@@ -133,7 +133,7 @@ const SideBarStyled = styled.nav.attrs<SideBarStyledProps>(p => ({
     p.exposed ? '0' : `calc(var(${SIDEBAR_WIDTH_PROP}) * -1 + 0.5rem)`};
   /* When the user is hovering, show half opacity */
   opacity: ${p => (p.exposed ? 1 : 0)};
-  height: 100vh;
+  height: 100dvh;
   width: var(${SIDEBAR_WIDTH_PROP});
   position: ${p => (p.locked ? 'relative' : 'absolute')};
   border-right: ${p => `1px solid ${p.theme.colors.bg2}`};
