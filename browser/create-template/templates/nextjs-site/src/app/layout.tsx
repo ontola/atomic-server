@@ -8,7 +8,7 @@ import Footer from '@/components/Footer';
 
 export const metadata: Metadata = {
   title: 'Next.js Atomic',
-  description: 'Next.js Atomic template',
+  description: 'A Next.js template for Atomic Server',
 };
 
 export default function RootLayout({

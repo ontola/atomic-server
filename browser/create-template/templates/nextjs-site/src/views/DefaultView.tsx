@@ -1,10 +1,11 @@
-import { store } from '@/app/store';
-import { Resource } from '@tomic/react';
+'use client';
 
-const DefaultView = async ({ resource }: { resource: Resource }) => {
-  const subjectResource = await store.getResource(resource.subject);
+import { useResource } from '@tomic/react';
 
-  return <p>No supported view for {subjectResource.title}.</p>;
+const DefaultView = ({ subject }: { subject: string }) => {
+  const resource = useResource(subject);
+
+  return <p>No supported view for {resource.title}.</p>;
 };
 
 export default DefaultView;
