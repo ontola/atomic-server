@@ -6,6 +6,7 @@ import { Image } from '@/components/Image';
 import matter from 'gray-matter';
 import html from 'remark-html';
 import { remark } from 'remark';
+import { MarkdownContent } from '@/components/MarkdownContent';
 
 const BlogpostFullPage = ({ resource }: { resource: Resource<Blogpost> }) => {
   const formatter = new Intl.DateTimeFormat('default', {
@@ -18,7 +19,7 @@ const BlogpostFullPage = ({ resource }: { resource: Resource<Blogpost> }) => {
 
   const matterResult = matter(resource.props.description);
   const processed = remark().use(html).processSync(matterResult.content);
-  const content = processed.toString();
+  const initialContent = processed.toString();
 
   return (
     <Container>
@@ -27,7 +28,10 @@ const BlogpostFullPage = ({ resource }: { resource: Resource<Blogpost> }) => {
         <div className={styles.content}>
           <h1 className={styles.h1}>{resource.title}</h1>
           <p className={styles.publishDate}>{date}</p>
-          <div dangerouslySetInnerHTML={{ __html: content }} />
+          <MarkdownContent
+            subject={resource.subject}
+            initialContent={initialContent}
+          />
         </div>
       </div>
     </Container>

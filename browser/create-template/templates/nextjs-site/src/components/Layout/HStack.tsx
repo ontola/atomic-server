@@ -1,4 +1,4 @@
-import React, { ReactNode } from 'react';
+import React, { FC, ReactNode } from 'react';
 import clsx from 'clsx';
 import styles from './HStack.module.css';
 
@@ -11,14 +11,14 @@ interface HStackProps {
   children: ReactNode;
 }
 
-const HStack: React.FC<HStackProps> = ({
+const HStack = ({
   gap = '1rem',
   align = 'start',
   justify = 'start',
   fullWidth = false,
   wrap = false,
   children,
-}) => {
+}: HStackProps) => {
   const inlineStyles: {
     [key: string]: string | number;
   } = {

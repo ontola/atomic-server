@@ -1,17 +1,34 @@
-import { useEffect, useState } from "react";
+import { useState, useEffect, useRef } from 'react';
 
-export function useDebounced<T>(value: T, delay: number = 100): T {
-  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+/**
+ * useThrottle
+ *
+ * Returns a throttled version of the input value. The throttled value only
+ * updates once every specified delay, even if the input value changes more frequently.
+ *
+ * @param value - The value to throttle.
+ * @param delay - The delay period (in milliseconds) for the throttle.
+ * @returns The throttled value.
+ */
+export function useThrottle<T>(value: T, interval: number = 500): T {
+  const [throttledValue, setThrottledValue] = useState(value);
+  const lastUpdated = useRef<number | null>(null);
 
   useEffect(() => {
-    const timeout = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
+    const now = Date.now();
 
-    return () => {
-      clearTimeout(timeout);
-    };
-  }, [value, delay]);
+    if (lastUpdated.current && now >= lastUpdated.current + interval) {
+      lastUpdated.current = now;
+      setThrottledValue(value);
+    } else {
+      const id = window.setTimeout(() => {
+        lastUpdated.current = now;
+        setThrottledValue(value);
+      }, interval);
 
-  return debouncedValue;
+      return () => window.clearTimeout(id);
+    }
+  }, [value, interval]);
+
+  return throttledValue;
 }

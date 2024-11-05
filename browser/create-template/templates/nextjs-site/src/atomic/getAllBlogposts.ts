@@ -1,12 +1,8 @@
-import { env } from '@/env';
 import { website } from '@/ontologies/website';
-import { CollectionBuilder, core, Store } from '@tomic/lib';
+import { CollectionBuilder, core } from '@tomic/lib';
+import { store } from '@/app/store';
 
 export async function getAllBlogposts(): Promise<string[]> {
-  const store = new Store({
-    serverUrl: env.NEXT_PUBLIC_ATOMIC_SERVER_URL,
-  });
-
   const collection = new CollectionBuilder(store)
     .setProperty(core.properties.isA)
     .setValue(website.classes.blogpost)

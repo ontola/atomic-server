@@ -1,7 +1,7 @@
-import Container from "@/components/Layout/Container";
-import { Resource } from "@tomic/lib";
+import Container from '@/components/Layout/Container';
+import { Resource } from '@tomic/lib';
 
-const DefaultFullPage = ({ resource }: { resource: Resource }) => {
+const DefaultFullPage = async ({ resource }: { resource: Resource }) => {
   return (
     <Container>
       <h1>{resource.title}</h1>

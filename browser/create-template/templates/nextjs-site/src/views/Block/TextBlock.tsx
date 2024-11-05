@@ -1,20 +1,19 @@
-import { Resource } from '@tomic/lib';
+import { Resource } from '@tomic/react';
 import { remark } from 'remark';
 import html from 'remark-html';
 import matter from 'gray-matter';
-import styles from './TextBlock.module.css';
+import { MarkdownContent } from '@/components/MarkdownContent';
 
 const TextBlock = ({ resource }: { resource: Resource }) => {
   const matterResult = matter(resource.props.description);
 
   const processed = remark().use(html).processSync(matterResult.content);
 
-  const content = processed.toString();
-
+  const initialContent = processed.toString();
   return (
-    <div
-      className={styles.wrapper}
-      dangerouslySetInnerHTML={{ __html: content }}
+    <MarkdownContent
+      subject={resource.subject}
+      initialContent={initialContent}
     />
   );
 };

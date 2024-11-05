@@ -5,43 +5,24 @@ import styles from './Searchbar.module.css';
 import FaMagnifyingGlass from './Icons/magnifying-glass-solid.svg';
 import Image from 'next/image';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
+import { useThrottle } from '@/utils';
 
 const Searchbar = () => {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const inputRef = useRef<HTMLInputElement>(null);
-  const debounceTimer = useRef<NodeJS.Timeout | null>(null);
-
-  const createQueryString = useCallback(
-    (name: string, value: string) => {
-      const params = new URLSearchParams(searchParams.toString());
-      params.set(name, value);
-      return params.toString();
-    },
-    [searchParams],
-  );
-
-  const handleSearchChange = () => {
-    if (debounceTimer.current) {
-      clearTimeout(debounceTimer.current);
-    }
-
-    debounceTimer.current = setTimeout(() => {
-      const searchValue = inputRef.current?.value || '';
-      router.push(pathname + '?' + createQueryString('search', searchValue));
-    }, 200);
-  };
+  const [val, setVal] = useState(searchParams.get('search') ?? '');
+  const throttledValue = useThrottle(val, 200);
 
   useEffect(() => {
-    return () => {
-      if (debounceTimer.current) {
-        clearTimeout(debounceTimer.current);
-      }
-    };
-  }, []);
+    if (throttledValue === '') {
+      router.push(pathname);
+    } else {
+      router.push(`${pathname}?search=${throttledValue}`);
+    }
+  }, [throttledValue]);
 
   return (
     <div className={styles.searchBar}>
@@ -54,11 +35,12 @@ const Searchbar = () => {
           alt='search'
         />
         <input
-          ref={inputRef}
           className={styles.input}
           type='search'
-          defaultValue={searchParams.get('search') || ''}
-          onChange={handleSearchChange}
+          value={val}
+          onChange={e => {
+            setVal(e.target.value);
+          }}
           aria-label='Search'
           placeholder='Search blogposts...'
         />

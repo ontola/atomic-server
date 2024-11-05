@@ -15,12 +15,14 @@ const BlogIndexPageFullPage = async ({
   searchParams,
 }: {
   resource: Resource<Page>;
-  searchParams?: { search: string };
+  searchParams?: {
+    [key: string]: string | string[] | undefined;
+  };
 }) => {
   const allItems = await getAllBlogposts();
   let results: string[] = [];
 
-  if (searchParams?.search) {
+  if (searchParams?.search && typeof searchParams.search === 'string') {
     results = await store.search(searchParams.search, {
       filters: {
         [core.properties.isA]: website.classes.blogpost,
