@@ -11,11 +11,11 @@
     type SizeIndication,
   } from './imageHelpers.js';
 
-  enum Support {
-    Full,
-    Basic,
-    None,
-  }
+  const Support = {
+    FULL: 0,
+    BASIC: 1,
+    NONE: 2,
+  };
 
   interface Props extends HTMLImgAttributes {
     subject: string;
@@ -38,13 +38,13 @@
 
   let support = $derived.by(() => {
     if (imageFormatsWithFullSupport.has(resource.props.mimetype ?? '')) {
-      return Support.Full;
+      return Support.FULL;
     } else if (
       imageFormatsWithBasicSupport.has(resource.props.mimetype ?? '')
     ) {
-      return Support.Basic;
+      return Support.BASIC;
     } else {
-      return Support.None;
+      return Support.NONE;
     }
   });
 
@@ -55,9 +55,9 @@
   <p>{resource.error.message}</p>
 {:else if resource.loading}
   <p>Loading...</p>
-{:else if support === Support.None}
+{:else if support === Support.NONE}
   <p>Image format not supported</p>
-{:else if support === Support.Basic}
+{:else if support === Support.BASIC}
   <img
     src={resource.props.downloadUrl}
     class:base-styles={!noBaseStyles}
@@ -66,7 +66,7 @@
     width={resource.props.imageWidth}
     {...restProps}
   />
-{:else if support === Support.Full}
+{:else if support === Support.FULL}
   <picture>
     <source
       srcSet={toSrcSet('avif', quality, DEFAULT_SIZES)}
