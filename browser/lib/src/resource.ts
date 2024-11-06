@@ -113,6 +113,13 @@ export class Resource<C extends OptionalClass = any> {
    * @example const description = resource.props.description
    */
   public get props(): QuickAccesPropType<C> {
+    const defaultProps = {
+      parent: core.properties.parent,
+      isA: core.properties.isA,
+      write: core.properties.write,
+      read: core.properties.read,
+    };
+
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     const innerThis = this;
 
@@ -121,6 +128,10 @@ export class Resource<C extends OptionalClass = any> {
       .filter(def => def !== undefined);
 
     const getPropSubject = (name: string) => {
+      if (name in defaultProps) {
+        return defaultProps[name];
+      }
+
       for (const def of defs) {
         const value = def[name];
 
