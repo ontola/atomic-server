@@ -1,8 +1,10 @@
-import { createEnv } from "@t3-oss/env-nextjs";
-import { z } from "zod";
+import { createEnv } from '@t3-oss/env-nextjs';
+import { z } from 'zod';
 
 export const env = createEnv({
   server: {},
+
+  // Client variables are exposed to the browser. They must be prefixed with NEXT_PUBLIC_.
   client: {
     NEXT_PUBLIC_ATOMIC_SERVER_URL: z.string().url(),
     NEXT_PUBLIC_WEBSITE_RESOURCE: z.string().url(),

@@ -4,7 +4,7 @@ import { env } from '@/env';
 import { Website } from '@/ontologies/website';
 import MenuItem from '@/views/MenuItem/MenuItem';
 import styles from './Navbar.module.css';
-import { store } from '@/app/store';
+import { store } from '@/store';
 import Link from 'next/link';
 
 const Navbar = async () => {

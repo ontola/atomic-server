@@ -2,7 +2,7 @@ import DefaultView from '../DefaultView';
 import TextBlock from './TextBlock';
 import { website } from '@/ontologies/website';
 import ImageGalleryBlock from './ImageGalleryBlock';
-import { store } from '@/app/store';
+import { store } from '@/store';
 
 const BlockView = async ({ subject }: { subject: string }) => {
   const block = await store.getResource(subject);

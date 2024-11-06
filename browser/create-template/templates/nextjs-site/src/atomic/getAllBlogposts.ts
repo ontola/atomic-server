@@ -1,6 +1,6 @@
 import { website } from '@/ontologies/website';
 import { CollectionBuilder, core } from '@tomic/lib';
-import { store } from '@/app/store';
+import { store } from '@/store';
 
 export async function getAllBlogposts(): Promise<string[]> {
   const collection = new CollectionBuilder(store)

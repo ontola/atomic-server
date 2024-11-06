@@ -2,7 +2,7 @@ import { website } from '@/ontologies/website';
 import { unknownSubject, Resource } from '@tomic/lib';
 import styles from './MenuItemLink.module.css';
 import clsx from 'clsx';
-import { store } from '@/app/store';
+import { store } from '@/store';
 
 const MenuItemLink = async ({
   resource,

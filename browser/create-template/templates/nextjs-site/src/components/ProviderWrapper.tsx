@@ -2,7 +2,7 @@
 
 import { StoreContext } from '@tomic/react';
 import { CurrentSubjectProvider } from '@/app/context/CurrentSubjectContext';
-import { store } from '@/app/store';
+import { store } from '@/store';
 import { initOntologies } from '@/ontologies';
 
 const ProviderWrapper = ({

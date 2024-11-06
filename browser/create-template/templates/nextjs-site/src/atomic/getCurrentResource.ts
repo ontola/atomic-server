@@ -1,6 +1,6 @@
 import { CollectionBuilder, type Resource } from '@tomic/lib';
 import { website } from '@/ontologies/website';
-import { store } from '@/app/store';
+import { store } from '@/store';
 
 /**
  * Queries the server for a resource with a href property that matches the given url pathname.

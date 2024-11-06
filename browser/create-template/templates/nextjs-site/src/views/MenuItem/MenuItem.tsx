@@ -1,7 +1,7 @@
 import type { MenuItem } from '@/ontologies/website';
 import MenuItemLink from './MenuItemLink';
 import styles from './MenuItem.module.css';
-import { store } from '@/app/store';
+import { store } from '@/store';
 import { unknownSubject } from '@tomic/lib';
 
 const MenuItem = async ({ subject }: { subject: string }) => {

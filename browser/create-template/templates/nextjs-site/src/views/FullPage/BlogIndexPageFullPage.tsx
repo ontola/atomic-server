@@ -8,7 +8,7 @@ import ListItemView from '../ListItem/ListItemView';
 import { getAllBlogposts } from '@/atomic/getAllBlogposts';
 import { Suspense } from 'react';
 import Searchbar from '@/components/Searchbar';
-import { store } from '@/app/store';
+import { store } from '@/store';
 
 const BlogIndexPageFullPage = async ({
   resource,

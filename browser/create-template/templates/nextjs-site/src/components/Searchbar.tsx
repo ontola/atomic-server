@@ -6,23 +6,23 @@ import FaMagnifyingGlass from './Icons/magnifying-glass-solid.svg';
 import Image from 'next/image';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { useThrottle } from '@/utils';
+import { useThrottle } from '@/hooks';
 
 const Searchbar = () => {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const [val, setVal] = useState(searchParams.get('search') ?? '');
-  const throttledValue = useThrottle(val, 200);
+  const [search, setSearch] = useState(searchParams.get('search') ?? '');
+  const throttledSearch = useThrottle(search, 200);
 
   useEffect(() => {
-    if (throttledValue === '') {
+    if (throttledSearch === '') {
       router.push(pathname);
     } else {
-      router.push(`${pathname}?search=${throttledValue}`);
+      router.push(`${pathname}?search=${throttledSearch}`);
     }
-  }, [throttledValue]);
+  }, [throttledSearch]);
 
   return (
     <div className={styles.searchBar}>
@@ -37,9 +37,9 @@ const Searchbar = () => {
         <input
           className={styles.input}
           type='search'
-          value={val}
+          value={search}
           onChange={e => {
-            setVal(e.target.value);
+            setSearch(e.target.value);
           }}
           aria-label='Search'
           placeholder='Search blogposts...'

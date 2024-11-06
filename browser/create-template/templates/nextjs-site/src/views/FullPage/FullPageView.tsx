@@ -3,7 +3,7 @@ import PageFullPage from './PageFullPage';
 import BlogIndexPageFullPage from './BlogIndexPageFullPage';
 import BlogpostFullPage from './BlogpostFullPage';
 import DefaultFullPage from './DefaultFullPage';
-import { store } from '@/app/store';
+import { store } from '@/store';
 
 const FullPageView = async ({
   subject,

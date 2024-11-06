@@ -1,7 +1,7 @@
 import { website } from '@/ontologies/website';
 import BlogListItem from './BlogListItem';
 import DefaultView from '@/views/DefaultView';
-import { store } from '@/app/store';
+import { store } from '@/store';
 
 const ListItemView = async ({ subject }: { subject: string }) => {
   const listItem = await store.getResource(subject);
