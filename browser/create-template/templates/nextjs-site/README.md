@@ -1,36 +1,56 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Atomic Next.js Template
 
-## Getting Started
+This repository is a [Next.js](https://nextjs.org/) 15 website starter template to be used with [AtomicServer](https://github.com/atomicdata-dev/atomic-server).
 
-First, run the development server:
+## Getting started
+
+This guide assumes you have AtomicServer running on your local machine. If you don't, you can follow the [AtomicServer installation guide](https://docs.atomicdata.dev/atomicserver/installation).
+
+### 1. Create a new project
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+$ npm create @tomic/template my-project -- --template nextjs-site --server-url http://localhost:9883
+$ pnpm create @tomic/template my-project --template nextjs-site --server-url http://localhost:9883
+$ yarn create @tomic/template my-project --template nextjs-site --server-url http://localhost:9883
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Generate ontologies
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+$ cd my-project
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+$ npx ad-generate
+$ pnpm exec ad-generate ontologies
+$ yarn ad-generate ontologies
+```
 
-## Learn More
+After making changes to an ontology you need to re-generate them in your code.
 
-To learn more about Next.js, take a look at the following resources:
+### 3. Start the development server
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+$ npm run dev
+$ pnpm dev
+$ yarn dev
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Structure
 
-## Deploy on Vercel
+Atomic Data resources are rendered by views.
+These views are components that accept a resource as prop and render the data in a certain way.
+For example the `BlogPostFullPage` view renders a `blog-post` resource as a full page.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Oftentimes these views also come with a kind of view selector component that determines what component to render based on the resources class.
+An example of this would be `FullPageView`.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+These selector components are great for when a resource can reference another resource without a classtype, meaning it can be any kind of resource.
+For example, the `page` class has a `blocks` property that can reference any type of resource.
+The FullPage view for the `page` class (`PageFullPage`) therefore renders a `BlockView` component that selects the appropriate component to render, i.e. a `TextBlock` or an `ImageGalleryBlock`.
+
+## Resources
+
+- [AtomicServer Docs](https://docs.atomicdata.dev/)
+- [Next.js Docs](https://nextjs.org/docs)
+- [Discord](https://discord.gg/a72Rv2P)
