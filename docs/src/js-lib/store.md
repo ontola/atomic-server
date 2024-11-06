@@ -172,6 +172,26 @@ const results = store.search('holiday-1995', {
 });
 ```
 
+## Preloading resources
+
+Sometimes you might want to prefetch a resource and all the resources it depends on ahead of time.
+For example when using @tomic/react or @tomic/svelte on the server.
+This can be done using the `store.preloadResourceTree()` method.
+The method takes a subject and an object representing a tree of referenced resources that need to be preloaded.
+
+```js
+
+// Preload a blog post, its header image, the author and the author's profile image
+await store.preloadResourceTree('https://myapp.com/my-blog-post', {
+  [myOntology.properties.headerImage]: true,
+  [myOntology.properties.author]: {
+    [myOntology.properties.profileImage]: true,
+  },
+});
+```
+
+The tree does not have to be complete and can contain any property, this way you can preload any resource even if you're not sure of what type it might be.
+
 ## (Advanced) Fetching resources in render code
 
 > **NOTE:** </br>

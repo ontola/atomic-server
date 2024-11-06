@@ -1,18 +1,19 @@
 <script lang="ts">
 	import { unknownSubject, type Resource } from '@tomic/lib';
-	import { website, type MenuItem } from '$lib/ontologies/website';
-	import { getResource, getValue } from '@tomic/svelte';
+	import { type Page, type MenuItem } from '$lib/ontologies/website';
+	import { getResource } from '@tomic/svelte';
 
-	export let resource: Resource<MenuItem>;
-	export let active = false;
+	interface Props {
+		resource: Resource<MenuItem>;
+		active: boolean;
+	}
 
-	let href = '';
+	const { resource, active }: Props = $props();
 
-	$: page = getResource(resource.props.linksTo ?? unknownSubject);
-	$: pageHrefValue = getValue(page, website.properties.href);
+	let page = getResource<Page>(() => resource.props.linksTo);
 
 	// If the menu item has a linksTo prop we want the href value of the page it links to. If that doesn't exist we check for an external link.
-	$: href = $pageHrefValue ?? resource.props.externalLink ?? '';
+	let href = $derived(page.props.href ?? resource.props.externalLink ?? '');
 </script>
 
 <a {href} aria-current={active ? 'page' : 'false'}>{resource.title}</a>

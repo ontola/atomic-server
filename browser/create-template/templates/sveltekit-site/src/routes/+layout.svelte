@@ -1,8 +1,13 @@
 <script lang="ts">
+	import { createAtomicStoreContext } from '@tomic/svelte';
 	import Navbar from '$lib/components/Navbar.svelte';
 	import SiteWrapper from '$lib/components/SiteWrapper.svelte';
 	import Footer from '$lib/components/Footer.svelte';
 	import VStack from '$lib/components/Layout/VStack.svelte';
+	import { getStore } from '$lib/atomic/getStore';
+
+	const store = getStore();
+	createAtomicStoreContext(store);
 </script>
 
 <SiteWrapper>

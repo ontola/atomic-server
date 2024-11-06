@@ -15,7 +15,7 @@ import { core } from './ontologies/core.js';
 import { server } from './ontologies/server.js';
 
 import {
-  getKnownNameBySubject,
+  getKnownClassDefBySubject,
   type InferTypeOfValueInTriple,
   type OptionalClass,
   type QuickAccesPropType,
@@ -113,17 +113,38 @@ export class Resource<C extends OptionalClass = any> {
    * @example const description = resource.props.description
    */
   public get props(): QuickAccesPropType<C> {
-    const props: QuickAccesPropType<C> = {} as QuickAccesPropType<C>;
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
+    const innerThis = this;
 
-    for (const prop of this.propvals.keys()) {
-      const name = getKnownNameBySubject(prop);
+    const defs = this.getClasses()
+      .map(c => getKnownClassDefBySubject(c))
+      .filter(def => def !== undefined);
 
-      if (name) {
-        props[name] = this.get(prop);
+    const getPropSubject = (name: string) => {
+      for (const def of defs) {
+        const value = def[name];
+
+        if (value !== undefined) {
+          return value;
+        }
       }
-    }
+    };
 
-    return props;
+    return new Proxy({} as QuickAccesPropType<C>, {
+      get(_target, propName) {
+        const propSubject = getPropSubject(propName as string);
+
+        return innerThis.get(propSubject);
+      },
+
+      set(_target, propName, value) {
+        const propSubject = getPropSubject(propName as string);
+
+        innerThis.set(propSubject, value, false);
+
+        return true;
+      },
+    });
   }
 
   private get store(): Store {
@@ -191,7 +212,7 @@ export class Resource<C extends OptionalClass = any> {
     agent?: string,
     child?: string,
   ): Promise<[boolean, string | undefined]> {
-    const writeArray = this.get(properties.write);
+    const writeArray = this.get(core.properties.write);
 
     if (!agent) {
       return [false, 'No agent given'];

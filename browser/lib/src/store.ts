@@ -98,6 +98,10 @@ type StoreEventHandlers = {
   [StoreEvents.Error]: ErrorCallback;
 };
 
+export interface ResourceTreeTemplate {
+  [property: string]: true | ResourceTreeTemplate;
+}
+
 /** Returns True if the client has WebSocket support */
 const supportsWebSockets = () => typeof WebSocket !== 'undefined';
 
@@ -956,6 +960,57 @@ export class Store {
     }
   }
 
+  /**
+   * Make sure the given tree of resources are available in the store.
+   * This is useful in situations where you need certain resources to be available before rendering a page.
+   * For example when rendering on a server that does not wait for resources to be fully available.
+   *
+   * **Example**:
+   * ```ts
+   * await store.preloadResourceTree('https://my-website.com', {
+   *  [myWebsite.properties.projects]: {
+   *    [myWebsite.properties.collaborators]: {
+   *      [core.properties.image]: true,
+   *    },
+   *    [core.properties.image]: true,
+   *  },
+   * });
+   * ```
+   */
+  public async preloadResourceTree(
+    subject: string,
+    treeTemplate: ResourceTreeTemplate,
+  ): Promise<void> {
+    const loadResourceTreeInner = async (
+      resource: Resource,
+      tree: ResourceTreeTemplate,
+    ) => {
+      const promises: Promise<unknown>[] = [];
+
+      for (const [property, branch] of Object.entries(tree)) {
+        await this.getResource(property);
+        const values = normalizeToArray(resource.get(property));
+        const resources = await Promise.all(
+          values.map(value => this.getResource(value)),
+        );
+
+        if (typeof branch === 'boolean') {
+          continue;
+        }
+
+        for (const res of resources) {
+          promises.push(loadResourceTreeInner(res, branch));
+        }
+      }
+
+      return Promise.allSettled(promises.flat());
+    };
+
+    const resource = await this.getResource(subject);
+
+    await loadResourceTreeInner(resource, treeTemplate);
+  }
+
   private randomPart(): string {
     return ulid().toLowerCase();
   }
@@ -995,6 +1050,18 @@ export class Store {
     Promise.allSettled(callbacks.map(async cb => cb(resource)));
   }
 }
+
+const normalizeToArray = (value: JSONValue): string[] => {
+  if (typeof value === 'string') {
+    return [value];
+  }
+
+  if (Array.isArray(value)) {
+    return value as string[];
+  }
+
+  return [];
+};
 
 /**
  * A Property represents a relationship between a Subject and its Value.

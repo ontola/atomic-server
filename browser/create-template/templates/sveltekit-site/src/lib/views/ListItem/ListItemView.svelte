@@ -4,15 +4,22 @@
 	import DefaultView from '../DefaultView.svelte';
 	import BlogListItem from './BlogListItem.svelte';
 
-	export let subject: string;
-	let listItem = getResource(subject);
+	interface Props {
+		subject: string;
+	}
 
-	$: component = $listItem.matchClass(
-		{
-			[website.classes.blogpost]: BlogListItem
-		},
-		DefaultView
+	const { subject }: Props = $props();
+
+	let listItem = getResource(() => subject);
+
+	let View = $derived(
+		listItem.matchClass(
+			{
+				[website.classes.blogpost]: BlogListItem
+			},
+			DefaultView
+		)
 	);
 </script>
 
-<svelte:component this={component} resource={$listItem} />
+<View resource={listItem} />

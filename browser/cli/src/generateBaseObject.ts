@@ -1,4 +1,4 @@
-import { Resource, type Core } from '@tomic/lib';
+import { Resource, type Core, core } from '@tomic/lib';
 import { store } from './store.js';
 import { camelCaseify, dedupe } from './utils.js';
 import chalk from 'chalk';
@@ -8,6 +8,7 @@ export type ReverseMapping = Record<string, string>;
 type BaseObject = {
   classes: Record<string, string>;
   properties: Record<string, string>;
+  __classDefs: Record<string, string[]>;
 };
 
 export const generateBaseObject = async (
@@ -24,12 +25,14 @@ export const generateBaseObject = async (
   const baseObj = {
     classes: await listToObj(classes, 'classes'),
     properties: await listToObj(properties, 'properties'),
+    __classDefs: await createClassDefs(classes),
   };
 
   const objStr = `export const ${name} = {
     classes: ${recordToString(baseObj.classes)},
     properties: ${recordToString(baseObj.properties)},
-  } as const`;
+    __classDefs: ${stringifyClassDefs(baseObj.__classDefs)}
+  } as const satisfies OntologyBaseObject`;
 
   return [objStr, createReverseMapping(name, baseObj)];
 };
@@ -71,6 +74,26 @@ const listToObj = async (
   return Object.fromEntries(entries);
 };
 
+const createClassDefs = async (
+  classes: string[],
+): Promise<Record<string, string[]>> => {
+  const classResources = await Promise.all(
+    classes.map(async c => await store.getResource(c)),
+  );
+
+  const entries = classResources.map(resource => {
+    return [
+      resource.subject,
+      [
+        ...resource.getArray(core.properties.requires),
+        ...resource.getArray(core.properties.recommends),
+      ],
+    ];
+  });
+
+  return Object.fromEntries(entries);
+};
+
 const recordToString = (obj: Record<string, string>): string => {
   const innerSting = Object.entries(obj).reduce(
     (acc, [key, value]) => `${acc}\n\t${key}: '${value}',`,
@@ -78,6 +101,15 @@ const recordToString = (obj: Record<string, string>): string => {
   );
 
   return `{${innerSting}\n   }`;
+};
+
+const stringifyClassDefs = (obj: Record<string, string[]>) => {
+  const innerString = Object.entries(obj).reduce(
+    (acc, [key, value]) => `${acc}\n\t["${key}"]: ${JSON.stringify(value)},`,
+    '',
+  );
+
+  return `{${innerString}\n   }`;
 };
 
 const createReverseMapping = (

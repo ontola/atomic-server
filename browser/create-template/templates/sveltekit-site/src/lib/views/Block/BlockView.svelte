@@ -5,16 +5,23 @@
 	import TextBlock from './TextBlock.svelte';
 	import ImageGalleryBlock from './ImageGalleryBlock.svelte';
 
-	export let subject: string;
-	let block = getResource(subject);
+	interface Props {
+		subject: string;
+	}
 
-	$: component = $block.matchClass(
-		{
-			[website.classes.textBlock]: TextBlock,
-			[website.classes.imageGalleryBlock]: ImageGalleryBlock
-		},
-		DefaultView
+	const { subject }: Props = $props();
+
+	let block = getResource(() => subject);
+
+	let View = $derived(
+		block.matchClass(
+			{
+				[website.classes.textBlock]: TextBlock,
+				[website.classes.imageGalleryBlock]: ImageGalleryBlock
+			},
+			DefaultView
+		)
 	);
 </script>
 
-<svelte:component this={component} resource={$block} />
+<View resource={block} />

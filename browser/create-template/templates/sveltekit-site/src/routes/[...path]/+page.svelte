@@ -1,13 +1,19 @@
 <script lang="ts">
 	import type { PageData } from './$types';
 	import FullPageView from '$lib/views/FullPage/FullPageView.svelte';
-	import { currentSubject } from '$lib/stores/currentSubject';
+	import { appState } from '$lib/stores/appstate.svelte';
 
-	export let data: PageData;
+	interface Props {
+		data: PageData;
+	}
 
-	$: subject = data.subject;
+	const { data }: Props = $props();
 
-	$: $currentSubject = subject;
+	appState.currentSubject = data.subject;
+
+	$effect(() => {
+		appState.currentSubject = data.subject;
+	});
 </script>
 
-<FullPageView {subject} />
+<FullPageView subject={data.subject} />

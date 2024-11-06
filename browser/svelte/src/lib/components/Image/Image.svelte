@@ -1,7 +1,6 @@
 <script lang="ts">
-  import { getResource } from '$lib/stores/getResource.js';
-  import { getValue } from '$lib/stores/getValue.js';
-  import { server, type Server } from '@tomic/lib';
+  import { getResource } from '$lib/stores/getResource.svelte.js';
+  import { type Server } from '@tomic/lib';
   import type { HTMLImgAttributes } from 'svelte/elements';
   import {
     buildSrcSet,
@@ -17,7 +16,8 @@
     Basic,
     None,
   }
-  interface $$Props extends HTMLImgAttributes {
+
+  interface Props extends HTMLImgAttributes {
     subject: string;
     alt: string;
     noBaseStyles?: boolean;
@@ -25,69 +25,70 @@
     sizeIndication?: SizeIndication;
   }
 
-  export let subject: $$Props['subject'];
-  export let alt: $$Props['alt'];
-  export let noBaseStyles: $$Props['noBaseStyles'] = false;
-  export let quality: number = 60;
-  export let sizeIndication: $$Props['sizeIndication'] = undefined;
+  const {
+    subject,
+    alt,
+    noBaseStyles,
+    quality = 60,
+    sizeIndication,
+    ...restProps
+  }: Props = $props();
 
-  let supported = Support.Full;
+  let resource = getResource<Server.File>(() => subject);
 
-  let resource = getResource<Server.File>(subject);
-  let downloadUrl = getValue(resource, server.properties.downloadUrl);
-  let mimetype = getValue(resource, server.properties.mimetype);
-
-  $: {
-    if (imageFormatsWithFullSupport.has($mimetype!)) {
-      supported = Support.Full;
-    } else if (imageFormatsWithBasicSupport.has($mimetype!)) {
-      supported = Support.Basic;
+  let support = $derived.by(() => {
+    if (imageFormatsWithFullSupport.has(resource.props.mimetype ?? '')) {
+      return Support.Full;
+    } else if (
+      imageFormatsWithBasicSupport.has(resource.props.mimetype ?? '')
+    ) {
+      return Support.Basic;
     } else {
-      supported = Support.None;
+      return Support.None;
     }
-  }
+  });
 
-  $: toSrcSet = buildSrcSet($downloadUrl);
+  let toSrcSet = $derived(buildSrcSet(resource.props.downloadUrl));
 </script>
 
-{#if $resource.error}
-  <p>{$resource.error.message}</p>
-{:else if $resource.loading}
+{#if resource.error}
+  <p>{resource.error.message}</p>
+{:else if resource.loading}
   <p>Loading...</p>
-{:else if supported === Support.None}
+{:else if support === Support.None}
   <p>Image format not supported</p>
-{:else if supported === Support.Basic}
+{:else if support === Support.Basic}
   <img
-    src={$downloadUrl}
+    src={resource.props.downloadUrl}
     class:base-styles={!noBaseStyles}
     {alt}
-    height={$resource.props.imageHeight}
-    width={$resource.props.imageWidth}
-    {...$$restProps}
+    height={resource.props.imageHeight}
+    width={resource.props.imageWidth}
+    {...restProps}
   />
-{:else if supported === Support.Full}
+{:else if support === Support.Full}
   <picture>
     <source
       srcSet={toSrcSet('avif', quality, DEFAULT_SIZES)}
       type="image/avif"
       sizes={indicationToSizes(sizeIndication)}
-      height={$resource.props.imageHeight}
-      width={$resource.props.imageWidth}
+      height={resource.props.imageHeight}
+      width={resource.props.imageWidth}
     />
     <source
       srcSet={toSrcSet('webp', quality, DEFAULT_SIZES)}
       type="image/webp"
       sizes={indicationToSizes(sizeIndication)}
-      height={$resource.props.imageHeight}
-      width={$resource.props.imageWidth}
+      height={resource.props.imageHeight}
+      width={resource.props.imageWidth}
     />
     <img
-      src={$downloadUrl}
+      src={resource.props.downloadUrl}
       class:base-styles={!noBaseStyles}
       {alt}
-      height={$resource.props.imageHeight}
-      width={$resource.props.imageWidth}
-      {...$$restProps}
+      height={resource.props.imageHeight}
+      width={resource.props.imageWidth}
+      {...restProps}
     />
   </picture>
 {/if}

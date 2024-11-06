@@ -3,10 +3,14 @@
 	import { Image } from '@tomic/svelte';
 	import type { ImageGalleryBlock } from '$lib/ontologies/website';
 
-	export let resource: Resource<ImageGalleryBlock>;
+	interface Props {
+		resource: Resource<ImageGalleryBlock>;
+	}
+
+	const { resource }: Props = $props();
 </script>
 
-{#if resource.get(core.properties.name)}
+{#if resource.props.name}
 	<h2>{resource.title}</h2>
 {/if}
 <div class="wrapper">
@@ -24,7 +28,7 @@
 			minmax(calc(var(--theme-size-container-width) / 3 - 4rem), 1fr)
 		);
 		gap: 1rem;
-		& img {
+		:global(& img) {
 			aspect-ratio: 1 / 1;
 			object-fit: cover;
 		}

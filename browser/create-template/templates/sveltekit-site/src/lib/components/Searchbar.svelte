@@ -2,14 +2,24 @@
 	import FaMagnifyingGlass from './Icons/FaMagnifyingGlass.svelte';
 	import HStack from './Layout/HStack.svelte';
 
-	export let value: string;
-	export let placeholder: string = 'Search...';
+	interface Props {
+		value?: string;
+		placeholder: string;
+		oninput: (value: string) => void;
+	}
+
+	let { value = $bindable(''), placeholder, oninput }: Props = $props();
 </script>
 
 <div class="search-bar">
 	<HStack align="center" gap="1ch">
 		<FaMagnifyingGlass />
-		<input type="search" bind:value {placeholder} />
+		<input
+			type="search"
+			bind:value
+			{placeholder}
+			oninput={(e) => oninput(e.currentTarget.value ?? '')}
+		/>
 	</HStack>
 </div>
 
@@ -22,7 +32,7 @@
 		&:focus-within {
 			box-shadow: 0px 0px 0px 2px var(--theme-color-accent);
 		}
-		& svg {
+		:global(& svg) {
 			width: 1rem;
 			fill: var(--theme-color-text-light);
 		}

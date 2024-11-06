@@ -1,9 +1,8 @@
 import { website } from '$lib/ontologies/website';
 import { CollectionBuilder, core } from '@tomic/lib';
-import { store as storeStore } from '@tomic/svelte';
-import { get } from 'svelte/store';
+import { getStore } from './getStore';
 export async function getAllBlogposts(): Promise<string[]> {
-	const store = get(storeStore);
+	const store = getStore();
 
 	const collection = new CollectionBuilder(store)
 		.setProperty(core.properties.isA)

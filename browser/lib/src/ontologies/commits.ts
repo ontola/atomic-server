@@ -3,7 +3,7 @@
  * For more info on how to use ontologies: https://github.com/atomicdata-dev/atomic-server/blob/develop/browser/cli/readme.md
  * -------------------------------- */
 
-import type { BaseProps } from '../index.js';
+import type { OntologyBaseObject, BaseProps } from '../index.js';
 
 export const commits = {
   classes: {
@@ -21,7 +21,18 @@ export const commits = {
     destroy: 'https://atomicdata.dev/properties/destroy',
     signature: 'https://atomicdata.dev/properties/signature',
   },
-} as const;
+  __classDefs: {
+    ['https://atomicdata.dev/classes/Commit']: [
+      'https://atomicdata.dev/properties/createdAt',
+      'https://atomicdata.dev/properties/signature',
+      'https://atomicdata.dev/properties/signer',
+      'https://atomicdata.dev/properties/subject',
+      'https://atomicdata.dev/properties/destroy',
+      'https://atomicdata.dev/properties/remove',
+      'https://atomicdata.dev/properties/set',
+    ],
+  },
+} as const satisfies OntologyBaseObject;
 
 // eslint-disable-next-line @typescript-eslint/no-namespace
 export namespace Commits {

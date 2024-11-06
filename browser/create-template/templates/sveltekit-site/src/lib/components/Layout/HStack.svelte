@@ -23,12 +23,12 @@
 		align-items: var(--hstack-align);
 		justify-content: var(--hstack-justify);
 
-		& > h1,
-		& > h2,
-		& > h3,
-		& > h4,
-		& > h5,
-		& > h6 {
+		:global(& > h1),
+		:global(& > h2),
+		:global(& > h3),
+		:global(& > h4),
+		:global(& > h5),
+		:global(& > h6) {
 			margin: 0;
 		}
 	}

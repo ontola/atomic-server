@@ -32,5 +32,9 @@ export async function getCurrentResource(
 
 	const currentResourceSubject = await collection.getMemberWithIndex(0);
 
+	if (currentResourceSubject === undefined) {
+		return undefined;
+	}
+
 	return await store.getResource(currentResourceSubject);
 }

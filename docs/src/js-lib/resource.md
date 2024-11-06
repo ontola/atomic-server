@@ -70,11 +70,31 @@ const category = resource.get(
 
 ## Writing Data
 
-Writing data is done using the `.set` method.
+Writing data is done using the `.set` method (works on any resource) or by asigning to the props accessor (only works on annotated resources).
+
+### Using .props:
+
+```typescript
+import { type Article } from './ontologies/article';
+
+const resource = await store.getResource<Article>(
+  'https://my-atomicserver.com/my-resource',
+);
+
+resource.props.description = 'New description';
+
+await resource.save();
+```
+
+Setting values via `resource.props` does not validate the value against the properties datatype.
+Use the `resource.set()` method when you want to validate the value.
+
+### Using .set():
 
 ```typescript
 import { core } from '@tomic/lib';
 
+const resource = await store.getResource('https://my-atomicserver.com/my-resource');
 // With Validation
 await resource.set(core.properties.description, 'New description');
 
@@ -91,6 +111,7 @@ You should await the method when validation is enabled because the property's re
 > Setting validate to false only disables validation on the client. The server will always validate the data and respond with an error if the data is invalid.
 
 **Parameters**
+
 | Name     | Type        | Description                                                   |
 |----------|-------------|---------------------------------------------------------------|
 | property | string      | Subject of the property to set                                |
@@ -119,6 +140,10 @@ resource.push(
 
 await resource.save();
 ```
+
+> **Note**</br>
+> You **cannot** push values using `resource.props`.
+> For example: `resource.props.likedBy.push('https://my-atomicserver.com/users/1')` will not work.
 
 **Parameters**
 | Name     | Type      | Description                                                                                         |
@@ -174,7 +199,7 @@ When a resource is deleted, all children of the resource are also deleted.
 
 Classes are an essential part of Atomic Data, therefore Resource has a few useful methods for reading and setting classes.
 
-### Reading classes
+### resource.getClasses()
 
 `Resource` provides a `.getClasses` method to get the classes of the resource.
 
@@ -184,6 +209,8 @@ const classes = resource.getClasses(); // string[]
 // Syntactic sugar for:
 // const classes = resource.get(core.properties.isA);
 ```
+
+### resource.hasClasses()
 
 If you just want to know if a resource is of a certain class use: `.hasClasses()`
 
@@ -197,6 +224,8 @@ if (resource.hasClasses(core.classes.agent, dataBrowser.classes.folder)) {
   // ...
 }
 ```
+
+### resource.matchClass()
 
 There are often situations where you want the value of some variable to depend on the class of a resource.
 An example would be a React component that renders different subcomponents based on the resource it is given.
@@ -226,7 +255,7 @@ If the resource has a class that is a key in the object, the corresponding value
 An optional fallback value can be provided as the second argument.
 The order of the classes in the object is important, as the first match is returned.
 
-### Writing classes
+### resource.addClasses()
 
 To add classes to a resource, use the `.addClasses()` method.
 

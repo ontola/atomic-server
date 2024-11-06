@@ -3,7 +3,7 @@
  * For more info on how to use ontologies: https://github.com/atomicdata-dev/atomic-server/blob/develop/browser/cli/readme.md
  * -------------------------------- */
 
-import type { BaseProps } from '../index.js';
+import type { OntologyBaseObject, BaseProps } from '../index.js';
 
 export const dataBrowser = {
   classes: {
@@ -58,7 +58,90 @@ export const dataBrowser = {
     tags: 'https://atomicdata.dev/properties/tags',
     url: 'https://atomicdata.dev/property/url',
   },
-} as const;
+  __classDefs: {
+    ['https://atomicdata.dev/classes/Article']: [
+      'https://atomicdata.dev/properties/description',
+      'https://atomicdata.dev/properties/name',
+      'https://atomicdata.dev/properties/tags',
+      'https://atomicdata.dev/properties/published-at',
+    ],
+    ['https://atomicdata.dev/class/Bookmark']: [
+      'https://atomicdata.dev/properties/name',
+      'https://atomicdata.dev/property/url',
+      'https://atomicdata.dev/property/preview',
+      'https://atomicdata.dev/properties/description',
+      'https://atomicdata.dev/properties/imageUrl',
+    ],
+    ['https://atomicdata.dev/classes/ChatRoom']: [
+      'https://atomicdata.dev/properties/name',
+      'https://atomicdata.dev/properties/messages',
+    ],
+    ['https://atomicdata.dev/ontology/data-browser/class/currency-property']: [
+      'https://atomicdata.dev/ontology/data-browser/property/currency',
+    ],
+    ['https://atomicdata.dev/classes/DateFormat']: [
+      'https://atomicdata.dev/properties/shortname',
+    ],
+    ['https://atomicdata.dev/class/DisplayStyle']: [
+      'https://atomicdata.dev/properties/name',
+    ],
+    ['https://atomicdata.dev/classes/Document']: [
+      'https://atomicdata.dev/properties/documents/elements',
+      'https://atomicdata.dev/properties/name',
+    ],
+    ['https://atomicdata.dev/classes/FloatRangeProperty']: [
+      'https://atomicdata.dev/properties/minFloat',
+      'https://atomicdata.dev/properties/maxFloat',
+    ],
+    ['https://atomicdata.dev/classes/Folder']: [
+      'https://atomicdata.dev/properties/name',
+      'https://atomicdata.dev/property/display-style',
+      'https://atomicdata.dev/properties/subresources',
+    ],
+    ['https://atomicdata.dev/classes/FormattedDate']: [
+      'https://atomicdata.dev/properties/dateFormat',
+    ],
+    ['https://atomicdata.dev/classes/FormattedNumber']: [
+      'https://atomicdata.dev/properties/numberFormatting',
+      'https://atomicdata.dev/properties/decimalPlaces',
+    ],
+    ['https://atomicdata.dev/classes/Importer']: [],
+    ['https://atomicdata.dev/classes/Message']: [
+      'https://atomicdata.dev/properties/description',
+      'https://atomicdata.dev/properties/parent',
+    ],
+    ['https://atomicdata.dev/classes/NumberFormat']: [
+      'https://atomicdata.dev/properties/shortname',
+    ],
+    ['https://atomicdata.dev/classes/elements/Paragraph']: [
+      'https://atomicdata.dev/properties/description',
+      'https://atomicdata.dev/properties/parent',
+    ],
+    ['https://atomicdata.dev/classes/RangeProperty']: [
+      'https://atomicdata.dev/properties/min',
+      'https://atomicdata.dev/properties/max',
+    ],
+    ['https://atomicdata.dev/classes/SelectProperty']: [
+      'https://atomicdata.dev/properties/allowsOnly',
+      'https://atomicdata.dev/properties/max',
+    ],
+    ['https://atomicdata.dev/classes/Table']: [
+      'https://atomicdata.dev/properties/classtype',
+      'https://atomicdata.dev/properties/name',
+    ],
+    ['https://atomicdata.dev/classes/Tag']: [
+      'https://atomicdata.dev/properties/shortname',
+      'https://atomicdata.dev/properties/color',
+      'https://atomicdata.dev/properties/emoji',
+    ],
+    ['https://atomicdata.dev/ontology/data-browser/class/template']: [
+      'https://atomicdata.dev/properties/name',
+      'https://atomicdata.dev/properties/description',
+      'https://atomicdata.dev/ontology/data-browser/property/image',
+      'https://atomicdata.dev/ontology/data-browser/property/resources',
+    ],
+  },
+} as const satisfies OntologyBaseObject;
 
 // eslint-disable-next-line @typescript-eslint/no-namespace
 export namespace DataBrowser {

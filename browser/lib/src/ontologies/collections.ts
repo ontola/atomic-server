@@ -3,7 +3,7 @@
  * For more info on how to use ontologies: https://github.com/atomicdata-dev/atomic-server/blob/develop/browser/cli/readme.md
  * -------------------------------- */
 
-import type { BaseProps } from '../index.js';
+import type { OntologyBaseObject, BaseProps } from '../index.js';
 
 export const collections = {
   classes: {
@@ -22,7 +22,24 @@ export const collections = {
     includeExternal:
       'https://atomicdata.dev/properties/collection/includeExternal',
   },
-} as const;
+  __classDefs: {
+    ['https://atomicdata.dev/classes/Collection']: [
+      'https://atomicdata.dev/properties/name',
+      'https://atomicdata.dev/properties/description',
+      'https://atomicdata.dev/properties/collection/currentPage',
+      'https://atomicdata.dev/properties/collection/members',
+      'https://atomicdata.dev/properties/collection/pageSize',
+      'https://atomicdata.dev/properties/collection/property',
+      'https://atomicdata.dev/properties/collection/sortBy',
+      'https://atomicdata.dev/properties/collection/sortDesc',
+      'https://atomicdata.dev/properties/collection/totalMembers',
+      'https://atomicdata.dev/properties/collection/totalPages',
+      'https://atomicdata.dev/properties/collection/value',
+      'https://atomicdata.dev/properties/collection/includeExternal',
+      'https://atomicdata.dev/properties/incomplete',
+    ],
+  },
+} as const satisfies OntologyBaseObject;
 
 // eslint-disable-next-line @typescript-eslint/no-namespace
 export namespace Collections {

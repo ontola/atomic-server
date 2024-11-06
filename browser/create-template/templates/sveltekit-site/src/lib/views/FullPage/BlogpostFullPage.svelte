@@ -4,9 +4,12 @@
 	import type { Resource } from '@tomic/lib';
 	import { Image } from '@tomic/svelte';
 	import SvelteMarkdown from 'svelte-markdown';
-	import type { Readable } from 'svelte/store';
 
-	export let resource: Readable<Resource<Blogpost>>;
+	interface Props {
+		resource: Resource<Blogpost>;
+	}
+
+	const { resource }: Props = $props();
 
 	const formatter = new Intl.DateTimeFormat('default', {
 		year: 'numeric',
@@ -14,18 +17,18 @@
 		day: 'numeric'
 	});
 
-	$: date = formatter.format(new Date($resource.props.publishedAt));
+	let date = $derived(formatter.format(new Date(resource.props.publishedAt)));
 </script>
 
 <Container>
 	<div class="blog-wrapper">
-		<Image subject={$resource.props.coverImage} alt="" />
+		<Image subject={resource.props.coverImage} alt="" />
 		<div class="content">
-			<h1>{$resource.title}</h1>
+			<h1>{resource.title}</h1>
 			<p class="publish-date">
 				{date}
 			</p>
-			<SvelteMarkdown source={$resource.props.description} />
+			<SvelteMarkdown source={resource.props.description} />
 		</div>
 	</div>
 </Container>
@@ -33,7 +36,7 @@
 <style>
 	.blog-wrapper {
 		padding: 1rem;
-		& > picture > img {
+		:global(& > picture > img) {
 			width: 100%;
 			height: 25rem;
 			object-fit: cover;

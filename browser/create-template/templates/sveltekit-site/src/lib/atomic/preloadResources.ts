@@ -1,6 +1,6 @@
 import { website } from '$lib/ontologies/website';
 import type { Resource } from '@tomic/lib';
-import { loadResourceTree } from '@tomic/svelte';
+import { getStore } from './getStore';
 
 /**
  * Due to how sveltekit works we sometimes need to preload resources for them to show up in the serverside rendered html.
@@ -9,8 +9,18 @@ import { loadResourceTree } from '@tomic/svelte';
  * If you do not preload the referenced resources they will not show up when the page is hydrated client side. This should not be a big problem but could cause issues with SEO or users that have javascript disabled.
  */
 export async function preloadResources(resource: Resource): Promise<void> {
+	const store = getStore();
+
+	if (resource.hasClasses(website.classes.website)) {
+		await store.preloadResourceTree(resource.subject, {
+			[website.properties.menuItems]: {
+				[website.properties.subItems]: true
+			}
+		});
+	}
+
 	if (resource.hasClasses(website.classes.page)) {
-		await loadResourceTree(resource.subject, {
+		await store.preloadResourceTree(resource.subject, {
 			[website.properties.blocks]: {
 				[website.properties.images]: true
 			}
@@ -18,7 +28,7 @@ export async function preloadResources(resource: Resource): Promise<void> {
 	}
 
 	if (resource.hasClasses(website.classes.blogpost)) {
-		await loadResourceTree(resource.subject, {
+		await store.preloadResourceTree(resource.subject, {
 			[website.properties.coverImage]: true
 		});
 	}

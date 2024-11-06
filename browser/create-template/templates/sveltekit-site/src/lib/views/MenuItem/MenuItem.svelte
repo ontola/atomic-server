@@ -1,27 +1,37 @@
 <script lang="ts">
-	import { website, type MenuItem } from '$lib/ontologies/website';
+	import { type MenuItem } from '$lib/ontologies/website';
 	import { generateId } from '$lib/utils';
-	import { getResource, getValue } from '@tomic/svelte';
+	import { getResource } from '@tomic/svelte';
 	import MenuItemLink from './MenuItemLink.svelte';
-	import { unknownSubject } from '@tomic/lib';
 	import type { FocusEventHandler } from 'svelte/elements';
-	import { currentSubject } from '$lib/stores/currentSubject';
-
+	import { appState } from '$lib/stores/appstate.svelte';
+	import Self from './MenuItem.svelte';
 	/*
 		This view renders a menu-item resource. A menu-item can have a linked-to property but also a sub-items property.
 		If it has a links-to prop, we simply render a link that navigates to the href of the linked resource.
 		If it has a sub-items prop, we render a button that toggles a popover in which we render this same view for all sub items.
 	*/
 
-	export let subject: string;
+	interface Props {
+		subject: string;
+	}
+
+	const { subject }: Props = $props();
 
 	/* A random id used to link the button to the popover */
 	const id = generateId();
+	const anchorName = `--menuItem-${id}`;
 
-	let menuItem = getResource<MenuItem>(subject ?? unknownSubject);
+	let menuItem = getResource<MenuItem>(() => subject);
+	let subItems = $derived(menuItem.props.subItems);
 
-	let popover: HTMLDivElement;
-	let button: HTMLButtonElement;
+	let popover: HTMLDivElement | undefined = $state();
+	let button: HTMLButtonElement | undefined = $state();
+
+	let submenuPosition = $state({
+		top: '0px',
+		left: '0px'
+	});
 
 	const closePopover = () => {
 		popover?.hidePopover();
@@ -35,7 +45,19 @@
 		}
 	};
 
-	$: subItems = getValue(menuItem, website.properties.subItems);
+	let calcPopoverPosition = () => {
+		if (!button || !popover) return;
+
+		// Check if the anchor position api is supported. If so we don't need to calculate the position.
+		if (getComputedStyle(popover).getPropertyValue('--supports-position-anchor') !== 'false') {
+			return;
+		}
+
+		const rect = button.getBoundingClientRect();
+
+		submenuPosition.top = `calc(${rect.top}px + 2rem)`;
+		submenuPosition.left = `calc(${rect.left}px - (var(--menu-width) / 2 - ${rect.width / 2}px))`;
+	};
 </script>
 
 <svelte:document
@@ -45,24 +67,38 @@
 		}
 	}}
 />
-
-{#if $subItems && $subItems.length > 0}
-	<button bind:this={button} popovertarget={id} popovertargetaction="toggle">
-		{$menuItem.title}
+{#if subItems && subItems.length > 0}
+	<button
+		bind:this={button}
+		popovertarget={id}
+		popovertargetaction="toggle"
+		onclick={calcPopoverPosition}
+		style:--anchor-name={anchorName}
+	>
+		{menuItem.title}
 	</button>
 
-	<div class="submenu" popover="manual" {id} bind:this={popover} on:focusout={onFocusout}>
-		{#each $subItems as subItem}
+	<div
+		class="submenu"
+		popover="manual"
+		{id}
+		bind:this={popover}
+		onfocusout={onFocusout}
+		style:--top={submenuPosition.top}
+		style:--left={submenuPosition.left}
+		style:--anchor-name={anchorName}
+	>
+		{#each subItems as subItem}
 			<ul>
 				<li>
-					<svelte:self subject={subItem} />
+					<Self subject={subItem} />
 				</li>
 			</ul>
 		{/each}
 	</div>
 {:else}
 	<!-- The resource does not have subitems so we just render a link -->
-	<MenuItemLink resource={$menuItem} active={$currentSubject === $menuItem.props.linksTo} />
+	<MenuItemLink resource={menuItem} active={appState.currentSubject === menuItem.props.linksTo} />
 {/if}
 
 <style>
@@ -70,7 +106,9 @@
 		padding: 0.5rem;
 		list-style: none;
 	}
+
 	button {
+		anchor-name: var(--anchor-name);
 		padding: 0.4rem;
 		display: inline-flex;
 		align-items: center;
@@ -81,7 +119,6 @@
 		background: none;
 		cursor: pointer;
 		transition: background-color 100ms ease-in-out;
-		anchor-name: --menu-item-anchor;
 		&:hover,
 		&:focus-visible {
 			background-color: var(--theme-color-bg-2);
@@ -89,10 +126,8 @@
 	}
 
 	.submenu {
-		position-anchor: --menu-item-anchor;
-		inset-area: bottom center;
-		position-area: bottom center;
-		width: max(20ch, anchor-size(width));
+		--menu-width: 20ch;
+		width: var(--menu-width);
 		border: 1px solid var(--theme-color-bg-1);
 		border-radius: var(--theme-border-radius);
 		box-shadow:
@@ -102,5 +137,15 @@
 			0px 22.3px 17.9px rgba(0, 0, 0, 0.042),
 			0px 41.8px 33.4px rgba(0, 0, 0, 0.05),
 			0px 100px 80px rgba(0, 0, 0, 0.07);
+
+		position-anchor: var(--anchor-name);
+		position-area: bottom center;
+
+		@supports not (anchor-name: --something) {
+			--supports-position-anchor: false;
+			position: fixed;
+			top: var(--top);
+			left: var(--left);
+		}
 	}
 </style>

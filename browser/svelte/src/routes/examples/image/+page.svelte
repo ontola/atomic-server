@@ -53,7 +53,7 @@
 <style>
   .image-styler {
     display: contents;
-    & img {
+    :global(& img) {
       border-radius: 15px;
     }
   }

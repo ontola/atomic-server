@@ -1,21 +1,21 @@
 <script lang="ts">
 	import Container from '$lib/components/Layout/Container.svelte';
 	import type { Page } from '$lib/ontologies/website';
-	import { core, type Resource } from '@tomic/lib';
+	import { type Resource } from '@tomic/lib';
 	import BlockView from '../Block/BlockView.svelte';
-	import type { Readable } from 'svelte/store';
-	import { getValue } from '@tomic/svelte';
 
-	export let resource: Readable<Resource<Page>>;
+	interface Props {
+		resource: Resource<Page>;
+	}
 
-	$: title = getValue(resource, core.properties.name);
+	const { resource }: Props = $props();
 </script>
 
 <Container>
 	<div class="wrapper">
-		<h1>{$title}</h1>
+		<h1>{resource.title}</h1>
 
-		{#each $resource.props.blocks ?? [] as block (block)}
+		{#each resource.props.blocks ?? [] as block (block)}
 			<BlockView subject={block} />
 		{/each}
 	</div>

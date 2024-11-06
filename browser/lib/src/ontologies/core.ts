@@ -3,7 +3,7 @@
  * For more info on how to use ontologies: https://github.com/atomicdata-dev/atomic-server/blob/develop/browser/cli/readme.md
  * -------------------------------- */
 
-import type { BaseProps } from '../index.js';
+import type { OntologyBaseObject, BaseProps } from '../index.js';
 
 export const core = {
   classes: {
@@ -35,7 +35,41 @@ export const core = {
     isLocked: 'https://atomicdata.dev/properties/isLocked',
     localId: 'https://atomicdata.dev/properties/localId',
   },
-} as const;
+  __classDefs: {
+    ['https://atomicdata.dev/classes/Class']: [
+      'https://atomicdata.dev/properties/shortname',
+      'https://atomicdata.dev/properties/description',
+      'https://atomicdata.dev/properties/recommends',
+      'https://atomicdata.dev/properties/requires',
+    ],
+    ['https://atomicdata.dev/classes/Property']: [
+      'https://atomicdata.dev/properties/shortname',
+      'https://atomicdata.dev/properties/datatype',
+      'https://atomicdata.dev/properties/description',
+      'https://atomicdata.dev/properties/classtype',
+      'https://atomicdata.dev/properties/isDynamic',
+      'https://atomicdata.dev/properties/isLocked',
+      'https://atomicdata.dev/properties/allowsOnly',
+    ],
+    ['https://atomicdata.dev/classes/Agent']: [
+      'https://atomicdata.dev/properties/publicKey',
+      'https://atomicdata.dev/properties/name',
+      'https://atomicdata.dev/properties/description',
+      'https://atomicdata.dev/properties/drives',
+    ],
+    ['https://atomicdata.dev/classes/Datatype']: [
+      'https://atomicdata.dev/properties/shortname',
+      'https://atomicdata.dev/properties/description',
+    ],
+    ['https://atomicdata.dev/class/ontology']: [
+      'https://atomicdata.dev/properties/description',
+      'https://atomicdata.dev/properties/shortname',
+      'https://atomicdata.dev/properties/classes',
+      'https://atomicdata.dev/properties/properties',
+      'https://atomicdata.dev/properties/instances',
+    ],
+  },
+} as const satisfies OntologyBaseObject;
 
 // eslint-disable-next-line @typescript-eslint/no-namespace
 export namespace Core {
@@ -112,7 +146,7 @@ declare module '../index.js' {
     [core.properties.write]: string[];
     [core.properties.publicKey]: string;
     [core.properties.instances]: string[];
-    [core.properties.properties]: string[];
+    [core.properties.properties]: undefined;
     [core.properties.classes]: string[];
     [core.properties.isLocked]: boolean;
     [core.properties.localId]: string;

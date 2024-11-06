@@ -1,15 +1,15 @@
 <script lang="ts">
 	import { core } from '@tomic/lib';
 	import { getResource } from '@tomic/svelte';
-	import { currentSubject } from '$lib/stores/currentSubject';
+	import { appState } from '$lib/stores/appstate.svelte';
 	import '../../styles/reset.css';
 
-	let page = getResource(currentSubject);
+	let page = getResource(() => appState.currentSubject);
 </script>
 
 <svelte:head>
-	<title>{$page.title}</title>
-	<meta content={$page.get(core.properties.description)} name="description" />
+	<title>{page.title}</title>
+	<meta content={page.get(core.properties.description)} name="description" />
 </svelte:head>
 <slot />
 

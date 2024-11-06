@@ -3,7 +3,7 @@
  * For more info on how to use ontologies: https://github.com/atomicdata-dev/atomic-server/blob/develop/browser/cli/readme.md
  * -------------------------------- */
 
-import type { BaseProps } from '../index.js';
+import type { OntologyBaseObject, BaseProps } from '../index.js';
 
 export const server = {
   classes: {
@@ -46,7 +46,50 @@ export const server = {
     imageWidth: 'https://atomicdata.dev/properties/imageWidth',
     imageHeight: 'https://atomicdata.dev/properties/imageHeight',
   },
-} as const;
+  __classDefs: {
+    ['https://atomicdata.dev/classes/Error']: [
+      'https://atomicdata.dev/properties/description',
+    ],
+    ['https://atomicdata.dev/classes/Endpoint']: [
+      'https://atomicdata.dev/properties/description',
+      'https://atomicdata.dev/properties/endpoint/parameters',
+    ],
+    ['https://atomicdata.dev/classes/Drive']: [
+      'https://atomicdata.dev/properties/read',
+      'https://atomicdata.dev/properties/children',
+      'https://atomicdata.dev/properties/description',
+      'https://atomicdata.dev/properties/subresources',
+      'https://atomicdata.dev/properties/write',
+      'https://atomicdata.dev/ontology/server/property/default-ontology',
+    ],
+    ['https://atomicdata.dev/classes/Redirect']: [
+      'https://atomicdata.dev/properties/destination',
+      'https://atomicdata.dev/properties/invite/redirectAgent',
+    ],
+    ['https://atomicdata.dev/classes/File']: [
+      'https://atomicdata.dev/properties/downloadURL',
+      'https://atomicdata.dev/properties/description',
+      'https://atomicdata.dev/properties/filesize',
+      'https://atomicdata.dev/properties/filename',
+      'https://atomicdata.dev/properties/checksum',
+      'https://atomicdata.dev/properties/mimetype',
+      'https://atomicdata.dev/properties/internalId',
+      'https://atomicdata.dev/properties/imageWidth',
+      'https://atomicdata.dev/properties/imageHeight',
+    ],
+    ['https://atomicdata.dev/classes/Invite']: [
+      'https://atomicdata.dev/properties/invite/target',
+      'https://atomicdata.dev/properties/invite/write',
+      'https://atomicdata.dev/properties/createdBy',
+      'https://atomicdata.dev/properties/invite/users',
+      'https://atomicdata.dev/properties/invite/usagesLeft',
+    ],
+    ['https://atomicdata.dev/ontology/server/class/endpoint-response']: [
+      'https://atomicdata.dev/ontology/server/property/status',
+      'https://atomicdata.dev/ontology/server/property/response-message',
+    ],
+  },
+} as const satisfies OntologyBaseObject;
 
 // eslint-disable-next-line @typescript-eslint/no-namespace
 export namespace Server {

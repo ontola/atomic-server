@@ -1,8 +1,9 @@
 import { JSONValue } from './value.js';
 
-export type BaseObject = {
-  classes: Record<string, string>;
-  properties: Record<string, string>;
+export type OntologyBaseObject = {
+  readonly classes: Record<string, string>;
+  readonly properties: Record<string, string>;
+  readonly __classDefs: Record<string, string[]>;
 };
 
 // Extended via module augmentation
@@ -52,7 +53,7 @@ export type InferTypeOfValueInTriple<
 > = Returns;
 
 type QuickAccesKnownPropType<Class extends OptionalClass> = {
-  readonly [Prop in keyof PropsOfClass<Class> as PropSubjectToNameMapping[Prop]]: InferTypeOfValueInTriple<
+  [Prop in keyof PropsOfClass<Class> as PropSubjectToNameMapping[Prop]]: InferTypeOfValueInTriple<
     Class,
     Prop
   >;
@@ -65,26 +66,48 @@ export type QuickAccesPropType<Class extends OptionalClass = UnknownClass> =
 
 export type OptionalClass = keyof Classes | UnknownClass;
 
-// A map of all known classes and properties to their camelcased shortname.
-const globalReverseNameMapping = new Map<string, string>();
-
 /** Let atomic lib know your custom ontologies exist */
-export function registerOntologies(...ontologies: BaseObject[]): void {
+export function registerOntologies(...ontologies: OntologyBaseObject[]): void {
+  if (!globalThis.ATOMIC_SUBJECT_TO_NAME_MAPPING) {
+    globalThis.ATOMIC_SUBJECT_TO_NAME_MAPPING = new Map<string, string>();
+  }
+
   for (const ontology of ontologies) {
-    for (const [key, value] of Object.entries(ontology.classes)) {
-      globalReverseNameMapping.set(value, key);
+    for (const [key, value] of Object.entries(ontology.properties)) {
+      globalThis.ATOMIC_SUBJECT_TO_NAME_MAPPING.set(value, key);
+    }
+  }
+
+  if (!globalThis.ATOMIC_CLASS_DEFS) {
+    globalThis.ATOMIC_CLASS_DEFS = new Map<string, Record<string, string>>();
+  }
+
+  for (const ontology of ontologies) {
+    if (!ontology.__classDefs) {
+      throw new Error(
+        'Outdated ontology format, update your ontologies using @tomic/cli',
+      );
     }
 
-    for (const [key, value] of Object.entries(ontology.properties)) {
-      globalReverseNameMapping.set(value, key);
+    for (const [key, value] of Object.entries(ontology.__classDefs)) {
+      const classDef = Object.fromEntries(
+        value.map(subject => [getKnownNameBySubject(subject), subject]),
+      );
+      globalThis.ATOMIC_CLASS_DEFS.set(key, classDef);
     }
   }
 }
 
 export function getKnownNameBySubject(subject: string): string | undefined {
-  return globalReverseNameMapping.get(subject);
+  return globalThis.ATOMIC_SUBJECT_TO_NAME_MAPPING.get(subject);
+}
+
+export function getKnownClassDefBySubject(
+  subject: string,
+): Map<string, Record<string, string>> {
+  return globalThis.ATOMIC_CLASS_DEFS.get(subject);
 }
 
 export function __INTERNAL_GET_KNOWN_SUBJECT_MAPPING(): Map<string, string> {
-  return globalReverseNameMapping;
+  return globalThis.ATOMIC_SUBJECT_TO_NAME_MAPPING;
 }

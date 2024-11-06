@@ -11,9 +11,31 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 - [#992](https://github.com/atomicdata-dev/atomic-server/issues/992) Fix Searchbox overflowing when displaying long names.
 - [#999](https://github.com/atomicdata-dev/atomic-server/issues/999) Fix parseMetaTags character escape issue.
 
+### @tomic/lib
+
+- `resource.props` is now writable: `resource.props.name = 'New Name'`.
+- Added `store.preloadResourceTree()` method.
+- Fix generated ontologies not working in a Next.js server context.
+
 ### @tomic/cli
 
 - [#983](https://github.com/atomicdata-dev/atomic-server/issues/983) Give clear error when name collisions are found in an ontology.
+- Generates class definitions that enables doing: `resource.props.name = 'New Name'`;
+
+### @tomic/svelte
+
+- [#700](https://github.com/atomicdata-dev/atomic-server/issues/700) Update to Svelte 5. There are significant changes to the API.
+- BREAKING CHANGE: Dropped support for Svelte 4 and below.
+- BREAKING CHANGE: `getResource()` now returns a reactive proxy instead of a readable store.
+- BREAKING CHANGE: `getResource()` now takes a function returning a subject instead of the subject directly. e.g. `getResource(() => 'https://my-atomicserver.com/my-resource');`.
+- BREAKING CHANGE: Removed `getValue()`. It is no longer needed. Instead use `resource.props.name` directly or do `const name = $derived(resource.get(core.properties.name));`.
+- BREAKING CHANGE: Removed `initStore()`. You now need to set your store on a context using `createAtomicStoreContext()`.
+- BREAKING CHANGE: Removed `loadResourceTree()`. It is now a method on `store`: `store.preloadResourceTree()`.
+- Added `createAtomicStoreContext()` and `getStoreFromContext()`.
+
+### @tomic/create-template
+
+- [#700](https://github.com/atomicdata-dev/atomic-server/issues/700) Update SvelteKit-site template to Svelte 5.
 
 ## [v0.40.0] - 2024-10-07
 

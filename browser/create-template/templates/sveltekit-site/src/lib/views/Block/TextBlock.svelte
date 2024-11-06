@@ -3,7 +3,11 @@
 	import type { Resource } from '@tomic/lib';
 	import SvelteMarkdown from 'svelte-markdown';
 
-	export let resource: Resource<TextBlock>;
+	interface Props {
+		resource: Resource<TextBlock>;
+	}
+
+	const { resource }: Props = $props();
 </script>
 
 <div class="wrapper">

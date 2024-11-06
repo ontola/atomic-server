@@ -10,18 +10,24 @@
 		Renders a full page view. The actual view component is determined by the resource's class.
 	*/
 
-	export let subject: string;
+	interface Props {
+		subject: string;
+	}
 
-	$: resource = getResource(subject);
+	const { subject }: Props = $props();
 
-	$: component = $resource.matchClass(
-		{
-			[website.classes.page]: PageFullPage,
-			[website.classes.blogIndexPage]: BlogIndexPageFullPage,
-			[website.classes.blogpost]: BlogpostFullPage
-		},
-		DefaultFullPage
+	let resource = getResource(() => subject);
+
+	let View = $derived(
+		resource.matchClass(
+			{
+				[website.classes.page]: PageFullPage,
+				[website.classes.blogIndexPage]: BlogIndexPageFullPage,
+				[website.classes.blogpost]: BlogpostFullPage
+			},
+			DefaultFullPage
+		)
 	);
 </script>
 
-<svelte:component this={component} {resource} />
+<View {resource} />

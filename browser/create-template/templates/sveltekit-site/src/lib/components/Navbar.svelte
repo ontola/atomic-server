@@ -1,30 +1,28 @@
 <script lang="ts">
 	import { PUBLIC_WEBSITE_RESOURCE } from '$env/static/public';
-	import { type Website } from '$lib/ontologies/website';
+	import { website, type Website } from '$lib/ontologies/website';
 	import { getResource } from '@tomic/svelte';
 	import MenuItem from '../views/MenuItem/MenuItem.svelte';
 	import Container from './Layout/Container.svelte';
 	import HStack from './Layout/HStack.svelte';
-	import Loader from './Loader.svelte';
 
-	$: site = getResource<Website>(PUBLIC_WEBSITE_RESOURCE);
+	let site = getResource<Website>(() => PUBLIC_WEBSITE_RESOURCE);
+	let menuItems = $derived(site.props.menuItems ?? []);
 </script>
 
 <Container>
 	<nav>
 		<HStack align="center" justify="space-between" wrap>
-			<Loader resource={$site}>
-				<a class="site-title" href="/">
-					{$site.title}
-				</a>
-				<ul>
-					{#each $site.props.menuItems ?? [] as menuItem}
-						<li>
-							<MenuItem subject={menuItem} />
-						</li>
-					{/each}
-				</ul>
-			</Loader>
+			<a class="site-title" href="/">
+				{site.title}
+			</a>
+			<ul>
+				{#each menuItems as menuItem (menuItem)}
+					<li>
+						<MenuItem subject={menuItem} />
+					</li>
+				{/each}
+			</ul>
 		</HStack>
 	</nav>
 </Container>

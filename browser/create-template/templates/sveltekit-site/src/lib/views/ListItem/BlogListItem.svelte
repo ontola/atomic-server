@@ -3,7 +3,11 @@
 	import type { Resource } from '@tomic/lib';
 	import { Image } from '@tomic/svelte';
 
-	export let resource: Resource<Blogpost>;
+	interface Props {
+		resource: Resource<Blogpost>;
+	}
+
+	const { resource }: Props = $props();
 
 	const formatter = new Intl.DateTimeFormat('default', {
 		year: 'numeric',
@@ -11,7 +15,7 @@
 		day: 'numeric'
 	});
 
-	$: date = formatter.format(new Date(resource.props.publishedAt));
+	let date = $derived(formatter.format(new Date(resource.props.publishedAt)));
 </script>
 
 <a class="card" href={resource.props.href}>
@@ -34,7 +38,7 @@
 		border: 1px solid var(--border-color);
 		border-radius: var(--theme-border-radius);
 		overflow: clip;
-		& img {
+		:global(& img) {
 			aspect-ratio: 21 / 9;
 			object-fit: cover;
 			transition: transform 300ms ease-in-out;
@@ -42,7 +46,7 @@
 
 		&:hover {
 			border-color: var(--theme-color-accent);
-			& img {
+			:global(& img) {
 				transform: scale(1.1);
 			}
 		}
