@@ -1,5 +1,5 @@
-import Container from "./Layout/Container";
-import styles from "./Footer.module.css";
+import Container from './Layout/Container';
+import styles from './Footer.module.css';
 
 const Footer = () => {
   const year = new Date().getFullYear();

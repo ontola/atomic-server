@@ -462,7 +462,7 @@ Currently available @tomic/templates for the website template are:
         '01j69weee5kvxedekcsm9z8hgd',
       ],
       'website/property/path': '/',
-      [core.properties.description]: 'A Sveltekit site made with Atomic Data',
+      [core.properties.description]: 'A website made with Atomic Data',
       [core.properties.isA]: ['website/class/page'],
       [core.properties.name]: 'Atomic Website Template',
       [core.properties.parent]: 'site-data',

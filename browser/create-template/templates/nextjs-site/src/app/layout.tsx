@@ -11,6 +11,8 @@ export const metadata: Metadata = {
   description: 'A Next.js template for Atomic Server',
 };
 
+export const dynamic = 'force-dynamic';
+
 export default function RootLayout({
   children,
 }: Readonly<{

@@ -46,6 +46,7 @@ const BlogIndexPageFullPage = async ({
                   type='search'
                   aria-label='Search'
                   placeholder='Search blogposts...'
+                  disabled
                 />
               }
             >

@@ -15,7 +15,7 @@ const CurrentSubjectContext = createContext<
 export const CurrentSubjectProvider = ({
   children,
 }: {
-  children: Readonly<React.ReactNode>;
+  children: React.ReactNode;
 }) => {
   const [currentSubject, setCurrentSubject] = useState<string>(
     env.NEXT_PUBLIC_WEBSITE_RESOURCE,
@@ -35,7 +35,9 @@ export const CurrentSubjectProvider = ({
 export const useCurrentSubject = () => {
   const context = useContext(CurrentSubjectContext);
   if (!context) {
-    throw new Error('useSubject must be used within a SubjectProvider');
+    throw new Error(
+      'useCurrentSubject must be used within a CurrentSubjectProvider',
+    );
   }
   return context;
 };

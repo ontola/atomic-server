@@ -1,28 +1,28 @@
-import React, { ReactNode } from "react";
-import styles from "./VStack.module.css";
+import React, { ReactNode } from 'react';
+import styles from './VStack.module.css';
 
 interface VStackProps {
-  gap?: React.CSSProperties["gap"];
-  align?: React.CSSProperties["alignItems"];
-  justify?: React.CSSProperties["justifyContent"];
-  height?: React.CSSProperties["height"];
+  gap?: React.CSSProperties['gap'];
+  align?: React.CSSProperties['alignItems'];
+  justify?: React.CSSProperties['justifyContent'];
+  height?: React.CSSProperties['height'];
   children: ReactNode;
 }
 
-const VStack: React.FC<VStackProps> = ({
-  gap = "1rem",
-  align = "start",
-  justify = "start",
-  height = "auto",
+const VStack = ({
+  gap = '1rem',
+  align = 'start',
+  justify = 'start',
+  height = 'auto',
   children,
-}) => {
+}: VStackProps) => {
   const inlineStyles: {
     [key: string]: React.CSSProperties[keyof React.CSSProperties];
   } = {
-    "--vstack-gap": gap,
-    "--vstack-align": align,
-    "--vstack-justify": justify,
-    "--vstack-height": height,
+    '--vstack-gap': gap,
+    '--vstack-align': align,
+    '--vstack-justify': justify,
+    '--vstack-height': height,
   };
 
   return (
