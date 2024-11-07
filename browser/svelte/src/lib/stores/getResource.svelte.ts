@@ -12,10 +12,10 @@ import { getStoreFromContext } from './store.js';
 
 /**
  * Starts fetching a resource and adds it to the store.
- * An empty resource will be returned immediately that updates when the resource is fetched.
- * This way you can start rendering UI that
+ * Unless the resource was found in the cache, an empty resource will be returned immediately that updates when the resource is fetched.
+ * This way you can start rendering UI without having to wait for the resource to be fetched.
  * To check if the resource is ready, use `resource.loading`.
- * Only works in components contexts. If you want to fetch a resource outside of a component, use `await store.getResource()`.
+ * Only works in component contexts. If you want to fetch a resource outside of a component, use `await store.getResource()`.
  *
  * You need to pass the subject as a function that returns a string to make it reactive.
  *
@@ -76,6 +76,7 @@ export function getResource<T extends OptionalClass = never>(
     };
   });
 
+  // Returning the resource directly would break the reactivity so we need to proxy it.
   return new Proxy(resource, {
     get(_, prop) {
       return resource[prop as keyof Resource];

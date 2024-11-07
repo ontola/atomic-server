@@ -23,7 +23,10 @@
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
     "https://atomicdata.dev/properties/description": "A list of properties",
     "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-    "https://atomicdata.dev/properties/shortname": "properties"
+    "https://atomicdata.dev/properties/shortname": "properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ]
   },
   {
     "@id": "https://atomicdata.dev/properties/classes",
@@ -41,7 +44,10 @@
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
     "https://atomicdata.dev/properties/description": "A list of class instances",
     "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-    "https://atomicdata.dev/properties/shortname": "instances"
+    "https://atomicdata.dev/properties/shortname": "instances",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ]
   },
   {
     "@id": "https://atomicdata.dev/ontology/server/property/default-ontology",

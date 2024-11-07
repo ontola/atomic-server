@@ -15,7 +15,8 @@ export async function getCurrentResource(
 	url: URL
 ): Promise<Resource | undefined> {
 	const store = getStore();
-	// Svelte uses a special fetch function that inlines responses during server-side rendering. To make sure the store can make use of this we need to inject the fetch function into the store.
+	// Svelte uses a special fetch function that inlines responses during server-side rendering.
+	// To make sure the store can make use of this we need to inject the fetch function into the store.
 	store.injectFetch(fetchOverride);
 
 	const path = url.pathname;

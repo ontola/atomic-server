@@ -16,9 +16,10 @@ import { server } from './ontologies/server.js';
 
 import {
   getKnownClassDefBySubject,
+  getKnownNameBySubject,
   type InferTypeOfValueInTriple,
   type OptionalClass,
-  type QuickAccesPropType,
+  type QuickAccessPropType,
 } from './ontology.js';
 import type { Store } from './store.js';
 import { properties, instances, urls } from './urls.js';
@@ -100,7 +101,7 @@ export class Resource<C extends OptionalClass = any> {
     return this._subject;
   }
 
-  /** A human readable title for the resource, returns first of eighter: name, shortname, filename or subject */
+  /** A human readable title for the resource, returns first of either: name, shortname, filename or subject */
   public get title(): string {
     return (this.get(core.properties.name) ??
       this.get(core.properties.shortname) ??
@@ -112,7 +113,7 @@ export class Resource<C extends OptionalClass = any> {
    * Dynamic prop accessor, only works for known properties registered via an ontology.
    * @example const description = resource.props.description
    */
-  public get props(): QuickAccesPropType<C> {
+  public get props(): QuickAccessPropType<C> {
     const defaultProps = {
       parent: core.properties.parent,
       isA: core.properties.isA,
@@ -128,10 +129,12 @@ export class Resource<C extends OptionalClass = any> {
       .filter(def => def !== undefined);
 
     const getPropSubject = (name: string) => {
+      // Check if the property is a default property
       if (name in defaultProps) {
         return defaultProps[name];
       }
 
+      // Check if the property is defined in any of the classes
       for (const def of defs) {
         const value = def[name];
 
@@ -139,9 +142,18 @@ export class Resource<C extends OptionalClass = any> {
           return value;
         }
       }
+
+      // Check if any of its propvals have the name
+      for (const key of this.propvals.keys()) {
+        const propName = getKnownNameBySubject(key);
+
+        if (propName === name) {
+          return key;
+        }
+      }
     };
 
-    return new Proxy({} as QuickAccesPropType<C>, {
+    return new Proxy({} as QuickAccessPropType<C>, {
       get(_target, propName) {
         const propSubject = getPropSubject(propName as string);
 

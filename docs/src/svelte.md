@@ -4,9 +4,11 @@
 
 An AtomicServer client for [Svelte](https://svelte.dev/).
 Makes fetching AtomicData easy.
-Fetched resources are chached and reactive, they will update when the data changes, even when the resource was changed by someone else.
+Fetched resources are cached and reactive, they will update when the data changes, even when the resource was changed by someone else.
 
 [See open source template: `atomic-sveltekit-demo` (outdated).](https://github.com/atomicdata-dev/atomic-sveltekit-demo)
+
+> **Note:** As of version 0.41, @tomic/svelte requires Svelte 5 or later. Svelte 4 is not supported on versions above 0.40.0.
 
 ## Quick Examples
 
@@ -31,7 +33,7 @@ Fetched resources are chached and reactive, they will update when the data chang
   import { type Core } from '@tomic/lib';
 
   const resource = getResource<Core.Agent>(() => 'https://example.com/user1');
-</script>
+</script>a
 
 <input bind:value={resource.props.name} />
 <button onclick={() => resource.save()}>Save</button>
@@ -88,7 +90,7 @@ You can now access this store from any sub component by using `getStoreFromConte
   const store = getStoreFromContext();
   store.newResource({
     isA: [dataBrowser.classes.Folder]
-    parant: 'some_other_subject',
+    parent: 'some_other_subject',
   });
 </script>
 ```

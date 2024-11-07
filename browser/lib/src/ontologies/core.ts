@@ -146,7 +146,7 @@ declare module '../index.js' {
     [core.properties.write]: string[];
     [core.properties.publicKey]: string;
     [core.properties.instances]: string[];
-    [core.properties.properties]: undefined;
+    [core.properties.properties]: string[];
     [core.properties.classes]: string[];
     [core.properties.isLocked]: boolean;
     [core.properties.localId]: string;

@@ -17,34 +17,35 @@ export const server = {
       'https://atomicdata.dev/ontology/server/class/endpoint-response',
   },
   properties: {
-    drives: 'https://atomicdata.dev/properties/drives',
-    results: 'https://atomicdata.dev/properties/endpoint/results',
-    property: 'https://atomicdata.dev/properties/search/property',
-    redirectAgent: 'https://atomicdata.dev/properties/invite/redirectAgent',
     agent: 'https://atomicdata.dev/properties/invite/agent',
+    altText: 'https://atomicdata.dev/ontology/server/property/alt-text',
+    attachments: 'https://atomicdata.dev/properties/attachments',
+    checksum: 'https://atomicdata.dev/properties/checksum',
+    children: 'https://atomicdata.dev/properties/children',
+    createdBy: 'https://atomicdata.dev/properties/createdBy',
+    defaultOntology:
+      'https://atomicdata.dev/ontology/server/property/default-ontology',
+    destination: 'https://atomicdata.dev/properties/destination',
+    downloadUrl: 'https://atomicdata.dev/properties/downloadURL',
+    drives: 'https://atomicdata.dev/properties/drives',
+    filename: 'https://atomicdata.dev/properties/filename',
+    filesize: 'https://atomicdata.dev/properties/filesize',
+    imageHeight: 'https://atomicdata.dev/properties/imageHeight',
+    imageWidth: 'https://atomicdata.dev/properties/imageWidth',
+    internalId: 'https://atomicdata.dev/properties/internalId',
+    mimetype: 'https://atomicdata.dev/properties/mimetype',
+    parameters: 'https://atomicdata.dev/properties/endpoint/parameters',
+    property: 'https://atomicdata.dev/properties/search/property',
     publicKey: 'https://atomicdata.dev/properties/invite/publicKey',
+    redirectAgent: 'https://atomicdata.dev/properties/invite/redirectAgent',
+    responseMessage:
+      'https://atomicdata.dev/ontology/server/property/response-message',
+    results: 'https://atomicdata.dev/properties/endpoint/results',
+    status: 'https://atomicdata.dev/ontology/server/property/status',
     target: 'https://atomicdata.dev/properties/invite/target',
     usagesLeft: 'https://atomicdata.dev/properties/invite/usagesLeft',
     users: 'https://atomicdata.dev/properties/invite/users',
     write: 'https://atomicdata.dev/properties/invite/write',
-    filename: 'https://atomicdata.dev/properties/filename',
-    filesize: 'https://atomicdata.dev/properties/filesize',
-    downloadUrl: 'https://atomicdata.dev/properties/downloadURL',
-    mimetype: 'https://atomicdata.dev/properties/mimetype',
-    attachments: 'https://atomicdata.dev/properties/attachments',
-    createdBy: 'https://atomicdata.dev/properties/createdBy',
-    checksum: 'https://atomicdata.dev/properties/checksum',
-    internalId: 'https://atomicdata.dev/properties/internalId',
-    children: 'https://atomicdata.dev/properties/children',
-    parameters: 'https://atomicdata.dev/properties/endpoint/parameters',
-    destination: 'https://atomicdata.dev/properties/destination',
-    status: 'https://atomicdata.dev/ontology/server/property/status',
-    responseMessage:
-      'https://atomicdata.dev/ontology/server/property/response-message',
-    defaultOntology:
-      'https://atomicdata.dev/ontology/server/property/default-ontology',
-    imageWidth: 'https://atomicdata.dev/properties/imageWidth',
-    imageHeight: 'https://atomicdata.dev/properties/imageHeight',
   },
   __classDefs: {
     ['https://atomicdata.dev/classes/Error']: [
@@ -76,6 +77,7 @@ export const server = {
       'https://atomicdata.dev/properties/internalId',
       'https://atomicdata.dev/properties/imageWidth',
       'https://atomicdata.dev/properties/imageHeight',
+      'https://atomicdata.dev/ontology/server/property/alt-text',
     ],
     ['https://atomicdata.dev/classes/Invite']: [
       'https://atomicdata.dev/properties/invite/target',
@@ -139,7 +141,8 @@ declare module '../index.js' {
         | typeof server.properties.mimetype
         | typeof server.properties.internalId
         | typeof server.properties.imageWidth
-        | typeof server.properties.imageHeight;
+        | typeof server.properties.imageHeight
+        | typeof server.properties.altText;
     };
     [server.classes.invite]: {
       requires: BaseProps | typeof server.properties.target;
@@ -159,60 +162,62 @@ declare module '../index.js' {
   }
 
   interface PropTypeMapping {
-    [server.properties.drives]: string[];
-    [server.properties.results]: string[];
-    [server.properties.property]: string;
-    [server.properties.redirectAgent]: string;
     [server.properties.agent]: string;
+    [server.properties.altText]: string;
+    [server.properties.attachments]: string[];
+    [server.properties.checksum]: string;
+    [server.properties.children]: string[];
+    [server.properties.createdBy]: string;
+    [server.properties.defaultOntology]: string;
+    [server.properties.destination]: string;
+    [server.properties.downloadUrl]: string;
+    [server.properties.drives]: string[];
+    [server.properties.filename]: string;
+    [server.properties.filesize]: number;
+    [server.properties.imageHeight]: number;
+    [server.properties.imageWidth]: number;
+    [server.properties.internalId]: string;
+    [server.properties.mimetype]: string;
+    [server.properties.parameters]: string[];
+    [server.properties.property]: string;
     [server.properties.publicKey]: string;
+    [server.properties.redirectAgent]: string;
+    [server.properties.responseMessage]: string;
+    [server.properties.results]: string[];
+    [server.properties.status]: number;
     [server.properties.target]: string;
     [server.properties.usagesLeft]: number;
     [server.properties.users]: string[];
     [server.properties.write]: boolean;
-    [server.properties.filename]: string;
-    [server.properties.filesize]: number;
-    [server.properties.downloadUrl]: string;
-    [server.properties.mimetype]: string;
-    [server.properties.attachments]: string[];
-    [server.properties.createdBy]: string;
-    [server.properties.checksum]: string;
-    [server.properties.internalId]: string;
-    [server.properties.children]: string[];
-    [server.properties.parameters]: string[];
-    [server.properties.destination]: string;
-    [server.properties.status]: number;
-    [server.properties.responseMessage]: string;
-    [server.properties.defaultOntology]: string;
-    [server.properties.imageWidth]: number;
-    [server.properties.imageHeight]: number;
   }
 
   interface PropSubjectToNameMapping {
-    [server.properties.drives]: 'drives';
-    [server.properties.results]: 'results';
-    [server.properties.property]: 'property';
-    [server.properties.redirectAgent]: 'redirectAgent';
     [server.properties.agent]: 'agent';
+    [server.properties.altText]: 'altText';
+    [server.properties.attachments]: 'attachments';
+    [server.properties.checksum]: 'checksum';
+    [server.properties.children]: 'children';
+    [server.properties.createdBy]: 'createdBy';
+    [server.properties.defaultOntology]: 'defaultOntology';
+    [server.properties.destination]: 'destination';
+    [server.properties.downloadUrl]: 'downloadUrl';
+    [server.properties.drives]: 'drives';
+    [server.properties.filename]: 'filename';
+    [server.properties.filesize]: 'filesize';
+    [server.properties.imageHeight]: 'imageHeight';
+    [server.properties.imageWidth]: 'imageWidth';
+    [server.properties.internalId]: 'internalId';
+    [server.properties.mimetype]: 'mimetype';
+    [server.properties.parameters]: 'parameters';
+    [server.properties.property]: 'property';
     [server.properties.publicKey]: 'publicKey';
+    [server.properties.redirectAgent]: 'redirectAgent';
+    [server.properties.responseMessage]: 'responseMessage';
+    [server.properties.results]: 'results';
+    [server.properties.status]: 'status';
     [server.properties.target]: 'target';
     [server.properties.usagesLeft]: 'usagesLeft';
     [server.properties.users]: 'users';
     [server.properties.write]: 'write';
-    [server.properties.filename]: 'filename';
-    [server.properties.filesize]: 'filesize';
-    [server.properties.downloadUrl]: 'downloadUrl';
-    [server.properties.mimetype]: 'mimetype';
-    [server.properties.attachments]: 'attachments';
-    [server.properties.createdBy]: 'createdBy';
-    [server.properties.checksum]: 'checksum';
-    [server.properties.internalId]: 'internalId';
-    [server.properties.children]: 'children';
-    [server.properties.parameters]: 'parameters';
-    [server.properties.destination]: 'destination';
-    [server.properties.status]: 'status';
-    [server.properties.responseMessage]: 'responseMessage';
-    [server.properties.defaultOntology]: 'defaultOntology';
-    [server.properties.imageWidth]: 'imageWidth';
-    [server.properties.imageHeight]: 'imageHeight';
   }
 }

@@ -23,5 +23,12 @@ const generateLine = (subject: string, reverseMapping: ReverseMapping) => {
   const resource = store.getResourceLoading<Core.Property>(subject);
   const datatype = resource.props.datatype as Datatype;
 
-  return `[${reverseMapping[subject]}]: ${DatatypeToTSTypeMap[datatype]}`;
+  const type = DatatypeToTSTypeMap[datatype];
+
+  if (!type) {
+    console.error(`Unknown datatype ${datatype} on property ${resource.title}`);
+    process.exit(1);
+  }
+
+  return `[${reverseMapping[subject]}]: ${type}`;
 };

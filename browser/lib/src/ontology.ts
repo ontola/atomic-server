@@ -52,7 +52,7 @@ export type InferTypeOfValueInTriple<
     : JSONValue,
 > = Returns;
 
-type QuickAccesKnownPropType<Class extends OptionalClass> = {
+type QuickAccessKnownPropType<Class extends OptionalClass> = {
   [Prop in keyof PropsOfClass<Class> as PropSubjectToNameMapping[Prop]]: InferTypeOfValueInTriple<
     Class,
     Prop
@@ -60,9 +60,9 @@ type QuickAccesKnownPropType<Class extends OptionalClass> = {
 };
 
 /** Type of the dynamically created resource.props field */
-export type QuickAccesPropType<Class extends OptionalClass = UnknownClass> =
+export type QuickAccessPropType<Class extends OptionalClass = UnknownClass> =
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  Class extends UnknownClass ? any : QuickAccesKnownPropType<Class>;
+  Class extends UnknownClass ? any : QuickAccessKnownPropType<Class>;
 
 export type OptionalClass = keyof Classes | UnknownClass;
 

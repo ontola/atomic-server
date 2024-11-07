@@ -70,9 +70,9 @@ const category = resource.get(
 
 ## Writing Data
 
-Writing data is done using the `.set` method (works on any resource) or by asigning to the props accessor (only works on annotated resources).
+Writing data is done using the `.set` method (works on any resource) or by assigning to the props accessor (only works on annotated resources).
 
-### Using .props:
+### Using .props
 
 ```typescript
 import { type Article } from './ontologies/article';
@@ -89,7 +89,7 @@ await resource.save();
 Setting values via `resource.props` does not validate the value against the properties datatype.
 Use the `resource.set()` method when you want to validate the value.
 
-### Using .set():
+### Using .set()
 
 ```typescript
 import { core } from '@tomic/lib';
@@ -146,6 +146,7 @@ await resource.save();
 > For example: `resource.props.likedBy.push('https://my-atomicserver.com/users/1')` will not work.
 
 **Parameters**
+
 | Name     | Type      | Description                                                                                         |
 |----------|-----------|-----------------------------------------------------------------------------------------------------|
 | property | string    | Subject of the property to push to                                                                  |

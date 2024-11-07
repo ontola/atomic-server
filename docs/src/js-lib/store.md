@@ -15,7 +15,7 @@ It takes an object with the following options
 | Name      | Type                | Description                                                                                                                              |
 |-----------|---------------------|------------------------------------------------------------------------------------------------------------------------------------------|
 | serverUrl | string              | URL of your atomic server                                                                                                                |
-| agent     | [Agent](./agent.md) | **(optional)** The agent the store should use to fetch resources and to sign commits when editting resources, defaults to a public agent |
+| agent     | [Agent](./agent.md) | **(optional)** The agent the store should use to fetch resources and to sign commits when editing resources, defaults to a public agent |
 
 ```typescript
 const store = new Store({

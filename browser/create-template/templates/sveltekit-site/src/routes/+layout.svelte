@@ -6,6 +6,7 @@
 	import VStack from '$lib/components/Layout/VStack.svelte';
 	import { getStore } from '$lib/atomic/getStore';
 
+	// We set the store on the AtomicStoreContext so it can be accessed by `getResource()`.
 	const store = getStore();
 	createAtomicStoreContext(store);
 </script>
