@@ -1,5 +1,4 @@
 import { styled } from 'styled-components';
-import { transition } from '../../helpers/transition';
 
 export interface SideBarItemProps {
   disabled?: boolean;
@@ -25,9 +24,7 @@ export const SideBarItem = styled('span')<SideBarItemProps>`
     color: ${p => (p.disabled ? p.theme.colors.main : p.theme.colors.text)};
   }
   &:active {
-    // filter: brightness(0.95);
     background-color: ${p => p.theme.colors.bg2};
-    // opacity: 0.5;
   }
 
   svg {
