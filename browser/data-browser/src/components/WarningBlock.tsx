@@ -9,7 +9,6 @@ export function WarningBlock({
 }
 
 const Wrapper = styled.div`
-  background-color: ${p => lighten(0.4, p.theme.colors.warning)};
   border: 2px solid ${p => lighten(0.2, p.theme.colors.warning)};
   border-radius: ${p => p.theme.radius};
   padding: 1rem;
@@ -17,6 +16,5 @@ const Wrapper = styled.div`
 
 WarningBlock.Title = styled.p`
   font-weight: bold;
-  color: ${p => lighten(-1, p.theme.colors.warning)};
   margin-bottom: 0px;
 `;

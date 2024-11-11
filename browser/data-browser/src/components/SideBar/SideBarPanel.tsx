@@ -22,10 +22,14 @@ export function SideBarPanel({
           {title}
         </PanelDevider>
       </DeviderButton>
-      <Collapse open={open}>{children}</Collapse>
+      <StyledCollapse open={open}>{children}</StyledCollapse>
     </Wrapper>
   );
 }
+
+const StyledCollapse = styled(Collapse)`
+  padding-inline: 1rem;
+`;
 
 export const PanelDevider = styled.h2`
   font-size: inherit;

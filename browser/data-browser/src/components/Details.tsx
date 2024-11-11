@@ -2,6 +2,7 @@ import { PropsWithChildren, useCallback, useEffect, useState } from 'react';
 import { styled } from 'styled-components';
 import { FaCaretRight } from 'react-icons/fa';
 import { Collapse } from './Collapse';
+import { IconButton } from './IconButton/IconButton';
 
 export interface DetailsProps {
   open?: boolean;
@@ -44,15 +45,15 @@ export function Details({
   return (
     <>
       <SummaryWrapper>
-        <IconButton
+        <StyledIconButton
           type='button'
+          title={isOpen ? 'collapse' : 'expand'}
           onClick={toggleOpen}
-          turn={!!isOpen}
           hide={!!disabled}
           aria-label={isOpen ? 'collapse' : 'expand'}
         >
-          <Icon />
-        </IconButton>
+          <Icon turn={!!isOpen} />
+        </StyledIconButton>
         <TitleWrapper>{title}</TitleWrapper>
       </SummaryWrapper>
       <StyledCollapse open={!!isOpen} noIndent={noIndent}>
@@ -77,39 +78,27 @@ const TitleWrapper = styled.div`
   }
 `;
 
-interface IconButtonProps {
-  turn: boolean;
-  hide: boolean;
-}
-
-const Icon = styled(FaCaretRight)`
+const Icon = styled(FaCaretRight)<{ turn: boolean }>`
   color: ${({ theme }) => theme.colors.main};
   margin-top: auto;
   cursor: pointer;
   * {
     cursor: pointer;
   }
-  font-size: 1.2rem;
-`;
-
-const IconButton = styled.button<IconButtonProps>`
   --speed: ${p => p.theme.animation.duration};
-  aspect-ratio: 1/1;
-  display: flex;
-  align-items: center;
-  padding: 0.2rem;
-  visibility: ${props => (props.hide ? 'hidden' : 'visible')};
   transition:
     transform var(--speed) ease-in-out,
     background-color var(--speed) ease;
   transform: rotate(${props => (props.turn ? '90deg' : '0deg')});
-  background-color: transparent;
-  border: none;
-  border-radius: 50%;
-  &:hover,
-  &:focus {
-    background-color: ${p => p.theme.colors.bg1};
-  }
+  aspect-ratio: 1/1;
+  display: flex;
+  align-items: center;
+`;
+
+const StyledIconButton = styled(IconButton)<{ hide: boolean }>`
+  font-size: 1rem;
+  margin-right: -0.3rem;
+  visibility: ${props => (props.hide ? 'hidden' : 'visible')};
 `;
 
 const StyledCollapse = styled(Collapse)<{ noIndent?: boolean }>`
