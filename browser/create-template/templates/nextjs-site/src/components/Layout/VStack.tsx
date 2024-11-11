@@ -1,5 +1,6 @@
 import React, { ReactNode } from 'react';
-import styles from './VStack.module.css';
+import styles from './Stack.module.css';
+import clsx from 'clsx';
 
 interface VStackProps {
   gap?: React.CSSProperties['gap'];
@@ -16,17 +17,15 @@ const VStack = ({
   height = 'auto',
   children,
 }: VStackProps) => {
-  const inlineStyles: {
-    [key: string]: React.CSSProperties[keyof React.CSSProperties];
-  } = {
-    '--vstack-gap': gap,
-    '--vstack-align': align,
-    '--vstack-justify': justify,
-    '--vstack-height': height,
+  const inlineStyles: Record<string, string | number> = {
+    '--stack-gap': gap,
+    '--stack-align': align,
+    '--stack-justify': justify,
+    '--stack-height': height,
   };
 
   return (
-    <div style={inlineStyles} className={styles.vstack}>
+    <div style={inlineStyles} className={clsx([styles.stack, styles.vstack])}>
       {children}
     </div>
   );

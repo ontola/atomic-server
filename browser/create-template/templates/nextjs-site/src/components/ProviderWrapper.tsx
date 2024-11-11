@@ -7,6 +7,7 @@ import { initOntologies } from '@/ontologies';
 import React from 'react';
 
 const ProviderWrapper = ({ children }: { children: React.ReactNode }) => {
+  // Registers your ontologies with the store
   initOntologies();
 
   return (

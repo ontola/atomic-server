@@ -1,13 +1,11 @@
 import FullPageView from '@/views/FullPage/FullPageView';
 import { notFound } from 'next/navigation';
 import { getCurrentResource } from '@/atomic/getCurrentResource';
-import { env } from '@/env';
 import { Metadata } from 'next';
 import { core } from '@tomic/lib';
 
 export const generateMetadata = async (): Promise<Metadata> => {
-  const url = new URL(env.NEXT_PUBLIC_ATOMIC_SERVER_URL);
-  const resource = await getCurrentResource(url);
+  const resource = await getCurrentResource('/');
 
   return {
     title: resource?.title,
@@ -16,8 +14,7 @@ export const generateMetadata = async (): Promise<Metadata> => {
 };
 
 export default async function Page() {
-  const url = new URL(env.NEXT_PUBLIC_ATOMIC_SERVER_URL);
-  const resource = await getCurrentResource(url);
+  const resource = await getCurrentResource('/');
 
   if (!resource) {
     return notFound();

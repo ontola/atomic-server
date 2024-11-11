@@ -10,12 +10,10 @@ const BlogListItem = async ({ resource }: { resource: Resource<Blogpost> }) => {
     day: 'numeric',
   });
 
-  const date = resource.props.publishedAt
-    ? formatter.format(new Date(resource.props.publishedAt))
-    : '';
+  const date = formatter.format(new Date(resource.props.publishedAt));
 
   return (
-    <a className={styles.card} href={resource.props.href ?? '#'}>
+    <a className={styles.card} href={resource.props.href}>
       <div className={styles.imageWrapper}>
         <Image subject={resource.props.coverImage} alt='' />
       </div>

@@ -8,9 +8,9 @@ import { store } from '@/store';
  * @returns Promise that resolves to the subject of the resource, or undefined if no resource was found.
  */
 export async function getCurrentResource(
-  url: URL,
+  path: string,
 ): Promise<Resource | undefined> {
-  const path = url.pathname;
+  console.log('getCurrentResource', path);
 
   // Find the resource with the current path as href.
   const collection = await new CollectionBuilder(store)

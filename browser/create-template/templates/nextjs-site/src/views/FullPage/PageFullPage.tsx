@@ -12,7 +12,7 @@ const PageFullPage = ({ resource }: { resource: Resource<Page> }) => {
       <div className={styles.wrapper}>
         <h1>{title?.toString()}</h1>
 
-        {resource.props.blocks?.map((block: string) => (
+        {resource.props.blocks?.map(block => (
           <BlockView key={block} subject={block} />
         ))}
       </div>

@@ -2,6 +2,7 @@ import Container from '@/components/Layout/Container';
 import { website, type Page } from '@/ontologies/website';
 import { core, type Resource } from '@tomic/lib';
 import styles from './BlogIndexPageFullPage.module.css';
+import searchStyle from '@/components/Searchbar.module.css';
 import VStack from '@/components/Layout/VStack';
 import HStack from '@/components/Layout/HStack';
 import ListItemView from '../ListItem/ListItemView';
@@ -16,7 +17,7 @@ const BlogIndexPageFullPage = async ({
 }: {
   resource: Resource<Page>;
   searchParams?: {
-    [key: string]: string | string[] | undefined;
+    [key: string]: Record<string, string | string[] | undefined>;
   };
 }) => {
   const allItems = await getAllBlogposts();
@@ -42,7 +43,7 @@ const BlogIndexPageFullPage = async ({
             <Suspense
               fallback={
                 <input
-                  className={styles.input}
+                  className={searchStyle.input}
                   type='search'
                   aria-label='Search'
                   placeholder='Search blogposts...'
@@ -55,7 +56,7 @@ const BlogIndexPageFullPage = async ({
           </HStack>
           {results.length !== 0 ? (
             <ul>
-              {results.map((post: string) => (
+              {results.map(post => (
                 <li key={post}>
                   <ListItemView subject={post} />
                 </li>

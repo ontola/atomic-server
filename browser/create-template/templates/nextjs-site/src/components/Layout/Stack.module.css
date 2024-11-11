@@ -1,0 +1,26 @@
+.stack {
+  display: flex;
+  gap: var(--stack-gap);
+  align-items: var(--stack-align);
+  justify-content: var(--stack-justify);
+  height: var(--stack-height, auto);
+
+  & > :is(h1, h2, h3, h4, h5, h6) {
+    margin: 0;
+  }
+}
+
+.vstack {
+  flex-direction: column;
+}
+.hstack {
+  flex-direction: row;
+}
+
+.fullWidth {
+  width: 100%;
+}
+
+.wrap {
+  flex-wrap: wrap;
+}

@@ -1,5 +1,4 @@
 import { getCurrentResource } from '@/atomic/getCurrentResource';
-import { env } from '@/env';
 import FullPageView from '@/views/FullPage/FullPageView';
 import { core } from '@tomic/lib';
 import type { Metadata } from 'next';
@@ -19,10 +18,7 @@ export const generateMetadata = async ({
 }: Props): Promise<Metadata> => {
   const slug = (await params).slug;
 
-  const resourceUrl = new URL(
-    `${env.NEXT_PUBLIC_ATOMIC_SERVER_URL}/${slug.join('/')}`,
-  );
-  const resource = await getCurrentResource(resourceUrl);
+  const resource = await getCurrentResource(`${slug.join('/')}`);
 
   return {
     title: resource?.title,
@@ -33,10 +29,8 @@ export const generateMetadata = async ({
 const Page = async (props: Props) => {
   const params = await props.params;
   const searchParams = await props.searchParams;
-  const resourceUrl = new URL(
-    `${env.NEXT_PUBLIC_ATOMIC_SERVER_URL}/${params.slug.join('/')}`,
-  );
-  const resource = await getCurrentResource(resourceUrl);
+
+  const resource = await getCurrentResource(`/${params.slug.join('/')}`);
 
   if (!resource) {
     return notFound();

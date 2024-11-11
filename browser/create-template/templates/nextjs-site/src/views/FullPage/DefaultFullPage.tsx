@@ -5,7 +5,7 @@ const DefaultFullPage = async ({ resource }: { resource: Resource }) => {
   return (
     <Container>
       <h1>{resource.title}</h1>
-      <p>No valid page view for resource {resource.getClasses()}.</p>
+      <p>No valid page view for class: {resource.getClasses()}.</p>
     </Container>
   );
 };

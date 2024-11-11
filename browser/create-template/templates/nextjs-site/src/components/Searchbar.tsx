@@ -34,6 +34,8 @@ const Searchbar = () => {
           src={FaMagnifyingGlass}
           alt='search'
         />
+
+        {styles.hallo}
         <input
           className={styles.input}
           type='search'
@@ -41,7 +43,7 @@ const Searchbar = () => {
           onChange={e => {
             setSearch(e.target.value);
           }}
-          aria-label='Search'
+          aria-label='Search blogposts...'
           placeholder='Search blogposts...'
         />
       </HStack>

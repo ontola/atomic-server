@@ -20,7 +20,7 @@ const Navbar = async () => {
             {site.title}
           </Link>
           <ul className={styles.ul}>
-            {site.props.menuItems?.map((menuItem: string) => (
+            {site.props.menuItems?.map(menuItem => (
               <li key={menuItem}>
                 <MenuItem subject={menuItem} />
               </li>

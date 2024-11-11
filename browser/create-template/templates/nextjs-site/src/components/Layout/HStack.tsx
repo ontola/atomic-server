@@ -1,6 +1,6 @@
-import React, { FC, ReactNode } from 'react';
+import React, { ReactNode } from 'react';
 import clsx from 'clsx';
-import styles from './HStack.module.css';
+import styles from './Stack.module.css';
 
 interface HStackProps {
   gap?: React.CSSProperties['gap'];
@@ -19,18 +19,17 @@ const HStack = ({
   wrap = false,
   children,
 }: HStackProps) => {
-  const inlineStyles: {
-    [key: string]: string | number;
-  } = {
-    '--hstack-gap': gap,
-    '--hstack-align': align,
-    '--hstack-justify': justify,
+  const inlineStyles: Record<string, string | number> = {
+    '--stack-gap': gap,
+    '--stack-align': align,
+    '--stack-justify': justify,
+    '--stack-height': 'auto',
   };
 
   return (
     <div
       style={inlineStyles}
-      className={clsx(styles.hstack, {
+      className={clsx([styles.stack, styles.hStack], {
         [styles.fullWidth]: fullWidth,
         [styles.wrap]: wrap,
       })}
