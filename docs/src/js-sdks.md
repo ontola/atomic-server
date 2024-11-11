@@ -1,4 +1,4 @@
-# Javscript SKDs
+# Atomic Data Javscript libraries & clients
 
 If you want to work with data from your AtomicServer you can use the following libraries.
 
@@ -17,3 +17,7 @@ Svelte functions for fetching and subscribing to AtomicServer data.
 ## [@tomic/cli](js-cli.md)
 
 Generate Typescript types from your AtomicServer ontologies.
+
+## [@tomic/template](atomic-template)
+
+Generate NextJS / SvelteKit / (more) templates with AtomicServer integration.
