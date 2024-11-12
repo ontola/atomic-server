@@ -1,6 +1,6 @@
 # Atomic Next.js Template
 
-This repository is a [Next.js](https://nextjs.org/) 15 website starter template to be used with [AtomicServer](https://github.com/atomicdata-dev/atomic-server).
+This repository is a [Next.js](https://nextjs.org/) 15 website starter template to be used with [AtomicServer](https://github.com/atomicdata-dev/atomic-server). For specific steps on how to deploy this template, see [DEPLOYING](./README/deploying.md).
 
 ## Getting started
 
@@ -21,7 +21,7 @@ $ cd my-project
 ```
 
 ```bash
-$ npx ad-generate
+$ npx ad-generate ontologies
 $ pnpm exec ad-generate ontologies
 $ yarn ad-generate ontologies
 ```
