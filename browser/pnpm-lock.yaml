@@ -46,7 +46,7 @@ importers:
         version: 8.0.3
       netlify-cli:
         specifier: 17.37.1
-        version: 17.37.1(@swc/core@1.7.39)(@types/node@20.17.0)(picomatch@4.0.2)
+        version: 17.37.1(@swc/core@1.7.39(@swc/helpers@0.5.13))(@types/node@20.17.0)(picomatch@4.0.2)
       prettier:
         specifier: 3.2.5
         version: 3.2.5
@@ -77,6 +77,9 @@ importers:
       chalk:
         specifier: ^5.3.0
         version: 5.3.0
+      get-tsconfig:
+        specifier: ^4.8.1
+        version: 4.8.1
       prettier:
         specifier: 3.0.3
         version: 3.0.3
@@ -341,7 +344,7 @@ importers:
         version: 2.8.0
       tsup:
         specifier: ^8.3.5
-        version: 8.3.5(@microsoft/api-extractor@7.48.0(@types/node@20.17.0))(@swc/core@1.7.39)(jiti@2.3.3)(postcss@8.4.47)(typescript@5.6.3)(yaml@2.6.0)
+        version: 8.3.5(@microsoft/api-extractor@7.48.0(@types/node@20.17.0))(@swc/core@1.7.39(@swc/helpers@0.5.13))(jiti@2.3.3)(postcss@8.4.47)(typescript@5.6.3)(yaml@2.6.0)
       typescript:
         specifier: ^5.6.3
         version: 5.6.3
@@ -375,7 +378,7 @@ importers:
         version: 5.3.3
       tsup:
         specifier: ^8.3.5
-        version: 8.3.5(@microsoft/api-extractor@7.48.0(@types/node@20.17.0))(@swc/core@1.7.39)(jiti@2.3.3)(postcss@8.4.47)(typescript@5.6.3)(yaml@2.6.0)
+        version: 8.3.5(@microsoft/api-extractor@7.48.0(@types/node@20.17.0))(@swc/core@1.7.39(@swc/helpers@0.5.13))(jiti@2.3.3)(postcss@8.4.47)(typescript@5.6.3)(yaml@2.6.0)
       typescript:
         specifier: ^5.6.3
         version: 5.6.3
@@ -409,7 +412,7 @@ importers:
         version: 9.1.0(eslint@9.13.0(jiti@2.3.3))
       eslint-plugin-svelte:
         specifier: ^2.46.0
-        version: 2.46.0(eslint@9.13.0(jiti@2.3.3))(svelte@5.1.4)(ts-node@10.9.2(@swc/core@1.7.39)(@types/node@20.17.0)(typescript@5.6.3))
+        version: 2.46.0(eslint@9.13.0(jiti@2.3.3))(svelte@5.1.4)(ts-node@10.9.2(@swc/core@1.7.39(@swc/helpers@0.5.13))(@types/node@20.17.0)(typescript@5.6.3))
       globals:
         specifier: ^15.11.0
         version: 15.11.0
@@ -427,7 +430,7 @@ importers:
         version: 5.1.4
       svelte-check:
         specifier: ^3.8.6
-        version: 3.8.6(@babel/core@7.26.0)(postcss-load-config@3.1.4(postcss@8.4.47)(ts-node@10.9.2(@swc/core@1.7.39)(@types/node@20.17.0)(typescript@5.6.3)))(postcss@8.4.47)(svelte@5.1.4)
+        version: 3.8.6(@babel/core@7.26.0)(postcss-load-config@3.1.4(postcss@8.4.47)(ts-node@10.9.2(@swc/core@1.7.39(@swc/helpers@0.5.13))(@types/node@20.17.0)(typescript@5.6.3)))(postcss@8.4.47)(svelte@5.1.4)
       typescript:
         specifier: ^5.6.3
         version: 5.6.3
@@ -2770,6 +2773,9 @@ packages:
   '@swc/counter@0.1.3':
     resolution: {integrity: sha512-e2BR4lsJkkRlKZ/qCHPw9ZaSxc0MVUd7gtbtaB7aMvHeJVYe8sOB8DBZkP2DtISHGSku9sCK6T6cnY0CtXrOCQ==}
 
+  '@swc/helpers@0.5.13':
+    resolution: {integrity: sha512-UoKGxQ3r5kYI9dALKJapMmuK+1zWM/H17Z1+iwnNmzcJRnfFuevZs375TA5rW31pu4BS4NoSy1fRsexDXfWn5w==}
+
   '@swc/types@0.1.13':
     resolution: {integrity: sha512-JL7eeCk6zWCbiYQg2xQSdLXQJl8Qoc9rXmG2cEKvHe3CKwMHwHGpfOb8frzNLmbycOo6I51qxnLnn9ESf4I20Q==}
 
@@ -3179,9 +3185,6 @@ packages:
   '@types/prismjs@1.26.5':
     resolution: {integrity: sha512-AUZTa7hQ2KY5L7AmtSiqxlhWxb4ina0yd8hNbl4TWuqnv/pFP0nDMb3YrfSBf4hJVGLh2YEIBfKaBW/9UEl6IQ==}
 
-  '@types/prop-types@15.7.13':
-    resolution: {integrity: sha512-hCZTSvwbzWGvhqxp/RqVqwU999pBf2vp7hzIjiYOsl8wqOmUxkQ6ddw1cV3l8811+kdUFus/q4d1Y3E3SyEifA==}
-
   '@types/pug@2.0.10':
     resolution: {integrity: sha512-Sk/uYFOBAB7mb74XcpizmH0KOR2Pv3D2Hmrh1Dmy5BmK3MpdSa5kqZcg6EKBdklU0bFXX9gCfzvpnyUehrPIuA==}
 
@@ -3200,9 +3203,6 @@ packages:
 
   '@types/react-window@1.8.8':
     resolution: {integrity: sha512-8Ls660bHR1AUA2kuRvVG9D/4XpRC6wjAaPT9dil7Ckc76eP9TKWZwwmgfq8Q1LANX3QNDnoU4Zp48A3w+zK69Q==}
-
-  '@types/react@18.3.12':
-    resolution: {integrity: sha512-D2wOSq/d6Agt28q7rSI3jhU7G6aiuzljDGZ2hTZHIkrTLUI+AF3WMeKkEZ9nN2fkBAlcktT6vcZjDFiIhMYEQw==}
 
   '@types/react@19.0.1':
     resolution: {integrity: sha512-YW6614BDhqbpR5KtUYzTA+zlA7nayzJRA9ljz9CQoxthR0sDisYZLuvSMsil36t4EH/uAt8T52Xb4sVw17G+SQ==}
@@ -5413,6 +5413,9 @@ packages:
   get-symbol-description@1.0.2:
     resolution: {integrity: sha512-g0QYk1dZBxGwk+Ngc+ltRH2IBp2f7zBkBMBJZCDerh6EhlhSR6+9irMCuT/09zD6qkarHUSn529sK/yL4S27mg==}
     engines: {node: '>= 0.4'}
+
+  get-tsconfig@4.8.1:
+    resolution: {integrity: sha512-k9PN+cFBmaLWtVz29SkUoqU5O0slLuHJXt/2P+tMVFT+phsSGXGkp9t3rQIqdz0e+06EHNGs3oM6ZX1s2zHxRg==}
 
   gh-pages@5.0.0:
     resolution: {integrity: sha512-Nqp1SjkPIB94Xw/3yYNTUL+G2dxlhjvv1zeN/4kMC1jfViTEqhtVz/Ba1zSXHuvXCN9ADNS1dN4r5/J/nZWEQQ==}
@@ -7853,6 +7856,9 @@ packages:
   resolve-from@5.0.0:
     resolution: {integrity: sha512-qYg9KP24dD5qka9J47d0aVky0N+b4fTU89LN9iDnjB5waksiC49rvMB0PrUJQGoTmH50XPiqOvAjDfaijGxYZw==}
     engines: {node: '>=8'}
+
+  resolve-pkg-maps@1.0.0:
+    resolution: {integrity: sha512-seS2Tj26TBVOC2NIc2rOe2y2ZO7efxITtLZcGSOnHHNOQ7CkiUBfw0Iw2ck6xkIhPwLhKNLS8BO+hEpngQlqzw==}
 
   resolve@1.22.8:
     resolution: {integrity: sha512-oKWePCxqpd6FlLvGV1VU0x7bkPmmCNolxzjMf4NczoDnQcIWrAF+cPtZn5i6n+RfD2d9i0tzpKnG6Yk168yIyw==}
@@ -10769,7 +10775,7 @@ snapshots:
       yaml: 2.6.0
       yargs: 17.7.2
 
-  '@netlify/build@29.55.2(@opentelemetry/api@1.8.0)(@swc/core@1.7.39)(@types/node@20.17.0)(picomatch@4.0.2)':
+  '@netlify/build@29.55.2(@opentelemetry/api@1.8.0)(@swc/core@1.7.39(@swc/helpers@0.5.13))(@types/node@20.17.0)(picomatch@4.0.2)':
     dependencies:
       '@bugsnag/js': 7.25.0
       '@netlify/blobs': 7.4.0
@@ -10826,7 +10832,7 @@ snapshots:
       strip-ansi: 7.1.0
       supports-color: 9.4.0
       terminal-link: 3.0.0
-      ts-node: 10.9.2(@swc/core@1.7.39)(@types/node@20.17.0)(typescript@5.6.3)
+      ts-node: 10.9.2(@swc/core@1.7.39(@swc/helpers@0.5.13))(@types/node@20.17.0)(typescript@5.6.3)
       typescript: 5.6.3
       uuid: 9.0.1
       yargs: 17.7.2
@@ -11833,7 +11839,7 @@ snapshots:
   '@swc/core-win32-x64-msvc@1.7.39':
     optional: true
 
-  '@swc/core@1.7.39':
+  '@swc/core@1.7.39(@swc/helpers@0.5.13)':
     dependencies:
       '@swc/counter': 0.1.3
       '@swc/types': 0.1.13
@@ -11848,9 +11854,15 @@ snapshots:
       '@swc/core-win32-arm64-msvc': 1.7.39
       '@swc/core-win32-ia32-msvc': 1.7.39
       '@swc/core-win32-x64-msvc': 1.7.39
+      '@swc/helpers': 0.5.13
     optional: true
 
   '@swc/counter@0.1.3':
+    optional: true
+
+  '@swc/helpers@0.5.13':
+    dependencies:
+      tslib: 2.8.0
     optional: true
 
   '@swc/types@0.1.13':
@@ -12308,8 +12320,6 @@ snapshots:
 
   '@types/prismjs@1.26.5': {}
 
-  '@types/prop-types@15.7.13': {}
-
   '@types/pug@2.0.10': {}
 
   '@types/react-dom@19.0.1':
@@ -12329,7 +12339,7 @@ snapshots:
   '@types/react-router-dom@5.3.3':
     dependencies:
       '@types/history': 4.7.11
-      '@types/react': 18.3.12
+      '@types/react': 19.0.1
       '@types/react-router': 5.1.20
 
   '@types/react-router@5.1.20':
@@ -12340,11 +12350,6 @@ snapshots:
   '@types/react-window@1.8.8':
     dependencies:
       '@types/react': 19.0.1
-
-  '@types/react@18.3.12':
-    dependencies:
-      '@types/prop-types': 15.7.13
-      csstype: 3.1.3
 
   '@types/react@19.0.1':
     dependencies:
@@ -14337,7 +14342,7 @@ snapshots:
       string.prototype.matchall: 4.0.11
       string.prototype.repeat: 1.0.0
 
-  eslint-plugin-svelte@2.46.0(eslint@9.13.0(jiti@2.3.3))(svelte@5.1.4)(ts-node@10.9.2(@swc/core@1.7.39)(@types/node@20.17.0)(typescript@5.6.3)):
+  eslint-plugin-svelte@2.46.0(eslint@9.13.0(jiti@2.3.3))(svelte@5.1.4)(ts-node@10.9.2(@swc/core@1.7.39(@swc/helpers@0.5.13))(@types/node@20.17.0)(typescript@5.6.3)):
     dependencies:
       '@eslint-community/eslint-utils': 4.4.0(eslint@9.13.0(jiti@2.3.3))
       '@jridgewell/sourcemap-codec': 1.5.0
@@ -14346,7 +14351,7 @@ snapshots:
       esutils: 2.0.3
       known-css-properties: 0.35.0
       postcss: 8.4.47
-      postcss-load-config: 3.1.4(postcss@8.4.47)(ts-node@10.9.2(@swc/core@1.7.39)(@types/node@20.17.0)(typescript@5.6.3))
+      postcss-load-config: 3.1.4(postcss@8.4.47)(ts-node@10.9.2(@swc/core@1.7.39(@swc/helpers@0.5.13))(@types/node@20.17.0)(typescript@5.6.3))
       postcss-safe-parser: 6.0.0(postcss@8.4.47)
       postcss-selector-parser: 6.1.2
       semver: 7.6.3
@@ -15007,6 +15012,10 @@ snapshots:
       call-bind: 1.0.7
       es-errors: 1.3.0
       get-intrinsic: 1.2.4
+
+  get-tsconfig@4.8.1:
+    dependencies:
+      resolve-pkg-maps: 1.0.0
 
   gh-pages@5.0.0:
     dependencies:
@@ -16577,12 +16586,12 @@ snapshots:
 
   nested-error-stacks@2.1.1: {}
 
-  netlify-cli@17.37.1(@swc/core@1.7.39)(@types/node@20.17.0)(picomatch@4.0.2):
+  netlify-cli@17.37.1(@swc/core@1.7.39(@swc/helpers@0.5.13))(@types/node@20.17.0)(picomatch@4.0.2):
     dependencies:
       '@bugsnag/js': 7.25.0
       '@fastify/static': 7.0.4
       '@netlify/blobs': 8.1.0
-      '@netlify/build': 29.55.2(@opentelemetry/api@1.8.0)(@swc/core@1.7.39)(@types/node@20.17.0)(picomatch@4.0.2)
+      '@netlify/build': 29.55.2(@opentelemetry/api@1.8.0)(@swc/core@1.7.39(@swc/helpers@0.5.13))(@types/node@20.17.0)(picomatch@4.0.2)
       '@netlify/build-info': 7.15.1
       '@netlify/config': 20.19.0
       '@netlify/edge-bundler': 12.2.3(supports-color@9.4.0)
@@ -17239,13 +17248,13 @@ snapshots:
 
   possible-typed-array-names@1.0.0: {}
 
-  postcss-load-config@3.1.4(postcss@8.4.47)(ts-node@10.9.2(@swc/core@1.7.39)(@types/node@20.17.0)(typescript@5.6.3)):
+  postcss-load-config@3.1.4(postcss@8.4.47)(ts-node@10.9.2(@swc/core@1.7.39(@swc/helpers@0.5.13))(@types/node@20.17.0)(typescript@5.6.3)):
     dependencies:
       lilconfig: 2.1.0
       yaml: 1.10.2
     optionalDependencies:
       postcss: 8.4.47
-      ts-node: 10.9.2(@swc/core@1.7.39)(@types/node@20.17.0)(typescript@5.6.3)
+      ts-node: 10.9.2(@swc/core@1.7.39(@swc/helpers@0.5.13))(@types/node@20.17.0)(typescript@5.6.3)
 
   postcss-load-config@6.0.1(jiti@2.3.3)(postcss@8.4.47)(yaml@2.6.0):
     dependencies:
@@ -17882,6 +17891,8 @@ snapshots:
 
   resolve-from@5.0.0: {}
 
+  resolve-pkg-maps@1.0.0: {}
+
   resolve@1.22.8:
     dependencies:
       is-core-module: 2.15.1
@@ -18465,14 +18476,14 @@ snapshots:
 
   supports-preserve-symlinks-flag@1.0.0: {}
 
-  svelte-check@3.8.6(@babel/core@7.26.0)(postcss-load-config@3.1.4(postcss@8.4.47)(ts-node@10.9.2(@swc/core@1.7.39)(@types/node@20.17.0)(typescript@5.6.3)))(postcss@8.4.47)(svelte@5.1.4):
+  svelte-check@3.8.6(@babel/core@7.26.0)(postcss-load-config@3.1.4(postcss@8.4.47)(ts-node@10.9.2(@swc/core@1.7.39(@swc/helpers@0.5.13))(@types/node@20.17.0)(typescript@5.6.3)))(postcss@8.4.47)(svelte@5.1.4):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.25
       chokidar: 3.6.0
       picocolors: 1.1.1
       sade: 1.8.1
       svelte: 5.1.4
-      svelte-preprocess: 5.1.4(@babel/core@7.26.0)(postcss-load-config@3.1.4(postcss@8.4.47)(ts-node@10.9.2(@swc/core@1.7.39)(@types/node@20.17.0)(typescript@5.6.3)))(postcss@8.4.47)(svelte@5.1.4)(typescript@5.6.3)
+      svelte-preprocess: 5.1.4(@babel/core@7.26.0)(postcss-load-config@3.1.4(postcss@8.4.47)(ts-node@10.9.2(@swc/core@1.7.39(@swc/helpers@0.5.13))(@types/node@20.17.0)(typescript@5.6.3)))(postcss@8.4.47)(svelte@5.1.4)(typescript@5.6.3)
       typescript: 5.6.3
     transitivePeerDependencies:
       - '@babel/core'
@@ -18495,7 +18506,7 @@ snapshots:
     optionalDependencies:
       svelte: 5.1.4
 
-  svelte-preprocess@5.1.4(@babel/core@7.26.0)(postcss-load-config@3.1.4(postcss@8.4.47)(ts-node@10.9.2(@swc/core@1.7.39)(@types/node@20.17.0)(typescript@5.6.3)))(postcss@8.4.47)(svelte@5.1.4)(typescript@5.6.3):
+  svelte-preprocess@5.1.4(@babel/core@7.26.0)(postcss-load-config@3.1.4(postcss@8.4.47)(ts-node@10.9.2(@swc/core@1.7.39(@swc/helpers@0.5.13))(@types/node@20.17.0)(typescript@5.6.3)))(postcss@8.4.47)(svelte@5.1.4)(typescript@5.6.3):
     dependencies:
       '@types/pug': 2.0.10
       detect-indent: 6.1.0
@@ -18506,7 +18517,7 @@ snapshots:
     optionalDependencies:
       '@babel/core': 7.26.0
       postcss: 8.4.47
-      postcss-load-config: 3.1.4(postcss@8.4.47)(ts-node@10.9.2(@swc/core@1.7.39)(@types/node@20.17.0)(typescript@5.6.3))
+      postcss-load-config: 3.1.4(postcss@8.4.47)(ts-node@10.9.2(@swc/core@1.7.39(@swc/helpers@0.5.13))(@types/node@20.17.0)(typescript@5.6.3))
       typescript: 5.6.3
 
   svelte2tsx@0.7.22(svelte@5.1.4)(typescript@5.6.3):
@@ -18762,7 +18773,7 @@ snapshots:
 
   ts-interface-checker@0.1.13: {}
 
-  ts-node@10.9.2(@swc/core@1.7.39)(@types/node@20.17.0)(typescript@5.6.3):
+  ts-node@10.9.2(@swc/core@1.7.39(@swc/helpers@0.5.13))(@types/node@20.17.0)(typescript@5.6.3):
     dependencies:
       '@cspotcode/source-map-support': 0.8.1
       '@tsconfig/node10': 1.0.11
@@ -18780,7 +18791,7 @@ snapshots:
       v8-compile-cache-lib: 3.0.1
       yn: 3.1.1
     optionalDependencies:
-      '@swc/core': 1.7.39
+      '@swc/core': 1.7.39(@swc/helpers@0.5.13)
 
   tsconfig-paths@3.15.0:
     dependencies:
@@ -18795,7 +18806,7 @@ snapshots:
 
   tslib@2.8.0: {}
 
-  tsup@8.3.5(@microsoft/api-extractor@7.48.0(@types/node@20.17.0))(@swc/core@1.7.39)(jiti@2.3.3)(postcss@8.4.47)(typescript@5.6.3)(yaml@2.6.0):
+  tsup@8.3.5(@microsoft/api-extractor@7.48.0(@types/node@20.17.0))(@swc/core@1.7.39(@swc/helpers@0.5.13))(jiti@2.3.3)(postcss@8.4.47)(typescript@5.6.3)(yaml@2.6.0):
     dependencies:
       bundle-require: 5.0.0(esbuild@0.24.0)
       cac: 6.7.14
@@ -18815,7 +18826,7 @@ snapshots:
       tree-kill: 1.2.2
     optionalDependencies:
       '@microsoft/api-extractor': 7.48.0(@types/node@20.17.0)
-      '@swc/core': 1.7.39
+      '@swc/core': 1.7.39(@swc/helpers@0.5.13)
       postcss: 8.4.47
       typescript: 5.6.3
     transitivePeerDependencies:

@@ -10,8 +10,6 @@ import { store } from '@/store';
 export async function getCurrentResource(
   path: string,
 ): Promise<Resource | undefined> {
-  console.log('getCurrentResource', path);
-
   // Find the resource with the current path as href.
   const collection = await new CollectionBuilder(store)
     .setProperty(website.properties.href)
