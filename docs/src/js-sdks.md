@@ -18,6 +18,6 @@ Svelte functions for fetching and subscribing to AtomicServer data.
 
 Generate Typescript types from your AtomicServer ontologies.
 
-## [@tomic/template](atomic-template)
+## [@tomic/template](create-template/atomic-template.md)
 
 Generate NextJS / SvelteKit / (more) templates with AtomicServer integration.
