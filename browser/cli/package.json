@@ -12,6 +12,7 @@
   "dependencies": {
     "@tomic/lib": "workspace:*",
     "chalk": "^5.3.0",
+    "get-tsconfig": "^4.8.1",
     "prettier": "3.0.3"
   },
   "devDependencies": {

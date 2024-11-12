@@ -1,5 +1,5 @@
 import { store } from './store.js';
-import { camelCaseify } from './utils.js';
+import { camelCaseify, getExtension } from './utils.js';
 import { atomicConfig } from './config.js';
 
 enum Inserts {
@@ -16,7 +16,7 @@ const TEMPLATE = `
 
 import { registerOntologies } from '${
   // Prevents a circular dependency
-  atomicConfig._ISLIB_ ? '../ontology.js' : Inserts.MODULE_ALIAS
+  atomicConfig._ISLIB_ ? `../ontology${getExtension()}` : Inserts.MODULE_ALIAS
 }';
 
 ${Inserts.IMPORTS}
@@ -57,4 +57,4 @@ export const generateIndex = (
 };
 
 const createImportLine = (name: string) =>
-  `import { ${name} } from './${name}.js';`;
+  `import { ${name} } from './${name}${getExtension()}';`;
