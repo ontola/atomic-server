@@ -6,12 +6,13 @@
   display: inline-flex;
   border-radius: var(--theme-border-radius);
   transition: background-color 100ms ease-in-out;
-}
 
-.link:hover {
-  background-color: var(--theme-color-bg-2);
-}
+  &[aria-current='page'] {
+    color: var(--theme-color-accent);
+  }
 
-.linkActive {
-  color: var(--theme-color-accent);
+  &:hover,
+  &:focus-visible {
+    background-color: var(--theme-color-bg-2);
+  }
 }

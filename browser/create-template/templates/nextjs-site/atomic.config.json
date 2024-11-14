@@ -1,4 +1,4 @@
 {
   "outputFolder": "./src/ontologies",
-  "ontologies": ["<ONTOLOGY>"]
+  "ontologies": ["http://localhost:9883/01jc0ayh83cxwhdhrvhycr5gdd/website"]
 }

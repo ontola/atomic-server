@@ -2,18 +2,20 @@ import { website } from '@/ontologies/website';
 import { unknownSubject, Resource } from '@tomic/lib';
 import styles from './MenuItemLink.module.css';
 import clsx from 'clsx';
-import { useResource } from '@tomic/react';
+import { store } from '@/store';
 
-const MenuItemLink = ({
+const MenuItemLink = async ({
   resource,
   active = false,
 }: {
   resource: Resource;
   active?: boolean;
 }) => {
-  const page = useResource(resource.subject ?? unknownSubject);
+  const page = await store.getResource(resource.subject ?? unknownSubject);
 
-  const pageHrefValue = useResource(page.get(website.properties.linksTo));
+  const pageHrefValue = await store.getResource(
+    page.get(website.properties.linksTo),
+  );
 
   const href =
     pageHrefValue.get(website.properties.href) ??
@@ -26,7 +28,7 @@ const MenuItemLink = ({
       className={clsx(styles.link, { [styles.linkActive]: active })}
       aria-current={active ? 'page' : 'false'}
     >
-      {resource.loading ? '' : page.title}
+      {resource.title}
     </a>
   );
 };

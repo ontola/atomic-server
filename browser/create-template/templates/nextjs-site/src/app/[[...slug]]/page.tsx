@@ -4,6 +4,8 @@ import { core } from '@tomic/lib';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
+export let currentSubject: string | undefined;
+
 type Params = {
   slug?: string[];
 };
@@ -13,7 +15,7 @@ type Props = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
-const fetchResource = async (slug?: string[]) => {
+export const fetchResource = async (slug?: string[]) => {
   const path = slug ? `/${slug.join('/')}` : '/';
   return await getCurrentResource(path);
 };
@@ -38,6 +40,8 @@ const Page = async ({ params, searchParams }: Props) => {
   if (!resource) {
     return notFound();
   }
+
+  currentSubject = resource.subject;
 
   return <FullPageView subject={resource.subject} searchParams={search} />;
 };
