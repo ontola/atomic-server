@@ -15,17 +15,17 @@
   cursor: pointer;
   transition: background-color 100ms ease-in-out;
   anchor-name: --menu-item-anchor;
-}
-
-.button:hover,
-.button:focus-visible {
-  background-color: var(--theme-color-bg-2);
+  &:hover,
+  &:focus-visible {
+    background-color: var(--theme-color-bg-2);
+  }
 }
 
 .submenu {
   position-anchor: --menu-item-anchor;
+  inset-area: bottom center;
   position-area: bottom center;
-  width: max(20ch, 100%);
+  width: max(20ch, anchor-size(width));
   border: 1px solid var(--theme-color-bg-1);
   border-radius: var(--theme-border-radius);
   box-shadow:

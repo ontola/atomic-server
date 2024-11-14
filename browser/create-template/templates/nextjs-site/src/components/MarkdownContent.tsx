@@ -5,6 +5,7 @@ import matter from 'gray-matter';
 import html from 'remark-html';
 import { remark } from 'remark';
 import { TextBlock } from '@/ontologies/website';
+import styles from '@/views/Block/TextBlock.module.css';
 
 export const MarkdownContent = ({
   subject,
@@ -20,6 +21,7 @@ export const MarkdownContent = ({
 
   return (
     <div
+      className={styles.wrapper}
       dangerouslySetInnerHTML={{
         __html: resource.loading ? initialContent : processed.toString(),
       }}

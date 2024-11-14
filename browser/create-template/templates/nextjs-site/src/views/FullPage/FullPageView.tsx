@@ -10,9 +10,7 @@ const FullPageView = async ({
   searchParams,
 }: {
   subject: string;
-  searchParams?: {
-    [key: string]: Record<string, string | string[] | undefined>;
-  };
+  searchParams?: Record<string, string | string[] | undefined>;
 }) => {
   const resource = await store.getResource(subject);
 

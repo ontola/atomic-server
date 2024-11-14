@@ -16,9 +16,7 @@ const BlogIndexPageFullPage = async ({
   searchParams,
 }: {
   resource: Resource<Page>;
-  searchParams?: {
-    [key: string]: Record<string, string | string[] | undefined>;
-  };
+  searchParams?: Record<string, string | string[] | undefined>;
 }) => {
   const allItems = await getAllBlogposts();
   let results: string[] = [];

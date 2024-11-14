@@ -1,15 +1,15 @@
 .blogWrapper {
   padding: 1rem;
+
+  & picture > img {
+    width: 100%;
+    height: 25rem;
+    object-fit: cover;
+    border-radius: var(--theme-border-radius);
+  }
 }
 
-.blogWrapper > picture > img {
-  width: 100%;
-  height: 25rem;
-  object-fit: cover;
-  border-radius: var(--theme-border-radius);
-}
-
-.publishDate {
+.blogWrapper > .publishDate {
   color: var(--theme-color-text-light);
   margin-bottom: 2rem;
 }

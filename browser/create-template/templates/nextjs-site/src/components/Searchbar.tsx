@@ -22,7 +22,7 @@ const Searchbar = () => {
     } else {
       router.push(`${pathname}?search=${throttledSearch}`);
     }
-  }, [throttledSearch]);
+  }, [throttledSearch, router, pathname]);
 
   return (
     <div className={styles.searchBar}>

@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "ad-generate ontologies && next build",
+    "build": "next build",
     "start": "next start",
     "lint": "next lint",
     "generate-ontologies": "ad-generate ontologies"
