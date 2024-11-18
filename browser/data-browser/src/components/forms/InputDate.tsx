@@ -27,7 +27,7 @@ export function InputDate({
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
     const dateStr = event.target.value;
 
-    if (required && dateStr) {
+    if (required && !dateStr) {
       setError('Required');
       setValue(undefined);
     } else {

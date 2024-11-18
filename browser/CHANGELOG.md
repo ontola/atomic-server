@@ -10,11 +10,12 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 - [#989](https://github.com/atomicdata-dev/atomic-server/issues/989) Added an edit button to the resource selector inputs.
 - [#992](https://github.com/atomicdata-dev/atomic-server/issues/992) Fix Searchbox overflowing when displaying long names.
 - [#999](https://github.com/atomicdata-dev/atomic-server/issues/999) Fix parseMetaTags character escape issue.
+- [#1014](https://github.com/atomicdata-dev/atomic-server/issues/1014) Fix date input always showing required error even when filled in.
 
 ### @tomic/lib
 
-- `resource.props` is now writable: `resource.props.name = 'New Name'`.
-- Added `store.preloadResourceTree()` method.
+- `resource.props` is now writeable: `resource.props.name = 'New Name'`.
+- Added `store.preloadResourceTree()` method, see docs for more info.
 - Fix generated ontologies not working in a Next.js server context.
 
 ### @tomic/cli
