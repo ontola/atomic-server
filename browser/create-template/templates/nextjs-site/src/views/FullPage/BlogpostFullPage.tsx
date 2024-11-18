@@ -24,7 +24,9 @@ const BlogpostFullPage = ({ resource }: { resource: Resource<Blogpost> }) => {
   return (
     <Container>
       <div className={styles.blogWrapper}>
-        <Image subject={resource.props.coverImage} alt='' />
+        <div style={{ height: '25rem' }}>
+          <Image subject={resource.props.coverImage} alt='' />
+        </div>
         <div className={styles.content}>
           <h1 className={styles.h1}>{resource.title}</h1>
           <p className={styles.publishDate}>{date}</p>

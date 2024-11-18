@@ -4,6 +4,7 @@
 }
 
 .button {
+  anchor-name: var(--anchor-name);
   padding: 0.4rem;
   display: inline-flex;
   align-items: center;
@@ -14,7 +15,6 @@
   background: none;
   cursor: pointer;
   transition: background-color 100ms ease-in-out;
-  anchor-name: --menu-item-anchor;
   &:hover,
   &:focus-visible {
     background-color: var(--theme-color-bg-2);
@@ -22,10 +22,8 @@
 }
 
 .submenu {
-  position-anchor: --menu-item-anchor;
-  inset-area: bottom center;
-  position-area: bottom center;
-  width: max(20ch, anchor-size(width));
+  --menu-width: 20ch;
+  width: var(--menu-width);
   border: 1px solid var(--theme-color-bg-1);
   border-radius: var(--theme-border-radius);
   box-shadow:
@@ -35,4 +33,14 @@
     0px 22.3px 17.9px rgba(0, 0, 0, 0.042),
     0px 41.8px 33.4px rgba(0, 0, 0, 0.05),
     0px 100px 80px rgba(0, 0, 0, 0.07);
+
+  position-anchor: var(--anchor-name);
+  position-area: bottom center;
+
+  @supports not (anchor-name: --something) {
+    --supports-position-anchor: false;
+    position: fixed;
+    top: var(--top);
+    left: var(--left);
+  }
 }

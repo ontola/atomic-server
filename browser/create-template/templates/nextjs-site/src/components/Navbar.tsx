@@ -1,7 +1,7 @@
 import Container from './Layout/Container';
 import HStack from './Layout/HStack';
 import { env } from '@/env';
-import { Website } from '@/ontologies/website';
+import type { Website } from '@/ontologies/website';
 import MenuItem from '@/views/MenuItem/MenuItem';
 import styles from './Navbar.module.css';
 import { store } from '@/store';
