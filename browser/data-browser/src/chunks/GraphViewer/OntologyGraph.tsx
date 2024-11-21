@@ -12,7 +12,7 @@ import { buildGraph } from './buildGraph';
 import { FloatingEdge } from './FloatingEdge';
 import { useGraph } from './useGraph';
 import { useEffectOnce } from '../../hooks/useEffectOnce';
-import { toAnchorId } from '../../views/OntologyPage/toAnchorId';
+import { toAnchorId } from '../../helpers/toAnchorId';
 
 const edgeTypes = {
   floating: FloatingEdge,

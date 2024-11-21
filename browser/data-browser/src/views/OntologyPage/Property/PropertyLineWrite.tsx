@@ -25,7 +25,7 @@ export function PropertyLineWrite({
   const resource = useResource(subject);
   const shortnameProp = useProperty(core.properties.shortname);
   const descriptionProp = useProperty(core.properties.description);
-  const [dialogProps, show, hide] = useDialog();
+  const [dialogProps, show, hide, isOpen] = useDialog();
   const [canEdit] = useCanWrite(resource);
 
   const { hasProperty } = useOntologyContext();
@@ -37,7 +37,7 @@ export function PropertyLineWrite({
       <ListItem>
         <Row center justify='space-between'>
           <StyledErrorLook>
-            This property does not exist anymore ({subject})
+            This property does not exist any more ({subject})
           </StyledErrorLook>
           <Button alert onClick={() => onRemove(subject)}>
             Remove
@@ -84,7 +84,12 @@ export function PropertyLineWrite({
           </IconButton>
         </Row>
       </Row>
-      <PropertyWriteDialog resource={resource} {...dialogProps} close={hide} />
+      <PropertyWriteDialog
+        resource={resource}
+        {...dialogProps}
+        close={hide}
+        isOpen={isOpen}
+      />
     </ListItem>
   );
 }

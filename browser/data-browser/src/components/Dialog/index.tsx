@@ -17,6 +17,7 @@ import { useDialog } from './useDialog';
 import { useControlLock } from '../../hooks/useControlLock';
 import { useDialogGlobalContext } from './DialogGlobalContextProvider';
 import { DIALOG_CONTENT_CONTAINER } from '../../helpers/containers';
+import { CurrentBackgroundColor } from '../../globalCssVars';
 
 export interface InternalDialogProps {
   show: boolean;
@@ -268,6 +269,7 @@ const fadeInBackground = keyframes`
 `;
 
 const StyledDialog = styled.dialog<{ $width?: CSS.Property.Width }>`
+  ${CurrentBackgroundColor.define(p => p.theme.colors.bg)}
   --dialog-width: min(90vw, ${p => p.$width ?? '60ch'});
 
   ${VAR_DIALOG_INNER_WIDTH}: calc(
@@ -280,7 +282,7 @@ const StyledDialog = styled.dialog<{ $width?: CSS.Property.Width }>`
   z-index: ${p => p.theme.zIndex.dialog};
   padding: ${p => p.theme.size()};
   color: ${props => props.theme.colors.text};
-  background-color: ${props => props.theme.colors.bg};
+  background-color: ${CurrentBackgroundColor.var()};
   border-radius: ${props => props.theme.radius};
   border: solid 1px ${props => props.theme.colors.bg2};
   inline-size: var(--dialog-width);

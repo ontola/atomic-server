@@ -99,7 +99,7 @@ for await (const rowSubject of table) {
     const valueLine = resourceShorthand
       ? `  console.log(\`\${row.title}: \${${resourceShorthand}}\`);`
       : `  const value = row.get(${propSubjectRef});
-  console.log(value);`;
+  console.log(\`\${row.title}: \${value}\`);`;
 
     return [
       `${imports}
@@ -113,7 +113,7 @@ const table = new CollectionBuilder(store)
 // Iterate over the collection, fetch the children and log a value
 // Check the docs on how to use collection for other use cases like pagenation
 for await (const rowSubject of table) {
-  const row = await store.getResource${genericName}(rowSubject);
+  const row = await store.getResource${genericName ?? ''}(rowSubject);
 ${valueLine}
 }`,
     ];
@@ -298,7 +298,7 @@ const Component = () => {
 };
 
 const Row = ({ subject }: { subject: string }) => {
-  const row = useResource${genericName}(subject);
+  const row = useResource${genericName ?? ''}(subject);
 ${propUsage}
 };`,
     ];
@@ -310,20 +310,24 @@ ${propUsage}
       `// Component.svelte
 <script>
   import { CollectionBuilder } from '@tomic/lib';
-  import { store } from '@tomic/svelte';
+  import { getStoreFromContext } from '@tomic/svelte';
 
-  let page = 0;
-  let items = [];
+  const store = getStoreFromContext();
+
+  let page = $state(0);
+  let items = $state([]);
 
   // Create a collection containing the children of the table
-  const table = new CollectionBuilder($store)
+  const table = new CollectionBuilder(store)
     .setProperty(core.properties.parent)
     .setValue('${this.resource.subject}')
     .setSortBy(commits.properties.createdAt)
     .build();
 
-  $: table.getMembersOnPage(page).then(members => {
-    items = members;
+  $effect(() => {
+    table.getMembersOnPage(page).then(members => {
+      items = members;
+    });
   });
 </script>
 
@@ -334,19 +338,19 @@ ${propUsage}
     </li>
   {/each}
 </ul>
-<button on:click={() => page -= 1}>Prev</button>
-<button on:click={() => page += 1}>Next</button>`,
+<button onclick={() => page -= 1}>Prev</button>
+<button onclick={() => page += 1}>Next</button>`,
       // Item code
       `// Item.svelte
 <script>
   import { getResource } from '@tomic/svelte';
 
-  export let subject: string;
+  let { subject } = $props();
 
-  let resource = getResource(subject);
+  let resource = getResource(() => subject);
 </script>
 
-<span>{$resource.title}</span>`,
+<span>{resource.title}</span>`,
     ];
   }
 
@@ -359,10 +363,6 @@ ${propUsage}
         name: 'getResource',
         file: '@tomic/svelte',
       },
-      {
-        name: 'getValue',
-        file: '@tomic/svelte',
-      },
       propImport,
     );
 
@@ -371,20 +371,24 @@ ${propUsage}
       `// Component.svelte
 <script>
   import { CollectionBuilder } from '@tomic/lib';
-  import { store } from '@tomic/svelte';
+  import { getStoreFromContext } from '@tomic/svelte';
 
-  let page = 0;
-  let items = [];
+  const store = getStoreFromContext();
+
+  let page = $state(0);
+  let items = $state([]);
 
   // Create a collection containing the children of the table
-  const table = new CollectionBuilder($store)
+  const table = new CollectionBuilder(store)
     .setProperty(core.properties.parent)
     .setValue('${this.resource.subject}')
     .setSortBy(commits.properties.createdAt)
     .build();
 
-  $: table.getMembersOnPage(page).then(members => {
-    items = members;
+  $effect(() => {
+    table.getMembersOnPage(page).then(members => {
+      items = members;
+    });
   });
 </script>
 
@@ -395,19 +399,19 @@ ${propUsage}
     </li>
   {/each}
 </ul>
-<button on:click={() => page -= 1}>Prev</button>
-<button on:click={() => page += 1}>Next</button>`,
+<button onclick={() => page -= 1}>Prev</button>
+<button onclick={() => page += 1}>Next</button>`,
       // Item code
       `// Item.svelte
 <script>
 ${imports}
-  export let subject: string;
+  let { subject } = $props();
 
-  let resource = getResource(subject);
-  let value = getValue(resource, ${propSubjectRef});
+  let resource = getResource(() => subject);
+  let value = $derived(resource.get(${propSubjectRef}));
 </script>
 
-<span>{$resource.title}: {$value}</span>`,
+<span>{resource.title}: {value}</span>`,
     ];
   }
 
@@ -417,20 +421,24 @@ ${imports}
       `// Component.svelte
 <script lang='ts'>
   import { CollectionBuilder } from '@tomic/lib';
-  import { store } from '@tomic/svelte';
+  import { getStoreFromContext } from '@tomic/svelte';
 
-  let page = 0;
-  let items = [];
+  const store = getStoreFromContext();
+
+  let page = $state(0);
+  let items = $state([]);
 
   // Create a collection containing the children of the table
-  const table = new CollectionBuilder($store)
+  const table = new CollectionBuilder(store)
     .setProperty(core.properties.parent)
     .setValue('${this.resource.subject}')
     .setSortBy(commits.properties.createdAt)
     .build();
 
-  $: table.getMembersOnPage(page).then(members => {
-    items = members;
+  $effect(() => {
+    table.getMembersOnPage(page).then(members => {
+      items = members;
+    });
   });
 </script>
 
@@ -441,19 +449,23 @@ ${imports}
     </li>
   {/each}
 </ul>
-<button on:click={() => page -= 1}>Prev</button>
-<button on:click={() => page += 1}>Next</button>`,
+<button onclick={() => page -= 1}>Prev</button>
+<button onclick={() => page += 1}>Next</button>`,
       // Item code
       `// Item.svelte
 <script lang='ts'>
   import { getResource } from '@tomic/svelte';
 
-  export let subject: string;
+  type Props = {
+    subject: string;
+  };
 
-  let resource = getResource(subject);
+  let { subject }: Props = $props();
+
+  let resource = getResource(() => subject);
 </script>
 
-<span>{$resource.title}</span>`,
+<span>{resource.title}</span>`,
     ];
   }
 
@@ -471,36 +483,36 @@ ${imports}
         name: 'getResource',
         file: '@tomic/svelte',
       },
-      {
-        name: 'getValue',
-        file: '@tomic/svelte',
-      },
       resourceShorthand ? undefined : propImport,
     );
 
     const hookPart = resourceShorthand
       ? ''
-      : `\n  let value = getValue(resource, ${propSubjectRef});`;
+      : `\n  let value = $derived(resource.get(${propSubjectRef}));`;
 
     return [
       // Component code
       `// Component.svelte
 <script lang='ts'>
   import { CollectionBuilder } from '@tomic/lib';
-  import { store } from '@tomic/svelte';
+  import { getStoreFromContext } from '@tomic/svelte';
 
-  let page = 0;
-  let items = [];
+  const store = getStoreFromContext();
+
+  let page = $state(0);
+  let items = $state([]);
 
   // Create a collection containing the children of the table
-  const table = new CollectionBuilder($store)
+  const table = new CollectionBuilder(store)
     .setProperty(core.properties.parent)
     .setValue('${this.resource.subject}')
     .setSortBy(commits.properties.createdAt)
     .build();
 
-  $: table.getMembersOnPage(page).then(members => {
-    items = members;
+  $effect(() => {
+    table.getMembersOnPage(page).then(members => {
+      items = members;
+    });
   });
 </script>
 
@@ -511,18 +523,22 @@ ${imports}
     </li>
   {/each}
 </ul>
-<button on:click={() => page -= 1}>Prev</button>
-<button on:click={() => page += 1}>Next</button>`,
+<button onclick={() => page -= 1}>Prev</button>
+<button onclick={() => page += 1}>Next</button>`,
       // Item code
       `// Item.svelte
 <script lang='ts'>
 ${itemImports}
-  export let subject: string;
+  type Props = {
+    subject: string;
+  };
 
-  let resource = getResource${genericName}(subject);${hookPart}
+  let { subject }: Props = $props();
+
+  let resource = getResource${genericName ?? ''}(() => subject);${hookPart}
 </script>
 
-<span>{$resource.title}: {${resourceShorthand ?? '$value'}}</span>`,
+<span>{resource.title}: {${resourceShorthand ?? 'value'}}</span>`,
     ];
   }
 }

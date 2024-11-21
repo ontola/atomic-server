@@ -10,7 +10,7 @@ import InputSwitcher from '../../../components/forms/InputSwitcher';
 import ResourceContextMenu, {
   ContextMenuOptions,
 } from '../../../components/ResourceContextMenu';
-import { toAnchorId } from '../toAnchorId';
+import { toAnchorId } from '../../../helpers/toAnchorId';
 import { AddPropertyButton } from './AddPropertyButton';
 import { ErrorChipInput } from '../../../components/forms/ErrorChip';
 import { useOntologyContext } from '../OntologyContext';
@@ -19,7 +19,11 @@ interface ClassCardWriteProps {
   subject: string;
 }
 
-const contextOptions = [ContextMenuOptions.Delete, ContextMenuOptions.History];
+const contextOptions = [
+  ContextMenuOptions.Open,
+  ContextMenuOptions.Delete,
+  ContextMenuOptions.History,
+];
 
 export function ClassCardWrite({ subject }: ClassCardWriteProps): JSX.Element {
   const resource = useResource(subject);
@@ -61,6 +65,7 @@ export function ClassCardWrite({ subject }: ClassCardWriteProps): JSX.Element {
             />
           </TitleWrapper>
           <ResourceContextMenu
+            external
             subject={subject}
             showOnly={contextOptions}
             onAfterDelete={handleDelete}

@@ -89,7 +89,7 @@ const TagPanel: FC<TagPanelProps> = ({ resource, ontology }) => {
 
   return (
     <Column>
-      <p>Only allow its value to be one of the following tags:</p>
+      <p>Only allow its value to be selected from the following tags:</p>
       <Row wrapItems>
         {tags.map(tag => (
           <EditableTag subject={tag} key={tag} onDelete={removeTag} />

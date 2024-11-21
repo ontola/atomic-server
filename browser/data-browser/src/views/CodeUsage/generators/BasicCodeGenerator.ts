@@ -136,10 +136,10 @@ ${propUsage}
     return [
       `<script>
   ${imports}
-  let resource = getResource('${this.resource.subject}');
+  let resource = getResource(() => '${this.resource.subject}');
 </script>
 
-<div>{$resource.title}</div> `,
+<div>{resource.title}</div> `,
     ];
   }
 
@@ -152,21 +152,17 @@ ${propUsage}
         name: 'getResource',
         file: '@tomic/svelte',
       },
-      {
-        name: 'getValue',
-        file: '@tomic/svelte',
-      },
       propImport,
     );
 
     return [
       `<script>
 ${imports}
-  let resource = getResource('${this.resource.subject}');
-  let value = getValue(resource, ${propSubjectRef});
+  let resource = getResource(() => '${this.resource.subject}');
+  let value = $derived(resource.get(${propSubjectRef}));
 </script>
 
-<div>{$value}</div>`,
+<div>{value}</div>`,
     ];
   }
 
@@ -179,10 +175,10 @@ ${imports}
     return [
       `<script lang='ts'>
   ${imports}
-  let resource = getResource('${this.resource.subject}');
+  let resource = getResource(() => '${this.resource.subject}');
 </script>
 
-<div>{$resource.title}</div>`,
+<div>{resource.title}</div>`,
     ];
   }
 
@@ -200,24 +196,20 @@ ${imports}
         name: 'getResource',
         file: '@tomic/svelte',
       },
-      {
-        name: 'getValue',
-        file: '@tomic/svelte',
-      },
       resourceShorthand ? undefined : propImport,
     );
 
     const hookPart = resourceShorthand
       ? ''
-      : `\n  let value = getValue(resource, ${propSubjectRef});`;
+      : `\n  let value = $derived(resource.get(${propSubjectRef}));`;
 
     return [
       `<script lang='ts'>
 ${imports}
-  let resource = getResource${genericName}('${this.resource.subject}');${hookPart}
+  let resource = getResource${genericName}(() => '${this.resource.subject}');${hookPart}
 </script>
 
-<div>{${resourceShorthand ?? '$value'}}</div> `,
+<div>{${resourceShorthand ?? 'value'}}</div> `,
     ];
   }
 }

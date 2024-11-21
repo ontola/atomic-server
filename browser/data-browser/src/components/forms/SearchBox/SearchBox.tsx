@@ -279,14 +279,15 @@ const TriggerButtonWrapper = styled.div<{
 
   background-color: ${p => SB_BACKGROUND.var(p.theme.colors.bg)};
 
-  &:disabled {
+  &:has(:disabled) {
     background-color: ${props => props.theme.colors.bg1};
+    opacity: 0.7;
   }
 
   &:has(${TriggerButton}:hover(), ${TriggerButton}:focus-visible) {
   }
-  &:hover,
-  &:focus-visible {
+
+  &:not(:has(:disabled)):where(:hover, :focus-visible) {
     border-color: transparent;
     box-shadow: 0 0 0 2px ${SB_HIGHLIGHT.var()};
     ${p =>

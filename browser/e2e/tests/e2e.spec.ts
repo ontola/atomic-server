@@ -487,7 +487,7 @@ test.describe('data-browser', async () => {
       'Datatype',
       'boolean',
     );
-    await selectDatatypeOption('boolean - Either `true` or `false`');
+    await selectDatatypeOption('booleanEither `true` or `false`');
 
     await currentDialog(page)
       .getByLabel('Description')

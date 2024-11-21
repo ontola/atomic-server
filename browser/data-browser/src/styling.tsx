@@ -3,10 +3,11 @@ import {
   DefaultTheme,
   ThemeProvider,
 } from 'styled-components';
-import { darken, lighten } from 'polished';
+import { darken, lighten, setLightness } from 'polished';
 import './reset.css';
 import { useContext } from 'react';
 import { SettingsContext } from './helpers/AppSettings';
+import { CurrentBackgroundColor } from './globalCssVars';
 
 interface ThemeWrapperProps {
   children: React.ReactNode;
@@ -118,6 +119,8 @@ export const buildTheme = (darkMode: boolean, mainIn: string): DefaultTheme => {
       bg: bg,
       // Use pitch black for dark mode
       bgBody: darkMode ? bg : darken(0.02)(bg),
+      mainSelectedBg: setLightness(darkMode ? 0.05 : 0.97, main),
+      mainSelectedFg: setLightness(darkMode ? 0.7 : 0.25, main),
       bg1: darkMode ? lighten(0.1)(bg) : darken(0.05)(bg),
       bg2: darkMode ? lighten(0.3)(bg) : darken(0.2)(bg),
       text,
@@ -198,6 +201,10 @@ declare module 'styled-components' {
       mainLight: string;
       /** Slightly darker version of Main accent color */
       mainDark: string;
+      /** Background color of selected items */
+      mainSelectedBg: string;
+      /** Foreground color of selected items */
+      mainSelectedFg: string;
       /** The background color of the body, which is subtly different from bg */
       bgBody: string;
       /** Most common background color */
@@ -257,7 +264,8 @@ export const GlobalStyle = createGlobalStyle`
   }
 
   body {
-    background-color: ${props => props.theme.colors.bgBody};
+    ${CurrentBackgroundColor.define(p => p.theme.colors.bgBody)}
+    background-color: ${CurrentBackgroundColor.var()};
     color: ${props => props.theme.colors.text};
     font-family: ${props => props.theme.fontFamily};
     line-height: 1.5em;

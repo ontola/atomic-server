@@ -25,6 +25,7 @@ import {
   FaShare,
   FaTrash,
   FaPlus,
+  FaArrowUpRightFromSquare,
 } from 'react-icons/fa6';
 import { useQueryScopeHandler } from '../../hooks/useQueryScope';
 import {
@@ -50,6 +51,7 @@ export enum ContextMenuOptions {
   UseInCode = 'useInCode',
   NewChild = 'newChild',
   Export = 'export',
+  Open = 'open',
 }
 
 export interface ResourceContextMenuProps {
@@ -64,6 +66,7 @@ export interface ResourceContextMenuProps {
   /** Callback that is called after the resource was deleted */
   onAfterDelete?: () => void;
   title?: string;
+  external?: boolean;
 }
 
 /** Dropdown menu that opens a bunch of actions for some resource */
@@ -74,6 +77,7 @@ function ResourceContextMenu({
   simple,
   isMainMenu,
   title,
+  external,
   bindActive,
   onAfterDelete,
 }: ResourceContextMenuProps) {
@@ -132,10 +136,16 @@ function ResourceContextMenu({
       },
       DIVIDER,
     ),
+    ...addIf(!!external, {
+      id: ContextMenuOptions.Open,
+      label: 'Open',
+      helper: 'Open the resource',
+      onClick: () => navigate(constructOpenURL(subject)),
+      icon: <FaArrowUpRightFromSquare />,
+    }),
     ...addIf(
       canWrite,
       {
-        // disabled: !canWrite || location.pathname.startsWith(paths.edit),
         id: ContextMenuOptions.Edit,
         label: 'Edit',
         helper: 'Open the edit form.',

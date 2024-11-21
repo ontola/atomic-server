@@ -1,5 +1,11 @@
 import { ResourcePageProps } from '../ResourcePage';
-import { core, useArray, useCanWrite } from '@tomic/react';
+import {
+  core,
+  useArray,
+  useCanWrite,
+  useResource,
+  type Core,
+} from '@tomic/react';
 import { OntologySidebar } from './OntologySidebar';
 import { styled } from 'styled-components';
 import { ClassCardRead } from './Class/ClassCardRead';
@@ -11,16 +17,29 @@ import { FaEdit, FaEye } from 'react-icons/fa';
 import { OntologyDescription } from './OntologyDescription';
 import { ClassCardWrite } from './Class/ClassCardWrite';
 import { NewClassButton } from './NewClassButton';
-import { toAnchorId } from './toAnchorId';
+import { toAnchorId } from '../../helpers/toAnchorId';
 import { OntologyContextProvider } from './OntologyContext';
 import { PropertyCardWrite } from './Property/PropertyCardWrite';
 import { Graph } from './Graph';
 import { CreateInstanceButton } from './CreateInstanceButton';
 import { useState } from 'react';
+import { NewPropertyButton } from './NewPropertyButton';
+import { InfoTitle } from './InfoTitle';
 
 const isEmpty = (arr: Array<unknown>) => arr.length === 0;
 
 export function OntologyPage({ resource }: ResourcePageProps) {
+  const classesPropResource = useResource<Core.Property>(
+    core.properties.classes,
+  );
+  const propertiesPropResource = useResource<Core.Property>(
+    core.properties.properties,
+  );
+
+  const instancesPropResource = useResource<Core.Property>(
+    core.properties.instances,
+  );
+
   const [classes] = useArray(resource, core.properties.classes);
   const [properties] = useArray(resource, core.properties.properties);
   const [instances] = useArray(resource, core.properties.instances);
@@ -56,7 +75,9 @@ export function OntologyPage({ resource }: ResourcePageProps) {
         <ListSlot>
           <Column style={{ paddingBottom: '3rem' }}>
             <OntologyDescription edit={editMode} resource={resource} />
-            <h2>Classes</h2>
+            <InfoTitle info={classesPropResource.props.description}>
+              Classes
+            </InfoTitle>
             <StyledUl>
               {editMode && (
                 <li>
@@ -72,9 +93,17 @@ export function OntologyPage({ resource }: ResourcePageProps) {
                   )}
                 </li>
               ))}
+              {!editMode && classes.length === 0 && <span>No classes</span>}
             </StyledUl>
-            <h2>Properties</h2>
+            <InfoTitle info={propertiesPropResource.props.description}>
+              Properties
+            </InfoTitle>
             <StyledUl>
+              {editMode && (
+                <li>
+                  <NewPropertyButton parent={resource} />
+                </li>
+              )}
               {properties.map(c => (
                 <li key={c}>
                   {editMode ? (
@@ -84,15 +113,21 @@ export function OntologyPage({ resource }: ResourcePageProps) {
                   )}
                 </li>
               ))}
+              {!editMode && properties.length === 0 && (
+                <span>No properties</span>
+              )}
             </StyledUl>
-            <h2>Instances</h2>
+            <InfoTitle info={instancesPropResource.props.description}>
+              Instances
+            </InfoTitle>
             <StyledUl>
+              {editMode && <CreateInstanceButton ontology={resource} />}
               {instances.map(c => (
                 <li key={c}>
                   <ResourceCard subject={c} id={toAnchorId(c)} />
                 </li>
               ))}
-              {editMode && <CreateInstanceButton ontology={resource} />}
+              {!editMode && instances.length === 0 && <span>No instances</span>}
             </StyledUl>
           </Column>
         </ListSlot>

@@ -183,6 +183,7 @@ export function applyNodeStyling(
       borderColor: theme.colors.bg2,
       color: theme.colors.text,
       borderStyle: node.data.external ? 'dashed' : 'solid',
+      opacity: node.data.external ? 0.7 : 1,
     },
   }));
 }

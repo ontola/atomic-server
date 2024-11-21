@@ -7,7 +7,7 @@ import {
   useResource,
 } from '@tomic/react';
 import { ResourceInline } from '../ResourceInline';
-import { toAnchorId } from './toAnchorId';
+import { toAnchorId } from '../../helpers/toAnchorId';
 import { useOntologyContext } from './OntologyContext';
 
 interface TypeSuffixProps {

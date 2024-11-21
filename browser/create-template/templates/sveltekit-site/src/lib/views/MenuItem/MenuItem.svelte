@@ -49,7 +49,7 @@
 		if (!button || !popover) return;
 
 		// Check if the anchor position api is supported. If so we don't need to calculate the position.
-		if (getComputedStyle(popover).getPropertyValue('--supports-position-anchor') !== 'false') {
+		if (CSS.supports('anchor-name', '--something')) {
 			return;
 		}
 
@@ -142,7 +142,6 @@
 		position-area: bottom center;
 
 		@supports not (anchor-name: --something) {
-			--supports-position-anchor: false;
 			position: fixed;
 			top: var(--top);
 			left: var(--left);

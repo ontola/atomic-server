@@ -1,4 +1,4 @@
-import { core, useResources, useServerSearch } from '@tomic/react';
+import { core, dataBrowser, useResources, useServerSearch } from '@tomic/react';
 import {
   ClipboardEventHandler,
   KeyboardEventHandler,
@@ -23,6 +23,31 @@ import { useSettings } from '../../../helpers/AppSettings';
 import { QuickScore } from 'quick-score';
 import { useTitlePropOfClass } from '../ResourceSelector/useTitlePropOfClass';
 import { stringToSlug } from '../../../helpers/stringToSlug';
+import { addIf } from '../../../helpers/addIf';
+import { Row } from '../../Row';
+
+/**
+ * Options shown at the top of the results when the `isA` prop matches a key in this object.
+ */
+const STANDARD_OPTIONS: Record<string, string[]> = {
+  [core.classes.property]: [
+    core.properties.name,
+    core.properties.description,
+    core.properties.shortname,
+    dataBrowser.properties.image,
+  ],
+};
+
+enum OptionType {
+  CreateOption,
+  StandardOption,
+  Result,
+}
+
+type Option = {
+  type: OptionType;
+  data: string;
+};
 
 const BOX_HEIGHT_REM = 20;
 
@@ -39,6 +64,10 @@ interface SearchBoxWindowProps {
   onCreateItem?: (name: string, isA?: string) => void;
 }
 
+/**
+ * The window that opens when the searchbox is focussed.
+ * It handles searching, both locally and on the server.
+ */
 export function SearchBoxWindow({
   searchValue,
   onChange,
@@ -53,7 +82,7 @@ export function SearchBoxWindow({
 }: SearchBoxWindowProps): JSX.Element {
   const { drive } = useSettings();
 
-  const [realIndex, setIndex] = useState<number | undefined>(undefined);
+  const [index, setIndex] = useState<number | undefined>(undefined);
   const [results, setResults] = useState<string[]>([]);
   const [searchError, setSearchError] = useState<Error | undefined>();
   const [valueIsURL, setValueIsURL] = useState(false);
@@ -67,12 +96,31 @@ export function SearchBoxWindow({
   const showCreateOption =
     onCreateItem && searchValue && !valueIsURL && !allowsOnly;
 
-  const offset = showCreateOption ? 1 : 0;
+  const standardOptions = useMemo(() => {
+    if (!searchValue && isA && isA in STANDARD_OPTIONS) {
+      return STANDARD_OPTIONS[isA];
+    }
+
+    return [];
+  }, [isA, searchValue]);
+
+  const options: Option[] = useMemo(
+    () => [
+      ...addIf(!!showCreateOption, {
+        type: OptionType.CreateOption,
+        data: '',
+      }),
+      ...standardOptions.map(option => ({
+        type: OptionType.StandardOption,
+        data: option,
+      })),
+      ...results.map(result => ({ type: OptionType.Result, data: result })),
+    ],
+    [showCreateOption, standardOptions, results],
+  );
 
   const selectedIndex =
-    realIndex !== undefined
-      ? loopingIndex(realIndex, results.length + offset)
-      : undefined;
+    index !== undefined ? loopingIndex(index, options.length) : undefined;
 
   const handleKeyDown: KeyboardEventHandler<HTMLInputElement> = e => {
     if (e.key === 'Enter') {
@@ -139,20 +187,24 @@ export function SearchBoxWindow({
     onCreateItem(name, isA);
   };
 
-  const pickSelectedItem = () => {
-    if (selectedIndex === undefined) {
+  const pickSelectedItem = (override?: number) => {
+    if (selectedIndex === undefined && override === undefined) {
       onSelect(searchValue);
 
       return;
     }
 
-    if (selectedIndex === 0 && showCreateOption) {
+    const selected = options[override! ?? selectedIndex!];
+
+    // The selected option is a "Create ..." option.
+    if (selected.type === OptionType.CreateOption) {
       createItem(searchValue);
 
       return;
     }
 
-    onSelect(results[selectedIndex - offset]);
+    // The selected option is a standard option or a search result.
+    onSelect(selected.data);
   };
 
   const handleResults = useCallback((res: string[], error?: Error) => {
@@ -206,7 +258,12 @@ export function SearchBoxWindow({
   }
 
   return (
-    <Wrapper onBlur={handleBlur} ref={wrapperRef} $above={isAboveTrigger}>
+    <Wrapper
+      onBlur={handleBlur}
+      ref={wrapperRef}
+      $above={isAboveTrigger}
+      onMouseLeave={() => setIndex(undefined)}
+    >
       <SearchInputWrapper>
         <FaSearch />
         <Input
@@ -223,33 +280,55 @@ export function SearchBoxWindow({
           <CenteredMessage>Start Searching</CenteredMessage>
         )}
         <StyledScrollArea>
-          <ul>
-            {showCreateOption ? (
-              <ResultLine
-                selected={selectedIndex === 0}
-                onMouseOver={() => handleMouseMove(0)}
-                onClick={() => createItem(searchValue)}
-              >
-                {titleProp ? (
-                  <>
-                    Create{' '}
-                    <CreateLineInputText>{searchValue}</CreateLineInputText>
-                  </>
-                ) : (
-                  `Create new ${classTitle ?? 'resource'}`
-                )}
-              </ResultLine>
-            ) : null}
-            {results.map((result, i) => (
-              <ResourceResultLine
-                key={result}
-                subject={result}
-                selected={i + offset === selectedIndex}
-                onMouseOver={() => handleMouseMove(i + offset)}
-                onClick={pickSelectedItem}
-              />
-            ))}
-          </ul>
+          <List>
+            {options.map((option, i) => {
+              let line = <></>;
+
+              if (option.type === OptionType.CreateOption) {
+                line = (
+                  <ResultLine
+                    key={'create option'}
+                    selected={selectedIndex === 0}
+                    onMouseOver={() => handleMouseMove(0)}
+                    onClick={() => createItem(searchValue)}
+                  >
+                    {titleProp ? (
+                      <Row gap='0.5ch'>
+                        Create{' '}
+                        <CreateLineInputText>{searchValue}</CreateLineInputText>
+                      </Row>
+                    ) : (
+                      `Create new ${classTitle ?? 'resource'}`
+                    )}
+                  </ResultLine>
+                );
+              } else {
+                line = (
+                  <ResourceResultLine
+                    key={option.data}
+                    subject={option.data}
+                    selected={i === selectedIndex}
+                    onMouseOver={() => handleMouseMove(i)}
+                    onClick={() => {
+                      // On mobile the item is not selected by hover so we need to force pickSelectedItem to pick this one.
+                      pickSelectedItem(i);
+                    }}
+                  />
+                );
+              }
+
+              const showDivider =
+                options[i + 1] !== undefined &&
+                option.type !== options[i + 1].type;
+
+              return (
+                <>
+                  {line}
+                  {showDivider && <Divider />}
+                </>
+              );
+            })}
+          </List>
           {!!searchValue && results.length === 0 && (
             <CenteredMessage>No Results</CenteredMessage>
           )}
@@ -301,7 +380,11 @@ const ServerSearchUnit = ({
       filters: {
         ...(isA ? { [core.properties.isA]: isA } : {}),
       },
-      parents: scopes ?? [drive, 'https://atomicdata.dev'],
+      parents: scopes ?? [
+        drive,
+        // We don't want to show atomicdata.dev results when there are standard defined options.
+        ...addIf(!!isA && !(isA in STANDARD_OPTIONS), 'https://atomicdata.dev'),
+      ],
       // If a classtype is given we want to prefill the searchbox with data.
       allowEmptyQuery: !!isA,
     }),
@@ -384,11 +467,24 @@ const Input = styled.input`
 `;
 
 const ResultBox = styled.div`
+  container: searchbox / inline-size;
   flex: 1;
   border: solid 1px ${p => p.theme.colors.bg2};
-
   height: calc(100% - 2rem);
   overflow: hidden;
+`;
+
+const List = styled.ul`
+  display: grid;
+  grid-template-columns: 20ch auto;
+  column-gap: 1ch;
+  overflow: hidden;
+  width: calc(100cqw);
+  margin-bottom: 0;
+
+  @container (max-width: 520px) {
+    grid-template-columns: 1fr;
+  }
 `;
 
 const Wrapper = styled.div<{ $above: boolean }>`
@@ -401,6 +497,9 @@ const Wrapper = styled.div<{ $above: boolean }>`
   height: ${BOX_HEIGHT_REM}rem;
   position: absolute;
   width: var(--radix-popover-trigger-width);
+  left: 0;
+  animation: ${fadeIn} 0.2s ease-in-out;
+
   ${({ $above, theme }) =>
     $above
       ? css`
@@ -433,9 +532,6 @@ const Wrapper = styled.div<{ $above: boolean }>`
             border-bottom-right-radius: ${p => p.theme.radius};
           }
         `}
-  left: 0;
-
-  animation: ${fadeIn} 0.2s ease-in-out;
 `;
 const CenteredMessage = styled.div`
   display: grid;
@@ -453,4 +549,14 @@ const StyledScrollArea = styled(ScrollArea)`
 const CreateLineInputText = styled.span`
   color: ${p => p.theme.colors.textLight};
   font-style: italic;
+`;
+
+const Divider = styled.div`
+  border-top: 1px solid ${props => props.theme.colors.bg2};
+  /* margin-block: 0.5rem; */
+  grid-column: 1/3;
+
+  @container (max-width: 520px) {
+    grid-column: 1/2;
+  }
 `;

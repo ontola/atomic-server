@@ -17,7 +17,7 @@ test.describe('Ontology', async () => {
     const pickOption = async (query: Locator, keyboardSteps?: number) => {
       await page.waitForTimeout(100);
 
-      // Sometimes when the page moves after the dropdown opens, part of the dropdownfalls outside the viewport.
+      // Sometimes when the page moves after the dropdown opens, part of the dropdown falls outside the viewport.
       // In this case we have to use the keyboard because scrolling doesn't seem to work.
       if (keyboardSteps !== undefined) {
         for (let i = 0; i < keyboardSteps; i++) {
@@ -118,12 +118,11 @@ test.describe('Ontology', async () => {
       .nth(1)
       .click();
 
-    await page.getByPlaceholder('Search for a property').fill('color');
-    await expect(page.getByText('The color of something')).toBeVisible();
+    await expect(
+      page.getByText('A textual description of something'),
+    ).toBeVisible();
 
-    await page.keyboard.press('ArrowDown');
-    await page.keyboard.press('ArrowDown');
-    await page.keyboard.press('Enter');
+    await page.getByText('A textual description of something').click();
 
     await page
       .getByRole('button', { name: 'add required property' })
@@ -167,13 +166,11 @@ test.describe('Ontology', async () => {
     // add name property to arrow-kind
     await arrowKindCard.getByTitle('add required property').click();
 
-    await page.getByPlaceholder('Search for a property').fill('name');
-
     await expect(
-      page.getByText('name - The name of a thing or person'),
+      page.getByText('nameThe name of a thing or person'),
     ).toBeVisible();
 
-    await pickOption(page.getByText('name - The name'), 2);
+    await pickOption(page.getByText('nameThe name'), 1);
 
     // add line-type property to arrow-kind
     await arrowKindCard.getByTitle('add recommended property').click();
@@ -243,6 +240,7 @@ test.describe('Ontology', async () => {
       await currentDialog(page).getByLabel('name').fill(name);
       await currentDialog(page).getByRole('button', { name: 'Save' }).click();
 
+      await expect(page.getByText('Resource loading...')).not.toBeVisible();
       await expect(page.getByRole('heading', { name })).toBeVisible();
     };
 

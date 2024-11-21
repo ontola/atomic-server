@@ -1,4 +1,4 @@
-import { Datatype, Resource, Store, core, useStore } from '@tomic/react';
+import { Resource, core, useStore } from '@tomic/react';
 import { useRef, useState } from 'react';
 import { styled } from 'styled-components';
 import { transition } from '../../../helpers/transition';
@@ -6,6 +6,7 @@ import { FaPlus } from 'react-icons/fa';
 import { SearchBox } from '../../../components/forms/SearchBox';
 import { focusOffsetElement } from '../../../helpers/focusOffsetElement';
 import { useOntologyContext } from '../OntologyContext';
+import { newProperty } from '../ontologyUtils';
 
 interface AddPropertyButtonProps {
   creator: Resource;
@@ -13,25 +14,6 @@ interface AddPropertyButtonProps {
 }
 
 const BUTTON_WIDTH = 'calc(100% - 5.6rem + 4px)'; //Width is 100% - (2 * 1.8rem for button width) + (2rem for gaps) + (4px for borders)
-
-async function newProperty(shortname: string, parent: Resource, store: Store) {
-  const subject = `${parent.subject}/property/${shortname}`;
-
-  const resource = await store.newResource({
-    subject,
-    parent: parent.subject,
-    isA: core.classes.property,
-    propVals: {
-      [core.properties.shortname]: shortname,
-      [core.properties.description]: 'a property',
-      [core.properties.datatype]: Datatype.STRING,
-    },
-  });
-
-  await resource.save();
-
-  return subject;
-}
 
 export function AddPropertyButton({
   creator,

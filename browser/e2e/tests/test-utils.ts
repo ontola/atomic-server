@@ -238,7 +238,7 @@ export async function fillSearchBox(
   await selector.getByPlaceholder(placeholder).fill(fillText);
 
   return async (name: string) => {
-    await selector.getByTestId('searchbox-results').getByText(name).hover();
+    // await selector.getByTestId('searchbox-results').getByText(name).hover();
     await selector.getByTestId('searchbox-results').getByText(name).click();
   };
 }

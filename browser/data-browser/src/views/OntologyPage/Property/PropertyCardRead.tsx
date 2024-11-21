@@ -7,7 +7,7 @@ import { Column, Row } from '../../../components/Row';
 import { InlineFormattedResourceList } from '../../../components/InlineFormattedResourceList';
 import { InlineDatatype } from '../InlineDatatype';
 import { AtomicLink } from '../../../components/AtomicLink';
-import { toAnchorId } from '../toAnchorId';
+import { toAnchorId } from '../../../helpers/toAnchorId';
 
 interface PropertyCardReadProps {
   subject: string;

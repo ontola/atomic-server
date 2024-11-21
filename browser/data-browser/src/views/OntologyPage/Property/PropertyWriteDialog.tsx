@@ -13,11 +13,13 @@ import { PropertyFormCommon } from './PropertyFormCommon';
 interface PropertyWriteDialogProps {
   resource: Resource;
   close: () => void;
+  isOpen: boolean;
 }
 
 export function PropertyWriteDialog({
   resource,
   close,
+  isOpen,
   ...dialogProps
 }: PropertyWriteDialogProps & InternalDialogProps): JSX.Element {
   const [canEdit] = useCanWrite(resource);
@@ -25,7 +27,7 @@ export function PropertyWriteDialog({
 
   return (
     <Dialog {...dialogProps} width='min(40rem, 90vw)'>
-      {dialogProps.show && (
+      {isOpen && (
         <>
           <DialogTitle>
             <InputSwitcher

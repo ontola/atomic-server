@@ -1,4 +1,4 @@
-import { Resource, Store, core, type Core } from '@tomic/react';
+import { Datatype, Resource, Store, core, type Core } from '@tomic/react';
 import { sortSubjectList } from './sortSubjectList';
 
 const DEFAULT_DESCRIPTION = 'Change me';
@@ -33,6 +33,29 @@ export async function newClass(
   );
 
   await parent.save();
+
+  return subject;
+}
+
+export async function newProperty(
+  shortname: string,
+  parent: Resource,
+  store: Store,
+) {
+  const subject = `${parent.subject}/property/${shortname}`;
+
+  const resource = await store.newResource({
+    subject,
+    parent: parent.subject,
+    isA: core.classes.property,
+    propVals: {
+      [core.properties.shortname]: shortname,
+      [core.properties.description]: 'a property',
+      [core.properties.datatype]: Datatype.STRING,
+    },
+  });
+
+  await resource.save();
 
   return subject;
 }

@@ -4,7 +4,7 @@ import { styled } from 'styled-components';
 import { Details } from '../../components/Details';
 import { FaAtom, FaCube, FaHashtag } from 'react-icons/fa';
 import { ScrollArea } from '../../components/ScrollArea';
-import { toAnchorId } from './toAnchorId';
+import { toAnchorId } from '../../helpers/toAnchorId';
 
 interface OntologySidebarProps {
   ontology: Resource;

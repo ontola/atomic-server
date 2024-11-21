@@ -13,10 +13,22 @@ interface CreateInstanceButtonProps {
 export function CreateInstanceButton({ ontology }: CreateInstanceButtonProps) {
   const [classSelectorActive, setClassSelectorActive] = useState(false);
   const [classSubject, setClassSubject] = useState<string | undefined>();
+  const [createdInstanceSubject, setCreatedInstanceSubject] =
+    useState<string>();
+
   const [dialogProps, show, close, isOpen] = useDialog({
-    onSuccess: () => {
-      setClassSubject(undefined);
-      ontology.save();
+    onSuccess: async () => {
+      ontology.push(core.properties.instances, [createdInstanceSubject], true);
+      await ontology.save();
+
+      requestAnimationFrame(() => {
+        document
+          .querySelector(`[about="${createdInstanceSubject}"]`)
+          ?.scrollIntoView({ behavior: 'smooth' });
+
+        setCreatedInstanceSubject(undefined);
+        setClassSubject(undefined);
+      });
     },
   });
 
@@ -31,7 +43,7 @@ export function CreateInstanceButton({ ontology }: CreateInstanceButtonProps) {
   };
 
   const handleSaveClick = (subject: string) => {
-    ontology.push(core.properties.instances, [subject], true);
+    setCreatedInstanceSubject(subject);
     close(true);
   };
 

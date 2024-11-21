@@ -4,7 +4,7 @@ import { urls, useCanWrite, useProperty, useResource } from '@tomic/react';
 import { FaHashtag } from 'react-icons/fa';
 import { styled } from 'styled-components';
 import { Column, Row } from '../../../components/Row';
-import { toAnchorId } from '../toAnchorId';
+import { toAnchorId } from '../../../helpers/toAnchorId';
 import InputSwitcher from '../../../components/forms/InputSwitcher';
 import ResourceContextMenu, {
   ContextMenuOptions,
@@ -16,7 +16,11 @@ interface PropertyCardWriteProps {
   subject: string;
 }
 
-const contextOptions = [ContextMenuOptions.Delete, ContextMenuOptions.History];
+const contextOptions = [
+  ContextMenuOptions.Open,
+  ContextMenuOptions.Delete,
+  ContextMenuOptions.History,
+];
 
 export function PropertyCardWrite({
   subject,
@@ -44,6 +48,7 @@ export function PropertyCardWrite({
             />
           </TitleWrapper>
           <ResourceContextMenu
+            external
             subject={subject}
             showOnly={contextOptions}
             onAfterDelete={handleDelete}

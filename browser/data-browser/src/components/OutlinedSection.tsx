@@ -1,6 +1,7 @@
 import { PropsWithChildren } from 'react';
 import { Row } from './Row';
 import { styled } from 'styled-components';
+import { CurrentBackgroundColor } from '../globalCssVars';
 
 interface OutlinedSectionProps {
   title: string;
@@ -39,7 +40,7 @@ const Heading = styled.h2`
   color: ${p => p.theme.colors.textLight};
   font-weight: normal;
   margin: 0;
-  background-color: ${p => p.theme.colors.bgBody};
+  background-color: ${CurrentBackgroundColor.var()};
   position: absolute;
   top: -0.5rem;
   left: ${p => p.theme.size()};

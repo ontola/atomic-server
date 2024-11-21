@@ -7,7 +7,7 @@ import { FaCube } from 'react-icons/fa';
 import { Column, Row } from '../../../components/Row';
 import Markdown from '../../../components/datatypes/Markdown';
 import { AtomicLink } from '../../../components/AtomicLink';
-import { toAnchorId } from '../toAnchorId';
+import { toAnchorId } from '../../../helpers/toAnchorId';
 import { ViewTransitionProps } from '../../../helpers/ViewTransitionProps';
 import {
   RESOURCE_PAGE_TRANSITION_TAG,

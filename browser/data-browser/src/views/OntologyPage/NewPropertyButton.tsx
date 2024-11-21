@@ -1,7 +1,12 @@
-import { Datatype, Resource, useStore, validateDatatype } from '@tomic/react';
+import {
+  Datatype,
+  Resource,
+  useStore,
+  validateDatatype,
+  type Core,
+} from '@tomic/react';
 import { useRef, useState } from 'react';
 import { FaPlus } from 'react-icons/fa';
-import { styled } from 'styled-components';
 import {
   Dialog,
   DialogActions,
@@ -13,28 +18,32 @@ import { Button } from '../../components/Button';
 import { InputStyled, InputWrapper } from '../../components/forms/InputStyles';
 import { stringToSlug } from '../../helpers/stringToSlug';
 import { Column } from '../../components/Row';
-import { newClass, subjectForClass } from './ontologyUtils';
+import { newProperty } from './ontologyUtils';
 import { toAnchorId } from '../../helpers/toAnchorId';
 import { DashedButton } from './DashedButton';
+import { useOntologyContext } from './OntologyContext';
 
-interface NewClassButtonProps {
-  resource: Resource;
+interface NewPropertyButtonProps {
+  parent: Resource<Core.Ontology>;
 }
 
-export function NewClassButton({ resource }: NewClassButtonProps): JSX.Element {
+export function NewPropertyButton({
+  parent,
+}: NewPropertyButtonProps): JSX.Element {
   const store = useStore();
   const [inputValue, setInputValue] = useState('');
   const [isValid, setIsValid] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  const subject = subjectForClass(resource, inputValue);
-  const shortSubject = new URL(subject).pathname;
+  const { addProperty } = useOntologyContext();
 
   const [dialogProps, show, hide, isOpen] = useDialog({
     onSuccess: async () => {
-      const createdClass = await newClass(inputValue, resource, store);
-      const id = toAnchorId(createdClass);
-      document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
+      const createdProperty = await newProperty(inputValue, parent, store);
+      await addProperty(createdProperty);
+      requestAnimationFrame(() => {
+        const id = toAnchorId(createdProperty);
+        document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
+      });
     },
   });
 
@@ -82,13 +91,13 @@ export function NewClassButton({ resource }: NewClassButtonProps): JSX.Element {
   return (
     <>
       <DashedButton onClick={openAndReset}>
-        <FaPlus /> Add class
+        <FaPlus /> Add property
       </DashedButton>
       <Dialog {...dialogProps}>
         {isOpen && (
           <>
             <DialogTitle>
-              <h1>New Class</h1>
+              <h1>New Property</h1>
             </DialogTitle>
             <DialogContent>
               <Column>
@@ -101,8 +110,6 @@ export function NewClassButton({ resource }: NewClassButtonProps): JSX.Element {
                     onKeyDown={handleKeyDown}
                   />
                 </InputWrapper>
-
-                <SubjectWrapper>{shortSubject}</SubjectWrapper>
               </Column>
             </DialogContent>
             <DialogActions>
@@ -119,16 +126,3 @@ export function NewClassButton({ resource }: NewClassButtonProps): JSX.Element {
     </>
   );
 }
-
-const SubjectWrapper = styled.div`
-  width: 100%;
-  max-width: 60ch;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: ${p => p.theme.colors.textLight};
-  background-color: ${p => p.theme.colors.bg1};
-  padding-inline: 0.5rem;
-  padding-block: 0.2rem;
-  border-radius: ${p => p.theme.radius};
-`;

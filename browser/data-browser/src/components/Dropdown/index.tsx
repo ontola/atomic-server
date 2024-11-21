@@ -378,6 +378,7 @@ export function MenuItem({
 
 const StyledShortcut = styled(Shortcut)`
   margin-left: 0.3rem;
+  color: ${p => p.theme.colors.textLight};
 `;
 
 const StyledLabel = styled.span`
@@ -389,43 +390,45 @@ interface MenuItemStyledProps {
 }
 
 const MenuItemStyled = styled(Button)<MenuItemStyledProps>`
+  --menu-item-bg: ${p =>
+    p.selected ? p.theme.colors.mainSelectedBg : p.theme.colors.bg};
+  --menu-item-fg: ${p =>
+    p.selected ? p.theme.colors.mainSelectedFg : p.theme.colors.text};
   align-items: center;
   display: flex;
   gap: 0.5rem;
   width: 100%;
   text-align: left;
-  color: ${p => p.theme.colors.text};
+  color: var(--menu-item-fg);
   padding: 0.4rem 1rem;
   height: auto;
-  background-color: ${p =>
-    p.selected ? p.theme.colors.bg1 : p.theme.colors.bg};
-  text-decoration: ${p => (p.selected ? 'underline' : 'none')};
+  background-color: var(--menu-item-bg);
+  outline: none;
 
   & svg {
-    color: ${p => p.theme.colors.textLight};
+    color: var(--menu-item-fg);
   }
+
   &:hover {
-    background-color: ${p => p.theme.colors.bg1};
+    --menu-item-bg: ${p => p.theme.colors.mainSelectedBg};
+    --menu-item-fg: ${p => p.theme.colors.mainSelectedFg};
+
+    @media (prefers-contrast: more) {
+      --menu-item-bg: ${p => (p.theme.darkMode ? 'white' : 'black')};
+      --menu-item-fg: ${p => (p.theme.darkMode ? 'black' : 'white')};
+    }
   }
   &:active {
-    background-color: ${p => p.theme.colors.bg2};
+    filter: brightness(0.9);
   }
   &:disabled {
     color: ${p => p.theme.colors.textLight2};
     cursor: default;
     background-color: ${p => p.theme.colors.bg};
 
-    &:hover {
-      cursor: 'default';
-    }
-
     & svg {
       color: ${p => p.theme.colors.textLight2};
     }
-  }
-
-  svg {
-    color: ${p => p.theme.colors.textLight};
   }
 `;
 
@@ -450,9 +453,13 @@ const Menu = styled.div<MenuProps>`
   width: auto;
   box-shadow: ${p => p.theme.boxShadowSoft};
   opacity: ${p => (p.isActive ? 1 : 0)};
+  ${transition('opacity')};
 
   @starting-style {
     opacity: 0;
   }
-  ${transition('opacity')};
+
+  @media (prefers-contrast: more) {
+    border: solid 1px ${p => p.theme.colors.bg2};
+  }
 `;

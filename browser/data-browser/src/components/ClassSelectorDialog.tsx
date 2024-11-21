@@ -89,6 +89,8 @@ const OntologySection = ({ subject, onClassSelect }: OntologySectionProps) => {
         {resource.props.classes?.map(s => (
           <ClassButton key={s} subject={s} onClassSelect={onClassSelect} />
         ))}
+        {!resource.props.classes ||
+          (resource.props.classes.length === 0 && <span>No classes</span>)}
       </Row>
     </OutlinedSection>
   );

@@ -21,7 +21,7 @@
     "@id": "https://atomicdata.dev/properties/properties",
     "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Property",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
-    "https://atomicdata.dev/properties/description": "A list of properties",
+    "https://atomicdata.dev/properties/description": "A list of properties used by the classes of the ontology.\nA Property is a single field in a Class. It's the thing that a property field in an Atom points to. An example is birthdate. An instance of Property requires various Properties, most notably a datatype (e.g. string or integer), a human readable description (such as the thing you're reading), and a shortname.",
     "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
     "https://atomicdata.dev/properties/shortname": "properties",
     "https://atomicdata.dev/properties/isA": [
@@ -32,7 +32,7 @@
     "@id": "https://atomicdata.dev/properties/classes",
     "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Class",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
-    "https://atomicdata.dev/properties/description": "A list of classes",
+    "https://atomicdata.dev/properties/description": "A list of classes that make up an ontology.\nA Class describes an abstract concept, such as 'Person' or 'Blogpost'. It describes the data shape of data (which fields are required and recommended) and explains what the concept represents. Resources use the is-a attribute to indicate which classes they are instances of.",
     "https://atomicdata.dev/properties/isA": [
       "https://atomicdata.dev/classes/Property"
     ],
@@ -42,7 +42,7 @@
   {
     "@id": "https://atomicdata.dev/properties/instances",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
-    "https://atomicdata.dev/properties/description": "A list of class instances",
+    "https://atomicdata.dev/properties/description": "A list of instances that are referenced in the ontology. For example, enum values",
     "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
     "https://atomicdata.dev/properties/shortname": "instances",
     "https://atomicdata.dev/properties/isA": [
