@@ -553,7 +553,6 @@ const CreateLineInputText = styled.span`
 
 const Divider = styled.div`
   border-top: 1px solid ${props => props.theme.colors.bg2};
-  /* margin-block: 0.5rem; */
   grid-column: 1/3;
 
   @container (max-width: 520px) {
