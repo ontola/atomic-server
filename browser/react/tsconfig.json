@@ -1,20 +1,14 @@
 {
-    "compilerOptions": {
-        "declaration": true,
-        "declarationMap": true,
-        "outDir": "./dist",
-        "lib": [
-            "ES6",
-            "ES7",
-            "ESNext",
-            "DOM"
-        ],
-        "rootDir": ".",
-        "jsx": "react",
-        "module": "NodeNext",
-        "moduleResolution": "NodeNext"
-    },
-    "include": [
-        "src/**/*"
-    ]
+  "extends": "../tsconfig.build.json",
+  "compilerOptions": {
+    "declaration": true,
+    "declarationMap": true,
+    "outDir": "./dist",
+    "lib": ["ES6", "ES7", "ESNext", "DOM"],
+    "rootDir": ".",
+    "jsx": "react",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext"
+  },
+  "include": ["src/**/*"]
 }

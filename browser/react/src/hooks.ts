@@ -58,7 +58,7 @@ export function useResource<C extends OptionalClass = never>(
   return resource;
 }
 
-const stableEmptyArray = [];
+const stableEmptyArray: string[] = [];
 
 /**
  * Converts an array of Atomic URL strings to an array of Resources.
@@ -75,7 +75,7 @@ export function useResources(
     // When a change happens, set the new Resource.
     function handleNotify(updated: Resource) {
       setResources(prev => {
-        prev.set(updated.getSubject(), proxyResource(updated));
+        prev.set(updated.subject, proxyResource(updated));
 
         // We need to create new Maps for react hooks to update - React only checks references, not content
         return new Map(prev);
