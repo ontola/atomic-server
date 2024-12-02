@@ -66,7 +66,7 @@ export function ChatRoomPage({ resource }: ResourcePageProps) {
   const disableSend = newMessageVal.length === 0;
 
   /** Creates a message using the internal state */
-  async function sendMessage(e?) {
+  async function sendMessage(e?: React.SyntheticEvent) {
     const messageBackup = newMessageVal;
 
     try {
@@ -106,7 +106,9 @@ export function ChatRoomPage({ resource }: ResourcePageProps) {
     inputRef?.current?.focus();
   }
 
-  function handleChangeMessageText(e) {
+  const handleChangeMessageText: React.ChangeEventHandler<
+    HTMLTextAreaElement
+  > = e => {
     setNewMessage(e.target.value);
 
     if (e.target.value === '') {
@@ -128,7 +130,7 @@ export function ChatRoomPage({ resource }: ResourcePageProps) {
     if (trows !== textAreaHight) {
       setTextAreaHight(trows);
     }
-  }
+  };
 
   return (
     <FullPageWrapper>
@@ -161,7 +163,7 @@ export function ChatRoomPage({ resource }: ResourcePageProps) {
           title='Send message [enter]'
           disabled={disableSend}
           clean
-          onClick={sendMessage}
+          onClick={() => sendMessage()}
         >
           Send
         </SendButton>

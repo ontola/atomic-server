@@ -38,16 +38,19 @@ export function dedupeVersions(versions: Version[]): Version[] {
 export function groupVersionsByMonth(
   versions: Version[],
 ): Record<string, Version[]> {
-  return versions.reduceRight((acc, version) => {
-    const createdDate = new Date(version.commit.createdAt);
-    const groupKey = groupFormatter.format(createdDate);
-    const group = acc[groupKey] ?? [];
+  return versions.reduceRight(
+    (acc, version) => {
+      const createdDate = new Date(version.commit.createdAt);
+      const groupKey = groupFormatter.format(createdDate);
+      const group = acc[groupKey] ?? [];
 
-    return {
-      ...acc,
-      [groupKey]: [...group, version],
-    };
-  }, {});
+      return {
+        ...acc,
+        [groupKey]: [...group, version],
+      };
+    },
+    {} as Record<string, Version[]>,
+  );
 }
 
 function compareMaps(map1: Map<string, unknown>, map2: Map<string, unknown>) {

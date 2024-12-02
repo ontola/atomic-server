@@ -123,8 +123,9 @@ export class Client {
 
     try {
       Client.tryValidSubject(subject);
-      const requestHeaders: HeadersObject = {};
-      requestHeaders['Accept'] = JSON_AD_MIME;
+      let requestHeaders: HeadersObject = {
+        Accept: JSON_AD_MIME,
+      };
 
       if (signInfo) {
         // Cookies only work in browsers for same-origin requests right now
@@ -134,7 +135,11 @@ export class Client {
             setCookieAuthentication(signInfo.serverURL, signInfo.agent);
           }
         } else {
-          await signRequest(subject, signInfo.agent, requestHeaders);
+          requestHeaders = await signRequest(
+            subject,
+            signInfo.agent,
+            requestHeaders,
+          );
         }
       }
 

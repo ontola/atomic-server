@@ -1,7 +1,7 @@
 {
-    "extends": "../tsconfig.build.json",
     "compilerOptions": {
-        "composite": true,
+        "declaration": true,
+        "declarationMap": true,
         "outDir": "./dist",
         "lib": [
             "ES6",
@@ -11,14 +11,10 @@
         ],
         "rootDir": ".",
         "jsx": "react",
-        "module": "NodeNext"
+        "module": "NodeNext",
+        "moduleResolution": "NodeNext"
     },
     "include": [
-        "./src"
-    ],
-    "references": [
-        {
-            "path": "../lib"
-        }
+        "src/**/*"
     ]
 }

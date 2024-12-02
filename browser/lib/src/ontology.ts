@@ -59,6 +59,14 @@ type QuickAccessKnownPropType<Class extends OptionalClass> = {
   >;
 };
 
+declare global {
+  // We need to use var for declaring types on globalThis
+  // eslint-disable-next-line no-var
+  var ATOMIC_SUBJECT_TO_NAME_MAPPING: Map<string, string>;
+  // eslint-disable-next-line no-var
+  var ATOMIC_CLASS_DEFS: Map<string, Record<string, string>>;
+}
+
 /** Type of the dynamically created resource.props field */
 export type QuickAccessPropType<Class extends OptionalClass = UnknownClass> =
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -104,7 +112,7 @@ export function getKnownNameBySubject(subject: string): string | undefined {
 
 export function getKnownClassDefBySubject(
   subject: string,
-): Map<string, Record<string, string>> {
+): Record<string, string> | undefined {
   return globalThis.ATOMIC_CLASS_DEFS.get(subject);
 }
 

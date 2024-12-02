@@ -31,9 +31,9 @@ function EndpointPage({ resource }: EndpointProps): JSX.Element {
   const navigate = useNavigate();
 
   /** Create the URL using the variables */
-  async function constructSubject(e?) {
+  async function constructSubject(e?: React.SyntheticEvent) {
     e && e.preventDefault();
-    const url = new URL(resource.getSubject());
+    const url = new URL(resource.subject);
 
     await Promise.all(
       parameters.map(async propUrl => {

@@ -1,5 +1,11 @@
-import { AtomicError, ErrorType } from './../../../../lib/src/error';
-import { Resource, urls, useStore, useString } from '@tomic/react';
+import {
+  AtomicError,
+  ErrorType,
+  Resource,
+  urls,
+  useStore,
+  useString,
+} from '@tomic/react';
 import { startTransition, useCallback, useEffect, useState } from 'react';
 import { debounce } from '../../helpers/debounce';
 import { paths } from '../../routes/paths';

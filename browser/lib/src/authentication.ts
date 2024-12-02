@@ -53,22 +53,23 @@ export async function signRequest(
   /** The resource meant to be fetched */
   subject: string,
   agent: Agent,
-  headers: HeadersObject | Headers,
+  headers: HeadersObject,
 ): Promise<HeadersObject> {
   const timestamp = getTimestampNow();
+  const newHeaders = { ...headers };
 
   if (agent?.subject && !localTryingExternal(subject, agent)) {
-    headers['x-atomic-public-key'] = await agent.getPublicKey();
-    headers['x-atomic-signature'] = await signatureMessage(
+    newHeaders['x-atomic-public-key'] = await agent.getPublicKey();
+    newHeaders['x-atomic-signature'] = await signatureMessage(
       subject,
       agent,
       timestamp,
     );
-    headers['x-atomic-timestamp'] = timestamp;
-    headers['x-atomic-agent'] = agent?.subject;
+    newHeaders['x-atomic-timestamp'] = timestamp.toString();
+    newHeaders['x-atomic-agent'] = agent?.subject;
   }
 
-  return headers as HeadersObject;
+  return newHeaders;
 }
 
 const ONE_DAY = 24 * 60 * 60 * 1000;

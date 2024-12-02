@@ -7,11 +7,9 @@ import ResourceCard from '../views/Card/ResourceCard';
 import { useServerSearch } from '@tomic/react';
 import { ErrorLook } from '../components/ErrorLook';
 import { styled } from 'styled-components';
-import { FaFilter, FaSearch } from 'react-icons/fa';
+import { FaSearch } from 'react-icons/fa';
 import { useQueryScopeHandler } from '../hooks/useQueryScope';
 import { useSettings } from '../helpers/AppSettings';
-import { ClassFilter } from '../components/SearchFilter';
-import { Button } from '../components/Button';
 import { Column } from '../components/Row';
 import { Main } from '../components/Main';
 
@@ -20,7 +18,6 @@ export function Search(): JSX.Element {
   const [query] = useSearchQuery();
   const { drive } = useSettings();
   const { scope } = useQueryScopeHandler();
-  const [filters, setFilters] = useState({});
   const [enableFilter, setEnableFilter] = useState(false);
 
   useHotkeys(
@@ -32,13 +29,10 @@ export function Search(): JSX.Element {
     [enableFilter],
   );
 
-  const [showFilter, setShowFilter] = useState(false);
-
   const [selectedIndex, setSelected] = useState(0);
   const { results, loading, error } = useServerSearch(query, {
     debounce: 0,
     parents: scope || drive,
-    filters,
     include: true,
   });
   const navigate = useNavigate();
@@ -109,36 +103,19 @@ export function Search(): JSX.Element {
           <ErrorLook>{error.message}</ErrorLook>
         ) : (
           <>
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-              }}
-            >
-              <Heading>
-                <FaSearch />
-                <span>
-                  {message ? (
-                    message
-                  ) : (
-                    <>
-                      {results.length}{' '}
-                      {results.length > 1 ? 'Results' : 'Result'} for{' '}
-                      <QueryText>{query}</QueryText>
-                    </>
-                  )}
-                </span>
-              </Heading>
-              {enableFilter && (
-                <Button onClick={() => setShowFilter(!showFilter)}>
-                  <FaFilter />
-                  Filter
-                </Button>
-              )}
-            </div>
-            {showFilter && (
-              <ClassFilter setFilters={setFilters} filters={filters} />
-            )}
+            <Heading>
+              <FaSearch />
+              <span>
+                {message ? (
+                  message
+                ) : (
+                  <>
+                    {results.length} {results.length > 1 ? 'Results' : 'Result'}{' '}
+                    for <QueryText>{query}</QueryText>
+                  </>
+                )}
+              </span>
+            </Heading>
             <Column ref={resultsDiv} gap='1rem'>
               {results.map((subject, index) => (
                 <ResourceCard
@@ -164,8 +141,9 @@ const Heading = styled.h1`
   white-space: nowrap;
   overflow: hidden;
   line-height: 1.5;
-  margin-bottom: ${p => p.theme.margin * 3}rem;
-  > span {
+  margin-bottom: ${p => p.theme.size(8)};
+
+  & > span {
     overflow: hidden;
     text-overflow: ellipsis;
   }

@@ -1,6 +1,14 @@
 {
   "version": "0.40.0",
   "author": "Polle Pas",
+  "homepage": "https://docs.atomicdata.dev/create-template/atomic-template",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/atomicdata-dev/atomic-server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/atomicdata-dev/atomic-server/issues"
+  },
   "dependencies": {
     "@tomic/lib": "workspace:*",
     "chalk": "^5.3.0",
@@ -20,7 +28,8 @@
     "build": "tsc",
     "lint": "eslint ./src --ext .js,.ts",
     "lint-fix": "eslint ./src --ext .js,.ts --fix",
-    "prepublishOnly": "pnpm run build && pnpm run lint-fix",
+    "prepublishOnly": "pnpm run build && pnpm run lint && pnpm run lint-package",
+    "lint-package": "pnpm dlx publint",
     "watch": "tsc --build --watch",
     "start": "pnpm exec tsc --build --watch",
     "tsc": "pnpm exec tsc --build",

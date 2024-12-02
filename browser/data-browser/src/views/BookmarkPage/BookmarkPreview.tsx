@@ -33,7 +33,7 @@ export function BookmarkPreview({
   );
 }
 
-const ErrorPage = ({ error }) => {
+const ErrorPage = ({ error }: { error: Error }) => {
   return (
     <CenterGrid>
       <div>

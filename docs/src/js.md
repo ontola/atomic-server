@@ -75,6 +75,5 @@ const unsub = store.subscribe('https://my-atomic-server.dev/some-resource', reso
 ## What's next?
 
 Next check out [Store](./js-lib/store.md) to learn how to set up a store and fetch data.
-Or read the [Generated Typedocs](https://atomic-lib.netlify.app/modules/_tomic_lib)
 
-If you rather want to see a step-by-step guide on how to use the library in a project check out the [Astro + AtomicServer Guide](<javascript:alert('TODO: Add link');>)
+If you rather want to see a step-by-step guide on how to use the library in a project check out the [Astro + AtomicServer Guide](astro-guide/1-index.md)

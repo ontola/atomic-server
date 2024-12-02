@@ -17,7 +17,6 @@ import { clearAllLocalData } from '../helpers/clearData';
 function ErrorPage({ resource }: ResourcePageProps): JSX.Element {
   const { agent } = useSettings();
   const store = useStore();
-  const subject = resource.getSubject();
 
   if (isUnauthorized(resource.error)) {
     return (
@@ -28,7 +27,11 @@ function ErrorPage({ resource }: ResourcePageProps): JSX.Element {
             <>
               <ErrorBlock error={resource.error!} />
               <span>
-                <Button onClick={() => store.fetchResourceFromServer(subject)}>
+                <Button
+                  onClick={() =>
+                    store.fetchResourceFromServer(resource.subject)
+                  }
+                >
                   Retry
                 </Button>
               </span>
@@ -47,12 +50,14 @@ function ErrorPage({ resource }: ResourcePageProps): JSX.Element {
   return (
     <ContainerWide>
       <Column>
-        <h1>Could not open {resource.getSubject()}</h1>
+        <h1>Could not open {resource.subject}</h1>
         <ErrorBlock error={resource.error!} />
         <Row>
           <Button
             onClick={() =>
-              store.fetchResourceFromServer(subject, { setLoading: true })
+              store.fetchResourceFromServer(resource.subject, {
+                setLoading: true,
+              })
             }
           >
             Retry
@@ -65,7 +70,7 @@ function ErrorPage({ resource }: ResourcePageProps): JSX.Element {
           </Button>
           <Button
             onClick={() =>
-              store.fetchResourceFromServer(subject, {
+              store.fetchResourceFromServer(resource.subject, {
                 fromProxy: true,
                 setLoading: true,
               })
@@ -100,7 +105,7 @@ export class ErrorBoundary extends React.Component<
     this.state = { error: undefined };
   }
 
-  public static getDerivedStateFromError(error) {
+  public static getDerivedStateFromError(error: Error) {
     // Update state so the next render will show the fallback UI.
     return { error };
   }

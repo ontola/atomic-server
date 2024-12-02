@@ -6,6 +6,7 @@ publish
 .husky
 .nohup
 .swc
+.tsup
 */lib
 */dist
 */dev-dist
@@ -26,3 +27,9 @@ data-browser/coverage
 !.yarn/versions
 .DS_Store
 **/.trunk/*
+
+**/tomic-lib-**.tgz
+**/tomic-react-**.tgz
+**/tomic-svelte-**.tgz
+**/tomic-cli-**.tgz
+**/tomic-create-template-**.tgz

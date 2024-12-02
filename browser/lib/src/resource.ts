@@ -23,7 +23,12 @@ import {
 } from './ontology.js';
 import type { Store } from './store.js';
 import { properties, instances, urls } from './urls.js';
-import { valToArray, type JSONValue, type JSONArray } from './value.js';
+import {
+  valToArray,
+  type JSONValue,
+  type JSONArray,
+  type JSONObject,
+} from './value.js';
 
 /** Contains the PropertyURL / Value combinations */
 export type PropVals = Map<string, JSONValue>;
@@ -131,7 +136,7 @@ export class Resource<C extends OptionalClass = any> {
     const getPropSubject = (name: string) => {
       // Check if the property is a default property
       if (name in defaultProps) {
-        return defaultProps[name];
+        return defaultProps[name as keyof typeof defaultProps];
       }
 
       // Check if the property is defined in any of the classes
@@ -157,11 +162,17 @@ export class Resource<C extends OptionalClass = any> {
       get(_target, propName) {
         const propSubject = getPropSubject(propName as string);
 
-        return innerThis.get(propSubject);
+        return innerThis.get(propSubject ?? '');
       },
 
       set(_target, propName, value) {
         const propSubject = getPropSubject(propName as string);
+
+        if (!propSubject) {
+          throw new Error(
+            `Unable to set property: ${propName.toString()} on ${innerThis.subject}. The property's subject could not be found.`,
+          );
+        }
 
         innerThis.set(propSubject, value, false);
 
@@ -316,7 +327,7 @@ export class Resource<C extends OptionalClass = any> {
     return this.getArray(propUrl).map(item => {
       if (typeof item === 'string') return item;
 
-      return item!['@id'] as string;
+      return (item as JSONObject)['@id'] as string;
     });
   }
 
@@ -569,7 +580,7 @@ export class Resource<C extends OptionalClass = any> {
     if (unique) {
       values = values
         .filter(value => !propVal.includes(value))
-        .filter(value => !this.commitBuilder.push[propUrl]?.includes(value))
+        .filter(value => !this.commitBuilder.push.get(propUrl)?.has(value))
         .filter((value, index, self) => self.indexOf(value) === index);
     }
 

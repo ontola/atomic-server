@@ -29,10 +29,6 @@
  * @module
  */
 
-import { initOntologies } from './ontologies/index.js';
-
-initOntologies();
-
 export * from './ontologies/core.js';
 export * from './ontologies/collections.js';
 export * from './ontologies/commits.js';

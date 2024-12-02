@@ -10,7 +10,7 @@ export const processCurrencyFile = (xmlStr: string): string => {
   const parser = new DOMParser();
   const xmlDoc = parser.parseFromString(xmlStr, 'text/xml');
   const currencyNodes = xmlDoc.getElementsByTagName('CcyNtry');
-  const currencyMap = {};
+  const currencyMap: Record<string, string> = {};
 
   for (let i = 0; i < currencyNodes.length; i++) {
     const currencyNode = currencyNodes[i];
@@ -22,7 +22,10 @@ export const processCurrencyFile = (xmlStr: string): string => {
 
     const currencyName =
       currencyNode.getElementsByTagName('CcyNm')[0]?.textContent;
-    currencyMap[code] = currencyName;
+
+    if (currencyName) {
+      currencyMap[code] = currencyName;
+    }
   }
 
   return JSON.stringify(currencyMap);

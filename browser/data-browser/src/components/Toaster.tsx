@@ -1,4 +1,9 @@
-import toast, { ToastBar, Toaster as ReactHotToast } from 'react-hot-toast';
+import toast, {
+  type Toast,
+  ToastBar,
+  Toaster as ReactHotToast,
+  type Renderable,
+} from 'react-hot-toast';
 import { FaCopy, FaTimes } from 'react-icons/fa';
 import { useTheme } from 'styled-components';
 import { zIndex } from '../styling';
@@ -45,12 +50,27 @@ export function Toaster(): JSX.Element {
   );
 }
 
-function ToastMessage({ icon, message, t }) {
-  let text = message.props.children;
+interface ToastMessageProps {
+  icon: React.ReactNode;
+  message: Renderable;
+  t: Toast;
+}
+
+function ToastMessage({ icon, message, t }: ToastMessageProps) {
+  let text: string;
+
+  if (typeof message === 'string') {
+    text = message;
+  } else if (message && 'props' in message) {
+    // children can technically still be a react node but we never do that in our code so we'll just assume it to be a string.
+    text = message.props.children;
+  } else {
+    text = '';
+  }
 
   function handleCopy() {
     toast.success('Copied error to clipboard');
-    navigator.clipboard.writeText(message.props.children);
+    navigator.clipboard.writeText(text);
     toast.dismiss(t.id);
   }
 

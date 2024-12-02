@@ -8,7 +8,7 @@ import {
 } from 'react';
 import { styled } from 'styled-components';
 import { FixedSizeList, ListOnScrollProps } from 'react-window';
-import Autosizer from 'react-virtualized-auto-sizer';
+import Autosizer, { type VerticalSize } from 'react-virtualized-auto-sizer';
 import { Cell, IndexCell } from './Cell';
 import { TableRow } from './TableRow';
 import { TableHeader, TableHeadingComponent } from './TableHeader';
@@ -157,7 +157,7 @@ function FancyTableInner<T>({
   );
 
   const List = useCallback(
-    ({ height }) => (
+    ({ height }: VerticalSize) => (
       <StyledFixedSizeList
         height={height}
         width='100%'
@@ -186,7 +186,6 @@ function FancyTableInner<T>({
       <VisuallyHidden id={ariaUsageId}>
         <p>{ARIA_TABLE_USAGE}</p>
       </VisuallyHidden>
-      {/* @ts-ignore */}
       <Table
         aria-labelledby={labelledBy}
         aria-rowcount={itemCount}
@@ -234,13 +233,12 @@ interface TableProps {
   totalContentHeight: number;
 }
 
-// @ts-ignore
 const Table = styled.div.attrs<TableProps>(p => ({
   style: {
     '--table-template-columns': p.gridTemplateColumns,
     '--table-content-width': p.contentRowWidth,
-  },
-}))<TableProps>`
+  } as Record<string, string>,
+}))`
   --table-height: 80vh;
   --table-row-height: ${p => p.rowHeight}px;
   --table-inner-padding: 0.5rem;
@@ -257,7 +255,6 @@ const Table = styled.div.attrs<TableProps>(p => ({
 
   &:focus-visible {
     outline: none;
-    /* border-color: ${p => p.theme.colors.main}; */
     box-shadow: 0 0 0 2px ${p => p.theme.colors.main};
   }
 `;

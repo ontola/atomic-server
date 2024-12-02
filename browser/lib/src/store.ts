@@ -21,6 +21,7 @@ import { stringToSlug } from './stringToSlug.js';
 import type { JSONValue } from './value.js';
 import { authenticate, fetchWebSocket, startWebsocket } from './websockets.js';
 import { endpoints } from './urls.js';
+import { initOntologies } from './ontologies/index.js';
 
 /** Function called when a resource is updated or removed */
 type ResourceCallback<C extends OptionalClass = UnknownClass> = (
@@ -136,6 +137,7 @@ export class Store {
   private client: Client;
 
   public constructor(opts: StoreOpts = {}) {
+    initOntologies();
     this._resources = new Map();
     this.webSockets = new Map();
     this.subscribers = new Map();
@@ -314,7 +316,7 @@ export class Store {
   }
 
   /**
-   * Always fetches resource from the server then adds it to the store.
+   * Always fetches the resource from the server then adds it to the store.
    */
   public async fetchResourceFromServer<C extends OptionalClass = UnknownClass>(
     /** The resource URL to be fetched */

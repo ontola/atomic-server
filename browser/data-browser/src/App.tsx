@@ -1,7 +1,7 @@
 import { BrowserRouter } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 import { StoreContext, Store } from '@tomic/react';
-import { StyleSheetManager } from 'styled-components';
+import { StyleSheetManager, type ShouldForwardProp } from 'styled-components';
 
 import { GlobalStyle, ThemeWrapper } from './styling';
 import { AppRoutes } from './routes/Routes';
@@ -75,7 +75,7 @@ if (isDev()) {
 }
 
 // This implements the default behavior from styled-components v5
-function shouldForwardProp(propName, target) {
+const shouldForwardProp: ShouldForwardProp<'web'> = (propName, target) => {
   if (typeof target === 'string') {
     // For HTML elements, forward the prop if it is a valid HTML attribute
     return isPropValid(propName);
@@ -83,7 +83,7 @@ function shouldForwardProp(propName, target) {
 
   // For other elements, forward all props
   return true;
-}
+};
 
 /** Entrypoint of the application. This is where providers go. */
 function App(): JSX.Element {
@@ -97,11 +97,10 @@ function App(): JSX.Element {
               <HotKeysWrapper>
                 <StyleSheetManager shouldForwardProp={shouldForwardProp}>
                   <ThemeWrapper>
-                    {/* @ts-ignore TODO: Check if types are fixed or upgrade styled-components to 6.0.0 */}
                     <GlobalStyle />
                     {/* @ts-ignore fallback component type too strict */}
                     <ErrBoundary FallbackComponent={CrashPage}>
-                      {/* Default form validation provider. Does not do anyting on its own but will make sure useValidation works without context*/}
+                      {/* Default form validation provider. Does not do anything on its own but will make sure useValidation works without context*/}
                       <FormValidationContextProvider
                         onValidationChange={() => undefined}
                       >

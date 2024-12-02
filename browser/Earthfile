@@ -7,6 +7,7 @@ all:
   BUILD +build
   BUILD +test
   BUILD +lint
+  BUILD +lint-package
   BUILD +typedoc
 
 deps:
@@ -18,6 +19,7 @@ deps:
   COPY react/package.json react/.
   COPY svelte/package.json svelte/.
   COPY cli/package.json cli/.
+  COPY create-template/package.json create-template/.
   RUN pnpm install --frozen-lockfile --shamefully-hoist
   COPY . .
 
@@ -29,6 +31,10 @@ test:
 lint:
   FROM +deps
   RUN pnpm run lint
+
+lint-package:
+  FROM +deps
+  RUN pnpm run lint-package
 
 build:
   FROM +deps

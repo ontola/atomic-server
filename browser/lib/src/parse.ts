@@ -126,16 +126,16 @@ export class JSONADParser {
       return value;
     }
 
-    if (value?.constructor === {}.constructor) {
-      if (Object.keys(value).includes('@id')) {
+    if (isJSONObject(value)) {
+      if ('@id' in value) {
         // It's a named resource that should be parsed too
-        const nestedSubject = value['@id'];
-        this.parseJsonADResource(value as JSONObject);
+        const nestedSubject = value['@id'] as string;
+        this.parseJsonADResource(value);
 
         return nestedSubject;
       } else {
         // It's an anonymous nested Resource
-        return value as JSONObject;
+        return value;
       }
     }
 
@@ -161,3 +161,6 @@ export class JSONADParser {
     return resources;
   }
 }
+
+const isJSONObject = (value: JSONValue): value is JSONObject =>
+  typeof value === 'object' && value !== null && !isArray(value);

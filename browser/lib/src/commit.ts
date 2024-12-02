@@ -11,6 +11,8 @@ import { Resource } from './resource.js';
 import type { Store } from './store.js';
 import { urls, properties } from './urls.js';
 import type { JSONValue, JSONArray } from './value.js';
+import { commits } from './ontologies/commits.js';
+import { core } from './ontologies/core.js';
 
 utils.sha512 = msg => Promise.resolve(sha512(msg));
 
@@ -43,6 +45,8 @@ interface CommitBuilderBase {
   destroy?: boolean;
   previousCommit?: string;
 }
+
+type JSONADObject = Record<string, JSONValue>;
 
 /** Return the current time as Atomic Data timestamp. Milliseconds since unix epoch. */
 export function getTimestampNow(): number {
@@ -222,7 +226,7 @@ export class CommitBuilder {
       throw new Error(`No changes to commit in ${this.subject}`);
     }
 
-    const commitPreSigned: CommitPreSigned = {
+    const commitPreSigned: UnsignedCommit = {
       ...this.clone().toPlainObject(),
       createdAt,
       signer: agent,
@@ -239,7 +243,7 @@ export class CommitBuilder {
 }
 
 /** A {@link Commit} without its signature, but with a signer and timestamp */
-interface CommitPreSigned extends CommitBuilderI {
+interface UnsignedCommit extends CommitBuilderI {
   /** https://atomicdata.dev/properties/signer */
   signer: string;
   /** Unix timestamp in milliseconds, see https://atomicdata.dev/properties/createdAt */
@@ -251,7 +255,7 @@ interface CommitPreSigned extends CommitBuilderI {
  * https://atomicdata.dev/classes/Commit If you want to create a Commit, you
  * should probably use the {@link CommitBuilder} and call `.sign()` on it.
  */
-export interface Commit extends CommitPreSigned {
+export interface Commit extends UnsignedCommit {
   /** https://atomicdata.dev/properties/signature */
   signature: string;
   /**
@@ -261,21 +265,34 @@ export interface Commit extends CommitPreSigned {
   id?: string;
 }
 
-/** Replaces a key in a Commit. Ignores it if it's not there */
-function replaceKey(
-  o: Commit | CommitPreSigned,
-  oldKey: string,
-  newKey: string,
-) {
-  if (oldKey in o && oldKey !== newKey) {
-    Object.defineProperty(
-      o,
-      newKey,
-      Object.getOwnPropertyDescriptor(o, oldKey)!,
-    );
-    delete o[oldKey];
-  }
-}
+const serializeMap = {
+  subject: commits.properties.subject,
+  set: commits.properties.set,
+  push: commits.properties.push,
+  remove: commits.properties.remove,
+  destroy: commits.properties.destroy,
+  previousCommit: commits.properties.previousCommit,
+  createdAt: commits.properties.createdAt,
+  signer: commits.properties.signer,
+  signature: commits.properties.signature,
+  id: 'id',
+};
+
+/** Replaces the keys of a Commit object with their respective json-ad key */
+const commitToJsonADObject = (commit: UnsignedCommit | Commit): JSONADObject =>
+  Object.entries(commit).reduce<JSONADObject>(
+    (acc, [key, value]) => {
+      const serializedKey =
+        serializeMap[key as keyof Commit | keyof UnsignedCommit];
+
+      acc[serializedKey] = value as JSONValue;
+
+      return acc;
+    },
+    {
+      [core.properties.isA]: [commits.classes.commit],
+    },
+  );
 
 /**
  * Takes a commit and serializes it deterministically (canonicilaization). Is
@@ -283,7 +300,7 @@ function replaceKey(
  * https://docs.atomicdata.dev/core/json-ad.html#canonicalized-json-ad
  */
 export function serializeDeterministically(
-  commit: CommitPreSigned | Commit,
+  commit: UnsignedCommit | Commit,
 ): string {
   // Remove empty arrays, objects, false values from root
   if (commit.remove && Object.keys(commit.remove).length === 0) {
@@ -302,18 +319,9 @@ export function serializeDeterministically(
     delete commit.destroy;
   }
 
-  replaceKey(commit, 'createdAt', urls.properties.commit.createdAt);
-  replaceKey(commit, 'subject', urls.properties.commit.subject);
-  replaceKey(commit, 'set', urls.properties.commit.set);
-  replaceKey(commit, 'push', urls.properties.commit.push);
-  replaceKey(commit, 'signer', urls.properties.commit.signer);
-  replaceKey(commit, 'signature', urls.properties.commit.signature);
-  replaceKey(commit, 'remove', urls.properties.commit.remove);
-  replaceKey(commit, 'destroy', urls.properties.commit.destroy);
-  replaceKey(commit, 'previousCommit', urls.properties.commit.previousCommit);
-  commit[urls.properties.isA] = [urls.classes.commit];
+  const jsonadCommit = commitToJsonADObject(commit);
 
-  return stringify(commit);
+  return stringify(jsonadCommit);
 }
 
 // /** Checks whether the commit signature is correct */
@@ -372,7 +380,7 @@ export async function generateKeyPair(): Promise<KeyPair> {
 
 export function parseCommitResource(resource: Resource): Commit {
   const commit: Commit = {
-    id: resource.getSubject(),
+    id: resource.subject,
     subject: resource.get(urls.properties.commit.subject) as string,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     set: resource.get(urls.properties.commit.set) as Record<string, any>,

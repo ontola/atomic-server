@@ -26,11 +26,11 @@ export enum Datatype {
   UNKNOWN = 'unknown-datatype',
 }
 
-const validDatatypes = new Set<string>(Object.values(Datatype));
+const validDatatypes = Object.values(Datatype) as string[];
 
 /** Convert a URL to a Datatype */
 export const datatypeFromUrl = (url: string): Datatype => {
-  if (validDatatypes.has(url)) {
+  if (validDatatypes.includes(url)) {
     return url as Datatype;
   }
 

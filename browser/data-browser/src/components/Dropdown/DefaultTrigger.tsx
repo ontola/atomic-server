@@ -1,6 +1,9 @@
 import { useId } from 'react';
 import { IconButton } from '../IconButton/IconButton';
-import { DropdownTriggerRenderFunction } from './DropdownTrigger';
+import {
+  DropdownTriggerRenderFunction,
+  type DropdownTriggerProps,
+} from './DropdownTrigger';
 
 /** Builds a default trigger for a dropdown menu using an IconButton.
  * Make sure the component stays mounted when the menu is open in order to have proper focus management.
@@ -11,7 +14,7 @@ export const buildDefaultTrigger = (
   ButtonComp: typeof IconButton = IconButton,
 ): DropdownTriggerRenderFunction => {
   const Comp = (
-    { onClick, menuId, isActive },
+    { onClick, menuId, isActive }: DropdownTriggerProps,
     ref: React.Ref<HTMLButtonElement>,
   ) => {
     const id = useId();

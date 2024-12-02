@@ -1,25 +1,26 @@
 import {
   Resource,
   useString,
-  urls,
+  core,
   reverseDatatypeMapping,
-  unknownSubject,
   useResource,
+  type Core,
+  datatypeFromUrl,
 } from '@tomic/react';
 import { ResourceInline } from '../ResourceInline';
 import { toAnchorId } from '../../helpers/toAnchorId';
 import { useOntologyContext } from './OntologyContext';
 
 interface TypeSuffixProps {
-  resource: Resource;
+  resource: Resource<Core.Property>;
 }
 
 export function InlineDatatype({ resource }: TypeSuffixProps): JSX.Element {
-  const [datatype] = useString(resource, urls.properties.datatype);
-  const [classType] = useString(resource, urls.properties.classType);
+  const datatype = resource.props.datatype;
+  const [classType] = useString(resource, core.properties.classtype);
   const { hasClass } = useOntologyContext();
 
-  const name = reverseDatatypeMapping[datatype ?? unknownSubject];
+  const name = reverseDatatypeMapping[datatypeFromUrl(datatype)];
 
   if (!classType) {
     return <span>{name}</span>;

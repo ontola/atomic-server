@@ -26,7 +26,7 @@ interface ApplyTemplateDialogProps {
   bindOpen: (open: boolean) => void;
 }
 
-const stableArray = [];
+const stableArray: string[] = [];
 
 export function ApplyTemplateDialog({
   template,

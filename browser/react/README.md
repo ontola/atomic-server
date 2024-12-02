@@ -3,9 +3,9 @@
 A library for viewing and creating Atomic Data.
 Re-exports `@tomic/lib`.
 
-[**demo + template on codesandbox**!](https://codesandbox.io/s/atomic-data-react-template-4y9qu?file=/src/MyResource.tsx:0-1223)
+[**docs**](https://docs.atomicdata.dev/usecases/react)
 
-[**docs**](https://atomic-lib.netlify.app/modules/_tomic_react)
+[**demo + template on codesandbox**!](https://codesandbox.io/s/atomic-data-react-template-4y9qu?file=/src/MyResource.tsx:0-1223)
 
 ## Setup
 
@@ -15,43 +15,44 @@ Wrap your App in a `StoreContext.Provider`, and pass the newly initialized store
 ```ts
 // App.tsx
 import { StoreContext, Store } from "@tomic/react";
-import { MyResource } from "./MyResource";
 
 // The store contains all the data for
-const store = new Store();
+const store = new Store({
+  serverUrl: 'https://my-atomic-server.com',
+});
 
 export default function App() {
   return (
     <StoreContext.Provider value={store}>
-      <MyResource subject={subject} />
+      // The rest of your app
     </StoreContext.Provider>
   );
 }
 ```
 
-Now, your Store can be accessed in React's context, which you can use the `atomic-react` hooks!
+Now, your Store can be accessed in React's context allowing you to use our hooks!
 
 ## Hooks
 
-### useResource, useString, useTitle
+```tsx
+import { useResource, useString, core } from "@tomic/react";
 
-```ts
-// Get the Resouce, and all its properties
-const resource = useResource('https://atomicdata.dev/classes/Agent');
-// The title takes either the Title, the Shortname or the URL of the resource
-const title = useTitle(resource);
-// All useValue / useString / useArray / useBoolean hooks have a getter and a setter.
-// Use the setter in forms.
-const [description, setDescription] = useString(resource, 'https://atomicdata.dev/properties/description');
-// The current Agent is the signed in user, inluding their private key. This enables you to create Commits and update data on a server.
-const [agent, setAgent] = useCurrentAgent();
+const SomeComponent = () => {
+  // Get the Resouce, and all its properties
+  const resource = useResource('https://atomicdata.dev/classes/Agent');
+  // All useValue / useString / useArray / useBoolean hooks have a getter and a setter.
+  const [description, setDescription] = useString(resource, core.properties.description);
 
-return (
-  <>
-    <h1>{title}</h2>
-    <textarea value={description} onChange={e => setDescription(e.target.value)} />
-    <button type={button} onClick={resource.save}>Save & commit</button>
-  </>
-)
+  return (
+    <>
+      <h1>{resource.title}</h2>
+      <textarea value={description} onChange={e => setDescription(e.target.value)} />
+      <button type={button} onClick={resource.save}>Save & commit</button>
+    </>
+  )
+}
 
 ```
+
+There are a lot more hooks and helpers available.
+See the [docs](https://docs.atomicdata.dev/usecases/react) for more information.

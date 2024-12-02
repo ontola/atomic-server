@@ -15,13 +15,5 @@
   },
   "include": [
     "./src",
-  ],
-  "references": [
-    {
-      "path": "../lib"
-    },
-    {
-      "path": "../react"
-    }
   ]
 }

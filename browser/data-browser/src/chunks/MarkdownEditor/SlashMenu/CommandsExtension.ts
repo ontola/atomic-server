@@ -22,6 +22,7 @@ export const SlashCommands = Extension.create({
     return {
       suggestion: {
         char: '/',
+        // @ts-expect-error Tiptap typing is not very good or clear so they're just any.
         command: ({ editor, range, props }) => {
           props.command({ editor, range });
         },
@@ -46,7 +47,7 @@ export const suggestion: Partial<SuggestionOptions> = {
         icon: FaListUl,
         command: ({ editor, range }) =>
           editor.chain().focus().deleteRange(range).toggleBulletList().run(),
-      },
+      } as CommandItem,
       {
         title: 'Codeblock',
         icon: FaCode,

@@ -22,7 +22,7 @@ const comments = myBlogpost.props.comments; // string[] automatically inferred!
 
 You can install the package globally or as a dev dependency of your project.
 
-**Globally**:
+#### Globally
 
 ```
 npm install -g @tomic/cli
@@ -34,7 +34,7 @@ You should now be able to run:
 ad-generate
 ```
 
-**Dev Dependency:**
+#### Dev Dependency
 
 ```
 npm install -D @tomic/cli
@@ -44,6 +44,14 @@ To run:
 
 ```
 npx ad-generate
+```
+
+Or add it to your `package.json` scripts:
+
+```json
+"scripts": {
+  "update-ontologies": "ad-generate ontologies"
+}
 ```
 
 ### Generating the files
@@ -90,7 +98,7 @@ If everything went well the generated files should now be in the output folder.
 In order to gain the benefit of the typings we will need to annotate our resource with its respective class as follows:
 
 ```typescript
-import { Book, creativeWorks } from './ontologies/creativeWorks.js';
+import { type Book, creativeWorks } from './ontologies/creativeWorks.js';
 
 const book = await store.getResourceAsync<Book>(
   'https://mybookstore.com/books/1',
@@ -149,7 +157,7 @@ interface AtomicConfig {
 
   /**
    * [OPTIONAL] The @tomic/lib module identifier.
-   * The default should be sufficient in most but if you have given the module an alias you should change this value
+   * The default should be sufficient in most cases but if you have given the module an alias you should change this value
    */
   moduleAlias?: string;
 
@@ -164,4 +172,4 @@ interface AtomicConfig {
 }
 ```
 
-Running `ad-generate init` will create this file for you that you can then tweak to your own preferences.
+Running `ad-generate init` will create this file for you which you can then tweak to your own preferences.

@@ -1,41 +1,67 @@
 {
+  "name": "@tomic/react",
   "version": "0.40.0",
   "author": "Joep Meindertsma",
   "description": "Atomic Data React library",
+  "homepage": "https://docs.atomicdata.dev/usecases/react",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/atomicdata-dev/atomic-server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/atomicdata-dev/atomic-server/issues"
+  },
   "dependencies": {
     "@tomic/lib": "workspace:*"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "^0.17.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@types/react-router-dom": "^5.3.3",
+    "tsup": "^8.3.5",
     "typescript": "^5.6.3"
   },
   "peerDependencies": {
-    "react": ">17.0.2"
+    "react": ">18.3.0"
   },
   "files": [
-    "dist"
+    "dist",
+    "!dist/**/*.d.ts.map"
   ],
   "license": "MIT",
-  "name": "@tomic/react",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/src/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/src/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
   "main-dev": "src/index.ts",
-  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
+  "source": "src/index.ts",
+  "type": "module",
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsup",
     "lint": "eslint ./src --ext .js,.jsx,.ts,.tsx",
     "lint-fix": "eslint ./src --ext .js,.jsx,.ts,.tsx --fix",
-    "prepublishOnly": "pnpm run lint-fix && pnpm run build",
+    "lint-package": "pnpm attw && pnpm publint",
+    "prepublishOnly": "pnpm run lint && pnpm run build && pnpm run lint-package",
     "start": "pnpm watch",
-    "watch": "tsc --build --watch",
-    "tsc": "tsc --build",
-    "typecheck": "pnpm exec tsc --noEmit"
-  },
-  "source": "src/index.ts",
-  "type": "module",
-  "types": "dist/src/index.d.ts",
-  "gitHead": "2172c73d8df4e5f273e6386676abc91b6c5b2707"
+    "watch": "tsup --watch",
+    "typecheck": "pnpm exec tsc --noEmit",
+    "publint": "pnpm dlx publint",
+    "attw": "pnpm exec attw $(pnpm pack)"
+  }
 }

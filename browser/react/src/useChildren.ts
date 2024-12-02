@@ -1,4 +1,3 @@
-// Sorry for the name of this
 import { Resource } from '@tomic/lib';
 import { useEffect, useState } from 'react';
 

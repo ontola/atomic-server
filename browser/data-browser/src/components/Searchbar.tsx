@@ -42,7 +42,7 @@ export function Searchbar({
     }
   };
 
-  function handleChange(e) {
+  const handleChange: React.ChangeEventHandler<HTMLInputElement> = e => {
     setInput(e.target.value);
 
     try {
@@ -52,9 +52,9 @@ export function Searchbar({
     } catch (_err) {
       navigate(searchURL(e.target.value, scope), { replace: true });
     }
-  }
+  };
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit: React.FormEventHandler<HTMLFormElement> = event => {
     if (!subject) {
       return;
     }
