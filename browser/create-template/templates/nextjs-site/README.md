@@ -49,6 +49,47 @@ These selector components are great for when a resource can reference another re
 For example, the `page` class has a `blocks` property that can reference any type of resource.
 The FullPage view for the `page` class (`PageFullPage`) therefore renders a `BlockView` component that selects the appropriate component to render, i.e. a `TextBlock` or an `ImageGalleryBlock`.
 
+## Deploying
+
+### Deploying to Netlify
+
+#### Prerequisites
+
+- A [Netlify](https://www.netlify.com/) account
+- A Git repository with your template project
+
+#### UI
+
+1. Click on the "Add new site" button and select "Import an existing project".
+2. Choose your Git provider and select the repository where your project is located.
+3. Add the environment variables required by your project
+
+#### CLI
+
+1. Install the Netlify CLI by running `npm install -g netlify-cli`.
+2. Run `netlify login` and log in.
+3. Run `netlify init` and select the repository you want to deploy.
+4. Run `netlify deploy` to deploy the site.
+
+### Deploying to Vercel
+
+#### Prerequisites
+
+- A [Vercel](https://vercel.com/) account
+- A Git repository with your template project
+
+#### UI
+
+1. Click on the "Import Project" button and select the repository where your project is located.
+2. Add the environment variables required by your project.
+
+#### CLI
+
+1. Install the Vercel CLI by running `npm install -g vercel`.
+2. Run `vercel login` and log in.
+3. Run `vercel` and select the repository you want to deploy.
+4. Run `vercel --prod` to deploy the site to production.
+
 ## Resources
 
 - [AtomicServer Docs](https://docs.atomicdata.dev/)
