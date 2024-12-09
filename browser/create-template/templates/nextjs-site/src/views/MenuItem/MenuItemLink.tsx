@@ -26,7 +26,6 @@ const MenuItemLink = ({
       href={href}
       className={clsx(styles.link, { [styles.linkActive]: active })}
       aria-current={active ? 'page' : 'false'}
-      suppressHydrationWarning
     >
       {resource.loading ? '' : page.title}
     </Link>

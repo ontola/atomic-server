@@ -11,7 +11,7 @@ const MenuItem = ({ subject }: { subject: string }) => {
   const menuItem = useResource<MenuItem>(subject);
   const { currentSubject } = useCurrentSubject();
   const id = useId();
-  const anchorName = CSS.escape(`--menuItem-${id}`);
+  const anchorName = cssEscape(`--menuItem-${id}`);
   const popover = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   const [submenuPosition, setSubmenuPosition] = useState({
@@ -22,7 +22,10 @@ const MenuItem = ({ subject }: { subject: string }) => {
   const calcPopoverPosition = () => {
     if (!button.current || !popover.current) return;
 
-    if (CSS.supports('anchor-name', '--something')) {
+    if (
+      typeof CSS !== 'undefined' &&
+      CSS.supports('anchor-name', '--something')
+    ) {
       return;
     }
 
@@ -60,7 +63,6 @@ const MenuItem = ({ subject }: { subject: string }) => {
         onClick={calcPopoverPosition}
         ref={button}
         style={{ '--anchor-name': anchorName } as React.CSSProperties}
-        suppressHydrationWarning
       >
         {menuItem.title}
       </button>
@@ -78,7 +80,6 @@ const MenuItem = ({ subject }: { subject: string }) => {
             '--anchor-name': anchorName,
           } as React.CSSProperties
         }
-        suppressHydrationWarning
       >
         <ul className={styles.ul}>
           {menuItem.props.subItems?.map((subItem: string, index: number) => (
@@ -95,6 +96,13 @@ const MenuItem = ({ subject }: { subject: string }) => {
       active={menuItem.props.linksTo === currentSubject}
     />
   );
+};
+
+const cssEscape = (value: string) => {
+  if (typeof CSS !== 'undefined' && CSS.escape) {
+    return CSS.escape(value);
+  }
+  return value.replace(/([!"#$%&'()*+,.\/:;<=>?@[\\\]^`{|}~])/g, '\\$1');
 };
 
 export default MenuItem;

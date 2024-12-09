@@ -7,9 +7,6 @@ const nextConfig = {
 
     return config;
   },
-  experimental: {
-    turbo: {},
-  },
 };
 
 export default nextConfig;
