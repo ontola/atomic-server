@@ -36,7 +36,7 @@ export function useDebouncedCallback<F extends Callback>(
   time: number,
   deps: unknown[],
 ): [debouncedFunction: (...args: Parameters<F>) => void, isWaiting: boolean] {
-  const timeoutId = useRef<ReturnType<typeof setTimeout>>();
+  const timeoutId = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [isWaiting, setIsWaiting] = useState(false);
 
   const memoizedFunction = useCallback(
