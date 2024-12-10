@@ -143,7 +143,8 @@ pnpm create @tomic/template my-project --template sveltekit-site --server-url ${
 yarn create @tomic/template my-project --template sveltekit-site --server-url ${context.serverUrl}
 \`\`\`
 Currently available @tomic/templates for the website template are:
-- sveltekit-site`,
+- sveltekit-site
+- nextjs-site`,
   Image,
   rootResourceLocalIDs: ['website', 'site-data'],
   resources: [

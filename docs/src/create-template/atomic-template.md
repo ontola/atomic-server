@@ -15,6 +15,7 @@ A dialog will open with a description of the template and a button to add the da
 
 The following templates are available:
 
-Name | Description | AtomicServer Template
---- | --- | ---
-`sveltekit-site` | A sveltekit website with dynamically rendered content and blog posts | Website
+| Name             | Description                                                          | AtomicServer Template |
+| ---------------- | -------------------------------------------------------------------- | --------------------- |
+| `sveltekit-site` | A sveltekit website with dynamically rendered content and blog posts | Website               |
+| `nextjs-site`    | A nextjs website with dynamically rendered content and blog posts    | Website               |
