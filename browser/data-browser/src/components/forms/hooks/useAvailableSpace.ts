@@ -2,7 +2,7 @@ import { useDeferredValue, useLayoutEffect, useState } from 'react';
 
 export function useAvailableSpace<T extends HTMLElement>(
   trigger: boolean,
-  ref: React.RefObject<T>,
+  ref: React.RefObject<T | null>,
 ) {
   const [space, setSpace] = useState({ above: 0, below: 0, width: 0 });
 

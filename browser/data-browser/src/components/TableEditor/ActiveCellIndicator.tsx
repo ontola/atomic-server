@@ -17,7 +17,7 @@ type OnScrollCallbackOptions = {
 
 export interface ActiveCellIndicatorProps {
   sizeStr: string;
-  scrollerRef: React.RefObject<HTMLDivElement>;
+  scrollerRef: React.RefObject<HTMLDivElement | null>;
   setOnScroll: (
     onScroll: ({ scrollUpdateWasRequested }: OnScrollCallbackOptions) => void,
   ) => void;
@@ -29,7 +29,7 @@ const cursorGoesOffscreen = (parentRect: DOMRect, childRect: DOMRect) => {
 
 const getCornerIfMultiSelect = (
   cursorMode: CursorMode,
-  ref: React.MutableRefObject<HTMLDivElement | null>,
+  ref: React.RefObject<HTMLDivElement | null>,
 ) => {
   if (cursorMode === CursorMode.MultiSelect && ref.current) {
     return ref.current.getBoundingClientRect();
@@ -68,7 +68,7 @@ export function ActiveCellIndicator({
 
   /** Measure the size and position of the current active cell and morph the indicator to the same values. */
   const updatePosition = useCallback(
-    (followHorizontaly = true) => {
+    (followHorizontally = true) => {
       if (!activeCellRef.current || !scrollerRef.current) {
         setVisible(false);
 
@@ -83,7 +83,7 @@ export function ActiveCellIndicator({
         multiSelectCornerCellRef,
       );
 
-      if (followHorizontaly && cursorGoesOffscreen(scrollerRect, cellRect)) {
+      if (followHorizontally && cursorGoesOffscreen(scrollerRect, cellRect)) {
         setTransitioningOffscreen(true);
 
         scrollIntoView(scrollerRef.current, scrollerRect, cellRect);

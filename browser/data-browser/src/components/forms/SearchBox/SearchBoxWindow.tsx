@@ -57,7 +57,7 @@ interface SearchBoxWindowProps {
   scopes?: string[];
   placeholder?: string;
   allowsOnly?: string[];
-  triggerRef: RefObject<HTMLButtonElement>;
+  triggerRef: RefObject<HTMLButtonElement | null>;
   onExit: (lostFocus: boolean) => void;
   onChange: (value: string) => void;
   onSelect: (value: string) => void;

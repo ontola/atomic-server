@@ -13,7 +13,7 @@ import { UnsavedIndicator } from './UnsavedIndicator';
 export interface EditableTitleProps {
   resource: Resource;
   /** Uses `name` by default */
-  parentRef?: React.RefObject<HTMLInputElement>;
+  parentRef?: React.RefObject<HTMLInputElement | null>;
   id?: string;
   className?: string;
 }

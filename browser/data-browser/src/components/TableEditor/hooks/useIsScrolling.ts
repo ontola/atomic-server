@@ -13,7 +13,7 @@ export function useIsScrolling<T extends HTMLElement>(
 ): void {
   const scrollLeft = useRef(0);
   const scrollTop = useRef(0);
-  const timeoutID = useRef<number | undefined>();
+  const timeoutID = useRef<number | undefined>(undefined);
 
   const scrollPositionChanged = (): boolean => {
     const node = ref.current;

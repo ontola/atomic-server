@@ -11,8 +11,8 @@ import { styled } from 'styled-components';
 
 interface UseResizeResult<E extends HTMLElement> {
   size: string;
-  targetRef: React.RefObject<E>;
-  dragAreaRef: React.RefObject<HTMLDivElement>;
+  targetRef: React.RefObject<E | null>;
+  dragAreaRef: React.RefObject<HTMLDivElement | null>;
   dragAreaListeners: Pick<React.DOMAttributes<HTMLDivElement>, 'onMouseDown'>;
   isDragging: boolean;
 }

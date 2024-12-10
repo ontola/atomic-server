@@ -8,10 +8,10 @@ export const DropdownContainer: React.FC<React.PropsWithChildren<unknown>> = ({
   const portalRef = useRef<HTMLDivElement>(null);
 
   return (
-    <DropdownPortalContext.Provider value={portalRef}>
+    <DropdownPortalContext value={portalRef}>
       {children}
       <DropdownContainerDiv ref={portalRef}></DropdownContainerDiv>
-    </DropdownPortalContext.Provider>
+    </DropdownPortalContext>
   );
 };
 

@@ -8,7 +8,7 @@ type Listeners = {
 };
 
 export function useHover<T extends HTMLElement>(): [
-  ref: RefObject<T>,
+  ref: RefObject<T | null>,
   isHovering: boolean,
   listeners: Listeners,
 ] {

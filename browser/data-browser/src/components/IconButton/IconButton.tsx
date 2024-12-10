@@ -1,8 +1,6 @@
 import {
   ComponentType,
   ButtonHTMLAttributes,
-  forwardRef,
-  PropsWithChildren,
   AnchorHTMLAttributes,
 } from 'react';
 import { styled, DefaultTheme } from 'styled-components';
@@ -30,52 +28,51 @@ type BaseProps = {
 };
 
 export type IconButtonProps = BaseProps &
-  ButtonHTMLAttributes<HTMLButtonElement>;
+  ButtonHTMLAttributes<HTMLButtonElement> & {
+    ref?: React.Ref<HTMLButtonElement | null>;
+  };
 
-export const IconButton = forwardRef<
-  HTMLButtonElement,
-  PropsWithChildren<IconButtonProps>
->(({ variant, children, color, ...props }, ref) => {
+export const IconButton: React.FC<React.PropsWithChildren<IconButtonProps>> = ({
+  variant = IconButtonVariant.Simple,
+  color = 'inherit',
+  size = '1em',
+  children,
+  ref,
+  ...props
+}) => {
   const Comp = ComponentMap.get(variant!) ?? SimpleIconButton;
 
   return (
-    <Comp ref={ref} color={color!} {...props}>
+    <Comp ref={ref} color={color} size={size} {...props}>
       {children}
     </Comp>
   );
-});
-
-IconButton.displayName = 'IconButton';
-
-const defaultProps = {
-  variant: IconButtonVariant.Simple,
-  color: 'inherit',
-  size: '1em',
-} as IconButtonProps;
-
-IconButton.defaultProps = defaultProps;
+};
 
 export type IconButtonLinkProps = BaseProps &
   AnchorHTMLAttributes<HTMLAnchorElement> & {
     href: string;
+    ref?: React.Ref<HTMLAnchorElement | null>;
   };
 
-export const IconButtonLink = forwardRef<
-  HTMLAnchorElement,
-  PropsWithChildren<IconButtonLinkProps>
->(({ variant, children, color, ...props }, ref) => {
+export const IconButtonLink: React.FC<
+  React.PropsWithChildren<IconButtonLinkProps>
+> = ({
+  variant = IconButtonVariant.Simple,
+  color = 'inherit',
+  size = '1em',
+  ref,
+  children,
+  ...props
+}) => {
   const Comp = ComponentMap.get(variant ?? IconButtonVariant.Simple)!;
 
   return (
-    <Comp ref={ref} color={color!} as='a' {...props}>
+    <Comp ref={ref} color={color!} size={size} as='a' {...props}>
       {children}
     </Comp>
   );
-});
-
-IconButtonLink.displayName = 'IconButtonLink';
-
-IconButtonLink.defaultProps = defaultProps as IconButtonLinkProps;
+};
 
 interface ButtonBaseProps {
   size?: string;

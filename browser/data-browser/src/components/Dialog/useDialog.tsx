@@ -16,7 +16,7 @@ export type UseDialogOptions<E extends HTMLElement> = {
   bindShow?: React.Dispatch<boolean>;
   onCancel?: () => void;
   onSuccess?: () => void;
-  triggerRef?: React.RefObject<E>;
+  triggerRef?: React.RefObject<E | null>;
 };
 
 /** Sets up state, and functions to use with a {@link Dialog} */

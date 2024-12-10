@@ -16,10 +16,14 @@ import { styled } from 'styled-components';
 interface DialogGlobalContext {
   openDialogs: string[];
   setDialogOpen: (id: string, open: boolean) => void;
-  portal: RefObject<HTMLDivElement>;
+  portal: RefObject<HTMLDivElement | null>;
 }
 
-export const DialogContext = createContext<DialogGlobalContext>(null!);
+export const DialogContext = createContext<DialogGlobalContext>({
+  openDialogs: [],
+  setDialogOpen: () => {},
+  portal: { current: null },
+});
 
 export const DialogGlobalContextProvider: FC<PropsWithChildren> = ({
   children,

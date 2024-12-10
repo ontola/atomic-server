@@ -87,11 +87,11 @@ const fadeIn = keyframes`
 `;
 
 const Content = styled(RadixPopover.Content)`
-  --popover-close-offset: ${p => p.theme.margin}rem;
+  --popover-close-offset: ${p => p.theme.size()};
   --popover-close-size: 25px;
   --popover-close-safe-area: calc(
     var(--popover-close-size) + (var(--popover-close-offset) * 2) -
-      ${p => p.theme.margin}rem
+      ${p => p.theme.size()}
   );
   background-color: ${p => transparentize(0.2, p.theme.colors.bgBody)};
   backdrop-filter: blur(10px);
@@ -110,16 +110,16 @@ const Arrow = styled(RadixPopover.Arrow)`
 `;
 
 const PopoverContainerContext =
-  createContext<RefObject<HTMLDivElement>>(createRef());
+  createContext<RefObject<HTMLDivElement | null>>(createRef());
 
 export const PopoverContainer: FC<PropsWithChildren> = ({ children }) => {
   const popoverContainerRef = useRef<HTMLDivElement>(null);
 
   return (
     <ContainerDiv ref={popoverContainerRef}>
-      <PopoverContainerContext.Provider value={popoverContainerRef}>
+      <PopoverContainerContext value={popoverContainerRef}>
         {children}
-      </PopoverContainerContext.Provider>
+      </PopoverContainerContext>
     </ContainerDiv>
   );
 };

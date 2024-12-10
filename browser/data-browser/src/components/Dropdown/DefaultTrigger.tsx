@@ -15,7 +15,7 @@ export const buildDefaultTrigger = (
 ): DropdownTriggerRenderFunction => {
   const Comp = (
     { onClick, menuId, isActive }: DropdownTriggerProps,
-    ref: React.Ref<HTMLButtonElement>,
+    ref: React.Ref<HTMLButtonElement | null>,
   ) => {
     const id = useId();
 

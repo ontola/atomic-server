@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 
 export function useHTMLFormFieldValidation(): [
   valid: boolean,
-  ref: React.RefObject<HTMLInputElement>,
+  ref: React.RefObject<HTMLInputElement | null>,
 ] {
   const [valid, setValid] = useState(false);
 

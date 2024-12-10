@@ -34,7 +34,7 @@ export type TableCommands = {
 export type HandlerContext = {
   tableContext: TableEditorContext;
   event: React.KeyboardEvent;
-  tableRef: React.RefObject<HTMLDivElement>;
+  tableRef: React.RefObject<HTMLDivElement | null>;
   translateCursor: (row: number, column: number) => void;
   columnCount: number;
 } & TableCommands;

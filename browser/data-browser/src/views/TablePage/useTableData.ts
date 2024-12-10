@@ -22,26 +22,23 @@ type UseTableDataResult = {
 } & UseCollectionResult;
 
 const useTableSorting = () =>
-  useReducer<(state: TableSorting, property: string) => TableSorting>(
-    (state, property) => {
-      if (state.prop === property && state.sortDesc) {
-        return DEFAULT_SORT;
-      }
+  useReducer((state: TableSorting, property: string) => {
+    if (state.prop === property && state.sortDesc) {
+      return DEFAULT_SORT;
+    }
 
-      if (state.prop === property) {
-        return {
-          ...state,
-          sortDesc: true,
-        };
-      }
-
+    if (state.prop === property) {
       return {
-        prop: property,
-        sortDesc: false,
+        ...state,
+        sortDesc: true,
       };
-    },
-    DEFAULT_SORT,
-  );
+    }
+
+    return {
+      prop: property,
+      sortDesc: false,
+    };
+  }, DEFAULT_SORT);
 
 export function useTableData(resource: Resource): UseTableDataResult {
   const [sorting, setSortBy] = useTableSorting();

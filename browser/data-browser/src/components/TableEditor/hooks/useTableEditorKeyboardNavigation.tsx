@@ -24,14 +24,15 @@ const matchModifier = (
 const matchCondition = (handler: KeyboardHandler, context: HandlerContext) =>
   handler.condition === undefined || handler.condition(context);
 
-const tableHeaderHasFocus = (headerRef: React.RefObject<HTMLDivElement>) =>
-  headerRef.current?.contains(document.activeElement);
+const tableHeaderHasFocus = (
+  headerRef: React.RefObject<HTMLDivElement | null>,
+) => headerRef.current?.contains(document.activeElement);
 
 export function useTableEditorKeyboardNavigation(
   columnCount: number,
   rowCount: number,
-  tableRef: React.RefObject<HTMLDivElement>,
-  headerRef: React.RefObject<HTMLDivElement>,
+  tableRef: React.RefObject<HTMLDivElement | null>,
+  headerRef: React.RefObject<HTMLDivElement | null>,
   commands: TableCommands,
 ) {
   const tableContext = useTableEditorContext();
