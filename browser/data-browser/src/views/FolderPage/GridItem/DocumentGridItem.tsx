@@ -4,6 +4,8 @@ import Markdown from '../../../components/datatypes/Markdown';
 import { GridItemDescription, InnerWrapper } from './components';
 import { GridItemViewProps } from './GridItemViewProps';
 
+import type { JSX } from 'react';
+
 export function DocumentGridItem({ resource }: GridItemViewProps): JSX.Element {
   const [elements] = useArray(resource, properties.document.elements);
   const firstElementResource = useResource(elements[0]);

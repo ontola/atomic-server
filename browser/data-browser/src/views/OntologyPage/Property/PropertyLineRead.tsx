@@ -8,6 +8,8 @@ import { CARD_CONTAINER } from '../../../helpers/containers';
 import { dataTypeIconMap } from '../../../helpers/iconMap';
 import { Row } from '../../../components/Row';
 
+import type { JSX } from 'react';
+
 interface PropertyLineReadProps {
   subject: string;
 }

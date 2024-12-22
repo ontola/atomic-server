@@ -1,5 +1,7 @@
 import { useSettings } from '../helpers/AppSettings';
 
+import type { JSX } from 'react';
+
 interface LogoProps {
   style: React.CSSProperties;
 }

@@ -7,7 +7,7 @@ import {
   generateKeyPair,
   properties,
 } from '@tomic/react';
-import { useNavigate, useNavigationType } from 'react-router-dom';
+import { useNavigate, useNavigationType } from 'react-router';
 
 import { ContainerNarrow } from '../components/Containers';
 import { ValueForm } from '../components/forms/ValueForm';
@@ -17,6 +17,8 @@ import { useSettings } from '../helpers/AppSettings';
 import { ResourcePageProps } from './ResourcePage';
 import { paths } from '../routes/paths';
 import { Row } from '../components/Row';
+
+import type { JSX } from 'react';
 
 // Whether Invites should automatically be accepted.
 const autoAccept = false;

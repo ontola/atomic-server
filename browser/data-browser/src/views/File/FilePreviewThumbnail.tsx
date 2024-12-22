@@ -11,6 +11,8 @@ import { TextPreview } from './TextPreview';
 import { ErrorBoundary } from '../ErrorPage';
 import { Row } from '../../components/Row';
 
+import type { JSX } from 'react';
+
 interface FilePreviewThumbnailProps {
   resource: Resource;
 }

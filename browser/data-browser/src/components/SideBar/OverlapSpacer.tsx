@@ -3,6 +3,8 @@ import { useSettings } from '../../helpers/AppSettings';
 import { styled } from 'styled-components';
 import { transition } from '../../helpers/transition';
 
+import type { JSX } from 'react';
+
 export function OverlapSpacer(): JSX.Element {
   const narrow = useMediaQuery('(max-width: 950px)');
   const { navbarFloating } = useSettings();

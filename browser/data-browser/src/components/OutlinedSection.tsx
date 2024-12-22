@@ -1,4 +1,4 @@
-import { PropsWithChildren } from 'react';
+import { PropsWithChildren, type JSX } from 'react';
 import { Row } from './Row';
 import { styled } from 'styled-components';
 import { CurrentBackgroundColor } from '../globalCssVars';

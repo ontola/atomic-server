@@ -2,6 +2,8 @@ import { core, dataBrowser } from '@tomic/react';
 import { OutlinedSection } from '../../components/OutlinedSection';
 import { ClassButton } from './ClassButton';
 
+import type { JSX } from 'react';
+
 interface BaseButtonsProps {
   parent: string;
 }

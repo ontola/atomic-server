@@ -1,4 +1,4 @@
-import { forwardRef, PropsWithChildren } from 'react';
+import { forwardRef, PropsWithChildren, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { transition } from '../helpers/transition';
 import { Spinner } from './Spinner';

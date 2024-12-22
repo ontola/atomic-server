@@ -1,5 +1,5 @@
 import { Property, unknownSubject, useStore } from '@tomic/react';
-import { useCallback, useId, useMemo, useState } from 'react';
+import { useCallback, useId, useMemo, useState, type JSX } from 'react';
 import { ContainerFull } from '../../components/Containers';
 import { EditableTitle } from '../../components/EditableTitle';
 import { FancyTable } from '../../components/TableEditor';

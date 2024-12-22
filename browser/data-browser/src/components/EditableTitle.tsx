@@ -1,5 +1,5 @@
 import { Resource, useCanWrite, useTitle } from '@tomic/react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type JSX } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { FaPencil } from 'react-icons/fa6';
 import { styled, css } from 'styled-components';
@@ -35,7 +35,7 @@ export function EditableTitle({
   const innerRef = useRef<HTMLInputElement>(null);
   const ref = parentRef || innerRef;
 
-  const [canEdit] = useCanWrite(resource);
+  const canEdit = useCanWrite(resource);
 
   useHotkeys(
     'enter',

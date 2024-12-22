@@ -6,7 +6,7 @@ import {
   useNumber,
   useString,
 } from '@tomic/react';
-import { Suspense, lazy, useEffect } from 'react';
+import { Suspense, lazy, useEffect, type JSX } from 'react';
 import { RadioGroup, RadioInput } from '../../../components/forms/RadioInput';
 import { FormGroupHeading } from './FormGroupHeading';
 import { DecimalPlacesInput } from './Inputs/DecimalPlacesInput';

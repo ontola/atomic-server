@@ -6,9 +6,9 @@ import {
   useStore,
   useTitle,
 } from '@tomic/react';
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useState, type JSX } from 'react';
 import { FaPlus } from 'react-icons/fa6';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { styled } from 'styled-components';
 import { useSettings } from '../../helpers/AppSettings';
 import { constructOpenURL } from '../../helpers/navigation';
@@ -56,7 +56,7 @@ export function SideBarDrive({
   );
   const [title] = useTitle(driveResource);
   const navigate = useNavigate();
-  const [agentCanWrite] = useCanWrite(driveResource);
+  const agentCanWrite = useCanWrite(driveResource);
   const [currentSubject] = useCurrentSubject();
   const currentResource = useResource(currentSubject);
   const [ancestry, setAncestry] = useState<string[]>([]);
@@ -107,7 +107,7 @@ export function SideBarDrive({
                   <Fragment key={child}>
                     <ResourceSideBar
                       subject={child}
-                      renderedHierargy={[drive]}
+                      renderedHierarchy={[drive]}
                       ancestry={ancestry}
                       onClick={onItemClick}
                     />

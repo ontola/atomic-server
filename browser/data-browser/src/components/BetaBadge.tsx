@@ -1,5 +1,7 @@
 import { styled } from 'styled-components';
 
+import type { JSX } from 'react';
+
 export function BetaBadge(): JSX.Element {
   return <Badge>BETA</Badge>;
 }

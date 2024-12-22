@@ -2,6 +2,8 @@ import { styled } from 'styled-components';
 import { Image } from '@tomic/react';
 import { InnerWrapper } from '../views/FolderPage/GridItem/components';
 
+import type { JSX } from 'react';
+
 interface ThumbnailProps {
   subject: string;
   style?: React.CSSProperties | undefined;

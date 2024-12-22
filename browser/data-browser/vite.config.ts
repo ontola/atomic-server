@@ -1,12 +1,19 @@
 import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react-swc';
+import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import webfontDownload from 'vite-plugin-webfont-dl';
 import prismjs from 'vite-plugin-prismjs';
 export default defineConfig({
   plugins: [
     webfontDownload(),
-    react({ plugins: [['@swc/plugin-styled-components', {}]] }),
+    react({
+      babel: {
+        plugins: [
+          ['babel-plugin-react-compiler', {}],
+          'babel-plugin-styled-components',
+        ],
+      },
+    }),
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: 'auto',

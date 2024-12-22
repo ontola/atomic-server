@@ -1,5 +1,5 @@
 import { useArray, useString, core, collections } from '@tomic/react';
-import { FC, PropsWithChildren, useState } from 'react';
+import { FC, PropsWithChildren, useState, type JSX } from 'react';
 
 import Markdown from '../../components/datatypes/Markdown';
 import { CardInsideFull, CardRow } from '../../components/Card';

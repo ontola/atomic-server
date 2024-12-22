@@ -3,6 +3,8 @@ import { ContainerNarrow } from '../../components/Containers.jsx';
 import Markdown from '../../components/datatypes/Markdown.jsx';
 import { ErrorLook } from '../../components/ErrorLook';
 
+import type { JSX } from 'react';
+
 export interface BookmarkPreviewProps {
   preview: string;
   error?: Error;

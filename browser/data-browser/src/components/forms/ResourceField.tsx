@@ -5,7 +5,7 @@ import Markdown from '../datatypes/Markdown';
 import { InputWrapper, InputStyled } from './InputStyles';
 import InputSwitcher from './InputSwitcher';
 import { AtomicLink } from '../AtomicLink';
-import { useId } from 'react';
+import { useId, type JSX } from 'react';
 import { Row } from '../Row';
 import { FaServer } from 'react-icons/fa6';
 

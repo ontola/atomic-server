@@ -2,6 +2,8 @@ import { Version, useResource, useTitle } from '@tomic/react';
 
 import { AtomicLink } from '../../components/AtomicLink';
 
+import type { JSX } from 'react';
+
 const formatter = new Intl.DateTimeFormat('default', {
   month: 'long',
   year: 'numeric',

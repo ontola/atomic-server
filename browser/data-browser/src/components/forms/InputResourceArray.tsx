@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState, type JSX } from 'react';
 import { useArray, validateDatatype } from '@tomic/react';
 import { Button } from '../Button';
 import { InputProps } from './ResourceField';

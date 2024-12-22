@@ -6,15 +6,15 @@ import {
   useState,
   useCallback,
   PropsWithChildren,
-  forwardRef,
   ReactNode,
   useEffect,
+  type JSX,
 } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { styled } from 'styled-components';
 import { useClickAwayListener } from '../../hooks/useClickAwayListener';
 import { Button } from '../Button';
-import { DropdownTriggerRenderFunction } from './DropdownTrigger';
+import { DropdownTriggerComponent as DropdownTriggerComponent } from './DropdownTrigger';
 import { shortcuts } from '../HotKeyWrapper';
 import { Shortcut } from '../Shortcut';
 import { transition } from '../../helpers/transition';
@@ -41,7 +41,7 @@ export type DropdownItem = typeof DIVIDER | MenuItemMinimial;
 interface DropdownMenuProps {
   /** The list of menu items */
   items: DropdownItem[];
-  trigger: DropdownTriggerRenderFunction;
+  Trigger: DropdownTriggerComponent;
   /** Enables the keyboard shortcut */
   isMainMenu?: boolean;
   bindActive?: (active: boolean) => void;
@@ -108,11 +108,12 @@ function normalizeItems(items: DropdownItem[]) {
  */
 export function DropdownMenu({
   items,
-  trigger,
+  Trigger,
   isMainMenu,
   bindActive = () => undefined,
 }: DropdownMenuProps): JSX.Element {
   const menuId = useId();
+  const triggerId = useId();
   const dropdownRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -252,8 +253,6 @@ export function DropdownMenu({
     [getNewIndex],
   );
 
-  const Trigger = useMemo(() => forwardRef(trigger), []);
-
   const handleBlur = useCallback(() => {
     // Doesn't work without delay, maybe the browser sets document.activeElement after firering the blur event?
     requestAnimationFrame(() => {
@@ -268,6 +267,7 @@ export function DropdownMenu({
   return (
     <>
       <Trigger
+        id={triggerId}
         ref={triggerRef}
         onClick={handleTriggerActivate}
         isActive={isActive}
@@ -281,7 +281,7 @@ export function DropdownMenu({
             id={menuId}
             onMouseOver={handleMouseOverMenu}
             onBlur={handleBlur}
-            aria-labelledby={triggerRef.current?.id}
+            aria-labelledby={triggerId}
             role='menu'
           >
             {normalizedItems.map((props, i) => {

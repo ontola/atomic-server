@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { DragAreaBase, useResizable } from '../../hooks/useResizable';
 import { useTableEditorContext } from './TableEditorContext';
@@ -26,6 +26,7 @@ export function TableHeading<T>({
   onResize,
   HeadingComponent,
 }: TableHeadingProps<T>): JSX.Element {
+  const targetRef = useRef<HTMLDivElement>(null);
   const {
     attributes,
     listeners,
@@ -36,11 +37,12 @@ export function TableHeading<T>({
     data: { index },
   });
 
-  const { targetRef, dragAreaRef, isDragging, dragAreaListeners } =
+  const { dragAreaRef, isDragging, dragAreaListeners } =
     useResizable<HTMLDivElement>({
       initialSize: DEFAULT_SIZE_PX,
       minSize: 100,
       onResize: size => onResize(index, `${size}px`),
+      targetRef,
     });
 
   const { setIsDragging } = useTableEditorContext();

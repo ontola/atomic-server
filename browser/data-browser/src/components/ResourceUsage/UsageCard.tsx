@@ -4,7 +4,7 @@ import { styled } from 'styled-components';
 import { Details } from '../Details';
 import { UsageRow } from './UsageRow';
 import { Column, Row } from '../Row';
-import { useState } from 'react';
+import { useState, type JSX } from 'react';
 import { FaChevronLeft, FaChevronRight } from 'react-icons/fa6';
 import { IconButton } from '../IconButton/IconButton';
 

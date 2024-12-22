@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type JSX } from 'react';
 import { useCanWrite, useResource } from '@tomic/react';
 import { ContainerNarrow } from '../../components/Containers';
 import { useCurrentSubject } from '../../helpers/useCurrentSubject';
@@ -8,7 +8,7 @@ import { InviteForm } from '../../components/InviteForm';
 import toast from 'react-hot-toast';
 import { Title } from '../../components/Title';
 import { constructOpenURL } from '../../helpers/navigation';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { ErrorLook } from '../../components/ErrorLook';
 import { Column } from '../../components/Row';
 import { Main } from '../../components/Main';
@@ -23,7 +23,7 @@ import styled from 'styled-components';
 export function ShareRoute(): JSX.Element {
   const [subject] = useCurrentSubject();
   const resource = useResource(subject);
-  const [canWrite] = useCanWrite(resource);
+  const canWrite = useCanWrite(resource);
   const [showInviteForm, setShowInviteForm] = useState(false);
   const [err, setErr] = useState<Error | undefined>(undefined);
   const navigate = useNavigate();

@@ -5,7 +5,7 @@ import {
 } from 'styled-components';
 import { darken, lighten, setLightness } from 'polished';
 import './reset.css';
-import { useContext } from 'react';
+import { useContext, type JSX } from 'react';
 import { SettingsContext } from './helpers/AppSettings';
 import { CurrentBackgroundColor } from './globalCssVars';
 

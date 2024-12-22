@@ -6,7 +6,7 @@ import {
   useArray,
   useStore,
 } from '@tomic/react';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, type JSX } from 'react';
 import { Row } from '../../../components/Row';
 import { PropertyCategoryFormProps } from './PropertyCategoryFormProps';
 import { CreateTagRow, EditableTag } from '../../../components/Tag';

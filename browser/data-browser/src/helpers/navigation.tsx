@@ -1,4 +1,4 @@
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 import { paths } from '../routes/paths';
 import { unknownSubject } from '@tomic/react';
 

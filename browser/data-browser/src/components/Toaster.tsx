@@ -10,6 +10,8 @@ import { zIndex } from '../styling';
 import { Row } from './Row';
 import { IconButton } from './IconButton/IconButton';
 
+import type { JSX } from 'react';
+
 /**
  * Makes themed toast notifications available in the Context. Render this
  * somewhere high up in the app

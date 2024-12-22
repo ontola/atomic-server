@@ -1,5 +1,7 @@
 import { ContainerFull } from '../components/Containers';
 
+import type { JSX } from 'react';
+
 export function Sandbox(): JSX.Element {
   return (
     <main>

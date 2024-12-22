@@ -1,5 +1,5 @@
 import { Datatype, useResource } from '@tomic/react';
-import { useCallback, useContext, useMemo, useState } from 'react';
+import { useCallback, useContext, useMemo, useState, type JSX } from 'react';
 import { FaChevronCircleDown, FaFile, FaHashtag, FaPlus } from 'react-icons/fa';
 import { DIVIDER, DropdownMenu, DropdownItem } from '../../components/Dropdown';
 import { buildDefaultTrigger } from '../../components/Dropdown/DefaultTrigger';
@@ -90,7 +90,7 @@ export function NewColumnButton(): JSX.Element {
 
   return (
     <>
-      <DropdownMenu trigger={NewColumnTrigger} items={items} />
+      <DropdownMenu Trigger={NewColumnTrigger} items={items} />
       <NewPropertyDialog
         showDialog={showDialog}
         tableClassResource={tableClassResource}

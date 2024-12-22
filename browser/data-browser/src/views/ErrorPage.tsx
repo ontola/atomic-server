@@ -10,6 +10,8 @@ import { Column, Row } from '../components/Row';
 import CrashPage from './CrashPage';
 import { clearAllLocalData } from '../helpers/clearData';
 
+import type { JSX } from 'react';
+
 /**
  * A View for Resource Errors. Not to be confused with the CrashPage, which is
  * for App wide errors.

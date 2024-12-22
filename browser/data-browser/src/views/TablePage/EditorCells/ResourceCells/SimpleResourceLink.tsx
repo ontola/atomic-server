@@ -1,5 +1,5 @@
 import { Resource } from '@tomic/react';
-import { useMemo } from 'react';
+import { useMemo, type JSX } from 'react';
 import { constructOpenURL } from '../../../../helpers/navigation';
 import { useNavigateWithTransition } from '../../../../hooks/useNavigateWithTransition';
 import { styled } from 'styled-components';

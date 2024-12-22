@@ -1,7 +1,6 @@
-import { useId } from 'react';
 import { IconButton } from '../IconButton/IconButton';
 import {
-  DropdownTriggerRenderFunction,
+  DropdownTriggerComponent,
   type DropdownTriggerProps,
 } from './DropdownTrigger';
 
@@ -12,13 +11,14 @@ export const buildDefaultTrigger = (
   icon: React.ReactNode,
   title = 'Open menu',
   ButtonComp: typeof IconButton = IconButton,
-): DropdownTriggerRenderFunction => {
-  const Comp = (
-    { onClick, menuId, isActive }: DropdownTriggerProps,
-    ref: React.Ref<HTMLButtonElement | null>,
-  ) => {
-    const id = useId();
-
+): DropdownTriggerComponent => {
+  const Comp = ({
+    onClick,
+    menuId,
+    isActive,
+    ref,
+    id,
+  }: DropdownTriggerProps) => {
     return (
       <ButtonComp
         id={id}

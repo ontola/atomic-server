@@ -9,6 +9,7 @@ import {
   useContext,
   useEffect,
   useRef,
+  type JSX,
 } from 'react';
 import * as RadixPopover from '@radix-ui/react-popover';
 import { styled, keyframes } from 'styled-components';

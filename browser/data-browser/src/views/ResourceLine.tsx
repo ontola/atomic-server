@@ -3,6 +3,8 @@ import { ResourceInline } from './ResourceInline';
 import { ErrorLook } from '../components/ErrorLook';
 import { styled } from 'styled-components';
 
+import type { JSX } from 'react';
+
 type Props = {
   subject: string;
   clickable?: boolean;

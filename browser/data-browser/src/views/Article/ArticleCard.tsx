@@ -10,6 +10,8 @@ import {
 import { ViewTransitionProps } from '../../helpers/ViewTransitionProps';
 import { CardViewProps } from '../Card/CardViewProps';
 
+import type { JSX } from 'react';
+
 const TRUNCATE_THRESHOLD = 200;
 
 export function ArticleCard({ resource }: CardViewProps): JSX.Element {

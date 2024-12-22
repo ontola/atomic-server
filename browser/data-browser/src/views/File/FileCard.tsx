@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, type JSX } from 'react';
 import { AtomicLink } from '../../components/AtomicLink';
 import { Row } from '../../components/Row';
 import { useFileInfo } from '../../hooks/useFile';
@@ -13,7 +13,7 @@ function FileCard(props: CardViewProps): JSX.Element {
     const Temp = () => {
       return (
         <>
-          <AtomicLink subject={props.resource.getSubject()}>
+          <AtomicLink subject={props.resource.subject}>
             {props.resource.title}
           </AtomicLink>
           <div>Can not show file due to invalid data.</div>
@@ -21,10 +21,8 @@ function FileCard(props: CardViewProps): JSX.Element {
       );
     };
 
-    Temp.displayName = 'FileError';
-
     return Temp;
-  }, [props.resource.getSubject(), props.resource.title]);
+  }, [props.resource.subject, props.resource.title]);
 
   return (
     <ErrorBoundary FallBackComponent={FileError}>

@@ -5,7 +5,7 @@ import {
   useResource,
   useString,
 } from '@tomic/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type JSX } from 'react';
 import { formatDate } from '../../../helpers/dates/formatDate';
 import { InputBase } from './InputBase';
 import { CellContainer, DisplayCellProps, EditCellProps } from './Type';

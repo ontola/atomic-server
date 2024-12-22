@@ -1,12 +1,13 @@
 import { FaEllipsisV } from 'react-icons/fa';
-import { DropdownTriggerRenderFunction } from '../Dropdown/DropdownTrigger';
+import { DropdownTriggerComponent } from '../Dropdown/DropdownTrigger';
 import { shortcuts } from '../HotKeyWrapper';
 import { IconButton } from '../IconButton/IconButton';
 
-export const MenuBarDropdownTrigger: DropdownTriggerRenderFunction = (
-  { onClick, menuId },
+export const MenuBarDropdownTrigger: DropdownTriggerComponent = ({
+  onClick,
+  menuId,
   ref,
-) => (
+}) => (
   <IconButton
     aria-controls={menuId}
     ref={ref}

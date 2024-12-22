@@ -26,7 +26,7 @@ export * from './hooks.js';
 export * from './useServerURL.js';
 export * from './useCurrentAgent.js';
 export * from './useChildren.js';
-export * from './useDebounce.js';
+export { useDebouncedSave } from './useDebounce.js';
 export * from './useMarkdown.js';
 export * from './useServerSearch.js';
 export * from './useCollection.js';

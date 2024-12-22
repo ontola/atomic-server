@@ -16,6 +16,8 @@ import { BREADCRUMB_BAR_TRANSITION_TAG } from '../helpers/transitionName';
 import ResourceContextMenu from './ResourceContextMenu';
 import { MenuBarDropdownTrigger } from './ResourceContextMenu/MenuBarDropdownTrigger';
 
+import type { JSX } from 'react';
+
 type ParentProps = {
   resource: Resource;
 };

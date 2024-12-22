@@ -1,5 +1,11 @@
 import { Resource } from '@tomic/react';
-import { PropsWithChildren, useCallback, useEffect, useRef } from 'react';
+import {
+  PropsWithChildren,
+  useCallback,
+  useEffect,
+  useRef,
+  type JSX,
+} from 'react';
 import { useDropzone } from 'react-dropzone';
 import { FaUpload } from 'react-icons/fa';
 import { styled, keyframes } from 'styled-components';

@@ -9,6 +9,8 @@ import { InlineDatatype } from '../InlineDatatype';
 import { AtomicLink } from '../../../components/AtomicLink';
 import { toAnchorId } from '../../../helpers/toAnchorId';
 
+import type { JSX } from 'react';
+
 interface PropertyCardReadProps {
   subject: string;
 }

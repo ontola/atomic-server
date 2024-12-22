@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useCallback, useMemo, useState, type JSX } from 'react';
+import { useNavigate } from 'react-router';
 import {
   useArray,
   useResource,
@@ -102,7 +102,7 @@ export function ResourceForm({
 
   const [save, saving, err] = useSaveResource(resource, onSaveSuccess);
 
-  const [canWrite, canWriteErr] = useCanWrite(resource);
+  const canWrite = useCanWrite(resource);
 
   const otherProps = useMemo(() => {
     const allProps = Array.from(resource.getPropVals().keys());
@@ -203,8 +203,10 @@ export function ResourceForm({
                 {klass.error.message}`
               </ErrMessage>
             )}
-            {canWriteErr && (
-              <ErrMessage>Cannot save edits: {canWriteErr}</ErrMessage>
+            {!canWrite && (
+              <ErrMessage>
+                Cannot save edits: Agent does not have edit rights
+              </ErrMessage>
             )}
             {requires.map(property => {
               return (

@@ -2,6 +2,8 @@ import type { ResourceInlineInstanceProps } from './ResourceInline';
 import { Tag } from '../../components/Tag';
 import { styled } from 'styled-components';
 
+import type { JSX } from 'react';
+
 export function TagInline({
   subject,
 }: ResourceInlineInstanceProps): JSX.Element {

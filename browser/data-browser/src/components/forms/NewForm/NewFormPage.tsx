@@ -6,6 +6,8 @@ import { SubjectField } from './SubjectField';
 import { useNewForm } from './useNewForm';
 import { Column } from '../../Row';
 
+import type { JSX } from 'react';
+
 export interface NewFormProps {
   classSubject: string;
 }

@@ -12,6 +12,8 @@ import { InputTimestamp } from './InputTimestamp';
 import { InputDate } from './InputDate';
 import { FilePicker } from './FilePicker/FilePicker';
 
+import type { JSX } from 'react';
+
 /** Renders a fitting HTML input depending on the Datatype */
 export default function InputSwitcher(props: InputProps): JSX.Element {
   switch (props.property.datatype) {

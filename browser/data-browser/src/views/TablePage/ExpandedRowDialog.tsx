@@ -1,5 +1,5 @@
 import { commits, core, useResource, dataBrowser } from '@tomic/react';
-import { useEffect } from 'react';
+import { useEffect, type JSX } from 'react';
 import {
   Dialog,
   DialogContent,

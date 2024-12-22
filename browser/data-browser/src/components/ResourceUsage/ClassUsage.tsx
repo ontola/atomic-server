@@ -4,6 +4,8 @@ import { UsageCard } from './UsageCard';
 import { Column } from '../Row';
 import { ChildrenUsage } from './ChildrenUsage';
 
+import type { JSX } from 'react';
+
 interface ClassUsageProps {
   resource: Resource;
 }

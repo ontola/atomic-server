@@ -1,5 +1,7 @@
 import { JSONValue, Resource } from '@tomic/react';
 
+import type { JSX } from 'react';
+
 export interface EditCellProps<T extends JSONValue> {
   value: T;
   onChange: (value: T) => void;

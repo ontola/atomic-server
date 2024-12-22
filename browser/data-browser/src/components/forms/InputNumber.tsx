@@ -8,6 +8,8 @@ import {
 import { ErrorChipInput } from './ErrorChip';
 import { styled } from 'styled-components';
 
+import type { JSX } from 'react';
+
 export default function InputNumber({
   resource,
   property,

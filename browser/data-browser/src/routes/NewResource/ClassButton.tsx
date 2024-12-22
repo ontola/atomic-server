@@ -2,6 +2,8 @@ import { useResource, useTitle } from '@tomic/react';
 import { getIconForClass } from '../../helpers/iconMap';
 import { NewInstanceButton } from '../../components/NewInstanceButton';
 
+import type { JSX } from 'react';
+
 interface ClassButtonProps {
   classType: string;
   parent: string;

@@ -36,6 +36,8 @@ import { Row } from '../components/Row';
 import { EditableTitle } from '../components/EditableTitle';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 
+import type { JSX } from 'react';
+
 const displayStyles = [
   {
     id: 'cards',

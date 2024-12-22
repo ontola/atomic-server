@@ -4,6 +4,8 @@ import { Detail } from './Detail';
 import { DateTime } from './datatypes/DateTime';
 import { AtomicLink } from './AtomicLink';
 
+import type { JSX } from 'react';
+
 type Props = {
   commitSubject?: string;
 };
@@ -22,8 +24,8 @@ export function CommitDetail({ commitSubject }: Props): JSX.Element | null {
     return null;
   }
 
-  if (!commitSubject || !resource.isReady) {
-    return <Detail>loading...</Detail>;
+  if (!commitSubject || resource.loading) {
+    return <Detail>-</Detail>;
   }
 
   return (

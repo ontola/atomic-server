@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router';
 import { Client, core, useCanWrite, useResource } from '@tomic/react';
 import {
   editURL,
@@ -13,7 +13,7 @@ import { DIVIDER, DropdownMenu, isItem, DropdownItem } from '../Dropdown';
 import toast from 'react-hot-toast';
 import { paths } from '../../routes/paths';
 import { shortcuts } from '../HotKeyWrapper';
-import { DropdownTriggerRenderFunction } from '../Dropdown/DropdownTrigger';
+import { DropdownTriggerComponent } from '../Dropdown/DropdownTrigger';
 import { buildDefaultTrigger } from '../Dropdown/DefaultTrigger';
 import {
   FaClock,
@@ -58,7 +58,7 @@ export interface ResourceContextMenuProps {
   subject: string;
   // If given only these options will appear in the list.
   showOnly?: ContextMenuOptions[];
-  trigger?: DropdownTriggerRenderFunction;
+  trigger?: DropdownTriggerComponent;
   simple?: boolean;
   /** If it's the primary menu in the navbar. Used for triggering keyboard shortcut */
   isMainMenu?: boolean;
@@ -88,7 +88,7 @@ function ResourceContextMenu({
   const [showCodeUsageDialog, setShowCodeUsageDialog] = useState(false);
   const handleAddClick = useNewRoute(subject);
   const [currentSubject] = useCurrentSubject();
-  const [canWrite] = useCanWrite(resource);
+  const canWrite = useCanWrite(resource);
   const { enableScope } = useQueryScopeHandler(subject);
   // Try to not have a useResource hook in here, as that will lead to many costly fetches when the user enters a new subject
 
@@ -229,7 +229,7 @@ function ResourceContextMenu({
     <>
       <DropdownMenu
         items={filteredItems}
-        trigger={triggerComp}
+        Trigger={triggerComp}
         isMainMenu={isMainMenu}
         bindActive={bindActive}
       />

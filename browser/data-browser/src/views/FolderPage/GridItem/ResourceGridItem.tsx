@@ -6,7 +6,7 @@ import {
   useString,
   useTitle,
 } from '@tomic/react';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { constructOpenURL } from '../../../helpers/navigation';
 import { getIconForClass } from '../../../helpers/iconMap';

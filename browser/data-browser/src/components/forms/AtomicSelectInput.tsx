@@ -2,6 +2,8 @@ import { Resource, useValue } from '@tomic/react';
 
 import { BasicSelect } from './BasicSelect';
 
+import type { JSX } from 'react';
+
 interface AtomicSelectInputProps {
   resource: Resource;
   property: string;

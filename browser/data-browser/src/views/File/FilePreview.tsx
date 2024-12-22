@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useState, type JSX } from 'react';
 import { Resource } from '@tomic/react';
 import { ImageViewer } from '../../components/ImageViewer';
 import { useFileInfo } from '../../hooks/useFile';

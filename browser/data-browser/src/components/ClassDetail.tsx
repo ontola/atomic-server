@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { type JSX } from 'react';
 import { Resource, useResource } from '@tomic/react';
 import { Detail } from './Detail';
 import { getIconForClass } from '../helpers/iconMap';
 import { InlineFormattedResourceList } from './InlineFormattedResourceList';
 import { AtomicLink } from './AtomicLink';
+import { Row } from './Row';
 
 type ClassDetailProps = {
   resource: Resource;
@@ -16,12 +17,12 @@ export const ClassDetail: React.FC<ClassDetailProps> = ({ resource }) => {
   }
 
   return (
-    <Detail>
+    <Row gap='1ch'>
       <InlineFormattedResourceList
         subjects={resource.getClasses()}
         RenderComp={ClassItem}
       />
-    </Detail>
+    </Row>
   );
 };
 

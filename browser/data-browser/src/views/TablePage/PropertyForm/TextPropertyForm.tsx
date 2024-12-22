@@ -1,5 +1,5 @@
 import { Datatype, core, dataBrowser } from '@tomic/react';
-import { useState } from 'react';
+import { useState, type JSX } from 'react';
 import { RadioGroup, RadioInput } from '../../../components/forms/RadioInput';
 import { FormGroupHeading } from './FormGroupHeading';
 import { TableRangeInput } from './Inputs/TableRangeInput';

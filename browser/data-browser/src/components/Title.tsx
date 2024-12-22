@@ -3,6 +3,8 @@ import { Resource, useTitle } from '@tomic/react';
 import { AtomicLink } from './AtomicLink';
 import { styled } from 'styled-components';
 
+import type { JSX } from 'react';
+
 interface PageTitleProps {
   /** Put in front of the subject's name */
   prefix?: string;

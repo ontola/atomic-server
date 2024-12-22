@@ -1,6 +1,8 @@
 import { styled } from 'styled-components';
 import { FaExternalLinkAlt } from 'react-icons/fa';
 
+import type { JSX } from 'react';
+
 export enum ExternalLinkVariant {
   Plain,
   Button,

@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useState, type JSX } from 'react';
 import { useInView } from 'react-intersection-observer';
 import {
   useString,

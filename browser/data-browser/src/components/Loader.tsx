@@ -1,4 +1,5 @@
 import { styled, keyframes } from 'styled-components';
+import { CurrentBackgroundColor } from '../globalCssVars';
 
 const loadingAnimation = keyframes`
   from {
@@ -11,13 +12,18 @@ const loadingAnimation = keyframes`
 
 export const LoaderInline = styled.span`
   --loader-bg-from: ${p => p.theme.colors.bg1};
-  --loader-bg-to: ${p => p.theme.colors.bg};
+  --loader-bg-to: ${CurrentBackgroundColor.var()};
   background-color: ${p => p.theme.colors.bg1};
   border-radius: ${p => p.theme.radius};
   animation: ${loadingAnimation} 0.8s infinite ease-in-out alternate;
-  width: 100%;
+  /* width: 100%; */
+  flex: 1;
   display: inline-block;
-  height: 1rem;
+  padding: 0;
+  padding-inline: 1ch;
+  margin: 0;
+  color: ${p => p.theme.colors.textLight};
+  /* height: 1rem; */
 `;
 
 export const LoaderBlock = styled.div`

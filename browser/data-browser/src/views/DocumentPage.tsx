@@ -1,5 +1,4 @@
-import * as React from 'react';
-import { useState } from 'react';
+import { useRef, useEffect, useState, type JSX } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
 import {
   Resource,
@@ -39,10 +38,10 @@ import { FileDropZone } from '../components/forms/FileDropzone/FileDropzone';
 
 /** A full page, editable document, consisting of Elements */
 export function DocumentPage({ resource }: ResourcePageProps): JSX.Element {
-  const [canWrite] = useCanWrite(resource);
+  const canWrite = useCanWrite(resource);
   const [editMode, setEditMode] = useState(canWrite);
 
-  React.useEffect(() => {
+  useEffect(() => {
     setEditMode(canWrite);
   }, [canWrite]);
 
@@ -74,11 +73,11 @@ function DocumentPageEdit({
     { commit: false, validate: false, commitDebounce: 0 },
   );
 
-  const titleRef = React.useRef<HTMLInputElement>(null);
+  const titleRef = useRef<HTMLInputElement>(null);
   const store = useStore();
-  const ref = React.useRef<HTMLInputElement>(null);
+  const ref = useRef<HTMLInputElement>(null);
   const [err, setErr] = useState<Error | undefined>(undefined);
-  const [current, setCurrent] = React.useState<number>(0);
+  const [current, setCurrent] = useState<number>(0);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -88,12 +87,16 @@ function DocumentPageEdit({
   );
 
   // On init, focus on the last element
-  React.useEffect(() => {
+  useEffect(() => {
     setCurrent(elements.length - 1);
+
+    if (elements === undefined) {
+      setElements([]);
+    }
   }, []);
 
   // Always have one element
-  React.useEffect(() => {
+  useEffect(() => {
     if (elements.length === 0) {
       addElement(0);
     }
@@ -115,9 +118,10 @@ function DocumentPageEdit({
     e => {
       e.preventDefault();
       addElement(0);
+      focusElement(0);
     },
     { enableOnTags: ['INPUT'] },
-    [current],
+    [addElement, focusElement],
   );
 
   useHotkeys(
@@ -241,16 +245,14 @@ function DocumentPageEdit({
       return;
     }
 
-    elements.splice(number, 1);
-    setElements([...elements]);
+    setElements(elements.toSpliced(number, 1));
     focusElement(number - 1);
     resource.save();
   }
 
   /** Sets the subject for a specific element and moves to the next element */
   async function setElement(index: number, subject: string) {
-    elements[index] = subject;
-    setElements(elements);
+    setElements(elements.with(index, subject));
 
     if (index === elements.length - 1) {
       addElement(index + 1);
@@ -262,9 +264,7 @@ function DocumentPageEdit({
 
   function moveElement(from: number, to: number) {
     const element = elements[from];
-    elements.splice(from, 1);
-    elements.splice(to, 0, element);
-    setElements([...elements]);
+    setElements(elements.toSpliced(from, 1).toSpliced(to, 0, element));
     focusElement(to);
     resource.save();
   }
@@ -295,9 +295,17 @@ function DocumentPageEdit({
   /** Add a new line, or move to the last line if it is empty */
   async function handleNewLineMaybe() {
     const lastSubject = elements[elements.length - 1];
-    const lastElem = await store.getResource(lastSubject);
 
-    if (lastElem.get(core.properties.description)?.toString()?.length === 0) {
+    if (!lastSubject) {
+      addElement(elements.length);
+
+      return;
+    }
+
+    const lastElem = await store.getResource(lastSubject);
+    const description = lastElem.get(core.properties.description);
+
+    if (description === undefined || description.length === 0) {
       focusElement(elements.length - 1);
     } else {
       addElement(elements.length);
@@ -361,7 +369,7 @@ function DocumentPageShow({
   setEditMode,
 }: DocumentSubPageProps): JSX.Element {
   const [elements] = useArray(resource, dataBrowser.properties.elements);
-  const [canWrite] = useCanWrite(resource);
+  const canWrite = useCanWrite(resource);
 
   return (
     <>

@@ -1,5 +1,7 @@
-import { useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router';
 import ResourcePage from '../views/ResourcePage';
+
+import type { JSX } from 'react';
 
 /** Show a resource where the domain matches the current domain */
 function Local(): JSX.Element {

@@ -8,6 +8,8 @@ import {
 } from './GridItem/components';
 import { ResourceGridItem } from './GridItem/ResourceGridItem';
 
+import type { JSX } from 'react';
+
 export function GridView({
   subResources,
   onNewClick,

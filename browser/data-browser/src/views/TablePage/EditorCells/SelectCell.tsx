@@ -6,7 +6,7 @@ import {
   useResource,
   useStore,
 } from '@tomic/react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type JSX } from 'react';
 import { FaPlus } from 'react-icons/fa';
 import * as RadixPopover from '@radix-ui/react-popover';
 import { styled } from 'styled-components';

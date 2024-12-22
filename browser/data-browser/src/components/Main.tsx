@@ -1,4 +1,4 @@
-import { PropsWithChildren, memo } from 'react';
+import { PropsWithChildren, memo, type JSX } from 'react';
 import { VisuallyHidden } from './VisuallyHidden';
 import { styled } from 'styled-components';
 import {

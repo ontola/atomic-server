@@ -1,4 +1,4 @@
-import { useState, useMemo, memo, useContext } from 'react';
+import { useState, useMemo, memo, useContext, type JSX } from 'react';
 import { Dialog, useDialog } from '../../Dialog';
 import { useSettings } from '../../../helpers/AppSettings';
 import { css, styled } from 'styled-components';
@@ -118,7 +118,7 @@ export const ResourceSelector = memo(function ResourceSelector({
   const { drive } = useSettings();
 
   const resource = useResource(value ?? unknownSubject);
-  const [canWrite] = useCanWrite(resource);
+  const canWrite = useCanWrite(resource);
 
   const shouldShowEditForm = canWrite && isURL(value ?? '');
 

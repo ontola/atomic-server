@@ -27,7 +27,7 @@ export function TagPage({ resource }: ResourcePageProps<DataBrowser.Tag>) {
     commit: true,
   });
   const shortnameProp = useProperty(core.properties.shortname);
-  const [canWrite] = useCanWrite(resource);
+  const canWrite = useCanWrite(resource);
 
   return (
     <ContainerNarrow>

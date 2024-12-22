@@ -14,7 +14,7 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { FaCopy, FaLink, FaPencilAlt, FaReply, FaTimes } from 'react-icons/fa';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { styled } from 'styled-components';
 import { AtomicLink } from '../components/AtomicLink';
 import { Button } from '../components/Button';
@@ -99,12 +99,13 @@ export function ChatRoomPage({ resource }: ResourcePageProps) {
     }
   }
 
-  const handleReplyCallback = useCallback(handleReplyTo, [inputRef]);
-
-  function handleReplyTo(subject: string) {
-    setReplyTo(subject);
-    inputRef?.current?.focus();
-  }
+  const handleReply = useCallback(
+    (subject: string) => {
+      setReplyTo(subject);
+      inputRef?.current?.focus();
+    },
+    [setReplyTo],
+  );
 
   const handleChangeMessageText: React.ChangeEventHandler<
     HTMLTextAreaElement
@@ -136,10 +137,7 @@ export function ChatRoomPage({ resource }: ResourcePageProps) {
     <FullPageWrapper>
       <EditableTitle resource={resource} />
       <ScrollingContent ref={scrollRef}>
-        <MessagesPage
-          subject={resource.getSubject()}
-          setReplyTo={handleReplyCallback}
-        />
+        <MessagesPage subject={resource.subject} setReplyTo={handleReply} />
       </ScrollingContent>
       {isReplyTo && (
         <Detail>
@@ -191,7 +189,7 @@ const Message = memo(function Message({ subject, setReplyTo }: MessageProps) {
   const [lastCommit] = useSubject(resource, commits.properties.lastCommit);
   const [replyTo] = useSubject(resource, dataBrowser.properties.replyTo);
   const navigate = useNavigate();
-  const [canWrite] = useCanWrite(resource);
+  const canWrite = useCanWrite(resource);
 
   function handleCopyUrl() {
     navigator.clipboard.writeText(subject);
@@ -297,6 +295,7 @@ const MessageDetails = styled.div`
   margin-bottom: 0;
   opacity: 0.4;
   display: flex;
+  gap: 1ch;
   flex: 1;
 `;
 
@@ -307,6 +306,7 @@ const MessageActions = styled.div`
   justify-content: flex-end;
   flex: 1;
   opacity: 0;
+  gap: 0.5ch;
   margin-right: 1rem;
 `;
 

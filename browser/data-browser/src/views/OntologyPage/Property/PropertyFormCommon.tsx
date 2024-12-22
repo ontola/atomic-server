@@ -8,7 +8,7 @@ import {
   useStore,
   useString,
 } from '@tomic/react';
-import { useCallback } from 'react';
+import { useCallback, type JSX } from 'react';
 import { Column, Row } from '../../../components/Row';
 import { SearchBox } from '../../../components/forms/SearchBox';
 import { OntologyDescription } from '../OntologyDescription';

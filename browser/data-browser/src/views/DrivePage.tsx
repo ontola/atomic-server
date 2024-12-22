@@ -10,12 +10,14 @@ import { styled } from 'styled-components';
 import InputSwitcher from '../components/forms/InputSwitcher';
 import { WarningBlock } from '../components/WarningBlock';
 
+import type { JSX } from 'react';
+
 /** A View for Drives, which function similar to a homepage or dashboard. */
 function DrivePage({ resource }: ResourcePageProps): JSX.Element {
   const { drive: baseURL, setDrive: setBaseURL } = useSettings();
 
   const defaultOntologyProp = useProperty(server.properties.defaultOntology);
-  const [canEdit] = useCanWrite(resource);
+  const canEdit = useCanWrite(resource);
 
   if (!baseURL) {
     setBaseURL(resource.subject);

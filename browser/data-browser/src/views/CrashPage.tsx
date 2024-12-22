@@ -6,6 +6,8 @@ import { ErrorBlock } from '../components/ErrorLook';
 import { Button } from '../components/Button';
 import { Column, Row } from '../components/Row';
 
+import type { JSX } from 'react';
+
 type ErrorPageProps = {
   resource?: Resource;
   children?: React.ReactNode;

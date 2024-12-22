@@ -1,6 +1,8 @@
 import { styled } from 'styled-components';
 import { transition } from '../../helpers/transition';
 
+import type { JSX } from 'react';
+
 interface RadioInputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   disabled?: boolean;
 }

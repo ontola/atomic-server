@@ -1,4 +1,4 @@
-import { useState, Fragment } from 'react';
+import { useState, Fragment, type JSX } from 'react';
 import { JSONValue } from '@tomic/react';
 import { styled } from 'styled-components';
 import { ResourceInline } from '../../views/ResourceInline';

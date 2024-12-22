@@ -6,6 +6,8 @@ import { ResourceInline } from './ResourceInline';
 import { ValueForm } from '../components/forms/ValueForm';
 import { ResourcePageProps } from './ResourcePage';
 
+import type { JSX } from 'react';
+
 /** A View for Drives, which function similar to a homepage or dashboard. */
 function AgentPage({ resource }: ResourcePageProps): JSX.Element {
   const [title] = useTitle(resource);

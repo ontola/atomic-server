@@ -4,6 +4,8 @@ import { styled } from 'styled-components';
 import { RadioInput } from '../../../../components/forms/RadioInput';
 import { formatDate } from '../../../../helpers/dates/formatDate';
 
+import type { JSX } from 'react';
+
 const {
   instances: { dateFormats },
 } = urls;

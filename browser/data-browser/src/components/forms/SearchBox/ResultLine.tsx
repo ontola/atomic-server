@@ -5,7 +5,7 @@ import {
   useString,
   type Resource,
 } from '@tomic/react';
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, type JSX } from 'react';
 import { styled, css } from 'styled-components';
 import { dataTypeIconMap, getIconForClass } from '../../../helpers/iconMap';
 import { FaAtom } from 'react-icons/fa6';

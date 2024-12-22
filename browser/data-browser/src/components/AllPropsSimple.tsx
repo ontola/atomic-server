@@ -7,7 +7,7 @@ import {
   useSubject,
   useTitle,
 } from '@tomic/react';
-import { useMemo } from 'react';
+import { useMemo, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { InlineFormattedResourceList } from './InlineFormattedResourceList';
 

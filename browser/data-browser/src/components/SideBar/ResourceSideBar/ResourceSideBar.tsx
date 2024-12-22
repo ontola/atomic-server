@@ -27,7 +27,7 @@ import { transition } from '../../../helpers/transition';
 
 interface ResourceSideBarProps {
   subject: string;
-  renderedHierargy: string[];
+  renderedHierarchy: string[];
   ancestry: string[];
   /** When a SideBar item is clicked, we should close the SideBar (on mobile devices) */
   onClick?: () => unknown;
@@ -36,19 +36,19 @@ interface ResourceSideBarProps {
 /** Renders a Resource as a nav item for in the sidebar. */
 export const ResourceSideBar: React.FC<ResourceSideBarProps> = ({
   subject,
-  renderedHierargy,
+  renderedHierarchy,
   ancestry,
   onClick,
 }) => {
-  if (renderedHierargy.length === 0) {
-    throw new Error('renderedHierargy should not be empty');
+  if (renderedHierarchy.length === 0) {
+    throw new Error('renderedHierarchy should not be empty');
   }
 
   const resource = useResource(subject, { allowIncomplete: true });
   const [currentUrl] = useCurrentSubject();
   const [title] = useTitle(resource);
   const [description] = useString(resource, core.properties.description);
-  const [canWrite] = useCanWrite(resource);
+  const canWrite = useCanWrite(resource);
   const active = currentUrl === subject;
   const [open, setOpen] = useState(active);
 
@@ -58,7 +58,7 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = ({
   );
 
   const dragData: SideBarDragData = {
-    renderedUnder: renderedHierargy.at(-1)!,
+    renderedUnder: renderedHierarchy.at(-1)!,
   };
 
   const {
@@ -90,7 +90,7 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = ({
   const hasSubResources = subResources.length > 0;
   const isDragging = draggingNode?.id === subject;
   const isHoveringOver = over?.data.current?.parent === subject;
-  const hierarchyWithItself = [...renderedHierargy, subject];
+  const hierarchyWithItself = [...renderedHierarchy, subject];
 
   useEffect(() => {
     if (isDragging) {
@@ -102,7 +102,7 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = ({
     if (ancestry.includes(subject) && ancestry[0] !== subject) {
       setOpen(true);
     }
-  }, [ancestry]);
+  }, [ancestry, subject]);
 
   if (!subject || subject === unknownSubject) {
     return null;
@@ -150,7 +150,7 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = ({
             <Fragment key={child}>
               <ResourceSideBar
                 subject={child}
-                renderedHierargy={hierarchyWithItself}
+                renderedHierarchy={hierarchyWithItself}
                 ancestry={ancestry}
                 onClick={onClick}
               />

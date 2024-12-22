@@ -11,6 +11,8 @@ import { ResourceInline } from '../ResourceInline';
 import { toAnchorId } from '../../helpers/toAnchorId';
 import { useOntologyContext } from './OntologyContext';
 
+import type { JSX } from 'react';
+
 interface TypeSuffixProps {
   resource: Resource<Core.Property>;
 }

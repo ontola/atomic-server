@@ -10,6 +10,8 @@ import { styled } from 'styled-components';
 import InputSwitcher from '../../../components/forms/InputSwitcher';
 import { PropertyFormCommon } from './PropertyFormCommon';
 
+import type { JSX } from 'react';
+
 interface PropertyWriteDialogProps {
   resource: Resource;
   close: () => void;
@@ -22,7 +24,7 @@ export function PropertyWriteDialog({
   isOpen,
   ...dialogProps
 }: PropertyWriteDialogProps & InternalDialogProps): JSX.Element {
-  const [canEdit] = useCanWrite(resource);
+  const canEdit = useCanWrite(resource);
   const shortnameProp = useProperty(urls.properties.shortname);
 
   return (

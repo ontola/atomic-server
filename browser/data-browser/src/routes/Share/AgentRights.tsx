@@ -6,6 +6,8 @@ import { ResourceInline } from '../../views/ResourceInline';
 import type { MergedRight } from './useRights';
 import { PermissionRow } from './PermissionRow';
 
+import type { JSX } from 'react';
+
 interface AgentRightsProps extends MergedRight {
   hideInherit?: boolean;
   handleSetRight?: (agent: string, write: boolean, setToTrue: boolean) => void;

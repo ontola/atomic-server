@@ -33,7 +33,7 @@ export function ValueForm({ resource, propertyURL, datatype }: ValueFormProps) {
   const property = useProperty(propertyURL);
   const [value] = useValue(resource, propertyURL);
   const { agent } = useSettings();
-  const [canWrite] = useCanWrite(resource);
+  const canWrite = useCanWrite(resource);
 
   useHotkeys(
     'esc',

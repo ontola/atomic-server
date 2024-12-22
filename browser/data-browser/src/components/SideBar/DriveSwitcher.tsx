@@ -7,7 +7,7 @@ import {
   FaRegCheckCircle,
   FaRegCircle,
 } from 'react-icons/fa';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { useSettings } from '../../helpers/AppSettings';
 import { constructOpenURL } from '../../helpers/navigation';
 import { useDriveHistory } from '../../hooks/useDriveHistory';
@@ -94,5 +94,5 @@ export function DriveSwitcher() {
     [savedDrivesMap, drive, historyMap, agent],
   );
 
-  return <DropdownMenu trigger={Trigger} items={items} />;
+  return <DropdownMenu Trigger={Trigger} items={items} />;
 }

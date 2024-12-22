@@ -41,7 +41,7 @@ export function NewClassInstanceButton({
     setShowTableDialogWithParent(undefined);
   };
 
-  const trigger = buildDefaultTrigger(
+  const Trigger = buildDefaultTrigger(
     <PlusIcon />,
     `New instance of ${resource.title}`,
   );
@@ -69,7 +69,7 @@ export function NewClassInstanceButton({
 
   return (
     <>
-      <DropdownMenu items={newInstanceItems} trigger={trigger} />
+      <DropdownMenu items={newInstanceItems} Trigger={Trigger} />
       <ParentPickerDialog
         open={showParentPicker}
         onOpenChange={setShowParentPicker}

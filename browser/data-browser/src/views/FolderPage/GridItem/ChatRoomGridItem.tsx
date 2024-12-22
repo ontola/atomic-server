@@ -11,6 +11,8 @@ import { styled } from 'styled-components';
 import { GridItemDescription, InnerWrapper } from './components';
 import { GridItemViewProps } from './GridItemViewProps';
 
+import type { JSX } from 'react';
+
 export function ChatRoomGridItem({ resource }: GridItemViewProps): JSX.Element {
   const [messages] = useArray(resource, properties.chatRoom.messages);
 

@@ -1,5 +1,5 @@
 import { Resource } from '@tomic/react';
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, type JSX } from 'react';
 import { styled } from 'styled-components';
 
 const OntologyGraph = lazy(

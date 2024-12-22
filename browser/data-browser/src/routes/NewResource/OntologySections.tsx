@@ -1,7 +1,7 @@
 import { OutlinedSection } from '../../components/OutlinedSection';
 import { Core, core, useResource, useServerSearch } from '@tomic/react';
 import { ClassButton } from './ClassButton';
-import { FC } from 'react';
+import { FC, type JSX } from 'react';
 import { useSettings } from '../../helpers/AppSettings';
 
 interface OntologySectionsProps {

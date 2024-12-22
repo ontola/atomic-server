@@ -6,6 +6,7 @@ import {
   createContext,
   useContext,
   ReactElement,
+  type JSX,
 } from 'react';
 import { FixedSizeList } from 'react-window';
 import { EventManager } from '../../helpers/EventManager';
@@ -38,7 +39,7 @@ function emptySetState<T>(_: T | ((__: T) => T)): undefined {
 export interface TableEditorContext {
   mouseDown: boolean;
   setMouseDown: React.Dispatch<React.SetStateAction<boolean>>;
-  tableRef: React.MutableRefObject<HTMLDivElement | null>;
+  tableRef: React.RefObject<HTMLDivElement | null>;
   disabledKeyboardInteractions: Set<KeyboardInteraction>;
   setDisabledKeyboardInteractions: React.Dispatch<
     React.SetStateAction<Set<KeyboardInteraction>>
@@ -54,11 +55,13 @@ export interface TableEditorContext {
     row: number | undefined,
     column: number | undefined,
   ) => void;
-  activeCellRef: React.MutableRefObject<HTMLDivElement | null>;
-  multiSelectCornerCellRef: React.MutableRefObject<HTMLDivElement | null>;
+  activeCellRef: React.RefObject<HTMLDivElement | null>;
+  updateActiveCellRef: (newValue: HTMLDivElement | null) => void;
+  multiSelectCornerCellRef: React.RefObject<HTMLDivElement | null>;
+  updateMultiSelectCornerCellRef: (newValue: HTMLDivElement | null) => void;
   isDragging: boolean;
   setIsDragging: React.Dispatch<React.SetStateAction<boolean>>;
-  listRef: React.MutableRefObject<FixedSizeList | null>;
+  listRef: React.RefObject<FixedSizeList | null>;
   cursorMode: CursorMode;
   setCursorMode: React.Dispatch<React.SetStateAction<CursorMode>>;
   clearCell: () => void;
@@ -88,7 +91,9 @@ const initial: TableEditorContext = {
   setIndicatorHidden: emptySetState,
   setMultiSelectCorner: () => undefined,
   activeCellRef: { current: null },
+  updateActiveCellRef: () => undefined,
   multiSelectCornerCellRef: { current: null },
+  updateMultiSelectCornerCellRef: () => undefined,
   isDragging: false,
   setIsDragging: emptySetState,
   listRef: { current: null },
@@ -135,7 +140,19 @@ export function TableEditorContextProvider({
   );
 
   const activeCellRef = useRef<HTMLDivElement | null>(null);
+
+  const updateActiveCellRef = useCallback((newValue: HTMLDivElement | null) => {
+    activeCellRef.current = newValue;
+  }, []);
+
   const multiSelectCornerCellRef = useRef<HTMLDivElement | null>(null);
+
+  const updateMultiSelectCornerCellRef = useCallback(
+    (newValue: HTMLDivElement | null) => {
+      multiSelectCornerCellRef.current = newValue;
+    },
+    [],
+  );
 
   const setActiveCell = useCallback(
     (row: number | undefined, column: number | undefined) => {
@@ -194,7 +211,9 @@ export function TableEditorContextProvider({
       setActiveCell,
       setMultiSelectCorner,
       activeCellRef,
+      updateActiveCellRef,
       multiSelectCornerCellRef,
+      updateMultiSelectCornerCellRef,
       isDragging,
       setIsDragging,
       listRef,
@@ -217,6 +236,8 @@ export function TableEditorContextProvider({
       indicatorHidden,
       setActiveCell,
       setMultiSelectCorner,
+      updateActiveCellRef,
+      updateMultiSelectCornerCellRef,
       isDragging,
       cursorMode,
       emitInteractionsFired,

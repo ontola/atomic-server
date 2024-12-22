@@ -4,6 +4,7 @@ import {
   useCallback,
   useContext,
   useMemo,
+  type JSX,
 } from 'react';
 import { DarkModeOption, useDarkMode } from './useDarkMode';
 import { useCurrentAgent, useServerURL, Agent } from '@tomic/react';

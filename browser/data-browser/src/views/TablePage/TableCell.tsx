@@ -3,10 +3,10 @@ import {
   JSONValue,
   Property,
   Resource,
-  useDebouncedCallback,
+  useDebouncedSave,
   useValue,
 } from '@tomic/react';
-import { useCallback, useContext, useMemo } from 'react';
+import { useCallback, useContext, useMemo, type JSX } from 'react';
 import { Cell } from '../../components/TableEditor';
 import { CellAlign } from '../../components/TableEditor/Cell';
 import {
@@ -56,13 +56,7 @@ export function TableCell({
 }: TableCell): JSX.Element {
   const { setActiveCell } = useTableEditorContext();
   const { addItemsToHistoryStack } = useContext(TablePageContext);
-  const [save, savePending] = useDebouncedCallback(
-    async () => {
-      await resource.save();
-    },
-    200,
-    [resource],
-  );
+  const [save, savePending] = useDebouncedSave(resource, 200);
   const [value, setValue] = useValue(resource, property.subject, valueOpts);
 
   const [createdAt, setCreatedAt] = useValue(

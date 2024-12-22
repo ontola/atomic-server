@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type JSX } from 'react';
 import { styled } from 'styled-components';
 import Markdown from '../../components/datatypes/Markdown';
 

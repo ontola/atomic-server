@@ -9,9 +9,8 @@ import {
 } from 'react';
 import { styled } from 'styled-components';
 
-interface UseResizeResult<E extends HTMLElement> {
+interface UseResizeResult {
   size: string;
-  targetRef: React.RefObject<E | null>;
   dragAreaRef: React.RefObject<HTMLDivElement | null>;
   dragAreaListeners: Pick<React.DOMAttributes<HTMLDivElement>, 'onMouseDown'>;
   isDragging: boolean;
@@ -58,18 +57,21 @@ function setDragStyling(id: string, enable: boolean) {
   }
 }
 
+export type UseResizableProps<E extends HTMLElement> = {
+  initialSize: number;
+  onResize?: (size: number) => void;
+  minSize?: number;
+  maxSize?: number;
+  targetRef: React.RefObject<E | null>;
+};
+
 export function useResizable<E extends HTMLElement>({
   initialSize,
   onResize,
   minSize = 0,
   maxSize = Infinity,
-}: {
-  initialSize: number;
-  onResize?: (size: number) => void;
-  minSize?: number;
-  maxSize?: number;
-}): UseResizeResult<E> {
-  const targetRef = useRef<E>(null);
+  targetRef,
+}: UseResizableProps<E>): UseResizeResult {
   const dragAreaRef = useRef<HTMLDivElement>(null);
 
   const [dragging, setDragging] = useState(false);
@@ -137,7 +139,6 @@ export function useResizable<E extends HTMLElement>({
 
   return {
     size,
-    targetRef,
     dragAreaRef,
     isDragging: dragging,
     dragAreaListeners: {

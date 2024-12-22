@@ -1,7 +1,7 @@
 import * as React from 'react';
-import { useEffect } from 'react';
+import { useEffect, type JSX } from 'react';
 import { FaArrowLeft, FaArrowRight, FaBars } from 'react-icons/fa';
-import { useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router';
 import { styled } from 'styled-components';
 
 import { ButtonBar } from './Button';

@@ -1,5 +1,7 @@
 import { styled } from 'styled-components';
 
+import type { JSX } from 'react';
+
 interface CheckboxProps
   extends Omit<
     React.InputHTMLAttributes<HTMLInputElement>,

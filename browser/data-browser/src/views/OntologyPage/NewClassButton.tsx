@@ -1,5 +1,5 @@
 import { Datatype, Resource, useStore, validateDatatype } from '@tomic/react';
-import { useRef, useState } from 'react';
+import { useRef, useState, type JSX } from 'react';
 import { FaPlus } from 'react-icons/fa';
 import { styled } from 'styled-components';
 import {

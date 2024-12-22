@@ -4,6 +4,8 @@ import { ResourceInline } from '../../views/ResourceInline';
 import { styled } from 'styled-components';
 import { ErrorLook } from '../ErrorLook';
 
+import type { JSX } from 'react';
+
 interface UsageRowProps {
   subject: string;
 }

@@ -2,6 +2,8 @@ import { Resource, properties, useCollection } from '@tomic/react';
 
 import { UsageCard } from './UsageCard';
 
+import type { JSX } from 'react';
+
 interface ChildrenUsageProps {
   resource: Resource;
 }

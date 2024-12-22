@@ -296,11 +296,11 @@ export async function changeDrive(subject: string, page: Page) {
 }
 
 export async function editTitle(title: string, page: Page) {
-  await page.locator(`${editableTitle} > h1`);
+  await expect(page.locator(editableTitle)).toHaveRole('heading');
   await page.locator(editableTitle).click();
-  await page.locator(`${editableTitle} > input`);
+  await expect(page.locator(editableTitle)).toHaveRole('textbox');
   await page.fill(editableTitle, title);
-  await page.keyboard.press('Escape');
+  await page.keyboard.press('Enter');
   // Make sure the commit is processed
   // await page.waitForTimeout(300);
 }

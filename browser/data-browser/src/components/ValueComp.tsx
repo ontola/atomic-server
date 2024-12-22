@@ -13,6 +13,8 @@ import Nestedresource from './datatypes/NestedResource';
 import ResourceArray from './datatypes/ResourceArray';
 import { ErrMessage } from './forms/InputStyles';
 
+import type { JSX } from 'react';
+
 type Props = {
   value: JSONValue;
   datatype: Datatype;

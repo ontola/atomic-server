@@ -1,5 +1,5 @@
 import { properties, Resource, useResource, useString } from '@tomic/react';
-import { useCallback } from 'react';
+import { useCallback, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { FileDropzoneInput } from '../../components/forms/FileDropzone/FileDropzoneInput';
 import { transition } from '../../helpers/transition';

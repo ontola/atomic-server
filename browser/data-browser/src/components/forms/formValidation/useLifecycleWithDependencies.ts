@@ -7,8 +7,10 @@ export function useLifecycleWithDependencies(
   const mountRef = useRef(onMount);
   const cleanupRef = useRef(onCleanup);
 
-  mountRef.current = onMount;
-  cleanupRef.current = onCleanup;
+  useEffect(() => {
+    mountRef.current = onMount;
+    cleanupRef.current = onCleanup;
+  }, [onMount, onCleanup]);
 
   useEffect(() => {
     mountRef.current();

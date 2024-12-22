@@ -1,5 +1,5 @@
 import { Datatype, core } from '@tomic/react';
-import { useEffect } from 'react';
+import { useEffect, type JSX } from 'react';
 import { PropertyCategoryFormProps } from './PropertyCategoryFormProps';
 
 export function CheckboxPropertyForm({

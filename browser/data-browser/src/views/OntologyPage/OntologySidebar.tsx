@@ -6,6 +6,8 @@ import { FaAtom, FaCube, FaHashtag } from 'react-icons/fa';
 import { ScrollArea } from '../../components/ScrollArea';
 import { toAnchorId } from '../../helpers/toAnchorId';
 
+import type { JSX } from 'react';
+
 interface OntologySidebarProps {
   ontology: Resource;
 }

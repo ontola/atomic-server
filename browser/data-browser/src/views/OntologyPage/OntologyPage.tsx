@@ -43,7 +43,7 @@ export function OntologyPage({ resource }: ResourcePageProps) {
   const [classes] = useArray(resource, core.properties.classes);
   const [properties] = useArray(resource, core.properties.properties);
   const [instances] = useArray(resource, core.properties.instances);
-  const [canWrite] = useCanWrite(resource);
+  const canWrite = useCanWrite(resource);
 
   const [editMode, setEditMode] = useState(
     isEmpty(classes) && isEmpty(properties) && isEmpty(instances),

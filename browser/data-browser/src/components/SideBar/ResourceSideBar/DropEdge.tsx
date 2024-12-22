@@ -25,7 +25,7 @@ export function DropEdge({
 
   const parentResource = useResource(parent);
 
-  const [canWrite] = useCanWrite(parentResource);
+  const canWrite = useCanWrite(parentResource);
   useDndMonitor({
     onDragStart: event => setDraggingSubject(event.active.id as string),
     onDragEnd: () => setDraggingSubject(undefined),

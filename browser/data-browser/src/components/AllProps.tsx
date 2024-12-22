@@ -4,6 +4,8 @@ import { styled, css } from 'styled-components';
 import PropVal from './PropVal';
 import { ALL_PROPS_CONTAINER } from '../helpers/containers';
 
+import type { JSX } from 'react';
+
 type Props = {
   resource: Resource;
   /** A list of property subjects (URLs) that need not be rendered */

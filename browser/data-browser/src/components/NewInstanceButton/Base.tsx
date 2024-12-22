@@ -1,9 +1,9 @@
 import { useStore } from '@tomic/react';
-import { useCallback } from 'react';
+import { useCallback, type JSX } from 'react';
 import toast from 'react-hot-toast';
 import { IconType } from 'react-icons';
 import { FaPlus } from 'react-icons/fa';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { styled } from 'styled-components';
 import { paths } from '../../routes/paths';
 import { Button } from '../Button';

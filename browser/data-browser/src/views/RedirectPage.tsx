@@ -1,6 +1,6 @@
-import { useStore, useString, properties } from '@tomic/react';
+import { useStore, useString, Agent, server, core } from '@tomic/react';
 import * as React from 'react';
-import { useNavigate, useNavigationType } from 'react-router-dom';
+import { useNavigate, useNavigationType } from 'react-router';
 
 import { ContainerNarrow } from '../components/Containers';
 import { ValueForm } from '../components/forms/ValueForm';
@@ -11,17 +11,14 @@ import { Button } from '../components/Button';
 import toast from 'react-hot-toast';
 import { paths } from '../routes/paths';
 import { ResourcePageProps } from './ResourcePage';
-import { useEffect } from 'react';
+import { useEffect, type JSX } from 'react';
 import { ErrorBlock } from '../components/ErrorLook';
 
 /** A View that redirects!. */
 function RedirectPage({ resource }: ResourcePageProps): JSX.Element {
   const [error, setError] = React.useState<Error | undefined>();
-  const [destination] = useString(resource, properties.redirect.destination);
-  const [redirectAgent] = useString(
-    resource,
-    properties.redirect.redirectAgent,
-  );
+  const [destination] = useString(resource, server.properties.destination);
+  const [redirectAgent] = useString(resource, server.properties.redirectAgent);
   const navigate = useNavigate();
   const { agent, setAgent } = useSettings();
   const store = useStore();
@@ -32,7 +29,7 @@ function RedirectPage({ resource }: ResourcePageProps): JSX.Element {
     if (redirectAgent) {
       // If there is an agent without a Subject, that is because the Browser has just sent a query param to the invite resource, as part of the invite process
       if (agent && !agent.subject) {
-        agent.subject = redirectAgent;
+        const newAgent = new Agent(agent.privateKey, redirectAgent);
         toast.success(
           <div>
             <p>New User created!</p>
@@ -42,7 +39,7 @@ function RedirectPage({ resource }: ResourcePageProps): JSX.Element {
           </div>,
           { duration: 6000 },
         );
-        setAgent(agent);
+        setAgent(newAgent);
       }
     }
 
@@ -64,14 +61,17 @@ function RedirectPage({ resource }: ResourcePageProps): JSX.Element {
 
   return (
     <ContainerNarrow>
-      <ValueForm resource={resource} propertyURL={properties.description} />
+      <ValueForm
+        resource={resource}
+        propertyURL={core.properties.description}
+      />
       <h1>Redirect</h1>
       <p>
         This page should redirect you automatically (unless you have just
         pressed the back button)
       </p>
       {error && <ErrorBlock error={error} />}
-      <AllProps resource={resource} except={[properties.isA]} />
+      <AllProps resource={resource} except={[core.properties.isA]} />
     </ContainerNarrow>
   );
 }

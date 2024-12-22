@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, type JSX } from 'react';
 import { styled } from 'styled-components';
 import {
   TableHeading,
@@ -55,6 +55,8 @@ export function TableHeader<T>({
       const key = columns.map(columnToKey).indexOf(event.active.id as string);
       setActiveIndex(key);
 
+      // Bug in react-compiler linter
+      // eslint-disable-next-line react-compiler/react-compiler
       document.body.style.cursor = 'grabbing';
     },
     [columns, columnToKey],

@@ -1,4 +1,4 @@
-import { useId, Fragment } from 'react';
+import { useId, Fragment, type JSX } from 'react';
 import { GroupedVersions } from './HistoryViewProps';
 import { Version, useStore } from '@tomic/react';
 import { styled } from 'styled-components';

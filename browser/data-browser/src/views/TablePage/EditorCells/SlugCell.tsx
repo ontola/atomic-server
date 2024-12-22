@@ -1,5 +1,5 @@
 import { JSONValue } from '@tomic/react';
-import { useCallback } from 'react';
+import { useCallback, type JSX } from 'react';
 import { InputBase } from './InputBase';
 import { CellContainer, DisplayCellProps, EditCellProps } from './Type';
 

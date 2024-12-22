@@ -7,7 +7,7 @@ import {
   useString,
   validateDatatype,
 } from '@tomic/react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type JSX } from 'react';
 import { formatDate } from '../../../helpers/dates/formatDate';
 import { InputBase } from './InputBase';
 import { CellContainer, DisplayCellProps, EditCellProps } from './Type';

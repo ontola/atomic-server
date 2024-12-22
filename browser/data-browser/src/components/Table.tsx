@@ -11,7 +11,7 @@ import { useSubjectParam } from '../helpers/useCurrentSubject';
 import { FaSort, FaSortDown, FaSortUp } from 'react-icons/fa';
 import { Button } from './Button';
 import { ValueForm } from './forms/ValueForm';
-import { memo } from 'react';
+import { memo, type JSX } from 'react';
 
 type TableProps = {
   /** A Collection Resource with a filter-value set */

@@ -4,6 +4,8 @@ import { getCategoryFromResource } from '../PropertyForm/categories';
 import { SelectCell } from './SelectCell';
 import { MultiRelationCell } from './MultiRelationCell';
 
+import type { JSX } from 'react';
+
 function ResourceArrayCellEdit(props: EditCellProps<JSONValue>): JSX.Element {
   const propResource = useResource(props.property);
 

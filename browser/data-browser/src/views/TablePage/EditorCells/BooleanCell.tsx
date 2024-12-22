@@ -3,6 +3,8 @@ import { JSONValue } from '@tomic/react';
 import { Checkbox } from '../../../components/forms/Checkbox';
 import { CellContainer, DisplayCellProps, EditCellProps } from './Type';
 
+import type { JSX } from 'react';
+
 function BooleanCellEdit({
   value,
   onChange,

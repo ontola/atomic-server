@@ -1,5 +1,5 @@
 import { Resource, useString, core } from '@tomic/react';
-import { useState } from 'react';
+import { useState, type JSX } from 'react';
 
 import toast from 'react-hot-toast';
 import { FaEdit, FaPlus } from 'react-icons/fa';

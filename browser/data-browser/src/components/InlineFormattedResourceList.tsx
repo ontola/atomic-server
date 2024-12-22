@@ -1,5 +1,7 @@
 import { ResourceInline } from '../views/ResourceInline';
 
+import type { JSX } from 'react';
+
 interface InlineFormattedResourceListProps {
   subjects: string[];
   /** Optional component to render items instead of an inline resource */

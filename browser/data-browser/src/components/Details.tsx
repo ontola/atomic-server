@@ -1,4 +1,10 @@
-import { PropsWithChildren, useCallback, useEffect, useState } from 'react';
+import {
+  PropsWithChildren,
+  useCallback,
+  useEffect,
+  useState,
+  type JSX,
+} from 'react';
 import { styled } from 'styled-components';
 import { FaCaretRight } from 'react-icons/fa';
 import { Collapse } from './Collapse';
@@ -40,7 +46,7 @@ export function Details({
 
       return !p;
     });
-  }, []);
+  }, [onStateToggle]);
 
   return (
     <>
@@ -52,7 +58,7 @@ export function Details({
           hide={!!disabled}
           aria-label={isOpen ? 'collapse' : 'expand'}
         >
-          <Icon turn={!!isOpen} />
+          <Icon $turn={!!isOpen} />
         </StyledIconButton>
         <TitleWrapper>{title}</TitleWrapper>
       </SummaryWrapper>
@@ -78,7 +84,7 @@ const TitleWrapper = styled.div`
   }
 `;
 
-const Icon = styled(FaCaretRight)<{ turn: boolean }>`
+const Icon = styled(FaCaretRight)<{ $turn: boolean }>`
   color: ${({ theme }) => theme.colors.main};
   margin-top: auto;
   cursor: pointer;
@@ -89,7 +95,7 @@ const Icon = styled(FaCaretRight)<{ turn: boolean }>`
   transition:
     transform var(--speed) ease-in-out,
     background-color var(--speed) ease;
-  transform: rotate(${props => (props.turn ? '90deg' : '0deg')});
+  transform: rotate(${props => (props.$turn ? '90deg' : '0deg')});
   aspect-ratio: 1/1;
   display: flex;
   align-items: center;

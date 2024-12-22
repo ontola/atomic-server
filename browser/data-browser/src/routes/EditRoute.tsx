@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type JSX } from 'react';
 import { useResource } from '@tomic/react';
 import { constructOpenURL, newURL } from '../helpers/navigation';
 import { ContainerNarrow } from '../components/Containers';

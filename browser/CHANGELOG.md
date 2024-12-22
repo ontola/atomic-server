@@ -28,7 +28,11 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ### @tomic/react
 
-- Add cjs build.
+- BREAKING CHANGE: `useCanWrite` now only returns a boolean. There is no longer a message returned.
+- BREAKING CHANGE: `useCanWrite` does not take an agent as argument any more and only checks the agent set in the store. If you need to explicitly check a different agent, use `await resource.canWrite(agent)`.
+- BREAKING CHANGE: `useDebounce` and `useDebouncedCallback` are no longer exported.
+- Added `useDebouncedSave` hook.
+- Add a cjs build.
 
 ### @tomic/cli
 

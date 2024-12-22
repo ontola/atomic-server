@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, type JSX } from 'react';
 import { Card } from '../../../components/Card';
 import { urls, useCanWrite, useProperty, useResource } from '@tomic/react';
 import { FaHashtag } from 'react-icons/fa';
@@ -27,7 +27,7 @@ export function PropertyCardWrite({
 }: PropertyCardWriteProps): JSX.Element {
   const resource = useResource(subject);
   const shortnameProp = useProperty(urls.properties.shortname);
-  const [canEdit] = useCanWrite(resource);
+  const canEdit = useCanWrite(resource);
 
   const { removeProperty } = useOntologyContext();
 

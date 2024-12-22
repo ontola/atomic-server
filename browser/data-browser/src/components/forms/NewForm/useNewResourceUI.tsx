@@ -7,6 +7,7 @@ import {
   useContext,
   useMemo,
   useState,
+  type JSX,
 } from 'react';
 import {
   useCreateAndNavigate,

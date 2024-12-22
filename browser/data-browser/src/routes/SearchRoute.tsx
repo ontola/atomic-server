@@ -1,7 +1,6 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, type JSX } from 'react';
 import { ContainerNarrow } from '../components/Containers';
 import { useHotkeys } from 'react-hotkeys-hook';
-import { useNavigate } from 'react-router-dom';
 import { constructOpenURL, useSearchQuery } from '../helpers/navigation';
 import ResourceCard from '../views/Card/ResourceCard';
 import { useServerSearch } from '@tomic/react';
@@ -12,22 +11,13 @@ import { useQueryScopeHandler } from '../hooks/useQueryScope';
 import { useSettings } from '../helpers/AppSettings';
 import { Column } from '../components/Row';
 import { Main } from '../components/Main';
+import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 
 /** Full text search route */
 export function Search(): JSX.Element {
   const [query] = useSearchQuery();
   const { drive } = useSettings();
   const { scope } = useQueryScopeHandler();
-  const [enableFilter, setEnableFilter] = useState(false);
-
-  useHotkeys(
-    'f12',
-    e => {
-      e.preventDefault();
-      setEnableFilter(!enableFilter);
-    },
-    [enableFilter],
-  );
 
   const [selectedIndex, setSelected] = useState(0);
   const { results, loading, error } = useServerSearch(query, {
@@ -35,7 +25,7 @@ export function Search(): JSX.Element {
     parents: scope || drive,
     include: true,
   });
-  const navigate = useNavigate();
+  const navigate = useNavigateWithTransition();
   const resultsDiv = useRef<HTMLDivElement | null>(null);
 
   function selectResult(index: number) {

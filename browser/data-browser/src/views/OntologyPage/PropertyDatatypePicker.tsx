@@ -8,6 +8,7 @@ import {
 } from '@tomic/react';
 import { AtomicSelectInput } from '../../components/forms/AtomicSelectInput';
 import styled from 'styled-components';
+import type { JSX } from 'react';
 interface PropertyDatatypePickerProps {
   resource: Resource;
   disabled?: boolean;

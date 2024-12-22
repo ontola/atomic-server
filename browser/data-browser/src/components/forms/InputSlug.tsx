@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type JSX } from 'react';
 import { useString, validateDatatype } from '@tomic/react';
 import { InputProps } from './ResourceField';
 import { InputStyled, InputWrapper } from './InputStyles';
@@ -55,9 +55,11 @@ export default function InputSlug({
     <Wrapper>
       <InputWrapper $invalid={!!error}>
         <InputStyled
+          type='text'
           value={inputValue ?? ''}
           onChange={handleUpdate}
           onBlur={setTouched}
+          autoComplete='none'
           {...props}
         />
       </InputWrapper>

@@ -1,5 +1,5 @@
 import { Datatype, core, useString } from '@tomic/react';
-import { useEffect } from 'react';
+import { useEffect, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { ResourceSelector } from '../../../components/forms/ResourceSelector';
 import { PropertyCategoryFormProps } from './PropertyCategoryFormProps';

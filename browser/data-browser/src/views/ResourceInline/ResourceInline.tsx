@@ -15,6 +15,8 @@ import { LoaderInline } from '../../components/Loader';
 import { TagInline } from './TagInline';
 import { FileInline } from './FileInline';
 
+import type { JSX } from 'react';
+
 export type ResourceInlineInstanceProps = {
   subject: string;
 };
@@ -69,7 +71,7 @@ export function ResourceInline({
   }
 
   if (resource.loading) {
-    return <LoaderInline about={subject}>loading...</LoaderInline>;
+    return <LoaderInline about={subject}>loading</LoaderInline>;
   }
 
   if (!Client.isValidSubject(subject)) {

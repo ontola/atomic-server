@@ -14,6 +14,8 @@ import { getIconForClass } from '../../helpers/iconMap';
 import { FaPlus } from 'react-icons/fa';
 import { Button } from '../../components/Button';
 
+import type { JSX } from 'react';
+
 export function ListView({
   subResources,
   onNewClick,
@@ -34,7 +36,7 @@ export function ListView({
           </thead>
           <tbody>
             {Array.from(subResources.values()).map(resource => (
-              <TableRow key={resource.getSubject()}>
+              <TableRow key={resource.subject}>
                 <td>
                   <Title resource={resource} />
                 </td>
@@ -74,7 +76,7 @@ function Title({ resource }: CellProps): JSX.Element {
       <IconWrapper>
         <Icon />
       </IconWrapper>
-      <AtomicLink subject={resource.getSubject()}>{title}</AtomicLink>
+      <AtomicLink subject={resource.subject}>{title}</AtomicLink>
     </TitleWrapper>
   );
 }
@@ -93,6 +95,10 @@ function ClassType({ resource }: CellProps): JSX.Element {
   const [classType] = useString(resource, properties.isA);
   const classTypeResource = useResource(classType);
   const [title] = useTitle(classTypeResource);
+
+  if (resource.loading) {
+    return <LinkWrapper></LinkWrapper>;
+  }
 
   return (
     <LinkWrapper>

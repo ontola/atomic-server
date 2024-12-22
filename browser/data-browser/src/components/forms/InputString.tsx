@@ -8,6 +8,8 @@ import {
   useValidation,
 } from './formValidation/useValidation';
 
+import type { JSX } from 'react';
+
 export default function InputString({
   resource,
   property,

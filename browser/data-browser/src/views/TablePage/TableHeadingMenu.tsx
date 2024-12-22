@@ -6,7 +6,14 @@ import {
   useString,
   core,
 } from '@tomic/react';
-import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type JSX,
+} from 'react';
 import { DropdownMenu, DropdownItem } from '../../components/Dropdown';
 import { buildDefaultTrigger } from '../../components/Dropdown/DefaultTrigger';
 import { FaEdit, FaEllipsisV, FaEye, FaTimes } from 'react-icons/fa';
@@ -46,8 +53,8 @@ export function TableHeadingMenu({
 
   const { tableClassSubject } = useContext(TablePageContext);
   const tableClassResource = useResource(tableClassSubject);
-  const [canWriteClass] = useCanWrite(tableClassResource);
-  const [canWriteProperty] = useCanWrite(resource);
+  const canWriteClass = useCanWrite(tableClassResource);
+  const canWriteProperty = useCanWrite(resource);
   const navigate = useNavigate();
 
   const isExternalProperty = useIsExternalProperty(resource);
@@ -124,7 +131,7 @@ export function TableHeadingMenu({
 
   return (
     <Wrapper>
-      <DropdownMenu trigger={Trigger} items={items} />
+      <DropdownMenu Trigger={Trigger} items={items} />
       <EditPropertyDialog
         resource={resource}
         showDialog={showEditDialog}

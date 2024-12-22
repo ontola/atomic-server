@@ -3,9 +3,9 @@ import {
   useEffect,
   useCallback,
   useMemo,
-  useRef,
   useContext,
   createContext,
+  useRef,
 } from 'react';
 import {
   Property,
@@ -30,7 +30,6 @@ import {
   core,
   server,
 } from '@tomic/lib';
-import { useDebouncedCallback } from './index.js';
 
 /**
  * Hook for getting a Resource in a React component. Will try to fetch the
@@ -54,6 +53,12 @@ export function useResource<C extends OptionalClass = never>(
       setResource(proxyResource(updated));
     });
   }, [store, subject]);
+
+  useEffect(() => {
+    return resource.on(ResourceEvents.LocalChange, () => {
+      setResource(proxyResource(resource.__internalObject));
+    });
+  }, [store]);
 
   return resource;
 }
@@ -211,6 +216,7 @@ export function useValue(
   propertyURL: string,
   opts: useValueOptions = {},
 ): [JSONValue | undefined, SetValue] {
+  const timeoutId = useRef<ReturnType<typeof setTimeout>>(undefined);
   const {
     commit = false,
     validate = true,
@@ -223,17 +229,23 @@ export function useValue(
 
   const store = useStore();
 
-  const [saveResource] = useDebouncedCallback(
-    () => {
-      if (!commit) {
-        return;
-      }
+  const saveResource = useCallback(() => {
+    if (!commit) {
+      return;
+    }
 
-      resource.save().catch(e => store.notifyError(e));
-    },
-    commitDebounce,
-    [resource, store],
-  );
+    if (timeoutId.current !== undefined) {
+      clearTimeout(timeoutId.current);
+    }
+
+    timeoutId.current = setTimeout(async () => {
+      try {
+        await resource.save();
+      } catch (e) {
+        store.notifyError(e);
+      }
+    }, commitDebounce);
+  }, [resource, store, commitDebounce, commit]);
 
   /**
    * Validates the value. If it fails, it calls the function in the second
@@ -406,11 +418,11 @@ export function useArray(
   opts?: useValueOptions,
 ): [string[], SetValue<JSONArray>, (vals: string[]) => void] {
   const [value, set] = useValue(resource, propertyURL, opts);
-  const stableEmptyResourceArray = useRef<JSONArray>([]);
+  const [stableEmptyResourceArray] = useState<JSONArray>([]);
 
   const values = useMemo(() => {
     if (value === undefined) {
-      return stableEmptyResourceArray.current;
+      return stableEmptyResourceArray;
     }
 
     try {
@@ -422,7 +434,7 @@ export function useArray(
 
       // If .toArray() errors, return an empty array. Useful in forms when datatypes haves changed!
       // https://github.com/atomicdata-dev/atomic-data-browser/issues/85
-      return stableEmptyResourceArray.current;
+      return stableEmptyResourceArray;
     }
   }, [value, resource, propertyURL]);
 
@@ -515,26 +527,16 @@ export function useStore(): Store {
 }
 
 /**
- * Checks if the Agent has the appropriate rights to edit this resource. If you
- * don't explicitly pass an Agent URL, it will select the current Agent set by the store.
+ * Checks if the current agent has the appropriate rights to edit this resource.
  */
-export function useCanWrite(
-  resource: Resource,
-  agent?: string,
-): [canWrite: boolean, message: string | undefined] {
+export function useCanWrite(resource: Resource): boolean {
   const store = useStore();
   const [canWrite, setCanWrite] = useState<boolean>(false);
-  const [msg, setMsg] = useState<string | undefined>(undefined);
-  const agentStore = store.getAgent();
+  const agent = store.getAgent();
 
   // If the subject changes, make sure to change the resource!
   useEffect(() => {
-    if (agent === undefined) {
-      agent = agentStore?.subject;
-    }
-
-    if (agent === undefined) {
-      setMsg('No Agent set');
+    if (!agent) {
       setCanWrite(false);
 
       return;
@@ -542,31 +544,16 @@ export function useCanWrite(
 
     if (resource.new) {
       setCanWrite(true);
-      setMsg(undefined);
 
       return;
     }
 
-    setMsg('Checking write rights...');
+    resource.canWrite(agent.subject).then(([result]) => {
+      setCanWrite(result);
+    });
+  }, [resource, agent?.subject]);
 
-    async function tryCanWrite() {
-      const [canWriteAsync, canWriteMsg] = await resource.canWrite(agent);
-      setCanWrite(canWriteAsync);
-
-      if (canWriteAsync) {
-        setMsg(undefined);
-      } else {
-        setMsg(
-          ("You don't have write rights in this resource or its parents: " +
-            canWriteMsg) as string,
-        );
-      }
-    }
-
-    tryCanWrite();
-  }, [resource, agent, agentStore?.subject]);
-
-  return [canWrite, msg];
+  return canWrite;
 }
 
 /**

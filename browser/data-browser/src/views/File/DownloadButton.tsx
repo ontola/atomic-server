@@ -5,6 +5,8 @@ import { IconButton } from '../../components/IconButton/IconButton';
 import { Row } from '../../components/Row';
 import { displayFileSize } from './displayFileSize';
 
+import type { JSX } from 'react';
+
 interface DownloadButtonProps {
   downloadFile: () => void;
   fileSize?: number;

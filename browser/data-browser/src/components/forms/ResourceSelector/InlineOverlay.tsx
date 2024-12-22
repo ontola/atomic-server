@@ -2,6 +2,8 @@ import { useResource } from '@tomic/react';
 
 import { styled } from 'styled-components';
 
+import type { JSX } from 'react';
+
 interface InlineOverlayProps {
   subject: string;
 }

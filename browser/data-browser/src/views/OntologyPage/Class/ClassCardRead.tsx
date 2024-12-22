@@ -15,6 +15,8 @@ import {
 } from '../../../helpers/transitionName';
 import { NewClassInstanceButton } from './NewClassInstanceButton';
 
+import type { JSX } from 'react';
+
 interface ClassCardReadProps {
   subject: string;
 }

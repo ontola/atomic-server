@@ -8,6 +8,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type JSX,
 } from 'react';
 import { FaSearch } from 'react-icons/fa';
 import { styled, css } from 'styled-components';

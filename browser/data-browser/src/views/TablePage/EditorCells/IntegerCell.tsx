@@ -6,6 +6,8 @@ import { ProgressBar } from './ProgressBar';
 import { CellContainer, DisplayCellProps, EditCellProps } from './Type';
 import { formatNumber } from '../helpers/formatNumber';
 
+import type { JSX } from 'react';
+
 const { numberFormats } = urls.instances;
 
 function IntegerCellEdit({

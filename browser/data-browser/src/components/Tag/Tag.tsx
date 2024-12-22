@@ -1,7 +1,7 @@
 import { urls, useResource, useString, useTitle } from '@tomic/react';
 import { lighten, setLightness, setSaturation } from 'polished';
 import * as RadixPopover from '@radix-ui/react-popover';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { transition } from '../../helpers/transition';
 import { Popover } from '../Popover';

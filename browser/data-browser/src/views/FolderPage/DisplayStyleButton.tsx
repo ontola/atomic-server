@@ -1,5 +1,5 @@
 import { classes } from '@tomic/react';
-import { useMemo } from 'react';
+import { useMemo, type JSX } from 'react';
 import { FaList, FaTh } from 'react-icons/fa';
 import { ButtonGroup } from '../../components/ButtonGroup';
 

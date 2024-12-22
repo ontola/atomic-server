@@ -1,5 +1,5 @@
 import { Resource, core, useStore } from '@tomic/react';
-import { useRef, useState } from 'react';
+import { useRef, useState, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { transition } from '../../../helpers/transition';
 import { FaPlus } from 'react-icons/fa';

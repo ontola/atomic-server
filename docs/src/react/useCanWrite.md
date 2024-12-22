@@ -12,7 +12,7 @@ import { useCanWrite, useResource, useString } from '@tomic/react';
 const ResourceDescription = () => {
   const resource = useResource('https://my-server.com/my-resource');
   const [description, setDescription] = useString(resource, core.properties.description);
-  const [canWrite] = useCanWrite(resource);
+  const canWrite = useCanWrite(resource);
 
   if (canWrite) {
     return (

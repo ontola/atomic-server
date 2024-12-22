@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useState } from 'react';
+import { useState, type JSX } from 'react';
 import {
   properties,
   classes,
@@ -70,7 +70,7 @@ export function ElementEdit({
   });
   const [klass] = useArray(resource, properties.isA);
   const ref = React.useRef<HTMLTextAreaElement>(null);
-  const [canWrite, canWriteErr] = useCanWrite(resource);
+  const canWrite = useCanWrite(resource);
 
   /** If it is not a text element */
   const isAResource =
@@ -138,8 +138,8 @@ export function ElementEdit({
   function Err() {
     if (err?.message) {
       return <ErrorLook>{err.message}</ErrorLook>;
-    } else if (active && !canWrite && canWriteErr) {
-      return <ErrorLook>{canWriteErr}</ErrorLook>;
+    } else if (active && !canWrite) {
+      return <ErrorLook>Agent does not have edit rights</ErrorLook>;
     } else {
       return null;
     }

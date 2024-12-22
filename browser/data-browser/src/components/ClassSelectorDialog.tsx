@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, type JSX } from 'react';
 import { Dialog, DialogContent, DialogTitle, useDialog } from './Dialog';
 import { OutlinedSection } from './OutlinedSection';
 import { useServerSearch, core, type Core, useResource } from '@tomic/react';

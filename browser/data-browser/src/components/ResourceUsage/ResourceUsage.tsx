@@ -6,6 +6,8 @@ import { ChildrenUsage } from './ChildrenUsage';
 import { Column } from '../Row';
 import { ReferenceUsage } from './ReferenceUsage';
 
+import type { JSX } from 'react';
+
 interface ResourceUsageProps {
   resource: Resource;
 }

@@ -5,6 +5,8 @@ import { useNewResourceUI } from '../forms/NewForm/useNewResourceUI';
 import { Base } from './Base';
 import { IconType } from 'react-icons';
 
+import type { JSX } from 'react';
+
 interface NewInstanceButtonProps {
   /** URL of the Class to be instantiated */
   klass: string;

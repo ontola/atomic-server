@@ -14,7 +14,7 @@ import { TableHeadingMenu } from './TableHeadingMenu';
 import { TablePageContext } from './tablePageContext';
 import { IconType } from 'react-icons';
 import { TableSorting } from './tableSorting';
-import { useContext, useState } from 'react';
+import { useContext, useState, type JSX } from 'react';
 import { TableHeadingComponent } from '../../components/TableEditor/TableHeader';
 import { dataTypeIconMap } from '../../helpers/iconMap';
 

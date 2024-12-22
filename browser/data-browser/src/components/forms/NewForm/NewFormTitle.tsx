@@ -1,5 +1,5 @@
 import { core, useResource, useString, useTitle } from '@tomic/react';
-import { useState } from 'react';
+import { useState, type JSX } from 'react';
 import { FaInfo } from 'react-icons/fa';
 import Markdown from '../../datatypes/Markdown';
 import { Column, Row } from '../../Row';

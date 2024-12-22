@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type JSX } from 'react';
 import { useBoolean } from '@tomic/react';
 import { InputProps } from './ResourceField';
 import { ErrMessage } from './InputStyles';

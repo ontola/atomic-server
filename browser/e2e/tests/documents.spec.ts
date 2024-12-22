@@ -26,11 +26,9 @@ test.describe('documents', async () => {
     const title = `Document ${timestamp()}`;
     await editTitle(title, page);
 
-    await page.press(editableTitle, 'Enter');
-
     const teststring = `My test: ${timestamp()}`;
 
-    await page.fill('textarea', teststring);
+    await page.locator('textarea').fill(teststring);
 
     await expect(page.locator(`text=${teststring}`)).toBeVisible();
 

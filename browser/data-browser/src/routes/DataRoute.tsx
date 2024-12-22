@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type JSX } from 'react';
 import { useResource, signRequest, HeadersObject } from '@tomic/react';
 
 import AllProps from '../components/AllProps';

@@ -2,7 +2,7 @@ import { styled } from 'styled-components';
 import * as CSS from 'csstype';
 
 import { ButtonDefault } from './Button';
-import { forwardRef } from 'react';
+import { forwardRef, type JSX } from 'react';
 
 export interface FlexProps extends React.HTMLAttributes<HTMLDivElement> {
   gap?: CSS.Property.Gap;

@@ -1,4 +1,4 @@
-import { useString, properties } from '@tomic/react';
+import { useString, core, commits } from '@tomic/react';
 
 import { CommitDetail } from '../../components/CommitDetail';
 import Markdown from '../../components/datatypes/Markdown';
@@ -8,9 +8,9 @@ import { ResourcePageProps } from '../ResourcePage';
 
 /** Card Message view that shows parent */
 export function MessageCard({ resource }: ResourcePageProps) {
-  const [description] = useString(resource, properties.description);
-  const [parent] = useString(resource, properties.parent);
-  const [lastCommit] = useString(resource, properties.commit.lastCommit);
+  const [description] = useString(resource, core.properties.description);
+  const [parent] = useString(resource, core.properties.parent);
+  const [lastCommit] = useString(resource, commits.properties.lastCommit);
 
   return (
     <>

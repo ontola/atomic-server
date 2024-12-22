@@ -1,6 +1,6 @@
 import { Client, useResource, useTitle } from '@tomic/react';
 import { transparentize } from 'polished';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, type JSX } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { FaTimes } from 'react-icons/fa';
 import { useNavigate } from 'react-router';
@@ -161,6 +161,7 @@ function ParentTag({ subject, onClick }: ParentTagProps): JSX.Element {
         variant={IconButtonVariant.Fill}
         color='textLight'
         size='0.8rem'
+        type='button'
       >
         <FaTimes />
       </IconButton>

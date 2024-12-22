@@ -7,7 +7,7 @@ import {
   useString,
   useTitle,
 } from '@tomic/react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 
 import { ContainerNarrow } from '../components/Containers';
 import Markdown from '../components/datatypes/Markdown';
@@ -15,6 +15,8 @@ import ResourceField from '../components/forms/ResourceField';
 import { Button } from '../components/Button';
 import { constructOpenURL } from '../helpers/navigation';
 import ResourceCard from './Card/ResourceCard';
+
+import type { JSX } from 'react';
 
 type EndpointProps = {
   resource: Resource;

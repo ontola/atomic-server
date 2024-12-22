@@ -5,6 +5,8 @@ import { CardViewProps } from './CardViewProps';
 import { ResourceCardTitle } from './ResourceCardTitle';
 import { Column } from '../../components/Row';
 
+import type { JSX } from 'react';
+
 export function ElementCard({ resource }: CardViewProps): JSX.Element {
   const [documentSubject] = useString(resource, urls.properties.parent);
   const document = useResource(documentSubject);

@@ -56,7 +56,7 @@ export function FolderPage({
 
   const subResources = useResources(resource.props.subResources);
   const navigateToNewRoute = useNewRoute(resource.subject);
-  const [canEdit] = useCanWrite(resource);
+  const canEdit = useCanWrite(resource);
 
   return (
     <FullPageWrapper view={displayStyle!}>

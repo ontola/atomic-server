@@ -13,6 +13,8 @@ import { useOntologyContext } from '../OntologyContext';
 import { ErrorLook } from '../../../components/ErrorLook';
 import { Button } from '../../../components/Button';
 
+import type { JSX } from 'react';
+
 interface PropertyLineWriteProps {
   subject: string;
   onRemove: (subject: string) => void;
@@ -26,7 +28,7 @@ export function PropertyLineWrite({
   const shortnameProp = useProperty(core.properties.shortname);
   const descriptionProp = useProperty(core.properties.description);
   const [dialogProps, show, hide, isOpen] = useDialog();
-  const [canEdit] = useCanWrite(resource);
+  const canEdit = useCanWrite(resource);
 
   const { hasProperty } = useOntologyContext();
 

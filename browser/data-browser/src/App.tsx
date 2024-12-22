@@ -1,5 +1,4 @@
-import { BrowserRouter } from 'react-router-dom';
-import { HelmetProvider } from 'react-helmet-async';
+import { BrowserRouter } from 'react-router';
 import { StoreContext, Store } from '@tomic/react';
 import { StyleSheetManager, type ShouldForwardProp } from 'styled-components';
 
@@ -27,6 +26,8 @@ import { registerCustomCreateActions } from './components/forms/NewForm/CustomCr
 import isPropValid from '@emotion/is-prop-valid';
 import { NewResourceUIProvider } from './components/forms/NewForm/useNewResourceUI';
 import { serverURLStorage } from './helpers/serverURLStorage';
+
+import type { JSX } from 'react';
 
 function fixDevUrl(url: string) {
   if (isDev()) {
@@ -90,45 +91,43 @@ function App(): JSX.Element {
   return (
     <StoreContext.Provider value={store}>
       <AppSettingsContextProvider>
-        <HelmetProvider>
-          {/* Basename is for hosting on GitHub pages */}
-          <BrowserRouter basename='/'>
-            <ControlLockProvider>
-              <HotKeysWrapper>
-                <StyleSheetManager shouldForwardProp={shouldForwardProp}>
-                  <ThemeWrapper>
-                    <GlobalStyle />
-                    {/* @ts-ignore fallback component type too strict */}
-                    <ErrBoundary FallbackComponent={CrashPage}>
-                      {/* Default form validation provider. Does not do anything on its own but will make sure useValidation works without context*/}
-                      <FormValidationContextProvider
-                        onValidationChange={() => undefined}
-                      >
-                        <Toaster />
-                        <MetaSetter />
-                        <DropdownContainer>
-                          <DialogGlobalContextProvider>
-                            <PopoverContainer>
-                              <DropdownContainer>
-                                <NewResourceUIProvider>
-                                  <SkipNav />
-                                  <NavWrapper>
-                                    <AppRoutes />
-                                  </NavWrapper>
-                                </NewResourceUIProvider>
-                              </DropdownContainer>
-                            </PopoverContainer>
-                            <NetworkIndicator />
-                          </DialogGlobalContextProvider>
-                        </DropdownContainer>
-                      </FormValidationContextProvider>
-                    </ErrBoundary>
-                  </ThemeWrapper>
-                </StyleSheetManager>
-              </HotKeysWrapper>
-            </ControlLockProvider>
-          </BrowserRouter>
-        </HelmetProvider>
+        {/* Basename is for hosting on GitHub pages */}
+        <BrowserRouter basename='/'>
+          <ControlLockProvider>
+            <HotKeysWrapper>
+              <StyleSheetManager shouldForwardProp={shouldForwardProp}>
+                <ThemeWrapper>
+                  <GlobalStyle />
+                  {/* @ts-ignore fallback component type too strict */}
+                  <ErrBoundary FallbackComponent={CrashPage}>
+                    {/* Default form validation provider. Does not do anything on its own but will make sure useValidation works without context*/}
+                    <FormValidationContextProvider
+                      onValidationChange={() => undefined}
+                    >
+                      <Toaster />
+                      <MetaSetter />
+                      <DropdownContainer>
+                        <DialogGlobalContextProvider>
+                          <PopoverContainer>
+                            <DropdownContainer>
+                              <NewResourceUIProvider>
+                                <SkipNav />
+                                <NavWrapper>
+                                  <AppRoutes />
+                                </NavWrapper>
+                              </NewResourceUIProvider>
+                            </DropdownContainer>
+                          </PopoverContainer>
+                          <NetworkIndicator />
+                        </DialogGlobalContextProvider>
+                      </DropdownContainer>
+                    </FormValidationContextProvider>
+                  </ErrBoundary>
+                </ThemeWrapper>
+              </StyleSheetManager>
+            </HotKeysWrapper>
+          </ControlLockProvider>
+        </BrowserRouter>
       </AppSettingsContextProvider>
     </StoreContext.Provider>
   );

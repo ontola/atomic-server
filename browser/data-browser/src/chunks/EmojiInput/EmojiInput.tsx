@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, type JSX } from 'react';
 import Picker from '@emoji-mart/react';
 import { styled } from 'styled-components';
 import * as RadixPopover from '@radix-ui/react-popover';

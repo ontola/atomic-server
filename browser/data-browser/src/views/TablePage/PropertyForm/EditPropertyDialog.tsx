@@ -1,5 +1,5 @@
 import { Resource } from '@tomic/react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type JSX } from 'react';
 import { PropertyForm } from './PropertyForm';
 import { FormValidationContextProvider } from '../../../components/forms/formValidation/FormValidationContextProvider';
 import {

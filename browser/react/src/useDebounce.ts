@@ -1,10 +1,5 @@
+import type { Resource } from '@tomic/lib';
 import { useCallback, useEffect, useRef, useState } from 'react';
-
-type Callback =
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  | ((...args: any[]) => void)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  | ((...args: any[]) => Promise<void>);
 
 // T is a generic type for value parameter, our case this will be string
 export function useDebounce<T>(value: T, delay: number): T {
@@ -31,30 +26,34 @@ export function useDebounce<T>(value: T, delay: number): T {
   return debouncedValue;
 }
 
-export function useDebouncedCallback<F extends Callback>(
-  func: F,
-  time: number,
-  deps: unknown[],
-): [debouncedFunction: (...args: Parameters<F>) => void, isWaiting: boolean] {
+export function useDebouncedSave(
+  resource: Resource,
+  timeout: number,
+  onError?: (error: Error) => void,
+): [save: () => void, savePending: boolean] {
   const timeoutId = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const [isWaiting, setIsWaiting] = useState(false);
+  const [savePending, setSavePending] = useState(false);
 
-  const memoizedFunction = useCallback(
-    (...args: Parameters<F>) => {
-      if (timeoutId.current) {
-        clearTimeout(timeoutId.current);
+  const save = useCallback(() => {
+    if (timeoutId.current) {
+      clearTimeout(timeoutId.current);
+    }
+
+    timeoutId.current = setTimeout(async () => {
+      try {
+        await resource.save();
+        setSavePending(false);
+      } catch (e) {
+        if (onError) {
+          onError(e);
+        } else {
+          throw e;
+        }
       }
+    }, timeout);
 
-      const id = setTimeout(async () => {
-        await func(...args);
-        timeoutId.current = undefined;
-        setIsWaiting(false);
-      }, time);
-      setIsWaiting(true);
-      timeoutId.current = id;
-    },
-    [...deps, time, timeoutId],
-  );
+    setSavePending(true);
+  }, [resource, timeout, onError]);
 
-  return [memoizedFunction, isWaiting];
+  return [save, savePending];
 }

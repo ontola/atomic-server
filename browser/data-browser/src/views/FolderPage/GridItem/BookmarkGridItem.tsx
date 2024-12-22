@@ -5,6 +5,8 @@ import { BasicGridItem } from './BasicGridItem';
 import { InnerWrapper } from './components';
 import { GridItemViewProps } from './GridItemViewProps';
 
+import type { JSX } from 'react';
+
 export function BookmarkGridItem({ resource }: GridItemViewProps): JSX.Element {
   const [imageUrl] = useString(resource, properties.bookmark.imageUrl);
 

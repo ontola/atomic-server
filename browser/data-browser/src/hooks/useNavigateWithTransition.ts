@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { flushSync } from 'react-dom';
-import { useNavigate } from 'react-router';
+import { useNavigate, type NavigateOptions, type To } from 'react-router';
 import { useSettings } from '../helpers/AppSettings';
 const wait = (ms: number) => new Promise(r => setTimeout(r, ms));
 
@@ -12,25 +12,34 @@ export function useNavigateWithTransition() {
   const { viewTransitionsDisabled } = useSettings();
 
   const navigateWithTransition = useCallback(
-    (to: string | number) => {
-      // @ts-ignore
+    (to: To, options?: NavigateOptions) => {
+      const doNavigate = (transition?: boolean) => {
+        const newOptions: NavigateOptions = {
+          ...options,
+        };
+
+        if (typeof to !== 'number') {
+          navigate(to, newOptions);
+        } else {
+          navigate(to);
+        }
+      };
+
       if (viewTransitionsDisabled || !document.startViewTransition) {
-        //@ts-ignore
-        navigate(to);
+        doNavigate(false);
 
         return;
       }
 
-      // @ts-ignore
+      console.log('doNavigate', true);
       document.startViewTransition(
         async () =>
           new Promise<void>(resolve => {
             flushSync(() => {
-              // @ts-ignore
-              navigate(to);
-              wait(1).then(() => {
-                resolve();
-              });
+              doNavigate(true);
+            });
+            wait(1).then(() => {
+              resolve();
             });
           }),
       );

@@ -3,6 +3,8 @@ import { noNestedSupport, useSubject } from '@tomic/react';
 import { ResourceSelector } from './ResourceSelector';
 import { ErrorLook } from '../ErrorLook';
 
+import type { JSX } from 'react';
+
 /** Input field for a single Resource. Renders a dropdown select menu. */
 export function InputResource({
   resource,

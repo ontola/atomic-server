@@ -38,7 +38,7 @@ module.exports = {
       'create-template/tsconfig.json',
     ],
   },
-  plugins: ['react', '@typescript-eslint', 'prettier', 'react-hooks', 'jsx-a11y'],
+  plugins: ['react', '@typescript-eslint', 'prettier', 'react-hooks', 'jsx-a11y', 'eslint-plugin-react-compiler'],
   settings: {
     react: {
       version: 'detect', // Tells eslint-plugin-react to automatically detect the version of React to use
@@ -114,5 +114,6 @@ module.exports = {
     "@typescript-eslint/no-shadow": ["error"],
     "@typescript-eslint/member-ordering": "error",
     "react/no-unknown-property": ["error", { "ignore": ["about"] }],
+    'react-compiler/react-compiler': 'error',
   },
 };

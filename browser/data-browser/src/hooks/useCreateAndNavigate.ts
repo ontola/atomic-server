@@ -1,7 +1,7 @@
 import { Core, JSONValue, Resource, useStore } from '@tomic/react';
 import { useCallback } from 'react';
 import toast from 'react-hot-toast';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { constructOpenURL } from '../helpers/navigation';
 
 export type CreateAndNavigate = (

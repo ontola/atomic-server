@@ -5,7 +5,7 @@ import {
   useChildren,
   useString,
 } from '@tomic/react';
-import { useCallback } from 'react';
+import { useCallback, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { CommitDetail } from '../../components/CommitDetail';
 import { ContainerWide } from '../../components/Containers';
@@ -22,7 +22,7 @@ import { useNewResourceUI } from '../../components/forms/NewForm/useNewResourceU
 export function ArticlePage({ resource }: ResourcePageProps): JSX.Element {
   const [lastCommit] = useString(resource, commits.properties.lastCommit);
 
-  const [canEdit] = useCanWrite(resource);
+  const canEdit = useCanWrite(resource);
   const children = useChildren(resource);
 
   const showNewResourceUI = useNewResourceUI();

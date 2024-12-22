@@ -8,6 +8,8 @@ import ValueComp from './ValueComp';
 import { ALL_PROPS_CONTAINER } from '../helpers/containers';
 import { LoaderInline } from './Loader';
 
+import type { JSX } from 'react';
+
 type Props = {
   propertyURL: string;
   resource: Resource;

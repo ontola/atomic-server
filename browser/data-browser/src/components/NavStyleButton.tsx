@@ -1,6 +1,8 @@
 import { styled } from 'styled-components';
 import { useSettings } from '../helpers/AppSettings';
 
+import type { JSX } from 'react';
+
 interface NavBarButtonProps {
   top: boolean;
   floating: boolean;

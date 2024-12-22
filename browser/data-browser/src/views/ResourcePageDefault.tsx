@@ -23,6 +23,8 @@ import { Column, Row } from '../components/Row';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { editURL } from '../helpers/navigation';
 
+import type { JSX } from 'react';
+
 /**
  * The properties that are shown in an alternative, custom way in default views.
  * If you use this, make sure you check the list every once in a while to make
@@ -55,7 +57,7 @@ export function ResourcePageDefault({
   resource,
 }: ResourcePageProps): JSX.Element {
   const [lastCommit] = useString(resource, commits.properties.lastCommit);
-  const [canEdit] = useCanWrite(resource);
+  const canEdit = useCanWrite(resource);
   const navigate = useNavigateWithTransition();
 
   return (

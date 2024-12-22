@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
 import {
   Client,
+  commits,
   Resource,
-  urls,
   useResources,
   useStore,
-  useDebounce,
 } from '@tomic/react';
 import { QuickScore } from 'quick-score';
+import { useDebounce } from './useDebounce';
 
 /**
  * Pass a query and an set of pre-defined subjects. If you don't pass these
@@ -75,12 +75,12 @@ function constructIndex(resourceMap?: Map<string, Resource>): SearchIndex {
     if (!resource.isReady()) return array;
 
     // ... or have no subject
-    if (resource.getSubject() === undefined) {
+    if (resource.subject === undefined) {
       return array;
     }
 
     // Don't index commits
-    if (resource.getClasses().includes(urls.classes.commit)) {
+    if (resource.hasClasses(commits.classes.commit)) {
       return array;
     }
 
@@ -89,7 +89,7 @@ function constructIndex(resourceMap?: Map<string, Resource>): SearchIndex {
       Array.from(resource.getPropVals().values()).sort().join(' \n '),
     );
     const searchResource: FoundResource = {
-      subject: resource.getSubject(),
+      subject: resource.subject,
       valuesArray: propvalsString,
     };
     array.push(searchResource);

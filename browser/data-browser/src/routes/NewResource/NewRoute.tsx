@@ -1,5 +1,5 @@
 import { useResource, core } from '@tomic/react';
-import { useCallback } from 'react';
+import { useCallback, type JSX } from 'react';
 import { useNavigate } from 'react-router';
 
 import { constructOpenURL, useQueryString } from '../../helpers/navigation';

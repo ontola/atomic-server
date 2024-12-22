@@ -2,7 +2,7 @@ import { styled } from 'styled-components';
 import { Collapse } from '../Collapse';
 import { FaCaretRight } from 'react-icons/fa';
 import { transition } from '../../helpers/transition';
-import { useState } from 'react';
+import { useState, type JSX } from 'react';
 
 interface SideBarPanelProps {
   title: string;

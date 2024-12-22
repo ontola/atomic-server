@@ -15,6 +15,7 @@ import { OntologiesPanel } from './OntologySideBar/OntologiesPanel';
 import { SideBarPanel } from './SideBarPanel';
 import { Panel, usePanelList } from './usePanelList';
 import { SIDEBAR_WIDTH_PROP } from './SidebarCSSVars';
+import { useRef, type JSX } from 'react';
 
 /** Amount of pixels where the sidebar automatically shows */
 export const SIDEBAR_TOGGLE_WIDTH = 600;
@@ -22,6 +23,7 @@ export const SIDEBAR_TOGGLE_WIDTH = 600;
 const SideBarDriveMemo = React.memo(SideBarDrive);
 
 export function SideBar(): JSX.Element {
+  const targetRef = useRef<HTMLDivElement>(null);
   const [isRearanging, setIsRearanging] = React.useState(false);
 
   const { drive, sideBarLocked, setSideBarLocked } = useSettings();
@@ -32,12 +34,12 @@ export function SideBar(): JSX.Element {
     true,
   );
 
-  const { size, targetRef, dragAreaRef, isDragging, dragAreaListeners } =
-    useResizable({
-      initialSize: 300,
-      minSize: 200,
-      maxSize: 2000,
-    });
+  const { size, dragAreaRef, isDragging, dragAreaListeners } = useResizable({
+    initialSize: 300,
+    minSize: 200,
+    maxSize: 2000,
+    targetRef,
+  });
 
   const { enabledPanels } = usePanelList();
 
@@ -58,8 +60,7 @@ export function SideBar(): JSX.Element {
 
   return (
     <SideBarContainer>
-      {/* @ts-ignore */}
-      <SideBarStyled
+      <StyledNav
         ref={mountRefs}
         size={size}
         data-testid='sidebar'
@@ -98,7 +99,7 @@ export function SideBar(): JSX.Element {
             {...dragAreaListeners}
           />
         )}
-      </SideBarStyled>
+      </StyledNav>
       <SideBarOverlay
         onClick={() => setSideBarLocked(false)}
         visible={sideBarLocked && !isWideScreen}
@@ -107,7 +108,7 @@ export function SideBar(): JSX.Element {
   );
 }
 
-interface SideBarStyledProps {
+interface StyledNavProps {
   locked: boolean;
   exposed: boolean;
   size: string;
@@ -117,11 +118,10 @@ interface SideBarOverlayProps {
   visible: boolean;
 }
 
-//@ts-ignore
-const SideBarStyled = styled.nav.attrs<SideBarStyledProps>(p => ({
+const StyledNav = styled.nav.attrs<StyledNavProps>(p => ({
   style: {
     [SIDEBAR_WIDTH_PROP]: p.size,
-  },
+  } as Record<string, string>,
 }))`
   z-index: ${p => p.theme.zIndex.sidebar};
   box-sizing: border-box;

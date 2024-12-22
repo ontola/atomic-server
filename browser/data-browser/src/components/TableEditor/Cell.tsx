@@ -4,6 +4,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type JSX,
 } from 'react';
 import { styled } from 'styled-components';
 import {
@@ -61,8 +62,8 @@ export function Cell({
     cursorMode,
     setActiveCell,
     setMultiSelectCorner,
-    activeCellRef,
-    multiSelectCornerCellRef,
+    updateActiveCellRef,
+    updateMultiSelectCornerCellRef,
     setCursorMode,
     registerEventListener,
     disabledKeyboardInteractions,
@@ -162,7 +163,7 @@ export function Cell({
     }
 
     if (isActiveCorner) {
-      multiSelectCornerCellRef.current = ref.current;
+      updateMultiSelectCornerCellRef(ref.current);
     }
   }, [isActiveCorner]);
 
@@ -176,7 +177,7 @@ export function Cell({
         ref.current.focus({ preventScroll: true });
       }
 
-      activeCellRef.current = ref.current;
+      updateActiveCellRef(ref.current);
 
       const unregisters = [
         registerEventListener(
@@ -199,7 +200,12 @@ export function Cell({
         }
       };
     }
-  }, [isActive, onEnterEditModeWithCharacter, onEditNextRow]);
+  }, [
+    isActive,
+    onEnterEditModeWithCharacter,
+    onEditNextRow,
+    updateActiveCellRef,
+  ]);
 
   return (
     <CellWrapper

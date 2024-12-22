@@ -1,6 +1,6 @@
 import { Client } from './client.js';
 import { generatePublicKeyFromPrivate } from './commit.js';
-import { AtomicError } from './error.js';
+import { AtomicError, ErrorType } from './error.js';
 import { core } from './ontologies/core.js';
 
 /**
@@ -20,7 +20,7 @@ export class Agent implements AgentInterface {
     }
 
     if (!privateKey) {
-      throw new AtomicError(`Agent requires a private key`);
+      throw new AtomicError(`Agent requires a private key`, ErrorType.Client);
     }
 
     this.client = new Client();
@@ -64,7 +64,7 @@ export class Agent implements AgentInterface {
   /** Fetches the public key for the agent, checks if it matches with the current one */
   public async verifyPublicKeyWithServer(): Promise<void> {
     if (!this.subject) {
-      throw new AtomicError(`Agent has no subject`);
+      throw new AtomicError(`Agent has no subject`, ErrorType.Client);
     }
 
     const { resource } = await this.client.fetchResourceHTTP(this.subject);

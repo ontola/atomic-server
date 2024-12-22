@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, type JSX } from 'react';
 import { useString, validateDatatype } from '@tomic/react';
 import { InputProps } from './ResourceField';
 import { ErrMessage } from './InputStyles';

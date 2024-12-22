@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type JSX } from 'react';
 import { FaEllipsisVertical } from 'react-icons/fa6';
 import { styled, css } from 'styled-components';
 import { buildDefaultTrigger } from '../../Dropdown/DefaultTrigger';

@@ -1,4 +1,4 @@
-import { ReactNode, forwardRef } from 'react';
+import { ReactNode, forwardRef, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { constructOpenURL, pathToURL } from '../helpers/navigation';
 import { FaExternalLinkAlt } from 'react-icons/fa';
@@ -33,7 +33,7 @@ export const AtomicLink = forwardRef<HTMLAnchorElement, AtomicLinkProps>(
   ): JSX.Element => {
     const navigate = useNavigateWithTransition();
 
-    if (!subject && !href && !path) {
+    if (subject === undefined && href === undefined && path === undefined) {
       return (
         <ErrorLook>
           No `subject`, `path` or `href` passed to this AtomicLink.

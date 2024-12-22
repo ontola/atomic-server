@@ -2,6 +2,7 @@ import { useString, useResource, server, Image } from '@tomic/react';
 import { imageMimeTypes, getFileIcon } from '../../helpers/filetypes';
 import { ResourceInlineInstanceProps } from './ResourceInline';
 import { styled } from 'styled-components';
+import type { JSX } from 'react';
 const THUMB_SIZE = '2rem';
 
 export function FileInline({

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router';
 import { useQueryString } from './navigation';
+import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 
 type setFunc = (latestValue: string) => void;
 
@@ -13,7 +14,7 @@ export function useCurrentSubject(
   replace?: boolean,
 ): [string | undefined, setFunc] {
   const [subjectQ, setSubjectQ] = useQueryString('subject');
-  const navigate = useNavigate();
+  const navigate = useNavigateWithTransition();
   const { pathname, search } = useLocation();
 
   function handleSetSubject(subject: string) {

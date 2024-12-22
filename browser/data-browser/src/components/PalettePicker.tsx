@@ -2,6 +2,8 @@ import { styled } from 'styled-components';
 import { transition } from '../helpers/transition';
 import { Row } from './Row';
 
+import type { JSX } from 'react';
+
 interface PalettePickerProps {
   palette: string[];
   onChange: (color: string) => void;

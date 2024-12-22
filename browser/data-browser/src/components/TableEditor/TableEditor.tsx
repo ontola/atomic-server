@@ -5,6 +5,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type JSX,
 } from 'react';
 import { styled } from 'styled-components';
 import { FixedSizeList, ListOnScrollProps } from 'react-window';

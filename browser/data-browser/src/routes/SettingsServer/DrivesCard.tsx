@@ -5,6 +5,8 @@ import { styled } from 'styled-components';
 import { useSettings } from '../../helpers/AppSettings';
 import { DriveRow } from './DriveRow';
 
+import type { JSX } from 'react';
+
 export interface DriveCardProps {
   drives: string[];
   showNewOption?: boolean;

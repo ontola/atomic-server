@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, type JSX } from 'react';
 import { Resource } from '@tomic/react';
 import { useDropzone } from 'react-dropzone';
 import { Button } from '../Button';

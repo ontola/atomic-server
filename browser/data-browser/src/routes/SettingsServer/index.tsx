@@ -4,7 +4,7 @@ import {
   InputWrapper,
   LabelStyled,
 } from '../../components/forms/InputStyles';
-import { useState } from 'react';
+import { useState, type JSX } from 'react';
 import { useSettings } from '../../helpers/AppSettings';
 import { ContainerWide } from '../../components/Containers';
 import { Column, Row } from '../../components/Row';

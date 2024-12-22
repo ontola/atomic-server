@@ -1,7 +1,7 @@
 import * as RadixScrollArea from '@radix-ui/react-scroll-area';
 import { styled } from 'styled-components';
 import { transparentize } from 'polished';
-import { forwardRef } from 'react';
+import { forwardRef, type JSX } from 'react';
 
 const SIZE = '0.8rem';
 

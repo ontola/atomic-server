@@ -12,7 +12,7 @@ import { AtomicLink } from '../../AtomicLink';
 import { getIconForClass } from '../../../helpers/iconMap';
 import { ScrollArea } from '../../ScrollArea';
 import { ErrorLook } from '../../ErrorLook';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type JSX } from 'react';
 import { useSettings } from '../../../helpers/AppSettings';
 
 export function OntologiesPanel(): JSX.Element | null {

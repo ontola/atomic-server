@@ -10,6 +10,8 @@ import { CardViewProps } from './CardViewProps';
 import { ResourceCardTitle } from './ResourceCardTitle';
 import { Column } from '../../components/Row';
 
+import type { JSX } from 'react';
+
 export function BookmarkCard({ resource }: CardViewProps): JSX.Element {
   const [url] = useString(resource, urls.properties.bookmark.url);
   const [preview] = useString(resource, urls.properties.bookmark.preview);

@@ -3,6 +3,8 @@ import { styled, css } from 'styled-components';
 
 import { FaExclamationTriangle } from 'react-icons/fa';
 
+import type { JSX } from 'react';
+
 export const errorLookStyle = css`
   color: ${props => props.theme.colors.alert};
   font-family: monospace;

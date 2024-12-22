@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { timeoutEffect } from '../helpers/timeoutEffect';
 import { animationDuration } from '../styling';

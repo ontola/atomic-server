@@ -5,6 +5,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type JSX,
 } from 'react';
 import { css, styled } from 'styled-components';
 import { removeCachedSearchResults, useResource, useStore } from '@tomic/react';
