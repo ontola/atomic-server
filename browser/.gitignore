@@ -13,6 +13,7 @@ publish
 */yarn-error.log
 test-results
 playwright-report
+template-tests
 */nohup.out
 */yarn-error.log
 lib/coverage

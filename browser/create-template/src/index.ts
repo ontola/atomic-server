@@ -61,4 +61,6 @@ log('');
 log(chalk.green('Done!'));
 
 const endUsage = buildEndUsageString(args.values.template, args.positionals[0]);
-console.log(endUsage);
+log(endUsage);
+
+process.exit(0);

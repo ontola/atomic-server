@@ -14,7 +14,7 @@ export function TemplateListItem({
   Image,
 }: TemplateListItemProps): React.JSX.Element {
   return (
-    <Wrapper onClick={() => onClick(id)}>
+    <Wrapper onClick={() => onClick(id)} data-testid='template-button'>
       <Image />
       <Content>
         <span>{title}</span>

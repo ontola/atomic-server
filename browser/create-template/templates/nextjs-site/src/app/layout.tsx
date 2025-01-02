@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import 'modern-css-reset/dist/reset.min.css';
-import './globals.css';
+import '@/app/globals.css';
 import ProviderWrapper from '@/components/ProviderWrapper';
 import VStack from '@/components/Layout/VStack';
 import Navbar from '@/components/Navbar';
