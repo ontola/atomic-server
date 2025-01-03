@@ -74,8 +74,6 @@ const waitForServer = (
     childProcess.stdout?.on('data', data => {
       const message = data.toString();
 
-      log(message);
-
       const match = message.match(/http:\/\/localhost:\d+/);
 
       if (match) {
@@ -160,6 +158,13 @@ test.describe('Create Next.js Template', () => {
       await expect(page.locator('body')).not.toContainText('coffee');
     } finally {
       child.kill();
+      kill(3000)
+        .then(() => {
+          log('Next.js server shut down successfully');
+        })
+        .catch(err => {
+          console.error('Failed to shut down Next.js server:', err);
+        });
     }
   });
 
@@ -176,8 +181,6 @@ test.describe('Create Next.js Template', () => {
     } catch (error) {
       console.error(`Failed to delete ${TEMPLATE_DIR_NAME}:`, error);
     }
-
-    await kill(3000);
   });
 });
 
@@ -240,6 +243,13 @@ test.describe('Create SvelteKit Template', () => {
       await expect(page.locator('body')).not.toContainText('coffee');
     } finally {
       child.kill();
+      kill(4174)
+        .then(() => {
+          log('SvelteKit server shut down successfully');
+        })
+        .catch(err => {
+          console.error('Failed to shut down SvelteKit server:', err);
+        });
     }
   });
 
@@ -256,7 +266,5 @@ test.describe('Create SvelteKit Template', () => {
     } catch (error) {
       console.error(`Failed to delete ${TEMPLATE_DIR_NAME}:`, error);
     }
-
-    await kill(4173);
   });
 });

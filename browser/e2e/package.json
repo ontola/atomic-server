@@ -13,7 +13,9 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.48.1",
-    "@types/kill-port": "^2.0.3"
+    "@types/kill-port": "^2.0.3",
+    "@axe-core/playwright": "^4.10.1",
+    "kill-port": "^2.0.1"
   },
   "scripts": {
     "playwright-install": "playwright install chromium",
@@ -24,8 +26,5 @@
     "test-new": "playwright codegen http://localhost:5173",
     "test-query": "PWDEBUG=1 DELETE_PREVIOUS_TEST_DRIVES=false playwright test \"e2e.spec.ts\" \"tables.spec.ts\" \"documents.spec.ts\" \"ontology.spec.ts\" \"search.spec.ts\" -g"
   },
-  "dependencies": {
-    "@axe-core/playwright": "^4.10.1",
-    "kill-port": "^2.0.1"
-  }
+  "dependencies": {}
 }
