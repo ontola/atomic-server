@@ -3,6 +3,16 @@ import { ContainerNarrow } from '../components/Containers';
 import { AtomicLink } from '../components/AtomicLink';
 import { Logo } from '../components/Logo';
 
+import { createRoute } from '@tanstack/react-router';
+import { pathNames } from './paths';
+import { appRoute } from './RootRoutes';
+
+export const AboutRoute = createRoute({
+  path: pathNames.about,
+  component: () => <About />,
+  getParentRoute: () => appRoute,
+});
+
 export const About: React.FunctionComponent = () => {
   return (
     <ContainerNarrow>

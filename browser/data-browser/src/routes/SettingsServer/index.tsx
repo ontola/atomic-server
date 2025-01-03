@@ -13,13 +13,22 @@ import { DrivesCard } from './DrivesCard';
 import { styled } from 'styled-components';
 import { useSavedDrives } from '../../hooks/useSavedDrives';
 import { constructOpenURL } from '../../helpers/navigation';
-import { useNavigate } from 'react-router';
 import { ErrorLook } from '../../components/ErrorLook';
 import { Main } from '../../components/Main';
+import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
+import { createRoute } from '@tanstack/react-router';
+import { pathNames } from '../paths';
+import { appRoute } from '../RootRoutes';
 
-export function SettingsServer(): JSX.Element {
+export const ServerSettingsRoute = createRoute({
+  path: pathNames.serverSettings,
+  component: () => <SettingsServer />,
+  getParentRoute: () => appRoute,
+});
+
+function SettingsServer(): JSX.Element {
   const { drive: baseURL, setDrive: setBaseURL } = useSettings();
-  const navigate = useNavigate();
+  const navigate = useNavigateWithTransition();
   const [baseUrlInput, setBaseUrlInput] = useState<string>(baseURL);
   const [baseUrlErr, setErrBaseUrl] = useState<Error | undefined>();
 

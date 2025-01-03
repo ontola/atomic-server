@@ -1,5 +1,4 @@
 import { useCallback, useMemo, useState, type JSX } from 'react';
-import { useNavigate } from 'react-router';
 import {
   useArray,
   useResource,
@@ -31,6 +30,7 @@ import {
   RESOURCE_FORM_CONTEXT_VALUE,
   ResourceFormContext,
 } from './ResourceFormContext';
+import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 
 export enum ResourceFormVariant {
   Default,
@@ -71,7 +71,7 @@ export function ResourceForm({
   onValidationChange,
 }: ResourceFormProps): JSX.Element {
   const isOnline = useOnline();
-  const navigate = useNavigate();
+  const navigate = useNavigateWithTransition();
   const [isAArray] = useArray(resource, core.properties.isA);
 
   if (classSubject === undefined && isAArray?.length > 0) {

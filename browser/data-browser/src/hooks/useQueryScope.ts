@@ -1,6 +1,6 @@
-import { useCallback } from 'react';
-import { useNavigate } from 'react-router';
-import { useQueryString } from '../helpers/navigation';
+import { useSearch } from '@tanstack/react-router';
+import { paths } from '../routes/paths';
+import { SearchRoute } from '../routes/SearchRoute';
 
 export interface QueryScopeHandler {
   scope: string | undefined;
@@ -11,23 +11,25 @@ export interface QueryScopeHandler {
 export function useQueryScopeHandler(subject: string): QueryScopeHandler;
 export function useQueryScopeHandler(): Omit<QueryScopeHandler, 'enableScope'>;
 export function useQueryScopeHandler(subject?: string): QueryScopeHandler {
-  const [scope, setScope] = useQueryString('queryscope');
-  const navigate = useNavigate();
+  const { queryscope } = useSearch({ strict: false });
+  const navigate = SearchRoute.useNavigate();
 
-  const enableScope = useCallback(() => {
-    const params = new URLSearchParams({
-      queryscope: subject ?? '',
+  const enableScope = () => {
+    navigate({
+      to: paths.search,
+      search: prev => ({ ...prev, queryscope: subject ?? '' }),
     });
+  };
 
-    navigate(`/app/search?${params.toString()}`, { replace: true });
-  }, [setScope, subject]);
-
-  const clearScope = useCallback(() => {
-    setScope(undefined);
-  }, [setScope]);
+  const clearScope = () => {
+    navigate({
+      to: '.',
+      search: prev => ({ ...prev, queryscope: undefined }),
+    });
+  };
 
   return {
-    scope,
+    scope: queryscope,
     enableScope,
     clearScope,
   };

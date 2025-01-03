@@ -1,7 +1,7 @@
 import { useRef, useState, type JSX } from 'react';
 import { ContainerNarrow } from '../components/Containers';
 import { useHotkeys } from 'react-hotkeys-hook';
-import { constructOpenURL, useSearchQuery } from '../helpers/navigation';
+import { constructOpenURL } from '../helpers/navigation';
 import ResourceCard from '../views/Card/ResourceCard';
 import { useServerSearch } from '@tomic/react';
 import { ErrorLook } from '../components/ErrorLook';
@@ -12,10 +12,32 @@ import { useSettings } from '../helpers/AppSettings';
 import { Column } from '../components/Row';
 import { Main } from '../components/Main';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
+import { createRoute } from '@tanstack/react-router';
+import { pathNames } from './paths';
+import { appRoute } from './RootRoutes';
+
+type SearchRouteQueryParams = {
+  query?: string;
+  queryscope?: string;
+};
+
+export const SearchRoute = createRoute({
+  path: pathNames.search,
+  component: () => <Search />,
+  getParentRoute: () => appRoute,
+  validateSearch: {
+    parse: (search: Record<string, unknown>): SearchRouteQueryParams => {
+      return {
+        query: (search.query as string) ?? undefined,
+        queryscope: (search.queryscope as string) ?? undefined,
+      };
+    },
+  },
+});
 
 /** Full text search route */
 export function Search(): JSX.Element {
-  const [query] = useSearchQuery();
+  const query = SearchRoute.useSearch({ select: state => state.query });
   const { drive } = useSettings();
   const { scope } = useQueryScopeHandler();
 
@@ -58,6 +80,7 @@ export function Search(): JSX.Element {
       selectResult(newSelected);
     },
     { enableOnTags: ['INPUT'] },
+    [selectedIndex, selectResult],
   );
   useHotkeys(
     'down',
@@ -70,6 +93,7 @@ export function Search(): JSX.Element {
       selectResult(newSelected);
     },
     { enableOnTags: ['INPUT'] },
+    [selectedIndex, selectResult],
   );
 
   let message: string | undefined = 'No hits';

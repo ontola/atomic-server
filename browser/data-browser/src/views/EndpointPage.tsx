@@ -7,7 +7,6 @@ import {
   useString,
   useTitle,
 } from '@tomic/react';
-import { useNavigate } from 'react-router';
 
 import { ContainerNarrow } from '../components/Containers';
 import Markdown from '../components/datatypes/Markdown';
@@ -17,6 +16,7 @@ import { constructOpenURL } from '../helpers/navigation';
 import ResourceCard from './Card/ResourceCard';
 
 import type { JSX } from 'react';
+import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 
 type EndpointProps = {
   resource: Resource;
@@ -30,7 +30,7 @@ function EndpointPage({ resource }: EndpointProps): JSX.Element {
   const [results] = useArray(resource, properties.endpoint.results);
   const virtualResource = useResource(undefined, { newResource: true });
   const store = useStore();
-  const navigate = useNavigate();
+  const navigate = useNavigateWithTransition();
 
   /** Create the URL using the variables */
   async function constructSubject(e?: React.SyntheticEvent) {

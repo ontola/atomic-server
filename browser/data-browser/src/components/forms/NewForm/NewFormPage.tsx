@@ -1,5 +1,4 @@
 import { useResource } from '@tomic/react';
-import { useQueryString } from '../../../helpers/navigation';
 import { ResourceForm } from '../ResourceForm';
 import { NewFormTitle } from './NewFormTitle';
 import { SubjectField } from './SubjectField';
@@ -7,6 +6,9 @@ import { useNewForm } from './useNewForm';
 import { Column } from '../../Row';
 
 import type { JSX } from 'react';
+import { useSearch } from '@tanstack/react-router';
+import { paths } from '../../../routes/paths';
+import { NewRoute } from '../../../routes/NewResource/NewRoute';
 
 export interface NewFormProps {
   classSubject: string;
@@ -17,15 +19,24 @@ export const NewFormFullPage = ({
   classSubject,
 }: NewFormProps): JSX.Element => {
   const klass = useResource(classSubject);
-  const [subject, setSubject] = useQueryString('newSubject');
-  const [parentSubject] = useQueryString('parent');
+  const { parent, newSubject: subject } = useSearch({ strict: false });
+
+  const navigate = NewRoute.useNavigate();
+
+  const setSubject = (x: string) => {
+    navigate({
+      to: paths.new,
+      search: prev => ({ ...prev, newSubject: x }),
+      replace: true,
+    });
+  };
 
   const { initialized, subjectErr, subjectValue, setSubjectValue, resource } =
     useNewForm({
       klass,
       setSubject,
       initialSubject: subject,
-      parent: parentSubject,
+      parent,
     });
 
   if (!initialized) return <>Initializing Resource</>;

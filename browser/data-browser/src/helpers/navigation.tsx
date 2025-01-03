@@ -1,4 +1,3 @@
-import { useSearchParams } from 'react-router';
 import { paths } from '../routes/paths';
 import { unknownSubject } from '@tomic/react';
 
@@ -13,6 +12,9 @@ function constructURL(
   return `${path}?${params}`;
 }
 
+const isRemoteResource = (subject: URL) =>
+  window.location.origin !== subject.origin;
+
 /** Constructs a URL for opening / showing a Resource. */
 export function constructOpenURL(
   subject: string,
@@ -24,13 +26,13 @@ export function constructOpenURL(
 
   const url = new URL(subject);
 
-  if (window.location.origin === url.origin) {
-    const path = url.pathname + url.search;
-
-    return path;
-  } else {
+  if (isRemoteResource(url)) {
     return constructURL(paths.show, { subject, ...extraParams });
   }
+
+  const path = url.pathname + url.search;
+
+  return path;
 }
 
 export function searchURL(query: string, scope?: string): string {
@@ -38,37 +40,6 @@ export function searchURL(query: string, scope?: string): string {
     query,
     ...(scope ? { queryscope: scope } : {}),
   });
-}
-
-type setFunc = (latestValue: string | undefined) => void;
-
-/** Returns a getter and a setter for query parameters */
-export function useQueryString(key: string): [string | undefined, setFunc] {
-  const [params, set] = useSearchParams();
-
-  const customSet = (subject: string | undefined) => {
-    if (subject === undefined) {
-      params.delete(key);
-    } else {
-      params.set(key, subject);
-    }
-
-    set(params);
-  };
-
-  const found = params.get(key);
-
-  if (found === null) {
-    return [undefined, customSet];
-  }
-
-  return [found, customSet];
-}
-
-/** A hook containing a getter and a setter for the current 'query' search param */
-// eslint-disable-next-line
-export function useSearchQuery() {
-  return useQueryString('query');
 }
 
 /** Query parameters used by the `/new` route */

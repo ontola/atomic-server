@@ -26,10 +26,10 @@ import {
 } from '../../components/ConfirmationDialog';
 import { ResourceInline } from '../ResourceInline';
 import { ResourceUsage } from '../../components/ResourceUsage';
-import { useNavigate } from 'react-router';
 import { constructOpenURL } from '../../helpers/navigation';
 import { Checkbox, CheckboxLabel } from '../../components/forms/Checkbox';
 import { Column } from '../../components/Row';
+import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 
 interface TableHeadingMenuProps {
   resource: Resource;
@@ -55,7 +55,7 @@ export function TableHeadingMenu({
   const tableClassResource = useResource(tableClassSubject);
   const canWriteClass = useCanWrite(tableClassResource);
   const canWriteProperty = useCanWrite(resource);
-  const navigate = useNavigate();
+  const navigate = useNavigateWithTransition();
 
   const isExternalProperty = useIsExternalProperty(resource);
 

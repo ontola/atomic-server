@@ -1,8 +1,7 @@
 import { useResource, core } from '@tomic/react';
 import { useCallback, type JSX } from 'react';
-import { useNavigate } from 'react-router';
 
-import { constructOpenURL, useQueryString } from '../../helpers/navigation';
+import { constructOpenURL } from '../../helpers/navigation';
 import {
   ContainerFull,
   ContainerNarrow,
@@ -21,10 +20,33 @@ import { OntologySections } from './OntologySections';
 import { useNewResourceUI } from '../../components/forms/NewForm/useNewResourceUI';
 import { Column } from '../../components/Row';
 import { TemplateList } from '../../components/Template/TemplateList';
+import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
+import { pathNames } from '../paths';
+import { createRoute } from '@tanstack/react-router';
+import { appRoute } from '../RootRoutes';
+
+export interface NewRouteSearchParams {
+  classSubject: string | undefined;
+  parent: string | undefined;
+  parentSubject: string | undefined;
+  newSubject: string | undefined;
+}
+
+export const NewRoute = createRoute({
+  path: pathNames.new,
+  component: () => <NewRoutePage />,
+  getParentRoute: () => appRoute,
+  validateSearch: (search: Record<string, unknown>): NewRouteSearchParams => ({
+    classSubject: (search.classSubject as string) ?? undefined,
+    parent: (search.parent as string) ?? undefined,
+    parentSubject: (search.parentSubject as string) ?? undefined,
+    newSubject: (search.newSubject as string) ?? undefined,
+  }),
+});
 
 /** Start page for instantiating a new Resource from some Class */
-function NewRoute(): JSX.Element {
-  const [classSubject] = useQueryString('classSubject');
+function NewRoutePage(): JSX.Element {
+  const { classSubject } = NewRoute.useSearch();
 
   return (
     <Main>
@@ -42,7 +64,7 @@ function NewRoute(): JSX.Element {
 }
 
 function NewResourceSelector() {
-  const [parentSubject] = useQueryString('parentSubject');
+  const { parentSubject } = NewRoute.useSearch();
   const { drive, hideTemplates } = useSettings();
   const calculatedParent = parentSubject || drive;
   const parentResource = useResource(calculatedParent);
@@ -50,7 +72,7 @@ function NewResourceSelector() {
   const showTemplates = !hideTemplates && calculatedParent === drive;
   const Container = showTemplates ? ContainerWide : ContainerNarrow;
 
-  const navigate = useNavigate();
+  const navigate = useNavigateWithTransition();
   const showNewResourceUI = useNewResourceUI();
 
   function handleClassSet(subject: string | undefined) {
@@ -128,5 +150,3 @@ const SideBySide = styled.div<{ noTemplates: boolean }>`
 const Devider = styled.div`
   border-right: 1px solid ${p => p.theme.colors.bg2};
 `;
-
-export default NewRoute;

@@ -7,7 +7,6 @@ import {
   FaRegCheckCircle,
   FaRegCircle,
 } from 'react-icons/fa';
-import { useNavigate } from 'react-router';
 import { useSettings } from '../../helpers/AppSettings';
 import { constructOpenURL } from '../../helpers/navigation';
 import { useDriveHistory } from '../../hooks/useDriveHistory';
@@ -16,6 +15,7 @@ import { paths } from '../../routes/paths';
 import { DIVIDER, DropdownMenu } from '../Dropdown';
 import { buildDefaultTrigger } from '../Dropdown/DefaultTrigger';
 import { useNewResourceUI } from '../forms/NewForm/useNewResourceUI';
+import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 
 const Trigger = buildDefaultTrigger(<FaHdd />, 'Open Drive Settings');
 
@@ -30,7 +30,7 @@ function dedupeAFromB<K, V>(a: Map<K, V>, b: Map<K, V>): Map<K, V> {
 }
 
 export function DriveSwitcher() {
-  const navigate = useNavigate();
+  const navigate = useNavigateWithTransition();
   const { drive, setDrive, agent } = useSettings();
   const [savedDrives] = useSavedDrives();
   const [history, addToHistory] = useDriveHistory(savedDrives, 5);

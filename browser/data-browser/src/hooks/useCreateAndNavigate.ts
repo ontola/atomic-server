@@ -1,8 +1,8 @@
 import { Core, JSONValue, Resource, useStore } from '@tomic/react';
 import { useCallback } from 'react';
 import toast from 'react-hot-toast';
-import { useNavigate } from 'react-router';
 import { constructOpenURL } from '../helpers/navigation';
+import { useNavigate } from '@tanstack/react-router';
 
 export type CreateAndNavigate = (
   isA: string,
@@ -51,7 +51,7 @@ export function useCreateAndNavigate(): CreateAndNavigate {
           await onCreated(resource);
         }
 
-        navigate(constructOpenURL(resource.subject, extraParams));
+        await navigate({ to: constructOpenURL(resource.subject, extraParams) });
         toast.success(`${classResource.title} created`);
         store.notifyResourceManuallyCreated(resource);
       } catch (e) {

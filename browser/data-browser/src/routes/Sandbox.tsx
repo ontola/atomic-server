@@ -1,8 +1,9 @@
+import { createLazyRoute } from '@tanstack/react-router';
 import { ContainerFull } from '../components/Containers';
 
 import type { JSX } from 'react';
 
-export function Sandbox(): JSX.Element {
+function Sandbox(): JSX.Element {
   return (
     <main>
       <ContainerFull>
@@ -15,3 +16,7 @@ export function Sandbox(): JSX.Element {
     </main>
   );
 }
+
+export const sandboxRouteLazy = createLazyRoute('/$')({
+  component: Sandbox,
+});

@@ -4,9 +4,18 @@ import { ContainerNarrow } from '../components/Containers';
 import { shortcuts } from '../components/HotKeyWrapper';
 import { Shortcut } from '../components/Shortcut';
 import { Main } from '../components/Main';
+import { createRoute } from '@tanstack/react-router';
+import { pathNames } from './paths';
+import { appRoute } from './RootRoutes';
+
+export const ShortcutsRoute = createRoute({
+  path: pathNames.shortcuts,
+  component: () => <Shortcuts />,
+  getParentRoute: () => appRoute,
+});
 
 /** List of all the keyboard shorcuts */
-export const Shortcuts: React.FunctionComponent = () => {
+const Shortcuts: React.FunctionComponent = () => {
   return (
     <Main>
       <ContainerNarrow>

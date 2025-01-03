@@ -16,10 +16,19 @@ import { ResourceInline } from '../views/ResourceInline';
 import { ContainerNarrow } from '../components/Containers';
 import { AtomicLink } from '../components/AtomicLink';
 import { editURL } from '../helpers/navigation';
-import { useNavigate } from 'react-router';
 import { Main } from '../components/Main';
 import { Column } from '../components/Row';
 import { WarningBlock } from '../components/WarningBlock';
+import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
+import { createRoute } from '@tanstack/react-router';
+import { pathNames } from './paths';
+import { appRoute } from './RootRoutes';
+
+export const AgentSettingsRoute = createRoute({
+  path: pathNames.agentSettings,
+  component: () => <SettingsAgent />,
+  getParentRoute: () => appRoute,
+});
 
 const SettingsAgent: React.FunctionComponent = () => {
   const { agent, setAgent } = useSettings();
@@ -29,7 +38,7 @@ const SettingsAgent: React.FunctionComponent = () => {
   const [showPrivateKey, setShowPrivateKey] = useState(false);
   const [advanced, setAdvanced] = useState(false);
   const [secret, setSecret] = useState<string | undefined>(undefined);
-  const navigate = useNavigate();
+  const navigate = useNavigateWithTransition();
 
   // When there is an agent, set the advanced values
   // Otherwise, reset the secret value
@@ -278,5 +287,3 @@ const SettingsAgent: React.FunctionComponent = () => {
     </Main>
   );
 };
-
-export default SettingsAgent;

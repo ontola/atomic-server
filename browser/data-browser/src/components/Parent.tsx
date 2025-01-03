@@ -13,7 +13,7 @@ import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { useSettings } from '../helpers/AppSettings';
 import { Button } from './Button';
 import { BREADCRUMB_BAR_TRANSITION_TAG } from '../helpers/transitionName';
-import ResourceContextMenu from './ResourceContextMenu';
+import { ResourceContextMenu } from './ResourceContextMenu';
 import { MenuBarDropdownTrigger } from './ResourceContextMenu/MenuBarDropdownTrigger';
 
 import type { JSX } from 'react';

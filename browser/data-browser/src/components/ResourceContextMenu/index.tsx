@@ -1,5 +1,4 @@
 import { useCallback, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router';
 import { Client, core, useCanWrite, useResource } from '@tomic/react';
 import {
   editURL,
@@ -38,26 +37,30 @@ import { useCurrentSubject } from '../../helpers/useCurrentSubject';
 import { ResourceCodeUsageDialog } from '../../views/CodeUsage/ResourceCodeUsageDialog';
 import { useNewRoute } from '../../helpers/useNewRoute';
 import { addIf } from '../../helpers/addIf';
+import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 
-export enum ContextMenuOptions {
-  View = 'view',
-  Data = 'data',
-  Edit = 'edit',
-  Scope = 'scope',
-  Share = 'share',
-  Delete = 'delete',
-  History = 'history',
-  Import = 'import',
-  UseInCode = 'useInCode',
-  NewChild = 'newChild',
-  Export = 'export',
-  Open = 'open',
-}
+export const ContextMenuOptions = {
+  View: 'view',
+  Data: 'data',
+  Edit: 'edit',
+  Scope: 'scope',
+  Share: 'share',
+  Delete: 'delete',
+  History: 'history',
+  Import: 'import',
+  UseInCode: 'useInCode',
+  NewChild: 'newChild',
+  Export: 'export',
+  Open: 'open',
+} as const;
+
+export type ContextMenuOptionsUnion =
+  (typeof ContextMenuOptions)[keyof typeof ContextMenuOptions];
 
 export interface ResourceContextMenuProps {
   subject: string;
   // If given only these options will appear in the list.
-  showOnly?: ContextMenuOptions[];
+  showOnly?: ContextMenuOptionsUnion[];
   trigger?: DropdownTriggerComponent;
   simple?: boolean;
   /** If it's the primary menu in the navbar. Used for triggering keyboard shortcut */
@@ -70,7 +73,7 @@ export interface ResourceContextMenuProps {
 }
 
 /** Dropdown menu that opens a bunch of actions for some resource */
-function ResourceContextMenu({
+export function ResourceContextMenu({
   subject,
   showOnly,
   trigger,
@@ -81,8 +84,8 @@ function ResourceContextMenu({
   bindActive,
   onAfterDelete,
 }: ResourceContextMenuProps) {
-  const navigate = useNavigate();
-  const location = useLocation();
+  const navigate = useNavigateWithTransition();
+  const location = window.location;
   const resource = useResource(subject);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showCodeUsageDialog, setShowCodeUsageDialog] = useState(false);
@@ -214,7 +217,8 @@ function ResourceContextMenu({
   const filteredItems = showOnly
     ? items.filter(
         item =>
-          !isItem(item) || showOnly.includes(item.id as ContextMenuOptions),
+          !isItem(item) ||
+          showOnly.includes(item.id as ContextMenuOptionsUnion),
       )
     : items;
 
@@ -258,5 +262,3 @@ function ResourceContextMenu({
     </>
   );
 }
-
-export default ResourceContextMenu;

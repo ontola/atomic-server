@@ -3,10 +3,10 @@ import { useCallback, type JSX } from 'react';
 import toast from 'react-hot-toast';
 import { IconType } from 'react-icons';
 import { FaPlus } from 'react-icons/fa';
-import { useNavigate } from 'react-router';
 import { styled } from 'styled-components';
 import { paths } from '../../routes/paths';
 import { Button } from '../Button';
+import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 
 export interface InstanceButtonBaseProps {
   onClick: () => void;
@@ -31,7 +31,7 @@ export function Base({
   const store = useStore();
   const agent = store.getAgent();
 
-  const navigate = useNavigate();
+  const navigate = useNavigateWithTransition();
 
   const handleClick = useCallback(() => {
     if (!agent) {

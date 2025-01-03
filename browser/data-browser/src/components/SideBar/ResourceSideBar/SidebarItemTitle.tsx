@@ -66,6 +66,7 @@ export const SidebarItemTitle = forwardRef<
                   title={`Rearange ${resource.title}`}
                   {...(listeners ?? {})}
                   {...(attributes ?? {})}
+                  role='link'
                 >
                   <Icon />
                   <FaGripVertical />

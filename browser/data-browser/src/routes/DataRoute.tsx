@@ -17,8 +17,17 @@ import { ResourceUsage } from '../components/ResourceUsage';
 import { Main } from '../components/Main';
 import { IconButton } from '../components/IconButton/IconButton';
 import { FaArrowLeft } from 'react-icons/fa';
-import { useNavigate } from 'react-router';
 import { constructOpenURL } from '../helpers/navigation';
+import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
+import { pathNames } from './paths';
+import { appRoute } from './RootRoutes';
+import { createRoute } from '@tanstack/react-router';
+
+export const DataRoute = createRoute({
+  path: pathNames.data,
+  component: () => <Data />,
+  getParentRoute: () => appRoute,
+});
 
 /** Renders the data of some Resource */
 function Data(): JSX.Element {
@@ -30,7 +39,7 @@ function Data(): JSX.Element {
   const [textResponseLoading, setTextResponseLoading] = useState(false);
   const [err, setErr] = useState<Error | undefined>(undefined);
   const { agent } = useSettings();
-  const navigate = useNavigate();
+  const navigate = useNavigateWithTransition();
 
   if (!subject) {
     <ContainerNarrow>No subject passed</ContainerNarrow>;
@@ -149,5 +158,3 @@ function Data(): JSX.Element {
     </Main>
   );
 }
-
-export default Data;

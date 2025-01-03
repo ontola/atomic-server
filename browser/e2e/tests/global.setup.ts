@@ -15,7 +15,7 @@ setup('delete previous test data', async ({ page }) => {
 
   await before({ page });
   await signIn(page);
-  await page.goto(`${FRONTEND_URL}/prunetests`);
+  await page.goto(`${FRONTEND_URL}/app/prunetests`);
   await expect(page.getByText('Prune Test Data')).toBeVisible();
   await page.getByRole('button', { name: 'Prune' }).click();
 

@@ -306,10 +306,7 @@ export async function editTitle(title: string, page: Page) {
 }
 
 export async function clickSidebarItem(text: string, page: Page) {
-  await page
-    .getByTestId('sidebar')
-    .getByRole('button', { name: text })
-    .click({ force: true });
+  await page.getByTestId('sidebar').getByRole('link', { name: text }).click();
 }
 
 /** Click an item from the main, visible context menu */

@@ -1,14 +1,12 @@
 import { useState, type JSX } from 'react';
 import { useCanWrite, useResource } from '@tomic/react';
 import { ContainerNarrow } from '../../components/Containers';
-import { useCurrentSubject } from '../../helpers/useCurrentSubject';
 import { Card, CardInsideFull } from '../../components/Card';
 import { Button } from '../../components/Button';
 import { InviteForm } from '../../components/InviteForm';
 import toast from 'react-hot-toast';
 import { Title } from '../../components/Title';
 import { constructOpenURL } from '../../helpers/navigation';
-import { useNavigate } from 'react-router';
 import { ErrorLook } from '../../components/ErrorLook';
 import { Column } from '../../components/Row';
 import { Main } from '../../components/Main';
@@ -18,15 +16,32 @@ import { AgentRights } from './AgentRights';
 import { useInheritedRights } from './useInheritedRights';
 import { PermissionRow } from './PermissionRow';
 import styled from 'styled-components';
+import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
+import { appRoute } from '../RootRoutes';
+import { pathNames } from '../paths';
+import { createRoute } from '@tanstack/react-router';
+
+export interface ShareRouteSearchParams {
+  subject: string;
+}
+
+export const ShareRoute = createRoute({
+  path: pathNames.share,
+  component: () => <SharePage />,
+  getParentRoute: () => appRoute,
+  validateSearch: search => ({
+    subject: search.subject as string,
+  }),
+});
 
 /** Form for managing and viewing rights for this resource */
-export function ShareRoute(): JSX.Element {
-  const [subject] = useCurrentSubject();
+function SharePage(): JSX.Element {
+  const { subject } = ShareRoute.useSearch();
   const resource = useResource(subject);
   const canWrite = useCanWrite(resource);
   const [showInviteForm, setShowInviteForm] = useState(false);
   const [err, setErr] = useState<Error | undefined>(undefined);
-  const navigate = useNavigate();
+  const navigate = useNavigateWithTransition();
   const inheritedRights = useInheritedRights(resource);
 
   const [resourceRights, updateResourceRights] = useRights(resource, setErr);

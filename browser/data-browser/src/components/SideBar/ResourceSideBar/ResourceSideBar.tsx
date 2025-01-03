@@ -80,8 +80,8 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = ({
         active={active}
         onClick={onClick}
         ref={setNodeRef}
-        listeners={listeners}
-        attributes={attributes}
+        listeners={canWrite ? listeners : undefined}
+        attributes={canWrite ? attributes : undefined}
       />
     ),
     [subject, active, onClick, description, title, listeners, attributes],

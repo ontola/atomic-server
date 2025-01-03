@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { useLocation } from 'react-router';
-import { useQueryString } from './navigation';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
+import { useLocation, useSearch } from '@tanstack/react-router';
+import { paths } from '../routes/paths';
+import { ShowRoute } from '../routes/ShowRoute';
 
 type setFunc = (latestValue: string) => void;
 
@@ -13,22 +14,20 @@ export function useCurrentSubject(
   /** Replace URL instead of push it, so it does not get added to history */
   replace?: boolean,
 ): [string | undefined, setFunc] {
-  const [subjectQ, setSubjectQ] = useQueryString('subject');
+  const { subject: subjectQ } = useSearch({ strict: false });
   const navigate = useNavigateWithTransition();
-  const { pathname, search } = useLocation();
+  const navigateShow = ShowRoute.useNavigate();
+  const { pathname } = useLocation();
 
   function handleSetSubject(subject: string) {
     const url = new URL(subject);
 
     if (window.location.origin === url.origin) {
-      if (replace) {
-        navigate(url.pathname + url.search, { replace: true });
-      } else {
-        navigate(url.pathname + url.search);
-      }
+      // Navigate to the new subject.
+      navigate({ to: url.pathname + url.search, replace });
     } else {
-      // TODO: Handle replace?
-      setSubjectQ(subject);
+      // Add the new subject to the search params.
+      navigateShow({ to: paths.show, search: { subject }, replace });
     }
   }
 
@@ -38,12 +37,11 @@ export function useCurrentSubject(
     }
 
     // The pathname defaults to a trailing slash, which leads to issues
-    const correctedPathNamer = pathname === '/' ? '' : pathname;
+    const correctedPathName = pathname === '/' ? '' : '/' + pathname;
+    const subject =
+      window.location.origin + correctedPathName + window.location.search;
 
-    return [
-      window.location.origin + correctedPathNamer + search,
-      handleSetSubject,
-    ];
+    return [subject, handleSetSubject];
   }
 
   return [subjectQ, handleSetSubject];

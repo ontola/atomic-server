@@ -2,7 +2,7 @@ import { useState, type JSX } from 'react';
 import { FaEllipsisVertical } from 'react-icons/fa6';
 import { styled, css } from 'styled-components';
 import { buildDefaultTrigger } from '../../Dropdown/DefaultTrigger';
-import ResourceContextMenu from '../../ResourceContextMenu';
+import { ResourceContextMenu } from '../../ResourceContextMenu';
 
 export interface FloatingActionsProps {
   subject: string;

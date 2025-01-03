@@ -14,7 +14,6 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { FaCopy, FaLink, FaPencilAlt, FaReply, FaTimes } from 'react-icons/fa';
-import { useNavigate } from 'react-router';
 import { styled } from 'styled-components';
 import { AtomicLink } from '../components/AtomicLink';
 import { Button } from '../components/Button';
@@ -26,6 +25,7 @@ import { NavBarSpacer } from '../components/NavBarSpacer';
 import { editURL } from '../helpers/navigation';
 import { ResourceInline } from './ResourceInline';
 import { ResourcePageProps } from './ResourcePage';
+import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 
 /** Full page ChatRoom that shows a message list and a form to add Messages. */
 export function ChatRoomPage({ resource }: ResourcePageProps) {
@@ -188,7 +188,7 @@ const Message = memo(function Message({ subject, setReplyTo }: MessageProps) {
   const [description] = useString(resource, core.properties.description);
   const [lastCommit] = useSubject(resource, commits.properties.lastCommit);
   const [replyTo] = useSubject(resource, dataBrowser.properties.replyTo);
-  const navigate = useNavigate();
+  const navigate = useNavigateWithTransition();
   const canWrite = useCanWrite(resource);
 
   function handleCopyUrl() {

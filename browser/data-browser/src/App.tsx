@@ -1,33 +1,14 @@
-import { BrowserRouter } from 'react-router';
 import { StoreContext, Store } from '@tomic/react';
-import { StyleSheetManager, type ShouldForwardProp } from 'styled-components';
 
-import { GlobalStyle, ThemeWrapper } from './styling';
-import { AppRoutes } from './routes/Routes';
-import { NavWrapper } from './components/Navigation';
-import { MetaSetter } from './components/MetaSetter';
-import { Toaster } from './components/Toaster';
 import { isDev } from './config';
-import { initBugsnag } from './helpers/loggingHandlers';
-import HotKeysWrapper from './components/HotKeyWrapper';
-import { AppSettingsContextProvider } from './helpers/AppSettings';
-import CrashPage from './views/CrashPage';
-import { DialogGlobalContextProvider } from './components/Dialog/DialogGlobalContextProvider';
 import { registerHandlers } from './handlers';
-import { ErrorBoundary } from './views/ErrorPage';
-import { NetworkIndicator } from './components/NetworkIndicator';
 import { getAgentFromLocalStorage } from './helpers/agentStorage';
-import { DropdownContainer } from './components/Dropdown/DropdownContainer';
-import { PopoverContainer } from './components/Popover';
-import { SkipNav } from './components/SkipNav';
-import { ControlLockProvider } from './hooks/useControlLock';
-import { FormValidationContextProvider } from './components/forms/formValidation/FormValidationContextProvider';
 import { registerCustomCreateActions } from './components/forms/NewForm/CustomCreateActions';
-import isPropValid from '@emotion/is-prop-valid';
-import { NewResourceUIProvider } from './components/forms/NewForm/useNewResourceUI';
 import { serverURLStorage } from './helpers/serverURLStorage';
 
 import type { JSX } from 'react';
+import { RouterProvider } from '@tanstack/react-router';
+import { router } from './routes/Router';
 
 function fixDevUrl(url: string) {
   if (isDev()) {
@@ -58,10 +39,6 @@ declare global {
     bugsnagApiKey: string;
   }
 }
-// Setup bugsnag for error handling, but only if there's an API key
-const ErrBoundary = window.bugsnagApiKey
-  ? initBugsnag(window.bugsnagApiKey)
-  : ErrorBoundary;
 
 // Fetch all the Properties and Classes - this helps speed up the app.
 store.preloadPropsAndClasses();
@@ -75,60 +52,11 @@ if (isDev()) {
   window.store = store;
 }
 
-// This implements the default behavior from styled-components v5
-const shouldForwardProp: ShouldForwardProp<'web'> = (propName, target) => {
-  if (typeof target === 'string') {
-    // For HTML elements, forward the prop if it is a valid HTML attribute
-    return isPropValid(propName);
-  }
-
-  // For other elements, forward all props
-  return true;
-};
-
 /** Entrypoint of the application. This is where providers go. */
 function App(): JSX.Element {
   return (
     <StoreContext.Provider value={store}>
-      <AppSettingsContextProvider>
-        {/* Basename is for hosting on GitHub pages */}
-        <BrowserRouter basename='/'>
-          <ControlLockProvider>
-            <HotKeysWrapper>
-              <StyleSheetManager shouldForwardProp={shouldForwardProp}>
-                <ThemeWrapper>
-                  <GlobalStyle />
-                  {/* @ts-ignore fallback component type too strict */}
-                  <ErrBoundary FallbackComponent={CrashPage}>
-                    {/* Default form validation provider. Does not do anything on its own but will make sure useValidation works without context*/}
-                    <FormValidationContextProvider
-                      onValidationChange={() => undefined}
-                    >
-                      <Toaster />
-                      <MetaSetter />
-                      <DropdownContainer>
-                        <DialogGlobalContextProvider>
-                          <PopoverContainer>
-                            <DropdownContainer>
-                              <NewResourceUIProvider>
-                                <SkipNav />
-                                <NavWrapper>
-                                  <AppRoutes />
-                                </NavWrapper>
-                              </NewResourceUIProvider>
-                            </DropdownContainer>
-                          </PopoverContainer>
-                          <NetworkIndicator />
-                        </DialogGlobalContextProvider>
-                      </DropdownContainer>
-                    </FormValidationContextProvider>
-                  </ErrBoundary>
-                </ThemeWrapper>
-              </StyleSheetManager>
-            </HotKeysWrapper>
-          </ControlLockProvider>
-        </BrowserRouter>
-      </AppSettingsContextProvider>
+      <RouterProvider router={router}></RouterProvider>
     </StoreContext.Provider>
   );
 }

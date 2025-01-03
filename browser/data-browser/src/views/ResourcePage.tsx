@@ -14,7 +14,6 @@ import { ContainerNarrow } from '../components/Containers';
 import Collection from '../views/CollectionPage';
 import EndpointPage from './EndpointPage';
 import DrivePage from './DrivePage';
-import RedirectPage from './RedirectPage';
 import InvitePage from './InvitePage';
 import { DocumentPage } from './DocumentPage';
 import ErrorPage, { ErrorBoundary } from './ErrorPage';
@@ -50,7 +49,6 @@ type Props = {
 function ResourcePage({ subject }: Props): JSX.Element {
   const resource = useResource(subject);
   const [klass] = useString(resource, core.properties.isA);
-
   // The body can have an inert attribute when the user navigated from an open dialog.
   // we remove it to make the page becomes interactive again.
   useEffect(() => {
@@ -95,8 +93,6 @@ function selectComponent(klass: string) {
       return EndpointPage;
     case server.classes.drive:
       return DrivePage;
-    case server.classes.redirect:
-      return RedirectPage;
     case server.classes.invite:
       return InvitePage;
     case dataBrowser.classes.document:

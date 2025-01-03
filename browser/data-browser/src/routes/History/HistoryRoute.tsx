@@ -16,9 +16,18 @@ import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { Column, Row } from '../../components/Row';
 import { ProgressBar } from '../../components/ProgressBar';
 import { Main } from '../../components/Main';
+import { pathNames } from '../paths';
+import { appRoute } from '../RootRoutes';
+import { createRoute } from '@tanstack/react-router';
+
+export const HistoryRoute = createRoute({
+  path: pathNames.history,
+  component: () => <History />,
+  getParentRoute: () => appRoute,
+});
 
 /** Shows an activity log of previous versions */
-export function History(): JSX.Element {
+function History(): JSX.Element {
   const navigate = useNavigateWithTransition();
   const isSmallScreen = useMediaQuery('(max-width: 500px)');
   const [subject] = useCurrentSubject();

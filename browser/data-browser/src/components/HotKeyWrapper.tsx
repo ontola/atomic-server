@@ -1,13 +1,13 @@
 import * as React from 'react';
 import { dataURL, editURL } from '../helpers/navigation';
 import { useHotkeys } from 'react-hotkeys-hook';
-import { useNavigate } from 'react-router';
 import { useCurrentSubject } from '../helpers/useCurrentSubject';
 import { Client } from '@tomic/react';
 import { useSettings } from '../helpers/AppSettings';
 import { paths } from '../routes/paths';
 
 import type { JSX } from 'react';
+import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 
 type Props = {
   children: React.ReactNode;
@@ -65,7 +65,7 @@ export function displayShortcut(shortcut: string): string {
 
 /** App-wide keyboard events handler. */
 function HotKeysWrapper({ children }: Props): JSX.Element {
-  const navigate = useNavigate();
+  const navigate = useNavigateWithTransition();
   const [subject] = useCurrentSubject();
   const { sideBarLocked, setSideBarLocked } = useSettings();
 
@@ -101,7 +101,7 @@ function HotKeysWrapper({ children }: Props): JSX.Element {
   });
   useHotkeys(shortcuts.themeSettings, e => {
     e.preventDefault();
-    navigate(paths.themeSettings);
+    navigate(paths.appSettings);
   });
   useHotkeys(shortcuts.keyboardShortcuts, e => {
     e.preventDefault();

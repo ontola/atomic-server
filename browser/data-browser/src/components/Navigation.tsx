@@ -1,7 +1,6 @@
 import * as React from 'react';
-import { useEffect, type JSX } from 'react';
+import { type JSX } from 'react';
 import { FaArrowLeft, FaArrowRight, FaBars } from 'react-icons/fa';
-import { useLocation } from 'react-router';
 import { styled } from 'styled-components';
 
 import { ButtonBar } from './Button';
@@ -13,7 +12,7 @@ import { shortcuts } from './HotKeyWrapper';
 import { NavBarSpacer } from './NavBarSpacer';
 import { Searchbar } from './Searchbar';
 import { useMediaQuery } from '../hooks/useMediaQuery';
-import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
+import { useBackForward } from '../hooks/useNavigateWithTransition';
 import { NAVBAR_TRANSITION_TAG } from '../helpers/transitionName';
 
 interface NavWrapperProps {
@@ -24,11 +23,6 @@ interface NavWrapperProps {
 export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
   const { navbarTop, navbarFloating } = useSettings();
   const contentRef = React.useRef<HTMLDivElement>(null);
-  const location = useLocation();
-
-  useEffect(() => {
-    contentRef?.current?.scrollTo(0, 0);
-  }, [location]);
 
   return (
     <>
@@ -62,8 +56,9 @@ const Content = styled.div<ContentProps>`
 
 /** Persistently shown navigation bar */
 function NavBar(): JSX.Element {
+  const { back, forward } = useBackForward();
+
   const [subject] = useCurrentSubject();
-  const navigate = useNavigateWithTransition();
   const { navbarTop, navbarFloating, sideBarLocked, setSideBarLocked } =
     useSettings();
   const [showButtons, setShowButtons] = React.useState<boolean>(true);
@@ -110,18 +105,10 @@ function NavBar(): JSX.Element {
           </ButtonBar>
           {isInStandaloneMode && (
             <>
-              <ButtonBar
-                type='button'
-                title='Go back'
-                onClick={() => navigate(-1)}
-              >
+              <ButtonBar type='button' title='Go back' onClick={back}>
                 <FaArrowLeft />
               </ButtonBar>{' '}
-              <ButtonBar
-                type='button'
-                title='Go forward'
-                onClick={() => navigate(1)}
-              >
+              <ButtonBar type='button' title='Go forward' onClick={forward}>
                 <FaArrowRight />
               </ButtonBar>
             </>

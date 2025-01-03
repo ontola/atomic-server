@@ -1,14 +1,29 @@
 import * as React from 'react';
 import { Client } from '@tomic/react';
 import ResourcePage from '../views/ResourcePage';
-import { useCurrentSubject } from '../helpers/useCurrentSubject';
 import { Search } from './SearchRoute';
 import { About } from './AboutRoute';
+import { createRoute } from '@tanstack/react-router';
+import { appRoute } from './RootRoutes';
+import { pathNames } from './paths';
+
+export type ShowRouteSearch = {
+  subject: string;
+};
+
+export const ShowRoute = createRoute({
+  path: pathNames.show,
+  component: () => <ShowComponent />,
+  getParentRoute: () => appRoute,
+  validateSearch: (search): ShowRouteSearch => ({
+    subject: (search.subject as string) ?? '',
+  }),
+});
 
 /** Renders either the Welcome page, an Individual resource, or search results. */
-const Show: React.FunctionComponent = () => {
+export const ShowComponent: React.FunctionComponent = () => {
   // Value shown in navbar, after Submitting
-  const [subject] = useCurrentSubject();
+  const subject = ShowRoute.useSearch({ select: state => state.subject });
 
   if (subject === undefined || subject === '') {
     return <About />;
@@ -20,5 +35,3 @@ const Show: React.FunctionComponent = () => {
     return <Search />;
   }
 };
-
-export default Show;

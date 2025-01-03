@@ -3,19 +3,16 @@ import { transparentize } from 'polished';
 import React, { useEffect, useRef, useState, type JSX } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { FaTimes } from 'react-icons/fa';
-import { useNavigate } from 'react-router';
 import { styled } from 'styled-components';
-import {
-  constructOpenURL,
-  searchURL,
-  useSearchQuery,
-} from '../helpers/navigation';
-import { useFocus } from '../helpers/useFocus';
+import { constructOpenURL } from '../helpers/navigation';
 import { useQueryScopeHandler } from '../hooks/useQueryScope';
 import { shortcuts } from './HotKeyWrapper';
 import { IconButton, IconButtonVariant } from './IconButton/IconButton';
 import { FaMagnifyingGlass } from 'react-icons/fa6';
 import { isURL } from '../helpers/isURL';
+import { useNavigate, useSearch } from '@tanstack/react-router';
+import { paths } from '../routes/paths';
+import { useCurrentSubject } from '../helpers/useCurrentSubject';
 
 export interface SearchbarProps {
   onFocus?: React.FocusEventHandler<HTMLInputElement>;
@@ -28,29 +25,41 @@ export function Searchbar({
   onBlur,
   subject,
 }: SearchbarProps): JSX.Element {
-  const [input, setInput] = useState<string | undefined>('');
-  const [query] = useSearchQuery();
+  const [currentSubject] = useCurrentSubject();
+  const { query } = useSearch({ strict: false });
+  const [input, setInput] = useState<string>(currentSubject ?? query ?? '');
   const { scope, clearScope } = useQueryScopeHandler();
   const searchBarRef = useRef<HTMLFormElement>(null);
-  const [inputRef, setInputFocus] = useFocus();
+  const inputRef = useRef<HTMLInputElement>(null);
+
   const navigate = useNavigate();
+
+  const setQuery = useDebouncedCallback((q: string) => {
+    try {
+      Client.tryValidSubject(q);
+      // Replace instead of push to make the back-button behavior better.
+      navigate({ to: constructOpenURL(q), replace: true });
+    } catch (_err) {
+      navigate({
+        to: paths.search,
+        search: {
+          query: q,
+          ...(scope ? { queryscope: scope } : {}),
+        },
+        replace: true,
+      });
+    }
+  }, 20);
+
+  const handleInput = (q: string) => {
+    setInput(q);
+    setQuery(q);
+  };
 
   const handleSelect: React.MouseEventHandler<HTMLInputElement> = e => {
     if (isURL(input ?? '')) {
       // @ts-ignore
       e.target.select();
-    }
-  };
-
-  const handleChange: React.ChangeEventHandler<HTMLInputElement> = e => {
-    setInput(e.target.value);
-
-    try {
-      Client.tryValidSubject(e.target.value);
-      // Replace instead of push to make the back-button behavior better.
-      navigate(constructOpenURL(e.target.value), { replace: true });
-    } catch (_err) {
-      navigate(searchURL(e.target.value, scope), { replace: true });
     }
   };
 
@@ -60,31 +69,30 @@ export function Searchbar({
     }
 
     event.preventDefault();
-    //@ts-ignore this does seem callable
-    inputRef.current.blur();
-    //@ts-ignore this does seem callable
-    document.activeElement.blur();
-    navigate(constructOpenURL(subject));
+
+    inputRef.current?.blur();
+    //@ts-expect-error This should work
+    document.activeElement?.blur();
+    navigate({ to: constructOpenURL(subject), replace: true });
   };
 
   const onSearchButtonClick = () => {
-    navigate(searchURL('', scope), { replace: true });
-    setInputFocus();
+    navigate({ to: paths.search });
+    inputRef.current?.focus();
   };
 
   useHotkeys(shortcuts.search, e => {
     e.preventDefault();
-    //@ts-ignore this does seem callable
-    inputRef.current.select();
-    setInputFocus();
+
+    inputRef.current?.select();
+    inputRef.current?.focus();
   });
 
   useHotkeys(
     'esc',
     e => {
       e.preventDefault();
-      //@ts-ignore this does seem callable
-      inputRef.current.blur();
+      inputRef.current?.blur();
     },
     { enableOnTags: ['INPUT'] },
   );
@@ -102,16 +110,24 @@ export function Searchbar({
   );
 
   useEffect(() => {
-    if (query) {
-      setInput(query);
-    } else {
-      setInput(subject);
+    if (query !== undefined) {
+      return;
     }
 
-    if (query || scope) {
-      setInputFocus();
+    if (scope !== undefined) {
+      setInput('');
+
+      return;
     }
-  }, [query, scope, subject]);
+
+    if (currentSubject) {
+      setInput(currentSubject);
+
+      return;
+    }
+
+    setInput('');
+  }, [query, scope, currentSubject]);
 
   return (
     <Form onSubmit={handleSubmit} autoComplete='off' ref={searchBarRef}>
@@ -126,7 +142,6 @@ export function Searchbar({
       {scope && <ParentTag subject={scope} onClick={clearScope} />}
       <Input
         autoComplete='false'
-        // @ts-ignore this seems to work fine
         ref={inputRef}
         type='search'
         data-test='address-bar'
@@ -136,11 +151,30 @@ export function Searchbar({
         onFocus={onFocus}
         onBlur={onBlur}
         value={input || ''}
-        onChange={handleChange}
+        onChange={e => handleInput(e.target.value)}
         placeholder='Enter an Atomic URL or search   (press "/" )'
       />
     </Form>
   );
+}
+
+function useDebouncedCallback(
+  callback: (query: string) => void,
+  timeout: number,
+): (query: string) => void {
+  const timeoutId = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  const cb = (query: string) => {
+    if (timeoutId.current) {
+      clearTimeout(timeoutId.current);
+    }
+
+    timeoutId.current = setTimeout(async () => {
+      callback(query);
+    }, timeout);
+  };
+
+  return cb;
 }
 
 interface ParentTagProps {

@@ -1,10 +1,11 @@
 import { Resource, Server, useStore } from '@tomic/react';
-import { useState, type JSX } from 'react';
+import { useState } from 'react';
 import { Button } from '../components/Button';
 import { ContainerFull } from '../components/Containers';
 import { Column } from '../components/Row';
+import { createLazyRoute } from '@tanstack/react-router';
 
-export function PruneTestsRoute(): JSX.Element {
+const PruneTestsRoute: React.FC = () => {
   const store = useStore();
   const [result, setResult] = useState<Resource<Server.EndpointResponse>>();
   const [isWaiting, setIsWaiting] = useState(false);
@@ -37,4 +38,8 @@ export function PruneTestsRoute(): JSX.Element {
       </ContainerFull>
     </main>
   );
-}
+};
+
+export const pruneTestRouteLazy = createLazyRoute('/$')({
+  component: PruneTestsRoute,
+});

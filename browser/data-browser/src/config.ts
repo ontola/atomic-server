@@ -1,4 +1,6 @@
+/// <reference types="vite/client" />
+
 /** Returns true if this is run in locally, in Development mode */
 export function isDev(): boolean {
-  return import.meta.env['MODE'] === 'development';
+  return import.meta.env.MODE === 'development';
 }

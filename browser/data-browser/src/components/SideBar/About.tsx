@@ -4,6 +4,7 @@ import { FaGithub, FaDiscord, FaBook } from 'react-icons/fa';
 import { IconButtonLink, IconButtonVariant } from '../IconButton/IconButton';
 import { FaRadiation } from 'react-icons/fa6';
 import { isDev } from '../../config';
+import { paths } from '../../routes/paths';
 
 interface AboutItem {
   icon: React.ReactNode;
@@ -49,7 +50,7 @@ export function About() {
         ))}
         {isDev() && (
           <IconButtonLink
-            href='/sandbox'
+            href={paths.sandbox}
             title='Sandbox, test components in isolation'
             size='1.2em'
             color='textLight'

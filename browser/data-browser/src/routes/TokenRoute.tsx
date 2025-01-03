@@ -4,9 +4,18 @@ import { CodeBlock } from '../components/CodeBlock';
 import { createAuthentication, useServerURL } from '@tomic/react';
 import { useSettings } from '../helpers/AppSettings';
 import { Main } from '../components/Main';
+import { pathNames } from './paths';
+import { appRoute } from './RootRoutes';
+import { createRoute } from '@tanstack/react-router';
+
+export const TokenRoute = createRoute({
+  path: pathNames.token,
+  component: () => <TokenRoutePage />,
+  getParentRoute: () => appRoute,
+});
 
 /** Lets user create bearer tokens */
-export const TokenRoute: React.FunctionComponent = () => {
+const TokenRoutePage: React.FunctionComponent = () => {
   const [token, setToken] = React.useState('');
   const { agent } = useSettings();
   const [server] = useServerURL();

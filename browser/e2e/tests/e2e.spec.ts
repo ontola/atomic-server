@@ -195,7 +195,7 @@ test.describe('data-browser', async () => {
     await page3.click('button:has-text("Accept")');
     await waiter;
     await page3.reload();
-    await expect(page3.locator(`text=${driveTitle}`).first()).toBeVisible();
+    await expect(page3.getByText(driveTitle).first()).toBeVisible();
   });
 
   test('chatroom', async ({ page, browser }) => {

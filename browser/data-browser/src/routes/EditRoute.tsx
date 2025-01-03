@@ -12,9 +12,18 @@ import { Column, Row } from '../components/Row';
 import { IconButton } from '../components/IconButton/IconButton';
 import { FaArrowLeft } from 'react-icons/fa';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
+import { createRoute } from '@tanstack/react-router';
+import { pathNames } from './paths';
+import { appRoute } from './RootRoutes';
+
+export const EditRoute = createRoute({
+  path: pathNames.edit,
+  component: () => <Edit />,
+  getParentRoute: () => appRoute,
+});
 
 /** Form for instantiating a new Resource from some Class */
-export function Edit(): JSX.Element {
+function Edit(): JSX.Element {
   const [subject] = useCurrentSubject();
   const resource = useResource(subject);
   const [subjectInput, setSubjectInput] = useState<string | undefined>(

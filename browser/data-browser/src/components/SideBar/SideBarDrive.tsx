@@ -8,7 +8,6 @@ import {
 } from '@tomic/react';
 import { Fragment, useEffect, useState, type JSX } from 'react';
 import { FaPlus } from 'react-icons/fa6';
-import { useNavigate } from 'react-router';
 import { styled } from 'styled-components';
 import { useSettings } from '../../helpers/AppSettings';
 import { constructOpenURL } from '../../helpers/navigation';
@@ -27,6 +26,7 @@ import { SidebarItemTitle } from './ResourceSideBar/SidebarItemTitle';
 import { DropEdge } from './ResourceSideBar/DropEdge';
 import { createPortal } from 'react-dom';
 import { transition } from '../../helpers/transition';
+import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 
 interface SideBarDriveProps {
   onItemClick: () => unknown;
@@ -55,7 +55,7 @@ export function SideBarDrive({
     dataBrowser.properties.subResources,
   );
   const [title] = useTitle(driveResource);
-  const navigate = useNavigate();
+  const navigate = useNavigateWithTransition();
   const agentCanWrite = useCanWrite(driveResource);
   const [currentSubject] = useCurrentSubject();
   const currentResource = useResource(currentSubject);

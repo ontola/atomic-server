@@ -6,8 +6,9 @@ import { styled } from 'styled-components';
 import { Column, Row } from '../../../components/Row';
 import { toAnchorId } from '../../../helpers/toAnchorId';
 import InputSwitcher from '../../../components/forms/InputSwitcher';
-import ResourceContextMenu, {
+import {
   ContextMenuOptions,
+  ResourceContextMenu,
 } from '../../../components/ResourceContextMenu';
 import { useOntologyContext } from '../OntologyContext';
 import { PropertyFormCommon } from './PropertyFormCommon';
@@ -16,15 +17,14 @@ interface PropertyCardWriteProps {
   subject: string;
 }
 
-const contextOptions = [
-  ContextMenuOptions.Open,
-  ContextMenuOptions.Delete,
-  ContextMenuOptions.History,
-];
-
 export function PropertyCardWrite({
   subject,
 }: PropertyCardWriteProps): JSX.Element {
+  const contextOptions = [
+    ContextMenuOptions.Open,
+    ContextMenuOptions.Delete,
+    ContextMenuOptions.History,
+  ];
   const resource = useResource(subject);
   const shortnameProp = useProperty(urls.properties.shortname);
   const canEdit = useCanWrite(resource);

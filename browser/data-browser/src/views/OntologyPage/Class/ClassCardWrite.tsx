@@ -1,3 +1,7 @@
+import {
+  ContextMenuOptions,
+  ResourceContextMenu,
+} from '../../../components/ResourceContextMenu';
 import { urls, useArray, useProperty, useResource } from '@tomic/react';
 import { useCallback, type JSX } from 'react';
 import { Card } from '../../../components/Card';
@@ -7,9 +11,6 @@ import { Column, Row } from '../../../components/Row';
 import { OntologyDescription } from '../OntologyDescription';
 import { PropertyLineWrite } from '../Property/PropertyLineWrite';
 import InputSwitcher from '../../../components/forms/InputSwitcher';
-import ResourceContextMenu, {
-  ContextMenuOptions,
-} from '../../../components/ResourceContextMenu';
 import { toAnchorId } from '../../../helpers/toAnchorId';
 import { AddPropertyButton } from './AddPropertyButton';
 import { ErrorChipInput } from '../../../components/forms/ErrorChip';
@@ -19,13 +20,12 @@ interface ClassCardWriteProps {
   subject: string;
 }
 
-const contextOptions = [
-  ContextMenuOptions.Open,
-  ContextMenuOptions.Delete,
-  ContextMenuOptions.History,
-];
-
 export function ClassCardWrite({ subject }: ClassCardWriteProps): JSX.Element {
+  const contextOptions = [
+    ContextMenuOptions.Open,
+    ContextMenuOptions.Delete,
+    ContextMenuOptions.History,
+  ];
   const resource = useResource(subject);
   const [requires, setRequires] = useArray(resource, urls.properties.requires, {
     commit: true,

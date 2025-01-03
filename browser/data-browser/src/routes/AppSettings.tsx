@@ -1,17 +1,26 @@
 import * as React from 'react';
-import { ContainerNarrow } from '../components/Containers';
+import { createRoute } from '@tanstack/react-router';
 import { HexColorPicker } from 'react-colorful';
+import { styled } from 'styled-components';
+import { ContainerNarrow } from '../components/Containers';
 import { Button } from '../components/Button';
 import { useSettings } from '../helpers/AppSettings';
 import { NavStyleButton } from '../components/NavStyleButton';
 import { DarkModeOption } from '../helpers/useDarkMode';
 import { Column, Row } from '../components/Row';
-import { styled } from 'styled-components';
 import { Checkbox, CheckboxLabel } from '../components/forms/Checkbox';
 import { Main } from '../components/Main';
 import { Panel, usePanelList } from '../components/SideBar/usePanelList';
+import { pathNames } from './paths';
+import { appRoute } from './RootRoutes';
 
-export const SettingsTheme: React.FunctionComponent = () => {
+export const AppSettingsRoute = createRoute({
+  path: pathNames.appSettings,
+  component: () => <AppSettings />,
+  getParentRoute: () => appRoute,
+});
+
+const AppSettings: React.FunctionComponent = () => {
   const {
     darkModeSetting,
     setDarkMode,

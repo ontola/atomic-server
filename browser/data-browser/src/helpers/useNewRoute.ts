@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
-import { useNavigate } from 'react-router';
 import { paths } from '../routes/paths';
+import { useNavigate } from '@tanstack/react-router';
 
 function buildURL(parent?: string) {
   const params = new URLSearchParams({
@@ -15,7 +15,7 @@ export function useNewRoute(parent?: string) {
 
   const navigateToNewRoute = useCallback(() => {
     const url = buildURL(parent);
-    navigate(url);
+    navigate({ to: url });
   }, [parent]);
 
   return navigateToNewRoute;
