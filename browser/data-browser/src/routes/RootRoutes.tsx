@@ -1,4 +1,9 @@
-import { createRootRoute, createRoute, Outlet } from '@tanstack/react-router';
+import {
+  createRootRoute,
+  createRoute,
+  Outlet,
+  useLocation,
+} from '@tanstack/react-router';
 import { pathNames } from './paths';
 // import { TanStackRouterDevtools } from '@tanstack/router-devtools';
 import { Providers } from '../Providers';
@@ -22,7 +27,12 @@ export const rootRoute = createRootRoute({
 });
 
 const TopRouteComponent: React.FC = () => {
-  return <ResourcePage subject={location.href} key={location.href} />;
+  const { href } = useLocation();
+
+  // We need to combine origin with tanstack's href because tanstack does not include the origin in the href but the normal window.location.href is not reactive.
+  const subject = window.location.origin + href;
+
+  return <ResourcePage subject={subject} key={subject} />;
 };
 
 export const topRoute = createRoute({
