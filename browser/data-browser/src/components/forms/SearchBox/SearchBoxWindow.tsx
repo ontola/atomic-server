@@ -26,6 +26,7 @@ import { useTitlePropOfClass } from '../ResourceSelector/useTitlePropOfClass';
 import { stringToSlug } from '../../../helpers/stringToSlug';
 import { addIf } from '../../../helpers/addIf';
 import { Row } from '../../Row';
+import React from 'react';
 
 /**
  * Options shown at the top of the results when the `isA` prop matches a key in this object.
@@ -69,6 +70,7 @@ interface SearchBoxWindowProps {
  * The window that opens when the searchbox is focussed.
  * It handles searching, both locally and on the server.
  */
+
 export function SearchBoxWindow({
   searchValue,
   onChange,
@@ -95,7 +97,7 @@ export function SearchBoxWindow({
   const isAboveTrigger = below < remToPixels(BOX_HEIGHT_REM);
 
   const showCreateOption =
-    onCreateItem && searchValue && !valueIsURL && !allowsOnly;
+    !!onCreateItem && !!searchValue && !valueIsURL && !allowsOnly;
 
   const standardOptions = useMemo(() => {
     if (!searchValue && isA && isA in STANDARD_OPTIONS) {
@@ -107,7 +109,7 @@ export function SearchBoxWindow({
 
   const options: Option[] = useMemo(
     () => [
-      ...addIf(!!showCreateOption, {
+      ...addIf(showCreateOption, {
         type: OptionType.CreateOption,
         data: '',
       }),
@@ -277,7 +279,7 @@ export function SearchBoxWindow({
         />
       </SearchInputWrapper>
       <ResultBox data-testid='searchbox-results'>
-        {!searchValue && results.length === 0 && (
+        {!searchValue && options.length === 0 && (
           <CenteredMessage>Start Searching</CenteredMessage>
         )}
         <StyledScrollArea>
@@ -288,7 +290,6 @@ export function SearchBoxWindow({
               if (option.type === OptionType.CreateOption) {
                 line = (
                   <ResultLine
-                    key={'create option'}
                     selected={selectedIndex === 0}
                     onMouseOver={() => handleMouseMove(0)}
                     onClick={() => createItem(searchValue)}
@@ -306,7 +307,6 @@ export function SearchBoxWindow({
               } else {
                 line = (
                   <ResourceResultLine
-                    key={option.data}
                     subject={option.data}
                     selected={i === selectedIndex}
                     onMouseOver={() => handleMouseMove(i)}
@@ -318,15 +318,22 @@ export function SearchBoxWindow({
                 );
               }
 
+              // Show a divider if the next option is of a different type. But not on the last option.
               const showDivider =
                 options[i + 1] !== undefined &&
                 option.type !== options[i + 1].type;
 
               return (
-                <>
+                <React.Fragment
+                  key={
+                    option.type === OptionType.CreateOption
+                      ? 'create option'
+                      : option.data
+                  }
+                >
                   {line}
                   {showDivider && <Divider />}
-                </>
+                </React.Fragment>
               );
             })}
           </List>
