@@ -63,4 +63,51 @@ export class AtomicServer {
       .withWorkdir("/src")
       .withExec(["npm", "install"]);
   }
+
+  @func()
+  buildJS(@argument({ defaultPath: "/browser" }) source: Directory): Container {
+    const depsContainer = this.getDeps(source.directory("."));
+
+    const buildContainer = depsContainer
+      .withWorkdir("/app")
+      .withExec(["pnpm", "run", "build"]);
+
+    return buildContainer;
+  }
+
+  @func()
+  private getDeps(source: Directory): Container {
+    // Create a container with PNPM installed
+    const pnpmContainer = dag
+      .container()
+      .from("node:24")
+      .withExec(["npm", "install", "--global", "corepack@latest"])
+      .withExec(["corepack", "enable"])
+      .withExec(["corepack", "prepare", "pnpm@latest-10", "--activate"])
+      .withWorkdir("/app");
+
+    // Copy workspace files first
+    const workspaceContainer = pnpmContainer
+      .withFile("/app/package.json", source.file("package.json"))
+      .withFile("/app/pnpm-lock.yaml", source.file("pnpm-lock.yaml"))
+      .withFile("/app/pnpm-workspace.yaml", source.file("pnpm-workspace.yaml"))
+      .withFile(
+        "/app/data-browser/package.json",
+        source.file("data-browser/package.json")
+      )
+      .withFile("/app/lib/package.json", source.file("lib/package.json"))
+      .withFile("/app/react/package.json", source.file("react/package.json"))
+      .withFile("/app/svelte/package.json", source.file("svelte/package.json"))
+      .withFile("/app/cli/package.json", source.file("cli/package.json"));
+
+    // Install dependencies
+    const depsContainer = workspaceContainer.withExec([
+      "sh",
+      "-c",
+      "yes | pnpm install --frozen-lockfile --shamefully-hoist",
+    ]);
+
+    // Copy the rest of the source
+    return depsContainer.withDirectory("/app", source);
+  }
 }
