@@ -70,7 +70,6 @@ interface SearchBoxWindowProps {
  * The window that opens when the searchbox is focussed.
  * It handles searching, both locally and on the server.
  */
-
 export function SearchBoxWindow({
   searchValue,
   onChange,

@@ -16,14 +16,12 @@ export const LoaderInline = styled.span`
   background-color: ${p => p.theme.colors.bg1};
   border-radius: ${p => p.theme.radius};
   animation: ${loadingAnimation} 0.8s infinite ease-in-out alternate;
-  /* width: 100%; */
   flex: 1;
   display: inline-block;
   padding: 0;
   padding-inline: 1ch;
   margin: 0;
   color: ${p => p.theme.colors.textLight};
-  /* height: 1rem; */
 `;
 
 export const LoaderBlock = styled.div`
