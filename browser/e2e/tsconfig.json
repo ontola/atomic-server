@@ -4,25 +4,9 @@
     "composite": true,
     // We overwrite this so we don't have to use `.js` extensions in imports
     "moduleResolution": "node",
-    "lib": [
-      "ES6",
-      "ES7",
-      "ESNext",
-      "DOM"
-    ],
+    "lib": ["ES6", "ES7", "ESNext", "DOM"],
     "outDir": "./dist",
-    "strictNullChecks": true,
+    "strictNullChecks": true
   },
-  "include": [
-    "./tests",
-    "playwright.config.ts"
-  ],
-  "references": [
-    {
-      "path": "../lib"
-    },
-    {
-      "path": "../react"
-    }
-  ]
+  "include": ["./tests", "playwright.config.ts"]
 }

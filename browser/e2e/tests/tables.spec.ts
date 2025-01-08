@@ -6,6 +6,15 @@ import {
   waitForCommit,
   before,
 } from './test-utils';
+
+type Row = {
+  name: string;
+  date: string;
+  number: string;
+  checkbox: boolean;
+  select: string;
+};
+
 test.describe('tables', async () => {
   test.beforeEach(before);
 
@@ -39,7 +48,7 @@ test.describe('tables', async () => {
       await expect(page.getByPlaceholder('filter tags')).not.toBeVisible();
     };
 
-    const fillRow = async (currentRowNumber: number, row) => {
+    const fillRow = async (currentRowNumber: number, row: Row) => {
       const { name, date, number, checkbox, select } = row;
       const rowIndex = currentRowNumber + 1;
       await page.keyboard.press('Enter');
