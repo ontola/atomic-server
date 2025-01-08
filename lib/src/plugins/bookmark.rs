@@ -135,39 +135,37 @@ impl Parser {
 
     pub fn get_meta(&self) -> SiteMeta {
         let document = parse_html().one(self.internal_html.clone());
-        let mut title = None;
-        let mut description = None;
-        let mut image = None;
 
-        if let Ok(title_element) = document.select_first("title") {
-            title = Some(title_element.text_contents());
-        }
+        let title = document
+            .select_first("title")
+            .ok()
+            .map(|element| element.text_contents());
 
-        if let Ok(description_element) =
-            document.select_first("meta[name='description'], meta[property='og:description']")
-        {
-            description = Some(
-                description_element
+        let description = document
+            .select_first("meta[name='description'], meta[property='og:description']")
+            .ok()
+            .map(|element| {
+                element
                     .attributes
                     .borrow()
                     .get("content")
                     .unwrap_or("")
-                    .to_string(),
-            );
-        }
+                    .to_string()
+            });
 
-        if let Ok(image_element) =
-            document.select_first("meta[property='og:image'], meta[name='twitter:image']")
-        {
-            image = Some(
-                image_element
+        let image = document
+            .select_first("meta[property='og:image'], meta[name='twitter:image']")
+            .ok()
+            .map(|element| {
+                let image_url = element
                     .attributes
                     .borrow()
                     .get("content")
                     .unwrap_or("")
-                    .to_string(),
-            );
-        }
+                    .to_string();
+
+                self.relative_to_absolute_url(&image_url)
+            });
 
         SiteMeta {
             title,
@@ -182,6 +180,34 @@ impl Parser {
         self.process_html()?;
 
         Ok(self.internal_html.clone())
+    }
+
+    fn relative_to_absolute_url(&self, url: &str) -> String {
+        if url.starts_with('/') {
+            // If it starts with //, it's protocol-relative
+            if url.starts_with("//") {
+                return format!("https:{}", url);
+            }
+            // Get the base URL (scheme + authority)
+            let base = format!(
+                "{}://{}",
+                self.url.scheme(),
+                self.url.host_str().unwrap_or("")
+            );
+
+            return format!("{}{}", base, url);
+        }
+
+        if !url.contains("://") {
+            // Handle relative URLs without leading slash
+            return self
+                .url
+                .join(url)
+                .map(|u| u.to_string())
+                .unwrap_or(url.to_string());
+        }
+
+        url.to_string()
     }
 
     fn resolve_url(&self, url: &str) -> String {
