@@ -65,7 +65,9 @@ export class AtomicServer {
   }
 
   @func()
-  buildJS(@argument({ defaultPath: "/browser" }) source: Directory): Container {
+  buildBrowser(
+    @argument({ defaultPath: "/browser" }) source: Directory
+  ): Container {
     const depsContainer = this.getDeps(source.directory("."));
 
     const buildContainer = depsContainer
@@ -73,6 +75,28 @@ export class AtomicServer {
       .withExec(["pnpm", "run", "build"]);
 
     return buildContainer;
+  }
+
+  @func()
+  async lintBrowser(
+    @argument({ defaultPath: "/browser" }) source: Directory
+  ): Promise<string> {
+    const depsContainer = this.getDeps(source.directory("."));
+    return depsContainer
+      .withWorkdir("/app")
+      .withExec(["pnpm", "run", "lint"])
+      .stdout();
+  }
+
+  @func()
+  async testBrowser(
+    @argument({ defaultPath: "/browser" }) source: Directory
+  ): Promise<string> {
+    const depsContainer = this.getDeps(source.directory("."));
+    return depsContainer
+      .withWorkdir("/app")
+      .withExec(["pnpm", "run", "test"])
+      .stdout();
   }
 
   @func()
