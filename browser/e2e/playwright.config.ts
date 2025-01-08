@@ -9,6 +9,15 @@ const config: PlaywrightTestConfig = {
     timezoneId: 'Europe/Amsterdam',
     actionTimeout: 5000,
     trace: 'retain-on-failure',
+    storageState: {
+      cookies: [],
+      origins: [
+        {
+          origin: 'http://localhost:5173',
+          localStorage: [{ name: 'viewTransitionsDisabled', value: 'true' }],
+        },
+      ],
+    },
   },
   reporter: [
     [

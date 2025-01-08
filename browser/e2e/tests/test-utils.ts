@@ -73,19 +73,8 @@ export async function setTitle(page: Page, title: string) {
   await waiter;
 }
 
-export async function disableViewTransition(page: Page) {
-  await page.getByRole('link', { name: 'Settings' }).click();
-  const checkbox = page.getByLabel('Disable page transition animations');
-
-  await expect(checkbox).toBeVisible();
-
-  await checkbox.check();
-  await page.goBack();
-}
-
 /** Signs in using an AtomicData.dev test user */
 export async function signIn(page: Page) {
-  await disableViewTransition(page);
   await page.click('text=Login');
   await expect(page.locator('text=edit data and sign Commits')).toBeVisible();
   // If there are any issues with this agent, try creating a new one https://atomicdata.dev/invites/1
