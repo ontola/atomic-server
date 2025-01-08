@@ -5,7 +5,11 @@ import {
   object,
   func,
   argument,
+  File,
+  Secret,
 } from "@dagger.io/dagger";
+
+const NODE_IMAGE = "node:24";
 
 @object()
 export class AtomicServer {
@@ -57,7 +61,7 @@ export class AtomicServer {
     const nodeCache = dag.cacheVolume("node");
     return dag
       .container()
-      .from("node:21-slim")
+      .from(NODE_IMAGE)
       .withDirectory("/src", source)
       .withMountedCache("/root/.npm", nodeCache)
       .withWorkdir("/src")
@@ -100,11 +104,24 @@ export class AtomicServer {
   }
 
   @func()
+  typedocPublish(
+    @argument({ defaultPath: "/browser" }) source: Directory,
+    @argument() netlifyAuthToken: Secret
+  ): Promise<string> {
+    const browserDir = this.buildBrowser(source.directory("."));
+    return browserDir
+      .withWorkdir("/app")
+      .withSecretVariable("NETLIFY_AUTH_TOKEN", netlifyAuthToken)
+      .withExec(["pnpm", "run", "typedoc-publish"])
+      .stdout();
+  }
+
+  @func()
   private getDeps(source: Directory): Container {
     // Create a container with PNPM installed
     const pnpmContainer = dag
       .container()
-      .from("node:24")
+      .from(NODE_IMAGE)
       .withExec(["npm", "install", "--global", "corepack@latest"])
       .withExec(["corepack", "enable"])
       .withExec(["corepack", "prepare", "pnpm@latest-10", "--activate"])

@@ -1,4 +1,5 @@
 /target
+.envrc
 .env
 trace-*.json
 **/.temp
