@@ -10,9 +10,15 @@
     "build",
     ".env",
     ".git",
+    ".temp",
+    ".cargo",
+    "tmp",
+    "book",
     ".github",
     ".husky",
-    ".vscode"
+    ".vscode",
+    "target/**",
+    "artifact/**"
   ],
   "source": ".dagger"
 }

@@ -5,7 +5,6 @@ import {
   object,
   func,
   argument,
-  File,
   Secret,
 } from "@dagger.io/dagger";
 
@@ -14,65 +13,25 @@ const RUST_IMAGE = "rust:bookworm";
 
 @object()
 export class AtomicServer {
-  /**
-   * Publish the application container after building and testing it on-the-fly
-   */
   @func()
-  async publish(
-    @argument({ defaultPath: "/" }) source: Directory
-  ): Promise<string> {
-    await this.test(source);
-    return await this.build(source).publish(
-      "ttl.sh/hello-dagger-" + Math.floor(Math.random() * 10000000)
-    );
-  }
-
-  /**
-   * Build the application container
-   */
-  @func()
-  build(@argument({ defaultPath: "/" }) source: Directory): Container {
-    const build = this.buildEnv(source)
-      .withExec(["npm", "run", "build"])
-      .directory("./dist");
-    return dag
-      .container()
-      .from("nginx:1.25-alpine")
-      .withDirectory("/usr/share/nginx/html", build)
-      .withExposedPort(80);
-  }
-
-  /**
-   * Return the result of running unit tests
-   */
-  @func()
-  async test(
-    @argument({ defaultPath: "/" }) source: Directory
-  ): Promise<string> {
-    return this.buildEnv(source)
-      .withExec(["npm", "run", "test:unit", "run"])
-      .stdout();
-  }
-
-  /**
-   * Build a ready-to-use development environment
-   */
-  @func()
-  buildEnv(@argument({ defaultPath: "/" }) source: Directory): Container {
-    const nodeCache = dag.cacheVolume("node");
-    return dag
-      .container()
-      .from(NODE_IMAGE)
-      .withDirectory("/src", source)
-      .withMountedCache("/root/.npm", nodeCache)
-      .withWorkdir("/src")
-      .withExec(["npm", "install"]);
+  async ci(
+    @argument() netlifyAuthToken: Secret
+  ): Promise<(string | Container)[]> {
+    return Promise.all([
+      this.docsPublish(netlifyAuthToken),
+      this.buildBrowser(),
+      this.lintBrowser(),
+      this.testBrowser(),
+      this.ee(netlifyAuthToken),
+      this.rustTest(),
+      this.rustClippy(),
+      this.rustFmt(),
+    ]);
   }
 
   @func()
-  buildBrowser(
-    @argument({ defaultPath: "/browser" }) source: Directory
-  ): Container {
+  buildBrowser(): Container {
+    const source = dag.currentModule().source().directory("browser");
     const depsContainer = this.getDeps(source.directory("."));
 
     const buildContainer = depsContainer
@@ -83,9 +42,8 @@ export class AtomicServer {
   }
 
   @func()
-  async lintBrowser(
-    @argument({ defaultPath: "/browser" }) source: Directory
-  ): Promise<string> {
+  async lintBrowser(): Promise<string> {
+    const source = dag.currentModule().source().directory("browser");
     const depsContainer = this.getDeps(source.directory("."));
     return depsContainer
       .withWorkdir("/app")
@@ -94,9 +52,8 @@ export class AtomicServer {
   }
 
   @func()
-  async testBrowser(
-    @argument({ defaultPath: "/browser" }) source: Directory
-  ): Promise<string> {
+  async testBrowser(): Promise<string> {
+    const source = dag.currentModule().source().directory("browser");
     const depsContainer = this.getDeps(source.directory("."));
     return depsContainer
       .withWorkdir("/app")
@@ -105,16 +62,14 @@ export class AtomicServer {
   }
 
   @func()
-  docsPublish(
-    @argument({ defaultPath: "/docs" }) source: Directory,
-    @argument() netlifyAuthToken: Secret
-  ): Promise<string> {
+  docsPublish(@argument() netlifyAuthToken: Secret): Promise<string> {
+    const builtDocsHtml = this.docsFolder();
     return dag
       .container()
       .from(NODE_IMAGE)
       .withExec(["npm", "install", "-g", "netlify-cli"])
       .withSecretVariable("NETLIFY_AUTH_TOKEN", netlifyAuthToken)
-      .withDirectory("/html", this.docsFolder(source.directory(".")))
+      .withDirectory("/html", builtDocsHtml)
       .withWorkdir("/html")
       .withExec([
         "sh",
@@ -126,26 +81,25 @@ export class AtomicServer {
   }
 
   @func()
-  docsFolder(@argument({ defaultPath: "/docs" }) source: Directory): Directory {
+  docsFolder(): Directory {
+    const moduleSource = dag.currentModule().source();
+    const actualDocsDirectory = moduleSource.directory("docs");
+
     const docsContainer = dag
       .container()
       .from(RUST_IMAGE)
       .withExec(["cargo", "install", "mdbook"])
       .withExec(["cargo", "install", "mdbook-linkcheck"]);
-    // We skip installing mdbook-sitemap-generator because it's broken
     return docsContainer
-      .withDirectory("/docs", source)
+      .withDirectory("/docs", actualDocsDirectory) // Use the derived path
       .withWorkdir("/docs")
       .withExec(["mdbook", "build"])
       .directory("/docs/book/html");
   }
-
   @func()
-  typedocPublish(
-    @argument({ defaultPath: "/browser" }) source: Directory,
-    @argument() netlifyAuthToken: Secret
-  ): Promise<string> {
-    const browserDir = this.buildBrowser(source.directory("."));
+  typedocPublish(@argument() netlifyAuthToken: Secret): Promise<string> {
+    const source = dag.currentModule().source().directory("browser");
+    const browserDir = this.buildBrowser();
     return browserDir
       .withWorkdir("/app")
       .withSecretVariable("NETLIFY_AUTH_TOKEN", netlifyAuthToken)
@@ -187,5 +141,157 @@ export class AtomicServer {
 
     // Copy the rest of the source
     return depsContainer.withDirectory("/app", source);
+  }
+
+  @func()
+  rustBuild(): Container {
+    const source = dag.currentModule().source();
+    const cargoCache = dag.cacheVolume("cargo");
+
+    const rustContainer = dag
+      .container()
+      .from(RUST_IMAGE)
+      .withExec(["apt-get", "update", "-qq"])
+      .withExec(["apt", "install", "-y", "nasm"])
+      .withExec(["rustup", "component", "add", "clippy"])
+      .withExec(["rustup", "component", "add", "rustfmt"])
+      .withExec(["cargo", "install", "cross"])
+      .withExec(["cargo", "install", "cargo-nextest"])
+      .withMountedCache("/usr/local/cargo/registry", cargoCache);
+
+    // Copy source files like in Earthfile, but more selectively
+    const sourceContainer = rustContainer
+      .withFile("/code/Cargo.toml", source.file("Cargo.toml"))
+      .withFile("/code/Cargo.lock", source.file("Cargo.lock"))
+      .withFile("/code/Cross.toml", source.file("Cross.toml"))
+      .withDirectory("/code/server", source.directory("server"))
+      .withDirectory("/code/lib", source.directory("lib"))
+      .withDirectory("/code/cli", source.directory("cli"))
+      .withMountedCache("/code/target", dag.cacheVolume("rust-target"))
+      .withWorkdir("/code")
+      .withExec(["cargo", "fetch"]);
+
+    return sourceContainer
+      .withExec(["cargo", "build", "--release"])
+      .withExec(["./target/release/atomic-server", "--version"]);
+  }
+
+  @func()
+  rustTest(): Promise<string> {
+    return this.rustBuild().withExec(["cargo", "nextest", "run"]).stdout();
+  }
+
+  @func()
+  rustClippy(): Promise<string> {
+    const source = dag.currentModule().source();
+    const rustContainer = dag
+      .container()
+      .from(RUST_IMAGE)
+      .withExec(["rustup", "component", "add", "clippy"])
+      .withDirectory("/code", source)
+      .withWorkdir("/code");
+
+    return rustContainer
+      .withExec([
+        "cargo",
+        "clippy",
+        "--no-deps",
+        "--all-features",
+        "--all-targets",
+      ])
+      .stdout();
+  }
+
+  @func()
+  rustFmt(): Promise<string> {
+    const source = dag.currentModule().source();
+    const rustContainer = dag
+      .container()
+      .from(RUST_IMAGE)
+      .withExec(["rustup", "component", "add", "rustfmt"])
+      .withDirectory("/code", source)
+      .withWorkdir("/code");
+
+    return rustContainer.withExec(["cargo", "fmt", "--check"]).stdout();
+  }
+
+  @func()
+  rustCrossBuild(@argument() target: string): Container {
+    const source = dag.currentModule().source();
+    const rustContainer = dag
+      .container()
+      .from(RUST_IMAGE)
+      .withExec(["cargo", "install", "cross"])
+      .withDirectory("/code", source)
+      .withWorkdir("/code");
+
+    return rustContainer
+      .withExec(["cross", "build", "--target", target, "--release"])
+      .withExec([`./target/${target}/release/atomic-server`, "--version"]);
+  }
+
+  @func()
+  ee(@argument() netlifyAuthToken: Secret): Promise<string> {
+    const source = dag.currentModule().source();
+    // Setup Playwright container - debug and fix package manager
+    const playwrightContainer = dag
+      .container()
+      .from("mcr.microsoft.com/playwright:v1.48.1-noble")
+      .withExec([
+        "/bin/sh",
+        "-c",
+        'curl -fsSL https://get.pnpm.io/install.sh | env PNPM_VERSION=9.3.0 ENV="$HOME/.shrc" SHELL="$(which sh)" sh - && export PATH=/root/.local/share/pnpm:$PATH && /bin/apt update && /bin/apt install -y zip',
+      ])
+      .withEnvVariable(
+        "PATH",
+        "/root/.local/share/pnpm:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      )
+      .withExec(["pnpm", "dlx", "playwright", "install", "--with-deps"])
+      .withExec(["npm", "install", "-g", "netlify-cli"]);
+
+    // Get the atomic-server binary from the build
+    const atomicServerBinary = this.rustBuild().file(
+      "/code/target/release/atomic-server"
+    );
+
+    // Setup e2e test environment
+    const e2eContainer = playwrightContainer
+      .withFile(
+        "/app/e2e/package.json",
+        source.file("browser/e2e/package.json")
+      )
+      .withWorkdir("/app/e2e")
+      .withExec(["pnpm", "install"])
+      .withDirectory("/app", source.directory("browser/e2e"))
+      .withExec(["pnpm", "install"])
+      .withEnvVariable("LANGUAGE", "en_GB")
+      .withEnvVariable("DELETE_PREVIOUS_TEST_DRIVES", "false")
+      .withEnvVariable("FRONTEND_URL", "http://localhost:9883")
+      .withFile("/atomic-server-bin", atomicServerBinary, {
+        permissions: 0o755,
+      })
+      .withSecretVariable("NETLIFY_AUTH_TOKEN", netlifyAuthToken);
+
+    // Run the tests with atomic-server in background
+    const testResult = e2eContainer
+      .withExec([
+        "/bin/sh",
+        "-c",
+        "nohup /atomic-server-bin --initialize & pnpm run test-e2e && zip -r test.zip /app/e2e/playwright-report",
+      ])
+      .withExec(["unzip", "-o", "test.zip", "-d", "/artifact"]);
+
+    // Upload test results to Netlify
+    return testResult
+      .withExec([
+        "netlify",
+        "deploy",
+        "--dir",
+        "/artifact/app/e2e/playwright-report",
+        "--prod",
+        "--site",
+        "atomic-tests",
+      ])
+      .stdout();
   }
 }

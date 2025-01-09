@@ -1,0 +1,20 @@
+name: dagger
+on:
+  push:
+    branches: [main, dagger]
+jobs:
+  build-publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Call Dagger Function to build and publish to ghcr.io
+        uses: dagger/dagger-for-github@8.0.0
+        with:
+          version: "latest"
+          verb: call
+          args: ci
+          cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
