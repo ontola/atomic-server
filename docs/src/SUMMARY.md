@@ -38,9 +38,9 @@
       - [Image](svelte/image.md)
     - [@tomic/template](create-template/atomic-template.md)
     - [@tomic/cli](js-cli.md)
-  - [Rust](rust-lib.md)
-    - [Rust lib](rust-lib.md)
-    - [Rust CLI](rust-cli.md)
+  - [Rust](rust.md)
+    - [CLI](rust-cli.md)
+    - [Lib](rust-lib.md)
 
 # Guides
 
