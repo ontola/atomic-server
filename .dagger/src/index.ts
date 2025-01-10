@@ -84,17 +84,26 @@ export class AtomicServer {
   @func()
   docsPublish(@argument() netlifyAuthToken: Secret): Promise<string> {
     const builtDocsHtml = this.docsFolder();
+    return this.netlifyDeploy(builtDocsHtml, "atomic-docs", netlifyAuthToken);
+  }
+
+  private netlifyDeploy(
+    /** The directory to deploy */
+    directory: Directory,
+    siteName: string,
+    netlifyAuthToken: Secret
+  ): Promise<string> {
     return dag
       .container()
       .from(NODE_IMAGE)
       .withExec(["npm", "install", "-g", "netlify-cli"])
+      .withDirectory("/deploy", directory)
+      .withWorkdir("/deploy")
       .withSecretVariable("NETLIFY_AUTH_TOKEN", netlifyAuthToken)
-      .withDirectory("/html", builtDocsHtml)
-      .withWorkdir("/html")
       .withExec([
         "sh",
         "-c",
-        "netlify link --name atomic-docs --auth $NETLIFY_AUTH_TOKEN",
+        `netlify link --name ${siteName} --auth $NETLIFY_AUTH_TOKEN`,
       ])
       .withExec(["netlify", "deploy", "--dir", ".", "--prod"])
       .stdout();
@@ -308,17 +317,14 @@ export class AtomicServer {
       .withExec(["zip", "-r", "test.zip", "playwright-report"])
       .withExec(["unzip", "-o", "test.zip", "-d", "/artifact"]);
 
-    // Upload test results to Netlify
-    return testResult
-      .withExec([
-        "netlify",
-        "deploy",
-        "--dir",
-        "/artifact/app/playwright-report",
-        "--prod",
-        "--site",
-        "atomic-tests",
-      ])
-      .stdout();
+    // Extract the test results directory and upload to Netlify
+    const testReportDirectory = testResult.directory(
+      "/artifact/app/playwright-report"
+    );
+    return this.netlifyDeploy(
+      testReportDirectory,
+      "atomic-tests",
+      netlifyAuthToken
+    );
   }
 }
