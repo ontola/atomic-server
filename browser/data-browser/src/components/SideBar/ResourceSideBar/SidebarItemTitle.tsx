@@ -83,6 +83,7 @@ export const SidebarItemTitle = forwardRef<
             ref={ref}
             {...(listeners ?? {})}
             {...(attributes ?? {})}
+            role='link'
           >
             <SideBarItem
               onClick={onClick}

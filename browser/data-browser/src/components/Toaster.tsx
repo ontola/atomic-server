@@ -39,8 +39,8 @@ export function Toaster(): JSX.Element {
             border: `solid 1px ${theme.colors.bg2}`,
             position: 'relative',
             animation: t.visible
-              ? 'toast-enter .5s ease'
-              : 'toast-exit 1s ease',
+              ? 'toast-enter .2s ease-out'
+              : 'toast-exit 1s ease-in',
           }}
         >
           {({ icon, message }) => (

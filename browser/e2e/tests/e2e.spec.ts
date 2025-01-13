@@ -75,7 +75,7 @@ test.describe('data-browser', async () => {
     // Use invite
     await clickSidebarItem(DEMO_INVITE_NAME, page);
     await page.click('text=Accept as new user');
-    await expect(page.locator(editableTitle)).toBeVisible();
+    await expect(editableTitle(page)).toBeVisible();
     // We need the initial enter because removing the top line isn't working ATM
     await page.keyboard.press('Enter');
     const teststring = `Testline ${timestamp()}`;
@@ -86,8 +86,8 @@ test.describe('data-browser', async () => {
     await page.keyboard.press('Alt+Backspace');
     await expect(page.locator(`text=${teststring}`)).not.toBeVisible();
     const docTitle = `Document Title ${timestamp()}`;
-    await page.click(editableTitle, { delay: 200 });
-    await page.fill(editableTitle, docTitle);
+    await editableTitle(page).click();
+    await editableTitle(page).fill(docTitle);
     // Not sure if this test is needed - it fails now.
     // await expect(page.locator(documentTitle)).toBeFocused();
     // Check if we can edit our profile
@@ -260,13 +260,13 @@ test.describe('data-browser', async () => {
     await newDrive(page);
     await newResource('folder', page);
 
-    await page.locator(editableTitle).click();
+    await editableTitle(page).click();
     // loop over all letters in alphabet
 
     const alphabet = 'abcdefghijklmnopqrstuvwxyz';
 
     for (const letter of alphabet) {
-      await page.type(editableTitle, letter, { delay: Math.random() * 300 });
+      await editableTitle(page).type(letter, { delay: Math.random() * 300 });
     }
 
     // wait for commit debounce
@@ -299,7 +299,7 @@ test.describe('data-browser', async () => {
       .getByRole('button', { name: 'New Resource', exact: true })
       .click();
     await page.click('button:has-text("Document")');
-    await page.locator(editableTitle).click();
+    await editableTitle(page).click();
     await page.keyboard.type('RAM Downloading Strategies');
     await page.keyboard.press('Enter');
     await clickSidebarItem('Untitled folder', page);

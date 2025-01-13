@@ -25,9 +25,9 @@ export const testFilePath = (filename: string) => {
 };
 
 export const timestamp = () => new Date().toLocaleTimeString();
-export const editableTitle = '[data-test="editable-title"]';
 export const sideBarDriveSwitcher = '[title="Open Drive Settings"]';
 export const sideBarNewResourceTestId = 'sidebar-new-resource';
+export const editableTitle = (page: Page) => page.getByTestId('editable-title');
 export const currentDriveTitle = (page: Page) =>
   page.getByTestId('current-drive-title');
 export const publicReadRightLocator = (page: Page) =>
@@ -65,9 +65,9 @@ export const before = async ({ page }: { page: Page }) => {
 
 export async function setTitle(page: Page, title: string) {
   const waiter = waitForCommitOnCurrentResource(page);
-  await page.locator(editableTitle).click();
-  await page.locator(`${editableTitle} > input`);
-  await page.type(editableTitle, title);
+  await editableTitle(page).click();
+  await expect(editableTitle(page)).toHaveRole('textbox');
+  await editableTitle(page).type(title);
   await page.keyboard.press('Escape');
   // await page.waitForTimeout(500);
   await waiter;
@@ -285,10 +285,10 @@ export async function changeDrive(subject: string, page: Page) {
 }
 
 export async function editTitle(title: string, page: Page) {
-  await expect(page.locator(editableTitle)).toHaveRole('heading');
-  await page.locator(editableTitle).click();
-  await expect(page.locator(editableTitle)).toHaveRole('textbox');
-  await page.fill(editableTitle, title);
+  await expect(editableTitle(page)).toHaveRole('heading');
+  await editableTitle(page).click();
+  await expect(editableTitle(page)).toHaveRole('textbox');
+  await editableTitle(page).fill(title);
   await page.keyboard.press('Enter');
   // Make sure the commit is processed
   // await page.waitForTimeout(300);
@@ -302,9 +302,7 @@ export async function clickSidebarItem(text: string, page: Page) {
 export async function contextMenuClick(text: string, page: Page) {
   await page.click(contextMenu);
   await page.waitForTimeout(100);
-  await page
-    .locator(`[data-test="menu-item-${text}"] >> visible = true`)
-    .click();
+  await page.getByTestId(`menu-item-${text}`).click();
 }
 
 export const waitForCommit = async (page: Page) =>

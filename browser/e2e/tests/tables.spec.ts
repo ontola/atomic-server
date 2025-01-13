@@ -5,6 +5,7 @@ import {
   newResource,
   waitForCommit,
   before,
+  currentDialog,
 } from './test-utils';
 
 type Row = {
@@ -121,11 +122,11 @@ test.describe('tables', async () => {
     await newColumn('Date');
     await expect(page.locator('text=New Date Column')).toBeVisible();
     const dateColumnName = 'Existed since';
-    await page
-      .locator('[placeholder="New Column"] >> visible = true')
+    await currentDialog(page)
+      .getByPlaceholder('New Column')
       .fill(dateColumnName);
-    await page.getByLabel('Long').click();
-    await page.locator('button:has-text("Create")').click();
+    await currentDialog(page).getByLabel('Long').click();
+    await currentDialog(page).getByRole('button', { name: 'Create' }).click();
     await waitForCommit(page);
     await expect(page.locator('text=New Date Column')).not.toBeVisible();
     await expect(
@@ -136,8 +137,8 @@ test.describe('tables', async () => {
     await newColumn('Number');
     const numberColumnName = 'Number of tracks';
     await expect(page.locator('text=New Number Column')).toBeVisible();
-    await page
-      .locator('[placeholder="New Column"] >> visible = true')
+    await currentDialog(page)
+      .getByPlaceholder('New Column')
       .fill(numberColumnName);
 
     await page.locator('button:has-text("Create")').click();
@@ -151,8 +152,8 @@ test.describe('tables', async () => {
     await newColumn('Checkbox');
     await expect(page.locator('text=New Checkbox Column')).toBeVisible();
     const checkboxColumnName = 'Approved by W3C';
-    await page
-      .locator('[placeholder="New Column"] >> visible = true')
+    await currentDialog(page)
+      .getByPlaceholder('New Column')
       .fill(checkboxColumnName);
     await page.locator('button:has-text("Create")').click();
     await waitForCommit(page);
@@ -165,8 +166,8 @@ test.describe('tables', async () => {
     await newColumn('Select');
     const selectColumnName = 'Descriptive words';
     await expect(page.locator('text=New Select Column')).toBeVisible();
-    await page
-      .locator('[placeholder="New Column"] >> visible = true')
+    await currentDialog(page)
+      .getByPlaceholder('New Column')
       .fill(selectColumnName);
 
     await createTag('😤', 'wild');

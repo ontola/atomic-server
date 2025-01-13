@@ -7,6 +7,8 @@ import {
 } from './test-utils';
 
 setup('delete previous test data', async ({ page }) => {
+  setup.slow();
+
   if (!DELETE_PREVIOUS_TEST_DRIVES) {
     expect(true).toBe(true);
 

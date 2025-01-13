@@ -125,10 +125,9 @@ test.describe('Create Next.js Template', () => {
 
     await setupTemplateSite(TEMPLATE_DIR_NAME, drive.driveURL, 'nextjs-site');
 
-    const child = startServer(TEMPLATE_DIR_NAME, 'nextjs-site');
-
     try {
       //start server
+      const child = startServer(TEMPLATE_DIR_NAME, 'nextjs-site');
       const url = await waitForServer(child);
 
       // check if the server is running
@@ -157,14 +156,12 @@ test.describe('Create Next.js Template', () => {
       await expect(page.locator('body')).toContainText('Balloon');
       await expect(page.locator('body')).not.toContainText('coffee');
     } finally {
-      child.kill();
-      kill(3000)
-        .then(() => {
-          log('Next.js server shut down successfully');
-        })
-        .catch(err => {
-          console.error('Failed to shut down Next.js server:', err);
-        });
+      try {
+        await kill(3000);
+        log('Next.js server shut down successfully');
+      } catch (err) {
+        console.error('Failed to shut down Next.js server:', err);
+      }
     }
   });
 
@@ -211,9 +208,8 @@ test.describe('Create SvelteKit Template', () => {
       'sveltekit-site',
     );
 
-    const child = startServer(TEMPLATE_DIR_NAME, 'sveltekit-site');
-
     try {
+      const child = startServer(TEMPLATE_DIR_NAME, 'sveltekit-site');
       //start server
       const url = await waitForServer(child);
 
@@ -242,14 +238,14 @@ test.describe('Create SvelteKit Template', () => {
       await expect(page.locator('body')).toContainText('Balloon');
       await expect(page.locator('body')).not.toContainText('coffee');
     } finally {
-      child.kill();
-      kill(4174)
-        .then(() => {
-          log('SvelteKit server shut down successfully');
-        })
-        .catch(err => {
-          console.error('Failed to shut down SvelteKit server:', err);
-        });
+      try {
+        await kill(4174);
+        log('SvelteKit server shut down successfully');
+        // We need to wait for the process to be killed and playwright does not wait unless there is another expect coming.
+        expect(true).toBe(true);
+      } catch (err) {
+        console.error('Failed to shut down SvelteKit server:', err);
+      }
     }
   });
 

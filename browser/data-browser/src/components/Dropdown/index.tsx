@@ -299,7 +299,7 @@ export function DropdownMenu({
                     onClick();
                   }}
                   id={id}
-                  data-test={`menu-item-${id}`}
+                  data-testid={`menu-item-${id}`}
                   disabled={disabled}
                   key={id}
                   helper={shortcut ? `${helper} (${shortcut})` : helper}

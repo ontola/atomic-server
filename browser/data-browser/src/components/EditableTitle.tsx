@@ -67,7 +67,8 @@ export function EditableTitle({
   return isEditing ? (
     <TitleInput
       ref={ref}
-      data-test='editable-title'
+      data-testid='editable-title'
+      type='text'
       {...props}
       onFocus={handleClick}
       placeholder={placeholder}
@@ -82,7 +83,7 @@ export function EditableTitle({
       id={id}
       canEdit={!!canEdit}
       title={canEdit ? 'Click to edit title' : ''}
-      data-test='editable-title'
+      data-testid='editable-title'
       onClick={handleClick}
       subtle={!!canEdit && !text}
       subject={resource.subject}

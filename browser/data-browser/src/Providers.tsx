@@ -1,4 +1,3 @@
-import { Toaster } from 'react-hot-toast';
 import { StyleSheetManager, type ShouldForwardProp } from 'styled-components';
 import { DialogGlobalContextProvider } from './components/Dialog/DialogGlobalContextProvider';
 import { DropdownContainer } from './components/Dropdown/DropdownContainer';
@@ -18,6 +17,7 @@ import { ErrorBoundary } from './views/ErrorPage';
 import CrashPage from './views/CrashPage';
 import { AppSettingsContextProvider } from './helpers/AppSettings';
 import { NavStateProvider } from './components/NavState';
+import { Toaster } from './components/Toaster';
 
 // Setup bugsnag for error handling, but only if there's an API key
 const ErrBoundary = window.bugsnagApiKey

@@ -4,7 +4,6 @@ import {
   newDrive,
   newResource,
   editTitle,
-  editableTitle,
   getCurrentSubject,
   makeDrivePublic,
   openNewSubjectWindow,
