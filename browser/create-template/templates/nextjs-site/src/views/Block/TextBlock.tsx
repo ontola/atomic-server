@@ -1,19 +1,12 @@
 import { Resource } from '@tomic/react';
-import { remark } from 'remark';
-import html from 'remark-html';
-import matter from 'gray-matter';
 import { MarkdownContent } from '@/components/MarkdownContent';
+import type { TextBlock as TextBlockType } from '@/ontologies/website';
 
-const TextBlock = ({ resource }: { resource: Resource }) => {
-  const matterResult = matter(resource.props.description);
-
-  const processed = remark().use(html).processSync(matterResult.content);
-
-  const initialContent = processed.toString();
+const TextBlock = ({ resource }: { resource: Resource<TextBlockType> }) => {
   return (
     <MarkdownContent
       subject={resource.subject}
-      initialContent={initialContent}
+      initialValue={resource.props.description}
     />
   );
 };

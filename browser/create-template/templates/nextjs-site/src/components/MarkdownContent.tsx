@@ -13,21 +13,23 @@ import styles from '@/views/Block/TextBlock.module.css';
  */
 export const MarkdownContent = ({
   subject,
-  initialContent,
+  initialValue,
 }: {
   subject: string;
-  initialContent: string | TrustedHTML;
+  initialValue: string;
 }) => {
   const resource = useResource<TextBlock>(subject);
 
-  const matterResult = matter(resource.props.description ?? '');
+  const matterResult = matter(
+    resource.loading ? initialValue : resource.props.description,
+  );
   const processed = remark().use(html).processSync(matterResult.content);
 
   return (
     <div
       className={styles.wrapper}
       dangerouslySetInnerHTML={{
-        __html: resource.loading ? initialContent : processed.toString(),
+        __html: processed.toString(),
       }}
     />
   );

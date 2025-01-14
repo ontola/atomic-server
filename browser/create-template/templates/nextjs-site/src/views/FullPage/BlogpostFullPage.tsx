@@ -1,11 +1,8 @@
 import Container from '@/components/Layout/Container';
-import { Blogpost } from '@/ontologies/website';
+import type { Blogpost } from '@/ontologies/website';
 import { Resource } from '@tomic/lib';
 import styles from './BlogpostFullPage.module.css';
 import { Image } from '@/components/Image';
-import matter from 'gray-matter';
-import html from 'remark-html';
-import { remark } from 'remark';
 import { MarkdownContent } from '@/components/MarkdownContent';
 
 const formatter = new Intl.DateTimeFormat('default', {
@@ -16,9 +13,6 @@ const formatter = new Intl.DateTimeFormat('default', {
 
 const BlogpostFullPage = ({ resource }: { resource: Resource<Blogpost> }) => {
   const date = formatter.format(new Date(resource.props.publishedAt));
-  const matterResult = matter(resource.props.description);
-  const processed = remark().use(html).processSync(matterResult.content);
-  const initialContent = processed.toString();
 
   return (
     <Container>
@@ -31,7 +25,7 @@ const BlogpostFullPage = ({ resource }: { resource: Resource<Blogpost> }) => {
           <p className={styles.publishDate}>{date}</p>
           <MarkdownContent
             subject={resource.subject}
-            initialContent={initialContent}
+            initialValue={resource.props.description}
           />
         </div>
       </div>
