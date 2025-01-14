@@ -1,6 +1,6 @@
 .nav {
   gap: 1rem;
-  padding: 2rem 1rem;
+  padding-block: 2rem;
   border-bottom: 1px solid var(--theme-color-bg-1);
 }
 

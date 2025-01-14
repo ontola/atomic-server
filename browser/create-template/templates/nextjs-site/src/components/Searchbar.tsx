@@ -34,8 +34,6 @@ const Searchbar = () => {
           src={FaMagnifyingGlass}
           alt='search'
         />
-
-        {styles.hallo}
         <input
           className={styles.input}
           type='search'

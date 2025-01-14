@@ -3,7 +3,7 @@ import { Resource } from '@tomic/lib';
 
 const DefaultFullPage = async ({ resource }: { resource: Resource }) => {
   console.error(
-    `Error: Unable to find a valid page view for the specified class: "${resource.getClasses}". Please ensure that the class is correctly matched using matchClass. See documentation for details: https://docs.atomicdata.dev/js-lib/resource.html?highlight=matchClass#resourcematchclass`,
+    `Error: Unable to find a valid page view for the specified class: "${resource.getClasses}". Make sure that the class is correctly matched using matchClass. See documentation for details: https://docs.atomicdata.dev/js-lib/resource.html?highlight=matchClass#resourcematchclass`,
   );
 
   return (

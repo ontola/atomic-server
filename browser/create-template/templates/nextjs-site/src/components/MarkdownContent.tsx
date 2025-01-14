@@ -7,6 +7,10 @@ import { remark } from 'remark';
 import { TextBlock } from '@/ontologies/website';
 import styles from '@/views/Block/TextBlock.module.css';
 
+/**
+ * Component that renders markdown content.
+ * It is hydrated on the client and will update whenever the markdown on the server changes.
+ */
 export const MarkdownContent = ({
   subject,
   initialContent,

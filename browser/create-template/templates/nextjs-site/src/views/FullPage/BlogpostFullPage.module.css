@@ -1,5 +1,14 @@
 .blogWrapper {
   padding: 1rem;
+}
+
+.publishDate {
+  color: var(--theme-color-text-light);
+  margin-bottom: 2rem;
+}
+
+.coverImageWrapper {
+  height: 25rem;
 
   & picture > img {
     width: 100%;
@@ -7,11 +16,6 @@
     object-fit: cover;
     border-radius: var(--theme-border-radius);
   }
-}
-
-.blogWrapper > .publishDate {
-  color: var(--theme-color-text-light);
-  margin-bottom: 2rem;
 }
 
 .content {

@@ -21,6 +21,8 @@ const BlogIndexPageFullPage = async ({
   const allItems = await getAllBlogposts();
   let results: string[] = [];
 
+  // We check if the searchParams have a search query. If so, we search for blogposts that match the query.
+  // If there is no search query, we show all blogposts.
   if (searchParams?.search && typeof searchParams.search === 'string') {
     results = await store.search(searchParams.search, {
       filters: {
@@ -52,7 +54,7 @@ const BlogIndexPageFullPage = async ({
               <Searchbar />
             </Suspense>
           </HStack>
-          {results.length !== 0 ? (
+          {results.length > 0 ? (
             <ul>
               {results.map(post => (
                 <li key={post}>

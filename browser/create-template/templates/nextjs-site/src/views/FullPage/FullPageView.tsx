@@ -14,6 +14,7 @@ const FullPageView = async ({
 }) => {
   const resource = await store.getResource(subject);
 
+  // Pick a component based on the resource's class.
   const Component = resource.matchClass(
     {
       [website.classes.page]: PageFullPage,
@@ -23,11 +24,7 @@ const FullPageView = async ({
     DefaultFullPage,
   );
 
-  if (Component === BlogIndexPageFullPage) {
-    return <Component resource={resource} searchParams={searchParams} />;
-  }
-
-  return <Component resource={resource} />;
+  return <Component resource={resource} searchParams={searchParams} />;
 };
 
 export default FullPageView;

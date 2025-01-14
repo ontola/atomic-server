@@ -8,15 +8,14 @@ import html from 'remark-html';
 import { remark } from 'remark';
 import { MarkdownContent } from '@/components/MarkdownContent';
 
+const formatter = new Intl.DateTimeFormat('default', {
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric',
+});
+
 const BlogpostFullPage = ({ resource }: { resource: Resource<Blogpost> }) => {
-  const formatter = new Intl.DateTimeFormat('default', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
-
   const date = formatter.format(new Date(resource.props.publishedAt));
-
   const matterResult = matter(resource.props.description);
   const processed = remark().use(html).processSync(matterResult.content);
   const initialContent = processed.toString();
@@ -24,7 +23,7 @@ const BlogpostFullPage = ({ resource }: { resource: Resource<Blogpost> }) => {
   return (
     <Container>
       <div className={styles.blogWrapper}>
-        <div style={{ height: '25rem' }}>
+        <div className={styles.coverImageWrapper}>
           <Image subject={resource.props.coverImage} alt='' />
         </div>
         <div className={styles.content}>
