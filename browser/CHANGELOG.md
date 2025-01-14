@@ -54,6 +54,7 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 - [#700](https://github.com/atomicdata-dev/atomic-server/issues/700) Update SvelteKit-site template to Svelte 5 and the new @tomic/svelte.
 - [#966](https://github.com/atomicdata-dev/atomic-server/issues/966) Add NextJS template.
+- [#1036](https://github.com/atomicdata-dev/atomic-server/issues/1036) Provide clearer errors when resources couldn't be fetched.
 - [#993](https://github.com/atomicdata-dev/atomic-server/issues/993) Fix template not working when the drive subject has a path after the origin.
 
 ## [v0.40.0] - 2024-10-07

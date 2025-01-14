@@ -1,6 +1,6 @@
 import path from 'node:path';
 import fs from 'node:fs';
-import { Store, type Resource } from '@tomic/lib';
+import { ErrorType, isAtomicError, Store, type Resource } from '@tomic/lib';
 import {
   type ExecutionContext,
   type TemplateKey,
@@ -31,9 +31,30 @@ export async function postProcess(context: PostProcessContext) {
   const ontology = await store.getResource(ontologySubject);
 
   if (ontology.error) {
-    console.error(
-      `\nThe ${baseTemplate.name} template does not exist on your drive. To get the template go to the Create Resource page and select the ${baseTemplate.name} template`,
-    );
+    if (isAtomicError(ontology.error)) {
+      switch (ontology.error.type) {
+        case ErrorType.NotFound:
+          console.error(
+            `\nThe ${baseTemplate.name} template does not exist on your drive. To get the template go to the Create Resource page and select the ${baseTemplate.name} template`,
+          );
+          break;
+        case ErrorType.Unauthorized:
+          console.error(
+            '\nSome of the template resources could not be accessed. Make sure the resources are public.',
+          );
+          break;
+        case ErrorType.Server:
+          console.error(
+            '\nServer Error: Something went wrong while fetching the template.',
+          );
+          break;
+        default:
+          console.error('\nAn error occurred while fetching the template.');
+      }
+    } else {
+      console.error(ontology.error.message);
+    }
+
     process.exit(1);
   }
 
