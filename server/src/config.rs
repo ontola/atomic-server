@@ -74,6 +74,10 @@ pub struct Opts {
     #[clap(long, env = "ATOMIC_DATA_DIR")]
     pub data_dir: Option<PathBuf>,
 
+    /// Path for the atomic data cache folder. Contains search index, temp files and more. Default value depends on your OS.
+    #[clap(long, env = "ATOMIC_CACHE_DIR")]
+    pub cache_dir: Option<PathBuf>,
+
     /// CAUTION: Skip authentication checks, making all data publicly readable. Improves performance.
     #[clap(long, env = "ATOMIC_PUBLIC_MODE")]
     pub public_mode: bool,
@@ -203,6 +207,21 @@ pub fn read_opts() -> Opts {
     Opts::parse()
 }
 
+pub fn build_temp_config(random_id: &str) -> AtomicServerResult<Config> {
+    let opts = Opts::parse_from([
+        "atomic-server",
+        "--initialize",
+        "--data-dir",
+        &format!("./.temp/{}/db", random_id),
+        "--config-dir",
+        &format!("./.temp/{}/config", random_id),
+        "--cache-dir",
+        &format!("./.temp/{}/cache", random_id),
+    ]);
+
+    build_config(opts)
+}
+
 /// Creates the server config, reads .env values and sets defaults
 pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
     // Directories & file system
@@ -242,9 +261,12 @@ pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
 
     // Cache data
 
-    let cache_dir = project_dirs.cache_dir();
+    let cache_dir = opts
+        .cache_dir
+        .clone()
+        .unwrap_or_else(|| project_dirs.cache_dir().to_owned());
 
-    let mut search_index_path = cache_dir.to_owned();
+    let mut search_index_path = cache_dir;
     search_index_path.push("search_index");
 
     let initialize = !std::path::Path::exists(&store_path) || opts.initialize;
