@@ -105,13 +105,13 @@ export class AtomicServer {
   docsFolder(): Directory {
     const actualDocsDirectory = this.source.directory("docs");
     const cargoCache = dag.cacheVolume("cargo");
-    const cargoBinCache = dag.cacheVolume("cargo-bin");
 
     const docsContainer = dag
       .container()
       .from(RUST_IMAGE)
+      .withExec(["sh", "-c", ". $HOME/.cargo/env"])
+      .withEnvVariable("PATH", "$HOME/.cargo/bin:$PATH")
       .withMountedCache("/usr/local/cargo/registry", cargoCache)
-      .withMountedCache("/usr/local/cargo/bin", cargoBinCache)
       .withExec(["cargo", "install", "mdbook"])
       .withExec(["cargo", "install", "mdbook-linkcheck"]);
     return docsContainer
