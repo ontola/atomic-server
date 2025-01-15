@@ -1138,5 +1138,39 @@
         ],
         "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/datatypes",
         "https://atomicdata.dev/properties/shortname": "uri"
+    },
+    {
+        "@id": "https://atomicdata.dev/classes/Folder",
+        "https://atomicdata.dev/properties/description": "Acts as a parent for resources, useful for ordering data.",
+        "https://atomicdata.dev/properties/isA": [
+            "https://atomicdata.dev/classes/Class"
+        ],
+        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+        "https://atomicdata.dev/properties/recommends": [
+            "https://atomicdata.dev/properties/subresources"
+        ],
+        "https://atomicdata.dev/properties/requires": [
+            "https://atomicdata.dev/properties/name",
+            "https://atomicdata.dev/property/display-style"
+        ],
+        "https://atomicdata.dev/properties/shortname": "folder"
+    },
+    {
+        "@id": "https://atomicdata.dev/class/Bookmark",
+        "https://atomicdata.dev/properties/description": "A named reference to a web page. Can include a markdown version of the HTML document.",
+        "https://atomicdata.dev/properties/isA": [
+            "https://atomicdata.dev/classes/Class"
+        ],
+        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+        "https://atomicdata.dev/properties/recommends": [
+            "https://atomicdata.dev/property/preview",
+            "https://atomicdata.dev/properties/description",
+            "https://atomicdata.dev/properties/imageUrl"
+        ],
+        "https://atomicdata.dev/properties/requires": [
+            "https://atomicdata.dev/properties/name",
+            "https://atomicdata.dev/property/url"
+        ],
+        "https://atomicdata.dev/properties/shortname": "bookmark"
     }
 ]
