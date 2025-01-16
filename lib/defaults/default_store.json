@@ -1172,5 +1172,16 @@
             "https://atomicdata.dev/property/url"
         ],
         "https://atomicdata.dev/properties/shortname": "bookmark"
+    },
+    {
+        "@id": "https://atomicdata.dev/ontology/data-browser/property/tag-list",
+        "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Tag",
+        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
+        "https://atomicdata.dev/properties/description": "List of tags available in a drive.",
+        "https://atomicdata.dev/properties/isA": [
+            "https://atomicdata.dev/classes/Property"
+        ],
+        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+        "https://atomicdata.dev/properties/shortname": "tag-list"
     }
 ]

@@ -9,6 +9,7 @@ import { ViewTransitionProps } from '../helpers/ViewTransitionProps';
 import { MAIN_CONTAINER } from '../helpers/containers';
 import Parent from './Parent';
 import { useResource } from '@tomic/react';
+import { CalculatedPageHeight } from '../globalCssVars';
 
 /** Main landmark. Every page should have one of these.
  * If the pages shows a resource a subject can be passed that enables view transitions to work. */
@@ -36,7 +37,9 @@ export function Main({
 const StyledMain = memo(styled.main<ViewTransitionProps>`
   container: ${MAIN_CONTAINER} / inline-size;
   ${p => transitionName(RESOURCE_PAGE_TRANSITION_TAG, p.subject)};
-  height: calc(100vh - ${p => p.theme.heights.breadCrumbBar});
+  height: calc(
+    ${CalculatedPageHeight.var()} - ${p => p.theme.heights.breadCrumbBar}
+  );
   overflow-y: auto;
   scroll-padding: calc(
     ${p => p.theme.heights.breadCrumbBar} + ${p => p.theme.size(2)}

@@ -21,11 +21,13 @@ export const ResourceCardTitle: FC<
   const Icon = getIconForClass(isA[0]);
 
   return (
-    <TitleRow center gap='1ch'>
-      <Icon />
-      <AtomicLink subject={resource.subject}>
-        <Title subject={resource.subject}>{resource.title}</Title>
-      </AtomicLink>
+    <TitleRow center gap='1ch' justify='space-between' wrapItems>
+      <Row center gap='1ch'>
+        <Icon />
+        <AtomicLink subject={resource.subject}>
+          <Title subject={resource.subject}>{resource.title}</Title>
+        </AtomicLink>
+      </Row>
       {children}
     </TitleRow>
   );
@@ -41,7 +43,6 @@ const Title = styled.h2<ViewTransitionProps>`
 
 const TitleRow = styled(Row)`
   max-width: 100%;
-  height: 2rem;
   overflow: hidden;
   color: ${({ theme }) => theme.colors.textLight};
 

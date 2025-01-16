@@ -62,6 +62,7 @@ const Thumb = styled(RadixScrollArea.Thumb)`
 export const ScrollViewPort = styled(RadixScrollArea.Viewport)`
   width: 100%;
   height: 100%;
+
   & > div[style] {
     /* Radix gives this div a display of table to fix an obscure bug (that we don't have).
     This messes with the accessibility tree and stops the TableEditor from working correctly for screen readers. */

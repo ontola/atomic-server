@@ -1,5 +1,5 @@
 import { urls, useResource, useString, useTitle } from '@tomic/react';
-import { lighten, setLightness, setSaturation } from 'polished';
+import { lighten, setLightness, setSaturation, transparentize } from 'polished';
 import * as RadixPopover from '@radix-ui/react-popover';
 import { useCallback, useMemo, useState, type JSX } from 'react';
 import { styled } from 'styled-components';
@@ -14,6 +14,7 @@ import { tagColours } from './tagColours';
 
 interface TagProps {
   subject: string;
+  selected?: boolean;
 }
 
 const useTagData = (subject: string) => {
@@ -38,12 +39,14 @@ const useTagData = (subject: string) => {
 
 export function Tag({
   subject,
+  selected,
   children,
 }: React.PropsWithChildren<TagProps>): JSX.Element {
   const { color, text } = useTagData(subject);
+  const className = selected ? 'selected-tag' : '';
 
   return (
-    <TagWrapper color={color}>
+    <TagWrapper color={color} className={className}>
       {text}
       {children}
     </TagWrapper>
@@ -55,10 +58,14 @@ interface TagWrapperProps {
 }
 
 const TagWrapper = styled.span<TagWrapperProps>`
-  --tag-dark-color: ${props => setLightness(0.11, props.color)};
-  --tag-mid-color: ${props => setLightness(0.4, props.color)};
-  --tag-light-color: ${props =>
-    setSaturation(0.5, setLightness(0.9, props.color))};
+  --tag-dark-color: ${p => setLightness(0.11, p.color)};
+  --tag-mid-color: ${p => setLightness(0.4, p.color)};
+  --tag-light-color: ${p => setSaturation(0.5, setLightness(0.9, p.color))};
+  --tag-shadow-color: ${p =>
+    transparentize(
+      p.theme.darkMode ? 0.2 : 0.5,
+      setLightness(p.theme.darkMode ? 0.7 : 0.4, p.color),
+    )};
   display: inline-flex;
   gap: 1ch;
   align-items: center;
@@ -75,7 +82,7 @@ const TagWrapper = styled.span<TagWrapperProps>`
     p.theme.darkMode ? 'var(--tag-dark-color)' : 'var(--tag-light-color)'};
 
   &.selected-tag {
-    text-decoration: underline;
+    box-shadow: 0 0px 10px 0px var(--tag-shadow-color);
   }
 `;
 
@@ -84,7 +91,7 @@ interface SelectableTagProps extends TagProps {
   selected: boolean;
 }
 
-export function SelectableTag({
+export function TagButton({
   onClick,
   selected,
   subject,

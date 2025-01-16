@@ -87,7 +87,10 @@ const ValueFormWrapper = styled.div`
   max-width: 100%;
 `;
 
-const EditButton = styled.div`
+const EditButton = styled.button`
+  appearance: none;
+  background: none;
+  border: none;
   position: absolute;
   top: 0;
   color: ${p => p.theme.colors.main};

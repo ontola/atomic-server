@@ -25,8 +25,8 @@ import { DndContext, DragOverlay } from '@dnd-kit/core';
 import { SidebarItemTitle } from './ResourceSideBar/SidebarItemTitle';
 import { DropEdge } from './ResourceSideBar/DropEdge';
 import { createPortal } from 'react-dom';
-import { transition } from '../../helpers/transition';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
+import { SkeletonButton } from '../SkeletonButton';
 
 interface SideBarDriveProps {
   onItemClick: () => unknown;
@@ -184,36 +184,10 @@ const StyledScrollArea = styled(ScrollArea)`
   overflow: hidden;
 `;
 
-const AddButton = styled.button`
-  display: flex;
-  justify-content: center;
-  color: ${p => p.theme.colors.textLight};
-  background: none;
-  appearance: none;
-  border: 1px dashed ${p => p.theme.colors.bg2};
-  border-radius: ${p => p.theme.radius};
+const AddButton = styled(SkeletonButton)`
   width: calc(100% - 5rem);
   padding-block: 0.3rem;
   margin-inline-start: 2rem;
   margin-block-start: 0.5rem;
   margin-block-end: 1rem;
-  cursor: pointer;
-  ${transition('color', 'border')}
-
-  & svg {
-    ${transition('transform')}
-  }
-  &:hover,
-  &:focus-visible {
-    color: ${p => p.theme.colors.main};
-    border: 1px solid ${p => p.theme.colors.main};
-
-    & svg {
-      transform: scale(1.3);
-    }
-  }
-
-  &:active {
-    background-color: ${p => p.theme.colors.bg1};
-  }
 `;

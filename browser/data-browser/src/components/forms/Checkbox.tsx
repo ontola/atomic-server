@@ -1,6 +1,7 @@
 import { styled } from 'styled-components';
 
 import type { JSX } from 'react';
+import { transition } from '../../helpers/transition';
 
 interface CheckboxProps
   extends Omit<
@@ -8,11 +9,13 @@ interface CheckboxProps
     'type' | 'onChange'
   > {
   checked?: boolean;
+  selected?: boolean;
   onChange: (value: boolean) => void;
 }
 
 export function Checkbox({
   checked,
+  selected,
   onChange,
   ...props
 }: CheckboxProps): JSX.Element {
@@ -22,6 +25,7 @@ export function Checkbox({
 
   return (
     <InputCheckBox
+      data-selected={selected}
       type='checkbox'
       checked={checked}
       onChange={handleChange}
@@ -34,38 +38,60 @@ const InputCheckBox = styled.input`
   --inset: 1px;
   --size: calc(100% - (var(--inset) * 2));
 
-  background-color: ${p => p.theme.colors.bg1};
+  background-color: ${p => p.theme.colors.bg};
   border: 1px solid ${p => p.theme.colors.bg2};
   width: 1rem;
   height: 1rem;
   border-radius: 3px;
-
+  cursor: pointer;
   position: relative;
+  appearance: none;
 
-  &:checked {
-    border: none;
-  }
-
-  &:checked::before {
-    content: '';
+  &::before {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
     border-radius: 2px;
-    background-color: ${p => p.theme.colors.main};
+    background-color: ${p => p.theme.colors.bg};
+    ${transition('opacity', 'background-color')}
   }
 
-  &:checked::after {
+  &::after {
     --inset: 3px;
     --size: calc(100% - (var(--inset) * 2));
-    content: '';
     position: absolute;
     inset: var(--inset);
     width: var(--size);
     height: var(--size);
     background-color: ${p => p.theme.colors.bg};
     clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+  }
+
+  &:checked {
+    border: none;
+
+    &::before {
+      background-color: ${p => p.theme.colors.main};
+      content: '';
+    }
+
+    &::after {
+      content: '';
+    }
+  }
+
+  &:focus-visible,
+  &:hover,
+  &[data-selected='true'] {
+    &:not(:checked)::before {
+      background-color: ${p => p.theme.colors.main};
+      content: '';
+      opacity: ${p => (p.theme.darkMode ? 0.5 : 0.2)};
+    }
+    &:not(:checked)::after {
+      content: '';
+    }
   }
 `;
 

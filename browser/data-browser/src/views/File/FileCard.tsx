@@ -1,12 +1,13 @@
 import { useMemo, type JSX } from 'react';
 import { AtomicLink } from '../../components/AtomicLink';
-import { Row } from '../../components/Row';
+import { Column } from '../../components/Row';
 import { useFileInfo } from '../../hooks/useFile';
 import { CardViewProps } from '../Card/CardViewProps';
 import { ResourceCardTitle } from '../Card/ResourceCardTitle';
 import { ErrorBoundary } from '../ErrorPage';
 import { DownloadIconButton } from './DownloadButton';
 import { FilePreview } from './FilePreview';
+import { SimpleTagBar } from '../../components/Tag/TagBar';
 
 function FileCard(props: CardViewProps): JSX.Element {
   const FileError = useMemo(() => {
@@ -37,12 +38,12 @@ function FileCardInner({ resource }: CardViewProps): JSX.Element {
   const { downloadFile, bytes } = useFileInfo(resource);
 
   return (
-    <>
-      <Row justify='space-between'>
-        <ResourceCardTitle resource={resource} />
+    <Column gap='1rem'>
+      <ResourceCardTitle resource={resource}>
         <DownloadIconButton downloadFile={downloadFile} fileSize={bytes} />
-      </Row>
+      </ResourceCardTitle>
+      <SimpleTagBar small resource={resource} />
       <FilePreview resource={resource} hideTypes={['application/pdf']} />
-    </>
+    </Column>
   );
 }

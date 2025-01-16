@@ -5,7 +5,6 @@ import { useSettings } from '../../helpers/AppSettings';
 import { SideBarDrive } from './SideBarDrive';
 import { DragAreaBase, useResizable } from '../../hooks/useResizable';
 import { useCombineRefs } from '../../hooks/useCombineRefs';
-import { NavBarSpacer } from '../NavBarSpacer';
 import { OverlapSpacer } from './OverlapSpacer';
 import { AppMenu } from './AppMenu';
 import { About } from './About';
@@ -16,6 +15,7 @@ import { SideBarPanel } from './SideBarPanel';
 import { Panel, usePanelList } from './usePanelList';
 import { SIDEBAR_WIDTH_PROP } from './SidebarCSSVars';
 import { useRef, type JSX } from 'react';
+import { CalculatedPageHeight } from '../../globalCssVars';
 
 /** Amount of pixels where the sidebar automatically shows */
 export const SIDEBAR_TOGGLE_WIDTH = 600;
@@ -68,7 +68,6 @@ export function SideBar(): JSX.Element {
         exposed={sidebarVisible}
         {...listeners}
       >
-        <NavBarSpacer position='top' />
         {/* The key is set to make sure the component is re-loaded when the baseURL changes */}
         <SideBarDriveMemo
           onItemClick={closeSideBar}
@@ -91,7 +90,6 @@ export function SideBar(): JSX.Element {
           </Column>
         </MenuWrapper>
         <OverlapSpacer />
-        <NavBarSpacer baseMargin='1rem' position='bottom' />
         {!isRearanging && (
           <SideBarDragArea
             ref={dragAreaRef}
@@ -133,7 +131,7 @@ const StyledNav = styled.nav.attrs<StyledNavProps>(p => ({
     p.exposed ? '0' : `calc(var(${SIDEBAR_WIDTH_PROP}) * -1 + 0.5rem)`};
   /* When the user is hovering, show half opacity */
   opacity: ${p => (p.exposed ? 1 : 0)};
-  height: 100dvh;
+  height: ${CalculatedPageHeight.var()};
   width: var(${SIDEBAR_WIDTH_PROP});
   position: ${p => (p.locked ? 'relative' : 'absolute')};
   border-right: ${p => `1px solid ${p.theme.colors.bg2}`};
@@ -142,6 +140,7 @@ const StyledNav = styled.nav.attrs<StyledNavProps>(p => ({
   flex-direction: column;
   overflow-y: auto;
   overflow-x: hidden;
+  padding-bottom: ${p => p.theme.size()};
 `;
 
 const MenuWrapper = styled.div`

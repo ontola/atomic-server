@@ -9,6 +9,7 @@ import {
 } from '../helpers/transitionName';
 import { ViewTransitionProps } from '../helpers/ViewTransitionProps';
 import { UnsavedIndicator } from './UnsavedIndicator';
+import { Flex } from './Row';
 
 export interface EditableTitleProps {
   resource: Resource;
@@ -141,6 +142,11 @@ const TitleInput = styled.input`
 
   &:focus {
     outline: none;
+  }
+
+  ${Flex} & {
+    // When rendered inside a flex container the margin is already provided by the gap.
+    margin-bottom: 0;
   }
 `;
 

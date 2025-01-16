@@ -12,7 +12,7 @@ import * as RadixPopover from '@radix-ui/react-popover';
 import { styled } from 'styled-components';
 import { IconButton } from '../../../components/IconButton/IconButton';
 import { Popover } from '../../../components/Popover';
-import { SelectableTag, Tag } from '../../../components/Tag';
+import { TagButton, Tag } from '../../../components/Tag';
 import { CellContainer, DisplayCellProps, EditCellProps } from './Type';
 import {
   InputStyled,
@@ -182,7 +182,7 @@ function SelectCellEdit({
             <ResultWrapper>
               <Row wrapItems gap={TAG_SPACING}>
                 {filteredTags.map((v, i) => (
-                  <SelectableTag
+                  <TagButton
                     key={v}
                     subject={v}
                     onClick={handleAddTag}

@@ -1,6 +1,6 @@
 import { createRoute, createRouter, Link } from '@tanstack/react-router';
 import { ShowRoute } from './ShowRoute';
-import { SearchRoute } from './SearchRoute';
+import { SearchRoute } from './Search/SearchRoute';
 import { NewRoute } from './NewResource/NewRoute';
 import { AppSettingsRoute } from './AppSettings';
 import { EditRoute } from './EditRoute';

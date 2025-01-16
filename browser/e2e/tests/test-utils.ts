@@ -37,7 +37,7 @@ export const publicReadRightLocator = (page: Page) =>
     )
     .first();
 export const contextMenu = '[data-test="context-menu"]';
-export const addressBar = '[data-test="address-bar"]';
+export const addressBar = (page: Page) => page.getByTestId('adress-bar');
 export const newDriveMenuItem = '[data-test="menu-item-new-drive"]';
 
 export const defaultDevServer = 'http://localhost:9883';
@@ -124,7 +124,7 @@ export async function makeDrivePublic(page: Page) {
 }
 
 export async function openSubject(page: Page, subject: string) {
-  await page.fill(addressBar, subject);
+  await addressBar(page).fill(subject);
   await expect(page.locator(`main[about="${subject}"]`).first()).toBeVisible();
 }
 

@@ -8,12 +8,12 @@ import type { JSX } from 'react';
 export function OverlapSpacer(): JSX.Element {
   const narrow = useMediaQuery('(max-width: 950px)');
   const { navbarFloating } = useSettings();
-  const elivate = narrow && navbarFloating;
+  const elevate = narrow && navbarFloating;
 
-  return <Elivator $elivate={elivate} />;
+  return <Elevator elevate={elevate} />;
 }
 
-const Elivator = styled.div<{ $elivate: boolean }>`
-  height: ${p => (p.$elivate ? '3.5rem' : '0rem')};
+const Elevator = styled.div<{ elevate: boolean }>`
+  height: ${p => (p.elevate ? '3.8rem' : '0rem')};
   ${transition('height')}
 `;

@@ -1,6 +1,6 @@
 import { useSearch } from '@tanstack/react-router';
 import { paths } from '../routes/paths';
-import { SearchRoute } from '../routes/SearchRoute';
+import { SearchRoute } from '../routes/Search/SearchRoute';
 
 export interface QueryScopeHandler {
   scope: string | undefined;

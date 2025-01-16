@@ -52,7 +52,13 @@ export const Column = forwardRef<
 
 Column.displayName = 'Column';
 
-const Flex = styled.div<FlexProps>`
+/**
+ * Underlying layout of the Row and Column components.
+ * Do not use this component directly and don't extend it.
+ *
+ * This component is only exported so it can be used in css selectors.
+ */
+export const Flex = styled.div<FlexProps>`
   align-items: ${p => (p.center ? 'center' : 'initial')};
   display: flex;
   gap: ${p => p.gap ?? `${p.theme.margin}rem`};

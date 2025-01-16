@@ -17,4 +17,9 @@ export function TagInline({
 const TagWrapper = styled.span`
   display: inline-block;
   padding-block: 2px;
+
+  &:hover,
+  &:focus-visible {
+    filter: brightness(1.05);
+  }
 `;

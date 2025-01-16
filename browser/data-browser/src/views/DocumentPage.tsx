@@ -35,6 +35,8 @@ import toast from 'react-hot-toast';
 import { shortcuts } from '../components/HotKeyWrapper';
 import { EditableTitle } from '../components/EditableTitle';
 import { FileDropZone } from '../components/forms/FileDropzone/FileDropzone';
+import { Column, Row } from '../components/Row';
+import { TagBar } from '../components/Tag/TagBar';
 
 /** A full page, editable document, consisting of Elements */
 export function DocumentPage({ resource }: ResourcePageProps): JSX.Element {
@@ -313,8 +315,8 @@ function DocumentPageEdit({
   }
 
   return (
-    <>
-      <div style={{ display: 'flex', flexDirection: 'row' }}>
+    <Column fullHeight>
+      <Row justify='space-between'>
         <EditableTitle parentRef={titleRef} resource={resource} />
         <Button
           icon
@@ -324,8 +326,8 @@ function DocumentPageEdit({
         >
           <FaEye />
         </Button>
-      </div>
-
+      </Row>
+      <TagBar resource={resource} />
       {err?.message && <ErrorLook>{err.message}</ErrorLook>}
       <FileDropZone
         onFilesUploaded={handleUploadedFiles}
@@ -360,7 +362,7 @@ function DocumentPageEdit({
           <NewLine onClick={handleNewLineMaybe} />
         </div>
       </FileDropZone>
-    </>
+    </Column>
   );
 }
 
@@ -372,8 +374,8 @@ function DocumentPageShow({
   const canWrite = useCanWrite(resource);
 
   return (
-    <>
-      <div style={{ display: 'flex', flexDirection: 'row' }}>
+    <Column fullHeight>
+      <Row justify='space-between'>
         <h1 style={{ flex: 1 }}>{resource.title}</h1>
         {canWrite && (
           <Button
@@ -386,11 +388,14 @@ function DocumentPageShow({
             <FaEdit />
           </Button>
         )}
+      </Row>
+      <TagBar resource={resource} />
+      <div>
+        {elements.map(subject => (
+          <ElementShow subject={subject} key={subject} />
+        ))}
       </div>
-      {elements.map(subject => (
-        <ElementShow subject={subject} key={subject} />
-      ))}
-    </>
+    </Column>
   );
 }
 

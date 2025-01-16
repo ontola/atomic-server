@@ -26,6 +26,8 @@ import { editURL } from '../helpers/navigation';
 import { ResourceInline } from './ResourceInline';
 import { ResourcePageProps } from './ResourcePage';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
+import { TagBar } from '../components/Tag/TagBar';
+import { Column } from '../components/Row';
 
 /** Full page ChatRoom that shows a message list and a form to add Messages. */
 export function ChatRoomPage({ resource }: ResourcePageProps) {
@@ -135,38 +137,41 @@ export function ChatRoomPage({ resource }: ResourcePageProps) {
 
   return (
     <FullPageWrapper>
-      <EditableTitle resource={resource} />
-      <ScrollingContent ref={scrollRef}>
-        <MessagesPage subject={resource.subject} setReplyTo={handleReply} />
-      </ScrollingContent>
-      {isReplyTo && (
-        <Detail>
-          <MessageLine subject={isReplyTo} />
-          <Button icon subtle onClick={() => setReplyTo(undefined)}>
-            <FaTimes />
-          </Button>
-        </Detail>
-      )}
-      <MessageForm onSubmit={sendMessage}>
-        <MessageInput
-          rows={textAreaHight}
-          ref={inputRef}
-          autoFocus
-          value={newMessageVal}
-          onChange={handleChangeMessageText}
-          placeholder={'type a message'}
-          data-test='message-input'
-        />
-        <SendButton
-          title='Send message [enter]'
-          disabled={disableSend}
-          clean
-          onClick={() => sendMessage()}
-        >
-          Send
-        </SendButton>
-      </MessageForm>
-      <NavBarSpacer baseMargin='2rem' position='bottom' />
+      <Column fullHeight>
+        <EditableTitle resource={resource} />
+        <TagBar resource={resource} />
+        <ScrollingContent ref={scrollRef}>
+          <MessagesPage subject={resource.subject} setReplyTo={handleReply} />
+        </ScrollingContent>
+        {isReplyTo && (
+          <Detail>
+            <MessageLine subject={isReplyTo} />
+            <Button icon subtle onClick={() => setReplyTo(undefined)}>
+              <FaTimes />
+            </Button>
+          </Detail>
+        )}
+        <MessageForm onSubmit={sendMessage}>
+          <MessageInput
+            rows={textAreaHight}
+            ref={inputRef}
+            autoFocus
+            value={newMessageVal}
+            onChange={handleChangeMessageText}
+            placeholder={'type a message'}
+            data-test='message-input'
+          />
+          <SendButton
+            title='Send message [enter]'
+            disabled={disableSend}
+            clean
+            onClick={() => sendMessage()}
+          >
+            Send
+          </SendButton>
+        </MessageForm>
+        <NavBarSpacer baseMargin='2rem' position='bottom' />
+      </Column>
     </FullPageWrapper>
   );
 }

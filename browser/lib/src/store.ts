@@ -877,6 +877,10 @@ export class Store {
       if (lastResource) {
         lastAncestor = lastResource.get(core.properties.parent) as string;
 
+        if (lastAncestor === undefined) {
+          break;
+        }
+
         if (ancestry.includes(lastAncestor)) {
           throw new Error(
             `Resource ${resource.subject} ancestry is cyclical. ${lastAncestor} is already in the ancestry}`,

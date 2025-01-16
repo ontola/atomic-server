@@ -26,7 +26,7 @@ export function TagPropertyCard({ resource }: TagPropertyCardProps) {
   );
 
   if (collection.totalMembers === 0) {
-    return <Card>Not used in any properties</Card>;
+    return null;
   }
 
   return (

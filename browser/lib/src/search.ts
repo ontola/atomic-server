@@ -9,7 +9,7 @@ export interface SearchOpts {
   parents?: string[] | string;
   /** Property-Value pair of set filters. */
   filters?: {
-    [subject: string]: string;
+    [subject: string]: string | number | string[];
   };
 }
 
@@ -50,11 +50,22 @@ export function escapeTantivyKey(key: string) {
 }
 
 /** Uses Tantivy query syntax */
-function buildFilterString(filters: Record<string, string>): string {
+function buildFilterString(
+  filters: Record<string, string | number | string[]>,
+): string {
   return Object.entries(filters)
     .map(([key, value]) => {
-      return value && `${escapeTantivyKey(key)}:"${value}"`;
+      if (value === undefined) {
+        return undefined;
+      }
+
+      if (Array.isArray(value)) {
+        return value.map(v => `${escapeTantivyKey(key)}:"${v}"`).join(' AND ');
+      }
+
+      return `${escapeTantivyKey(key)}:"${value}"`;
     })
+    .filter(x => x !== undefined)
     .join(' AND ');
 }
 
@@ -71,7 +82,13 @@ export function buildSearchSubject(
   const hasFilters =
     filters &&
     Object.keys(filters).length > 0 &&
-    Object.values(filters).filter(v => v && v.length > 0).length > 0;
+    Object.values(filters).some(v => {
+      if (Array.isArray(v)) {
+        return v.length > 0;
+      }
+
+      return v !== undefined;
+    });
 
   query && url.searchParams.set('q', query);
   include && url.searchParams.set('include', include.toString());
@@ -85,7 +102,6 @@ export function buildSearchSubject(
       url.searchParams.append('parents', parents);
     }
   }
-  // parents && url.searchParams.set('parents', JSON.stringify(parents));
 
   return url.toString();
 }

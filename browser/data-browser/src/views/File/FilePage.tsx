@@ -10,6 +10,7 @@ import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { ResourcePageProps } from '../ResourcePage';
 import { DownloadButton, DownloadIconButton } from './DownloadButton';
 import { FilePreview } from './FilePreview';
+import { TagBar } from '../../components/Tag/TagBar';
 
 /** Full page File resource for showing and downloading files */
 export function FilePage({ resource }: ResourcePageProps) {
@@ -28,6 +29,7 @@ export function FilePage({ resource }: ResourcePageProps) {
             <DownloadIconButton downloadFile={downloadFile} fileSize={bytes} />
           )}
         </Row>
+        <TagBar resource={resource} />
         <ValueForm resource={resource} propertyURL={properties.description} />
         <FilePreview resource={resource} />
       </Column>

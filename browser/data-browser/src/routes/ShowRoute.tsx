@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { Client } from '@tomic/react';
 import ResourcePage from '../views/ResourcePage';
-import { Search } from './SearchRoute';
+import { Search } from './Search/SearchRoute';
 import { About } from './AboutRoute';
 import { createRoute } from '@tanstack/react-router';
 import { appRoute } from './RootRoutes';

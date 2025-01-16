@@ -24,6 +24,7 @@ import { IconButton } from '../../components/IconButton/IconButton';
 import { FaCode, FaFileCsv } from 'react-icons/fa6';
 import { ResourceCodeUsageDialog } from '../CodeUsage/ResourceCodeUsageDialog';
 import { TableExportDialog } from './TableExportDialog';
+import { TagBar } from '../../components/Tag/TagBar';
 
 const columnToKey = (column: Property) => column.subject;
 
@@ -139,6 +140,7 @@ export function TablePage({ resource }: ResourcePageProps): JSX.Element {
               </IconButton>
             </FlexRow>
           </FlexRow>
+          <TagBar resource={resource} />
           <FancyTable
             columns={columns}
             columnSizes={columnSizes}

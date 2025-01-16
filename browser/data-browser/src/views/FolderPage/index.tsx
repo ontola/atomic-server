@@ -14,6 +14,8 @@ import { DisplayStyleButton } from './DisplayStyleButton';
 import { GridView } from './GridView';
 import { ListView } from './ListView';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
+import { TagBar } from '../../components/Tag/TagBar';
+import { Column, Row } from '../../components/Row';
 
 type PreferredFolderStyles = Record<string, string>;
 
@@ -60,42 +62,42 @@ export function FolderPage({
 
   return (
     <FullPageWrapper view={displayStyle!}>
-      <TitleBar>
-        <TitleBarInner>
-          <EditableTitle resource={resource} />
-          <DisplayStyleButton
-            onClick={setPreferedDisplayStyle}
-            displayStyle={displayStyle}
-          />
-        </TitleBarInner>
-      </TitleBar>
-      <Wrapper>
-        <FileDropZone parentResource={resource}>
-          <View
-            subResources={subResources}
-            onNewClick={navigateToNewRoute}
-            showNewButton={canEdit!}
-          />
-        </FileDropZone>
-      </Wrapper>
+      <Column>
+        <div>
+          <TitleBarInner justify='space-between'>
+            <EditableTitle resource={resource} />
+            <DisplayStyleButton
+              onClick={setPreferedDisplayStyle}
+              displayStyle={displayStyle}
+            />
+          </TitleBarInner>
+        </div>
+        <TagBar resource={resource} />
+        <Wrapper>
+          <FileDropZone parentResource={resource}>
+            <View
+              subResources={subResources}
+              onNewClick={navigateToNewRoute}
+              showNewButton={canEdit!}
+            />
+          </FileDropZone>
+        </Wrapper>
+      </Column>
     </FullPageWrapper>
   );
 }
 
-const TitleBar = styled.div`
-  padding: ${p => p.theme.margin}rem;
-`;
-
-const TitleBarInner = styled.div`
-  display: flex;
+const TitleBarInner = styled(Row)`
   width: var(--container-width);
   margin-inline: auto;
-  justify-content: space-between;
+
+  input {
+    margin-bottom: 0;
+  }
 `;
 
 const Wrapper = styled.div`
   width: 100%;
-  padding: ${p => p.theme.margin}rem;
   flex: 1;
 `;
 
@@ -106,7 +108,8 @@ interface FullPageWrapperProps {
 const FullPageWrapper = styled.div<FullPageWrapperProps>`
   --container-width: min(1300px, 100%);
   min-height: ${p => p.theme.heights.fullPage};
-  padding-bottom: ${p => p.theme.heights.floatingSearchBarPadding};
   display: flex;
   flex-direction: column;
+  padding: ${p => p.theme.size()};
+  padding-bottom: ${p => p.theme.heights.floatingSearchBarPadding};
 `;

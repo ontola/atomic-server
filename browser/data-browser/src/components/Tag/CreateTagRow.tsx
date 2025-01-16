@@ -25,6 +25,7 @@ export function CreateTagRow({ parent, onNewTag }: CreateTagRowProps) {
       ['tag', tagName],
       parent,
     );
+
     const tag = await store.newResource({
       subject,
       parent,
@@ -60,7 +61,7 @@ export function CreateTagRow({ parent, onNewTag }: CreateTagRowProps) {
   );
 
   return (
-    <Row>
+    <Row gap='0.5rem'>
       <InputWrapper>
         <EmojiInput onChange={setEmoji} key={resetKey} />
         <InputStyled
