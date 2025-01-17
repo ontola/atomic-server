@@ -1,7 +1,7 @@
 import { getTsconfig } from 'get-tsconfig';
 
 export const camelCaseify = (str: string) =>
-  str.replace(/-([a-z])/g, g => {
+  str.replace(/-([a-z0-9])/g, g => {
     return g[1].toUpperCase();
   });
 
