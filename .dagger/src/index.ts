@@ -221,7 +221,7 @@ export class AtomicServer {
     );
 
     return containerWithAssets
-      .withExec(["cargo", "build", "--release"])
+      .withExec(["cargo", "build"])
       .withExec(["./target/release/atomic-server", "--version"])
       .withExec([
         "cp",
