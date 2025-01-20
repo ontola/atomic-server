@@ -40,7 +40,8 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 - [#983](https://github.com/atomicdata-dev/atomic-server/issues/983) Give clear error when name collisions are found in an ontology.
 - Generates class definitions that enables doing: `resource.props.name = 'New Name'`;
--
+- [#1071](https://github.com/atomicdata-dev/atomic-server/issues/1071) Fix bug where classes and properties with 'name' props would lead to invalid generated typescript code.
+
 ### @tomic/svelte
 
 - [#700](https://github.com/atomicdata-dev/atomic-server/issues/700) Update to Svelte 5. There are significant changes to the API.
