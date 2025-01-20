@@ -271,17 +271,58 @@ export class AtomicServer {
   @func()
   rustCrossBuild(@argument() target: string): Container {
     const source = this.source;
+    const cargoCache = dag.cacheVolume("cargo");
+
+    // Use rust-musl-cross images which support multi-arch builds
+    // Map target to the appropriate image tag
+    let imageTag: string;
+    switch (target) {
+      case "x86_64-unknown-linux-musl":
+        imageTag = "x86_64-musl";
+        break;
+      case "aarch64-unknown-linux-musl":
+        imageTag = "aarch64-musl";
+        break;
+      case "armv7-unknown-linux-musleabihf":
+        imageTag = "armv7-musleabihf";
+        break;
+      default:
+        throw new Error(`Unsupported cross-compilation target: ${target}`);
+    }
+
     const rustContainer = dag
       .container()
-      .from(RUST_IMAGE)
-      .withExec(["cargo", "install", "cross"])
-      .withMountedDirectory("/code", source)
-      .withWorkdir("/code")
-      .withExec(["rustup", "target", "add", target]);
+      .from(`ghcr.io/rust-cross/rust-musl-cross:${imageTag}`)
+      .withExec(["apt-get", "update", "-qq"])
+      .withExec(["apt-get", "install", "-y", "nasm"])
+      .withMountedCache("/home/rust/.cargo/registry", cargoCache);
 
-    return rustContainer
-      .withExec(["cross", "build", "--target", target, "--release"])
-      .withExec([`./target/${target}/release/atomic-server`, "--version"]);
+    const sourceContainer = rustContainer
+      .withFile("/home/rust/src/Cargo.toml", source.file("Cargo.toml"))
+      .withFile("/home/rust/src/Cargo.lock", source.file("Cargo.lock"))
+      .withDirectory("/home/rust/src/server", source.directory("server"))
+      .withDirectory("/home/rust/src/lib", source.directory("lib"))
+      .withDirectory("/home/rust/src/cli", source.directory("cli"))
+      .withMountedCache("/home/rust/src/target", dag.cacheVolume("rust-target"))
+      .withWorkdir("/home/rust/src")
+      .withExec(["cargo", "fetch"]);
+
+    // Include frontend assets for the server build
+    const browserDir = this.jsBuild().directory("/app/data-browser/dist");
+    const containerWithAssets = sourceContainer.withDirectory(
+      "/home/rust/src/server/assets_tmp",
+      browserDir
+    );
+
+    // Build using the pre-configured cross-compilation environment
+    return containerWithAssets
+      .withExec(["cargo", "build", "--target", target, "--release"])
+      .withExec([`./target/${target}/release/atomic-server`, "--version"])
+      .withExec([
+        "cp",
+        `./target/${target}/release/atomic-server`,
+        "/atomic-server-binary",
+      ]);
   }
 
   @func()
@@ -378,9 +419,7 @@ export class AtomicServer {
     const crossBuildContainer = this.rustCrossBuild(
       "x86_64-unknown-linux-musl"
     );
-    const binaryFile = crossBuildContainer.file(
-      "/code/target/x86_64-unknown-linux-musl/release/atomic-server"
-    );
+    const binaryFile = crossBuildContainer.file("/atomic-server-binary");
 
     // Create deployment container with SSH client
     const deployContainer = dag
@@ -430,25 +469,5 @@ export class AtomicServer {
       .stdout();
 
     return `Deployment to ${remoteHost} completed successfully:\n${deployResult}`;
-  }
-
-  @func()
-  async deployStaging(
-    @argument() remoteUser: Secret,
-    @argument() sshPrivateKey: Secret
-  ): Promise<string> {
-    return this.deployServer(
-      "staging.atomicdata.dev",
-      remoteUser,
-      sshPrivateKey
-    );
-  }
-
-  @func()
-  async deployProduction(
-    @argument() remoteUser: Secret,
-    @argument() sshPrivateKey: Secret
-  ): Promise<string> {
-    return this.deployServer("atomicdata.dev", remoteUser, sshPrivateKey);
   }
 }

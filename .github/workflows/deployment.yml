@@ -20,41 +20,15 @@ jobs:
     environment: ${{ inputs.environment }}
     runs-on: ubuntu-latest
     env:
-      EARTHLY_TOKEN: ${{ secrets.EARTHLY_TOKEN }}
+      REMOTE_USER: ${{ secrets.REMOTE_USER }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
     steps:
-      - uses: actions/checkout@v2
-
-      - uses: earthly/actions-setup@v1
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Deploy using Dagger
+        uses: dagger/dagger-for-github@8.0.0
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
           version: "latest"
-
-      - name: Set env
-        run: echo "RELEASE_VERSION=$(echo ${GITHUB_REF#refs/*/})" >> $GITHUB_ENV
-
-      - name: Earthly build
-        run: earthly --org ontola --sat henk -P +cross-build -TARGET=x86_64-unknown-linux-musl
-
-      - name: Transfer binary rsync
-        uses: easingthemes/ssh-deploy@v3
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          ARGS: "-rltgoDzvO"
-          SOURCE: "./artifact/bin/atomic-server-x86_64-unknown-linux-musl"
-          REMOTE_HOST: ${{ inputs.remote_host }}
-          REMOTE_USER: ${{ secrets.REMOTE_USER }}
-          TARGET: ~/
-
-      - name: executing remote ssh commands using ssh key
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ inputs.remote_host }}
-          username: ${{ secrets.REMOTE_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            mv ~/atomic-server-x86_64-unknown-linux-musl ~/atomic-server
-            cp ~/atomic-server ~/atomic-server-$(date +'%Y-%m-%dT%H:%M:%S')
-            systemctl stop atomic
-            ./atomic-server export &&
-            systemctl start atomic
-            systemctl status atomic
+          verb: call
+          args: deploy-server --remote-host ${{ inputs.remote_host }} --remote-user env://REMOTE_USER --ssh-private-key env://SSH_PRIVATE_KEY
+          cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
