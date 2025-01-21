@@ -17,7 +17,6 @@ Check out the [Roadmap](https://docs.atomicdata.dev/roadmap.html) if you want to
   - [Running locally (with local development browser)](#running-locally-with-local-development-browser)
   - [IDE setup (VSCode)](#ide-setup-vscode)
   - [Using Dagger](#using-dagger)
-  - [Compilation using Earthly](#compilation-using-earthly)
   - [Improve local compilation speed](#improve-local-compilation-speed)
   - [Cross compilation](#cross-compilation)
 - [Git policy](#git-policy)
@@ -72,15 +71,6 @@ You can pass secrets / ENVS to dagger like so:
 If Dagger is taking up a lot of storage, run `dagger core engine local-cache prune`.
 Note that the camelCase functions in the `index.ts` file are converted to kebab-case commands in the Dagger API.
 Check out the [Dagger docs](https://docs.dagger.io/) for more information.
-
-### Compilation using Earthly
-
-There are `earthfile`s in `browser` and in `atomic-server`.
-These can be used by Earthly to build all steps, including a full docker image.
-
-- Make sure `earthly` is installed
-- `earthly --org ontola -P --satellite henk --artifact +e2e/test-results +pipeline`
-- `earthly --org ontola -P --satellite henk --artifact +build-server/atomic-server ./output/atomicserver`
 
 ### Improve local compilation speed
 

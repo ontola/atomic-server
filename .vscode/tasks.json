@@ -57,16 +57,9 @@
 			"problemMatcher": []
 		},
 		{
-			"label": "earthly pipeline locally",
+			"label": "dagger call rust-build",
 			"type": "shell",
-			"command": "earthly -i -P +pipeline",
-			"group": "none",
-			"problemMatcher": []
-		},
-		{
-			"label": "earthly cross-compile",
-			"type": "shell",
-			"command": "earthly -i -P +compile-all",
+			"command": "dagger call rust-build",
 			"group": "none",
 			"problemMatcher": []
 		},
