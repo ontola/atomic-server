@@ -5,6 +5,7 @@
 #   "apt-get install --assume-yes nasm:$CROSS_DEB_ARCH",
 # ]
 [target.x86_64-unknown-linux-musl]
+image = "ghcr.io/cross-rs/x86_64-unknown-linux-musl:edge"
 pre-build = [
   "dpkg --add-architecture $CROSS_DEB_ARCH",
   "apt-get update",
@@ -16,3 +17,19 @@ pre-build = [
 #   "apt-get update",
 #   "apt-get install --assume-yes nasm:$CROSS_DEB_ARCH",
 # ]
+
+[target.aarch64-unknown-linux-musl]
+image = "ghcr.io/cross-rs/aarch64-unknown-linux-musl:edge"
+pre-build = [
+  "dpkg --add-architecture $CROSS_DEB_ARCH",
+  "apt-get update",
+  "apt-get install --assume-yes nasm:$CROSS_DEB_ARCH",
+]
+
+[target.armv7-unknown-linux-musleabihf]
+image = "ghcr.io/cross-rs/armv7-unknown-linux-musleabihf:edge"
+pre-build = [
+  "dpkg --add-architecture $CROSS_DEB_ARCH",
+  "apt-get update",
+  "apt-get install --assume-yes nasm:$CROSS_DEB_ARCH",
+]
