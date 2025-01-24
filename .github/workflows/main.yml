@@ -2,8 +2,8 @@ on: [push, workflow_dispatch]
 
 name: "Main pipeline: build, lint, test"
 jobs:
-  earthly:
-    name: Earthly
+  Main:
+    name: Main
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -24,7 +24,7 @@ jobs:
           version: "latest"
           cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
           verb: call
-          args: ci
+          args: ci --netlify-auth-token ${{ secrets.NETLIFY_AUTH_TOKEN }}
       - name: Docker images
         if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
         uses: dagger/dagger-for-github@8.0.0
