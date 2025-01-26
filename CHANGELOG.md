@@ -1,13 +1,14 @@
 # Changelog
 
-## UNRELEASED
-
-- [#1048](https://github.com/atomicdata-dev/atomic-server/issues/1048) Fix search index not removing old versions of resources.
-
 List of changes for this repo, including `atomic-cli`, `atomic-server` and `atomic-lib`.
 By far most changes relate to `atomic-server`, so if not specified, assume the changes are relevant only for the server.
 **Changes to JS assets (including the front-end and JS libraries) are not shown here**, but in [`/browser/CHANGELOG`](/browser/CHANGELOG.md).
 See [STATUS.md](server/STATUS.md) to learn more about which features will remain stable.
+
+## UNRELEASED
+
+- [#1048](https://github.com/atomicdata-dev/atomic-server/issues/1048) Fix search index not removing old versions of resources.
+- [#1056](https://github.com/atomicdata-dev/atomic-server/issues/1056) Switched from Earthly to Dagger for CI. Also made improvements to E2E test publishing and building docker images.
 
 ## [v0.40.2]
 
