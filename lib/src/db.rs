@@ -895,20 +895,31 @@ impl Storelike for Db {
     #[instrument(skip(self))]
     fn remove_resource(&self, subject: &str) -> AtomicResult<()> {
         let mut transaction = Transaction::new();
-        if let Ok(found) = self.get_propvals(subject) {
-            let resource = Resource::from_propvals(found, subject.to_string());
-            for (prop, val) in resource.get_propvals() {
-                let remove_atom = crate::Atom::new(subject.into(), prop.clone(), val.clone());
-                self.remove_atom_from_index(&remove_atom, &resource, &mut transaction)?;
+        transaction.push(Operation::remove_resource(subject));
+
+        let mut recursive_remove = |subject: &str| -> AtomicResult<()> {
+            if let Ok(found) = self.get_propvals(subject) {
+                let resource = Resource::from_propvals(found, subject.to_string());
+                let mut children = resource.get_children(self)?;
+                for child in children.iter_mut() {
+                    transaction.push(Operation::remove_resource(child.get_subject()));
+                }
+                for (prop, val) in resource.get_propvals() {
+                    let remove_atom = crate::Atom::new(subject.into(), prop.clone(), val.clone());
+                    self.remove_atom_from_index(&remove_atom, &resource, &mut transaction)?;
+                }
+            } else {
+                return Err(format!(
+                    "Resource {} could not be deleted, because it was not found in the store.",
+                    subject
+                )
+                .into());
             }
-            let _found = self.resources.remove(subject.as_bytes())?;
-        } else {
-            return Err(format!(
-                "Resource {} could not be deleted, because it was not found in the store.",
-                subject
-            )
-            .into());
-        }
+            Ok(())
+        };
+
+        recursive_remove(subject)?;
+
         self.apply_transaction(&mut transaction)?;
         Ok(())
     }

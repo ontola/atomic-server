@@ -187,6 +187,10 @@ impl Storelike for Store {
     }
 
     fn remove_resource(&self, subject: &str) -> AtomicResult<()> {
+        let resource = self.get_resource(subject)?;
+        for child in resource.get_children(self)? {
+            self.remove_resource(child.get_subject())?;
+        }
         self.hashmap
             .lock()
             .unwrap()

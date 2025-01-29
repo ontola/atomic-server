@@ -401,6 +401,7 @@ test.describe('data-browser', async () => {
     await page.click('button:has-text("Delete")');
     await expect(page.locator('text=Resource deleted')).toBeVisible();
     await openSubject(page, nestedResource);
+    await page.reload();
     // Expect a 404
     await expect(
       page.locator('text=Resource not found'),

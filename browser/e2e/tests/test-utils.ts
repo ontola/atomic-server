@@ -248,6 +248,8 @@ export async function newResource(klass: string, page: Page) {
     await page.keyboard.press('Enter');
   } else {
     await page.locator(`button:has-text("${klass}")`).click();
+    // after navigation to the new resource, wait for the URL to change
+    await page.locator('main[about]');
   }
 }
 
