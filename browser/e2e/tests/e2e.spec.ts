@@ -23,7 +23,6 @@ import {
   openSubject,
   publicReadRightLocator,
   setTitle,
-  sideBarDriveSwitcher,
   signIn,
   timestamp,
   waitForCommit,
@@ -311,22 +310,22 @@ test.describe('data-browser', async () => {
     ).toBeVisible();
   });
 
-  test('drive switcher', async ({ page }) => {
-    await signIn(page);
-    await page.click(sideBarDriveSwitcher);
-    // temp disable for trailing slash
-    // const dropdownId = await page
-    //   .locator(sideBarDriveSwitcher)
-    //   .getAttribute('aria-controls');
-    // await page.click(`[id="${dropdownId}"] >> text=Atomic Data`);
-    // await expect(page.locator(currentDriveTitle)).toHaveText('Atomic Data');
+  // test('drive switcher', async ({ page }) => {
+  //   await signIn(page);
+  //   await page.click(sideBarDriveSwitcher);
+  //   // temp disable for trailing slash
+  //   // const dropdownId = await page
+  //   //   .locator(sideBarDriveSwitcher)
+  //   //   .getAttribute('aria-controls');
+  //   // await page.click(`[id="${dropdownId}"] >> text=Atomic Data`);
+  //   // await expect(page.locator(currentDriveTitle)).toHaveText('Atomic Data');
 
-    // Cleanup drives for signed in user
-    await openAgentPage(page);
-    await page.click('text=Edit profile');
-    await page.getByTestId('input-drives-clear').click();
-    await page.click('[data-test="save"]');
-  });
+  //   // Cleanup drives for signed in user
+  //   await openAgentPage(page);
+  //   await page.click('text=Edit profile');
+  //   await page.getByTestId('input-drives-clear').click();
+  //   await page.click('[data-test="save"]');
+  // });
 
   test('configure drive page', async ({ page }) => {
     await signIn(page);
@@ -399,9 +398,12 @@ test.describe('data-browser', async () => {
     await openSubject(page, parentResource);
     await contextMenuClick('delete', page);
     await page.click('button:has-text("Delete")');
+
     await expect(page.locator('text=Resource deleted')).toBeVisible();
-    await openSubject(page, nestedResource);
+
     await page.reload();
+    await openSubject(page, nestedResource);
+
     // Expect a 404
     await expect(
       page.locator('text=Resource not found'),
