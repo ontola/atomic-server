@@ -71,6 +71,7 @@ export function SideBarDrive({
     <>
       <SideBarHeader>
         <TitleButton
+          resource={drive}
           clean
           title={`Your current baseURL is ${drive}`}
           data-test='sidebar-drive-open'
