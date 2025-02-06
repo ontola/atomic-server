@@ -575,7 +575,9 @@ VOLUME /atomic-storage
 
   @func()
   /** Creates Docker images for all supported architectures */
-  async createDockerImages(@argument() tag: string = "latest"): Promise<void> {
+  async createDockerImages(
+    @argument() tags: string[] = ["develop"],
+  ): Promise<void> {
     const targets = Object.keys(TARGET_IMAGE_MAP);
 
     // Build one variant first.
@@ -588,8 +590,10 @@ VOLUME /atomic-storage
       .map((target) => this.createDockerImage(target));
 
     // Publish the multi-platform image with all variants
-    await firstImage.publish(`joepmeneer/atomic-server:${tag}`, {
-      platformVariants: otherVariants,
-    });
+    for (const tag of tags) {
+      await firstImage.publish(`joepmeneer/atomic-server:${tag}`, {
+        platformVariants: otherVariants,
+      });
+    }
   }
 }
