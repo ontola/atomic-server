@@ -479,6 +479,29 @@ impl Db {
         }
         Ok(())
     }
+
+    /// Recursively removes a resource and its children from the database
+    fn recursive_remove(&self, subject: &str, transaction: &mut Transaction) -> AtomicResult<()> {
+        if let Ok(found) = self.get_propvals(subject) {
+            let resource = Resource::from_propvals(found, subject.to_string());
+            transaction.push(Operation::remove_resource(subject));
+            let mut children = resource.get_children(self)?;
+            for child in children.iter_mut() {
+                self.recursive_remove(child.get_subject(), transaction)?;
+            }
+            for (prop, val) in resource.get_propvals() {
+                let remove_atom = crate::Atom::new(subject.into(), prop.clone(), val.clone());
+                self.remove_atom_from_index(&remove_atom, &resource, transaction)?;
+            }
+        } else {
+            return Err(format!(
+                "Resource {} could not be deleted, because it was not found in the store.",
+                subject
+            )
+            .into());
+        }
+        Ok(())
+    }
 }
 
 impl Drop for Db {
@@ -895,33 +918,10 @@ impl Storelike for Db {
     #[instrument(skip(self))]
     fn remove_resource(&self, subject: &str) -> AtomicResult<()> {
         let mut transaction = Transaction::new();
-        transaction.push(Operation::remove_resource(subject));
 
-        let mut recursive_remove = |subject: &str| -> AtomicResult<()> {
-            if let Ok(found) = self.get_propvals(subject) {
-                let resource = Resource::from_propvals(found, subject.to_string());
-                let mut children = resource.get_children(self)?;
-                for child in children.iter_mut() {
-                    transaction.push(Operation::remove_resource(child.get_subject()));
-                }
-                for (prop, val) in resource.get_propvals() {
-                    let remove_atom = crate::Atom::new(subject.into(), prop.clone(), val.clone());
-                    self.remove_atom_from_index(&remove_atom, &resource, &mut transaction)?;
-                }
-            } else {
-                return Err(format!(
-                    "Resource {} could not be deleted, because it was not found in the store.",
-                    subject
-                )
-                .into());
-            }
-            Ok(())
-        };
+        self.recursive_remove(subject, &mut transaction)?;
 
-        recursive_remove(subject)?;
-
-        self.apply_transaction(&mut transaction)?;
-        Ok(())
+        self.apply_transaction(&mut transaction)
     }
 
     fn set_default_agent(&self, agent: crate::agents::Agent) {
