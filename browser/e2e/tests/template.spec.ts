@@ -13,10 +13,29 @@ import fs from 'node:fs';
 import { spawn, type ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import kill from 'kill-port';
-import { promisify } from 'util';
 import { log } from 'node:console';
 
-const execAsync = promisify(exec);
+const execAsync = async (
+  command: Parameters<typeof exec>[0],
+  options?: Parameters<typeof exec>[1],
+) => {
+  return new Promise((resolve, reject) => {
+    exec(command, options, (err, stdout, stderr) => {
+      console.log(stdout, stderr);
+
+      if (err) {
+        reject(new Error(err.message));
+      }
+
+      if (stderr) {
+        reject(new Error(stderr.toString()));
+      }
+
+      resolve(stdout.toString());
+    });
+  });
+};
+
 const TEMPLATE_DIR_NAME = 'template-tests';
 // test.describe.configure({ mode: 'serial' });
 
