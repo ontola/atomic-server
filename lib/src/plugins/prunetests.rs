@@ -1,3 +1,5 @@
+use tracing::info;
+
 use crate::{
     endpoints::{Endpoint, HandleGetContext, HandlePostContext},
     errors::AtomicResult,
@@ -29,7 +31,7 @@ fn handle_prune_tests_request(context: HandlePostContext) -> AtomicResult<Resour
     let mut deleted_drives = 0;
 
     if let Ok(mut query_result) = store.query(&query) {
-        println!(
+        info!(
             "Received prune request, deleting {} drives",
             query_result.resources.len()
         );
@@ -46,15 +48,15 @@ fn handle_prune_tests_request(context: HandlePostContext) -> AtomicResult<Resour
                     deleted_drives += 1;
 
                     if (deleted_drives % 10) == 0 {
-                        println!("Deleted {} of {} drives", deleted_drives, total_drives);
+                        info!("Deleted {} of {} drives", deleted_drives, total_drives);
                     }
                 }
             }
         }
 
-        println!("Done pruning drives");
+        info!("Done pruning drives");
     } else {
-        println!("Received prune request but there are no drives to prune");
+        info!("Received prune request but there are no drives to prune");
     }
 
     let resource = build_response(store, 200, format!("Deleted {} drives", deleted_drives));
