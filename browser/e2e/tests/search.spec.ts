@@ -116,6 +116,7 @@ test.describe('search', async () => {
     // Search for the folder by the first tag
     await addressBar(page).fill('tag:first');
     await expect(page.locator(`text=${firstTagName}`).first()).toBeVisible();
+    await page.waitForTimeout(200);
     await page.keyboard.press('ArrowDown');
     await page.keyboard.press('Enter');
 
