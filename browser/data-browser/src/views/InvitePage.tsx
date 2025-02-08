@@ -24,7 +24,6 @@ import type { JSX } from 'react';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { useNavState } from '../components/NavState';
 import { toast } from 'react-hot-toast';
-import { errorHandler } from '../handlers/errorHandler';
 
 /** A View that opens an invite */
 function InvitePage({ resource }: ResourcePageProps): JSX.Element {

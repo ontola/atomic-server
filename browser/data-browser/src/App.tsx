@@ -10,7 +10,6 @@ import { useEffect, type JSX } from 'react';
 import { RouterProvider } from '@tanstack/react-router';
 import { router } from './routes/Router';
 import { errorHandler } from './handlers/errorHandler';
-import { error } from 'node:console';
 
 function fixDevUrl(url: string) {
   if (isDev()) {
@@ -59,7 +58,11 @@ function App(): JSX.Element {
   // Handle uncaught errors
   useEffect(() => {
     window.onerror = (message, source, lineno, colno, error) => {
-      errorHandler(error);
+      if (!error) {
+        errorHandler(new Error(`message: ${message}`));
+      }
+
+      errorHandler(error as Error);
     };
 
     window.onunhandledrejection = event => {
