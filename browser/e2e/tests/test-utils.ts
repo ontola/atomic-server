@@ -10,18 +10,20 @@ export const INITIAL_TEST = false;
 export const DEMO_INVITE_NAME = 'document demo invite';
 
 export const testFilePath = (filename: string) => {
-  const processPath = process.cwd();
+  const fixturesFolder = __dirname + '/fixtures';
 
-  // In the CI, the tests dir is missing for some reason?
-  if (processPath.endsWith('tests')) {
-    return `${processPath}/${filename}`;
-  } else if (processPath.endsWith('e2e')) {
-    return `${processPath}/tests/${filename}`;
-  } else if (processPath.endsWith('browser')) {
-    return `${processPath}/e2e/tests/${filename}`;
-  } else {
-    return `${processPath}/browser/e2e/tests/${filename}`;
-  }
+  return `${fixturesFolder}/${filename}`;
+
+  // const processPath = process.cwd();
+  // if (processPath.endsWith('tests')) {
+  //   return `${processPath}/fixtures/${filename}`;
+  // } else if (processPath.endsWith('e2e')) {
+  //   return `${processPath}/tests/fixtures/${filename}`;
+  // } else if (processPath.endsWith('browser')) {
+  //   return `${processPath}/e2e/tests/fixtures/${filename}`;
+  // } else {
+  //   return `${processPath}/browser/e2e/tests/fixtures/${filename}`;
+  // }
 };
 
 export const timestamp = () => new Date().toLocaleTimeString();

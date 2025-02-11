@@ -7,11 +7,13 @@ import ResourceCard from '../Card/ResourceCard';
 type TargetableCardProps = {
   subject: string;
   className?: string;
+  testId: string;
 };
 
 export const TargetableCard = ({
   subject,
   className,
+  testId,
   children,
 }: React.PropsWithChildren<TargetableCardProps>) => {
   return (
@@ -19,6 +21,7 @@ export const TargetableCard = ({
       id={toAnchorId(subject ?? '')}
       about={subject}
       className={className}
+      data-testid={testId}
     >
       {children}
     </StyledCard>
