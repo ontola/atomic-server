@@ -109,3 +109,7 @@ $ atomic install https://atomicdata.dev/ontologies/meetings
 # when no URL is given, use the Ontola repo's ontologies
 $ atomic install meetings
 ``` -->
+
+## Development / contributing
+
+If you want to run the commands from source, first run `pnpm link --global` and then exec the binary with `pnpm exec ad-generate`.
