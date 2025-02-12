@@ -173,8 +173,8 @@ test.describe('File Picker', () => {
 
       await page.getByRole('button', { name: 'Save' }).click();
       await expect(page.getByText('New robot')).not.toBeVisible();
-      await expect(page.getByText('testFile3.txt').nth(1)).toBeVisible();
-      await page.getByText('testFile3.txt').nth(1).click();
+      await expect(page.getByText('testFile3.txt').nth(0)).toBeVisible();
+      await page.getByText('testFile3.txt').nth(0).click();
 
       // For some reason playwright will only find text with quotes in them when using a regex instead of string.
       await expect(page.getByText(/It's a secret to everybody/)).toBeVisible();
