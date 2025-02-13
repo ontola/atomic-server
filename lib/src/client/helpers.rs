@@ -54,18 +54,33 @@ pub fn fetch_body(
     if !url.starts_with("http") {
         return Err(format!("Could not fetch url '{}', must start with http.", url).into());
     }
-    if let Some(agent) = client_agent {
-        get_authentication_headers(url, agent)?;
-    }
 
-    let agent = ureq::builder()
+    let client = ureq::builder()
         .timeout(std::time::Duration::from_secs(2))
         .build();
-    let resp = agent
-        .get(url)
-        .set("Accept", content_type)
-        .call()
-        .map_err(|e| format!("Error when server tried fetching {} : {}", url, e))?;
+
+    let mut req = client.get(url);
+    if let Some(agent) = client_agent {
+        let headers = get_authentication_headers(url, agent)?;
+        for (key, value) in headers {
+            req = req.set(key.as_str(), value.as_str());
+        }
+    }
+
+    let resp = match req.set("Accept", content_type).call() {
+        Ok(response) => response,
+        Err(ureq::Error::Status(status, response)) => {
+            let body = response
+                .into_string()
+                .unwrap_or_else(|_| "<failed to read response body>".to_string());
+            return Err(format!(
+                "Error when server tried fetching {}: Status: {}. Body: {}",
+                url, status, body
+            )
+            .into());
+        }
+        Err(e) => return Err(format!("Error when server tried fetching {}: {}", url, e).into()),
+    };
     let status = resp.status();
     let body = resp
         .into_string()

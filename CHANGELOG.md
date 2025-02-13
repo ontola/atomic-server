@@ -11,6 +11,7 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 - [#1056](https://github.com/atomicdata-dev/atomic-server/issues/1056) Switched from Earthly to Dagger for CI. Also made improvements to E2E test publishing and building docker images.
 - [#979](https://github.com/atomicdata-dev/atomic-server/issues/979) Fix nested resource deletion, use transactions
 - [#1057](https://github.com/atomicdata-dev/atomic-server/issues/1057) Fix double slashes in search bar
+- CLI should use Agent in requests - get #986
 
 ## [v0.40.2]
 

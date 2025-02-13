@@ -104,6 +104,8 @@ enum Commands {
     /// Validates the store
     #[command(hide = true)]
     Validate,
+    /// Print the current agent
+    Agent,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
@@ -262,6 +264,10 @@ fn exec_command(context: &mut Context) -> AtomicResult<()> {
         }
         Commands::Validate => {
             validate(context);
+        }
+        Commands::Agent => {
+            let agent = context.read_config();
+            println!("{}", agent.agent);
         }
     };
     Ok(())
