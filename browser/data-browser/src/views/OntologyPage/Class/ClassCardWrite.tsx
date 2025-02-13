@@ -4,17 +4,16 @@ import {
 } from '../../../components/ResourceContextMenu';
 import { urls, useArray, useProperty, useResource } from '@tomic/react';
 import { useCallback, type JSX } from 'react';
-import { Card } from '../../../components/Card';
 import { styled } from 'styled-components';
 import { FaCube } from 'react-icons/fa';
 import { Column, Row } from '../../../components/Row';
 import { OntologyDescription } from '../OntologyDescription';
 import { PropertyLineWrite } from '../Property/PropertyLineWrite';
 import InputSwitcher from '../../../components/forms/InputSwitcher';
-import { toAnchorId } from '../../../helpers/toAnchorId';
 import { AddPropertyButton } from './AddPropertyButton';
 import { ErrorChipInput } from '../../../components/forms/ErrorChip';
 import { useOntologyContext } from '../OntologyContext';
+import { TargetableCard } from '../TargetableCard';
 
 interface ClassCardWriteProps {
   subject: string;
@@ -52,8 +51,11 @@ export function ClassCardWrite({ subject }: ClassCardWriteProps): JSX.Element {
   };
 
   return (
-    <StyledCard data-testid={`class-card-write-${resource.title}`}>
-      <Column id={toAnchorId(subject)}>
+    <StyledCard
+      subject={subject}
+      data-testid={`class-card-write-${resource.title}`}
+    >
+      <Column>
         <Row center justify='space-between'>
           <TitleWrapper>
             <FaCube />
@@ -103,8 +105,8 @@ export function ClassCardWrite({ subject }: ClassCardWriteProps): JSX.Element {
   );
 }
 
-const StyledCard = styled(Card)`
-  padding-bottom: ${p => p.theme.margin}rem;
+const StyledCard = styled(TargetableCard)`
+  padding-bottom: ${p => p.theme.size()}rem;
   max-width: 100rem;
 
   border: ${p =>

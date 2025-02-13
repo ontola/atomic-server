@@ -1,5 +1,4 @@
-import { Card } from '../../../components/Card';
-import { urls, useArray, useResource, useString } from '@tomic/react';
+import { core, useArray, useResource, useString } from '@tomic/react';
 import { FaHashtag } from 'react-icons/fa';
 import { styled } from 'styled-components';
 import Markdown from '../../../components/datatypes/Markdown';
@@ -7,9 +6,9 @@ import { Column, Row } from '../../../components/Row';
 import { InlineFormattedResourceList } from '../../../components/InlineFormattedResourceList';
 import { InlineDatatype } from '../InlineDatatype';
 import { AtomicLink } from '../../../components/AtomicLink';
-import { toAnchorId } from '../../../helpers/toAnchorId';
 
 import type { JSX } from 'react';
+import { TargetableCard } from '../TargetableCard';
 
 interface PropertyCardReadProps {
   subject: string;
@@ -19,11 +18,11 @@ export function PropertyCardRead({
   subject,
 }: PropertyCardReadProps): JSX.Element {
   const resource = useResource(subject);
-  const [description] = useString(resource, urls.properties.description);
-  const [allowsOnly] = useArray(resource, urls.properties.allowsOnly);
+  const [description] = useString(resource, core.properties.description);
+  const [allowsOnly] = useArray(resource, core.properties.allowsOnly);
 
   return (
-    <StyledCard id={toAnchorId(subject)}>
+    <TargetableCard subject={subject}>
       <Column>
         <Row center justify='space-between'>
           <Heading>
@@ -42,7 +41,7 @@ export function PropertyCardRead({
           </>
         )}
       </Column>
-    </StyledCard>
+    </TargetableCard>
   );
 }
 
@@ -56,8 +55,4 @@ const Heading = styled.h3`
 
 const SubHeading = styled.h4`
   margin-bottom: 0px;
-`;
-
-const StyledCard = styled(Card)`
-  padding-bottom: ${p => p.theme.margin}rem;
 `;
