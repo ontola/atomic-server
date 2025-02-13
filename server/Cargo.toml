@@ -52,9 +52,6 @@ tracing-chrome = "0.7"
 tracing-log = "0.2"
 ureq = "2"
 urlencoding = "2"
-image = "0.25.2"
-webp = "0.3"
-ravif = "0.11.8"
 
 [dependencies.instant-acme]
 optional = true
@@ -111,6 +108,14 @@ version = "1"
 features = ["time"]
 version = "1"
 
+[dependencies.image]
+optional = true
+version = "0.25.2"
+
+[dependencies.webp]
+optional = true
+version = "0.3"
+
 [dependencies.tracing-subscriber]
 features = ["env-filter"]
 version = "0.3"
@@ -120,9 +125,10 @@ actix-rt = "2"
 assert_cmd = "2"
 
 [features]
-default = ["https", "telemetry"]
+default = ["https", "telemetry", "img"]
 https = ["rustls", "instant-acme", "rcgen", "rustls-pemfile"]
 telemetry = ["tracing-opentelemetry", "opentelemetry", "opentelemetry-jaeger"]
+img = ["webp", "image"]
 
 [lib]
 name = "atomic_server_lib"
