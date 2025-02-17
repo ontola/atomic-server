@@ -8,8 +8,8 @@ use dirs::home_dir;
 use std::{cell::RefCell, path::PathBuf, sync::Mutex};
 
 mod commit;
+mod get;
 mod new;
-mod path;
 mod print;
 mod search;
 
@@ -45,9 +45,9 @@ enum Commands {
         Visit https://docs.atomicdata.dev/core/paths.html for more info about paths. \
     ")]
     Get {
-        /// The subject URL, shortname or path to be fetched
-        #[arg(required = true, num_args = 1..)]
-        path: Vec<String>,
+        /// The subject URL
+        #[arg(required = true)]
+        subject: String,
 
         /// Serialization format
         #[arg(long, value_enum, default_value = "pretty")]
@@ -98,6 +98,12 @@ enum Commands {
         /// The search query
         #[arg(required = true)]
         query: String,
+        /// Subject URL of the parent Resource to filter by
+        #[arg(long)]
+        parent: Option<String>,
+        /// Serialization format
+        #[arg(long, value_enum, default_value = "pretty")]
+        as_: SerializeOptions,
     },
     /// List all bookmarks
     List,
@@ -112,6 +118,7 @@ enum Commands {
 pub enum SerializeOptions {
     Pretty,
     Json,
+    JsonAd,
     NTriples,
 }
 
@@ -120,6 +127,7 @@ impl Into<Format> for SerializeOptions {
         match self {
             SerializeOptions::Pretty => Format::Pretty,
             SerializeOptions::Json => Format::Json,
+            SerializeOptions::JsonAd => Format::JsonAd,
             SerializeOptions::NTriples => Format::NTriples,
         }
     }
@@ -153,6 +161,7 @@ impl Context {
             name: None,
             public_key: generate_public_key(&write_ctx.private_key).public,
         });
+        self.store.set_server_url(&write_ctx.server);
         write_ctx
     }
 }
@@ -240,8 +249,8 @@ fn exec_command(context: &mut Context) -> AtomicResult<()> {
                 return Err("Feature not available. Compile with `native` feature.".into());
             }
         }
-        Commands::Get { path, as_ } => {
-            path::get_path(context, &path, &as_)?;
+        Commands::Get { subject, as_ } => {
+            get::get_resource(context, &subject, &as_)?;
         }
         Commands::List => {
             list(context);
@@ -259,8 +268,8 @@ fn exec_command(context: &mut Context) -> AtomicResult<()> {
         } => {
             commit::set(context, &subject, &property, &value)?;
         }
-        Commands::Search { query } => {
-            search::search(context, query)?;
+        Commands::Search { query, parent, as_ } => {
+            search::search(context, query, parent, &as_)?;
         }
         Commands::Validate => {
             validate(context);

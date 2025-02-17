@@ -7,6 +7,8 @@ Use the `/search` endpoint from AtomicServer to perform full-text search.
 use std::collections::HashMap;
 use url::Url;
 
+use crate::agents::Agent;
+
 // Define the SearchOpts struct with optional fields
 #[derive(Debug, Default)]
 pub struct SearchOpts {
@@ -14,6 +16,8 @@ pub struct SearchOpts {
     pub limit: Option<u32>,
     pub parents: Option<Vec<String>>,
     pub filters: Option<HashMap<String, String>>,
+    /// The agent to use for authentication
+    pub agent: Option<Agent>,
 }
 
 // Function to build the base URL for search
@@ -126,6 +130,7 @@ mod tests {
                 filters
             }),
             parents: Some(vec!["https://test.com/parent".to_string()]),
+            agent: None,
         };
         let expected_search_url = "https://test.com/search?q=test&include=true&limit=30&filters=age%3A%2210%22&parents=https%3A%2F%2Ftest.com%2Fparent";
         assert_eq!(

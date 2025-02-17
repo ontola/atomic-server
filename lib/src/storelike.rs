@@ -98,7 +98,9 @@ pub trait Storelike: Sized {
     /// E.g. `https://example.com`
     /// This is where deltas should be sent to.
     /// Also useful for Subject URL generation.
-    fn get_server_url(&self) -> &str;
+    fn get_server_url(&self) -> AtomicResult<String> {
+        Err("No server URL found. Set it using `set_server_url`.".into())
+    }
 
     /// Returns the root URL where this instance of the store is hosted.
     /// Should return `None` if this is simply a client and not a server.
@@ -153,6 +155,28 @@ pub trait Storelike: Sized {
         let resource: Resource = crate::client::fetch_resource(subject, self, client_agent)?;
         self.add_resource_opts(&resource, true, true, true)?;
         Ok(resource)
+    }
+
+    /// Performs a full-text search on the Server's /search endpoint.
+    /// Requires a server URL to be set.
+    fn search(
+        &self,
+        query: &str,
+        opts: crate::client::search::SearchOpts,
+    ) -> AtomicResult<Vec<Resource>> {
+        let server_url = self.get_server_url()?;
+        let subject = crate::client::search::build_search_subject(&server_url, query, opts);
+        println!("subject: {:?}", subject);
+        // let resource = self.fetch_resource(&subject, self.get_default_agent().ok().as_ref())?;
+        let resource = self.fetch_resource("https://atomicdata.dev/search?q=a&include=true&limit=30&parents=https%3A%2F%2Fatomicdata.dev%2Fdrive%2Fxzpv34r5ibr", self.get_default_agent().ok().as_ref())?;
+        let results: Vec<Resource> = match resource.get(urls::ENDPOINT_RESULTS) {
+            Ok(Value::ResourceArray(vec)) => {
+                println!("members: {:?}", vec);
+                vec.iter().cloned().map(|r| r.try_into().unwrap()).collect()
+            }
+            _ => return Err("No 'ENDPOINT_RESULTS' in response from server.".into()),
+        };
+        Ok(results)
     }
 
     /// Returns a full Resource with native Values.

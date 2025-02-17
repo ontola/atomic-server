@@ -1,5 +1,12 @@
+use std::io::Write;
+use std::path::PathBuf;
+
 use image::GenericImageView;
 use image::{codecs::avif::AvifEncoder, ImageReader};
+
+use crate::errors::AtomicServerResult;
+
+use super::download::DownloadParams;
 
 pub fn is_image(file_path: &PathBuf) -> bool {
     if let Ok(img) = image::open(file_path) {
@@ -12,8 +19,8 @@ pub fn process_image(
     file_path: &PathBuf,
     new_path: &PathBuf,
     params: &DownloadParams,
+    format: &str,
 ) -> AtomicServerResult<()> {
-    let format = get_format(params)?;
     let quality = params.q.unwrap_or(100.0).clamp(0.0, 100.0);
 
     let mut img = ImageReader::open(file_path)?

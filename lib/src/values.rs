@@ -39,6 +39,18 @@ pub enum SubResource {
     Subject(String),
 }
 
+// try convert subresource into resource
+impl TryInto<Resource> for SubResource {
+    type Error = String;
+
+    fn try_into(self) -> Result<Resource, Self::Error> {
+        match self {
+            SubResource::Resource(r) => Ok(*r.clone()),
+            _ => Err("SubResource is not a Resource".into()),
+        }
+    }
+}
+
 /// When the Datatype of a Value is not handled by this library
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct UnsupportedValue {
