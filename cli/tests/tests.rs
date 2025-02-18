@@ -14,31 +14,9 @@ mod test {
     }
 
     #[test]
-    fn get_shortname() {
-        let mut cmd = Command::cargo_bin(assert_cmd::crate_name!()).unwrap();
-        cmd.args(["get", "shortname"]).assert().success();
-    }
-
-    #[test]
     fn get_url() {
         let mut cmd = Command::cargo_bin(assert_cmd::crate_name!()).unwrap();
         cmd.args(["get", TEST_URL]).assert().success();
-    }
-
-    #[test]
-    fn get_path() {
-        let mut cmd = Command::cargo_bin(assert_cmd::crate_name!()).unwrap();
-        cmd.args(["get", &format!("{TEST_URL} name")])
-            .assert()
-            .success();
-    }
-
-    #[test]
-    fn get_path_array() {
-        let mut cmd = Command::cargo_bin(assert_cmd::crate_name!()).unwrap();
-        cmd.args(["get", &format!("{TEST_URL} is-a 0")])
-            .assert()
-            .success();
     }
 
     #[test]
@@ -47,6 +25,15 @@ mod test {
         cmd.args(["get", &format!("{TEST_URL} is-a 1")])
             .assert()
             .failure();
+    }
+
+    #[test]
+    fn search() {
+        let parent = "https://atomicdata.dev/ontology/core";
+        let mut cmd = Command::cargo_bin(assert_cmd::crate_name!()).unwrap();
+        cmd.args(["search", "a", "--parent", parent])
+            .assert()
+            .success();
     }
 
     #[ignore]

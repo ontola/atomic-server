@@ -59,14 +59,13 @@ fn handle_prune_tests_request(context: HandlePostContext) -> AtomicResult<Resour
         info!("Received prune request but there are no drives to prune");
     }
 
-    let resource = build_response(store, 200, format!("Deleted {} drives", deleted_drives));
-    Ok(resource)
+    build_response(store, 200, format!("Deleted {} drives", deleted_drives))
 }
 
-fn build_response(store: &impl Storelike, status: i32, message: String) -> Resource {
-    let mut resource = Resource::new_generate_subject(store);
+fn build_response(store: &impl Storelike, status: i32, message: String) -> AtomicResult<Resource> {
+    let mut resource = Resource::new_generate_subject(store)?;
     resource.set_class(urls::ENDPOINT_RESPONSE);
     resource.set_unsafe(urls::STATUS.to_string(), status.into());
     resource.set_unsafe(urls::RESPONSE_MESSAGE.to_string(), message.into());
-    resource
+    Ok(resource)
 }

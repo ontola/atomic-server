@@ -683,14 +683,14 @@ impl Storelike for Db {
         Ok(commit_response)
     }
 
-    fn get_server_url(&self) -> &str {
-        &self.server_url
+    fn get_server_url(&self) -> AtomicResult<String> {
+        Ok(self.server_url.clone())
     }
 
     // Since the DB is often also the server, this should make sense.
     // Some edge cases might appear later on (e.g. a slave DB that only stores copies?)
     fn get_self_url(&self) -> Option<String> {
-        Some(self.get_server_url().into())
+        self.get_server_url().ok()
     }
 
     fn get_default_agent(&self) -> AtomicResult<crate::agents::Agent> {
