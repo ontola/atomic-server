@@ -1,4 +1,8 @@
-use crate::{endpoints::Endpoint, urls};
+use crate::{
+    endpoints::{Endpoint, HandleGetContext},
+    errors::AtomicResult,
+    urls, Resource,
+};
 
 // Note that the actual logic of this endpoint resides in `atomic-server`, as it depends on the Actix runtime.
 pub fn search_endpoint() -> Endpoint {
@@ -11,7 +15,22 @@ pub fn search_endpoint() -> Endpoint {
     ],
       description: "Full text-search endpoint. You can use the keyword `AND` and `OR`, or use `\"` for advanced searches. ".to_string(),
       shortname: "search".to_string(),
-      handle: None,
+      handle: Some(handle_search),
       handle_post: None,
   }
+}
+
+fn handle_search(context: HandleGetContext) -> AtomicResult<Resource> {
+    let HandleGetContext {
+        subject,
+        store,
+        for_agent: _for_agent,
+    } = context;
+    let params = subject.query_pairs();
+    if params.into_iter().next().is_none() {
+        return search_endpoint().to_resource(store);
+    }
+    return Err(
+        "Search endpoint is only available through HTTP requests, not through webhooks".into(),
+    );
 }
