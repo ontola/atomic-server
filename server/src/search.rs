@@ -314,7 +314,7 @@ mod tests {
         let fields = search_state.get_schema_fields().unwrap();
 
         // Create initial resource
-        let mut resource = Resource::new_generate_subject(&store);
+        let mut resource = Resource::new_generate_subject(&store).unwrap();
         resource
             .set_string(urls::NAME.into(), "Initial Title", &store)
             .unwrap();

@@ -5,6 +5,7 @@ pub fn init_store() -> crate::Store {
 
     let store = crate::Store::init().unwrap();
     store.populate().unwrap();
+    store.set_server_url("http://localhost");
     let agent = store.create_agent(None).unwrap();
     store.set_default_agent(agent);
     store

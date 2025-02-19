@@ -171,7 +171,7 @@ impl Storelike for Store {
             .lock()
             .unwrap()
             .clone()
-            .ok_or("No server URL found. Set it using `set_server_url`.".into())
+            .ok_or("No server URL found. Set it using `store.set_server_url`.".into())
     }
 
     fn get_self_url(&self) -> Option<String> {

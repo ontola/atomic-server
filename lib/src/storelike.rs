@@ -102,9 +102,9 @@ pub trait Storelike: Sized {
         Err("No server URL found. Set it using `set_server_url`.".into())
     }
 
-    /// Returns the root URL where this instance of the store is hosted.
-    /// Should return `None` if this is simply a client and not a server.
+    /// Returns the root URL of where this instance of the store is hosted.
     /// E.g. `https://example.com`
+    /// Should return `None` if this store is a client and not a server.
     fn get_self_url(&self) -> Option<String> {
         None
     }
