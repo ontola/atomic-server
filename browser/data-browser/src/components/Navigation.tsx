@@ -15,6 +15,8 @@ import { NAVBAR_TRANSITION_TAG } from '../helpers/transitionName';
 import { SearchbarFakeInput } from './Searchbar/SearchbarInput';
 import { CalculatedPageHeight } from '../globalCssVars';
 
+export const NAVBAR_HEIGHT = '2.5rem';
+
 interface NavWrapperProps {
   children: React.ReactNode;
 }
@@ -102,6 +104,7 @@ function NavBar(): JSX.Element {
       <>
         <ButtonBar
           leftPadding
+          rightPadding={!isInStandaloneMode}
           type='button'
           onClick={() => setSideBarLocked(!sideBarLocked)}
           title={`Show / hide sidebar (${shortcuts.sidebarToggle})`}
@@ -136,7 +139,7 @@ const NavBarBase = styled.div<NavBarStyledProps>`
   /* transition: all 0.2s; */
   position: fixed;
   z-index: ${p => p.theme.zIndex.sidebar};
-  height: 2.5rem;
+  height: ${NAVBAR_HEIGHT};
   display: flex;
   border: solid 1px ${props => props.theme.colors.bg2};
   background-color: ${props => props.theme.colors.bg};
@@ -201,7 +204,6 @@ const VerticalDivider = styled.div`
   width: 1px;
   background-color: ${props => props.theme.colors.bg2};
   height: 100%;
-  margin-left: ${p => p.theme.size(2)};
 `;
 
 const SideBarWrapper = styled.div<{ navbarPosition: NavBarPosition }>`

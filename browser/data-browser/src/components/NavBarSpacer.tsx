@@ -2,8 +2,8 @@ import { styled } from 'styled-components';
 import { useSettings } from '../helpers/AppSettings';
 
 import type { JSX } from 'react';
+import { NAVBAR_HEIGHT } from './Navigation';
 
-const NAVBAR_HEIGHT = '2rem';
 const NAVBAR_CALC_PART = ` + ${NAVBAR_HEIGHT}`;
 
 export interface NavBarSpacerProps {
