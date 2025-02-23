@@ -84,7 +84,13 @@ pub fn propvals_v1_to_v2(propvals: PropValsV1) -> crate::resources::PropVals {
 impl From<SubResourceV1> for crate::values::SubResource {
     fn from(sub_resource: SubResourceV1) -> Self {
         match sub_resource {
-            SubResourceV1::Resource(_resource) => panic!("ResourceV1 is not supported"),
+            SubResourceV1::Resource(resource) => {
+                tracing::warn!(
+                    "Named SubResource found, converting to Subject {}",
+                    resource.subject
+                );
+                return Self::Subject(resource.subject);
+            }
             SubResourceV1::Nested(propvals) => Self::Nested(propvals_v1_to_v2(propvals)),
             SubResourceV1::Subject(subject) => Self::Subject(subject),
         }
@@ -115,8 +121,12 @@ impl From<ValueV1> for crate::values::Value {
             crate::db::v1_types::ValueV1::NestedResource(sub_resource_v1) => {
                 Self::NestedResource(sub_resource_v1.into())
             }
-            crate::db::v1_types::ValueV1::Resource(_resource_v1) => {
-                panic!("ResourceV1 is not supported")
+            crate::db::v1_types::ValueV1::Resource(resource_v1) => {
+                tracing::warn!(
+                    "Named SubResource found, converting to Subject {}",
+                    resource_v1.subject
+                );
+                return Self::AtomicUrl(resource_v1.subject);
             }
             crate::db::v1_types::ValueV1::Boolean(v) => Self::Boolean(v),
             crate::db::v1_types::ValueV1::Unsupported(unsupported_value) => {
