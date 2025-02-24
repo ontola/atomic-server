@@ -1,17 +1,8 @@
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { useEffect, useState } from 'react';
-import { useSettings } from '../../helpers/AppSettings';
-import type { AIAgent, MCPServer } from './types';
-import {
-  experimental_createMCPClient as createMCPClient,
-  type ToolSet,
-} from 'ai';
-
-// The mcp ts library does not export a type for this so we have to infer it.
-export type MCPTool = Awaited<
-  ReturnType<(typeof Client)['prototype']['listTools']>
->['tools'][number];
+import type { AIAgent } from './types';
+import { jsonSchema, tool, type Tool, type ToolSet } from 'ai';
+import { useMcpServers } from './MCP/useMcpServers';
+import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 
 export type MCPToolCallResult = {
   content: Array<{
@@ -21,63 +12,57 @@ export type MCPToolCallResult = {
   isError: boolean;
 };
 
+// Thanks to the heavy use of zod the mcp sdk doesn't have an actual type for tools so we have to infer it from the return type of listTools.
+type MCPTool = Awaited<
+  ReturnType<(typeof Client)['prototype']['listTools']>
+>['tools'][number];
+
 export function useTools() {
-  const { mcpServers } = useSettings();
+  const { clients } = useMcpServers();
   const [toolSets, setToolSets] = useState<Record<string, ToolSet>>({});
 
   useEffect(() => {
-    (async () => {
-      // Create a client for each MCP server.
-      const connectedClients = (
-        await Promise.allSettled(
-          mcpServers.map(async server => {
-            const client = await createMCPClient({
-              transport: {
-                type: 'sse',
-                url: server.url,
-              },
-            });
+    for (const [name, client] of Object.entries(clients)) {
+      client.listTools().then(tools => {
+        const convertedTools: Record<string, Tool> = {};
 
-            return {
-              id: server.id,
-              client,
-            };
-          }),
-        )
-      )
-        .filter(p => p.status === 'fulfilled')
-        .map(p => p.value);
+        for (const t of tools.tools) {
+          const convertedTool = convertTool(t, client);
+          convertedTools[t.name] = convertedTool;
+        }
 
-      // Get the tools for each client.
-      const toolList = await Promise.all(
-        connectedClients.map(async c => {
-          const tools = await c.client.tools({
-            schemas: 'automatic',
-          });
+        setToolSets(prev => ({ ...prev, [name]: convertedTools }));
+      });
+    }
+  }, [clients]);
 
-          return {
-            id: c.id,
-            tools,
-          };
-        }),
-      );
+  const convertTool = (t: MCPTool, client: Client): Tool => {
+    return tool({
+      description: t.description,
+      parameters: jsonSchema({
+        ...t.inputSchema,
+        properties:
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (t.inputSchema.properties as Record<string, any>) ?? {},
+        additionalProperties: false,
+      }),
+      // @ts-expect-error - AI-SDK is expecting to be able to infer the type but it can't in our case.
+      execute: async (args: Record<string, unknown>) => {
+        const result = await client.callTool({
+          name: t.name,
+          arguments: args,
+        });
 
-      const _tools = toolList.reduce(
-        (acc, t) => ({
-          ...acc,
-          [t.id]: t.tools,
-        }),
-        {} as Record<string, ToolSet>,
-      );
+        if (result.isError) {
+          return result.content;
+        }
 
-      console.log(_tools);
-      setToolSets(_tools);
-    })();
-  }, [mcpServers]);
+        return result.content;
+      },
+    });
+  };
 
   const getToolsForAgent = (agent: AIAgent) => {
-    console.log('toolSets', toolSets);
-    console.log('agent', agent);
     const agentTools = agent.availableTools.reduce(
       (acc, id) => ({
         ...acc,
@@ -85,8 +70,6 @@ export function useTools() {
       }),
       {},
     );
-
-    console.log('picked agentTools', agentTools);
 
     return agentTools;
   };

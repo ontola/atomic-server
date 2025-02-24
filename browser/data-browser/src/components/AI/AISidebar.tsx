@@ -2,7 +2,10 @@ import { styled } from 'styled-components';
 import { SimpleAIChat } from './SimpleAIChat';
 import React, { useEffect, useRef, useState } from 'react';
 import { newContextItem, useAISidebar } from './AISidebarContext';
-import type { AIChatDisplayMessage } from './types';
+import {
+  AIAtomicResourceMessageContext,
+  type AIChatDisplayMessage,
+} from './types';
 import { useCurrentSubject } from '../../helpers/useCurrentSubject';
 import { FaFloppyDisk, FaPlus, FaXmark } from 'react-icons/fa6';
 import { IconButton } from '../IconButton/IconButton';
@@ -81,8 +84,8 @@ export const AISidebar: React.FC = () => {
       contextItems.length < 2
     ) {
       setContextItems([
-        newContextItem({
-          type: 'resource',
+        newContextItem<AIAtomicResourceMessageContext>({
+          type: 'atomic-resource',
           subject: currentSubject,
         }),
       ]);

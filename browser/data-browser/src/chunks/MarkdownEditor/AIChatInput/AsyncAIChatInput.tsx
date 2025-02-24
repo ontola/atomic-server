@@ -12,6 +12,36 @@ import { useStore } from '@tomic/react';
 import { useSettings } from '../../../helpers/AppSettings';
 import type { Node } from '@tiptap/pm/model';
 import Placeholder from '@tiptap/extension-placeholder';
+import { useMcpServers } from '../../../components/AI/MCP/useMcpServers';
+import type {
+  AtomicResourceSuggestion,
+  MCPResourceSuggestion,
+  MentionItem,
+} from './types';
+import { Row } from '../../../components/Row';
+import {
+  IconButton,
+  IconButtonVariant,
+} from '../../../components/IconButton/IconButton';
+import { FaArrowRight } from 'react-icons/fa6';
+
+const createAttribute = (propName: string, dataName: string) => {
+  return {
+    [propName]: {
+      default: null,
+      parseHTML: (element: HTMLElement) => element.getAttribute(dataName),
+      renderHTML: (attributes: Record<string, unknown>) => {
+        if (!attributes[propName]) {
+          return {};
+        }
+
+        return {
+          [dataName]: attributes[propName],
+        };
+      },
+    },
+  };
+};
 
 // Modify the Mention extension to allow serializing to markdown.
 const SerializableMention = Mention.extend({
@@ -27,76 +57,95 @@ const SerializableMention = Mention.extend({
       },
     };
   },
+  addAttributes() {
+    return {
+      ...createAttribute('type', 'data-type'),
+      ...createAttribute('serverId', 'data-server-id'),
+      ...createAttribute('mimeType', 'data-mime-type'),
+      ...createAttribute('id', 'data-id'),
+      ...createAttribute('label', 'data-label'),
+      ...createAttribute('isA', 'data-is-a'),
+    };
+  },
 });
 
 interface AsyncAIChatInputProps {
-  onMentionUpdate: (mentions: string[]) => void;
+  onMentionUpdate: (mentions: MentionItem[]) => void;
   onChange: (markdown: string) => void;
   onSubmit: () => void;
+  hasFiles: boolean;
 }
 
-const AsyncAIChatInput: React.FC<AsyncAIChatInputProps> = ({
-  onMentionUpdate,
-  onChange,
-  onSubmit,
-}) => {
+const AsyncAIChatInput: React.FC<
+  React.PropsWithChildren<AsyncAIChatInputProps>
+> = ({ onMentionUpdate, onChange, onSubmit, children, hasFiles }) => {
   const store = useStore();
-  const { drive } = useSettings();
+  const { drive, mcpServers } = useSettings();
   const [markdown, setMarkdown] = useState('');
   const markdownRef = useRef(markdown);
   const onSubmitRef = useRef(onSubmit);
+  const { serversWithResources, searchResourcesOfServer } = useMcpServers();
 
-  const editor = useEditor({
-    extensions: [
-      Markdown.configure({
-        html: true,
-      }),
-      StarterKit.extend({
-        addKeyboardShortcuts() {
-          return {
-            Enter: () => {
-              // Check if the cursor is in a code block, if so allow the user to press enter.
-              // Pressing shift + enter will exit the code block.
-              if ('language' in this.editor.getAttributes('codeBlock')) {
-                return false;
-              }
+  const editor = useEditor(
+    {
+      extensions: [
+        Markdown.configure({
+          html: true,
+        }),
+        StarterKit.extend({
+          addKeyboardShortcuts() {
+            return {
+              Enter: () => {
+                // Check if the cursor is in a code block, if so allow the user to press enter.
+                // Pressing shift + enter will exit the code block.
+                if ('language' in this.editor.getAttributes('codeBlock')) {
+                  return false;
+                }
 
-              // The content has to be read from a ref because this callback is not updated often leading to stale content.
-              onSubmitRef.current();
-              setMarkdown('');
-              this.editor.commands.clearContent();
+                // The content has to be read from a ref because this callback is not updated often leading to stale content.
+                onSubmitRef.current();
+                setMarkdown('');
+                this.editor.commands.clearContent();
 
-              return true;
-            },
-          };
-        },
-      }).configure({
-        blockquote: false,
-        bulletList: false,
-        orderedList: false,
-        // paragraph: false,
-        heading: false,
-        listItem: false,
-        horizontalRule: false,
-        bold: false,
-        strike: false,
-        italic: false,
-      }),
-      SerializableMention.configure({
-        HTMLAttributes: {
-          class: 'ai-chat-mention',
-        },
-        suggestion: searchSuggestionBuilder(store, drive),
-        renderText({ options, node }) {
-          return `${options.suggestion.char}${node.attrs.title}`;
-        },
-      }),
-      Placeholder.configure({
-        placeholder: 'Ask me anything...',
-      }),
-    ],
-    autofocus: true,
-  });
+                return true;
+              },
+            };
+          },
+        }).configure({
+          blockquote: false,
+          bulletList: false,
+          orderedList: false,
+          heading: false,
+          listItem: false,
+          horizontalRule: false,
+          bold: false,
+          strike: false,
+          italic: false,
+        }),
+        SerializableMention.configure({
+          HTMLAttributes: {
+            class: 'ai-chat-mention',
+          },
+          suggestion: searchSuggestionBuilder(
+            store,
+            drive,
+            mcpServers.filter(server =>
+              serversWithResources.includes(server.id),
+            ),
+            searchResourcesOfServer,
+          ),
+          renderText({ options, node }) {
+            return `${options.suggestion.char}bla${node.attrs.title}`;
+          },
+        }),
+        Placeholder.configure({
+          placeholder: 'Ask me anything...',
+        }),
+      ],
+      autofocus: true,
+    },
+    [serversWithResources, searchResourcesOfServer],
+  );
 
   const handleChange = (value: string) => {
     setMarkdown(value);
@@ -108,7 +157,7 @@ const AsyncAIChatInput: React.FC<AsyncAIChatInputProps> = ({
     }
 
     const mentions = digForMentions(editor.getJSON());
-    onMentionUpdate(Array.from(new Set(mentions)));
+    onMentionUpdate(mentions);
   };
 
   useEffect(() => {
@@ -117,12 +166,29 @@ const AsyncAIChatInput: React.FC<AsyncAIChatInputProps> = ({
   }, [markdown, onSubmit]);
 
   return (
-    <EditorWrapper hideEditor={false}>
-      <TiptapContextProvider editor={editor}>
-        <EditorContent editor={editor} />
-        <EditorEvents onChange={handleChange} />
-      </TiptapContextProvider>
-    </EditorWrapper>
+    <>
+      <EditorWrapper hideEditor={false}>
+        <TiptapContextProvider editor={editor}>
+          <EditorContent editor={editor} />
+          <EditorEvents onChange={handleChange} />
+        </TiptapContextProvider>
+      </EditorWrapper>
+      <Row justify='space-between'>
+        {children}
+        <IconButton
+          disabled={markdown.length === 0 && !hasFiles}
+          onClick={() => {
+            onSubmit();
+            setMarkdown('');
+            editor?.commands.clearContent();
+          }}
+          title='Send'
+          variant={IconButtonVariant.Fill}
+        >
+          <FaArrowRight />
+        </IconButton>
+      </Row>
+    </>
   );
 };
 
@@ -141,9 +207,11 @@ const EditorWrapper = styled(EditorWrapperBase)`
   }
 `;
 
-function digForMentions(data: JSONContent): string[] {
+function digForMentions(
+  data: JSONContent,
+): Array<MCPResourceSuggestion | AtomicResourceSuggestion> {
   if (data.type === 'mention') {
-    return [data.attrs!.id];
+    return [data.attrs as MCPResourceSuggestion | AtomicResourceSuggestion];
   }
 
   if (data.content) {

@@ -19,7 +19,6 @@ import { styled } from 'styled-components';
 import { GeneratingIndicator } from './GeneratingIndicator';
 import { IconButton, IconButtonVariant } from '../IconButton/IconButton';
 import {
-  FaArrowRight,
   FaXmark,
   FaPaperclip,
   FaFile,
@@ -32,7 +31,9 @@ import {
   AIAgent,
   AIState,
   isMessageWithContext,
+  type AIAtomicResourceMessageContext,
   type AIChatDisplayMessage,
+  type AIMCPResourceMessageContext,
   type AIMessageContext,
 } from './types';
 import { AgentConfig, useAIAgentConfig } from './AgentConfig';
@@ -42,6 +43,7 @@ import { useProcessMessages } from './useProcessMessages';
 import { NoKeyOverlay } from './NoKeyOverlay';
 import { useAutoAgentSelect } from './useAgentAutoSelect';
 import { useOpenRouterModels } from './useOpenRouterModels';
+import type { MentionItem } from '../../chunks/MarkdownEditor/AIChatInput/types';
 
 const AIChatInput = React.lazy(
   () => import('../../chunks/MarkdownEditor/AIChatInput/AsyncAIChatInput'),
@@ -104,8 +106,7 @@ export const SimpleAIChat: React.FC<
     agents.find(a => a.id === defaultAgentId) || agents[0],
   );
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
-  const { checkModelSupport, checkModelSupportsImageInput } =
-    useOpenRouterModels();
+  const { checkModelSupportsImageInput } = useOpenRouterModels();
   const [userInput, setUserInput] = useState('');
   const [userSelectedContextItems, setUserSelectedContextItems] = useState<
     AIMessageContext[]
@@ -116,14 +117,6 @@ export const SimpleAIChat: React.FC<
     compatibility: 'strict',
     extraBody: {
       transforms: ['middle-out'],
-      ...(webSearchEnabled
-        ? {
-            plugins: [{ id: 'web' }],
-            web_search_options: {
-              search_context_size: 'low',
-            },
-          }
-        : {}),
     },
   });
   const [ongoingMessage, setOngoingMessage] = useState<OngoingMessagePart>({
@@ -182,6 +175,31 @@ export const SimpleAIChat: React.FC<
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+  };
+
+  const handleMentionUpdate = (mentions: MentionItem[]) => {
+    // Convert mentions to context items
+    const newContextItems: AIMessageContext[] = mentions.map(mention => {
+      if (mention.type === 'atomic-resource') {
+        return {
+          type: mention.type,
+          id: crypto.randomUUID(),
+          subject: mention.id,
+        } as AIAtomicResourceMessageContext;
+      } else if (mention.type === 'mcp-resource') {
+        return {
+          type: mention.type,
+          id: crypto.randomUUID(),
+          uri: mention.id,
+          name: mention.label,
+          serverId: mention.serverId,
+        } as AIMCPResourceMessageContext;
+      }
+
+      throw new Error('Invalid mention type');
+    });
+
+    setUserSelectedContextItems(newContextItems);
   };
 
   const sendMessage = async (isFollowUp = false) => {
@@ -255,9 +273,13 @@ export const SimpleAIChat: React.FC<
     setAiState(AIState.Generating);
     let textStream;
 
+    const model = webSearchEnabled
+      ? `${pickedAgent.model}:online`
+      : pickedAgent.model;
+
     try {
       textStream = streamText({
-        model: openrouter(pickedAgent.model),
+        model: openrouter(model),
         maxTokens: 100000,
         messages: filteredMessages,
         temperature: pickedAgent.temperature,
@@ -443,6 +465,12 @@ export const SimpleAIChat: React.FC<
       }
     } catch (err) {
       console.error(err);
+      abortSignalRef.current?.abort();
+      setAiState(AIState.Stopped);
+      onNewMessage({
+        role: 'error',
+        content: 'An error occurred while generating the message',
+      });
     }
   };
 
@@ -575,40 +603,27 @@ export const SimpleAIChat: React.FC<
                   ))}
                 </ContextItemRow>
                 <AIChatInput
-                  onMentionUpdate={(mentions: string[]) => {
-                    // Convert mentions to context items
-                    const newContextItems = mentions.map(subject => ({
-                      type: 'resource' as const,
-                      id: crypto.randomUUID(),
-                      subject,
-                    }));
-                    setUserSelectedContextItems(newContextItems);
-                  }}
+                  onMentionUpdate={handleMentionUpdate}
                   onChange={setUserInput}
                   onSubmit={handleSubmit}
-                />
-                <Row justify='space-between'>
+                  hasFiles={!!attachedFile}
+                >
                   <Row gap='0.5rem'>
                     <SubtleButton onClick={() => setAgentConfigOpen(true)}>
                       {autoAgentSelectEnabled
                         ? 'Automatic'
                         : selectedAgent.name}
                     </SubtleButton>
-                    {checkModelSupport(
-                      selectedAgent.model,
-                      'web_search_options',
-                    ) && (
-                      <IconButton
-                        title='Toggle web search'
-                        onClick={() => setWebSearchEnabled(v => !v)}
-                        color={webSearchEnabled ? 'main' : 'textLight'}
-                        variant={
-                          webSearchEnabled ? IconButtonVariant.Fill : undefined
-                        }
-                      >
-                        <FaGlobe />
-                      </IconButton>
-                    )}
+                    <IconButton
+                      title='Toggle web search'
+                      onClick={() => setWebSearchEnabled(v => !v)}
+                      color={webSearchEnabled ? 'main' : 'textLight'}
+                      variant={
+                        webSearchEnabled ? IconButtonVariant.Fill : undefined
+                      }
+                    >
+                      <FaGlobe />
+                    </IconButton>
                     {checkModelSupportsImageInput(selectedAgent.model) && (
                       <>
                         <input
@@ -627,15 +642,7 @@ export const SimpleAIChat: React.FC<
                       </>
                     )}
                   </Row>
-                  <IconButton
-                    disabled={userInput.length === 0 && !attachedFile}
-                    onClick={() => sendMessage()}
-                    title='Send'
-                    variant={IconButtonVariant.Fill}
-                  >
-                    <FaArrowRight />
-                  </IconButton>
-                </Row>
+                </AIChatInput>
               </Column>
               <NoKeyOverlay />
             </ChatInputWrapper>
@@ -687,7 +694,7 @@ const prepareUserMessage = (
         }
       : {
           type: 'file',
-          data: `data:${fileAttachment.type};base6 4,${fileAttachment.base64Content}`,
+          data: `data:${fileAttachment.type};base64,${fileAttachment.base64Content}`,
           mimeType: fileAttachment.type,
         };
 
@@ -761,7 +768,7 @@ const ChatWindow = styled.div<{ fullView?: boolean }>`
   position: relative;
   display: grid;
   grid-template-rows: auto 1fr auto;
-  height: 90vh;
+  height: ${p => (p.fullView ? '90vh' : '100%')};
   width: min(100%, 40rem);
   margin-inline: auto;
   gap: 1rem;
@@ -769,6 +776,10 @@ const ChatWindow = styled.div<{ fullView?: boolean }>`
   pre {
     white-space: pre-wrap;
     word-break: break-word;
+  }
+
+  @media (max-width: 1550px) {
+    height: 90vh;
   }
 `;
 

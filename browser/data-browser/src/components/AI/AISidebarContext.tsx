@@ -33,11 +33,11 @@ export const AISidebarContextProvider: React.FC<React.PropsWithChildren> = ({
   );
 };
 
-export const newContextItem = (
-  item: Omit<AIMessageContext, 'id'>,
-): AIMessageContext => {
+export const newContextItem = <T extends AIMessageContext>(
+  item: Omit<T, 'id'>,
+): T => {
   return {
     ...item,
-    id: crypto.randomUUID(),
-  };
+    id: crypto.randomUUID() as string,
+  } as T;
 };

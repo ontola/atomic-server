@@ -5,6 +5,7 @@ import { Column, Row } from './Row';
 import { InputStyled, InputWrapper } from './forms/InputStyles';
 import { IconButton, IconButtonVariant } from './IconButton/IconButton';
 import type { MCPServer } from './AI/types';
+import { BasicSelect } from './forms/BasicSelect';
 
 interface MCPServersManagerProps {
   servers: MCPServer[];
@@ -17,6 +18,9 @@ export const MCPServersManager: React.FC<MCPServersManagerProps> = ({
 }) => {
   const [newServerName, setNewServerName] = useState('');
   const [newServerUrl, setNewServerUrl] = useState('');
+  const [newServerTransport, setNewServerTransport] = useState<'http' | 'sse'>(
+    'http',
+  );
 
   const addMcpServer = () => {
     if (newServerName.trim() === '' || newServerUrl.trim() === '') {
@@ -27,11 +31,13 @@ export const MCPServersManager: React.FC<MCPServersManagerProps> = ({
       name: newServerName.trim(),
       url: newServerUrl.trim(),
       id: crypto.randomUUID(),
+      transport: newServerTransport,
     };
 
     setServers([...servers, newServer]);
     setNewServerName('');
     setNewServerUrl('');
+    setNewServerTransport('http');
   };
 
   const removeMcpServer = (index: number) => {
@@ -51,6 +57,7 @@ export const MCPServersManager: React.FC<MCPServersManagerProps> = ({
               <ServerDetails>
                 <ServerName>{server.name}</ServerName>
                 <ServerUrl>{server.url}</ServerUrl>
+                <TransportType>Transport: {server.transport}</TransportType>
               </ServerDetails>
               <IconButton
                 color='alert'
@@ -65,8 +72,8 @@ export const MCPServersManager: React.FC<MCPServersManagerProps> = ({
       </ServerList>
       <Column gap='0.5rem'>
         <h4>Add Server</h4>
-        <Row gap='1rem' center>
-          <Column gap='0.5rem' style={{ flex: 1 }}>
+        <Row gap='1rem' align='flex-end'>
+          <Column gap='0.5rem'>
             <label htmlFor='server-name'>Server Name</label>
             <InputWrapper>
               <InputStyled
@@ -78,30 +85,42 @@ export const MCPServersManager: React.FC<MCPServersManagerProps> = ({
               />
             </InputWrapper>
           </Column>
-          <Column gap='0.5rem' style={{ flex: 2 }}>
+          <Column gap='0.5rem'>
             <label htmlFor='server-url'>Server URL</label>
-            <Row>
-              <InputWrapper>
-                <InputStyled
-                  id='server-url'
-                  type='text'
-                  inputMode='url'
-                  pattern='https?://.*'
-                  value={newServerUrl}
-                  onChange={e => setNewServerUrl(e.target.value)}
-                  placeholder='Enter server URL'
-                />
-              </InputWrapper>
-              <IconButton
-                variant={IconButtonVariant.Fill}
-                onClick={addMcpServer}
-                disabled={!newServerName || !newServerUrl}
-                title='Add server'
-              >
-                <FaPlus />
-              </IconButton>
-            </Row>
+            <InputWrapper>
+              <InputStyled
+                id='server-url'
+                type='text'
+                inputMode='url'
+                pattern='https?://.*'
+                value={newServerUrl}
+                onChange={e => setNewServerUrl(e.target.value)}
+                placeholder='Enter server URL'
+              />
+            </InputWrapper>
           </Column>
+          <Column gap='0.5rem'>
+            <label htmlFor='server-transport'>Type</label>
+            <StyledSelect
+              id='server-transport'
+              value={newServerTransport}
+              onChange={e =>
+                setNewServerTransport(e.target.value as 'http' | 'sse')
+              }
+              title='Select transport type'
+            >
+              <option value='http'>HTTP</option>
+              <option value='sse'>SSE</option>
+            </StyledSelect>
+          </Column>
+          <IconButton
+            variant={IconButtonVariant.Fill}
+            onClick={addMcpServer}
+            disabled={!newServerName || !newServerUrl}
+            title='Add server'
+          >
+            <FaPlus />
+          </IconButton>
         </Row>
       </Column>
     </Column>
@@ -140,9 +159,21 @@ const ServerUrl = styled.div`
   color: ${p => p.theme.colors.textLight};
 `;
 
+const TransportType = styled.div`
+  font-size: 0.8em;
+  color: ${p => p.theme.colors.textLight || '#888'};
+`;
+
 const EmptyMessage = styled.div`
   padding: ${p => p.theme.size()};
   text-align: center;
   color: ${p => p.theme.colors.textLight};
   font-style: italic;
+`;
+
+const StyledSelect = styled(BasicSelect)`
+  select {
+    min-width: 7ch;
+    margin-left: 0.5rem;
+  }
 `;

@@ -14,10 +14,10 @@ export const MessageContextItem = ({
   onRemove,
 }: ChatContextItemProps) => {
   const content =
-    contextItem.type === 'resource' ? (
+    contextItem.type === 'atomic-resource' ? (
       <ResourceContextItem subject={contextItem.subject} />
     ) : (
-      <span>{contextItem.subject}</span>
+      <span>{contextItem.name}</span>
     );
 
   return (
