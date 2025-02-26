@@ -105,7 +105,7 @@ impl SearchState {
     #[tracing::instrument(skip(self, store))]
     pub fn add_resource(&self, resource: &Resource, store: &Db) -> AtomicServerResult<()> {
         let fields = self.get_schema_fields()?;
-        let subject = resource.get_subject();
+        let subject = resource.get_subject().to_string();
         let writer = self.writer.read()?;
 
         let mut doc = tantivy::TantivyDocument::default();
@@ -153,7 +153,19 @@ impl SearchState {
 pub fn build_schema() -> AtomicServerResult<tantivy::schema::Schema> {
     let mut schema_builder = tantivy::schema::Schema::builder();
     // The STORED flag makes the index store the full values. Can be useful.
-    schema_builder.add_text_field("subject", TEXT | STORED);
+
+    // The raw tokenizer is used to index the subject field as is, without any tokenization.
+    // If we don't do this the subject will be split into multiple tokens which breaks the search.
+    schema_builder.add_text_field(
+        "subject",
+        tantivy::schema::TextOptions::default()
+            .set_stored()
+            .set_indexing_options(
+                tantivy::schema::TextFieldIndexing::default()
+                    .set_tokenizer("raw")
+                    .set_index_option(tantivy::schema::IndexRecordOption::Basic),
+            ),
+    );
     schema_builder.add_text_field("title", TEXT | STORED);
     schema_builder.add_text_field("description", TEXT | STORED);
     schema_builder.add_json_field("propvals", STORED | TEXT);
@@ -177,6 +189,12 @@ pub fn get_index(config: &Config) -> AtomicServerResult<(IndexWriter, tantivy::I
             e
         )
     })?;
+
+    // Register the raw tokenizer
+    index
+        .tokenizers()
+        .register("raw", tantivy::tokenizer::RawTokenizer::default());
+
     let heap_size_bytes = 50_000_000;
     let index_writer = index.writer(heap_size_bytes)?;
     Ok((index_writer, index))
@@ -245,9 +263,9 @@ fn get_resource_title(resource: &Resource) -> String {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use atomic_lib::{urls, Resource, Storelike};
 
-    use super::resource_to_facet;
     #[test]
     fn facet_contains_subfacet() {
         let store = atomic_lib::Db::init_temp("facet_contains").unwrap();
@@ -278,11 +296,66 @@ mod tests {
         let query_facet_direct_parent = resource_to_facet(&resources[1], &store).unwrap();
         let query_facet_root = resource_to_facet(&resources[0], &store).unwrap();
 
-        // println!("Index: {:?}", index_facet);
-        // println!("query direct: {:?}", query_facet_direct_parent);
-        // println!("query root: {:?}", query_facet_root);
-
         assert!(query_facet_direct_parent.is_prefix_of(&index_facet));
         assert!(query_facet_root.is_prefix_of(&index_facet));
+    }
+
+    #[test]
+    fn test_update_resource() {
+        let unique_string = atomic_lib::utils::random_string(10);
+
+        let config = crate::config::build_temp_config(&unique_string)
+            .map_err(|e| format!("Initialization failed: {}", e))
+            .expect("failed init config");
+
+        let store = atomic_lib::Db::init_temp(&unique_string).unwrap();
+
+        let search_state = SearchState::new(&config).unwrap();
+        let fields = search_state.get_schema_fields().unwrap();
+
+        // Create initial resource
+        let mut resource = Resource::new_generate_subject(&store);
+        resource
+            .set_string(urls::NAME.into(), "Initial Title", &store)
+            .unwrap();
+        store.add_resource(&resource).unwrap();
+
+        // Add to search index
+        search_state.add_resource(&resource, &store).unwrap();
+        search_state.writer.write().unwrap().commit().unwrap();
+
+        // Update the resource
+        resource
+            .set_string(urls::NAME.into(), "Updated Title", &store)
+            .unwrap();
+        resource.save(&store).unwrap();
+
+        // Update in search index
+        search_state
+            .remove_resource(resource.get_subject())
+            .unwrap();
+        search_state.add_resource(&resource, &store).unwrap();
+        search_state.writer.write().unwrap().commit().unwrap();
+
+        // Make sure changes are visible to searcher
+        search_state.reader.reload().unwrap();
+
+        let searcher = search_state.reader.searcher();
+
+        // Search for the old title - should return no results
+        let query_parser =
+            tantivy::query::QueryParser::for_index(&search_state.index, vec![fields.title]);
+        let query = query_parser.parse_query("Initial").unwrap();
+        let top_docs = searcher
+            .search(&query, &tantivy::collector::TopDocs::with_limit(1))
+            .unwrap();
+        assert_eq!(top_docs.len(), 0, "Old title should not be found in index");
+
+        // Search for the new title - should return one result
+        let query = query_parser.parse_query("Updated").unwrap();
+        let top_docs = searcher
+            .search(&query, &tantivy::collector::TopDocs::with_limit(1))
+            .unwrap();
+        assert_eq!(top_docs.len(), 1, "New title should be found in index");
     }
 }

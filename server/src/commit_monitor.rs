@@ -119,18 +119,17 @@ impl CommitMonitor {
             tracing::debug!("No subscribers for {}", target);
         }
 
+        self.search_state.remove_resource(&target)?;
+
         // Update the search index
         if let Some(resource) = &msg.commit_response.resource_new {
             // We could one day re-(allow) to keep old resources,
             // but then we also should index the older versions when re-indexing.
-            self.search_state.remove_resource(&target)?;
             // Add new resource to search index
             self.search_state.add_resource(resource, &self.store)?;
-            self.run_expensive_next_tick = true;
-        } else {
-            // If there is no new resource, it must have been deleted, so let's remove it from the search index.
-            self.search_state.remove_resource(&target)?;
         }
+
+        self.run_expensive_next_tick = true;
         Ok(())
     }
 
