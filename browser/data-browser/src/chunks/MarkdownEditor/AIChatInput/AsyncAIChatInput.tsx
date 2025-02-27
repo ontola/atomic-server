@@ -2,6 +2,7 @@ import { EditorContent, useEditor, type JSONContent } from '@tiptap/react';
 import { styled } from 'styled-components';
 import StarterKit from '@tiptap/starter-kit';
 import Mention from '@tiptap/extension-mention';
+import FileHandler from '@tiptap/extension-file-handler';
 import { TiptapContextProvider } from '../TiptapContext';
 import { EditorWrapperBase } from '../EditorWrapperBase';
 import { searchSuggestionBuilder } from './resourceSuggestions';
@@ -24,6 +25,7 @@ import {
   IconButtonVariant,
 } from '../../../components/IconButton/IconButton';
 import { FaArrowRight } from 'react-icons/fa6';
+import { addIf } from '../../../helpers/addIf';
 
 const createAttribute = (propName: string, dataName: string) => {
   return {
@@ -73,12 +75,20 @@ interface AsyncAIChatInputProps {
   onMentionUpdate: (mentions: MentionItem[]) => void;
   onChange: (markdown: string) => void;
   onSubmit: () => void;
+  onFileAdded?: (files: File[]) => void;
   hasFiles: boolean;
 }
 
 const AsyncAIChatInput: React.FC<
   React.PropsWithChildren<AsyncAIChatInputProps>
-> = ({ onMentionUpdate, onChange, onSubmit, children, hasFiles }) => {
+> = ({
+  onMentionUpdate,
+  onChange,
+  onSubmit,
+  children,
+  hasFiles,
+  onFileAdded,
+}) => {
   const store = useStore();
   const { drive, mcpServers } = useSettings();
   const [markdown, setMarkdown] = useState('');
@@ -141,6 +151,19 @@ const AsyncAIChatInput: React.FC<
         Placeholder.configure({
           placeholder: 'Ask me anything...',
         }),
+        ...addIf(
+          !!onFileAdded,
+          FileHandler.configure({
+            onDrop: (_currentEditor, files) => {
+              onFileAdded!(Array.from(files));
+            },
+            onPaste: (_currentEditor, files, htmlContent) => {
+              if (htmlContent) return false;
+
+              onFileAdded!(Array.from(files));
+            },
+          }),
+        ),
       ],
       autofocus: true,
     },

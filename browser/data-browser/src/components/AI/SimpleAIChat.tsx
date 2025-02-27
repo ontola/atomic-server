@@ -145,28 +145,27 @@ export const SimpleAIChat: React.FC<
     },
   });
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const handleFileUpload = (files: File[]) => {
+    for (const file of files) {
+      const reader = new FileReader();
 
-    const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64Content = (reader.result as string).split(',')[1];
+        setAttachedFile({
+          name: file.name,
+          type: file.type,
+          base64Content,
+          isImage: IMAGE_MIME_TYPES.includes(file.type),
+        });
+        toast.success(`File "${file.name}" attached`);
+      };
 
-    reader.onloadend = () => {
-      const base64Content = (reader.result as string).split(',')[1];
-      setAttachedFile({
-        name: file.name,
-        type: file.type,
-        base64Content,
-        isImage: IMAGE_MIME_TYPES.includes(file.type),
-      });
-      toast.success(`File "${file.name}" attached`);
-    };
+      reader.onerror = () => {
+        toast.error('Error reading file');
+      };
 
-    reader.onerror = () => {
-      toast.error('Error reading file');
-    };
-
-    reader.readAsDataURL(file);
+      reader.readAsDataURL(file);
+    }
   };
 
   const removeAttachedFile = () => {
@@ -607,6 +606,11 @@ export const SimpleAIChat: React.FC<
                   onChange={setUserInput}
                   onSubmit={handleSubmit}
                   hasFiles={!!attachedFile}
+                  onFileAdded={
+                    checkModelSupportsImageInput(selectedAgent.model)
+                      ? handleFileUpload
+                      : undefined
+                  }
                 >
                   <Row gap='0.5rem'>
                     <SubtleButton onClick={() => setAgentConfigOpen(true)}>
@@ -629,7 +633,11 @@ export const SimpleAIChat: React.FC<
                         <input
                           type='file'
                           ref={fileInputRef}
-                          onChange={handleFileUpload}
+                          onChange={e => {
+                            if (!e.target.files) return;
+
+                            handleFileUpload(Array.from(e.target.files));
+                          }}
                           style={{ display: 'none' }}
                         />
                         <IconButton

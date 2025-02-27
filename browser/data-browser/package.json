@@ -23,6 +23,7 @@
     "@radix-ui/react-scroll-area": "^1.2.0",
     "@radix-ui/react-tabs": "^1.1.1",
     "@tanstack/react-router": "^1.95.1",
+    "@tiptap/extension-file-handler": "^2.25.0",
     "@tiptap/extension-image": "^2.11.7",
     "@tiptap/extension-link": "^2.11.7",
     "@tiptap/extension-mention": "^2.11.7",
