@@ -1,6 +1,7 @@
 import { styled } from 'styled-components';
 import { AtomicLink, AtomicLinkProps } from '../AtomicLink';
 import { SideBarItem } from './SideBarItem';
+import { useLocation } from '@tanstack/react-router';
 
 export interface SideBarMenuItemProps extends AtomicLinkProps {
   label: string;
@@ -20,9 +21,18 @@ export function SideBarMenuItem({
   subject,
   onClick,
 }: SideBarMenuItemProps) {
+  const { pathname } = useLocation();
+  const targetPath = path || href || subject;
+  const current: boolean = pathname === targetPath;
+
   return (
     <AtomicLink href={href} subject={subject} path={path} clean>
-      <SideBarItem key={label} title={helper} onClick={onClick}>
+      <SideBarItem
+        key={label}
+        title={helper}
+        onClick={onClick}
+        current={current}
+      >
         {icon && <SideBarIcon>{icon}</SideBarIcon>}
         {label}
       </SideBarItem>

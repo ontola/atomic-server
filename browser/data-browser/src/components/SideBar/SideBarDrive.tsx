@@ -73,6 +73,7 @@ export function SideBarDrive({
         <TitleButton
           resource={drive}
           clean
+          current={drive === currentSubject}
           title={`Your current baseURL is ${drive}`}
           data-test='sidebar-drive-open'
           onClick={() => {
@@ -161,9 +162,24 @@ const DriveTitle = styled.h2`
   flex: 1;
 `;
 
-const TitleButton = styled(Button)`
+const TitleButton = styled(Button)<{ current?: boolean }>`
   text-align: left;
   flex: 1;
+  padding: 0.5rem 1rem;
+  border-radius: ${props => props.theme.radius};
+
+  ${({ current, theme }) =>
+    current &&
+    `
+    color: ${theme.colors.main};
+  `}
+
+  &:hover {
+    background-color: ${props => props.theme.colors.bg1};
+  }
+  &:active {
+    background-color: ${props => props.theme.colors.bg2};
+  }
 `;
 
 const SideBarErr = styled(ErrorLook)`
