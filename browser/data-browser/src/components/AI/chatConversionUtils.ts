@@ -17,6 +17,7 @@ import { newContextItem } from './AISidebarContext';
 import {
   type AIAtomicResourceMessageContext,
   type AIChatDisplayMessage,
+  AIChatErrorMessage,
   type AIMCPResourceMessageContext,
   type AIMessageContext,
   isAtomicResource,
@@ -157,7 +158,15 @@ export const messageResourcesToDisplayMessages = async (
 
   for (const resource of resources) {
     if (resource.error) {
-      throw resource.error;
+      console.error(resource.error);
+      messages.set(
+        {
+          role: 'error',
+          content: resource.error.message,
+        } satisfies AIChatErrorMessage,
+        resource,
+      );
+      continue;
     }
 
     const role = tagToRole(resource.props.role);

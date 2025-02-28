@@ -368,6 +368,7 @@ const AgentForm = ({ agent, onChange }: AgentFormProps) => {
         <Label htmlFor='agent-name'>Name</Label>
         <Input
           id='agent-name'
+          required
           max={50}
           value={agent.name}
           onChange={e => handleChange('name', e.target.value)}

@@ -4,6 +4,7 @@ import { styled, css } from 'styled-components';
 import { FaExclamationTriangle } from 'react-icons/fa';
 
 import type { JSX } from 'react';
+import { getMessageForErrorType } from '@tomic/react';
 
 export const errorLookStyle = css`
   color: ${props => props.theme.colors.alert};
@@ -25,7 +26,7 @@ export function ErrorBlock({ error, showTrace }: ErrorBlockProps): JSX.Element {
     <ErrorLookBig>
       <BiggerText>
         <FaExclamationTriangle />
-        Something went wrong
+        {getMessageForErrorType(error)}
       </BiggerText>
       <Pre>
         <code>{error.message}</code>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { SimpleAIChat } from '../../components/AI/SimpleAIChat';
 import {
+  Ai,
   ai,
   useArray,
   useCanWrite,
@@ -23,8 +24,11 @@ import {
   messageResourcesToDisplayMessages,
 } from '../../components/AI/chatConversionUtils';
 import { TagBar } from '../../components/Tag/TagBar';
+import { flushSync } from 'react-dom';
 
-export const AIChatPage: React.FC<ResourcePageProps> = ({ resource }) => {
+export const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({
+  resource,
+}) => {
   const store = useStore();
   const [messages, setMessages] = useState<AIChatDisplayMessage[]>([]);
   const [contextItems, setContextItems] = useState<AIMessageContext[]>([]);
@@ -87,6 +91,54 @@ export const AIChatPage: React.FC<ResourcePageProps> = ({ resource }) => {
     });
   };
 
+  const removeFollowingMessages = async (message: AIChatDisplayMessage) => {
+    const nextMessages = messages.slice(messages.indexOf(message) + 1);
+
+    // We need to destroy the resources server side as well as in the internal state.
+    // We also need to update the `messages` prop in the chat resource.
+    const destroySubjects: string[] = [];
+
+    for (const m of nextMessages) {
+      const r = messageToResourceMap.get(m);
+
+      if (r) {
+        destroySubjects.push(r.subject);
+
+        try {
+          await r.destroy();
+        } catch (error) {
+          console.error('Error removing message:', error);
+        }
+      } else {
+        throw new Error('Resource not found for message:', m);
+      }
+    }
+
+    try {
+      // Set chat resource on server with new message array
+      await resource.set(
+        ai.properties.messages,
+        resource.props.messages?.filter(x => !destroySubjects.includes(x)),
+      );
+      await resource.save();
+      // Set internal message state
+      setMessages(prev => {
+        const newMessages = prev.slice(0, prev.indexOf(message) + 1);
+
+        console.log(
+          'setting messages',
+          newMessages,
+          'last message',
+          newMessages.at(-1).content[0].text,
+        );
+
+        return newMessages;
+      });
+    } catch (error) {
+      console.error('Error removing messages:', error);
+    }
+  };
+
   // On load create AIChatDisplayMessages from the resource's messages.
   useEffect(() => {
     messageResourcesToDisplayMessages(messageSubjects, store).then(map => {
@@ -110,6 +162,7 @@ export const AIChatPage: React.FC<ResourcePageProps> = ({ resource }) => {
       externalContextItems={contextItems}
       setExternalContextItems={setContextItems}
       onDeleteMessage={handleDeleteMessage}
+      onRegenerateMessage={removeFollowingMessages}
     >
       <Column gap='0.5rem'>
         <Row>
