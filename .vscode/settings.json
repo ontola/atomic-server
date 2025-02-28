@@ -8,7 +8,7 @@
     "**/node_modules": true,
     "**/build": true,
     "**/coverage": true,
-    "**/dist": true,
+    "**/dist": true
   },
   "eslint.validate": [
     "javascript",
@@ -32,5 +32,10 @@
     "./svelte"
   ],
   "typescript.preferences.preferTypeOnlyAutoImports": true,
-  "rustTestExplorer.rootCargoManifestFilePath": "./Cargo.toml"
+  "rustTestExplorer.rootCargoManifestFilePath": "./Cargo.toml",
+  // This won't work in multi-root workspaces, could be fixed by using a rust-analyzer.toml once there is some more documentation on that.
+  // For now you need to set this in your own vscode settings file.
+  "rust-analyzer.cargo.extraEnv": {
+    "ATOMICSERVER_SKIP_JS_BUILD": "true"
+  }
 }
