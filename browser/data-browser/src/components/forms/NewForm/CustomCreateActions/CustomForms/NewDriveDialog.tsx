@@ -8,6 +8,7 @@ import {
   Dialog,
   DialogContent,
   DialogActions,
+  DialogTitle,
 } from '../../../../Dialog';
 import Field from '../../../Field';
 import { InputWrapper, InputStyled } from '../../../InputStyles';
@@ -53,7 +54,7 @@ export const NewDriveDialog: FC<CustomResourceDialogProps> = ({
           await agentResource.save();
 
           // Create a default ontology.
-          const ontologyName = stringToSlug(name);
+          const ontologyName = stringToSlug(name.trim());
           const ontology = await store.newResource({
             subject: await store.buildUniqueSubjectFromParts(
               ['defaultOntology'],
@@ -99,7 +100,9 @@ export const NewDriveDialog: FC<CustomResourceDialogProps> = ({
 
   return (
     <Dialog {...dialogProps}>
-      <H1>New Drive</H1>
+      <DialogTitle>
+        <H1>New Drive</H1>
+      </DialogTitle>
       <DialogContent>
         <form
           onSubmit={(e: FormEvent) => {

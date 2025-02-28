@@ -223,16 +223,6 @@ test.describe('tables', async () => {
       await fillRow(index + 1, row);
     }
 
-    // Disabled date tests until Playwright bug fixed
-    // await expect(
-    //   page.getByRole('gridcell', { name: '4 March 2000' }),
-    // ).toBeVisible();
-    // await expect(
-    //   page.getByRole('gridcell', { name: '15 May 1980' }),
-    // ).toBeVisible();
-    // await expect(
-    //   page.getByRole('gridcell', { name: '13 May 1965' }),
-    // ).toBeVisible();
     await expect(
       page.getByRole('gridcell', { name: '😵‍💫 dreamy' }),
     ).toBeVisible();
