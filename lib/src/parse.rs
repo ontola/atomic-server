@@ -282,65 +282,64 @@ fn parse_json_ad_map_to_resource(
                 ));
             };
             continue;
+        } else if prop == urls::LOCAL_ID && parse_opts.importer.is_some() {
+            // If the property is a localId we need to set to generate a subject and update the subject value.
+            let serde_json::Value::String(local_id) = val else {
+                return Err(AtomicError::parse_error(
+                    "`localId` must be a string",
+                    Some(&val.to_string()),
+                    Some(&prop),
+                ));
+            };
+
+            let parent = parse_opts.importer.as_ref().ok_or_else(|| {
+                AtomicError::parse_error(
+                    "Encountered `localId`, which means we need a `parent` in the parsing options.",
+                    subject.as_deref(),
+                    Some(&prop),
+                )
+            })?;
+
+            subject = Some(generate_id_from_local_id(parent, &local_id));
+
+            continue;
         }
 
         prop = try_to_subject(&prop, &prop)?;
+        let property = store.get_property(&prop)?;
 
-        let atomic_val = match val {
-            serde_json::Value::Null => {
-                return Err(AtomicError::parse_error(
-                    "Null not allowed in JSON-AD",
-                    subject.as_deref(),
-                    Some(&prop),
-                ));
-            }
-            serde_json::Value::Bool(bool) => Value::Boolean(bool),
-            serde_json::Value::Number(num) => {
-                let property = store.get_property(&prop)?;
-                // Also converts numbers to strings, not sure what to think about this.
-                // Does not result in invalid atomic data, but does allow for weird inputs
-                Value::new(&num.to_string(), &property.data_type)?
-            }
-            serde_json::Value::String(str) => {
-                // LocalIDs are mapped to @ids by appending the `localId` to the `importer`'s `parent`.
-                if prop == urls::LOCAL_ID && parse_opts.importer.is_some() {
-                    let parent = parse_opts.importer.as_ref()
-                        .ok_or_else(|| AtomicError::parse_error(
-                            "Encountered `localId`, which means we need a `parent` in the parsing options.",
-                            subject.as_deref(),
-                            Some(&prop),
-                        ))?;
-                    subject = Some(generate_id_from_local_id(parent, &str));
-                }
-                let property = store.get_property(&prop).map_err(|e| {
-                    AtomicError::parse_error(
-                        &format!("Unable to find property {prop}: {e}"),
-                        subject.as_deref(),
-                        Some(&prop),
-                    )
-                })?;
-
-                match property.data_type {
-                    DataType::AtomicUrl => {
+        let atomic_val: Value = match property.data_type {
+            DataType::AtomicUrl => {
+                match val {
+                    serde_json::Value::String(str) => {
                         // If the value is not a valid URL, and we have an importer, we can generate_id_from_local_id
                         let url = try_to_subject(&str, &prop)?;
                         Value::new(&url, &property.data_type)?
                     }
-                    other => Value::new(&str.to_string(), &other).map_err(|e| {
-                        AtomicError::parse_error(
-                            &format!("Unable to parse value for prop {prop}: {e}. Value: {str}"),
+                    serde_json::Value::Object(map) => Value::NestedResource(
+                        parse_json_ad_map_to_resource(map, store, parse_opts)?,
+                    ),
+                    _ => {
+                        return Err(AtomicError::parse_error(
+                            "Invalid value for AtomicUrl, not a string or object",
                             subject.as_deref(),
                             Some(&prop),
-                        )
-                    })?,
+                        ));
+                    }
                 }
             }
-            // In Atomic Data, all arrays are Resource Arrays which are serialized JSON things.
-            // Maybe this step could be simplified? Just serialize to string?
-            serde_json::Value::Array(arr) => {
+            DataType::ResourceArray => {
+                let serde_json::Value::Array(array) = val else {
+                    return Err(AtomicError::parse_error(
+                        "Invalid value for ResourceArray, not an array",
+                        subject.as_deref(),
+                        Some(&prop),
+                    ));
+                };
+
                 let mut newvec: Vec<SubResource> = Vec::new();
-                for v in arr {
-                    match v {
+                for item in array {
+                    match item {
                         serde_json::Value::String(str) => {
                             let url = try_to_subject(&str, &prop)?;
                             newvec.push(SubResource::Subject(url))
@@ -361,10 +360,115 @@ fn parse_json_ad_map_to_resource(
                 }
                 Value::ResourceArray(newvec)
             }
-            serde_json::Value::Object(map) => {
-                Value::NestedResource(parse_json_ad_map_to_resource(map, store, parse_opts)?)
+            DataType::String => {
+                let serde_json::Value::String(str) = val else {
+                    return Err(AtomicError::parse_error(
+                        "Invalid value for String, not a string",
+                        subject.as_deref(),
+                        Some(&prop),
+                    ));
+                };
+
+                Value::String(str)
+            }
+            DataType::Slug => {
+                let serde_json::Value::String(str) = val else {
+                    return Err(AtomicError::parse_error(
+                        "Invalid value for Slug, not a string",
+                        subject.as_deref(),
+                        Some(&prop),
+                    ));
+                };
+
+                Value::Slug(str)
+            }
+            DataType::Markdown => {
+                let serde_json::Value::String(str) = val else {
+                    return Err(AtomicError::parse_error(
+                        "Invalid value for Markdown, not a string",
+                        subject.as_deref(),
+                        Some(&prop),
+                    ));
+                };
+
+                Value::Markdown(str)
+            }
+            DataType::Uri => {
+                let serde_json::Value::String(str) = val else {
+                    return Err(AtomicError::parse_error(
+                        "Invalid value for URI, not a string",
+                        subject.as_deref(),
+                        Some(&prop),
+                    ));
+                };
+
+                Value::Uri(str)
+            }
+            DataType::Date => {
+                let serde_json::Value::String(str) = val else {
+                    return Err(AtomicError::parse_error(
+                        "Invalid value for Date, not a string",
+                        subject.as_deref(),
+                        Some(&prop),
+                    ));
+                };
+
+                Value::Date(str)
+            }
+            DataType::Boolean => {
+                let serde_json::Value::Bool(bool) = val else {
+                    return Err(AtomicError::parse_error(
+                        "Invalid value for Boolean, not a boolean",
+                        subject.as_deref(),
+                        Some(&prop),
+                    ));
+                };
+
+                Value::Boolean(bool)
+            }
+            DataType::Integer => {
+                let serde_json::Value::Number(num) = val else {
+                    return Err(AtomicError::parse_error(
+                        "Invalid value for Integer, not a number",
+                        subject.as_deref(),
+                        Some(&prop),
+                    ));
+                };
+
+                Value::new(&num.to_string(), &DataType::Integer)?
+            }
+            DataType::Float => {
+                let serde_json::Value::Number(num) = val else {
+                    return Err(AtomicError::parse_error(
+                        "Invalid value for Float, not a number",
+                        subject.as_deref(),
+                        Some(&prop),
+                    ));
+                };
+
+                Value::new(&num.to_string(), &DataType::Float)?
+            }
+            DataType::Timestamp => {
+                let serde_json::Value::Number(num) = val else {
+                    return Err(AtomicError::parse_error(
+                        "Invalid value for Timestamp, not a string",
+                        subject.as_deref(),
+                        Some(&prop),
+                    ));
+                };
+
+                Value::new(&num.to_string(), &DataType::Timestamp)?
+            }
+            DataType::JSON => Value::JSON(val),
+            DataType::Unsupported(s) => {
+                return Err(AtomicError::parse_error(
+                    &format!("Unsupported datatype: {s}"),
+                    subject.as_deref(),
+                    Some(&prop),
+                ));
             }
         };
+
         // Some of these values are _not correctly matched_ to the datatype.
         propvals.insert(prop, atomic_val);
     }
@@ -484,7 +588,7 @@ mod test {
 
     #[test]
     // This test should actually fail, I think, because the datatype should match the property.
-    // #[should_panic(expected = "Datatype")]
+    #[should_panic(expected = "Invalid value for Markdown")]
     fn parse_and_serialize_json_ad_wrong_datatype_int_to_str() {
         let store = crate::Store::init().unwrap();
         store.populate().unwrap();
@@ -626,7 +730,52 @@ mod test {
         let found = store.get_resource(&imported_subject).unwrap();
         println!("{:?}", found);
         assert_eq!(found.get(urls::NAME).unwrap().to_string(), "My resource");
-        assert_eq!(found.get(urls::LOCAL_ID).unwrap().to_string(), local_id);
+
+        // LocalId should be removed from the imported resource
+        assert_eq!(found.get(urls::LOCAL_ID).is_err(), true);
+    }
+    #[test]
+    fn import_resource_with_json() {
+        let (store, importer) = create_store_and_importer();
+
+        let local_id = "my-local-id";
+
+        let json = r#"
+        [
+        {
+            "@id": "http://localhost:9883/01k06n9cz8r8vsdehh4btz8tdk",
+            "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+            "https://atomicdata.dev/properties/description": "Een prop met een json value",
+            "https://atomicdata.dev/properties/isA": [
+                "https://atomicdata.dev/classes/Property"
+            ],
+            "https://atomicdata.dev/properties/shortname": "nieuwe-json-prop"
+        }, {
+            "https://atomicdata.dev/properties/localId": "my-local-id",
+            "https://atomicdata.dev/properties/name": "My resource",
+            "http://localhost:9883/01k06n9cz8r8vsdehh4btz8tdk": {
+                "wat": "patat"
+            }
+        }
+        ]"#;
+
+        let parse_opts = ParseOpts {
+            save: SaveOpts::Commit,
+            signer: Some(store.get_default_agent().unwrap()),
+            for_agent: ForAgent::Sudo,
+            overwrite_outside: false,
+            importer: Some(importer.clone()),
+        };
+
+        store.import(json, &parse_opts).unwrap();
+
+        let imported_subject = generate_id_from_local_id(&importer, local_id);
+
+        let found = store.get_resource(&imported_subject).unwrap();
+        assert_eq!(found.get(urls::NAME).unwrap().to_string(), "My resource");
+
+        // LocalId should be removed from the imported resource
+        assert_eq!(found.get(urls::LOCAL_ID).is_err(), true);
     }
 
     #[test]

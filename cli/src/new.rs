@@ -1,6 +1,7 @@
 //! Creating a new resource. Provides prompting logic
 use crate::{CLIResult, Context};
 use atomic_lib::mapping;
+use atomic_lib::utils::{check_valid_json, check_valid_uri};
 use atomic_lib::{
     datatype::DataType,
     errors::AtomicResult,
@@ -118,7 +119,6 @@ fn prompt_field(
     optional: bool,
     context: &Context,
 ) -> CLIResult<Option<String>> {
-    let mut input: Option<String> = None;
     let msg_appendix: &str = if optional {
         " (optional)"
     } else {
@@ -127,12 +127,11 @@ fn prompt_field(
     match &property.data_type {
         DataType::String | DataType::Markdown => {
             let msg = format!("string{}", msg_appendix);
-            input = prompt_opt(msg)?;
-            return Ok(input);
+            return Ok(prompt_opt(msg)?);
         }
         DataType::Slug => {
             let msg = format!("slug{}", msg_appendix);
-            input = prompt_opt(msg)?;
+            let input: Option<String> = prompt_opt(msg)?;
             let re = Regex::new(atomic_lib::values::SLUG_REGEX)?;
             match input {
                 Some(slug) => {
@@ -145,12 +144,32 @@ fn prompt_field(
                 None => return Ok(None),
             }
         }
+        DataType::Uri => {
+            let msg = format!("URI{}", msg_appendix);
+
+            let input: Option<String> = prompt_opt(msg)?;
+            let Some(uri) = input else {
+                return Ok(None);
+            };
+
+            check_valid_uri(&uri).unwrap();
+            return Ok(Some(uri));
+        }
+        DataType::JSON => {
+            let msg = format!("JSON{}", msg_appendix);
+            let Some(json) = prompt_opt::<String, String>(msg)? else {
+                return Ok(None);
+            };
+
+            check_valid_json(&json).unwrap();
+            return Ok(Some(json));
+        }
         DataType::Integer => {
             let msg = format!("integer{}", msg_appendix);
             let number: Option<u32> = prompt_opt(msg)?;
             match number {
                 Some(nr) => {
-                    input = Some(nr.to_string());
+                    return Ok(Some(nr.to_string()));
                 }
                 None => return Ok(None),
             }
@@ -160,7 +179,7 @@ fn prompt_field(
             let number: Option<f64> = prompt_opt(msg)?;
             match number {
                 Some(nr) => {
-                    input = Some(nr.to_string());
+                    return Ok(Some(nr.to_string()));
                 }
                 None => return Ok(None),
             }
@@ -172,8 +191,7 @@ fn prompt_field(
             match date {
                 Some(date_val) => {
                     if re.is_match(&date_val) {
-                        input = Some(date_val);
-                        return Ok(input);
+                        return Ok(Some(date_val));
                     }
                     println!("Not a valid date.");
                     return Ok(None);
@@ -197,8 +215,7 @@ fn prompt_field(
             // If a classtype is present, the given URL must be an instance of that Class
             if let Some(u) = url {
                 // TODO: Check if string or if map
-                input = context.mapping.lock().unwrap().try_mapping_or_url(&u);
-                match input {
+                match context.mapping.lock().unwrap().try_mapping_or_url(&u) {
                     Some(url) => return Ok(Some(url)),
                     None => {
                         println!("Shortname not found, try again.");
@@ -209,7 +226,7 @@ fn prompt_field(
         },
         DataType::ResourceArray => loop {
             let msg = format!(
-                "resource array - Add the URLs or Shortnames, separated by spacebars{}",
+                "resource array - Add the URLs or Shortnames, separated by spaces{}",
                 msg_appendix
             );
             let option_string: Option<String> = prompt_opt(msg).unwrap();
@@ -244,11 +261,12 @@ fn prompt_field(
                         }
                     }
                     if length == urls.len() {
-                        input = Some(atomic_lib::serialize::serialize_json_array(&urls).unwrap());
-                        break;
+                        return Ok(Some(
+                            atomic_lib::serialize::serialize_json_array(&urls).unwrap(),
+                        ));
                     }
                 }
-                None => break,
+                None => return Ok(None),
             }
         },
         DataType::Timestamp => {
@@ -256,7 +274,7 @@ fn prompt_field(
             let number: Option<u64> = prompt_opt(msg)?;
             match number {
                 Some(nr) => {
-                    input = Some(nr.to_string());
+                    return Ok(Some(nr.to_string()));
                 }
                 None => return Ok(None),
             }
@@ -269,7 +287,7 @@ fn prompt_field(
             let string: Option<String> = prompt_opt(msg)?;
             match string {
                 Some(nr) => {
-                    input = Some(nr);
+                    return Ok(Some(nr.to_string()));
                 }
                 None => return Ok(None),
             }
@@ -288,7 +306,6 @@ fn prompt_field(
             }
         }
     };
-    Ok(input)
 }
 
 // Asks for and saves the bookmark. Returns the shortname.

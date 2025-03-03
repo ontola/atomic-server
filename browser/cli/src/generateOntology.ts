@@ -52,7 +52,7 @@ export const generateOntology = async (
   const properties = dedupe(ontology.props.properties ?? []);
 
   for (const prop of properties) {
-    propertyRecord.repordPropertyDefined(prop);
+    propertyRecord.reportPropertyDefined(prop);
   }
 
   const [baseObjStr, reverseMapping] = await generateBaseObject(ontology);

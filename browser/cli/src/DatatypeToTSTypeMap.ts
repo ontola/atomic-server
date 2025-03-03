@@ -11,5 +11,7 @@ export const DatatypeToTSTypeMap = {
   [Datatype.STRING]: 'string',
   [Datatype.SLUG]: 'string',
   [Datatype.MARKDOWN]: 'string',
+  [Datatype.URI]: 'string',
+  [Datatype.JSON]: 'unknown',
   [Datatype.UNKNOWN]: 'JSONValue',
 };

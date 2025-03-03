@@ -12,7 +12,7 @@ Therefore, we need migrations to convert the old schema to the new one.
 - Update the Tree key used in [crate::db::trees]
  */
 
-use crate::{errors::AtomicResult, Db};
+use crate::{db::v1_types::propvals_v1_to_v2, errors::AtomicResult, Db};
 
 /// Checks the current version(s) of the internal Store, and performs migrations if needed.
 pub fn migrate_maybe(store: &Db) -> AtomicResult<()> {
@@ -21,9 +21,54 @@ pub fn migrate_maybe(store: &Db) -> AtomicResult<()> {
             // Add migrations for outdated Trees to this list
             "resources" => v0_to_v1(store)?,
             "reference_index" => ref_v0_to_v1(store)?,
+            "resources_v1" => resources_v1_to_v2(store)?,
             _other => {}
         }
     }
+    Ok(())
+}
+
+fn resources_v1_to_v2(store: &Db) -> AtomicResult<()> {
+    tracing::warn!("Migrating resources from v1 to v2, this may take a while...");
+    let old_key = "resources_v1";
+    let old = store.db.open_tree(old_key)?;
+
+    let new_key = "resources_v2";
+    let new = store.db.open_tree(new_key)?;
+
+    let mut count = 0;
+
+    for item in old.into_iter() {
+        let (subject, propvals_bin) = item.expect("Unable to convert into interable");
+
+        let subject: String =
+            String::from_utf8(subject.to_vec()).expect("Unable to deserialize subject");
+        let propvals: crate::db::v1_types::PropValsV1 = bincode1::deserialize(&propvals_bin)
+            .map_err(|e| format!("Migration Error: Failed to deserialize propvals: {}", e))?;
+
+        let new_propvals = propvals_v1_to_v2(propvals);
+
+        new.insert(
+            subject.as_bytes(),
+            bincode::encode_to_vec(&new_propvals, bincode::config::standard())
+                .map_err(|e| format!("Migration Error: Failed to encode propvals: {}", e))?,
+        )?;
+
+        count += 1;
+    }
+
+    store.db.drop_tree(old_key).map_err(|e| {
+        tracing::error!("Migration Error: Failed to drop old tree: {}", e);
+        e
+    })?;
+
+    tracing::info!("Finished migrating {} resources", count);
+
+    tracing::info!("clearing index...");
+    store.clear_index()?;
+
+    store.build_index(true)?;
+
     Ok(())
 }
 
@@ -37,8 +82,9 @@ fn v0_to_v1(store: &Db) -> AtomicResult<()> {
 
     for item in old.into_iter() {
         let (subject, resource_bin) = item.expect("Unable to convert into iterable");
-        let subject: String =
-            bincode::deserialize(&subject).expect("Unable to deserialize subject");
+        let (subject, _): (String, usize) =
+            bincode::decode_from_slice(&subject, bincode::config::legacy())
+                .expect("Unable to deserialize subject");
         new.insert(subject.as_bytes(), resource_bin)?;
         count += 1;
     }

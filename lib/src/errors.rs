@@ -263,14 +263,3 @@ impl From<sled::Error> for AtomicError {
         }
     }
 }
-
-#[cfg(feature = "db")]
-impl From<Box<bincode::ErrorKind>> for AtomicError {
-    fn from(error: Box<bincode::ErrorKind>) -> Self {
-        AtomicError {
-            message: error.to_string(),
-            subject: None,
-            error_type: AtomicErrorType::OtherError,
-        }
-    }
-}

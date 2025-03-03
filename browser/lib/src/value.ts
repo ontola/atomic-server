@@ -3,7 +3,12 @@ import type { Resource } from './resource.js';
 
 export type JSONPrimitive = string | number | boolean;
 export type JSONValue = JSONPrimitive | JSONObject | JSONArray | undefined;
-export type JSONObject = { [member: string]: JSONValue };
+export type JSONObject = { [key: string]: JSONValue };
+export type NamedJSONObject = {
+  [key: string]: JSONValue;
+  '@id': string;
+};
+
 export type JSONArray = Array<JSONValue>;
 
 /**

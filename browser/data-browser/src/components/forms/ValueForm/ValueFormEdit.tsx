@@ -6,6 +6,7 @@ import { Column, Row } from '../../Row';
 import { ErrMessage } from '../InputStyles';
 import InputSwitcher from '../InputSwitcher';
 import { useEffect, useState } from 'react';
+import { FormValidationContextProvider } from '../formValidation/FormValidationContextProvider';
 
 interface ValueFormEditProps {
   resource: Resource;
@@ -19,6 +20,7 @@ export function ValueFormEdit({
   onClose,
 }: ValueFormEditProps): React.JSX.Element {
   const [err, setErr] = useState<Error | undefined>(undefined);
+  const [isFormValid, setIsFormValid] = useState(false);
 
   const save = async () => {
     try {
@@ -44,23 +46,25 @@ export function ValueFormEdit({
   }, []);
 
   return (
-    <Column gap='0.5rem'>
-      <InputSwitcher
-        data-test={`input-${property.subject}`}
-        resource={resource}
-        property={property}
-        autoFocus
-      />
-      {err && <ErrMessage>{err.message}</ErrMessage>}
-      <Row gap='0.5rem'>
-        <Button subtle onClick={cancel}>
-          Cancel
-        </Button>
-        <Button onClick={save}>
-          <FaFloppyDisk />
-          Save
-        </Button>
-      </Row>
-    </Column>
+    <FormValidationContextProvider onValidationChange={setIsFormValid}>
+      <Column gap='0.5rem'>
+        <InputSwitcher
+          data-test={`input-${property.subject}`}
+          resource={resource}
+          property={property}
+          autoFocus
+        />
+        {err && <ErrMessage>{err.message}</ErrMessage>}
+        <Row gap='0.5rem'>
+          <Button subtle onClick={cancel}>
+            Cancel
+          </Button>
+          <Button onClick={save} disabled={!isFormValid}>
+            <FaFloppyDisk />
+            Save
+          </Button>
+        </Row>
+      </Column>
+    </FormValidationContextProvider>
   );
 }

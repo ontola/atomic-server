@@ -9,6 +9,7 @@ import { ALL_PROPS_CONTAINER } from '../helpers/containers';
 import { LoaderInline } from './Loader';
 
 import type { JSX } from 'react';
+import { JSON_RENDERER_CLASS } from './datatypes/JSON';
 
 type Props = {
   propertyURL: string;
@@ -82,6 +83,11 @@ export const PropValRow = styled.div<PropValRowProps>`
   grid-template-rows: auto 1fr;
 
   @container ${ALL_PROPS_CONTAINER} (min-width: 500px) {
+    &:has(.${JSON_RENDERER_CLASS}) {
+      grid-template-columns: 1fr;
+      gap: 0.5rem;
+    }
+
     grid-template-columns: 23ch auto;
     grid-template-rows: 1fr;
   }

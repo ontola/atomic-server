@@ -1,5 +1,6 @@
 //! Describe changes / mutations to data
 
+use bincode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use urls::{SET, SIGNER};
@@ -501,7 +502,7 @@ impl Commit {
 }
 
 /// Use this for creating Commits.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Encode, Decode)]
 pub struct CommitBuilder {
     /// The subject URL that is to be modified by this Delta.
     /// Not the URL of the Commit itself.

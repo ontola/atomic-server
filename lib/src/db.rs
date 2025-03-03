@@ -7,6 +7,7 @@ mod query_index;
 #[cfg(test)]
 pub mod test;
 mod trees;
+mod v1_types;
 mod val_prop_sub_index;
 
 use std::{
@@ -45,6 +46,8 @@ use self::{
     },
     val_prop_sub_index::add_atom_to_valpropsub_index,
 };
+
+use sled::{transaction::TransactionError, Transactional};
 
 // A function called by the Store when a Commit is accepted
 type HandleCommit = Box<dyn Fn(&CommitResponse) + Send + Sync>;
@@ -166,7 +169,10 @@ impl Db {
     ) -> AtomicResult<()> {
         let subject = resource.get_subject();
         let propvals = resource.get_propvals();
-        let resource_bin = bincode::serialize(propvals)?;
+
+        let resource_bin = bincode::encode_to_vec(propvals, bincode::config::standard())
+            .map_err(|e| format!("Could not serialize PropVals: {}", e))?;
+
         transaction.push(Operation {
             tree: Tree::Resources,
             method: Method::Insert,
@@ -195,15 +201,29 @@ impl Db {
     /// Constructs the value index from all resources in the store. Could take a while.
     pub fn build_index(&self, include_external: bool) -> AtomicResult<()> {
         tracing::info!("Building index (this could take a few minutes for larger databases)");
+        let mut count = 0;
+
         for r in self.all_resources(include_external) {
             let mut transaction = Transaction::new();
-            for atom in r.to_atoms() {
+            for atom in r.to_atoms_iter() {
                 self.add_atom_to_index(&atom, &r, &mut transaction)
                     .map_err(|e| format!("Failed to add atom to index {}. {}", atom, e))?;
             }
             self.apply_transaction(&mut transaction)
                 .map_err(|e| format!("Failed to commit transaction. {}", e))?;
+
+            if count % 1000 == 0 {
+                tracing::info!("Building index, applied transaction: {}", count);
+            }
+
+            if count % 10000 == 0 {
+                tracing::info!("Building index, flushing to disk");
+                self.db.flush()?;
+            }
+
+            count += 1;
         }
+
         tracing::info!("Building index finished!");
         Ok(())
     }
@@ -211,7 +231,9 @@ impl Db {
     /// Internal method for fetching Resource data.
     #[instrument(skip(self))]
     fn set_propvals(&self, subject: &str, propvals: &PropVals) -> AtomicResult<()> {
-        let resource_bin = bincode::serialize(propvals)?;
+        let resource_bin = bincode::encode_to_vec(propvals, bincode::config::standard())
+            .map_err(|e| format!("Could not serialize PropVals: {}", e))?;
+
         self.resources.insert(subject.as_bytes(), resource_bin)?;
         Ok(())
     }
@@ -232,13 +254,16 @@ impl Db {
             .map_err(|e| format!("Can't open {} from store: {}", subject, e))?;
         match propval_maybe.as_ref() {
             Some(binpropval) => {
-                let propval: PropVals = bincode::deserialize(binpropval).map_err(|e| {
-                    format!(
-                        "Deserialize propval error: {} {}",
-                        corrupt_db_message(subject),
-                        e
-                    )
-                })?;
+                let (propval, _): (PropVals, usize) =
+                    bincode::decode_from_slice(binpropval, bincode::config::standard()).map_err(
+                        |e| {
+                            format!(
+                                "Deserialize propval error: {} {}",
+                                corrupt_db_message(subject),
+                                e
+                            )
+                        },
+                    )?;
                 Ok(propval)
             }
             None => Err(AtomicError::not_found(format!(
@@ -279,8 +304,9 @@ impl Db {
             return None;
         }
 
-        let propvals: PropVals = bincode::deserialize(&resource_bin)
-            .unwrap_or_else(|e| panic!("{}. {}", corrupt_db_message(&subject), e));
+        let (propvals, _): (PropVals, usize) =
+            bincode::decode_from_slice(&resource_bin, bincode::config::standard())
+                .unwrap_or_else(|e| panic!("{}. {}", corrupt_db_message(&subject), e));
 
         Some(Resource::from_propvals(propvals, subject))
     }
@@ -376,11 +402,30 @@ impl Db {
             }
         }
 
-        self.resources.apply_batch(batch_resources)?;
-        self.prop_val_sub_index.apply_batch(batch_propvalsub)?;
-        self.reference_index.apply_batch(batch_valpropsub)?;
-        self.watched_queries.apply_batch(batch_watched_queries)?;
-        self.query_index.apply_batch(batch_query_members)?;
+        (
+            &self.resources,
+            &self.prop_val_sub_index,
+            &self.reference_index,
+            &self.watched_queries,
+            &self.query_index,
+        )
+            .transaction(
+                |(
+                    tx_resources,
+                    tx_prop_val_sub_index,
+                    tx_reference_index,
+                    tx_watched_queries,
+                    tx_query_index,
+                )| {
+                    tx_resources.apply_batch(&batch_resources)?;
+                    tx_prop_val_sub_index.apply_batch(&batch_propvalsub)?;
+                    tx_reference_index.apply_batch(&batch_valpropsub)?;
+                    tx_watched_queries.apply_batch(&batch_watched_queries)?;
+                    tx_query_index.apply_batch(&batch_query_members)?;
+                    Ok::<(), sled::transaction::ConflictableTransactionError<sled::Error>>(())
+                },
+            )
+            .map_err(|e: TransactionError<_>| format!("Failed to apply transaction: {}", e))?;
 
         Ok(())
     }
@@ -702,14 +747,15 @@ impl Storelike for Db {
 
     #[instrument(skip(self))]
     fn get_resource(&self, subject: &str) -> AtomicResult<Resource> {
-        let propvals = self.get_propvals(subject);
-
-        match propvals {
+        match self.get_propvals(subject) {
             Ok(propvals) => {
                 let resource = crate::resources::Resource::from_propvals(propvals, subject.into());
                 Ok(resource)
             }
-            Err(e) => self.handle_not_found(subject, e, None),
+            Err(e) => {
+                println!("Error getting resource: {:?}", e);
+                self.handle_not_found(subject, e, None)
+            }
         }
     }
 

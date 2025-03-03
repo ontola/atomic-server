@@ -9,7 +9,7 @@ import { isArray } from './datatypes.js';
 import { JSONADParser } from './parse.js';
 import { Resource } from './resource.js';
 import type { Store } from './store.js';
-import { urls, properties } from './urls.js';
+import { properties } from './urls.js';
 import type { JSONValue, JSONArray } from './value.js';
 import { commits } from './ontologies/commits.js';
 import { core } from './ontologies/core.js';
@@ -381,16 +381,14 @@ export async function generateKeyPair(): Promise<KeyPair> {
 export function parseCommitResource(resource: Resource): Commit {
   const commit: Commit = {
     id: resource.subject,
-    subject: resource.get(urls.properties.commit.subject) as string,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    set: resource.get(urls.properties.commit.set) as Record<string, any>,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    push: resource.get(urls.properties.commit.push) as Record<string, any>,
-    signer: resource.get(urls.properties.commit.signer) as string,
-    createdAt: resource.get(urls.properties.commit.createdAt) as number,
-    remove: resource.get(urls.properties.commit.remove) as string[],
-    destroy: resource.get(urls.properties.commit.destroy) as boolean,
-    signature: resource.get(urls.properties.commit.signature) as string,
+    subject: resource.get(commits.properties.subject),
+    set: resource.get(commits.properties.set),
+    push: resource.get(commits.properties.push),
+    signer: resource.get(commits.properties.signer),
+    createdAt: resource.get(commits.properties.createdAt),
+    remove: resource.get(commits.properties.remove),
+    destroy: resource.get(commits.properties.destroy),
+    signature: resource.get(commits.properties.signature),
   };
 
   return commit;
@@ -405,19 +403,17 @@ export function parseCommitJSON(str: string): Commit {
       throw new Error(`Commit is not an object`);
     }
 
-    const subject = jsonAdObj[urls.properties.commit.subject];
-    const set = jsonAdObj[urls.properties.commit.set];
-    const push = jsonAdObj[urls.properties.commit.push];
-    const signer = jsonAdObj[urls.properties.commit.signer];
-    const createdAt = jsonAdObj[urls.properties.commit.createdAt];
-    const remove: string[] | undefined =
-      jsonAdObj[urls.properties.commit.remove];
-    const destroy: boolean | undefined =
-      jsonAdObj[urls.properties.commit.destroy];
-    const signature: string = jsonAdObj[urls.properties.commit.signature];
+    const subject = jsonAdObj[commits.properties.subject];
+    const set = jsonAdObj[commits.properties.set];
+    const push = jsonAdObj[commits.properties.push];
+    const signer = jsonAdObj[commits.properties.signer];
+    const createdAt = jsonAdObj[commits.properties.createdAt];
+    const remove: string[] | undefined = jsonAdObj[commits.properties.remove];
+    const destroy: boolean | undefined = jsonAdObj[commits.properties.destroy];
+    const signature: string = jsonAdObj[commits.properties.signature];
     const id: undefined | string = jsonAdObj['@id'];
     const previousCommit: undefined | string =
-      jsonAdObj[urls.properties.commit.previousCommit];
+      jsonAdObj[commits.properties.previousCommit];
 
     if (!signature) {
       throw new Error(`Commit has no signature`);
@@ -515,14 +511,14 @@ function execSetCommit(
     let newVal = value;
 
     if (value?.constructor === {}.constructor) {
-      const [result, foundResources] = parser.parseValue(value, key);
+      const [result, foundResources] = parser.parseValue(value);
       newVal = result;
       parsedResources.push(...foundResources);
     }
 
     if (isArray(value)) {
       newVal = value.map(resourceOrURL => {
-        const [result, foundResources] = parser.parseValue(resourceOrURL, key);
+        const [result, foundResources] = parser.parseValue(resourceOrURL);
         parsedResources.push(...foundResources);
 
         return result;
@@ -555,7 +551,7 @@ function execPushCommit(
     // The `push` arrays may contain full resources.
     // We parse these here and add them to a list of resources to add to the store.
     const stringArr = newArr.map(val => {
-      const [result, foundResources] = parser.parseValue(val, key);
+      const [result, foundResources] = parser.parseValue(val);
       parsedResources.push(...foundResources);
 
       return result;

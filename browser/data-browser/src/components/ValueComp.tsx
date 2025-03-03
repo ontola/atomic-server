@@ -14,6 +14,8 @@ import ResourceArray from './datatypes/ResourceArray';
 import { ErrMessage } from './forms/InputStyles';
 
 import type { JSX } from 'react';
+import { JSONRenderer } from './datatypes/JSON';
+import { AtomicLink } from './AtomicLink';
 
 type Props = {
   value: JSONValue;
@@ -40,6 +42,12 @@ function ValueComp({ value, datatype }: Props): JSX.Element {
         return <Markdown text={valToString(value)} />;
       case Datatype.RESOURCEARRAY:
         return <ResourceArray subjects={valToArray(value)} />;
+      case Datatype.JSON:
+        return <JSONRenderer value={value} />;
+      case Datatype.URI:
+        return (
+          <AtomicLink href={value as string}>{value as string}</AtomicLink>
+        );
       default:
         return <div>{valToString(value)}</div>;
     }

@@ -13,6 +13,8 @@ import { InputDate } from './InputDate';
 import { FilePicker } from './FilePicker/FilePicker';
 
 import type { JSX } from 'react';
+import { InputJSON } from './InputJSON';
+import InputURI from './InputURI';
 
 /** Renders a fitting HTML input depending on the Datatype */
 export default function InputSwitcher(props: InputProps): JSX.Element {
@@ -59,6 +61,14 @@ export default function InputSwitcher(props: InputProps): JSX.Element {
 
     case Datatype.DATE: {
       return <InputDate {...props} />;
+    }
+
+    case Datatype.JSON: {
+      return <InputJSON {...props} />;
+    }
+
+    case Datatype.URI: {
+      return <InputURI {...props} />;
     }
 
     default: {

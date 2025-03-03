@@ -32,6 +32,8 @@ fn val_to_serde(value: Value) -> AtomicResult<SerdeValue> {
         Value::Integer(val) => serde_json::from_str(&val.to_string()).unwrap_or_default(),
         Value::Float(val) => serde_json::from_str(&val.to_string()).unwrap_or_default(),
         Value::Markdown(val) => SerdeValue::String(val),
+        Value::Uri(val) => SerdeValue::String(val),
+        Value::JSON(val) => val,
         Value::ResourceArray(val) => {
             let mut vec: Vec<SerdeValue> = Vec::new();
             for resource in val {
