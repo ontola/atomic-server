@@ -10,10 +10,15 @@ import { ResourceArrayCell } from './EditorCells/ResourceArrayCell';
 import { SlugCell } from './EditorCells/SlugCell';
 import { StringCell } from './EditorCells/StringCell';
 import { CellContainer } from './EditorCells/Type';
+import { URICell } from './EditorCells/URICell';
+import { MarkdownCell } from './EditorCells/MarkdownCell';
+import { JSONCell } from './EditorCells/JSONCell';
 
 export const dataTypeCellMap = new Map<Datatype, CellContainer<JSONValue>>([
   [Datatype.STRING, StringCell],
   [Datatype.SLUG, SlugCell],
+  [Datatype.MARKDOWN, MarkdownCell],
+  [Datatype.URI, URICell],
   [Datatype.ATOMIC_URL, AtomicURLCell],
   [Datatype.RESOURCEARRAY, ResourceArrayCell],
   [Datatype.INTEGER, IntegerCell],
@@ -21,6 +26,7 @@ export const dataTypeCellMap = new Map<Datatype, CellContainer<JSONValue>>([
   [Datatype.BOOLEAN, BooleanCell],
   [Datatype.TIMESTAMP, DateTimeCell],
   [Datatype.DATE, DateCell],
+  [Datatype.JSON, JSONCell],
 ]);
 
 export const dataTypeAlignmentMap = new Map<string, CellAlign>([
@@ -50,6 +56,7 @@ export function appendStringToType<T extends JSONValue>(
     case Datatype.STRING:
     case Datatype.SLUG:
     case Datatype.MARKDOWN:
+    case Datatype.URI:
       return `${val}${append}` as T;
     case Datatype.INTEGER:
       return Number.parseInt(

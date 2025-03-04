@@ -47,6 +47,8 @@ const valueOpts = {
   validate: false,
 };
 
+const emptyFunc = () => undefined;
+
 export function TableCell({
   columnIndex,
   rowIndex,
@@ -56,7 +58,8 @@ export function TableCell({
 }: TableCell): JSX.Element {
   const { setActiveCell } = useTableEditorContext();
   const { addItemsToHistoryStack } = useContext(TablePageContext);
-  const [save, savePending] = useDebouncedSave(resource, 200);
+  // We give an empty error handler to debouncedSave so it doesn't spam the user with error popups when the value is invalid.
+  const [save, savePending] = useDebouncedSave(resource, 200, emptyFunc);
   const [value, setValue] = useValue(resource, property.subject, valueOpts);
 
   const [createdAt, setCreatedAt] = useValue(

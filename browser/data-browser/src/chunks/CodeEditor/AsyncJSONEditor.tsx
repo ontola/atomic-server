@@ -13,6 +13,7 @@ export interface JSONEditorProps {
   showErrorStyling?: boolean;
   required?: boolean;
   maxWidth?: string;
+  autoFocus?: boolean;
   onChange: (value: string) => void;
   onValidationChange?: (isValid: boolean) => void;
   onBlur?: () => void;
@@ -33,6 +34,7 @@ const AsyncJSONEditor: React.FC<JSONEditorProps> = ({
   showErrorStyling,
   required,
   maxWidth,
+  autoFocus,
   onChange,
   onValidationChange,
   onBlur,
@@ -90,6 +92,7 @@ const AsyncJSONEditor: React.FC<JSONEditorProps> = ({
       className={showErrorStyling ? 'json-editor__error' : ''}
     >
       <CodeMirror
+        autoFocus={autoFocus}
         value={value}
         onChange={handleChange}
         // We disable tab indenting because that would mess with accessibility/keyboard navigation.

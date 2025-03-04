@@ -102,6 +102,10 @@ export function Cell({
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
+      if (disabledKeyboardInteractions.has(KeyboardInteraction.ExitEditMode)) {
+        return;
+      }
+
       setMouseDown(true);
 
       // When Shift is pressed, enter multi-select mode
@@ -126,10 +130,6 @@ export function Cell({
         return;
       }
 
-      if (disabledKeyboardInteractions.has(KeyboardInteraction.ExitEditMode)) {
-        return;
-      }
-
       if (isActive && cursorMode === CursorMode.Edit) {
         return;
       }
@@ -148,6 +148,10 @@ export function Cell({
   );
 
   const handleClick = useCallback(() => {
+    if (disabledKeyboardInteractions.has(KeyboardInteraction.ExitEditMode)) {
+      return;
+    }
+
     if (markEnterEditMode) {
       setMultiSelectCorner(undefined, undefined);
       setMouseDown(false);
@@ -155,7 +159,7 @@ export function Cell({
       setCursorMode(CursorMode.Edit);
       setMarkEnterEditMode(false);
     }
-  }, [markEnterEditMode]);
+  }, [markEnterEditMode, disabledKeyboardInteractions]);
 
   useLayoutEffect(() => {
     if (!ref.current) {

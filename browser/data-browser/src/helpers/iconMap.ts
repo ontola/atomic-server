@@ -31,6 +31,8 @@ import {
   FaListUl,
   FaMarkdown,
   FaRegSquareCheck,
+  FaLink,
+  FaCode,
 } from 'react-icons/fa6';
 
 const iconMap = new Map<string, IconType>([
@@ -70,4 +72,6 @@ export const dataTypeIconMap = new Map<string, IconType>([
   [Datatype.BOOLEAN, FaRegSquareCheck],
   [Datatype.DATE, FaCalendar],
   [Datatype.TIMESTAMP, FaClock],
+  [Datatype.URI, FaLink],
+  [Datatype.JSON, FaCode],
 ]);

@@ -753,7 +753,7 @@ impl Storelike for Db {
                 Ok(resource)
             }
             Err(e) => {
-                println!("Error getting resource: {:?}", e);
+                tracing::error!("Error getting resource: {:?}", e);
                 self.handle_not_found(subject, e, None)
             }
         }

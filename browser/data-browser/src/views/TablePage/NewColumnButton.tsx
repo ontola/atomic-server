@@ -7,6 +7,7 @@ import { NewPropertyDialog } from './PropertyForm/NewPropertyDialog';
 import { TablePageContext } from './tablePageContext';
 import { ExternalPropertyDialog } from './PropertyForm/ExternalPropertyDialog';
 import { dataTypeIconMap } from '../../helpers/iconMap';
+import { FaCode } from 'react-icons/fa6';
 
 const NewColumnTrigger = buildDefaultTrigger(<FaPlus />, 'Add column');
 
@@ -71,6 +72,12 @@ export function NewColumnButton(): JSX.Element {
         label: 'File',
         onClick: openDialog('file'),
         icon: <FileIcon />,
+      },
+      {
+        id: 'json',
+        label: 'JSON',
+        onClick: openDialog('json'),
+        icon: <FaCode />,
       },
       {
         id: 'relation',

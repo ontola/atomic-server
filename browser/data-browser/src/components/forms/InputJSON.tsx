@@ -8,15 +8,13 @@ import {
 } from './formValidation/useValidation';
 import { JSONEditor } from '../JSONEditor';
 import { JSON_RENDERER_CLASS } from '../datatypes/JSON';
-import { CSSVar } from '../../helpers/CSSVar';
-
-const JSON_EDITOR_MAX_WIDTH = new CSSVar('json-editor-max-width');
 
 export const InputJSON: React.FC<InputProps> = ({
   resource,
   property,
   commit,
   commitDebounceInterval,
+  autoFocus,
   ...props
 }) => {
   const [value, setValue] = useValue(resource, property.subject, {
@@ -52,7 +50,7 @@ export const InputJSON: React.FC<InputProps> = ({
     <Wrapper className={JSON_RENDERER_CLASS}>
       <JSONEditor
         initialValue={initialValue}
-        maxWidth={JSON_EDITOR_MAX_WIDTH.var()}
+        autoFocus={autoFocus}
         onChange={handleUpdate}
         onBlur={setTouched}
         showErrorStyling={!!error}
@@ -66,7 +64,6 @@ export const InputJSON: React.FC<InputProps> = ({
 };
 
 const Wrapper = styled.div`
-  ${JSON_EDITOR_MAX_WIDTH.define(p => `calc(100cqw - ${p.theme.size()})`)}
   flex: 1;
   position: relative;
 `;

@@ -380,7 +380,7 @@ fn parse_json_ad_map_to_resource(
                     ));
                 };
 
-                Value::Slug(str)
+                Value::new(&str, &DataType::Slug)?
             }
             DataType::Markdown => {
                 let serde_json::Value::String(str) = val else {
@@ -391,7 +391,7 @@ fn parse_json_ad_map_to_resource(
                     ));
                 };
 
-                Value::Markdown(str)
+                Value::new(&str, &DataType::Markdown)?
             }
             DataType::Uri => {
                 let serde_json::Value::String(str) = val else {
@@ -402,7 +402,7 @@ fn parse_json_ad_map_to_resource(
                     ));
                 };
 
-                Value::Uri(str)
+                Value::new(&str, &DataType::Uri)?
             }
             DataType::Date => {
                 let serde_json::Value::String(str) = val else {
@@ -413,7 +413,7 @@ fn parse_json_ad_map_to_resource(
                     ));
                 };
 
-                Value::Date(str)
+                Value::new(&str, &DataType::Date)?
             }
             DataType::Boolean => {
                 let serde_json::Value::Bool(bool) = val else {
@@ -424,7 +424,7 @@ fn parse_json_ad_map_to_resource(
                     ));
                 };
 
-                Value::Boolean(bool)
+                Value::new(&bool.to_string(), &DataType::Boolean)?
             }
             DataType::Integer => {
                 let serde_json::Value::Number(num) = val else {

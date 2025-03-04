@@ -18,6 +18,7 @@ import { transition } from '../../helpers/transition';
 export type AsyncMarkdownEditorProps = {
   placeholder?: string;
   initialContent?: string;
+  autoFocus?: boolean;
   onChange?: (content: string) => void;
   id?: string;
   labelId?: string;
@@ -31,6 +32,7 @@ const LINE_HEIGHT = 1.15;
 export default function AsyncMarkdownEditor({
   placeholder,
   initialContent,
+  autoFocus,
   id,
   labelId,
   onChange,
@@ -76,6 +78,7 @@ export default function AsyncMarkdownEditor({
     extensions,
     content: markdown,
     onBlur,
+    autofocus: autoFocus,
     editorProps: {
       attributes: {
         ...(id && { id }),
