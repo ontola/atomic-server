@@ -155,7 +155,7 @@ There are two ways you can use `tracing` to get insights into performance.
 #### Tracing with OpenTelemetry (and Jaeger)
 
 - Run the server with `--trace opentelemetry` and add `--log-level trace` to inspect more events
-- Run an OpenTelemetry compatible service, such as [Jaeger](https://www.jaegertracing.io/docs/1.34/getting-started/). See `docker run` command below or use the vscode task.
+- Run an OpenTelemetry compatible service, such as Jaeger. See `docker run` command below or use the vscode task.
 - Visit jaeger: `http://localhost:16686`
 
 ```sh
@@ -168,7 +168,7 @@ docker run -d --platform linux/amd64 --name jaeger \
   -p 16686:16686 \
   -p 14268:14268 \
   -p 9411:9411 \
-  jaegertracing/all-in-one:1.6
+  jaegertracing/all-in-one:latest
 ```
 
 #### Tracing with Chrome

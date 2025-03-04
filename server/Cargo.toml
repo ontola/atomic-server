@@ -68,15 +68,19 @@ version = "0.12"
 
 [dependencies.tracing-opentelemetry]
 optional = true
-version = "0.22.0"
+version = "0.30.0"
 
 [dependencies.opentelemetry]
 optional = true
-version = "0.21.0"
+version = "0.29.0"
 
-[dependencies.opentelemetry-jaeger]
+[dependencies.opentelemetry-otlp]
 optional = true
-version = "0.20.0"
+version = "0.29.0"
+
+[dependencies.opentelemetry_sdk]
+optional = true
+version = "0.29.0"
 
 [dependencies.actix-web]
 features = ["rustls"]
@@ -126,10 +130,17 @@ actix-rt = "2"
 assert_cmd = "2"
 
 [features]
+telemetry = [
+    "tracing-opentelemetry",
+    "opentelemetry",
+    "opentelemetry-otlp",
+    "opentelemetry-otlp/trace",
+    "opentelemetry-otlp/http-proto",
+    "opentelemetry_sdk",
+]
+img = ["webp", "image"]
 default = ["https", "telemetry", "img"]
 https = ["rustls", "instant-acme", "rcgen", "rustls-pemfile"]
-telemetry = ["tracing-opentelemetry", "opentelemetry", "opentelemetry-jaeger"]
-img = ["webp", "image"]
 
 [lib]
 name = "atomic_server_lib"
