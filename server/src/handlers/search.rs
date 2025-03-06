@@ -56,7 +56,6 @@ pub async fn search_query(
     req: actix_web::HttpRequest,
 ) -> AtomicServerResult<HttpResponse> {
     let mut timer = Timer::new();
-    let store = &appstate.store;
     let searcher = appstate.search_state.reader.searcher();
     let fields = appstate.search_state.get_schema_fields()?;
     let limit = if let Some(l) = params.limit {
@@ -68,6 +67,9 @@ pub async fn search_query(
     } else {
         DEFAULT_RETURN_LIMIT
     };
+
+    let server_url = appstate.config.get_server_url_for_request(&req);
+    let store = appstate.store.clone_with_url(server_url);
 
     let query = query_from_params(&params, &fields, &appstate).await?;
     timer.add("build_query");
@@ -82,7 +84,6 @@ pub async fn search_query(
     let subjects = docs_to_subjects(top_docs, &fields, &searcher)?;
 
     // Create a valid atomic data resource.
-    // You'd think there would be a simpler way of getting the requested URL...
     let subject = format!(
         "{}{}",
         store.get_self_url().ok_or("No base URL set")?,
@@ -90,7 +91,7 @@ pub async fn search_query(
     );
 
     let mut results_resource = crate::plugins::search::search_endpoint()
-        .to_resource(store)
+        .to_resource(&store)
         .await?;
     results_resource.set_subject(subject.clone());
 
@@ -106,7 +107,7 @@ pub async fn search_query(
         .set(
             urls::ENDPOINT_RESULTS.into(),
             filtered_subjects.into(),
-            store,
+            &store,
         )
         .await?;
 
@@ -117,6 +118,7 @@ pub async fn search_query(
     };
 
     result_vec.push(results_resource);
+    let body = Resource::vec_to_json_ad(&result_vec)?.into_bytes();
 
     let mut builder = HttpResponse::Ok();
     builder.append_header(("Server-Timing", timer.header_value()));

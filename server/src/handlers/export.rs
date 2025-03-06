@@ -29,7 +29,8 @@ pub async fn handle_export(
     req: actix_web::HttpRequest,
 ) -> AtomicServerResult<HttpResponse> {
     let headers = req.headers();
-    let store = &appstate.store;
+    let server_url = appstate.config.get_server_url_for_request(&req);
+    let store = appstate.store.clone_with_url(server_url);
 
     let Some(subject) = params.subject.clone() else {
         return Err("No subject provided".into());
@@ -45,7 +46,7 @@ pub async fn handle_export(
     match format.as_str() {
         "csv" => {
             let exporter = CSVExporter {
-                store,
+                store: &store,
                 agent: &for_agent,
                 display_refs_as_name,
             };

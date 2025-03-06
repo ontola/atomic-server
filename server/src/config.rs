@@ -101,6 +101,11 @@ pub struct Opts {
     /// Removes all remote resources from the store.
     #[clap(long, env = "ATOMIC_CLEAR_REMOTE_CACHE")]
     pub clear_remote_cache: bool,
+
+    /// The base domain for multi-tenant hosting.
+    /// If set, the server will allow serving subdomains of this domain (e.g. *.atomicserver.eu).
+    #[clap(long, env = "ATOMIC_BASE_DOMAIN")]
+    pub base_domain: Option<String>,
 }
 
 #[derive(clap::ValueEnum, Clone, Debug)]
@@ -201,6 +206,35 @@ pub struct Config {
     pub plugin_cache_path: PathBuf,
     /// If true, the initialization scripts will be ran (create first Drive, Agent, indexing, etc)
     pub initialize: bool,
+    /// The base domain for multi-tenant hosting.
+    pub base_domain: Option<String>,
+}
+
+impl Config {
+    /// Returns the server URL for a given request.
+    /// If multi-tenancy is enabled and the host matches a subdomain of the base domain, it returns the host URL.
+    pub fn get_server_url_for_request(&self, req: &actix_web::HttpRequest) -> String {
+        if let Some(base) = &self.base_domain {
+            if let Some(host) = req.head().headers.get("Host") {
+                if let Ok(host_str) = host.to_str() {
+                    // Remove port if present
+                    let domain = host_str.split(':').next().unwrap_or(host_str);
+                    if domain.ends_with(base) {
+                        let schema =
+                            if let Some(proto) = req.head().headers.get("X-Forwarded-Proto") {
+                                proto.to_str().unwrap_or("http")
+                            } else if self.opts.https {
+                                "https"
+                            } else {
+                                "http"
+                            };
+                        return format!("{}://{}", schema, host_str);
+                    }
+                }
+            }
+        }
+        self.server_url.clone()
+    }
 }
 
 /// Parse .env and CLI options
@@ -300,6 +334,8 @@ pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
         format!("{}://{}:{}", schema, opts.domain, opts.port)
     };
 
+    let base_domain = opts.base_domain.clone();
+
     Ok(Config {
         initialize,
         opts,
@@ -315,5 +351,6 @@ pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
         search_index_path,
         plugin_cache_path,
         uploads_path,
+        base_domain,
     })
 }

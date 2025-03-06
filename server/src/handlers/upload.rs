@@ -2,7 +2,7 @@ use std::{ffi::OsStr, io::Write, path::Path};
 
 use actix_multipart::{Field, Multipart};
 use actix_web::{web, HttpResponse};
-use atomic_lib::{hierarchy::check_write, urls, utils::now, Resource, Storelike, Value};
+use atomic_lib::{hierarchy::check_write, urls, utils::now, Db, Resource, Storelike, Value};
 use futures::{StreamExt, TryStreamExt};
 use image::GenericImageView;
 use serde::Deserialize;
@@ -26,7 +26,9 @@ pub async fn upload_handler(
     query: web::Query<UploadQuery>,
     req: actix_web::HttpRequest,
 ) -> AtomicServerResult<HttpResponse> {
-    let store = &appstate.store;
+    let server_url = appstate.config.get_server_url_for_request(&req);
+    let store = appstate.store.clone_with_url(server_url);
+
     let parent = store.get_resource(&query.parent).await?;
     let subject = format!(
         "{}{}",
@@ -37,13 +39,14 @@ pub async fn upload_handler(
             .ok_or("Path must be given")?
     );
     let agent = get_client_agent(req.headers(), &appstate, subject).await?;
-    check_write(store, &parent, &agent).await?;
+    check_write(&store, &parent, &agent).await?;
 
     let mut created_resources: Vec<Resource> = Vec::new();
 
     while let Ok(Some(field)) = body.try_next().await {
-        let mut resource = save_file_and_create_resource(field, &appstate, &query.parent).await?;
-        resource.save(store).await?;
+        let mut resource =
+            save_file_and_create_resource(field, &appstate, &query.parent, &store).await?;
+        resource.save(&store).await?;
         created_resources.push(resource);
     }
 
@@ -58,8 +61,8 @@ async fn save_file_and_create_resource(
     mut field: Field,
     appstate: &web::Data<AppState>,
     parent: &str,
+    store: &Db,
 ) -> AtomicServerResult<Resource> {
-    let store = &appstate.store;
     let content_type = field.content_disposition().clone();
     let filename = content_type.get_filename().ok_or("Filename is missing")?;
 

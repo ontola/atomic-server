@@ -52,7 +52,6 @@ use self::{
     },
     val_prop_sub_index::add_atom_to_valpropsub_index,
 };
-
 use sled::{transaction::TransactionError, Transactional};
 
 // A function called by the Store when a Commit is accepted
@@ -139,6 +138,15 @@ impl Db {
             .await
             .map_err(|e| format!("Failed to populate base models. {}", e))?;
         Ok(store)
+    }
+
+    /// Creates a clone of the store with a different server_url.
+    /// This is useful for multi-tenant applications.
+    /// Cloning is very cheap, as it only clones the pointers to the Sled trees.
+    pub fn clone_with_url(&self, server_url: String) -> Db {
+        let mut clone = self.clone();
+        clone.server_url = server_url;
+        clone
     }
 
     /// Create a temporary Db in `.temp/db/{id}`. Useful for testing.
