@@ -5,22 +5,26 @@ They list a bunch of Messages.
 */
 
 use crate::{
-    agents::ForAgent,
+    class_extender::{ClassExtender, CommitExtenderContext, GetExtenderContext},
     commit::{CommitBuilder, CommitOpts},
     errors::AtomicResult,
-    storelike::Query,
+    storelike::{Query, QueryResult, ResourceResponse},
     urls::{self, PARENT},
-    utils, Resource, Storelike, Value,
+    utils,
+    values::SubResource,
+    Storelike, Value,
 };
 
 // Find the messages for the ChatRoom
-#[tracing::instrument(skip(store))]
-pub fn construct_chatroom(
-    store: &impl Storelike,
-    url: url::Url,
-    resource: &mut Resource,
-    for_agent: &ForAgent,
-) -> AtomicResult<Resource> {
+#[tracing::instrument(skip(context))]
+pub fn construct_chatroom(context: GetExtenderContext) -> AtomicResult<ResourceResponse> {
+    let GetExtenderContext {
+        store,
+        url,
+        db_resource: resource,
+        for_agent,
+    } = context;
+
     // TODO: From range
     let mut start_val = utils::now();
     for (k, v) in url.query_pairs() {
@@ -47,11 +51,15 @@ pub fn construct_chatroom(
         for_agent: for_agent.clone(),
     };
 
-    let mut messages_unfiltered = store.query(&query_children)?.resources;
+    let QueryResult {
+        mut subjects,
+        resources,
+        count,
+    } = store.query(&query_children)?;
 
     // An attempt at creating a `next_page` URL on the server. But to be honest, it's probably better to do this in the front-end.
-    if messages_unfiltered.len() > page_limit {
-        let last_subject = messages_unfiltered
+    if count > page_limit {
+        let last_subject = resources
             .last()
             .ok_or("There are more messages than the page limit")?
             .get_subject();
@@ -69,23 +77,29 @@ pub fn construct_chatroom(
     }
 
     // Clients expect messages to appear from old to new
-    messages_unfiltered.reverse();
+    subjects.reverse();
 
-    resource.set(urls::MESSAGES.into(), messages_unfiltered.into(), store)?;
-    Ok(resource.to_owned())
+    resource.set(urls::MESSAGES.into(), subjects.into(), store)?;
+
+    Ok(ResourceResponse::ResourceWithReferenced(
+        resource.to_owned(),
+        resources,
+    ))
 }
 
 /// Update the ChatRoom with the new message, make sure this is sent to all Subscribers
-#[tracing::instrument(skip(store))]
-pub fn after_apply_commit_message(
-    store: &impl Storelike,
-    _commit: &crate::Commit,
-    resource_new: &Resource,
-) -> AtomicResult<()> {
+#[tracing::instrument(skip(context))]
+pub fn after_apply_commit_message(context: CommitExtenderContext) -> AtomicResult<()> {
+    let CommitExtenderContext {
+        store,
+        commit: applied_commit,
+        resource,
+    } = context;
+
     // only update the ChatRoom for _new_ messages, not for edits
-    if _commit.previous_commit.is_none() {
+    if applied_commit.previous_commit.is_none() {
         // Get the related ChatRoom
-        let parent_subject = resource_new
+        let parent_subject = resource
             .get(urls::PARENT)
             .map_err(|_e| "Message must have a Parent!")?
             .to_string();
@@ -98,13 +112,27 @@ pub fn after_apply_commit_message(
         let chat_room = store.get_resource(&parent_subject)?;
 
         let mut commit_builder = CommitBuilder::new(parent_subject);
-        let new_message = crate::values::SubResource::Resource(Box::new(resource_new.to_owned()));
-        commit_builder.push_propval(urls::MESSAGES, new_message)?;
+
+        commit_builder.push_propval(
+            urls::MESSAGES,
+            SubResource::Subject(resource.get_subject().to_string()),
+        )?;
+
         let commit = commit_builder.sign(&store.get_default_agent()?, store, &chat_room)?;
+
         let resp =
             commit.validate_and_build_response(&CommitOpts::no_validations_no_index(), store)?;
 
         store.handle_commit(&resp);
     }
     Ok(())
+}
+
+pub fn build_chatroom_extender() -> ClassExtender {
+    ClassExtender {
+        class: urls::CHATROOM.to_string(),
+        on_resource_get: Some(construct_chatroom),
+        before_commit: None,
+        after_commit: Some(after_apply_commit_message),
+    }
 }

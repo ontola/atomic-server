@@ -77,7 +77,8 @@ impl<'a> CSVExporter<'a> {
         println!("Exporting resource to CSV: {}", subject);
         let resource = self
             .store
-            .get_resource_extended(subject, false, self.agent)?;
+            .get_resource_extended(subject, false, self.agent)?
+            .to_single();
 
         let binding = resource.get_classes(self.store)?;
 
@@ -109,6 +110,7 @@ impl<'a> CSVExporter<'a> {
             Value::AtomicUrl(subject) => self
                 .store
                 .get_resource_extended(subject, false, self.agent)?
+                .to_single()
                 .get_propvals()
                 .clone(),
             Value::Resource(resource) => resource.get_propvals().clone(),
@@ -117,6 +119,7 @@ impl<'a> CSVExporter<'a> {
                 SubResource::Subject(subject) => self
                     .store
                     .get_resource_extended(subject, false, self.agent)?
+                    .to_single()
                     .get_propvals()
                     .clone(),
                 SubResource::Nested(props) => props.clone(),
@@ -210,12 +213,16 @@ impl<'a> CSVExporter<'a> {
     fn create_csv_header_from_props(&self, props: &[String]) -> AtomicResult<String> {
         let mut header = "subject".to_string();
         for prop in props.iter() {
-            let name: String =
-                if let Ok(resource) = self.store.get_resource_extended(prop, true, self.agent) {
-                    resource.get(urls::SHORTNAME)?.to_string()
-                } else {
-                    prop.to_string()
-                };
+            let name: String = if let Ok(resource_response) =
+                self.store.get_resource_extended(prop, true, self.agent)
+            {
+                resource_response
+                    .to_single()
+                    .get(urls::SHORTNAME)?
+                    .to_string()
+            } else {
+                prop.to_string()
+            };
             header.push_str(&format!(",{}", name));
         }
 
@@ -264,9 +271,12 @@ impl<'a> CSVExporter<'a> {
     }
 
     fn get_name_from_subject(&self, subject: &str) -> String {
-        let Ok(resource) = self.store.get_resource_extended(subject, true, self.agent) else {
+        let Ok(resource_response) = self.store.get_resource_extended(subject, true, self.agent)
+        else {
             return subject.to_string();
         };
+
+        let resource = resource_response.to_single();
 
         self.get_name_from_propvals(resource.get_propvals(), resource.get_subject().clone())
     }

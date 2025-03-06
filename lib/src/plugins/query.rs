@@ -1,6 +1,7 @@
 use crate::{
     endpoints::{Endpoint, HandleGetContext},
     errors::AtomicResult,
+    storelike::ResourceResponse,
     urls, Resource,
 };
 
@@ -26,7 +27,7 @@ pub fn query_endpoint() -> Endpoint {
     }
 }
 
-fn handle_query_request(context: HandleGetContext) -> AtomicResult<Resource> {
+fn handle_query_request(context: HandleGetContext) -> AtomicResult<ResourceResponse> {
     let HandleGetContext {
         subject,
         store,
@@ -34,13 +35,16 @@ fn handle_query_request(context: HandleGetContext) -> AtomicResult<Resource> {
     } = context;
 
     if subject.query_pairs().into_iter().next().is_none() {
-        return query_endpoint().to_resource(store);
+        return query_endpoint().to_resource_response(store);
     }
+
     let mut resource = Resource::new(subject.to_string());
-    crate::collections::construct_collection_from_params(
+    let collection_resource_response = crate::collections::construct_collection_from_params(
         store,
         subject.query_pairs(),
         &mut resource,
         for_agent,
-    )
+    )?;
+
+    Ok(collection_resource_response)
 }

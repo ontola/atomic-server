@@ -5,11 +5,8 @@ import { decode as decodeB64, encode as encodeB64 } from 'base64-arraybuffer';
 import { sha512 } from '@noble/hashes/sha512';
 
 import { Client } from './client.js';
-import { isArray } from './datatypes.js';
-import { JSONADParser } from './parse.js';
 import { Resource } from './resource.js';
 import type { Store } from './store.js';
-import { properties } from './urls.js';
 import type { JSONValue, JSONArray } from './value.js';
 import { commits } from './ontologies/commits.js';
 import { core } from './ontologies/core.js';
@@ -485,7 +482,7 @@ export function parseAndApplyCommit(jsonAdObjStr: string, store: Store) {
 
   if (id) {
     // This is something that the server does, too.
-    resource.setUnsafe(properties.commit.lastCommit, id);
+    resource.setUnsafe(commits.properties.lastCommit, id);
   }
 
   if (destroy) {
@@ -504,28 +501,10 @@ function execSetCommit(
   resource: Resource,
   store?: Store,
 ) {
-  const parser = new JSONADParser();
   const parsedResources: Resource[] = [];
 
   for (const [key, value] of Object.entries(set)) {
-    let newVal = value;
-
-    if (value?.constructor === {}.constructor) {
-      const [result, foundResources] = parser.parseValue(value);
-      newVal = result;
-      parsedResources.push(...foundResources);
-    }
-
-    if (isArray(value)) {
-      newVal = value.map(resourceOrURL => {
-        const [result, foundResources] = parser.parseValue(resourceOrURL);
-        parsedResources.push(...foundResources);
-
-        return result;
-      });
-    }
-
-    resource.setUnsafe(key, newVal);
+    resource.setUnsafe(key, value);
   }
 
   store && store.addResources(parsedResources);
@@ -537,30 +516,13 @@ function execRemoveCommit(remove: string[], resource: Resource) {
   }
 }
 
-function execPushCommit(
-  push: Record<string, JSONArray>,
-  resource: Resource,
-  store?: Store,
-) {
-  const parser = new JSONADParser();
-  const parsedResources: Resource[] = [];
-
+function execPushCommit(push: Record<string, JSONArray>, resource: Resource) {
   for (const [key, value] of Object.entries(push)) {
     const current = (resource.get(key) as JSONArray) || [];
     const newArr = value as JSONArray;
-    // The `push` arrays may contain full resources.
-    // We parse these here and add them to a list of resources to add to the store.
-    const stringArr = newArr.map(val => {
-      const [result, foundResources] = parser.parseValue(val);
-      parsedResources.push(...foundResources);
-
-      return result;
-    });
     // Merge both the old and new items
-    const new_arr = [...current, ...stringArr];
+    const new_arr = [...current, ...newArr];
     // Save it!
     resource.setUnsafe(key, new_arr);
   }
-
-  store && store.addResources(parsedResources);
 }

@@ -3,7 +3,7 @@ use tracing::info;
 use crate::{
     endpoints::{Endpoint, HandleGetContext, HandlePostContext},
     errors::AtomicResult,
-    storelike::Query,
+    storelike::{Query, ResourceResponse},
     urls, Resource, Storelike, Value,
 };
 
@@ -18,12 +18,12 @@ pub fn prune_tests_endpoint() -> Endpoint {
     }
 }
 
-pub fn handle_get(context: HandleGetContext) -> AtomicResult<Resource> {
-    prune_tests_endpoint().to_resource(context.store)
+pub fn handle_get(context: HandleGetContext) -> AtomicResult<ResourceResponse> {
+    prune_tests_endpoint().to_resource_response(context.store)
 }
 
 // Delete all drives with 'testdrive-' in their name. (These drive are generated with each e2e test run)
-fn handle_prune_tests_request(context: HandlePostContext) -> AtomicResult<Resource> {
+fn handle_prune_tests_request(context: HandlePostContext) -> AtomicResult<ResourceResponse> {
     let HandlePostContext { store, .. } = context;
 
     let mut query = Query::new_class(urls::DRIVE);
@@ -59,7 +59,8 @@ fn handle_prune_tests_request(context: HandlePostContext) -> AtomicResult<Resour
         info!("Received prune request but there are no drives to prune");
     }
 
-    build_response(store, 200, format!("Deleted {} drives", deleted_drives))
+    let resource = build_response(store, 200, format!("Deleted {} drives", deleted_drives))?;
+    Ok(ResourceResponse::Resource(resource))
 }
 
 fn build_response(store: &impl Storelike, status: i32, message: String) -> AtomicResult<Resource> {

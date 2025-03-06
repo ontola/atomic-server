@@ -4,11 +4,6 @@ import type { Resource } from './resource.js';
 export type JSONPrimitive = string | number | boolean;
 export type JSONValue = JSONPrimitive | JSONObject | JSONArray | undefined;
 export type JSONObject = { [key: string]: JSONValue };
-export type NamedJSONObject = {
-  [key: string]: JSONValue;
-  '@id': string;
-};
-
 export type JSONArray = Array<JSONValue>;
 
 /**
@@ -82,13 +77,13 @@ export function valToResource(val: JSONValue): string | Resource {
     throw new Error(`Not a resource: ${val}, is a Date`);
   }
 
-  if (val?.constructor === Array) {
+  if (Array.isArray(val)) {
     throw new Error(`Not a resource: ${val}, is an Array`);
   }
 
   if (typeof val === 'object') {
     const parser = new JSONADParser();
-    const [resource] = parser.parseObject(val as JSONObject, 'nested-resource');
+    const [resource] = parser.parse(val as JSONObject, 'nested-resource');
 
     return resource;
   }

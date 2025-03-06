@@ -243,7 +243,7 @@ impl Storelike for Store {
             // These nested resources are not fully calculated - they will be presented as -is
             match self.get_resource_extended(subject, true, &q.for_agent) {
                 Ok(resource) => {
-                    resources.push(resource);
+                    resources.push(resource.to_single());
                 }
                 Err(e) => match &e.error_type {
                     crate::AtomicErrorType::NotFoundError => {}

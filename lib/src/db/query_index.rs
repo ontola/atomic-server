@@ -129,7 +129,7 @@ pub fn query_sorted_indexed(
 
             if should_include_resource(q) {
                 if let Ok(resource) = store.get_resource_extended(subject, true, &q.for_agent) {
-                    resources.push(resource);
+                    resources.push(resource.to_single());
                     subjects.push(subject.into());
                 }
             } else {

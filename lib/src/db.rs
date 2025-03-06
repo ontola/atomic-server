@@ -23,6 +23,9 @@ use trees::{Method, Operation, Transaction, Tree};
 use crate::{
     agents::ForAgent,
     atoms::IndexAtom,
+    class_extender::{
+        default_class_extenders, ClassExtender, CommitExtenderContext, GetExtenderContext,
+    },
     commit::{CommitOpts, CommitResponse},
     db::{
         query_index::{requires_query_index, NO_VALUE},
@@ -31,7 +34,7 @@ use crate::{
     endpoints::{default_endpoints, Endpoint, HandleGetContext},
     errors::{AtomicError, AtomicResult},
     resources::PropVals,
-    storelike::{Query, QueryResult, Storelike},
+    storelike::{Query, QueryResult, ResourceResponse, Storelike},
     urls,
     values::SortableValue,
     Atom, Commit, Resource,
@@ -85,6 +88,8 @@ pub struct Db {
     server_url: String,
     /// Endpoints are checked whenever a resource is requested. They calculate (some properties of) the resource and return it.
     endpoints: Vec<Endpoint>,
+    /// List of class extenders.
+    class_extenders: Vec<ClassExtender>,
     /// Function called whenever a Commit is applied.
     on_commit: Option<Arc<HandleCommit>>,
     /// Where the DB is stored on disk.
@@ -115,6 +120,7 @@ impl Db {
             server_url,
             watched_queries,
             endpoints: default_endpoints(),
+            class_extenders: default_class_extenders(),
             on_commit: None,
         };
         migrate_maybe(&store).map(|e| format!("Error during migration of database: {:?}", e))?;
@@ -462,7 +468,7 @@ impl Db {
                 if let Ok(resource) = self.get_resource_extended(&atom.subject, true, &q.for_agent)
                 {
                     subjects.push(atom.subject.clone());
-                    resources.push(resource);
+                    resources.push(resource.to_single());
                 }
             }
         }
@@ -546,6 +552,51 @@ impl Db {
             .into());
         }
         Ok(())
+    }
+
+    fn is_endpoint(&self, url: &url::Url) -> bool {
+        self.endpoints.iter().any(|e| e.path == url.path())
+    }
+
+    fn call_endpoint(&self, subject: &str, for_agent: &ForAgent) -> AtomicResult<ResourceResponse> {
+        let url = url::Url::parse(subject)?;
+
+        // Check if the subject matches one of the endpoints
+        for endpoint in self.endpoints.iter() {
+            if url.path() == endpoint.path {
+                // Not all Endpoints have a handle function.
+                // If there is none, return the endpoint plainly.
+                let response = if let Some(handle) = endpoint.handle {
+                    // Call the handle function for the endpoint, if it exists.
+                    let context: HandleGetContext = HandleGetContext {
+                        subject: url,
+                        store: self,
+                        for_agent,
+                    };
+                    (handle)(context).map_err(|e| {
+                        format!("Error handling {} Endpoint: {}", endpoint.shortname, e)
+                    })?
+                } else {
+                    endpoint.to_resource_response(self)?
+                };
+
+                // Extended resources must always return the requested subject as their own subject
+                match response {
+                    ResourceResponse::Resource(mut resource) => {
+                        resource.set_subject(subject.into());
+                        return Ok(resource.into());
+                    }
+                    ResourceResponse::ResourceWithReferenced(mut resource, references) => {
+                        resource.set_subject(subject.into());
+                        return Ok(ResourceResponse::ResourceWithReferenced(
+                            resource, references,
+                        ));
+                    }
+                }
+            }
+        }
+
+        Err(format!("No endpoint found for {}", subject).into())
     }
 }
 
@@ -644,22 +695,19 @@ impl Storelike for Db {
         let mut transaction = Transaction::new();
 
         // BEFORE APPLY COMMIT HANDLERS
-        // TODO: Move to something dynamic
         if let Some(resource_new) = &commit_response.resource_new {
-            let _resource_new_classes = resource_new.get_classes(store)?;
-            #[cfg(feature = "db")]
-            for class in &_resource_new_classes {
-                match class.subject.as_str() {
-                    urls::COMMIT => {
-                        return Err("Commits can not be edited or created directly.".into())
-                    }
-                    urls::INVITE => crate::plugins::invite::before_apply_commit(
+            for extender in self.class_extenders.iter() {
+                if extender.resource_has_extender(resource_new)? {
+                    let Some(handler) = extender.before_commit else {
+                        continue;
+                    };
+
+                    (handler)(CommitExtenderContext {
                         store,
-                        &commit_response.commit,
-                        resource_new,
-                    )?,
-                    _other => {}
-                };
+                        commit: &commit_response.commit,
+                        resource: resource_new,
+                    })?;
+                }
             }
         }
 
@@ -710,19 +758,21 @@ impl Storelike for Db {
         // AFTER APPLY COMMIT HANDLERS
         // Commit has been checked and saved.
         // Here you can add side-effects, such as creating new Commits.
-        #[cfg(feature = "db")]
         if let Some(resource_new) = &commit_response.resource_new {
-            let _resource_new_classes = resource_new.get_classes(store)?;
-            #[cfg(feature = "db")]
-            for class in &_resource_new_classes {
-                match class.subject.as_str() {
-                    urls::MESSAGE => crate::plugins::chatroom::after_apply_commit_message(
+            for extender in self.class_extenders.iter() {
+                if extender.resource_has_extender(resource_new)? {
+                    use crate::class_extender::CommitExtenderContext;
+
+                    let Some(handler) = extender.after_commit else {
+                        continue;
+                    };
+
+                    (handler)(CommitExtenderContext {
                         store,
-                        &commit_response.commit,
-                        resource_new,
-                    )?,
-                    _other => {}
-                };
+                        commit: &commit_response.commit,
+                        resource: resource_new,
+                    })?;
+                }
             }
         }
         Ok(commit_response)
@@ -765,7 +815,7 @@ impl Storelike for Db {
         subject: &str,
         skip_dynamic: bool,
         for_agent: &ForAgent,
-    ) -> AtomicResult<Resource> {
+    ) -> AtomicResult<ResourceResponse> {
         let url_span = tracing::span!(tracing::Level::TRACE, "URL parse").entered();
         // This might add a trailing slash
         let url = url::Url::parse(subject)?;
@@ -783,98 +833,68 @@ impl Storelike for Db {
         url_span.exit();
 
         let endpoint_span = tracing::span!(tracing::Level::TRACE, "Endpoint").entered();
-        // Check if the subject matches one of the endpoints
-        for endpoint in self.endpoints.iter() {
-            if url.path() == endpoint.path {
-                // Not all Endpoints have a handle function.
-                // If there is none, return the endpoint plainly.
-                let mut resource = if let Some(handle) = endpoint.handle {
-                    // Call the handle function for the endpoint, if it exists.
-                    let context: HandleGetContext = HandleGetContext {
-                        subject: url,
-                        store: self,
-                        for_agent,
-                    };
-                    (handle)(context).map_err(|e| {
-                        format!("Error handling {} Endpoint: {}", endpoint.shortname, e)
-                    })?
-                } else {
-                    endpoint.to_resource(self)?
-                };
-                // Extended resources must always return the requested subject as their own subject
-                resource.set_subject(subject.into());
-                return Ok(resource.to_owned());
-            }
+
+        // Check if the subject matches one of the endpoints, if so, call the endpoint.
+        if self.is_endpoint(&url) {
+            return self.call_endpoint(subject, for_agent);
         }
+
         endpoint_span.exit();
 
         let dynamic_span =
             tracing::span!(tracing::Level::TRACE, "get_resource_extended (dynamic)").entered();
+
         let mut resource = self.get_resource(&removed_query_params)?;
 
         let _explanation = crate::hierarchy::check_read(self, &resource, for_agent)?;
 
-        // Whether the resource has dynamic properties
-        let mut has_dynamic = false;
         // If a certain class needs to be extended, add it to this match statement
-        for class in resource.get_classes(self)? {
-            match class.subject.as_ref() {
-                crate::urls::COLLECTION => {
-                    has_dynamic = true;
-                    if !skip_dynamic {
-                        resource = crate::collections::construct_collection_from_params(
-                            self,
-                            url.query_pairs(),
-                            &mut resource,
-                            for_agent,
-                        )?;
+        for extender in self.class_extenders.iter() {
+            if extender.resource_has_extender(&resource)? {
+                if skip_dynamic {
+                    // This lets clients know that the resource may have dynamic properties that are currently not included
+                    resource.set(
+                        crate::urls::INCOMPLETE.into(),
+                        crate::Value::Boolean(true),
+                        self,
+                    )?;
+
+                    dynamic_span.exit();
+                    return Ok(resource.into());
+                }
+
+                if let Some(handler) = extender.on_resource_get {
+                    let resource_response = (handler)(GetExtenderContext {
+                        store: self,
+                        url: &url,
+                        db_resource: &mut resource,
+                        for_agent,
+                    })?;
+
+                    dynamic_span.exit();
+
+                    // TODO: Check if we actually need this
+                    // make sure the actual subject matches the one requested - It should not be changed in the logic above
+                    match resource_response {
+                        ResourceResponse::Resource(mut resource) => {
+                            resource.set_subject(subject.into());
+                            return Ok(resource.into());
+                        }
+                        ResourceResponse::ResourceWithReferenced(mut resource, referenced) => {
+                            resource.set_subject(subject.into());
+
+                            return Ok(ResourceResponse::ResourceWithReferenced(
+                                resource, referenced,
+                            ));
+                        }
                     }
                 }
-                crate::urls::INVITE => {
-                    has_dynamic = true;
-                    if !skip_dynamic {
-                        resource = crate::plugins::invite::construct_invite_redirect(
-                            self,
-                            url.query_pairs(),
-                            &mut resource,
-                            for_agent,
-                        )?;
-                    }
-                }
-                crate::urls::DRIVE => {
-                    has_dynamic = true;
-                    if !skip_dynamic {
-                        resource = crate::hierarchy::add_children(self, &mut resource)?;
-                    }
-                }
-                crate::urls::CHATROOM => {
-                    has_dynamic = true;
-                    if !skip_dynamic {
-                        resource = crate::plugins::chatroom::construct_chatroom(
-                            self,
-                            url.clone(),
-                            &mut resource,
-                            for_agent,
-                        )?;
-                    }
-                }
-                _ => {}
             }
         }
-        dynamic_span.exit();
 
-        // make sure the actual subject matches the one requested - It should not be changed in the logic above
         resource.set_subject(subject.into());
 
-        // This lets clients know that the resource may have dynamic properties that are currently not included
-        if has_dynamic && skip_dynamic {
-            resource.set(
-                crate::urls::INCOMPLETE.into(),
-                crate::Value::Boolean(true),
-                self,
-            )?;
-        }
-        Ok(resource)
+        Ok(resource.into())
     }
 
     fn handle_commit(&self, commit_response: &CommitResponse) {
@@ -928,8 +948,9 @@ impl Storelike for Db {
                         for_agent,
                         subject: subj_url,
                     };
-                    let mut resource = fun(handle_post_context)?;
+                    let mut resource = fun(handle_post_context)?.to_single();
                     resource.set_subject(subject.into());
+
                     return Ok(resource);
                 }
             }

@@ -1,6 +1,7 @@
 use crate::{
     endpoints::{Endpoint, HandleGetContext},
     errors::AtomicResult,
+    storelike::ResourceResponse,
     urls, Resource, Storelike,
 };
 
@@ -16,7 +17,7 @@ pub fn path_endpoint() -> Endpoint {
 }
 
 #[tracing::instrument]
-fn handle_path_request(context: HandleGetContext) -> AtomicResult<Resource> {
+fn handle_path_request(context: HandleGetContext) -> AtomicResult<ResourceResponse> {
     let HandleGetContext {
         store,
         for_agent,
@@ -30,7 +31,7 @@ fn handle_path_request(context: HandleGetContext) -> AtomicResult<Resource> {
         };
     }
     if path.is_none() {
-        return path_endpoint().to_resource(store);
+        return path_endpoint().to_resource_response(store);
     }
     let result = store.get_path(&path.unwrap(), None, for_agent)?;
     match result {
@@ -42,7 +43,8 @@ fn handle_path_request(context: HandleGetContext) -> AtomicResult<Resource> {
             resource.set_string(urls::ATOM_SUBJECT.into(), &atom.subject, store)?;
             resource.set_string(urls::ATOM_PROPERTY.into(), &atom.property, store)?;
             resource.set_string(urls::ATOM_VALUE.into(), &atom.value.to_string(), store)?;
-            Ok(resource)
+
+            Ok(ResourceResponse::Resource(resource))
         }
     }
 }

@@ -110,7 +110,7 @@ interface HelperTextProps {
   link: string;
 }
 
-const HelperTextWraper = styled.div`
+const HelperTextWrapper = styled.div`
   position: relative;
   margin-bottom: 0rem;
 `;
@@ -122,10 +122,10 @@ const Extra = styled(Row)`
 
 function HelperText({ text, link }: HelperTextProps) {
   return (
-    <HelperTextWraper>
+    <HelperTextWrapper>
       <Markdown text={text} />
       <AtomicLink subject={link}>{link}</AtomicLink>
-    </HelperTextWraper>
+    </HelperTextWrapper>
   );
 }
 

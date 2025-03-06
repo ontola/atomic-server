@@ -10,6 +10,7 @@ import { JSONEditor } from '../JSONEditor';
 import { JSON_RENDERER_CLASS } from '../datatypes/JSON';
 
 export const InputJSON: React.FC<InputProps> = ({
+  labelId,
   resource,
   property,
   commit,
@@ -49,6 +50,7 @@ export const InputJSON: React.FC<InputProps> = ({
   return (
     <Wrapper className={JSON_RENDERER_CLASS}>
       <JSONEditor
+        labelId={labelId}
         initialValue={initialValue}
         autoFocus={autoFocus}
         onChange={handleUpdate}

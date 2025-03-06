@@ -2,50 +2,58 @@ import { AtomicError } from './error.js';
 import { Client, isArray } from './index.js';
 import { server } from './ontologies/server.js';
 import { Resource, unknownSubject } from './resource.js';
-import type { JSONObject, JSONValue, NamedJSONObject } from './value.js';
+import type { JSONObject, JSONValue } from './value.js';
 
 /**
  * Parses a JSON-AD object or array into resources. Create a new instance each time you need to parse a json-ad string.
  */
 export class JSONADParser {
-  private parsedResources: Resource[] = [];
+  public parse(json: unknown, subject: string = unknownSubject): Resource[] {
+    if (Array.isArray(json)) {
+      return this.parseArray(json);
+    }
+
+    if (isJSONObject(json as JSONValue)) {
+      return [this.parseObject(json as JSONObject, subject)];
+    }
+
+    throw new Error(`Expected object or array, got ${typeof json}`);
+  }
 
   /**
    * Parses an JSON-AD object containing a resource. Returns the resource and a list of all the sub-resources it found.
    */
-  public parseObject(
+  private parseObject(
     jsonObject: JSONObject,
     resourceSubject?: string,
-  ): [parsedRootResource: Resource, allParsedResources: Resource[]] {
-    this.parsedResources = [];
+  ): Resource {
     const parsedResource = this.parseJsonADResource(
       jsonObject,
       resourceSubject,
     );
 
-    return [parsedResource, [...this.parsedResources]];
+    return parsedResource;
   }
 
   /**
    * Parses an array of JSON-AD objects containing resources.
    * Returns a list of the resources in the array and a list of all the resources that were found including sub-resources.
    */
-  public parseArray(
-    jsonArray: unknown[],
-  ): [resourcesInArray: Resource[], allParsedResources: Resource[]] {
-    this.parsedResources = [];
-    const resources = this.parseJsonADArray(jsonArray);
+  private parseArray(jsonArray: unknown[]): Resource[] {
+    const resources: Resource[] = [];
 
-    return [resources, [...this.parsedResources]];
-  }
+    for (const item of jsonArray as JSONValue[]) {
+      if (!isJSONObject(item)) {
+        throw new Error(
+          `Error parsing JSON-AD Array, expected object, got ${typeof item}`,
+        );
+      }
 
-  public parseValue(
-    value: JSONValue,
-  ): [value: JSONValue, allParsedResources: Resource[]] {
-    this.parsedResources = [];
-    const result = this.parseJsonAdResourceValue(value);
+      const resource = this.parseJsonADResource(item);
+      resources.push(resource);
+    }
 
-    return [result, [...this.parsedResources]];
+    return resources;
   }
 
   private parseJsonADResource(
@@ -53,7 +61,6 @@ export class JSONADParser {
     resourceSubject: string = unknownSubject,
   ): Resource {
     const resource = new Resource(resourceSubject);
-    this.parsedResources.push(resource);
 
     try {
       for (const [key, value] of Object.entries(object)) {
@@ -76,27 +83,7 @@ export class JSONADParser {
           continue;
         }
 
-        try {
-          // Resource values can be either strings (URLs) or full Resources, which in turn can be either Anonymous (no @id) or Named (with an @id)
-          if (Array.isArray(value)) {
-            const [namedResources, array] = pickNamedResourcesFromArray(value);
-
-            resource.setUnsafe(key, array);
-
-            for (const namedResource of namedResources) {
-              this.parseJsonAdResourceValue(namedResource);
-            }
-          } else if (isJSONObject(value)) {
-            const val = this.parseJsonAdResourceValue(value);
-            resource.setUnsafe(key, val);
-          } else {
-            resource.setUnsafe(key, value);
-          }
-        } catch (e) {
-          const baseMsg = `Failed creating value ${value} for key ${key} in resource ${resource.subject}`;
-          const errorMsg = `${baseMsg}. ${e.message}`;
-          throw new Error(errorMsg);
-        }
+        resource.setUnsafe(key, value);
       }
 
       resource.loading = false;
@@ -114,57 +101,7 @@ export class JSONADParser {
 
     return resource;
   }
-
-  private parseJsonAdResourceValue(value: JSONValue): JSONValue {
-    if (!isNamedResource(value)) {
-      return value;
-    }
-
-    // It's a named resource that should be parsed too
-    const nestedSubject = value['@id'] as string;
-    this.parseJsonADResource(value);
-
-    return nestedSubject;
-  }
-
-  /** Parses a JSON-AD array, returns array of Resources */
-  private parseJsonADArray(jsonArray: unknown[]): Resource[] {
-    const resources: Resource[] = [];
-
-    try {
-      for (const jsonObject of jsonArray) {
-        const resource = this.parseJsonADResource(jsonObject as JSONObject);
-        resources.push(resource);
-      }
-    } catch (e) {
-      e.message = 'Failed parsing JSON ' + e.message;
-      throw e;
-    }
-
-    return resources;
-  }
 }
 
 const isJSONObject = (value: JSONValue): value is JSONObject =>
   typeof value === 'object' && value !== null && !isArray(value);
-
-const pickNamedResourcesFromArray = (
-  array: JSONValue[],
-): [namedResources: NamedJSONObject[], rest: JSONValue[]] => {
-  const named: NamedJSONObject[] = [];
-  const rest: JSONValue[] = [];
-
-  for (const item of array) {
-    if (isNamedResource(item)) {
-      rest.push(item['@id']);
-      named.push(item);
-    } else {
-      rest.push(item);
-    }
-  }
-
-  return [named, rest];
-};
-
-const isNamedResource = (value: JSONValue): value is NamedJSONObject =>
-  isJSONObject(value) && '@id' in value && Client.isValidSubject(value['@id']);

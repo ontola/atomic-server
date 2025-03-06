@@ -4,14 +4,15 @@
 //! See https://docs.atomicdata.dev/endpoints.html or https://atomicdata.dev/classes/Endpoint
 
 use crate::{
-    agents::ForAgent, errors::AtomicResult, plugins, urls, Db, Resource, Storelike, Value,
+    agents::ForAgent, errors::AtomicResult, plugins, storelike::ResourceResponse, urls, Db,
+    Resource, Storelike, Value,
 };
 
-/// The function that is called when a POST request matches the path
-type HandleGet = fn(context: HandleGetContext) -> AtomicResult<Resource>;
-
 /// The function that is called when a GET request matches the path
-type HandlePost = fn(context: HandlePostContext) -> AtomicResult<Resource>;
+type HandleGet = fn(context: HandleGetContext) -> AtomicResult<ResourceResponse>;
+
+/// The function that is called when a POST request matches the path
+type HandlePost = fn(context: HandlePostContext) -> AtomicResult<ResourceResponse>;
 
 /// Passed to an Endpoint GET request handler.
 #[derive(Debug)]
@@ -71,6 +72,11 @@ impl Endpoint {
             store,
         )?;
         Ok(resource)
+    }
+
+    pub fn to_resource_response(&self, store: &impl Storelike) -> AtomicResult<ResourceResponse> {
+        let resource = self.to_resource(store)?;
+        Ok(resource.into())
     }
 }
 
