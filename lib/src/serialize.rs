@@ -38,12 +38,6 @@ fn val_to_serde(value: Value) -> AtomicResult<SerdeValue> {
             let mut vec: Vec<SerdeValue> = Vec::new();
             for resource in val {
                 match resource {
-                    crate::values::SubResource::Resource(r) => {
-                        vec.push(crate::serialize::propvals_to_json_ad_map(
-                            r.get_propvals(),
-                            Some(r.get_subject().clone()),
-                        )?);
-                    }
                     crate::values::SubResource::Nested(pv) => {
                         vec.push(crate::serialize::propvals_to_json_ad_map(&pv, None)?);
                     }
@@ -61,16 +55,11 @@ fn val_to_serde(value: Value) -> AtomicResult<SerdeValue> {
         Value::Boolean(val) => SerdeValue::Bool(val),
         // TODO: fix this for nested resources in json and json-ld serialization, because this will cause them to fall back to json-ad
         Value::NestedResource(res) => match res {
-            crate::values::SubResource::Resource(r) => crate::serialize::propvals_to_json_ad_map(
-                r.get_propvals(),
-                Some(r.get_subject().clone()),
-            )?,
             crate::values::SubResource::Nested(propvals) => {
                 propvals_to_json_ad_map(&propvals, None)?
             }
             crate::values::SubResource::Subject(s) => SerdeValue::String(s),
         },
-        Value::Resource(_) => todo!(),
     };
     Ok(json_val)
 }

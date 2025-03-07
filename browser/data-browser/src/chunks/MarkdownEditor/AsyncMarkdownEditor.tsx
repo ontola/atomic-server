@@ -83,7 +83,7 @@ export default function AsyncMarkdownEditor({
     extensions,
     content: markdown,
     onBlur,
-    autofocus: autoFocus,
+    autofocus: !!autoFocus,
     editorProps: {
       attributes: {
         ...(id && { id }),

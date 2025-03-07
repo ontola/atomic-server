@@ -14,16 +14,31 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import kill from 'kill-port';
 import { log } from 'node:console';
+import os from 'node:os';
 
-const execAsync = async (
-  command: Parameters<typeof exec>[0],
-  options?: Parameters<typeof exec>[1],
+const EXEC_DIR = path.join(os.tmpdir(), 'atomic-data-template-tests');
+
+const pathToPackage = (
+  libName: 'lib' | 'cli' | 'react' | 'svelte' | 'create-template',
 ) => {
+  return path.join(__dirname, '..', '..', libName);
+};
+
+const execAsync = async (command: Parameters<typeof exec>[0], cwd?: string) => {
   return new Promise((resolve, reject) => {
+    const options = {
+      cwd: cwd ? path.join(EXEC_DIR, cwd) : EXEC_DIR,
+    };
+
     exec(command, options, (err, stdout, stderr) => {
+      // eslint-disable-next-line no-console
       console.log(stdout, stderr);
 
       if (err) {
+        // eslint-disable-next-line no-console
+        console.log(
+          `Encountered error while excecuting ${command} in ${options.cwd}`,
+        );
         reject(new Error(err.message));
       }
 
@@ -36,46 +51,41 @@ const execAsync = async (
   });
 };
 
-const TEMPLATE_DIR_NAME = 'template-tests';
 // test.describe.configure({ mode: 'serial' });
 
-async function setupTemplateSite(
-  serverUrl: string,
-  siteType: 'nextjs-site' | 'sveltekit-site',
-) {
-  if (!fs.existsSync(TEMPLATE_DIR_NAME)) {
-    fs.mkdirSync(TEMPLATE_DIR_NAME);
+async function setupTemplateSite(serverUrl: string, siteType: string) {
+  if (!fs.existsSync(EXEC_DIR)) {
+    fs.mkdirSync(EXEC_DIR);
   }
 
-  await execAsync('pnpm link ../create-template');
+  await execAsync('pnpm init');
+  await execAsync(`pnpm link ${pathToPackage('create-template')}`);
   await execAsync(
-    `pnpm exec create-template ${TEMPLATE_DIR_NAME}/${siteType} --template ${siteType} --server-url ${serverUrl}`,
+    `pnpm exec create-template ${siteType} --template ${siteType} --server-url ${serverUrl}`,
   );
 
-  const sitePath = `${TEMPLATE_DIR_NAME}/${siteType}`;
-  await execAsync('pnpm install', { cwd: sitePath });
-  await execAsync('pnpm link ../../../cli', { cwd: sitePath });
-  await execAsync('pnpm link ../../../lib', { cwd: sitePath });
+  await execAsync('pnpm install', siteType);
+  await execAsync(`pnpm link ${pathToPackage('cli')}`, siteType);
+  await execAsync(`pnpm link ${pathToPackage('lib')}`, siteType);
 
   if (siteType === 'nextjs-site') {
-    await execAsync('pnpm link ../../../react', { cwd: sitePath });
+    await execAsync(`pnpm link ${pathToPackage('react')}`, siteType);
   } else if (siteType === 'sveltekit-site') {
-    await execAsync('pnpm link ../../../svelte', { cwd: sitePath });
-    await execAsync('pnpm svelte-kit sync', { cwd: sitePath });
+    await execAsync(`pnpm link ${pathToPackage('svelte')}`, siteType);
   }
 
-  await execAsync('pnpm update-ontologies', { cwd: sitePath });
+  await execAsync('pnpm update-ontologies', siteType);
 }
 
-function startServer(templateDir: string, siteType: string) {
+function startServer(siteType: string) {
   // Adjust runtime commands per template
   const command =
     siteType === 'nextjs-site'
-      ? 'pnpm run build && pnpm start'
+      ? 'pnpm build && pnpm start'
       : 'pnpm run build && NO_COLOR=1 pnpm preview';
 
   return spawn(command, {
-    cwd: `${templateDir}/${siteType}`,
+    cwd: path.join(EXEC_DIR, siteType),
     shell: true,
   });
 }
@@ -121,7 +131,7 @@ const waitForServer = (
   });
 };
 
-test.describe('Create Next.js Template', () => {
+test.describe('Test create-template package', () => {
   test.beforeEach(before);
 
   test('apply next-js template', async ({ page }) => {
@@ -146,7 +156,7 @@ test.describe('Create Next.js Template', () => {
 
     try {
       //start server
-      const child = startServer(TEMPLATE_DIR_NAME, 'nextjs-site');
+      const child = startServer('nextjs-site');
       const url = await waitForServer(child);
 
       // check if the server is running
@@ -184,25 +194,6 @@ test.describe('Create Next.js Template', () => {
     }
   });
 
-  test.afterEach(async () => {
-    const dirPath = path.join(
-      __dirname,
-      '..',
-      TEMPLATE_DIR_NAME,
-      'nextjs-site',
-    );
-
-    try {
-      await fs.promises.rm(dirPath, { recursive: true, force: true });
-    } catch (error) {
-      console.error(`Failed to delete ${TEMPLATE_DIR_NAME}:`, error);
-    }
-  });
-});
-
-test.describe('Create SvelteKit Template', () => {
-  test.beforeEach(before);
-
   test('apply sveltekit template', async ({ page }) => {
     test.slow();
     await signIn(page);
@@ -224,7 +215,7 @@ test.describe('Create SvelteKit Template', () => {
     await setupTemplateSite(drive.driveURL, 'sveltekit-site');
 
     try {
-      const child = startServer(TEMPLATE_DIR_NAME, 'sveltekit-site');
+      const child = startServer('sveltekit-site');
       //start server
       const url = await waitForServer(child);
 
@@ -264,18 +255,18 @@ test.describe('Create SvelteKit Template', () => {
     }
   });
 
-  test.afterEach(async () => {
-    const dirPath = path.join(
-      __dirname,
-      '..',
-      TEMPLATE_DIR_NAME,
-      'sveltekit-site',
-    );
+  test.afterAll(async () => {
+    if (!fs.existsSync(EXEC_DIR)) {
+      // eslint-disable-next-line no-console
+      console.log('No EXEC_DIR to delete, skipping...');
+
+      return;
+    }
 
     try {
-      await fs.promises.rm(dirPath, { recursive: true, force: true });
+      await fs.promises.rm(EXEC_DIR, { recursive: true, force: true });
     } catch (error) {
-      console.error(`Failed to delete ${TEMPLATE_DIR_NAME}:`, error);
+      console.error(`Failed to delete ${EXEC_DIR}:`, error);
     }
   });
 });

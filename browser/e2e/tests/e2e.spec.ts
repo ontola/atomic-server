@@ -1,6 +1,6 @@
 // This file is copied from `atomic-data-browser` to `atomic-data-server` when `pnpm build-server` is run.
 // This is why the `testConfig` is imported.
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import {
   DEMO_INVITE_NAME,
   FRONTEND_URL,
@@ -198,6 +198,9 @@ test.describe('data-browser', async () => {
   });
 
   test('chatroom', async ({ page, browser }) => {
+    const inputLocator = (currentPage: Page) =>
+      currentPage.getByLabel('Chat input');
+
     await signIn(page);
     await newDrive(page);
     const waiter = waitForCommitOnCurrentResource(page);
@@ -207,11 +210,11 @@ test.describe('data-browser', async () => {
       page.getByRole('heading', { name: 'Untitled ChatRoom' }),
     ).toBeVisible();
     const teststring = `My test: ${timestamp()}`;
-    await page.fill('[data-test="message-input"]', teststring);
+    await inputLocator(page).fill(teststring);
     await page.keyboard.press('Enter');
     const chatRoomUrl = (await getCurrentSubject(page)) as string;
     await expect(
-      page.locator('[data-test="message-input"]'),
+      inputLocator(page),
       'Text input not cleared on enter',
     ).toHaveText('');
     await expect(
@@ -228,7 +231,7 @@ test.describe('data-browser', async () => {
 
     await expect(page2.locator(`text=${teststring}`)).toBeVisible();
     const teststring2 = `My reply: ${timestamp()}`;
-    await page2.fill('[data-test="message-input"]', teststring2);
+    await inputLocator(page2).fill(teststring2);
     await page2.keyboard.press('Enter');
     // Both pages should see then new chat message
     await expect(page.locator(`text=${teststring2}`)).toBeVisible();

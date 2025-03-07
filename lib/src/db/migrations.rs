@@ -36,6 +36,7 @@ fn resources_v1_to_v2(store: &Db) -> AtomicResult<()> {
     let new_key = "resources_v2";
     let new = store.db.open_tree(new_key)?;
 
+    new.clear()?;
     let mut count = 0;
 
     for item in old.into_iter() {
@@ -50,7 +51,7 @@ fn resources_v1_to_v2(store: &Db) -> AtomicResult<()> {
 
         new.insert(
             subject.as_bytes(),
-            bincode::encode_to_vec(&new_propvals, bincode::config::standard())
+            rmp_serde::to_vec(&new_propvals)
                 .map_err(|e| format!("Migration Error: Failed to encode propvals: {}", e))?,
         )?;
 
@@ -82,9 +83,8 @@ fn v0_to_v1(store: &Db) -> AtomicResult<()> {
 
     for item in old.into_iter() {
         let (subject, resource_bin) = item.expect("Unable to convert into iterable");
-        let (subject, _): (String, usize) =
-            bincode::decode_from_slice(&subject, bincode::config::legacy())
-                .expect("Unable to deserialize subject");
+        let subject: String =
+            bincode1::deserialize(&subject).expect("Unable to deserialize subject");
         new.insert(subject.as_bytes(), resource_bin)?;
         count += 1;
     }
