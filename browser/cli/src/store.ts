@@ -11,7 +11,7 @@ const getCommandIndex = (): number | undefined => {
   return undefined;
 };
 
-const getAgent = (): Agent | undefined => {
+const getAgent = async (): Promise<Agent | undefined> => {
   let secret;
   const agentCommandIndex = getCommandIndex();
 
@@ -28,8 +28,8 @@ const getAgent = (): Agent | undefined => {
 
 export const store = new Store();
 
-const agent = getAgent();
-
-if (agent) {
-  store.setAgent(agent);
-}
+getAgent().then(agent => {
+  if (agent) {
+    store.setAgent(agent);
+  }
+});
