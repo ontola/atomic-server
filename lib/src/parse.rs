@@ -311,7 +311,7 @@ pub fn parse_propval<'a>(
                     match item {
                         serde_json::Value::String(str) => {
                             let url = try_to_subject(&str, &prop, parse_opts)?;
-                            newvec.push(SubResource::Subject(url))
+                            newvec.push(SubResource::Subject(url.into()))
                         }
                         // If it's an Object, it can be either an anonymous or a full resource.
                         serde_json::Value::Object(map) => {
@@ -549,7 +549,10 @@ async fn parse_json_ad_map_to_resource(
     // if there is no parent set, we set it to the Importer
     if let Some(importer) = &parse_opts.importer {
         if !propvals.contains_key(urls::PARENT) {
-            propvals.insert(urls::PARENT.into(), Value::AtomicUrl(importer.into()));
+            propvals.insert(
+                urls::PARENT.into(),
+                Value::AtomicUrl(importer.clone().into()),
+            );
         }
     }
 
@@ -575,7 +578,7 @@ async fn parse_json_ad_map_to_resource(
             r
         }
         SaveOpts::Commit => {
-            let mut r = if let Ok(orig) = store.get_resource(&subj).await {
+            let mut r = if let Ok(orig) = store.get_resource(&subj.as_str().into()).await {
                 // If the resource already exists, and overwrites outside are not permitted, and it does not have the importer as parent...
                 // Then we throw!
                 // Because this would enable malicious users to overwrite resources that they shouldn't.
@@ -726,7 +729,7 @@ mod test {
 
         assert_eq!(all1.len(), all2_count);
         let found_shortname = store2
-            .get_resource(urls::CLASS)
+            .get_resource(&urls::CLASS.into())
             .await
             .unwrap()
             .get(urls::SHORTNAME)
@@ -797,7 +800,10 @@ mod test {
 
         let imported_subject = generate_id_from_local_id(&importer, local_id);
 
-        let found = store.get_resource(&imported_subject).await.unwrap();
+        let found = store
+            .get_resource(&imported_subject.as_str().into())
+            .await
+            .unwrap();
         println!("{:?}", found);
         assert_eq!(found.get(urls::NAME).unwrap().to_string(), "My resource");
 
@@ -841,7 +847,10 @@ mod test {
 
         let imported_subject = generate_id_from_local_id(&importer, local_id);
 
-        let found = store.get_resource(&imported_subject).await.unwrap();
+        let found = store
+            .get_resource(&imported_subject.as_str().into())
+            .await
+            .unwrap();
         assert_eq!(found.get(urls::NAME).unwrap().to_string(), "My resource");
 
         // LocalId should be removed from the imported resource
@@ -867,8 +876,14 @@ mod test {
 
         let reference_subject = generate_id_from_local_id(&importer, "reference");
         let my_subject = generate_id_from_local_id(&importer, "my-local-id");
-        let found = store.get_resource(&my_subject).await.unwrap();
-        let found_ref = store.get_resource(&reference_subject).await.unwrap();
+        let found = store
+            .get_resource(&my_subject.as_str().into())
+            .await
+            .unwrap();
+        let found_ref = store
+            .get_resource(&reference_subject.as_str().into())
+            .await
+            .unwrap();
 
         assert_eq!(
             found.get(urls::PARENT).unwrap().to_string(),
@@ -989,11 +1004,17 @@ mod test {
         store.import(json, &parse_opts).await.unwrap();
 
         let parent_subject = generate_id_from_local_id(&importer, "test1");
-        let found = store.get_resource(&parent_subject).await.unwrap();
+        let found = store
+            .get_resource(&parent_subject.as_str().into())
+            .await
+            .unwrap();
         assert_eq!(found.get(urls::PARENT).unwrap().to_string(), importer);
 
         let newprop_subject = format!("{importer}/newprop");
-        let _prop = store.get_resource(&newprop_subject).await.unwrap();
+        let _prop = store
+            .get_resource(&newprop_subject.as_str().into())
+            .await
+            .unwrap();
     }
 
     // TODO: Add support for parent sorting in the parser.

@@ -100,8 +100,10 @@ pub async fn search_query(
     let resources = get_resources(req, &appstate, &subject, subjects.clone(), limit).await?;
 
     // Convert the list of resources back into subjects.
-    let filtered_subjects: Vec<String> =
-        resources.iter().map(|r| r.get_subject().clone()).collect();
+    let filtered_subjects: Vec<String> = resources
+        .iter()
+        .map(|r| r.get_subject().to_string())
+        .collect();
 
     results_resource
         .set(
@@ -118,13 +120,13 @@ pub async fn search_query(
     };
 
     result_vec.push(results_resource);
-    let _body = Resource::vec_to_json_ad(&result_vec)?.into_bytes();
+    let _body = Resource::vec_to_json_ad(&result_vec, &store)?.into_bytes();
 
     let mut builder = HttpResponse::Ok();
     builder.append_header(("Server-Timing", timer.header_value()));
 
     // TODO: support other serialization options
-    Ok(builder.body(Resource::vec_to_json_ad(&result_vec)?))
+    Ok(builder.body(Resource::vec_to_json_ad(&result_vec, &store)?))
 }
 
 #[instrument(skip(appstate, req))]
@@ -147,7 +149,7 @@ async fn get_resources(
     for s in subjects {
         match appstate
             .store
-            .get_resource_extended(&s, true, &for_agent)
+            .get_resource_extended(&s.clone().into(), true, &for_agent)
             .await
         {
             Ok(r) => {
@@ -267,7 +269,7 @@ async fn build_parent_query(
     fields: &Fields,
     store: &Db,
 ) -> AtomicServerResult<TermQuery> {
-    let resource = store.get_resource(subject).await?;
+    let resource = store.get_resource(&subject.into()).await?;
     let facet = resource_to_facet(&resource, store).await?;
     let term = Term::from_facet(fields.hierarchy, &facet);
 

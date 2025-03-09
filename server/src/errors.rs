@@ -56,7 +56,7 @@ impl ResponseError for AtomicServerError {
             }
         };
 
-        let body = r.to_json_ad().unwrap();
+        let body = r.to_json_ad_with_url("").unwrap();
         tracing::info!("Error response: {}", self.message);
         HttpResponse::build(self.status_code())
             .content_type(JSON_AD_MIME)

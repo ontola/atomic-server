@@ -136,10 +136,10 @@ pub async fn construct_version(
     store: &impl Storelike,
     for_agent: &ForAgent,
 ) -> AtomicResult<Resource> {
-    let commit = store.get_resource(commit_url).await?;
+    let commit = store.get_resource(&commit_url.into()).await?;
     // Get all the commits for the subject of that Commit
     let subject = &commit.get(urls::SUBJECT)?.to_string();
-    let current_resource = store.get_resource(subject).await?;
+    let current_resource = store.get_resource(&subject.clone().into()).await?;
     atomic_lib::hierarchy::check_read(store, &current_resource, for_agent).await?;
     let commits = get_commits_for_resource(subject, store).await?;
     let mut version = Resource::new(subject.into());
@@ -176,7 +176,7 @@ pub async fn get_version(
     for_agent: &ForAgent,
 ) -> AtomicResult<Resource> {
     let version_url = construct_version_endpoint_url(store, commit_url)?;
-    match store.get_resource(&version_url).await {
+    match store.get_resource(&version_url.into()).await {
         Ok(cached) => Ok(cached),
         Err(_not_cached) => {
             let version = construct_version(commit_url, store, for_agent).await?;

@@ -66,7 +66,7 @@ impl Endpoint {
     /// Converts Endpoint to resource. Does not save it.
     pub async fn to_resource(&self, store: &impl Storelike) -> AtomicResult<Resource> {
         let subject = format!("{}{}", store.get_server_url()?, self.path);
-        let mut resource = store.get_resource_new(&subject).await;
+        let mut resource = store.get_resource_new(&subject.as_str().into()).await;
         resource
             .set_string(urls::DESCRIPTION.into(), &self.description, store)
             .await?;

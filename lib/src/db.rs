@@ -37,7 +37,7 @@ use crate::{
     resources::PropVals,
     storelike::{Query, QueryResult, ResourceResponse, Storelike},
     values::SortableValue,
-    Atom, Commit, Resource,
+    Atom, Commit, Resource, Subject, Value,
 };
 use async_trait::async_trait;
 use tracing::{info, instrument};
@@ -248,7 +248,7 @@ impl Db {
         transaction.push(Operation {
             tree: Tree::Resources,
             method: Method::Insert,
-            key: subject.as_bytes().to_vec(),
+            key: subject.as_str().as_bytes().to_vec(),
             val: Some(resource_bin),
         });
         Ok(())
@@ -379,7 +379,7 @@ impl Db {
         let propvals: PropVals = decode_propvals(&resource_bin)
             .unwrap_or_else(|e| panic!("{}. {}", corrupt_db_message(&subject), e));
 
-        Some(Resource::from_propvals(propvals, subject))
+        Some(Resource::from_propvals(propvals, subject.into()))
     }
 
     pub fn get_plugin_meta(&self, key: &PluginMetaKey) -> AtomicResult<Option<PluginMeta>> {
@@ -567,7 +567,7 @@ impl Db {
                 }
 
                 if let Ok(resource) = self
-                    .get_resource_extended(&atom.subject, true, &q.for_agent)
+                    .get_resource_extended(&atom.subject.clone().into(), true, &q.for_agent)
                     .await
                 {
                     subjects.push(atom.subject.clone());
@@ -638,19 +638,20 @@ impl Db {
     /// Recursively removes a resource and its children from the database
     async fn recursive_remove(
         &self,
-        subject: &str,
+        subject: &Subject,
         transaction: &mut Transaction,
     ) -> AtomicResult<()> {
-        if let Ok(found) = self.get_propvals(subject) {
-            let resource = Resource::from_propvals(found, subject.to_string());
-            transaction.push(Operation::remove_resource(subject));
+        let subject_str = subject.to_string();
+        if let Ok(found) = self.get_propvals(&subject_str) {
+            let resource = Resource::from_propvals(found, subject.clone());
+            transaction.push(Operation::remove_resource(&subject_str));
             let mut children = resource.get_children(self).await?;
             for child in children.iter_mut() {
                 // Because the function is async we need to box it to use recursion.
                 Box::pin(self.recursive_remove(child.get_subject(), transaction)).await?;
             }
             for (prop, val) in resource.get_propvals() {
-                let remove_atom = crate::Atom::new(subject.into(), prop.clone(), val.clone());
+                let remove_atom = crate::Atom::new(subject_str.clone(), prop.clone(), val.clone());
                 self.remove_atom_from_index(&remove_atom, &resource, transaction)?;
             }
         } else {
@@ -766,7 +767,7 @@ impl Storelike for Db {
     ) -> AtomicResult<()> {
         // This only works if no external functions rely on using add_resource for atom-like operations!
         // However, add_atom uses set_propvals, which skips the validation.
-        let existing = self.get_propvals(resource.get_subject()).ok();
+        let existing = self.get_propvals(resource.get_subject().as_str()).ok();
         if !overwrite_existing && existing.is_some() {
             return Err(format!(
                 "Failed to add: '{}', already exists, should not be overwritten.",
@@ -783,7 +784,8 @@ impl Storelike for Db {
                 let subject = resource.get_subject();
                 for (prop, val) in pv.iter() {
                     // Possible performance hit - these clones can be replaced by modifying remove_atom_from_index
-                    let remove_atom = crate::Atom::new(subject.into(), prop.into(), val.clone());
+                    let remove_atom =
+                        crate::Atom::new(subject.to_string(), prop.into(), val.clone());
                     self.remove_atom_from_index(&remove_atom, resource, &mut transaction)
                         .map_err(|e| {
                             format!("Failed to remove atom from index {}. {}", remove_atom, e)
@@ -796,7 +798,7 @@ impl Storelike for Db {
             }
             self.apply_transaction(&mut transaction)?;
         }
-        self.set_propvals(resource.get_subject(), resource.get_propvals())
+        self.set_propvals(resource.get_subject().as_str(), resource.get_propvals())
     }
 
     /// Apply a single signed Commit to the Db.
@@ -871,9 +873,10 @@ impl Storelike for Db {
                 return Err("Neither an old nor a new resource is returned from the commit - something went wrong.".into())
             },
             (Some(_old), None) => {
-                assert_eq!(_old.get_subject(), &commit_response.commit.subject);
+                assert_eq!(_old.get_subject().to_string(), commit_response.commit.subject);
                 assert!(&commit_response.commit.destroy.expect("Resource was removed but `commit.destroy` was not set!"));
-                self.remove_resource(&commit_response.commit.subject).await?;
+                let subject: Subject = commit_response.commit.subject.clone().into();
+                self.remove_resource(&subject).await?;
             },
             _ => {}
         };
@@ -969,19 +972,55 @@ impl Storelike for Db {
     }
 
     #[instrument(skip(self))]
-    async fn get_resource(&self, subject: &str) -> AtomicResult<Resource> {
-        match self.get_propvals(subject) {
-            Ok(propvals) => {
-                let resource = crate::resources::Resource::from_propvals(propvals, subject.into());
-                Ok(resource)
-            }
-            Err(e) => {
-                if e.error_type != crate::errors::AtomicErrorType::NotFoundError {
-                    tracing::error!("Error getting resource: {:?}", e);
-                } else {
-                    tracing::debug!("Resource not found: {}", subject);
+    async fn get_value(&self, subject: &str, property: &str) -> AtomicResult<Value> {
+        self.get_resource(&subject.into())
+            .await
+            .and_then(|r| r.get(property).cloned())
+    }
+
+    #[instrument(skip(self))]
+    async fn get_resource(&self, subject: &Subject) -> AtomicResult<Resource> {
+        let subject_str = subject.to_string();
+        if let Ok(propvals) = self.get_propvals(&subject_str) {
+            let resource = Resource::from_propvals(propvals, subject.clone());
+            Ok(resource)
+        } else {
+            // If the resource is not found, it might be an endpoint.
+            // This is checking if the subject matches one of the endpoints
+            if let Ok(url) = url::Url::parse(&subject_str) {
+                if self.is_endpoint(&url) {
+                    let agent_opt = self.get_default_agent().ok();
+                    let for_agent = if let Some(agent) = &agent_opt {
+                        ForAgent::from(agent)
+                    } else {
+                        ForAgent::Public
+                    };
+                    return Ok(self
+                        .call_endpoint(&subject_str, &for_agent)
+                        .await?
+                        .to_single());
                 }
-                self.handle_not_found(subject, e, None).await
+            }
+            if let Ok(resource) = self
+                .fetch_resource(&subject_str, self.get_default_agent().ok().as_ref())
+                .await
+            {
+                // If the resource is external, it's not present in the store.
+                // However, we did fetch it (because the user probably requested it).
+                // So we should add it to the store.
+                // Note that this logic is also in `Store`'s `get_resource`, but it's slightly different there.
+                // We should probably unify this.
+                // Also, this might cause issues if we want to get a resource but NOT save it.
+                self.add_resource_opts(&resource, false, false, true)
+                    .await?;
+                Ok(resource)
+            } else {
+                self.handle_not_found(
+                    &subject_str,
+                    "Not found in DB".into(),
+                    self.get_default_agent().ok().as_ref(),
+                )
+                .await
             }
         }
     }
@@ -989,13 +1028,13 @@ impl Storelike for Db {
     #[instrument(skip(self))]
     async fn get_resource_extended(
         &self,
-        subject: &str,
+        subject: &Subject,
         skip_dynamic: bool,
         for_agent: &ForAgent,
     ) -> AtomicResult<ResourceResponse> {
         let url_span = tracing::span!(tracing::Level::TRACE, "URL parse").entered();
         // This might add a trailing slash
-        let url = url::Url::parse(subject)?;
+        let url = url::Url::parse(subject.as_str())?;
         let mut subject_without_params = {
             let mut url_altered = url.clone();
             url_altered.set_query(None);
@@ -1016,11 +1055,11 @@ impl Storelike for Db {
 
         // Check if the subject matches one of the endpoints, if so, call the endpoint.
         if is_endpoint {
-            return self.call_endpoint(subject, for_agent).await;
+            return self.call_endpoint(subject.as_str(), for_agent).await;
         }
 
         async move {
-            let mut resource = self.get_resource(&subject_without_params).await?;
+            let mut resource = self.get_resource(&subject_without_params.into()).await?;
 
             let _explanation = crate::hierarchy::check_read(self, &resource, for_agent).await?;
 
@@ -1072,11 +1111,11 @@ impl Storelike for Db {
                         // make sure the actual subject matches the one requested - It should not be changed in the logic above
                         match resource_response {
                             ResourceResponse::Resource(mut resource) => {
-                                resource.set_subject(subject.into());
+                                resource.set_subject(subject.to_string());
                                 return Ok(resource.into());
                             }
                             ResourceResponse::ResourceWithReferenced(mut resource, referenced) => {
-                                resource.set_subject(subject.into());
+                                resource.set_subject(subject.to_string());
 
                                 return Ok(ResourceResponse::ResourceWithReferenced(
                                     resource, referenced,
@@ -1087,7 +1126,7 @@ impl Storelike for Db {
                 }
             }
 
-            resource.set_subject(subject.into());
+            resource.set_subject(subject.to_string());
 
             Ok(resource.into())
         }
@@ -1180,12 +1219,11 @@ impl Storelike for Db {
     }
 
     #[instrument(skip(self))]
-    async fn remove_resource(&self, subject: &str) -> AtomicResult<()> {
+    async fn remove_resource(&self, subject: &Subject) -> AtomicResult<()> {
         let mut transaction = Transaction::new();
-
         self.recursive_remove(subject, &mut transaction).await?;
-
-        self.apply_transaction(&mut transaction)
+        self.apply_transaction(&mut transaction)?;
+        Ok(())
     }
 
     fn set_default_agent(&self, agent: crate::agents::Agent) {

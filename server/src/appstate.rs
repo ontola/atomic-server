@@ -86,7 +86,10 @@ impl AppState {
             store.add_class_extender(extender)?;
         }
 
-        let no_server_resource = store.get_resource(&config.server_url).await.is_err();
+        let no_server_resource = store
+            .get_resource(&config.server_url.clone().into())
+            .await
+            .is_err();
         if no_server_resource {
             tracing::warn!("Server URL resource not found. This is likely because the server URL has changed. Initializing a new database...");
         }
@@ -177,7 +180,7 @@ async fn set_default_agent(config: &Config, store: &impl Storelike) -> AtomicSer
     let agent = match atomic_lib::config::read_config(Some(&config.config_file_path)) {
         Ok(agent_config) => {
             let agent = Agent::from_secret(&agent_config.shared.agent_secret)?;
-            match store.get_resource(&agent.subject).await {
+            match store.get_resource(&agent.subject.clone().into()).await {
                 Ok(_) => agent,
                 Err(e) => {
                     if agent.subject.contains(&config.server_url) {
@@ -232,7 +235,7 @@ async fn set_default_agent(config: &Config, store: &impl Storelike) -> AtomicSer
 async fn set_up_initial_invite(store: &impl Storelike) -> AtomicServerResult<()> {
     let subject = format!("{}/setup", store.get_server_url()?);
     tracing::info!("Creating initial Invite at {}", subject);
-    let mut invite = store.get_resource_new(&subject).await;
+    let mut invite = store.get_resource_new(&subject.clone().into()).await;
     invite.set_class(atomic_lib::urls::INVITE);
     invite.set_subject(subject);
     // This invite can be used only once

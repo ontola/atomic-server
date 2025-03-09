@@ -222,7 +222,7 @@ impl ClassExtender {
                         return Ok((false, None));
                     };
 
-                    root.get_subject().clone()
+                    root.get_subject().to_string()
                 };
 
                 if rs != *scope {

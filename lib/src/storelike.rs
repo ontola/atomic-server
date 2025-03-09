@@ -10,7 +10,7 @@ use crate::{
     values::SubResource,
 };
 use crate::{errors::AtomicResult, parse::parse_json_ad_string};
-use crate::{mapping::Mapping, values::Value, Atom, Resource};
+use crate::{mapping::Mapping, values::Value, Atom, Resource, Subject};
 use async_trait::async_trait;
 use futures::future;
 
@@ -34,13 +34,13 @@ impl ResourceResponse {
         }
     }
 
-    pub fn to_json_ad(&self) -> AtomicResult<String> {
+    pub fn to_json_ad(&self, store: &impl Storelike) -> AtomicResult<String> {
         match self {
-            ResourceResponse::Resource(resource) => Ok(resource.to_json_ad()?),
+            ResourceResponse::Resource(resource) => Ok(resource.to_json_ad(store)?),
             ResourceResponse::ResourceWithReferenced(resource, references) => {
                 let mut list = references.clone();
                 list.push(resource.clone());
-                Ok(Resource::vec_to_json_ad(&list)?)
+                Ok(Resource::vec_to_json_ad(&list, store)?)
             }
         }
     }
@@ -104,7 +104,7 @@ impl ResourceResponse {
         let mut referenced = Vec::new();
 
         for r in vec {
-            if r.get_subject() == main_subject {
+            if r.get_subject().as_str() == main_subject {
                 resource = Some(r);
             } else {
                 referenced.push(r);
@@ -188,8 +188,8 @@ pub trait Storelike: Sized + Send + Sync {
                 self.add_resource(new).await?;
             },
             (Some(_old), None) => {
-                assert_eq!(_old.get_subject(), &applied.commit.subject);
-                self.remove_resource(&applied.commit.subject).await?;
+                assert_eq!(_old.get_subject().as_str(), applied.commit.subject);
+                self.remove_resource(&applied.commit.subject.clone().into()).await?;
             }
         }
 
@@ -198,7 +198,7 @@ pub trait Storelike: Sized + Send + Sync {
 
     /// Returns a single [Value] from a [Resource]
     async fn get_value(&self, subject: &str, property: &str) -> AtomicResult<Value> {
-        self.get_resource(subject)
+        self.get_resource(&subject.into())
             .await
             .and_then(|r| r.get(property).cloned())
     }
@@ -250,7 +250,7 @@ pub trait Storelike: Sized + Send + Sync {
             other_resources.push(r);
         }
         properties.append(&mut other_resources);
-        crate::serialize::resources_to_json_ad(&properties)
+        crate::serialize::resources_to_json_ad(&properties, &self.get_server_url()?)
     }
 
     /// Fetches a resource, makes sure its subject matches.
@@ -304,9 +304,9 @@ pub trait Storelike: Sized + Send + Sync {
             .filter_map(|s| {
                 if let SubResource::Subject(result_subject) = s {
                     Some(async move {
-                        match self.get_resource(&result_subject).await {
+                        match self.get_resource(&result_subject.as_str().into()).await {
                             Ok(r) => r,
-                            Err(err) => err.into_resource(result_subject.clone()),
+                            Err(err) => err.into_resource(result_subject.to_string()),
                         }
                     })
                 } else {
@@ -323,20 +323,23 @@ pub trait Storelike: Sized + Send + Sync {
     /// Returns a full Resource with native Values.
     /// Note that this does _not_ construct dynamic Resources, such as collections.
     /// If you're not sure what to use, use `get_resource_extended`.
-    async fn get_resource(&self, subject: &str) -> AtomicResult<Resource>;
+    /// Returns a full Resource with native Values.
+    /// Note that this does _not_ construct dynamic Resources, such as collections.
+    /// If you're not sure what to use, use `get_resource_extended`.
+    async fn get_resource(&self, subject: &Subject) -> AtomicResult<Resource>;
 
     /// Returns an existing resource, or creates a new one with the given Subject
-    async fn get_resource_new(&self, subject: &str) -> Resource {
+    async fn get_resource_new(&self, subject: &Subject) -> Resource {
         match self.get_resource(subject).await {
             Ok(r) => r,
-            Err(_) => Resource::new(subject.into()),
+            Err(_) => Resource::new(subject.to_string()),
         }
     }
 
     /// Retrieves a Class from the store by subject URL and converts it into a Class useful for forms
     async fn get_class(&self, subject: &str) -> AtomicResult<Class> {
         let resource = self
-            .get_resource(subject)
+            .get_resource(&subject.into())
             .await
             .map_err(|e| format!("Failed getting class {}. {}", subject, e))?;
         Class::from_resource(resource)
@@ -344,7 +347,7 @@ pub trait Storelike: Sized + Send + Sync {
 
     /// Finds all classes (isA) for any subject.
     /// Returns an empty vector if there are none.
-    async fn get_classes_for_subject(&self, subject: &str) -> AtomicResult<Vec<Class>> {
+    async fn get_classes_for_subject(&self, subject: &Subject) -> AtomicResult<Vec<Class>> {
         let classes = self.get_resource(subject).await?.get_classes(self).await?;
         Ok(classes)
     }
@@ -353,7 +356,7 @@ pub trait Storelike: Sized + Send + Sync {
     #[tracing::instrument(skip(self))]
     async fn get_property(&self, subject: &str) -> AtomicResult<Property> {
         let prop = self
-            .get_resource(subject)
+            .get_resource(&subject.into())
             .await
             .map_err(|e| format!("Failed getting property {}. {}", subject, e))?;
         Property::from_resource(prop)
@@ -366,7 +369,7 @@ pub trait Storelike: Sized + Send + Sync {
     /// - *skip_dynamic* Does not calculte dynamic properties. Adds an `incomplete=true` property if the resource should have been dynamic.
     async fn get_resource_extended(
         &self,
-        subject: &str,
+        subject: &Subject,
         skip_dynamic: bool,
         for_agent: &ForAgent,
     ) -> AtomicResult<ResourceResponse> {
@@ -409,7 +412,7 @@ pub trait Storelike: Sized + Send + Sync {
     }
 
     /// Removes a resource and its children from the store. Errors if not present.
-    async fn remove_resource(&self, subject: &str) -> AtomicResult<()>;
+    async fn remove_resource(&self, subject: &Subject) -> AtomicResult<()>;
 
     /// Accepts an Atomic Path string, returns the result value (resource or property value)
     /// E.g. `https://example.com description` or `thing isa 0`
@@ -441,7 +444,7 @@ pub trait Storelike: Sized + Send + Sync {
         let mut subject = id_url;
         // Set the currently selectred resource parent, which starts as the root of the search
         let mut resource = self
-            .get_resource_extended(&subject, false, for_agent)
+            .get_resource_extended(&subject.clone().into(), false, for_agent)
             .await?
             .to_single();
         // During each of the iterations of the loop, the scope changes.
@@ -478,7 +481,7 @@ pub trait Storelike: Sized + Send + Sync {
                             .to_string();
                         subject = url;
                         resource = self
-                            .get_resource_extended(&subject, false, for_agent)
+                            .get_resource_extended(&subject.clone().into(), false, for_agent)
                             .await?
                             .to_single();
                         current = PathReturn::Subject(subject.clone());
@@ -594,7 +597,7 @@ impl Query {
     pub fn new_class(class: &str) -> Self {
         let mut q = Self::new();
         q.property = Some(urls::IS_A.into());
-        q.value = Some(Value::AtomicUrl(class.to_string()));
+        q.value = Some(Value::AtomicUrl(class.to_string().into()));
         q
     }
 }

@@ -30,7 +30,7 @@ pub async fn fetch_resource(
         let mut referenced: Vec<Resource> = Vec::new();
 
         for r in resources {
-            if r.get_subject() == subject {
+            if r.get_subject().as_str() == subject {
                 main_resource = Some(r);
             } else {
                 referenced.push(r);
@@ -139,7 +139,7 @@ async fn post_commit_custom_endpoint(
     commit: &crate::Commit,
     store: &impl Storelike,
 ) -> AtomicResult<()> {
-    let json = commit.into_resource(store).await?.to_json_ad()?;
+    let json = commit.into_resource(store).await?.to_json_ad(store)?;
 
     let agent = ureq::builder()
         .timeout(std::time::Duration::from_secs(2))

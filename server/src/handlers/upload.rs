@@ -27,9 +27,9 @@ pub async fn upload_handler(
     req: actix_web::HttpRequest,
 ) -> AtomicServerResult<HttpResponse> {
     let server_url = appstate.config.get_server_url_for_request(&req);
-    let store = appstate.store.clone_with_url(server_url);
+    let store = appstate.store.clone_with_url(server_url.clone());
 
-    let parent = store.get_resource(&query.parent).await?;
+    let parent = store.get_resource(&query.parent.clone().into()).await?;
     let subject = format!(
         "{}{}",
         store.get_server_url()?,
@@ -54,6 +54,7 @@ pub async fn upload_handler(
 
     Ok(builder.body(atomic_lib::serialize::resources_to_json_ad(
         &created_resources,
+        &server_url,
     )?))
 }
 

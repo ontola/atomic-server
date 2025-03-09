@@ -87,7 +87,7 @@ impl SearchState {
 
         let resources = store
             .all_resources(true)
-            .filter(|resource| !resource.get_subject().contains("/commits/"));
+            .filter(|resource| !resource.get_subject().as_str().contains("/commits/"));
 
         for resource in resources {
             self.add_resource(&resource, store).await.map_err(|e| {
@@ -116,7 +116,7 @@ impl SearchState {
         let mut doc = tantivy::TantivyDocument::default();
         doc.add_object(
             fields.propvals,
-            serde_json::from_str(&resource.to_json_ad()?).map_err(|e| {
+            serde_json::from_str(&resource.to_json_ad(store)?).map_err(|e| {
                 format!(
                 "Failed to convert resource to json for search indexing. Subject: {}. Error: {}",
                 subject, e
@@ -381,7 +381,7 @@ mod tests {
 
         // Update in search index
         search_state
-            .remove_resource(resource.get_subject())
+            .remove_resource(resource.get_subject().as_str())
             .unwrap();
         search_state.add_resource(&resource, &store).await.unwrap();
         search_state.writer.write().unwrap().commit().unwrap();
