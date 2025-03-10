@@ -117,6 +117,6 @@ JSON-AD and JSON-LD are very similar by design, but there are some important dif
 - Make sure the URLs used in the `@context` resolve to Atomic Properties.
 <!-- Not sure about this.. maybe use RDF collections or some other model? -->
 - Convert JSON-LD arrays into ResourceArrays
-- Creating nested JSON objects is possible (by resolving the identifiers from `@id` relations), but it is up to the serializer to decide how deep this object nesting should happen.
+- Nested JSON objects are only allowed if the data does not have an `@id` field. If the data contains multiple named resources they MUST all be part of an array at the root level.
 
 Note that as of now, there are no JSON-LD parsers for Atomic Data.

@@ -117,9 +117,6 @@ _URL: `https://atomicdata.dev/datatypes/resourceArray`_
 
 Sequential, ordered list of Atomic URIs.
 Serialized as a JSON array with strings.
-Note that other types of arrays are not included in this spec, but can be perfectly valid.
-
-([Discussion](https://github.com/atomicdata-dev/atomic-data-docs/issues/127))
 
 - e.g. `["https://example.com/1", "https://example.com/1"]`
 

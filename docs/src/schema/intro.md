@@ -34,7 +34,7 @@ This Property does three things:
 
 **Classes** are a special kind of Resource that describe an abstract class of things (such as "Person" or "Blog").
 Classes can _recommend_ or _require_ a set of Properties.
-They behave as Models, similar to `struts` in C or `interfaces` in Typescript.
+They behave as Models, similar to `structs` in C or `interfaces` in Typescript.
 A Resource _could_ have one or more classes, which _could_ provide information about which Properties are expected or required.
 
 **example:**

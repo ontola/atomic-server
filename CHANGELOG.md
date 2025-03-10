@@ -11,10 +11,12 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 - [#1056](https://github.com/atomicdata-dev/atomic-server/issues/1056) Switched from Earthly to Dagger for CI. Also made improvements to E2E test publishing and building docker images.
 - [#979](https://github.com/atomicdata-dev/atomic-server/issues/979) Fix nested resource deletion, use transactions
 - [#1057](https://github.com/atomicdata-dev/atomic-server/issues/1057) Fix double slashes in search bar
-- CLI should use Agent in requests - get #986
-- Search endpoint throws error for websocket requests #1047
-- Fix search in CLI / atomic_lib #958
-
+- [#986](https://github.com/atomicdata-dev/atomic-server/issues/986) CLI should use Agent in requests - get
+- [#1047](https://github.com/atomicdata-dev/atomic-server/issues/1047) Search endpoint throws error for websocket requests
+- [#958](https://github.com/atomicdata-dev/atomic-server/issues/958) Fix search in CLI / atomic_lib
+- [#658](https://github.com/atomicdata-dev/atomic-server/issues/658) Added JSON datatype.
+- [#1024](https://github.com/atomicdata-dev/atomic-server/issues/1024) Added URI datatype.
+BREAKING: [#1107](https://github.com/atomicdata-dev/atomic-server/issues/1107) Named nested resources are no longer supported. Value::Resource and SubResource::Resource have been removed. If you need to include multiple resources in a response use an array.
 BREAKING: `store.get_resource_extended()` now returns a `ResourceResponse` instead of a `Resource` due to the removal of named nested resources.
 
 ## [v0.40.2]

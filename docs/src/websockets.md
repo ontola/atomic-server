@@ -21,7 +21,7 @@ The `WebSocket-Protocol` is `AtomicData`.
 ## Server to client messages
 
 - `COMMIT ${CommitBody}` an entire [Commit](../src/commits/concepts.md) for a resource that you're subscribed to.
-- `RESOURCE ${Resource}` a JSON-AD Resource as a response to a `GET` message. If there is something wrong with this request (e.g. 404), return a `Error` Resource with the requested subject, similar to how the HTTP protocol server does this.`
+- `RESOURCE ${Resource}` a JSON-AD Resource or array of JSON-AD Resources as a response to a `GET` message. If there is something wrong with this request (e.g. 404), return a `Error` Resource with the requested subject, similar to how the HTTP protocol server does this.`
 - `ERROR ${ErrorBody}` an Error resource is sent whenever something goes wrong. The `ErrorBody` is a plaintext, typically English description of what went wrong.
 
 ## Considerations
