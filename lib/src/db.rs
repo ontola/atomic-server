@@ -21,17 +21,16 @@ use std::{
 use crate::{
     agents::ForAgent,
     atoms::IndexAtom,
-    class_extender::{
-        default_class_extenders, ClassExtender, CommitExtenderContext, GetExtenderContext,
-    },
+    class_extender::{ClassExtender, CommitExtenderContext, GetExtenderContext},
     commit::{CommitOpts, CommitResponse},
     db::{
         encoding::{decode_propvals, encode_propvals},
         query_index::{requires_query_index, NO_VALUE},
         val_prop_sub_index::find_in_val_prop_sub_index,
     },
-    endpoints::{default_endpoints, Endpoint, HandleGetContext},
+    endpoints::{Endpoint, HandleGetContext},
     errors::{AtomicError, AtomicResult},
+    plugins::plugins,
     resources::PropVals,
     storelike::{Query, QueryResult, ResourceResponse, Storelike},
     values::SortableValue,
@@ -119,8 +118,8 @@ impl Db {
             prop_val_sub_index,
             server_url,
             watched_queries,
-            endpoints: default_endpoints(),
-            class_extenders: default_class_extenders(),
+            endpoints: plugins::default_endpoints(),
+            class_extenders: plugins::default_class_extenders(),
             on_commit: None,
         };
         migrate_maybe(&store).map(|e| format!("Error during migration of database: {:?}", e))?;

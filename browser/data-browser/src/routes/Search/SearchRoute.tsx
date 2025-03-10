@@ -17,6 +17,7 @@ import { pathNames } from '../paths';
 import { appRoute } from '../RootRoutes';
 import { base64StringToFilter } from './searchUtils';
 import { InlineFormattedResourceList } from '../../components/InlineFormattedResourceList';
+import { ErrorBoundary } from '../../views/ErrorPage';
 
 type SearchRouteQueryParams = {
   query?: string;
@@ -163,16 +164,18 @@ export function Search(): JSX.Element {
                   by adding <code>tag:[name]</code> to your search.
                 </HelperMessage>
               )}
-              <Column ref={resultsDiv} gap='1rem'>
-                {results.map((subject, index) => (
-                  <SelectableResult
-                    key={subject}
-                    subject={subject}
-                    initialInView={index < 5}
-                    selected={index === selectedIndex}
-                  />
-                ))}
-              </Column>
+              <ErrorBoundary>
+                <Column ref={resultsDiv} gap='1rem'>
+                  {results.map((subject, index) => (
+                    <SelectableResult
+                      key={subject}
+                      subject={subject}
+                      initialInView={index < 5}
+                      selected={index === selectedIndex}
+                    />
+                  ))}
+                </Column>
+              </ErrorBoundary>
             </Column>
           </>
         )}

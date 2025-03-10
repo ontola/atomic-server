@@ -32,12 +32,3 @@ impl ClassExtender {
         Ok(is_a.to_subjects(None)?.iter().any(|c| c == &self.class))
     }
 }
-
-pub fn default_class_extenders() -> Vec<ClassExtender> {
-    vec![
-        crate::collections::build_collection_extender(),
-        crate::plugins::invite::build_invite_extender(),
-        crate::plugins::chatroom::build_chatroom_extender(),
-        crate::plugins::chatroom::build_message_extender(),
-    ]
-}

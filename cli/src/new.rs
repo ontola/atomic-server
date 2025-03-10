@@ -46,11 +46,15 @@ fn prompt_instance(
     // I think URL generation could be better, though. Perhaps use a
     let path = SystemTime::now().duration_since(UNIX_EPOCH)?.subsec_nanos();
 
-    let write_ctx = context.read_config();
+    let config = context.read_config();
 
-    let mut subject = format!("{}/{}", write_ctx.server, path);
+    let Some(client_config) = config.client else {
+        return Err("No client config found".into());
+    };
+
+    let mut subject = format!("{}/{}", client_config.server_url, path);
     if let Some(sn) = &preferred_shortname {
-        subject = format!("{}/{}-{}", write_ctx.server, path, sn);
+        subject = format!("{}/{}-{}", client_config.server_url, path, sn);
     }
 
     let mut new_resource: Resource = Resource::new(subject.clone());

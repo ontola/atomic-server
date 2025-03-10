@@ -189,6 +189,11 @@ impl Storelike for Store {
         if let Some(resource) = self.hashmap.lock().unwrap().get(subject) {
             return Ok(resource.clone());
         }
+
+        if let Ok(resource) = self.fetch_resource(subject, self.get_default_agent().ok().as_ref()) {
+            return Ok(resource);
+        };
+
         self.handle_not_found(
             subject,
             "Not found in HashMap.".into(),

@@ -56,7 +56,10 @@ export class Agent implements AgentInterface {
    * Key. Used for signing in with one string
    */
   public buildSecret(): string {
-    const objJsonStr = JSON.stringify(this);
+    const objJsonStr = JSON.stringify({
+      privateKey: this.privateKey,
+      subject: this.subject,
+    });
 
     return btoa(objJsonStr);
   }

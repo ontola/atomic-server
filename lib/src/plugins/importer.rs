@@ -4,7 +4,7 @@ Importers allow users to (periodically) import JSON-AD files from a remote sourc
 
 use crate::{
     agents::ForAgent,
-    endpoints::{Endpoint, HandlePostContext},
+    endpoints::{Endpoint, HandleGetContext, HandlePostContext},
     errors::AtomicResult,
     storelike::ResourceResponse,
     urls, Storelike,

@@ -91,6 +91,13 @@ export class Resource<C extends OptionalClass = any> {
 
   public constructor(subject: string, newResource?: boolean) {
     if (typeof subject !== 'string') {
+      // Check if the subject is an object with an @id property
+      if (subject && typeof subject === 'object' && '@id' in subject) {
+        throw new Error(
+          'Found named nested resource instead of subjects, this probably means your server is outdated.',
+        );
+      }
+
       throw new Error(
         'Invalid subject given to resource, must be a string, found ' +
           typeof subject,

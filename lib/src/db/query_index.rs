@@ -5,7 +5,6 @@ use crate::{
     agents::ForAgent, atoms::IndexAtom, errors::AtomicResult, storelike::Query,
     values::SortableValue, Atom, Db, Resource, Storelike, Value,
 };
-use rmp_serde::Serializer;
 use serde::{Deserialize, Serialize};
 
 use super::trees::{self, Operation, Transaction, Tree};

@@ -5,6 +5,7 @@ use crate::{
 use atomic_lib::{
     agents::{generate_public_key, Agent},
     commit::CommitResponse,
+    config::{ClientConfig, SharedConfig},
     Storelike,
 };
 
@@ -121,25 +122,26 @@ impl Drop for AppState {
 fn set_default_agent(config: &Config, store: &impl Storelike) -> AtomicServerResult<()> {
     tracing::info!("Setting default agent");
 
-    let ag_cfg: atomic_lib::config::Config = match atomic_lib::config::read_config(Some(
-        &config.config_file_path,
-    )) {
+    let agent = match atomic_lib::config::read_config(Some(&config.config_file_path)) {
         Ok(agent_config) => {
-            match store.get_resource(&agent_config.agent) {
-                Ok(_) => agent_config,
+            let agent = Agent::from_secret(&agent_config.shared.agent_secret)?;
+            match store.get_resource(&agent.subject) {
+                Ok(_) => agent,
                 Err(e) => {
-                    if agent_config.agent.contains(&config.server_url) {
+                    if agent.subject.contains(&config.server_url) {
                         // If there is an agent in the config, but not in the store,
                         // That probably means that the DB has been erased and only the config file exists.
                         // This means that the Agent from the Config file should be recreated, using its private key.
                         tracing::info!("Agent not retrievable, but config was found. Recreating Agent in new store.");
+
                         let recreated_agent = Agent::new_from_private_key(
                             "server".into(),
                             store,
-                            &agent_config.private_key,
+                            &agent.private_key.ok_or("No private key found")?,
                         )?;
                         store.add_resource(&recreated_agent.to_resource()?)?;
-                        agent_config
+
+                        recreated_agent
                     } else {
                         return Err(format!(
                             "An agent is present in {:?}, but this agent cannot be retrieved. Either make sure the agent is retrievable, or remove it from your config. {}",
@@ -152,26 +154,23 @@ fn set_default_agent(config: &Config, store: &impl Storelike) -> AtomicServerRes
         Err(_no_config) => {
             let agent = store.create_agent(Some("server"))?;
             let cfg = atomic_lib::config::Config {
-                agent: agent.subject.clone(),
-                server: config.server_url.clone(),
-                private_key: agent
-                    .private_key
-                    .expect("No private key for agent. Check the config file."),
+                shared: SharedConfig {
+                    agent_secret: agent.build_secret()?,
+                },
+                client: Some(ClientConfig {
+                    server_url: config.server_url.clone(),
+                }),
             };
-            let config_string =
-                atomic_lib::config::write_config(&config.config_file_path, cfg.clone())?;
+
+            cfg.save(&config.config_file_path)?;
+
+            let config_string = cfg.to_string()?;
             tracing::warn!("No existing config found, created a new Config at {:?}. Copy this to your client machine (running atomic-cli or atomic-data-browser) to log in with these credentials. \n{}", &config.config_file_path, config_string);
-            cfg
+
+            agent
         }
     };
 
-    let agent = Agent {
-        subject: ag_cfg.agent.clone(),
-        private_key: Some(ag_cfg.private_key.clone()),
-        public_key: generate_public_key(&ag_cfg.private_key).public,
-        created_at: 0,
-        name: None,
-    };
     tracing::info!("Default Agent is set: {}", &agent.subject);
     store.set_default_agent(agent);
     Ok(())

@@ -1,19 +1,27 @@
 //! Configuration logic which can be used in both CLI and Server contexts
 //! For serializaing, storing, and parsing the `~/.config/atomic/config.toml` file
 
-use crate::errors::AtomicResult;
+use crate::{agents::Agent, errors::AtomicResult};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
 /// A set of options that are shared between CLI and Server contexts
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Config {
+    pub shared: SharedConfig,
+    pub client: Option<ClientConfig>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SharedConfig {
+    /// Sudo agent on the server, also used as agent in the CLI. Usually lives on the server, but not necessarily so.
+    pub agent_secret: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ClientConfig {
     /// URL of Companion Atomic Server, where data is written to by default.
-    pub server: String,
-    /// The current Agent (user) URL. Usually lives on the server, but not necessarily so.
-    pub agent: String,
-    /// Private key for the Agent, which is used to sign commits.
-    pub private_key: String,
+    pub server_url: String,
 }
 
 /// Returns the default path for the config file: `~/.config/atomic`
@@ -39,7 +47,7 @@ pub fn read_config(path: Option<&Path>) -> AtomicResult<Config> {
     let path = path.unwrap_or(&default);
     let config_string = std::fs::read_to_string(path)
         .map_err(|e| format!("Error reading config from {:?}. {}", path, e))?;
-    let config: Config = toml::from_str(&config_string)
+    let config = parse_and_migrate_if_needed(&config_string)
         .map_err(|e| format!("Could not parse toml in config file {:?}. {}", path, e))?;
     Ok(config)
 }
@@ -47,7 +55,7 @@ pub fn read_config(path: Option<&Path>) -> AtomicResult<Config> {
 /// Writes config file from a specified path.
 /// Overwrites any existing config.
 /// Creates the config directory if it does not exist.
-pub fn write_config(path: &Path, config: Config) -> AtomicResult<String> {
+fn write_config(path: &Path, config: Config) -> AtomicResult<String> {
     let out =
         toml::to_string_pretty(&config).map_err(|e| format!("Error serializing config. {}", e))?;
 
@@ -60,4 +68,59 @@ pub fn write_config(path: &Path, config: Config) -> AtomicResult<String> {
     std::fs::write(path, out.clone())
         .map_err(|e| format!("Error writing config file to {:?}. {}", path, e))?;
     Ok(out)
+}
+
+impl Config {
+    pub fn save(&self, path: &Path) -> AtomicResult<()> {
+        write_config(&path, self.clone())?;
+        Ok(())
+    }
+
+    pub fn to_string(&self) -> AtomicResult<String> {
+        let out =
+            toml::to_string_pretty(self).map_err(|e| format!("Error serializing config. {}", e))?;
+        Ok(out)
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct ConfigV0 {
+    agent: String,
+    private_key: String,
+    server: String,
+}
+
+fn parse_and_migrate_if_needed(config_str: &str) -> AtomicResult<Config> {
+    // Try latest version first
+    if let Ok(config) = toml::from_str::<Config>(config_str) {
+        return Ok(config);
+    }
+
+    // Try v0 version
+    if let Ok(config) = toml::from_str::<ConfigV0>(config_str) {
+        return config_v0_to_v1(&config);
+    }
+
+    return Err("Could not parse config".into());
+}
+
+fn config_v0_to_v1(config_v0: &ConfigV0) -> AtomicResult<Config> {
+    let ConfigV0 {
+        agent,
+        private_key,
+        server,
+    } = config_v0;
+
+    let new_agent = Agent::from_private_key_and_subject(private_key, agent)?;
+
+    let config = Config {
+        shared: SharedConfig {
+            agent_secret: new_agent.build_secret()?,
+        },
+        client: Some(ClientConfig {
+            server_url: server.clone(),
+        }),
+    };
+
+    Ok(config)
 }

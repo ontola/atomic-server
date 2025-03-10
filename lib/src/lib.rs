@@ -71,6 +71,7 @@ pub mod config;
 pub mod datatype;
 #[cfg(feature = "db")]
 pub mod db;
+#[cfg(feature = "db")]
 pub mod endpoints;
 pub mod errors;
 pub mod hierarchy;

@@ -7,6 +7,7 @@ use crate::{
     hierarchy,
     schema::{Class, Property},
     urls,
+    values::SubResource,
 };
 use crate::{errors::AtomicResult, parse::parse_json_ad_string};
 use crate::{mapping::Mapping, values::Value, Atom, Resource};
@@ -84,6 +85,39 @@ impl ResourceResponse {
                 Ok(Resource::vec_to_n_triples(&list, store)?)
             }
         }
+    }
+
+    /// Takes a vector of resources and returns a ResourceResponse::ResourceWithReferenced
+    /// If the main subject is not found it will Error
+    pub fn from_vec(main_subject: &str, vec: Vec<Resource>) -> AtomicResult<Self> {
+        if vec.len() == 0 {
+            return Err("No resources found".into());
+        }
+        if vec.len() == 1 {
+            return Ok(ResourceResponse::Resource(vec[0].clone()));
+        }
+
+        let mut resource: Option<Resource> = None;
+        let mut referenced = Vec::new();
+
+        for r in vec {
+            if r.get_subject() == main_subject {
+                resource = Some(r);
+            } else {
+                referenced.push(r);
+            }
+        }
+
+        let Some(resource) = resource else {
+            return Err(AtomicError::not_found(format!(
+                "Resource with subject {} not found",
+                main_subject
+            )));
+        };
+
+        Ok(ResourceResponse::ResourceWithReferenced(
+            resource, referenced,
+        ))
     }
 }
 
@@ -222,9 +256,23 @@ pub trait Storelike: Sized {
         subject: &str,
         client_agent: Option<&Agent>,
     ) -> AtomicResult<Resource> {
-        let resource: Resource = crate::client::fetch_resource(subject, self, client_agent)?;
-        self.add_resource_opts(&resource, true, true, true)?;
-        Ok(resource)
+        let response = crate::client::fetch_resource(subject, self, client_agent)?;
+
+        match response {
+            ResourceResponse::Resource(resource) => {
+                self.add_resource_opts(&resource, true, true, true)?;
+
+                Ok(resource)
+            }
+            ResourceResponse::ResourceWithReferenced(resource, referenced) => {
+                self.add_resource_opts(&resource, true, true, true)?;
+                for r in referenced {
+                    self.add_resource_opts(&r, true, true, true)?;
+                }
+
+                Ok(resource)
+            }
+        }
     }
 
     /// Performs a full-text search on the Server's /search endpoint.
@@ -238,9 +286,18 @@ pub trait Storelike: Sized {
         let subject = crate::client::search::build_search_subject(&server_url, query, opts);
         let resource = self.fetch_resource(&subject, self.get_default_agent().ok().as_ref())?;
         let results: Vec<Resource> = match resource.get(urls::ENDPOINT_RESULTS) {
-            Ok(Value::ResourceArray(vec)) => {
-                vec.iter().cloned().map(|r| r.try_into().unwrap()).collect()
-            }
+            Ok(Value::ResourceArray(vec)) => vec
+                .iter()
+                .filter_map(|s| match s {
+                    SubResource::Subject(result_subject) => {
+                        match self.get_resource(result_subject) {
+                            Ok(r) => Some(r),
+                            Err(err) => Some(err.into_resource(subject.clone())),
+                        }
+                    }
+                    SubResource::Nested(_) => None,
+                })
+                .collect(),
             _ => return Err("No 'ENDPOINT_RESULTS' in response from server.".into()),
         };
         Ok(results)

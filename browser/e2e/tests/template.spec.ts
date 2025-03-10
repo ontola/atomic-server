@@ -56,10 +56,10 @@ const execAsync = async (command: Parameters<typeof exec>[0], cwd?: string) => {
 async function setupTemplateSite(serverUrl: string, siteType: string) {
   if (!fs.existsSync(EXEC_DIR)) {
     fs.mkdirSync(EXEC_DIR);
+    await execAsync('pnpm init');
+    await execAsync(`pnpm link ${pathToPackage('create-template')}`);
   }
 
-  await execAsync('pnpm init');
-  await execAsync(`pnpm link ${pathToPackage('create-template')}`);
   await execAsync(
     `pnpm exec create-template ${siteType} --template ${siteType} --server-url ${serverUrl}`,
   );

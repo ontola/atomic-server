@@ -4,8 +4,8 @@
 //! See https://docs.atomicdata.dev/endpoints.html or https://atomicdata.dev/classes/Endpoint
 
 use crate::{
-    agents::ForAgent, errors::AtomicResult, plugins, storelike::ResourceResponse, urls, Db,
-    Resource, Storelike, Value,
+    agents::ForAgent, errors::AtomicResult, storelike::ResourceResponse, urls, Db, Resource,
+    Storelike, Value,
 };
 
 /// The function that is called when a GET request matches the path
@@ -78,22 +78,4 @@ impl Endpoint {
         let resource = self.to_resource(store)?;
         Ok(resource.into())
     }
-}
-
-pub fn default_endpoints() -> Vec<Endpoint> {
-    vec![
-        plugins::versioning::version_endpoint(),
-        plugins::versioning::all_versions_endpoint(),
-        plugins::path::path_endpoint(),
-        plugins::search::search_endpoint(),
-        plugins::files::upload_endpoint(),
-        plugins::files::download_endpoint(),
-        plugins::export::export_endpoint(),
-        #[cfg(feature = "html")]
-        plugins::bookmark::bookmark_endpoint(),
-        plugins::importer::import_endpoint(),
-        plugins::query::query_endpoint(),
-        #[cfg(debug_assertions)]
-        plugins::prunetests::prune_tests_endpoint(),
-    ]
 }
