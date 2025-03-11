@@ -1,4 +1,7 @@
-use crate::{appstate::AppState, errors::AtomicServerResult, helpers::get_client_agent};
+use crate::{
+    appstate::AppState, context::RequestContext, errors::AtomicServerResult,
+    helpers::get_client_agent,
+};
 use actix_files::NamedFile;
 use actix_web::{web, HttpRequest, HttpResponse};
 use atomic_lib::{urls, Resource, Storelike};
@@ -24,12 +27,12 @@ pub async fn handle_download(
     req: actix_web::HttpRequest,
 ) -> AtomicServerResult<HttpResponse> {
     let headers = req.headers();
-    let server_url = appstate.config.get_server_url_for_request(&req);
-    let store = appstate.store.clone_with_url(server_url.clone());
+    let origin = RequestContext::new(&req, &appstate).origin;
+    let store = &appstate.store;
 
     // We replace `/download` with `/` to get the subject of the Resource.
     let subject = if let Some(pth) = path {
-        let subject = format!("{}/{}", server_url, pth);
+        let subject = format!("{}/{}", origin, pth);
         subject
     } else {
         // There is no end string, so It's the root of the URL, the base URL!

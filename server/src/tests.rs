@@ -16,7 +16,8 @@ use atomic_lib::{urls, Storelike};
 
 /// Returns the request with signed headers. Also adds a json-ad accept header - overwrite this if you need something else.
 fn build_request_authenticated(path: &str, appstate: &AppState) -> TestRequest {
-    let url = format!("{}{}", appstate.store.get_server_url().unwrap(), path);
+    let origin = appstate.config.get_origin();
+    let url = format!("{}{}", origin, path);
     let headers = atomic_lib::client::get_authentication_headers(
         &url,
         &appstate.store.get_default_agent().unwrap(),
@@ -27,6 +28,19 @@ fn build_request_authenticated(path: &str, appstate: &AppState) -> TestRequest {
     for (k, v) in headers {
         prereq = prereq.insert_header((k, v));
     }
+
+    // Ensure the Host header matches the origin used for signing
+    if let Ok(u) = url::Url::parse(&origin) {
+        if let Some(host) = u.host_str() {
+            let authority = if let Some(port) = u.port() {
+                format!("{}:{}", host, port)
+            } else {
+                host.to_string()
+            };
+            prereq = prereq.insert_header(("Host", authority));
+        }
+    }
+
     prereq.insert_header(("Accept", "application/ad+json"))
 }
 
@@ -63,7 +77,7 @@ async fn server_tests() {
 
     // Does not work, unfortunately, because the server is not accessible.
     // let fetched =
-    //     atomic_lib::client::fetch_resource(&appstate.config.server_url, &appstate.store, None)
+    //     atomic_lib::client::fetch_resource(&appstate.config.get_origin(), &appstate.store, None)
     //         .expect("could not fetch drive");
 
     // Get HTML page
@@ -94,10 +108,7 @@ async fn server_tests() {
     assert!(resp.status().is_client_error());
 
     // Edit the main drive, make it hidden to the public agent
-    let mut drive = store
-        .get_resource(&appstate.config.server_url)
-        .await
-        .unwrap();
+    let mut drive = store.get_resource(&"internal:/".into()).await.unwrap();
     drive
         .set(
             urls::READ.into(),
@@ -124,7 +135,7 @@ async fn server_tests() {
     assert!(resp.status().is_success(), "setup not returning JSON-AD");
     let body = get_body(resp);
     assert!(
-        body.as_str().contains("{\n  \"@id\""),
+        body.as_str().contains("\"@id\""),
         "response should be json-ad"
     );
 

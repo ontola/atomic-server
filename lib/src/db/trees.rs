@@ -20,7 +20,7 @@ pub enum Tree {
     PluginMeta,
 }
 
-const RESOURCES: &str = "resources_v2";
+const RESOURCES: &str = "resources_v3";
 const VALPROPSUB: &str = "reference_index_v1";
 const QUERY_MEMBERS: &str = "members_index";
 const PROPVALSUB: &str = "prop_val_sub_index";

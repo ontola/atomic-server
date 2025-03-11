@@ -116,7 +116,7 @@ impl SearchState {
         let mut doc = tantivy::TantivyDocument::default();
         doc.add_object(
             fields.propvals,
-            serde_json::from_str(&resource.to_json_ad(store)?).map_err(|e| {
+            serde_json::from_str(&resource.to_json_ad(None)?).map_err(|e| {
                 format!(
                 "Failed to convert resource to json for search indexing. Subject: {}. Error: {}",
                 subject, e

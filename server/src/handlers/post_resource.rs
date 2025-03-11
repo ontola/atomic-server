@@ -6,7 +6,7 @@ use crate::{
     helpers::{get_client_agent, try_extension},
 };
 use actix_web::{web, HttpResponse};
-use atomic_lib::Storelike;
+use atomic_lib::{Resource, Storelike};
 use simple_server_timing_header::Timer;
 
 /// Respond to a single resource POST request.
@@ -15,20 +15,21 @@ pub async fn handle_post_resource(
     path: Option<web::Path<String>>,
     appstate: web::Data<AppState>,
     req: actix_web::HttpRequest,
+    context: crate::context::RequestContext,
     body: web::Bytes,
 ) -> AtomicServerResult<HttpResponse> {
     let mut timer = Timer::new();
 
     let headers = req.headers();
     let mut content_type = get_accept(headers);
-    let server_url = appstate.config.get_server_url_for_request(&req);
+    let origin = context.origin.clone();
 
     // Get the subject from the path, or return the home URL
     let subject = if let Some(subj_end) = path {
         let mut subj_end_string = subj_end.as_str();
         // If the request is for the root, return the home URL
         if subj_end_string.is_empty() {
-            server_url.to_string()
+            origin.to_string()
         } else {
             if content_type == ContentType::Html {
                 if let Some((ext, path)) = try_extension(subj_end_string) {
@@ -46,16 +47,16 @@ pub async fn handle_post_resource(
             let subject = if subj_end_string.starts_with("did:") {
                 subj_end_string.to_string()
             } else {
-                format!("{}/{}{}", server_url, subj_end_string, querystring)
+                format!("{}/{}{}", origin, subj_end_string, querystring)
             };
             subject
         }
     } else {
         // There is no end string, so It's the root of the URL, the base URL!
-        String::from(&server_url)
+        String::from(&origin)
     };
 
-    let store = appstate.store.clone_with_url(server_url);
+    let store = &appstate.store;
     timer.add("parse_headers");
 
     let for_agent = get_client_agent(headers, &appstate, subject.clone()).await?;
@@ -72,19 +73,19 @@ pub async fn handle_post_resource(
         "no-store, no-cache, must-revalidate, private",
     ));
 
-    let resource = store
+    let resource: Resource = store
         .post_resource(&subject, body.into(), &for_agent)
         .await?;
     timer.add("post_resource");
 
     let response_body = match content_type {
-        ContentType::Json => resource.to_json(&store).await?,
-        ContentType::JsonLd => resource.to_json_ld(&store).await?,
-        ContentType::JsonAd => resource.to_json_ad(&store)?,
-        ContentType::Html => resource.to_json_ad(&store)?,
+        ContentType::Json => resource.to_json(store, Some(&origin)).await?,
+        ContentType::JsonLd => resource.to_json_ld(store, Some(&origin)).await?,
+        ContentType::JsonAd => resource.to_json_ad(Some(&origin))?,
+        ContentType::Html => resource.to_json_ad(Some(&origin))?,
         ContentType::Turtle | ContentType::NTriples => {
             let atoms = resource.to_atoms();
-            atomic_lib::serialize::atoms_to_ntriples(atoms, &store).await?
+            atomic_lib::serialize::atoms_to_ntriples(atoms, store).await?
         }
     };
     timer.add("serialize");

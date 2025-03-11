@@ -34,35 +34,43 @@ impl ResourceResponse {
         }
     }
 
-    pub fn to_json_ad(&self, store: &impl Storelike) -> AtomicResult<String> {
+    pub fn to_json_ad(&self, origin: Option<&str>) -> AtomicResult<String> {
         match self {
-            ResourceResponse::Resource(resource) => Ok(resource.to_json_ad(store)?),
+            ResourceResponse::Resource(resource) => Ok(resource.to_json_ad(origin)?),
             ResourceResponse::ResourceWithReferenced(resource, references) => {
                 let mut list = references.clone();
                 list.push(resource.clone());
-                Ok(Resource::vec_to_json_ad(&list, store)?)
+                Ok(Resource::vec_to_json_ad(&list, origin)?)
             }
         }
     }
 
-    pub async fn to_json(&self, store: &impl Storelike) -> AtomicResult<String> {
+    pub async fn to_json(
+        &self,
+        store: &impl Storelike,
+        origin: Option<&str>,
+    ) -> AtomicResult<String> {
         match self {
-            ResourceResponse::Resource(resource) => Ok(resource.to_json(store).await?),
+            ResourceResponse::Resource(resource) => Ok(resource.to_json(store, origin).await?),
             ResourceResponse::ResourceWithReferenced(resource, references) => {
                 let mut list = references.clone();
                 list.push(resource.clone());
-                Ok(Resource::vec_to_json(&list, store).await?)
+                Ok(Resource::vec_to_json(&list, store, origin).await?)
             }
         }
     }
 
-    pub async fn to_json_ld(&self, store: &impl Storelike) -> AtomicResult<String> {
+    pub async fn to_json_ld(
+        &self,
+        store: &impl Storelike,
+        origin: Option<&str>,
+    ) -> AtomicResult<String> {
         match self {
-            ResourceResponse::Resource(resource) => Ok(resource.to_json_ld(store).await?),
+            ResourceResponse::Resource(resource) => Ok(resource.to_json_ld(store, origin).await?),
             ResourceResponse::ResourceWithReferenced(resource, references) => {
                 let mut list = references.clone();
                 list.push(resource.clone());
-                Ok(Resource::vec_to_json_ld(&list, store).await?)
+                Ok(Resource::vec_to_json_ld(&list, store, origin).await?)
             }
         }
     }
@@ -141,6 +149,15 @@ pub trait Storelike: Sized + Send + Sync {
     )]
     async fn add_atoms(&self, atoms: Vec<Atom>) -> AtomicResult<()>;
 
+    /// Returns the base domain of the server, e.g. "localhost" or "atomicdata.dev".
+    /// Used for multi-tenant isolation and normalization.
+    fn get_base_domain(&self) -> Option<String>;
+
+    /// Normalizes a subject: if it matches the server's base domain, it becomes an Internal subject.
+    fn normalize_subject(&self, subject: &Subject) -> Subject {
+        Subject::from_raw(subject.as_str(), self.get_base_domain().as_deref())
+    }
+
     /// Adds a Resource to the store.
     /// Replaces existing resource with the contents.
     /// Updates the index.
@@ -203,21 +220,6 @@ pub trait Storelike: Sized + Send + Sync {
             .and_then(|r| r.get(property).cloned())
     }
 
-    /// Returns the base URL where the default store is.
-    /// E.g. `https://example.com`
-    /// This is where deltas should be sent to.
-    /// Also useful for Subject URL generation.
-    fn get_server_url(&self) -> AtomicResult<String> {
-        Err("No server URL found. Set it using `set_server_url`.".into())
-    }
-
-    /// Returns the root URL of where this instance of the store is hosted.
-    /// E.g. `https://example.com`
-    /// Should return `None` if this store is a client and not a server.
-    fn get_self_url(&self) -> Option<String> {
-        None
-    }
-
     /// Returns the default Agent for applying commits.
     fn get_default_agent(&self) -> AtomicResult<crate::agents::Agent> {
         Err("No default agent implemented for this store".into())
@@ -229,7 +231,7 @@ pub trait Storelike: Sized + Send + Sync {
     /// Make sure to store the private_key somewhere safe!
     /// Does not create a Commit - the recommended way is to use `agent.to_resource().save_locally()`.
     async fn create_agent(&self, name: Option<&str>) -> AtomicResult<crate::agents::Agent> {
-        let agent = Agent::new(name, self)?;
+        let agent = Agent::new(name)?;
         self.add_resource(&agent.to_resource()?).await?;
         Ok(agent)
     }
@@ -250,7 +252,7 @@ pub trait Storelike: Sized + Send + Sync {
             other_resources.push(r);
         }
         properties.append(&mut other_resources);
-        crate::serialize::resources_to_json_ad(&properties, &self.get_server_url()?)
+        crate::serialize::resources_to_json_ad(&properties, "internal:")
     }
 
     /// Fetches a resource, makes sure its subject matches.
@@ -287,8 +289,10 @@ pub trait Storelike: Sized + Send + Sync {
         query: &str,
         opts: crate::client::search::SearchOpts,
     ) -> AtomicResult<Vec<Resource>> {
-        let server_url = self.get_server_url()?;
-        let subject = crate::client::search::build_search_subject(&server_url, query, opts);
+        let search_base = self
+            .get_base_domain()
+            .unwrap_or_else(|| "internal:".to_string());
+        let subject = crate::client::search::build_search_subject(&search_base, query, opts);
 
         let resource = self
             .fetch_resource(&subject, self.get_default_agent().ok().as_ref())
@@ -389,13 +393,12 @@ pub trait Storelike: Sized + Send + Sync {
         _error: AtomicError,
         for_agent: Option<&Agent>,
     ) -> AtomicResult<Resource> {
-        if let Some(self_url) = self.get_self_url() {
-            if subject.starts_with(&self_url) {
-                return Err(AtomicError::not_found(format!(
-                    "Failed to retrieve locally: '{}'",
-                    subject
-                )));
-            }
+        let subject_obj = Subject::from_raw(subject, self.get_base_domain().as_deref());
+        if matches!(subject_obj, Subject::Internal(_)) {
+            return Err(AtomicError::not_found(format!(
+                "Failed to retrieve locally: '{}'",
+                subject
+            )));
         }
         self.fetch_resource(subject, for_agent).await
     }

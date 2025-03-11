@@ -10,6 +10,7 @@ mod query_index;
 pub mod test;
 mod trees;
 mod v1_types;
+mod v2_types;
 mod val_prop_sub_index;
 
 use std::{
@@ -88,8 +89,8 @@ pub struct Db {
     watched_queries: sled::Tree,
     /// [Tree::PluginMeta]
     plugin_meta: sled::Tree,
-    /// The address where the db will be hosted, e.g. http://localhost/
-    server_url: String,
+    /// The base domain for multi-tenant hosting, e.g. "localhost" or "atomicdata.dev".
+    base_domain: Option<String>,
     /// Endpoints are checked whenever a resource is requested. They calculate (some properties of) the resource and return it.
     endpoints: Vec<Endpoint>,
     /// List of class extenders.
@@ -102,9 +103,9 @@ pub struct Db {
 
 impl Db {
     /// Creates a new store at the specified path, or opens the store if it already exists.
-    /// The server_url is the domain where the db will be hosted, e.g. http://localhost/
+    /// The base_domain is the domain where the db will be hosted, e.g. "localhost" or "atomicdata.dev".
     /// It is used for distinguishing locally defined items from externally defined ones.
-    pub async fn init(path: &std::path::Path, server_url: String) -> AtomicResult<Db> {
+    pub async fn init(path: &std::path::Path, base_domain: Option<String>) -> AtomicResult<Db> {
         tracing::info!("Opening database at {:?}", path);
 
         let db = sled::open(path).map_err(|e|format!("Failed opening DB at this location: {:?} . Is another instance of Atomic Server running? {}", path, e))?;
@@ -123,7 +124,7 @@ impl Db {
             reference_index,
             query_index,
             prop_val_sub_index,
-            server_url,
+            base_domain,
             watched_queries,
             plugin_meta,
             endpoints: vec![],
@@ -140,12 +141,12 @@ impl Db {
         Ok(store)
     }
 
-    /// Creates a clone of the store with a different server_url.
+    /// Creates a clone of the store with a different base_domain.
     /// This is useful for multi-tenant applications.
     /// Cloning is very cheap, as it only clones the pointers to the Sled trees.
-    pub fn clone_with_url(&self, server_url: String) -> Db {
+    pub fn clone_with_url(&self, base_domain: String) -> Db {
         let mut clone = self.clone();
-        clone.server_url = server_url;
+        clone.base_domain = Some(base_domain);
         clone
     }
 
@@ -156,7 +157,7 @@ impl Db {
         let _try_remove_existing = std::fs::remove_dir_all(&tmp_dir_path);
         let store = Db::init(
             std::path::Path::new(&tmp_dir_path),
-            "https://localhost".into(),
+            Some("https://localhost".into()),
         )
         .await?;
         let agent = store.create_agent(None).await?;
@@ -240,7 +241,7 @@ impl Db {
         resource: &Resource,
         transaction: &mut Transaction,
     ) -> AtomicResult<()> {
-        let subject = resource.get_subject();
+        let subject = self.normalize_subject(resource.get_subject());
         let propvals = resource.get_propvals();
 
         let resource_bin = encode_propvals(&propvals)?;
@@ -366,13 +367,12 @@ impl Db {
 
     fn map_sled_item_to_resource(
         item: Result<(sled::IVec, sled::IVec), sled::Error>,
-        self_url: String,
         include_external: bool,
     ) -> Option<Resource> {
         let (subject, resource_bin) = item.expect(DB_CORRUPT_MSG);
         let subject: String = String::from_utf8_lossy(&subject).to_string();
 
-        if !include_external && !subject.starts_with(&self_url) {
+        if !include_external && !subject.starts_with('/') && !subject.starts_with("internal:") {
             return None;
         }
 
@@ -538,10 +538,6 @@ impl Db {
     }
 
     async fn query_basic(&self, q: &Query) -> AtomicResult<QueryResult> {
-        let self_url = self
-            .get_self_url()
-            .ok_or("No self_url set, required for Queries")?;
-
         let mut subjects: Vec<String> = vec![];
         let mut resources: Vec<Resource> = vec![];
         let mut total_count = 0;
@@ -550,8 +546,17 @@ impl Db {
 
         for (i, atom_res) in atoms.enumerate() {
             let atom = atom_res?;
-            if !q.include_external && !atom.subject.starts_with(&self_url) {
-                continue;
+            if !q.include_external {
+                let is_internal =
+                    atom.subject.starts_with("internal:") || atom.subject.starts_with('/');
+                let matches_base = if let Some(base) = &self.base_domain {
+                    atom.subject.contains(base)
+                } else {
+                    false
+                };
+                if !is_internal && !matches_base {
+                    continue;
+                }
             }
 
             total_count += 1;
@@ -674,7 +679,13 @@ impl Db {
         subject: &str,
         for_agent: &ForAgent,
     ) -> AtomicResult<ResourceResponse> {
-        let url = url::Url::parse(subject)?;
+        // For internal endpoint resolution, we use a placeholder origin.
+        // What matters is the path and subdomain.
+        let origin = self
+            .get_base_domain()
+            .unwrap_or_else(|| "http://localhost".to_string());
+        let resolved = Subject::from(subject).resolve(&origin);
+        let url = url::Url::parse(&resolved)?;
 
         // Check if the subject matches one of the endpoints
         for endpoint in self.endpoints.iter() {
@@ -757,6 +768,10 @@ impl Storelike for Db {
         Ok(())
     }
 
+    fn get_base_domain(&self) -> Option<String> {
+        self.base_domain.clone()
+    }
+
     #[instrument(skip(self, resource), fields(sub = %resource.get_subject()))]
     async fn add_resource_opts(
         &self,
@@ -767,7 +782,8 @@ impl Storelike for Db {
     ) -> AtomicResult<()> {
         // This only works if no external functions rely on using add_resource for atom-like operations!
         // However, add_atom uses set_propvals, which skips the validation.
-        let existing = self.get_propvals(resource.get_subject().as_str()).ok();
+        let subject = self.normalize_subject(resource.get_subject());
+        let existing = self.get_propvals(subject.as_str()).ok();
         if !overwrite_existing && existing.is_some() {
             return Err(format!(
                 "Failed to add: '{}', already exists, should not be overwritten.",
@@ -798,7 +814,7 @@ impl Storelike for Db {
             }
             self.apply_transaction(&mut transaction)?;
         }
-        self.set_propvals(resource.get_subject().as_str(), resource.get_propvals())
+        self.set_propvals(subject.as_str(), resource.get_propvals())
     }
 
     /// Apply a single signed Commit to the Db.
@@ -873,7 +889,8 @@ impl Storelike for Db {
                 return Err("Neither an old nor a new resource is returned from the commit - something went wrong.".into())
             },
             (Some(_old), None) => {
-                assert_eq!(_old.get_subject().to_string(), commit_response.commit.subject);
+                let normalized_commit_subject = self.normalize_subject(&commit_response.commit.subject.clone().into());
+                assert_eq!(_old.get_subject().to_string(), normalized_commit_subject.to_string());
                 assert!(&commit_response.commit.destroy.expect("Resource was removed but `commit.destroy` was not set!"));
                 let subject: Subject = commit_response.commit.subject.clone().into();
                 self.remove_resource(&subject).await?;
@@ -954,16 +971,6 @@ impl Storelike for Db {
         Ok(commit_response)
     }
 
-    fn get_server_url(&self) -> AtomicResult<String> {
-        Ok(self.server_url.clone())
-    }
-
-    // Since the DB is often also the server, this should make sense.
-    // Some edge cases might appear later on (e.g. a slave DB that only stores copies?)
-    fn get_self_url(&self) -> Option<String> {
-        self.get_server_url().ok()
-    }
-
     fn get_default_agent(&self) -> AtomicResult<crate::agents::Agent> {
         match self.default_agent.lock().unwrap().to_owned() {
             Some(agent) => Ok(agent),
@@ -980,14 +987,21 @@ impl Storelike for Db {
 
     #[instrument(skip(self))]
     async fn get_resource(&self, subject: &Subject) -> AtomicResult<Resource> {
-        let subject_str = subject.to_string();
+        let normalized = self.normalize_subject(subject);
+        let subject_str = normalized.to_string();
         if let Ok(propvals) = self.get_propvals(&subject_str) {
-            let resource = Resource::from_propvals(propvals, subject.clone());
+            let resource = Resource::from_propvals(propvals, normalized);
             Ok(resource)
         } else {
+            // Resolve the subject to a full URL for network operations
+            let origin = self
+                .get_base_domain()
+                .unwrap_or_else(|| "http://localhost".to_string());
+            let resolved_url = normalized.resolve(&origin);
+
             // If the resource is not found, it might be an endpoint.
             // This is checking if the subject matches one of the endpoints
-            if let Ok(url) = url::Url::parse(&subject_str) {
+            if let Ok(url) = url::Url::parse(&resolved_url) {
                 if self.is_endpoint(&url) {
                     let agent_opt = self.get_default_agent().ok();
                     let for_agent = if let Some(agent) = &agent_opt {
@@ -996,13 +1010,26 @@ impl Storelike for Db {
                         ForAgent::Public
                     };
                     return Ok(self
-                        .call_endpoint(&subject_str, &for_agent)
+                        .call_endpoint(&resolved_url, &for_agent)
                         .await?
                         .to_single());
                 }
             }
+            let origin = self
+                .get_base_domain()
+                .unwrap_or_else(|| "http://localhost".to_string());
+            if resolved_url.starts_with(&origin) {
+                return self
+                    .handle_not_found(
+                        &resolved_url,
+                        format!("Resource {} not found locally", resolved_url).into(),
+                        self.get_default_agent().ok().as_ref(),
+                    )
+                    .await;
+            }
+
             if let Ok(resource) = self
-                .fetch_resource(&subject_str, self.get_default_agent().ok().as_ref())
+                .fetch_resource(&resolved_url, self.get_default_agent().ok().as_ref())
                 .await
             {
                 // If the resource is external, it's not present in the store.
@@ -1016,7 +1043,7 @@ impl Storelike for Db {
                 Ok(resource)
             } else {
                 self.handle_not_found(
-                    &subject_str,
+                    &resolved_url,
                     "Not found in DB".into(),
                     self.get_default_agent().ok().as_ref(),
                 )
@@ -1032,34 +1059,29 @@ impl Storelike for Db {
         skip_dynamic: bool,
         for_agent: &ForAgent,
     ) -> AtomicResult<ResourceResponse> {
-        let url_span = tracing::span!(tracing::Level::TRACE, "URL parse").entered();
-        // This might add a trailing slash
-        let url = url::Url::parse(subject.as_str())?;
-        let mut subject_without_params = {
-            let mut url_altered = url.clone();
-            url_altered.set_query(None);
-            url_altered.to_string()
-        };
-
-        // Remove trailing slash
-        if subject_without_params.ends_with('/') {
-            subject_without_params.pop();
+        if subject.as_str().starts_with("did:ad:") {
+            let resource = self.get_resource(subject).await?;
+            return Ok(ResourceResponse::Resource(resource));
         }
 
-        url_span.exit();
+        let subject_without_params = subject.without_params();
 
-        let is_endpoint = {
-            let _guard = tracing::span!(tracing::Level::TRACE, "Endpoint").entered();
-            self.is_endpoint(&url)
+        // Get the inner URL for endpoint checking and extender context
+        let inner_url = match subject {
+            Subject::Internal(u) => u,
+            Subject::External(u) => u,
+            Subject::Did(u) => u,
         };
 
         // Check if the subject matches one of the endpoints, if so, call the endpoint.
+        let is_endpoint = self.is_endpoint(inner_url);
+
         if is_endpoint {
             return self.call_endpoint(subject.as_str(), for_agent).await;
         }
 
         async move {
-            let mut resource = self.get_resource(&subject_without_params.into()).await?;
+            let mut resource = self.get_resource(&subject_without_params).await?;
 
             let _explanation = crate::hierarchy::check_read(self, &resource, for_agent).await?;
 
@@ -1101,7 +1123,7 @@ impl Storelike for Db {
                     if let Some(handler) = extender.on_resource_get.as_ref() {
                         let fut = (handler)(GetExtenderContext {
                             store: self,
-                            url: &url,
+                            url: inner_url,
                             db_resource: &mut resource,
                             for_agent,
                         });
@@ -1156,13 +1178,10 @@ impl Storelike for Db {
         &self,
         include_external: bool,
     ) -> Box<dyn std::iter::Iterator<Item = Resource> + Send> {
-        let self_url = self
-            .get_self_url()
-            .expect("No self URL set, is required in DB");
-
-        let result = self.resources.into_iter().filter_map(move |item| {
-            Db::map_sled_item_to_resource(item, self_url.clone(), include_external)
-        });
+        let result = self
+            .resources
+            .into_iter()
+            .filter_map(move |item| Db::map_sled_item_to_resource(item, include_external));
 
         Box::new(result)
     }
@@ -1240,7 +1259,7 @@ const DB_CORRUPT_MSG: &str = "Could not deserialize item from database. DB is po
 impl std::fmt::Debug for Db {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Db")
-            .field("server_url", &self.server_url)
+            .field("base_domain", &self.base_domain)
             .finish()
     }
 }

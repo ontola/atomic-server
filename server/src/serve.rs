@@ -35,13 +35,12 @@ async fn rebuild_indexes(appstate: &crate::appstate::AppState) -> AtomicServerRe
 
 /// Removes all remote resources from the store.
 async fn clear_remote_cache(appstate: &crate::appstate::AppState) -> AtomicServerResult<()> {
-    let self_url = appstate.store.get_self_url().expect("No self url");
     tracing::info!("Removing remote resources...");
     let mut count = 0;
     let mut subjects_to_remove = Vec::new();
     for resource in appstate.store.all_resources(true) {
         let subject = resource.get_subject();
-        if !subject.as_str().starts_with(&self_url) {
+        if matches!(subject, atomic_lib::Subject::External(_)) {
             subjects_to_remove.push(subject.clone());
         }
     }
@@ -99,7 +98,16 @@ pub async fn serve(config: crate::config::Config) -> AtomicServerResult<()> {
             )
     });
 
-    let message = format!("{}\n\nVisit {}\n\n", BANNER, config.server_url);
+    let protocol = if config.opts.https { "https" } else { "http" };
+    let port = if config.opts.https {
+        config.opts.port_https
+    } else {
+        config.opts.port
+    };
+    let message = format!(
+        "{}\n\nVisit {}://{}:{}\n\n",
+        BANNER, protocol, config.opts.domain, port
+    );
 
     if config.opts.https {
         if cfg!(feature = "https") {

@@ -7,12 +7,7 @@ use crate::{
     search::SearchState,
     y_sync_broadcaster::{self, YSyncBroadcaster},
 };
-use atomic_lib::{
-    agents::Agent,
-    commit::CommitResponse,
-    config::{ClientConfig, SharedConfig},
-    Storelike,
-};
+use atomic_lib::{agents::Agent, commit::CommitResponse, config::SharedConfig, Storelike};
 
 use crate::plugins::wasm;
 /// The AppState contains all the relevant Context for the server.
@@ -48,7 +43,7 @@ impl AppState {
             tracing::warn!("Development mode is enabled. This will use staging environments for services like LetsEncrypt.");
         }
 
-        let mut store = atomic_lib::Db::init(&config.store_path, config.server_url.clone()).await?;
+        let mut store = atomic_lib::Db::init(&config.store_path, Some(config.get_origin())).await?;
 
         // Register all built-in class extenders
         store.add_class_extender(plugins::chatroom::build_chatroom_extender())?;
@@ -86,14 +81,11 @@ impl AppState {
             store.add_class_extender(extender)?;
         }
 
-        let no_server_resource = store
-            .get_resource(&config.server_url.clone().into())
-            .await
-            .is_err();
-        if no_server_resource {
-            tracing::warn!("Server URL resource not found. This is likely because the server URL has changed. Initializing a new database...");
+        let no_root_drive = store.get_resource(&"internal:/".into()).await.is_err();
+        if no_root_drive {
+            tracing::warn!("Root drive not found. Initializing a new database...");
         }
-        let should_init = !&config.store_path.exists() || config.initialize || no_server_resource;
+        let should_init = !&config.store_path.exists() || config.initialize || no_root_drive;
         if should_init {
             tracing::info!("Initialize: creating and populating new Database...");
             atomic_lib::populate::populate_default_store(&store)
@@ -130,13 +122,10 @@ impl AppState {
             // Building the index here is needed to perform Queries on imported resources
             let store_clone = store.clone();
             std::thread::spawn(move || {
-                let rt = tokio::runtime::Runtime::new().unwrap();
-                rt.block_on(async {
-                    let res = store_clone.build_index(true);
-                    if let Err(e) = res {
-                        tracing::error!("Failed to build index: {}", e);
-                    }
-                });
+                let res = store_clone.build_index(true);
+                if let Err(e) = res {
+                    tracing::error!("Failed to build index: {}", e);
+                }
             });
 
             set_up_initial_invite(&store)
@@ -183,7 +172,13 @@ async fn set_default_agent(config: &Config, store: &impl Storelike) -> AtomicSer
             match store.get_resource(&agent.subject.clone().into()).await {
                 Ok(_) => agent,
                 Err(e) => {
-                    if agent.subject.contains(&config.server_url) {
+                    let is_local = if let Some(base) = &config.base_domain {
+                        agent.subject.contains(base)
+                    } else {
+                        agent.subject.starts_with("internal:")
+                    };
+
+                    if is_local {
                         // If there is an agent in the config, but not in the store,
                         // That probably means that the DB has been erased and only the config file exists.
                         // This means that the Agent from the Config file should be recreated, using its private key.
@@ -191,7 +186,6 @@ async fn set_default_agent(config: &Config, store: &impl Storelike) -> AtomicSer
 
                         let recreated_agent = Agent::new_from_private_key(
                             "server".into(),
-                            store,
                             &agent.private_key.ok_or("No private key found")?,
                         )?;
                         store.add_resource(&recreated_agent.to_resource()?).await?;
@@ -212,9 +206,7 @@ async fn set_default_agent(config: &Config, store: &impl Storelike) -> AtomicSer
                 shared: SharedConfig {
                     agent_secret: agent.build_secret()?,
                 },
-                client: Some(ClientConfig {
-                    server_url: config.server_url.clone(),
-                }),
+                client: None,
             };
 
             cfg.save(&config.config_file_path)?;
@@ -233,11 +225,11 @@ async fn set_default_agent(config: &Config, store: &impl Storelike) -> AtomicSer
 
 /// Creates the first Invitation that is opened by the user on the Home page.
 async fn set_up_initial_invite(store: &impl Storelike) -> AtomicServerResult<()> {
-    let subject = format!("{}/setup", store.get_server_url()?);
+    let subject = "/setup";
     tracing::info!("Creating initial Invite at {}", subject);
-    let mut invite = store.get_resource_new(&subject.clone().into()).await;
+    let mut invite = store.get_resource_new(&subject.into()).await;
     invite.set_class(atomic_lib::urls::INVITE);
-    invite.set_subject(subject);
+    invite.set_subject(subject.into());
     // This invite can be used only once
     invite
         .set(
@@ -256,14 +248,14 @@ async fn set_up_initial_invite(store: &impl Storelike) -> AtomicServerResult<()>
     invite
         .set(
             atomic_lib::urls::TARGET.into(),
-            atomic_lib::Value::AtomicUrl(store.get_server_url()?.into()),
+            atomic_lib::Value::AtomicUrl("/".into()),
             store,
         )
         .await?;
     invite
         .set(
             atomic_lib::urls::PARENT.into(),
-            atomic_lib::Value::AtomicUrl(store.get_server_url()?.into()),
+            atomic_lib::Value::AtomicUrl("/".into()),
             store,
         )
         .await?;

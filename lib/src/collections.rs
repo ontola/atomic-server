@@ -124,10 +124,10 @@ impl CollectionBuilder {
     pub fn class_collection(
         class_url: &str,
         path: &str,
-        store: &impl Storelike,
+        _store: &impl Storelike,
     ) -> AtomicResult<CollectionBuilder> {
         Ok(CollectionBuilder {
-            subject: format!("{}/{}", store.get_server_url()?, path),
+            subject: format!("/{}", path),
             property: Some(urls::IS_A.into()),
             value: Some(class_url.into()),
             sort_by: None,
@@ -478,13 +478,13 @@ pub async fn create_collection_resource_for_class(
 
     let mut collection_resource = collection.to_resource(store).await?;
 
-    let drive = store
-        .get_self_url()
-        .ok_or("No self_url present in store, can't populate collections")?;
+    let drive = "/";
 
     // Let the Collections collection be the top level item
     let parent = if class.subject == urls::COLLECTION {
-        drive
+        drive.to_string()
+    } else if drive == "/" {
+        "/collections".to_string()
     } else {
         format!("{}/collections", drive)
     };
@@ -890,7 +890,7 @@ mod test {
             .await
             .unwrap();
         let first_resource = &collection.referenced_resources.clone().unwrap()[0];
-        assert!(first_resource.get_subject().contains("Agent"));
+        assert!(first_resource.get_subject().as_str().contains("Agent"));
 
         let resource_collection = &collection.to_resource(&store).await.unwrap().to_single();
         let val = resource_collection
@@ -910,11 +910,7 @@ mod test {
             .unwrap()
             .clone();
         let collections_collection = store
-            .get_resource_extended(
-                &format!("{}/collections", store.get_server_url().unwrap()).into(),
-                false,
-                &ForAgent::Public,
-            )
+            .get_resource_extended(&"internal:/collections".into(), false, &ForAgent::Public)
             .await
             .unwrap()
             .to_single();

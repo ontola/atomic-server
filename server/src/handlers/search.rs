@@ -4,6 +4,7 @@
 
 use crate::{
     appstate::AppState,
+    context::RequestContext,
     errors::{AtomicServerError, AtomicServerResult},
     search::{resource_to_facet, Fields},
 };
@@ -68,8 +69,8 @@ pub async fn search_query(
         DEFAULT_RETURN_LIMIT
     };
 
-    let server_url = appstate.config.get_server_url_for_request(&req);
-    let store = appstate.store.clone_with_url(server_url);
+    let origin = RequestContext::new(&req, &appstate).origin;
+    let store = &appstate.store;
 
     let query = query_from_params(&params, &fields, &appstate).await?;
     timer.add("build_query");
@@ -86,12 +87,12 @@ pub async fn search_query(
     // Create a valid atomic data resource.
     let subject = format!(
         "{}{}",
-        store.get_self_url().ok_or("No base URL set")?,
+        origin,
         req.uri().path_and_query().ok_or("Add a query param")?
     );
 
     let mut results_resource = crate::plugins::search::search_endpoint()
-        .to_resource(&store)
+        .to_resource(store)
         .await?;
     results_resource.set_subject(subject.clone());
 
@@ -109,7 +110,7 @@ pub async fn search_query(
         .set(
             urls::ENDPOINT_RESULTS.into(),
             filtered_subjects.into(),
-            &store,
+            store,
         )
         .await?;
 
@@ -120,13 +121,13 @@ pub async fn search_query(
     };
 
     result_vec.push(results_resource);
-    let _body = Resource::vec_to_json_ad(&result_vec, &store)?.into_bytes();
+    let _body = Resource::vec_to_json_ad(&result_vec, Some(&origin))?.into_bytes();
 
     let mut builder = HttpResponse::Ok();
     builder.append_header(("Server-Timing", timer.header_value()));
 
     // TODO: support other serialization options
-    Ok(builder.body(Resource::vec_to_json_ad(&result_vec, &store)?))
+    Ok(builder.body(Resource::vec_to_json_ad(&result_vec, Some(&origin))?))
 }
 
 #[instrument(skip(appstate, req))]

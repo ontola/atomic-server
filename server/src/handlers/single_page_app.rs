@@ -10,17 +10,18 @@ pub async fn single_page(
     appstate: actix_web::web::Data<AppState>,
     path: actix_web::web::Path<String>,
     req: actix_web::HttpRequest,
+    context: crate::context::RequestContext,
 ) -> AtomicServerResult<HttpResponse> {
-    let server_url = appstate.config.get_server_url_for_request(&req);
-    let store = appstate.store.clone_with_url(server_url.clone());
+    let origin = context.origin.clone();
+    let store = appstate.store.clone_with_url(origin.clone());
     let template = include_str!("../../assets_tmp/index.html");
     let csp_nonce = generate_nonce().map_err(|_e| "Failed to generate nonce")?;
-    let subject = format!("{}/{}", server_url, path);
+    let subject = format!("{}/{}", origin, path);
     let meta_tags: MetaTags = if let Ok(resource_response) = store
         .get_resource_extended(&subject.clone().into(), true, &ForAgent::Public)
         .await
     {
-        MetaTags::from_resource_response(resource_response, &store)
+        MetaTags::from_resource_response(resource_response, &origin)
     } else {
         MetaTags::default()
     };
@@ -67,18 +68,15 @@ struct MetaTags {
 }
 
 impl MetaTags {
-    pub fn from_resource_response(rr: ResourceResponse, store: &impl Storelike) -> Self {
+    pub fn from_resource_response(rr: ResourceResponse, origin: &str) -> Self {
         match rr {
-            ResourceResponse::Resource(r) => Self::from_resource(r, store),
+            ResourceResponse::Resource(r) => Self::from_resource(r, origin),
             ResourceResponse::ResourceWithReferenced(ref resource, _) => {
-                let mut tags: MetaTags = Self::from_resource(resource.clone(), store);
+                let mut tags: MetaTags = Self::from_resource(resource.clone(), origin);
 
-                let json = if let Ok(serialized) = rr.to_json_ad(store) {
-                    // TODO: also fetch the parents for extra fast first renders.
-                    Some(serialized)
-                } else {
-                    None
-                };
+                // Turns the resource into JSON-AD and base64 encodes it.
+                // TODO: also fetch the parents for extra fast first renders!
+                let json = rr.to_json_ad(Some(origin)).ok();
 
                 tags.json = json;
 
@@ -89,7 +87,7 @@ impl MetaTags {
 }
 
 impl MetaTags {
-    pub fn from_resource(r: Resource, store: &impl Storelike) -> Self {
+    pub fn from_resource(r: Resource, origin: &str) -> Self {
         let description = if let Ok(d) = r.get(urls::DESCRIPTION) {
             d.to_string()
         } else {
@@ -106,12 +104,8 @@ impl MetaTags {
         } else {
             "/default_social_preview.jpg".to_string()
         };
-        let json = if let Ok(serialized) = r.to_json_ad(store) {
-            // TODO: also fetch the parents for extra fast first renders.
-            Some(serialized)
-        } else {
-            None
-        };
+        // TODO: also fetch the parents for extra fast first renders!
+        let json = r.to_json_ad(Some(origin)).ok();
         Self {
             description,
             title,

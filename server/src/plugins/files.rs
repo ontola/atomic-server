@@ -62,7 +62,11 @@ fn on_after_commit(
             return Ok(());
         };
 
-        let correct_subject = format!("{}/files/{}", store.get_server_url()?, file_name);
+        let correct_subject = format!(
+            "{}/files/{}",
+            store.get_base_domain().ok_or("No base domain set")?,
+            file_name
+        );
 
         if resource.get_subject().as_str() != correct_subject {
             return Err(AtomicError::from(format!(

@@ -84,7 +84,7 @@ async fn populate_collections() {
         .map(|r| r.get_subject().to_string())
         .collect();
     println!("{:?}", subjects);
-    let collections_collection_url = format!("{}/collections", store.get_server_url().unwrap());
+    let collections_collection_url = "internal:/collections".to_string();
     let collections_resource = store
         .get_resource_extended(
             &collections_collection_url.as_str().into(),
@@ -117,14 +117,14 @@ async fn populate_collections() {
 async fn destroy_resource_and_check_collection_and_commits() {
     let store = Db::init_temp("counter").await.unwrap();
     let for_agent = &ForAgent::Public;
-    let agents_url = format!("{}/agents", store.get_server_url().unwrap());
+    let agents_url = "internal:/agents".to_string();
     let agents_collection_1 = store
         .get_resource_extended(&agents_url.as_str().into(), false, for_agent)
         .await
         .unwrap();
     println!(
         "Agents collection 1: {}",
-        agents_collection_1.to_json_ad().unwrap()
+        agents_collection_1.to_json_ad(None).unwrap()
     );
     let agents_collection_count_1 = agents_collection_1
         .to_single()
@@ -138,7 +138,7 @@ async fn destroy_resource_and_check_collection_and_commits() {
     );
 
     // We will count the commits, and check if they've incremented later on.
-    let commits_url = format!("{}/commits", store.get_server_url().unwrap());
+    let commits_url = "internal:/commits".to_string();
     let commits_collection_1 = store
         .get_resource_extended(&commits_url.as_str().into(), false, for_agent)
         .await
@@ -152,7 +152,7 @@ async fn destroy_resource_and_check_collection_and_commits() {
     println!("Commits collection count 1: {}", commits_collection_count_1);
 
     // Create a new agent, check if it is added to the new Agents collection as a Member.
-    let mut resource = crate::agents::Agent::new(None, &store)
+    let mut resource = crate::agents::Agent::new(None)
         .unwrap()
         .to_resource()
         .unwrap();
@@ -193,8 +193,12 @@ async fn destroy_resource_and_check_collection_and_commits() {
     let resp = _res.resource_new.unwrap().destroy(&store).await.unwrap();
     assert!(resp.resource_new.is_none());
     assert_eq!(
-        resp.resource_old.as_ref().unwrap().to_json_ad().unwrap(),
-        clone.to_json_ad().unwrap(),
+        resp.resource_old
+            .as_ref()
+            .unwrap()
+            .to_json_ad(None)
+            .unwrap(),
+        clone.to_json_ad(None).unwrap(),
         "JSON AD differs between removed resource and resource passed back from commit"
     );
     assert!(resp.resource_old.is_some());
@@ -238,7 +242,7 @@ async fn get_extended_resource_pagination() {
         .unwrap();
     let subject = format!(
         "{}/commits?current_page=2&page_size=99999",
-        store.get_server_url().unwrap()
+        "http://localhost"
     );
     let for_agent = &ForAgent::Public;
     if store
@@ -265,7 +269,7 @@ async fn get_extended_resource_pagination() {
         .to_int()
         .unwrap();
     assert_eq!(cur_page, 2);
-    assert_eq!(resource.get_subject(), &subject_with_page_size);
+    assert_eq!(resource.get_subject().as_str(), &subject_with_page_size);
 }
 
 /// Generate a bunch of resources, query them.
@@ -498,14 +502,16 @@ async fn index_invalidate_cache() {
         urls::FILENAME,
         Value::String("old_val".into()),
         Value::String("1".into()),
-    );
+    )
+    .await;
     // Do booleans work?
     test_collection_update_value(
         store,
         urls::IS_LOCKED,
         Value::Boolean(true),
         Value::Boolean(false),
-    );
+    )
+    .await;
     // Do ResourceArrays work?
     test_collection_update_value(
         store,
@@ -516,7 +522,8 @@ async fn index_invalidate_cache() {
             "http://example.com/3".into(),
         ]),
         Value::ResourceArray(vec!["http://example.com/1".into()]),
-    );
+    )
+    .await;
 }
 
 /// Generates a bunch of resources, changes the value for one of them, checks if the order has changed correctly.
@@ -608,7 +615,7 @@ async fn test_collection_update_value(
 
     assert_eq!(
         res.subjects.first().unwrap(),
-        resource_changed_order.get_subject(),
+        resource_changed_order.get_subject().as_str(),
         "Updated resource is not the first Result of the new query"
     );
 
@@ -638,4 +645,77 @@ async fn test_collection_update_value(
         count - 1,
         "Modifying the filtered value did not remove the item from the results"
     );
+}
+
+#[tokio::test]
+async fn test_migration_v2_to_v3() {
+    let tmp_dir_path = ".temp/db/migration_v2_v3";
+    let _try_remove_existing = std::fs::remove_dir_all(tmp_dir_path);
+    let server_url = "https://localhost";
+    let store = Db::init(
+        std::path::Path::new(tmp_dir_path),
+        Some(server_url.to_string()),
+    )
+    .await
+    .unwrap();
+
+    // Create an old-style PropValsV2
+    let mut propvals = crate::db::v2_types::PropValsV2::new();
+    let subject_url = format!("{}/test-resource", server_url);
+    propvals.insert(
+        crate::urls::DESCRIPTION.to_string(),
+        crate::db::v2_types::ValueV2::String("test".to_string()),
+    );
+    // Add an AtomicUrl that points to itself
+    propvals.insert(
+        crate::urls::PARENT.to_string(),
+        crate::db::v2_types::ValueV2::AtomicUrl(subject_url.clone()),
+    );
+
+    // Manually insert into resources_v2
+    {
+        let v2_tree = store.db.open_tree("resources_v2").unwrap();
+        v2_tree
+            .insert(
+                subject_url.as_bytes(),
+                rmp_serde::to_vec(&propvals).unwrap(),
+            )
+            .unwrap();
+        v2_tree.flush().unwrap();
+    }
+
+    // Run migration
+    super::migrations::migrate_maybe(&store).unwrap();
+
+    // Verify results in v3
+    let resource = store
+        .get_resource(&subject_url.clone().into())
+        .await
+        .unwrap();
+
+    // The subject in the resource should now be Local
+    assert!(
+        matches!(resource.get_subject(), crate::Subject::Internal(_)),
+        "Subject should be Internal, but is {:?}",
+        resource.get_subject()
+    );
+
+    // The value for PARENT should now be Local
+    let parent = resource.get(crate::urls::PARENT).unwrap();
+    if let crate::Value::AtomicUrl(s) = parent {
+        assert!(
+            matches!(s, crate::Subject::Internal(_)),
+            "Value should be Internal, but is {:?}",
+            s
+        );
+    } else {
+        panic!("Value should be AtomicUrl, but is {:?}", parent);
+    }
+
+    // Verify it is NOT in resources_v2 anymore (it should have been dropped)
+    assert!(!store
+        .db
+        .tree_names()
+        .into_iter()
+        .any(|n| n == "resources_v2".as_bytes()));
 }

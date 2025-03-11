@@ -16,7 +16,9 @@ pub struct Store {
     // The store currently holds two stores - that is not ideal
     hashmap: Arc<Mutex<HashMap<String, Resource>>>,
     default_agent: Arc<Mutex<Option<crate::agents::Agent>>>,
-    server_url: Arc<Mutex<Option<String>>>,
+    /// The base URL for client-side operations (optional).
+    /// Used as a fallback for resolving relative paths.
+    base_url: Arc<Mutex<Option<String>>>,
 }
 
 impl Store {
@@ -26,16 +28,15 @@ impl Store {
         let store = Store {
             hashmap: Arc::new(Mutex::new(HashMap::new())),
             default_agent: Arc::new(Mutex::new(None)),
-            server_url: Arc::new(Mutex::new(None)),
+            base_url: Arc::new(Mutex::new(Some("http://localhost".to_string()))),
         };
         crate::populate::populate_base_models(&store).await?;
         Ok(store)
     }
 
-    /// Set the URL of the server which endpoint we are using.
-    /// This is needed for generating correct URLs for Commits, Search, etc.
-    pub fn set_server_url(&self, server_url: &str) {
-        self.server_url.lock().unwrap().replace(server_url.into());
+    /// Set the base URL for client-side operations.
+    pub fn set_base_url(&self, base_url: &str) {
+        self.base_url.lock().unwrap().replace(base_url.into());
     }
 
     /// Triple Pattern Fragments interface.
@@ -141,6 +142,10 @@ impl Storelike for Store {
         Ok(())
     }
 
+    fn get_base_domain(&self) -> Option<String> {
+        self.base_url.lock().unwrap().clone()
+    }
+
     async fn add_resource_opts(
         &self,
         resource: &Resource,
@@ -171,18 +176,6 @@ impl Storelike for Store {
         Box::new(self.hashmap.lock().unwrap().clone().into_values())
     }
 
-    fn get_server_url(&self) -> AtomicResult<String> {
-        self.server_url
-            .lock()
-            .unwrap()
-            .clone()
-            .ok_or("No server URL found. Set it using `store.set_server_url`.".into())
-    }
-
-    fn get_self_url(&self) -> Option<String> {
-        None
-    }
-
     fn get_default_agent(&self) -> AtomicResult<Agent> {
         match self.default_agent.lock().unwrap().to_owned() {
             Some(agent) => Ok(agent),
@@ -191,7 +184,8 @@ impl Storelike for Store {
     }
 
     async fn get_resource(&self, subject: &Subject) -> AtomicResult<Resource> {
-        let subject_str = subject.to_string();
+        let normalized = self.normalize_subject(subject);
+        let subject_str = normalized.to_string();
         if let Some(resource) = self.hashmap.lock().unwrap().get(&subject_str) {
             return Ok(resource.clone());
         }
@@ -342,7 +336,7 @@ mod test {
         let store = init_store().await;
         let subject = urls::CLASS;
         let resource = store.get_resource(&subject.into()).await.unwrap();
-        resource.to_json_ad().unwrap();
+        resource.to_json_ad(None).unwrap();
     }
 
     #[tokio::test]

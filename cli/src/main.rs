@@ -164,7 +164,7 @@ impl Context {
         let agent = Agent::from_secret(&write_ctx.shared.agent_secret).unwrap();
         self.store.set_default_agent(agent);
         self.store
-            .set_server_url(&write_ctx.client.clone().unwrap().server_url);
+            .set_base_url(&write_ctx.client.clone().unwrap().server_url);
 
         write_ctx
     }

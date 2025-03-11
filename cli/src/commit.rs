@@ -9,7 +9,7 @@ pub async fn set(
     value: &str,
 ) -> AtomicResult<()> {
     // If the resource is not found, create it
-    let mut resource = match context.store.get_resource(subject).await {
+    let mut resource = match context.store.get_resource(&subject.into()).await {
         Ok(r) => r,
         Err(_) => atomic_lib::Resource::new(subject.into()),
     };
@@ -24,7 +24,7 @@ pub async fn set(
 #[cfg(feature = "native")]
 pub async fn edit(context: &Context, subject: &str, prop: &str) -> AtomicResult<()> {
     // If the resource is not found, create it
-    let mut resource = match context.store.get_resource(subject).await {
+    let mut resource = match context.store.get_resource(&subject.into()).await {
         Ok(r) => r,
         Err(_) => atomic_lib::Resource::new(subject.into()),
     };
@@ -45,7 +45,7 @@ pub async fn edit(context: &Context, subject: &str, prop: &str) -> AtomicResult<
 
 /// Apply a Commit using the Remove method - removes a property from a resource
 pub async fn remove(context: &Context, subject: &str, prop: &str) -> AtomicResult<()> {
-    let mut resource = context.store.get_resource(subject).await?;
+    let mut resource = context.store.get_resource(&subject.into()).await?;
     resource
         .remove_propval_shortname(prop, &context.store)
         .await?;
@@ -55,7 +55,7 @@ pub async fn remove(context: &Context, subject: &str, prop: &str) -> AtomicResul
 
 /// Apply a Commit using the destroy method - removes a resource
 pub async fn destroy(context: &Context, subject: &str) -> AtomicResult<()> {
-    let mut resource = context.store.get_resource(subject).await?;
+    let mut resource = context.store.get_resource(&subject.into()).await?;
     resource.destroy(&context.store).await?;
     Ok(())
 }

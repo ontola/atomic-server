@@ -280,7 +280,7 @@ async fn prompt_field(
                                 );
                                 let (resource, _shortname) =
                                     prompt_instance(context, class, Some(item.into())).await?;
-                                urls.push(resource.get_subject().clone());
+                                urls.push(resource.get_subject().to_string());
                                 continue;
                             }
                         }

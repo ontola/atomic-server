@@ -38,7 +38,7 @@ impl Handler<SubscribeYSync> for YSyncBroadcaster {
         let store = self.store.clone();
         Box::pin(
             async move {
-                let self_url = store.get_self_url().unwrap();
+                let self_url = store.get_base_domain().unwrap();
                 if !msg.subject.starts_with(&self_url) {
                     tracing::warn!("can't subscribe to external resource");
                     return None;

@@ -8,6 +8,7 @@ mod appstate;
 mod commit_monitor;
 pub mod config;
 mod content_types;
+pub mod context;
 mod errors;
 mod handlers;
 mod helpers;

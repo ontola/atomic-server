@@ -74,10 +74,33 @@ export class Client {
 
   /** Throws an error if the subject is not valid */
   public static tryValidSubject(subject: string | undefined): void {
-    try {
-      new URL(subject as string);
-    } catch (e) {
-      throw new Error(`Not a valid URL: ${subject}. ${e}`);
+    if (typeof subject !== 'string') {
+      throw new Error(`Subject is not a string: ${subject}`);
+    }
+
+    if (subject.startsWith('http') || subject.startsWith('did:ad:')) {
+      if (subject.startsWith('http')) {
+        try {
+          new URL(subject);
+
+          return;
+        } catch (e) {
+          throw new Error(`Not a valid URL: ${subject}. ${e}`);
+        }
+      }
+
+      return;
+    }
+
+    // Relative path validation
+    // Allow empty string for root. Allow ?, =, &, % for collections/search.
+    if (
+      subject !== '' &&
+      !subject.match(/^[a-zA-Z0-9/][a-zA-Z0-9/._\-:?=&%]*$/)
+    ) {
+      throw new Error(
+        `Not a valid Relative Subject: ${subject}. This should be a slug-like string without spaces.`,
+      );
     }
   }
 
@@ -88,7 +111,7 @@ export class Client {
     try {
       Client.tryValidSubject(subject);
 
-      return subject.startsWith('http');
+      return true;
     } catch (e) {
       return false;
     }
@@ -144,6 +167,15 @@ export class Client {
       }
 
       let url = subject;
+
+      if (subject.startsWith('did:')) {
+        // We can't fetch DIDs directly, so we fetch them from the server
+        const baseUrl =
+          signInfo?.serverURL ||
+          (window as any).atomicServerUrl ||
+          window.location.origin;
+        url = `${baseUrl}/${subject}`;
+      }
 
       if (from !== undefined) {
         const newURL = new URL(`${from}/path`);

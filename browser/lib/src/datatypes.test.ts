@@ -10,7 +10,7 @@ describe('Datatypes', () => {
     const slug = 'sl-ug';
     const atomicUrl = urls.classes.class;
     const resourceArray = [urls.classes.class, urls.classes.property];
-    const resourceArrayInvalid = [urls.classes.class, 'urls.classes.property'];
+    const resourceArrayInvalid = [urls.classes.class, 'not a URL'];
     expect(
       () => validateDatatype(string, Datatype.STRING),
       'Valid string',

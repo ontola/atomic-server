@@ -35,6 +35,28 @@ describe('Commit signing and keys', () => {
     expect(serialized).to.equal(serializedCommitRust);
     expect(sig).to.equal(signatureCorrect);
   });
+
+  it('handles did:ad genesis commits correctly', async ({ expect }) => {
+    const tempSubject = 'did:ad:temp';
+    const createdAt = 0;
+
+    const commitBuilder = new CommitBuilder(tempSubject, {
+      set: new Map([
+        ['https://atomicdata.dev/properties/description', 'Genesis value'],
+      ]),
+    });
+
+    const commit = await commitBuilder.signAt(agent, createdAt);
+
+    // Subject should match signature
+    expect(commit.subject).to.equal(`did:ad:${commit.signature}`);
+
+    // Serialization should NOT contain the subject
+    const serialized = serializeDeterministically(commit);
+    const jsonCorrect = JSON.parse(serialized);
+    expect(jsonCorrect['https://atomicdata.dev/properties/subject']).to.be
+      .undefined;
+  });
 });
 
 describe('Commit parse and apply', () => {

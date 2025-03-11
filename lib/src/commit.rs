@@ -8,7 +8,7 @@ use crate::{
     resources::PropVals,
     urls,
     values::SubResource,
-    Atom, Resource, Storelike, Value,
+    Atom, Resource, Storelike, Subject, Value,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -272,8 +272,12 @@ impl Commit {
         store: &impl Storelike,
     ) -> AtomicResult<CommitResponse> {
         let commit = self;
-        let subject_url = url::Url::parse(&commit.subject)
-            .map_err(|e| format!("Subject '{}' is not a URL. {}", commit.subject, e))?;
+        let subject = Subject::from(commit.subject.clone());
+        let subject_url = match &subject {
+            Subject::Internal(u) => u.clone(),
+            Subject::External(u) => u.clone(),
+            Subject::Did(u) => u.clone(),
+        };
 
         if subject_url.query().is_some() {
             return Err("Subject URL cannot have query parameters".into());
@@ -291,7 +295,14 @@ impl Commit {
         // Create a new resource if it doesn't exist yet
         let (resource_old, is_new) = match store.get_resource(&commit.subject).await {
             Ok(rs) => (rs, false),
-            Err(_) => (Resource::new(commit.subject.clone()), true),
+            Err(_) => (
+                Resource::new(
+                    store
+                        .normalize_subject(&commit.subject.clone().into())
+                        .to_string(),
+                ),
+                true,
+            ),
         };
 
         // Make sure the one creating the commit had the same idea of what the current state is.
@@ -393,9 +404,10 @@ impl Commit {
             }
         }
         if let Some(set) = self.set.clone() {
-            for (prop, new_val) in set.iter() {
+            for (prop, mut new_val) in set {
+                new_val.normalize(store);
                 resource
-                    .set(prop.into(), new_val.to_owned(), store)
+                    .set(prop.clone().into(), new_val.to_owned(), store)
                     .await
                     .map_err(|e| {
                         format!(
@@ -406,13 +418,13 @@ impl Commit {
 
                 let new_atom = Atom::new(
                     resource.get_subject().to_string(),
-                    prop.into(),
+                    prop.clone(),
                     new_val.clone(),
                 );
-                if let Ok(old_val) = resource_unedited.get(prop) {
+                if let Ok(old_val) = resource_unedited.get(&prop) {
                     let old_atom = Atom::new(
                         resource.get_subject().to_string(),
-                        prop.into(),
+                        prop.clone(),
                         old_val.clone(),
                     );
                     remove_atoms.push(old_atom);
@@ -421,24 +433,25 @@ impl Commit {
             }
         }
         if let Some(push) = self.push.clone() {
-            for (prop, vec) in push.iter() {
-                let mut old_vec = match resource.get(prop) {
+            for (prop, mut val) in push {
+                val.normalize(store);
+                let mut old_vec = match resource.get(&prop) {
                     Ok(val) => match val {
                         Value::ResourceArray(res_arr) => res_arr.clone(),
                         _other => return Err("Wrong datatype when pushing to array".into()),
                     },
                     Err(_) => Vec::new(),
                 };
-                let new_vec = match vec {
+                let new_vec = match val {
                     Value::ResourceArray(res_arr) => res_arr.clone(),
                     _other => return Err("Wrong datatype when pushing to array".into()),
                 };
                 old_vec.append(&mut new_vec.clone());
-                resource.set_unsafe(prop.into(), old_vec.into());
+                resource.set_unsafe(prop.clone().into(), old_vec.into());
                 for added_resource in new_vec {
                     let atom = Atom::new(
                         resource.get_subject().to_string(),
-                        prop.into(),
+                        prop.clone().into(),
                         added_resource.into(),
                     );
                     add_atoms.push(atom);
@@ -553,10 +566,10 @@ impl Commit {
     #[tracing::instrument(skip(store))]
     pub async fn into_resource(&self, store: &impl Storelike) -> AtomicResult<Resource> {
         let commit_subject = match self.signature.as_ref() {
-            Some(sig) => format!("{}/commits/{}", store.get_server_url()?, sig),
+            Some(sig) => format!("internal:/commits/{}", sig),
             None => {
                 let now = crate::utils::now();
-                format!("{}/commitsUnsigned/{}", store.get_server_url()?, now)
+                format!("internal:/commitsUnsigned/{}", now)
             }
         };
         let mut resource = Resource::new_instance(urls::COMMIT, store).await?;
@@ -643,7 +656,9 @@ impl Commit {
         let json_obj = crate::serialize::propvals_to_json_ad_map(
             commit_resource.get_propvals(),
             None,
-            &store.get_server_url()?,
+            &store
+                .get_base_domain()
+                .unwrap_or_else(|| "internal".to_string()),
         )?;
         let json = serde_jcs::to_string(&json_obj)
             .map_err(|e| format!("Failed to serialize Commit: {}", e))?;
@@ -890,7 +905,7 @@ mod test {
     #[tokio::test]
     async fn agent_and_commit() {
         let store = Store::init().await.unwrap();
-        store.set_server_url("http://localhost:9883");
+        store.set_base_url("http://localhost:9883");
         store.populate().await.unwrap();
         let agent = store.create_agent(Some("test_actor")).await.unwrap();
         let subject = "https://localhost/new_thing";
@@ -906,13 +921,14 @@ mod test {
         let commit_subject = commit.get_subject().to_string();
         let _created_resource = store.apply_commit(commit, &OPTS).await.unwrap();
 
-        let resource = store.get_resource(&subject.as_str().into()).await.unwrap();
+        let resource = store.get_resource(&subject.into()).await.unwrap();
         assert!(resource.get(property1).unwrap().to_string() == value1.to_string());
         let found_commit = store
             .get_resource(&commit_subject.as_str().into())
             .await
             .unwrap();
-        println!("{}", found_commit.get_subject());
+        println!("Found commit subject: {}", found_commit.get_subject());
+        println!("Found commit props: {:?}", found_commit.get_propvals());
 
         assert!(
             found_commit
@@ -927,7 +943,7 @@ mod test {
     #[tokio::test]
     async fn serialize_commit() {
         let store = Store::init().await.unwrap();
-        store.set_server_url("http://localhost:9883");
+        store.set_base_url("http://localhost:9883");
         store.populate().await.unwrap();
         let mut set: HashMap<String, Value> = HashMap::new();
         let shortname = Value::new("shortname", &DataType::String).unwrap();
@@ -960,12 +976,12 @@ mod test {
     #[tokio::test]
     async fn signature_matches() {
         let store = Store::init().await.unwrap();
-        store.set_server_url("http://localhost:9883");
+        store.set_base_url("http://localhost:9883");
         let private_key = "CapMWIhFUT+w7ANv9oCPqrHrwZpkP2JhzF9JnyT6WcI=";
-        let agent = Agent::new_from_private_key(None, &store, private_key).unwrap();
+        let agent = Agent::new_from_private_key(None, private_key).unwrap();
         assert_eq!(
             &agent.subject,
-            "http://localhost:9883/agents/7LsjMW5gOfDdJzK/atgjQ1t20J/rw8MjVg6xwqm+h8U="
+            "internal:/agents/7LsjMW5gOfDdJzK/atgjQ1t20J/rw8MjVg6xwqm+h8U="
         );
         store
             .add_resource(&agent.to_resource().unwrap())
@@ -1003,7 +1019,7 @@ mod test {
     #[tokio::test]
     async fn invalid_subjects() {
         let store = Store::init().await.unwrap();
-        store.set_server_url("http://localhost:9883");
+        store.set_base_url("http://localhost:9883");
         store.populate().await.unwrap();
         let agent = store.create_agent(Some("test_actor")).await.unwrap();
         let resource = Resource::new("https://localhost/test_resource".into());
@@ -1033,7 +1049,7 @@ mod test {
     #[tokio::test]
     async fn deserialize_from_json() {
         let store = Store::init().await.unwrap();
-        store.set_server_url("http://localhost:9883");
+        store.set_base_url("http://localhost:9883");
         store.populate().await.unwrap();
 
         let json = r#"
