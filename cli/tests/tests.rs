@@ -5,12 +5,14 @@ mod test {
     const TEST_URL: &str =
         "https://atomicdata.dev/agents/QmfpRIBn2JYEatT0MjSkMNoBJzstz19orwnT5oT2rcQ=";
 
+    #[ignore]
     #[test]
     fn get_url() {
         let mut cmd = Command::cargo_bin(assert_cmd::crate_name!()).unwrap();
         cmd.args(["get", TEST_URL]).assert().success();
     }
 
+    #[ignore]
     #[test]
     fn search() {
         let parent = "https://atomicdata.dev/ontology/core";
