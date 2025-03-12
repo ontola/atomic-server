@@ -21,14 +21,6 @@ fn main() -> std::io::Result<()> {
     // Uncomment this line if you want faster builds during development
     // return Ok(());
 
-    // If the ATOMICSERVER_SKIP_JS_BUILD environment variable is set, skip the JS build
-    if let Ok(env_skip) = std::env::var("ATOMICSERVER_SKIP_JS_BUILD") {
-        if env_skip == "true" {
-            p!("ATOMICSERVER_SKIP_JS_BUILD is set, skipping JS build.");
-            return Ok(());
-        }
-    }
-
     const BROWSER_ROOT: &str = "../browser/";
     let dirs: Dirs = {
         Dirs {
@@ -69,6 +61,14 @@ fn main() -> std::io::Result<()> {
 }
 
 fn should_build(dirs: &Dirs) -> bool {
+    // If the ATOMICSERVER_SKIP_JS_BUILD environment variable is set, skip the JS build
+    if let Ok(env_skip) = std::env::var("ATOMICSERVER_SKIP_JS_BUILD") {
+        if env_skip == "true" {
+            p!("ATOMICSERVER_SKIP_JS_BUILD is set, skipping JS build.");
+            return false;
+        }
+    }
+
     if !dirs.browser_root.exists() {
         p!("Could not find browser folder, assuming this is a `cargo publish` run. Skipping JS build.");
         return false;
