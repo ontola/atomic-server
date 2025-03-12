@@ -27,6 +27,7 @@ pub fn query_endpoint() -> Endpoint {
     }
 }
 
+#[tracing::instrument(skip(context))]
 fn handle_query_request(context: HandleGetContext) -> AtomicResult<ResourceResponse> {
     let HandleGetContext {
         subject,

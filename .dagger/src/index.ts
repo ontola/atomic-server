@@ -9,19 +9,22 @@ import {
   File,
   Platform,
   Service,
-} from "@dagger.io/dagger";
+} from '@dagger.io/dagger';
 
-const NODE_IMAGE = "node:24";
-const RUST_IMAGE = "rust:bookworm";
+const NODE_IMAGE = 'node:22';
+const RUST_IMAGE = 'rust:bookworm';
 
+const PLAYWRIGHT_VERSION = 'v1.49.1-noble';
 // See https://github.com/rust-cross/rust-musl-cross?tab=readme-ov-file#prebuilt-images
 const TARGET_IMAGE_MAP = {
-  "x86_64-unknown-linux-musl": "ghcr.io/rust-cross/rust-musl-cross:x86_64-musl",
-  "aarch64-unknown-linux-musl":
-    "ghcr.io/rust-cross/rust-musl-cross:aarch64-musl",
-  "armv7-unknown-linux-musleabihf":
-    "ghcr.io/rust-cross/rust-musl-cross:armv7-musleabihf",
+  'x86_64-unknown-linux-musl': 'ghcr.io/rust-cross/rust-musl-cross:x86_64-musl',
+  'aarch64-unknown-linux-musl':
+    'ghcr.io/rust-cross/rust-musl-cross:aarch64-musl',
+  'armv7-unknown-linux-musleabihf':
+    'ghcr.io/rust-cross/rust-musl-cross:armv7-musleabihf',
 } as const;
+
+const ATOMIC_DOMAIN = 'localhost-atomic';
 
 @object()
 export class AtomicServer {
@@ -29,33 +32,34 @@ export class AtomicServer {
 
   constructor(
     @argument({
-      defaultPath: ".",
+      defaultPath: '.',
       ignore: [
-        "**/node_modules",
-        "**/.git",
-        "**/.github",
-        "**/.husky",
-        "**/.vscode",
+        '**/node_modules',
+        '**/.git',
+        '**/.github',
+        '**/.husky',
+        '**/.vscode',
         // rust
-        "**/target",
-        "**/artifact",
+        '**/target',
+        '**/artifact',
         // browser
-        "**/.swc",
-        "**/.netlify",
+        '**/.swc',
+        '**/.netlify',
         // e2e
-        "**/test-results",
-        "**/template-tests",
-        "**/playwright-report",
-        "**/tmp",
-        "**/.temp",
-        "**/.cargo",
-        "**/.DS_Store",
-        "**/.vscode",
-        "**/dist",
-        "**/assets_tmp",
-        "**/build",
-        "**/.env",
-        "**/.envrc",
+        '**/test-results',
+        '**/template-tests',
+        '**/playwright-report',
+        '**/tmp',
+        '**/.temp',
+        '**/.cargo',
+        '**/.DS_Store',
+        '**/.vscode',
+        '**/dist',
+        '**/assets_tmp',
+        '**/build',
+        '**/.env',
+        '**/.envrc',
+        '**/bin',
       ],
     })
     source: Directory,
@@ -76,31 +80,31 @@ export class AtomicServer {
       this.rustFmt(),
     ]);
 
-    return "CI pipeline completed successfully";
+    return 'CI pipeline completed successfully';
   }
 
   @func()
   async jsLint(): Promise<string> {
-    const depsContainer = this.jsBuild();
+    const depsContainer = this.jsBuild(this.source.directory('browser'));
     return depsContainer
-      .withWorkdir("/app")
-      .withExec(["pnpm", "run", "lint"])
+      .withWorkdir('/app')
+      .withExec(['pnpm', 'run', 'lint'])
       .stdout();
   }
 
   @func()
   async jsTest(): Promise<string> {
-    const depsContainer = this.jsBuild();
+    const depsContainer = this.jsBuild(this.source.directory('browser'));
     return depsContainer
-      .withWorkdir("/app")
-      .withExec(["pnpm", "run", "test"])
+      .withWorkdir('/app')
+      .withExec(['pnpm', 'run', 'test'])
       .stdout();
   }
 
   @func()
   docsPublish(@argument() netlifyAuthToken: Secret): Promise<string> {
     const builtDocsHtml = this.docsFolder();
-    return this.netlifyDeploy(builtDocsHtml, "atomic-docs", netlifyAuthToken);
+    return this.netlifyDeploy(builtDocsHtml, 'atomic-docs', netlifyAuthToken);
   }
 
   private netlifyDeploy(
@@ -112,23 +116,23 @@ export class AtomicServer {
     return dag
       .container()
       .from(NODE_IMAGE)
-      .withExec(["npm", "install", "-g", "netlify-cli"])
-      .withDirectory("/deploy", directory)
-      .withWorkdir("/deploy")
-      .withSecretVariable("NETLIFY_AUTH_TOKEN", netlifyAuthToken)
+      .withExec(['npm', 'install', '-g', 'netlify-cli'])
+      .withDirectory('/deploy', directory)
+      .withWorkdir('/deploy')
+      .withSecretVariable('NETLIFY_AUTH_TOKEN', netlifyAuthToken)
       .withExec([
-        "sh",
-        "-c",
+        'sh',
+        '-c',
         `for i in $(seq 1 5); do netlify link --name ${siteName} --auth $NETLIFY_AUTH_TOKEN && break || sleep 2; done`,
       ])
-      .withExec(["netlify", "deploy", "--dir", ".", "--prod"])
+      .withExec(['netlify', 'deploy', '--dir', '.', '--prod'])
       .stdout();
   }
 
   /** Extracts the unique deploy URL from netlify output */
   private extractDeployUrl(netlifyOutput: string): string {
     const match = netlifyOutput.match(/https:\/\/[a-f0-9]+--.+\.netlify\.app/);
-    return match ? match[0] : "Deploy URL not found";
+    return match ? match[0] : 'Deploy URL not found';
   }
 
   @func()
@@ -136,110 +140,115 @@ export class AtomicServer {
     const mdBookContainer = dag
       .container()
       .from(RUST_IMAGE)
-      .withExec(["cargo", "install", "mdbook"])
-      .withExec(["cargo", "install", "mdbook-linkcheck"]);
+      .withExec(['cargo', 'install', 'mdbook'])
+      .withExec(['cargo', 'install', 'mdbook-linkcheck']);
 
-    const actualDocsDirectory = this.source.directory("docs");
+    const actualDocsDirectory = this.source.directory('docs');
 
     return mdBookContainer
-      .withMountedDirectory("/docs", actualDocsDirectory)
-      .withWorkdir("/docs")
-      .withExec(["mdbook", "build"])
-      .directory("/docs/build/html");
+      .withMountedDirectory('/docs', actualDocsDirectory)
+      .withWorkdir('/docs')
+      .withExec(['mdbook', 'build'])
+      .directory('/docs/build/html');
   }
 
   @func()
   typedocPublish(@argument() netlifyAuthToken: Secret): Promise<string> {
-    const browserDir = this.jsBuild();
+    const browserDir = this.jsBuild(this.source.directory('browser'));
     return browserDir
-      .withWorkdir("/app")
-      .withSecretVariable("NETLIFY_AUTH_TOKEN", netlifyAuthToken)
-      .withExec(["pnpm", "run", "typedoc-publish"])
+      .withWorkdir('/app')
+      .withSecretVariable('NETLIFY_AUTH_TOKEN', netlifyAuthToken)
+      .withExec(['pnpm', 'run', 'typedoc-publish'])
       .stdout();
   }
 
   @func()
-  private jsBuild(): Container {
-    const source = this.source.directory("browser");
-
+  private jsBuild(
+    @argument({ ignore: ['**/e2e'] }) source: Directory,
+  ): Container {
     // Create a container with PNPM installed
     const pnpmContainer = dag
       .container()
       .from(NODE_IMAGE)
-      .withExec(["npm", "install", "--global", "corepack@latest"])
-      .withExec(["corepack", "enable"])
-      .withExec(["corepack", "prepare", "pnpm@latest-10", "--activate"])
-      .withWorkdir("/app");
+      .withExec(['npm', 'install', '--global', 'corepack@latest'])
+      .withExec(['corepack', 'enable'])
+      .withExec(['corepack', 'prepare', 'pnpm@latest-10', '--activate'])
+      .withWorkdir('/app');
 
-    // Copy workspace files first
+    // Copy workspace files first for caching node_modules.
     const workspaceContainer = pnpmContainer
-      .withFile("/app/package.json", source.file("package.json"))
-      .withFile("/app/pnpm-lock.yaml", source.file("pnpm-lock.yaml"))
-      .withFile("/app/pnpm-workspace.yaml", source.file("pnpm-workspace.yaml"))
+      .withFile('/app/package.json', source.file('package.json'))
+      .withFile('/app/pnpm-lock.yaml', source.file('pnpm-lock.yaml'))
+      .withFile('/app/pnpm-workspace.yaml', source.file('pnpm-workspace.yaml'))
       .withFile(
-        "/app/data-browser/package.json",
-        source.file("data-browser/package.json"),
+        '/app/data-browser/package.json',
+        source.file('data-browser/package.json'),
       )
-      .withFile("/app/lib/package.json", source.file("lib/package.json"))
-      .withFile("/app/react/package.json", source.file("react/package.json"))
-      .withFile("/app/svelte/package.json", source.file("svelte/package.json"))
-      .withFile("/app/cli/package.json", source.file("cli/package.json"));
-
-    // Install dependencies
-    const depsContainer = workspaceContainer.withExec([
-      "sh",
-      "-c",
-      "yes | pnpm install --frozen-lockfile --shamefully-hoist",
-    ]);
+      .withFile('/app/lib/package.json', source.file('lib/package.json'))
+      .withFile('/app/react/package.json', source.file('react/package.json'))
+      .withFile('/app/svelte/package.json', source.file('svelte/package.json'))
+      .withFile('/app/cli/package.json', source.file('cli/package.json'))
+      .withFile(
+        '/app/create-template/package.json',
+        source.file('create-template/package.json'),
+      )
+      // .withMountedCache('/app/.pnpm-store', dag.cacheVolume('pnpm-store'))
+      .withExec([
+        'sh',
+        '-c',
+        'yes | pnpm install --frozen-lockfile --shamefully-hoist',
+      ]);
 
     // Copy the source so installed dependencies persist in the container
-    const sourceContainer = depsContainer.withDirectory("/app", source);
+    const sourceContainer = workspaceContainer.withDirectory('/app', source);
 
     // Build all packages since they may depend on each other's built artifacts
-    return sourceContainer.withExec(["pnpm", "run", "build"]);
+    return sourceContainer.withExec(['pnpm', 'run', 'build']);
   }
 
   @func()
   /** Builds the Rust server binary on the host architecture */
   rustBuild(
-    @argument() release: boolean = false,
-    @argument() target: string = "x86_64-unknown-linux-musl",
+    @argument() release: boolean = true,
+    @argument() target: string = 'x86_64-unknown-linux-musl',
   ): Container {
     const source = this.source;
-    const cargoCache = dag.cacheVolume("cargo");
+    const cargoCache = dag.cacheVolume('cargo');
 
     const image = TARGET_IMAGE_MAP[target as keyof typeof TARGET_IMAGE_MAP];
 
     const rustContainer = dag
       .container()
       .from(image)
-      .withExec(["apt-get", "update", "-qq"])
-      .withExec(["apt", "install", "-y", "nasm"])
-      .withExec(["rustup", "component", "add", "clippy"])
-      .withExec(["rustup", "component", "add", "rustfmt"])
-      .withExec(["cargo", "install", "cargo-nextest"])
-      .withMountedCache("/usr/local/cargo/registry", cargoCache);
+      .withExec(['apt-get', 'update', '-qq'])
+      .withExec(['apt', 'install', '-y', 'nasm'])
+      .withMountedCache('/usr/local/cargo/registry', cargoCache)
+      .withExec(['rustup', 'component', 'add', 'clippy'])
+      .withExec(['rustup', 'component', 'add', 'rustfmt'])
+      .withExec(['cargo', 'install', 'cargo-nextest']);
 
     const sourceContainer = rustContainer
-      .withFile("/code/Cargo.toml", source.file("Cargo.toml"))
-      .withFile("/code/Cargo.lock", source.file("Cargo.lock"))
-      .withFile("/code/Cross.toml", source.file("Cross.toml"))
-      .withDirectory("/code/server", source.directory("server"))
-      .withDirectory("/code/lib", source.directory("lib"))
-      .withDirectory("/code/cli", source.directory("cli"))
-      .withMountedCache("/code/target", dag.cacheVolume("rust-target"))
-      .withWorkdir("/code")
-      .withExec(["cargo", "fetch"]);
+      .withFile('/code/Cargo.toml', source.file('Cargo.toml'))
+      .withFile('/code/Cargo.lock', source.file('Cargo.lock'))
+      .withFile('/code/Cross.toml', source.file('Cross.toml'))
+      .withDirectory('/code/server', source.directory('server'))
+      .withDirectory('/code/lib', source.directory('lib'))
+      .withDirectory('/code/cli', source.directory('cli'))
+      .withMountedCache('/code/target', dag.cacheVolume('rust-target'))
+      .withWorkdir('/code')
+      .withExec(['cargo', 'fetch']);
 
-    const browserDir = this.jsBuild().directory("/app/data-browser/dist");
+    const browserDir = this.jsBuild(this.source.directory('browser')).directory(
+      '/app/data-browser/dist',
+    );
     const containerWithAssets = sourceContainer.withDirectory(
-      "/code/server/assets_tmp",
+      '/code/server/assets_tmp',
       browserDir,
     );
 
     const buildArgs = release
-      ? ["cargo", "build", "--release"]
-      : ["cargo", "build"];
+      ? ['cargo', 'build', '--release']
+      : ['cargo', 'build'];
     const targetPath = release
       ? `/code/target/${target}/release/atomic-server`
       : `/code/target/${target}/debug/atomic-server`;
@@ -248,22 +257,22 @@ export class AtomicServer {
       containerWithAssets
         .withExec(buildArgs)
         // .withExec([targetPath, "--version"])
-        .withExec(["cp", targetPath, "/atomic-server-binary"])
+        .withExec(['cp', targetPath, '/atomic-server-binary'])
     );
   }
 
   @func()
   /** Returns the release binary */
   rustBuildRelease(
-    @argument() target: string = "x86_64-unknown-linux-musl",
+    @argument() target: string = 'x86_64-unknown-linux-musl',
   ): File {
     const container = this.rustBuild(true, target);
-    return container.file("/atomic-server-binary");
+    return container.file('/atomic-server-binary');
   }
 
   @func()
   rustTest(): Promise<string> {
-    return this.rustBuild().withExec(["cargo", "nextest", "run"]).stdout();
+    return this.rustBuild().withExec(['cargo', 'nextest', 'run']).stdout();
   }
 
   @func()
@@ -272,11 +281,11 @@ export class AtomicServer {
 
     return rustContainer
       .withExec([
-        "cargo",
-        "clippy",
-        "--no-deps",
-        "--all-features",
-        "--all-targets",
+        'cargo',
+        'clippy',
+        '--no-deps',
+        '--all-features',
+        '--all-targets',
       ])
       .stdout();
   }
@@ -285,7 +294,7 @@ export class AtomicServer {
   rustFmt(): Promise<string> {
     const rustContainer = this.rustBuild();
 
-    return rustContainer.withExec(["cargo", "fmt", "--check"]).stdout();
+    return rustContainer.withExec(['cargo', 'fmt', '--check']).stdout();
   }
 
   // @func()
@@ -360,68 +369,94 @@ export class AtomicServer {
   @func()
   /** Returns a Service running atomic-server for use in tests */
   atomicService(): Service {
-    const atomicServerBinary = this.rustBuild().file("/atomic-server-binary");
+    const atomicServerBinary = this.rustBuild().file('/atomic-server-binary');
     return dag
       .container()
-      .from("alpine:latest")
-      .withFile("/atomic-server-bin", atomicServerBinary, {
+      .from('alpine:latest')
+      .withFile('/atomic-server-bin', atomicServerBinary, {
         permissions: 0o755,
       })
-      .withEnvVariable("ATOMIC_DOMAIN", "atomic")
+      .withEnvVariable('ATOMIC_DOMAIN', ATOMIC_DOMAIN)
       .withExposedPort(9883)
-      .withEntrypoint(["/atomic-server-bin"])
+      .withEntrypoint(['/atomic-server-bin'])
       .asService()
-      .withHostname("atomic");
+      .withHostname(ATOMIC_DOMAIN);
   }
 
   @func()
   async endToEnd(@argument() netlifyAuthToken: Secret): Promise<string> {
-    const e2eSource = this.source.directory("browser/e2e");
+    const browserContainer = this.jsBuild(this.source.directory('browser'));
 
     // Setup Playwright container - debug and fix package manager
     const playwrightContainer = dag
       .container()
-      .from("mcr.microsoft.com/playwright:v1.48.1-noble")
+      .from(`mcr.microsoft.com/playwright:${PLAYWRIGHT_VERSION}`)
       .withExec([
-        "/bin/sh",
-        "-c",
-        'curl -fsSL https://get.pnpm.io/install.sh | env PNPM_VERSION=9.3.0 ENV="$HOME/.shrc" SHELL="$(which sh)" sh - && export PATH=/root/.local/share/pnpm:$PATH && /bin/apt update && /bin/apt install -y zip',
+        '/bin/sh',
+        '-c',
+        'curl -fsSL https://get.pnpm.io/install.sh | env PNPM_VERSION=10.15.1 ENV="$HOME/.shrc" SHELL="$(which sh)" sh - && export PATH=/root/.local/share/pnpm:$PATH && /bin/apt update && /bin/apt install -y zip',
       ])
       .withEnvVariable(
-        "PATH",
-        "/root/.local/share/pnpm:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        'PATH',
+        '/root/.local/share/pnpm:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
       )
-      .withExec(["pnpm", "dlx", "playwright", "install", "--with-deps"])
-      .withExec(["npm", "install", "-g", "netlify-cli"]);
+      // .withExec(['pnpm', 'dlx', 'playwright', 'install', '--with-deps'])
+      .withExec(['npm', 'install', '-g', 'netlify-cli']);
 
     // Setup e2e test environment
     const e2eContainer = playwrightContainer
-      .withMountedDirectory("/app", e2eSource)
-      .withWorkdir("/app")
-      .withExec(["pnpm", "install"])
-      .withEnvVariable("LANGUAGE", "en_GB")
-      .withEnvVariable("DELETE_PREVIOUS_TEST_DRIVES", "false")
-      .withEnvVariable("FRONTEND_URL", "http://atomic:9883")
-      .withEnvVariable("SERVER_URL", "http://atomic:9883")
-      .withServiceBinding("atomic", this.atomicService())
+      .withEnvVariable('CI', 'true')
+      .withDirectory(
+        '/app/e2e',
+        this.source
+          .directory('browser/e2e')
+          .withoutDirectory('tests')
+          .withoutDirectory('playwright-report')
+          .withoutDirectory('node_modules')
+          .withoutDirectory('test-results'),
+      )
+      .withWorkdir('/app/e2e')
+      .withExec(['pnpm', 'install'])
+      .withExec(['pnpm', 'exec', 'playwright', 'install'])
+      .withDirectory('/app/cli', browserContainer.directory('/app/cli'))
+      .withDirectory('/app/react', browserContainer.directory('/app/react'))
+      .withDirectory('/app/svelte', browserContainer.directory('/app/svelte'))
+      .withDirectory(
+        '/app/create-template',
+        browserContainer.directory('/app/create-template'),
+      )
+      .withDirectory('/app/lib', browserContainer.directory('/app/lib'))
+      .withDirectory(
+        '/app/node_modules',
+        browserContainer.directory('/app/node_modules'),
+      )
+      .withEnvVariable('LANGUAGE', 'en_GB')
+      .withEnvVariable('DELETE_PREVIOUS_TEST_DRIVES', 'false')
+      .withEnvVariable('FRONTEND_URL', `http://${ATOMIC_DOMAIN}:9883`)
+      .withEnvVariable('SERVER_URL', `http://${ATOMIC_DOMAIN}:9883`)
+      .withServiceBinding('atomic', this.atomicService())
+      .withDirectory(
+        '/app/e2e/tests',
+        this.source.directory('browser/e2e/tests'),
+      )
       // Wait for the server to be ready
       .withExec([
-        "sh",
-        "-c",
-        "for i in $(seq 1 10); do curl http://atomic:9883/setup && exit 0 || sleep 1; done; exit 1",
+        'sh',
+        '-c',
+        `for i in $(seq 1 10); do curl http://${ATOMIC_DOMAIN}:9883/setup && exit 0 || sleep 1; done; exit 1`,
       ])
       // Test the server is running
       .withExec([
-        "/bin/sh",
-        "-c",
-        "pnpm run test-e2e; echo $? > /test-exit-code",
+        '/bin/sh',
+        '-c',
+        'pnpm run test-e2e; echo $? > /test-exit-code',
       ]);
 
     // Extract the test results directory and upload to Netlify
-    const testReportDirectory = e2eContainer.directory("playwright-report");
+    const testReportDirectory = e2eContainer.directory('playwright-report');
     const deployOutput = await this.netlifyDeploy(
       testReportDirectory,
-      "atomic-tests",
+      'atomic-tests',
       netlifyAuthToken,
     );
 
@@ -429,8 +464,8 @@ export class AtomicServer {
     const deployUrl = this.extractDeployUrl(deployOutput);
 
     // Check the test exit code and fail if tests failed
-    const exitCode = await e2eContainer.file("/test-exit-code").contents();
-    if (exitCode.trim() !== "0") {
+    const exitCode = await e2eContainer.file('/test-exit-code').contents();
+    if (exitCode.trim() !== '0') {
       throw new Error(
         `E2E tests failed (exit code: ${exitCode.trim()}). Test report deployed to: \n${deployUrl}`,
       );
@@ -446,44 +481,44 @@ export class AtomicServer {
     @argument() sshPrivateKey: Secret,
   ): Promise<string> {
     // Build the cross-compiled binary for x86_64-unknown-linux-musl
-    const binaryFile = this.rustBuildRelease("x86_64-unknown-linux-musl");
+    const binaryFile = this.rustBuildRelease('x86_64-unknown-linux-musl');
 
     // Create deployment container with SSH client
     const deployContainer = dag
       .container()
-      .from("alpine:latest")
-      .withExec(["apk", "add", "--no-cache", "openssh-client", "rsync"])
-      .withFile("/atomic-server-binary", binaryFile, { permissions: 0o755 });
+      .from('alpine:latest')
+      .withExec(['apk', 'add', '--no-cache', 'openssh-client', 'rsync'])
+      .withFile('/atomic-server-binary', binaryFile, { permissions: 0o755 });
 
     // Setup SSH key
     const sshContainer = deployContainer
-      .withExec(["mkdir", "-p", "/root/.ssh"])
-      .withSecretVariable("SSH_PRIVATE_KEY", sshPrivateKey)
-      .withExec(["sh", "-c", 'echo "$SSH_PRIVATE_KEY" > /root/.ssh/id_rsa'])
-      .withExec(["chmod", "600", "/root/.ssh/id_rsa"])
-      .withExec(["ssh-keyscan", "-H", remoteHost])
+      .withExec(['mkdir', '-p', '/root/.ssh'])
+      .withSecretVariable('SSH_PRIVATE_KEY', sshPrivateKey)
+      .withExec(['sh', '-c', 'echo "$SSH_PRIVATE_KEY" > /root/.ssh/id_rsa'])
+      .withExec(['chmod', '600', '/root/.ssh/id_rsa'])
+      .withExec(['ssh-keyscan', '-H', remoteHost])
       .withExec([
-        "sh",
-        "-c",
+        'sh',
+        '-c',
         `ssh-keyscan -H ${remoteHost} >> /root/.ssh/known_hosts`,
       ]);
 
     // Transfer binary using rsync
     const transferResult = await sshContainer
-      .withSecretVariable("REMOTE_USER", remoteUser)
+      .withSecretVariable('REMOTE_USER', remoteUser)
       .withExec([
-        "sh",
-        "-c",
+        'sh',
+        '-c',
         `rsync -rltgoDzvO /atomic-server-binary $REMOTE_USER@${remoteHost}:~/atomic-server-x86_64-unknown-linux-musl`,
       ])
       .stdout();
 
     // Execute deployment commands on remote server
     const deployResult = await sshContainer
-      .withSecretVariable("REMOTE_USER", remoteUser)
+      .withSecretVariable('REMOTE_USER', remoteUser)
       .withExec([
-        "sh",
-        "-c",
+        'sh',
+        '-c',
         `ssh -i /root/.ssh/id_rsa $REMOTE_USER@${remoteHost} '
           mv ~/atomic-server-x86_64-unknown-linux-musl ~/atomic-server &&
           cp ~/atomic-server ~/atomic-server-$(date +"%Y-%m-%dT%H:%M:%S") &&
@@ -502,11 +537,11 @@ export class AtomicServer {
   async releaseAssets(): Promise<Directory> {
     const targets = Object.keys(TARGET_IMAGE_MAP);
 
-    const builds = targets.map((target) => {
+    const builds = targets.map(target => {
       const container = this.rustBuild(true, target);
       return {
         target,
-        binary: container.file("/atomic-server-binary"),
+        binary: container.file('/atomic-server-binary'),
       };
     });
 
@@ -526,15 +561,15 @@ export class AtomicServer {
   @func()
   /** Creates a Docker image for a specific target architecture */
   createDockerImage(
-    @argument() target: string = "x86_64-unknown-linux-musl",
+    @argument() target: string = 'x86_64-unknown-linux-musl',
   ): Container {
-    const binary = this.rustBuild(true, target).file("/atomic-server-binary");
+    const binary = this.rustBuild(true, target).file('/atomic-server-binary');
 
     // Map targets to their corresponding platform strings
     const platformMap = {
-      "x86_64-unknown-linux-musl": "linux/amd64" as Platform,
-      "aarch64-unknown-linux-musl": "linux/arm64" as Platform,
-      "armv7-unknown-linux-musleabihf": "linux/arm/v7" as Platform,
+      'x86_64-unknown-linux-musl': 'linux/amd64' as Platform,
+      'aarch64-unknown-linux-musl': 'linux/arm64' as Platform,
+      'armv7-unknown-linux-musleabihf': 'linux/arm/v7' as Platform,
     };
 
     const platform = platformMap[target as keyof typeof platformMap];
@@ -542,11 +577,11 @@ export class AtomicServer {
       throw new Error(`Unknown platform for target: ${target}`);
     }
 
-    const innerImage = "alpine:latest";
+    const innerImage = 'alpine:latest';
 
     // https://github.com/dagger/dagger/issues/9998
     const dir = dag.directory().withNewFile(
-      "Dockerfile",
+      'Dockerfile',
       `FROM ${innerImage}
 
 VOLUME /atomic-storage
@@ -558,12 +593,12 @@ VOLUME /atomic-storage
         .container({ platform })
         .build(dir)
         // .from(innerImage)
-        .withFile("/usr/local/bin/atomic-server", binary)
-        .withExec(["chmod", "+x", "/usr/local/bin/atomic-server"])
-        .withEntrypoint(["/usr/local/bin/atomic-server"])
-        .withEnvVariable("ATOMIC_DATA_DIR", "/atomic-storage/data")
-        .withEnvVariable("ATOMIC_CONFIG_DIR", "/atomic-storage/config")
-        .withEnvVariable("ATOMIC_PORT", "80")
+        .withFile('/usr/local/bin/atomic-server', binary)
+        .withExec(['chmod', '+x', '/usr/local/bin/atomic-server'])
+        .withEntrypoint(['/usr/local/bin/atomic-server'])
+        .withEnvVariable('ATOMIC_DATA_DIR', '/atomic-storage/data')
+        .withEnvVariable('ATOMIC_CONFIG_DIR', '/atomic-storage/config')
+        .withEnvVariable('ATOMIC_PORT', '80')
         .withExposedPort(80)
         .withDefaultArgs([])
     );
@@ -572,18 +607,18 @@ VOLUME /atomic-storage
   @func()
   /** Creates Docker images for all supported architectures */
   async createDockerImages(
-    @argument() tags: string[] = ["develop"],
+    @argument() tags: string[] = ['develop'],
   ): Promise<void> {
     const targets = Object.keys(TARGET_IMAGE_MAP);
 
     // Build one variant first.
-    let firstImageArchitecture = "x86_64-unknown-linux-musl";
+    let firstImageArchitecture = 'x86_64-unknown-linux-musl';
     const firstImage = this.createDockerImage(firstImageArchitecture);
 
     // Build other variants
     const otherVariants = targets
-      .filter((target) => target !== firstImageArchitecture)
-      .map((target) => this.createDockerImage(target));
+      .filter(target => target !== firstImageArchitecture)
+      .map(target => this.createDockerImage(target));
 
     // Publish the multi-platform image with all variants
     for (const tag of tags) {

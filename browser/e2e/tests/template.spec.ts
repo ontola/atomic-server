@@ -8,6 +8,7 @@ import {
   signIn,
   sideBarNewResourceTestId,
   FRONTEND_URL,
+  inDialog,
 } from './test-utils';
 import fs from 'node:fs';
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -64,7 +65,8 @@ async function setupTemplateSite(serverUrl: string, siteType: string) {
     `pnpm exec create-template ${siteType} --template ${siteType} --server-url ${serverUrl}`,
   );
 
-  await execAsync('pnpm install', siteType);
+  // We don't want a frozen lockfile because it would cause issues in the ci.
+  await execAsync('pnpm install --no-frozen-lockfile', siteType);
   await execAsync(`pnpm link ${pathToPackage('cli')}`, siteType);
   await execAsync(`pnpm link ${pathToPackage('lib')}`, siteType);
 
@@ -144,13 +146,19 @@ test.describe('Test create-template package', () => {
     await page.getByTestId(sideBarNewResourceTestId).click();
     await expect(page).toHaveURL(`${FRONTEND_URL}/app/new`);
 
-    const button = page.getByTestId('template-button');
-    await button.click();
+    await page.getByTestId('template-button').click();
 
-    const applyTemplateButton = page.getByRole('button', {
-      name: 'Apply template',
+    const navigationPromise = page.waitForNavigation();
+    await inDialog(page, async (_, closeDialogWith) => {
+      await closeDialogWith('Apply template');
     });
-    await applyTemplateButton.click();
+
+    await navigationPromise;
+
+    // Check if the template was applied
+    await expect(
+      page.getByRole('heading', { name: 'website', level: 1 }),
+    ).toBeVisible();
 
     await setupTemplateSite(drive.driveURL, 'nextjs-site');
 
@@ -188,6 +196,7 @@ test.describe('Test create-template package', () => {
       try {
         await kill(3000);
         log('Next.js server shut down successfully');
+        expect(true).toBe(true);
       } catch (err) {
         console.error('Failed to shut down Next.js server:', err);
       }
@@ -265,6 +274,8 @@ test.describe('Test create-template package', () => {
 
     try {
       await fs.promises.rm(EXEC_DIR, { recursive: true, force: true });
+      // eslint-disable-next-line no-console
+      console.log('Cleared EXEC_DIR');
     } catch (error) {
       console.error(`Failed to delete ${EXEC_DIR}:`, error);
     }

@@ -249,7 +249,7 @@ impl Db {
 
     /// Finds resource by Subject, return PropVals HashMap
     /// Deals with the binary API of Sled
-    #[instrument(skip(self))]
+    #[instrument(skip(self), fields(subject))]
     fn get_propvals(&self, subject: &str) -> AtomicResult<PropVals> {
         let propval_maybe = self
             .resources
@@ -260,10 +260,12 @@ impl Db {
                 let propval: PropVals = decode_propvals(binpropval)?;
                 Ok(propval)
             }
-            None => Err(AtomicError::not_found(format!(
-                "Resource {} not found",
-                subject
-            ))),
+            None => {
+                return Err(AtomicError::not_found(format!(
+                    "Resource {} not found",
+                    subject
+                )))
+            }
         }
     }
 
@@ -545,6 +547,7 @@ impl Db {
         self.endpoints.iter().any(|e| e.path == url.path())
     }
 
+    #[tracing::instrument(skip(self))]
     fn call_endpoint(&self, subject: &str, for_agent: &ForAgent) -> AtomicResult<ResourceResponse> {
         let url = url::Url::parse(subject)?;
 

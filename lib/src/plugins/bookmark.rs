@@ -33,6 +33,7 @@ pub fn bookmark_endpoint() -> Endpoint {
     }
 }
 
+#[tracing::instrument(skip(context))]
 fn handle_bookmark_request(context: HandleGetContext) -> AtomicResult<ResourceResponse> {
     let HandleGetContext {
         subject,

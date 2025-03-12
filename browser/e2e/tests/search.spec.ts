@@ -12,14 +12,25 @@ import {
   sideBarNewResourceTestId,
   contextMenuClick,
   timestamp,
+  newResource,
+  anyValue,
 } from './test-utils';
 test.describe('search', async () => {
   test.beforeEach(before);
 
   test('text search', async ({ page }) => {
-    await addressBar(page).fill('welcome');
+    const navigateToSearchPromise = page.waitForURL(
+      '**/app/search?query=welcome',
+      {
+        timeout: 10000,
+      },
+    );
+    await addressBar(page).pressSequentially('welcome');
+    await navigateToSearchPromise;
     await expect(page.locator('text=Welcome to your')).toBeVisible();
+    const navigateToOntologyPromise = page.waitForNavigation();
     await page.keyboard.press('Enter');
+    await navigateToOntologyPromise;
     await expect(
       page.getByRole('heading', { name: 'Default Ontology' }),
     ).toBeVisible();
@@ -30,16 +41,19 @@ test.describe('search', async () => {
     await newDrive(page);
 
     // Create folder called 1
-    await page.getByTestId(sideBarNewResourceTestId).click();
-    await page.locator('button:has-text("folder")').click();
+    await newResource('folder', page);
     await setTitle(page, 'Salad folder');
 
     // Create document called 'Avocado Salad'
+    const addParagraphCommit = waitForCommit(page, {
+      set: {
+        ['https://atomicdata.dev/properties/documents/elements']: anyValue,
+      },
+    });
     await page.locator('button:has-text("New Resource")').click();
     await page.locator('button:has-text("document")').click();
-    await waitForCommit(page);
-    // commit for initializing the first element (paragraph)
-    await waitForCommit(page);
+    await addParagraphCommit;
+
     await editTitle('Avocado Salad', page);
 
     await page.getByTestId(sideBarNewResourceTestId).click();
@@ -48,12 +62,17 @@ test.describe('search', async () => {
     await page.locator('button:has-text("folder")').click();
     await setTitle(page, 'Cake Folder');
 
-    // Create document called 'Avocado Salad'
+    // Create document called 'Avocado Cake'
+
+    const addParagraphCommit2 = waitForCommit(page, {
+      set: {
+        ['https://atomicdata.dev/properties/documents/elements']: anyValue,
+      },
+    });
     await page.locator('button:has-text("New Resource")').click();
     await page.locator('button:has-text("document")').click();
-    await waitForCommit(page);
-    // commit for initializing the first element (paragraph)
-    await waitForCommit(page);
+    await addParagraphCommit2;
+
     await editTitle('Avocado Cake', page);
 
     await clickSidebarItem('Cake Folder', page);

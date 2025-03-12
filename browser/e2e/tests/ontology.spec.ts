@@ -4,8 +4,9 @@ import {
   newDrive,
   newResource,
   before,
-  currentDialog,
   REBUILD_INDEX_TIME,
+  inDialog,
+  DIALOG_CLOSE_BUTTON,
 } from './test-utils';
 
 test.describe('Ontology', async () => {
@@ -46,8 +47,11 @@ test.describe('Ontology', async () => {
 
     // Name ontology
     const ontologyName = 'youtube-thumbnail-editor';
-    await page.getByPlaceholder('my-ontology').fill(ontologyName);
-    await page.locator('dialog[open] button:has-text("Create")').click();
+    await inDialog(page, async (dialog, closeDialogWith) => {
+      await dialog.getByPlaceholder('my-ontology').fill(ontologyName);
+      await closeDialogWith('Create');
+    });
+
     await expect(page.locator(`h1:has-text("${ontologyName}")`)).toBeVisible();
 
     await page
@@ -59,12 +63,14 @@ test.describe('Ontology', async () => {
       page.getByText('Data model for youtube thumbnail editor'),
     ).toBeVisible();
 
+    // Create a thumbnail class
     await page.getByRole('button', { name: 'Edit', exact: true }).click();
     await page.getByRole('button', { name: 'Add class', exact: true }).click();
-    await page.getByPlaceholder('shortname').fill('thumbnail');
-    await page.getByRole('button', { name: 'Save' }).click();
 
-    // Thumbnail class
+    await inDialog(page, async (dialog, closeDialogWith) => {
+      await dialog.getByPlaceholder('shortname').fill('thumbnail');
+      await closeDialogWith('Save');
+    });
 
     await expect(page.locator('input[value="thumbnail"]')).toBeVisible();
     await page.getByText('Change me').fill('Thumbnail of a youtube video');
@@ -76,7 +82,7 @@ test.describe('Ontology', async () => {
     await page.keyboard.press('ArrowDown');
     await page.keyboard.press('Enter');
 
-    await expect(page.locator('input[value="arrows"]')).toBeVisible();
+    await expect(page.getByLabel('Property shortname')).toHaveValue('arrows');
     await expect(page.locator('input[value="a property"]')).toBeVisible();
 
     await page
@@ -84,26 +90,21 @@ test.describe('Ontology', async () => {
       .fill('The arrows on a thumbnail');
 
     // Arrows property
-
     await page.getByRole('button', { name: 'Configure arrows' }).click();
 
-    await expect(currentDialog(page).getByLabel('Classtype')).toBeDisabled();
+    await inDialog(page, async dialog => {
+      await dialog
+        .getByLabel('Datatype')
+        .selectOption('https://atomicdata.dev/datatypes/resourceArray');
 
-    await currentDialog(page)
-      .getByLabel('Datatype')
-      .selectOption('https://atomicdata.dev/datatypes/resourceArray');
+      await expect(dialog.getByLabel('Classtype')).not.toBeDisabled();
+      await dialog.getByLabel('Classtype').click();
 
-    await expect(
-      currentDialog(page).getByLabel('Classtype'),
-    ).not.toBeDisabled();
-    await currentDialog(page).getByLabel('Classtype').click();
+      await dialog.getByPlaceholder('Search for a class').fill('arrow');
 
-    await currentDialog(page)
-      .getByPlaceholder('Search for a class')
-      .fill('arrow');
-
-    await page.keyboard.press('ArrowDown');
-    await page.keyboard.press('Enter');
+      await page.keyboard.press('ArrowDown');
+      await page.keyboard.press('Enter');
+    });
 
     // Arrow class
 
@@ -136,25 +137,21 @@ test.describe('Ontology', async () => {
 
     await page.getByTitle('Configure arrow-kind').click();
 
-    await expect(
-      currentDialog(page).locator('input[value="arrow-kind"]'),
-    ).toBeVisible();
+    await inDialog(page, async dialog => {
+      await expect(dialog.locator('input[value="arrow-kind"]')).toBeVisible();
 
-    await currentDialog(page)
-      .getByLabel('Datatype')
-      .selectOption('https://atomicdata.dev/datatypes/atomicURL');
+      await dialog
+        .getByLabel('Datatype')
+        .selectOption('https://atomicdata.dev/datatypes/atomicURL');
 
-    await expect(
-      currentDialog(page).getByLabel('Classtype'),
-    ).not.toBeDisabled();
-    await currentDialog(page).getByLabel('Classtype').click();
+      await expect(dialog.getByLabel('Classtype')).not.toBeDisabled();
+      await dialog.getByLabel('Classtype').click();
 
-    await currentDialog(page)
-      .getByPlaceholder('Search for a class')
-      .fill('arrow-kind');
+      await dialog.getByPlaceholder('Search for a class').fill('arrow-kind');
 
-    await page.keyboard.press('ArrowDown');
-    await page.keyboard.press('Enter');
+      await page.keyboard.press('ArrowDown');
+      await page.keyboard.press('Enter');
+    });
 
     // arrow-kind class
 
@@ -182,63 +179,58 @@ test.describe('Ontology', async () => {
 
     await page.getByTitle('Configure line-type').click();
 
-    await expect(
-      currentDialog(page).locator('input[value="line-type"]'),
-    ).toBeVisible();
+    await inDialog(page, async (dialog, closeDialogWith) => {
+      await expect(dialog.locator('input[value="line-type"]')).toBeVisible();
 
-    await expect(
-      currentDialog(page).getByRole('button', { name: 'Enum' }),
-    ).not.toBeVisible();
+      await expect(
+        dialog.getByRole('button', { name: 'Enum' }),
+      ).not.toBeVisible();
 
-    await currentDialog(page)
-      .getByLabel('Datatype')
-      .selectOption('https://atomicdata.dev/datatypes/resourceArray');
+      await dialog
+        .getByLabel('Datatype')
+        .selectOption('https://atomicdata.dev/datatypes/resourceArray');
 
-    await expect(
-      currentDialog(page).getByRole('tab', { name: 'Enum' }),
-    ).toBeVisible();
+      await expect(dialog.getByRole('tab', { name: 'Enum' })).toBeVisible();
 
-    // Create two tags: dashed and solid
-    await currentDialog(page).getByPlaceholder('New tag').fill('dashed');
-    await currentDialog(page).getByRole('button', { name: 'Add tag' }).click();
+      // Create two tags: dashed and solid
+      await dialog.getByPlaceholder('New tag').fill('dashed');
+      await dialog.getByRole('button', { name: 'Add tag' }).click();
 
-    await expect(currentDialog(page).getByPlaceholder('New tag')).toHaveValue(
-      '',
-    );
+      await expect(dialog.getByPlaceholder('New tag')).toHaveValue('');
 
-    await expect(currentDialog(page).getByText('dashed')).toBeVisible();
+      await expect(dialog.getByText('dashed')).toBeVisible();
 
-    await currentDialog(page).getByPlaceholder('New tag').fill('solid');
-    await currentDialog(page).getByRole('button', { name: 'Add tag' }).click();
+      await dialog.getByPlaceholder('New tag').fill('solid');
+      await dialog.getByRole('button', { name: 'Add tag' }).click();
 
-    await expect(currentDialog(page).getByPlaceholder('New tag')).toHaveValue(
-      '',
-    );
+      await expect(dialog.getByPlaceholder('New tag')).toHaveValue('');
 
-    await expect(currentDialog(page).getByText('solid')).toBeVisible();
+      await expect(dialog.getByText('solid')).toBeVisible();
 
-    await currentDialog(page).getByRole('button', { name: 'close' }).click();
+      await closeDialogWith(DIALOG_CLOSE_BUTTON);
+    });
+
     // Create arrow-kind instances
 
     await page.waitForTimeout(REBUILD_INDEX_TIME);
 
     const createInstance = async (name: string) => {
       await page.getByRole('button', { name: 'New Instance' }).click();
-      await expect(
-        currentDialog(page).getByRole('heading', { name: 'Select a class' }),
-      ).toBeVisible();
+      await inDialog(page, async (dialog, closeDialogWith) => {
+        await expect(
+          dialog.getByRole('heading', { name: 'Select a class' }),
+        ).toBeVisible();
 
-      await currentDialog(page)
-        .getByRole('button', { name: 'arrow-kind' })
-        .click();
+        await dialog.getByRole('button', { name: 'arrow-kind' }).click();
 
-      await expect(
-        currentDialog(page).getByRole('heading', { name: 'new arrow-kind' }),
-      ).toBeVisible();
+        await expect(
+          dialog.getByRole('heading', { name: 'new arrow-kind' }),
+        ).toBeVisible();
 
-      await expect(currentDialog(page).getByLabel('name')).toBeVisible();
-      await currentDialog(page).getByLabel('name').fill(name);
-      await currentDialog(page).getByRole('button', { name: 'Save' }).click();
+        await expect(dialog.getByLabel('name')).toBeVisible();
+        await dialog.getByLabel('name').fill(name);
+        closeDialogWith('Save');
+      });
 
       await expect(page.getByText('Resource loading...')).not.toBeVisible();
       await expect(page.getByRole('heading', { name })).toBeVisible();

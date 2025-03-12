@@ -34,7 +34,7 @@ export function useDialog<E extends HTMLElement>(
     setShowDialog(true);
     setVisible(true);
     bindShow?.(true);
-  }, []);
+  }, [bindShow]);
 
   const close = useCallback((success = false) => {
     setWasSuccess(success);
@@ -55,7 +55,7 @@ export function useDialog<E extends HTMLElement>(
     setWasSuccess(false);
 
     triggerRef?.current?.focus();
-  }, [wasSuccess, onSuccess, onCancel]);
+  }, [wasSuccess, onSuccess, onCancel, bindShow, triggerRef]);
 
   /** Props that should be passed to a {@link Dialog} component. */
   const dialogProps = useMemo<InternalDialogProps>(

@@ -80,36 +80,39 @@ export function NewResourceUIProvider({ children }: PropsWithChildren) {
   const [Dialog, setDialog] = useState<JSX.Element | undefined>(undefined);
   const navigate = useNavigateWithTransition();
 
-  const showNewResourceUI = useCallback(async (isA: string, parent: string) => {
-    // Show a dialog if one is registered for the given class
-    if (dialogs.has(isA)) {
-      const onClose = () => {
-        setDialog(undefined);
-      };
+  const showNewResourceUI = useCallback(
+    async (isA: string, parent: string) => {
+      // Show a dialog if one is registered for the given class
+      if (dialogs.has(isA)) {
+        const onClose = () => {
+          setDialog(undefined);
+        };
 
-      const Comp = dialogs.get(isA)!;
-      setDialog(<Comp parent={parent} onClose={onClose} />);
+        const Comp = dialogs.get(isA)!;
+        setDialog(<Comp parent={parent} onClose={onClose} />);
 
-      return;
-    }
-
-    // If a basicInstanceHandler is registered for the class, create a resource of the given class with some default values.
-    if (basicNewInstanceHandlers.has(isA)) {
-      try {
-        await basicNewInstanceHandlers.get(isA)?.(parent, createAndNavigate, {
-          store,
-          settings,
-        });
-      } catch (e) {
-        store.notifyError(e);
+        return;
       }
 
-      return;
-    }
+      // If a basicInstanceHandler is registered for the class, create a resource of the given class with some default values.
+      if (basicNewInstanceHandlers.has(isA)) {
+        try {
+          await basicNewInstanceHandlers.get(isA)?.(parent, createAndNavigate, {
+            store,
+            settings,
+          });
+        } catch (e) {
+          store.notifyError(e);
+        }
 
-    // Default behaviour. Navigate to a new resource form for the given class.
-    navigate(newURL(isA, parent, store.createSubject()));
-  }, []);
+        return;
+      }
+
+      // Default behaviour. Navigate to a new resource form for the given class.
+      navigate(newURL(isA, parent, store.createSubject()));
+    },
+    [store, settings, createAndNavigate, navigate],
+  );
 
   const context = useMemo(
     () => ({

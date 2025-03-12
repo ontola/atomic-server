@@ -1,10 +1,21 @@
 import { Page, expect, Browser, Locator } from '@playwright/test';
 
+export const PROPERTIES = {
+  isA: 'https://atomicdata.dev/properties/isA',
+  set: 'https://atomicdata.dev/properties/set',
+  delete: 'https://atomicdata.dev/properties/delete',
+  push: 'https://atomicdata.dev/properties/push',
+} as const;
+
 export const DELETE_PREVIOUS_TEST_DRIVES =
   process.env.DELETE_PREVIOUS_TEST_DRIVES === 'false' ? false : true;
 
-export const SERVER_URL = process.env.SERVER_URL || 'http://localhost:9883';
-export const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+export const SERVER_URL =
+  process.env.SERVER_URL || 'http://localhost-atomic:9883';
+export const FRONTEND_URL =
+  process.env.FRONTEND_URL || 'http://localhost-atomic:9883';
+const startDriveName = new URL(FRONTEND_URL).hostname;
+
 // TODO: Should use an env var so the CI can test the setup test.
 export const INITIAL_TEST = false;
 export const DEMO_INVITE_NAME = 'document demo invite';
@@ -86,14 +97,28 @@ export async function newDrive(page: Page) {
   const driveTitle = `testdrive-${timestamp()}`;
   await page.locator(sideBarDriveSwitcher).click();
   await page.locator('button:has-text("New Drive")').click();
-  await expect(
-    currentDialog(page).getByRole('heading', { name: 'New Drive' }),
-  ).toBeVisible();
+  await waitForCurrentDialog(page);
 
   await currentDialog(page).getByLabel('Name').fill(driveTitle);
 
-  await currentDialog(page).getByRole('button', { name: 'Create' }).click();
-  await expect(currentDriveTitle(page)).not.toHaveText('localhost');
+  await currentDialog(page)
+    .locator('footer button', { hasText: 'Create' })
+    .waitFor({
+      state: 'attached',
+    });
+  await expect(
+    currentDialog(page).locator('footer button', { hasText: 'Create' }),
+  ).toBeEnabled();
+
+  const navigationPromise = page.waitForNavigation({ timeout: 30000 });
+  await currentDialog(page)
+    .locator('footer button', { hasText: 'Create' })
+    .click();
+
+  await navigationPromise;
+
+  // Wait for the sidebar to update with the new drive title
+  await expect(currentDriveTitle(page)).not.toHaveText(startDriveName);
   await expect(currentDriveTitle(page)).toHaveText(driveTitle);
   const driveURL = await getCurrentSubject(page);
   expect(driveURL).toContain(SERVER_URL);
@@ -187,7 +212,15 @@ export async function openAtomic(page: Page) {
 /** Opens the users' profile, sets a username */
 export async function editProfileAndCommit(page: Page) {
   await openAgentPage(page);
-  await page.click('text=Edit profile');
+  // Wait for the agent to be loaded
+  await expect(
+    page.getByRole('button', { name: 'Edit profile' }),
+  ).toBeVisible();
+  await expect(page.getByRole('main').getByText('loading')).not.toBeVisible();
+
+  const navigationPromise = page.waitForNavigation({ timeout: 5000 });
+  await page.getByRole('button', { name: 'Edit profile' }).click();
+  await navigationPromise;
   const advancedButton = page.getByRole('button', { name: 'advanced' });
   await advancedButton.scrollIntoViewIfNeeded();
   await advancedButton.click();
@@ -392,9 +425,91 @@ export async function contextMenuClick(text: string, page: Page) {
   await page.getByTestId(`menu-item-${text}`).click();
 }
 
-export const waitForCommit = async (page: Page) =>
-  page.waitForResponse(`${SERVER_URL}/commit`);
+export const anyValue = Symbol('any');
+type CommitFilter = {
+  set?: Record<string, unknown | typeof anyValue>;
+  // TODO: Add push and delete filters when they're needed.
+};
+
+export const waitForCommit = async (page: Page, filter?: CommitFilter) =>
+  page.waitForResponse(async response => {
+    if (
+      !response.url().endsWith('/commit') ||
+      response.request().method() !== 'POST'
+    ) {
+      return false;
+    }
+
+    const commit = response.request().postDataJSON() as Record<string, unknown>;
+
+    const isA = commit[PROPERTIES.isA] as string[];
+
+    if (!isA.includes('https://atomicdata.dev/classes/Commit')) {
+      return false;
+    }
+
+    // We have a commit and there is no filter so we can stop waiting.
+    if (!filter) {
+      return true;
+    }
+
+    if (filter.set) {
+      if (!(PROPERTIES.set in commit)) {
+        return false;
+      }
+
+      const set = commit[PROPERTIES.set] as Record<string, unknown>;
+
+      for (const [key, value] of Object.entries(filter.set)) {
+        if (!(key in set)) {
+          return false;
+        }
+
+        if (value === anyValue) {
+          continue;
+        }
+
+        if (JSON.stringify(set[key]) !== JSON.stringify(value)) {
+          return false;
+        }
+      }
+    }
+
+    return true;
+  });
 
 export function currentDialog(page: Page) {
   return page.locator('dialog[data-top-level="true"]');
+}
+
+export async function waitForCurrentDialog(page: Page) {
+  await currentDialog(page).waitFor({ state: 'visible' });
+}
+
+export const DIALOG_CLOSE_BUTTON = 'dialog-close-button';
+
+export async function inDialog(
+  page: Page,
+  fn: (
+    dialog: Locator,
+    closeDialogWith: (buttonText: string) => Promise<void>,
+  ) => Promise<void>,
+): Promise<void> {
+  await waitForCurrentDialog(page);
+
+  const closeDialogWith = async (buttonText: string) => {
+    if (buttonText === DIALOG_CLOSE_BUTTON) {
+      await currentDialog(page).getByRole('button', { name: 'Close' }).click();
+
+      return;
+    }
+
+    const button = page.locator('footer button', { hasText: buttonText });
+    await expect(button).toBeEnabled();
+    await button.click();
+  };
+
+  await fn(currentDialog(page), closeDialogWith);
+
+  await currentDialog(page).waitFor({ state: 'hidden' });
 }

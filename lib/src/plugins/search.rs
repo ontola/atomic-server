@@ -21,6 +21,7 @@ pub fn search_endpoint() -> Endpoint {
   }
 }
 
+#[tracing::instrument(skip(context))]
 fn handle_search(context: HandleGetContext) -> AtomicResult<ResourceResponse> {
     let HandleGetContext {
         subject,
