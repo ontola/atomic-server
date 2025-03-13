@@ -107,6 +107,10 @@ impl Subject {
     /// Normalizes a subject string based on a base domain.
     /// If the URL matches the base domain or its subdomains, it becomes an Internal subject.
     pub fn from_raw(s: &str, base_domain: Option<&str>) -> Self {
+        if s.starts_with("/did:") {
+            return Subject::from_raw(&s[1..], base_domain);
+        }
+
         if s.starts_with("internal:") {
             if let Ok(u) = Url::parse(s) {
                 return Subject::Internal(u);

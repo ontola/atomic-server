@@ -1018,7 +1018,7 @@ impl Storelike for Db {
             let origin = self
                 .get_base_domain()
                 .unwrap_or_else(|| "http://localhost".to_string());
-            if resolved_url.starts_with(&origin) {
+            if resolved_url.starts_with(&origin) || resolved_url.starts_with("did:") {
                 return self
                     .handle_not_found(
                         &resolved_url,

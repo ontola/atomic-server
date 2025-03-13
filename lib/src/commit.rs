@@ -211,30 +211,47 @@ impl Commit {
             Some(sig) => sig,
             None => return Err("No signature set".into()),
         };
-        // If the signer is the subject, we can't fetch the public key from the store.
-        // This is the case for self-signed DIDs.
-        let pubkey_b64 = if commit.signer == commit.subject {
-            // If the resource is being destroyed, we can't verify the signature using the resource itself.
-            if commit.destroy.unwrap_or(false) {
-                return Err("Cannot verify signature for self-signed destroy commit".into());
-            }
-            // Logic for self-signed commits (Did creation)
-            // We need to look at the `set` fields to find the public key
-            if let Some(set) = &commit.set {
-                if let Some(pk_val) = set.get(urls::PUBLIC_KEY) {
-                    pk_val.to_string()
+        let signer_subject = store.normalize_subject(&commit.signer.clone().into());
+        // We first try to get the public key from the store.
+        // If the signer is found in the store, we use that key.
+        // This handles updates to existing agents by themselves.
+        let pubkey_b64 = match store.get_resource(&signer_subject).await {
+            Ok(resource) => resource.get(urls::PUBLIC_KEY)?.to_string(),
+            Err(e) => {
+                // If the signer is not found in the store, we might be able to extract the public key from the URL.
+                if let crate::Subject::Internal(url) = &signer_subject {
+                    let path = url.path();
+                    if path.starts_with("/agents/") {
+                        path.strip_prefix("/agents/").unwrap().to_string()
+                    } else {
+                        return Err(format!("Signer {} not found in store, and path does not start with /agents/. Error: {}", commit.signer, e).into());
+                    }
+                } else if commit.signer.starts_with("did:key:") {
+                    // Extract from did:key (placeholder for future implementation)
+                    return Err(format!(
+                        "did:key not yet fully supported for signature verification: {}",
+                        commit.signer
+                    )
+                    .into());
+                } else if commit.signer == commit.subject && commit.previous_commit.is_none() {
+                    // If the signer is not found in the store AND signer == subject,
+                    // it's likely a self-signed genesis commit (e.g. creating a new DID/agent).
+                    if commit.destroy.unwrap_or(false) {
+                        return Err("Cannot verify signature for self-signed destroy commit".into());
+                    }
+                    if let Some(set) = &commit.set {
+                        if let Some(pk_val) = set.get(urls::PUBLIC_KEY) {
+                            pk_val.to_string()
+                        } else {
+                            return Err("Self-signed genesis commit must contain public key in 'set' field for non-extractable signer URLs".into());
+                        }
+                    } else {
+                        return Err("Self-signed genesis commit must contain 'set' field".into());
+                    }
                 } else {
-                    return Err("Self-signed commit must contain public key".into());
+                    return Err(format!("Signer {} not found in store, and this is not a self-signed genesis commit or extractable URL. Error: {}", commit.signer, e).into());
                 }
-            } else {
-                return Err("Self-signed commit must contain set".into());
             }
-        } else {
-            store
-                .get_resource(&crate::Subject::from(commit.signer.as_str()))
-                .await?
-                .get(urls::PUBLIC_KEY)?
-                .to_string()
         };
         let agent_pubkey = decode_base64(&pubkey_b64)?;
         let stringified_commit = commit.serialize_deterministically_json_ad(store).await?;

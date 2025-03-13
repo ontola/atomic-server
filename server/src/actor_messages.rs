@@ -9,13 +9,13 @@ use serde::{Deserialize, Serialize};
 #[rtype(result = "()")]
 pub struct Subscribe {
     pub addr: Addr<crate::handlers::web_sockets::WebSocketConnection>,
-    pub subject: String,
+    pub subject: atomic_lib::Subject,
     pub agent: String,
 }
 
 #[derive(Deserialize, Serialize)]
 pub struct YSubscriptionJSON {
-    pub subject: String,
+    pub subject: atomic_lib::Subject,
     pub property: String,
 }
 
@@ -23,7 +23,7 @@ pub struct YSubscriptionJSON {
 #[rtype(result = "()")]
 pub struct SubscribeYSync {
     pub addr: Addr<crate::handlers::web_sockets::WebSocketConnection>,
-    pub subject: String,
+    pub subject: atomic_lib::Subject,
     pub property: String,
     pub agent: String,
 }
@@ -32,7 +32,7 @@ pub struct SubscribeYSync {
 #[rtype(result = "()")]
 pub struct UnsubscribeYSync {
     pub addr: Addr<crate::handlers::web_sockets::WebSocketConnection>,
-    pub subject: String,
+    pub subject: atomic_lib::Subject,
     pub property: String,
 }
 
@@ -49,7 +49,7 @@ pub struct CommitMessage {
 #[derive(Message, Clone, Debug, Serialize, Deserialize)]
 #[rtype(result = "()")]
 pub struct YSyncUpdate {
-    pub subject: String,
+    pub subject: atomic_lib::Subject,
     pub property: String,
     pub awareness_update: Option<String>,
     pub doc_update: Option<String>,

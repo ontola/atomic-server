@@ -19,7 +19,7 @@ struct Subscription {
 /// Yjs updates that do not need to be persisted (e.g. cursor positions and selections)
 /// The Yjs updates that do need persistence are handled by Commits.
 pub struct YSyncBroadcaster {
-    subscriptions: HashMap<(String, String), HashSet<Subscription>>,
+    subscriptions: HashMap<(atomic_lib::Subject, String), HashSet<Subscription>>,
     store: Db,
 }
 
@@ -39,13 +39,15 @@ impl Handler<SubscribeYSync> for YSyncBroadcaster {
         Box::pin(
             async move {
                 let self_url = store.get_base_domain().unwrap();
-                if !msg.subject.starts_with(&self_url) {
-                    tracing::warn!("can't subscribe to external resource");
+                if !msg.subject.as_str().starts_with(&self_url)
+                    && !msg.subject.as_str().starts_with("did:")
+                {
+                    tracing::warn!("can't subscribe to external resource: {}", msg.subject);
                     return None;
                 }
                 let key = (msg.subject.clone(), msg.property.clone());
 
-                let resource = match store.get_resource(&msg.subject.clone().into()).await {
+                let resource = match store.get_resource(&msg.subject).await {
                     Ok(resource) => resource,
                     Err(e) => {
                         tracing::debug!(
@@ -137,22 +139,18 @@ impl Handler<YSyncUpdate> for YSyncBroadcaster {
 
         let Some(subscribers) = self.subscriptions.get(&key) else {
             tracing::warn!("no subscribers for {}", msg.subject);
-            return ();
+            return;
         };
 
         // Check if msg.addr is in the subscibers and has write rights, if not, don't send the update.
         let Some(addr) = &msg.addr else {
             tracing::warn!("no addr in update for {}", msg.subject);
-            return ();
+            return;
         };
 
-        if subscribers
-            .iter()
-            .find(|s| s.addr == *addr && s.can_write)
-            .is_none()
-        {
+        if !subscribers.iter().any(|s| s.addr == *addr && s.can_write) {
             tracing::warn!("not allowed to send update to {}", msg.subject);
-            return ();
+            return;
         }
 
         for subscriber in subscribers {
