@@ -22,10 +22,7 @@ export function ClassCardRead({ subject }: ClassCardReadProps): JSX.Element {
   const [recommends] = useArray(resource, core.properties.recommends);
 
   return (
-    <TargetableCard
-      subject={subject}
-      testId={`class-card-read-${resource.title}`}
-    >
+    <TargetableCard subject={subject}>
       <Column>
         <Row center justify='space-between'>
           <StyledH3>

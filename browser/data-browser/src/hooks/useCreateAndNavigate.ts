@@ -51,7 +51,6 @@ export function useCreateAndNavigate(): CreateAndNavigate {
           await onCreated(resource);
         }
 
-        console.log('navigating to', resource.subject);
         await navigate({ to: constructOpenURL(resource.subject, extraParams) });
         toast.success(`${classResource.title} created`);
         store.notifyResourceManuallyCreated(resource);
