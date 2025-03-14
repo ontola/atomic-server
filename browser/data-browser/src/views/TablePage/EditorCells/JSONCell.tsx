@@ -47,15 +47,11 @@ function JSONCellEdit({
 
   useCellOptions(options);
 
-  const openDialog = () => {
-    show();
-  };
-
   const displayValue = JSON.stringify(value);
 
   return (
     <>
-      <IconButton title='Open edit dialog' onClick={openDialog} autoFocus>
+      <IconButton title='Open edit dialog' onClick={show} autoFocus>
         <FaPencil />
       </IconButton>
       <div>{displayValue}</div>
