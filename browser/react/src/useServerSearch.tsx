@@ -76,7 +76,7 @@ export function useServerSearch(
       .finally(() => {
         setLoading(false);
       });
-  }, [store, allowEmptyQuery, debouncedQuery, searchOpts]);
+  }, [store, allowEmptyQuery, debouncedQuery, JSON.stringify(searchOpts)]);
 
   // Remove cached results when component unmounts.
   useEffect(() => {

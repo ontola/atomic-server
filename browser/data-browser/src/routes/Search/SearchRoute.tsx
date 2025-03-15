@@ -118,9 +118,7 @@ export function Search(): JSX.Element {
     heading = 'Loading results...';
   }
 
-  if (results.length > 0) {
-    heading = undefined;
-  }
+
 
   const showHelperMessage = !query && filterIsEmpty;
 
@@ -141,6 +139,8 @@ export function Search(): JSX.Element {
                 <span>
                   {heading ? (
                     heading
+                  ) : loading ? (
+                    <>Searching for <QueryText>{query}</QueryText>...</>
                   ) : (
                     <>
                       {results.length}{' '}
@@ -166,7 +166,11 @@ export function Search(): JSX.Element {
                 </HelperMessage>
               )}
               <ErrorBoundary>
-                <Column ref={resultsDiv} gap='1rem'>
+                <Column
+                  ref={resultsDiv}
+                  gap='1rem'
+                  // style={{ opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}
+                >
                   {results.map((subject, index) => (
                     <SelectableResult
                       key={subject}

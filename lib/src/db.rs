@@ -368,6 +368,7 @@ impl Db {
     fn map_sled_item_to_resource(
         item: Result<(sled::IVec, sled::IVec), sled::Error>,
         include_external: bool,
+        base_domain: Option<&str>,
     ) -> Option<Resource> {
         let (subject, resource_bin) = item.expect(DB_CORRUPT_MSG);
         let subject: String = String::from_utf8_lossy(&subject).to_string();
@@ -379,7 +380,10 @@ impl Db {
         let propvals: PropVals = decode_propvals(&resource_bin)
             .unwrap_or_else(|e| panic!("{}. {}", corrupt_db_message(&subject), e));
 
-        Some(Resource::from_propvals(propvals, subject.into()))
+        Some(Resource::from_propvals(
+            propvals,
+            Subject::from_raw(&subject, base_domain),
+        ))
     }
 
     pub fn get_plugin_meta(&self, key: &PluginMetaKey) -> AtomicResult<Option<PluginMeta>> {
@@ -1178,10 +1182,10 @@ impl Storelike for Db {
         &self,
         include_external: bool,
     ) -> Box<dyn std::iter::Iterator<Item = Resource> + Send> {
-        let result = self
-            .resources
-            .into_iter()
-            .filter_map(move |item| Db::map_sled_item_to_resource(item, include_external));
+        let base_domain = self.base_domain.clone();
+        let result = self.resources.into_iter().filter_map(move |item| {
+            Db::map_sled_item_to_resource(item, include_external, base_domain.as_deref())
+        });
 
         Box::new(result)
     }

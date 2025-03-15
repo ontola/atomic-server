@@ -113,6 +113,8 @@ impl SearchState {
         let subject = resource.get_subject().to_string();
         let writer = self.writer.read()?;
 
+        println!("Adding resource to search index: {}", subject);
+
         let mut doc = tantivy::TantivyDocument::default();
         doc.add_object(
             fields.propvals,
@@ -207,7 +209,7 @@ pub fn get_index(config: &Config) -> AtomicServerResult<(IndexWriter, tantivy::I
     let mmap_directory = tantivy::directory::MmapDirectory::open(&config.search_index_path)?;
     let index = Index::open_or_create(mmap_directory, schema).map_err(|e| {
         format!(
-            "Failed to create or open search index. Try starting again with --rebuild-index. Error: {}",
+            "Failed to create or open search index. Try starting again with --rebuild-indexes. Error: {}",
             e
         )
     })?;
@@ -291,11 +293,8 @@ fn extract_plain_text(fragment: &yrs::XmlFragmentRef, txn: &yrs::TransactionMut)
     let mut text_content = String::new();
 
     for node in fragment.successors(txn) {
-        match node {
-            yrs::types::xml::XmlOut::Text(text) => {
-                text_content.push_str(&text.get_string(txn));
-            }
-            _ => {}
+        if let yrs::types::xml::XmlOut::Text(text) = node {
+            text_content.push_str(&text.get_string(txn));
         }
     }
 
