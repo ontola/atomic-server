@@ -60,6 +60,7 @@ pub const LAST_COMMIT: &str = "https://atomicdata.dev/properties/lastCommit";
 pub const PUBLIC_KEY: &str = "https://atomicdata.dev/properties/publicKey";
 pub const NAME: &str = "https://atomicdata.dev/properties/name";
 pub const DRIVES: &str = "https://atomicdata.dev/properties/drives";
+pub const AVAILABLE_DOMAINS: &str = "https://atomicdata.dev/properties/availableDomains";
 // ... for Collections
 pub const COLLECTION_PROPERTY: &str = "https://atomicdata.dev/properties/collection/property";
 pub const COLLECTION_VALUE: &str = "https://atomicdata.dev/properties/collection/value";

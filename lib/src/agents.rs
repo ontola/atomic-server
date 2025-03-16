@@ -96,21 +96,21 @@ impl Agent {
         Agent::new_from_private_key(name, &keypair.private)
     }
 
-    /// Creates a new Agent on this server, using the server's Server URL.
-    /// Derives the public key.
+    /// Creates a new Agent with a DID identifier.
+    /// Derives the public key from the private key.
     pub fn new_from_private_key(name: Option<&str>, private_key: &str) -> AtomicResult<Agent> {
         let keypair = generate_public_key(private_key);
 
         Ok(Agent {
             private_key: Some(keypair.private),
             public_key: keypair.public.clone(),
-            subject: format!("internal:/agents/{}", keypair.public),
+            subject: format!("did:ad:{}", keypair.public),
             name: name.map(|x| x.to_owned()),
             created_at: crate::utils::now(),
         })
     }
 
-    /// Creates a new Agent on this server, using the server's Server URL.
+    /// Creates a new Agent with a DID identifier from a public key.
     /// This will not be able to write, because there is no private key.
     pub fn new_from_public_key(public_key: &str) -> AtomicResult<Agent> {
         verify_public_key(public_key)?;
@@ -118,7 +118,7 @@ impl Agent {
         Ok(Agent {
             private_key: None,
             public_key: public_key.into(),
-            subject: format!("internal:/agents/{}", public_key),
+            subject: format!("did:ad:{}", public_key),
             name: None,
             created_at: crate::utils::now(),
         })

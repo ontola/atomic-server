@@ -998,7 +998,7 @@ mod test {
         let agent = Agent::new_from_private_key(None, private_key).unwrap();
         assert_eq!(
             &agent.subject,
-            "internal:/agents/7LsjMW5gOfDdJzK/atgjQ1t20J/rw8MjVg6xwqm+h8U="
+            "did:ad:7LsjMW5gOfDdJzK/atgjQ1t20J/rw8MjVg6xwqm+h8U="
         );
         store
             .add_resource(&agent.to_resource().unwrap())
@@ -1019,8 +1019,8 @@ mod test {
             .await
             .unwrap();
 
-        assert_eq!(serialized, "{\"https://atomicdata.dev/properties/createdAt\":0,\"https://atomicdata.dev/properties/isA\":[\"https://atomicdata.dev/classes/Commit\"],\"https://atomicdata.dev/properties/set\":{\"https://atomicdata.dev/properties/description\":\"Some value\",\"https://atomicdata.dev/properties/shortname\":\"someval\"},\"https://atomicdata.dev/properties/signer\":\"http://localhost:9883/agents/7LsjMW5gOfDdJzK/atgjQ1t20J/rw8MjVg6xwqm+h8U=\",\"https://atomicdata.dev/properties/subject\":\"https://localhost/new_thing\"}");
-        assert_eq!(signature, "pYkM6dC4qFGGh6EXbys6NwmhaPIA6Z7Ij//rPejo5mnBOvs1EFxP0iErfJiUXZgJDi5yK4QOBMb2nf2FIKcUCA==");
+        assert_eq!(serialized, "{\"https://atomicdata.dev/properties/createdAt\":0,\"https://atomicdata.dev/properties/isA\":[\"https://atomicdata.dev/classes/Commit\"],\"https://atomicdata.dev/properties/set\":{\"https://atomicdata.dev/properties/description\":\"Some value\",\"https://atomicdata.dev/properties/shortname\":\"someval\"},\"https://atomicdata.dev/properties/signer\":\"did:ad:7LsjMW5gOfDdJzK/atgjQ1t20J/rw8MjVg6xwqm+h8U=\",\"https://atomicdata.dev/properties/subject\":\"https://localhost/new_thing\"}");
+        assert_eq!(signature, "EaTH336kiEVEMrCKbMEsqreHAqO0bpdOUWAq3rACdVedH9rX/D1bw//iLKXuqzgxiDuzGKJ8MTNfQNeIxk7pAA==");
     }
 
     #[test]

@@ -151,10 +151,7 @@ pub fn get_auth(
     map: &HeaderMap,
     requested_subject: String,
 ) -> AtomicServerResult<Option<AuthValues>> {
-    let from_header = match get_auth_headers(map, requested_subject.clone()) {
-        Ok(res) => res,
-        Err(err) => return Err(err),
-    };
+    let from_header = get_auth_headers(map, requested_subject.clone())?;
 
     match from_header {
         Some(v) => Ok(Some(v)),

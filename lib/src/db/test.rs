@@ -134,7 +134,7 @@ async fn destroy_resource_and_check_collection_and_commits() {
         .unwrap();
     assert_eq!(
         agents_collection_count_1, 1,
-        "There should be only 1 agent in this members collection (we assume there is one agent already present from init)"
+        "There should be 1 agent in this collection initially (the agent created during init)"
     );
 
     // We will count the commits, and check if they've incremented later on.
