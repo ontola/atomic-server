@@ -122,6 +122,10 @@ const MarkdownWrapper = styled.div`
 
     border: 1px solid ${props => props.theme.colors.bg2};
   }
+
+  a {
+    word-break: break-word;
+  }
 `;
 
 export default Markdown;

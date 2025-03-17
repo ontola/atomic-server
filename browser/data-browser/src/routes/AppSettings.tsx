@@ -13,6 +13,8 @@ import { Main } from '../components/Main';
 import { Panel, usePanelList } from '../components/SideBar/usePanelList';
 import { pathNames } from './paths';
 import { appRoute } from './RootRoutes';
+import { InputStyled, InputWrapper } from '../components/forms/InputStyles';
+import { MCPServersManager } from '../components/MCPServersManager';
 
 export const AppSettingsRoute = createRoute({
   path: pathNames.appSettings,
@@ -30,6 +32,10 @@ const AppSettings: React.FunctionComponent = () => {
     setSidebarKeyboardDndEnabled,
     hideTemplates,
     setHideTemplates,
+    openRouterApiKey,
+    setOpenRouterApiKey,
+    mcpServers,
+    setMcpServers,
   } = useSettings();
 
   const { enabledPanels, enablePanel, disablePanel } = usePanelList();
@@ -105,6 +111,26 @@ const AppSettings: React.FunctionComponent = () => {
             />{' '}
             Enable keyboard drag & drop in sidebar
           </CheckboxLabel>
+          <Heading>AI</Heading>
+          {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
+          <label>
+            <Column gap='0.5rem'>
+              OpenRouter API Key
+              <InputWrapper>
+                <InputStyled
+                  type='password'
+                  value={openRouterApiKey || ''}
+                  onChange={e =>
+                    setOpenRouterApiKey(e.target.value || undefined)
+                  }
+                  placeholder='Enter your OpenRouter API key'
+                />
+              </InputWrapper>
+            </Column>
+          </label>
+
+          <Heading>MCP Servers</Heading>
+          <MCPServersManager servers={mcpServers} setServers={setMcpServers} />
         </Column>
       </ContainerNarrow>
     </Main>

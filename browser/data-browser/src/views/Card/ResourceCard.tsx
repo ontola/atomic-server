@@ -27,6 +27,7 @@ import { styled } from 'styled-components';
 import { ResourceCardTitle } from './ResourceCardTitle';
 import { Column, Row } from '../../components/Row';
 import { Tag } from '../../components/Tag';
+import { ResourceContextMenu } from '../../components/ResourceContextMenu';
 
 interface ResourceCardProps extends CardViewPropsBase {
   /** The subject URL - the identifier of the resource. */
@@ -128,7 +129,10 @@ export function ResourceCardDefault({
   return (
     <Column gap='0.5rem'>
       <ResourceCardTitle resource={resource}>
-        <span>{isAResource.title}</span>
+        <Row center gap='1ch'>
+          <span>{isAResource.title}</span>
+          <ResourceContextMenu simple subject={resource.subject} />
+        </Row>
       </ResourceCardTitle>
       <Row gap='1ch' style={{ fontSize: '0.8rem' }}>
         {tags.map(tag => (

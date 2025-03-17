@@ -25,6 +25,7 @@ import {
   FaTrash,
   FaPlus,
   FaArrowUpRightFromSquare,
+  FaMessage,
 } from 'react-icons/fa6';
 import { useQueryScopeHandler } from '../../hooks/useQueryScope';
 import {
@@ -38,6 +39,7 @@ import { ResourceCodeUsageDialog } from '../../views/CodeUsage/ResourceCodeUsage
 import { useNewRoute } from '../../helpers/useNewRoute';
 import { addIf } from '../../helpers/addIf';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
+import { newContextItem, useAISidebar } from '../AI/AISidebarContext';
 
 export const ContextMenuOptions = {
   View: 'view',
@@ -52,6 +54,7 @@ export const ContextMenuOptions = {
   NewChild: 'newChild',
   Export: 'export',
   Open: 'open',
+  AddToChat: 'addToChat',
 } as const;
 
 export type ContextMenuOptionsUnion =
@@ -93,7 +96,22 @@ export function ResourceContextMenu({
   const [currentSubject] = useCurrentSubject();
   const canWrite = useCanWrite(resource);
   const { enableScope } = useQueryScopeHandler(subject);
+  const { setContextItems, isOpen, setIsOpen } = useAISidebar();
   // Try to not have a useResource hook in here, as that will lead to many costly fetches when the user enters a new subject
+
+  const addToChat = () => {
+    setContextItems(prev => [
+      ...prev.filter(x => x.subject !== subject),
+      newContextItem({
+        type: 'resource',
+        subject,
+      }),
+    ]);
+
+    if (!isOpen) {
+      setIsOpen(true);
+    }
+  };
 
   const handleDestroy = useCallback(async () => {
     const parent = resource.get(core.properties.parent);
@@ -171,6 +189,13 @@ export function ResourceContextMenu({
         'Usage instructions for how to fetch and use the resource in your code.',
       icon: <FaCode />,
       onClick: () => setShowCodeUsageDialog(true),
+    },
+    {
+      id: ContextMenuOptions.AddToChat,
+      label: 'Add to chat',
+      helper: 'Add the resource as context to the AI sidebar',
+      icon: <FaMessage />,
+      onClick: addToChat,
     },
     {
       id: ContextMenuOptions.Scope,

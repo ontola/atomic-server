@@ -4,6 +4,8 @@ import { transition } from '../helpers/transition';
 export const SkeletonButton = styled.button`
   display: flex;
   justify-content: center;
+  align-items: center;
+  gap: ${p => p.theme.size(1)};
   color: ${p => p.theme.colors.textLight};
   background: none;
   appearance: none;
