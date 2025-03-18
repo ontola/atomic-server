@@ -196,7 +196,11 @@ async fn server_tests() {
     let req = build_request_authenticated("/did:ad:test", &appstate);
     let resp = test::call_service(&app, req.to_request()).await;
     // It should be a 404 because did:ad:test doesn't exist, but it confirms it reached the handler correctly
-    assert_eq!(resp.status(), 404);
+    assert_eq!(
+        resp.status(),
+        404,
+        "Should be a 404, because `did:ad:test` does not exist"
+    );
 }
 
 /// Gets the body from the response as a String. Why doen't actix provide this?

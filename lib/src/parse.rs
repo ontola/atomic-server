@@ -830,7 +830,7 @@ mod test {
         assert_eq!(found.get(urls::NAME).unwrap().to_string(), "My resource");
 
         // LocalId should be removed from the imported resource
-        assert_eq!(found.get(urls::LOCAL_ID).is_err(), true);
+        assert!(found.get(urls::LOCAL_ID).is_err());
     }
     #[tokio::test]
     async fn import_resource_with_json() {
@@ -876,7 +876,7 @@ mod test {
         assert_eq!(found.get(urls::NAME).unwrap().to_string(), "My resource");
 
         // LocalId should be removed from the imported resource
-        assert_eq!(found.get(urls::LOCAL_ID).is_err(), true);
+        assert!(found.get(urls::LOCAL_ID).is_err());
     }
 
     #[tokio::test]

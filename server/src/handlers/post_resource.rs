@@ -24,12 +24,10 @@ pub async fn handle_post_resource(
     let mut content_type = get_accept(headers);
     let origin = context.origin.clone();
 
-    // Get the subject from the path, or return the home URL
-    let subject = if let Some(subj_end) = path {
+    let subject_string = if let Some(subj_end) = path {
         let mut subj_end_string = subj_end.as_str();
-        // If the request is for the root, return the home URL
         if subj_end_string.is_empty() {
-            origin.to_string()
+            "/".to_string()
         } else {
             if content_type == ContentType::Html {
                 if let Some((ext, path)) = try_extension(subj_end_string) {
@@ -37,34 +35,32 @@ pub async fn handle_post_resource(
                     subj_end_string = path;
                 }
             }
-            // Check extensions and set datatype. Harder than it looks to get right...
-            // This might not be the best way of creating the subject. But I can't access the full URL from any actix stuff!
             let querystring = if req.query_string().is_empty() {
                 "".to_string()
             } else {
                 format!("?{}", req.query_string())
             };
-            let subject = if subj_end_string.starts_with("did:") {
-                subj_end_string.to_string()
-            } else {
-                format!("{}/{}{}", origin, subj_end_string, querystring)
-            };
-            subject
+            format!("/{}{}", subj_end_string, querystring)
         }
     } else {
-        // There is no end string, so It's the root of the URL, the base URL!
-        String::from(&origin)
+        "/".to_string()
     };
+
+    let full_subject = format!("{}{}", origin, subject_string);
 
     let store = &appstate.store;
     timer.add("parse_headers");
 
-    let for_agent = get_client_agent(headers, &appstate, subject.clone()).await?;
+    let for_agent = get_client_agent(headers, &appstate, full_subject.clone()).await?;
     timer.add("get_agent");
 
     let mut builder = HttpResponse::Ok();
 
-    tracing::debug!("post_resource: {} as {}", subject, content_type.to_mime());
+    tracing::debug!(
+        "post_resource: {} as {}",
+        full_subject,
+        content_type.to_mime()
+    );
     builder.append_header(("Content-Type", content_type.to_mime()));
     // This prevents the browser from displaying the JSON response upon re-opening a closed tab
     // https://github.com/atomicdata-dev/atomic-server/issues/137
@@ -74,7 +70,7 @@ pub async fn handle_post_resource(
     ));
 
     let resource: Resource = store
-        .post_resource(&subject, body.into(), &for_agent)
+        .post_resource(&full_subject, body.into(), &for_agent)
         .await?;
     timer.add("post_resource");
 

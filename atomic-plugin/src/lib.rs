@@ -140,7 +140,7 @@ pub trait ClassExtender {
     fn class_url() -> Vec<String>;
 
     /// Called when a resource is fetched from the server. You can modify the resource in place.
-    fn on_resource_get<'a>(resource: &'a mut Resource) -> Result<Option<&'a Resource>, String> {
+    fn on_resource_get(resource: &mut Resource) -> Result<Option<&Resource>, String> {
         Ok(Some(resource))
     }
 

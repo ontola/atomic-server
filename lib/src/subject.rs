@@ -88,7 +88,7 @@ impl Subject {
                 let subdomain = self.subdomain();
                 let trimmed_origin = origin.trim_end_matches('/');
 
-                if let Some(s) = subdomain {
+                let mut resolved = if let Some(s) = subdomain {
                     if let Some(pos) = trimmed_origin.find("://") {
                         let (proto, rest) = trimmed_origin.split_at(pos + 3);
                         format!("{}{}.{}{}", proto, s, rest, path)
@@ -97,7 +97,17 @@ impl Subject {
                     }
                 } else {
                     format!("{}{}", trimmed_origin, path)
+                };
+
+                if let Some(q) = _u.query() {
+                    resolved.push('?');
+                    resolved.push_str(q);
                 }
+                if let Some(f) = _u.fragment() {
+                    resolved.push('#');
+                    resolved.push_str(f);
+                }
+                resolved
             }
             Subject::External(u) => u.to_string(),
             Subject::Did(u) => u.to_string(),
@@ -236,5 +246,43 @@ impl<'de> Deserialize<'de> for Subject {
     {
         let s = String::deserialize(deserializer)?;
         Ok(Subject::from(s))
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_did_parsing_and_resolution() {
+        let origin = "http://localhost:9883";
+        let did = "did:ad:C1PsEdNI7K1D4N2dMVaaHwxwevsl/6pL8rSdejvD+ori3rZb6eafyTgeEVKCHPG0Po3SBQyT7Ea/7pB/Fl8PCg==";
+        let with_slash = format!("/{}", did);
+
+        let subject_from_did = Subject::from_raw(did, None);
+        assert!(matches!(subject_from_did, Subject::Did(_)));
+        assert_eq!(subject_from_did.as_str(), did);
+        assert_eq!(subject_from_did.resolve(origin), did);
+
+        let subject_from_slash = Subject::from_raw(&with_slash, None);
+        assert!(matches!(subject_from_slash, Subject::Did(_)));
+        assert_eq!(subject_from_slash.as_str(), did);
+        assert_eq!(subject_from_slash.resolve(origin), did);
+    }
+
+    #[test]
+    fn test_internal_resolution() {
+        let origin = "http://localhost:9883";
+        let path = "/test";
+        let subject = Subject::new_local(path, None);
+        assert_eq!(subject.resolve(origin), format!("{}{}", origin, path));
+    }
+
+    #[test]
+    fn test_resolution_with_query() {
+        let origin = "http://localhost:9883";
+        let raw = "/test?query=value";
+        let subject = Subject::from_raw(raw, None);
+        // If this fails, we know resolve() is losing query params
+        assert_eq!(subject.resolve(origin), format!("{}{}", origin, raw));
     }
 }
