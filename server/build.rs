@@ -1,7 +1,7 @@
 use std::{
     fs::{self, Metadata},
     path::PathBuf,
-    time::SystemTime,
+    time::{Instant, SystemTime},
 };
 
 macro_rules! p {
@@ -18,6 +18,7 @@ struct Dirs {
 }
 
 fn main() -> std::io::Result<()> {
+    let start_total = Instant::now();
     // Uncomment this line if you want faster builds during development
     // return Ok(());
 
@@ -32,10 +33,28 @@ fn main() -> std::io::Result<()> {
     };
     println!("cargo:rerun-if-changed={}", BROWSER_ROOT);
 
-    if should_build(&dirs) {
+    let start_should_build = Instant::now();
+    let needs_build = should_build(&dirs);
+    p!(
+        "should_build() took: {:.3}s",
+        start_should_build.elapsed().as_secs_f32()
+    );
+
+    if needs_build {
+        let start_build_js = Instant::now();
         build_js(&dirs);
+        p!(
+            "build_js() took: {:.3}s",
+            start_build_js.elapsed().as_secs_f32()
+        );
+
+        let start_copy = Instant::now();
         let _ = fs::remove_dir_all(&dirs.js_dist_tmp);
         dircpy::copy_dir(&dirs.js_dist_source, &dirs.js_dist_tmp)?;
+        p!(
+            "Copying assets took: {:.3}s",
+            start_copy.elapsed().as_secs_f32()
+        );
     } else if dirs.js_dist_tmp.exists() {
         p!("Found {}, skipping copy", dirs.js_dist_tmp.display());
     } else {
@@ -44,10 +63,16 @@ fn main() -> std::io::Result<()> {
             dirs.js_dist_tmp.display(),
             dirs.js_dist_source.display()
         );
+        let start_copy = Instant::now();
         dircpy::copy_dir(&dirs.js_dist_source, &dirs.js_dist_tmp)?;
+        p!(
+            "Copying assets took: {:.3}s",
+            start_copy.elapsed().as_secs_f32()
+        );
     }
 
     // Makes the static files available for compilation
+    let start_bundle = Instant::now();
     static_files::resource_dir(&dirs.js_dist_tmp)
         .build()
         .unwrap_or_else(|_e| {
@@ -56,6 +81,15 @@ fn main() -> std::io::Result<()> {
                 dirs.js_dist_tmp.display()
             )
         });
+    p!(
+        "Bundling static files took: {:.3}s",
+        start_bundle.elapsed().as_secs_f32()
+    );
+
+    p!(
+        "Total build.rs time: {:.3}s",
+        start_total.elapsed().as_secs_f32()
+    );
 
     Ok(())
 }
@@ -74,8 +108,9 @@ fn should_build(dirs: &Dirs) -> bool {
         return false;
     }
     // Check if any JS files were modified since the last build
-    if let Ok(tmp_dist_index_html) =
-        std::fs::metadata(format!("{}/index.html", dirs.js_dist_tmp.display()))
+    // Compare against the actual dist output, not the temporary copy
+    if let Ok(dist_index_html) =
+        std::fs::metadata(format!("{}/index.html", dirs.js_dist_source.display()))
     {
         let has_changes = walkdir::WalkDir::new(&dirs.src_browser)
             .into_iter()
@@ -86,7 +121,7 @@ fn should_build(dirs: &Dirs) -> bool {
                     .map(|s| !s.starts_with(".DS_Store"))
                     .unwrap_or(false)
             })
-            .any(|entry| is_older_than(&entry.unwrap(), &tmp_dist_index_html));
+            .any(|entry| is_older_than(&entry.unwrap(), &dist_index_html));
 
         if has_changes {
             return true;
