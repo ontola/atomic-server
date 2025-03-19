@@ -15,59 +15,20 @@ import {
   FaFile,
   FaMagnifyingGlass,
   FaPencil,
-  FaSpinner,
 } from 'react-icons/fa6';
 import { Row } from '../Row';
 import { ResourceInline } from '../../views/ResourceInline';
 import { TOOL_NAMES } from './useAtomicTools';
 import { useResource, useResources } from '@tomic/react';
-import type { AIMessageContext } from './types';
+import {
+  isAIErrorMessage,
+  isMessageWithContext,
+  type AIChatDisplayMessage,
+} from './types';
 import { MessageContextItem } from './MessageContextItem';
 
 interface MessageProps {
   message: AIChatDisplayMessage;
-}
-
-export type AIChatErrorMessage = {
-  role: 'error';
-  content: string;
-};
-
-export type MessageWithContext = {
-  role: 'annotated-message';
-  message: CoreMessage;
-  context: AIMessageContext[];
-};
-
-export type AIChatDisplayMessage =
-  | CoreMessage
-  | AIChatErrorMessage
-  | MessageWithContext;
-
-export function isAIErrorMessage(
-  message: AIChatDisplayMessage,
-): message is AIChatErrorMessage {
-  return message.role === 'error';
-}
-
-export function isMessageWithContext(
-  message: AIChatDisplayMessage,
-): message is MessageWithContext {
-  return message.role === 'annotated-message';
-}
-
-export function normalizeMessageForAPIIngestion(
-  messages: AIChatDisplayMessage[],
-) {
-  return messages
-    .map(m => {
-      if (isMessageWithContext(m)) return m.message;
-
-      if (isAIErrorMessage(m)) return undefined;
-
-      return m;
-    })
-    .filter(m => m !== undefined);
 }
 
 function isToolMessage(
@@ -156,6 +117,14 @@ export const AIChatMessage = ({ message: messageIn }: MessageProps) => {
 
       if (c.toolName === TOOL_NAMES.SEARCH_RESOURCE) {
         return <SearchResultMessage toolResultPart={c} key={key} />;
+      }
+
+      if (c.toolName === TOOL_NAMES.SHOW_SVG) {
+        console.log(c.result);
+
+        return (
+          <div key={key} dangerouslySetInnerHTML={{ __html: c.result.data }} />
+        );
       }
 
       let result;

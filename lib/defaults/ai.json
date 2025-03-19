@@ -1,0 +1,292 @@
+[
+  {
+    "@id": "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/class/ai-chat",
+    "https://atomicdata.dev/properties/description": "A conversation with an LLM",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/messages"
+    ],
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/name"
+    ],
+    "https://atomicdata.dev/properties/shortname": "ai-chat"
+  },
+  {
+    "@id": "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/class/ai-message",
+    "https://atomicdata.dev/properties/description": "A message in an ai-chat",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/provided-context"
+    ],
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/role",
+      "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/content"
+    ],
+    "https://atomicdata.dev/properties/shortname": "ai-message"
+  },
+  {
+    "@id": "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/class/file-part",
+    "https://atomicdata.dev/properties/description": "A content part that holds a file. Can be any type of file, including images",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/mimetype",
+      "https://atomicdata.dev/properties/filename"
+    ],
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/data"
+    ],
+    "https://atomicdata.dev/properties/shortname": "file-part"
+  },
+  {
+    "@id": "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/class/reasoning-part",
+    "https://atomicdata.dev/properties/description": "A content block for reasoning output.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/reasoning-signature"
+    ],
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/description"
+    ],
+    "https://atomicdata.dev/properties/shortname": "reasoning-part"
+  },
+  {
+    "@id": "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/class/text-part",
+    "https://atomicdata.dev/properties/description": "A simple text block.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/description"
+    ],
+    "https://atomicdata.dev/properties/shortname": "text-part"
+  },
+  {
+    "@id": "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/class/tool-call-part",
+    "https://atomicdata.dev/properties/description": "A content part that represents a tool call made by the llm",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/tool-id",
+      "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/tool-name",
+      "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/tool-arguments"
+    ],
+    "https://atomicdata.dev/properties/shortname": "tool-call-part"
+  },
+  {
+    "@id": "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/class/tool-result-part",
+    "https://atomicdata.dev/properties/description": "A content part that holds the result of a tool-call",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/tool-result-is-error"
+    ],
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/tool-id",
+      "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/tool-name",
+      "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/tool-result"
+    ],
+    "https://atomicdata.dev/properties/shortname": "tool-result-part"
+  },
+  {
+    "@id": "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/content",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
+    "https://atomicdata.dev/properties/description": "list of content-part resources",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/isDynamic": false,
+    "https://atomicdata.dev/properties/isLocked": false,
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "content"
+  },
+  {
+    "@id": "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/data",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "A base64 encoded file",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/isDynamic": false,
+    "https://atomicdata.dev/properties/isLocked": false,
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "data"
+  },
+  {
+    "@id": "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/messages",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/class/ai-message",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
+    "https://atomicdata.dev/properties/description": "list of ai-messages",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/isDynamic": false,
+    "https://atomicdata.dev/properties/isLocked": false,
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "messages"
+  },
+  {
+    "@id": "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/provided-context",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
+    "https://atomicdata.dev/properties/description": "list of resources that add context to the prompt",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/isDynamic": false,
+    "https://atomicdata.dev/properties/isLocked": false,
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "provided-context"
+  },
+  {
+    "@id": "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/reasoning-signature",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "signature to verify that it came from the llm",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/isDynamic": false,
+    "https://atomicdata.dev/properties/isLocked": false,
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "reasoning-signature"
+  },
+  {
+    "@id": "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/role",
+    "https://atomicdata.dev/properties/allowsOnly": [
+      "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/tag/user",
+      "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/tag/assistant",
+      "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/tag/system",
+      "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/tag/tool",
+      "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/tag/error"
+    ],
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "The type of message",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/isDynamic": false,
+    "https://atomicdata.dev/properties/isLocked": false,
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "role"
+  },
+  {
+    "@id": "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/tool-arguments",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "JSON object of arguments given by the llm",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/isDynamic": false,
+    "https://atomicdata.dev/properties/isLocked": false,
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "tool-arguments"
+  },
+  {
+    "@id": "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/tool-id",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "The id of the tool call, used to link the call to the result",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/isDynamic": false,
+    "https://atomicdata.dev/properties/isLocked": false,
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "tool-id"
+  },
+  {
+    "@id": "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/tool-name",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "name of the tool that was called",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/isDynamic": false,
+    "https://atomicdata.dev/properties/isLocked": false,
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "tool-name"
+  },
+  {
+    "@id": "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/tool-result",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "JSON object containing the result of a tool-call",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/isDynamic": false,
+    "https://atomicdata.dev/properties/isLocked": false,
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "tool-result"
+  },
+  {
+    "@id": "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/tool-result-is-error",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
+    "https://atomicdata.dev/properties/description": "If the tool errored while executing.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/isDynamic": false,
+    "https://atomicdata.dev/properties/isLocked": false,
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "tool-result-is-error"
+  },
+  {
+    "@id": "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/tag/user",
+    "https://atomicdata.dev/properties/color": "#5FF56E",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Tag"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/role",
+    "https://atomicdata.dev/properties/shortname": "user"
+  },
+  {
+    "@id": "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/tag/assistant",
+    "https://atomicdata.dev/properties/color": "#FF006E",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Tag"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/role",
+    "https://atomicdata.dev/properties/shortname": "assistant"
+  },
+  {
+    "@id": "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/tag/system",
+    "https://atomicdata.dev/properties/color": "#3A86FF",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Tag"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/role",
+    "https://atomicdata.dev/properties/shortname": "system"
+  },
+  {
+    "@id": "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/tag/tool",
+    "https://atomicdata.dev/properties/color": "#3A86FF",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Tag"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/role",
+    "https://atomicdata.dev/properties/shortname": "tool"
+  },
+  {
+    "@id": "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/tag/error",
+    "https://atomicdata.dev/properties/color": "#FB5607",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Tag"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/role",
+    "https://atomicdata.dev/properties/shortname": "error"
+  }
+]

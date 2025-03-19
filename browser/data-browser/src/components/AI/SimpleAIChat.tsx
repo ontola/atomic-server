@@ -1,14 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useSettings } from '../../helpers/AppSettings';
 import { Column, Row } from '../Row';
 import toast from 'react-hot-toast';
 import { useAtomicMCPTools } from './useAtomicTools';
-import {
-  AIChatMessage,
-  isMessageWithContext,
-  normalizeMessageForAPIIngestion,
-  type AIChatDisplayMessage,
-} from './AIChatMessage';
+import { AIChatMessage } from './AIChatMessage';
 import {
   generateObject,
   InvalidToolArgumentsError,
@@ -27,7 +22,6 @@ import { GeneratingIndicator } from './GeneratingIndicator';
 import { IconButton, IconButtonVariant } from '../IconButton/IconButton';
 import {
   FaArrowRight,
-  FaPlus,
   FaXmark,
   FaPaperclip,
   FaFile,
@@ -35,18 +29,21 @@ import {
 } from 'react-icons/fa6';
 import { ChatMessagesContainer } from './ChatMessagesContainer';
 import { useStore } from '@tomic/react';
-import { AIAgent, AIState, type AIMessageContext } from './types';
+import {
+  AIAgent,
+  AIState,
+  isMessageWithContext,
+  type AIChatDisplayMessage,
+  type AIMessageContext,
+} from './types';
 import {
   AgentConfig,
   useAIAgentConfig,
   useAutoAgentSelect,
 } from './AgentConfig';
 import { Button } from '../Button';
-import { useContextDataForAgent } from './useContextForAgent';
-import { newContextItem, useAISidebar } from './AISidebarContext';
 import { MessageContextItem } from './MessageContextItem';
-import { useCurrentSubject } from '../../helpers/useCurrentSubject';
-
+import { useProcessMessages } from './useProcessMessages';
 type OngoingMessagePart = {
   type: 'reasoning' | 'text';
   text: string;
@@ -69,8 +66,32 @@ const IMAGE_MIME_TYPES = [
   'image/svg+xml',
 ];
 
-export const SimpleAIChat = () => {
-  const { setIsOpen: setSidebarOpen, isOpen } = useAISidebar();
+const AIChatInput = React.lazy(
+  () => import('../../chunks/MarkdownEditor/AIChatInput/AsyncAIChatInput'),
+);
+
+interface SimpleAIChatProps {
+  messages: AIChatDisplayMessage[];
+  fullView?: boolean;
+  readonly?: boolean;
+  onNewMessage: (message: AIChatDisplayMessage) => void;
+  externalContextItems: AIMessageContext[];
+  setExternalContextItems: React.Dispatch<
+    React.SetStateAction<AIMessageContext[]>
+  >;
+}
+
+export const SimpleAIChat: React.FC<
+  React.PropsWithChildren<SimpleAIChatProps>
+> = ({
+  messages,
+  fullView = false,
+  readonly = false,
+  externalContextItems,
+  setExternalContextItems,
+  onNewMessage,
+  children,
+}) => {
   const abortSignalRef = useRef<AbortController>(null);
   const [aiState, setAiState] = useState<AIState>(AIState.Stopped);
   const [editedResources, setEditedResources] = useState<string[]>([]);
@@ -78,29 +99,29 @@ export const SimpleAIChat = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [attachedFile, setAttachedFile] = useState<FileAttachment | null>(null);
   const store = useStore();
-  const { contextItems, setContextItems } = useAISidebar();
   const [selectedAgent, setSelectedAgent] = useState<AIAgent>(agents[0]);
   const [userInput, setUserInput] = useState('');
+  const [userSelectedContextItems, setUserSelectedContextItems] = useState<
+    AIMessageContext[]
+  >([]);
   const { openRouterApiKey } = useSettings() as { openRouterApiKey?: string };
   const openrouter = createOpenRouter({
     apiKey: openRouterApiKey,
     compatibility: 'strict',
   });
-  const [messages, setMessages] = useState<AIChatDisplayMessage[]>([]);
   const [ongoingMessage, setOngoingMessage] = useState<OngoingMessagePart>({
     type: 'text',
     text: '',
   });
   const [tokensUsed, setTokensUsed] = useState<[number, number]>([0, 0]);
-  // Google models do not support tools with enum parameters for now.
-  // TODO: Remove this once we have a model that supports tools with enum parameters
+
   const getToolsForAgent = useTools();
   const [hasToolResultFollowUp, setHasToolResultFollowUp] = useState(false);
-  const { injectContextIntoPrompt, addExtraContextToMessage } =
-    useContextDataForAgent();
+
   const [agentConfigOpen, setAgentConfigOpen] = useState(false);
   const pickAgent = useAutoAgentSelect();
-  const [currentSubject] = useCurrentSubject();
+
+  const normalizeAndApplyContext = useProcessMessages();
 
   const { tools: atomicTools } = useAtomicMCPTools({
     onResourceEdited: (subject: string) => {
@@ -147,6 +168,12 @@ export const SimpleAIChat = () => {
   };
 
   const sendMessage = async (isFollowUp = false) => {
+    if (readonly) {
+      toast.error('You do not have the permissions to edit this chat.');
+
+      return;
+    }
+
     abortSignalRef.current = new AbortController();
 
     if (!openRouterApiKey) {
@@ -180,29 +207,29 @@ export const SimpleAIChat = () => {
 
     console.log('toolsToUse', toolsToUse);
 
-    let input = userInput;
-
-    if (contextItems.length > 0) {
-      input = await addExtraContextToMessage(input, contextItems);
-    }
+    const allContextItems = [
+      ...externalContextItems,
+      ...userSelectedContextItems,
+    ];
 
     if (!isFollowUp) {
-      messagesToUse = prepareUserMessage(
-        messages,
-        input,
+      const userMessage = prepareUserMessage(
+        userInput,
         attachedFile,
-        contextItems,
+        allContextItems,
       );
+      messagesToUse = [...messages, userMessage];
+      onNewMessage(userMessage);
     } else {
       messagesToUse = messages;
     }
 
     // Filter message to only include non-error messages, error messages are only intended for the user.
-    const filteredMessages = normalizeMessageForAPIIngestion(messagesToUse);
+    const filteredMessages = await normalizeAndApplyContext(messagesToUse);
 
     // Update messages with the user message first
-    setMessages(messagesToUse);
-    setContextItems([]);
+    setExternalContextItems([]);
+    setUserSelectedContextItems([]);
     // Clear the input field, attached file, and any ongoing message
     setUserInput('');
     setAttachedFile(null);
@@ -229,25 +256,19 @@ export const SimpleAIChat = () => {
             // Handle the error
             console.log('Invalid tool arguments error', err);
 
-            setMessages(prev => [
-              ...prev,
-              {
-                role: 'error',
-                content: 'LLM did not give the correct parameters to the tool',
-              },
-            ]);
+            onNewMessage({
+              role: 'error',
+              content: 'LLM did not give the correct parameters to the tool',
+            });
           }
 
           if (TypeValidationError.isInstance(err.error) && err.error.cause) {
             console.error(err.error.message);
 
-            setMessages(prev => [
-              ...prev,
-              {
-                role: 'error',
-                content: 'Server error',
-              },
-            ]);
+            onNewMessage({
+              role: 'error',
+              content: 'Server error',
+            });
           }
         },
         experimental_repairToolCall: async ({
@@ -323,19 +344,17 @@ export const SimpleAIChat = () => {
             setOngoingMessage(ownOnGoingMessage);
           }
 
-          setMessages(prev => [...prev, toolCallMessage]);
+          onNewMessage(toolCallMessage);
 
           pendingToolCalls.push(part);
         }
 
         if (part.type === 'tool-result') {
-          setMessages(prev => [
-            ...prev,
-            {
-              role: 'tool',
-              content: [part],
-            },
-          ]);
+          console.log('tool-result', part);
+          onNewMessage({
+            role: 'tool',
+            content: [part],
+          });
 
           pendingToolCalls = pendingToolCalls.filter(
             call => call.toolCallId !== part.toolCallId,
@@ -352,13 +371,10 @@ export const SimpleAIChat = () => {
         if (part.type === 'text-delta') {
           if (isReasoning) {
             isReasoning = false;
-            setMessages(prev => [
-              ...prev,
-              {
-                role: 'assistant',
-                content: [ownOnGoingMessage],
-              },
-            ]);
+            onNewMessage({
+              role: 'assistant',
+              content: [ownOnGoingMessage],
+            });
 
             ownOnGoingMessage = {
               type: 'text',
@@ -376,13 +392,10 @@ export const SimpleAIChat = () => {
           console.log('Stream finished', part);
 
           if (ownOnGoingMessage) {
-            setMessages(prev => [
-              ...prev,
-              {
-                role: 'assistant',
-                content: [ownOnGoingMessage],
-              },
-            ]);
+            onNewMessage({
+              role: 'assistant',
+              content: [ownOnGoingMessage],
+            });
           }
 
           setOngoingMessage({
@@ -426,7 +439,7 @@ export const SimpleAIChat = () => {
             //     console.log('result', r);
             //     resultMessage.content.push(r);
             //   });
-            //   setMessages(prev => [...prev, resultMessage]);
+            //   onNewMessage(prev => [...prev, resultMessage]);
             //   setHasToolResultFollowUp(true);
             // });
           } else {
@@ -463,50 +476,21 @@ export const SimpleAIChat = () => {
     }
   }, [hasToolResultFollowUp]);
 
-  useEffect(() => {
-    // When the user opens the AI sidebar and the chat is completely empty, we add the current subject to the context.
-    if (
-      isOpen &&
-      currentSubject &&
-      messages.length === 0 &&
-      userInput.length === 0 &&
-      contextItems.length === 0
-    ) {
-      setContextItems([
-        newContextItem({
-          type: 'resource',
-          subject: currentSubject,
-        }),
-      ]);
-    }
-  }, [isOpen, currentSubject]);
+  // Combine both context item lists when needed
+  const allContextItems = [
+    ...externalContextItems,
+    ...userSelectedContextItems,
+  ];
+
+  const handleSubmit = () => {
+    requestAnimationFrame(() => {
+      sendMessage();
+    });
+  };
 
   return (
-    <ChatWindow>
-      <Row center justify='space-between' fullWidth>
-        <Row center gap='1ch'>
-          <IconButton
-            title='Reset'
-            onClick={() => setMessages([])}
-            color='textLight'
-            style={{ alignSelf: 'flex-end' }}
-          >
-            <FaPlus />
-          </IconButton>
-          <Heading>Atomic Assistant</Heading>
-        </Row>
-        <IconButton
-          title='Close AI Sidebar'
-          color='textLight'
-          style={{ alignSelf: 'flex-end' }}
-          onClick={() => {
-            abortSignalRef.current?.abort();
-            setSidebarOpen(false);
-          }}
-        >
-          <FaXmark />
-        </IconButton>
-      </Row>
+    <ChatWindow fullView={fullView}>
+      {children}
       <ChatMessagesContainer enableAutoScroll={aiState !== AIState.Stopped}>
         {messages.filter(cleanMessages).map(message => (
           <AIChatMessage key={JSON.stringify(message)} message={message} />
@@ -531,96 +515,114 @@ export const SimpleAIChat = () => {
             </IconButton>
           </Row>
         )}
-        <Row fullWidth>
-          <ChatInputWrapper>
-            <Column fullWidth gap='none' style={{ position: 'relative' }}>
-              <FloatingChatWidgetsContainer>
-                {editedResources.length > 0 && (
-                  <UnsavedChangesIndicator>
-                    <Row center gap='1ch' justify='flex-end'>
-                      <span>Unsaved changes</span>
-                      <AcceptButton onClick={handleAcceptChanges}>
-                        <FaCheck />
-                        <span>Accept</span>
-                      </AcceptButton>
-                    </Row>
-                  </UnsavedChangesIndicator>
-                )}
-                {attachedFile && (
-                  <AttachmentPreview>
-                    <Row gap='1ch' center>
-                      <FaFile />
-                      <span>{attachedFile.name}</span>
-                    </Row>
+        {!readonly && (
+          <>
+            <ChatInputWrapper>
+              <Column fullWidth gap='none' style={{ position: 'relative' }}>
+                <FloatingChatWidgetsContainer>
+                  {editedResources.length > 0 && (
+                    <UnsavedChangesIndicator>
+                      <Row center gap='1ch' justify='flex-end'>
+                        <span>Unsaved changes</span>
+                        <AcceptButton onClick={handleAcceptChanges}>
+                          <FaCheck />
+                          <span>Accept</span>
+                        </AcceptButton>
+                      </Row>
+                    </UnsavedChangesIndicator>
+                  )}
+                  {attachedFile && (
+                    <AttachmentPreview>
+                      <Row gap='1ch' center>
+                        <FaFile />
+                        <span>{attachedFile.name}</span>
+                      </Row>
+                      <IconButton
+                        title='Remove file'
+                        onClick={removeAttachedFile}
+                        size='small'
+                      >
+                        <FaXmark />
+                      </IconButton>
+                    </AttachmentPreview>
+                  )}
+                </FloatingChatWidgetsContainer>
+                <ContextItemRow wrapItems center gap='1ch'>
+                  {allContextItems.map(item => (
+                    <MessageContextItem
+                      key={item.id}
+                      contextItem={item}
+                      onRemove={
+                        // Only allow removing external context items, normal items are removed via the input.
+                        externalContextItems.some(x => x.id === item.id)
+                          ? () => {
+                              setExternalContextItems(prev => {
+                                const newList = prev.filter(
+                                  i => i.id !== item.id,
+                                );
+
+                                if (newList.length === prev.length) {
+                                  return prev;
+                                }
+
+                                return newList;
+                              });
+                            }
+                          : undefined
+                      }
+                    />
+                  ))}
+                </ContextItemRow>
+                <AIChatInput
+                  onMentionUpdate={(mentions: string[]) => {
+                    // Convert mentions to context items
+                    const newContextItems = mentions.map(subject => ({
+                      type: 'resource' as const,
+                      id: crypto.randomUUID(),
+                      subject,
+                    }));
+                    setUserSelectedContextItems(newContextItems);
+                  }}
+                  onChange={setUserInput}
+                  onSubmit={handleSubmit}
+                />
+                <Row justify='space-between'>
+                  <Row gap='0.5rem'>
+                    <SubtleButton onClick={() => setAgentConfigOpen(true)}>
+                      {autoAgentSelectEnabled
+                        ? 'Automatic'
+                        : selectedAgent.name}
+                    </SubtleButton>
+                    <input
+                      type='file'
+                      ref={fileInputRef}
+                      onChange={handleFileUpload}
+                      style={{ display: 'none' }}
+                    />
                     <IconButton
-                      title='Remove file'
-                      onClick={removeAttachedFile}
-                      size='small'
+                      title='Attach file'
+                      onClick={() => fileInputRef.current?.click()}
+                      color='textLight'
                     >
-                      <FaXmark />
+                      <FaPaperclip />
                     </IconButton>
-                  </AttachmentPreview>
-                )}
-              </FloatingChatWidgetsContainer>
-              <ContextItemRow wrapItems center gap='1ch'>
-                {contextItems.map(item => (
-                  <MessageContextItem
-                    key={item.subject}
-                    contextItem={item}
-                    onRemove={() =>
-                      setContextItems(prev =>
-                        prev.filter(i => i.id !== item.id),
-                      )
-                    }
-                  />
-                ))}
-              </ContextItemRow>
-              <StyledTextarea
-                value={userInput}
-                placeholder='Ask me anything...'
-                onChange={e => setUserInput(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    sendMessage();
-                  }
-                }}
-                style={{ flex: 1 }}
-              />
-              <Row justify='space-between'>
-                <Row gap='0.5rem'>
-                  <SubtleButton onClick={() => setAgentConfigOpen(true)}>
-                    {autoAgentSelectEnabled ? 'Automatic' : selectedAgent.name}
-                  </SubtleButton>
-                  <input
-                    type='file'
-                    ref={fileInputRef}
-                    onChange={handleFileUpload}
-                    style={{ display: 'none' }}
-                  />
+                  </Row>
                   <IconButton
-                    title='Attach file'
-                    onClick={() => fileInputRef.current?.click()}
-                    color='textLight'
+                    disabled={userInput.length === 0 && !attachedFile}
+                    onClick={() => sendMessage()}
+                    title='Send'
+                    variant={IconButtonVariant.Fill}
                   >
-                    <FaPaperclip />
+                    <FaArrowRight />
                   </IconButton>
                 </Row>
-                <IconButton
-                  disabled={userInput.length === 0 && !attachedFile}
-                  onClick={() => sendMessage()}
-                  title='Send'
-                  variant={IconButtonVariant.Fill}
-                >
-                  <FaArrowRight />
-                </IconButton>
-              </Row>
-            </Column>
-          </ChatInputWrapper>
-        </Row>
-        <TokensUsed>
-          Tokens used: {tokensUsed[0]} input, {tokensUsed[1]} output
-        </TokensUsed>
+              </Column>
+            </ChatInputWrapper>
+            <TokensUsed>
+              Tokens used: {tokensUsed[0]} input, {tokensUsed[1]} output
+            </TokensUsed>
+          </>
+        )}
       </Column>
 
       {/* Agent configuration dialog */}
@@ -638,11 +640,10 @@ export const SimpleAIChat = () => {
  * Prepares a user message with optional file attachment
  */
 const prepareUserMessage = (
-  existingMessages: AIChatDisplayMessage[],
   inputText: string,
   fileAttachment: FileAttachment | null,
   contextItems: AIMessageContext[],
-): AIChatDisplayMessage[] => {
+): AIChatDisplayMessage => {
   const wrapWithContext = (message: CoreMessage): AIChatDisplayMessage => {
     if (contextItems.length === 0) {
       return message;
@@ -677,13 +678,10 @@ const prepareUserMessage = (
         : [filePart],
     };
 
-    return [...existingMessages, wrapWithContext(newMessage)];
+    return wrapWithContext(newMessage);
   } else {
     // No file, just text
-    return [
-      ...existingMessages,
-      wrapWithContext({ role: 'user', content: inputText }),
-    ];
+    return wrapWithContext({ role: 'user', content: inputText });
   }
 };
 
@@ -716,6 +714,10 @@ const ChatInputWrapper = styled.div`
   gap: ${p => p.theme.size()};
   position: relative;
 
+  &:focus-within {
+    border-color: ${p => p.theme.colors.main};
+  }
+
   textarea {
     height: 100%;
   }
@@ -732,17 +734,8 @@ const AttachmentPreview = styled.div`
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 `;
 
-const StyledTextarea = styled.textarea`
-  appearance: none;
-  border: none;
-  outline: none;
-  resize: none;
-  font-size: 16px;
-  line-height: 1.5;
-  padding: ${p => p.theme.size(2)};
-`;
-
-const ChatWindow = styled.div`
+const ChatWindow = styled.div<{ fullView?: boolean }>`
+  padding-top: ${p => (p.fullView ? p.theme.size(2) : 0)};
   display: grid;
   grid-template-rows: auto 1fr auto;
   height: 90vh;
@@ -775,12 +768,6 @@ const SubtleButton = styled.button`
   &:hover {
     background-color: ${p => p.theme.colors.bg1};
   }
-`;
-
-const Heading = styled.h2`
-  font-size: 1rem;
-  font-weight: 600;
-  margin-bottom: ${p => p.theme.size(2)};
 `;
 
 // New styled components for the Unsaved Changes indicator

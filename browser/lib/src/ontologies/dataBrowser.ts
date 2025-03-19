@@ -308,7 +308,7 @@ declare module '../index.js' {
     [dataBrowser.properties.nextPage]: string;
     [dataBrowser.properties.numberFormatting]: string;
     [dataBrowser.properties.preview]: string;
-    [dataBrowser.properties.publishedAt]: number;
+    [dataBrowser.properties.publishedAt]: string;
     [dataBrowser.properties.replyTo]: string;
     [dataBrowser.properties.resources]: string[];
     [dataBrowser.properties.subResources]: string[];

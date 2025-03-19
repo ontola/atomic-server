@@ -158,7 +158,7 @@ export const buildSuggestion = (
         }
 
         popup = tippy('body', {
-          getReferenceClientRect: props.clientRect! as () => DOMRect,
+          getReferenceClientRect: props.clientRect as () => DOMRect,
           appendTo: () => container,
           content: component.element,
           showOnCreate: true,

@@ -8,6 +8,7 @@ import {
   collections,
   server,
   core,
+  ai,
 } from '@tomic/react';
 
 import { ContainerNarrow } from '../components/Containers';
@@ -31,6 +32,7 @@ import { TablePage } from './TablePage';
 import { Main } from '../components/Main';
 import { OntologyPage } from './OntologyPage';
 import { TagPage } from './TagPage/TagPage';
+import { AIChatPage } from './AIChat/AIChatPage';
 
 /** These properties are passed to every View at Page level */
 export type ResourcePageProps<Subject extends OptionalClass = never> = {
@@ -119,6 +121,8 @@ function selectComponent(klass: string) {
       return OntologyPage;
     case dataBrowser.classes.tag:
       return TagPage;
+    case ai.classes.aiChat:
+      return AIChatPage;
     default:
       return ResourcePageDefault;
   }

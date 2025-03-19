@@ -18,38 +18,38 @@ const defaultContextData: AgentContextData = {
 
 export function useContextDataForAgent() {
   const store = useStore();
-  const [currentSubject] = useCurrentSubject();
-  const resource = useResource(currentSubject);
+  // const [currentSubject] = useCurrentSubject();
+  // const resource = useResource(currentSubject);
 
-  const [contextData, setContextData] =
-    useState<AgentContextData>(defaultContextData);
+  // const [contextData, setContextData] =
+  //   useState<AgentContextData>(defaultContextData);
 
-  useEffect(() => {
-    (async () => {
-      if (resource.error || resource.loading) {
-        setContextData(defaultContextData);
+  // useEffect(() => {
+  //   (async () => {
+  //     if (resource.error || resource.loading) {
+  //       setContextData(defaultContextData);
 
-        return;
-      }
+  //       return;
+  //     }
 
-      const resourceData = toResultObject(resource, true);
-      const classString = await toClassString(resource.getClasses()[0], store);
+  //     const resourceData = toResultObject(resource, true);
+  //     const classString = await toClassString(resource.getClasses()[0], store);
 
-      setContextData({
-        '{{resource.title}}': resource.title,
-        '{{resource.data}}': JSON.stringify(resourceData, null, 2),
-        '{{resource.schema}}': classString,
-      });
-    })();
-  }, [resource, store]);
+  //     setContextData({
+  //       '{{resource.title}}': resource.title,
+  //       '{{resource.data}}': JSON.stringify(resourceData, null, 2),
+  //       '{{resource.schema}}': classString,
+  //     });
+  //   })();
+  // }, [resource, store]);
 
-  const injectContextIntoPrompt = (prompt: string) =>
-    Array.from(Object.entries(contextData)).reduce(
-      (acc, [key, value]) => acc.replaceAll(key, value),
-      prompt,
-    );
+  // const injectContextIntoPrompt = (prompt: string) =>
+  //   Array.from(Object.entries(contextData)).reduce(
+  //     (acc, [key, value]) => acc.replaceAll(key, value),
+  //     prompt,
+  //   );
 
-  const addExtraContextToMessage = async (
+  const addContextToMessage = async (
     message: string,
     context: AIMessageContext[],
   ) => {
@@ -81,7 +81,7 @@ ${JSON.stringify(toResultObject(r, true), null, 2)}
     return messageWithContext;
   };
 
-  return { injectContextIntoPrompt, addExtraContextToMessage };
+  return { addExtraContextToMessage: addContextToMessage };
 }
 
 const toResultObject = (resource: Resource, includeCommitData: boolean) => {

@@ -1,5 +1,6 @@
-import { dataBrowser, core, classes } from '@tomic/react';
+import { dataBrowser, core, classes, ai } from '@tomic/react';
 import { registerBasicInstanceHandler } from '../useNewResourceUI';
+import { DEFAULT_AICHAT_NAME } from '../../../AI/aiContstants';
 
 /**
  * These handlers do not show any UI / inputs when creating new instances.
@@ -44,6 +45,21 @@ export const registerBasicInstanceHandlers = () => {
         dataBrowser.classes.document,
         {
           [core.properties.name]: 'Untitled Document',
+        },
+        {
+          parent,
+        },
+      );
+    },
+  );
+
+  registerBasicInstanceHandler(
+    ai.classes.aiChat,
+    async (parent, createAndNavigate) => {
+      await createAndNavigate(
+        ai.classes.aiChat,
+        {
+          [core.properties.name]: DEFAULT_AICHAT_NAME,
         },
         {
           parent,
