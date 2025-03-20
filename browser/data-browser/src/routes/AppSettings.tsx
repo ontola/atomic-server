@@ -15,6 +15,7 @@ import { pathNames } from './paths';
 import { appRoute } from './RootRoutes';
 import { InputStyled, InputWrapper } from '../components/forms/InputStyles';
 import { MCPServersManager } from '../components/MCPServersManager';
+import { transition } from '../helpers/transition';
 
 export const AppSettingsRoute = createRoute({
   path: pathNames.appSettings,
@@ -36,6 +37,8 @@ const AppSettings: React.FunctionComponent = () => {
     setOpenRouterApiKey,
     mcpServers,
     setMcpServers,
+    enableAI,
+    setEnableAI,
   } = useSettings();
 
   const { enabledPanels, enablePanel, disablePanel } = usePanelList();
@@ -112,25 +115,34 @@ const AppSettings: React.FunctionComponent = () => {
             Enable keyboard drag & drop in sidebar
           </CheckboxLabel>
           <Heading>AI</Heading>
+          <CheckboxLabel>
+            <Checkbox checked={enableAI} onChange={setEnableAI} /> Enable AI
+            Features
+          </CheckboxLabel>
           {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
-          <label>
-            <Column gap='0.5rem'>
-              OpenRouter API Key
-              <InputWrapper>
-                <InputStyled
-                  type='password'
-                  value={openRouterApiKey || ''}
-                  onChange={e =>
-                    setOpenRouterApiKey(e.target.value || undefined)
-                  }
-                  placeholder='Enter your OpenRouter API key'
-                />
-              </InputWrapper>
-            </Column>
-          </label>
+          <ConditionalSettings enabled={enableAI} inert={!enableAI}>
+            <label>
+              <Column gap='0.5rem'>
+                OpenRouter API Key
+                <InputWrapper>
+                  <InputStyled
+                    type='password'
+                    value={openRouterApiKey || ''}
+                    onChange={e =>
+                      setOpenRouterApiKey(e.target.value || undefined)
+                    }
+                    placeholder='Enter your OpenRouter API key'
+                  />
+                </InputWrapper>
+              </Column>
+            </label>
 
-          <Heading>MCP Servers</Heading>
-          <MCPServersManager servers={mcpServers} setServers={setMcpServers} />
+            <Heading>MCP Servers</Heading>
+            <MCPServersManager
+              servers={mcpServers}
+              setServers={setMcpServers}
+            />
+          </ConditionalSettings>
         </Column>
       </ContainerNarrow>
     </Main>
@@ -149,4 +161,11 @@ const Heading = styled.h2`
   font-size: 1em;
   margin: 0;
   margin-top: 1rem;
+`;
+
+const ConditionalSettings = styled(Column)<{ enabled: boolean }>`
+  opacity: ${p => (p.enabled ? 1 : 0.3)};
+  pointer-events: ${p => (p.enabled ? 'auto' : 'none')};
+  touch-action: ${p => (p.enabled ? 'auto' : 'none')};
+  ${transition('opacity')}
 `;

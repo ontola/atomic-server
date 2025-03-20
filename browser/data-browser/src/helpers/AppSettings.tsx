@@ -58,6 +58,8 @@ export const AppSettingsContextProvider = (
   const [baseURL, setBaseURL] = useServerURL();
   const [drive, innerSetDrive] = useLocalStorage('drive', baseURL);
 
+  const [enableAI, setEnableAI] = useLocalStorage('atomic.ai.enabled', true);
+
   const setDrive = useCallback(
     (newDrive: string) => {
       const url = new URL(newDrive);
@@ -108,6 +110,8 @@ export const AppSettingsContextProvider = (
       setOpenRouterApiKey,
       mcpServers,
       setMcpServers,
+      enableAI,
+      setEnableAI,
     }),
     [
       drive,
@@ -135,6 +139,8 @@ export const AppSettingsContextProvider = (
       setOpenRouterApiKey,
       mcpServers,
       setMcpServers,
+      enableAI,
+      setEnableAI,
     ],
   );
 
@@ -186,6 +192,9 @@ export interface AppSettings {
   mcpServers: MCPServer[];
   /** Update the list of MCP servers */
   setMcpServers: (servers: MCPServer[]) => void;
+  /** Enable all AI features in the app */
+  enableAI: boolean;
+  setEnableAI: (b: boolean) => void;
 }
 
 const initialState: AppSettings = {
@@ -214,6 +223,8 @@ const initialState: AppSettings = {
   setOpenRouterApiKey: () => undefined,
   mcpServers: [],
   setMcpServers: () => undefined,
+  enableAI: true,
+  setEnableAI: () => undefined,
 };
 
 /** Hook for using App Settings, such as theme and darkmode */

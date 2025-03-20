@@ -196,7 +196,7 @@ const messageResourcesToDisplayMessages = async (
           }
 
           throw new Error(
-            `Content with class ${r.getClasses()} not supported on role user`,
+            `Content with class ${r.getClasses()} not supported on role: user`,
           );
         }),
       };
@@ -232,7 +232,7 @@ const messageResourcesToDisplayMessages = async (
           }
 
           throw new Error(
-            `Content with class ${r.getClasses()} not supported on role assistant`,
+            `Content with class ${r.getClasses()} not supported on role: assistant`,
           );
         }),
       };
@@ -243,7 +243,7 @@ const messageResourcesToDisplayMessages = async (
 
       if (!resourceIsTextPart(contentResource)) {
         throw new Error(
-          `Content with class ${contentResource.getClasses()} not supported on role system`,
+          `Content with class ${contentResource.getClasses()} not supported on role: system`,
         );
       }
 
@@ -262,7 +262,7 @@ const messageResourcesToDisplayMessages = async (
           }
 
           throw new Error(
-            `Content with class ${r.getClasses()} not supported on role tool`,
+            `Content with class ${r.getClasses()} not supported on role: tool`,
           );
         }),
       };
@@ -273,7 +273,7 @@ const messageResourcesToDisplayMessages = async (
 
       if (!resourceIsTextPart(contentResource)) {
         throw new Error(
-          `Content with class ${contentResource.getClasses()} not supported on role error`,
+          `Content with class ${contentResource.getClasses()} not supported on role: error`,
         );
       }
 
@@ -388,8 +388,11 @@ const partsToResourceBuilder = (
       propVals: {
         [ai.properties.data]: data,
         [server.properties.mimetype]: filePart.mimeType,
-        [server.properties.filename]:
-          filePart.type === 'file' ? filePart.filename : undefined,
+        ...(filePart.type === 'file'
+          ? {
+              [server.properties.filename]: filePart.filename,
+            }
+          : {}),
       },
     });
   },

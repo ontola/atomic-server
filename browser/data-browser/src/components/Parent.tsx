@@ -28,6 +28,7 @@ type ParentProps = {
 /** Breadcrumb list. Recursively renders parents. */
 function Parent({ resource }: ParentProps): JSX.Element {
   const [parent] = useString(resource, core.properties.parent);
+  const { enableAI } = useSettings();
   const { setIsOpen } = useAISidebar();
 
   return (
@@ -41,12 +42,14 @@ function Parent({ resource }: ParentProps): JSX.Element {
         <BreadCrumbCurrent>{resource.title}</BreadCrumbCurrent>
         <Spacer />
         <ButtonArea>
-          <IconButton
-            title='Toggle AI panel'
-            onClick={() => setIsOpen(prev => !prev)}
-          >
-            <AIIcon />
-          </IconButton>
+          {enableAI && (
+            <IconButton
+              title='Toggle AI panel'
+              onClick={() => setIsOpen(prev => !prev)}
+            >
+              <AIIcon />
+            </IconButton>
+          )}
           <ResourceContextMenu
             isMainMenu
             subject={resource.subject}
