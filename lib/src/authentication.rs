@@ -66,17 +66,33 @@ pub async fn get_agent_from_auth_values_and_check(
         check_timestamp_in_past(auth_vals.timestamp, ACCEPTABLE_TIME_DIFFERENCE)?;
         // check if the public key belongs to the agent
         // For DID subjects, we need to fetch the agent resource locally
-        let agent_subject = crate::Subject::from_raw(&auth_vals.agent_subject, None);
+        // unless it's a DID based on the public key, in which case we can verify it directly.
+        let agent_subject_trimmed = auth_vals.agent_subject.trim();
+        let public_key_trimmed = auth_vals.public_key.trim();
+
+        if agent_subject_trimmed.starts_with("did:") {
+            if agent_subject_trimmed.ends_with(public_key_trimmed) {
+                return Ok(ForAgent::AgentSubject(agent_subject_trimmed.to_string()));
+            } else {
+                return Err(format!(
+                    "The public key in the auth headers '{}' does not match the DID subject '{}'",
+                    public_key_trimmed, agent_subject_trimmed
+                )
+                .into());
+            }
+        }
+
+        let agent_subject = crate::Subject::from_raw(agent_subject_trimmed, None);
         let agent_resource = store.get_resource(&agent_subject).await?;
         let found_public_key = agent_resource.get(urls::PUBLIC_KEY)?;
-        if found_public_key.to_string() != auth_vals.public_key {
+        if found_public_key.to_string().trim() != public_key_trimmed {
             Err(
                 "The public key in the auth headers does not match the public key in the agent"
                     .to_string()
                     .into(),
             )
         } else {
-            Ok(ForAgent::AgentSubject(auth_vals.agent_subject))
+            Ok(ForAgent::AgentSubject(agent_subject_trimmed.to_string()))
         }
     } else {
         Ok(ForAgent::Public)

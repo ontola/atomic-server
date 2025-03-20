@@ -587,7 +587,7 @@ impl Resource {
 
     pub fn to_atoms_iter(&self) -> impl Iterator<Item = Atom> + '_ {
         self.propvals.iter().map(|(property, value)| {
-            Atom::new(self.subject.to_string(), property.clone(), value.clone())
+            Atom::new(self.subject.clone(), property.clone(), value.clone())
         })
     }
 

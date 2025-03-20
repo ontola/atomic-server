@@ -63,7 +63,7 @@ impl Store {
             for resource in self.all_resources(include_external) {
                 for (property, value) in resource.get_propvals() {
                     vec.push(Atom::new(
-                        resource.get_subject().to_string(),
+                        resource.get_subject().clone(),
                         property.clone(),
                         value.clone(),
                     ))
@@ -79,15 +79,15 @@ impl Store {
                 if hasprop && q_property.as_ref().unwrap() == prop {
                     if hasval {
                         if val.contains_value(q_value.unwrap()) {
-                            vec.push(Atom::new(subj.to_string(), prop.into(), val.clone()))
+                            vec.push(Atom::new(subj.clone(), prop.into(), val.clone()))
                         }
                         break;
                     } else {
-                        vec.push(Atom::new(subj.to_string(), prop.into(), val.clone()))
+                        vec.push(Atom::new(subj.clone(), prop.into(), val.clone()))
                     }
                     break;
                 } else if hasval && !hasprop && val.contains_value(q_value.unwrap()) {
-                    vec.push(Atom::new(subj.to_string(), prop.into(), val.clone()))
+                    vec.push(Atom::new(subj.clone(), prop.into(), val.clone()))
                 }
             }
         };
@@ -121,18 +121,21 @@ impl Store {
 impl Storelike for Store {
     async fn add_atoms(&self, atoms: Vec<Atom>) -> AtomicResult<()> {
         // Start with a nested HashMap, containing only strings.
-        let mut map: HashMap<String, Resource> = HashMap::new();
+        let mut map: HashMap<Subject, Resource> = HashMap::new();
         for atom in atoms {
-            match map.get_mut(&atom.subject) {
+            let subject = atom.subject;
+            let property = atom.property;
+            let value = atom.value;
+            match map.get_mut(&subject) {
                 // Resource exists in map
                 Some(resource) => {
-                    resource.set_unsafe(atom.property, atom.value);
+                    resource.set_unsafe(property, value);
                 }
                 // Resource does not exist
                 None => {
-                    let mut resource = Resource::new(atom.subject.clone());
-                    resource.set_unsafe(atom.property, atom.value);
-                    map.insert(atom.subject, resource);
+                    let mut resource = Resource::new(subject.to_string());
+                    resource.set_unsafe(property, value);
+                    map.insert(subject, resource);
                 }
             }
         }
@@ -240,15 +243,15 @@ impl Storelike for Store {
             .await?;
 
         // Remove duplicate subjects
-        let mut subjects_deduplicated: Vec<String> = atoms
+        let mut subjects_deduplicated: Vec<Subject> = atoms
             .iter()
             .map(|atom| atom.subject.clone())
-            .collect::<std::collections::HashSet<String>>()
+            .collect::<std::collections::HashSet<Subject>>()
             .into_iter()
             .collect();
 
         // Sort by subject, better than no sorting
-        subjects_deduplicated.sort();
+        subjects_deduplicated.sort_by(|a, b| a.as_str().cmp(b.as_str()));
 
         // WARNING: Entering expensive loop!
         // This is needed for sorting, authorization and including nested resources.
@@ -257,7 +260,7 @@ impl Storelike for Store {
         for subject in subjects_deduplicated.iter() {
             // These nested resources are not fully calculated - they will be presented as -is
             match self
-                .get_resource_extended(&subject.clone().into(), true, &q.for_agent)
+                .get_resource_extended(subject, true, &q.for_agent)
                 .await
             {
                 Ok(resource) => {
@@ -278,10 +281,7 @@ impl Storelike for Store {
         if let Some(sort) = &q.sort_by {
             resources = crate::collections::sort_resources(resources, sort, q.sort_desc);
         }
-        let mut subjects = Vec::new();
-        for r in resources.iter() {
-            subjects.push(r.get_subject().to_string())
-        }
+        let subjects: Vec<Subject> = resources.iter().map(|r| r.get_subject().clone()).collect();
 
         Ok(QueryResult {
             count: atoms.len(),

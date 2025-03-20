@@ -13,6 +13,7 @@ use actix_web::{
     App,
 };
 use atomic_lib::{urls, Storelike};
+use base64::Engine;
 
 /// Returns the request with signed headers. Also adds a json-ad accept header - overwrite this if you need something else.
 fn build_request_authenticated(path: &str, appstate: &AppState) -> TestRequest {
@@ -46,6 +47,11 @@ fn build_request_authenticated(path: &str, appstate: &AppState) -> TestRequest {
 
 #[actix_rt::test]
 async fn server_tests() {
+    // Enable logging
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter("info,atomic_server=trace")
+        .try_init();
+
     let unique_string = atomic_lib::utils::random_string(10);
     use clap::Parser;
     let opts = Opts::parse_from([
@@ -200,6 +206,91 @@ async fn server_tests() {
         resp.status(),
         404,
         "Should be a 404, because `did:ad:test` does not exist"
+    );
+
+    // Test Unauthenticated Invite with Public Key
+    let issuer_agent = appstate.store.get_default_agent().unwrap();
+    let target_resource_subject = "https://atomicdata.dev/test/resource";
+    // We need to create the target resource to check write rights
+    let mut target = atomic_lib::Resource::new(target_resource_subject.into());
+    target
+        .set(
+            urls::READ.into(),
+            vec![issuer_agent.subject.clone()].into(),
+            &appstate.store,
+        )
+        .await
+        .unwrap();
+    target
+        .set(
+            urls::WRITE.into(),
+            vec![issuer_agent.subject.clone()].into(),
+            &appstate.store,
+        )
+        .await
+        .unwrap();
+    target.save_locally(&appstate.store).await.unwrap();
+
+    let expiration = atomic_lib::utils::now() + 100000;
+
+    // Construct the InviteToken manually as we don't have a helper in the lib for this yet
+    // This replicates what the frontend does
+    let mut signable_json = serde_json::Map::new();
+    signable_json.insert(
+        urls::TARGET.into(),
+        serde_json::Value::String(target_resource_subject.into()),
+    );
+    signable_json.insert(urls::WRITE_BOOL.into(), serde_json::Value::Bool(true));
+    signable_json.insert(
+        urls::EXPIRES_AT.into(),
+        serde_json::Value::Number(expiration.into()),
+    );
+    signable_json.insert(
+        urls::SIGNER.into(),
+        serde_json::Value::String(issuer_agent.subject.clone()),
+    );
+
+    let serialized = serde_jcs::to_string(&signable_json).unwrap();
+    let private_key = issuer_agent.private_key.clone().unwrap();
+    let signature =
+        atomic_lib::commit::sign_message(&serialized, &private_key, &issuer_agent.public_key)
+            .unwrap();
+
+    let mut map = signable_json;
+    map.insert(urls::SIGNATURE.into(), serde_json::Value::String(signature));
+
+    let bytes = serde_json::to_vec(&map).unwrap();
+    let token_base64 = base64::engine::general_purpose::STANDARD.encode(bytes);
+    let token_encoded: String =
+        url::form_urlencoded::byte_serialize(token_base64.as_bytes()).collect();
+
+    // Generate a new public key for the visitor
+    let visitor_agent = atomic_lib::agents::Agent::new(None).unwrap();
+    let public_key = visitor_agent.public_key; // This gives the Base64 public key
+    let public_key_encoded: String =
+        url::form_urlencoded::byte_serialize(public_key.as_bytes()).collect();
+
+    let path = format!(
+        "/invites?token={}&public-key={}",
+        token_encoded, public_key_encoded
+    );
+
+    // Use an unauthenticated request
+    let req = test::TestRequest::with_uri(&path).insert_header(("Accept", "application/ad+json"));
+    let resp = test::call_service(&app, req.to_request()).await;
+
+    assert!(
+        resp.status().is_success(),
+        "Invite request failed: Status {}",
+        resp.status()
+    );
+
+    let body = get_body(resp);
+
+    assert!(
+        body.contains(urls::DESTINATION),
+        "Response should contain destination property. Body: {}",
+        body
     );
 }
 

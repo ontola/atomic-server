@@ -13,6 +13,7 @@ mod handlers;
 mod helpers;
 #[cfg(feature = "https")]
 mod https;
+mod invite_token;
 mod jsonerrors;
 pub mod plugins;
 mod routes;

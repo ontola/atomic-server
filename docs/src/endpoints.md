@@ -25,6 +25,14 @@ This tells the client that it has to individually fetch the resource from the se
 One scenario where this happens, is when fetching Collections that have other Collections as members.
 If we would not have incomplete resources, the server would have to perform expensive computations even if the data is not needed by the client.
 
+## Invite Endpoint
+
+The `/invites` endpoint handles stateless, signed invite tokens. These tokens are generated and signed by the inviter's private key and can be verified by the server without any stored state.
+
+The endpoint accepts a `token` query parameter (base64-encoded signed JSON) and an optional `public-key` parameter.
+When a `public-key` is provided, the server derives a DID-based Agent (`did:ad:{publicKey}`) from it, grants the requested rights to that Agent, and responds with a Redirect to the target resource.
+When no `public-key` is provided and the request is unauthenticated, the endpoint returns information about the invite (target, rights, expiration) so the client can prompt the user.
+
 ## Design Goals
 
 - **Familiar API**: should look like something that most developers already know

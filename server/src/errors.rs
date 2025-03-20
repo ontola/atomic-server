@@ -43,18 +43,26 @@ impl ResponseError for AtomicServerError {
     }
     fn error_response(&self) -> HttpResponse {
         // Creates a JSON-AD resource representing the Error.
-        let r = match &self.error_resource {
-            Some(r) => r.to_owned(),
+        let mut r = match &self.error_resource {
+            Some(res) => res.as_ref().clone(),
             None => {
-                let mut r = Resource::new("subject".into());
-                r.set_class(urls::ERROR);
-                r.set_unsafe(
+                let mut res = Resource::new("subject".into());
+                res.set_class(urls::ERROR);
+                res.set_unsafe(
                     urls::DESCRIPTION.into(),
                     Value::String(self.message.clone()),
                 );
-                Box::new(r)
+                res
             }
         };
+
+        // Error class requires description; ensure it is always set so clients get valid JSON-AD.
+        if r.get(urls::DESCRIPTION).is_err() {
+            r.set_unsafe(
+                urls::DESCRIPTION.into(),
+                Value::String(self.message.clone()),
+            );
+        }
 
         let body = r.to_json_ad_with_url("").unwrap();
         tracing::info!("Error response: {}", self.message);

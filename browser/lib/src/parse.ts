@@ -95,6 +95,7 @@ export class JSONADParser {
               s === '';
 
             if (isAliasCandidate(resource.subject) && isDID(value as string)) {
+              // eslint-disable-next-line no-console
               console.log(
                 `Alias detected: Requested ${resource.subject}, received ${value}. Allowing mismatch.`,
               );

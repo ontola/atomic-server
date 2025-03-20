@@ -373,7 +373,11 @@ impl Db {
         let (subject, resource_bin) = item.expect(DB_CORRUPT_MSG);
         let subject: String = String::from_utf8_lossy(&subject).to_string();
 
-        if !include_external && !subject.starts_with('/') && !subject.starts_with("internal:") {
+        if !include_external
+            && !subject.starts_with('/')
+            && !subject.starts_with("internal:")
+            && !subject.starts_with("did:")
+        {
             return None;
         }
 
@@ -422,7 +426,7 @@ impl Db {
                 atom.sort_value.clone()
             } else {
                 // Find the sort value in the store
-                match self.get_value(&atom.subject, sort).await {
+                match self.get_value(atom.subject.as_str(), sort).await {
                     Ok(val) => val.to_sortable_string(),
                     // If we try sorting on a value that does not exist,
                     // we'll use an empty string as the sortable value.
@@ -433,7 +437,13 @@ impl Db {
             atom.sort_value.clone()
         };
 
-        update_indexed_member(query_filter, &atom.subject, &sort_val, false, transaction)?;
+        update_indexed_member(
+            query_filter,
+            atom.subject.as_str(),
+            &sort_val,
+            false,
+            transaction,
+        )?;
         Ok(())
     }
 
@@ -542,7 +552,7 @@ impl Db {
     }
 
     async fn query_basic(&self, q: &Query) -> AtomicResult<QueryResult> {
-        let mut subjects: Vec<String> = vec![];
+        let mut subjects: Vec<Subject> = vec![];
         let mut resources: Vec<Resource> = vec![];
         let mut total_count = 0;
 
@@ -550,17 +560,8 @@ impl Db {
 
         for (i, atom_res) in atoms.enumerate() {
             let atom = atom_res?;
-            if !q.include_external {
-                let is_internal =
-                    atom.subject.starts_with("internal:") || atom.subject.starts_with('/');
-                let matches_base = if let Some(base) = &self.base_domain {
-                    atom.subject.contains(base)
-                } else {
-                    false
-                };
-                if !is_internal && !matches_base {
-                    continue;
-                }
+            if !q.include_external && !atom.subject.is_local() {
+                continue;
             }
 
             total_count += 1;
@@ -660,7 +661,7 @@ impl Db {
                 Box::pin(self.recursive_remove(child.get_subject(), transaction)).await?;
             }
             for (prop, val) in resource.get_propvals() {
-                let remove_atom = crate::Atom::new(subject_str.clone(), prop.clone(), val.clone());
+                let remove_atom = crate::Atom::new(subject.clone(), prop.clone(), val.clone());
                 self.remove_atom_from_index(&remove_atom, &resource, transaction)?;
             }
         } else {
@@ -744,7 +745,7 @@ impl Storelike for Db {
     #[instrument(skip(self))]
     async fn add_atoms(&self, atoms: Vec<Atom>) -> AtomicResult<()> {
         // Start with a nested HashMap, containing only strings.
-        let mut map: HashMap<String, Resource> = HashMap::new();
+        let mut map: HashMap<Subject, Resource> = HashMap::new();
         for atom in atoms {
             match map.get_mut(&atom.subject) {
                 // Resource exists in map
@@ -756,7 +757,7 @@ impl Storelike for Db {
                 }
                 // Resource does not exist
                 None => {
-                    let mut resource = Resource::new(atom.subject.clone());
+                    let mut resource = Resource::new(atom.subject.to_string());
                     resource
                         .set_string(atom.property.clone(), &atom.value.to_string(), self)
                         .await
@@ -805,7 +806,7 @@ impl Storelike for Db {
                 for (prop, val) in pv.iter() {
                     // Possible performance hit - these clones can be replaced by modifying remove_atom_from_index
                     let remove_atom =
-                        crate::Atom::new(subject.to_string(), prop.into(), val.clone());
+                        crate::Atom::new(subject.clone(), prop.into(), val.clone());
                     self.remove_atom_from_index(&remove_atom, resource, &mut transaction)
                         .map_err(|e| {
                             format!("Failed to remove atom from index {}. {}", remove_atom, e)
@@ -1022,7 +1023,10 @@ impl Storelike for Db {
             let origin = self
                 .get_base_domain()
                 .unwrap_or_else(|| "http://localhost".to_string());
-            if resolved_url.starts_with(&origin) || resolved_url.starts_with("did:") {
+            let resolved_url = normalized.resolve(&origin);
+            let trimmed_origin = origin.trim_end_matches('/');
+
+            if resolved_url.starts_with(trimmed_origin) || resolved_url.starts_with("did:") {
                 return self
                     .handle_not_found(
                         &resolved_url,

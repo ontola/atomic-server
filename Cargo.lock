@@ -685,6 +685,7 @@ dependencies = [
  "rustls-pemfile",
  "sanitize-filename",
  "serde",
+ "serde_jcs",
  "serde_json",
  "serde_with",
  "simple-server-timing-header",

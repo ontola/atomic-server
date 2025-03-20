@@ -30,7 +30,7 @@ use atomic_lib::Storelike;
 tokio::runtime::Runtime::new().unwrap().block_on(async {
     // Start with initializing the in-memory store
     let store = atomic_lib::Store::init().await.unwrap();
-    store.set_server_url("http://localhost");
+    store.set_base_url("http://localhost");
     // Pre-load the default Atomic Data Atoms (from atomicdata.dev),
     // this is not necessary, but will probably make your project a bit faster
     store.populate().await.unwrap();

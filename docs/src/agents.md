@@ -29,7 +29,9 @@ The `publicKey` is used to verify commit signatures by that Agent, to check if t
 
 ## Creating an Agent
 
-Since an Agent is used for verification of commits, the Agent's `subject` should resolve and be publicly available.
-This means that the one creating the Agent has to deal with this.
-One way of doing this, is by hosting an [Atomic Server](https://crates.io/crates/atomic-server).
-An easier way of doing this, is by accepting an [Invite](invitations.md) that exists on someone else's server.
+An Agent is identified by a DID (Decentralized Identifier) derived from its public key: `did:ad:{publicKey}`.
+When a client generates a keypair, the public key immediately determines the Agent's subject, without needing to register it on a server first.
+
+One way to start using your Agent is by accepting an [Invite](invitations.md) with your public key.
+The server will derive the `did:ad:` identifier and grant the requested rights.
+Alternatively, you can host an [Atomic Server](https://crates.io/crates/atomic-server) and use the `/setup` invite to configure the root Agent.

@@ -3,6 +3,7 @@
 use crate::{
     errors::AtomicResult,
     values::{ReferenceString, SortableValue, Value},
+    Subject,
 };
 
 /// The Atom is the smallest meaningful piece of data.
@@ -11,13 +12,13 @@ use crate::{
 #[derive(Clone, Debug)]
 pub struct Atom {
     /// The URL where the resource is located
-    pub subject: String,
+    pub subject: Subject,
     pub property: String,
     pub value: Value,
 }
 
 impl Atom {
-    pub fn new(subject: String, property: String, value: Value) -> Self {
+    pub fn new(subject: Subject, property: String, value: Value) -> Self {
         Atom {
             subject,
             property,
@@ -57,7 +58,7 @@ impl Atom {
 /// One IndexAtom for every member of the ResourceArray is created.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IndexAtom {
-    pub subject: String,
+    pub subject: Subject,
     pub property: String,
     pub ref_value: ReferenceString,
     pub sort_value: SortableValue,

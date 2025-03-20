@@ -150,7 +150,7 @@ export class Client {
         Accept: JSON_AD_MIME,
       };
 
-      if (signInfo) {
+      if (signInfo && !subject.startsWith('https://atomicdata.dev')) {
         // Cookies only work in browsers for same-origin requests right now
         // https://github.com/atomicdata-dev/atomic-data-browser/issues/253
         if (hasBrowserAPI() && subject.startsWith(window.location.origin)) {
@@ -172,7 +172,8 @@ export class Client {
         // We can't fetch DIDs directly, so we fetch them from the server
         const baseUrl =
           signInfo?.serverURL ||
-          (window as any).atomicServerUrl ||
+          (window as unknown as Record<'atomicServerUrl', string>)
+            .atomicServerUrl ||
           window.location.origin;
         url = `${baseUrl}/${subject}`;
       }

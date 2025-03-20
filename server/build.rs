@@ -1,7 +1,7 @@
 use std::{
-    fs::{self, Metadata},
+    fs,
     path::PathBuf,
-    time::{Instant, SystemTime},
+    time::{Duration, Instant, SystemTime},
 };
 
 macro_rules! p {
@@ -109,9 +109,10 @@ fn should_build(dirs: &Dirs) -> bool {
     }
     // Check if any JS files were modified since the last build
     // Compare against the actual dist output, not the temporary copy
-    if let Ok(dist_index_html) =
-        std::fs::metadata(format!("{}/index.html", dirs.js_dist_source.display()))
-    {
+    // Find the newest file in the dist directory to compare against
+    let dist_time = find_newest_file_time(&dirs.js_dist_source);
+
+    if let Some(dist_time) = dist_time {
         let has_changes = walkdir::WalkDir::new(&dirs.src_browser)
             .into_iter()
             .filter_entry(|entry| {
@@ -121,7 +122,13 @@ fn should_build(dirs: &Dirs) -> bool {
                     .map(|s| !s.starts_with(".DS_Store"))
                     .unwrap_or(false)
             })
-            .any(|entry| is_older_than(&entry.unwrap(), &dist_index_html));
+            .any(|entry| {
+                if let Ok(entry) = entry {
+                    is_newer_than_dist(&entry, dist_time)
+                } else {
+                    false
+                }
+            });
 
         if has_changes {
             return true;
@@ -177,28 +184,84 @@ fn build_js(dirs: &Dirs) {
     }
 }
 
-fn is_older_than(dir_entry: &walkdir::DirEntry, dist_meta: &Metadata) -> bool {
-    let dist_time = dist_meta
-        .modified()
-        .unwrap()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap();
+/// Finds the modification time of the newest file in the dist directory
+fn find_newest_file_time(dist_dir: &PathBuf) -> Option<Duration> {
+    let mut newest_time: Option<Duration> = None;
 
-    if dir_entry.path().is_file() {
-        let src_time = dir_entry
-            .metadata()
-            .unwrap()
-            .modified()
-            .unwrap()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap();
-        if src_time >= dist_time {
-            p!(
-                "Source file modified: {:?}, rebuilding...",
-                dir_entry.path()
-            );
-            return true;
+    if let Ok(entries) = walkdir::WalkDir::new(dist_dir)
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()
+    {
+        for entry in entries {
+            if entry.path().is_file() {
+                if let Ok(meta) = entry.metadata() {
+                    if let Ok(modified) = meta.modified() {
+                        if let Ok(time) = modified.duration_since(SystemTime::UNIX_EPOCH) {
+                            newest_time = Some(newest_time.map_or(time, |t| t.max(time)));
+                        }
+                    }
+                }
+            }
         }
     }
+
+    newest_time
+}
+
+/// Checks if a source file is newer than the dist build time
+/// Returns true if the source file is significantly newer (more than 2 seconds)
+/// This accounts for filesystem timestamp precision issues
+fn is_newer_than_dist(dir_entry: &walkdir::DirEntry, dist_time: Duration) -> bool {
+    if !dir_entry.path().is_file() {
+        return false;
+    }
+
+    let src_modified = match dir_entry.metadata() {
+        Ok(meta) => meta.modified().ok(),
+        Err(_) => return false,
+    };
+
+    let src_modified_time = match src_modified {
+        Some(time) => time,
+        None => return false,
+    };
+
+    // Check if source timestamp is in the future relative to current time
+    // This handles files with incorrect future timestamps (like Dec 31 2026)
+    let now = SystemTime::now();
+    match src_modified_time.duration_since(now) {
+        Ok(future_duration) => {
+            // Source file is in the future - if more than 1 hour, ignore it
+            if future_duration > Duration::from_secs(3600) {
+                p!(
+                    "Source file {:?} has future timestamp ({}s ahead), ignoring...",
+                    dir_entry.path(),
+                    future_duration.as_secs()
+                );
+                return false;
+            }
+        }
+        Err(_) => {
+            // Source file is in the past or present, which is normal
+        }
+    }
+
+    // Convert source time to duration since epoch for comparison
+    let src_time = match src_modified_time.duration_since(SystemTime::UNIX_EPOCH) {
+        Ok(time) => time,
+        Err(_) => return false, // Source file has invalid timestamp (before epoch)
+    };
+
+    // Add a 2-second tolerance to account for filesystem timestamp precision issues
+    // Only rebuild if source is significantly newer (more than 2 seconds)
+    let tolerance = Duration::from_secs(2);
+    if src_time > dist_time + tolerance {
+        p!(
+            "Source file modified: {:?}, rebuilding...",
+            dir_entry.path()
+        );
+        return true;
+    }
+
     false
 }

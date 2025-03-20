@@ -75,8 +75,10 @@ pub async fn check_append(
                 .await?
                 .iter()
                 .any(|c| c.subject == urls::DRIVE)
+                || resource.get_subject().to_string().starts_with("did:")
             {
-                Ok(String::from("Drive without a parent can be created"))
+                // This string is not returned, it's just a check
+                Ok(String::from("Drive or DID without a parent can be created"))
             } else {
                 Err(e)
             }
@@ -213,5 +215,29 @@ mod test {
         assert_eq!(read.to_string(), super::urls::READ);
         let write = super::Right::Write;
         assert_eq!(write.to_string(), super::urls::WRITE);
+    }
+
+    #[tokio::test]
+    async fn create_did_agent() {
+        let store = crate::Store::init().await.unwrap();
+        store.populate().await.unwrap();
+        let agent = store.create_agent(Some("test_actor")).await.unwrap();
+        let subject = "did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK";
+        let mut commitbuilder = crate::commit::CommitBuilder::new(subject.into());
+        let property = crate::urls::DESCRIPTION;
+        let value = Value::new("Some value", &DataType::Markdown).unwrap();
+        commitbuilder.set(property.into(), value);
+        let resource = crate::Resource::new(subject.into());
+        let commit = commitbuilder.sign(&agent, &store, &resource).await.unwrap();
+        let opts = crate::commit::CommitOpts {
+            validate_schema: true,
+            validate_signature: false, // We sign with a different agent (default agent), so signature validation would fail if we checked against subject
+            validate_timestamp: true,
+            validate_rights: true,
+            validate_previous_commit: false,
+            update_index: true,
+            validate_for_agent: Some(agent.subject.clone()),
+        };
+        store.apply_commit(commit, &opts).await.unwrap();
     }
 }

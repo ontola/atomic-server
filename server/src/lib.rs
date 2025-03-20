@@ -14,6 +14,7 @@ mod handlers;
 mod helpers;
 #[cfg(feature = "https")]
 mod https;
+pub mod invite_token;
 mod jsonerrors;
 pub mod plugins;
 mod routes;

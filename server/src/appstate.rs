@@ -48,7 +48,7 @@ impl AppState {
         // Register all built-in class extenders
         store.add_class_extender(plugins::chatroom::build_chatroom_extender())?;
         store.add_class_extender(plugins::chatroom::build_message_extender())?;
-        store.add_class_extender(plugins::invite::build_invite_extender())?;
+        store.add_endpoint(plugins::invite::invite_endpoint())?;
         store.add_class_extender(plugins::plugin::build_plugin_extender(
             config.plugin_path.clone(),
             config.plugin_cache_path.clone(),
@@ -129,11 +129,12 @@ impl AppState {
                 }
             });
 
-            set_up_initial_invite(&store)
+            let invite_url = get_initial_invite_token(&store, &config.get_origin())
                 .await
                 .map_err(|e| format!("Error while setting up initial invite: {}", e))?;
             // This means that editing the .env does _not_ grant you the rights to edit the Drive.
 
+            tracing::info!("Initial invite URL: \n\n {} \n\n", invite_url);
             tracing::info!("Adding all resources to search index");
             search_state.add_all_resources(&store).await?;
         }
@@ -225,55 +226,23 @@ async fn set_default_agent(config: &Config, store: &impl Storelike) -> AtomicSer
 }
 
 /// Creates the first Invitation that is opened by the user on the Home page.
-async fn set_up_initial_invite(store: &impl Storelike) -> AtomicServerResult<()> {
-    let subject = "/setup";
-    tracing::info!("Creating initial Invite at {}", subject);
-    let mut invite = store.get_resource_new(&subject.into()).await;
-    invite.set_class(atomic_lib::urls::INVITE);
-    invite.set_subject(subject.into());
-    // This invite can be used only once
-    invite
-        .set(
-            atomic_lib::urls::USAGES_LEFT.into(),
-            atomic_lib::Value::Integer(1),
-            store,
-        )
-        .await?;
-    invite
-        .set(
-            atomic_lib::urls::WRITE_BOOL.into(),
-            atomic_lib::Value::Boolean(true),
-            store,
-        )
-        .await?;
-    invite
-        .set(
-            atomic_lib::urls::TARGET.into(),
-            atomic_lib::Value::AtomicUrl("/".into()),
-            store,
-        )
-        .await?;
-    invite
-        .set(
-            atomic_lib::urls::PARENT.into(),
-            atomic_lib::Value::AtomicUrl("/".into()),
-            store,
-        )
-        .await?;
-    invite
-        .set(
-            atomic_lib::urls::NAME.into(),
-            atomic_lib::Value::String("Setup".into()),
-            store,
-        )
-        .await?;
-    invite
-        .set_string(
-            atomic_lib::urls::DESCRIPTION.into(),
-            "Use this Invite to create an Agent, or use an existing one. Accepting will grant your Agent the necessary rights to edit the data in your Atomic Server. This can only be used once. If you, for whatever reason, need a new `/setup` invite, you can pass the `--initialize` flag to `atomic-server`.",
-            store,
-        )
-        .await?;
-    invite.save_locally(store).await?;
-    Ok(())
+async fn get_initial_invite_token(
+    store: &impl Storelike,
+    base_url: &str,
+) -> AtomicServerResult<String> {
+    let agent = store
+        .get_default_agent()
+        .map_err(|e| format!("Could not get default agent: {}", e))?;
+    let expiry = atomic_lib::utils::now() + 60 * 60 * 24 * 2; // 2 days
+    let token = crate::invite_token::InviteToken::new(base_url.to_string(), true, expiry, &agent)
+        .map_err(|e| format!("Could not create invite token: {}", e))?;
+
+    let token_base64 = token
+        .encode()
+        .map_err(|e| format!("Could not encode invite token: {}", e))?;
+    let token_encoded: String =
+        url::form_urlencoded::byte_serialize(token_base64.as_bytes()).collect();
+    let url = format!("{}/invites?token={}", base_url, token_encoded);
+
+    Ok(url)
 }

@@ -24,18 +24,24 @@ export default defineConfig(options => ({
     console.log('Generating type definition files...');
 
     // Run the typescript compiler but only emit declaration files.
-    exec('tsc --emitDeclarationOnly --declaration', (err, stdout, stderr) => {
-      if (err || stderr) {
-        console.error(err ?? stderr);
-      }
+    await new Promise<void>((resolve, reject) => {
+      exec('tsc --emitDeclarationOnly --declaration', (err, stdout, stderr) => {
+        if (err || stderr) {
+          console.error(err ?? stderr);
+        }
 
-      // We need a copy of index.d.ts for cjs builds but the actual content can be the same so we can just copy it.
-      console.log('Creating index.d.cts...');
-      fs.copyFile('dist/src/index.d.ts', 'dist/src/index.d.cts')
-        .then(() => {
-          console.log('Build Finished!');
-        })
-        .catch(console.error);
+        // We need a copy of index.d.ts for cjs builds but the actual content can be the same so we can just copy it.
+        console.log('Creating index.d.cts...');
+        fs.copyFile('dist/src/index.d.ts', 'dist/src/index.d.cts')
+          .then(() => {
+            console.log('Build Finished!');
+            resolve();
+          })
+          .catch(e => {
+            console.error(e);
+            reject(e);
+          });
+      });
     });
   },
 }));

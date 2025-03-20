@@ -171,7 +171,7 @@ Commands:
 
 Options:
       --initialize
-          Recreates the `/setup` Invite for creating a new Root User. Also re-runs various populate commands, and re-builds the index
+          Recreates the initial Invite for creating a new Root User, prints it to console. Also re-runs various populate commands, and re-builds the index
 
           [env: ATOMIC_INITIALIZE=]
 

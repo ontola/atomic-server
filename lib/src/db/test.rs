@@ -404,7 +404,7 @@ async fn queries() {
     delete_resource.destroy(store).await.unwrap();
     let res = store.query(&q).await.unwrap();
     assert!(
-        !res.subjects.contains(&subject_to_delete),
+        !res.subjects.iter().any(|s| s.as_str() == subject_to_delete),
         "deleted resource still in results"
     );
 
@@ -614,7 +614,7 @@ async fn test_collection_update_value(
     assert_eq!(res.count, count, "count changed after updating one value");
 
     assert_eq!(
-        res.subjects.first().unwrap(),
+        res.subjects.first().unwrap().as_str(),
         resource_changed_order.get_subject().as_str(),
         "Updated resource is not the first Result of the new query"
     );

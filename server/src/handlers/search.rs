@@ -84,12 +84,12 @@ pub async fn search_query(
     timer.add("execute_query");
     let subjects = docs_to_subjects(top_docs, &fields, &searcher)?;
 
-    // Create a valid atomic data resource.
-    let subject = format!(
-        "{}{}",
-        origin,
-        req.uri().path_and_query().ok_or("Add a query param")?
-    );
+    let path_and_query = req
+        .uri()
+        .path_and_query()
+        .ok_or("Add a query param")?
+        .to_string();
+    let subject = atomic_lib::Subject::from_raw(&path_and_query, None).resolve(&origin);
 
     let mut results_resource = crate::plugins::search::search_endpoint()
         .to_resource(store)

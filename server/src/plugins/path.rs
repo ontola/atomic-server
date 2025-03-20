@@ -46,7 +46,7 @@ fn handle_path_request<'a>(
             PathReturn::Atom(atom) => {
                 let mut resource = Resource::new(subject.to_string());
                 resource
-                    .set_string(urls::ATOM_SUBJECT.into(), &atom.subject, store)
+                    .set_string(urls::ATOM_SUBJECT.into(), atom.subject.as_str(), store)
                     .await?;
                 resource
                     .set_string(urls::ATOM_PROPERTY.into(), &atom.property, store)

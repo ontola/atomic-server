@@ -54,8 +54,9 @@ describe('Commit signing and keys', () => {
     // Serialization should NOT contain the subject
     const serialized = serializeDeterministically(commit);
     const jsonCorrect = JSON.parse(serialized);
-    expect(jsonCorrect['https://atomicdata.dev/properties/subject']).to.be
-      .undefined;
+    expect(
+      jsonCorrect['https://atomicdata.dev/properties/subject'],
+    ).toBeUndefined();
   });
 });
 

@@ -83,7 +83,7 @@ impl SearchState {
     /// Indexes all resources from the store to search.
     /// At this moment does not remove existing index.
     pub async fn add_all_resources(&self, store: &Db) -> AtomicServerResult<()> {
-        tracing::info!("Building search index...");
+        tracing::info!("Building search index");
 
         let resources = store
             .all_resources(true)

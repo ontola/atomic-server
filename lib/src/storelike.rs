@@ -394,7 +394,9 @@ pub trait Storelike: Sized + Send + Sync {
         for_agent: Option<&Agent>,
     ) -> AtomicResult<Resource> {
         let subject_obj = Subject::from_raw(subject, self.get_base_domain().as_deref());
-        if matches!(subject_obj, Subject::Internal(_) | Subject::Did(_)) {
+        if matches!(subject_obj, Subject::Internal(_) | Subject::Did(_))
+            || subject.starts_with("did:")
+        {
             return Err(AtomicError::not_found(format!(
                 "Failed to retrieve locally: '{}'",
                 subject
@@ -507,7 +509,7 @@ pub trait Storelike: Sized + Send + Sync {
             let value = resource.get_shortname(item, self).await?.clone();
             let property = resource.resolve_shortname_to_property(item, self).await?;
             current = PathReturn::Atom(Box::new(Atom::new(
-                subject.clone(),
+                subject.clone().into(),
                 property.subject,
                 value,
             )))
@@ -612,7 +614,7 @@ impl Default for Query {
 }
 
 pub struct QueryResult {
-    pub subjects: Vec<String>,
+    pub subjects: Vec<Subject>,
     pub resources: Vec<Resource>,
     /// The amount of hits that were found, including the ones that were out of bounds or not authorized.
     pub count: usize,
