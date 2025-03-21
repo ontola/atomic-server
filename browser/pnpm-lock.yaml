@@ -237,6 +237,9 @@ importers:
       '@tiptap/y-tiptap':
         specifier: ^3.0.1
         version: 3.0.1(prosemirror-model@1.25.4)(prosemirror-state@1.4.4)(prosemirror-view@1.41.3)(y-protocols@1.0.6(yjs@13.6.27))(yjs@13.6.27)
+      '@tomic/lib':
+        specifier: workspace:*
+        version: link:../lib
       '@tomic/plugin':
         specifier: workspace:*
         version: link:../plugin

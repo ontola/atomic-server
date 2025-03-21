@@ -110,7 +110,7 @@ impl SearchState {
     #[tracing::instrument(skip(self, store))]
     pub async fn add_resource(&self, resource: &Resource, store: &Db) -> AtomicServerResult<()> {
         let fields = self.get_schema_fields()?;
-        let subject = resource.get_subject().to_string();
+        let subject = store.normalize_subject(resource.get_subject()).to_string();
         let writer = self.writer.read()?;
 
         let mut doc = tantivy::TantivyDocument::default();
@@ -118,9 +118,9 @@ impl SearchState {
             fields.propvals,
             serde_json::from_str(&resource.to_json_ad(None)?).map_err(|e| {
                 format!(
-                "Failed to convert resource to json for search indexing. Subject: {}. Error: {}",
-                subject, e
-            )
+                    "Failed to convert resource to json for search indexing. Subject: {}. Error: {}",
+                    subject, e
+                )
             })?,
         );
 
