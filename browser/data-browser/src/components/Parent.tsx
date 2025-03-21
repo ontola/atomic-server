@@ -15,7 +15,7 @@ import { Button } from './Button';
 import { BREADCRUMB_BAR_TRANSITION_TAG } from '../helpers/transitionName';
 import { ResourceContextMenu } from './ResourceContextMenu';
 import { MenuBarDropdownTrigger } from './ResourceContextMenu/MenuBarDropdownTrigger';
-import { IconButton } from './IconButton/IconButton';
+import { IconButton, IconButtonVariant } from './IconButton/IconButton';
 
 import type { JSX } from 'react';
 import { useAISidebar } from './AI/AISidebarContext';
@@ -45,6 +45,7 @@ function Parent({ resource }: ParentProps): JSX.Element {
           {enableAI && (
             <IconButton
               title='Toggle AI panel'
+              variant={IconButtonVariant.Magic}
               onClick={() => setIsOpen(prev => !prev)}
             >
               <AIIcon />
@@ -181,6 +182,7 @@ const Spacer = styled.span`
 `;
 
 const ButtonArea = styled.div`
+  display: flex;
   justify-self: flex-end;
   color: ${p => p.theme.colors.textLight};
 `;

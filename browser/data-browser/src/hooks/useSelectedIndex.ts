@@ -4,6 +4,7 @@ import { loopingIndex } from '../helpers/loopingIndex';
 export function useSelectedIndex<T, K>(
   list: T[],
   onSelect: (index: number | undefined) => void,
+  initialIndex?: number,
 ): {
   selectedIndex: number | undefined;
   onKeyDown: (e: React.KeyboardEvent<K>) => void;
@@ -12,7 +13,9 @@ export function useSelectedIndex<T, K>(
   resetIndex: () => void;
   usingKeyboard: boolean;
 } {
-  const [selectedIndex, setSelectedIndex] = useState<number | undefined>(0);
+  const [selectedIndex, setSelectedIndex] = useState<number | undefined>(
+    initialIndex,
+  );
   const [usingKeyboard, setUsingKeyboard] = useState(false);
 
   const onKeyDown = (e: React.KeyboardEvent<K>) => {
@@ -52,7 +55,7 @@ export function useSelectedIndex<T, K>(
   };
 
   const resetIndex = () => {
-    setSelectedIndex(undefined);
+    setSelectedIndex(initialIndex);
   };
 
   useEffect(() => {

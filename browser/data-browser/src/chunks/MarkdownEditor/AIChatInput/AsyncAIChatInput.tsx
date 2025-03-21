@@ -107,7 +107,6 @@ const AsyncAIChatInput: React.FC<AsyncAIChatInputProps> = ({
       return;
     }
 
-    console.log('update', editor.getJSON());
     const mentions = digForMentions(editor.getJSON());
     onMentionUpdate(Array.from(new Set(mentions)));
   };

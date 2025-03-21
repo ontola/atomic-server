@@ -3,7 +3,6 @@ import Markdown from '../datatypes/Markdown';
 import { Details } from '../Details';
 import type {
   CoreAssistantMessage,
-  CoreMessage,
   CoreToolMessage,
   FilePart,
   ImagePart,
@@ -172,25 +171,32 @@ export const AIChatMessage = ({ message: messageIn }: MessageProps) => {
           }
 
           if (c.type === 'tool-call') {
-            if (c.toolName === TOOL_NAMES.SEARCH_RESOURCE) {
-              return (
-                <AtomicSearchToolMessage key={c.toolCallId} toolCall={c} />
-              );
+            switch (c.toolName) {
+              case TOOL_NAMES.SEARCH_RESOURCE:
+                return (
+                  <AtomicSearchToolMessage key={c.toolCallId} toolCall={c} />
+                );
+              case TOOL_NAMES.GET_ATOMIC_RESOURCE:
+                return (
+                  <AtomicFetchToolMessage key={c.toolCallId} toolCall={c} />
+                );
+              case TOOL_NAMES.EDIT_ATOMIC_RESOURCE:
+                return (
+                  <AtomicEditToolMessage key={c.toolCallId} toolCall={c} />
+                );
+              case TOOL_NAMES.CREATE_RESOURCE:
+                return (
+                  <BasicCustomToolUseMessage key={c.toolCallId} toolCall={c}>
+                    Creating Resource
+                  </BasicCustomToolUseMessage>
+                );
+              default:
+                return (
+                  <ToolUseMessage key={c.toolCallId}>
+                    Using tool: <span>{c.toolName}</span>
+                  </ToolUseMessage>
+                );
             }
-
-            if (c.toolName === TOOL_NAMES.GET_ATOMIC_RESOURCE) {
-              return <AtomicFetchToolMessage key={c.toolCallId} toolCall={c} />;
-            }
-
-            if (c.toolName === TOOL_NAMES.EDIT_ATOMIC_RESOURCE) {
-              return <AtomicEditToolMessage key={c.toolCallId} toolCall={c} />;
-            }
-
-            return (
-              <ToolUseMessage key={c.toolCallId}>
-                Using tool: <span>{c.toolName}</span>
-              </ToolUseMessage>
-            );
           }
 
           if (c.type === 'reasoning') {
@@ -277,7 +283,7 @@ const AtomicFetchToolMessage = ({ toolCall }: ToolCallMessageProps) => {
   return (
     <>
       {Array.from(resources.values()).map(resource => (
-        <ToolUseMessage key={toolCall.toolCallId}>
+        <SubtleToolUseMessage key={toolCall.toolCallId}>
           <Row center gap='1ch'>
             Reading
             <span>
@@ -285,7 +291,7 @@ const AtomicFetchToolMessage = ({ toolCall }: ToolCallMessageProps) => {
               {resource.title.length > 20 ? '...' : ''}
             </span>
           </Row>
-        </ToolUseMessage>
+        </SubtleToolUseMessage>
       ))}
     </>
   );
@@ -302,6 +308,17 @@ const AtomicEditToolMessage = ({ toolCall }: ToolCallMessageProps) => {
         Changing <ClippedTitle>{property.title}</ClippedTitle> on{' '}
         <ClippedTitle>{resource.title}</ClippedTitle>
       </Row>
+    </ToolUseMessage>
+  );
+};
+
+const BasicCustomToolUseMessage = ({
+  toolCall,
+  children,
+}: React.PropsWithChildren<ToolCallMessageProps>) => {
+  return (
+    <ToolUseMessage key={toolCall.toolCallId}>
+      <span>{children}</span>
     </ToolUseMessage>
   );
 };
@@ -357,6 +374,12 @@ const ToolUseMessage = styled.div`
   span {
     color: ${p => p.theme.colors.textLight};
   }
+`;
+
+const SubtleToolUseMessage = styled.div`
+  color: ${p => p.theme.colors.textLight};
+  font-size: 0.7rem;
+  width: fit-content;
 `;
 
 const MessageWrapper = styled.div`

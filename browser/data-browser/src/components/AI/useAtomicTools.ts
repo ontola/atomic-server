@@ -75,10 +75,14 @@ export function useAtomicMCPTools({
           query: z.string().describe('A text query to search for.'),
           limit: z
             .number()
-            .describe('The max number of results to return.')
+            .describe('The max number of results to return. Range 1 - 50')
             .default(10),
         }),
         execute: async ({ query, limit }) => {
+          if (limit < 1 || limit > 50) {
+            throw new Error('Limit must be between 1 and 50');
+          }
+
           const results = await store.search(query, { limit });
 
           const resources = await Promise.all(

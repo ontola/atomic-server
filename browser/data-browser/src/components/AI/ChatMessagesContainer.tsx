@@ -5,11 +5,12 @@ import { Column } from '../Row';
 
 interface ChatMessagesContainerProps {
   enableAutoScroll?: boolean;
+  fullView?: boolean;
 }
 
 export const ChatMessagesContainer: React.FC<
   React.PropsWithChildren<ChatMessagesContainerProps>
-> = ({ children, enableAutoScroll }) => {
+> = ({ children, enableAutoScroll, fullView }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -53,7 +54,7 @@ export const ChatMessagesContainer: React.FC<
   }, [enableAutoScroll]);
 
   return (
-    <MessagesContainer>
+    <MessagesContainer fullView={fullView}>
       <Column ref={containerRef}>
         {children}
         <div ref={messagesEndRef} />
@@ -62,10 +63,10 @@ export const ChatMessagesContainer: React.FC<
   );
 };
 
-const MessagesContainer = styled(ScrollArea)`
+const MessagesContainer = styled(ScrollArea)<{ fullView?: boolean }>`
   overflow: auto;
   height: 100%;
-  padding: ${p => p.theme.size()};
   background-color: ${p => p.theme.colors.bgBody};
   border-radius: ${p => p.theme.radius};
+  padding: ${p => (p.fullView ? '0' : p.theme.size())};
 `;
