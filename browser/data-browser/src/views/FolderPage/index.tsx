@@ -110,6 +110,8 @@ const FullPageWrapper = styled.div<FullPageWrapperProps>`
   min-height: ${p => p.theme.heights.fullPage};
   display: flex;
   flex-direction: column;
+  width: var(--container-width);
+  margin-inline: auto;
   padding: ${p => p.theme.size()};
   padding-bottom: ${p => p.theme.heights.floatingSearchBarPadding};
 `;
