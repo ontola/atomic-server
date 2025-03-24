@@ -26,6 +26,7 @@ import {
   FaPaperclip,
   FaFile,
   FaCheck,
+  FaGlobe,
 } from 'react-icons/fa6';
 import { ChatMessagesContainer } from './ChatMessagesContainer';
 import { useStore } from '@tomic/react';
@@ -42,6 +43,7 @@ import { MessageContextItem } from './MessageContextItem';
 import { useProcessMessages } from './useProcessMessages';
 import { NoKeyOverlay } from './NoKeyOverlay';
 import { useAutoAgentSelect } from './useAgentAutoSelect';
+import { useOpenRouterModels } from './useOpenRouterModels';
 
 const AIChatInput = React.lazy(
   () => import('../../chunks/MarkdownEditor/AIChatInput/AsyncAIChatInput'),
@@ -78,6 +80,7 @@ interface SimpleAIChatProps {
   setExternalContextItems: React.Dispatch<
     React.SetStateAction<AIMessageContext[]>
   >;
+  onDeleteMessage: (message: AIChatDisplayMessage) => void;
 }
 
 export const SimpleAIChat: React.FC<
@@ -89,6 +92,7 @@ export const SimpleAIChat: React.FC<
   externalContextItems,
   setExternalContextItems,
   onNewMessage,
+  onDeleteMessage,
   children,
 }) => {
   const abortSignalRef = useRef<AbortController>(null);
@@ -101,6 +105,9 @@ export const SimpleAIChat: React.FC<
   const [selectedAgent, setSelectedAgent] = useState<AIAgent>(
     agents.find(a => a.id === defaultAgentId) || agents[0],
   );
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  const { checkModelSupport, checkModelSupportsImageInput } =
+    useOpenRouterModels();
   const [userInput, setUserInput] = useState('');
   const [userSelectedContextItems, setUserSelectedContextItems] = useState<
     AIMessageContext[]
@@ -111,6 +118,14 @@ export const SimpleAIChat: React.FC<
     compatibility: 'strict',
     extraBody: {
       transforms: ['middle-out'],
+      ...(webSearchEnabled
+        ? {
+            plugins: [{ id: 'web' }],
+            web_search_options: {
+              search_context_size: 'low',
+            },
+          }
+        : {}),
     },
   });
   const [ongoingMessage, setOngoingMessage] = useState<OngoingMessagePart>({
@@ -178,8 +193,6 @@ export const SimpleAIChat: React.FC<
       return;
     }
 
-    abortSignalRef.current = new AbortController();
-
     if (!openRouterApiKey) {
       toast.error(
         'OpenRouter API key not found. Please provide a valid API key in settings.',
@@ -188,8 +201,8 @@ export const SimpleAIChat: React.FC<
       return;
     }
 
+    abortSignalRef.current = new AbortController();
     let messagesToUse: AIChatDisplayMessage[] = [];
-
     let pickedAgent = selectedAgent;
 
     if (autoAgentSelectEnabled && messages.length === 0) {
@@ -249,6 +262,7 @@ export const SimpleAIChat: React.FC<
         model: openrouter(pickedAgent.model),
         maxTokens: 100000,
         messages: filteredMessages,
+        temperature: pickedAgent.temperature,
         tools: Object.keys(toolsToUse).length > 0 ? toolsToUse : undefined,
         maxSteps: 20,
         system: systemPrompt,
@@ -291,7 +305,6 @@ export const SimpleAIChat: React.FC<
             model: openrouter('qwen/qwq-32b:free'),
             output: 'no-schema',
             mode: 'json',
-            temperature: 0.1,
             prompt: [
               `The model tried to call the tool "${toolCall.toolName}"` +
                 ` with the following arguments:`,
@@ -319,13 +332,29 @@ export const SimpleAIChat: React.FC<
       text: '',
     };
 
-    const pendingToolCalls: ToolCallPart[] = [];
+    let pendingToolCalls: ToolCallPart[] = [];
     let isReasoning = false;
+
+    abortSignalRef.current.signal.addEventListener('abort', () => {
+      setAiState(AIState.Stopped);
+
+      if (ownOnGoingMessage) {
+        onNewMessage({
+          role: 'assistant',
+          content: [ownOnGoingMessage],
+        });
+
+        setOngoingMessage({
+          type: 'text',
+          text: '',
+        });
+      }
+    });
 
     try {
       for await (const part of textStream.fullStream) {
         // Update ongoing message with streamed chunks
-        // console.log('Part', part);
+        console.log('Part', part);
 
         if (part.type === 'tool-call') {
           const toolCallMessage: AIChatDisplayMessage = {
@@ -350,16 +379,16 @@ export const SimpleAIChat: React.FC<
           pendingToolCalls.push(part);
         }
 
-        // if (part.type === 'tool-result') {
-        //   onNewMessage({
-        //     role: 'tool',
-        //     content: [part],
-        //   });
+        if (part.type === 'tool-result') {
+          onNewMessage({
+            role: 'tool',
+            content: [part],
+          });
 
-        //   pendingToolCalls = pendingToolCalls.filter(
-        //     call => call.toolCallId !== part.toolCallId,
-        //   );
-        // }
+          pendingToolCalls = pendingToolCalls.filter(
+            call => call.toolCallId !== part.toolCallId,
+          );
+        }
 
         if (part.type === 'reasoning') {
           isReasoning = true;
@@ -494,7 +523,11 @@ export const SimpleAIChat: React.FC<
         fullView={fullView}
       >
         {messages.filter(cleanMessages).map(message => (
-          <AIChatMessage key={JSON.stringify(message)} message={message} />
+          <AIChatMessage
+            key={JSON.stringify(message)}
+            message={message}
+            onDeleteMessage={onDeleteMessage}
+          />
         ))}
         {ongoingMessage.text && (
           <AIChatMessage
@@ -594,19 +627,38 @@ export const SimpleAIChat: React.FC<
                         ? 'Automatic'
                         : selectedAgent.name}
                     </SubtleButton>
-                    <input
-                      type='file'
-                      ref={fileInputRef}
-                      onChange={handleFileUpload}
-                      style={{ display: 'none' }}
-                    />
-                    <IconButton
-                      title='Attach file'
-                      onClick={() => fileInputRef.current?.click()}
-                      color='textLight'
-                    >
-                      <FaPaperclip />
-                    </IconButton>
+                    {checkModelSupport(
+                      selectedAgent.model,
+                      'web_search_options',
+                    ) && (
+                      <IconButton
+                        title='Toggle web search'
+                        onClick={() => setWebSearchEnabled(v => !v)}
+                        color={webSearchEnabled ? 'main' : 'textLight'}
+                        variant={
+                          webSearchEnabled ? IconButtonVariant.Fill : undefined
+                        }
+                      >
+                        <FaGlobe />
+                      </IconButton>
+                    )}
+                    {checkModelSupportsImageInput(selectedAgent.model) && (
+                      <>
+                        <input
+                          type='file'
+                          ref={fileInputRef}
+                          onChange={handleFileUpload}
+                          style={{ display: 'none' }}
+                        />
+                        <IconButton
+                          title='Attach file'
+                          onClick={() => fileInputRef.current?.click()}
+                          color='textLight'
+                        >
+                          <FaPaperclip />
+                        </IconButton>
+                      </>
+                    )}
                   </Row>
                   <IconButton
                     disabled={userInput.length === 0 && !attachedFile}
@@ -668,7 +720,7 @@ const prepareUserMessage = (
         }
       : {
           type: 'file',
-          data: `data:${fileAttachment.type};base64,${fileAttachment.base64Content}`,
+          data: `data:${fileAttachment.type};base6 4,${fileAttachment.base64Content}`,
           mimeType: fileAttachment.type,
         };
 

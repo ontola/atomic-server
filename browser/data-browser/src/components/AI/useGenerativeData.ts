@@ -28,8 +28,6 @@ export const useGenerativeData = () => {
       prompt: convoString,
     });
 
-    console.log('text', text);
-
     const cleaned = text.trim();
 
     if (cleaned) {

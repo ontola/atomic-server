@@ -113,12 +113,12 @@ export const displayMessageToResource = async (
 export const messageResourcesToDisplayMessages = async (
   subjects: string[],
   store: Store,
-): Promise<AIChatDisplayMessage[]> => {
+): Promise<Map<AIChatDisplayMessage, Resource<Ai.AiMessage>>> => {
   const resources = await Promise.all(
     subjects.map(s => store.getResource<Ai.AiMessage>(s)),
   );
 
-  const messages: AIChatDisplayMessage[] = [];
+  const messages = new Map<AIChatDisplayMessage, Resource<Ai.AiMessage>>();
 
   for (const resource of resources) {
     if (resource.error) {
@@ -233,7 +233,7 @@ export const messageResourcesToDisplayMessages = async (
     }
 
     if (message) {
-      messages.push(message);
+      messages.set(message, resource);
     }
   }
 
