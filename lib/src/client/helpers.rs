@@ -18,7 +18,16 @@ pub async fn fetch_resource(
     store: &impl Storelike,
     client_agent: Option<&Agent>,
 ) -> AtomicResult<ResourceResponse> {
-    let body = fetch_body(subject, crate::parse::JSON_AD_MIME, client_agent)?;
+    let url = if subject.starts_with("did:") {
+        // Route DID requests through the server's normal resource endpoint.
+        // The server's catch-all GET handler parses the DID from the path
+        // and resolves it locally or via DHT.
+        let server = store.get_server_url();
+        format!("{}/{}", server.trim_end_matches('/'), subject)
+    } else {
+        subject.to_string()
+    };
+    let body = fetch_body(&url, crate::parse::JSON_AD_MIME, client_agent)?;
     let resources = Box::pin(parse_json_ad_string(&body, store, &ParseOpts::default()))
         .await
         .map_err(|e| format!("Error parsing body of {}. {}", subject, e))?;
@@ -29,8 +38,14 @@ pub async fn fetch_resource(
         let mut main_resource: Option<Resource> = None;
         let mut referenced: Vec<Resource> = Vec::new();
 
+        let pure_subject = if subject.starts_with("did:") {
+            subject.split('?').next().unwrap_or(subject)
+        } else {
+            subject
+        };
+
         for r in resources {
-            if r.get_subject().as_str() == subject {
+            if r.get_subject().pure_id() == pure_subject {
                 main_resource = Some(r);
             } else {
                 referenced.push(r);
@@ -126,7 +141,16 @@ pub fn fetch_body(
 
 /// Posts a Commit to the endpoint of the Subject from the Commit
 pub async fn post_commit(commit: &crate::Commit, store: &impl Storelike) -> AtomicResult<()> {
-    let server_url = crate::utils::server_url(commit.get_subject())?;
+    let subject = commit.get_subject();
+    let server_url = if subject.starts_with("did:") {
+        let mut url = store.get_server_url().to_string();
+        if !url.ends_with('/') {
+            url.push('/');
+        }
+        url
+    } else {
+        crate::utils::server_url(subject)?
+    };
     // Default Commit endpoint is `https://example.com/commit`
     let endpoint = format!("{}commit", server_url);
     post_commit_custom_endpoint(&endpoint, commit, store).await

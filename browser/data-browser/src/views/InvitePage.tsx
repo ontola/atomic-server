@@ -11,12 +11,12 @@ import {
   useStore,
   type Server,
   SubtleCryptoProvider,
+  JSCryptoProvider,
   type KeyPair,
   Resource,
 } from '@tomic/react';
 
 import { ContainerNarrow } from '../components/Containers';
-import { ValueForm } from '../components/forms/ValueForm';
 import { Button } from '../components/Button';
 import { constructOpenURL } from '../helpers/navigation';
 import { useSettings } from '../helpers/AppSettings';
@@ -26,7 +26,6 @@ import { Row } from '../components/Row';
 
 import { useId, useState, type JSX } from 'react';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
-import { useNavState } from '../components/NavState';
 import { getResourcesDrive } from '@helpers/getResourcesDrive';
 import { saveAgentToIDB } from '@helpers/agentStorage';
 import { Dialog, useDialog } from '@components/Dialog';
@@ -43,14 +42,7 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
   const [usagesLeft] = useNumber(resource, server.properties.usagesLeft);
   const [write] = useBoolean(resource, server.properties.write);
   const [description] = useString(resource, core.properties.description);
-  console.log('InvitePage resource props:', {
-    write,
-    description,
-    usagesLeft,
-    resourceSubject: resource.subject,
-  });
   const navigate = useNavigateWithTransition();
-  const navigationType = useNavState();
   const { agent, setAgent, setDrive } = useSettings();
   const agentResource = useResource(agent?.subject);
   const [agentTitle] = useTitle(agentResource, 15);
@@ -60,23 +52,34 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
   const [hasCopiedSecret, setHasCopiedSecret] = useState(false);
   const [isNewAgent, setIsNewAgent] = useState(false);
 
+  const getRedirectDestination = async (
+    redirect: Resource<Server.Redirect>,
+  ): Promise<string | undefined> => {
+    const destinationValue = (await redirect.get(
+      server.properties.destination,
+    )) as unknown;
+    const redirectProps = redirect.props as Record<string, unknown>;
+
+    return (
+      (typeof destinationValue === 'string' ? destinationValue : undefined) ??
+      (redirectProps[server.properties.destination] as string | undefined) ??
+      (redirectProps.destination as string | undefined)
+    );
+  };
+
   const goToRedirect = (destination?: string) => {
     const url = destination ?? redirectURL;
     if (!url) return;
-    // React needs a cycle to update the agent so we defer the next bit of code to after the render cycle so the store has the updated agent.
+    // React needs a cycle to update the agent so we defer navigation.
     requestAnimationFrame(() => {
+      navigate(constructOpenURL(url));
+      // Best-effort prefetch to set the active drive; navigation should not depend on this.
       store
         .fetchResourceFromServer(url)
-        .then(target => {
-          getResourcesDrive(target, store)
-            .then(setDrive)
-            .finally(() => {
-              navigate(constructOpenURL(url));
-            });
+        .then((target: Resource) => {
+          getResourcesDrive(target, store).then(setDrive).catch(() => undefined);
         })
-        .catch(err => {
-          console.error(err);
-        });
+        .catch(() => undefined);
     });
   };
 
@@ -128,21 +131,30 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
         goToRedirect();
         return;
       }
-      await persistAgentAfterInvite(agentSubject, redirectURL, agentName);
       goToRedirect();
+      void persistAgentAfterInvite(agentSubject, redirectURL, agentName);
     },
   });
 
-  // When the Invite is accepted, a new Agent might be created.
-  // When this happens, a new keypair is made, but the subject of the Agent is not yet known.
-  // It will be created by the server, and will be accessible in the Redirect response.
+  // When the Invite is accepted, a new Agent might be created client-side.
   async function handleNew() {
     try {
       const keypair = await generateKeyPair();
-      const cryptoKeyPair =
-        await SubtleCryptoProvider.createKeysFromKeyPair(keypair);
 
-      const provider = new SubtleCryptoProvider(cryptoKeyPair);
+      let cryptoKeyPair: CryptoKeyPair | undefined;
+
+      try {
+        cryptoKeyPair =
+          await SubtleCryptoProvider.createKeysFromKeyPair(keypair);
+      } catch {
+        // SubtleCrypto doesn't support Ed25519 in this environment.
+        // We'll use JSCryptoProvider as a fallback below.
+      }
+
+      const provider = cryptoKeyPair
+        ? new SubtleCryptoProvider(cryptoKeyPair)
+        : new JSCryptoProvider(keypair.privateKey);
+
       const subject = `did:ad:${keypair.publicKey}`;
       const newAgent = new Agent(provider, subject);
 
@@ -165,21 +177,21 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
   }
 
   const handleAccept = async (keys?: {
-    crypto: CryptoKeyPair;
+    crypto?: CryptoKeyPair;
     real: KeyPair;
   }) => {
     const inviteURL = new URL(resource.subject);
-
-    if (keys) {
-      inviteURL.searchParams.set('public-key', keys.real.publicKey);
-    } else {
-      inviteURL.searchParams.set('agent', agentSubject!);
-    }
-
-    const redirect = await store.getResource<Server.Redirect>(inviteURL.href);
+    const redirect = await store.postToServer<Server.Redirect>(inviteURL.href);
 
     if (redirect.error) {
       store.notifyError(redirect.error);
+      return;
+    }
+
+    const destination = await getRedirectDestination(redirect);
+
+    if (!destination) {
+      store.notifyError(new Error('Invite accepted, but no destination was returned.'));
       return;
     }
 
@@ -188,42 +200,33 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
       const newAgentSubject = `did:ad:${keys.real.publicKey}`;
       const secret = Agent.buildSecret(keys.real.privateKey, newAgentSubject);
 
-      const newAgent = new Agent(
-        new SubtleCryptoProvider(keys.crypto),
-        newAgentSubject,
-      );
+      const provider = keys.crypto
+        ? new SubtleCryptoProvider(keys.crypto)
+        : new JSCryptoProvider(keys.real.privateKey);
+      const newAgent = new Agent(provider, newAgentSubject);
 
-      saveAgentToIDB(keys.crypto, newAgentSubject);
+      if (keys.crypto) {
+        saveAgentToIDB(keys.crypto, newAgentSubject);
+      }
+
       setAgentSecret(secret);
       setAgent(newAgent);
       setIsNewAgent(true);
     } else {
       // Existing agent: persist agent (isA, drives) and redirect immediately — no dialog
       setIsNewAgent(false);
-      const destination = redirect.props.destination;
-      if (destination) {
-        setRedirectURL(destination);
-        await persistAgentAfterInvite(agentSubject!, destination, undefined);
-        goToRedirect(destination);
-      }
+      setRedirectURL(destination);
+      goToRedirect(destination);
+      void persistAgentAfterInvite(agentSubject!, destination, undefined);
       return;
     }
 
     // New agent: show dialog (secret, name) then on Continue we persist and redirect
-    if (redirect.props.destination) {
-      setRedirectURL(redirect.props.destination);
-      show();
-    }
+    setRedirectURL(destination);
+    show();
   };
 
   const agentSubject = agent?.subject;
-
-  if (agentSubject && usagesLeft && usagesLeft > 0) {
-    // Accept the invite if an agent subject is present, but not if the user just pressed the back button
-    if (navigationType !== 'POP') {
-      handleAccept();
-    }
-  }
 
   return (
     <>

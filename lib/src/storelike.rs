@@ -153,6 +153,23 @@ pub trait Storelike: Sized + Send + Sync {
     /// Used for multi-tenant isolation and normalization.
     fn get_base_domain(&self) -> Option<String>;
 
+    /// Returns the full server URL, e.g. "http://localhost:9883" or "https://atomicdata.dev".
+    /// Used by client helpers to route DID resolution requests through the server's `/did` endpoint.
+    /// Default implementation derives from `get_base_domain`, assuming HTTPS.
+    fn get_server_url(&self) -> String {
+        self.get_base_domain()
+            .map(|domain| {
+                if domain.starts_with("http://") || domain.starts_with("https://") {
+                    domain
+                } else if domain.starts_with("localhost") || domain.contains("localhost:") {
+                    format!("http://{}", domain)
+                } else {
+                    format!("https://{}", domain)
+                }
+            })
+            .unwrap_or_else(|| "http://localhost".to_string())
+    }
+
     /// Normalizes a subject: if it matches the server's base domain, it becomes an Internal subject.
     fn normalize_subject(&self, subject: &Subject) -> Subject {
         Subject::from_raw(subject.as_str(), self.get_base_domain().as_deref())

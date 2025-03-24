@@ -1,6 +1,9 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use url::Url;
 
+/// The prefix for Agent DIDs: `did:ad:`
+pub const DID_AD_AGENT_PREFIX: &str = "did:ad:";
+
 /// The Subject of a Resource.
 ///
 /// In Atomic Data, every subject is a URI.
@@ -185,6 +188,12 @@ impl Subject {
             Subject::External(_) => Subject::External(u),
             Subject::Did(_) => Subject::Did(u),
         }
+    }
+
+    /// Returns the core identifier as a String, stripping any query parameters or fragments.
+    /// This is used for database keys and cryptographic signatures.
+    pub fn pure_id(&self) -> String {
+        self.without_params().to_string()
     }
 }
 

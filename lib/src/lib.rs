@@ -75,6 +75,7 @@ pub mod config;
 pub mod datatype;
 #[cfg(feature = "db")]
 pub mod db;
+pub mod drive;
 #[cfg(feature = "db")]
 pub mod endpoints;
 pub mod errors;

@@ -1,7 +1,6 @@
 use atomic_lib::{
-    agents::Agent,
     class_extender::BoxFuture,
-    endpoints::{Endpoint, HandleGetContext},
+    endpoints::{Endpoint, HandleGetContext, HandlePostContext},
     errors::AtomicResult,
     storelike::ResourceResponse,
     urls,
@@ -11,6 +10,16 @@ use atomic_lib::{
 
 use crate::invite_token::InviteToken;
 
+fn read_token_from_subject(subject: &url::Url) -> Option<String> {
+    for (k, v) in subject.query_pairs() {
+        if k.as_ref() == "token" {
+            return Some(v.to_string());
+        }
+    }
+
+    None
+}
+
 pub fn invite_endpoint() -> Endpoint {
     Endpoint {
         path: urls::PATH_INVITE.to_string(),
@@ -18,7 +27,7 @@ pub fn invite_endpoint() -> Endpoint {
         description: "Stateless invite endpoint that accepts user-signed tokens.".to_string(),
         shortname: "invites".to_string(),
         handle: Some(handle_invite_request),
-        handle_post: None,
+        handle_post: Some(handle_invite_post),
     }
 }
 
@@ -29,21 +38,64 @@ pub fn handle_invite_request<'a>(
         let HandleGetContext {
             subject,
             store,
-            for_agent,
+            for_agent: _for_agent,
         } = context;
 
-        let query_pairs = subject.query_pairs();
-        let mut token_str = None;
-        let mut public_key = None;
-        for (k, v) in query_pairs {
-            match k.as_ref() {
-                "token" => token_str = Some(v.to_string()),
-                "public-key" | "publicKey" => public_key = Some(v.to_string()),
-                _ => {}
-            }
-        }
+        let token_str = match read_token_from_subject(&subject) {
+            Some(t) => t,
+            None => return invite_endpoint().to_resource_response(store).await,
+        };
 
-        let token_str = match token_str {
+        let token = InviteToken::decode(&token_str)?;
+        token.verify(store).await?;
+
+        // GET is preview mode only: return a virtual Invite resource so users can review before accepting
+        let mut invite = Resource::new_instance(urls::INVITE, store).await?;
+        invite.set_subject(subject.to_string());
+        invite
+            .set(urls::WRITE_BOOL.into(), Value::Boolean(token.write), store)
+            .await?;
+        invite
+            .set(
+                urls::EXPIRES_AT.into(),
+                Value::Timestamp(token.expires_at),
+                store,
+            )
+            .await?;
+
+        let target_resource = store.get_resource(&token.target.clone()).await?;
+        let title = target_resource
+            .get(urls::NAME)
+            .map(|v| v.to_string())
+            .unwrap_or_else(|_| token.target.to_string());
+        invite
+            .set(
+                urls::DESCRIPTION.into(),
+                Value::Markdown(format!(
+                    "Stateless invite to {} the resource: {}",
+                    if token.write { "edit" } else { "view" },
+                    title
+                )),
+                store,
+            )
+            .await?;
+
+        Ok(invite.into())
+    })
+}
+
+pub fn handle_invite_post<'a>(
+    context: HandlePostContext<'a>,
+) -> BoxFuture<'a, AtomicResult<ResourceResponse>> {
+    Box::pin(async move {
+        let HandlePostContext {
+            subject,
+            store,
+            for_agent,
+            ..
+        } = context;
+
+        let token_str = match read_token_from_subject(&subject) {
             Some(t) => t,
             None => return invite_endpoint().to_resource_response(store).await,
         };
@@ -52,89 +104,44 @@ pub fn handle_invite_request<'a>(
         token.verify(store).await?;
 
         let agent = match for_agent {
-            atomic_lib::agents::ForAgent::AgentSubject(s) => Some(s.to_owned()),
+            atomic_lib::agents::ForAgent::AgentSubject(s) => s.to_owned(),
             atomic_lib::agents::ForAgent::Sudo => {
                 return Err("Sudo agent cannot accept invites.".into());
             }
             atomic_lib::agents::ForAgent::Public => {
-                if let Some(pk) = public_key {
-                    tracing::info!("Creating new agent from public key: {}", pk);
-                    let new_agent = Agent::new_from_public_key(&pk)?;
-                    // Create an agent if there is none, but skip save_locally for DIDs to avoid "Parent not found" errors
-                    if store
-                        .get_resource(&new_agent.subject.clone().into())
-                        .await
-                        .is_err()
-                        && !new_agent.subject.starts_with("did:")
-                    {
-                        new_agent.to_resource()?.save_locally(store).await?;
-                    }
-
-                    // Always add write rights to the agent itself
-                    if !new_agent.subject.starts_with("did:") {
-                        add_rights(&new_agent.subject, &new_agent.subject, true, store).await?;
-                    }
-
-                    Some(new_agent.subject)
-                } else {
-                    tracing::info!("No public key provided for unauthenticated invite request");
-                    None
-                }
+                return Err("Accepting invite requires an authenticated agent.".into());
             }
         };
 
-        if let Some(agent) = agent {
-            tracing::info!("Redirecting to target with agent: {}", agent);
-            add_rights(&agent, &token.target, token.write, store).await?;
-            if token.write {
-                add_rights(&agent, &token.target, false, store).await?;
+        if agent.as_str().starts_with("did:ad:") {
+            if store.get_resource(&agent.as_str().into()).await.is_err() {
+                let mut new_agent = Resource::new_instance(urls::AGENT, store).await?;
+                new_agent.set_subject(agent.to_string());
+                if let Some(pk) = agent.as_str().strip_prefix("did:ad:") {
+                    new_agent
+                        .set_string(urls::PUBLIC_KEY.into(), pk, store)
+                        .await?;
+                }
+                new_agent.save_locally(store).await?;
             }
-
-            let mut redirect = Resource::new_instance(urls::REDIRECT, store).await?;
-            redirect
-                .set(
-                    urls::DESTINATION.into(),
-                    Value::AtomicUrl(token.target.into()),
-                    store,
-                )
-                .await?;
-            redirect.set_subject(subject.to_string());
-
-            Ok(redirect.into())
-        } else {
-            // Unauthenticated and no public-key provided, return virtual Invite resource
-            let mut invite = Resource::new_instance(urls::INVITE, store).await?;
-            invite.set_subject(subject.to_string());
-            invite
-                .set(urls::WRITE_BOOL.into(), Value::Boolean(token.write), store)
-                .await?;
-            invite
-                .set(
-                    urls::EXPIRES_AT.into(),
-                    Value::Timestamp(token.expires_at),
-                    store,
-                )
-                .await?;
-
-            let target_resource = store.get_resource(&token.target.clone().into()).await?;
-            let title = target_resource
-                .get(urls::NAME)
-                .map(|v| v.to_string())
-                .unwrap_or_else(|_| token.target.clone());
-            invite
-                .set(
-                    urls::DESCRIPTION.into(),
-                    Value::Markdown(format!(
-                        "Stateless invite to {} the resource: {}",
-                        if token.write { "edit" } else { "view" },
-                        title
-                    )),
-                    store,
-                )
-                .await?;
-
-            Ok(invite.into())
         }
+
+        add_rights(agent.as_str(), token.target.as_str(), token.write, store).await?;
+        if token.write {
+            add_rights(agent.as_str(), token.target.as_str(), false, store).await?;
+        }
+
+        let mut redirect = Resource::new_instance(urls::REDIRECT, store).await?;
+        redirect
+            .set(
+                urls::DESTINATION.into(),
+                Value::AtomicUrl(token.target.clone()),
+                store,
+            )
+            .await?;
+        redirect.set_subject(subject.to_string());
+
+        Ok(redirect.into())
     })
 }
 

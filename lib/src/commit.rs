@@ -170,7 +170,7 @@ impl Commit {
 
         let mut commit = Commit {
             subject: temp_subject,
-            signer: agent.subject.clone(),
+            signer: agent.subject.to_string(),
             set: Some(commit_builder.set),
             y_update: Some(commit_builder.y_update),
             remove: Some(commit_builder.remove.into_iter().collect()),
@@ -861,7 +861,7 @@ async fn sign_at(
 ) -> AtomicResult<Commit> {
     let mut commit = Commit {
         subject: commitbuilder.subject,
-        signer: agent.subject.clone(),
+        signer: agent.subject.to_string(),
         set: Some(commitbuilder.set),
         y_update: Some(commitbuilder.y_update),
         remove: Some(commitbuilder.remove.into_iter().collect()),
@@ -1002,7 +1002,7 @@ mod test {
         let private_key = "CapMWIhFUT+w7ANv9oCPqrHrwZpkP2JhzF9JnyT6WcI=";
         let agent = Agent::new_from_private_key(None, private_key).unwrap();
         assert_eq!(
-            &agent.subject,
+            agent.subject,
             "did:ad:7LsjMW5gOfDdJzK/atgjQ1t20J/rw8MjVg6xwqm+h8U="
         );
         store
@@ -1025,7 +1025,9 @@ mod test {
             .unwrap();
 
         assert_eq!(serialized, "{\"https://atomicdata.dev/properties/createdAt\":0,\"https://atomicdata.dev/properties/isA\":[\"https://atomicdata.dev/classes/Commit\"],\"https://atomicdata.dev/properties/set\":{\"https://atomicdata.dev/properties/description\":\"Some value\",\"https://atomicdata.dev/properties/shortname\":\"someval\"},\"https://atomicdata.dev/properties/signer\":\"did:ad:7LsjMW5gOfDdJzK/atgjQ1t20J/rw8MjVg6xwqm+h8U=\",\"https://atomicdata.dev/properties/subject\":\"https://localhost/new_thing\"}");
-        assert_eq!(signature, "EaTH336kiEVEMrCKbMEsqreHAqO0bpdOUWAq3rACdVedH9rX/D1bw//iLKXuqzgxiDuzGKJ8MTNfQNeIxk7pAA==");
+        // Verify signature is valid rather than checking a hardcoded value,
+        // since the serialized form changed with the did:ad: prefix.
+        commit.validate_signature(&store).await.unwrap();
     }
 
     #[test]

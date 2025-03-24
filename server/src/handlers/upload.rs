@@ -2,7 +2,7 @@ use std::{ffi::OsStr, io::Write, path::Path};
 
 use actix_multipart::{Field, Multipart};
 use actix_web::{web, HttpResponse};
-use atomic_lib::{hierarchy::check_write, urls, utils::now, Db, Resource, Storelike, Value};
+use atomic_lib::{hierarchy::check_write, urls, utils::now, Db, Resource, Storelike, Subject, Value};
 use futures::{StreamExt, TryStreamExt};
 use image::GenericImageView;
 use serde::Deserialize;
@@ -99,12 +99,15 @@ async fn save_file_and_create_resource(
 
     let mimetype = guess_mime_for_filename(filename);
     let subject_path = format!("files/{}", urlencoding::encode(&file_id));
-    let new_subject = format!("{}/{}", origin, subject_path);
+    // Build a proper Internal subject using Subject::new_local so that
+    // Resource::save correctly identifies this as a local resource and applies
+    // the commit in-process (instead of POSTing via HTTP, which fails with
+    // "Incorrect signature" because of serialization differences).
+    let subject = Subject::new_local(&format!("/{}", subject_path), None);
     let download_url = format!("{}/download/{}", origin, subject_path);
 
     let mut resource = atomic_lib::Resource::new_instance(urls::FILE, store).await?;
-    resource
-        .set_subject(new_subject)
+    resource.set_subject_from(subject)
         .set_string(urls::PARENT.into(), parent, store)
         .await?
         .set_string(urls::INTERNAL_ID.into(), &file_id, store)

@@ -72,7 +72,10 @@ pub async fn get_agent_from_auth_values_and_check(
 
         if agent_subject_trimmed.starts_with("did:") {
             if agent_subject_trimmed.ends_with(public_key_trimmed) {
-                return Ok(ForAgent::AgentSubject(agent_subject_trimmed.to_string()));
+                return Ok(ForAgent::AgentSubject(crate::Subject::from_raw(
+                    agent_subject_trimmed,
+                    None,
+                )));
             } else {
                 return Err(format!(
                     "The public key in the auth headers '{}' does not match the DID subject '{}'",
@@ -92,7 +95,7 @@ pub async fn get_agent_from_auth_values_and_check(
                     .into(),
             )
         } else {
-            Ok(ForAgent::AgentSubject(agent_subject_trimmed.to_string()))
+            Ok(ForAgent::AgentSubject(agent_subject))
         }
     } else {
         Ok(ForAgent::Public)

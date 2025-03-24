@@ -66,7 +66,7 @@ impl Handler<SubscribeYSync> for YSyncBroadcaster {
                 match atomic_lib::hierarchy::check_write(
                     &store,
                     &resource,
-                    &ForAgent::AgentSubject(msg.agent.clone()),
+                    &ForAgent::AgentSubject(msg.agent.clone().into()),
                 )
                 .await
                 {
@@ -77,7 +77,7 @@ impl Handler<SubscribeYSync> for YSyncBroadcaster {
                         match atomic_lib::hierarchy::check_read(
                             &store,
                             &resource,
-                            &ForAgent::AgentSubject(msg.agent.clone()),
+                            &ForAgent::AgentSubject(msg.agent.clone().into()),
                         )
                         .await
                         {

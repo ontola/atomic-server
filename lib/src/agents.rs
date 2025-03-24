@@ -12,14 +12,14 @@ use crate::{errors::AtomicResult, urls, Resource, Value};
 struct DecodedSecret {
     #[serde(rename = "privateKey")]
     private_key: String,
-    subject: String,
+    subject: crate::Subject,
 }
 
 /// None represents no right checks will be performed, effectively SUDO mode.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ForAgent {
-    /// The Subject URL agent that is performing the action.
-    AgentSubject(String),
+    /// The Subject URL/DID agent that is performing the action.
+    AgentSubject(crate::Subject),
     /// Allows all checks to pass.
     /// See [urls::SUDO_AGENT]
     Sudo,
@@ -38,16 +38,15 @@ impl std::fmt::Display for ForAgent {
     }
 }
 
-// From all string-likes
 impl<T: Into<String>> From<T> for ForAgent {
     fn from(subject: T) -> Self {
-        let subject = subject.into();
-        if subject == urls::SUDO_AGENT {
+        let subject_str = subject.into();
+        if subject_str == urls::SUDO_AGENT {
             ForAgent::Sudo
-        } else if subject == urls::PUBLIC_AGENT {
+        } else if subject_str == urls::PUBLIC_AGENT {
             ForAgent::Public
         } else {
-            ForAgent::AgentSubject(subject)
+            ForAgent::AgentSubject(crate::Subject::from_raw(&subject_str, None))
         }
     }
 }
@@ -60,8 +59,8 @@ pub struct Agent {
     pub private_key: Option<String>,
     /// Used for validating commit signatures and for the username.
     pub public_key: String,
-    /// URL of the Agent
-    pub subject: String,
+    /// URL / DID of the Agent
+    pub subject: crate::Subject,
     pub created_at: i64,
     pub name: Option<String>,
 }
@@ -70,9 +69,9 @@ impl Agent {
     /// Converts Agent to Resource.
     /// Does not include private key, only public.
     pub fn to_resource(&self) -> AtomicResult<Resource> {
-        let mut resource = Resource::new(self.subject.clone());
+        let mut resource = Resource::new(self.subject.to_string());
         resource.set_class(urls::AGENT);
-        resource.set_subject(self.subject.clone());
+        resource.set_subject_from(self.subject.clone());
         if let Some(name) = &self.name {
             resource.set_unsafe(crate::urls::NAME.into(), Value::String(name.into()));
         }
@@ -100,11 +99,13 @@ impl Agent {
     /// Derives the public key from the private key.
     pub fn new_from_private_key(name: Option<&str>, private_key: &str) -> AtomicResult<Agent> {
         let keypair = generate_public_key(private_key);
+        let did_string = format!("did:ad:{}", keypair.public);
+        let subject = crate::Subject::from_raw(&did_string, None);
 
         Ok(Agent {
             private_key: Some(keypair.private),
             public_key: keypair.public.clone(),
-            subject: format!("did:ad:{}", keypair.public),
+            subject,
             name: name.map(|x| x.to_owned()),
             created_at: crate::utils::now(),
         })
@@ -114,11 +115,13 @@ impl Agent {
     /// This will not be able to write, because there is no private key.
     pub fn new_from_public_key(public_key: &str) -> AtomicResult<Agent> {
         verify_public_key(public_key)?;
+        let did_string = format!("did:ad:{}", public_key);
+        let subject = crate::Subject::from_raw(&did_string, None);
 
         Ok(Agent {
             private_key: None,
             public_key: public_key.into(),
-            subject: format!("did:ad:{}", public_key),
+            subject,
             name: None,
             created_at: crate::utils::now(),
         })
@@ -132,7 +135,7 @@ impl Agent {
         let agent = Agent {
             private_key: Some(private_key.into()),
             public_key: generate_public_key(private_key).public,
-            subject: subject.into(),
+            subject: crate::Subject::from_raw(subject, None),
             name: None,
             created_at: crate::utils::now(),
         };
@@ -210,6 +213,15 @@ pub fn encode_base64(bytes: &[u8]) -> String {
     general_purpose::STANDARD.encode(bytes)
 }
 
+/// Signs a message using the private key.
+pub fn sign_message(message: &[u8], private_key: &str) -> AtomicResult<String> {
+    let private_key_bytes = decode_base64(private_key)?;
+    let key_pair = ring::signature::Ed25519KeyPair::from_seed_unchecked(&private_key_bytes)
+        .map_err(|e| format!("Error generating keypair: {}", e))?;
+    let signature = key_pair.sign(message);
+    Ok(encode_base64(signature.as_ref()))
+}
+
 /// Checks if the public key is a valid ED25519 base64 key.
 /// Not perfect - only checks byte length and parses base64.
 pub fn verify_public_key(public_key: &str) -> AtomicResult<()> {
@@ -228,14 +240,13 @@ pub fn verify_public_key(public_key: &str) -> AtomicResult<()> {
 
 impl From<Agent> for ForAgent {
     fn from(agent: Agent) -> Self {
-        agent.subject.into()
+        ForAgent::AgentSubject(agent.subject)
     }
 }
 
 impl<'a> From<&'a Agent> for ForAgent {
     fn from(agent: &'a Agent) -> Self {
-        let subject: String = agent.subject.clone();
-        subject.into()
+        ForAgent::AgentSubject(agent.subject.clone())
     }
 }
 

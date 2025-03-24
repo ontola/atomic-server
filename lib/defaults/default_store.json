@@ -719,6 +719,36 @@
         "https://atomicdata.dev/properties/shortname": "public-key"
     },
     {
+        "@id": "https://atomicdata.dev/properties/drive/publicKey",
+        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+        "https://atomicdata.dev/properties/description": "The public key of a Drive. Used for identifying and verifying the drive.",
+        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+        "https://atomicdata.dev/properties/isA": [
+            "https://atomicdata.dev/classes/Property"
+        ],
+        "https://atomicdata.dev/properties/shortname": "drive-public-key"
+    },
+    {
+        "@id": "https://atomicdata.dev/properties/drive/privateKey",
+        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+        "https://atomicdata.dev/properties/description": "The private key of a Drive. Keep this secret! used for signing operations on behalf of the drive.",
+        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+        "https://atomicdata.dev/properties/isA": [
+            "https://atomicdata.dev/classes/Property"
+        ],
+        "https://atomicdata.dev/properties/shortname": "drive-private-key"
+    },
+    {
+        "@id": "https://atomicdata.dev/properties/drive/hash",
+        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+        "https://atomicdata.dev/properties/description": "The 16-byte hex-encoded hash of a Drive, derived from its public key.",
+        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+        "https://atomicdata.dev/properties/isA": [
+            "https://atomicdata.dev/classes/Property"
+        ],
+        "https://atomicdata.dev/properties/shortname": "drive-hash"
+    },
+    {
         "@id": "https://atomicdata.dev/properties/published-at",
         "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/date",
         "https://atomicdata.dev/properties/description": "DateTime at which an item is made public.",
@@ -947,16 +977,22 @@
     },
     {
         "@id": "https://atomicdata.dev/classes/Drive",
-        "https://atomicdata.dev/properties/description": "The Drive node is at the top of the hierarchy in an Atomic Server. It can be thought of as a hard drive at the top of a filesystem. It can be used as a starting point to navigate to any Resource. A Drive needs to provide read and write access at least to one node.",
+        "https://atomicdata.dev/properties/description": "The Drive node is at the top of the hierarchy in an Atomic Server. It can be thought of as a hard drive at the top of a filesystem. It can be used as a starting point to navigate to any Resource. A Drive needs to provide read and write access at least to one node. Every Drive has a unique cryptographic identity.",
         "https://atomicdata.dev/properties/isA": [
             "https://atomicdata.dev/classes/Class"
+        ],
+        "https://atomicdata.dev/properties/requires": [
+            "https://atomicdata.dev/properties/drive/publicKey",
+            "https://atomicdata.dev/properties/drive/hash"
         ],
         "https://atomicdata.dev/properties/recommends": [
             "https://atomicdata.dev/properties/read",
             "https://atomicdata.dev/properties/children",
             "https://atomicdata.dev/properties/description",
             "https://atomicdata.dev/properties/subresources",
-            "https://atomicdata.dev/properties/write"
+            "https://atomicdata.dev/properties/write",
+            "https://atomicdata.dev/properties/drive/privateKey",
+            "https://atomicdata.dev/properties/name"
         ],
         "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
         "https://atomicdata.dev/properties/shortname": "drive"

@@ -1,6 +1,6 @@
 use actix_cors::Cors;
 use actix_web::{middleware, web, HttpServer};
-use atomic_lib::Storelike;
+use atomic_lib::{urls, Storelike};
 
 use crate::errors::AtomicServerResult;
 
@@ -57,6 +57,60 @@ async fn clear_remote_cache(appstate: &crate::appstate::AppState) -> AtomicServe
     Ok(())
 }
 
+/// Spawns a background task that periodically announces local drives to the DHT.
+fn spawn_dht_announcer(appstate: crate::appstate::AppState) {
+    if let Some(dht) = appstate.dht.clone() {
+        let port = if appstate.config.opts.https {
+            appstate.config.opts.port_https
+        } else {
+            appstate.config.opts.port
+        };
+
+        tracing::info!("DHT: Spawning drive announcer on port {}", port);
+
+        actix_web::rt::spawn(async move {
+            let mut interval =
+                actix_web::rt::time::interval(std::time::Duration::from_secs(20 * 60));
+            loop {
+                interval.tick().await;
+                tracing::info!("DHT: Starting periodic drive announcement...");
+
+                // Find all local drives
+                let all_resources = appstate.store.all_resources(false);
+                let mut announced_count = 0;
+
+                for resource in all_resources {
+                    let mut is_drive = false;
+                    if let Ok(classes_val) = resource.get(urls::IS_A) {
+                        if let Ok(classes) = classes_val.to_subjects(None) {
+                            if classes.contains(&urls::DRIVE.to_string()) {
+                                is_drive = true;
+                            }
+                        }
+                    }
+
+                    if is_drive {
+                        if let Ok(drive_hash) =
+                            resource.get(urls::DRIVE_HASH).map(|v| v.to_string())
+                        {
+                            if let Err(e) = dht.announce_drive(&drive_hash, port as u16) {
+                                tracing::error!(
+                                    "DHT: Failed to announce drive {}: {}",
+                                    drive_hash,
+                                    e
+                                );
+                            } else {
+                                announced_count += 1;
+                            }
+                        }
+                    }
+                }
+                tracing::info!("DHT: Finished announcing {} drives.", announced_count);
+            }
+        });
+    }
+}
+
 // Increase the maximum payload size (for POSTing a body, for example) to 50MB
 const PAYLOAD_MAX: usize = 50_242_880;
 
@@ -75,6 +129,9 @@ pub async fn serve(config: crate::config::Config) -> AtomicServerResult<()> {
     if config.opts.clear_remote_cache {
         clear_remote_cache(&appstate).await?;
     }
+
+    // Start discovery / announcement services
+    spawn_dht_announcer(appstate.clone());
 
     let server = HttpServer::new(move || {
         let cors = Cors::permissive();

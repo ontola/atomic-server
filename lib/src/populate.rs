@@ -4,6 +4,7 @@
 //! Other populate methods help to set up an Atomic Server, by creating a basic file hierarcy and creating default collections.
 
 use crate::{
+    agents,
     datatype::DataType,
     errors::AtomicResult,
     parse::ParseOpts,
@@ -174,6 +175,8 @@ pub async fn populate_base_models(store: &impl Storelike) -> AtomicResult<()> {
 }
 
 /// Creates a Drive resource at the base URL. Does not set rights. Use set_drive_rights for that.
+/// Generates a new keypair for the drive and computes the drive hash
+/// (truncated SHA-256 of "atomicdata.drive" || public_key → 16 bytes, hex-encoded).
 pub async fn create_drive(store: &impl Storelike) -> AtomicResult<()> {
     let mut drive = store.get_resource_new(&"internal:/".into()).await;
     drive.set_class(urls::DRIVE);
@@ -181,6 +184,28 @@ pub async fn create_drive(store: &impl Storelike) -> AtomicResult<()> {
         .get_base_domain()
         .unwrap_or_else(|| "Atomic Server".to_string());
     drive.set_string(urls::NAME.into(), &name, store).await?;
+
+    // Generate a keypair for the drive's cryptographic identity
+    let keypair = agents::generate_public_key(&agents::encode_base64(
+        &ring::rand::generate::<[u8; 32]>(&ring::rand::SystemRandom::new())
+            .map_err(|e| format!("Failed to generate drive key seed: {}", e))?
+            .expose(),
+    ));
+
+    // Compute drive hash: truncated_SHA256("atomicdata.drive" || public_key_bytes) → 16 bytes → hex
+    let public_key_bytes = agents::decode_base64(&keypair.public)?;
+    use ring::digest;
+    let mut hash_input = b"atomicdata.drive".to_vec();
+    hash_input.extend_from_slice(&public_key_bytes);
+    let full_hash = digest::digest(&digest::SHA256, &hash_input);
+    let drive_hash_hex = full_hash.as_ref()[..16]
+        .iter()
+        .map(|b| format!("{:02x}", b))
+        .collect::<String>();
+
+    drive.set_unsafe(urls::DRIVE_PUBLIC_KEY.into(), Value::String(keypair.public));
+    drive.set_unsafe(urls::DRIVE_HASH.into(), Value::String(drive_hash_hex));
+
     drive.save_locally(store).await?;
 
     Ok(())

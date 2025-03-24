@@ -7,6 +7,8 @@ export interface SubjectFieldProps {
   error?: Error;
   value: string;
   onChange: (value: string) => void;
+  /** When true the field is read-only (e.g. for DID subjects). */
+  readOnly?: boolean;
 }
 
 const getPath = (value: string) => {
@@ -25,7 +27,30 @@ const normalizePath = (str: string) => {
   return '/' + str;
 };
 
-export function SubjectField({ error, value, onChange }: SubjectFieldProps) {
+export function SubjectField({
+  error,
+  value,
+  onChange,
+  readOnly,
+}: SubjectFieldProps) {
+  // DID subjects can't be parsed as URLs and are deterministic — show them
+  // as plain read-only text.
+  const isDID = value.startsWith('did:') || value.startsWith('_');
+
+  if (isDID || readOnly) {
+    return (
+      <Field
+        error={error}
+        label='subject'
+        helper='The identifier of the resource. DID subjects are determined by the genesis commit signature.'
+      >
+        <InputWrapper>
+          <ReadOnlySubject>{value}</ReadOnlySubject>
+        </InputWrapper>
+      </Field>
+    );
+  }
+
   const [origin, path] = getPath(value);
   const [inputValue, setInputValue] = useState(path);
 
@@ -60,6 +85,17 @@ const OriginPart = styled.span`
   padding-inline: 0.5rem;
   background-color: ${p => p.theme.colors.bg1};
   color: ${p => p.theme.colors.textLight};
+`;
+
+const ReadOnlySubject = styled.span`
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  padding-inline: 0.5rem;
+  font-family: monospace;
+  font-size: 0.85em;
+  color: ${p => p.theme.colors.textLight};
+  word-break: break-all;
 `;
 
 const StyledInputStyled = styled(InputStyled)`

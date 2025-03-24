@@ -6,7 +6,7 @@ use crate::{
     helpers::{get_client_agent, try_extension},
 };
 use actix_web::{web, HttpResponse};
-use atomic_lib::Storelike;
+use atomic_lib::{storelike::ResourceResponse, Storelike, Subject};
 use simple_server_timing_header::Timer;
 
 /// Respond to a single resource.
@@ -66,9 +66,25 @@ pub async fn handle_get_resource(
     ));
 
     let store = appstate.store.clone_with_url(origin.clone());
-    let resource = store
-        .get_resource_extended(&subject.clone().into(), false, &for_agent)
-        .await?;
+    let resource = match store
+        .get_resource_extended(&subject.clone(), false, &for_agent)
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            // If the resource wasn't found locally and it's a DID subject,
+            // try resolving via the Mainline DHT before giving up.
+            if matches!(subject, Subject::Did(_)) {
+                if let Some(r) = try_dht_resolve(&appstate, &subject, &store).await {
+                    r
+                } else {
+                    return Err(e.into());
+                }
+            } else {
+                return Err(e.into());
+            }
+        }
+    };
     timer.add("get_resource");
 
     let response_body = match content_type {
@@ -84,4 +100,35 @@ pub async fn handle_get_resource(
 
     timer.add("serialize");
     Ok(builder.body(response_body))
+}
+
+/// Attempts to resolve a `did:ad` resource via the Mainline DHT.
+/// On success, caches the resource locally and returns it.
+async fn try_dht_resolve(
+    appstate: &web::Data<AppState>,
+    subject: &Subject,
+    store: &atomic_lib::Db,
+) -> Option<ResourceResponse> {
+    let dht = appstate.dht.as_ref()?;
+
+    tracing::info!("DHT: Attempting to resolve {}", subject);
+
+    match dht.resolve(subject, store).await {
+        Ok(resource) => {
+            tracing::info!("DHT: Successfully resolved {}", subject);
+            // Cache the resource locally so future requests don't need DHT
+            if let Err(e) = store.add_resource(&resource).await {
+                tracing::warn!(
+                    "DHT: Resolved {} but failed to cache locally: {}",
+                    subject,
+                    e
+                );
+            }
+            Some(resource.into())
+        }
+        Err(e) => {
+            tracing::debug!("DHT: Failed to resolve {}: {}", subject, e);
+            None
+        }
+    }
 }

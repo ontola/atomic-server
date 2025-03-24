@@ -704,8 +704,12 @@ impl Db {
                         store: self,
                         for_agent,
                     };
-                    (handle)(context).await.map_err(|e| {
-                        format!("Error handling {} Endpoint: {}", endpoint.shortname, e)
+                    (handle)(context).await.map_err(|mut e| {
+                        e.message = format!(
+                            "Error handling {} Endpoint: {}",
+                            endpoint.shortname, e.message
+                        );
+                        e
                     })?
                 } else {
                     endpoint.to_resource_response(self).await?
@@ -993,9 +997,9 @@ impl Storelike for Db {
     #[instrument(skip(self))]
     async fn get_resource(&self, subject: &Subject) -> AtomicResult<Resource> {
         let normalized = self.normalize_subject(subject);
-        let subject_str = normalized.to_string();
+        let subject_str = normalized.pure_id();
         if let Ok(propvals) = self.get_propvals(&subject_str) {
-            let resource = Resource::from_propvals(propvals, normalized);
+            let resource = Resource::from_propvals(propvals, normalized.without_params());
             Ok(resource)
         } else {
             // Resolve the subject to a full URL for network operations
