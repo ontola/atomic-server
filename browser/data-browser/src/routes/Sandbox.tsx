@@ -1,18 +1,19 @@
 import { createLazyRoute } from '@tanstack/react-router';
-import { ContainerFull } from '../components/Containers';
+import { ContainerFull, ContainerNarrow } from '../components/Containers';
 
 import type { JSX } from 'react';
+import { SimpleAIChat } from '../components/AI/SimpleAIChat';
+import { core, useResource, useStore } from '@tomic/react';
 
 function Sandbox(): JSX.Element {
+  // const store = useStore();
+
+  const name = useResource(core.properties.name);
+
   return (
     <main>
-      <ContainerFull>
-        <h1>Sandbox</h1>
-        <p>
-          Welcome to the sandbox. This is a place to test components in
-          isolation.
-        </p>
-      </ContainerFull>
+      {/* <SimpleAIChat />  */}
+      {name.title}
     </main>
   );
 }

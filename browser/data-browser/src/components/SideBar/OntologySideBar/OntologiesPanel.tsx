@@ -44,7 +44,7 @@ export function OntologiesPanel(): JSX.Element | null {
 
   return (
     <Wrapper>
-      <StyledScrollArea key={drive}>
+      <StyledScrollArea key={drive} type='hover'>
         {ontologies.map(subject => (
           <Item key={subject} subject={subject} />
         ))}
@@ -60,7 +60,7 @@ const Wrapper = styled.div`
 `;
 
 const StyledScrollArea = styled(ScrollArea)`
-  max-height: 10rem;
+  height: 10rem;
   overflow-x: hidden;
 `;
 
