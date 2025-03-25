@@ -13,6 +13,7 @@ import { SIDEBAR_TOGGLE_WIDTH } from '../components/SideBar';
 import { serverURLStorage } from './serverURLStorage';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { errorHandler } from '../handlers/errorHandler';
+import type { MCPServer } from '../components/AI/types';
 
 interface ProviderProps {
   children: ReactNode;
@@ -28,6 +29,13 @@ export const AppSettingsContextProvider = (
   const [hideTemplates, setHideTemplates] = useLocalStorage(
     'hideTemplates',
     false,
+  );
+  const [openRouterApiKey, setOpenRouterApiKey] = useLocalStorage<
+    string | undefined
+  >('openRouterApiKey', undefined);
+  const [mcpServers, setMcpServers] = useLocalStorage<MCPServer[]>(
+    'atomic.ai.mcpServers',
+    [],
   );
 
   const [viewTransitionsDisabled, setViewTransitionsDisabled] = useLocalStorage(
@@ -96,6 +104,10 @@ export const AppSettingsContextProvider = (
       setSidebarKeyboardDndEnabled,
       hideTemplates,
       setHideTemplates,
+      openRouterApiKey,
+      setOpenRouterApiKey,
+      mcpServers,
+      setMcpServers,
     }),
     [
       drive,
@@ -119,6 +131,10 @@ export const AppSettingsContextProvider = (
       setSidebarKeyboardDndEnabled,
       hideTemplates,
       setHideTemplates,
+      openRouterApiKey,
+      setOpenRouterApiKey,
+      mcpServers,
+      setMcpServers,
     ],
   );
 
@@ -163,6 +179,13 @@ export interface AppSettings {
   setSidebarKeyboardDndEnabled: (b: boolean) => void;
   hideTemplates: boolean;
   setHideTemplates: (b: boolean) => void;
+  /** The OpenRouter API key for making requests to OpenRouter */
+  openRouterApiKey: string | undefined;
+  setOpenRouterApiKey: (key: string | undefined) => void;
+  /** List of MCP servers */
+  mcpServers: MCPServer[];
+  /** Update the list of MCP servers */
+  setMcpServers: (servers: MCPServer[]) => void;
 }
 
 const initialState: AppSettings = {
@@ -187,6 +210,10 @@ const initialState: AppSettings = {
   setSidebarKeyboardDndEnabled: () => undefined,
   hideTemplates: false,
   setHideTemplates: () => undefined,
+  openRouterApiKey: undefined,
+  setOpenRouterApiKey: () => undefined,
+  mcpServers: [],
+  setMcpServers: () => undefined,
 };
 
 /** Hook for using App Settings, such as theme and darkmode */

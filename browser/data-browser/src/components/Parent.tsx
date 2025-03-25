@@ -15,8 +15,11 @@ import { Button } from './Button';
 import { BREADCRUMB_BAR_TRANSITION_TAG } from '../helpers/transitionName';
 import { ResourceContextMenu } from './ResourceContextMenu';
 import { MenuBarDropdownTrigger } from './ResourceContextMenu/MenuBarDropdownTrigger';
+import { FaStroopwafel } from 'react-icons/fa6';
+import { IconButton } from './IconButton/IconButton';
 
 import type { JSX } from 'react';
+import { useAISidebar } from './AI/AISidebarContext';
 
 type ParentProps = {
   resource: Resource;
@@ -25,6 +28,7 @@ type ParentProps = {
 /** Breadcrumb list. Recursively renders parents. */
 function Parent({ resource }: ParentProps): JSX.Element {
   const [parent] = useString(resource, core.properties.parent);
+  const { setIsOpen } = useAISidebar();
 
   return (
     <ParentWrapper aria-label='Breadcrumbs'>
@@ -37,6 +41,12 @@ function Parent({ resource }: ParentProps): JSX.Element {
         <BreadCrumbCurrent>{resource.title}</BreadCrumbCurrent>
         <Spacer />
         <ButtonArea>
+          <IconButton
+            title='Toggle AI panel'
+            onClick={() => setIsOpen(prev => !prev)}
+          >
+            <FaStroopwafel />
+          </IconButton>
           <ResourceContextMenu
             isMainMenu
             subject={resource.subject}
