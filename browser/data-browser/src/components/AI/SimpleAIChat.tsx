@@ -5,9 +5,7 @@ import toast from 'react-hot-toast';
 import { useAtomicMCPTools } from './useAtomicTools';
 import { AIChatMessage } from './AIChatMessage';
 import {
-  generateObject,
   InvalidToolArgumentsError,
-  NoSuchToolError,
   streamText,
   TypeValidationError,
   type CoreMessage,
@@ -112,7 +110,7 @@ export const SimpleAIChat: React.FC<
   const [userSelectedContextItems, setUserSelectedContextItems] = useState<
     AIMessageContext[]
   >([]);
-  const { openRouterApiKey } = useSettings() as { openRouterApiKey?: string };
+  const { openRouterApiKey, showTokenUsage } = useSettings();
   const openrouter = createOpenRouter({
     apiKey: openRouterApiKey,
     compatibility: 'strict',
@@ -287,38 +285,6 @@ export const SimpleAIChat: React.FC<
             });
           }
         },
-        experimental_repairToolCall: async ({
-          toolCall,
-          parameterSchema,
-          error,
-        }) => {
-          if (NoSuchToolError.isInstance(error)) {
-            console.log('No such tool error', error);
-
-            return null; // do not attempt to fix invalid tool names
-          }
-
-          console.log('arg error', error);
-          console.log('Repairing tool call', toolCall.toolName);
-
-          const { object: repairedArgs } = await generateObject({
-            model: openrouter('qwen/qwq-32b:free'),
-            output: 'no-schema',
-            mode: 'json',
-            prompt: [
-              `The model tried to call the tool "${toolCall.toolName}"` +
-                ` with the following arguments:`,
-              JSON.stringify(toolCall.args),
-              `The tool accepts the following schema:`,
-              JSON.stringify(parameterSchema(toolCall)),
-              'Please fix the arguments.',
-            ].join('\n'),
-          });
-
-          console.log('Repaired tool call', repairedArgs);
-
-          return { ...toolCall, args: JSON.stringify(repairedArgs) };
-        },
       });
     } catch (err) {
       console.error(err);
@@ -354,7 +320,6 @@ export const SimpleAIChat: React.FC<
     try {
       for await (const part of textStream.fullStream) {
         // Update ongoing message with streamed chunks
-        console.log('Part', part);
 
         if (part.type === 'tool-call') {
           const toolCallMessage: AIChatDisplayMessage = {
@@ -379,6 +344,7 @@ export const SimpleAIChat: React.FC<
           pendingToolCalls.push(part);
         }
 
+        // @ts-expect-error 'tool-result' is not in the types but there are definitely parts that have this type, removing this would break tool use.
         if (part.type === 'tool-result') {
           onNewMessage({
             role: 'tool',
@@ -386,6 +352,7 @@ export const SimpleAIChat: React.FC<
           });
 
           pendingToolCalls = pendingToolCalls.filter(
+            // @ts-expect-error part has type never do to incorrect types.
             call => call.toolCallId !== part.toolCallId,
           );
         }
@@ -672,14 +639,14 @@ export const SimpleAIChat: React.FC<
               </Column>
               <NoKeyOverlay />
             </ChatInputWrapper>
-            <TokensUsed>
-              Tokens used: {tokensUsed[0]} input, {tokensUsed[1]} output
-            </TokensUsed>
+            {showTokenUsage && (
+              <TokensUsed>
+                Tokens used: {tokensUsed[0]} input, {tokensUsed[1]} output
+              </TokensUsed>
+            )}
           </>
         )}
       </Column>
-
-      {/* Agent configuration dialog */}
       <AgentConfig
         open={agentConfigOpen}
         onOpenChange={setAgentConfigOpen}

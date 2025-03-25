@@ -5,6 +5,7 @@ import {
 } from 'react';
 import { styled, DefaultTheme, keyframes } from 'styled-components';
 import { transition } from '../../helpers/transition';
+import { adjustHue } from 'polished';
 
 export enum IconButtonVariant {
   Simple,
@@ -197,7 +198,7 @@ const cycle = keyframes`
     filter: hue-rotate(0deg) brightness(var(--brightness-factor)) saturate(1.5);
   }
   to {
-    filter: hue-rotate(360deg) brightness(var(--brightness-factor)) saturate(1.5);
+    filter: hue-rotate(360deg) brightness(var(--brightness-factor)) saturate(2);
   }
 `;
 
@@ -225,11 +226,17 @@ const MagicIconButton = styled(IconButtonBase)<ButtonStyleProps>`
     inset: 0;
     opacity: 0;
     z-index: -2;
-    background: linear-gradient(
-      45deg,
-      ${p => p.theme.colors.main},
-      ${p => p.theme.colors.complementary}
-    );
+    background: radial-gradient(ellipse at top right, #365ccd, transparent),
+      radial-gradient(
+        ellipse at bottom left,
+        ${adjustHue(-45, '#365ccd')},
+        transparent
+      ),
+      radial-gradient(
+        ellipse at bottom right,
+        ${adjustHue(180, '#365ccd')},
+        transparent
+      );
   }
   &::after {
     content: '';

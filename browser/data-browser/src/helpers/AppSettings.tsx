@@ -59,6 +59,10 @@ export const AppSettingsContextProvider = (
   const [drive, innerSetDrive] = useLocalStorage('drive', baseURL);
 
   const [enableAI, setEnableAI] = useLocalStorage('atomic.ai.enabled', true);
+  const [showTokenUsage, setShowTokenUsage] = useLocalStorage(
+    'atomic.ai.showTokenUsage',
+    true,
+  );
 
   const setDrive = useCallback(
     (newDrive: string) => {
@@ -112,6 +116,8 @@ export const AppSettingsContextProvider = (
       setMcpServers,
       enableAI,
       setEnableAI,
+      showTokenUsage,
+      setShowTokenUsage,
     }),
     [
       drive,
@@ -141,6 +147,8 @@ export const AppSettingsContextProvider = (
       setMcpServers,
       enableAI,
       setEnableAI,
+      showTokenUsage,
+      setShowTokenUsage,
     ],
   );
 
@@ -195,6 +203,9 @@ export interface AppSettings {
   /** Enable all AI features in the app */
   enableAI: boolean;
   setEnableAI: (b: boolean) => void;
+  /** Whether to show the token usage in AI chats */
+  showTokenUsage: boolean;
+  setShowTokenUsage: (b: boolean) => void;
 }
 
 const initialState: AppSettings = {
@@ -225,6 +236,8 @@ const initialState: AppSettings = {
   setMcpServers: () => undefined,
   enableAI: true,
   setEnableAI: () => undefined,
+  showTokenUsage: true,
+  setShowTokenUsage: () => undefined,
 };
 
 /** Hook for using App Settings, such as theme and darkmode */
