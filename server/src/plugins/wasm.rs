@@ -32,7 +32,7 @@ use wasmtime::{
     component::{Component, Linker, ResourceTable},
     Config, Engine, ResourceLimiter, Store, StoreLimits, StoreLimitsBuilder, Trap,
 };
-use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime_wasi::{p2, DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 
 use atomic_lib::db::plugin_meta::PluginMetaKey;
@@ -701,7 +701,7 @@ impl bindings::atomic::class_extender::host::Host for PluginHostState {
             .map(ForAgent::from)
             .unwrap_or(ForAgent::Public);
 
-        if !subject.starts_with(&self.db.get_server_url().map_err(|e| e.to_string())?) {
+        if !subject.starts_with(&self.db.get_server_url()) {
             // If the plugin does not have network permissions we block the request since the plugin could send data to remote servers via these requests.
             if !PluginManifest::option_has_permission(
                 self.manifest.as_ref(),
@@ -718,7 +718,7 @@ impl bindings::atomic::class_extender::host::Host for PluginHostState {
 
             return Ok(WasmResourceJson {
                 subject: resource.get_subject().to_string(),
-                json_ad: resource.to_json_ad().map_err(|e| e.to_string())?,
+                json_ad: resource.to_json_ad(None).map_err(|e| e.to_string())?,
             });
         }
 
@@ -1370,7 +1370,7 @@ async fn create_plugin_meta(
         Agent::from_secret(&plugin_meta.agent_secret)?
     } else {
         // If the plugin meta does not exist yet we create a new agent.
-        let new_agent = Agent::new(Some(&name), store)?;
+        let new_agent = Agent::new(Some(&name))?;
 
         let mut agent_resource = new_agent.to_resource()?;
         let full_name = format!("{}/{}", namespace, name);
@@ -1387,7 +1387,7 @@ async fn create_plugin_meta(
     };
 
     if manifest.has_permission(PermissionType::FullDriveAccess) {
-        let mut drive = store.get_resource(&drive_subject).await?;
+        let mut drive = store.get_resource(&drive_subject.into()).await?;
         drive.push(urls::WRITE, agent.subject.clone().into(), true)?;
         drive.push(urls::READ, agent.subject.clone().into(), true)?;
         drive.save(store).await?;
@@ -1628,7 +1628,7 @@ async fn compare_manifest_to_resource(
     subject: &str,
     db: &Db,
 ) -> AtomicResult<bool> {
-    let resource = db.get_resource(subject).await?;
+    let resource = db.get_resource(&subject.into()).await?;
     let name = resource.get(urls::NAME)?;
     let namespace = resource.get(urls::NAMESPACE)?;
 
