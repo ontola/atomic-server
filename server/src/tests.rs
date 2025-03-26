@@ -16,7 +16,7 @@ use atomic_lib::{urls, Storelike};
 
 /// Returns the request with signed headers. Also adds a json-ad accept header - overwrite this if you need something else.
 fn build_request_authenticated(path: &str, appstate: &AppState) -> TestRequest {
-    let url = format!("{}{}", appstate.store.get_server_url(), path);
+    let url = format!("{}{}", appstate.store.get_server_url().unwrap(), path);
     let headers = atomic_lib::client::get_authentication_headers(
         &url,
         &appstate.store.get_default_agent().unwrap(),

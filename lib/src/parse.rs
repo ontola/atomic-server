@@ -591,6 +591,7 @@ mod test {
 
     fn create_store_and_importer() -> (crate::Store, String) {
         let store = crate::Store::init().unwrap();
+        store.set_server_url("http://localhost:9883");
         store.populate().unwrap();
         let agent = store.create_agent(None).unwrap();
         store.set_default_agent(agent);
@@ -669,6 +670,7 @@ mod test {
     #[test]
     fn import_resource_malicious() {
         let (store, importer) = create_store_and_importer();
+        store.set_server_url("http://localhost:9883");
 
         // Try to overwrite the main drive with some malicious data
         let agent = store.get_default_agent().unwrap();

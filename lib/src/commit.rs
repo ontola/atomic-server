@@ -675,11 +675,12 @@ mod test {
     }
 
     use super::*;
-    use crate::{agents::Agent, Storelike};
+    use crate::{agents::Agent, Store, Storelike};
 
     #[test]
     fn agent_and_commit() {
-        let store = crate::Store::init().unwrap();
+        let store = Store::init().unwrap();
+        store.set_server_url("http://localhost:9883");
         store.populate().unwrap();
         let agent = store.create_agent(Some("test_actor")).unwrap();
         let subject = "https://localhost/new_thing";
@@ -711,7 +712,8 @@ mod test {
 
     #[test]
     fn serialize_commit() {
-        let store = crate::Store::init().unwrap();
+        let store = Store::init().unwrap();
+        store.set_server_url("http://localhost:9883");
         store.populate().unwrap();
         let mut set: HashMap<String, Value> = HashMap::new();
         let shortname = Value::new("shortname", &DataType::String).unwrap();
@@ -739,13 +741,13 @@ mod test {
 
     #[test]
     fn signature_matches() {
+        let store = Store::init().unwrap();
+        store.set_server_url("http://localhost:9883");
         let private_key = "CapMWIhFUT+w7ANv9oCPqrHrwZpkP2JhzF9JnyT6WcI=";
-        let store = crate::Store::init().unwrap();
-        store.populate().unwrap();
-        let agent = Agent::new_from_private_key(None, &store, private_key);
+        let agent = Agent::new_from_private_key(None, &store, private_key).unwrap();
         assert_eq!(
             &agent.subject,
-            "local:store/agents/7LsjMW5gOfDdJzK/atgjQ1t20J/rw8MjVg6xwqm+h8U="
+            "http://localhost:9883/agents/7LsjMW5gOfDdJzK/atgjQ1t20J/rw8MjVg6xwqm+h8U="
         );
         store.add_resource(&agent.to_resource().unwrap()).unwrap();
         let subject = "https://localhost/new_thing";
@@ -760,8 +762,8 @@ mod test {
         let signature = commit.signature.clone().unwrap();
         let serialized = commit.serialize_deterministically_json_ad(&store).unwrap();
 
-        assert_eq!(serialized, "{\"https://atomicdata.dev/properties/createdAt\":0,\"https://atomicdata.dev/properties/isA\":[\"https://atomicdata.dev/classes/Commit\"],\"https://atomicdata.dev/properties/set\":{\"https://atomicdata.dev/properties/description\":\"Some value\",\"https://atomicdata.dev/properties/shortname\":\"someval\"},\"https://atomicdata.dev/properties/signer\":\"local:store/agents/7LsjMW5gOfDdJzK/atgjQ1t20J/rw8MjVg6xwqm+h8U=\",\"https://atomicdata.dev/properties/subject\":\"https://localhost/new_thing\"}");
-        assert_eq!(signature, "JOGRyp1NCulc0RNuuNozgIagQPRoZy0Y5+mbSpHY2DKiN3vqUNYLjXbAPYT6Cga6vSG9zztEIa/ZcbQPo7wgBg==");
+        assert_eq!(serialized, "{\"https://atomicdata.dev/properties/createdAt\":0,\"https://atomicdata.dev/properties/isA\":[\"https://atomicdata.dev/classes/Commit\"],\"https://atomicdata.dev/properties/set\":{\"https://atomicdata.dev/properties/description\":\"Some value\",\"https://atomicdata.dev/properties/shortname\":\"someval\"},\"https://atomicdata.dev/properties/signer\":\"http://localhost:9883/agents/7LsjMW5gOfDdJzK/atgjQ1t20J/rw8MjVg6xwqm+h8U=\",\"https://atomicdata.dev/properties/subject\":\"https://localhost/new_thing\"}");
+        assert_eq!(signature, "pYkM6dC4qFGGh6EXbys6NwmhaPIA6Z7Ij//rPejo5mnBOvs1EFxP0iErfJiUXZgJDi5yK4QOBMb2nf2FIKcUCA==");
     }
 
     #[test]
@@ -775,9 +777,9 @@ mod test {
     }
 
     #[test]
-
     fn invalid_subjects() {
-        let store = crate::Store::init().unwrap();
+        let store = Store::init().unwrap();
+        store.set_server_url("http://localhost:9883");
         store.populate().unwrap();
         let agent = store.create_agent(Some("test_actor")).unwrap();
         let resource = Resource::new("https://localhost/test_resource".into());

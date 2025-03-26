@@ -65,7 +65,7 @@ fn populate_collections() {
         .map(|r| r.get_subject().into())
         .collect();
     println!("{:?}", subjects);
-    let collections_collection_url = format!("{}/collections", store.get_server_url());
+    let collections_collection_url = format!("{}/collections", store.get_server_url().unwrap());
     let collections_resource = store
         .get_resource_extended(&collections_collection_url, false, &ForAgent::Public)
         .unwrap();
@@ -91,7 +91,7 @@ fn populate_collections() {
 fn destroy_resource_and_check_collection_and_commits() {
     let store = Db::init_temp("counter").unwrap();
     let for_agent = &ForAgent::Public;
-    let agents_url = format!("{}/agents", store.get_server_url());
+    let agents_url = format!("{}/agents", store.get_server_url().unwrap());
     let agents_collection_1 = store
         .get_resource_extended(&agents_url, false, for_agent)
         .unwrap();
@@ -110,7 +110,7 @@ fn destroy_resource_and_check_collection_and_commits() {
     );
 
     // We will count the commits, and check if they've incremented later on.
-    let commits_url = format!("{}/commits", store.get_server_url());
+    let commits_url = format!("{}/commits", store.get_server_url().unwrap());
     let commits_collection_1 = store
         .get_resource_extended(&commits_url, false, for_agent)
         .unwrap();
@@ -198,7 +198,7 @@ fn get_extended_resource_pagination() {
     let store = Db::init_temp("get_extended_resource_pagination").unwrap();
     let subject = format!(
         "{}/commits?current_page=2&page_size=99999",
-        store.get_server_url()
+        store.get_server_url().unwrap()
     );
     let for_agent = &ForAgent::Public;
     if store
@@ -244,7 +244,7 @@ fn queries() {
     let mut subject_to_delete = "".to_string();
 
     for _x in 0..count {
-        let mut demo_resource = Resource::new_generate_subject(store);
+        let mut demo_resource = Resource::new_generate_subject(store).unwrap();
         // We make one resource public
         if _x == 1 {
             demo_resource
@@ -489,7 +489,7 @@ fn test_collection_update_value(store: &Db, property_url: &str, old_val: Value, 
 
     let mut resources: Vec<Resource> = (0..count)
         .map(|_num| {
-            let mut demo_resource = Resource::new_generate_subject(store);
+            let mut demo_resource = Resource::new_generate_subject(store).unwrap();
             demo_resource
                 .set(property_url.into(), old_val.clone(), store)
                 .unwrap();
