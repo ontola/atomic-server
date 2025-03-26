@@ -30,7 +30,7 @@ pub async fn upload_handler(
     let parent = store.get_resource(&query.parent)?;
     let subject = format!(
         "{}{}",
-        store.get_server_url(),
+        store.get_server_url()?,
         req.head()
             .uri
             .path_and_query()
@@ -93,8 +93,8 @@ async fn save_file_and_create_resource(
 
     let mimetype = guess_mime_for_filename(filename);
     let subject_path = format!("files/{}", urlencoding::encode(&file_id));
-    let new_subject = format!("{}/{}", store.get_server_url(), subject_path);
-    let download_url = format!("{}/download/{}", store.get_server_url(), subject_path);
+    let new_subject = format!("{}/{}", store.get_server_url()?, subject_path);
+    let download_url = format!("{}/download/{}", store.get_server_url()?, subject_path);
 
     let mut resource = atomic_lib::Resource::new_instance(urls::FILE, store)?;
     resource

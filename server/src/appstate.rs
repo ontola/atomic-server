@@ -137,7 +137,7 @@ fn set_default_agent(config: &Config, store: &impl Storelike) -> AtomicServerRes
                             "server".into(),
                             store,
                             &agent_config.private_key,
-                        );
+                        )?;
                         store.add_resource(&recreated_agent.to_resource()?)?;
                         agent_config
                     } else {
@@ -179,7 +179,7 @@ fn set_default_agent(config: &Config, store: &impl Storelike) -> AtomicServerRes
 
 /// Creates the first Invitation that is opened by the user on the Home page.
 fn set_up_initial_invite(store: &impl Storelike) -> AtomicServerResult<()> {
-    let subject = format!("{}/setup", store.get_server_url());
+    let subject = format!("{}/setup", store.get_server_url()?);
     tracing::info!("Creating initial Invite at {}", subject);
     let mut invite = store.get_resource_new(&subject);
     invite.set_class(atomic_lib::urls::INVITE);
@@ -197,12 +197,12 @@ fn set_up_initial_invite(store: &impl Storelike) -> AtomicServerResult<()> {
     )?;
     invite.set(
         atomic_lib::urls::TARGET.into(),
-        atomic_lib::Value::AtomicUrl(store.get_server_url().into()),
+        atomic_lib::Value::AtomicUrl(store.get_server_url()?.into()),
         store,
     )?;
     invite.set(
         atomic_lib::urls::PARENT.into(),
-        atomic_lib::Value::AtomicUrl(store.get_server_url().into()),
+        atomic_lib::Value::AtomicUrl(store.get_server_url()?.into()),
         store,
     )?;
     invite.set(

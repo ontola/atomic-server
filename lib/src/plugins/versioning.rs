@@ -80,11 +80,11 @@ fn handle_all_versions_request(context: HandleGetContext) -> AtomicResult<Resour
         include_external: false,
     };
     let mut collection = collection_builder.into_collection(store, for_agent)?;
-    let new_members = collection
+    let new_members: Vec<String> = collection
         .members
         .iter_mut()
         .map(|commit_url| construct_version_endpoint_url(store, commit_url))
-        .collect();
+        .collect::<AtomicResult<Vec<String>>>()?;
     collection.members = new_members;
     collection.to_resource(store)
 }
@@ -148,12 +148,15 @@ pub fn construct_version(
 }
 
 /// Creates the versioning URL for some specific Commit
-fn construct_version_endpoint_url(store: &impl Storelike, commit_url: &str) -> String {
-    format!(
+fn construct_version_endpoint_url(
+    store: &impl Storelike,
+    commit_url: &str,
+) -> AtomicResult<String> {
+    Ok(format!(
         "{}/versioning?commit={}",
-        store.get_server_url(),
+        store.get_server_url()?,
         urlencoding::encode(commit_url)
-    )
+    ))
 }
 
 /// Gets a version of a Resource by Commit.
@@ -163,7 +166,7 @@ pub fn get_version(
     store: &impl Storelike,
     for_agent: &ForAgent,
 ) -> AtomicResult<Resource> {
-    let version_url = construct_version_endpoint_url(store, commit_url);
+    let version_url = construct_version_endpoint_url(store, commit_url)?;
     match store.get_resource(&version_url) {
         Ok(cached) => Ok(cached),
         Err(_not_cached) => {
