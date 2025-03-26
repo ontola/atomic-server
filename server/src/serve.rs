@@ -113,6 +113,8 @@ fn spawn_dht_announcer(appstate: crate::appstate::AppState) {
 
 // Increase the maximum payload size (for POSTing a body, for example) to 50MB
 const PAYLOAD_MAX: usize = 50_242_880;
+const SERVER_VERSION_HEADER: &str = "X-Atomic-Server-Version";
+const SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Start the server
 pub async fn serve(config: crate::config::Config) -> AtomicServerResult<()> {
@@ -140,6 +142,10 @@ pub async fn serve(config: crate::config::Config) -> AtomicServerResult<()> {
             .app_data(web::PayloadConfig::new(PAYLOAD_MAX))
             .app_data(web::Data::new(appstate.clone()))
             .wrap(cors)
+            .wrap(
+                middleware::DefaultHeaders::new()
+                    .add((SERVER_VERSION_HEADER, SERVER_VERSION)),
+            )
             .wrap(tracing_actix_web::TracingLogger::default())
             .wrap(middleware::Compress::default())
             // Here are the actual handlers / endpoints
