@@ -37,6 +37,7 @@ export type AIMCPResourceMessageContext = {
   id: string;
   uri: string;
   name: string;
+  mimetype?: string;
   serverId: string;
 };
 
@@ -76,4 +77,16 @@ export function isMessageWithContext(
   message: AIChatDisplayMessage,
 ): message is MessageWithContext {
   return message.role === 'annotated-message';
+}
+
+export function isMCPResource(
+  context: AIMessageContext,
+): context is AIMCPResourceMessageContext {
+  return context.type === 'mcp-resource';
+}
+
+export function isAtomicResource(
+  context: AIMessageContext,
+): context is AIAtomicResourceMessageContext {
+  return context.type === 'atomic-resource';
 }

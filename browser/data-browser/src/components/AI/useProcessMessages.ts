@@ -145,7 +145,7 @@ const processMCPResources = async (
       try {
         const resourceData = await readMCPResource(ctx.serverId, ctx.uri);
 
-        return `MCP resource "${ctx.name}" (${ctx.uri}):\n\`\`\`${resourceData.mimeType || 'text'}
+        return `\`\`\`${resourceData.mimeType || 'text'}
 ${typeof resourceData.contents === 'string' ? resourceData.contents : JSON.stringify(resourceData.contents, null, 2)}
 \`\`\``;
       } catch (error) {
@@ -195,7 +195,7 @@ const addContextToMessage = async (
 
   // Add MCP context if we have any MCP resources
   if (mcpContent) {
-    messageWithContext += `\n<extra-context>\n${mcpContent}\n</extra-context>`;
+    messageWithContext += `\n<context>\n${mcpContent}\n</context>`;
   }
 
   return messageWithContext;
