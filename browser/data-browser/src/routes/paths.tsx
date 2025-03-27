@@ -20,6 +20,7 @@ export const pathNames = {
   sandbox: '/sandbox',
   fetchBookmark: '/fetch-bookmark',
   pruneTests: '/prunetests',
+  linkOpenRouter: '/link-openrouter',
 } as const;
 export const paths = {
   agentSettings: `${pathNames.app}${pathNames.agentSettings}`,
@@ -40,4 +41,5 @@ export const paths = {
   sandbox: `${pathNames.app}${pathNames.sandbox}`,
   fetchBookmark: pathNames.fetchBookmark,
   pruneTests: `${pathNames.app}${pathNames.pruneTests}`,
+  linkOpenRouter: `${pathNames.app}${pathNames.linkOpenRouter}`,
 } as const;
