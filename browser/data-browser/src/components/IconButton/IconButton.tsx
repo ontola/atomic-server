@@ -226,6 +226,7 @@ const MagicIconButton = styled(IconButtonBase)<ButtonStyleProps>`
     inset: 0;
     opacity: 0;
     z-index: -2;
+    will-change: filter;
     background: radial-gradient(ellipse at top right, #365ccd, transparent),
       radial-gradient(
         ellipse at bottom left,
@@ -245,6 +246,7 @@ const MagicIconButton = styled(IconButtonBase)<ButtonStyleProps>`
     position: absolute;
     inset: var(--border-width);
     opacity: var(--bg-opacity);
+    will-change: transform;
     border-radius: calc(${p => p.theme.radius} - var(--border-width));
     background: ${p => p.theme.colors.bg};
     z-index: -1;

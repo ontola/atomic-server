@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Column, Row } from '../Row';
 import { Checkbox, CheckboxLabel } from '../forms/Checkbox';
 import { InputStyled, InputWrapper } from '../forms/InputStyles';
-import { MCPServersManager } from '../MCPServersManager';
+import { MCPServersManager } from './MCP/MCPServersManager';
 import styled from 'styled-components';
 import { transition } from '../../helpers/transition';
 import { useSettings } from '../../helpers/AppSettings';
