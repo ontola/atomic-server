@@ -113,11 +113,11 @@ pub fn handle_invite_post<'a>(
             }
         };
 
-        if agent.as_str().starts_with("did:ad:") {
+        if agent.as_str().starts_with("did:ad:agent:") {
             if store.get_resource(&agent.as_str().into()).await.is_err() {
                 let mut new_agent = Resource::new_instance(urls::AGENT, store).await?;
                 new_agent.set_subject(agent.to_string());
-                if let Some(pk) = agent.as_str().strip_prefix("did:ad:") {
+                if let Some(pk) = agent.as_str().strip_prefix("did:ad:agent:") {
                     new_agent
                         .set_string(urls::PUBLIC_KEY.into(), pk, store)
                         .await?;

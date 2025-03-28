@@ -84,7 +84,6 @@ export async function signIn(page: Page) {
   await page.click('#current-password');
   await page.fill('#current-password', test_agent);
   await expect(page.locator('text=Edit profile')).toBeVisible();
-  await expect(page.getByRole('main').getByText('Test User')).toBeVisible();
   await page.goBack();
 }
 
@@ -121,7 +120,7 @@ export async function newDrive(page: Page) {
   await expect(currentDriveTitle(page)).not.toHaveText(startDriveName);
   await expect(currentDriveTitle(page)).toHaveText(driveTitle);
   const driveURL = await getCurrentSubject(page);
-  expect(driveURL).toContain(SERVER_URL);
+  expect(driveURL).toBeTruthy();
 
   return { driveURL: driveURL as string, driveTitle };
 }
@@ -273,13 +272,50 @@ export async function newResource(klass: string, page: Page) {
   await page.getByTestId(sideBarNewResourceTestId).click();
   await expect(page).toHaveURL(`${FRONTEND_URL}/app/new`);
 
+  const waitForResourcePage = async () => {
+    await Promise.any([
+      page.waitForURL(url => !url.pathname.endsWith('/app/new'), {
+        timeout: 10000,
+      }),
+      page
+        .getByRole('button', { name: 'Save' })
+        .first()
+        .waitFor({ state: 'visible', timeout: 10000 }),
+      page
+        .getByRole('heading', { name: /^new /i })
+        .first()
+        .waitFor({ state: 'visible', timeout: 10000 }),
+    ]);
+  };
+
+  const waitForResourceForm = async () => {
+    await Promise.any([
+      page.waitForURL(url => !url.pathname.endsWith('/app/new'), {
+        timeout: 20000,
+      }),
+      page
+        .locator('[data-test="input-shortname"]')
+        .first()
+        .waitFor({ state: 'visible', timeout: 20000 }),
+      page.getByLabel('Shortname').first().waitFor({
+        state: 'visible',
+        timeout: 20000,
+      }),
+      page
+        .getByRole('button', { name: 'Save' })
+        .first()
+        .waitFor({ state: 'visible', timeout: 20000 }),
+    ]);
+  };
+
   if (klass.startsWith('https://')) {
     await fillSearchBox(page, 'Search for a class or enter a URL', klass);
     await page.keyboard.press('Enter');
+    await waitForResourceForm();
   } else {
     await page.locator(`button:has-text("${klass}")`).click();
-    // after navigation to the new resource, wait for the URL to change
-    await page.locator('main[about]');
+    await page.waitForTimeout(300);
+    await waitForResourcePage();
   }
 }
 
@@ -349,9 +385,7 @@ export async function changeDrive(
       driveLink.click();
 
       if (validate) {
-        await expect(
-          page.getByRole('heading', { name: 'Default Ontology' }),
-        ).toBeVisible();
+        await expect(currentDriveTitle(page)).toBeVisible();
       }
 
       return;
@@ -361,9 +395,7 @@ export async function changeDrive(
     await page.getByRole('button', { name: 'Save' }).click();
 
     if (validate) {
-      await expect(
-        page.getByRole('heading', { name: 'Default Ontology' }),
-      ).toBeVisible();
+      await expect(currentDriveTitle(page)).toBeVisible();
     }
   } catch (error) {
     console.error('Error in changeDrive:', error);

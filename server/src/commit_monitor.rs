@@ -9,8 +9,8 @@ use crate::{
     search::SearchState,
 };
 use actix::{
-    prelude::{Actor, Context, Handler},
-    ActorFutureExt, ActorStreamExt, Addr, ContextFutureSpawner, ResponseActFuture, WrapFuture,
+    prelude::{Actor, AsyncContext, Context, Handler},
+    ActorFutureExt, Addr, ResponseActFuture, WrapFuture,
 };
 use atomic_lib::{agents::ForAgent, Db, Storelike};
 use chrono::Local;
@@ -37,11 +37,13 @@ impl Actor for CommitMonitor {
 
     fn started(&mut self, ctx: &mut Context<Self>) {
         tracing::debug!("CommitMonitor started");
-
-        // spawn an interval stream into our context
-        actix::utils::IntervalFunc::new(REBUILD_INDEX_TIME, Self::tick)
-            .finish()
-            .spawn(ctx);
+        if tokio::runtime::Handle::try_current().is_ok() {
+            ctx.run_interval(REBUILD_INDEX_TIME, |actor, ctx| {
+                actor.tick(ctx);
+            });
+        } else {
+            tracing::warn!("No Tokio runtime available; skipping CommitMonitor interval");
+        }
     }
 }
 

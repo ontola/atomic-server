@@ -16,7 +16,7 @@ This makes resources portable, self-authenticating, and resolvable over both the
 
 ## The `did:ad` method
 
-Atomic Data defines the `did:ad` method with two forms, distinguished by an explicit type prefix:
+Atomic Data defines the `did:ad` method with three forms, distinguished by an explicit type prefix:
 
 ### Agent identifiers
 
@@ -43,6 +43,23 @@ For most operations, agents don't need to be "resolved" at all:
 
 If a client encounters an unknown agent, it can show the truncated public key as a fallback.
 More sophisticated resolution (e.g. using [Mainline DHT](#3-mainline-dht-internet) or [Reticulum](#2-reticulum-mesh-resolution) announces) can be layered on later without changing the DID format.
+
+### Commit identifiers
+
+[Commits](commits/intro.md) are the fundamental events in Atomic Data. They are identified by the `commit` prefix followed by their cryptographic signature:
+
+```text
+did:ad:commit:{signature}
+```
+
+The `signature` is the base64-encoded Ed25519 signature of the commit.
+Using a DID for commits ensures that the history of a resource is fully portable and not tied to the server where the commit was originally created.
+
+Like resources, commits can include a routing hint to help discover them over decentralized networks:
+
+```text
+did:ad:commit:{signature}?drive={drive_hash}
+```
 
 ### Resource identifiers
 
@@ -145,7 +162,7 @@ The three variants map to different resolution strategies:
 | `Subject` variant | Format | Use case |
 |---|---|---|
 | `Internal` | `internal:/path` | Local resources on this server. Resolved to an absolute URL using the server's origin for serialization. |
-| `Did` | `did:ad:...` | Agents (by public key) and resources in Drives (by genesis commit signature). Routing happens via `?drive=` hints. Resolved via Reticulum or Mainline DHT. |
+| `Did` | `did:ad:...` | Agents (by public key), Commits (by signature), and resources in Drives (by genesis commit signature). Routing happens via `?drive=` hints. Resolved via Reticulum or Mainline DHT. |
 | `External` | `https://...` | Resources on other servers. Resolved via HTTP. Used for backward compatibility and external linked data. |
 
 When serializing to [JSON-AD](core/json-ad.md), `Internal` subjects are resolved to absolute URLs using the server's configured origin.

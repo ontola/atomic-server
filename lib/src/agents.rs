@@ -99,7 +99,7 @@ impl Agent {
     /// Derives the public key from the private key.
     pub fn new_from_private_key(name: Option<&str>, private_key: &str) -> AtomicResult<Agent> {
         let keypair = generate_public_key(private_key);
-        let did_string = format!("did:ad:{}", keypair.public);
+        let did_string = format!("did:ad:agent:{}", keypair.public);
         let subject = crate::Subject::from_raw(&did_string, None);
 
         Ok(Agent {
@@ -115,7 +115,7 @@ impl Agent {
     /// This will not be able to write, because there is no private key.
     pub fn new_from_public_key(public_key: &str) -> AtomicResult<Agent> {
         verify_public_key(public_key)?;
-        let did_string = format!("did:ad:{}", public_key);
+        let did_string = format!("did:ad:agent:{}", public_key);
         let subject = crate::Subject::from_raw(&did_string, None);
 
         Ok(Agent {
@@ -131,11 +131,13 @@ impl Agent {
         let agent_bytes = decode_base64(secret_b64)?;
         let parsed: serde_json::Value = from_slice(&agent_bytes)?;
         let private_key = parsed["privateKey"].as_str().ok_or("Invalid private key")?;
-        let subject = parsed["subject"].as_str().ok_or("Invalid subject")?;
+        let raw_subject = parsed["subject"].as_str().ok_or("Invalid subject")?;
+        // Migrate legacy HTTP agent subjects (https://server/agents/{pubkey}) to did:ad:agent:{pubkey}
+        let subject = migrate_http_agent_subject(raw_subject);
         let agent = Agent {
             private_key: Some(private_key.into()),
             public_key: generate_public_key(private_key).public,
-            subject: crate::Subject::from_raw(subject, None),
+            subject: crate::Subject::from_raw(&subject, None),
             name: None,
             created_at: crate::utils::now(),
         };
@@ -238,6 +240,20 @@ pub fn verify_public_key(public_key: &str) -> AtomicResult<()> {
     Ok(())
 }
 
+/// Migrates a legacy HTTP agent subject (`https://server/agents/{pubkey}`) to `did:ad:agent:{pubkey}`.
+/// Returns the input unchanged if it doesn't match the legacy pattern.
+pub fn migrate_http_agent_subject(subject: &str) -> String {
+    if let Some(pubkey) = subject
+        .strip_prefix("http://")
+        .or_else(|| subject.strip_prefix("https://"))
+        .and_then(|s| s.split_once('/'))
+        .and_then(|(_, path)| path.strip_prefix("agents/"))
+    {
+        return format!("did:ad:agent:{}", pubkey);
+    }
+    subject.to_string()
+}
+
 impl From<Agent> for ForAgent {
     fn from(agent: Agent) -> Self {
         ForAgent::AgentSubject(agent.subject)
@@ -288,9 +304,10 @@ mod test {
             agent.private_key.unwrap(),
             "SMyxRgF7QhiC7C506qXSUKfE+SKAtCdNFu5XeTjzadA="
         );
+        // Legacy HTTP subject is automatically migrated to did:ad:agent:
         assert_eq!(
             agent.subject,
-            "http://localhost:9883/agents/RqPwpgHv+PK7Pnz/dVab8hmHjYnvTL1YrlVa6L9G9Zg="
+            "did:ad:agent:RqPwpgHv+PK7Pnz/dVab8hmHjYnvTL1YrlVa6L9G9Zg="
         );
     }
 
@@ -298,9 +315,31 @@ mod test {
     fn can_build_secret() {
         let og_secret = "eyJwcml2YXRlS2V5IjoiU015eFJnRjdRaGlDN0M1MDZxWFNVS2ZFK1NLQXRDZE5GdTVYZVRqemFkQT0iLCJzdWJqZWN0IjoiaHR0cDovL2xvY2FsaG9zdDo5ODgzL2FnZW50cy9ScVB3cGdIditQSzdQbnovZFZhYjhobUhqWW52VEwxWXJsVmE2TDlHOVpnPSJ9";
         let agent = Agent::from_secret(og_secret).unwrap();
+        // Legacy HTTP subject should be migrated to did:ad:agent:
+        assert_eq!(
+            agent.subject.to_string(),
+            "did:ad:agent:RqPwpgHv+PK7Pnz/dVab8hmHjYnvTL1YrlVa6L9G9Zg="
+        );
         let secret = agent.build_secret().unwrap();
+        let agent2 = Agent::from_secret(&secret).unwrap();
+        assert_eq!(agent2.subject, agent.subject);
+    }
 
-        let agent2 = Agent::from_secret(&secret);
-        assert_eq!(agent2.unwrap().subject, agent.subject);
+    #[test]
+    fn migrate_http_agent_subject_works() {
+        assert_eq!(
+            migrate_http_agent_subject(
+                "http://localhost:9883/agents/RqPwpgHv+PK7Pnz/dVab8hmHjYnvTL1YrlVa6L9G9Zg="
+            ),
+            "did:ad:agent:RqPwpgHv+PK7Pnz/dVab8hmHjYnvTL1YrlVa6L9G9Zg="
+        );
+        assert_eq!(
+            migrate_http_agent_subject("did:ad:agent:somepubkey"),
+            "did:ad:agent:somepubkey"
+        );
+        assert_eq!(
+            migrate_http_agent_subject("https://example.com/agents/pubkey123"),
+            "did:ad:agent:pubkey123"
+        );
     }
 }

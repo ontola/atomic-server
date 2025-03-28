@@ -3438,3 +3438,11 @@ msgstr ""
 #: src/views/InvitePage.tsx
 msgid "Failed to persist agent after accepting invite"
 msgstr ""
+
+#: src/views/InvitePage.tsx
+msgid "Invite accepted, but no destination was returned."
+msgstr ""
+
+#: src/components/forms/NewForm/SubjectField.tsx
+msgid "The identifier of the resource. DID subjects are determined by the genesis commit signature."
+msgstr ""

@@ -1,8 +1,12 @@
 import { createAuthentication } from './authentication.js';
-import { hasBrowserAPI } from './hasBrowserAPI.js';
 import { parseAndApplyCommit } from './index.js';
 import { JSONADParser } from './parse.js';
 import type { Resource } from './resource.js';
+import {
+  ensureServerVersionKnown,
+  shouldSkipDidAuthForLegacyServer,
+  warnDidAuthCompatibility,
+} from './serverCapabilities.js';
 import type { Store } from './store.js';
 
 const REQUEST_TIMEOUT = 5000;
@@ -145,15 +149,10 @@ export class WSClient {
       return;
     }
 
-    // Legacy-safe fallback: remote servers may not support DID-based websocket auth.
-    if (
-      agent.subject.startsWith('did:ad:') &&
-      hasBrowserAPI() &&
-      !this.isSameOriginWebSocket()
-    ) {
-      console.warn(
-        `Skipping websocket authentication for DID agent on cross-origin socket ${this.ws.url}. Assuming legacy server compatibility (<0.40).`,
-      );
+    await ensureServerVersionKnown(this.ws.url);
+
+    if (shouldSkipDidAuthForLegacyServer(this.ws.url, agent.subject)) {
+      warnDidAuthCompatibility(this.ws.url);
 
       return;
     }
@@ -363,19 +362,5 @@ export class WSClient {
 
       this.ws.addEventListener('message', listener);
     });
-  }
-
-  private isSameOriginWebSocket(): boolean {
-    if (!hasBrowserAPI()) {
-      return true;
-    }
-
-    try {
-      const wsOrigin = new URL(this.ws.url).origin;
-
-      return wsOrigin === window.location.origin;
-    } catch {
-      return false;
-    }
   }
 }

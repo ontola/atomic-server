@@ -233,11 +233,11 @@ impl Commit {
                         commit.signer
                     )
                     .into());
-                } else if commit.signer.starts_with("did:ad:") {
+                } else if commit.signer.starts_with("did:ad:agent:") {
                     commit
                         .signer
-                        .strip_prefix("did:ad:")
-                        .ok_or("Invalid did:ad signer")?
+                        .strip_prefix("did:ad:agent:")
+                        .ok_or("Invalid did:ad:agent signer")?
                         .to_string()
                 } else if commit.signer == commit.subject && commit.previous_commit.is_none() {
                     // If the signer is not found in the store AND signer == subject,
@@ -273,14 +273,22 @@ impl Commit {
                 )
             })?;
 
-        // Special check for did:ad
-        if commit.subject.starts_with("did:ad:") && commit.previous_commit.is_none() {
+        // For genesis resource commits (did:ad:{signature}), the subject must equal the signature.
+        // Agent DIDs (did:ad:agent:{pubkey}) are identity-based and exempt from this check.
+        if commit.subject.starts_with("did:ad:")
+            && !commit.subject.starts_with("did:ad:agent:")
+            && commit.previous_commit.is_none()
+        {
             let subject_val = commit
                 .subject
                 .strip_prefix("did:ad:")
                 .ok_or("Invalid did:ad subject")?;
-            if subject_val != signature && subject_val != pubkey_b64 {
-                return Err(format!("Invalid did:ad subject. The subject part after 'did:ad:' ({}) must match the signature ({}) or the public key ({})", subject_val, signature, pubkey_b64).into());
+            if subject_val != signature {
+                return Err(format!(
+                    "Invalid did:ad subject. Expected 'did:ad:{}' but got '{}'",
+                    signature, commit.subject
+                )
+                .into());
             }
         }
         Ok(())
@@ -349,8 +357,36 @@ impl Commit {
             if is_new {
                 crate::hierarchy::check_append(store, &applied.resource_new, &validate_for.into())
                     .await?;
+                // For new DID resources, grant the signer explicit write access so future
+                // commits don't need drive-level rights. Agents are excluded because they
+                // already have self-write via their subject matching the agent check.
+                if matches!(applied.resource_new.get_subject(), Subject::Did(_)) {
+                    let is_agent = applied
+                        .resource_new
+                        .get(urls::IS_A)
+                        .ok()
+                        .and_then(|v| v.to_subjects(None).ok())
+                        .unwrap_or_default()
+                        .iter()
+                        .any(|c| c == urls::AGENT);
+                    if !is_agent {
+                        let mut writers: Vec<String> = applied
+                            .resource_new
+                            .get(urls::WRITE)
+                            .ok()
+                            .and_then(|v| v.to_subjects(None).ok())
+                            .unwrap_or_default();
+                        if !writers.contains(&commit.signer) {
+                            writers.push(commit.signer.clone());
+                            applied.resource_new.set_unsafe(
+                                urls::WRITE.into(),
+                                writers.into(),
+                            );
+                        }
+                    }
+                }
             } else {
-                // This should use the _old_ resource, no the new one, as the new one might maliciously give itself write rights.
+                // This should use the _old_ resource, not the new one, as the new one might maliciously give itself write rights.
                 crate::hierarchy::check_write(store, &resource_old, &validate_for.into()).await?;
             }
         };
@@ -1004,7 +1040,7 @@ mod test {
         let agent = Agent::new_from_private_key(None, private_key).unwrap();
         assert_eq!(
             agent.subject,
-            "did:ad:7LsjMW5gOfDdJzK/atgjQ1t20J/rw8MjVg6xwqm+h8U="
+            "did:ad:agent:7LsjMW5gOfDdJzK/atgjQ1t20J/rw8MjVg6xwqm+h8U="
         );
         store
             .add_resource(&agent.to_resource().unwrap())
@@ -1019,13 +1055,12 @@ mod test {
         let value2 = Value::new("someval", &DataType::String).unwrap();
         commitbuilder.set(property2.into(), value2);
         let commit = sign_at(commitbuilder, &agent, 0, &store).await.unwrap();
-        let signature = commit.signature.clone().unwrap();
         let serialized = commit
             .serialize_deterministically_json_ad(&store)
             .await
             .unwrap();
 
-        assert_eq!(serialized, "{\"https://atomicdata.dev/properties/createdAt\":0,\"https://atomicdata.dev/properties/isA\":[\"https://atomicdata.dev/classes/Commit\"],\"https://atomicdata.dev/properties/set\":{\"https://atomicdata.dev/properties/description\":\"Some value\",\"https://atomicdata.dev/properties/shortname\":\"someval\"},\"https://atomicdata.dev/properties/signer\":\"did:ad:7LsjMW5gOfDdJzK/atgjQ1t20J/rw8MjVg6xwqm+h8U=\",\"https://atomicdata.dev/properties/subject\":\"https://localhost/new_thing\"}");
+        assert_eq!(serialized, "{\"https://atomicdata.dev/properties/createdAt\":0,\"https://atomicdata.dev/properties/isA\":[\"https://atomicdata.dev/classes/Commit\"],\"https://atomicdata.dev/properties/set\":{\"https://atomicdata.dev/properties/description\":\"Some value\",\"https://atomicdata.dev/properties/shortname\":\"someval\"},\"https://atomicdata.dev/properties/signer\":\"did:ad:agent:7LsjMW5gOfDdJzK/atgjQ1t20J/rw8MjVg6xwqm+h8U=\",\"https://atomicdata.dev/properties/subject\":\"https://localhost/new_thing\"}");
         // Verify signature is valid rather than checking a hardcoded value,
         // since the serialized form changed with the did:ad: prefix.
         commit.validate_signature(&store).await.unwrap();

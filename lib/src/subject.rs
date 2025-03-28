@@ -1,8 +1,8 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use url::Url;
 
-/// The prefix for Agent DIDs: `did:ad:`
-pub const DID_AD_AGENT_PREFIX: &str = "did:ad:";
+/// The prefix for Agent DIDs: `did:ad:agent:`
+pub const DID_AD_AGENT_PREFIX: &str = "did:ad:agent:";
 
 /// The Subject of a Resource.
 ///

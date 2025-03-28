@@ -1,5 +1,6 @@
 //! Collections are dynamic resources that refer to multiple resources.
 //! They are constructed using a [Query]
+#[cfg(feature = "db")]
 use crate::class_extender::{ClassExtender, GetExtenderContext};
 use crate::{
     agents::ForAgent,
@@ -250,7 +251,11 @@ impl Collection {
         };
 
         let query_result = store.query(&q).await?;
-        let members: Vec<String> = query_result.subjects.iter().map(|s| s.to_string()).collect();
+        let members: Vec<String> = query_result
+            .subjects
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
         let referenced_resources = if collection_builder.include_nested {
             Some(query_result.resources)
         } else {
@@ -508,6 +513,7 @@ pub async fn create_collection_resource_for_class(
 }
 
 #[cfg(test)]
+#[cfg(feature = "db")]
 mod test {
     use super::*;
     use crate::urls;
@@ -601,7 +607,9 @@ mod test {
             .await
             .unwrap();
 
-        assert!(collection.members.contains(resource1.get_subject()));
+        assert!(collection
+            .members
+            .contains(&resource1.get_subject().to_string()));
 
         resource1
             .set(
@@ -633,7 +641,12 @@ mod test {
             .await
             .unwrap();
 
-        assert_eq!(collection.members.contains(resource1.get_subject()), false);
+        assert_eq!(
+            collection
+                .members
+                .contains(&resource1.get_subject().to_string()),
+            false
+        );
 
         resource1
             .push(
@@ -662,7 +675,9 @@ mod test {
             .await
             .unwrap();
 
-        assert!(collection.members.contains(resource1.get_subject()));
+        assert!(collection
+            .members
+            .contains(&resource1.get_subject().to_string()));
     }
 
     /// Tests that multiple consecutive push operations work correctly with collections.
@@ -711,7 +726,9 @@ mod test {
         .await
         .unwrap();
         assert!(
-            collection.members.contains(resource1.get_subject()),
+            collection
+                .members
+                .contains(&resource1.get_subject().to_string()),
             "Should find resource after first push"
         );
 
@@ -745,7 +762,9 @@ mod test {
         .await
         .unwrap();
         assert!(
-            collection.members.contains(resource1.get_subject()),
+            collection
+                .members
+                .contains(&resource1.get_subject().to_string()),
             "Should still find resource for item1 after second push"
         );
 
@@ -769,7 +788,9 @@ mod test {
         .await
         .unwrap();
         assert!(
-            collection.members.contains(resource1.get_subject()),
+            collection
+                .members
+                .contains(&resource1.get_subject().to_string()),
             "Should find resource for item2 after second push"
         );
 
@@ -804,7 +825,9 @@ mod test {
             .await
             .unwrap();
             assert!(
-                collection.members.contains(resource1.get_subject()),
+                collection
+                    .members
+                    .contains(&resource1.get_subject().to_string()),
                 "Should find resource for {} after third push",
                 item
             );
@@ -844,7 +867,9 @@ mod test {
             .await
             .unwrap();
             assert!(
-                !collection.members.contains(resource1.get_subject()),
+                !collection
+                    .members
+                    .contains(&resource1.get_subject().to_string()),
                 "Should NOT find resource for {} after set replacement",
                 item
             );
@@ -870,7 +895,9 @@ mod test {
         .await
         .unwrap();
         assert!(
-            collection.members.contains(resource1.get_subject()),
+            collection
+                .members
+                .contains(&resource1.get_subject().to_string()),
             "Should find resource for newitem after set"
         );
     }
@@ -1012,6 +1039,81 @@ mod test {
             c.get_subject(),
             sorted_desc[2].get_subject(),
             "c is missing the sorted property - it should _alway_ be last"
+        );
+    }
+
+    /// Verifies that resources with DID subjects (`did:ad:...`) are correctly indexed and
+    /// returned by sorted queries. This simulates the chatroom refresh scenario where messages
+    /// have DID subjects but must appear when the chatroom queries by parent + sort by createdAt.
+    #[tokio::test]
+    async fn did_subject_resource_appears_in_sorted_query() {
+        let store = crate::db::Db::init_temp("did_subject_resource_appears_in_sorted_query")
+            .await
+            .unwrap();
+        store.populate().await.unwrap();
+
+        // Create a chatroom-like resource (normal internal subject)
+        let mut chatroom = Resource::new_instance(urls::CHATROOM, &store).await.unwrap();
+        chatroom
+            .set(urls::NAME.into(), crate::Value::String("Test Chat".into()), &store)
+            .await
+            .unwrap();
+        store
+            .add_resource_opts(&chatroom, false, true, true)
+            .await
+            .unwrap();
+        let chatroom_subject = chatroom.get_subject().clone();
+
+        // First query to register the query as watched (empty chatroom)
+        let q = crate::storelike::Query {
+            property: Some(urls::PARENT.into()),
+            value: Some(crate::Value::AtomicUrl(chatroom_subject.clone())),
+            sort_by: Some(urls::CREATED_AT.into()),
+            sort_desc: true,
+            limit: Some(10),
+            include_nested: false,
+            include_external: false,
+            ..Default::default()
+        };
+        let result = store.query(&q).await.unwrap();
+        assert_eq!(result.subjects.len(), 0, "Chatroom should start empty");
+
+        // Create a message with a DID subject (simulating genesis commit result)
+        let did_subject = crate::Subject::from("did:ad:TestSignatureHere123");
+        let mut message = Resource::new(did_subject.to_string());
+        message
+            .set_unsafe(
+                urls::PARENT.into(),
+                crate::Value::AtomicUrl(chatroom_subject.clone()),
+            );
+        message.set_unsafe(
+            urls::CREATED_AT.into(),
+            crate::Value::Timestamp(1000000),
+        );
+        message.set_unsafe(
+            urls::IS_A.into(),
+            crate::Value::ResourceArray(vec![crate::values::SubResource::Subject(
+                urls::MESSAGE.into(),
+            )]),
+        );
+
+        // Add the DID message to the store with index update (simulating apply_commit)
+        store
+            .add_resource_opts(&message, false, true, true)
+            .await
+            .unwrap();
+
+        // Query again - should now find the DID message
+        let result = store.query(&q).await.unwrap();
+        assert_eq!(
+            result.subjects.len(),
+            1,
+            "DID message should appear in chatroom query after being added"
+        );
+        assert_eq!(
+            result.subjects[0].as_str(),
+            "did:ad:TestSignatureHere123",
+            "The DID subject should be returned"
         );
     }
 }
