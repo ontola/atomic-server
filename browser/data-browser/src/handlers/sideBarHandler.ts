@@ -34,6 +34,11 @@ export function buildSideBarNewResourceHandler(store: Store) {
 export function buildSideBarRemoveResourceHandler(store: Store) {
   // When a resource is deleted remove it from the parents subResources list.
   return async (subject: string) => {
+    // Temporary subjects are never persisted in subResources lists.
+    if (subject.startsWith('_new:') || subject.startsWith('_local:')) {
+      return;
+    }
+
     const collection = new CollectionBuilder(store)
       .setProperty(dataBrowser.properties.subResources)
       .setValue(subject)

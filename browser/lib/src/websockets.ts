@@ -289,9 +289,7 @@ export class WSClient {
       .then(() => {
         // Subscribe to all existing messages
         for (const subject of this.store.subscribers.keys()) {
-          if (subject.startsWith(this.ws.url)) {
-            this.subscribeResource(subject);
-          }
+          this.subscribeResource(subject);
         }
       })
       .catch(e => {
