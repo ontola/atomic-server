@@ -4,6 +4,9 @@ use url::Url;
 /// The prefix for Agent DIDs: `did:ad:agent:`
 pub const DID_AD_AGENT_PREFIX: &str = "did:ad:agent:";
 
+/// The prefix for Commit DIDs: `did:ad:commit:`
+pub const DID_AD_COMMIT_PREFIX: &str = "did:ad:commit:";
+
 /// The Subject of a Resource.
 ///
 /// In Atomic Data, every subject is a URI.

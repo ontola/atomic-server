@@ -378,10 +378,9 @@ impl Commit {
                             .unwrap_or_default();
                         if !writers.contains(&commit.signer) {
                             writers.push(commit.signer.clone());
-                            applied.resource_new.set_unsafe(
-                                urls::WRITE.into(),
-                                writers.into(),
-                            );
+                            applied
+                                .resource_new
+                                .set_unsafe(urls::WRITE.into(), writers.into());
                         }
                     }
                 }
@@ -625,7 +624,7 @@ impl Commit {
     #[tracing::instrument(skip(store))]
     pub async fn into_resource(&self, store: &impl Storelike) -> AtomicResult<Resource> {
         let commit_subject = match self.signature.as_ref() {
-            Some(sig) => format!("internal:/commits/{}", sig),
+            Some(sig) => format!("did:ad:commit:{}", sig),
             None => {
                 let now = crate::utils::now();
                 format!("internal:/commitsUnsigned/{}", now)

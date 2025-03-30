@@ -87,7 +87,7 @@ impl SearchState {
 
         let resources = store
             .all_resources(true)
-            .filter(|resource| !resource.get_subject().as_str().contains("/commits/"));
+            .filter(|resource| !resource.get_subject().as_str().contains("/commits/") && !resource.get_subject().as_str().starts_with("did:ad:commit:"));
 
         for resource in resources {
             self.add_resource(&resource, store).await.map_err(|e| {

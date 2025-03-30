@@ -233,7 +233,7 @@ pub async fn parse_json_ad_commit_resource(
     };
 
     // Incoming commits do not have an @id field, we generate that from the signature.
-    let commit_subject = format!("internal:/commits/{}", signature);
+    let commit_subject = format!("did:ad:commit:{}", signature);
 
     let resource =
         parse_json_ad_map_to_resource(json, store, Some(commit_subject), &ParseOpts::default())
