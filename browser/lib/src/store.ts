@@ -710,8 +710,11 @@ export class Store {
 
     const result = await this.fetchResourceFromServer(resolved);
 
-    // If the resource was not in the store yet, subscripe to changes so we don't return stale results when the resource is updated.
-    this.subscribeWebSocket(resolved);
+    // If the resource was not in the store yet, subscribe to changes so we don't return stale results when the resource is updated.
+    // Commits are immutable — no need to subscribe for push updates.
+    if (!result.hasClasses(commits.classes.commit)) {
+      this.subscribeWebSocket(resolved);
+    }
 
     return result;
   }
@@ -994,6 +997,13 @@ export class Store {
     const normalized = this.normalizeSubject(subject);
 
     if (normalized === unknownSubject) {
+      return;
+    }
+
+    // Commits are immutable — no need to subscribe for push updates
+    const existing = this.getResourceLoading(normalized);
+
+    if (existing?.hasClasses(commits.classes.commit)) {
       return;
     }
 
