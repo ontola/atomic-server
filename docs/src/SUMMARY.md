@@ -14,6 +14,7 @@
   - [Installation](atomicserver/installation.md)
   - [Using the GUI](atomicserver/gui.md)
     - [Tables](atomicserver/gui/tables.md)
+    - [AI and Atomic Assistant](atomicserver/gui/ai-and-atomic-assistant.md)
   - [API](atomicserver/API.md)
   - [Creating a JSON-AD file](create-json-ad.md)
   - [FAQ & troubleshooting](atomicserver/faq.md)

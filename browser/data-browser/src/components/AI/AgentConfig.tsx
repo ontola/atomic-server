@@ -427,6 +427,11 @@ const AgentForm = ({ agent, onChange }: AgentFormProps) => {
               </CheckboxLabel>
             </li>
           ))}
+          {mcpServers.length === 0 && (
+            <li>
+              <SubtleText>No MCP servers configured.</SubtleText>
+            </li>
+          )}
         </ToolList>
       </FormGroup>
 
@@ -580,4 +585,9 @@ const ToolList = styled.ul`
 const RangeInput = styled.input`
   flex: 1;
   flex-basis: 75%;
+`;
+
+const SubtleText = styled.p`
+  font-size: 0.875rem;
+  color: ${p => p.theme.colors.textLight};
 `;
