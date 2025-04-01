@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import styled from 'styled-components';
 import { useSettings } from '../helpers/AppSettings';
+import { effectFetch } from '../helpers/effectFetch';
 
 export type LinkOpenRouterSearch = {
   code: string;
@@ -38,7 +39,7 @@ function LinkOpenRouterPage() {
       return;
     }
 
-    fetch(ENDPOINT, {
+    return effectFetch(ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -48,18 +49,18 @@ function LinkOpenRouterPage() {
         code_verifier: codeVerifier,
         code_challenge_method: 'S256',
       }),
-    })
-      .then(res => res.json())
-      .then(({ key }) => {
+    })(
+      ({ key }) => {
         setOpenRouterApiKey(key);
         sessionStorage.removeItem('atomic.ai.openrouter-code-verifier');
         sessionStorage.removeItem('atomic.ai.openrouter-code-challenge');
 
         navigate({ to: paths.appSettings });
-      })
-      .catch(err => {
+      },
+      err => {
         setError(err.message);
-      });
+      },
+    );
   }, [code]);
 
   if (error) {

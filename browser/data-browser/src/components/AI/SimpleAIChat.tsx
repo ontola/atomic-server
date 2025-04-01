@@ -18,6 +18,7 @@ import { useTools } from './useTools';
 import { styled } from 'styled-components';
 import { GeneratingIndicator } from './GeneratingIndicator';
 import { IconButton, IconButtonVariant } from '../IconButton/IconButton';
+import { ollama } from 'ollama-ai-provider';
 import {
   FaXmark,
   FaPaperclip,
@@ -29,12 +30,14 @@ import { ChatMessagesContainer } from './ChatMessagesContainer';
 import { useStore } from '@tomic/react';
 import {
   AIAgent,
+  AIProvider,
   AIState,
   isMessageWithContext,
   type AIAtomicResourceMessageContext,
   type AIChatDisplayMessage,
   type AIMCPResourceMessageContext,
   type AIMessageContext,
+  type AIModelIdentifier,
 } from './types';
 import { AgentConfig, useAIAgentConfig } from './AgentConfig';
 import { Button } from '../Button';
@@ -54,7 +57,6 @@ type OngoingMessagePart = {
   text: string;
 };
 
-// File attachment type
 type FileAttachment = {
   name: string;
   type: string;
@@ -62,7 +64,6 @@ type FileAttachment = {
   isImage: boolean;
 };
 
-// Image file mime types
 const IMAGE_MIME_TYPES = [
   'image/jpeg',
   'image/png',
@@ -105,13 +106,26 @@ export const SimpleAIChat: React.FC<
   const [selectedAgent, setSelectedAgent] = useState<AIAgent>(
     agents.find(a => a.id === defaultAgentId) || agents[0],
   );
+  const webSearchSupported =
+    selectedAgent.model.provider === AIProvider.OpenRouter;
+
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
-  const { checkModelSupportsImageInput } = useOpenRouterModels();
+  const { checkORModelSupportsImageInput } = useOpenRouterModels();
+
+  const checkModelSupportsImageInput = (model: AIModelIdentifier) => {
+    if (model.provider === AIProvider.OpenRouter) {
+      return checkORModelSupportsImageInput(model.id);
+    }
+
+    // We can't know if an ollama is multimodal so we'll just assume it is and have the model handle the failure case.
+    return true;
+  };
+
   const [userInput, setUserInput] = useState('');
   const [userSelectedContextItems, setUserSelectedContextItems] = useState<
     AIMessageContext[]
   >([]);
-  const { openRouterApiKey, showTokenUsage } = useSettings();
+  const { openRouterApiKey, showTokenUsage, ollamaUrl } = useSettings();
   const openrouter = createOpenRouter({
     apiKey: openRouterApiKey,
     compatibility: 'strict',
@@ -144,6 +158,16 @@ export const SimpleAIChat: React.FC<
       });
     },
   });
+
+  const getModel = (agent: AIAgent) => {
+    if (agent.model.provider === AIProvider.OpenRouter) {
+      return openrouter(agent.model.id + (webSearchEnabled ? ':online' : ''));
+    } else if (agent.model.provider === AIProvider.Ollama) {
+      return ollama(agent.model.id);
+    }
+
+    throw new Error('Invalid model provider');
+  };
 
   const handleFileUpload = (files: File[]) => {
     for (const file of files) {
@@ -208,14 +232,6 @@ export const SimpleAIChat: React.FC<
       return;
     }
 
-    if (!openRouterApiKey) {
-      toast.error(
-        'OpenRouter API key not found. Please provide a valid API key in settings.',
-      );
-
-      return;
-    }
-
     abortSignalRef.current = new AbortController();
     let messagesToUse: AIChatDisplayMessage[] = [];
     let pickedAgent = selectedAgent;
@@ -226,7 +242,30 @@ export const SimpleAIChat: React.FC<
         pickedAgent = await pickAgent(userInput);
       } catch (err) {
         console.error(err);
+        setAiState(AIState.Stopped);
+        toast.error(err.message);
+
+        return;
       }
+    }
+
+    if (
+      pickedAgent.model.provider === AIProvider.OpenRouter &&
+      !openRouterApiKey
+    ) {
+      toast.error(
+        'OpenRouter API key not found. Please provide a valid API key in settings.',
+      );
+
+      return;
+    }
+
+    if (pickedAgent.model.provider === AIProvider.Ollama && !ollamaUrl) {
+      toast.error(
+        'Ollama URL not found. Please provide a valid URL in settings.',
+      );
+
+      return;
     }
 
     // const systemPrompt = injectContextIntoPrompt(pickedAgent.systemPrompt);
@@ -272,13 +311,11 @@ export const SimpleAIChat: React.FC<
     setAiState(AIState.Generating);
     let textStream;
 
-    const model = webSearchEnabled
-      ? `${pickedAgent.model}:online`
-      : pickedAgent.model;
+    const model = getModel(pickedAgent);
 
     try {
       textStream = streamText({
-        model: openrouter(model),
+        model,
         maxTokens: 100000,
         messages: filteredMessages,
         temperature: pickedAgent.temperature,
@@ -305,6 +342,24 @@ export const SimpleAIChat: React.FC<
               content: 'Server error',
             });
           }
+
+          if ('error' in err && err.error instanceof Error) {
+            if (err.error.message === 'Failed to fetch') {
+              setAiState(AIState.Stopped);
+              onNewMessage({
+                role: 'error',
+                content: 'Could not connect to AI server',
+              });
+
+              return;
+            }
+          }
+
+          setAiState(AIState.Stopped);
+          onNewMessage({
+            role: 'error',
+            content: 'An error occurred while generating the message',
+          });
         },
       });
     } catch (err) {
@@ -618,16 +673,18 @@ export const SimpleAIChat: React.FC<
                         ? 'Automatic'
                         : selectedAgent.name}
                     </SubtleButton>
-                    <IconButton
-                      title='Toggle web search'
-                      onClick={() => setWebSearchEnabled(v => !v)}
-                      color={webSearchEnabled ? 'main' : 'textLight'}
-                      variant={
-                        webSearchEnabled ? IconButtonVariant.Fill : undefined
-                      }
-                    >
-                      <FaGlobe />
-                    </IconButton>
+                    {webSearchSupported && (
+                      <IconButton
+                        title='Toggle web search'
+                        onClick={() => setWebSearchEnabled(v => !v)}
+                        color={webSearchEnabled ? 'main' : 'textLight'}
+                        variant={
+                          webSearchEnabled ? IconButtonVariant.Fill : undefined
+                        }
+                      >
+                        <FaGlobe />
+                      </IconButton>
+                    )}
                     {checkModelSupportsImageInput(selectedAgent.model) && (
                       <>
                         <input

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { effectFetch } from '../../helpers/effectFetch';
 
 export type OpenRouterAIModel = {
   id: string;
@@ -23,7 +24,7 @@ export function useOpenRouterModels() {
     modelDataCache ?? [],
   );
 
-  const checkModelSupport = (model: string, parameter: string) => {
+  const checkORModelSupport = (model: string, parameter: string) => {
     const foundModel = models.find(m => m.id === model);
 
     if (!foundModel) {
@@ -33,7 +34,7 @@ export function useOpenRouterModels() {
     return foundModel.supported_parameters.includes(parameter);
   };
 
-  const checkModelSupportsImageInput = (model: string) => {
+  const checkORModelSupportsImageInput = (model: string) => {
     const foundModel = models.find(m => m.id === model);
 
     if (!foundModel) {
@@ -48,14 +49,11 @@ export function useOpenRouterModels() {
       return;
     }
 
-    fetch('https://openrouter.ai/api/v1/models')
-      .then(res => res.json())
-      .then(data => {
-        console.log(data);
-        setModels(data.data as OpenRouterAIModel[]);
-        modelDataCache = data.data as OpenRouterAIModel[];
-      });
+    return effectFetch('https://openrouter.ai/api/v1/models')(data => {
+      setModels(data.data as OpenRouterAIModel[]);
+      modelDataCache = data.data as OpenRouterAIModel[];
+    });
   }, []);
 
-  return { models, checkModelSupport, checkModelSupportsImageInput };
+  return { models, checkORModelSupport, checkORModelSupportsImageInput };
 }

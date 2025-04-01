@@ -6,22 +6,16 @@ import { Column } from '../Row';
 import { FaGear } from 'react-icons/fa6';
 
 export const NoKeyOverlay: React.FC = () => {
-  const { openRouterApiKey } = useSettings();
+  const { openRouterApiKey, ollamaUrl } = useSettings();
 
-  if (openRouterApiKey) {
+  if (openRouterApiKey || ollamaUrl) {
     return null;
   }
 
   return (
     <Overlay>
       <Column gap='0.5rem' center>
-        <p>
-          No{' '}
-          <a href='https://openrouter.ai/' target='_blank' rel='noreferrer'>
-            OpenRouter
-          </a>{' '}
-          API key configured.
-        </p>
+        <p>No AI provider configured.</p>
         <ButtonLink clean path={paths.appSettings}>
           <FaGear /> Settings
         </ButtonLink>

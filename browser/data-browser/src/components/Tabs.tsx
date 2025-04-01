@@ -6,31 +6,46 @@ import { transition } from '../helpers/transition';
 type TabItem = {
   label: string;
   value: string;
+  disabled?: boolean;
 };
 
 interface TabsProps {
   tabs: TabItem[];
+  rounded?: boolean;
   className?: string;
   label: string;
+  defaultValue?: string;
 }
+
+export const TAB_PANEL_HAS_ERROR_CLASS = 'tab-panel-has-error';
 
 export const Tabs: FC<PropsWithChildren<TabsProps>> = ({
   children,
   tabs,
   label,
   className,
+  defaultValue,
+  rounded,
 }) => {
   return (
-    <RadixTabs.Root defaultValue={tabs[0].value} className={className}>
+    <StyledTabsRoot
+      defaultValue={defaultValue ?? tabs[0].value}
+      className={className}
+    >
       <TabList aria-label={label}>
         {tabs.map(tab => (
-          <TabButton key={tab.value} value={tab.value}>
+          <TabButton
+            key={tab.value}
+            value={tab.value}
+            className={rounded ? 'rounded-tab' : ''}
+            disabled={tab.disabled}
+          >
             {tab.label}
           </TabButton>
         ))}
       </TabList>
       {children}
-    </RadixTabs.Root>
+    </StyledTabsRoot>
   );
 };
 
@@ -54,17 +69,18 @@ export const TabPanel: FC<PropsWithChildren<TabPanelProps>> = ({
 const TabList = styled(RadixTabs.List)`
   display: flex;
   justify-content: space-evenly;
-  margin-bottom: ${p => p.theme.margin}rem;
+  margin-bottom: ${p => p.theme.size()};
 `;
 
 const TabButton = styled(RadixTabs.Trigger)`
+  --tab-active-color: ${p => p.theme.colors.main};
   background: none;
   border: none;
   color: ${p => p.theme.colors.text};
   border-bottom: 1px solid ${p => p.theme.colors.bg2};
   padding: 1rem;
   flex: 1;
-  ${transition('background', 'border-bottom')}
+  ${transition('background', 'border-color', 'box-shadow')}
   cursor: pointer;
   &:hover,
   &:focus-visible {
@@ -73,6 +89,28 @@ const TabButton = styled(RadixTabs.Trigger)`
   }
 
   &[data-state='active'] {
-    border-bottom: 2px solid ${p => p.theme.colors.main};
+    border-color: var(--tab-active-color);
+    // We use a box-shadow for one half of the border to avoid minor layout shift.
+    box-shadow: inset 0 -1px 0 0 var(--tab-active-color);
+  }
+
+  &.${TAB_PANEL_HAS_ERROR_CLASS} {
+    --tab-active-color: ${p => p.theme.colors.alert};
+  }
+
+  &.rounded-tab:first-child {
+    border-top-left-radius: ${p => p.theme.radius};
+  }
+
+  &.rounded-tab:last-child {
+    border-top-right-radius: ${p => p.theme.radius};
+  }
+`;
+
+const StyledTabsRoot = styled(RadixTabs.Root)`
+  &:has(*.${TAB_PANEL_HAS_ERROR_CLASS}) {
+    & ${TabButton} {
+      --tab-active-color: ${p => p.theme.colors.alert};
+    }
   }
 `;

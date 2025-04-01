@@ -37,6 +37,10 @@ export const AppSettingsContextProvider = (
     'atomic.ai.mcpServers',
     [],
   );
+  const [ollamaUrl, setOllamaUrl] = useLocalStorage<string | undefined>(
+    'atomic.ai.ollama-url',
+    undefined,
+  );
 
   const [viewTransitionsDisabled, setViewTransitionsDisabled] = useLocalStorage(
     'viewTransitionsDisabled',
@@ -118,6 +122,8 @@ export const AppSettingsContextProvider = (
       setEnableAI,
       showTokenUsage,
       setShowTokenUsage,
+      ollamaUrl,
+      setOllamaUrl,
     }),
     [
       drive,
@@ -149,6 +155,8 @@ export const AppSettingsContextProvider = (
       setEnableAI,
       showTokenUsage,
       setShowTokenUsage,
+      ollamaUrl,
+      setOllamaUrl,
     ],
   );
 
@@ -206,6 +214,9 @@ export interface AppSettings {
   /** Whether to show the token usage in AI chats */
   showTokenUsage: boolean;
   setShowTokenUsage: (b: boolean) => void;
+  /** The URL of the Ollama server */
+  ollamaUrl: string | undefined;
+  setOllamaUrl: (url: string | undefined) => void;
 }
 
 const initialState: AppSettings = {
@@ -238,6 +249,8 @@ const initialState: AppSettings = {
   setEnableAI: () => undefined,
   showTokenUsage: true,
   setShowTokenUsage: () => undefined,
+  ollamaUrl: undefined,
+  setOllamaUrl: () => undefined,
 };
 
 /** Hook for using App Settings, such as theme and darkmode */
