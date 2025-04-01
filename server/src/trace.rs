@@ -9,7 +9,10 @@ pub fn init_tracing(config: &crate::config::Config) -> Option<tracing_chrome::Fl
         crate::config::LogLevel::Debug => "debug",
         crate::config::LogLevel::Trace => "trace",
     };
-    std::env::set_var("RUST_LOG", format!("{},tantivy=warn", log_level));
+    // Only set RUST_LOG if not already set (allow .env to override)
+    if std::env::var("RUST_LOG").is_err() {
+        std::env::set_var("RUST_LOG", format!("{},tantivy=warn", log_level));
+    }
     use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
     // Start tracing
     // STDOUT log
@@ -36,22 +39,19 @@ pub fn init_tracing(config: &crate::config::Config) -> Option<tracing_chrome::Fl
             {
                 use opentelemetry::trace::TracerProvider;
                 use opentelemetry::KeyValue;
-                use opentelemetry_otlp::{Protocol, WithExportConfig};
-                use opentelemetry_sdk::{trace as sdktrace, Resource};
-                use tracing_subscriber::layer::SubscriberExt;
+                use opentelemetry_otlp::WithTonicConfig;
+                use opentelemetry_sdk::{logs::SdkLoggerProvider, trace::SdkTracerProvider, Resource};
 
-                let endpoint = std::env::var("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")
-                    .unwrap_or_else(|_| "http://localhost:4317".into()); // gRPC
+                // Install ring as the rustls 0.23 crypto provider (required by tonic TLS).
+                // Ignore the error — it just means another provider was already installed.
+                let _ = rustls023::crypto::ring::default_provider().install_default();
 
+                let endpoint = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT")
+                    .or_else(|_| std::env::var("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"))
+                    .unwrap_or_else(|_| "http://localhost:4317".into());
                 println!("Enabling OTel gRPC at {}", endpoint);
 
-                // gRPC exporter (no `.tonic()` in 0.29, just enable "tonic" feature)
-                let exporter = opentelemetry_otlp::SpanExporter::builder()
-                    .with_tonic()
-                    .with_endpoint(endpoint)
-                    .with_protocol(Protocol::Grpc)
-                    .build()
-                    .expect("build OTLP gRPC exporter");
+                let tls = tonic::transport::ClientTlsConfig::new().with_native_roots();
 
                 let resource = Resource::builder()
                     .with_attributes(vec![
@@ -60,18 +60,39 @@ pub fn init_tracing(config: &crate::config::Config) -> Option<tracing_chrome::Fl
                     ])
                     .build();
 
-                let provider = sdktrace::SdkTracerProvider::builder()
-                    .with_resource(resource)
-                    .with_sampler(sdktrace::Sampler::AlwaysOn)
-                    .with_batch_exporter(exporter) // runtime is set by Cargo feature
+                // Traces
+                let span_exporter = opentelemetry_otlp::SpanExporter::builder()
+                    .with_tonic()
+                    .with_tls_config(tls.clone())
+                    .build()
+                    .expect("build OTLP span exporter");
+                let tracer_provider = SdkTracerProvider::builder()
+                    .with_resource(resource.clone())
+                    .with_batch_exporter(span_exporter)
                     .build();
 
-                let tracer = provider.tracer("atomic-server");
+                // Logs — bridges tracing events to SigNoz logs (linked to traces)
+                let log_exporter = opentelemetry_otlp::LogExporter::builder()
+                    .with_tonic()
+                    .with_tls_config(tls)
+                    .build()
+                    .expect("build OTLP log exporter");
+                let logger_provider = SdkLoggerProvider::builder()
+                    .with_resource(resource)
+                    .with_batch_exporter(log_exporter)
+                    .build();
 
-                let layer = tracing_opentelemetry::layer().with_tracer(tracer);
-                tracing_registry.with(layer).init();
+                let tracer = tracer_provider.tracer("atomic-server");
+                let otel_trace_layer = tracing_opentelemetry::layer().with_tracer(tracer);
+                let otel_log_layer = opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge::new(&logger_provider);
+                let terminal_layer = tracing_subscriber::fmt::Layer::default();
+                tracing_registry
+                    .with(terminal_layer)
+                    .with(otel_trace_layer)
+                    .with(otel_log_layer)
+                    .init();
 
-                opentelemetry::global::set_tracer_provider(provider);
+                opentelemetry::global::set_tracer_provider(tracer_provider);
             }
             #[cfg(not(feature = "telemetry"))]
             {

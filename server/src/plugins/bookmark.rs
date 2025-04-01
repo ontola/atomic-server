@@ -72,7 +72,7 @@ fn handle_bookmark_request<'a>(
         resource.set_string(urls::URL.into(), &path, store).await?;
 
         // Fetch the data and create a parser from it.
-        let content = fetch_data(&path)?;
+        let content = fetch_data(&path).await?;
         let mut parser = Parser::from_html(&path, &content)?;
 
         // Extract the title, description and preview image from the HTML
@@ -113,8 +113,8 @@ fn handle_bookmark_request<'a>(
     })
 }
 
-fn fetch_data(url: &str) -> AtomicResult<String> {
-    fetch_body(url, "text/html", None).map_err(|e| format!("Fetching failed: {}", e).into())
+async fn fetch_data(url: &str) -> AtomicResult<String> {
+    fetch_body(url, "text/html", None).await.map_err(|e| format!("Fetching failed: {}", e).into())
 }
 
 struct Parser {

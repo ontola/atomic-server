@@ -26,7 +26,7 @@ Check out the [Roadmap](https://docs.atomicdata.dev/roadmap.html) if you want to
 - [Testing](#testing)
 - [Performance monitoring / benchmarks](#performance-monitoring--benchmarks)
   - [Tracing](#tracing)
-    - [Tracing with OpenTelemetry (and Jaeger)](#tracing-with-opentelemetry-and-jaeger)
+    - [Tracing with OpenTelemetry (and SigNoz)](#tracing-with-opentelemetry-and-signoz)
     - [Tracing with Chrome](#tracing-with-chrome)
   - [Criterion benchmarks](#criterion-benchmarks)
   - [Drill](#drill)
@@ -158,25 +158,29 @@ For doing this, we have at least three tools: tracing, criterion and drill.
 
 There are two ways you can use `tracing` to get insights into performance.
 
-#### Tracing with OpenTelemetry (and Jaeger)
+#### Tracing with OpenTelemetry (and SigNoz)
 
 - Run the server with `--trace opentelemetry` and add `--log-level trace` to inspect more events
-- Run an OpenTelemetry compatible service, such as Jaeger. See `docker run` command below or use the vscode task.
-- Visit jaeger: `http://localhost:16686`
+- Sign up for [SigNoz Cloud](https://signoz.io/) (free trial available) or run SigNoz locally with Docker
+- Add the following to your `.env`:
 
 ```sh
-docker run -d --platform linux/amd64 --name jaeger \
-  -e COLLECTOR_ZIPKIN_HTTP_PORT=9411 \
-  -p 5775:5775/udp \
-  -p 6831:6831/udp \
-  -p 6832:6832/udp \
-  -p 5778:5778 \
-  -p 4317:4317 \
-  -p 16686:16686 \
-  -p 14268:14268 \
-  -p 9411:9411 \
-  jaegertracing/all-in-one:latest
+ATOMIC_TRACING=opentelemetry
+OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+OTEL_EXPORTER_OTLP_ENDPOINT=https://ingest.<region>.signoz.cloud:443
+OTEL_EXPORTER_OTLP_HEADERS=signoz-ingestion-key=<your-key>
 ```
+
+- Visit SigNoz to inspect traces and logs: `https://app.signoz.io/`
+
+For local development without a cloud account, you can run SigNoz locally:
+
+```sh
+git clone https://github.com/SigNoz/signoz.git
+cd signoz/deploy && docker compose up
+```
+
+Then set `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317` (no TLS needed locally).
 
 #### Tracing with Chrome
 

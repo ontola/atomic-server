@@ -42,7 +42,7 @@ pub async fn fetch_resource(
         _ => client_agent,
     };
 
-    let body = fetch_body(&url, crate::parse::JSON_AD_MIME, effective_agent)?;
+    let body = fetch_body(&url, crate::parse::JSON_AD_MIME, effective_agent).await?;
     let resources = Box::pin(parse_json_ad_string(&body, store, &ParseOpts::default()))
         .await
         .map_err(|e| format!("Error parsing body of {}. {}", subject, e))?;
@@ -105,7 +105,7 @@ pub fn get_authentication_headers(url: &str, agent: &Agent) -> AtomicResult<Vec<
 /// Fetches a URL, returns its body.
 /// Uses the store's Agent agent (if set) to sign the request.
 #[tracing::instrument(level = "info")]
-pub fn fetch_body(
+pub async fn fetch_body(
     url: &str,
     content_type: &str,
     client_agent: Option<&Agent>,
@@ -114,16 +114,17 @@ pub fn fetch_body(
         return Err(format!("Could not fetch url '{}', must start with http.", url).into());
     }
 
-    let client = ureq::builder()
+    let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
-        .build();
+        .build()
+        .map_err(|e| format!("Could not build HTTP client: {}", e))?;
 
-    let mut req = client.get(url);
+    let mut req = client.get(url).header("Accept", content_type);
     if let Some(agent) = client_agent {
         if should_sign_request(url, agent) {
             let headers = get_authentication_headers(url, agent)?;
             for (key, value) in headers {
-                req = req.set(key.as_str(), value.as_str());
+                req = req.header(key, value);
             }
         } else {
             tracing::warn!(
@@ -134,23 +135,14 @@ pub fn fetch_body(
         }
     }
 
-    let resp = match req.set("Accept", content_type).call() {
-        Ok(response) => response,
-        Err(ureq::Error::Status(status, response)) => {
-            let body = response
-                .into_string()
-                .unwrap_or_else(|_| "<failed to read response body>".to_string());
-            return Err(format!(
-                "Error when fetching {}: Status: {}. Body: {}",
-                url, status, body
-            )
-            .into());
-        }
-        Err(e) => return Err(format!("Error when fetching {}: {}", url, e).into()),
-    };
-    let status = resp.status();
+    let resp = req
+        .send()
+        .await
+        .map_err(|e| format!("Error when fetching {}: {}", url, e))?;
+    let status = resp.status().as_u16();
     let body = resp
-        .into_string()
+        .text()
+        .await
         .map_err(|e| format!("Could not parse HTTP response for {}: {}", url, e))?;
     if status != 200 {
         return Err(format!(
@@ -207,22 +199,25 @@ async fn post_commit_custom_endpoint(
 ) -> AtomicResult<()> {
     let json = commit.into_resource(store).await?.to_json_ad(None)?;
 
-    let agent = ureq::builder()
+    let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
-        .build();
+        .build()
+        .map_err(|e| format!("Could not build HTTP client: {}", e))?;
 
-    let resp = agent
+    let resp = client
         .post(endpoint)
-        .set("Content-Type", "application/json")
-        .send_string(&json)
-        .map_err(|e| format!("Error when posting commit to {} : {}", endpoint, e))?;
+        .header("Content-Type", "application/json")
+        .body(json)
+        .send()
+        .await
+        .map_err(|e| format!("Error when posting commit to {}: {}", endpoint, e))?;
 
-    if resp.status() != 200 {
+    let status = resp.status().as_u16();
+    if status != 200 {
+        let body = resp.text().await.unwrap_or_default();
         Err(format!(
             "Failed applying commit to {}. Status: {} Body: {}",
-            endpoint,
-            resp.status(),
-            resp.into_string()?
+            endpoint, status, body
         )
         .into())
     } else {

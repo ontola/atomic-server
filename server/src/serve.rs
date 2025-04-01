@@ -1,6 +1,25 @@
 use actix_cors::Cors;
-use actix_web::{middleware, web, HttpServer};
+use actix_web::{body::MessageBody, dev::{ServiceRequest, ServiceResponse}, middleware, web, Error, HttpServer};
 use atomic_lib::{urls, Storelike};
+use tracing_actix_web::{DefaultRootSpanBuilder, RootSpanBuilder};
+
+/// Custom span builder: uses "{method} {path}" when no route pattern is matched
+/// (e.g. static files), so spans are legible in SigNoz instead of just "GET".
+struct AtomicRootSpanBuilder;
+
+impl RootSpanBuilder for AtomicRootSpanBuilder {
+    fn on_request_start(request: &ServiceRequest) -> tracing::Span {
+        if request.match_pattern().is_none() {
+            let name = format!("{} {}", request.method(), request.path());
+            return tracing::info_span!("HTTP request", "otel.name" = name, "http.method" = %request.method(), "http.target" = %request.path());
+        }
+        DefaultRootSpanBuilder::on_request_start(request)
+    }
+
+    fn on_request_end<B: MessageBody>(span: tracing::Span, outcome: &Result<ServiceResponse<B>, Error>) {
+        DefaultRootSpanBuilder::on_request_end(span, outcome);
+    }
+}
 
 use crate::errors::AtomicServerResult;
 
@@ -146,7 +165,7 @@ pub async fn serve(config: crate::config::Config) -> AtomicServerResult<()> {
                 middleware::DefaultHeaders::new()
                     .add((SERVER_VERSION_HEADER, SERVER_VERSION)),
             )
-            .wrap(tracing_actix_web::TracingLogger::default())
+            .wrap(tracing_actix_web::TracingLogger::<AtomicRootSpanBuilder>::new())
             .wrap(middleware::Compress::default())
             // Here are the actual handlers / endpoints
             .configure(crate::routes::config_routes)
