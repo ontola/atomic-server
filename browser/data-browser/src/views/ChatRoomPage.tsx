@@ -39,10 +39,20 @@ export function ChatRoomPage({ resource }: ResourcePageProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [textAreaHight, setTextAreaHight] = useState(1);
 
+  const shouldAutoScroll = useRef(true);
+
   const scrollToBottom = () => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
+  };
+
+  const handleScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    shouldAutoScroll.current =
+      el.scrollHeight - el.scrollTop - el.clientHeight < 100;
   };
 
   const disableSend = newMessageVal.length === 0;
@@ -96,7 +106,27 @@ export function ChatRoomPage({ resource }: ResourcePageProps) {
     { enableOnTags: ['TEXTAREA'] },
     [],
   );
-  useEffect(scrollToBottom, [messages.length, resource]);
+  // Scroll to bottom when new messages arrive, and re-enable auto-scroll
+  useEffect(() => {
+    shouldAutoScroll.current = true;
+    scrollToBottom();
+  }, [messages.length, resource]);
+
+  // Continue scrolling as async message content loads and expands the container
+  useEffect(() => {
+    const content = scrollRef.current?.firstElementChild;
+    if (!content) return;
+
+    const observer = new ResizeObserver(() => {
+      if (shouldAutoScroll.current) {
+        scrollToBottom();
+      }
+    });
+
+    observer.observe(content);
+
+    return () => observer.disconnect();
+  }, []);
 
   const handleReply = useCallback(
     (subject: string) => {
@@ -137,7 +167,7 @@ export function ChatRoomPage({ resource }: ResourcePageProps) {
       <Column fullHeight>
         <EditableTitle resource={resource} />
         <TagBar resource={resource} />
-        <ScrollingContent ref={scrollRef}>
+        <ScrollingContent ref={scrollRef} onScroll={handleScroll}>
           <MessagesPage subject={resource.subject} setReplyTo={handleReply} />
         </ScrollingContent>
         {isReplyTo && (
