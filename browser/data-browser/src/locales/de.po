@@ -160,9 +160,8 @@ msgstr "Der einfachste Weg, Linked Data zu erstellen und zu teilen."
 msgid "You are offline, changes might not be persisted."
 msgstr "Sie sind offline, Änderungen werden möglicherweise nicht gespeichert."
 
-#: src/components/NetworkIndicator.tsx
-msgid "No Internet Connection."
-msgstr "Keine Internetverbindung."
+#~ msgid "No Internet Connection."
+#~ msgstr "Keine Internetverbindung."
 
 #: src/components/Parent.tsx
 msgid "Toggle AI panel"
@@ -3445,4 +3444,19 @@ msgstr ""
 
 #: src/components/forms/NewForm/SubjectField.tsx
 msgid "The identifier of the resource. DID subjects are determined by the genesis commit signature."
+msgstr ""
+
+#: src/components/NetworkIndicator.tsx
+msgid "Connection to server lost, reconnecting..."
+msgstr ""
+
+#~ msgid "Server connection lost."
+#~ msgstr ""
+
+#: src/components/NetworkIndicator.tsx
+msgid "No internet connection"
+msgstr ""
+
+#: src/components/NetworkIndicator.tsx
+msgid "Server connection lost — reconnecting…"
 msgstr ""
