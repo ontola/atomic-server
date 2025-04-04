@@ -118,8 +118,6 @@ export function Search(): JSX.Element {
     heading = 'Loading results...';
   }
 
-
-
   const showHelperMessage = !query && filterIsEmpty;
 
   useOnValueChange(() => {
@@ -140,7 +138,9 @@ export function Search(): JSX.Element {
                   {heading ? (
                     heading
                   ) : loading ? (
-                    <>Searching for <QueryText>{query}</QueryText>...</>
+                    <>
+                      Searching for <QueryText>{query}</QueryText>...
+                    </>
                   ) : (
                     <>
                       {results.length}{' '}

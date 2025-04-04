@@ -1,4 +1,4 @@
-import { Agent, SubtleCryptoProvider, JSCryptoProvider } from '@tomic/react';
+import { Agent, SubtleCryptoProvider } from '@tomic/react';
 import { del, get, set } from 'idb-keyval';
 
 const AGENT_IDB_KEY = 'atomic.agent';

@@ -91,7 +91,10 @@ const Wrapper = styled.div<WrapperProps>`
   font-size: 1.5rem;
   color: ${p => p.theme.colors.alert};
   pointer-events: ${p => (p.shown ? 'auto' : 'none')};
-  transition: opacity 0.1s ease-in-out, border-radius 0.25s ease, padding 0.25s ease;
+  transition:
+    opacity 0.1s ease-in-out,
+    border-radius 0.25s ease,
+    padding 0.25s ease;
   opacity: ${p => (p.shown ? 1 : 0)};
 
   background-color: ${p => p.theme.colors.bg};

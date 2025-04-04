@@ -9,7 +9,7 @@ use tokio::runtime::Runtime;
 
 fn random_atom_string() -> Atom {
     Atom::new(
-        format!("https://localhost/{}", random_string(10)),
+        format!("https://localhost/{}", random_string(10)).into(),
         urls::DESCRIPTION.into(),
         Value::Markdown(random_string(200)),
     )
@@ -25,14 +25,14 @@ fn random_array(n: usize) -> Vec<String> {
 
 fn random_atom_array() -> Atom {
     Atom::new(
-        format!("https://localhost/{}", random_string(10)),
+        format!("https://localhost/{}", random_string(10)).into(),
         urls::COLLECTION_MEMBERS.into(),
         random_array(200).into(),
     )
 }
 
 fn random_resource(atom: &Atom) -> Resource {
-    let mut resource = Resource::new(atom.subject.clone());
+    let mut resource = Resource::new(atom.subject.to_string());
     resource.set_unsafe(atom.property.clone(), atom.value.clone());
     resource
 }

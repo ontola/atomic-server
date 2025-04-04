@@ -3320,12 +3320,11 @@ msgstr "Continuer"
 msgid "Copy secret to continue"
 msgstr "Copier le secret pour continuer"
 
-#: src/views/InvitePage.tsx
-msgid ""
-"IMPORTANT! Below is your agent secret, you use this to login. Save\n"
-"it somewhere safe, the secret will not be show again and if you\n"
-"lose it you will not be able to access this user again."
-msgstr "IMPORTANT ! Ci-dessous se trouve votre secret d'agent, vous l'utilisez pour vous connecter. Sauvegardez-le dans un endroit sûr, le secret ne sera plus affiché et si vous le perdez, vous ne pourrez plus accéder à cet utilisateur."
+#~ msgid ""
+#~ "IMPORTANT! Below is your agent secret, you use this to login. Save\n"
+#~ "it somewhere safe, the secret will not be show again and if you\n"
+#~ "lose it you will not be able to access this user again."
+#~ msgstr "IMPORTANT ! Ci-dessous se trouve votre secret d'agent, vous l'utilisez pour vous connecter. Sauvegardez-le dans un endroit sûr, le secret ne sera plus affiché et si vous le perdez, vous ne pourrez plus accéder à cet utilisateur."
 
 #: src/views/InvitePage.tsx
 msgid "Enter a name"
@@ -3458,4 +3457,11 @@ msgstr ""
 
 #: src/components/NetworkIndicator.tsx
 msgid "Server connection lost — reconnecting…"
+msgstr ""
+
+#: src/views/InvitePage.tsx
+msgid ""
+"IMPORTANT! Below is your agent secret, you use this to login.\n"
+"Save it somewhere safe, the secret will not be show again and if\n"
+"you lose it you will not be able to access this user again."
 msgstr ""
