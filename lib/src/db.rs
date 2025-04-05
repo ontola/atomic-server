@@ -599,6 +599,7 @@ impl Db {
 
         if total_count == 0 && !q_filter.is_watched(self) {
             info!(filter = ?q_filter, "Building query index");
+            crate::metrics::query_indexed();
             let atoms = self.get_index_iterator_for_query(q);
             q_filter.watch(self)?;
 

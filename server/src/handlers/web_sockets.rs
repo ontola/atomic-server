@@ -134,6 +134,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WebSocketConnecti
                                             .to_json_ad(store.get_base_domain().as_deref())
                                             .expect("Can't serialize Resource to JSON-AD");
                                         ctx.text(format!("RESOURCE {serialized}"));
+                                        crate::metrics::resource_fetched_ws();
                                     }
                                     Err(e) => {
                                         let r = e.into_resource(subject);

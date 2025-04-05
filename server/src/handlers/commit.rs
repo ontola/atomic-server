@@ -48,6 +48,7 @@ pub async fn post_commit(
         update_index: true,
     };
     let commit_response = store.apply_commit(incoming_commit, &opts).await?;
+    crate::metrics::commit_applied();
 
     if signer.starts_with("did:ad:agent:") {
         if store.get_resource(&signer.as_str().into()).await.is_err() {

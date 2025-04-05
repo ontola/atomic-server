@@ -714,6 +714,7 @@ dependencies = [
  "iai",
  "lazy_static",
  "ntest",
+ "opentelemetry",
  "rand 0.8.5",
  "regex",
  "reqwest 0.12.23",

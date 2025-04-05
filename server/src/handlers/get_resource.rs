@@ -86,6 +86,7 @@ pub async fn handle_get_resource(
         }
     };
     timer.add("get_resource");
+    crate::metrics::resource_fetched_http();
 
     let response_body = match content_type {
         ContentType::Json => resource.to_json(&store, Some(&origin)).await?,

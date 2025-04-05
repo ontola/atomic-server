@@ -179,6 +179,13 @@ impl Handler<CommitMessage> for CommitMonitor {
                     )
                 })?;
                 if let Some(resource) = resource_new {
+                    if let Ok(classes) = resource.get(atomic_lib::urls::IS_A) {
+                        if let Ok(subjects) = classes.to_subjects(None) {
+                            if subjects.contains(&atomic_lib::urls::DRIVE.to_string()) {
+                                crate::metrics::drive_created();
+                            }
+                        }
+                    }
                     // We could one day re-(allow) to keep old resources,
                     // but then we also should index the older versions when re-indexing.
                     // Add new resource to search index
