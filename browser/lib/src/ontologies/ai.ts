@@ -3,7 +3,7 @@
  * For more info on how to use ontologies: https://github.com/atomicdata-dev/atomic-server/blob/develop/browser/cli/readme.md
  * -------------------------------- */
 
-import type { OntologyBaseObject, BaseProps } from '../index.js';
+import type { OntologyBaseObject, BaseProps, JSONValue } from '../index.js';
 
 export const ai = {
   classes: {
@@ -16,16 +16,15 @@ export const ai = {
       'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/class/mcp-resource',
     reasoningPart:
       'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/class/reasoning-part',
+    sourceUrlPart:
+      'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/class/source-url-part',
     textPart:
       'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/class/text-part',
     toolCallPart:
       'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/class/tool-call-part',
-    toolResultPart:
-      'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/class/tool-result-part',
   },
   properties: {
-    content:
-      'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/content',
+    parts: 'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/content',
     data: 'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/data',
     mcpServerId:
       'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/mcp-server-id',
@@ -38,13 +37,13 @@ export const ai = {
     reasoningSignature:
       'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/reasoning-signature',
     role: 'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/role',
-    toolArguments:
+    toolInput:
       'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/tool-arguments',
     toolId:
       'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/tool-id',
     toolName:
       'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/tool-name',
-    toolResult:
+    toolOutput:
       'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/tool-result',
     toolResultIsError:
       'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/tool-result-is-error',
@@ -76,6 +75,11 @@ export const ai = {
         'https://atomicdata.dev/properties/description',
         'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/reasoning-signature',
       ],
+    ['https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/class/source-url-part']:
+      [
+        'https://atomicdata.dev/property/url',
+        'https://atomicdata.dev/properties/name',
+      ],
     ['https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/class/text-part']: [
       'https://atomicdata.dev/properties/description',
     ],
@@ -84,11 +88,6 @@ export const ai = {
         'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/tool-id',
         'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/tool-name',
         'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/tool-arguments',
-      ],
-    ['https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/class/tool-result-part']:
-      [
-        'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/tool-id',
-        'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/tool-name',
         'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/tool-result',
         'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/tool-result-is-error',
       ],
@@ -102,9 +101,9 @@ export namespace Ai {
   export type FilePart = typeof ai.classes.filePart;
   export type McpResource = typeof ai.classes.mcpResource;
   export type ReasoningPart = typeof ai.classes.reasoningPart;
+  export type SourceUrlPart = typeof ai.classes.sourceUrlPart;
   export type TextPart = typeof ai.classes.textPart;
   export type ToolCallPart = typeof ai.classes.toolCallPart;
-  export type ToolResultPart = typeof ai.classes.toolResultPart;
 }
 
 declare module '../index.js' {
@@ -117,7 +116,7 @@ declare module '../index.js' {
       requires:
         | BaseProps
         | typeof ai.properties.role
-        | typeof ai.properties.content;
+        | typeof ai.properties.parts;
       recommends: typeof ai.properties.providedContext;
     };
     [ai.classes.filePart]: {
@@ -140,6 +139,10 @@ declare module '../index.js' {
       requires: BaseProps | 'https://atomicdata.dev/properties/description';
       recommends: typeof ai.properties.reasoningSignature;
     };
+    [ai.classes.sourceUrlPart]: {
+      requires: BaseProps | 'https://atomicdata.dev/property/url';
+      recommends: 'https://atomicdata.dev/properties/name';
+    };
     [ai.classes.textPart]: {
       requires: BaseProps | 'https://atomicdata.dev/properties/description';
       recommends: never;
@@ -148,22 +151,16 @@ declare module '../index.js' {
       requires:
         | BaseProps
         | typeof ai.properties.toolId
-        | typeof ai.properties.toolName
-        | typeof ai.properties.toolArguments;
-      recommends: never;
-    };
-    [ai.classes.toolResultPart]: {
-      requires:
-        | BaseProps
-        | typeof ai.properties.toolId
-        | typeof ai.properties.toolName
-        | typeof ai.properties.toolResult;
-      recommends: typeof ai.properties.toolResultIsError;
+        | typeof ai.properties.toolName;
+      recommends:
+        | typeof ai.properties.toolInput
+        | typeof ai.properties.toolOutput
+        | typeof ai.properties.toolResultIsError;
     };
   }
 
   interface PropTypeMapping {
-    [ai.properties.content]: string[];
+    [ai.properties.parts]: string[];
     [ai.properties.data]: string;
     [ai.properties.mcpServerId]: string;
     [ai.properties.mcpUri]: string;
@@ -171,15 +168,15 @@ declare module '../index.js' {
     [ai.properties.providedContext]: string[];
     [ai.properties.reasoningSignature]: string;
     [ai.properties.role]: string;
-    [ai.properties.toolArguments]: string;
+    [ai.properties.toolInput]: JSONValue;
     [ai.properties.toolId]: string;
     [ai.properties.toolName]: string;
-    [ai.properties.toolResult]: string;
+    [ai.properties.toolOutput]: JSONValue;
     [ai.properties.toolResultIsError]: boolean;
   }
 
   interface PropSubjectToNameMapping {
-    [ai.properties.content]: 'content';
+    [ai.properties.parts]: 'parts';
     [ai.properties.data]: 'data';
     [ai.properties.mcpServerId]: 'mcpServerId';
     [ai.properties.mcpUri]: 'mcpUri';
@@ -187,10 +184,10 @@ declare module '../index.js' {
     [ai.properties.providedContext]: 'providedContext';
     [ai.properties.reasoningSignature]: 'reasoningSignature';
     [ai.properties.role]: 'role';
-    [ai.properties.toolArguments]: 'toolArguments';
+    [ai.properties.toolInput]: 'toolInput';
     [ai.properties.toolId]: 'toolId';
     [ai.properties.toolName]: 'toolName';
-    [ai.properties.toolResult]: 'toolResult';
+    [ai.properties.toolOutput]: 'toolOutput';
     [ai.properties.toolResultIsError]: 'toolResultIsError';
   }
 }

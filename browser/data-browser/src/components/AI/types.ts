@@ -1,4 +1,4 @@
-import type { CoreMessage, CoreUserMessage } from 'ai';
+import type { UIMessage } from 'ai';
 
 export interface MCPServer {
   name: string;
@@ -45,39 +45,14 @@ export type AIMessageContext =
   | AIAtomicResourceMessageContext
   | AIMCPResourceMessageContext;
 
-export type AIChatErrorMessage = {
-  role: 'error';
-  content: string;
+export type MessageMetadata = {
+  context?: AIMessageContext[];
+  inputTokensUsed?: number;
+  outputTokensUsed?: number;
+  error?: string;
 };
 
-export type MessageWithContext = {
-  role: 'annotated-message';
-  message: CoreMessage;
-  context: AIMessageContext[];
-};
-
-export type AIChatDisplayMessage =
-  | CoreMessage
-  | AIChatErrorMessage
-  | MessageWithContext;
-
-export function isAIErrorMessage(
-  message: AIChatDisplayMessage,
-): message is AIChatErrorMessage {
-  return message.role === 'error';
-}
-
-export function isUserMessage(
-  message: CoreMessage,
-): message is CoreUserMessage {
-  return message.role === 'user';
-}
-
-export function isMessageWithContext(
-  message: AIChatDisplayMessage,
-): message is MessageWithContext {
-  return message.role === 'annotated-message';
-}
+export type AtomicUIMessage = UIMessage<MessageMetadata>;
 
 export function isMCPResource(
   context: AIMessageContext,
@@ -85,7 +60,7 @@ export function isMCPResource(
   return context.type === 'mcp-resource';
 }
 
-export function isAtomicResource(
+export function isAtomicResourceContext(
   context: AIMessageContext,
 ): context is AIAtomicResourceMessageContext {
   return context.type === 'atomic-resource';

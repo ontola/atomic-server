@@ -1,12 +1,11 @@
 import styled from 'styled-components';
 import { Row } from '../Row';
-import { AIState } from './types';
 
 interface GeneratingIndicatorProps {
-  state: AIState;
+  text: string;
 }
 
-export function GeneratingIndicator({ state }: GeneratingIndicatorProps) {
+export function GeneratingIndicator({ text }: GeneratingIndicatorProps) {
   return (
     <Wrapper center gap='1ch'>
       <svg height='1em' width='2.5em' viewBox='0 0 25 10'>
@@ -39,20 +38,9 @@ export function GeneratingIndicator({ state }: GeneratingIndicatorProps) {
         <circle cx='12.5' cy='5' r='2' className='dot dot2' />
         <circle cx='20' cy='5' r='2' className='dot dot3' />
       </svg>
-      <span>{getStateText(state)}</span>
+      <span>{text}</span>
     </Wrapper>
   );
-}
-
-function getStateText(state: AIState) {
-  switch (state) {
-    case AIState.Generating:
-      return 'Generating';
-    case AIState.UsingTool:
-      return 'Using tool';
-    case AIState.SelectingAgent:
-      return 'Selecting agent';
-  }
 }
 
 const Wrapper = styled(Row)`

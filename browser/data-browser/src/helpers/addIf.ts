@@ -8,3 +8,8 @@
  */
 export const addIf = <T>(condition: boolean, ...items: T[]): T[] =>
   condition ? items : [];
+
+export const addFieldsIf = <T>(
+  condition: boolean,
+  obj: T,
+): T | Record<string, never> => (condition ? obj : {});

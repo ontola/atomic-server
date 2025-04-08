@@ -63,14 +63,14 @@ export function useAtomicMCPTools({
 }: UseAtomicMCPToolsProps = {}) {
   const store = useStore();
   const navigate = useNavigateWithTransition();
-  const { setDarkMode, darkModeSetting } = useSettings();
+  const { setDarkMode, darkModeSetting, drive } = useSettings();
 
   const tools = {
     read: {
       [TOOL_NAMES.SEARCH_RESOURCE]: tool({
         description:
           'Search for resources in the Atomic Data Database. Resources are matched based on their title and description. Search results do not include the full resources as JSON-AD, but only the most important properties.',
-        parameters: z.object({
+        inputSchema: z.object({
           query: z.string().describe('A text query to search for.'),
           limit: z
             .number()
@@ -82,7 +82,10 @@ export function useAtomicMCPTools({
             throw new Error('Limit must be between 1 and 50');
           }
 
-          const results = await store.search(query, { limit });
+          const results = await store.search(query, {
+            limit,
+            parents: [drive],
+          });
 
           const resources = await Promise.all(
             results.map(subject => store.getResource(subject)),
@@ -102,7 +105,7 @@ export function useAtomicMCPTools({
       [TOOL_NAMES.GET_ATOMIC_RESOURCE]: tool({
         description:
           'Retrieve specific resources from the Atomic Data Database by their subjects',
-        parameters: z.object({
+        inputSchema: z.object({
           subjects: z
             .array(z.string())
             .describe('List of subjects (URL) of the resources to retrieve'),
@@ -138,12 +141,12 @@ export function useAtomicMCPTools({
             Promise.resolve({}),
           );
 
-          return JSON.stringify(await result, null, 2);
+          return result;
         },
       }),
       [TOOL_NAMES.NAVIGATE_TO_RESOURCE]: tool({
         description: 'Navigates the user to a resource',
-        parameters: z.object({
+        inputSchema: z.object({
           subject: z
             .string()
             .describe('The subject of the resource to navigate to'),
@@ -151,14 +154,14 @@ export function useAtomicMCPTools({
         execute: async ({ subject }) => {
           await navigate(constructOpenURL(subject));
 
-          return `Navigated to resource ${subject}`;
+          return { success: true, message: `Navigated to resource ${subject}` };
         },
       }),
     },
     write: {
       [TOOL_NAMES.EDIT_ATOMIC_RESOURCE]: tool({
         description: 'Change a property on a resource',
-        parameters: z.object({
+        inputSchema: z.object({
           subject: z.string().describe('The subject of the resource to edit'),
           property: z
             .string()
@@ -184,7 +187,7 @@ export function useAtomicMCPTools({
       }),
       [TOOL_NAMES.CHANGE_THEME]: tool({
         description: 'Change the visual theme of the Atomic Data Browser',
-        parameters: z.object({
+        inputSchema: z.object({
           theme: z.enum(['light', 'dark', 'system']),
         }),
         execute: async ({ theme }) => {
@@ -208,11 +211,11 @@ export function useAtomicMCPTools({
       [TOOL_NAMES.CREATE_RESOURCE]: tool({
         description:
           'Create a new resource. To create a resource you will need to provide the subject of the class and an object with.',
-        parameters: z.object({
+        inputSchema: z.object({
           jsonAD: z
             .string()
             .describe(
-              `A JSON-AD object containing the data of the new resource, make sure to include an ${core.properties.isA} and a ${core.properties.parent} as they are always required. Do not include an ${core.properties.id} as this is auto generated.`,
+              `A JSON-AD object containing the data of the new resource, make sure to include an ${core.properties.isA} and a ${core.properties.parent} as they are always required. Do not include an @id as this is auto generated.`,
             ),
         }),
         execute: async ({ jsonAD }) => {

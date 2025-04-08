@@ -40,6 +40,10 @@ import { useNewRoute } from '../../helpers/useNewRoute';
 import { addIf } from '../../helpers/addIf';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { newContextItem, useAISidebar } from '../AI/AISidebarContext';
+import {
+  isAtomicResourceContext,
+  type AIAtomicResourceMessageContext,
+} from '../AI/types';
 
 export const ContextMenuOptions = {
   View: 'view',
@@ -101,11 +105,11 @@ export function ResourceContextMenu({
 
   const addToChat = () => {
     setContextItems(prev => [
-      ...prev.filter(x => x.subject !== subject),
+      ...prev.filter(x => isAtomicResourceContext(x) && x.subject !== subject),
       newContextItem({
-        type: 'resource',
+        type: 'atomic-resource',
         subject,
-      }),
+      } as AIAtomicResourceMessageContext),
     ]);
 
     if (!isOpen) {

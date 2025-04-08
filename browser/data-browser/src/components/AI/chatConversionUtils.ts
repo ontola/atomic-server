@@ -5,31 +5,27 @@ import {
   ai,
   core,
   server,
+  type JSONObject,
+  dataBrowser,
 } from '@tomic/react';
-import type {
-  FilePart,
-  ImagePart,
-  TextPart,
-  ToolCallPart,
-  ToolResultPart,
+import {
+  getToolName,
+  isToolUIPart,
+  type FileUIPart,
+  type ReasoningUIPart,
+  type SourceUrlUIPart,
+  type TextUIPart,
+  type ToolUIPart,
 } from 'ai';
 import { newContextItem } from './AISidebarContext';
 import {
   type AIAtomicResourceMessageContext,
-  type AIChatDisplayMessage,
-  AIChatErrorMessage,
   type AIMCPResourceMessageContext,
   type AIMessageContext,
-  isAtomicResource,
-  isMessageWithContext,
+  type AtomicUIMessage,
+  isAtomicResourceContext,
 } from './types';
-
-// Not exported from 'ai' for some reason, for now we need to define it ourselves.
-type ReasoningPart = {
-  type: 'reasoning';
-  text: string;
-  signature?: string;
-};
+import { addFieldsIf } from '../../helpers/addIf';
 
 const TAG_TO_ROLE_MAPPING = {
   'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/tag/user': 'user',
@@ -44,28 +40,21 @@ const roleToTagMapping = Object.fromEntries(
   Object.entries(TAG_TO_ROLE_MAPPING).map(([tag, role]) => [role, tag]),
 );
 
-export const displayMessageToResource = async (
-  message: AIChatDisplayMessage,
+export const uiMessageToResource = async (
+  message: AtomicUIMessage,
   parent: Resource<Ai.AiChat>,
   store: Store,
-  context?: AIMessageContext[],
 ): Promise<Resource<Ai.AiMessage>> => {
-  if (isMessageWithContext(message)) {
-    return displayMessageToResource(
-      message.message,
-      parent,
-      store,
-      message.context,
-    );
-  }
-
   const messageResource = await store.newResource<Ai.AiMessage>({
+    subject: message.id,
     isA: ai.classes.aiMessage,
     parent: parent.subject,
     propVals: {
       [ai.properties.role]: roleToTag(message.role),
     },
   });
+
+  const context = message.metadata?.context;
 
   if (context && context.length > 0) {
     const subjects = await Promise.all(
@@ -75,43 +64,30 @@ export const displayMessageToResource = async (
     messageResource.props.providedContext = subjects;
   }
 
-  if (typeof message.content === 'string') {
-    const textPart = await store.newResource<Ai.TextPart>({
-      isA: ai.classes.textPart,
-      parent: messageResource.subject,
-      propVals: {
-        [core.properties.description]: message.content,
-      },
-    });
-
-    await textPart.save();
-    messageResource.push(ai.properties.content, [textPart.subject]);
-  } else {
-    const builder = partsToResourceBuilder(messageResource, store);
-    const partResources = await Promise.all(
-      message.content.map(content => {
-        switch (content.type) {
-          case 'file':
-          case 'image':
-            return builder.filePartToResource(content);
-          case 'text':
-            return builder.textPartToResource(content);
-          case 'reasoning':
-            return builder.reasoningPartToResource(content);
-          case 'tool-call':
-            return builder.toolCallPartToResource(content);
-          case 'tool-result':
-            return builder.toolResultPartToResource(content);
-          default:
-            throw new Error(`Unknown content type: ${content.type}`);
+  const builder = partsToResourceBuilder(messageResource, store);
+  const partResources = await Promise.all(
+    message.parts
+      .filter(part => part.type !== 'step-start')
+      .map(part => {
+        if (part.type === 'file') {
+          return builder.filePartToResource(part);
+        } else if (part.type === 'text') {
+          return builder.textPartToResource(part);
+        } else if (part.type === 'reasoning') {
+          return builder.reasoningPartToResource(part);
+        } else if (isToolUIPart(part)) {
+          return builder.toolCallPartToResource(part);
+        } else if (part.type === 'source-url') {
+          return builder.sourceUrlPartToResource(part);
+        } else {
+          throw new Error(`Unknown content type: ${part.type}`);
         }
       }),
-    );
+  );
 
-    for (const partResource of partResources) {
-      await partResource.save();
-      messageResource.push(ai.properties.content, [partResource.subject]);
-    }
+  for (const partResource of partResources) {
+    await partResource.save();
+    messageResource.push(ai.properties.parts, [partResource.subject]);
   }
 
   await messageResource.save();
@@ -124,7 +100,7 @@ const contextToResource = async (
   message: Resource<Ai.AiMessage>,
   store: Store,
 ): Promise<string> => {
-  if (isAtomicResource(context)) {
+  if (isAtomicResourceContext(context)) {
     return context.subject;
   }
 
@@ -149,21 +125,25 @@ const contextToResource = async (
 export const messageResourcesToDisplayMessages = async (
   subjects: string[],
   store: Store,
-): Promise<Map<AIChatDisplayMessage, Resource<Ai.AiMessage>>> => {
+): Promise<Map<AtomicUIMessage, Resource<Ai.AiMessage>>> => {
   const resources = await Promise.all(
     subjects.map(s => store.getResource<Ai.AiMessage>(s)),
   );
 
-  const messages = new Map<AIChatDisplayMessage, Resource<Ai.AiMessage>>();
+  const messages = new Map<AtomicUIMessage, Resource<Ai.AiMessage>>();
 
   for (const resource of resources) {
     if (resource.error) {
       console.error(resource.error);
       messages.set(
         {
-          role: 'error',
-          content: resource.error.message,
-        } satisfies AIChatErrorMessage,
+          id: resource.subject,
+          role: 'assistant',
+          parts: [],
+          metadata: {
+            error: resource.error.message,
+          },
+        } satisfies AtomicUIMessage,
         resource,
       );
       continue;
@@ -171,16 +151,17 @@ export const messageResourcesToDisplayMessages = async (
 
     const role = tagToRole(resource.props.role);
 
-    const contentResources = await Promise.all(
-      resource.props.content.map(s => store.getResource(s)),
+    const partResources = await Promise.all(
+      resource.props.parts.map(s => store.getResource(s)),
     );
 
-    let message: AIChatDisplayMessage | undefined;
+    let message: AtomicUIMessage | undefined;
 
     if (role === 'user') {
       message = {
+        id: resource.subject,
         role,
-        content: contentResources.map(r => {
+        parts: partResources.map(r => {
           if (resourceIsFilePart(r)) {
             return toFilePart(r);
           }
@@ -206,9 +187,7 @@ export const messageResourcesToDisplayMessages = async (
           .filter(c => c.status === 'fulfilled')
           .map(c => c.value);
 
-        message = {
-          role: 'annotated-message',
-          message,
+        message.metadata = {
           context,
         };
       }
@@ -216,8 +195,9 @@ export const messageResourcesToDisplayMessages = async (
 
     if (role === 'assistant') {
       message = {
+        id: resource.subject,
         role,
-        content: contentResources.map(r => {
+        parts: partResources.map(r => {
           if (resourceIsReasoningPart(r)) {
             return toReasoningPart(r);
           }
@@ -230,6 +210,10 @@ export const messageResourcesToDisplayMessages = async (
             return toToolCallPart(r);
           }
 
+          if (resourceIsSourceUrlPart(r)) {
+            return toSourceUrlPart(r);
+          }
+
           throw new Error(
             `Content with class ${r.getClasses()} not supported on role: assistant`,
           );
@@ -238,47 +222,18 @@ export const messageResourcesToDisplayMessages = async (
     }
 
     if (role === 'system') {
-      const contentResource = contentResources[0];
+      const contentResource = partResources[0];
 
       if (!resourceIsTextPart(contentResource)) {
         throw new Error(
-          `Content with class ${contentResource.getClasses()} not supported on role: system`,
+          `Part with class ${contentResource.getClasses()} not supported on role: system`,
         );
       }
 
       message = {
+        id: resource.subject,
         role,
-        content: contentResource.props.description,
-      };
-    }
-
-    if (role === 'tool') {
-      message = {
-        role,
-        content: contentResources.map(r => {
-          if (resourceIsToolResultPart(r)) {
-            return toToolResultPart(r);
-          }
-
-          throw new Error(
-            `Content with class ${r.getClasses()} not supported on role: tool`,
-          );
-        }),
-      };
-    }
-
-    if (role === 'error') {
-      const contentResource = contentResources[0];
-
-      if (!resourceIsTextPart(contentResource)) {
-        throw new Error(
-          `Content with class ${contentResource.getClasses()} not supported on role: error`,
-        );
-      }
-
-      message = {
-        role,
-        content: contentResource.props.description,
+        parts: [toTextPart(contentResource)],
       };
     }
 
@@ -336,135 +291,123 @@ const roleToTag = (role: string) => {
   return tag;
 };
 
-const toFilePart = (resource: Resource<Ai.FilePart>): FilePart | ImagePart => {
-  if (resource.props.mimetype?.startsWith('image/')) {
-    return {
-      type: 'image',
-      image: resource.props.data,
-      mimeType: resource.props.mimetype,
-    };
-  }
-
+const toFilePart = (resource: Resource<Ai.FilePart>): FileUIPart => {
   return {
     type: 'file',
-    data: resource.props.data,
+    url: resource.props.data,
     filename: resource.props.filename,
-    mimeType: resource.props.mimetype!,
+    mediaType: resource.props.mimetype!,
   };
 };
 
-const toTextPart = (resource: Resource<Ai.TextPart>): TextPart => ({
+const toTextPart = (resource: Resource<Ai.TextPart>): TextUIPart => ({
   type: 'text',
   text: resource.props.description,
 });
 
 const toReasoningPart = (
   resource: Resource<Ai.ReasoningPart>,
-): ReasoningPart => ({
+): ReasoningUIPart => ({
   type: 'reasoning',
   text: resource.props.description,
-  signature: resource.props.reasoningSignature,
 });
 
-const toToolCallPart = (resource: Resource<Ai.ToolCallPart>): ToolCallPart => {
-  let args = resource.props.toolArguments;
+const toToolCallPart = (resource: Resource<Ai.ToolCallPart>): ToolUIPart => {
+  let state: ToolUIPart['state'] = 'input-streaming';
 
-  try {
-    args = JSON.parse(resource.props.toolArguments);
-  } catch (e) {
-    // Arguments are not a json object.
+  if (resource.props.toolResultIsError) {
+    state = 'output-error';
+  } else if (resource.props.toolInput !== undefined) {
+    state = 'input-available';
+
+    if (resource.props.toolOutput !== undefined) {
+      state = 'output-available';
+    }
   }
 
+  // @ts-expect-error - ToolUIPart type does not expect input and output fields to be present for certain states but we handle this beforehand.
   return {
-    type: 'tool-call',
-    toolName: resource.props.toolName,
+    type: `tool-${resource.props.toolName}`,
+    state,
     toolCallId: resource.props.toolId,
-    args,
+    input: resource.props.toolInput,
+    output: resource.props.toolOutput,
   };
 };
 
-const toToolResultPart = (
-  resource: Resource<Ai.ToolResultPart>,
-): ToolResultPart => {
-  let result = resource.props.toolResult;
-
-  try {
-    result = JSON.parse(resource.props.toolResult);
-  } catch (e) {
-    // Result is not a json object.
-  }
-
-  return {
-    type: 'tool-result',
-    toolName: resource.props.toolName,
-    toolCallId: resource.props.toolId,
-    result,
-    isError: resource.props.toolResultIsError,
-  };
-};
+const toSourceUrlPart = (
+  resource: Resource<Ai.SourceUrlPart>,
+): SourceUrlUIPart => ({
+  type: 'source-url',
+  sourceId: crypto.randomUUID(), // Do we need real IDs?
+  url: resource.props.url,
+  title: resource.props.name,
+});
 
 const partsToResourceBuilder = (
   parent: Resource<Ai.AiMessage>,
   store: Store,
 ) => ({
-  async filePartToResource(filePart: FilePart | ImagePart) {
-    const data = filePart.type === 'file' ? filePart.data : filePart.image;
-
-    if (typeof data !== 'string') {
-      throw new Error('Incompatible file data.');
-    }
+  async filePartToResource(part: FileUIPart) {
+    const data = part.url;
 
     return await store.newResource<Ai.FilePart>({
       isA: ai.classes.filePart,
       parent: parent.subject,
       propVals: {
         [ai.properties.data]: data,
-        [server.properties.mimetype]: filePart.mimeType,
-        ...(filePart.type === 'file'
+        [server.properties.mimetype]: part.mediaType,
+        ...(part.filename
           ? {
-              [server.properties.filename]: filePart.filename,
+              [server.properties.filename]: part.filename,
             }
           : {}),
       },
     });
   },
-  async textPartToResource(textPart: TextPart) {
+
+  async textPartToResource(part: TextUIPart) {
     return await store.newResource<Ai.TextPart>({
       isA: ai.classes.textPart,
       parent: parent.subject,
-      propVals: { [core.properties.description]: textPart.text },
+      propVals: { [core.properties.description]: part.text },
     });
   },
-  async reasoningPartToResource(reasoningPart: ReasoningPart) {
+
+  async reasoningPartToResource(part: ReasoningUIPart) {
     return await store.newResource<Ai.ReasoningPart>({
       isA: ai.classes.reasoningPart,
       parent: parent.subject,
-      propVals: { [core.properties.description]: reasoningPart.text },
+      propVals: { [core.properties.description]: part.text },
     });
   },
-  async toolCallPartToResource(toolCallPart: ToolCallPart) {
+
+  async toolCallPartToResource(part: ToolUIPart) {
     return await store.newResource<Ai.ToolCallPart>({
       isA: ai.classes.toolCallPart,
       parent: parent.subject,
       propVals: {
-        [ai.properties.toolName]: toolCallPart.toolName,
-        [ai.properties.toolId]: toolCallPart.toolCallId,
-        [ai.properties.toolArguments]: JSON.stringify(toolCallPart.args),
+        [ai.properties.toolName]: getToolName(part),
+        [ai.properties.toolId]: part.toolCallId,
+        ...addFieldsIf(!!part.input, {
+          [ai.properties.toolInput]: part.input as JSONObject,
+        }),
+        ...addFieldsIf(!!part.output, {
+          [ai.properties.toolOutput]: part.output as JSONObject,
+        }),
       },
     });
   },
-  async toolResultPartToResource(toolResultPart: ToolResultPart) {
-    return await store.newResource<Ai.ToolResultPart>({
-      isA: ai.classes.toolResultPart,
+
+  async sourceUrlPartToResource(part: SourceUrlUIPart) {
+    return await store.newResource<Ai.SourceUrlPart>({
+      isA: ai.classes.sourceUrlPart,
       parent: parent.subject,
       propVals: {
-        [ai.properties.toolName]: toolResultPart.toolName,
-        [ai.properties.toolId]: toolResultPart.toolCallId,
-        [ai.properties.toolResult]:
-          typeof toolResultPart.result === 'string'
-            ? toolResultPart.result
-            : JSON.stringify(toolResultPart.result),
-        [ai.properties.toolResultIsError]: !!toolResultPart.isError,
+        [dataBrowser.properties.url]: part.url,
+        ...addFieldsIf(!!part.title, {
+          [core.properties.name]: part.title,
+        }),
       },
     });
   },
@@ -490,7 +433,7 @@ const resourceIsToolCallPart = (
 ): resource is Resource<Ai.ToolCallPart> =>
   resource.hasClasses(ai.classes.toolCallPart);
 
-const resourceIsToolResultPart = (
+const resourceIsSourceUrlPart = (
   resource: Resource,
-): resource is Resource<Ai.ToolResultPart> =>
-  resource.hasClasses(ai.classes.toolResultPart);
+): resource is Resource<Ai.SourceUrlPart> =>
+  resource.hasClasses(ai.classes.sourceUrlPart);
