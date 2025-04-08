@@ -30,7 +30,8 @@ pub fn default_config_dir_path() -> AtomicResult<PathBuf> {
         let atomic_config_dir = dirs.home_dir().join(".config/atomic");
         return Ok(atomic_config_dir);
     }
-    Err("No default config dir can be found, as no Home directory can be found on this operating system".into())
+    // Fallback for systems like Android where UserDirs might be None
+    Ok(PathBuf::from(".config/atomic"))
 }
 
 /// Returns the default path for the config file: `~/.config/atomic/config.toml`

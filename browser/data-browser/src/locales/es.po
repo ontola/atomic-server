@@ -2236,9 +2236,8 @@ msgstr "Exportar a CSV"
 msgid "Attached File"
 msgstr "Archivo adjunto"
 
-#: src/chunks/AI/AIChatMessageParts/UserMessage.tsx
-msgid "You"
-msgstr "Tú"
+#~ msgid "You"
+#~ msgstr "Tú"
 
 #: src/chunks/AI/AIChatMessageParts/ReasoningMessage.tsx
 msgid "Thinking..."

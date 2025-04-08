@@ -2846,9 +2846,8 @@ msgstr ""
 "Der Titel wird verwendet, um das Subjekt zu erstellen. Bitte beachte, dass\n"
 "das Subjekt später nicht mehr geändert werden kann."
 
-#: src/chunks/AI/AIChatMessageParts/UserMessage.tsx
-msgid "You"
-msgstr "Du"
+#~ msgid "You"
+#~ msgstr "Du"
 
 #. placeholder {0}: name
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx

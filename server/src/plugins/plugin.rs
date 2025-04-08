@@ -1,17 +1,24 @@
-use std::path::{Path, PathBuf};
+#[cfg(feature = "wasm-plugins")]
+use std::path::Path;
+use std::path::PathBuf;
 
+#[cfg(feature = "wasm-plugins")]
+use atomic_lib::urls::{DOWNLOAD_URL, MIMETYPE};
 use atomic_lib::{
     agents::{Agent, ForAgent},
     class_extender::{BoxFuture, ClassExtender, CommitExtenderContext, GetExtenderContext},
     db::plugin_meta::PluginMetaKey,
     errors::AtomicResult,
     storelike::ResourceResponse,
-    urls::{self, DOWNLOAD_URL, MIMETYPE},
+    urls::{self},
     AtomicError, Db, Resource, Storelike, Value,
 };
+#[cfg(feature = "wasm-plugins")]
 use tracing::{error, info};
+#[cfg(feature = "wasm-plugins")]
 use zip::ZipArchive;
 
+#[cfg(feature = "wasm-plugins")]
 use crate::plugins::wasm::{install_or_update_plugin, uninstall_plugin};
 
 async fn get_parent_drive(resource: &Resource, store: &Db) -> AtomicResult<String> {
@@ -59,6 +66,7 @@ fn get_namespace_and_name(resource: &Resource) -> AtomicResult<(String, String)>
     Ok((namespace.to_string(), name.to_string()))
 }
 
+#[cfg(feature = "wasm-plugins")]
 async fn do_uninstall_plugin(
     resource: &Resource,
     parent_subject: &str,
@@ -95,6 +103,7 @@ async fn do_uninstall_plugin(
     Ok(())
 }
 
+#[cfg(feature = "wasm-plugins")]
 async fn do_install_plugin(
     resource: &Resource,
     parent_subject: &str,
@@ -211,6 +220,7 @@ async fn do_install_plugin(
     Ok(())
 }
 
+#[allow(unused_variables)]
 fn on_before_commit(
     context: CommitExtenderContext,
     plugins_dir: PathBuf,
@@ -230,6 +240,7 @@ fn on_before_commit(
 
         // If the plugin is being deleted, uninstall it.
         if commit.destroy == Some(true) {
+            #[cfg(feature = "wasm-plugins")]
             do_uninstall_plugin(resource, &parent_subject, store, &plugins_dir).await?;
             return Ok(());
         }
@@ -264,6 +275,7 @@ fn on_before_commit(
             }
 
             // The plugin file has been set or updated, so we need to (re)install the plugin.
+            #[cfg(feature = "wasm-plugins")]
             if set.contains_key(urls::PLUGIN_FILE) {
                 tracing::info!(
                     "New plugin file found for plugin {}, installing...",
