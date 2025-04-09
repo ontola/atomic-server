@@ -618,6 +618,7 @@ dependencies = [
  "rand 0.8.5",
  "rcgen",
  "regex",
+ "ring 0.17.14",
  "rio_api",
  "rio_turtle",
  "rustls 0.20.9",

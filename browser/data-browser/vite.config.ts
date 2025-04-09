@@ -1,8 +1,9 @@
-import { defineConfig } from 'vite';
+import { defineConfig, type PluginOption } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import webfontDownload from 'vite-plugin-webfont-dl';
 import prismjs from 'vite-plugin-prismjs';
+
 export default defineConfig({
   plugins: [
     webfontDownload(),
@@ -164,6 +165,9 @@ export default defineConfig({
         assetFileNames: `assets/[name].[ext]`,
       },
     },
+  },
+  html: {
+    cspNonce: 'ATOMICSERVER_NONCE',
   },
   server: {
     strictPort: true,
