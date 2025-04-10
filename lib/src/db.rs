@@ -38,7 +38,7 @@ use crate::{
     resources::PropVals,
     storelike::{Query, QueryResult, ResourceResponse, Storelike},
     values::SortableValue,
-    Atom, Commit, Resource, Subject, Value,
+    Atom, Commit, Resource, Subject, urls, Value,
 };
 use async_trait::async_trait;
 use tracing::{info, instrument};
@@ -89,6 +89,8 @@ pub struct Db {
     watched_queries: sled::Tree,
     /// [Tree::PluginMeta]
     plugin_meta: sled::Tree,
+    /// [Tree::DriveMapping]
+    drive_mapping: sled::Tree,
     /// The base domain for multi-tenant hosting, e.g. "localhost" or "atomicdata.dev".
     base_domain: Option<String>,
     /// Endpoints are checked whenever a resource is requested. They calculate (some properties of) the resource and return it.
@@ -115,6 +117,7 @@ impl Db {
         let prop_val_sub_index = db.open_tree(Tree::PropValSub)?;
         let watched_queries = db.open_tree(Tree::WatchedQueries)?;
         let plugin_meta = db.open_tree(Tree::PluginMeta)?;
+        let drive_mapping = db.open_tree(Tree::DriveMapping)?;
 
         let store = Db {
             path: path.into(),
@@ -127,6 +130,7 @@ impl Db {
             base_domain,
             watched_queries,
             plugin_meta,
+            drive_mapping,
             endpoints: vec![],
             class_extenders: Arc::new(RwLock::new(vec![])),
             on_commit: None,
@@ -210,6 +214,58 @@ impl Db {
 
     pub fn get_endpoints(&self) -> &Vec<Endpoint> {
         &self.endpoints
+    }
+
+    /// Maps a drive hint (short ID) to a full Drive DID.
+    pub fn add_drive_mapping(&self, hint: &str, did: &str) -> AtomicResult<()> {
+        self.drive_mapping.insert(hint.as_bytes(), did.as_bytes())?;
+        Ok(())
+    }
+
+    /// Returns the full Drive DID for a given drive hint (short ID).
+    pub fn get_drive_did(&self, hint: &str) -> AtomicResult<Option<Subject>> {
+        if let Some(did_bin) = self.drive_mapping.get(hint.as_bytes())? {
+            let did_str = std::str::from_utf8(&did_bin)
+                .map_err(|e| format!("Failed to parse DID from database: {}", e))?;
+            return Ok(Some(Subject::from_raw(did_str, None)));
+        }
+        Ok(None)
+    }
+
+    /// Resolves a path (e.g. "/classes") relative to a Drive DID.
+    /// Traverses the hierarchy using the PARENT property and shortnames.
+    pub async fn get_resource_at_path(&self, drive_did: &Subject, path: &str) -> AtomicResult<Subject> {
+        if path == "/" || path.is_empty() {
+            return Ok(drive_did.clone());
+        }
+
+        let mut current_subject = drive_did.clone();
+        let segments = path.trim_start_matches('/').split('/');
+
+        for segment in segments {
+            if segment.is_empty() {
+                continue;
+            }
+
+            let mut query = Query::new_prop_val(urls::PARENT, current_subject.as_str());
+            query.limit = Some(1000); // Reasonable limit for children
+            
+            let result = self.query(&query).await?;
+            let mut found = None;
+            
+            for resource in result.resources {
+                if let Ok(sn) = resource.get(urls::SHORTNAME) {
+                    if sn.to_string() == segment {
+                        found = Some(resource.get_subject().clone());
+                        break;
+                    }
+                }
+            }
+            
+            current_subject = found.ok_or_else(|| format!("Could not find segment '{}' in {}", segment, current_subject))?;
+        }
+
+        Ok(current_subject)
     }
 
     #[instrument(skip(self))]
@@ -464,6 +520,7 @@ impl Db {
         let mut batch_watched_queries = sled::Batch::default();
         let mut batch_query_members = sled::Batch::default();
         let mut batch_plugin_meta = sled::Batch::default();
+        let mut batch_drive_mapping = sled::Batch::default();
 
         for op in transaction.iter() {
             match op.tree {
@@ -517,6 +574,15 @@ impl Db {
                         batch_plugin_meta.remove(op.key.clone());
                     }
                 },
+                trees::Tree::DriveMapping => match op.method {
+                    trees::Method::Insert => {
+                        batch_drive_mapping
+                            .insert::<&[u8], &[u8]>(&op.key, op.val.as_ref().unwrap());
+                    }
+                    trees::Method::Delete => {
+                        batch_drive_mapping.remove(op.key.clone());
+                    }
+                },
             }
         }
 
@@ -527,6 +593,7 @@ impl Db {
             &self.watched_queries,
             &self.query_index,
             &self.plugin_meta,
+            &self.drive_mapping,
         )
             .transaction(
                 |(
@@ -536,6 +603,7 @@ impl Db {
                     tx_watched_queries,
                     tx_query_index,
                     tx_plugin_meta,
+                    tx_drive_mapping,
                 )| {
                     tx_resources.apply_batch(&batch_resources)?;
                     tx_prop_val_sub_index.apply_batch(&batch_propvalsub)?;
@@ -543,6 +611,7 @@ impl Db {
                     tx_watched_queries.apply_batch(&batch_watched_queries)?;
                     tx_query_index.apply_batch(&batch_query_members)?;
                     tx_plugin_meta.apply_batch(&batch_plugin_meta)?;
+                    tx_drive_mapping.apply_batch(&batch_drive_mapping)?;
                     Ok::<(), sled::transaction::ConflictableTransactionError<sled::Error>>(())
                 },
             )
@@ -721,13 +790,13 @@ impl Db {
                 // (e.g. the /did proxy endpoint returns DID resources that must keep their DID as @id).
                 match response {
                     ResourceResponse::Resource(mut resource) => {
-                        if !matches!(resource.get_subject(), Subject::Did(_)) {
+                        if !matches!(resource.get_subject(), Subject::Did { .. }) {
                             resource.set_subject(subject.into());
                         }
                         return Ok(resource.into());
                     }
                     ResourceResponse::ResourceWithReferenced(mut resource, references) => {
-                        if !matches!(resource.get_subject(), Subject::Did(_)) {
+                        if !matches!(resource.get_subject(), Subject::Did { .. }) {
                             resource.set_subject(subject.into());
                         }
                         return Ok(ResourceResponse::ResourceWithReferenced(
@@ -915,6 +984,15 @@ impl Storelike for Db {
 
         if let Some(new) = &commit_response.resource_new {
             self.add_resource_tx(new, &mut transaction)?;
+
+            // If the resource is a Drive, add it to the drive_mapping index
+            if let Ok(classes) = new.get_classes(self).await {
+                if classes.iter().any(|c| c.subject == urls::DRIVE) {
+                    if let Ok(hash) = new.get(urls::DRIVE_HASH) {
+                        self.add_drive_mapping(&hash.to_string(), new.get_subject().as_str())?;
+                    }
+                }
+            }
         }
 
         if opts.update_index {
@@ -1083,7 +1161,7 @@ impl Storelike for Db {
         let inner_url = match subject {
             Subject::Internal(u) => u,
             Subject::External(u) => u,
-            Subject::Did(u) => u,
+            Subject::Did { url, .. } => url,
         };
 
         // Check if the subject matches one of the endpoints, if so, call the endpoint.
@@ -1094,7 +1172,28 @@ impl Storelike for Db {
         }
 
         async move {
-            let mut resource = self.get_resource(&subject_without_params).await?;
+            let mut resource = match self.get_resource(&subject_without_params).await {
+                Ok(r) => r,
+                Err(e) => {
+                    if subject_without_params.as_str().starts_with("did:ad:agent:") {
+                        let pubkey = subject_without_params
+                            .as_str()
+                            .strip_prefix("did:ad:agent:")
+                            .unwrap();
+                        if let Ok(agent) = crate::agents::Agent::new_from_public_key(pubkey) {
+                            if let Ok(res) = agent.to_resource() {
+                                res
+                            } else {
+                                return Err(e);
+                            }
+                        } else {
+                            return Err(e);
+                        }
+                    } else {
+                        return Err(e);
+                    }
+                }
+            };
 
             let _explanation = crate::hierarchy::check_read(self, &resource, for_agent).await?;
 

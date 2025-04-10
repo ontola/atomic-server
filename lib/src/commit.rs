@@ -307,7 +307,7 @@ impl Commit {
         let subject_url = match &subject {
             Subject::Internal(u) => u.clone(),
             Subject::External(u) => u.clone(),
-            Subject::Did(u) => u.clone(),
+            Subject::Did { url, .. } => url.clone(),
         };
 
         if subject_url.query().is_some() {
@@ -360,7 +360,7 @@ impl Commit {
                 // For new DID resources, grant the signer explicit write access so future
                 // commits don't need drive-level rights. Agents are excluded because they
                 // already have self-write via their subject matching the agent check.
-                if matches!(applied.resource_new.get_subject(), Subject::Did(_)) {
+                if matches!(applied.resource_new.get_subject(), Subject::Did { .. }) {
                     let is_agent = applied
                         .resource_new
                         .get(urls::IS_A)

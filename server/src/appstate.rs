@@ -7,10 +7,13 @@ use crate::{
     search::SearchState,
     y_sync_broadcaster::{self, YSyncBroadcaster},
 };
-use atomic_lib::{agents::Agent, commit::CommitResponse, config::SharedConfig, Storelike};
+use atomic_lib::{
+    agents::Agent, commit::CommitResponse, config::SharedConfig, storelike::Query, urls, Storelike,
+};
 
 #[cfg(feature = "wasm-plugins")]
 use crate::plugins::wasm;
+
 /// The AppState contains all the relevant Context for the server.
 /// This data object is available to all handlers and actors.
 /// Contains the store, configuration and addresses for Actix Actors, such as for the [CommitMonitor].
@@ -31,6 +34,37 @@ pub struct AppState {
 }
 
 impl AppState {
+    /// Returns the Drive DID for a given host (domain/subdomain).
+    /// If the host matches a subdomain of the base domain, it looks for a Drive with that subdomain.
+    /// If no mapping is found, returns None.
+    pub async fn get_drive_did_for_host(&self, host: &str) -> Option<atomic_lib::Subject> {
+        let base_domain = self.config.get_base_domain()?;
+
+        // Extract subdomain if it exists
+        let subdomain = if host == base_domain {
+            Some("root".to_string()) // Special case for the apex domain
+        } else if host.ends_with(&format!(".{}", base_domain)) {
+            let sub = &host[..host.len() - base_domain.len() - 1];
+            Some(sub.to_string())
+        } else {
+            None
+        };
+
+        if let Some(sub) = subdomain {
+            let mut query = Query::new_class(urls::DRIVE);
+            query.property = Some(urls::SUBDOMAIN.to_string());
+            query.value = Some(atomic_lib::Value::Slug(sub));
+
+            if let Ok(result) = self.store.query(&query).await {
+                if let Some(subject) = result.subjects.first() {
+                    return Some(subject.clone());
+                }
+            }
+        }
+
+        None
+    }
+
     /// Creates the AppState (the server's context available in Handlers).
     /// Initializes or opens a store on disk.
     /// Creates a new agent, if necessary.
@@ -90,11 +124,15 @@ impl AppState {
             }
         }
 
-        let no_root_drive = store.get_resource(&"internal:/".into()).await.is_err();
-        if no_root_drive {
-            tracing::warn!("Root drive not found. Initializing a new database...");
+        let no_drives = store
+            .query(&Query::new_class(urls::DRIVE))
+            .await
+            .map(|r| r.subjects.is_empty())
+            .unwrap_or(true);
+        if no_drives {
+            tracing::warn!("No drives found. Initializing a new database...");
         }
-        let should_init = !&config.store_path.exists() || config.initialize || no_root_drive;
+        let should_init = !&config.store_path.exists() || config.initialize || no_drives;
         if should_init {
             tracing::info!("Initialize: creating and populating new Database...");
             atomic_lib::populate::populate_default_store(&store)
@@ -135,6 +173,17 @@ impl AppState {
         // If the user changes their server_url, the drive will not exist.
         // In this situation, we should re-build a new drive from scratch.
         if should_init {
+            let drive_did = atomic_lib::populate::create_did_drive(&store, Some("root".into())).await?;
+            tracing::info!("Created initial DID drive: {}", drive_did);
+
+            // Map the server's host to this drive
+            let origin_url = url::Url::parse(&config.get_origin())
+                .map_err(|e| format!("Invalid origin URL: {}", e))?;
+            let host = origin_url.host_str().ok_or("Origin URL has no host")?;
+
+            store.add_drive_mapping(host, drive_did.as_str())?;
+            tracing::info!("Mapped host {} to drive {}", host, drive_did);
+
             atomic_lib::populate::populate_all(&store).await?;
             // Building the index here is needed to perform Queries on imported resources
             let store_clone = store.clone();

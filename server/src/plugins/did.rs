@@ -40,8 +40,24 @@ fn handle_did_request<'a>(
         }
 
         let did_subject = atomic_lib::Subject::from_raw(&did.unwrap(), None);
-        store
+        match store
             .get_resource_extended(&did_subject, false, for_agent)
             .await
+        {
+            Ok(res) => Ok(res),
+            Err(e) => {
+                // If it's an agent DID and not found locally, return a minimal resource
+                // instead of an error. This is important for "just-in-time" agent registration.
+                if did_subject.as_str().starts_with("did:ad:agent:") {
+                    let pubkey = did_subject.as_str().strip_prefix("did:ad:agent:").unwrap();
+                    if let Ok(agent) = atomic_lib::agents::Agent::new_from_public_key(pubkey) {
+                        if let Ok(resource) = agent.to_resource() {
+                            return Ok(resource.into());
+                        }
+                    }
+                }
+                Err(e)
+            }
+        }
     })
 }

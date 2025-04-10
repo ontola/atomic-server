@@ -21,8 +21,12 @@ pub enum Subject {
     Internal(Url),
     /// External resource identifier (usually over HTTP).
     External(Url),
-    /// Decentralized Identifier (typically did:ad:{signature}).
-    Did(Url),
+    /// Decentralized Identifier (typically did:ad:{genesis}).
+    /// Contains an optional drive identifier (short hash or alias) for routing.
+    Did {
+        url: Url,
+        drive_hint: Option<String>,
+    },
 }
 
 impl Subject {
@@ -30,7 +34,15 @@ impl Subject {
         match self {
             Subject::Internal(u) => u.as_str(),
             Subject::External(u) => u.as_str(),
-            Subject::Did(u) => u.as_str(),
+            Subject::Did { url, .. } => url.as_str(),
+        }
+    }
+
+    /// Returns the drive routing hint (hash or alias) if this is a DID subject.
+    pub fn drive_hint(&self) -> Option<&str> {
+        match self {
+            Subject::Did { drive_hint, .. } => drive_hint.as_deref(),
+            _ => None,
         }
     }
 
@@ -64,7 +76,7 @@ impl Subject {
                 }
             }
             Subject::External(u) => u.path().to_string(),
-            Subject::Did(_) => "/".to_string(),
+            Subject::Did { .. } => "/".to_string(),
         }
     }
 
@@ -88,7 +100,7 @@ impl Subject {
     /// Returns true if this subject is local to the server (Internal or Did).
     /// External subjects are not considered local.
     pub fn is_local(&self) -> bool {
-        matches!(self, Subject::Internal(_) | Subject::Did(_))
+        matches!(self, Subject::Internal(_) | Subject::Did { .. })
     }
 
     /// Resolves the Subject to an absolute URL string based on the provided origin.
@@ -122,7 +134,7 @@ impl Subject {
                 resolved
             }
             Subject::External(u) => u.to_string(),
-            Subject::Did(u) => u.to_string(),
+            Subject::Did { url, .. } => url.to_string(),
         }
     }
 
@@ -141,7 +153,8 @@ impl Subject {
 
         if s.starts_with("did:") {
             if let Ok(u) = Url::parse(s) {
-                return Subject::Did(u);
+                let drive_hint = u.query_pairs().find(|(k, _)| k == "drive").map(|(_, v)| v.into_owned());
+                return Subject::Did { url: u, drive_hint };
             }
         }
 
@@ -179,17 +192,25 @@ impl Subject {
     }
     /// Returns a new Subject without query parameters or fragments.
     pub fn without_params(&self) -> Self {
-        let mut u = match self {
-            Subject::Internal(u) => u.clone(),
-            Subject::External(u) => u.clone(),
-            Subject::Did(u) => u.clone(),
-        };
-        u.set_query(None);
-        u.set_fragment(None);
         match self {
-            Subject::Internal(_) => Subject::Internal(u),
-            Subject::External(_) => Subject::External(u),
-            Subject::Did(_) => Subject::Did(u),
+            Subject::Internal(u) => {
+                let mut u = u.clone();
+                u.set_query(None);
+                u.set_fragment(None);
+                Subject::Internal(u)
+            }
+            Subject::External(u) => {
+                let mut u = u.clone();
+                u.set_query(None);
+                u.set_fragment(None);
+                Subject::External(u)
+            }
+            Subject::Did { url, .. } => {
+                let mut u = url.clone();
+                u.set_query(None);
+                u.set_fragment(None);
+                Subject::Did { url: u, drive_hint: None }
+            }
         }
     }
 
@@ -277,14 +298,24 @@ mod tests {
         let with_slash = format!("/{}", did);
 
         let subject_from_did = Subject::from_raw(did, None);
-        assert!(matches!(subject_from_did, Subject::Did(_)));
+        assert!(matches!(subject_from_did, Subject::Did { .. }));
         assert_eq!(subject_from_did.as_str(), did);
         assert_eq!(subject_from_did.resolve(origin), did);
 
         let subject_from_slash = Subject::from_raw(&with_slash, None);
-        assert!(matches!(subject_from_slash, Subject::Did(_)));
+        assert!(matches!(subject_from_slash, Subject::Did { .. }));
         assert_eq!(subject_from_slash.as_str(), did);
         assert_eq!(subject_from_slash.resolve(origin), did);
+    }
+
+    #[test]
+    fn test_did_drive_hint_parsing() {
+        let did_with_drive = "did:ad:123?drive=abc";
+        let subject = Subject::from_raw(did_with_drive, None);
+        
+        assert!(matches!(subject, Subject::Did { .. }));
+        assert_eq!(subject.drive_hint(), Some("abc"));
+        assert_eq!(subject.pure_id(), "did:ad:123");
     }
 
     #[test]

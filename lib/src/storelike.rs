@@ -411,7 +411,7 @@ pub trait Storelike: Sized + Send + Sync {
         for_agent: Option<&Agent>,
     ) -> AtomicResult<Resource> {
         let subject_obj = Subject::from_raw(subject, self.get_base_domain().as_deref());
-        if matches!(subject_obj, Subject::Internal(_) | Subject::Did(_))
+        if matches!(subject_obj, Subject::Internal(_) | Subject::Did { .. })
             || subject.starts_with("did:")
         {
             return Err(AtomicError::not_found(format!(

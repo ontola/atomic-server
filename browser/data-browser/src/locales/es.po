@@ -3451,3 +3451,7 @@ msgid ""
 "Save it somewhere safe, the secret will not be show again and if\n"
 "you lose it you will not be able to access this user again."
 msgstr ""
+
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
+msgid "Subdomain"
+msgstr ""

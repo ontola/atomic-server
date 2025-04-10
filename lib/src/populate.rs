@@ -10,7 +10,7 @@ use crate::{
     parse::ParseOpts,
     schema::{Class, Property},
     storelike::Query,
-    urls, Storelike, Value,
+    urls, Resource, Storelike, Subject, Value,
 };
 
 const DEFAULT_ONTOLOGY_PATH: &str = "defaultOntology";
@@ -113,6 +113,14 @@ pub async fn populate_base_models(store: &impl Storelike) -> AtomicResult<()> {
             description: "If this is true, the Property should probably not be edited, because doing so could lead to serious errors.".into(),
             subject: urls::IS_LOCKED.into(),
             allows_only: None,
+        },
+        Property {
+            class_type: None,
+            data_type: DataType::Slug,
+            shortname: "subdomain".into(),
+            description: "The subdomain that identifies a Drive on a server. For example, in `joep.atomicdata.dev`, the subdomain is `joep`.".into(),
+            subject: urls::SUBDOMAIN.into(),
+            allows_only: None,
         }
     ];
 
@@ -209,6 +217,47 @@ pub async fn create_drive(store: &impl Storelike) -> AtomicResult<()> {
     drive.save_locally(store).await?;
 
     Ok(())
+}
+
+/// Creates a new DID-native Drive resource.
+/// Generates a new keypair for the drive and computes the drive hash.
+/// The subject will be `did:ad:{genesis_signature}`.
+pub async fn create_did_drive(store: &impl Storelike, subdomain: Option<String>) -> AtomicResult<Subject> {
+    // Create a new resource with a dummy subject (will be overwritten by save_as_genesis)
+    let mut drive = Resource::new("did:ad:placeholder".into());
+    drive.set_class(urls::DRIVE);
+
+    if let Some(sub) = subdomain {
+        drive.set_unsafe(urls::SUBDOMAIN.into(), Value::Slug(sub));
+    }
+
+    let name = store
+        .get_base_domain()
+        .unwrap_or_else(|| "Atomic Server".to_string());
+    drive.set_string(urls::NAME.into(), &name, store).await?;
+
+    // Generate a keypair for the drive's cryptographic identity
+    let (public_key, _seed) = crate::drive::generate_drive_keypair();
+    let public_key_base64 = crate::agents::encode_base64(&public_key);
+
+    // Compute drive hash: truncated_SHA256("atomicdata.drive" || public_key_bytes) → 16 bytes → hex
+    let hash = crate::drive::compute_drive_hash(&public_key);
+    let drive_hash_hex = hash.iter().map(|b| format!("{:02x}", b)).collect::<String>();
+
+    drive.set_unsafe(
+        urls::DRIVE_PUBLIC_KEY.into(),
+        Value::String(public_key_base64),
+    );
+    drive.set_unsafe(urls::DRIVE_HASH.into(), Value::String(drive_hash_hex));
+
+    let commit_res = drive.save_as_genesis(store).await?;
+    let subject = commit_res
+        .resource_new
+        .ok_or("Failed to create drive resource")?
+        .get_subject()
+        .clone();
+
+    Ok(subject)
 }
 
 pub async fn create_default_ontology(store: &impl Storelike) -> AtomicResult<()> {
