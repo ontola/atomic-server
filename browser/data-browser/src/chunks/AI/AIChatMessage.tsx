@@ -2,7 +2,7 @@ import styled from 'styled-components';
 import { FaRetweet, FaTrash } from 'react-icons/fa6';
 import { type AtomicUIMessage } from './types';
 import { AssistantMessage } from './AIChatMessageParts/AssistantMessage';
-import { IconButton } from '../IconButton/IconButton';
+import { IconButton } from '@components/IconButton/IconButton';
 import { UserMessage } from './AIChatMessageParts/UserMessage';
 
 interface MessageProps {

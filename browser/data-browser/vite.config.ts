@@ -3,8 +3,18 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import webfontDownload from 'vite-plugin-webfont-dl';
 import prismjs from 'vite-plugin-prismjs';
+import * as path from 'node:path';
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      '@components': path.resolve(__dirname, 'src/components'),
+      '@views': path.resolve(__dirname, 'src/views'),
+      '@hooks': path.resolve(__dirname, 'src/hooks'),
+      '@helpers': path.resolve(__dirname, 'src/helpers'),
+      '@chunks': path.resolve(__dirname, 'src/chunks'),
+    },
+  },
   plugins: [
     webfontDownload(),
     react({
@@ -97,8 +107,6 @@ export default defineConfig({
       workbox: {
         // See https://github.com/atomicdata-dev/atomic-data-browser/issues/294
         globIgnores: ['**/index.html'],
-        // TODO: Remove this and split up the AI part into a chunk.
-        maximumFileSizeToCacheInBytes: 3000000,
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,

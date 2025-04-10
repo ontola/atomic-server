@@ -1,7 +1,7 @@
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { useAIAgentConfig } from './AgentConfig';
 import type { AIAgent, MCPServer } from './types';
-import { useSettings } from '../../helpers/AppSettings';
+import { useSettings } from '@helpers/AppSettings';
 import { generateObject } from 'ai';
 import { z } from 'zod';
 

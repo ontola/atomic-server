@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { styled, useTheme } from 'styled-components';
-import { Row, Column } from '../Row';
+import { Row, Column } from '@components/Row';
 import { FaPencil, FaPlus, FaTrash, FaStar } from 'react-icons/fa6';
-import { IconButton } from '../IconButton/IconButton';
+import { IconButton } from '@components/IconButton/IconButton';
 import { ModelSelect } from './ModelSelect/ModelSelect';
 import { AIProvider, type AIAgent, type AIModelIdentifier } from './types';
 import {
@@ -11,14 +11,14 @@ import {
   DialogContent,
   DialogActions,
   useDialog,
-} from '../Dialog';
-import { useLocalStorage } from '../../hooks/useLocalStorage';
-import { Button } from '../Button';
-import { SkeletonButton } from '../SkeletonButton';
-import { useSettings } from '../../helpers/AppSettings';
-import { Checkbox, CheckboxLabel } from '../forms/Checkbox';
-import { InputWrapper, InputStyled } from '../forms/InputStyles';
-import { transition } from '../../helpers/transition';
+} from '@components/Dialog';
+import { useLocalStorage } from '@hooks/useLocalStorage';
+import { Button } from '@components/Button';
+import { SkeletonButton } from '@components/SkeletonButton';
+import { useSettings } from '@helpers/AppSettings';
+import { Checkbox, CheckboxLabel } from '@components/forms/Checkbox';
+import { InputWrapper, InputStyled } from '@components/forms/InputStyles';
+import { transition } from '@helpers/transition';
 
 // Add this formatter at the top of the file, after imports
 const temperatureFormatter = new Intl.NumberFormat(undefined, {

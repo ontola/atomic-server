@@ -7,7 +7,14 @@
     "moduleResolution": "bundler",
     "lib": ["ES6", "ES7", "ESNext", "DOM"],
     "outDir": "./dist",
-    "strictNullChecks": true
+    "strictNullChecks": true,
+    "paths": {
+      "@components/*": ["./src/components/*"],
+      "@views/*": ["./src/views/*"],
+      "@hooks/*": ["./src/hooks/*"],
+      "@helpers/*": ["./src/helpers/*"],
+      "@chunks/*": ["./src/chunks/*"]
+    }
   },
   "include": ["./src"]
 }

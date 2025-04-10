@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { effectFetch } from '../../helpers/effectFetch';
+import { effectFetch } from '@helpers/effectFetch';
 
 export type OpenRouterAIModel = {
   id: string;

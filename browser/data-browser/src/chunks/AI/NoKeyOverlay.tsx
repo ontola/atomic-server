@@ -1,8 +1,8 @@
 import styled from 'styled-components';
 import { useSettings } from '../../helpers/AppSettings';
 import { paths } from '../../routes/paths';
-import { AtomicLink } from '../AtomicLink';
-import { Column } from '../Row';
+import { AtomicLink } from '@components/AtomicLink';
+import { Column } from '@components/Row';
 import { FaGear } from 'react-icons/fa6';
 
 export const NoKeyOverlay: React.FC = () => {

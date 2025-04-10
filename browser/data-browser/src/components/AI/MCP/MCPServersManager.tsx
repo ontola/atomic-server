@@ -4,7 +4,7 @@ import { FaPlus } from 'react-icons/fa6';
 import { Column, Row } from '../../Row';
 import { InputStyled, InputWrapper } from '../../forms/InputStyles';
 import { IconButton, IconButtonVariant } from '../../IconButton/IconButton';
-import type { MCPServer } from '../types';
+import type { MCPServer } from '../../../chunks/AI/types';
 import { BasicSelect } from '../../forms/BasicSelect';
 import { ServerItem } from './ServerItem';
 

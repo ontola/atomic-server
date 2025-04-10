@@ -1,20 +1,20 @@
 import { styled } from 'styled-components';
 import React, { useEffect, useReducer, useRef, useState } from 'react';
-import { newContextItem, useAISidebar } from './AISidebarContext';
+import { newContextItem, useAISidebar } from '@components/AI/AISidebarContext';
 import { AIAtomicResourceMessageContext, type AtomicUIMessage } from './types';
-import { useCurrentSubject } from '../../helpers/useCurrentSubject';
+import { useCurrentSubject } from '@helpers/useCurrentSubject';
 import { FaFloppyDisk, FaPlus, FaXmark } from 'react-icons/fa6';
-import { IconButton } from '../IconButton/IconButton';
-import { Row } from '../Row';
-import { ParentPickerDialog } from '../ParentPicker/ParentPickerDialog';
+import { IconButton } from '@components/IconButton/IconButton';
+import { Row } from '@components/Row';
+import { ParentPickerDialog } from '@components/ParentPicker/ParentPickerDialog';
 import { ai, core, useStore, type Ai } from '@tomic/react';
 import { useGenerativeData } from './useGenerativeData';
 import { uiMessageToResource } from './chatConversionUtils';
-import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
-import { constructOpenURL } from '../../helpers/navigation';
+import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
+import { constructOpenURL } from '@helpers/navigation';
 import { RealAIChat } from './RealAIChat';
 
-export const AISidebar: React.FC = () => {
+const AISidebar: React.FC = () => {
   const store = useStore();
   const [rerenderKey, updateRenderKey] = useReducer(prev => prev + 1, 0);
   const { isOpen, contextItems, setContextItems, setIsOpen } = useAISidebar();
@@ -111,88 +111,64 @@ export const AISidebar: React.FC = () => {
   }, [messages]);
 
   return (
-    <SidebarContainer data-open={isOpen ? '' : undefined}>
+    <React.Fragment key={rerenderKey}>
       {/* When resetting the chat it is better to refresh the whole component because the useChat hook keeps internal state that is not easy to reset. */}
-      <React.Fragment key={rerenderKey}>
-        <RealAIChat
-          initialMessages={messages}
-          onNewMessage={addNewMessage}
-          externalContextItems={contextItems}
-          setExternalContextItems={setContextItems}
-          onDeleteMessage={handleMessageDelete}
-          onRegenerateMessage={onRegenerateMessage}
-        >
-          <Row center justify='space-between' fullWidth>
-            <Row center gap='0.5ch'>
-              <IconButton
-                title='Reset'
-                onClick={resetChat}
-                color='textLight'
-                style={{ alignSelf: 'flex-end' }}
-              >
-                <FaPlus />
-              </IconButton>
-              <Heading>Atomic Assistant</Heading>
-            </Row>
-            <Row center gap='0.5ch'>
-              <IconButton
-                title='Save Chat'
-                onClick={() => setShowParentPicker(true)}
-                disabled={messages.length < 2}
-                color='textLight'
-                style={{ alignSelf: 'flex-end' }}
-              >
-                <FaFloppyDisk />
-              </IconButton>
-              <IconButton
-                title='Close AI Sidebar'
-                color='textLight'
-                style={{ alignSelf: 'flex-end' }}
-                onClick={() => {
-                  setIsOpen(false);
-                }}
-              >
-                <FaXmark />
-              </IconButton>
-            </Row>
+      <RealAIChat
+        initialMessages={messages}
+        onNewMessage={addNewMessage}
+        externalContextItems={contextItems}
+        setExternalContextItems={setContextItems}
+        onDeleteMessage={handleMessageDelete}
+        onRegenerateMessage={onRegenerateMessage}
+      >
+        <Row center justify='space-between' fullWidth>
+          <Row center gap='0.5ch'>
+            <IconButton
+              title='Reset'
+              onClick={resetChat}
+              color='textLight'
+              style={{ alignSelf: 'flex-end' }}
+            >
+              <FaPlus />
+            </IconButton>
+            <Heading>Atomic Assistant</Heading>
           </Row>
-        </RealAIChat>
-        <ParentPickerDialog
-          open={showParentPicker}
-          onOpenChange={setShowParentPicker}
-          onSelect={handleParentSelect}
-        />
-      </React.Fragment>
-    </SidebarContainer>
+          <Row center gap='0.5ch'>
+            <IconButton
+              title='Save Chat'
+              onClick={() => setShowParentPicker(true)}
+              disabled={messages.length < 2}
+              color='textLight'
+              style={{ alignSelf: 'flex-end' }}
+            >
+              <FaFloppyDisk />
+            </IconButton>
+            <IconButton
+              title='Close AI Sidebar'
+              color='textLight'
+              style={{ alignSelf: 'flex-end' }}
+              onClick={() => {
+                setIsOpen(false);
+              }}
+            >
+              <FaXmark />
+            </IconButton>
+          </Row>
+        </Row>
+      </RealAIChat>
+      <ParentPickerDialog
+        open={showParentPicker}
+        onOpenChange={setShowParentPicker}
+        onSelect={handleParentSelect}
+      />
+    </React.Fragment>
   );
 };
-
-const SidebarContainer = styled.div`
-  background-color: ${p => p.theme.colors.bg};
-  display: none;
-  transform: translateX(30rem);
-  width: min(30rem, 100vw);
-  overflow: hidden;
-  border-left: 1px solid ${p => p.theme.colors.bg2};
-  padding: ${p => p.theme.size()};
-  padding-top: 2px;
-  transition:
-    display 100ms allow-discrete,
-    transform 100ms ease-in-out;
-
-  &[data-open] {
-    transform: translateX(0rem);
-    display: block;
-  }
-
-  @starting-style {
-    transform: translateX(30rem);
-    display: none;
-  }
-`;
 
 const Heading = styled.h2`
   font-size: 1rem;
   font-weight: 600;
   margin-bottom: ${p => p.theme.size(2)};
 `;
+
+export default AISidebar;

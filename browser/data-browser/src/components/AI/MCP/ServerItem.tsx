@@ -5,7 +5,7 @@ import { Row } from '../../Row';
 import { InputStyled, InputWrapper } from '../../forms/InputStyles';
 import { IconButton, IconButtonVariant } from '../../IconButton/IconButton';
 import { BasicSelect } from '../../forms/BasicSelect';
-import type { MCPServer } from '../types';
+import type { MCPServer } from '../../../chunks/AI/types';
 
 export interface ServerItemProps {
   server: MCPServer;

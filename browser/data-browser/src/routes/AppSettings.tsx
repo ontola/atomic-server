@@ -13,7 +13,7 @@ import { Main } from '../components/Main';
 import { Panel, usePanelList } from '../components/SideBar/usePanelList';
 import { pathNames } from './paths';
 import { appRoute } from './RootRoutes';
-import AISettings from '../components/AI/AISettings';
+import AISettings from '@components/AI/AISettings';
 
 export const AppSettingsRoute = createRoute({
   path: pathNames.appSettings,

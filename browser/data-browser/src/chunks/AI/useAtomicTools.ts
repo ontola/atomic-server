@@ -7,10 +7,10 @@ import {
 } from '@tomic/react';
 import { tool } from 'ai';
 import { z } from 'zod';
-import { useSettings } from '../../helpers/AppSettings';
-import { DarkModeOption } from '../../helpers/useDarkMode';
-import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
-import { constructOpenURL } from '../../helpers/navigation';
+import { useSettings } from '@helpers/AppSettings';
+import { DarkModeOption } from '@helpers/useDarkMode';
+import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
+import { constructOpenURL } from '@helpers/navigation';
 import { toClassString } from './atomicSchemaHelpers';
 
 export const TOOL_NAMES = {

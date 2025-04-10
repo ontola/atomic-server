@@ -3,7 +3,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { useSettings } from '../../../helpers/AppSettings';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { QuickScore } from 'quick-score';
-import type { MCPServer } from '../types';
+import type { MCPServer } from '../../../chunks/AI/types';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 
 export type MCPResourceMeta = {

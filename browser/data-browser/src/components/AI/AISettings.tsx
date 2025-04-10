@@ -1,16 +1,16 @@
 import * as React from 'react';
-import { Column, Row } from '../Row';
-import { Checkbox, CheckboxLabel } from '../forms/Checkbox';
-import { InputStyled, InputWrapper } from '../forms/InputStyles';
+import { Column, Row } from '@components/Row';
+import { Checkbox, CheckboxLabel } from '@components/forms/Checkbox';
+import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
 import { MCPServersManager } from './MCP/MCPServersManager';
 import styled from 'styled-components';
-import { transition } from '../../helpers/transition';
-import { useSettings } from '../../helpers/AppSettings';
+import { transition } from '@helpers/transition';
+import { useSettings } from '@helpers/AppSettings';
 import { useEffect, useState } from 'react';
 import { OpenRouterLoginButton } from './OpenRouterLoginButton';
-import { TabPanel, Tabs } from '../Tabs';
-import { effectFetch } from '../../helpers/effectFetch';
-import { CheckboxDescriptor } from '../forms/CheckboxDescriptor';
+import { TabPanel, Tabs } from '@components/Tabs';
+import { effectFetch } from '@helpers/effectFetch';
+import { CheckboxDescriptor } from '@components/forms/CheckboxDescriptor';
 
 const intl = new Intl.NumberFormat('default', {
   style: 'currency',

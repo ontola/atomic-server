@@ -1,6 +1,6 @@
 import React, { useContext, useState, createContext } from 'react';
 
-import type { AIMessageContext } from './types';
+import type { AIMessageContext } from '../../chunks/AI/types';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
 
 export const AISidebarContext = createContext<{

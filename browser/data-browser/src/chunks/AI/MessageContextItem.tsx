@@ -2,7 +2,7 @@ import { useResource } from '@tomic/react';
 import type { AIMessageContext } from './types';
 import { styled } from 'styled-components';
 import { FaXmark } from 'react-icons/fa6';
-import { IconButton } from '../IconButton/IconButton';
+import { IconButton } from '@components/IconButton/IconButton';
 
 interface ChatContextItemProps {
   contextItem: AIMessageContext;

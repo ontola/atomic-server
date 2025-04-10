@@ -1,4 +1,4 @@
-import Markdown from '../../datatypes/Markdown';
+import Markdown from '@components/datatypes/Markdown';
 import styled from 'styled-components';
 
 const MessageWrapper = styled.div`

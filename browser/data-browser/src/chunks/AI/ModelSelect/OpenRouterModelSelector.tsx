@@ -1,12 +1,12 @@
 import styled from 'styled-components';
-import { ComboBox } from '../../ComboBox';
-import { Column, Row } from '../../Row';
+import { ComboBox } from '@components/ComboBox';
+import { Column, Row } from '@components/Row';
 import { useState } from 'react';
 import { useOpenRouterModels } from '../useOpenRouterModels';
 import { AIProvider, type AIModelIdentifier } from '../types';
 import { FaTriangleExclamation } from 'react-icons/fa6';
 import { ModelInfoLayout } from './ModelInfoLayout';
-import Markdown from '../../datatypes/Markdown';
+import Markdown from '@components/datatypes/Markdown';
 
 interface OpenRouterModelSelectorProps {
   onSelect: (model: AIModelIdentifier) => void;

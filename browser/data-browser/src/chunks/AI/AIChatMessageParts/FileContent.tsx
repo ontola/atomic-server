@@ -1,7 +1,7 @@
 import type { FileUIPart, ImagePart } from 'ai';
 import { FaFile } from 'react-icons/fa6';
 import { styled } from 'styled-components';
-import { ImageViewer } from '../../ImageViewer';
+import { ImageViewer } from '@components/ImageViewer';
 import { useId } from 'react';
 
 export const FileContent = ({ part }: { part: FileUIPart }) => {

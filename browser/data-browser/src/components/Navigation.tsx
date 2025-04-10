@@ -14,8 +14,8 @@ import { useBackForward } from '../hooks/useNavigateWithTransition';
 import { NAVBAR_TRANSITION_TAG } from '../helpers/transitionName';
 import { SearchbarFakeInput } from './Searchbar/SearchbarInput';
 import { CalculatedPageHeight } from '../globalCssVars';
-import { AISidebar } from './AI/AISidebar';
 import { AISidebarContextProvider } from './AI/AISidebarContext';
+import { AISidebarContainer } from './AI/AISidebarContainer';
 
 export const NAVBAR_HEIGHT = '2.5rem';
 
@@ -38,7 +38,7 @@ const getPosition = (
   return NavBarPosition.Bottom;
 };
 
-const AISidebarMemo = React.memo(AISidebar);
+const AISidebarMemo = React.memo(AISidebarContainer);
 
 /** Wraps the entire app and adds a navbar at the bottom or the top */
 export function NavWrapper({ children }: NavWrapperProps): JSX.Element {

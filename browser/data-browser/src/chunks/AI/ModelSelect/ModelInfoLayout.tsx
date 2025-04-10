@@ -1,4 +1,4 @@
-import { Row } from '../../Row';
+import { Row } from '@components/Row';
 import { styled } from 'styled-components';
 
 interface ModelInfoLayoutProps {
