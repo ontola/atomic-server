@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { styled, useTheme } from 'styled-components';
+import { styled } from 'styled-components';
 import { Row, Column } from '@components/Row';
-import { FaPencil, FaPlus, FaTrash, FaStar } from 'react-icons/fa6';
-import { IconButton } from '@components/IconButton/IconButton';
+import { FaPlus } from 'react-icons/fa6';
 import { ModelSelect } from './ModelSelect/ModelSelect';
-import { AIProvider, type AIAgent, type AIModelIdentifier } from './types';
+import { AIProvider } from '@components/AI/aiContstants';
+import { type AIAgent, type AIModelIdentifier } from './types';
 import {
   Dialog,
   DialogTitle,
@@ -15,10 +15,11 @@ import {
 import { useLocalStorage } from '@hooks/useLocalStorage';
 import { Button } from '@components/Button';
 import { SkeletonButton } from '@components/SkeletonButton';
-import { useSettings } from '@helpers/AppSettings';
 import { Checkbox, CheckboxLabel } from '@components/forms/Checkbox';
 import { InputWrapper, InputStyled } from '@components/forms/InputStyles';
-import { transition } from '@helpers/transition';
+import { useAISettings } from '@components/AI/AISettingsContext';
+import { CheckboxDescriptor } from '@components/forms/CheckboxDescriptor';
+import { AgentConfigItem } from './AgentConfigItem';
 
 // Add this formatter at the top of the file, after imports
 const temperatureFormatter = new Intl.NumberFormat(undefined, {
@@ -93,7 +94,6 @@ Keep the following things in mind:
   },
 ];
 
-// This hook manages the agent configuration
 export const useAIAgentConfig = () => {
   const [agents, setAgents] = useLocalStorage<AIAgent[]>(
     'atomic.ai.agents',
@@ -112,13 +112,29 @@ export const useAIAgentConfig = () => {
     Record<string, string>
   >('atomic.ai.lastUsedAgentInChat', {});
 
+  // Remember the last used agent in the sidebar but don't keep it
+  const [lastUsedSidebarAgent, setLastUsedSidebarAgent] =
+    useLocalStorage<string>(
+      'atomic.ai.sidebar.lastUsedAgent',
+      defaultAgentId,
+      window.sessionStorage,
+    );
+
   // Save agents to settings
   const saveAgents = (newAgents: AIAgent[]) => {
     setAgents(newAgents);
   };
 
-  const getLastUsedAgentForChat = (chatSubject: string) => {
-    return agentChatIndex[chatSubject];
+  const getInitialAgent = (sideBar: boolean, chatSubject?: string) => {
+    if (sideBar) {
+      return agents.find(a => a.id === lastUsedSidebarAgent) ?? agents[0];
+    } else if (chatSubject) {
+      const id = agentChatIndex[chatSubject] ?? defaultAgentId;
+
+      return agents.find(a => a.id === id) ?? agents[0];
+    }
+
+    return agents.find(a => a.id === defaultAgentId) ?? agents[0];
   };
 
   const setLastUsedAgentForChat = (chatSubject: string, agentId: string) => {
@@ -126,14 +142,15 @@ export const useAIAgentConfig = () => {
   };
 
   return {
-    agents: agents.length > 0 ? agents : [],
+    agents,
     autoAgentSelectEnabled,
     setAutoAgentSelectEnabled,
     saveAgents,
     defaultAgentId,
     setDefaultAgentId,
     setLastUsedAgentForChat,
-    getLastUsedAgentForChat,
+    setLastUsedSidebarAgent,
+    getInitialAgent,
   };
 };
 
@@ -148,12 +165,9 @@ export const AgentConfig = ({
     autoAgentSelectEnabled,
     setAutoAgentSelectEnabled,
     saveAgents,
-    defaultAgentId,
-    setDefaultAgentId,
   } = useAIAgentConfig();
   const [editingAgent, setEditingAgent] = useState<AIAgent | null>(null);
   const [isCreating, setIsCreating] = useState(false);
-  const theme = useTheme();
   const [dialogProps, show, _close, isOpen] = useDialog({
     bindShow: onOpenChange,
   });
@@ -233,78 +247,35 @@ export const AgentConfig = ({
             ) : (
               <Column>
                 <div>
-                  <CheckboxLabel>
-                    <Checkbox
-                      checked={autoAgentSelectEnabled}
-                      onChange={setAutoAgentSelectEnabled}
-                    />
-                    Automatic Agent Selection
-                  </CheckboxLabel>
-                  <p>
-                    Pick best agent for the job based on name, description and
-                    available tools
-                  </p>
+                  <CheckboxDescriptor
+                    label='Automatic Agent Selection'
+                    description='Pick best agent for the job based on name, description and
+                    available tools'
+                  >
+                    {id => (
+                      <Checkbox
+                        id={id}
+                        checked={autoAgentSelectEnabled}
+                        onChange={setAutoAgentSelectEnabled}
+                      />
+                    )}
+                  </CheckboxDescriptor>
                 </div>
-                <AgentsList>
+                <AgentsList role='radiogroup' aria-label='AI Agents'>
                   {agents.map((agent: AIAgent) => (
-                    <AgentListItem
+                    <AgentConfigItem
                       key={agent.id}
-                      selected={agent.id === selectedAgent.id}
-                      onClick={() => onSelectAgent(agent)}
-                    >
-                      <Column>
-                        <Row gap='0.2ch' center>
-                          <IconButton
-                            onClick={e => {
-                              e.stopPropagation();
-                              setDefaultAgentId(agent.id);
-                            }}
-                            title={
-                              defaultAgentId === agent.id
-                                ? 'Default agent'
-                                : 'Set as default'
-                            }
-                            edgeAlign='start'
-                          >
-                            <FaStar
-                              color={
-                                defaultAgentId === agent.id
-                                  ? theme.colors.main
-                                  : theme.colors.bg2
-                              }
-                            />
-                          </IconButton>
-                          <AgentName>{agent.name}</AgentName>
-                        </Row>
-                        <AgentDescription>{agent.description}</AgentDescription>
-                      </Column>
-                      <Row gap='0.5rem'>
-                        <IconButton
-                          onClick={e => {
-                            e.stopPropagation();
-                            handleEditAgent(agent);
-                          }}
-                          title='Edit agent'
-                        >
-                          <FaPencil />
-                        </IconButton>
-                        <IconButton
-                          onClick={e => {
-                            e.stopPropagation();
-                            handleDeleteAgent(agent);
-                          }}
-                          title='Delete agent'
-                          disabled={agents.length <= 1}
-                        >
-                          <FaTrash />
-                        </IconButton>
-                      </Row>
-                    </AgentListItem>
+                      agent={agent}
+                      selected={selectedAgent.id === agent.id}
+                      onSelect={onSelectAgent}
+                      onEdit={handleEditAgent}
+                      onDelete={handleDeleteAgent}
+                    />
                   ))}
                 </AgentsList>
 
                 <CreateButton onClick={handleCreateNewAgent}>
-                  <FaPlus /> Create New Agent
+                  <FaPlus title='' /> Create New Agent
                 </CreateButton>
               </Column>
             )}
@@ -335,7 +306,7 @@ interface AgentFormProps {
 }
 
 const AgentForm = ({ agent, onChange }: AgentFormProps) => {
-  const { mcpServers } = useSettings();
+  const { mcpServers } = useAISettings();
 
   const handleChange = (
     field: keyof AIAgent,
@@ -501,35 +472,6 @@ const AgentsList = styled.ul`
   display: flex;
   flex-direction: column;
   gap: ${p => p.theme.size(2)};
-`;
-
-const AgentListItem = styled.li<{ selected: boolean }>`
-  padding: ${p => p.theme.size(3)};
-  margin: 0;
-  border-radius: ${p => p.theme.radius};
-  background-color: ${p => p.theme.colors.bg1};
-  cursor: pointer;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  box-shadow: ${p =>
-    p.selected ? `0 0 0 2px ${p.theme.colors.main}` : 'none'};
-  ${transition('box-shadow')}
-  &:hover {
-    filter: brightness(0.95);
-  }
-`;
-
-const AgentName = styled.h3`
-  font-size: 1rem;
-  font-weight: 600;
-  margin: 0;
-`;
-
-const AgentDescription = styled.p`
-  font-size: 0.875rem;
-  color: ${p => p.theme.colors.textLight};
-  margin: ${p => p.theme.size(1)} 0 0;
 `;
 
 const CreateButton = styled(SkeletonButton)`

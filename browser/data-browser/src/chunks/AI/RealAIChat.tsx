@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useSettings } from '../../helpers/AppSettings';
 import { Column, Row } from '@components/Row';
 import toast from 'react-hot-toast';
 import { useAtomicMCPTools } from './useAtomicTools';
@@ -21,9 +20,9 @@ import {
 } from 'react-icons/fa6';
 import { ChatMessagesContainer } from './ChatMessagesContainer';
 import { useStore } from '@tomic/react';
+import { AIProvider } from '@components/AI/aiContstants';
 import {
   AIAgent,
-  AIProvider,
   type AIAtomicResourceMessageContext,
   type AIMCPResourceMessageContext,
   type AIMessageContext,
@@ -41,6 +40,7 @@ import { useChat } from '@ai-sdk/react';
 import { useClientOnlyTransport } from './ClientOnlyTransport';
 import { useGenerativeData } from './useGenerativeData';
 import { FollowUpPrompt } from './FollowUpPrompt';
+import { useAISettings } from '@components/AI/AISettingsContext';
 
 const AIChatInput = React.lazy(
   () => import('@chunks/MarkdownEditor/AIChatInput/AsyncAIChatInput'),
@@ -73,19 +73,23 @@ export const RealAIChat: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   children,
 }) => {
   const store = useStore();
-  const { openRouterApiKey, showTokenUsage, showFollowUpPrompts } =
-    useSettings();
+  const {
+    openRouterApiKey,
+    showTokenUsage,
+    showFollowUpPrompts,
+    ollamaUrl,
+    isProviderEnabled,
+  } = useAISettings();
 
   // useChat does not update it's options so we need to use a ref to make it use the latest value.
   const showFollowUpPromptsRef = useRef(showFollowUpPrompts);
   showFollowUpPromptsRef.current = showFollowUpPrompts;
 
   const {
-    agents,
     autoAgentSelectEnabled,
-    defaultAgentId,
-    getLastUsedAgentForChat,
+    getInitialAgent,
     setLastUsedAgentForChat,
+    setLastUsedSidebarAgent,
   } = useAIAgentConfig();
   const addContextToMessages = useProcessMessages();
   const getToolsForAgent = useTools();
@@ -97,8 +101,12 @@ export const RealAIChat: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   const [editedResources, setEditedResources] = useState<string[]>([]);
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<AIAgent>(
-    agents.find(a => a.id === defaultAgentId) || agents[0],
+    getInitialAgent(!chatSubject, chatSubject),
   );
+
+  const canSubmit =
+    autoAgentSelectEnabled || isProviderEnabled(selectedAgent.model.provider);
+
   const [userSelectedContextItems, setUserSelectedContextItems] = useState<
     AIMessageContext[]
   >([]);
@@ -123,7 +131,8 @@ export const RealAIChat: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   });
 
   const transport = useClientOnlyTransport({
-    openRouterAPIKey: openRouterApiKey || '',
+    openRouterAPIKey: openRouterApiKey,
+    ollamaURL: ollamaUrl,
     selectedAgent,
     tools: {
       ...(selectedAgent.canReadAtomicData ? atomicTools.read : {}),
@@ -268,6 +277,8 @@ export const RealAIChat: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
 
     if (chatSubject) {
       setLastUsedAgentForChat(chatSubject, selectedAgent.id);
+    } else {
+      setLastUsedSidebarAgent(selectedAgent.id);
     }
   };
 
@@ -287,13 +298,9 @@ export const RealAIChat: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   useEffect(() => {
     if (!chatSubject) return;
 
-    const agentId = getLastUsedAgentForChat(chatSubject);
-    if (!agentId) return;
+    const initialAgent = getInitialAgent(false, chatSubject);
 
-    const lastUsedAgent = agents.find(a => a.id === agentId);
-    if (!lastUsedAgent) return;
-
-    setSelectedAgent(lastUsedAgent);
+    setSelectedAgent(initialAgent);
   }, [chatSubject]);
 
   return (
@@ -389,10 +396,11 @@ export const RealAIChat: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                   ))}
                 </ContextItemRow>
                 <AIChatInput
+                  disabled={!canSubmit}
+                  hasFiles={!!attachedFiles}
                   onMentionUpdate={handleMentionUpdate}
                   onChange={setUserInput}
                   onSubmit={handleSubmit}
-                  hasFiles={!!attachedFiles}
                   onFileAdded={
                     checkModelSupportsImageInput(selectedAgent.model)
                       ? handleFileUpload

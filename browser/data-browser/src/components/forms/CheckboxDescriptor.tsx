@@ -4,7 +4,7 @@ import { styled } from 'styled-components';
 
 interface CheckboxDescriptorProps {
   label: string;
-  description: string;
+  description: string | React.ReactNode;
   children: (id: string) => React.ReactNode;
 }
 

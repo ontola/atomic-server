@@ -3,7 +3,7 @@ import React, { useEffect, useReducer, useRef, useState } from 'react';
 import { newContextItem, useAISidebar } from '@components/AI/AISidebarContext';
 import { AIAtomicResourceMessageContext, type AtomicUIMessage } from './types';
 import { useCurrentSubject } from '@helpers/useCurrentSubject';
-import { FaFloppyDisk, FaPlus, FaXmark } from 'react-icons/fa6';
+import { FaArrowRotateLeft, FaFloppyDisk, FaXmark } from 'react-icons/fa6';
 import { IconButton } from '@components/IconButton/IconButton';
 import { Row } from '@components/Row';
 import { ParentPickerDialog } from '@components/ParentPicker/ParentPickerDialog';
@@ -13,10 +13,12 @@ import { uiMessageToResource } from './chatConversionUtils';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import { constructOpenURL } from '@helpers/navigation';
 import { RealAIChat } from './RealAIChat';
+import { useAISettings } from '@components/AI/AISettingsContext';
 
 const AISidebar: React.FC = () => {
   const store = useStore();
   const [rerenderKey, updateRenderKey] = useReducer(prev => prev + 1, 0);
+  const { shouldGenerateTitles } = useAISettings();
   const { isOpen, contextItems, setContextItems, setIsOpen } = useAISidebar();
   const [messages, setMessages] = useState<AtomicUIMessage[]>([]);
   const [currentSubject] = useCurrentSubject();
@@ -106,6 +108,13 @@ const AISidebar: React.FC = () => {
 
   useEffect(() => {
     if (messages.length > 2 && !titlePromiseRef.current) {
+      if (!shouldGenerateTitles) {
+        // Don't generate a title, just resolve the promise.
+        titlePromiseRef.current = Promise.resolve(undefined);
+
+        return;
+      }
+
       titlePromiseRef.current = generateTitleFromConversation(messages);
     }
   }, [messages]);
@@ -129,7 +138,7 @@ const AISidebar: React.FC = () => {
               color='textLight'
               style={{ alignSelf: 'flex-end' }}
             >
-              <FaPlus />
+              <FaArrowRotateLeft />
             </IconButton>
             <Heading>Atomic Assistant</Heading>
           </Row>

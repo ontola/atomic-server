@@ -4,8 +4,8 @@ import { appRoute } from './RootRoutes';
 import { useEffect, useState } from 'react';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import styled from 'styled-components';
-import { useSettings } from '../helpers/AppSettings';
 import { effectFetch } from '../helpers/effectFetch';
+import { useAISettings } from '@components/AI/AISettingsContext';
 
 export type LinkOpenRouterSearch = {
   code: string;
@@ -24,7 +24,7 @@ export const LinkOpenRouter = createRoute({
 
 function LinkOpenRouterPage() {
   const [error, setError] = useState<string>();
-  const { setOpenRouterApiKey } = useSettings();
+  const { setOpenRouterApiKey } = useAISettings();
   const { code } = LinkOpenRouter.useSearch();
   const navigate = useNavigateWithTransition();
 

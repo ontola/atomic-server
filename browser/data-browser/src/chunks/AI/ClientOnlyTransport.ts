@@ -6,16 +6,19 @@ import {
   type ToolSet,
   type UIMessageChunk,
 } from 'ai';
-import { AIProvider, type AIAgent, type AtomicUIMessage } from './types';
+import { AIProvider } from '@components/AI/aiContstants';
+import { type AIAgent, type AtomicUIMessage } from './types';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { useRef } from 'react';
 import { useStore } from '@tomic/react';
 import { useAutoAgentSelect } from './useAgentAutoSelect';
+import { createOllama } from 'ollama-ai-provider-v2';
 
 export type Modalities = 'text' | 'image';
 
 export interface ClientOnlyTransportOptions {
-  openRouterAPIKey: string;
+  openRouterAPIKey?: string;
+  ollamaURL?: string;
   selectedAgent: AIAgent;
   autoSelectAgent: boolean;
   tools: ToolSet;
@@ -61,6 +64,7 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
       tools: this.options.tools,
       abortSignal,
       stopWhen: stepCountIs(10),
+      temperature: agent.temperature,
     });
 
     const originalStream = result.toUIMessageStream({
@@ -94,7 +98,10 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
   }
 
   private getModelFromAgent(agent: AIAgent) {
-    if (agent.model.provider === AIProvider.OpenRouter) {
+    if (
+      agent.model.provider === AIProvider.OpenRouter &&
+      this.options.openRouterAPIKey
+    ) {
       const openRouter = createOpenRouter({
         apiKey: this.options.openRouterAPIKey,
         compatibility: 'strict',
@@ -109,10 +116,16 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
       return openRouter(
         agent.model.id + (this.options.webSearchEnabled ? ':online' : ''),
       );
+    } else if (
+      agent.model.provider === AIProvider.Ollama &&
+      this.options.ollamaURL
+    ) {
+      const ollama = createOllama({
+        baseURL: `${this.options.ollamaURL}/api`,
+      });
+
+      return ollama(agent.model.id);
     }
-    // } else if (agent.model.provider === AIProvider.Ollama) {
-    //   return ollama(agent.model.id);
-    // }
 
     throw new Error('Invalid model provider');
   }

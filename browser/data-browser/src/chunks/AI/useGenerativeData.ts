@@ -1,8 +1,8 @@
 import { generateObject, generateText } from 'ai';
 import { type AtomicUIMessage } from './types';
-import { useSettings } from '@helpers/AppSettings';
-import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import z from 'zod';
+import { useAISettings } from '@components/AI/AISettingsContext';
+import { useGetModel } from './useModel';
 
 const generateTitleSystemPrompt = (
   conversation: string,
@@ -39,25 +39,26 @@ ${conversation}
 `;
 
 export const useGenerativeData = () => {
-  const { openRouterApiKey } = useSettings() as { openRouterApiKey?: string };
-  const openrouter = createOpenRouter({
-    apiKey: openRouterApiKey,
-    compatibility: 'strict',
-    extraBody: {
-      transforms: ['middle-out'],
-    },
-  });
+  const { genFeaturesModel } = useAISettings();
+
+  const getModel = useGetModel();
 
   const generateTitleFromConversation = async (
     conversation: AtomicUIMessage[],
   ) => {
+    const model = getModel(genFeaturesModel);
+
+    if (!model) {
+      return undefined;
+    }
+
     const filteredConversation = removeFilesAndImages(
       conversation.slice(0, 2).filter(m => m.role !== 'system'),
     );
     const convoString = JSON.stringify(filteredConversation);
 
     const { text } = await generateText({
-      model: openrouter('google/gemma-3-4b-it'),
+      model,
       // Google/gemma-3-4b-it:free doesn't support system prompts so we have to do it this way
       prompt: generateTitleSystemPrompt(convoString),
     });
@@ -72,13 +73,19 @@ export const useGenerativeData = () => {
   };
 
   const generateFollowUpQuestions = async (conversation: AtomicUIMessage[]) => {
+    const model = getModel(genFeaturesModel);
+
+    if (!model) {
+      return [];
+    }
+
     const filteredConversation = removeFilesAndImages(
       conversation.slice(-2).filter(m => m.role !== 'system'),
     );
     const convoString = JSON.stringify(filteredConversation);
 
     const { object } = await generateObject({
-      model: openrouter('google/gemma-3-4b-it'),
+      model,
       prompt: generateFollowUpQuestionsSystemPrompt(convoString),
       schema: z.object({
         prompt: z.string(),

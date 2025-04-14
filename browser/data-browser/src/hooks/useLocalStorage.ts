@@ -10,13 +10,14 @@ export type SetLocalStorageValue<T> = (value: T | ((val: T) => T)) => void;
 export function useLocalStorage<T>(
   key: string,
   initialValue: T,
+  storage: Storage = window.localStorage,
 ): [T, SetLocalStorageValue<T>] {
   // State to store our value
   // Pass initial state function to useState so logic is only executed once
   const [storedValue, setStoredValue] = useState<T>(() => {
     try {
       // Get from local storage by key
-      const item = window.localStorage.getItem(key);
+      const item = storage.getItem(key);
 
       if (item === 'undefined') {
         return initialValue;
@@ -47,7 +48,7 @@ export function useLocalStorage<T>(
         }
 
         // Save to local storage
-        window.localStorage.setItem(key, JSON.stringify(valueToStore));
+        storage.setItem(key, JSON.stringify(valueToStore));
       } catch (error) {
         // A more advanced implementation would handle the error case
         console.error(error);

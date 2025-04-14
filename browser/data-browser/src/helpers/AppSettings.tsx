@@ -13,7 +13,6 @@ import { SIDEBAR_TOGGLE_WIDTH } from '../components/SideBar';
 import { serverURLStorage } from './serverURLStorage';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { errorHandler } from '../handlers/errorHandler';
-import type { MCPServer } from '@chunks/AI/types';
 
 interface ProviderProps {
   children: ReactNode;
@@ -43,28 +42,6 @@ export const AppSettingsContextProvider = (
   const [sideBarLocked, setSideBarLocked] = useLocalStorage(
     'sideBarOpen',
     window.innerWidth > SIDEBAR_TOGGLE_WIDTH,
-  );
-
-  // == AI ==
-  const [enableAI, setEnableAI] = useLocalStorage('atomic.ai.enabled', true);
-  const [openRouterApiKey, setOpenRouterApiKey] = useLocalStorage<
-    string | undefined
-  >('atomic.ai.openrouter-api-key', undefined);
-  const [mcpServers, setMcpServers] = useLocalStorage<MCPServer[]>(
-    'atomic.ai.mcpServers',
-    [],
-  );
-  const [ollamaUrl, setOllamaUrl] = useLocalStorage<string | undefined>(
-    'atomic.ai.ollama-url',
-    undefined,
-  );
-  const [showTokenUsage, setShowTokenUsage] = useLocalStorage(
-    'atomic.ai.showTokenUsage',
-    true,
-  );
-  const [showFollowUpPrompts, setShowFollowUpPrompts] = useLocalStorage(
-    'atomic.ai.showFollowUpPrompts',
-    true,
   );
 
   // == ACCESSIBILITY ==
@@ -121,18 +98,6 @@ export const AppSettingsContextProvider = (
       setSidebarKeyboardDndEnabled,
       hideTemplates,
       setHideTemplates,
-      openRouterApiKey,
-      setOpenRouterApiKey,
-      mcpServers,
-      setMcpServers,
-      enableAI,
-      setEnableAI,
-      showTokenUsage,
-      setShowTokenUsage,
-      ollamaUrl,
-      setOllamaUrl,
-      showFollowUpPrompts,
-      setShowFollowUpPrompts,
     }),
     [
       drive,
@@ -156,18 +121,6 @@ export const AppSettingsContextProvider = (
       setSidebarKeyboardDndEnabled,
       hideTemplates,
       setHideTemplates,
-      openRouterApiKey,
-      setOpenRouterApiKey,
-      mcpServers,
-      setMcpServers,
-      enableAI,
-      setEnableAI,
-      showTokenUsage,
-      setShowTokenUsage,
-      ollamaUrl,
-      setOllamaUrl,
-      showFollowUpPrompts,
-      setShowFollowUpPrompts,
     ],
   );
 
@@ -212,25 +165,6 @@ export interface AppSettings {
   setSidebarKeyboardDndEnabled: (b: boolean) => void;
   hideTemplates: boolean;
   setHideTemplates: (b: boolean) => void;
-  /** The OpenRouter API key for making requests to OpenRouter */
-  openRouterApiKey: string | undefined;
-  setOpenRouterApiKey: (key: string | undefined) => void;
-  /** List of MCP servers */
-  mcpServers: MCPServer[];
-  /** Update the list of MCP servers */
-  setMcpServers: (servers: MCPServer[]) => void;
-  /** Enable all AI features in the app */
-  enableAI: boolean;
-  setEnableAI: (b: boolean) => void;
-  /** Whether to show the token usage in AI chats */
-  showTokenUsage: boolean;
-  setShowTokenUsage: (b: boolean) => void;
-  /** The URL of the Ollama server */
-  ollamaUrl: string | undefined;
-  setOllamaUrl: (url: string | undefined) => void;
-  /** Whether to show the follow up prompts in AI chats */
-  showFollowUpPrompts: boolean;
-  setShowFollowUpPrompts: (b: boolean) => void;
 }
 
 const initialState: AppSettings = {
@@ -255,18 +189,6 @@ const initialState: AppSettings = {
   setSidebarKeyboardDndEnabled: () => undefined,
   hideTemplates: false,
   setHideTemplates: () => undefined,
-  openRouterApiKey: undefined,
-  setOpenRouterApiKey: () => undefined,
-  mcpServers: [],
-  setMcpServers: () => undefined,
-  enableAI: true,
-  setEnableAI: () => undefined,
-  showTokenUsage: true,
-  setShowTokenUsage: () => undefined,
-  ollamaUrl: undefined,
-  setOllamaUrl: () => undefined,
-  showFollowUpPrompts: true,
-  setShowFollowUpPrompts: () => undefined,
 };
 
 /** Hook for using App Settings, such as theme and darkmode */

@@ -2,13 +2,14 @@ import styled from 'styled-components';
 import { ComboBox } from '@components/ComboBox';
 import { Column } from '@components/Row';
 import { useEffect, useState } from 'react';
-import { AIProvider, type AIModelIdentifier } from '../types';
+import { AIProvider } from '@components/AI/aiContstants';
+import { type AIModelIdentifier } from '../types';
 import { ModelInfoLayout } from './ModelInfoLayout';
-import { useSettings } from '@helpers/AppSettings';
 import { ErrorLook } from '@components/ErrorLook';
 import { TAB_PANEL_HAS_ERROR_CLASS } from '@components/Tabs';
 import { LoaderBlock } from '@components/Loader';
 import { effectFetch } from '@helpers/effectFetch';
+import { useAISettings } from '@components/AI/AISettingsContext';
 
 type OllamaModel = {
   name: string;
@@ -34,7 +35,7 @@ export const OllamaModelSelector: React.FC<OllamaModelSelectorProps> = ({
   onSelect,
   selectedModel,
 }) => {
-  const { ollamaUrl } = useSettings();
+  const { ollamaUrl, isProviderEnabled } = useAISettings();
 
   const [error, setError] = useState<string>();
   const [loading, setLoading] = useState(modelCache.length === 0);
@@ -49,7 +50,7 @@ export const OllamaModelSelector: React.FC<OllamaModelSelectorProps> = ({
   }));
 
   useEffect(() => {
-    return effectFetch(`${ollamaUrl}/tags`, {
+    return effectFetch(`${ollamaUrl}/api/tags`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -76,6 +77,10 @@ export const OllamaModelSelector: React.FC<OllamaModelSelectorProps> = ({
 
   if (loading) {
     return <LoaderBlock>Loading...</LoaderBlock>;
+  }
+
+  if (!isProviderEnabled(AIProvider.Ollama)) {
+    return <ModelInfoLayout.Empty>Ollama is not enabled</ModelInfoLayout.Empty>;
   }
 
   return (

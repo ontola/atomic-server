@@ -84,7 +84,7 @@ const OntologySection = ({ subject, onClassSelect }: OntologySectionProps) => {
   const resource = useResource<Core.Ontology>(subject);
 
   return (
-    <OutlinedSection title={resource.title}>
+    <OutlinedSection extraPadding title={resource.title}>
       <Row wrapItems>
         {resource.props.classes?.map(s => (
           <ClassButton key={s} subject={s} onClassSelect={onClassSelect} />
