@@ -4,7 +4,6 @@ import { useHotkeys } from 'react-hotkeys-hook';
 import { FaTimes } from 'react-icons/fa';
 import { styled, keyframes } from 'styled-components';
 import * as CSS from 'csstype';
-import { effectTimeout } from '../../helpers/effectTimeout';
 import { Button } from '../Button';
 import { DropdownContainer } from '../Dropdown/DropdownContainer';
 import { PopoverContainer } from '../Popover';
@@ -18,6 +17,7 @@ import { useControlLock } from '../../hooks/useControlLock';
 import { useDialogGlobalContext } from './DialogGlobalContextProvider';
 import { DIALOG_CONTENT_CONTAINER } from '../../helpers/containers';
 import { CurrentBackgroundColor } from '../../globalCssVars';
+import { timeoutEffect } from '@helpers/timeoutEffect';
 
 export interface InternalDialogProps {
   show: boolean;
@@ -145,7 +145,7 @@ const InnerDialog: React.FC<React.PropsWithChildren<InternalDialogProps>> = ({
 
     if (dialogRef.current.hasAttribute('data-closing')) {
       // TODO: Use getAnimations() api to wait for the animations to complete instead of a timeout.
-      return effectTimeout(() => {
+      return timeoutEffect(() => {
         // @ts-ignore
         dialogRef.current.close();
         dialogRef.current?.removeAttribute('data-closing');

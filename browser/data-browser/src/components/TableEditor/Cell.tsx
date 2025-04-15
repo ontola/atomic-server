@@ -54,6 +54,7 @@ export function Cell({
   const [markEnterEditMode, setMarkEnterEditMode] = useState(false);
 
   const {
+    readOnly,
     mouseDown,
     selectedRow,
     selectedColumn,
@@ -77,14 +78,14 @@ export function Cell({
 
   const handleMouseUp = useCallback(() => {
     setMouseDown(false);
-  }, []);
+  }, [setMouseDown]);
 
   const handleMouseEnter = useCallback(() => {
     if (mouseDown) {
       setMultiSelectCorner(rowIndex, columnIndex);
       setCursorMode(CursorMode.MultiSelect);
     }
-  }, [mouseDown, rowIndex, columnIndex]);
+  }, [mouseDown, rowIndex, columnIndex, setMultiSelectCorner, setCursorMode]);
 
   const shouldEnterEditMode = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
@@ -124,7 +125,7 @@ export function Cell({
         return;
       }
 
-      if (shouldEnterEditMode(e)) {
+      if (!readOnly && shouldEnterEditMode(e)) {
         setMarkEnterEditMode(true);
 
         return;
@@ -138,12 +139,17 @@ export function Cell({
       setActiveCell(rowIndex, columnIndex);
     },
     [
+      readOnly,
       setActiveCell,
       columnIndex,
       shouldEnterEditMode,
       cursorMode,
       isActive,
       disabledKeyboardInteractions,
+      setCursorMode,
+      setMouseDown,
+      setMultiSelectCorner,
+      rowIndex,
     ],
   );
 
@@ -159,7 +165,13 @@ export function Cell({
       setCursorMode(CursorMode.Edit);
       setMarkEnterEditMode(false);
     }
-  }, [markEnterEditMode, disabledKeyboardInteractions]);
+  }, [
+    markEnterEditMode,
+    disabledKeyboardInteractions,
+    setMultiSelectCorner,
+    setMouseDown,
+    setCursorMode,
+  ]);
 
   useLayoutEffect(() => {
     if (!ref.current) {
@@ -169,7 +181,7 @@ export function Cell({
     if (isActiveCorner) {
       updateMultiSelectCornerCellRef(ref.current);
     }
-  }, [isActiveCorner]);
+  }, [isActiveCorner, updateMultiSelectCornerCellRef]);
 
   useEffect(() => {
     if (!ref.current) {
@@ -209,6 +221,7 @@ export function Cell({
     onEnterEditModeWithCharacter,
     onEditNextRow,
     updateActiveCellRef,
+    registerEventListener,
   ]);
 
   return (

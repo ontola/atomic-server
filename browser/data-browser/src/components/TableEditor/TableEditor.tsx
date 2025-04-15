@@ -40,6 +40,7 @@ const ARIA_TABLE_USAGE =
   'Use the arrow keys to navigate the table. Press enter to edit a cell. Press escape to exit edit mode.';
 
 interface FancyTableProps<T> {
+  readOnly?: boolean;
   columns: T[];
   itemCount: number;
   columnSizes?: number[];
@@ -68,10 +69,11 @@ type OnScroll = (props: ListOnScrollProps) => unknown;
 
 export function FancyTable<T>({
   rowHeight = 40,
+  readOnly = false,
   ...props
 }: FancyTableProps<T>): JSX.Element {
   return (
-    <TableEditorContextProvider>
+    <TableEditorContextProvider readOnly={readOnly}>
       <FancyTableInner rowHeight={rowHeight} {...props} />
     </TableEditorContextProvider>
   );
@@ -100,8 +102,13 @@ function FancyTableInner<T>({
   const scrollerRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
 
-  const { listRef, tableRef, setCursorMode, disabledKeyboardInteractions } =
-    useTableEditorContext();
+  const {
+    listRef,
+    tableRef,
+    setCursorMode,
+    disabledKeyboardInteractions,
+    readOnly,
+  } = useTableEditorContext();
   const [onScroll, setOnScroll] = useState<OnScroll>(() => undefined);
 
   const { templateColumns, contentRowWidth, resizeCell } = useCellSizes(
@@ -116,7 +123,7 @@ function FancyTableInner<T>({
     }
 
     setCursorMode(CursorMode.Visual);
-  }, [disabledKeyboardInteractions]);
+  }, [disabledKeyboardInteractions, setCursorMode]);
 
   useClickAwayListener([tableRef], handleClickOutside, true);
 
@@ -154,7 +161,7 @@ function FancyTableInner<T>({
         </TableRow>
       );
     },
-    [itemCount, children],
+    [children, onRowExpand],
   );
 
   const List = useCallback(
@@ -175,12 +182,16 @@ function FancyTableInner<T>({
   );
 
   useEffect(() => {
+    if (readOnly) {
+      return;
+    }
+
     document.addEventListener('paste', triggerPasteCommand);
 
     return () => {
       document.removeEventListener('paste', triggerPasteCommand);
     };
-  }, [triggerPasteCommand]);
+  }, [triggerPasteCommand, readOnly]);
 
   return (
     <DndWrapper>

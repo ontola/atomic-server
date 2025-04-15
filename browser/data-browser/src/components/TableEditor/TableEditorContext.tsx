@@ -37,6 +37,7 @@ function emptySetState<T>(_: T | ((__: T) => T)): undefined {
 }
 
 export interface TableEditorContext {
+  readOnly: boolean;
   mouseDown: boolean;
   setMouseDown: React.Dispatch<React.SetStateAction<boolean>>;
   tableRef: React.RefObject<HTMLDivElement | null>;
@@ -77,6 +78,7 @@ export interface TableEditorContext {
 }
 
 const initial: TableEditorContext = {
+  readOnly: false,
   mouseDown: false,
   setMouseDown: emptySetState,
   tableRef: { current: null },
@@ -110,9 +112,14 @@ const initial: TableEditorContext = {
 
 const TableEditorContext = createContext<TableEditorContext>(initial);
 
+interface TableEditorContextProviderProps {
+  readOnly: boolean;
+}
+
 export function TableEditorContextProvider({
   children,
-}: React.PropsWithChildren<unknown>): JSX.Element {
+  readOnly,
+}: React.PropsWithChildren<TableEditorContextProviderProps>): JSX.Element {
   const [mouseDown, setMouseDown] = useState(false);
   const tableRef = useRef<HTMLDivElement | null>(null);
   const listRef = useRef<FixedSizeList>(null);
@@ -197,6 +204,7 @@ export function TableEditorContextProvider({
 
   const context = useMemo(
     () => ({
+      readOnly,
       mouseDown,
       setMouseDown,
       tableRef,
@@ -228,6 +236,10 @@ export function TableEditorContextProvider({
       setMarkings,
     }),
     [
+      clearCell,
+      clearRow,
+      enterEditModeWithCharacter,
+      eventManager,
       disabledKeyboardInteractions,
       selectedRow,
       selectedColumn,
@@ -241,6 +253,7 @@ export function TableEditorContextProvider({
       isDragging,
       cursorMode,
       emitInteractionsFired,
+      readOnly,
       mouseDown,
       markings,
     ],
