@@ -186,7 +186,10 @@ fn set_agent_config() -> CLIResult<Config> {
             let server = promptly::prompt("What's the base url of your Atomic Server?")?;
             let agent_secret = promptly::prompt("Enter your agent secret")?;
             let config = atomic_lib::config::Config {
-                shared: SharedConfig { agent_secret },
+                shared: SharedConfig {
+                    agent_secret,
+                    initial_drive: None,
+                },
                 client: Some(ClientConfig { server_url: server }),
             };
             config.save(&agent_config_path)?;

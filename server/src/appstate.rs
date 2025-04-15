@@ -7,9 +7,7 @@ use crate::{
     search::SearchState,
     y_sync_broadcaster::{self, YSyncBroadcaster},
 };
-use atomic_lib::{
-    agents::Agent, commit::CommitResponse, config::SharedConfig, storelike::Query, urls, Storelike,
-};
+use atomic_lib::{agents::Agent, commit::CommitResponse, config::SharedConfig, Storelike};
 
 #[cfg(feature = "wasm-plugins")]
 use crate::plugins::wasm;
@@ -30,41 +28,10 @@ pub struct AppState {
     pub commit_monitor: actix::Addr<CommitMonitor>,
     pub y_sync_broadcaster: actix::Addr<YSyncBroadcaster>,
     pub search_state: SearchState,
-    pub dht: Option<crate::dht::DhtService>,
+    pub dht: Option<atomic_lib::dht::DhtService>,
 }
 
 impl AppState {
-    /// Returns the Drive DID for a given host (domain/subdomain).
-    /// If the host matches a subdomain of the base domain, it looks for a Drive with that subdomain.
-    /// If no mapping is found, returns None.
-    pub async fn get_drive_did_for_host(&self, host: &str) -> Option<atomic_lib::Subject> {
-        let base_domain = self.config.get_base_domain()?;
-
-        // Extract subdomain if it exists
-        let subdomain = if host == base_domain {
-            Some("root".to_string()) // Special case for the apex domain
-        } else if host.ends_with(&format!(".{}", base_domain)) {
-            let sub = &host[..host.len() - base_domain.len() - 1];
-            Some(sub.to_string())
-        } else {
-            None
-        };
-
-        if let Some(sub) = subdomain {
-            let mut query = Query::new_class(urls::DRIVE);
-            query.property = Some(urls::SUBDOMAIN.to_string());
-            query.value = Some(atomic_lib::Value::Slug(sub));
-
-            if let Ok(result) = self.store.query(&query).await {
-                if let Some(subject) = result.subjects.first() {
-                    return Some(subject.clone());
-                }
-            }
-        }
-
-        None
-    }
-
     /// Creates the AppState (the server's context available in Handlers).
     /// Initializes or opens a store on disk.
     /// Creates a new agent, if necessary.
@@ -98,6 +65,7 @@ impl AppState {
         store.add_endpoint(plugins::versioning::version_endpoint())?;
         store.add_endpoint(plugins::versioning::all_versions_endpoint())?;
         store.add_endpoint(plugins::did::did_endpoint())?;
+        store.add_endpoint(plugins::setup::setup_endpoint())?;
         store.add_endpoint(plugins::bookmark::bookmark_endpoint())?;
         store.add_endpoint(plugins::files::upload_endpoint())?;
         store.add_endpoint(plugins::files::download_endpoint())?;
@@ -124,35 +92,38 @@ impl AppState {
             }
         }
 
-        let no_drives = store
-            .query(&Query::new_class(urls::DRIVE))
-            .await
-            .map(|r| r.subjects.is_empty())
-            .unwrap_or(true);
-        if no_drives {
-            tracing::warn!("No drives found. Initializing a new database...");
-        }
-        let should_init = !&config.store_path.exists() || config.initialize || no_drives;
-        if should_init {
-            tracing::info!("Initialize: creating and populating new Database...");
-            atomic_lib::populate::populate_default_store(&store)
-                .await
-                .map_err(|e| format!("Failed to populate default store. {}", e))?;
-        }
-
         set_default_agent(&config, &store).await?;
+
+        let should_init = !&config.store_path.exists() || config.initialize;
+        // If the store is empty, populate the core models (classes, properties, etc.).
+        // We don't create a Drive here anymore; that's handled by the frontend onboarding.
+        if should_init {
+            tracing::info!("Initialize: bootstrapping core models...");
+            atomic_lib::populate::bootstrap(&store)
+                .await
+                .map_err(|e| format!("Failed to bootstrap store. {}", e))?;
+        }
 
         // Initialize search constructs
         let search_state = SearchState::new(&config)
             .map_err(|e| format!("Failed to start search service: {}", e))?;
 
+        if should_init {
+            tracing::info!("Adding all resources to search index");
+            search_state.add_all_resources(&store).await?;
+        }
+
         let dht = if config.opts.mainline_dht {
             tracing::info!("Starting Mainline DHT service");
-            let dht_service = crate::dht::DhtService::new()?;
+            let dht_service = atomic_lib::dht::DhtService::new()?;
             Some(dht_service)
         } else {
             None
         };
+
+        if let Some(dht_service) = dht.clone() {
+            store.set_dht(dht_service);
+        }
 
         // Initialize commit monitor, which watches commits and sends these to the commit_monitor actor
         let commit_monitor =
@@ -169,40 +140,6 @@ impl AppState {
             });
         };
         store.set_handle_commit(Box::new(send_commit));
-
-        // If the user changes their server_url, the drive will not exist.
-        // In this situation, we should re-build a new drive from scratch.
-        if should_init {
-            let drive_did = atomic_lib::populate::create_did_drive(&store, Some("root".into())).await?;
-            tracing::info!("Created initial DID drive: {}", drive_did);
-
-            // Map the server's host to this drive
-            let origin_url = url::Url::parse(&config.get_origin())
-                .map_err(|e| format!("Invalid origin URL: {}", e))?;
-            let host = origin_url.host_str().ok_or("Origin URL has no host")?;
-
-            store.add_drive_mapping(host, drive_did.as_str())?;
-            tracing::info!("Mapped host {} to drive {}", host, drive_did);
-
-            atomic_lib::populate::populate_all(&store).await?;
-            // Building the index here is needed to perform Queries on imported resources
-            let store_clone = store.clone();
-            std::thread::spawn(move || {
-                let res = store_clone.build_index(true);
-                if let Err(e) = res {
-                    tracing::error!("Failed to build index: {}", e);
-                }
-            });
-
-            let invite_url = get_initial_invite_token(&store, &config.get_origin())
-                .await
-                .map_err(|e| format!("Error while setting up initial invite: {}", e))?;
-            // This means that editing the .env does _not_ grant you the rights to edit the Drive.
-
-            tracing::info!("Initial invite URL: \n\n {} \n\n", invite_url);
-            tracing::info!("Adding all resources to search index");
-            search_state.add_all_resources(&store).await?;
-        }
 
         Ok(AppState {
             store,
@@ -268,6 +205,7 @@ async fn set_default_agent(config: &Config, store: &impl Storelike) -> AtomicSer
                 let cfg = atomic_lib::config::Config {
                     shared: SharedConfig {
                         agent_secret: agent.build_secret()?,
+                        initial_drive: agent.initial_drive.clone().map(|s| s.to_string()),
                     },
                     client: agent_config.client,
                 };
@@ -278,17 +216,10 @@ async fn set_default_agent(config: &Config, store: &impl Storelike) -> AtomicSer
                 );
             }
 
-            match store.get_resource(&agent.subject.clone().into()).await {
+            match store.get_resource(&agent.subject.clone()).await {
                 Ok(_) => agent,
                 Err(e) => {
-                    let is_local = if let Some(base) = &config.base_domain {
-                        agent.subject.as_str().contains(base)
-                    } else {
-                        agent.subject.as_str().starts_with("internal:")
-                            || agent.subject.as_str().starts_with("did:")
-                    };
-
-                    if is_local {
+                    if agent.subject.is_local() {
                         // If there is an agent in the config, but not in the store,
                         // That probably means that the DB has been erased and only the config file exists.
                         // This means that the Agent from the Config file should be recreated, using its private key.
@@ -315,6 +246,7 @@ async fn set_default_agent(config: &Config, store: &impl Storelike) -> AtomicSer
             let cfg = atomic_lib::config::Config {
                 shared: SharedConfig {
                     agent_secret: agent.build_secret()?,
+                    initial_drive: agent.initial_drive.clone().map(|s| s.to_string()),
                 },
                 client: None,
             };
@@ -331,26 +263,4 @@ async fn set_default_agent(config: &Config, store: &impl Storelike) -> AtomicSer
     tracing::info!("Default Agent is set: {}", &agent.subject);
     store.set_default_agent(agent);
     Ok(())
-}
-
-/// Creates the first Invitation that is opened by the user on the Home page.
-async fn get_initial_invite_token(
-    store: &impl Storelike,
-    base_url: &str,
-) -> AtomicServerResult<String> {
-    let agent = store
-        .get_default_agent()
-        .map_err(|e| format!("Could not get default agent: {}", e))?;
-    let expiry = atomic_lib::utils::now() + 60 * 60 * 24 * 2; // 2 days
-    let token = crate::invite_token::InviteToken::new(base_url.to_string(), true, expiry, &agent)
-        .map_err(|e| format!("Could not create invite token: {}", e))?;
-
-    let token_base64 = token
-        .encode()
-        .map_err(|e| format!("Could not encode invite token: {}", e))?;
-    let token_encoded: String =
-        url::form_urlencoded::byte_serialize(token_base64.as_bytes()).collect();
-    let url = format!("{}/invites?token={}", base_url, token_encoded);
-
-    Ok(url)
 }

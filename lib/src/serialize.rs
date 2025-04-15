@@ -10,13 +10,23 @@ use crate::{
 };
 
 /// Serializes a vector or Resources to a JSON-AD string
-pub fn resources_to_json_ad(resources: &[Resource], origin: &str) -> AtomicResult<String> {
+pub fn resources_to_json_ad(
+    resources: &[Resource],
+    origin: &str,
+    resolve_subjects: bool,
+) -> AtomicResult<String> {
     let mut strings = Vec::new();
     for r in resources {
+        let subject = if resolve_subjects {
+            r.get_subject().resolve(origin)
+        } else {
+            r.get_subject().to_string()
+        };
         let res = propvals_to_json_ad_map(
             r.get_propvals(),
-            Some(r.get_subject().resolve(origin)),
+            Some(subject),
             origin,
+            resolve_subjects,
         )?;
         strings.push(serde_json::to_string(&res)?);
     }
@@ -26,29 +36,40 @@ pub fn resources_to_json_ad(resources: &[Resource], origin: &str) -> AtomicResul
 }
 
 /// Converts an Atomic Value to a Serde Value.
-// TODO: Accept JSON-LD / JSON as options
-// https://github.com/atomicdata-dev/atomic-server/issues/315
-pub fn val_to_serde(value: Value, origin: &str) -> AtomicResult<SerdeValue> {
+pub fn val_to_serde(value: Value, origin: &str, resolve_subjects: bool) -> AtomicResult<SerdeValue> {
     let json_val: SerdeValue = match value {
-        Value::AtomicUrl(val) => SerdeValue::String(val.resolve(origin)),
+        Value::AtomicUrl(val) => {
+            if resolve_subjects {
+                SerdeValue::String(val.resolve(origin))
+            } else {
+                SerdeValue::String(val.to_string())
+            }
+        }
         Value::Date(val) => SerdeValue::String(val),
         // TODO: Handle big numbers
         Value::Integer(val) => serde_json::from_str(&val.to_string()).unwrap_or_default(),
         Value::Float(val) => serde_json::from_str(&val.to_string()).unwrap_or_default(),
         Value::Markdown(val) => SerdeValue::String(val),
         Value::Uri(val) => SerdeValue::String(val),
-        Value::JSON(val) => val,
+        Value::Json(val) => val,
         Value::ResourceArray(val) => {
             let mut vec: Vec<SerdeValue> = Vec::new();
             for resource in val {
                 match resource {
                     crate::values::SubResource::Nested(pv) => {
                         vec.push(crate::serialize::propvals_to_json_ad_map(
-                            &pv, None, origin,
+                            &pv,
+                            None,
+                            origin,
+                            resolve_subjects,
                         )?);
                     }
                     crate::values::SubResource::Subject(s) => {
-                        vec.push(SerdeValue::String(s.resolve(origin)))
+                        if resolve_subjects {
+                            vec.push(SerdeValue::String(s.resolve(origin)))
+                        } else {
+                            vec.push(SerdeValue::String(s.to_string()))
+                        }
                     }
                 }
             }
@@ -62,9 +83,15 @@ pub fn val_to_serde(value: Value, origin: &str) -> AtomicResult<SerdeValue> {
         // TODO: fix this for nested resources in json and json-ld serialization, because this will cause them to fall back to json-ad
         Value::NestedResource(res) => match res {
             crate::values::SubResource::Nested(propvals) => {
-                propvals_to_json_ad_map(&propvals, None, origin)?
+                propvals_to_json_ad_map(&propvals, None, origin, resolve_subjects)?
             }
-            crate::values::SubResource::Subject(s) => SerdeValue::String(s.resolve(origin)),
+            crate::values::SubResource::Subject(s) => {
+                if resolve_subjects {
+                    SerdeValue::String(s.resolve(origin))
+                } else {
+                    SerdeValue::String(s.to_string())
+                }
+            }
         },
         Value::YDoc(val) => {
             let mut obj = Map::new();
@@ -86,13 +113,21 @@ pub fn propvals_to_json_ad_map(
     propvals: &PropVals,
     subject: Option<String>,
     origin: &str,
+    resolve_subjects: bool,
 ) -> AtomicResult<serde_json::Value> {
     let mut root = Map::new();
     for (prop_url, value) in propvals.iter() {
-        root.insert(prop_url.clone(), val_to_serde(value.clone(), origin)?);
+        root.insert(
+            prop_url.clone(),
+            val_to_serde(value.clone(), origin, resolve_subjects)?,
+        );
     }
     if let Some(sub) = subject {
-        root.insert("@id".into(), SerdeValue::String(sub));
+        // Commits are server-generated and should not have an @id field in the JSON-AD representation
+        // as they are identified by their hash which is derived from the other fields.
+        if !sub.starts_with("did:ad:commit:") {
+            root.insert("@id".into(), SerdeValue::String(sub));
+        }
     }
     let obj = SerdeValue::Object(root);
     Ok(obj)
@@ -160,11 +195,15 @@ pub async fn propvals_to_json_ld(
             context.insert(property.shortname.as_str().into(), ctx_value);
         }
         let key = property.shortname;
-        root.insert(key, val_to_serde(value.clone(), origin)?);
+        root.insert(key, val_to_serde(value.clone(), origin, true)?);
     }
 
     if let Some(sub) = subject {
-        root.insert("@id".into(), SerdeValue::String(sub));
+        // Commits are server-generated and should not have an @id field in the JSON-AD representation
+        // as they are identified by their hash which is derived from the other fields.
+        if !sub.starts_with("did:ad:commit:") {
+            root.insert("@id".into(), SerdeValue::String(sub));
+        }
     }
 
     if json_ld {
@@ -320,7 +359,7 @@ mod test {
     #[test]
     fn serialize_json_ad_multiple() {
         let vec = vec![Resource::new("subject".into())];
-        let serialized = resources_to_json_ad(&vec, "http://localhost/").unwrap();
+        let serialized = resources_to_json_ad(&vec, "http://localhost/", true).unwrap();
         let correct_json = r#"[{"@id":"http://localhost/subject"}]"#;
         assert_eq!(serialized, correct_json);
     }

@@ -595,7 +595,6 @@ msgstr "<0/> Sie sind angemeldet als"
 msgid "Edit profile"
 msgstr "Profil bearbeiten"
 
-#: src/routes/SettingsAgent.tsx
 #: src/views/InvitePage.tsx
 msgid "Agent Secret"
 msgstr "Agenten-Geheimnis"
@@ -723,9 +722,8 @@ msgstr "Ruft die URL von Ihrem aktuellen Atomic-Server ({0}) ab, anstatt von der
 msgid "{0} endpoint"
 msgstr "{0} Endpunkt"
 
-#: src/views/EndpointPage.tsx
-msgid "Go"
-msgstr "Los"
+#~ msgid "Go"
+#~ msgstr "Los"
 
 #: src/routes/Search/SearchRoute.tsx
 #: src/views/EndpointPage.tsx
@@ -1031,6 +1029,7 @@ msgid "This URL will be used as the default Parent for imported resources."
 msgstr "Diese URL wird als Standard-Elternteil für importierte Ressourcen verwendet."
 
 #: src/views/ImporterPage.tsx
+#: src/views/OnboardingPage.tsx
 msgid "Importing..."
 msgstr "Importiere..."
 
@@ -1251,6 +1250,7 @@ msgid "Edit permissions and create invites."
 msgstr "Berechtigungen bearbeiten und Einladungen erstellen."
 
 #: src/components/ResourceContextMenu/index.tsx
+#: src/routes/SettingsServer/index.tsx
 msgid "History"
 msgstr "Verlauf"
 
@@ -1353,9 +1353,8 @@ msgstr "Sandbox, teste Komponenten isoliert"
 msgid "No tags found"
 msgstr "Keine Tags gefunden"
 
-#: src/components/SideBar/AppMenu.tsx
-msgid "Login"
-msgstr "Anmelden"
+#~ msgid "Login"
+#~ msgstr "Anmelden"
 
 #: src/components/SideBar/AppMenu.tsx
 msgid "See and edit the current Agent / User (u)"
@@ -1400,9 +1399,8 @@ msgstr "App-Menü"
 msgid "Switch to {0}"
 msgstr "Zu {0} wechseln"
 
-#: src/components/SideBar/DriveSwitcher.tsx
-msgid "Configure Drives"
-msgstr "Laufwerke konfigurieren"
+#~ msgid "Configure Drives"
+#~ msgstr "Laufwerke konfigurieren"
 
 #: src/components/SideBar/DriveSwitcher.tsx
 msgid "Load drives not displayed in this list."
@@ -1548,7 +1546,6 @@ msgstr "{0} bearbeiten"
 #: src/components/forms/EditFormDialog.tsx
 #: src/components/forms/NewForm/NewFormDialog.tsx
 #: src/components/forms/ResourceForm.tsx
-#: src/routes/SettingsServer/index.tsx
 #: src/routes/Share/ShareRoute.tsx
 #: src/views/Article/ArticleDescription.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
@@ -2256,6 +2253,7 @@ msgid "Edit raw markdown"
 msgstr "Rohes Markdown bearbeiten"
 
 #: src/chunks/RTE/EditLinkForm.tsx
+#: src/routes/SettingsServer/index.tsx
 msgid "Set"
 msgstr "Setzen"
 
@@ -2413,17 +2411,14 @@ msgstr "Schreiben"
 msgid "Drive Configuration"
 msgstr "Laufwerkskonfiguration"
 
-#: src/routes/SettingsServer/index.tsx
-msgid "Current Drive"
-msgstr "Aktuelles Laufwerk"
+#~ msgid "Current Drive"
+#~ msgstr "Aktuelles Laufwerk"
 
-#: src/routes/SettingsServer/index.tsx
-msgid "Saved"
-msgstr "Gespeichert"
+#~ msgid "Saved"
+#~ msgstr "Gespeichert"
 
-#: src/routes/SettingsServer/index.tsx
-msgid "Other"
-msgstr "Andere"
+#~ msgid "Other"
+#~ msgstr "Andere"
 
 #: src/components/SideBar/OntologySideBar/OntologiesPanel.tsx
 msgid "Invalid Resource"
@@ -3299,13 +3294,10 @@ msgstr "Keine Plugins installiert"
 msgid "Sign Out"
 msgstr "Abmelden"
 
-#. placeholder {0}: ' '
-#. placeholder {1}: "'s"
-#: src/routes/SettingsAgent.tsx
-msgid ""
-"You can create your own Agent by hosting an{0} <0>atomic-server</0> . Alternatively, you can use an Invite to get a guest Agent on\n"
-"someone else{1} Atomic Server."
-msgstr "Sie können Ihren eigenen Agent erstellen, indem Sie einen{0} <0>atomic-server</0> hosten. Alternativ können Sie eine Einladung verwenden, um einen Gast-Agent auf dem Atomic Server eines anderen zu erhalten."
+#~ msgid ""
+#~ "You can create your own Agent by hosting an{0} <0>atomic-server</0> . Alternatively, you can use an Invite to get a guest Agent on\n"
+#~ "someone else{1} Atomic Server."
+#~ msgstr "Sie können Ihren eigenen Agent erstellen, indem Sie einen{0} <0>atomic-server</0> hosten. Alternativ können Sie eine Einladung verwenden, um einen Gast-Agent auf dem Atomic Server eines anderen zu erhalten."
 
 #: src/views/InvitePage.tsx
 msgid "Agent created!"
@@ -3338,11 +3330,10 @@ msgstr "Agentenname"
 msgid "This drive is private, sign in to view it"
 msgstr "Dieses Laufwerk ist privat, melden Sie sich an, um es anzuzeigen"
 
-#: src/routes/SettingsAgent.tsx
-msgid ""
-"An Agent is a user, consisting of a Subject (its URL) and Private Key.\n"
-"Together, these can be used to edit data and sign Commits."
-msgstr "Ein Agent ist ein Benutzer, der aus einem Subjekt (seiner URL) und einem privaten Schlüssel besteht. Zusammen können diese verwendet werden, um Daten zu bearbeiten und Commits zu signieren."
+#~ msgid ""
+#~ "An Agent is a user, consisting of a Subject (its URL) and Private Key.\n"
+#~ "Together, these can be used to edit data and sign Commits."
+#~ msgstr "Ein Agent ist ein Benutzer, der aus einem Subjekt (seiner URL) und einem privaten Schlüssel besteht. Zusammen können diese verwendet werden, um Daten zu bearbeiten und Commits zu signieren."
 
 #: src/views/Plugin/AssignRights.tsx
 msgid "Pick a resource"
@@ -3426,38 +3417,38 @@ msgstr "<0/> möchte eine Ressource ändern, die nicht im aktuellen Geltungsbere
 
 #: src/routes/Search/SearchRoute.tsx
 msgid "Searching for <0/>..."
-msgstr ""
+msgstr "Suche nach <0/>..."
 
 #: src/views/InvitePage.tsx
 msgid "Failed to add invited drive to agent"
-msgstr ""
+msgstr "Hinzufügen des eingeladenen Laufwerks zum Agenten fehlgeschlagen"
 
 #: src/views/InvitePage.tsx
 msgid "Failed to persist agent after accepting invite"
-msgstr ""
+msgstr "Fehler beim Speichern des Agenten nach Annahme der Einladung"
 
 #: src/views/InvitePage.tsx
 msgid "Invite accepted, but no destination was returned."
-msgstr ""
+msgstr "Einladung angenommen, aber kein Ziel zurückgegeben."
 
 #: src/components/forms/NewForm/SubjectField.tsx
 msgid "The identifier of the resource. DID subjects are determined by the genesis commit signature."
-msgstr ""
+msgstr "Der Bezeichner der Ressource. DID-Subjekte werden durch die Genesis-Commit-Signatur bestimmt."
 
 #: src/components/NetworkIndicator.tsx
 msgid "Connection to server lost, reconnecting..."
-msgstr ""
+msgstr "Verbindung zum Server verloren, es wird wieder verbunden ..."
 
 #~ msgid "Server connection lost."
 #~ msgstr ""
 
 #: src/components/NetworkIndicator.tsx
 msgid "No internet connection"
-msgstr ""
+msgstr "Keine Internetverbindung"
 
 #: src/components/NetworkIndicator.tsx
 msgid "Server connection lost — reconnecting…"
-msgstr ""
+msgstr "Serververbindung verloren – es wird wieder verbunden ..."
 
 #: src/views/InvitePage.tsx
 msgid ""
@@ -3465,7 +3456,272 @@ msgid ""
 "Save it somewhere safe, the secret will not be show again and if\n"
 "you lose it you will not be able to access this user again."
 msgstr ""
+"WICHTIG! Unten steht Ihr Agenten-Geheimnis, das Sie zum Anmelden verwenden.\n"
+"Speichern Sie es an einem sicheren Ort, das Geheimnis wird nicht wieder angezeigt und wenn\n"
+"Sie es verlieren, können Sie diesen Benutzer nicht wieder erreichen."
 
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 msgid "Subdomain"
+msgstr "Subdomain"
+
+#~ msgid "This secret does not contain an initial drive link. You might need to set it up manually or create a new account."
+#~ msgstr ""
+
+#~ msgid "Initial Drive"
+#~ msgstr ""
+
+#~ msgid "My first decentralized drive"
+#~ msgstr ""
+
+#~ msgid "Welcome to Atomic Server"
+#~ msgstr ""
+
+#~ msgid "This server node is currently uninitialized for <0/>."
+#~ msgstr ""
+
+#~ msgid "I already have an account (Paste Secret)"
+#~ msgstr ""
+
+#~ msgid "Create a new Account & Drive"
+#~ msgstr ""
+
+#~ msgid "Paste your Agent Secret"
+#~ msgstr ""
+
+#~ msgid "Back"
+#~ msgstr ""
+
+#: src/views/OnboardingPage.tsx
+msgid "Import & Connect"
+msgstr "Importieren & Verbinden"
+
+#~ msgid "Create a New Identity"
+#~ msgstr ""
+
+#~ msgid "This will generate a new self-sovereign Agent (your ID) and a decentralized Drive (your data storage) anchored to this server."
+#~ msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Generating..."
+msgstr "Wird generiert..."
+
+#~ msgid "Generate Identity"
+#~ msgstr ""
+
+#~ msgid "Success! Your Identity is ready."
+#~ msgstr ""
+
+#~ msgid "<0>IMPORTANT:</0> Save this secret key. It is the only way to access your data if you clear your browser cache or sign in from another device."
+#~ msgstr ""
+
+#~ msgid "Finish Setup"
+#~ msgstr ""
+
+#~ msgid "or"
+#~ msgstr ""
+
+#~ msgid "Active Server"
+#~ msgstr ""
+
+#. placeholder {0}: s
+#: src/components/SideBar/DriveSwitcher.tsx
+msgid "Connect via {0}"
+msgstr "Verbinden über {0}"
+
+#: src/routes/SettingsServer/ServersCard.tsx
+msgid "No known servers"
+msgstr "Keine bekannten Server"
+
+#: src/routes/SettingsServer/index.tsx
+msgid "Gateway Server"
+msgstr "Gateway-Server"
+
+#~ msgid "The gateway server is used to resolve DIDs and fetch data from the network."
+#~ msgstr ""
+
+#: src/components/SideBar/DriveSwitcher.tsx
+msgid "Active Gateway"
+msgstr "Aktives Gateway"
+
+#: src/routes/SettingsServer/index.tsx
+msgid "Saved Drives"
+msgstr "Gespeicherte Laufwerke"
+
+#: src/routes/SettingsServer/index.tsx
+msgid "Custom Drive URL"
+msgstr "Benutzerdefinierte Laufwerks-URL"
+
+#: src/routes/SettingsServer/index.tsx
+msgid "Enter a Drive DID or URL"
+msgstr "Geben Sie eine Laufwerks-DID oder URL ein"
+
+#: src/routes/SettingsServer/index.tsx
+msgid "Add Gateway by URL"
+msgstr "Gateway per URL hinzufügen"
+
+#: src/routes/SettingsServer/index.tsx
+msgid "Set Active"
+msgstr "Als aktiv festlegen"
+
+#: src/components/SideBar/DriveSwitcher.tsx
+msgid "Configure"
+msgstr "Konfigurieren"
+
+#: src/components/SideBar/DriveSwitcher.tsx
+msgid "Gateway (Locked to Drive)"
+msgstr "Gateway (an Laufwerk gebunden)"
+
+#: src/components/SideBar/DriveSwitcher.tsx
+msgid "Cannot change gateway for HTTP drives"
+msgstr "Gateway für HTTP-Laufwerke kann nicht geändert werden"
+
+#. placeholder {0}: ' '
+#: src/routes/SettingsServer/index.tsx
+msgid ""
+"The gateway is currently locked to{0} <0/> because you are using an\n"
+"HTTP-based drive."
 msgstr ""
+"Das Gateway ist derzeit auf{0} <0/> gesperrt, da Sie ein\n"
+"HTTP-basiertes Laufwerk verwenden."
+
+#: src/routes/SettingsServer/index.tsx
+msgid ""
+"The gateway server is used to resolve DIDs and fetch data from the\n"
+"network."
+msgstr ""
+"Der Gateway-Server wird verwendet, um DIDs aufzulösen und Daten aus dem\n"
+"Netzwerk abzurufen."
+
+#: src/routes/SettingsServer/index.tsx
+msgid "Locked"
+msgstr "Gesperrt"
+
+#~ msgid "This secret does not contain an initial drive, and no drives were found on this server. Please create a new account."
+#~ msgstr ""
+
+#~ msgid "Initial drive for {0}"
+#~ msgstr ""
+
+#: src/views/OnboardingPage.tsx
+msgid "Welcome to Atomic Data"
+msgstr "Willkommen bei Atomic Data"
+
+#~ msgid "Create a new Identity & Drive"
+#~ msgstr ""
+
+#~ msgid "Login via existing server"
+#~ msgstr ""
+
+#~ msgid "If you have an Atomic Data secret from another device or server, paste it here to anchor your identity to this node."
+#~ msgstr ""
+
+#~ msgid "This will generate a new self-sovereign <0>Agent</0> (your global ID) and a decentralized <1>Drive</1> (your storage) anchored to this server."
+#~ msgstr ""
+
+#~ msgid "Create Identity"
+#~ msgstr ""
+
+#. placeholder {0}: ' '
+#: src/views/OnboardingPage.tsx
+msgid "This server node is currently uninitialized for{0} <0/>."
+msgstr "Dieser Serverknoten ist derzeit für{0} <0/> nicht initialisiert."
+
+#~ msgid ""
+#~ "If you have an Atomic Data secret from another device or\n"
+#~ "server, paste it here to anchor your identity to this node."
+#~ msgstr ""
+
+#~ msgid "This will generate a new self-sovereign <0>Agent</0>{0} (your global ID) and a decentralized <1>Drive</1>{1} (your storage) anchored to this server."
+#~ msgstr ""
+
+#~ msgid ""
+#~ "<0>IMPORTANT:</0> Save this secret key. It is the\n"
+#~ "only way to access your data if you clear your browser cache\n"
+#~ "or sign in from another device."
+#~ msgstr ""
+
+#~ msgid "Option 1: Create a New Identity"
+#~ msgstr ""
+
+#~ msgid ""
+#~ "This will generate a new self-sovereign{0} <0>Agent</0> (your global ID) and a decentralized{1} <1>Drive</1> (your storage) anchored to this\n"
+#~ "server."
+#~ msgstr ""
+
+#~ msgid "Option 2: Use an existing Identity"
+#~ msgstr ""
+
+#: src/views/OnboardingPage.tsx
+msgid ""
+"Paste your Atomic Data secret key below to connect your\n"
+"existing identity to this node."
+msgstr ""
+"Fügen Sie Ihren Atomic Data Geheimschlüssel unten ein, um Ihre\n"
+"bestehende Identität mit diesem Knoten zu verbinden."
+
+#: src/components/NewIdentitySection.tsx
+msgid "Your new identity is ready"
+msgstr "Ihre neue Identität ist bereit"
+
+#~ msgid ""
+#~ "<0>IMPORTANT:</0> Save this secret key. It is the only\n"
+#~ "way to access your data if you clear your browser cache or sign in\n"
+#~ "from another device."
+#~ msgstr ""
+
+#~ msgid "Done"
+#~ msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+#: src/routes/SettingsAgent.tsx
+msgid "Create a new identity"
+msgstr "Neue Identität erstellen"
+
+#: src/components/NewIdentitySection.tsx
+#: src/routes/SettingsAgent.tsx
+msgid "Generate a new self-sovereign Agent and Drive on this server."
+msgstr "Generieren Sie einen neuen selbst-souveränen Agenten und Drive auf diesem Server."
+
+#: src/components/NewIdentitySection.tsx
+#: src/routes/SettingsAgent.tsx
+msgid "Create new identity"
+msgstr "Neue Identität erstellen"
+
+#: src/routes/SettingsAgent.tsx
+msgid "Sign in with existing secret"
+msgstr "Mit bestehendem Geheimnis anmelden"
+
+#~ msgid "Don{0}t have a server yet? You can use an{1} <0>atomic-server</0>{2} or an Invite from someone else{3} server."
+#~ msgstr ""
+
+#: src/views/OnboardingPage.tsx
+msgid "Use an existing identity"
+msgstr "Eine bestehende Identität verwenden"
+
+#: src/components/NewIdentitySection.tsx
+msgid ""
+"<0>IMPORTANT:</0> Save this secret key. It is the only way\n"
+"to access your data if you clear your browser cache or sign in from\n"
+"another device."
+msgstr ""
+"<0>WICHTIG:</0> Speichern Sie diesen geheimen Schlüssel. Es ist die einzige Möglichkeit,\n"
+"auf Ihre Daten zuzugreifen, wenn Sie Ihren Browser-Cache leeren oder sich von\n"
+"einem anderen Gerät anmelden."
+
+#. placeholder {0}: "'"
+#: src/components/NewIdentitySection.tsx
+msgid "Are you sure you{0}ve stored this secret somewhere safe? You cannot recover it if you lose it."
+msgstr "Sind Sie sicher, dass Sie dieses Geheimnis an einem sicheren Ort gespeichert haben? Sie können es nicht wiederherstellen, wenn Sie es verlieren."
+
+#: src/components/NewIdentitySection.tsx
+msgid "Copy the secret key to continue"
+msgstr "Geheimen Schlüssel kopieren, um fortzufahren"
+
+#: src/views/OnboardingPage.tsx
+msgid "Yes, I've stored it safely"
+msgstr "Ja, ich habe es sicher gespeichert"
+
+#: src/components/SideBar/AppMenu.tsx
+#: src/routes/SettingsAgent.tsx
+msgid "Login / New User"
+msgstr "Anmelden / Neuer Benutzer"

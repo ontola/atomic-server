@@ -41,6 +41,16 @@
         "https://atomicdata.dev/properties/shortname": "results"
     },
     {
+        "@id": "https://atomicdata.dev/properties/endpoint/isPost",
+        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
+        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+        "https://atomicdata.dev/properties/description": "If true, this endpoint expects a POST request. The UI will submit params via POST instead of navigating to a GET URL.",
+        "https://atomicdata.dev/properties/isA": [
+            "https://atomicdata.dev/classes/Property"
+        ],
+        "https://atomicdata.dev/properties/shortname": "is-post"
+    },
+    {
         "@id": "https://atomicdata.dev/properties/name",
         "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
         "https://atomicdata.dev/properties/description": "The name of a thing or person.",
@@ -81,6 +91,17 @@
         ],
         "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Property",
         "https://atomicdata.dev/properties/shortname": "property"
+    },
+    {
+        "@id": "https://atomicdata.dev/properties/setup/reset",
+        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
+        "https://atomicdata.dev/properties/description": "If true, resets the server's onboarding state for the current host, clearing the drive mapping. Intended for development use.",
+        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+        "https://atomicdata.dev/properties/isA": [
+            "https://atomicdata.dev/classes/Property"
+        ],
+        "https://atomicdata.dev/properties/name": "Reset onboarding",
+        "https://atomicdata.dev/properties/shortname": "reset"
     },
     {
         "@id": "https://atomicdata.dev/properties/isDynamic",
@@ -739,16 +760,6 @@
         "https://atomicdata.dev/properties/shortname": "drive-private-key"
     },
     {
-        "@id": "https://atomicdata.dev/properties/drive/hash",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
-        "https://atomicdata.dev/properties/description": "The 16-byte hex-encoded hash of a Drive, derived from its public key.",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "drive-hash"
-    },
-    {
         "@id": "https://atomicdata.dev/properties/published-at",
         "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/date",
         "https://atomicdata.dev/properties/description": "DateTime at which an item is made public.",
@@ -981,17 +992,13 @@
         "https://atomicdata.dev/properties/isA": [
             "https://atomicdata.dev/classes/Class"
         ],
-        "https://atomicdata.dev/properties/requires": [
-            "https://atomicdata.dev/properties/drive/publicKey",
-            "https://atomicdata.dev/properties/drive/hash"
-        ],
+        "https://atomicdata.dev/properties/requires": [],
         "https://atomicdata.dev/properties/recommends": [
             "https://atomicdata.dev/properties/read",
             "https://atomicdata.dev/properties/children",
             "https://atomicdata.dev/properties/description",
             "https://atomicdata.dev/properties/subresources",
             "https://atomicdata.dev/properties/write",
-            "https://atomicdata.dev/properties/drive/privateKey",
             "https://atomicdata.dev/properties/name"
         ],
         "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
@@ -1284,5 +1291,51 @@
         ],
         "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
         "https://atomicdata.dev/properties/shortname": "document-content"
+    },
+    {
+        "@id": "https://atomicdata.dev/properties/subdomain",
+        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/slug",
+        "https://atomicdata.dev/properties/description": "The subdomain associated with a Drive.",
+        "https://atomicdata.dev/properties/isA": [
+            "https://atomicdata.dev/classes/Property"
+        ],
+        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+        "https://atomicdata.dev/properties/shortname": "subdomain"
+    },
+    {
+        "@id": "https://atomicdata.dev/properties/isUninitialized",
+        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
+        "https://atomicdata.dev/properties/description": "True if the server node has not been initialized yet.",
+        "https://atomicdata.dev/properties/isA": [
+            "https://atomicdata.dev/classes/Property"
+        ],
+        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+        "https://atomicdata.dev/properties/shortname": "is-uninitialized"
+    },
+    {
+        "@id": "https://atomicdata.dev/properties/initialDrive",
+        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+        "https://atomicdata.dev/properties/description": "The DID of the drive that should be mapped to the current host during onboarding.",
+        "https://atomicdata.dev/properties/isA": [
+            "https://atomicdata.dev/classes/Property"
+        ],
+        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+        "https://atomicdata.dev/properties/shortname": "initial-drive"
+    },
+    {
+        "@id": "https://atomicdata.dev/classes/Server",
+        "https://atomicdata.dev/properties/description": "An Atomic Data server node.",
+        "https://atomicdata.dev/properties/isA": [
+            "https://atomicdata.dev/classes/Class"
+        ],
+        "https://atomicdata.dev/properties/recommends": [
+            "https://atomicdata.dev/properties/name",
+            "https://atomicdata.dev/properties/isUninitialized"
+        ],
+        "https://atomicdata.dev/properties/requires": [
+            "https://atomicdata.dev/properties/shortname"
+        ],
+        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+        "https://atomicdata.dev/properties/shortname": "server"
     }
 ]

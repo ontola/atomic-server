@@ -30,7 +30,7 @@ async fn get_parent_drive(resource: &Resource, store: &Db) -> AtomicResult<Strin
     };
 
     let parent_resource = store
-        .get_resource_extended(&parent_subject.clone().into(), true, &ForAgent::Sudo)
+        .get_resource_extended(&parent_subject.clone(), true, &ForAgent::Sudo)
         .await?
         .to_single();
 
@@ -98,7 +98,7 @@ async fn do_uninstall_plugin(
 
     // Even if the uninstall fails we still want to continue the commit
     // If we don't do this the resource will not be able to be deleted.
-    let _ = uninstall_plugin(name, namespace, &parent_subject, store, &plugins_dir).await;
+    let _ = uninstall_plugin(name, namespace, parent_subject, store, plugins_dir).await;
 
     Ok(())
 }
@@ -119,7 +119,7 @@ async fn do_install_plugin(
 
     let plugin_file = match store
         .get_resource_extended(
-            &plugin_file_subject.clone().into(),
+            &plugin_file_subject.clone(),
             false,
             &ForAgent::AgentSubject(signer.to_string().into()),
         )
@@ -209,11 +209,11 @@ async fn do_install_plugin(
 
     install_or_update_plugin(
         &mut zip_file,
-        &parent_subject,
+        parent_subject,
         resource.get_subject().as_str(),
         store,
-        &plugins_dir,
-        &plugin_cache_dir,
+        plugins_dir,
+        plugin_cache_dir,
     )
     .await?;
 
@@ -354,7 +354,7 @@ fn on_resource_get(context: GetExtenderContext) -> BoxFuture<AtomicResult<Resour
             db_resource
                 .set(
                     urls::PLUGIN_PERMISSIONS.to_string(),
-                    Value::JSON(serde_json::to_value(permissions)?),
+                    Value::Json(serde_json::to_value(permissions)?),
                     store,
                 )
                 .await?;
@@ -364,7 +364,7 @@ fn on_resource_get(context: GetExtenderContext) -> BoxFuture<AtomicResult<Resour
             db_resource
                 .set(
                     urls::JSON_SCHEMA.to_string(),
-                    Value::JSON(serde_json::to_value(json_schema)?),
+                    Value::Json(serde_json::to_value(json_schema)?),
                     store,
                 )
                 .await?;

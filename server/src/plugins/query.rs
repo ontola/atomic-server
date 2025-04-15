@@ -40,7 +40,9 @@ fn handle_query_request<'a>(
         } = context;
 
         if subject.query_pairs().into_iter().next().is_none() {
-            return query_endpoint().to_resource_response(store).await;
+            return query_endpoint()
+                .to_resource_response(store, subject.as_str())
+                .await;
         }
 
         let mut resource = Resource::new(subject.to_string());

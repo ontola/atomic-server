@@ -37,14 +37,60 @@ pub fn check_auth_signature(subject: &str, auth_header: &AuthValues) -> AtomicRe
     let peer_public_key =
         ring::signature::UnparsedPublicKey::new(&ring::signature::ED25519, agent_pubkey);
     let signature_bytes = decode_base64(&auth_header.signature)?;
-    peer_public_key
-                .verify(message.as_bytes(), &signature_bytes)
-                .map_err(|_e| {
-                    format!(
-                        "Incorrect signature for auth headers. This could be due to an error during signing or serialization of the commit. Compare this to the serialized message in the client: {}",
-                        message,
-                    )
-                })?;
+
+    let result = peer_public_key.verify(message.as_bytes(), &signature_bytes);
+
+    if result.is_err() {
+        // In multi-tenant environments, the client might sign the full URL or just the path.
+        // If it's a full URL, try checking just the path (with and without query params) as well.
+        if let Ok(url) = url::Url::parse(subject) {
+            let path = url.path();
+            let query = url.query().map(|q| format!("?{}", q)).unwrap_or_default();
+
+            // Try path+query (e.g. /setup?reset=true)
+            let path_and_query = format!("{}{}", path, query);
+            if path_and_query != subject {
+                let message_path = format!("{} {}", path_and_query, &auth_header.timestamp);
+                if peer_public_key
+                    .verify(message_path.as_bytes(), &signature_bytes)
+                    .is_ok()
+                {
+                    return Ok(());
+                }
+            }
+
+            // Try full URL without query params (e.g. client signed http://host/setup but URL has ?params)
+            if url.query().is_some() {
+                let mut url_no_query = url.clone();
+                url_no_query.set_query(None);
+                let message_no_query =
+                    format!("{} {}", url_no_query, &auth_header.timestamp);
+                if peer_public_key
+                    .verify(message_no_query.as_bytes(), &signature_bytes)
+                    .is_ok()
+                {
+                    return Ok(());
+                }
+                // Also try path-only without query params
+                let message_path_no_query =
+                    format!("{} {}", path, &auth_header.timestamp);
+                if peer_public_key
+                    .verify(message_path_no_query.as_bytes(), &signature_bytes)
+                    .is_ok()
+                {
+                    return Ok(());
+                }
+            }
+        }
+
+        // If we haven't returned Ok, return the original error.
+        return Err(format!(
+            "Incorrect signature for auth headers. This could be due to an error during signing or serialization of the commit. Compare this to the serialized message in the client: {}",
+            message,
+        )
+        .into());
+    }
+
     Ok(())
 }
 
@@ -67,25 +113,21 @@ pub async fn get_agent_from_auth_values_and_check(
         // check if the public key belongs to the agent
         // For DID subjects, we need to fetch the agent resource locally
         // unless it's a DID based on the public key, in which case we can verify it directly.
-        let agent_subject_trimmed = auth_vals.agent_subject.trim();
+        let agent_subject = crate::Subject::from_raw(auth_vals.agent_subject.trim(), None);
         let public_key_trimmed = auth_vals.public_key.trim();
 
-        if agent_subject_trimmed.starts_with("did:") {
-            if agent_subject_trimmed.ends_with(public_key_trimmed) {
-                return Ok(ForAgent::AgentSubject(crate::Subject::from_raw(
-                    agent_subject_trimmed,
-                    None,
-                )));
+        if agent_subject.is_did() {
+            if agent_subject.as_str().ends_with(public_key_trimmed) {
+                return Ok(ForAgent::AgentSubject(agent_subject));
             } else {
                 return Err(format!(
                     "The public key in the auth headers '{}' does not match the DID subject '{}'",
-                    public_key_trimmed, agent_subject_trimmed
+                    public_key_trimmed, auth_vals.agent_subject
                 )
                 .into());
             }
         }
 
-        let agent_subject = crate::Subject::from_raw(agent_subject_trimmed, None);
         let agent_resource = store.get_resource(&agent_subject).await?;
         let found_public_key = agent_resource.get(urls::PUBLIC_KEY)?;
         if found_public_key.to_string().trim() != public_key_trimmed {

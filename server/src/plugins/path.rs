@@ -34,7 +34,9 @@ fn handle_path_request<'a>(
             };
         }
         if path.is_none() {
-            return path_endpoint().to_resource_response(store).await;
+            return path_endpoint()
+                .to_resource_response(store, subject.as_str())
+                .await;
         }
         let result = store.get_path(&path.unwrap(), None, for_agent).await?;
         match result {

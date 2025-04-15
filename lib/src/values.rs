@@ -29,12 +29,12 @@ pub enum Value {
     NestedResource(SubResource),
     Boolean(bool),
     Uri(String),
-    JSON(serde_json::Value),
+    Json(serde_json::Value),
     YDoc(Vec<u8>),
     Unsupported(UnsupportedValue),
 }
 
-/// A resource in a JSON-AD body can be any of these
+/// A resource in a Json-AD body can be any of these
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum SubResource {
     // I was considering using Resources for these, but that would involve
@@ -119,7 +119,7 @@ impl Value {
             Value::NestedResource(_) => DataType::AtomicUrl,
             Value::Boolean(_) => DataType::Boolean,
             Value::Uri(_) => DataType::Uri,
-            Value::JSON(_) => DataType::JSON,
+            Value::Json(_) => DataType::Json,
             Value::YDoc(_) => DataType::YDoc,
             Value::Unsupported(s) => DataType::Unsupported(s.datatype.clone()),
         }
@@ -158,13 +158,13 @@ impl Value {
                 check_valid_uri(value)?;
                 Ok(Value::Uri(value.into()))
             }
-            DataType::JSON => {
+            DataType::Json => {
                 let json: serde_json::Value = serde_json::from_str(value)?;
-                Ok(Value::JSON(json))
+                Ok(Value::Json(json))
             }
             DataType::ResourceArray => {
                 let vector: Vec<String> = crate::parse::parse_json_array(value).map_err(|e| {
-                    format!("Could not deserialize ResourceArray: {}. Should be a JSON array of strings. {}", &value, e)
+                    format!("Could not deserialize ResourceArray: {}. Should be a Json array of strings. {}", &value, e)
                 })?;
                 let mut new_vec = Vec::new();
                 for i in vector {
@@ -411,7 +411,7 @@ impl fmt::Display for Value {
             Value::NestedResource(n) => write!(f, "{:?}", n),
             Value::Boolean(b) => write!(f, "{}", b),
             Value::Uri(s) => write!(f, "{}", s),
-            Value::JSON(s) => write!(f, "{}", s),
+            Value::Json(s) => write!(f, "{}", s),
             Value::YDoc(s) => write!(f, "{}", general_purpose::STANDARD.encode(s)),
             Value::Unsupported(u) => write!(f, "{}", u.value),
         }
@@ -425,7 +425,7 @@ impl fmt::Display for SubResource {
         match self {
             SubResource::Nested(pv) => {
                 let serialized =
-                    crate::serialize::propvals_to_json_ad_map(pv, None, "http://localhost/")
+                    crate::serialize::propvals_to_json_ad_map(pv, None, "http://localhost/", true)
                         .unwrap_or_else(|_e| {
                             serde_json::Value::String(format!(
                                 "Could not serialize {:?} : {}",
@@ -487,8 +487,8 @@ mod test {
         let uri = Value::new("ldap://[2001:db8::7]/c=GB?objectClass?one", &DataType::Uri).unwrap();
         assert!(uri.to_string() == "ldap://[2001:db8::7]/c=GB?objectClass?one");
 
-        let json = Value::new("{\"foo\": \"bar\", \"baz\": 123}", &DataType::JSON).unwrap();
-        // Note: JSON serialization switches the order of the keys.
+        let json = Value::new("{\"foo\": \"bar\", \"baz\": 123}", &DataType::Json).unwrap();
+        // Note: Json serialization switches the order of the keys.
         assert!(
             json.to_string() == "{\"baz\":123,\"foo\":\"bar\"}"
                 || json.to_string() == "{\"foo\":\"bar\",\"baz\":123}"
@@ -509,7 +509,7 @@ mod test {
         Value::new("blabliebla", &DataType::Uri).unwrap_err();
         Value::new(
             "{\"foo\": \"bar\", \"trailing comma\": 123,}",
-            &DataType::JSON,
+            &DataType::Json,
         )
         .unwrap_err();
     }

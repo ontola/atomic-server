@@ -120,11 +120,10 @@ pub async fn query_sorted_indexed(
 
             let subject = Subject::from_raw(subject_str, base_domain.as_deref());
 
-            if !q.include_external {
-                if !subject.is_local() {
+            if !q.include_external
+                && !subject.is_local() {
                     continue;
                 }
-            }
 
             if should_include_resource(q) {
                 if let Ok(resource) = store

@@ -27,8 +27,9 @@ export function shouldSkipDidAuthForLegacyServer(
 
   const supportsDidAuth = supportsDidAuthByOrigin.get(requestOrigin);
 
-  // Legacy-safe default: if we don't know this origin yet, assume <0.40.
-  return supportsDidAuth !== true;
+  // If we explicitly know it does not support it, skip.
+  // If we don't know yet (undefined), we should TRY it.
+  return supportsDidAuth === false;
 }
 
 export function warnDidAuthCompatibility(url: string): void {

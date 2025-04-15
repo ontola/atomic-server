@@ -170,7 +170,7 @@ async fn prompt_field(
             check_valid_uri(&uri).unwrap();
             return Ok(Some(uri));
         }
-        DataType::JSON => {
+        DataType::Json => {
             let msg = format!("JSON{}", msg_appendix);
             let Some(json) = prompt_opt::<String, String>(msg)? else {
                 return Ok(None);

@@ -1,6 +1,8 @@
+import React from 'react';
 import {
   properties,
   Resource,
+  server,
   useArray,
   useResource,
   useStore,
@@ -28,11 +30,12 @@ function EndpointPage({ resource }: EndpointProps): JSX.Element {
   const [description] = useString(resource, properties.description);
   const [parameters] = useArray(resource, properties.endpoint.parameters);
   const [results] = useArray(resource, properties.endpoint.results);
+  const isPost = resource.get(server.properties.isPost) === true;
   const virtualResource = useResource(undefined, { newResource: true });
   const store = useStore();
   const navigate = useNavigateWithTransition();
+  const [hasQueried, setHasQueried] = React.useState(false);
 
-  /** Create the URL using the variables */
   async function constructSubject(e?: React.SyntheticEvent) {
     e?.preventDefault();
     const url = new URL(resource.subject);
@@ -41,13 +44,22 @@ function EndpointPage({ resource }: EndpointProps): JSX.Element {
       parameters.map(async propUrl => {
         const val = virtualResource.get(propUrl);
 
-        if (val !== undefined) {
+        // Skip params that are unset or explicitly false (e.g. boolean flags).
+        if (val !== undefined && val !== false) {
           const fullprop = await store.getProperty(propUrl);
           url.searchParams.set(fullprop.shortname, val.toString());
         }
       }),
     );
-    navigate(constructOpenURL(url.href));
+
+    setHasQueried(true);
+
+    if (isPost) {
+      const response = await store.postToServer(url.href);
+      navigate(constructOpenURL(response.subject));
+    } else {
+      navigate(constructOpenURL(url.href));
+    }
   }
 
   return (
@@ -65,15 +77,12 @@ function EndpointPage({ resource }: EndpointProps): JSX.Element {
           );
         })}
       </form>
-      <Button onClick={constructSubject}>Go</Button>
+      <Button onClick={constructSubject}>{isPost ? 'POST' : 'GET'}</Button>
 
-      {results && results.length === 0 ? (
-        <p>No hits</p>
-      ) : (
-        results.map(result => {
-          return <ResourceCard key={result} subject={result} />;
-        })
-      )}
+      {hasQueried && results && results.length === 0 && <p>No hits</p>}
+      {results.map(result => (
+        <ResourceCard key={result} subject={result} />
+      ))}
     </ContainerNarrow>
   );
 }

@@ -72,6 +72,10 @@ async fn server_tests() {
     let appstate = crate::appstate::AppState::init(config.clone())
         .await
         .expect("failed init appstate");
+    
+    // For tests, we manually populate a test drive and collections
+    atomic_lib::test_utils::setup_test_env(&appstate.store).await.unwrap();
+
     let data = Data::new(appstate.clone());
     let app = test::init_service(
         App::new()
@@ -80,11 +84,6 @@ async fn server_tests() {
     )
     .await;
     let store = &appstate.store;
-
-    // Does not work, unfortunately, because the server is not accessible.
-    // let fetched =
-    //     atomic_lib::client::fetch_resource(&appstate.config.get_origin(), &appstate.store, None)
-    //         .expect("could not fetch drive");
 
     // Get HTML page
     let req =
@@ -96,16 +95,6 @@ async fn server_tests() {
     assert!(is_success);
     assert!(body.as_str().contains("html"));
 
-    // Should 200 (public)
-    let req =
-        test::TestRequest::with_uri("/properties").insert_header(("Accept", "application/ad+json"));
-    let resp = test::call_service(&app, req.to_request()).await;
-    assert_eq!(
-        resp.status().as_u16(),
-        200,
-        "properties collections should be found and public"
-    );
-
     // Should 404
     let req = test::TestRequest::with_uri("/doesnotexist")
         .append_header(("Accept", "application/ld+json"))
@@ -114,7 +103,8 @@ async fn server_tests() {
     assert!(resp.status().is_client_error());
 
     // Edit the main drive, make it hidden to the public agent
-    let mut drive = store.get_resource(&"internal:/".into()).await.unwrap();
+    let drive_did = store.get_drive_did("localhost").await.unwrap().unwrap();
+    let mut drive = store.get_resource(&drive_did.into()).await.unwrap();
     drive
         .set(
             urls::READ.into(),
@@ -127,19 +117,19 @@ async fn server_tests() {
 
     // Should 401 (Unauthorized)
     let req =
-        test::TestRequest::with_uri("/properties").insert_header(("Accept", "application/ad+json"));
+        test::TestRequest::with_uri("/").insert_header(("Accept", "application/ad+json"));
     let resp = test::call_service(&app, req.to_request()).await;
     let status = resp.status().as_u16();
     let body = get_body(resp);
     if status != 401 {
         panic!(
-            "Public request to /properties status: {}. Expected 401. Body: {}",
+            "Root resource should be 401 after editing rights. Status: {}, body: {:?}",
             status, body
         );
     }
 
     // Get JSON-AD
-    let req = build_request_authenticated("/properties", &appstate);
+    let req = build_request_authenticated("/", &appstate);
     let resp = test::call_service(&app, req.to_request()).await;
     let status = resp.status().as_u16();
     let body = get_body(resp);
@@ -154,7 +144,7 @@ async fn server_tests() {
     }
 
     // Get JSON-LD
-    let req = build_request_authenticated("/properties", &appstate)
+    let req = build_request_authenticated("/", &appstate)
         .insert_header(("Accept", "application/ld+json"));
     let resp = test::call_service(&app, req.to_request()).await;
     assert!(resp.status().is_success(), "setup not returning JSON-LD");
@@ -165,7 +155,7 @@ async fn server_tests() {
     );
 
     // Get turtle
-    let req = build_request_authenticated("/properties", &appstate)
+    let req = build_request_authenticated("/", &appstate)
         .insert_header(("Accept", "text/turtle"));
     let resp = test::call_service(&app, req.to_request()).await;
     assert!(resp.status().is_success());
@@ -286,13 +276,87 @@ async fn server_tests() {
     );
 
     let body = get_body(resp);
-
     assert!(
         body.contains(urls::DESTINATION) || body.contains(urls::INVITE),
         "Response should contain either destination (redirect) or invite metadata. Body: {}",
         body
     );
-}
+    }
+
+    #[actix_rt::test]
+    async fn test_did_agent_edit() {
+    use atomic_lib::{agents::Agent, commit::CommitBuilder, urls, Value, Resource};
+    let unique_string = atomic_lib::utils::random_string(10);
+    use clap::Parser;
+    let opts = Opts::parse_from([
+        "atomic-server",
+        "--initialize",
+        "--data-dir",
+        &format!("./.temp/{}/db", unique_string),
+        "--config-dir",
+        &format!("./.temp/{}/config", unique_string),
+    ]);
+
+    let mut config = config::build_config(opts)
+        .map_err(|e| format!("Initialization failed: {}", e))
+        .expect("failed init config");
+    config.search_index_path = format!("./.temp/{}/search_index", unique_string).into();
+
+    let appstate = crate::appstate::AppState::init(config.clone())
+        .await
+        .expect("failed init appstate");
+
+    let data = Data::new(appstate.clone());
+    let app = test::init_service(
+        App::new()
+            .app_data(data)
+            .configure(crate::routes::config_routes),
+    )
+    .await;
+
+    // 1. Create a new agent locally
+    let agent = Agent::new(Some("Test User")).unwrap();
+    let agent_did = agent.subject.pure_id();
+
+    // 2. Setup onboarding: create a drive and map it
+    let drive_did = "did:ad:test-drive";
+    let mut drive = Resource::new(drive_did.into());
+    drive.set_class(urls::DRIVE);
+    drive.set(urls::READ.into(), vec![urls::PUBLIC_AGENT.to_string()].into(), &appstate.store).await.unwrap();
+    drive.set(urls::WRITE.into(), vec![agent_did.clone()].into(), &appstate.store).await.unwrap();
+    appstate.store.add_resource(&drive).await.unwrap();
+
+    appstate.store.add_drive_mapping("localhost", &Value::AtomicUrl(drive_did.into())).unwrap();
+
+    // 3. Setup the agent resource manually in the store
+    let mut agent_res = agent.to_resource().unwrap();
+    agent_res.set_subject(agent_did.clone());
+    agent_res.set_unsafe(urls::NAME.into(), Value::String("Initial Name".into()));
+    // Dummy last commit to avoid genesis trigger
+    agent_res.set_unsafe(urls::LAST_COMMIT.into(), Value::AtomicUrl("dummy-initial-commit".into()));
+    appstate.store.add_resource_opts(&agent_res, false, false, true).await.unwrap();
+
+    // 4. Create a commit to edit the agent's name
+    let mut builder = CommitBuilder::new(agent_did.clone());
+    builder.set(urls::NAME.into(), Value::String("Updated Name".into()));
+
+    let commit = builder.sign(&agent, &appstate.store, &agent_res).await.unwrap();
+    let mut opts = atomic_lib::commit::CommitOpts::no_validations_no_index();
+    opts.update_index = true;
+    appstate.store.apply_commit(commit, &opts, None).await.expect("Failed to apply commit directly");
+
+    // 5. Fetch the agent resource via GET and verify the name change
+    let req = test::TestRequest::get()
+        .uri(&format!("/did?subject={}", urlencoding::encode(&agent_did)))
+        .insert_header(("Accept", "application/ad+json"))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "Fetch failed with status: {:?}", resp.status());
+
+    let body = get_body(resp);
+    assert!(body.contains("Updated Name"), "Body does not contain 'Updated Name'. Body: {}", body);
+    }
+
 
 /// Gets the body from the response as a String. Why doen't actix provide this?
 fn get_body(resp: ServiceResponse) -> String {

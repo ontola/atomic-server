@@ -33,12 +33,14 @@ use crate::{
         query_index::{requires_query_index, NO_VALUE},
         val_prop_sub_index::find_in_val_prop_sub_index,
     },
+    dht::DhtService,
     endpoints::{Endpoint, HandleGetContext},
     errors::{AtomicError, AtomicResult},
     resources::PropVals,
     storelike::{Query, QueryResult, ResourceResponse, Storelike},
+    urls,
     values::SortableValue,
-    Atom, Commit, Resource, Subject, urls, Value,
+    Atom, Commit, Resource, Subject, Value,
 };
 use async_trait::async_trait;
 use tracing::{info, instrument};
@@ -57,6 +59,20 @@ use sled::{transaction::TransactionError, Transactional};
 
 // A function called by the Store when a Commit is accepted
 type HandleCommit = Box<dyn Fn(&CommitResponse) + Send + Sync>;
+
+/// Result of a subject resolution, which can either be a Resource or an Uninitialized signal.
+pub enum ResolveSubjectResult {
+    Resource {
+        resource: Box<ResourceResponse>,
+        /// If the resource was requested via an alias (e.g. localhost), this contains the requested subject.
+        /// The handler should rewrite the @id of the returned resource to this value.
+        redirect_subject: Option<String>,
+    },
+    Uninitialized {
+        full_subject: String,
+        host: String,
+    },
+}
 
 /// Inside the reference_index, each value is mapped to this type.
 /// The String on the left represents a Property URL, and the second one is the set of subjects.
@@ -91,22 +107,24 @@ pub struct Db {
     plugin_meta: sled::Tree,
     /// [Tree::DriveMapping]
     drive_mapping: sled::Tree,
-    /// The base domain for multi-tenant hosting, e.g. "localhost" or "atomicdata.dev".
-    base_domain: Option<String>,
+    /// [Tree::DidMapping]
+    did_mapping: sled::Tree,
     /// Endpoints are checked whenever a resource is requested. They calculate (some properties of) the resource and return it.
     endpoints: Vec<Endpoint>,
     /// List of class extenders.
     class_extenders: Arc<RwLock<Vec<ClassExtender>>>,
+    /// DHT service for decentralized discovery.
+    dht: Arc<Option<DhtService>>,
     /// Function called whenever a Commit is applied.
     on_commit: Option<Arc<HandleCommit>>,
     /// Where the DB is stored on disk.
     path: std::path::PathBuf,
+    /// The base domain of the store.
+    pub base_domain: Option<String>,
 }
 
 impl Db {
     /// Creates a new store at the specified path, or opens the store if it already exists.
-    /// The base_domain is the domain where the db will be hosted, e.g. "localhost" or "atomicdata.dev".
-    /// It is used for distinguishing locally defined items from externally defined ones.
     pub async fn init(path: &std::path::Path, base_domain: Option<String>) -> AtomicResult<Db> {
         tracing::info!("Opening database at {:?}", path);
 
@@ -118,6 +136,7 @@ impl Db {
         let watched_queries = db.open_tree(Tree::WatchedQueries)?;
         let plugin_meta = db.open_tree(Tree::PluginMeta)?;
         let drive_mapping = db.open_tree(Tree::DriveMapping)?;
+        let did_mapping = db.open_tree(Tree::DidMapping)?;
 
         let store = Db {
             path: path.into(),
@@ -127,13 +146,15 @@ impl Db {
             reference_index,
             query_index,
             prop_val_sub_index,
-            base_domain,
             watched_queries,
             plugin_meta,
             drive_mapping,
+            did_mapping,
             endpoints: vec![],
             class_extenders: Arc::new(RwLock::new(vec![])),
+            dht: Arc::new(None),
             on_commit: None,
+            base_domain,
         };
 
         store.add_class_extender(crate::collections::get_collection_class_extender())?;
@@ -168,6 +189,138 @@ impl Db {
         store.set_default_agent(agent);
         store.populate().await?;
         Ok(store)
+    }
+
+    /// Returns true if no Drive resources exist in the entire store.
+    pub async fn is_uninitialized(&self) -> bool {
+        if let Ok(res) = self.query(&Query::new_class(urls::DRIVE)).await {
+            return res.subjects.is_empty();
+        }
+        true
+    }
+
+    /// Returns true if no Drive is mapped to the given host.
+    pub async fn is_uninitialized_for_host(&self, host: &str) -> bool {
+        if let Ok(Some(_)) = self.get_drive_did(host).await {
+            return false;
+        }
+
+        // If no mapping exists, we are uninitialized for this host.
+        true
+    }
+
+    /// Sets the DHT service for decentralized discovery.
+    pub fn set_dht(&mut self, dht: DhtService) {
+        self.dht = Arc::new(Some(dht));
+    }
+
+    /// Resolves a subject to a Resource, handling drive mappings and uninitialized states.
+    /// This is the primary entry point for resolving subjects in a multi-tenant environment.
+    pub async fn resolve_subject(
+        &self,
+        subject: &Subject,
+        host: &str,
+        subject_string: &str,
+        origin: &str,
+        for_agent: &ForAgent,
+    ) -> AtomicResult<ResolveSubjectResult> {
+        let mut mapped_subject = subject.clone();
+        let full_subject = format!("{}{}", origin.trim_end_matches('/'), subject_string);
+
+        // DIDs are already global identifiers and should not be routed relative to a drive.
+        let is_did = subject.is_did();
+
+        // Reserved internal paths that should not be routed to a drive
+        let is_reserved = is_did
+            || subject_string.starts_with("/did")
+            || subject_string.starts_with("/setup")
+            || subject_string.starts_with("/search")
+            || subject_string.starts_with("/upload")
+            || subject_string.starts_with("/export")
+            || subject_string.starts_with("/download")
+            || subject_string.starts_with("/invites")
+            || subject_string.starts_with("/commit")
+            || subject_string.starts_with("/path")
+            || subject_string.starts_with("/query");
+
+        if !is_reserved {
+            if let Ok(Some(drive_did)) = self.get_drive_did(host).await {
+                // We have a mapping. Does the drive resource actually exist?
+                if self.get_resource(&drive_did.as_str().into()).await.is_ok() {
+                    // Drive exists! Resolve the path relative to it.
+                    if subject_string == "/" {
+                        mapped_subject = drive_did;
+                    } else {
+                        match self.get_resource_at_path(&drive_did, subject_string).await {
+                            Ok(resolved) => {
+                                mapped_subject =
+                                    resolved.set_drive_hint(drive_did.as_str().to_string());
+                            }
+                            Err(e) => {
+                                // If path not found relative to drive, we should return a 404
+                                // instead of falling back to the root or internal subject.
+                                return Err(crate::errors::AtomicError::not_found(format!(
+                                    "Path '{}' not found in drive {}: {}",
+                                    subject_string, drive_did, e
+                                )));
+                            }
+                        }
+                    }
+                } else if subject_string == "/" {
+                    // Mapping exists but drive resource is missing.
+                    return Ok(ResolveSubjectResult::Uninitialized {
+                        full_subject,
+                        host: host.to_string(),
+                    });
+                }
+            } else if subject_string == "/" {
+                // No mapping and we are at the root.
+                return Ok(ResolveSubjectResult::Uninitialized {
+                    full_subject,
+                    host: host.to_string(),
+                });
+            }
+        }
+
+        let store = self.clone_with_url(origin.to_string());
+        let redirect_subject = if mapped_subject != *subject {
+            Some(full_subject.clone())
+        } else {
+            None
+        };
+
+        match store
+            .get_resource_extended(&mapped_subject, false, for_agent)
+            .await
+        {
+            Ok(r) => Ok(ResolveSubjectResult::Resource {
+                resource: Box::new(r),
+                redirect_subject,
+            }),
+            Err(e) => {
+                // If the resource wasn't found locally and it's a DID subject,
+                // try resolving via the Mainline DHT before giving up.
+                if let Subject::Did { .. } = mapped_subject {
+                    if let Some(dht) = self.dht.as_ref() {
+                        if let Ok(resource) = dht.resolve(&mapped_subject, &store).await {
+                            // Cache the resource locally
+                            if let Err(e) = store.add_resource(&resource).await {
+                                tracing::warn!(
+                                    "DHT: Resolved {} but failed to cache locally: {}",
+                                    mapped_subject,
+                                    e
+                                );
+                            }
+                            return Ok(ResolveSubjectResult::Resource {
+                                resource: Box::new(resource.into()),
+                                redirect_subject,
+                            });
+                        }
+                    }
+                }
+                Err(e)
+            }
+        }
     }
 
     pub fn add_class_extender(&self, class_extender: ClassExtender) -> AtomicResult<()> {
@@ -217,28 +370,72 @@ impl Db {
     }
 
     /// Maps a drive hint (short ID) to a full Drive DID.
-    pub fn add_drive_mapping(&self, hint: &str, did: &str) -> AtomicResult<()> {
-        self.drive_mapping.insert(hint.as_bytes(), did.as_bytes())?;
+    pub fn add_drive_mapping(&self, host: &str, drive_did: &Value) -> AtomicResult<()> {
+        let did_str = match drive_did {
+            Value::AtomicUrl(s) => s.to_string(),
+            Value::ResourceArray(arr) => {
+                if let Some(first) = arr.first() {
+                    first.to_string()
+                } else {
+                    return Err("Drive DID array is empty".into());
+                }
+            }
+            _ => drive_did.to_string(),
+        };
+
+        self.drive_mapping
+            .insert(host.as_bytes(), did_str.as_bytes())?;
+        tracing::info!("Added drive mapping: {} -> {}", host, did_str);
         Ok(())
     }
 
-    /// Returns the full Drive DID for a given drive hint (short ID).
-    pub fn get_drive_did(&self, hint: &str) -> AtomicResult<Option<Subject>> {
-        if let Some(did_bin) = self.drive_mapping.get(hint.as_bytes())? {
+    /// Removes the drive mapping for a given host, making it uninitialized again.
+    pub fn remove_drive_mapping(&self, host: &str) -> AtomicResult<()> {
+        self.drive_mapping.remove(host.as_bytes())?;
+        tracing::info!("Removed drive mapping for host: {}", host);
+        Ok(())
+    }
+
+    /// Returns the full Drive DID for a given host (domain/subdomain).
+    pub async fn get_drive_did(&self, host: &str) -> AtomicResult<Option<Subject>> {
+        if let Some(did_bin) = self.drive_mapping.get(host.as_bytes())? {
             let did_str = std::str::from_utf8(&did_bin)
                 .map_err(|e| format!("Failed to parse DID from database: {}", e))?;
             return Ok(Some(Subject::from_raw(did_str, None)));
         }
+
         Ok(None)
     }
 
-    /// Resolves a path (e.g. "/classes") relative to a Drive DID.
-    /// Traverses the hierarchy using the PARENT property and shortnames.
-    pub async fn get_resource_at_path(&self, drive_did: &Subject, path: &str) -> AtomicResult<Subject> {
+    /// Resolves a path (e.g. "/blog/my-post") relative to a Drive DID.
+    /// 1. First, it tries to find a resource in the Drive that has this exact string in its `PATH` property.
+    /// 2. If not found, it traverses the hierarchy recursively using the PARENT property and shortnames.
+    pub async fn get_resource_at_path(
+        &self,
+        drive_did: &Subject,
+        path: &str,
+    ) -> AtomicResult<Subject> {
         if path == "/" || path.is_empty() {
             return Ok(drive_did.clone());
         }
 
+        // Strategy 1: Direct PATH lookup (flat routing)
+        // Find any resource where parent is the drive and path matches the full path string.
+        let mut query_path = Query::new_prop_val(urls::PATH, path);
+        query_path.limit = Some(1);
+        if let Ok(result) = self.query(&query_path).await {
+            for resource in result.resources {
+                // Verify the resource belongs to this drive
+                // (In a multi-tenant world, we want to make sure we don't return someone else's resource)
+                if let Ok(parent) = resource.get(urls::PARENT) {
+                    if parent.to_string() == *drive_did {
+                        return Ok(resource.get_subject().clone());
+                    }
+                }
+            }
+        }
+
+        // Strategy 2: Recursive SHORTNAME traversal (hierarchical routing)
         let mut current_subject = drive_did.clone();
         let segments = path.trim_start_matches('/').split('/');
 
@@ -249,10 +446,10 @@ impl Db {
 
             let mut query = Query::new_prop_val(urls::PARENT, current_subject.as_str());
             query.limit = Some(1000); // Reasonable limit for children
-            
+
             let result = self.query(&query).await?;
             let mut found = None;
-            
+
             for resource in result.resources {
                 if let Ok(sn) = resource.get(urls::SHORTNAME) {
                     if sn.to_string() == segment {
@@ -261,13 +458,17 @@ impl Db {
                     }
                 }
             }
-            
-            current_subject = found.ok_or_else(|| format!("Could not find segment '{}' in {}", segment, current_subject))?;
+
+            current_subject = found.ok_or_else(|| {
+                format!(
+                    "Could not find segment '{}' in {} (path: {})",
+                    segment, current_subject, path
+                )
+            })?;
         }
 
         Ok(current_subject)
     }
-
     #[instrument(skip(self))]
     fn add_atom_to_index(
         &self,
@@ -298,14 +499,29 @@ impl Db {
         transaction: &mut Transaction,
     ) -> AtomicResult<()> {
         let subject = self.normalize_subject(resource.get_subject());
+        let subject_str = subject.pure_id();
         let propvals = resource.get_propvals();
 
-        let resource_bin = encode_propvals(&propvals)?;
+        // Persist DID routing hint if available
+        if let Subject::Did {
+            drive_hint: Some(hint),
+            ..
+        } = &subject
+        {
+            transaction.push(Operation {
+                tree: Tree::DidMapping,
+                method: Method::Insert,
+                key: subject_str.as_bytes().to_vec(),
+                val: Some(hint.as_bytes().to_vec()),
+            });
+        }
+
+        let resource_bin = encode_propvals(propvals)?;
 
         transaction.push(Operation {
             tree: Tree::Resources,
             method: Method::Insert,
-            key: subject.as_str().as_bytes().to_vec(),
+            key: subject_str.as_bytes().to_vec(),
             val: Some(resource_bin),
         });
         Ok(())
@@ -330,9 +546,7 @@ impl Db {
     /// Constructs the value index from all resources in the store. Could take a while.
     pub fn build_index(&self, include_external: bool) -> AtomicResult<()> {
         tracing::info!("Building index (this could take a few minutes for larger databases)");
-        let mut count = 0;
-
-        for r in self.all_resources(include_external) {
+        for (count, r) in self.all_resources(include_external).enumerate() {
             let mut transaction = Transaction::new();
             for atom in r.to_atoms_iter() {
                 self.add_atom_to_index(&atom, &r, &mut transaction)
@@ -349,8 +563,6 @@ impl Db {
                 tracing::info!("Building index, flushing to disk");
                 self.db.flush()?;
             }
-
-            count += 1;
         }
 
         tracing::info!("Building index finished!");
@@ -360,7 +572,7 @@ impl Db {
     /// Internal method for fetching Resource data.
     #[instrument(skip(self))]
     fn set_propvals(&self, subject: &str, propvals: &PropVals) -> AtomicResult<()> {
-        let resource_bin = encode_propvals(&propvals)?;
+        let resource_bin = encode_propvals(propvals)?;
 
         self.resources.insert(subject.as_bytes(), resource_bin)?;
         Ok(())
@@ -385,12 +597,10 @@ impl Db {
                 let propval: PropVals = decode_propvals(binpropval)?;
                 Ok(propval)
             }
-            None => {
-                return Err(AtomicError::not_found(format!(
-                    "Resource {} not found",
-                    subject
-                )))
-            }
+            None => Err(AtomicError::not_found(format!(
+                "Resource {} not found",
+                subject
+            ))),
         }
     }
 
@@ -429,21 +639,16 @@ impl Db {
         let (subject, resource_bin) = item.expect(DB_CORRUPT_MSG);
         let subject: String = String::from_utf8_lossy(&subject).to_string();
 
-        if !include_external
-            && !subject.starts_with('/')
-            && !subject.starts_with("internal:")
-            && !subject.starts_with("did:")
-        {
+        let subject_obj = Subject::from_raw(&subject, base_domain);
+
+        if !include_external && !subject_obj.is_local() {
             return None;
         }
 
         let propvals: PropVals = decode_propvals(&resource_bin)
             .unwrap_or_else(|e| panic!("{}. {}", corrupt_db_message(&subject), e));
 
-        Some(Resource::from_propvals(
-            propvals,
-            Subject::from_raw(&subject, base_domain),
-        ))
+        Some(Resource::from_propvals(propvals, subject_obj))
     }
 
     pub fn get_plugin_meta(&self, key: &PluginMetaKey) -> AtomicResult<Option<PluginMeta>> {
@@ -521,6 +726,7 @@ impl Db {
         let mut batch_query_members = sled::Batch::default();
         let mut batch_plugin_meta = sled::Batch::default();
         let mut batch_drive_mapping = sled::Batch::default();
+        let mut batch_did_mapping = sled::Batch::default();
 
         for op in transaction.iter() {
             match op.tree {
@@ -583,6 +789,14 @@ impl Db {
                         batch_drive_mapping.remove(op.key.clone());
                     }
                 },
+                trees::Tree::DidMapping => match op.method {
+                    trees::Method::Insert => {
+                        batch_did_mapping.insert::<&[u8], &[u8]>(&op.key, op.val.as_ref().unwrap());
+                    }
+                    trees::Method::Delete => {
+                        batch_did_mapping.remove(op.key.clone());
+                    }
+                },
             }
         }
 
@@ -594,6 +808,7 @@ impl Db {
             &self.query_index,
             &self.plugin_meta,
             &self.drive_mapping,
+            &self.did_mapping,
         )
             .transaction(
                 |(
@@ -604,6 +819,7 @@ impl Db {
                     tx_query_index,
                     tx_plugin_meta,
                     tx_drive_mapping,
+                    tx_did_mapping,
                 )| {
                     tx_resources.apply_batch(&batch_resources)?;
                     tx_prop_val_sub_index.apply_batch(&batch_propvalsub)?;
@@ -612,6 +828,7 @@ impl Db {
                     tx_query_index.apply_batch(&batch_query_members)?;
                     tx_plugin_meta.apply_batch(&batch_plugin_meta)?;
                     tx_drive_mapping.apply_batch(&batch_drive_mapping)?;
+                    tx_did_mapping.apply_batch(&batch_did_mapping)?;
                     Ok::<(), sled::transaction::ConflictableTransactionError<sled::Error>>(())
                 },
             )
@@ -646,7 +863,7 @@ impl Db {
                 }
 
                 if let Ok(resource) = self
-                    .get_resource_extended(&atom.subject.clone().into(), true, &q.for_agent)
+                    .get_resource_extended(&atom.subject.clone(), true, &q.for_agent)
                     .await
                 {
                     subjects.push(atom.subject.clone());
@@ -754,8 +971,7 @@ impl Db {
         subject: &str,
         for_agent: &ForAgent,
     ) -> AtomicResult<ResourceResponse> {
-        // For internal endpoint resolution, we use a placeholder origin.
-        // What matters is the path and subdomain.
+        // For internal endpoint resolution, we use the store's base domain if set.
         let origin = self
             .get_base_domain()
             .unwrap_or_else(|| "http://localhost".to_string());
@@ -782,7 +998,7 @@ impl Db {
                         e
                     })?
                 } else {
-                    endpoint.to_resource_response(self).await?
+                    endpoint.to_resource_response(self, subject).await?
                 };
 
                 // Extended resources must always return the requested subject as their own subject,
@@ -822,6 +1038,13 @@ impl Drop for Db {
 
 #[async_trait]
 impl Storelike for Db {
+    fn normalize_subject(&self, subject: &Subject) -> Subject {
+        Subject::from_raw(subject.as_str(), self.get_base_domain().as_deref())
+    }
+
+    /// Adds Atoms to the store.
+    /// Will replace existing Atoms that share Subject / Property combination.
+    /// Validates datatypes and required props presence.
     #[instrument(skip(self))]
     async fn add_atoms(&self, atoms: Vec<Atom>) -> AtomicResult<()> {
         // Start with a nested HashMap, containing only strings.
@@ -853,8 +1076,29 @@ impl Storelike for Db {
         Ok(())
     }
 
+    /// Maps a host (domain/subdomain) to a Drive DID.
+    fn add_drive_mapping(&self, host: &str, drive_did: &Value) -> AtomicResult<()> {
+        self.add_drive_mapping(host, drive_did)
+    }
+
+    /// Removes the drive mapping for a given host, making it uninitialized again.
+    fn remove_drive_mapping(&self, host: &str) -> AtomicResult<()> {
+        self.remove_drive_mapping(host)
+    }
+
+    /// Returns the base domain of the store, e.g. "https://atomicdata.dev".
     fn get_base_domain(&self) -> Option<String> {
         self.base_domain.clone()
+    }
+
+    fn set_base_url(&self, _url: &str) {
+        // Since Db is mostly immutable and cloned per-request in multi-tenant mode,
+        // setting base_url on the original instance might not be what's intended
+        // in all cases, but for CLI usage it is.
+        // However, we don't have a Mutex for base_domain in Db.
+        // Let's just say it's not supported for Db yet if it's not a clone.
+        // Actually, for CLI it's usually just initialized once.
+        tracing::warn!("set_base_url called on Db, but it is not supported to change it after initialization. Use clone_with_url instead.");
     }
 
     #[instrument(skip(self, resource), fields(sub = %resource.get_subject()))]
@@ -868,7 +1112,8 @@ impl Storelike for Db {
         // This only works if no external functions rely on using add_resource for atom-like operations!
         // However, add_atom uses set_propvals, which skips the validation.
         let subject = self.normalize_subject(resource.get_subject());
-        let existing = self.get_propvals(subject.as_str()).ok();
+        let subject_str = subject.pure_id();
+        let existing = self.get_propvals(&subject_str).ok();
         if !overwrite_existing && existing.is_some() {
             return Err(format!(
                 "Failed to add: '{}', already exists, should not be overwritten.",
@@ -881,6 +1126,21 @@ impl Storelike for Db {
         }
         if update_index {
             let mut transaction = Transaction::new();
+
+            // Persist DID routing hint if available
+            if let Subject::Did {
+                drive_hint: Some(hint),
+                ..
+            } = &subject
+            {
+                transaction.push(Operation {
+                    tree: Tree::DidMapping,
+                    method: Method::Insert,
+                    key: subject_str.as_bytes().to_vec(),
+                    val: Some(hint.as_bytes().to_vec()),
+                });
+            }
+
             if let Some(pv) = existing {
                 let subject = resource.get_subject();
                 for (prop, val) in pv.iter() {
@@ -898,7 +1158,7 @@ impl Storelike for Db {
             }
             self.apply_transaction(&mut transaction)?;
         }
-        self.set_propvals(subject.as_str(), resource.get_propvals())
+        self.set_propvals(&subject_str, resource.get_propvals())
     }
 
     /// Apply a single signed Commit to the Db.
@@ -913,7 +1173,7 @@ impl Storelike for Db {
     ) -> AtomicResult<CommitResponse> {
         let store = self;
 
-        let commit_response = commit.validate_and_build_response(opts, store).await?;
+        let commit_response = commit.validate_and_build_response(&opts, store).await?;
 
         let mut transaction = Transaction::new();
 
@@ -970,29 +1230,29 @@ impl Storelike for Db {
 
         match (&commit_response.resource_old, &commit_response.resource_new) {
             (None, None) => {
-                return Err("Neither an old nor a new resource is returned from the commit - something went wrong.".into())
-            },
+                if !commit_response.commit.destroy.unwrap_or(false) {
+                    return Err("Neither an old nor a new resource is returned from the commit - something went wrong.".into());
+                }
+            }
             (Some(_old), None) => {
-                let normalized_commit_subject = self.normalize_subject(&commit_response.commit.subject.clone().into());
-                assert_eq!(_old.get_subject().to_string(), normalized_commit_subject.to_string());
-                assert!(&commit_response.commit.destroy.expect("Resource was removed but `commit.destroy` was not set!"));
+                let normalized_commit_subject =
+                    self.normalize_subject(&commit_response.commit.subject.clone().into());
+                assert_eq!(
+                    _old.get_subject().to_string(),
+                    normalized_commit_subject.to_string()
+                );
+                assert!(&commit_response
+                    .commit
+                    .destroy
+                    .expect("Resource was removed but `commit.destroy` was not set!"));
                 let subject: Subject = commit_response.commit.subject.clone().into();
                 self.remove_resource(&subject).await?;
-            },
+            }
             _ => {}
         };
 
         if let Some(new) = &commit_response.resource_new {
             self.add_resource_tx(new, &mut transaction)?;
-
-            // If the resource is a Drive, add it to the drive_mapping index
-            if let Ok(classes) = new.get_classes(self).await {
-                if classes.iter().any(|c| c.subject == urls::DRIVE) {
-                    if let Ok(hash) = new.get(urls::DRIVE_HASH) {
-                        self.add_drive_mapping(&hash.to_string(), new.get_subject().as_str())?;
-                    }
-                }
-            }
         }
 
         if opts.update_index {
@@ -1083,7 +1343,22 @@ impl Storelike for Db {
         let normalized = self.normalize_subject(subject);
         let subject_str = normalized.pure_id();
         if let Ok(propvals) = self.get_propvals(&subject_str) {
-            let resource = Resource::from_propvals(propvals, normalized.without_params());
+            let mut res_subject = normalized.clone();
+
+            // If it's a DID and we don't have a hint in the requested subject,
+            // check if we have one persisted in the did_mapping tree.
+            if let Subject::Did {
+                drive_hint: None, ..
+            } = &res_subject
+            {
+                if let Ok(Some(hint_bin)) = self.did_mapping.get(subject_str.as_bytes()) {
+                    if let Ok(hint) = std::str::from_utf8(&hint_bin) {
+                        res_subject = res_subject.set_drive_hint(hint.to_string());
+                    }
+                }
+            }
+
+            let resource = Resource::from_propvals(propvals, res_subject);
             Ok(resource)
         } else {
             // Resolve the subject to a full URL for network operations
@@ -1108,13 +1383,33 @@ impl Storelike for Db {
                         .to_single());
                 }
             }
-            let origin = self
-                .get_base_domain()
-                .unwrap_or_else(|| "http://localhost".to_string());
             let resolved_url = normalized.resolve(&origin);
-            let trimmed_origin = origin.trim_end_matches('/');
 
-            if resolved_url.starts_with(trimmed_origin) || resolved_url.starts_with("did:") {
+            if normalized.is_did() || normalized.path().starts_with("/did") {
+                // If it's an agent DID and not found locally, return a minimal resource
+                // instead of an error. This is important for "just-in-time" agent registration.
+                if normalized.is_agent_did() || normalized.path().starts_with("/did:ad:agent:") {
+                    let lookup = if normalized.path().starts_with('/') {
+                        &normalized.path()[1..]
+                    } else {
+                        &normalized.path()
+                    };
+                    if let Some(pubkey) = lookup.strip_prefix("did:ad:agent:") {
+                        if let Ok(agent) = crate::agents::Agent::new_from_public_key(pubkey) {
+                            if let Ok(resource) = agent.to_resource() {
+                                return Ok(resource);
+                            }
+                        }
+                    }
+                }
+
+                if normalized.is_did() || resolved_url.starts_with("/did:") {
+                    return Err(AtomicError::not_found(format!(
+                        "DID Resource {} not found locally",
+                        resolved_url
+                    )));
+                }
+
                 return self
                     .handle_not_found(
                         &resolved_url,
@@ -1159,7 +1454,7 @@ impl Storelike for Db {
 
         // Get the inner URL for endpoint checking and extender context
         let inner_url = match subject {
-            Subject::Internal(u) => u,
+            Subject::Internal { url, .. } => url,
             Subject::External(u) => u,
             Subject::Did { url, .. } => url,
         };
@@ -1172,28 +1467,7 @@ impl Storelike for Db {
         }
 
         async move {
-            let mut resource = match self.get_resource(&subject_without_params).await {
-                Ok(r) => r,
-                Err(e) => {
-                    if subject_without_params.as_str().starts_with("did:ad:agent:") {
-                        let pubkey = subject_without_params
-                            .as_str()
-                            .strip_prefix("did:ad:agent:")
-                            .unwrap();
-                        if let Ok(agent) = crate::agents::Agent::new_from_public_key(pubkey) {
-                            if let Ok(res) = agent.to_resource() {
-                                res
-                            } else {
-                                return Err(e);
-                            }
-                        } else {
-                            return Err(e);
-                        }
-                    } else {
-                        return Err(e);
-                    }
-                }
-            };
+            let mut resource = self.get_resource(&subject_without_params).await?;
 
             let _explanation = crate::hierarchy::check_read(self, &resource, for_agent).await?;
 
@@ -1346,7 +1620,7 @@ impl Storelike for Db {
     }
 
     async fn populate(&self) -> AtomicResult<()> {
-        crate::populate::populate_all(self).await
+        crate::populate::bootstrap(self).await
     }
 
     #[instrument(skip(self))]

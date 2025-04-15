@@ -21,14 +21,20 @@ pub fn server_url(url: &str) -> AtomicResult<String> {
 
 /// Throws an error if the URL is not a valid URL
 pub fn check_valid_url(url: &str) -> AtomicResult<()> {
-    if !url.starts_with("http")
-        && !url.starts_with("internal:")
-        && !url.starts_with("did:")
-        && !url.starts_with('/')
-    {
-        return Err(format!("Url does not start with http or did: {}", url).into());
+    if url.starts_with("http") || url.starts_with("did:") || url.starts_with('/') {
+        return Ok(());
     }
-    Ok(())
+    if url.starts_with("internal:") {
+        // internal:/ is always valid
+        if url == "internal:/" {
+            return Ok(());
+        }
+        // internal:/path is also valid
+        if url.starts_with("internal:/") {
+            return Ok(());
+        }
+    }
+    Err(format!("Url does not start with http, did: or internal:/: {}", url).into())
 }
 
 pub fn check_valid_uri(uri: &str) -> AtomicResult<()> {
@@ -71,7 +77,7 @@ pub fn check_timestamp_in_past(timestamp: i64, difference: i64) -> AtomicResult<
             )
             .into());
     }
-    return Ok(());
+    Ok(())
 }
 
 pub fn truncate_string(s: &str, max_len: usize) -> String {

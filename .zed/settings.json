@@ -1,0 +1,10 @@
+{
+  "terminal": {
+    "shell": {
+      "with_arguments": {
+        "program": "/bin/zsh",
+        "args": ["--login"]
+      }
+    }
+  }
+}

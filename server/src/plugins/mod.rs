@@ -45,6 +45,7 @@ pub mod plugin;
 pub mod prunetests;
 pub mod query;
 pub mod search;
+pub mod setup;
 pub mod versioning;
 #[cfg(feature = "wasm-plugins")]
 pub mod wasm;

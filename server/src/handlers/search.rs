@@ -89,23 +89,34 @@ pub async fn search_query(
         params
     );
     let subjects = docs_to_subjects(top_docs, &fields, &searcher)?;
-    tracing::debug!("search_query: subjects after docs_to_subjects: {:?}", subjects);
+    tracing::debug!(
+        "search_query: subjects after docs_to_subjects: {:?}",
+        subjects
+    );
 
     let path_and_query = req
         .uri()
         .path_and_query()
         .ok_or("Add a query param")?
         .to_string();
-    let subject = atomic_lib::Subject::from_raw(&path_and_query, None).resolve(&origin);
+    let subject =
+        atomic_lib::Subject::from_raw(&path_and_query, store.get_base_domain().as_deref());
 
     let mut results_resource = crate::plugins::search::search_endpoint()
-        .to_resource(store)
+        .to_resource(store, &subject.to_string())
         .await?;
-    results_resource.set_subject(subject.clone());
+    results_resource.set_subject(subject.to_string());
 
     timer.add("get_resources");
     // Get all resources returned by the search, this also performs authorization checks!
-    let resources = get_resources(req, &appstate, &subject, subjects.clone(), limit).await?;
+    let resources = get_resources(
+        req,
+        &appstate,
+        &format!("{}{}", origin, path_and_query),
+        subjects.clone(),
+        limit,
+    )
+    .await?;
 
     // Convert the list of resources back into subjects.
     // We must resolve Internal subjects (e.g. "internal:/files/xxx") to full
@@ -155,8 +166,7 @@ async fn get_resources(
     // But we could probably do some things to speed this up: make it async / parallel, check admin rights.
     // https://github.com/atomicdata-dev/atomic-server/issues/279
     // https://github.com/atomicdata-dev/atomic-server/issues/280/
-    let for_agent =
-        crate::helpers::get_client_agent(req.headers(), appstate, subject.into()).await?;
+    let for_agent = crate::helpers::get_client_agent(req.headers(), appstate, subject).await?;
     for s in subjects {
         match appstate
             .store

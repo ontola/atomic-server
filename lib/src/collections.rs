@@ -373,10 +373,10 @@ impl Collection {
 
         match &self.referenced_resources {
             Some(referenced_resources) => {
-                return Ok(ResourceResponse::ResourceWithReferenced(
+                Ok(ResourceResponse::ResourceWithReferenced(
                     resource.clone(),
                     referenced_resources.clone(),
-                ));
+                ))
             }
             None => Ok(ResourceResponse::Resource(resource.clone())),
         }
@@ -574,6 +574,7 @@ mod test {
         let store = crate::db::Db::init_temp("query_on_resource_arrays")
             .await
             .unwrap();
+        crate::test_utils::setup_test_env(&store).await.unwrap();
 
         store.populate().await.unwrap();
         let mut resource1 = Resource::new_instance(urls::TAG, &store).await.unwrap();
@@ -688,6 +689,7 @@ mod test {
         let store = crate::db::Db::init_temp("query_on_resource_arrays_multiple_pushes")
             .await
             .unwrap();
+        crate::test_utils::setup_test_env(&store).await.unwrap();
 
         store.populate().await.unwrap();
         let mut resource1 = Resource::new_instance(urls::TAG, &store).await.unwrap();
@@ -1050,6 +1052,7 @@ mod test {
         let store = crate::db::Db::init_temp("did_subject_resource_appears_in_sorted_query")
             .await
             .unwrap();
+        crate::test_utils::setup_test_env(&store).await.unwrap();
         store.populate().await.unwrap();
 
         // Create a chatroom-like resource (normal internal subject)

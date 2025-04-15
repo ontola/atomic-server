@@ -34,6 +34,14 @@ impl ResourceResponse {
         }
     }
 
+    /// Get the subject of the main resource.
+    pub fn get_subject(&self) -> &Subject {
+        match self {
+            ResourceResponse::Resource(resource) => resource.get_subject(),
+            ResourceResponse::ResourceWithReferenced(resource, _) => resource.get_subject(),
+        }
+    }
+
     pub fn to_json_ad(&self, origin: Option<&str>) -> AtomicResult<String> {
         match self {
             ResourceResponse::Resource(resource) => Ok(resource.to_json_ad(origin)?),
@@ -101,7 +109,7 @@ impl ResourceResponse {
     /// Takes a vector of resources and returns a ResourceResponse::ResourceWithReferenced
     /// If the main subject is not found it will Error
     pub fn from_vec(main_subject: &str, vec: Vec<Resource>) -> AtomicResult<Self> {
-        if vec.len() == 0 {
+        if vec.is_empty() {
             return Err("No resources found".into());
         }
         if vec.len() == 1 {
@@ -149,24 +157,24 @@ pub trait Storelike: Sized + Send + Sync {
     )]
     async fn add_atoms(&self, atoms: Vec<Atom>) -> AtomicResult<()>;
 
-    /// Returns the base domain of the server, e.g. "localhost" or "atomicdata.dev".
-    /// Used for multi-tenant isolation and normalization.
-    fn get_base_domain(&self) -> Option<String>;
+    /// Maps a host (domain/subdomain) to a Drive DID.
+    fn add_drive_mapping(&self, host: &str, drive_did: &Value) -> AtomicResult<()>;
+
+    /// Removes the drive mapping for a given host, making it uninitialized again.
+    fn remove_drive_mapping(&self, host: &str) -> AtomicResult<()>;
+
+    /// Returns the base domain of the store, e.g. "https://atomicdata.dev".
+    fn get_base_domain(&self) -> Option<String> {
+        None
+    }
+
+    /// Sets the base URL of the store.
+    fn set_base_url(&self, _url: &str) {}
 
     /// Returns the full server URL, e.g. "http://localhost:9883" or "https://atomicdata.dev".
     /// Used by client helpers to route DID resolution requests through the server's `/did` endpoint.
-    /// Default implementation derives from `get_base_domain`, assuming HTTPS.
     fn get_server_url(&self) -> String {
         self.get_base_domain()
-            .map(|domain| {
-                if domain.starts_with("http://") || domain.starts_with("https://") {
-                    domain
-                } else if domain.starts_with("localhost") || domain.contains("localhost:") {
-                    format!("http://{}", domain)
-                } else {
-                    format!("https://{}", domain)
-                }
-            })
             .unwrap_or_else(|| "http://localhost".to_string())
     }
 
@@ -213,17 +221,23 @@ pub trait Storelike: Sized + Send + Sync {
 
         match (&applied.resource_old, &applied.resource_new) {
             (None, None) => {
-                return Err("Neither an old nor a new resource is returned from the commit - something went wrong.".into())
-            },
+                if !applied.commit.destroy.unwrap_or(false) {
+                    return Err(
+                        "Neither an old nor a new resource is returned from the commit - something went wrong."
+                            .into(),
+                    );
+                }
+            }
             (None, Some(new)) => {
                 self.add_resource(new).await?;
-            },
+            }
             (Some(_old), Some(new)) => {
                 self.add_resource(new).await?;
-            },
+            }
             (Some(_old), None) => {
                 assert_eq!(_old.get_subject().as_str(), applied.commit.subject);
-                self.remove_resource(&applied.commit.subject.clone().into()).await?;
+                self.remove_resource(&applied.commit.subject.clone().into())
+                    .await?;
             }
         }
 
@@ -269,7 +283,7 @@ pub trait Storelike: Sized + Send + Sync {
             other_resources.push(r);
         }
         properties.append(&mut other_resources);
-        crate::serialize::resources_to_json_ad(&properties, "internal:")
+        crate::serialize::resources_to_json_ad(&properties, "internal:", true)
     }
 
     /// Fetches a resource, makes sure its subject matches.
@@ -411,9 +425,7 @@ pub trait Storelike: Sized + Send + Sync {
         for_agent: Option<&Agent>,
     ) -> AtomicResult<Resource> {
         let subject_obj = Subject::from_raw(subject, self.get_base_domain().as_deref());
-        if matches!(subject_obj, Subject::Internal(_) | Subject::Did { .. })
-            || subject.starts_with("did:")
-        {
+        if subject_obj.is_local() {
             return Err(AtomicError::not_found(format!(
                 "Failed to retrieve locally: '{}'",
                 subject

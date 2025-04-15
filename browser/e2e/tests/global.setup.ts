@@ -10,13 +10,15 @@ import {
 setup('delete previous test data', async ({ page }) => {
   setup.slow();
 
-  if (!DELETE_PREVIOUS_TEST_DRIVES) {
-    expect(true).toBe(true);
+  setup.skip(!DELETE_PREVIOUS_TEST_DRIVES, 'Skipping test drive cleanup');
 
+  const wasInitialized = await before({ page });
+
+  if (wasInitialized) {
+    // If we just initialized the server, it's already empty.
     return;
   }
 
-  await before({ page });
   await signIn(page);
   await page.goto(`${FRONTEND_URL}/app/prunetests`);
   await expect(page.getByText('Prune Test Data')).toBeVisible();
@@ -43,6 +45,9 @@ setup('delete previous test data', async ({ page }) => {
     }
   } catch {
     // There were no drives to clear. Do nothing.
-    await page.getByRole('button', { name: 'Back to Test User' }).click();
+    const backButton = page.getByRole('button', { name: 'Back to Test User' });
+    if (await backButton.isVisible()) {
+      await backButton.click();
+    }
   }
 });

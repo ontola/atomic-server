@@ -1,18 +1,19 @@
 import { useEffect, useState } from 'react';
+import { sha256 } from '@noble/hashes/sha256';
 import { ButtonLink } from '../ButtonLink';
 import { paths } from '../../routes/paths';
+import { randomString } from '../../helpers/randomString';
 
 const TEXT = 'Login with OpenRouter';
 const AUTH_ENDPOINT = 'https://openrouter.ai/auth';
 
-async function createSHA256CodeChallenge(input: string): Promise<string> {
+function createSHA256CodeChallenge(input: string): string {
   const encoder = new TextEncoder();
   const data = encoder.encode(input);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hash = sha256(data);
 
   // Convert ArrayBuffer to base64url string
-  const byteArray = new Uint8Array(hashBuffer);
-  const base64String = btoa(String.fromCharCode(...byteArray));
+  const base64String = btoa(String.fromCharCode(...hash));
 
   // Convert base64 to base64url
   return base64String
@@ -38,14 +39,10 @@ export const OpenRouterLoginButton = () => {
   const [challenge, setChallenge] = useState<string | null>(null);
 
   useEffect(() => {
-    const randomString = crypto.randomUUID();
-    createSHA256CodeChallenge(randomString).then(generatedChallenge => {
-      setChallenge(generatedChallenge);
-      sessionStorage.setItem(
-        'atomic.ai.openrouter-code-verifier',
-        randomString,
-      );
-    });
+    const verifier = crypto.randomUUID ? crypto.randomUUID() : randomString(32);
+    const generatedChallenge = createSHA256CodeChallenge(verifier);
+    setChallenge(generatedChallenge);
+    sessionStorage.setItem('atomic.ai.openrouter-code-verifier', verifier);
   }, []);
 
   if (!challenge) {

@@ -33,6 +33,7 @@ export type MenuItemMinimial = {
   id: string;
   icon?: ReactNode;
   disabled?: boolean;
+  header?: boolean;
   /** Keyboard shortcut helper */
   shortcut?: string;
 };
@@ -323,8 +324,16 @@ export function DropdownMenu({
                 return <ItemDivider key={i} />;
               }
 
-              const { label, onClick, helper, id, disabled, shortcut, icon } =
-                props;
+              const {
+                label,
+                onClick,
+                helper,
+                id,
+                disabled,
+                shortcut,
+                icon,
+                header,
+              } = props;
 
               return (
                 <MenuItem
@@ -341,6 +350,7 @@ export function DropdownMenu({
                   selected={useKeys && selectedIndex === i}
                   icon={icon}
                   shortcut={shortcut}
+                  header={header}
                 />
               );
             })}
@@ -363,6 +373,7 @@ const DropdownPortal = ({ children }: PropsWithChildren) => {
 
 export interface MenuItemSidebarProps extends MenuItemMinimial {
   handleClickItem?: () => unknown;
+  header?: boolean;
 }
 
 interface MenuItemPropsExtended extends MenuItemSidebarProps {
@@ -377,6 +388,7 @@ export function MenuItem({
   shortcut,
   icon,
   label,
+  header,
   ...props
 }: MenuItemPropsExtended): JSX.Element {
   const ref = useRef<HTMLButtonElement>(null);
@@ -386,6 +398,15 @@ export function MenuItem({
       ref.current?.focus();
     }
   }, [selected]);
+
+  if (header) {
+    return (
+      <MenuItemHeader id={props.id}>
+        {icon}
+        <StyledLabel>{label}</StyledLabel>
+      </MenuItemHeader>
+    );
+  }
 
   return (
     <MenuItemStyled
@@ -413,6 +434,23 @@ const StyledShortcut = styled(Shortcut)`
 
 const StyledLabel = styled.span`
   flex: 1;
+`;
+
+const MenuItemHeader = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem 0.2rem 1rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  font-weight: bold;
+  letter-spacing: 0.05rem;
+  color: ${p => p.theme.colors.main};
+  opacity: 0.8;
+
+  & svg {
+    color: ${p => p.theme.colors.main};
+  }
 `;
 
 interface MenuItemStyledProps {

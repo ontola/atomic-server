@@ -43,7 +43,7 @@ pub async fn handle_post_resource(
             format!("/{}{}", subj_end_string, querystring)
         }
     } else {
-        "/".to_string()
+        req.path().to_string()
     };
 
     let full_subject = atomic_lib::Subject::from_raw(&subject_string, None).resolve(&origin);
@@ -51,7 +51,7 @@ pub async fn handle_post_resource(
     let store = &appstate.store;
     timer.add("parse_headers");
 
-    let for_agent = get_client_agent(headers, &appstate, full_subject.clone()).await?;
+    let for_agent = get_client_agent(headers, &appstate, &full_subject).await?;
     timer.add("get_agent");
 
     let mut builder = HttpResponse::Ok();

@@ -88,7 +88,7 @@ export function SideBarDrive({
           }}
         >
           <DriveTitle data-testid='current-drive-title'>
-            {driveName}{' '}
+            {driveName}
           </DriveTitle>
         </TitleButton>
         <HeadingButtonWrapper gap='0'>

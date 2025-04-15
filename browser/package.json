@@ -20,7 +20,7 @@
     "typedoc": "^0.25.13",
     "typedoc-plugin-missing-exports": "^2.3.0",
     "typescript": "^5.9.3",
-    "vite": "^5.4.10",
+    "vite": "^8.0.0",
     "vitest": "^2.1.3"
   },
   "name": "@tomic/root",
@@ -37,6 +37,7 @@
     "test": "pnpm run -r test",
     "test-e2e": "pnpm run --filter @tomic/e2e test-e2e",
     "test-query": "pnpm run --filter @tomic/e2e test-query",
+    "test-query-debug": "pnpm run --filter @tomic/e2e test-query-debug",
     "start": "pnpm run -r --parallel start",
     "typedoc": "typedoc --options ./typedoc.json",
     "typedoc-publish": "pnpm run typedoc && netlify deploy --dir data-browser/publish/docs/ --prod --auth $NETLIFY_AUTH_TOKEN --site a628f703-2dc1-4305-93d2-4ddc16c13f75",

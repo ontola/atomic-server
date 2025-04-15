@@ -7,3 +7,5 @@ WixTools
 /gen/android/build/
 /gen/android/app/build/
 /gen/android/app/src/main/jniLibs/
+
+/dist/

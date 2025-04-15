@@ -1,4 +1,5 @@
 import { Page, expect, Browser, Locator } from '@playwright/test';
+import { urls } from '@tomic/react';
 
 export const PROPERTIES = {
   isA: 'https://atomicdata.dev/properties/isA',
@@ -7,6 +8,9 @@ export const PROPERTIES = {
   push: 'https://atomicdata.dev/properties/push',
 } as const;
 
+export const SECRET =
+  'eyJwcml2YXRlS2V5IjoiVUZDV2xoMGM0b05XVm4ySnNXbndWRVp0VXVEZXBpQmRQelFRMWVVcjdLbz0iLCJzdWJqZWN0IjoiZGlkOmFkOmFnZW50OmdKUlpWVEdQbmdhRzNtU1BBL2U2TEVld0tpeFlwWnR1VVlRaE5nK3Q3WTQ9IiwiaW5pdGlhbERyaXZlIjoiZGlkOmFkOmJiWlRJd2hBbFdhQjl0enpuUVpVSlB0QlhldGhvSFcxYmpMc3VhMXQ5RUtYU3ZNU0k3TWdaKzg0bzJsRGZKR0lhbk8zai8zb2xYNTNwam9GWGVwT0RnPT0ifQ==';
+
 export const DELETE_PREVIOUS_TEST_DRIVES =
   process.env.DELETE_PREVIOUS_TEST_DRIVES === 'false' ? false : true;
 
@@ -14,8 +18,6 @@ export const SERVER_URL = process.env.SERVER_URL || 'http://localhost:9883';
 export const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 const startDriveName = new URL(FRONTEND_URL).hostname;
 
-// TODO: Should use an env var so the CI can test the setup test.
-export const INITIAL_TEST = false;
 export const DEMO_INVITE_NAME = 'document demo invite';
 
 export const testFilePath = (filename: string) => {
@@ -47,7 +49,7 @@ export const currentDialogOkButton = 'dialog[open] >> footer >> text=Ok';
 export const REBUILD_INDEX_TIME = 5000;
 
 /** Checks server URL and browser URL */
-export const before = async ({ page }: { page: Page }) => {
+export const before = async ({ page }: { page: Page }): Promise<boolean> => {
   if (!SERVER_URL) {
     throw new Error('serverUrl is not set');
   }
@@ -55,13 +57,36 @@ export const before = async ({ page }: { page: Page }) => {
   // Open the server
   await page.goto(FRONTEND_URL);
 
-  // Sometimes we run the test server on a different port, but we should
-  // only change the drive if it is non-default.
-  if (SERVER_URL !== FRONTEND_URL) {
-    await changeDrive(SERVER_URL, page);
+  // Handle onboarding if the server is uninitialized
+  const onboardingHeading = page.getByRole('heading', {
+    name: 'Welcome to Atomic Data',
+  });
+  if (await onboardingHeading.isVisible()) {
+    const test_agent =
+      'eyJwcml2YXRlS2V5IjoidDBDM2pQYW8wUmMyNHVsVWw5ZzZrcFUrRlo0clFNK1I5dDhpaVo4SHBrQT0iLCJzdWJqZWN0IjoiZGlkOmFkOmFnZW50OnNMS1VIK1VKaVRNbStkeHpiQUZmMWgzZ0RvbldRYU9nVSsrMkhEMWJ1ZVE9IiwiaW5pdGlhbERyaXZlIjoiaHR0cDovL2xvY2FsaG9zdDo5ODgzIn0K';
+    await page.locator('textarea').fill(test_agent);
+    const navPromise = page.waitForNavigation();
+    await page.getByRole('button', { name: 'Import & Connect' }).click();
+    await navPromise;
+
+    // Wait for the reload and sidebar to appear
+    await page.goto(
+      `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(SERVER_URL)}`,
+    );
+    await expect(sideBarDriveSwitcher(page)).toBeVisible({ timeout: 15000 });
+
+    return true;
   }
 
+  // // Sometimes we run the test server on a different port, but we should
+  // // only change the drive if it is non-default.
+  // if (SERVER_URL !== FRONTEND_URL) {
+  //   await changeDrive(SERVER_URL, page);
+  // }
+
   await expect(currentDriveTitle(page)).toBeVisible();
+
+  return false;
 };
 
 export async function setTitle(page: Page, title: string) {
@@ -74,16 +99,9 @@ export async function setTitle(page: Page, title: string) {
   await waiter;
 }
 
-/** Signs in using an AtomicData.dev test user */
 export async function signIn(page: Page) {
-  await page.click('text=Login');
-  await expect(page.locator('text=edit data and sign Commits')).toBeVisible();
-  // If there are any issues with this agent, try creating a new one https://atomicdata.dev/invites/1
-  const test_agent =
-    'eyJzdWJqZWN0IjoiaHR0cHM6Ly9hdG9taWNkYXRhLmRldi9hZ2VudHMvaElNWHFoR3VLSDRkM0QrV1BjYzAwUHVFbldFMEtlY21GWStWbWNVR2tEWT0iLCJwcml2YXRlS2V5IjoiZkx0SDAvY29VY1BleFluNC95NGxFemFKbUJmZTYxQ3lEekUwODJyMmdRQT0ifQ==';
-  await page.click('#current-password');
-  await page.fill('#current-password', test_agent);
-  await expect(page.locator('text=Edit profile')).toBeVisible();
+  await page.getByRole('link', { name: 'Login / New User' }).click();
+  await page.locator('#current-password').fill(SECRET);
   await page.goBack();
 }
 
@@ -94,27 +112,27 @@ export async function signIn(page: Page) {
 export async function newDrive(page: Page) {
   // Create new drive to prevent polluting the main drive
   const driveTitle = `testdrive-${timestamp()}`;
+  const subdomain = `testsub-${Math.random().toString(36).substring(7)}`;
+
+  await expect(sideBarDriveSwitcher(page)).toBeVisible({ timeout: 15000 });
+
   await sideBarDriveSwitcher(page).click();
-  await page.locator('button:has-text("New Drive")').click();
+  const newDriveButton = page.getByTestId('menu-item-new-drive');
+  await expect(newDriveButton).toBeVisible({ timeout: 10000 });
+  await newDriveButton.click();
   await waitForCurrentDialog(page);
 
-  await currentDialog(page).getByLabel('Name').fill(driveTitle);
+  const dialog = currentDialog(page);
+  await dialog.getByLabel('Name').fill(driveTitle);
+  await dialog.getByLabel('Subdomain').fill(subdomain);
 
-  await currentDialog(page)
-    .locator('footer button', { hasText: 'Create' })
-    .waitFor({
-      state: 'attached',
-    });
-  await expect(
-    currentDialog(page).locator('footer button', { hasText: 'Create' }),
-  ).toBeEnabled();
+  const createButton = dialog.locator('button', { hasText: 'Create' });
+  await createButton.waitFor({ state: 'attached' });
+  await expect(createButton).toBeEnabled();
+  await createButton.click();
 
-  const navigationPromise = page.waitForNavigation({ timeout: 30000 });
-  await currentDialog(page)
-    .locator('footer button', { hasText: 'Create' })
-    .click();
-
-  await navigationPromise;
+  // Wait for the URL to change to did:ad: (newly created drive)
+  await page.waitForURL(/did(?:%3A|:)ad(?:%3A|:)/, { timeout: 30000 });
 
   // Wait for the sidebar to update with the new drive title
   await expect(currentDriveTitle(page)).not.toHaveText(startDriveName);
@@ -212,29 +230,30 @@ export async function openAtomic(page: Page) {
   await expect(currentDriveTitle(page)).toHaveText('Atomic Data');
 }
 
-/** Opens the users' profile, sets a username */
+/** Opens the users' profile, sets a username, saves, reloads and verifies the change persisted. */
 export async function editProfileAndCommit(page: Page) {
   await openAgentPage(page);
   // Wait for the agent to be loaded
   await expect(
     page.getByRole('button', { name: 'Edit profile' }),
   ).toBeVisible();
-  await expect(page.getByRole('main').getByText('loading')).not.toBeVisible();
 
   const navigationPromise = page.waitForNavigation({ timeout: 5000 });
   await page.getByRole('button', { name: 'Edit profile' }).click();
   await navigationPromise;
-  const advancedButton = page.getByRole('button', { name: 'advanced' });
-  await advancedButton.scrollIntoViewIfNeeded();
-  await advancedButton.click();
-  await expect(page.locator('text=add another property')).toBeVisible();
+
+  // Name is a recommended property for Agent — it shows directly in the main form.
+  const nameInput = page.locator('[data-test="input-name"]');
+  await expect(nameInput).toBeVisible({ timeout: 10000 });
   const username = `Test user edited at ${new Date().toLocaleDateString()}`;
-  await page.getByLabel('Name').fill(username);
+  await nameInput.fill(username);
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.locator('text=Resource saved')).toBeVisible();
   await page.waitForURL(/\/app\/show/);
   await page.reload();
-  await expect(page.locator(`text=${username}`).first()).toBeVisible();
+  await expect(page.locator(`text=${username}`).first()).toBeVisible({
+    timeout: 10000,
+  });
 }
 
 export async function fillSearchBox(
@@ -277,14 +296,6 @@ export async function newResource(klass: string, page: Page) {
       page.waitForURL(url => !url.pathname.endsWith('/app/new'), {
         timeout: 10000,
       }),
-      page
-        .getByRole('button', { name: 'Save' })
-        .first()
-        .waitFor({ state: 'visible', timeout: 10000 }),
-      page
-        .getByRole('heading', { name: /^new /i })
-        .first()
-        .waitFor({ state: 'visible', timeout: 10000 }),
     ]);
   };
 
@@ -333,23 +344,23 @@ export async function openNewSubjectWindow(
     await signIn(page);
   }
 
-  // Only when we run on `localhost` we don't need to change drive during tests
-  if (SERVER_URL !== FRONTEND_URL) {
-    try {
-      await page.waitForSelector(`[data-testid="${sidebarDriveButtonId}"]`, {
-        timeout: 5000,
-      });
-      await changeDrive(SERVER_URL, page);
-    } catch (error) {
-      console.error('Error changing drive in new window:', error);
-      // Try reloading the page if the sidebar drive element is not found
-      await page.reload();
-      await page.waitForSelector(`[data-testid="${sidebarDriveButtonId}"]`, {
-        timeout: 5000,
-      });
-      await changeDrive(SERVER_URL, page);
-    }
-  }
+  // // Only when we run on `localhost` we don't need to change drive during tests
+  // if (SERVER_URL !== FRONTEND_URL) {
+  //   try {
+  //     await page.waitForSelector(`[data-testid="${sidebarDriveButtonId}"]`, {
+  //       timeout: 5000,
+  //     });
+  //     await changeDrive(SERVER_URL, page);
+  //   } catch (error) {
+  //     console.error('Error changing drive in new window:', error);
+  //     // Try reloading the page if the sidebar drive element is not found
+  //     await page.reload();
+  //     await page.waitForSelector(`[data-testid="${sidebarDriveButtonId}"]`, {
+  //       timeout: 5000,
+  //     });
+  //     await changeDrive(SERVER_URL, page);
+  //   }
+  // }
 
   await openSubject(page, url);
   await page.setViewportSize({ width: 1000, height: 400 });
@@ -358,15 +369,10 @@ export async function openNewSubjectWindow(
 }
 
 export async function openConfigureDrive(page: Page) {
-  // Make sure the drive switched dropdown is not open
-  if (await page.locator(newDriveMenuItem).isVisible()) {
-    await sideBarDriveSwitcher(page).click();
-    await page.waitForTimeout(100);
-  }
-
-  await sideBarDriveSwitcher(page).click();
-  await page.click('text=Configure Drives');
-  await expect(page.locator('text=Drive Configuration')).toBeVisible();
+  await page.goto(`${FRONTEND_URL}/app/server`);
+  await expect(
+    page.getByRole('heading', { name: 'Drive Configuration' }),
+  ).toBeVisible({ timeout: 10000 });
 }
 
 export async function changeDrive(
@@ -378,11 +384,11 @@ export async function changeDrive(
     const driveLink = page.getByTestId(sidebarDriveButtonId);
     await expect(driveLink).toBeVisible();
     await openConfigureDrive(page);
-    const currentDriveInput = page.getByLabel('Current Drive');
+    const currentDriveInput = page.getByTestId('drive-url-input');
 
     if ((await currentDriveInput.inputValue()) === subject) {
-      // We are already on the correct drive, do nothing.
-      driveLink.click();
+      // We are already on the correct drive, close the dialog.
+      await page.keyboard.press('Escape');
 
       if (validate) {
         await expect(currentDriveTitle(page)).toBeVisible();
@@ -392,14 +398,10 @@ export async function changeDrive(
     }
 
     await currentDriveInput.fill(subject);
-    await page.getByRole('button', { name: 'Save' }).click();
-
-    if (validate) {
-      await expect(currentDriveTitle(page)).toBeVisible();
-    }
-  } catch (error) {
-    console.error('Error in changeDrive:', error);
-    throw error;
+    await page.locator('[data-test="drive-url-save"]').click();
+  } catch (e) {
+    console.error('Error in changeDrive:', e);
+    throw e;
   }
 }
 

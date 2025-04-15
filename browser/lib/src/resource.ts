@@ -95,6 +95,12 @@ export class Resource<C extends OptionalClass = any> {
    */
   private _lastLocalSignature: string | undefined;
 
+  /**
+   * The subject of the most recently applied commit. This is the source of truth
+   * for the commit chain and is protected from being clobbered by remote merges.
+   */
+  private _lastCommit: string | undefined;
+
   private inProgressCommit: Promise<void> | undefined;
   private hasQueue = false;
 
@@ -434,6 +440,16 @@ export class Resource<C extends OptionalClass = any> {
     this.new = resourceB.new;
     this.error = resourceB.error;
     this.commitError = resourceB.commitError;
+
+    // Only update _lastCommit if the remote version has one and we don't have one,
+    // or if they are different (assuming the remote one is newer if it comes from the store).
+    const remoteLastCommit = resourceB
+      .get(properties.commit.lastCommit)
+      ?.toString();
+
+    if (remoteLastCommit && remoteLastCommit !== this._lastCommit) {
+      this._lastCommit = remoteLastCommit;
+    }
 
     if (this.commitBuilder.hasUnsavedChanges()) {
       // We have changes so we want to apply those on top of the propvals we just got.
@@ -847,9 +863,12 @@ export class Resource<C extends OptionalClass = any> {
       // it verifies the signature.  The server stores commit resources at
       // `{origin}/commits/{signature}`.
       const commitUrl = `did:ad:commit:${this._lastLocalSignature}`;
+      console.log(`[signChanges] Using _lastLocalSignature as chain: ${commitUrl}`);
       this.commitBuilder.setPreviousCommit(commitUrl);
     } else {
-      const lastCommit = this.get(properties.commit.lastCommit)?.toString();
+      const lastCommit =
+        this._lastCommit ?? this.get(properties.commit.lastCommit)?.toString();
+      console.log(`[signChanges] Using chain: ${lastCommit}`);
 
       if (lastCommit) {
         this.commitBuilder.setPreviousCommit(lastCommit);
@@ -917,6 +936,8 @@ export class Resource<C extends OptionalClass = any> {
       this._lastLocalSignature = undefined;
 
       if (lastCommitId) {
+        console.log(`[pushCommits] Setting lastCommit property to: ${lastCommitId}`);
+        this._lastCommit = lastCommitId;
         this.setUnsafe(properties.commit.lastCommit, lastCommitId);
       }
 
@@ -935,6 +956,40 @@ export class Resource<C extends OptionalClass = any> {
       this.store.addResources(this, { skipCommitCompare: true });
       throw e;
     }
+  }
+
+  /**
+   * Saves the resource as a new DID-native resource.
+   * The subject will be set to `did:ad:{genesis_signature}`.
+   */
+  public async saveAsGenesis(): Promise<string> {
+    const agent = this.store.getAgent();
+
+    if (!agent) {
+      throw new Error('No agent set, cannot sign genesis commit');
+    }
+
+    // Use a placeholder that triggers special genesis serialization logic
+    this.setSubject('did:ad:genesis');
+
+    const commit = await this.signChanges(agent);
+    const signature = commit.signature;
+
+    if (!signature) {
+      throw new Error('No signature generated for genesis commit');
+    }
+
+    const didSubject = `did:ad:${signature}`;
+
+    // Update both the resource and the commit subject to the real DID
+    // this.setSubject handles updating the internal state and the store mapping
+    this.setSubject(didSubject);
+
+    // If there were multiple commits queued, we'd need to update their subjects too,
+    // but signChanges drains the queue into one commit for genesis.
+    const result = await this.pushCommits();
+
+    return result as string;
   }
 
   /**
@@ -962,6 +1017,10 @@ export class Resource<C extends OptionalClass = any> {
 
     if (this.hasQueue) {
       return;
+    }
+
+    if (!this._lastCommit) {
+      this._lastCommit = this.get(properties.commit.lastCommit)?.toString();
     }
 
     // If the parent of this resource is new we can't save yet so we add it to a batched that gets saved when the parent does.
@@ -1143,15 +1202,35 @@ export class Resource<C extends OptionalClass = any> {
 
   /** Resolves the `/commit` endpoint for this resource. */
   private getCommitEndpoint(): string {
-    if (this.subject.startsWith('did:')) {
-      return new URL('/commit', this.store.getServerUrl()).toString();
+    const serverUrl = this.store.getServerUrl();
+
+    if (!serverUrl || serverUrl === 'null') {
+      console.warn(
+        `Resource ${this.subject} has an invalid server URL: ${serverUrl}. Falling back to origin.`,
+      );
+    }
+
+    const base = !serverUrl || serverUrl === 'null' ? '' : serverUrl;
+    const fallbackBase = base || window.location.origin;
+
+    if (
+      this.subject.startsWith('did:') ||
+      this.subject.startsWith('internal:')
+    ) {
+      return new URL('/commit', fallbackBase).toString();
     }
 
     try {
-      return new URL(this.subject).origin + `/commit`;
+      const url = new URL(this.subject);
+
+      if (url.origin && url.origin !== 'null') {
+        return url.origin + `/commit`;
+      }
     } catch {
-      return new URL('/commit', this.store.getServerUrl()).toString();
+      // ignore
     }
+
+    return new URL('/commit', fallbackBase).toString();
   }
 
   private isParentNew() {

@@ -5,7 +5,7 @@ use crate::{
     errors::AtomicResult,
     parse::{parse_json_ad_string, ParseOpts},
     storelike::ResourceResponse,
-    Resource, Storelike,
+    Resource, Storelike, Subject,
 };
 
 /// Fetches a resource, makes sure its subject matches.
@@ -18,7 +18,8 @@ pub async fn fetch_resource(
     store: &impl Storelike,
     client_agent: Option<&Agent>,
 ) -> AtomicResult<ResourceResponse> {
-    let url = if subject.starts_with("did:") {
+    let subject_obj = Subject::from_raw(subject, store.get_base_domain().as_deref());
+    let url = if subject_obj.is_did() {
         // Route DID requests through the server's normal resource endpoint.
         // The server's catch-all GET handler parses the DID from the path
         // and resolves it locally or via DHT.
@@ -31,7 +32,7 @@ pub async fn fetch_resource(
     // DID agents are not understood by old/external servers (they can't resolve
     // `did:ad:agent:` to fetch the public key). Only sign requests to our own server.
     let effective_agent = match client_agent {
-        Some(agent) if agent.subject.as_str().starts_with("did:") => {
+        Some(agent) if agent.subject.is_did() => {
             let server = store.get_server_url();
             if url.starts_with(server.trim_end_matches('/')) {
                 client_agent
@@ -53,14 +54,14 @@ pub async fn fetch_resource(
         let mut main_resource: Option<Resource> = None;
         let mut referenced: Vec<Resource> = Vec::new();
 
-        let pure_subject = if subject.starts_with("did:") {
-            subject.split('?').next().unwrap_or(subject)
+        let pure_subject = if subject_obj.is_did() {
+            subject_obj.pure_id()
         } else {
-            subject
+            subject.to_string()
         };
 
         for r in resources {
-            if r.get_subject().pure_id() == pure_subject {
+            if r.get_subject_enum().pure_id() == pure_subject {
                 main_resource = Some(r);
             } else {
                 referenced.push(r);
@@ -157,7 +158,7 @@ pub async fn fetch_body(
 
 fn should_sign_request(url: &str, agent: &Agent) -> bool {
     // DID agents can be verified without fetching an HTTP subject.
-    if agent.subject.as_str().starts_with("did:") {
+    if agent.subject.is_did() {
         return true;
     }
 
@@ -176,15 +177,16 @@ fn should_sign_request(url: &str, agent: &Agent) -> bool {
 
 /// Posts a Commit to the endpoint of the Subject from the Commit
 pub async fn post_commit(commit: &crate::Commit, store: &impl Storelike) -> AtomicResult<()> {
-    let subject = commit.get_subject();
-    let server_url = if subject.starts_with("did:") {
+    let subject_str = commit.get_subject();
+    let subject = Subject::from_raw(subject_str, store.get_base_domain().as_deref());
+    let server_url = if subject.is_did() {
         let mut url = store.get_server_url().to_string();
         if !url.ends_with('/') {
             url.push('/');
         }
         url
     } else {
-        crate::utils::server_url(subject)?
+        crate::utils::server_url(subject_str)?
     };
     // Default Commit endpoint is `https://example.com/commit`
     let endpoint = format!("{}commit", server_url);

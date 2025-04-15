@@ -41,7 +41,7 @@ pub async fn upload_handler(
         .ok_or("Path must be given")?
         .to_string();
     let subject = atomic_lib::Subject::from_raw(&path_and_query, None).resolve(&origin);
-    let agent = get_client_agent(req.headers(), &appstate, subject).await?;
+    let agent = get_client_agent(req.headers(), &appstate, &subject).await?;
     check_write(store, &parent, &agent).await?;
 
     let mut created_resources: Vec<Resource> = Vec::new();
@@ -58,6 +58,7 @@ pub async fn upload_handler(
     Ok(builder.body(atomic_lib::serialize::resources_to_json_ad(
         &created_resources,
         &origin,
+        true,
     )?))
 }
 

@@ -18,7 +18,12 @@ include!(concat!(env!("OUT_DIR"), "/generated.rs"));
 // Keep in mind that the order of these matters. An early, greedy route will take
 // precedence over a later route.
 pub fn config_routes(app: &mut actix_web::web::ServiceConfig) {
-    app.service(web::resource("/ws").to(handlers::web_sockets::web_socket_handler))
+    app.service(
+        web::resource("/setup")
+            .guard(guard::Method(Method::POST))
+            .to(handlers::post_resource::handle_post_resource),
+    )
+    .service(web::resource("/ws").to(handlers::web_sockets::web_socket_handler))
         .service(web::resource("/download/{path:[^{}]+}").to(handlers::download::handle_download))
         .service(web::resource("/export").to(handlers::export::handle_export))
         .service(web::resource("/plugin-ui").to(handlers::plugin_ui::handle_plugin_ui))
@@ -56,13 +61,13 @@ pub fn config_routes(app: &mut actix_web::web::ServiceConfig) {
         )
         .service(
             web::resource(ANY)
-                .guard(guard::Method(Method::GET))
-                .to(handlers::get_resource::handle_get_resource),
+                .guard(guard::Method(Method::POST))
+                .to(handlers::post_resource::handle_post_resource),
         )
         .service(
             web::resource(ANY)
-                .guard(guard::Method(Method::POST))
-                .to(handlers::post_resource::handle_post_resource),
+                .guard(guard::Method(Method::GET))
+                .to(handlers::get_resource::handle_get_resource),
         )
         // Also allow the home resource (not matched by the previous one)
         .service(web::resource("/").to(handlers::get_resource::handle_get_resource));

@@ -216,12 +216,16 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
 
     if (keys) {
       const newAgentSubject = `did:ad:${keys.real.publicKey}`;
-      const secret = Agent.buildSecret(keys.real.privateKey, newAgentSubject);
+      const secret = Agent.buildSecret(
+        keys.real.privateKey,
+        newAgentSubject,
+        destination,
+      );
 
       const provider = keys.crypto
         ? new SubtleCryptoProvider(keys.crypto)
         : new JSCryptoProvider(keys.real.privateKey);
-      const newAgent = new Agent(provider, newAgentSubject);
+      const newAgent = new Agent(provider, newAgentSubject, destination);
 
       if (keys.crypto) {
         saveAgentToIDB(keys.crypto, newAgentSubject);

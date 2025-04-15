@@ -23,7 +23,7 @@ pub fn handle_get<'a>(
 ) -> BoxFuture<'a, AtomicResult<ResourceResponse>> {
     Box::pin(async move {
         prune_tests_endpoint()
-            .to_resource_response(context.store)
+            .to_resource_response(context.store, context.subject.as_str())
             .await
     })
 }

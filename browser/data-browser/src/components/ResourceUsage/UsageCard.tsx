@@ -47,6 +47,7 @@ export function UsageCard({
     <DetailsCard>
       <Details
         noIndent
+        disabled={collection.totalMembers === 0}
         title={
           <Row justify='space-between'>
             <span>{title}</span>

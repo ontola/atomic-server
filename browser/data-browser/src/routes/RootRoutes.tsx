@@ -33,10 +33,7 @@ const TopRouteComponent: React.FC = () => {
   // We use the useLocation hook to get the pathname and searchStr because the window.location is not reactive.
   const subject = window.location.origin + pathname + searchStr;
 
-  // Remove trailing slash from subject
-  const cleanedSubject = subject.endsWith('/') ? subject.slice(0, -1) : subject;
-
-  return <ResourcePage subject={cleanedSubject} key={cleanedSubject} />;
+  return <ResourcePage subject={subject} key={subject} />;
 };
 
 export const topRoute = createRoute({

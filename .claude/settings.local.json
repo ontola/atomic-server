@@ -13,7 +13,9 @@
       "Bash(grep -n \"pub async fn handle_get_resource\\\\|pub async fn post_commit\" /Users/joep/dev/github/atomicdata-dev/atomic-server/server/src/handlers/*.rs)",
       "Bash(cargo tauri --version)",
       "Bash(echo $ANDROID_HOME)",
-      "Bash(adb devices)"
+      "Bash(adb devices)",
+      "Bash(echo $PATH)",
+      "Bash(cargo build:*)"
     ]
   }
 }

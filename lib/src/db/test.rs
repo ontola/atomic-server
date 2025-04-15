@@ -12,8 +12,12 @@ static DB: OnceCell<Mutex<Db>> = OnceCell::const_new();
 /// Note that not all behavior can be properly tested with a shared database.
 /// If you need a clean one, juts call init("someId").
 pub async fn get_shared_db() -> &'static Mutex<Db> {
-    DB.get_or_init(|| async { Mutex::new(Db::init_temp("shared").await.unwrap()) })
-        .await
+    DB.get_or_init(|| async {
+        let store = Db::init_temp("shared").await.unwrap();
+        crate::test_utils::setup_test_env(&store).await.unwrap();
+        Mutex::new(store)
+    })
+    .await
 }
 
 #[tokio::test]
@@ -77,45 +81,11 @@ async fn basic() {
 }
 
 #[tokio::test]
-async fn populate_collections() {
-    let store = Db::init_temp("populate_collections").await.unwrap();
-    let subjects: Vec<String> = store
-        .all_resources(false)
-        .map(|r| r.get_subject().to_string())
-        .collect();
-    println!("{:?}", subjects);
-    let collections_collection_url = "internal:/collections".to_string();
-    let collections_resource = store
-        .get_resource_extended(
-            &collections_collection_url.as_str().into(),
-            false,
-            &ForAgent::Public,
-        )
-        .await
-        .unwrap();
-    let member_count = collections_resource
-        .to_single()
-        .get(crate::urls::COLLECTION_MEMBER_COUNT)
-        .unwrap()
-        .to_int()
-        .unwrap();
-    assert!(member_count > 11);
-    let nested = collections_resource
-        .to_single()
-        .get(crate::urls::COLLECTION_INCLUDE_NESTED)
-        .unwrap()
-        .to_bool()
-        .unwrap();
-    assert!(nested);
-    // Make sure it can be run multiple times
-    store.populate().await.unwrap();
-}
-
-#[tokio::test]
 /// Check if a resource is properly removed from the DB after a delete command.
 /// Also counts commits.
 async fn destroy_resource_and_check_collection_and_commits() {
     let store = Db::init_temp("counter").await.unwrap();
+    crate::test_utils::setup_test_env(&store).await.unwrap();
     let for_agent = &ForAgent::Public;
     let agents_url = "internal:/agents".to_string();
     let agents_collection_1 = store
@@ -240,6 +210,7 @@ async fn get_extended_resource_pagination() {
     let store = Db::init_temp("get_extended_resource_pagination")
         .await
         .unwrap();
+    crate::test_utils::setup_test_env(&store).await.unwrap();
     let subject = format!(
         "{}/commits?current_page=2&page_size=99999",
         "http://localhost"
@@ -278,7 +249,9 @@ async fn get_extended_resource_pagination() {
 async fn queries() {
     // Re-using the same instance can cause issues with testing concurrently.
     // let store = &DB.lock().unwrap().clone();
-    let store = &Db::init_temp("queries").await.unwrap();
+    let store_owned = Db::init_temp("queries").await.unwrap();
+    crate::test_utils::setup_test_env(&store_owned).await.unwrap();
+    let store = &store_owned;
 
     let demo_val = Value::Slug("myval".to_string());
     let demo_reference = Value::AtomicUrl(urls::PARAGRAPH.into());
@@ -452,7 +425,9 @@ async fn queries() {
 /// Check if `include_external` is respected.
 #[tokio::test]
 async fn query_include_external() {
-    let store = &Db::init_temp("query_include_external").await.unwrap();
+    let store_owned = Db::init_temp("query_include_external").await.unwrap();
+    crate::test_utils::setup_test_env(&store_owned).await.unwrap();
+    let store = &store_owned;
 
     let mut q = Query {
         property: Some(urls::DESCRIPTION.into()),
@@ -479,8 +454,10 @@ async fn query_include_external() {
 }
 
 #[tokio::test]
-async fn test_db_resources_all() {
-    let store = &Db::init_temp("resources_all").await.unwrap();
+async fn resources_all() {
+    let store_owned = Db::init_temp("resources_all").await.unwrap();
+    crate::test_utils::setup_test_env(&store_owned).await.unwrap();
+    let store = &store_owned;
     let res_no_include = store.all_resources(false).count();
     let res_include = store.all_resources(true).count();
     assert!(
@@ -491,8 +468,10 @@ async fn test_db_resources_all() {
 
 #[tokio::test]
 /// Changing these values actually correctly updates the index.
-async fn index_invalidate_cache() {
-    let store = &Db::init_temp("invalidate_cache").await.unwrap();
+async fn invalidate_cache() {
+    let store_owned = Db::init_temp("invalidate_cache").await.unwrap();
+    crate::test_utils::setup_test_env(&store_owned).await.unwrap();
+    let store = &store_owned;
 
     // Make sure to use Properties that are not in the default store
 
@@ -695,7 +674,7 @@ async fn test_migration_v2_to_v3() {
 
     // The subject in the resource should now be Local
     assert!(
-        matches!(resource.get_subject(), crate::Subject::Internal(_)),
+        matches!(resource.get_subject(), crate::Subject::Internal { .. }),
         "Subject should be Internal, but is {:?}",
         resource.get_subject()
     );
@@ -704,7 +683,7 @@ async fn test_migration_v2_to_v3() {
     let parent = resource.get(crate::urls::PARENT).unwrap();
     if let crate::Value::AtomicUrl(s) = parent {
         assert!(
-            matches!(s, crate::Subject::Internal(_)),
+            matches!(s, crate::Subject::Internal { .. }),
             "Value should be Internal, but is {:?}",
             s
         );

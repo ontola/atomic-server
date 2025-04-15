@@ -8,7 +8,6 @@ mod commit_monitor;
 pub mod config;
 mod content_types;
 mod context;
-mod dht;
 mod errors;
 mod handlers;
 mod helpers;

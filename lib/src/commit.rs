@@ -107,6 +107,9 @@ pub struct Commit {
     /// The previously applied commit to this Resource.
     #[serde(rename = "https://atomicdata.dev/properties/previousCommit")]
     pub previous_commit: Option<String>,
+    /// Whether this is the first commit for a Resource.
+    #[serde(rename = "https://atomicdata.dev/properties/isGenesis")]
+    pub is_genesis: Option<bool>,
     /// The URL of the Commit
     pub url: Option<String>,
 }
@@ -165,7 +168,7 @@ impl Commit {
         let now = crate::utils::now();
         // Create a temporary commit with empty signature and subject
         // The subject is needed for serialization, but it will be removed for the signature check (and thus creation)
-        let temp_subject = "did:ad:temp".to_string();
+        let temp_subject = "did:ad:genesis".to_string();
         commit_builder.subject = temp_subject.clone();
 
         let mut commit = Commit {
@@ -177,6 +180,7 @@ impl Commit {
             destroy: Some(commit_builder.destroy),
             created_at: now,
             previous_commit: None,
+            is_genesis: Some(true),
             signature: None,
             push: Some(commit_builder.push),
             url: None,
@@ -219,7 +223,7 @@ impl Commit {
             Ok(resource) => resource.get(urls::PUBLIC_KEY)?.to_string(),
             Err(e) => {
                 // If the signer is not found in the store, we might be able to extract the public key from the URL.
-                if let crate::Subject::Internal(url) = &signer_subject {
+                if let crate::Subject::Internal { url, .. } = &signer_subject {
                     let path = url.path();
                     if path.starts_with("/agents/") {
                         path.strip_prefix("/agents/").unwrap().to_string()
@@ -305,7 +309,7 @@ impl Commit {
         let commit = self;
         let subject = Subject::from(commit.subject.clone());
         let subject_url = match &subject {
-            Subject::Internal(u) => u.clone(),
+            Subject::Internal { url, .. } => url.clone(),
             Subject::External(u) => u.clone(),
             Subject::Did { url, .. } => url.clone(),
         };
@@ -336,6 +340,38 @@ impl Commit {
                 true,
             ),
         };
+
+        if let Some(explicit_genesis) = commit.is_genesis {
+            if explicit_genesis && !is_new {
+                return Err(format!(
+                    "Commit for {} has is_genesis: true, but the resource already exists.",
+                    commit.subject
+                )
+                .into());
+            }
+            if !explicit_genesis && is_new {
+                return Err(format!(
+                    "Commit for {} has is_genesis: false, but the resource does not exist yet.",
+                    commit.subject
+                )
+                .into());
+            }
+        }
+
+        // Mandatory chaining for DID resources: if it exists, it must have a previousCommit.
+        // Exception: Agents (did:ad:agent:...) don't have genesis commits in the same way,
+        // so we allow updates without previousCommit for agents.
+        let is_agent = commit.subject.starts_with("did:ad:agent:");
+        if !is_new
+            && commit.subject.starts_with("did:ad:")
+            && !is_agent
+            && commit.previous_commit.is_none()
+        {
+            return Err(format!(
+                "Resource {} already exists. Updates to DID resources must provide a `previousCommit` to prevent accidental forks.",
+                commit.subject
+            ).into());
+        }
 
         // Make sure the one creating the commit had the same idea of what the current state is.
         if !is_new && opts.validate_previous_commit {
@@ -600,6 +636,10 @@ impl Commit {
             Ok(found) => Some(found.to_string()),
             Err(_) => None,
         };
+        let is_genesis = match resource.get(urls::IS_GENESIS) {
+            Ok(found) => Some(found.to_bool()?),
+            Err(_) => None,
+        };
         let signature = resource.get(urls::SIGNATURE)?.to_string();
         let url = Some(resource.get_subject().to_string());
 
@@ -613,6 +653,7 @@ impl Commit {
             remove,
             destroy,
             previous_commit,
+            is_genesis,
             signature: Some(signature),
             url,
         })
@@ -669,6 +710,9 @@ impl Commit {
                 Value::AtomicUrl(previous_commit.clone().into()),
             );
         }
+        if let Some(is_genesis) = self.is_genesis {
+            resource.set_unsafe(urls::IS_GENESIS.into(), is_genesis.into());
+        }
         if let Some(y_update) = &self.y_update {
             if !y_update.is_empty() {
                 let mut newy_update = PropVals::new();
@@ -708,8 +752,12 @@ impl Commit {
         // A deterministic serialization should not contain the hash (signature), since that would influence the hash.
         commit_resource.remove_propval(urls::SIGNATURE);
         // Special logic for did:ad genesis commits: remove subject from serialization
-        if self.subject.starts_with("did:ad:") && self.previous_commit.is_none() {
+        if self.subject.starts_with("did:ad:")
+            && !self.subject.starts_with("did:ad:agent:")
+            && self.previous_commit.is_none()
+        {
             commit_resource.remove_propval(urls::SUBJECT);
+            commit_resource.remove_propval(urls::IS_GENESIS);
         }
         let json_obj = crate::serialize::propvals_to_json_ad_map(
             commit_resource.get_propvals(),
@@ -717,6 +765,7 @@ impl Commit {
             &store
                 .get_base_domain()
                 .unwrap_or_else(|| "internal".to_string()),
+            false,
         )?;
         let json = serde_jcs::to_string(&json_obj)
             .map_err(|e| format!("Failed to serialize Commit: {}", e))?;
@@ -904,6 +953,7 @@ async fn sign_at(
         destroy: Some(commitbuilder.destroy),
         created_at: sign_date,
         previous_commit: commitbuilder.previous_commit,
+        is_genesis: None,
         signature: None,
         push: Some(commitbuilder.push),
         url: None,
@@ -977,7 +1027,7 @@ mod test {
         commitbuiler.set(property2.into(), value2);
         let commit = commitbuiler.sign(&agent, &store, &resource).await.unwrap();
         let commit_subject = commit.get_subject().to_string();
-        let _created_resource = store.apply_commit(commit, &OPTS).await.unwrap();
+        let _created_resource = store.apply_commit(commit, &OPTS, None).await.unwrap();
 
         let resource = store.get_resource(&subject.into()).await.unwrap();
         assert!(resource.get(property1).unwrap().to_string() == value1.to_string());
@@ -1019,6 +1069,7 @@ mod test {
             y_update: None,
             remove: Some(remove),
             previous_commit: None,
+            is_genesis: None,
             destroy: Some(destroy),
             signature: None,
             url: None,
