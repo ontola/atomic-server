@@ -7,13 +7,12 @@ import {
   useState,
   type JSX,
 } from 'react';
-import { css, styled } from 'styled-components';
+import { styled, useTheme } from 'styled-components';
 import { removeCachedSearchResults, useResource, useStore } from '@tomic/react';
 import { DropdownPortalContext } from '../../Dropdown/dropdownContext';
 import * as RadixPopover from '@radix-ui/react-popover';
 import { SearchBoxWindow } from './SearchBoxWindow';
 import { FaExternalLinkAlt, FaSearch, FaTimes } from 'react-icons/fa';
-import { ErrorChip } from '../ErrorChip';
 import { constructOpenURL } from '../../../helpers/navigation';
 import { useNavigateWithTransition } from '../../../hooks/useNavigateWithTransition';
 import { SearchBoxButton } from './SearchBoxButton';
@@ -25,6 +24,8 @@ import {
 } from './searchboxVars';
 import { useDialogTreeContext } from '../../Dialog/dialogContext';
 import { useResourceFormContext } from '../ResourceFormContext';
+import clsx from 'clsx';
+import { FaTriangleExclamation } from 'react-icons/fa6';
 
 export type OnResourceError = (hasError: boolean) => void;
 
@@ -68,6 +69,7 @@ export function SearchBox({
   onResourceError,
 }: React.PropsWithChildren<SearchBoxProps>): JSX.Element {
   const store = useStore();
+  const theme = useTheme();
   const navigate = useNavigateWithTransition();
   const selectedResource = useResource(value);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -163,9 +165,11 @@ export function SearchBox({
       <RadixPopover.Anchor>
         <TriggerButtonWrapper
           disabled={!!disabled}
-          className={className}
-          open={open}
-          invalid={!!visualError}
+          className={clsx({
+            [className ?? '']: className,
+            invalid: !!visualError,
+            open: open,
+          })}
         >
           {prefix}
           <TriggerButton
@@ -174,7 +178,7 @@ export function SearchBox({
             disabled={disabled}
             ref={triggerRef}
             tabIndex={0}
-            $empty={inputValue.length === 0}
+            className={clsx({ empty: inputValue.length === 0 })}
             onFocus={handleTriggerFocus}
             onClick={() => {
               setOpen(true);
@@ -182,6 +186,13 @@ export function SearchBox({
             }}
             id={id}
           >
+            {!!visualError && (
+              <FaTriangleExclamation
+                title='Error'
+                size='0.8rem'
+                color={theme.colors.alert}
+              />
+            )}
             {value ? (
               <ResourceTitle>{title}</ResourceTitle>
             ) : (
@@ -215,9 +226,6 @@ export function SearchBox({
             </>
           )}
           {children}
-          {visualError && (
-            <PositionedErrorChip noMovement>{visualError}</PositionedErrorChip>
-          )}
         </TriggerButtonWrapper>
       </RadixPopover.Anchor>
       <RadixPopover.Portal container={containerRef.current}>
@@ -242,7 +250,7 @@ export function SearchBox({
   );
 }
 
-const TriggerButton = styled.button<{ $empty: boolean }>`
+const TriggerButton = styled.button`
   display: flex;
   align-items: center;
   padding: 0.5rem;
@@ -255,18 +263,18 @@ const TriggerButton = styled.button<{ $empty: boolean }>`
   width: 100%;
   overflow: hidden;
   cursor: text;
-  color: ${p => (p.$empty ? p.theme.colors.textLight : p.theme.colors.text)};
+  color: ${p => p.theme.colors.text};
+  &.empty {
+    color: ${p => p.theme.colors.textLight};
+  }
 `;
 
-const TriggerButtonWrapper = styled.div<{
-  invalid: boolean;
-  disabled: boolean;
-  open: boolean;
-}>`
-  ${SB_HIGHLIGHT.define(p =>
-    p.invalid ? p.theme.colors.alert : p.theme.colors.main,
-  )}
+const TriggerButtonWrapper = styled.div<{ disabled: boolean }>`
+  ${SB_HIGHLIGHT.define(p => p.theme.colors.main)}
 
+  &.invalid {
+    ${SB_HIGHLIGHT.define(p => p.theme.colors.alert)}
+  }
   max-width: 100cqw;
 
   display: flex;
@@ -279,7 +287,8 @@ const TriggerButtonWrapper = styled.div<{
   border-bottom-right-radius: ${p => SB_BOTTOM_RADIUS.var(p.theme.radius)};
 
   background-color: ${p => SB_BACKGROUND.var(p.theme.colors.bg)};
-
+  content-visibility: auto;
+  contain-intrinsic-size: auto 2rem;
   &:has(:disabled) {
     background-color: ${props => props.theme.colors.bg1};
     opacity: 0.7;
@@ -288,14 +297,13 @@ const TriggerButtonWrapper = styled.div<{
   &:has(${TriggerButton}:hover(), ${TriggerButton}:focus-visible) {
   }
 
-  &:not(:has(:disabled)):where(:hover, :focus-visible) {
+  &:not(:has(:disabled)):where(:hover, :focus-within) {
     border-color: transparent;
     box-shadow: 0 0 0 2px ${SB_HIGHLIGHT.var()};
-    ${p =>
-      !p.open &&
-      css`
-        z-index: 1000;
-      `}
+    z-index: 1000;
+    &.open {
+      z-index: 1000;
+    }
   }
 `;
 
@@ -308,10 +316,4 @@ const ResourceTitle = styled.span`
 
 const PlaceholderText = styled.span`
   color: ${p => p.theme.colors.textLight};
-`;
-
-const PositionedErrorChip = styled(ErrorChip)`
-  position: absolute;
-  top: 2rem;
-  z-index: 1001;
 `;
