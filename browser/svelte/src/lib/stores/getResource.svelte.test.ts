@@ -5,6 +5,9 @@ import { getResource } from '../index.js';
 import { ATOMIC_STORE_CONTEXT_KEY, getStoreFromContext } from './store.js';
 
 const resource1Subject = 'https://resource1';
+const resource2Subject = 'https://resource2';
+
+const someProp = 'https://some-prop';
 
 // We need to mock getContext because normally you can't use it outside of a Svelte component scope.
 vi.mock('svelte', () => ({
@@ -28,7 +31,7 @@ describe('getResource', () => {
           [core.properties.name]: 'Resource 1',
         },
       });
-      const resource = getResource<DataBrowser.Folder>(resource1Subject);
+      const resource = getResource<DataBrowser.Folder>(() => resource1Subject);
 
       expect(resource).not.toBe(undefined);
       expect(resource.subject).toBe(resource1Subject);
@@ -47,8 +50,8 @@ describe('getResource', () => {
         isA: dataBrowser.classes.folder,
       });
 
-      const resource1 = getResource<DataBrowser.Folder>(resource1Subject);
-      const resource2 = getResource<DataBrowser.Folder>(resource1Subject);
+      const resource1 = getResource<DataBrowser.Folder>(() => resource1Subject);
+      const resource2 = getResource<DataBrowser.Folder>(() => resource1Subject);
 
       expect(resource1.props.name).toBe(undefined);
 
@@ -57,6 +60,46 @@ describe('getResource', () => {
       flushSync();
 
       expect(resource2.props.name).toBe('Resource with a name');
+    });
+
+    cleanup();
+  });
+
+  it('correctly fetches derrived subjects', async () => {
+    const cleanup = $effect.root(() => {
+      const store = getStoreFromContext();
+      console.log(store);
+      store.newResource({
+        subject: resource1Subject,
+        isA: dataBrowser.classes.folder,
+        propVals: {
+          [core.properties.name]: 'Resource 1',
+        },
+      });
+
+      store.newResource({
+        subject: resource2Subject,
+        isA: dataBrowser.classes.folder,
+        propVals: {
+          [core.properties.name]: 'Resource 2',
+        },
+      });
+
+      const resource1 = getResource<DataBrowser.Folder>(() => resource1Subject);
+      const resource2 = getResource<DataBrowser.Folder>(
+        () => resource1.get(someProp) as string,
+      );
+
+      expect(resource1.props.name).toBe('Resource 1');
+      expect(resource2.error).not.toBe(undefined);
+      expect(resource2.props.name).toBe(undefined);
+
+      resource1.set(someProp, resource2Subject);
+
+      flushSync();
+
+      expect(resource2.error).toBe(undefined);
+      expect(resource2.props.name).toBe('Resource 2');
     });
 
     cleanup();
