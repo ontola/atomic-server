@@ -17,6 +17,7 @@ enum Inserts {
   CLASSES = '{{4}}',
   PROP_TYPE_MAPPING = '{{7}}',
   PROP_SUBJECT_TO_NAME_MAPPING = '{{8}}',
+  TYPE_IMPORTS = '{{9}}',
 }
 
 const TEMPLATE = `
@@ -25,7 +26,7 @@ const TEMPLATE = `
 * For more info on how to use ontologies: https://github.com/atomicdata-dev/atomic-server/blob/develop/browser/cli/readme.md
 * -------------------------------- */
 
-import type { OntologyBaseObject, BaseProps } from '${Inserts.MODULE_ALIAS}'
+import type { ${Inserts.TYPE_IMPORTS} } from '${Inserts.MODULE_ALIAS}'
 
 ${Inserts.BASE_OBJECT}
 
@@ -57,7 +58,10 @@ export const generateOntology = async (
 
   const [baseObjStr, reverseMapping] = await generateBaseObject(ontology);
   const classesStr = generateClasses(ontology, reverseMapping, propertyRecord);
-  const propertiesStr = generatePropTypeMapping(ontology, reverseMapping);
+  const [propertiesStr, propertiesImports] = generatePropTypeMapping(
+    ontology,
+    reverseMapping,
+  );
   const subToNameStr = generateSubjectToNameMapping(ontology, reverseMapping);
   const classExportsStr = generateClassExports(ontology, reverseMapping);
 
@@ -65,6 +69,10 @@ export const generateOntology = async (
     Inserts.MODULE_ALIAS,
     atomicConfig.moduleAlias ?? '@tomic/lib',
   )
+    .replace(
+      Inserts.TYPE_IMPORTS,
+      ['OntologyBaseObject', 'BaseProps', ...propertiesImports].join(', '),
+    )
     .replace(Inserts.BASE_OBJECT, baseObjStr)
     .replace(Inserts.CLASS_EXPORTS, classExportsStr)
     .replace(Inserts.CLASSES, classesStr)
