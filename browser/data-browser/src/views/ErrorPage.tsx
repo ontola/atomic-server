@@ -9,6 +9,8 @@ import { ResourcePageProps } from './ResourcePage';
 import { Column, Row } from '../components/Row';
 import CrashPage from './CrashPage';
 import { clearAllLocalData } from '../helpers/clearData';
+import { AtomicLink } from '../components/AtomicLink';
+import { paths } from '../routes/paths';
 
 import type { JSX } from 'react';
 
@@ -17,7 +19,7 @@ import type { JSX } from 'react';
  * for App wide errors.
  */
 function ErrorPage({ resource }: ResourcePageProps): JSX.Element {
-  const { agent } = useSettings();
+  const { agent, baseURL } = useSettings();
   const store = useStore();
 
   if (isUnauthorized(resource.error)) {
@@ -54,6 +56,13 @@ function ErrorPage({ resource }: ResourcePageProps): JSX.Element {
       <Column>
         <h1>Could not open {resource.subject}</h1>
         <ErrorBlock error={resource.error!} />
+        {resource.subject === baseURL && (
+          <p>
+            If this host has not been bound to a Drive yet, continue at{' '}
+            <AtomicLink path={paths.onboarding}>the onboarding page</AtomicLink>
+            .
+          </p>
+        )}
         <Row>
           <Button
             onClick={() =>

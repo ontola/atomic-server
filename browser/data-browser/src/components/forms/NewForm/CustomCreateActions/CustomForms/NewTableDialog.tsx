@@ -1,7 +1,8 @@
-import { dataBrowser, core, useStore } from '@tomic/react';
+import { dataBrowser, core, type Server, useStore } from '@tomic/react';
 import { useState, useCallback, useEffect, FormEvent, FC } from 'react';
 import { styled } from 'styled-components';
 import { stringToSlug } from '../../../../../helpers/stringToSlug';
+import { useSettings } from '../../../../../helpers/AppSettings';
 import { BetaBadge } from '../../../../BetaBadge';
 import { Button } from '../../../../Button';
 import {
@@ -31,6 +32,7 @@ export const NewTableDialog: FC<NewTableDialogProps> = ({
   onCreated,
 }) => {
   const store = useStore();
+  const { drive: driveSubject } = useSettings();
   const [useExistingClass, setUseExistingClass] =
     useState(!!initialExistingClass);
   const [existingClass, setExistingClass] = useState<string | undefined>(
@@ -49,7 +51,16 @@ export const NewTableDialog: FC<NewTableDialogProps> = ({
     let classSubject: string;
 
     if (!useExistingClass) {
+      const drive = await store.getResource<Server.Drive>(driveSubject);
+      const ontologyParent = drive.props.defaultOntology;
+      const parentSubject =
+        ontologyParent &&
+        !ontologyParent.startsWith('internal:') &&
+        !ontologyParent.includes('unknown-subject')
+          ? ontologyParent
+          : driveSubject;
       const instanceResource = await store.newResource({
+        parent: parentSubject,
         isA: core.classes.class,
         propVals: {
           [core.properties.shortname]: stringToSlug(name),
@@ -94,6 +105,7 @@ export const NewTableDialog: FC<NewTableDialogProps> = ({
     skipNavigation,
     onCreated,
     store,
+    driveSubject,
   ]);
 
   const [dialogProps, show, hide, isOpen] = useDialog({ onCancel, onSuccess });

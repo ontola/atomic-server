@@ -69,7 +69,6 @@ impl Subject {
             Url::parse(&format!("internal:/{}", &path[1..])).unwrap()
         };
 
-
         // Some URL parsers might strip the slash for 'internal:' scheme.
         // We MUST have it for consistent internal subjects.
         if !url.as_str().starts_with("internal:/") && url.scheme() == "internal" {
@@ -157,7 +156,15 @@ impl Subject {
     /// Returns true if this is a DID Agent subject (did:ad:agent:).
     pub fn is_agent_did(&self) -> bool {
         match self {
-            Subject::Did { url, .. } => url.as_str().starts_with("did:ad:agent:"),
+            Subject::Did { url, .. } => url.as_str().starts_with(DID_AD_AGENT_PREFIX),
+            _ => false,
+        }
+    }
+
+    /// Returns true if this is a DID Commit subject (did:ad:commit:).
+    pub fn is_commit_did(&self) -> bool {
+        match self {
+            Subject::Did { url, .. } => url.as_str().starts_with(DID_AD_COMMIT_PREFIX),
             _ => false,
         }
     }
@@ -175,10 +182,7 @@ impl Subject {
     /// Returns true if this subject is local to the server (Internal or Did).
     /// External subjects are not considered local.
     pub fn is_local(&self) -> bool {
-        matches!(
-            self,
-            Subject::Internal { .. } | Subject::Did { .. }
-        )
+        matches!(self, Subject::Internal { .. } | Subject::Did { .. })
     }
 
     /// Resolves the Subject to an absolute URL string based on the provided origin.
@@ -250,10 +254,7 @@ impl Subject {
                         }
                     }
                 }
-                return Subject::Did {
-                    url: u,
-                    drive_hint,
-                };
+                return Subject::Did { url: u, drive_hint };
             }
         }
 
@@ -268,10 +269,7 @@ impl Subject {
                     Some(opaque.to_string())
                 };
 
-                return Subject::Internal {
-                    url: u,
-                    subdomain,
-                };
+                return Subject::Internal { url: u, subdomain };
             }
         }
 
@@ -293,12 +291,18 @@ impl Subject {
                     host.to_string()
                 };
 
+                let path_and_query = if let Some(q) = u.query() {
+                    format!("{}?{}", u.path(), q)
+                } else {
+                    u.path().to_string()
+                };
+
                 if authority == trimmed_base {
-                    return Subject::new_local(u.path(), None);
+                    return Subject::new_local(&path_and_query, None);
                 }
                 if authority.ends_with(&format!(".{}", trimmed_base)) {
                     let subdomain = &authority[..authority.len() - trimmed_base.len() - 1];
-                    return Subject::new_local(u.path(), Some(subdomain));
+                    return Subject::new_local(&path_and_query, Some(subdomain));
                 }
             }
             return Subject::External(u);
@@ -468,7 +472,11 @@ mod tests {
             "Expected Subject::Did, got {:?}",
             subject
         );
-        assert_eq!(subject.as_str(), agent_did, "as_str() must preserve + and = without percent-encoding");
+        assert_eq!(
+            subject.as_str(),
+            agent_did,
+            "as_str() must preserve + and = without percent-encoding"
+        );
         assert!(subject.is_agent_did());
     }
 
@@ -497,5 +505,19 @@ mod tests {
         let subject = Subject::from_raw(raw, None);
         // If this fails, we know resolve() is losing query params
         assert_eq!(subject.resolve(origin), format!("{}{}", origin, raw));
+    }
+
+    #[test]
+    fn test_from_raw_http_url_preserves_query_params() {
+        // Regression test: full HTTP URL with query params must be preserved
+        // when converted to an Internal subject (e.g. WS GET for /query endpoint).
+        let origin = "http://localhost:9883";
+        let raw = "http://localhost:9883/query?page_size=30&property=https%3A%2F%2Fexample.com%2Fprop";
+        let subject = Subject::from_raw(raw, Some("localhost:9883"));
+        assert!(
+            matches!(subject, Subject::Internal { .. }),
+            "Expected Internal subject"
+        );
+        assert_eq!(subject.resolve(origin), raw);
     }
 }

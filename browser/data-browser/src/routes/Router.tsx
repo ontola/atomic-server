@@ -18,6 +18,7 @@ import { unavailableLazyRoute } from './UnavailableLazyRoute';
 import { ImportRoute } from './ImportRoute';
 import { HistoryRoute } from './History/HistoryRoute';
 import { LinkOpenRouter } from './LinkOpenRouter';
+import { OnboardingRoute } from './OnboardingRoute';
 
 const PruneTestsRoute = createRoute({
   getParentRoute: () => appRoute,
@@ -54,6 +55,7 @@ const routeTree = rootRoute.addChildren({
     DataRoute,
     EditRoute,
     ImportRoute,
+    OnboardingRoute,
     ShareRoute,
     AboutRoute,
     TokenRoute,

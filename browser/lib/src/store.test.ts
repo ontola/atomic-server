@@ -80,8 +80,18 @@ describe('Store', () => {
 
     const resource2 = await store.newResource({ did: false });
 
-    expect(resource2.props.parent).toBe(store.getServerUrl());
+    expect(resource2.props.parent).toBe('https://myserver.dev/');
     expect(resource2.get(core.properties.isA)).toBe(undefined);
+  });
+
+  it('normalizes the default root parent when creating resources', async ({
+    expect,
+  }) => {
+    const store = new Store({ serverUrl: 'https://myserver.dev' });
+
+    const resource = await store.newResource({ did: false });
+
+    expect(resource.props.parent).toBe('https://myserver.dev/');
   });
 
   it('resolves aliases correctly', async ({ expect }) => {

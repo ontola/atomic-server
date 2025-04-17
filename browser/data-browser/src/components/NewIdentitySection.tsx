@@ -100,7 +100,10 @@ export function NewIdentitySection({
         />
         {hasCopiedSecret ? (
           <>
-            <p>Are you sure you{"'"}ve stored this secret somewhere safe? You cannot recover it if you lose it.</p>
+            <p>
+              Are you sure you{"'"}ve stored this secret somewhere safe? You
+              cannot recover it if you lose it.
+            </p>
             <Button onClick={onDone}>{doneLabel}</Button>
           </>
         ) : (

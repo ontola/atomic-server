@@ -99,7 +99,6 @@ pub const APPEND: &str = "https://atomicdata.dev/properties/append";
 pub const CHILDREN: &str = "https://atomicdata.dev/properties/children";
 pub const SUBRESOURCES: &str = "https://atomicdata.dev/properties/subresources";
 pub const SUBDOMAIN: &str = "https://atomicdata.dev/properties/subdomain";
-pub const IS_UNINITIALIZED: &str = "https://atomicdata.dev/properties/isUninitialized";
 pub const INITIAL_DRIVE: &str = "https://atomicdata.dev/properties/initialDrive";
 // ... for Inivtations
 pub const DESTINATION: &str = "https://atomicdata.dev/properties/destination";

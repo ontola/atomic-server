@@ -97,8 +97,6 @@ export class WSClient {
       ws.addEventListener('error', e => {
         if (!this.retryingOldVersion) {
           this.retryingOldVersion = true;
-          // eslint-disable-next-line no-console
-          console.log(`Retrying ${wsURL.toString()} with legacy protocol`);
           createSocket();
 
           return;
@@ -307,6 +305,11 @@ export class WSClient {
       }
 
       return false;
+    }).catch(e => {
+      throw new Error(
+        `WS GET timed out for subject "${subject}" on ${this.ws.url}`,
+        { cause: e },
+      );
     });
 
     this.ws.send('GET ' + subject);
@@ -384,7 +387,7 @@ export class WSClient {
         this.ws.removeEventListener('message', listener);
         reject(
           new Error(
-            `WS Request timed out after ${REQUEST_TIMEOUT}ms. on ${this.ws.url}, message: ${message}`,
+            `WS Request with message '${message}' timed out after ${REQUEST_TIMEOUT}ms. on ${this.ws.url}, message: ${message}`,
           ),
         );
       }, REQUEST_TIMEOUT);

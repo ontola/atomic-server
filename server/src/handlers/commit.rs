@@ -53,13 +53,6 @@ pub async fn post_commit(
         update_index: true,
     };
 
-    let host = req
-        .headers()
-        .get("Host")
-        .and_then(|h| h.to_str().ok())
-        .map(|h| h.split(':').next().unwrap_or(h))
-        .unwrap_or("localhost");
-
     let _subject = atomic_lib::Subject::from_raw(&incoming_commit.subject, None);
 
     let signer = incoming_commit.signer.clone();

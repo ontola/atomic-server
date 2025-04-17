@@ -1,3 +1,5 @@
+import { isDev } from '../config';
+
 const ServerURLStorageKEY = 'serverUrl';
 const KnownServersKEY = 'knownServers';
 
@@ -22,7 +24,10 @@ export const serverURLStorage = {
       const origin = urlObj.origin;
       const known = this.getKnownServers();
       if (!known.includes(origin)) {
-        localStorage.setItem(KnownServersKEY, JSON.stringify([...known, origin]));
+        localStorage.setItem(
+          KnownServersKEY,
+          JSON.stringify([...known, origin]),
+        );
       }
     } catch (e) {
       // Not a valid URL, ignore
@@ -32,13 +37,22 @@ export const serverURLStorage = {
     try {
       const val = localStorage.getItem(KnownServersKEY);
       if (!val) return [];
-      return JSON.parse(val);
+      const servers = JSON.parse(val) as string[];
+
+      if (!isDev()) {
+        return servers;
+      }
+
+      return servers.filter(server => server !== window.location.origin);
     } catch (e) {
       return [];
     }
   },
   removeKnownServer(url: string) {
     const known = this.getKnownServers();
-    localStorage.setItem(KnownServersKEY, JSON.stringify(known.filter(s => s !== url)));
-  }
+    localStorage.setItem(
+      KnownServersKEY,
+      JSON.stringify(known.filter((s: string) => s !== url)),
+    );
+  },
 };

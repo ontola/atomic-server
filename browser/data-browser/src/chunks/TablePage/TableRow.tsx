@@ -2,6 +2,7 @@ import {
   memo,
   useEffect,
   useEffectEvent,
+  useMemo,
   useRef,
   useState,
   type JSX,
@@ -11,13 +12,12 @@ import {
   DataBrowser,
   Property,
   Resource,
-  core,
   unknownSubject,
   useMemberFromCollection,
   useResource,
+  useStore,
 } from '@tomic/react';
 import { TableCell } from './TableCell';
-import { randomSubject } from '../../helpers/randomString';
 import { styled, keyframes } from 'styled-components';
 import { useTableEditorContext } from '@chunks/TableEditor/TableEditorContext';
 import { FaTriangleExclamation } from 'react-icons/fa6';
@@ -121,40 +121,39 @@ export function TableNewRow({
   parent,
   invalidateTable,
 }: TableNewRowProps): JSX.Element {
-  const [subject] = useState<string>(() =>
-    randomSubject(parent.subject, 'row'),
-  );
-
-  const [loading, setLoading] = useState(true);
-
+  const store = useStore();
+  const [subject, setSubject] = useState<string>(unknownSubject);
   const resource = useResource(subject, resourceOpts);
-  const resourceRef = useRef(resource);
+  const [loading, setLoading] = useState(true);
+  const rowClass = useMemo(
+    () => [parent.props.classtype],
+    [parent.props.classtype],
+  );
   const onEditNextRow = useTableInvalidation(resource, invalidateTable);
 
   useMarkings(resource, index);
 
   useEffect(() => {
-    if (resource.subject === unknownSubject || resource.commitError) {
-      return;
-    }
+    let cancelled = false;
 
-    resourceRef.current
-      .set(core.properties.parent, parent.subject)
-      .then(() =>
-        resourceRef.current.set(core.properties.isA, [parent.props.classtype]),
-      )
-      .then(() => {
+    store
+      .newResource({
+        parent: parent.subject,
+        isA: rowClass,
+      })
+      .then(row => {
+        if (cancelled) {
+          return;
+        }
+
+        setSubject(row.subject);
         setLoading(false);
       });
 
-    // We can't add resource to the list because we modify the resource in the effect so it would cause a loop.
-    // We put resource in a ref so we don't need to add it to the list.
-  }, [
-    resource.subject,
-    parent.subject,
-    parent.props.classtype,
-    resource.commitError,
-  ]);
+    return () => {
+      cancelled = true;
+    };
+  }, [parent.subject, rowClass, store]);
 
   if (loading) {
     return (

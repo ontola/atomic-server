@@ -6,7 +6,7 @@ use crate::{
     helpers::{get_client_agent, try_extension},
 };
 use actix_web::{web, HttpResponse};
-use atomic_lib::db::ResolveSubjectResult;
+use atomic_lib::db::ResolvedTarget;
 use simple_server_timing_header::Timer;
 
 /// Respond to a single resource.
@@ -60,47 +60,35 @@ pub async fn handle_get_resource(
         get_client_agent(headers, &appstate, &format!("{}{}", origin, subject_string)).await?;
     timer.add("get_agent");
 
-    let res = appstate
+    let resolved: ResolvedTarget = appstate
         .store
-        .resolve_subject(&subject, host, &subject_string, &origin, &for_agent)
+        .resolve_request_target(&subject, host, &subject_string, &origin)
+        .await?;
+    let resource_response = appstate
+        .store
+        .fetch_resource_with_did_fallback(&resolved.subject, &origin, &for_agent)
         .await?;
 
     let mut builder = HttpResponse::Ok();
+    if let atomic_lib::Subject::Did { .. } = resource_response.get_subject() {
+        builder.append_header((
+            "Link",
+            format!(
+                "<{}>; rel=\"canonical\"",
+                resource_response.get_subject().as_str()
+            ),
+        ));
+    }
 
-    let (mut resource, redirect_subject) = match res {
-        ResolveSubjectResult::Uninitialized {
-            full_subject,
-            host,
-        } => {
-            tracing::info!("Server is uninitialized for host: {}", host);
-            builder.append_header(("Content-Type", ContentType::JsonAd.to_mime()));
-            return Ok(builder.body(
-                serde_json::json!({
-                    "@id": full_subject,
-                    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Server"],
-                    "https://atomicdata.dev/properties/isUninitialized": true,
-                    "https://atomicdata.dev/properties/name": format!("Uninitialized Atomic Server ({})", host),
-                })
-                .to_string(),
-            ));
-        }
-        ResolveSubjectResult::Resource {
-            resource,
-            redirect_subject,
-        } => {
-            if let atomic_lib::Subject::Did { .. } = resource.get_subject() {
-                builder.append_header((
-                    "Link",
-                    format!("<{}>; rel=\"canonical\"", resource.get_subject().as_str()),
-                ));
-            }
-            (resource.to_single().clone(), redirect_subject)
-        }
-    };
+    let mut resource = resource_response.to_single().clone();
 
-    if let Some(redirect) = redirect_subject {
+    if let Some(redirect) = resolved.alias_subject {
         let old_subject: &str = resource.get_subject().as_str();
-        tracing::debug!("Aliasing resource {} to requested subject {}", old_subject, redirect);
+        tracing::debug!(
+            "Aliasing resource {} to requested subject {}",
+            old_subject,
+            redirect
+        );
         resource.set_subject(redirect);
         builder.append_header((
             "Warning",

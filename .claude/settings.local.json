@@ -15,7 +15,8 @@
       "Bash(echo $ANDROID_HOME)",
       "Bash(adb devices)",
       "Bash(echo $PATH)",
-      "Bash(cargo build:*)"
+      "Bash(cargo build:*)",
+      "Bash(cargo test:*)"
     ]
   }
 }

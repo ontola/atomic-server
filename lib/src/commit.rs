@@ -1027,7 +1027,7 @@ mod test {
         commitbuiler.set(property2.into(), value2);
         let commit = commitbuiler.sign(&agent, &store, &resource).await.unwrap();
         let commit_subject = commit.get_subject().to_string();
-        let _created_resource = store.apply_commit(commit, &OPTS, None).await.unwrap();
+        let _created_resource = store.apply_commit(commit, &OPTS).await.unwrap();
 
         let resource = store.get_resource(&subject.into()).await.unwrap();
         assert!(resource.get(property1).unwrap().to_string() == value1.to_string());

@@ -3704,10 +3704,8 @@ msgid ""
 "another device."
 msgstr "<0>IMPORTANT :</0> Enregistrez cette clé secrète. C'est le seul moyen d'accéder à vos données si vous videz le cache de votre navigateur ou si vous vous connectez depuis un autre appareil."
 
-#. placeholder {0}: "'"
-#: src/components/NewIdentitySection.tsx
-msgid "Are you sure you{0}ve stored this secret somewhere safe? You cannot recover it if you lose it."
-msgstr "Êtes-vous sûr d'avoir stocké ce secret en lieu sûr ? Vous ne pourrez pas le récupérer si vous le perdez."
+#~ msgid "Are you sure you{0}ve stored this secret somewhere safe? You cannot recover it if you lose it."
+#~ msgstr "Êtes-vous sûr d'avoir stocké ce secret en lieu sûr ? Vous ne pourrez pas le récupérer si vous le perdez."
 
 #: src/components/NewIdentitySection.tsx
 msgid "Copy the secret key to continue"
@@ -3721,3 +3719,18 @@ msgstr "Oui, je l'ai stocké en toute sécurité"
 #: src/routes/SettingsAgent.tsx
 msgid "Login / New User"
 msgstr "Connexion / Nouvel utilisateur"
+
+#~ msgid "This host is not bound to a Drive yet:{0} <0/>."
+#~ msgstr ""
+
+#. placeholder {0}: ' '
+#: src/views/ErrorPage.tsx
+msgid "If this host has not been bound to a Drive yet, continue at{0} <0>the onboarding page</0> ."
+msgstr ""
+
+#. placeholder {0}: "'"
+#: src/components/NewIdentitySection.tsx
+msgid ""
+"Are you sure you{0}ve stored this secret somewhere safe? You\n"
+"cannot recover it if you lose it."
+msgstr ""

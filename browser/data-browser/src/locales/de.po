@@ -3708,10 +3708,8 @@ msgstr ""
 "auf Ihre Daten zuzugreifen, wenn Sie Ihren Browser-Cache leeren oder sich von\n"
 "einem anderen Gerät anmelden."
 
-#. placeholder {0}: "'"
-#: src/components/NewIdentitySection.tsx
-msgid "Are you sure you{0}ve stored this secret somewhere safe? You cannot recover it if you lose it."
-msgstr "Sind Sie sicher, dass Sie dieses Geheimnis an einem sicheren Ort gespeichert haben? Sie können es nicht wiederherstellen, wenn Sie es verlieren."
+#~ msgid "Are you sure you{0}ve stored this secret somewhere safe? You cannot recover it if you lose it."
+#~ msgstr "Sind Sie sicher, dass Sie dieses Geheimnis an einem sicheren Ort gespeichert haben? Sie können es nicht wiederherstellen, wenn Sie es verlieren."
 
 #: src/components/NewIdentitySection.tsx
 msgid "Copy the secret key to continue"
@@ -3725,3 +3723,18 @@ msgstr "Ja, ich habe es sicher gespeichert"
 #: src/routes/SettingsAgent.tsx
 msgid "Login / New User"
 msgstr "Anmelden / Neuer Benutzer"
+
+#~ msgid "This host is not bound to a Drive yet:{0} <0/>."
+#~ msgstr ""
+
+#. placeholder {0}: ' '
+#: src/views/ErrorPage.tsx
+msgid "If this host has not been bound to a Drive yet, continue at{0} <0>the onboarding page</0> ."
+msgstr ""
+
+#. placeholder {0}: "'"
+#: src/components/NewIdentitySection.tsx
+msgid ""
+"Are you sure you{0}ve stored this secret somewhere safe? You\n"
+"cannot recover it if you lose it."
+msgstr ""

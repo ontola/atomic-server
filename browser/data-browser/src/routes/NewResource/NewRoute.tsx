@@ -1,5 +1,5 @@
 import { useResource, core } from '@tomic/react';
-import { useCallback, type JSX } from 'react';
+import { Fragment, useCallback, type JSX } from 'react';
 
 import { constructOpenURL } from '../../helpers/navigation';
 import {
@@ -123,13 +123,13 @@ function NewResourceSelector() {
             />
           </Column>
           {showTemplates && (
-            <>
+            <Fragment key='templates'>
               <Devider />
               <Column>
                 <h2>Templates</h2>
                 <TemplateList />
               </Column>
-            </>
+            </Fragment>
           )}
         </SideBySide>
       </Column>

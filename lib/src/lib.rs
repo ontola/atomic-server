@@ -73,9 +73,9 @@ pub mod commit;
 #[cfg(feature = "config")]
 pub mod config;
 pub mod datatype;
-pub mod dht;
 #[cfg(feature = "db")]
 pub mod db;
+pub mod dht;
 #[cfg(feature = "db")]
 pub mod endpoints;
 pub mod errors;

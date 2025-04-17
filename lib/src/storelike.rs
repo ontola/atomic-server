@@ -160,7 +160,7 @@ pub trait Storelike: Sized + Send + Sync {
     /// Maps a host (domain/subdomain) to a Drive DID.
     fn add_drive_mapping(&self, host: &str, drive_did: &Value) -> AtomicResult<()>;
 
-    /// Removes the drive mapping for a given host, making it uninitialized again.
+    /// Removes the drive mapping for a given host.
     fn remove_drive_mapping(&self, host: &str) -> AtomicResult<()>;
 
     /// Returns the base domain of the store, e.g. "https://atomicdata.dev".

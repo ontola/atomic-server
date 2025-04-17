@@ -1,5 +1,4 @@
 import { useCallback, useMemo } from 'react';
-import { useSavedDrives } from './useSavedDrives';
 import { useLocalStorage } from './useLocalStorage';
 
 const MAX_DRIVE_HISTORY = 5;
@@ -12,7 +11,6 @@ export function useDriveHistory(
   addDriveToHistory: (drive: string) => void,
   removeFromHistory: (drive: string) => void,
 ] {
-  const [savedDrives] = useSavedDrives();
   const [driveHistory, setDriveHistory] = useLocalStorage<string[]>(
     'driveHistory',
     [],
@@ -31,7 +29,7 @@ export function useDriveHistory(
         );
       });
     },
-    [savedDrives, setDriveHistory],
+    [setDriveHistory],
   );
 
   const removeFromHistory = useCallback(

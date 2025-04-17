@@ -36,8 +36,6 @@ import { DocumentV2FullPage } from './Document/DocumentV2FullPage';
 import { PluginPage } from '@views/Plugin/PluginPage';
 import { useCustomViews } from '@components/CustomViewProvider';
 import { PluginView } from './PluginView/PluginView';
-import { OnboardingPage } from './OnboardingPage';
-import { useSettings } from '../helpers/AppSettings';
 
 const TablePage = lazy(() =>
   import('../chunks/TablePage').then(m => ({ default: m.TablePage })),
@@ -58,17 +56,10 @@ type Props = {
  * particular Class, it will render a different Component.
  */
 const ResourcePage: React.FC<Props> = ({ subject }) => {
-  const { baseURL } = useSettings();
   const resource = useResource(subject);
-  const serverResource = useResource(baseURL);
   const { getPluginForClass, loading } = useCustomViews();
   const [isAList] = useArray(resource, core.properties.isA);
   const isA = isAList[0];
-
-  const isUninitialized =
-    serverResource.get('https://atomicdata.dev/properties/isUninitialized') ===
-      true ||
-    resource.get('https://atomicdata.dev/properties/isUninitialized') === true;
 
   // The body can have an inert attribute when the user navigated from an open dialog.
   // we remove it to make the page interactive again.
@@ -76,7 +67,7 @@ const ResourcePage: React.FC<Props> = ({ subject }) => {
     document.body.removeAttribute('inert');
   }, []);
 
-  if (resource.loading || (serverResource.loading && subject === baseURL)) {
+  if (resource.loading) {
     return (
       <Main subject={subject}>
         <ContainerNarrow>
@@ -85,10 +76,6 @@ const ResourcePage: React.FC<Props> = ({ subject }) => {
         </ContainerNarrow>
       </Main>
     );
-  }
-
-  if (isUninitialized) {
-    return <OnboardingPage />;
   }
 
   if (resource.error) {

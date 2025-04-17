@@ -22,7 +22,12 @@ export function useAddToOntology(ontologySubject?: string) {
 
   return useCallback(
     async (resource: Resource) => {
-      if (ontology.subject === unknownSubject) {
+      const hasResolvedOntologySubject =
+        ontology.subject !== unknownSubject &&
+        !ontology.subject.startsWith('internal:') &&
+        !ontology.subject.includes('unknown-subject');
+
+      if (!hasResolvedOntologySubject) {
         await resource.set(core.properties.parent, driveSubject);
         resource.save();
 

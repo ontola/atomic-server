@@ -1,4 +1,5 @@
 import { Resource, core, server, useResources } from '@tomic/react';
+import { useMemo } from 'react';
 import {
   FaGear,
   FaHardDrive,
@@ -12,7 +13,7 @@ import { constructOpenURL } from '../../helpers/navigation';
 import { useDriveHistory } from '../../hooks/useDriveHistory';
 import { useSavedDrives } from '../../hooks/useSavedDrives';
 import { paths } from '../../routes/paths';
-import { DIVIDER, DropdownMenu } from '../Dropdown';
+import { type DropdownItem, DIVIDER, DropdownMenu } from '../Dropdown';
 import { buildDefaultTrigger } from '../Dropdown/DefaultTrigger';
 import { useNewResourceUI } from '../forms/NewForm/useNewResourceUI';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
@@ -52,66 +53,85 @@ export function DriveSwitcher() {
   const knownServers = serverURLStorage.getKnownServers();
   const isHttpDrive = isURL(drive);
 
-  const items = [
-    ...Array.from(savedDrivesMap.entries())
-      .filter(([_, resource]) => !resource.error)
-      .map(([subject, resource]) => ({
-        id: subject,
-        label: getTitle(resource),
-        helper: `Switch to ${getTitle(resource)}`,
-        disabled: false,
-        onClick: () => {
-          setDrive(subject);
-          navigate(constructOpenURL(subject));
-        },
-        icon: subject === drive ? <FaSquareCheck /> : <FaRegCircle />,
+  const items = useMemo<DropdownItem[]>(
+    () => [
+      ...Array.from(savedDrivesMap.entries())
+        .filter(([_, resource]) => !resource.error)
+        .map(([subject, resource]) => ({
+          id: subject,
+          label: getTitle(resource),
+          helper: `Switch to ${getTitle(resource)}`,
+          disabled: false,
+          onClick: (): void => {
+            setDrive(subject);
+            navigate(constructOpenURL(subject));
+          },
+          icon: subject === drive ? <FaSquareCheck /> : <FaRegCircle />,
+        })),
+      {
+        id: 'new-drive',
+        label: 'New Drive',
+        icon: <FaPlus />,
+        helper: 'Create a new drive',
+        onClick: (): void =>
+          createNewResource(server.classes.drive, agent?.subject ?? ''),
+        disabled: !agent,
+      },
+      DIVIDER,
+      // Dedupe history from savedDrives bause not all savedDrives might be loaded yet.
+      ...Array.from(dedupeAFromB(historyMap, savedDrivesMap))
+        .map(([subject, resource]) => ({
+          label: getTitle(resource),
+          id: subject,
+          helper: `Switch to ${getTitle(resource)}`,
+          icon: subject === drive ? <FaSquareCheck /> : <FaRegCircle />,
+          onClick: buildHandleHistoryDriveClick(subject),
+          disabled: false,
+        }))
+        .slice(0, 5),
+      DIVIDER,
+      {
+        id: 'active-server-header',
+        label: isHttpDrive ? 'Gateway (Locked to Drive)' : 'Active Gateway',
+        icon: <FaServer />,
+        header: true,
+        onClick: () => undefined,
+      },
+      ...knownServers.map(s => ({
+        id: `server-${s}`,
+        label: s,
+        helper: isHttpDrive
+          ? 'Cannot change gateway for HTTP drives'
+          : `Connect via ${s}`,
+        disabled: isHttpDrive || s === baseURL,
+        icon: s === baseURL ? <FaSquareCheck /> : <FaRegCircle />,
+        onClick: (): void => setServer(s),
       })),
-    {
-      id: 'new-drive',
-      label: 'New Drive',
-      icon: <FaPlus />,
-      helper: 'Create a new drive',
-      onClick: () =>
-        createNewResource(server.classes.drive, agent?.subject ?? ''),
-      disabled: !agent,
-    },
-    DIVIDER,
-    // Dedupe history from savedDrives bause not all savedDrives might be loaded yet.
-    ...Array.from(dedupeAFromB(historyMap, savedDrivesMap))
-      .map(([subject, resource]) => ({
-        label: getTitle(resource),
-        id: subject,
-        helper: `Switch to ${getTitle(resource)}`,
-        icon: subject === drive ? <FaSquareCheck /> : <FaRegCircle />,
-        onClick: buildHandleHistoryDriveClick(subject),
-        disabled: false,
-      }))
-      .slice(0, 5),
-    DIVIDER,
-    {
-      id: 'active-server-header',
-      label: isHttpDrive ? 'Gateway (Locked to Drive)' : 'Active Gateway',
-      icon: <FaServer />,
-      header: true,
-      onClick: () => undefined,
-    },
-    ...knownServers.map(s => ({
-      id: `server-${s}`,
-      label: s,
-      helper: isHttpDrive ? 'Cannot change gateway for HTTP drives' : `Connect via ${s}`,
-      disabled: isHttpDrive || s === baseURL,
-      icon: s === baseURL ? <FaSquareCheck /> : <FaRegCircle />,
-      onClick: () => setServer(s),
-    })),
-    DIVIDER,
-    {
-      id: 'configure-drives',
-      label: 'Configure',
-      icon: <FaGear />,
-      helper: 'Load drives not displayed in this list.',
-      onClick: () => navigate(paths.serverSettings),
-    },
-  ];
+      DIVIDER,
+      {
+        id: 'configure-drives',
+        label: 'Configure',
+        icon: <FaGear />,
+        helper: 'Load drives not displayed in this list.',
+        onClick: (): void => {
+          void navigate(paths.serverSettings);
+        },
+      },
+    ],
+    [
+      agent,
+      baseURL,
+      createNewResource,
+      drive,
+      historyMap,
+      isHttpDrive,
+      knownServers,
+      navigate,
+      savedDrivesMap,
+      setDrive,
+      setServer,
+    ],
+  );
 
   return <DropdownMenu Trigger={Trigger} items={items} />;
 }

@@ -4,6 +4,7 @@ import {
   useCollection,
   UseCollectionResult,
   useResource,
+  useStore,
   useSubject,
 } from '@tomic/react';
 import { useReducer } from 'react';
@@ -42,6 +43,7 @@ const useTableSorting = () =>
 
 export function useTableData(resource: Resource): UseTableDataResult {
   const [sorting, setSortBy] = useTableSorting();
+  const store = useStore();
 
   const [classSubject] = useSubject(resource, core.properties.classtype);
   const tableClass = useResource(classSubject);
@@ -57,7 +59,9 @@ export function useTableData(resource: Resource): UseTableDataResult {
     queryFilter,
     {
       pageSize: PAGE_SIZE,
-      server: new URL(resource.subject).origin,
+      server: resource.subject.startsWith('http')
+        ? new URL(resource.subject).origin
+        : store.getServerUrl(),
     },
   );
 

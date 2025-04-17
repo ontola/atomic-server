@@ -52,7 +52,8 @@ export const OnboardingPage: React.FC = () => {
           'https://atomicdata.dev/properties/drives',
         );
         // @ts-ignore
-        const driveList = drives.get('https://atomicdata.dev/properties/drives') || [];
+        const driveList =
+          drives.get('https://atomicdata.dev/properties/drives') || [];
 
         if (driveList.length > 0) {
           driveToMap = driveList[0];
@@ -88,7 +89,14 @@ export const OnboardingPage: React.FC = () => {
                 doneLabel="Yes, I've stored it safely"
               />
 
-              <hr style={{ width: '100%', opacity: 0.1, border: 'none', borderTop: '1px solid' }} />
+              <hr
+                style={{
+                  width: '100%',
+                  opacity: 0.1,
+                  border: 'none',
+                  borderTop: '1px solid',
+                }}
+              />
 
               <Column gap='1rem'>
                 <h3>Use an existing identity</h3>
