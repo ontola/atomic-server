@@ -41,7 +41,7 @@ export function TextPreview({
     fetchFile(downloadUrl, abortController.signal, mimeType)
       .then(res => setData(res))
       .catch(e => {
-        if (e.name !== 'AbortError') throw e;
+        if (e.name !== /* @wc-ignore */ 'AbortError') throw e;
       });
 
     return () => abortController.abort();

@@ -19,7 +19,9 @@ const matchModifier = (
 ) =>
   handler.mod === undefined ||
   handler.mod ===
-    (navigator.platform.includes('Mac') ? event.metaKey : event.ctrlKey);
+    (navigator.platform.includes(/* @wc-ignore */ 'Mac')
+      ? event.metaKey
+      : event.ctrlKey);
 
 const matchCondition = (handler: KeyboardHandler, context: HandlerContext) =>
   handler.condition === undefined || handler.condition(context);

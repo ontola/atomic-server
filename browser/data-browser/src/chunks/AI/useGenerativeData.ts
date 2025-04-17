@@ -1,3 +1,4 @@
+// @wc-ignore-file
 import { generateObject, generateText } from 'ai';
 import { type AtomicUIMessage } from './types';
 import z from 'zod';

@@ -1,3 +1,4 @@
+// @wc-ignore-file
 import { Position, Node } from 'reactflow';
 
 // this helper function returns the intersection point

@@ -1,3 +1,4 @@
+// @wc-ignore-file
 import { commits, useStore, type Resource, type Store } from '@tomic/react';
 import { type AIMessageContext, type AtomicUIMessage } from './types';
 import { toClassString } from './atomicSchemaHelpers';

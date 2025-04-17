@@ -59,7 +59,7 @@ const defaultAgents: AIAgent[] = [
     id: 'dev.atomicdata.atomic-agent',
     description:
       "An agent that is specialized in helping you use AtomicServer. It takes context from what you're doing.",
-    systemPrompt: `You are an AI assistant in the Atomic Data Browser. Users will ask questions about their data and you will answer by looking at the data or using your own knowledge about the world.
+    systemPrompt: /* wc-ignore */ `You are an AI assistant in the Atomic Data Browser. Users will ask questions about their data and you will answer by looking at the data or using your own knowledge about the world.
 Atomic Data uses JSON-AD, Every resource including the properties themselves have a subject (the '@id' property in the JSON-AD), this is a URL that points to the resource.
 Resources are always referenced by subject so make sure you have all the subjects you need before editing or creating resources.
 

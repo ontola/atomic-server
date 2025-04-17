@@ -41,7 +41,7 @@ export default function UploadForm({
       <div {...getRootProps()}>
         <input {...getInputProps()} />
         {isDragActive ? (
-          <p>{'Drop the files here ...'}</p>
+          <p>Drop the files here ...</p>
         ) : (
           <Button
             subtle

@@ -15,7 +15,7 @@ export const useAutoAgentSelect = () => {
 
   const getModel = useGetModel();
 
-  const basePrompt = `You are part of an AI Chat application. It is your job to determine what agent to use to answer the users question.
+  const basePrompt = /* @wc-ignore */ `You are part of an AI Chat application. It is your job to determine what agent to use to answer the users question.
 These are the agents you can choose from:
 
 ${agents.map(agent => agentToText(agent, mcpServers)).join('\n')}
@@ -35,8 +35,8 @@ User question: `;
 
     const { object } = await generateObject({
       model,
-      schemaName: 'Agent',
-      schemaDescription: 'The agent to use for the question.',
+      schemaName: /* @wc-ignore */ 'Agent',
+      schemaDescription: /* @wc-ignore */ 'The agent to use for the question.',
       schema: z.object({
         agentId: z.string(),
       }),

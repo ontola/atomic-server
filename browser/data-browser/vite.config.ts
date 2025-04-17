@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import webfontDownload from 'vite-plugin-webfont-dl';
 import prismjs from 'vite-plugin-prismjs';
+import { wuchale } from '@wuchale/vite-plugin';
 import * as path from 'node:path';
 
 export default defineConfig({
@@ -17,6 +18,7 @@ export default defineConfig({
   },
   plugins: [
     webfontDownload(),
+    wuchale(),
     react({
       babel: {
         plugins: [

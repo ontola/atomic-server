@@ -14,12 +14,6 @@ const valueOpts = {
   commit: true,
 };
 
-const dropdzoneProps = {
-  accept: ['image/*'],
-  maxFiles: 1,
-  text: 'Click or drop image to use as a cover',
-};
-
 export function ArticleCover({
   resource,
   canEdit,
@@ -49,7 +43,9 @@ export function ArticleCover({
   if (!coverImageDownloadUrl) {
     return (
       <FileDropzoneInput
-        {...dropdzoneProps}
+        accept={['image/*']}
+        maxFiles={1}
+        text='Click or drop image to use as a cover'
         parentResource={resource}
         onFilesUploaded={setCover}
       />
@@ -62,7 +58,9 @@ export function ArticleCover({
       {canEdit && (
         <DropzoneWrapper>
           <StyledDropzone
-            {...dropdzoneProps}
+            accept={['image/*']}
+            maxFiles={1}
+            text='Click or drop image to use as a cover'
             parentResource={resource}
             onFilesUploaded={setCover}
           />

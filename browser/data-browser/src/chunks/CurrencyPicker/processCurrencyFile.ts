@@ -1,3 +1,4 @@
+// @wc-ignore-file
 /**
  * Function to map currency codes to names using this list: https://www.six-group.com/dam/download/financial-information/data-center/iso-currrency/lists/list-one.xml
  * Used to update the string in currencies.ts.

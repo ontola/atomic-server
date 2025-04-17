@@ -58,7 +58,7 @@ export function EditableTitle({
     setIsEditing(true);
   }
 
-  const placeholder = canEdit ? 'set a title' : 'Untitled';
+  const placeholder = canEdit ? 'Set a title' : 'Untitled';
 
   useEffect(() => {
     ref.current?.focus();
