@@ -79,8 +79,10 @@ size.raw = (multiplier: number) => `${multiplier}rem`;
 
 /** Construct a StyledComponents theme object */
 export const buildTheme = (darkMode: boolean, mainIn: string): DefaultTheme => {
-  const main = darkMode ? lighten(0.2, mainIn) : mainIn;
-  const complementaryIn = complement(mainIn);
+  // Guard against undefined during HMR re-initialization (e.g. useLocalStorage cold start)
+  const safeMain = mainIn || '#1b50d8';
+  const main = darkMode ? lighten(0.2, safeMain) : safeMain;
+  const complementaryIn = complement(safeMain);
   const complementary = darkMode
     ? lighten(0.2, complementaryIn)
     : complementaryIn;
