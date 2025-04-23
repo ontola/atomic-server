@@ -17,14 +17,14 @@ export const useServerURL = (): [string, (serverUrl: string) => void] => {
         return;
       }
 
-      let newValue = 'https://atomicdata.dev';
+      let newValue = store.getServerUrl() || window.location.origin;
 
       if (Client.isValidSubject(value)) {
         newValue = value;
       } else {
         store.notifyError(
           new Error(
-            `Invalid Server URL: ${value}, defaulting to atomicdata.dev`,
+            `Invalid Server URL: ${value}`,
           ),
         );
       }

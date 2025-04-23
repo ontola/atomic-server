@@ -49,7 +49,7 @@ export function warnDidAuthCompatibility(url: string): void {
     : `server version unknown (assuming <0.40)`;
 
   warnedDidAuthCompatibilityOrigins.add(origin);
-  console.warn(
+  console.debug(
     `[atomic-lib] Skipping DID authentication request to '${origin}': ${reason}.`,
   );
 }
@@ -59,14 +59,16 @@ export function recordServerVersionFromResponse(
   response: Response,
 ): void {
   const version = response.headers.get(ATOMIC_SERVER_VERSION_HEADER);
-
-  if (!version) {
-    return;
-  }
-
   const origin = tryGetOrigin(url);
 
   if (!origin) {
+    return;
+  }
+
+  if (!version) {
+    // No version header means old server that doesn't support DID auth
+    supportsDidAuthByOrigin.set(origin, false);
+
     return;
   }
 
@@ -89,7 +91,8 @@ export async function ensureServerVersionKnown(url: string): Promise<void> {
     const response = await fetch(`${origin}/`, { method: 'GET' });
     recordServerVersionFromResponse(origin, response);
   } catch {
-    // Keep unknown; default behavior remains legacy-safe.
+    // Can't reach the server - treat as legacy (no DID auth support)
+    supportsDidAuthByOrigin.set(origin, false);
   }
 }
 

@@ -1,4 +1,4 @@
-import { Core, JSONValue, Resource, useStore } from '@tomic/react';
+import { JSONValue, Resource, useStore } from '@tomic/react';
 import { useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { constructOpenURL } from '../helpers/navigation';
@@ -36,7 +36,9 @@ export function useCreateAndNavigate(): CreateAndNavigate {
       propVals,
       { parent, extraParams, onCreated, subject, noParent, skipNavigation },
     ): Promise<Resource> => {
-      const classResource = await store.getResource<Core.Class>(isA);
+      const classTitle = store
+        .getResourceLoading(isA)
+        ?.title?.replace(/^https?:\/\/[^/]+\/classes\//, '') ?? 'Resource';
 
       const resource = await store.newResource({
         subject,
@@ -59,7 +61,7 @@ export function useCreateAndNavigate(): CreateAndNavigate {
           });
         }
 
-        toast.success(`${classResource.title} created`);
+        toast.success(`${classTitle} created`);
         store.notifyResourceManuallyCreated(resource);
       } catch (e) {
         store.notifyError(e);

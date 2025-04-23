@@ -106,6 +106,16 @@ export async function signIn(page: Page) {
 }
 
 /**
+ * Quick dev setup: navigates to /app/dev-drive which creates a fresh agent +
+ * drive on localhost:9883 and switches to it automatically.
+ */
+export async function devDrive(page: Page) {
+  await page.goto(`${FRONTEND_URL}/app/dev-drive`);
+  await page.waitForURL(/did(?:%3A|:)ad(?:%3A|:)/, { timeout: 30000 });
+  await expect(currentDriveTitle(page)).toBeVisible({ timeout: 15000 });
+}
+
+/**
  * Create a new drive, go to it, and set it as the current drive. Returns URL of
  * drive and its name
  */

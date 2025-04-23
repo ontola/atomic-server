@@ -16,7 +16,13 @@
       "Bash(adb devices)",
       "Bash(echo $PATH)",
       "Bash(cargo build:*)",
-      "Bash(cargo test:*)"
+      "Bash(cargo test:*)",
+      "Bash(for f:*)",
+      "Bash(do echo:*)",
+      "Read(//Users/joep/dev/github/atomicdata-dev/atomic-server/**)",
+      "Bash(done)",
+      "Bash(npx tsc:*)",
+      "mcp__charlotte__charlotte_screenshot"
     ]
   }
 }

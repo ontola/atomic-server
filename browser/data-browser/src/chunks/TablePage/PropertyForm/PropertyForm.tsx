@@ -69,7 +69,7 @@ export function PropertyForm({
     [onSubmit],
   );
 
-  // If name was already set remove the error.
+  // Clear validation error if name is already set (pre-filled or existing property).
   useEffect(() => {
     if (
       resource.subject !== unknownSubject &&

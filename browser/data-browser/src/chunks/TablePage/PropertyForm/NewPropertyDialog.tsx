@@ -4,22 +4,14 @@ import {
   Resource,
   Store,
   core,
+  dataBrowser,
+  server,
   useArray,
   useStore,
 } from '@tomic/react';
-import { useCallback, useEffect, useState, type JSX } from 'react';
-import { styled } from 'styled-components';
-import { Button } from '@components/Button';
-import {
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  useDialog,
-} from '@components/Dialog';
-import { FormValidationContextProvider } from '@components/forms/formValidation/FormValidationContextProvider';
+import { useCallback, useEffect, type JSX } from 'react';
 import { randomString } from '@helpers/randomString';
-import { PropertyForm } from './PropertyForm';
+import { stringToSlug } from '@helpers/stringToSlug';
 import { PropertyFormCategory } from './categories';
 import { sortSubjectList } from '@views/OntologyPage/sortSubjectList';
 
@@ -39,35 +31,56 @@ const createSubjectWithBase = (base: string) => {
 const populatePropertyWithDefaults = async (
   property: Resource,
   tableClass: Resource<Core.Class>,
+  name: string,
 ) => {
   await property.set(core.properties.isA, [core.classes.property]);
   await property.set(core.properties.parent, tableClass.props.parent);
-  await property.set(core.properties.shortname, 'new-column', false);
-  await property.set(core.properties.name, '', false);
-  await property.set(core.properties.description, 'A column in a table');
+  await property.set(core.properties.shortname, stringToSlug(name), false);
+  await property.set(core.properties.name, name, false);
+  await property.set(core.properties.description, '');
   await property.set(core.properties.datatype, Datatype.STRING);
+};
 
-  await property.save();
+const applyCategoryDefaults = async (
+  category: PropertyFormCategory | undefined,
+  resource: Resource,
+) => {
+  switch (category) {
+    case 'number':
+      await resource.set(core.properties.datatype, Datatype.INTEGER);
+      break;
+    case 'date':
+      await resource.set(core.properties.datatype, Datatype.DATE);
+      break;
+    case 'checkbox':
+      await resource.set(core.properties.datatype, Datatype.BOOLEAN);
+      break;
+    case 'file':
+      await resource.set(core.properties.datatype, Datatype.ATOMIC_URL);
+      await resource.set(core.properties.classtype, server.classes.file);
+      break;
+    case 'json':
+      await resource.set(core.properties.datatype, Datatype.JSON);
+      break;
+    case 'select':
+      await resource.set(core.properties.datatype, Datatype.RESOURCEARRAY);
+      await resource.set(core.properties.classtype, dataBrowser.classes.tag);
+      await resource.addClasses(dataBrowser.classes.selectProperty);
+      break;
+    case 'relation':
+      await resource.set(core.properties.datatype, Datatype.ATOMIC_URL);
+      break;
+    case 'text':
+    default:
+      // STRING is already set in populatePropertyWithDefaults
+      break;
+  }
 };
 
 const getChildren = (store: Store, resource: Resource) =>
   store.clientSideQuery(
     res => res.get(core.properties.parent) === resource?.subject,
   );
-
-const destroyChildren = async (store: Store, resource: Resource) => {
-  const children = getChildren(store, resource);
-
-  await Promise.all(
-    children.map(child => {
-      try {
-        child.destroy();
-      } catch (e) {
-        return;
-      }
-    }),
-  );
-};
 
 const saveChildren = async (store: Store, resource: Resource) => {
   const children = getChildren(store, resource);
@@ -80,10 +93,7 @@ export function NewPropertyDialog({
   tableClassResource,
   bindShow,
 }: NewPropertyDialogProps): JSX.Element {
-  const [valid, setValid] = useState(false);
-
   const store = useStore();
-  const [resource, setResource] = useState<Resource | null>(null);
   const [_properties, _setProperties, pushProp] = useArray(
     tableClassResource,
     core.properties.recommends,
@@ -92,117 +102,58 @@ export function NewPropertyDialog({
     },
   );
 
-  const handleUserCancelAction = useCallback(async () => {
-    if (!resource) {
-      return;
-    }
-
-    try {
-      await destroyChildren(store, resource);
-      await resource.destroy();
-    } finally {
-      // Server does not have this resource yet so it will nag at us. We set the state to null anyway.
-      setResource(null);
-    }
-  }, [resource, store]);
-
-  const handleUserSuccessAction = useCallback(async () => {
-    if (!resource) {
-      return;
-    }
-
-    const tableClassParent = await store.getResource(
-      tableClassResource.props.parent,
-    );
-
-    if (tableClassParent.hasClasses(core.classes.ontology)) {
-      await resource.set(core.properties.parent, tableClassParent.subject);
-
-      const ontologyProps =
-        tableClassParent.get(core.properties.properties) ?? [];
-
-      await tableClassParent.set(
-        core.properties.properties,
-        await sortSubjectList(store, [...ontologyProps, resource.subject]),
+  const savePropertyToTable = useCallback(
+    async (prop: Resource) => {
+      const tableClassParent = await store.getResource(
+        tableClassResource.props.parent,
       );
 
-      await tableClassParent.save();
-    }
+      if (tableClassParent.hasClasses(core.classes.ontology)) {
+        await prop.set(core.properties.parent, tableClassParent.subject);
 
-    await resource.save();
-    await saveChildren(store, resource);
+        const ontologyProps =
+          tableClassParent.get(core.properties.properties) ?? [];
 
-    pushProp([resource.subject]);
-    setResource(null);
-  }, [resource, store, tableClassResource, pushProp]);
+        await tableClassParent.set(
+          core.properties.properties,
+          await sortSubjectList(store, [...ontologyProps, prop.subject]),
+        );
 
-  const [dialogProps, show, hide] = useDialog({
-    bindShow,
-    onCancel: handleUserCancelAction,
-    onSuccess: handleUserSuccessAction,
-  });
+        await tableClassParent.save();
+      }
 
-  const createProperty = async () => {
-    const subject = createSubjectWithBase(tableClassResource.subject);
-    const propertyResource = store.getResourceLoading(subject, {
-      newResource: true,
-    });
-
-    await populatePropertyWithDefaults(propertyResource, tableClassResource);
-
-    setResource(propertyResource);
-  };
-
-  const handleCancelClick = useCallback(() => {
-    hide();
-  }, [hide]);
-
-  const handleCreateClick = useCallback(() => {
-    if (valid) {
-      hide(true);
-    }
-  }, [hide, valid]);
+      await prop.save();
+      await saveChildren(store, prop);
+      pushProp([prop.subject]);
+    },
+    [store, tableClassResource, pushProp],
+  );
 
   useEffect(() => {
-    if (showDialog) {
-      createProperty().then(() => {
-        show();
+    if (!showDialog) return;
+
+    const create = async () => {
+      const subject = createSubjectWithBase(tableClassResource.subject);
+      const propertyResource = store.getResourceLoading(subject, {
+        newResource: true,
       });
-    }
+
+      const name = selectedCategory ?? 'column';
+      await populatePropertyWithDefaults(
+        propertyResource,
+        tableClassResource,
+        name,
+      );
+      await applyCategoryDefaults(
+        selectedCategory as PropertyFormCategory,
+        propertyResource,
+      );
+      await savePropertyToTable(propertyResource);
+      bindShow(false);
+    };
+
+    create().catch(console.error);
   }, [showDialog]);
 
-  if (!resource) {
-    return <></>;
-  }
-
-  return (
-    <FormValidationContextProvider onValidationChange={setValid}>
-      <Dialog {...dialogProps}>
-        <DialogTitle>
-          <h1>
-            New <Capitalize>{selectedCategory}</Capitalize> Column
-          </h1>
-        </DialogTitle>
-        <DialogContent>
-          <PropertyForm
-            resource={resource}
-            category={selectedCategory as PropertyFormCategory}
-            onSubmit={handleCreateClick}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCancelClick} subtle>
-            Cancel
-          </Button>
-          <Button onClick={handleCreateClick} disabled={!valid} type='submit'>
-            Create
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </FormValidationContextProvider>
-  );
+  return <></>;
 }
-
-const Capitalize = styled('span')`
-  text-transform: capitalize;
-`;

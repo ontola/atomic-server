@@ -571,17 +571,7 @@ export class Store {
         origin = new URL(this.serverUrl).origin;
       }
 
-      const found = this.webSockets.get(origin);
-
-      if (found) {
-        return found;
-      } else {
-        if (typeof window !== 'undefined') {
-          this.webSockets.set(origin, new WSClient(origin, this));
-        }
-      }
-
-      return;
+      return this.webSockets.get(origin);
     } catch (e) {
       throw new Error(
         `Could not open websocket for subject ${subject}: ${e.message}`,

@@ -30,7 +30,6 @@ msgstr "Aucune classe"
 #: src/chunks/Plugins/NewPluginButton.tsx
 #: src/chunks/Plugins/UpdatePluginButton.tsx
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
-#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
 #: src/components/ConfirmationDialog.tsx
 #: src/components/ParentPicker/ParentPickerDialog.tsx
 #: src/components/forms/EditFormDialog.tsx
@@ -95,7 +94,6 @@ msgstr "Texte d'invitation (facultatif)"
 msgid "Limit Usages (optional)"
 msgstr "Limiter les utilisations (facultatif)"
 
-#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
 #: src/components/InviteForm.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
@@ -2464,6 +2462,7 @@ msgstr "Initialisation de la ressource"
 
 #: src/chunks/RTE/CollaborativeEditor.tsx
 #: src/components/forms/NewForm/NewFormTitle.tsx
+#: src/hooks/useCreateAndNavigate.ts
 #: src/views/Plugin/AssignRights.tsx
 msgid "Resource"
 msgstr "Ressource"
@@ -2645,13 +2644,11 @@ msgstr "Ajouter une propriété externe"
 msgid "Add"
 msgstr "Ajouter"
 
-#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
-msgid "A column in a table"
-msgstr "Une colonne dans un tableau"
+#~ msgid "A column in a table"
+#~ msgstr "Une colonne dans un tableau"
 
-#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
-msgid "New <0/> Column"
-msgstr "Nouvelle <0/> Colonne"
+#~ msgid "New <0/> Column"
+#~ msgstr "Nouvelle <0/> Colonne"
 
 #: src/chunks/TablePage/PropertyForm/TextPropertyForm.tsx
 msgid "Text Format:"
@@ -3733,4 +3730,22 @@ msgstr ""
 msgid ""
 "Are you sure you{0}ve stored this secret somewhere safe? You\n"
 "cannot recover it if you lose it."
+msgstr ""
+
+#~ msgid "Setting up..."
+#~ msgstr ""
+
+#: src/components/SideBar/AppMenu.tsx
+msgid "Dev Drive"
+msgstr ""
+
+#~ msgid "Create a new agent + drive on localhost:9883 and switch to it"
+#~ msgstr ""
+
+#: src/routes/DevDriveRoute.tsx
+msgid "Setting up dev drive..."
+msgstr ""
+
+#: src/components/SideBar/AppMenu.tsx
+msgid "Create a fresh agent + drive on localhost:9883"
 msgstr ""
