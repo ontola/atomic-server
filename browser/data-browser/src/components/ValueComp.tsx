@@ -1,11 +1,14 @@
+import type { JSX } from 'react';
 import {
   Datatype,
   valToDate,
   valToString,
   valToArray,
   valToResource,
-  JSONValue,
+  type AtomicValue,
+  type JSONValue,
 } from '@tomic/react';
+import * as Y from 'yjs';
 import { ResourceInline } from '../views/ResourceInline';
 import { DateTime } from './datatypes/DateTime';
 import Markdown from './datatypes/Markdown';
@@ -13,12 +16,12 @@ import Nestedresource from './datatypes/NestedResource';
 import ResourceArray from './datatypes/ResourceArray';
 import { ErrMessage } from './forms/InputStyles';
 
-import type { JSX } from 'react';
 import { JSONRenderer } from './datatypes/JSON';
 import { AtomicLink } from './AtomicLink';
+import { YDocValue } from './YDocValue';
 
 type Props = {
-  value: JSONValue;
+  value: AtomicValue;
   datatype: Datatype;
 };
 
@@ -43,7 +46,9 @@ function ValueComp({ value, datatype }: Props): JSX.Element {
       case Datatype.RESOURCEARRAY:
         return <ResourceArray subjects={valToArray(value)} />;
       case Datatype.JSON:
-        return <JSONRenderer value={value} />;
+        return <JSONRenderer value={value as JSONValue} />;
+      case Datatype.YDOC:
+        return <YDocValue value={value as Y.Doc} />;
       case Datatype.URI:
         return (
           <AtomicLink href={value as string}>{value as string}</AtomicLink>

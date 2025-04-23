@@ -1,10 +1,8 @@
 import { lazy, Suspense } from 'react';
-import type { AsyncMarkdownEditorProps } from '../../chunks/MarkdownEditor/AsyncMarkdownEditor';
+import type { AsyncMarkdownEditorProps } from '@chunks/RTE/AsyncMarkdownEditor';
 import { styled } from 'styled-components';
 
-const MarkdownEditor = lazy(
-  () => import('../../chunks/MarkdownEditor/AsyncMarkdownEditor'),
-);
+const MarkdownEditor = lazy(() => import('@chunks/RTE/AsyncMarkdownEditor'));
 
 export function MarkdownInput(
   props: AsyncMarkdownEditorProps,

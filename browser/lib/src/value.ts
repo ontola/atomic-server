@@ -1,16 +1,25 @@
 import { JSONADParser } from './parse.js';
 import type { Resource } from './resource.js';
+import type * as Y from 'yjs';
+import { YLoader } from './yjs.js';
 
 export type JSONPrimitive = string | number | boolean;
 export type JSONValue = JSONPrimitive | JSONObject | JSONArray | undefined;
 export type JSONObject = { [key: string]: JSONValue };
 export type JSONArray = Array<JSONValue>;
 
+export type AtomicValue = JSONValue | Y.Doc;
+
+export type SerializedYUpdate = {
+  type: 'ydoc';
+  data: string;
+};
+
 /**
  * Tries to convert the value as an array of resources, which can be both URLs
  * or Nested Resources. Throws an error when fails
  */
-export function valToArray(val?: JSONValue): JSONArray {
+export function valToArray(val?: AtomicValue): JSONArray {
   if (val === undefined) {
     throw new Error(`Not an array: ${val}, is ${typeof val}`);
   }
@@ -23,7 +32,7 @@ export function valToArray(val?: JSONValue): JSONArray {
 }
 
 /** Tries to make a boolean from this value. Throws if it is not a boolean. */
-export function valToBoolean(val?: JSONValue): boolean {
+export function valToBoolean(val?: AtomicValue): boolean {
   if (typeof val !== 'boolean') {
     throw new Error(`Not a boolean: ${val}, is a ${typeof val}`);
   }
@@ -35,7 +44,7 @@ export function valToBoolean(val?: JSONValue): boolean {
  * Tries to convert the value (timestamp or date) to a JS Date. Throws an error
  * when fails.
  */
-export function valToDate(val?: JSONValue): Date {
+export function valToDate(val?: AtomicValue): Date {
   // If it's a unix epoch timestamp...
   if (typeof val === 'number') {
     const date = new Date(0); // The 0 there is the key, which sets the date to the epoch
@@ -52,7 +61,7 @@ export function valToDate(val?: JSONValue): Date {
 }
 
 /** Returns a number of the value, or throws an error */
-export function valToNumber(val?: JSONValue): number {
+export function valToNumber(val?: AtomicValue): number {
   if (typeof val !== 'number') {
     throw new Error(`Not a number: ${val}, is a ${typeof val}`);
   }
@@ -61,13 +70,13 @@ export function valToNumber(val?: JSONValue): number {
 }
 
 /** Returns a default string representation of the value. */
-export function valToString(val: JSONValue): string {
+export function valToString(val: AtomicValue): string {
   // val && val.toString();
   return val?.toString() ?? 'undefined';
 }
 
 /** Returns either the URL of the resource, or the NestedResource itself. */
-export function valToResource(val: JSONValue): string | Resource {
+export function valToResource(val: AtomicValue): string | Resource {
   if (typeof val === 'string') {
     return val;
   }
@@ -93,3 +102,23 @@ export function valToResource(val: JSONValue): string | Resource {
 
   throw new Error(`Not a resource: ${val}, is a ${typeof val}`);
 }
+
+export function isYDoc(val: AtomicValue): val is Y.Doc {
+  if (!YLoader.isLoaded()) {
+    return false;
+  }
+
+  const Y = YLoader.Y;
+
+  return val instanceof Y.Doc;
+}
+
+export const isJSONObject = (value: JSONValue): value is JSONObject =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+export const isSerializedYUpdate = (
+  value: JSONValue,
+): value is SerializedYUpdate =>
+  isJSONObject(value) &&
+  value.type === 'ydoc' &&
+  typeof value.data === 'string';

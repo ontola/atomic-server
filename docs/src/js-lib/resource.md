@@ -309,6 +309,46 @@ const version = userPicksVersion(versions);
 await resource.setVersion(version);
 ```
 
+## Yjs Documents
+
+AtomicServer supports Yjs documents as a datatype.
+Using these you can build powerful collaborative editors.
+Yjs documents are synced via atomic commits when you call `resource.save()`, just like regular properties.
+This means that you don't have to use any provider server to sync the documents.
+
+To use any Yjs related feature you first need to install the `yjs` package using your package manager of choice.
+You also need to tell @tomic/lib that Yjs is available by calling the following function somewhere early on in your application.
+
+```typescript
+import { enableYjs } from '@tomic/lib';
+
+await enableYjs();
+```
+
+This will load the Yjs module and make it available to @tomic/lib.
+
+### Using Yjs documents
+
+To get a Yjs document from a resource, use the `.getYDoc` method and pass the property of the value containing the document.
+If the value is still empty, a new document will be created and returned.
+You can then use the Yjs doc like you would normally with Yjs.
+Any change made to the document will be merged into the current commit.
+When you call `resource.save()`, the changes will be synced to the server and with other clients.
+
+```typescript
+const doc = resource.getYDoc('https://my-atomicserver.com/properties/yjs-document');
+
+const text = doc.getText('content');
+const cursors = doc.getMap('cursors');
+
+doc.transact(() => {
+  text.insert(0, 'Hello, world!');
+  cursors.set(someClientId, 13);
+});
+
+await resource.save();
+```
+
 ## Useful methods and properties
 
 ### Subject

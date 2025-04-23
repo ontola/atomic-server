@@ -7,9 +7,14 @@ import { Button } from './Button';
 interface CodeBlockProps {
   content?: string;
   loading?: boolean;
+  wordWrap?: boolean;
 }
 
-export function CodeBlock({ content, loading }: CodeBlockProps) {
+export function CodeBlock({
+  content,
+  loading,
+  wordWrap = false,
+}: CodeBlockProps) {
   const [isCopied, setIsCopied] = useState<string | undefined>(undefined);
 
   function copyToClipboard() {
@@ -19,7 +24,10 @@ export function CodeBlock({ content, loading }: CodeBlockProps) {
   }
 
   return (
-    <CodeBlockStyled data-code-content={content}>
+    <CodeBlockStyled
+      data-code-content={content}
+      className={wordWrap ? 'word-wrap' : ''}
+    >
       {loading ? (
         'loading...'
       ) : (
@@ -55,4 +63,8 @@ export const CodeBlockStyled = styled.pre`
   font-family: monospace;
   width: 100%;
   overflow-x: auto;
+
+  &.word-wrap {
+    white-space: pre-wrap;
+  }
 `;

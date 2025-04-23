@@ -1,8 +1,17 @@
 import { AtomicError } from './error.js';
-import { Client, isArray } from './index.js';
+import { Client } from './index.js';
 import { server } from './ontologies/server.js';
 import { Resource, unknownSubject } from './resource.js';
-import type { JSONObject, JSONValue } from './value.js';
+import {
+  type JSONObject,
+  type JSONValue,
+  isJSONObject,
+  isSerializedYUpdate,
+  type SerializedYUpdate,
+} from './value.js';
+import { decodeB64 } from './base64.js';
+import { YLoader } from './yjs.js';
+import type * as Y from 'yjs';
 
 /**
  * Parses a JSON-AD object or array into resources. Create a new instance each time you need to parse a json-ad string.
@@ -83,6 +92,12 @@ export class JSONADParser {
           continue;
         }
 
+        if (isSerializedYUpdate(value)) {
+          const doc = this.parseYDoc(value);
+          resource.setUnsafe(key, doc);
+          continue;
+        }
+
         resource.setUnsafe(key, value);
       }
 
@@ -101,7 +116,17 @@ export class JSONADParser {
 
     return resource;
   }
-}
 
-const isJSONObject = (value: JSONValue): value is JSONObject =>
-  typeof value === 'object' && value !== null && !isArray(value);
+  private parseYDoc(value: SerializedYUpdate): Y.Doc | SerializedYUpdate {
+    if (!YLoader.isLoaded()) {
+      return value;
+    }
+
+    const Y = YLoader.Y;
+
+    const doc = new Y.Doc();
+    Y.applyUpdateV2(doc, decodeB64(value.data));
+
+    return doc;
+  }
+}

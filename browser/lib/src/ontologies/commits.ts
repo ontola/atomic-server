@@ -20,6 +20,7 @@ export const commits = {
     remove: 'https://atomicdata.dev/properties/remove',
     destroy: 'https://atomicdata.dev/properties/destroy',
     signature: 'https://atomicdata.dev/properties/signature',
+    yUpdate: 'https://atomicdata.dev/properties/yUpdate',
   },
   __classDefs: {
     ['https://atomicdata.dev/classes/Commit']: [
@@ -30,6 +31,8 @@ export const commits = {
       'https://atomicdata.dev/properties/destroy',
       'https://atomicdata.dev/properties/remove',
       'https://atomicdata.dev/properties/set',
+      'https://atomicdata.dev/properties/push',
+      'https://atomicdata.dev/properties/yUpdate',
     ],
   },
 } as const satisfies OntologyBaseObject;
@@ -51,7 +54,9 @@ declare module '../index.js' {
       recommends:
         | typeof commits.properties.destroy
         | typeof commits.properties.remove
-        | typeof commits.properties.set;
+        | typeof commits.properties.set
+        | typeof commits.properties.push
+        | typeof commits.properties.yUpdate;
     };
   }
 
@@ -66,6 +71,7 @@ declare module '../index.js' {
     [commits.properties.remove]: string[];
     [commits.properties.destroy]: boolean;
     [commits.properties.signature]: string;
+    [commits.properties.yUpdate]: string;
   }
 
   interface PropSubjectToNameMapping {
@@ -79,5 +85,6 @@ declare module '../index.js' {
     [commits.properties.remove]: 'remove';
     [commits.properties.destroy]: 'destroy';
     [commits.properties.signature]: 'signature';
+    [commits.properties.yUpdate]: 'yUpdate';
   }
 }

@@ -8,6 +8,7 @@ use atomic_lib::{
     schema::{Class, Property},
     Resource, Storelike, Value,
 };
+use base64::engine::{general_purpose, Engine};
 use colored::Colorize;
 use promptly::prompt_opt;
 use regex::Regex;
@@ -167,6 +168,15 @@ fn prompt_field(
 
             check_valid_json(&json).unwrap();
             return Ok(Some(json));
+        }
+        DataType::YDoc => {
+            let msg = format!("YDoc{}", msg_appendix);
+            let Some(ydoc) = prompt_opt::<String, String>(msg)? else {
+                return Ok(None);
+            };
+            // Check if it is a valid Base64 string
+            general_purpose::STANDARD.decode(&ydoc).unwrap();
+            return Ok(Some(ydoc));
         }
         DataType::Integer => {
             let msg = format!("integer{}", msg_appendix);

@@ -179,7 +179,9 @@ const AsyncAIChatInput: React.FC<
     [serversWithResources, searchResourcesOfServer, disabled],
   );
 
-  const handleChange = (value: string) => {
+  const handleChange = () => {
+    // @ts-expect-error - markdown is a valid storage
+    const value = editor.storage.markdown.getMarkdown();
     setMarkdown(value);
     markdownRef.current = value;
     onChange(value);

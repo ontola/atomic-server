@@ -35,7 +35,7 @@ import { MessageContextItem } from './MessageContextItem';
 import { useProcessMessages } from './useProcessMessages';
 import { NoKeyOverlay } from './NoKeyOverlay';
 import { useOpenRouterModels } from './useOpenRouterModels';
-import type { MentionItem } from '@chunks/MarkdownEditor/AIChatInput/types';
+import type { MentionItem } from '@chunks/RTE/AIChatInput/types';
 import { useChat } from '@ai-sdk/react';
 import { useClientOnlyTransport } from './ClientOnlyTransport';
 import { useGenerativeData } from './useGenerativeData';
@@ -43,7 +43,7 @@ import { FollowUpPrompt } from './FollowUpPrompt';
 import { useAISettings } from '@components/AI/AISettingsContext';
 
 const AIChatInput = React.lazy(
-  () => import('@chunks/MarkdownEditor/AIChatInput/AsyncAIChatInput'),
+  () => import('@chunks/RTE/AIChatInput/AsyncAIChatInput'),
 );
 
 interface RealAIChatProps {

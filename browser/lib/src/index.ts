@@ -51,3 +51,4 @@ export * from './truncate.js';
 export * from './collection.js';
 export * from './collectionBuilder.js';
 export * from './ontology.js';
+export * from './yjs.js';

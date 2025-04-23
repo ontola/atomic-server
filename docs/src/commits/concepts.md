@@ -22,6 +22,7 @@ The **optional method fields** describe how the data must be changed:
 - `remove` - an array of Properties that need to be removed (including their values).
 - `set` - a Nested Resource which contains all the new or edited fields.
 - `push` - a Nested Resource which contains all the fields that are _appended_ to. This means adding items to a new or existing ResourceArray.
+- `yUpdate` - a Nested Resource which contains Yjs updates (v2) for the given properties.
 
 These commands are executed in the order above.
 This means that you can set `destroy` to `true` and include `set`, which empties the existing resource and sets new values.
@@ -84,7 +85,7 @@ Congratulations, you've just created a valid Commit!
 Here are currently working implementations of this process, including serialization and signing (links are permalinks).
 
 - [in Rust (atomic-lib)](https://github.com/atomicdata-dev/atomic-server/blob/ceb88c1ae58811f2a9e6bacb7eaa39a2a7aa1513/lib/src/commit.rs#L81).
-- [in Typescript / Javascript (atomic-data-browser)](https://github.com/atomicdata-dev/atomic-data-browser/blob/fc899bb2cf54bdff593ee6b4debf52e20a85619e/src/atomic-lib/commit.ts#L51).
+- [in Typescript / Javascript (atomic-data-browser)](https://github.com/atomicdata-dev/atomic-server/blob/6947650263d56e6c70a7f726ed0a51c0f4d8f25c/browser/lib/src/commit.ts#L299).
 
 If you want validate your implementation, check out the tests for these two projects.
 

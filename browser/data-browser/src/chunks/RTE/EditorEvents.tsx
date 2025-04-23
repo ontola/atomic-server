@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useTipTapEditor } from './TiptapContext';
 
 interface EditorEventsProps {
-  onChange?: (content: string) => void;
+  onChange?: () => void;
 }
 
 export function EditorEvents({ onChange }: EditorEventsProps): null {
@@ -12,7 +12,7 @@ export function EditorEvents({ onChange }: EditorEventsProps): null {
     if (!editor) return;
 
     const callback = () => {
-      onChange?.(editor.storage.markdown.getMarkdown());
+      onChange?.();
     };
 
     if (editor) {

@@ -1,7 +1,7 @@
 /** Each possible Atomic Datatype. See https://atomicdata.dev/collections/datatype */
 
-import { Client } from './index.js';
-import type { JSONValue } from './value.js';
+import { Client, YLoader } from './index.js';
+import type { AtomicValue } from './value.js';
 
 // TODO: use strings from `./urls`, requires TS fix: https://github.com/microsoft/TypeScript/issues/40793
 export enum Datatype {
@@ -27,6 +27,7 @@ export enum Datatype {
   JSON = 'https://atomicdata.dev/datatypes/json',
   /** URI */
   URI = 'https://atomicdata.dev/datatypes/uri',
+  YDOC = 'https://atomicdata.dev/datatypes/ydoc',
   UNKNOWN = 'unknown-datatype',
 }
 
@@ -51,7 +52,7 @@ export interface ArrayError extends Error {
 
 /** Validates a JSON Value using a Datatype. Throws an error if things are wrong. */
 export const validateDatatype = (
-  value: JSONValue,
+  value: AtomicValue,
   datatype: Datatype,
 ): void => {
   let err: null | string = null;
@@ -104,14 +105,14 @@ export const validateDatatype = (
     }
 
     case Datatype.RESOURCEARRAY: {
-      if (!isArray(value)) {
+      if (!Array.isArray(value)) {
         err = 'Not an array';
         break;
       }
 
       value.map((item, index) => {
         try {
-          Client.tryValidSubject(item);
+          Client.tryValidSubject(item as string);
         } catch (e) {
           const arrError: ArrayError = new Error(`Invalid URL`);
           arrError.index = index;
@@ -134,6 +135,24 @@ export const validateDatatype = (
       break;
     }
 
+    case Datatype.FLOAT: {
+      if (!isNumber(value)) {
+        err = 'Not a number';
+        break;
+      }
+
+      break;
+    }
+
+    case Datatype.BOOLEAN: {
+      if (typeof value !== 'boolean') {
+        err = 'Not a boolean';
+        break;
+      }
+
+      break;
+    }
+
     case Datatype.DATE: {
       if (!isString(value)) {
         err = 'Not a string';
@@ -142,6 +161,15 @@ export const validateDatatype = (
 
       if (value.match(dateStringRegex) === null) {
         err = 'Not a date string: YYYY-MM-DD';
+      }
+
+      break;
+    }
+
+    case Datatype.TIMESTAMP: {
+      if (!isNumber(value)) {
+        err = 'Not a number';
+        break;
       }
 
       break;
@@ -166,6 +194,28 @@ export const validateDatatype = (
 
       break;
     }
+
+    case Datatype.YDOC: {
+      if (!YLoader.isLoaded()) {
+        console.warn(
+          'Cannot validate YDoc because Yjs is not loaded. passing as valid',
+        );
+        break;
+      }
+
+      const Y = YLoader.Y;
+
+      if (!(value instanceof Y.Doc)) {
+        err = 'Not a Yjs Doc';
+        break;
+      }
+
+      break;
+    }
+
+    default: {
+      throw new Error(`Unsupported datatype: ${datatype}`);
+    }
   }
 
   if (err !== null) {
@@ -173,15 +223,11 @@ export const validateDatatype = (
   }
 };
 
-export function isArray(val: JSONValue): val is [] {
-  return Object.prototype.toString.call(val) === '[object Array]';
-}
-
-export function isString(val: JSONValue): val is string {
+export function isString(val: AtomicValue): val is string {
   return typeof val === 'string';
 }
 
-export function isNumber(val: JSONValue): val is number {
+export function isNumber(val: AtomicValue): val is number {
   return typeof val === 'number';
 }
 
@@ -198,5 +244,6 @@ export const reverseDatatypeMapping = {
   [Datatype.TIMESTAMP]: 'Timestamp',
   [Datatype.ATOMIC_URL]: 'Resource',
   [Datatype.RESOURCEARRAY]: 'ResourceArray',
+  [Datatype.YDOC]: 'YDoc',
   [Datatype.UNKNOWN]: 'Unknown',
 };

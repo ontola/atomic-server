@@ -1,5 +1,6 @@
 //! Serialization / formatting / encoding (JSON, RDF, N-Triples)
 
+use base64::engine::{general_purpose, Engine};
 use serde_json::Map;
 use serde_json::Value as SerdeValue;
 use tracing::instrument;
@@ -60,6 +61,15 @@ fn val_to_serde(value: Value) -> AtomicResult<SerdeValue> {
             }
             crate::values::SubResource::Subject(s) => SerdeValue::String(s),
         },
+        Value::YDoc(val) => {
+            let mut obj = Map::new();
+            obj.insert("type".to_string(), "ydoc".into());
+            obj.insert(
+                "data".to_string(),
+                general_purpose::STANDARD.encode(val).into(),
+            );
+            obj.into()
+        }
     };
     Ok(json_val)
 }

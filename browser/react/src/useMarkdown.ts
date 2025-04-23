@@ -1,12 +1,12 @@
 import {
   Datatype,
-  JSONValue,
   properties,
   Resource,
   Store,
   urls,
   valToArray,
   valToDate,
+  type AtomicValue,
 } from '@tomic/lib';
 import { useEffect, useState } from 'react';
 import { useStore, useString, useTitle } from './index.js';
@@ -69,7 +69,7 @@ export function useMarkdown(resource: Resource): string {
 /** Renders a single Atomic Property + Value as a single Markdown line */
 async function propertyLine(
   propertySubject: string,
-  value: JSONValue,
+  value: AtomicValue,
   store: Store,
 ): Promise<string> {
   const property = await store.getProperty(propertySubject);

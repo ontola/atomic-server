@@ -1,0 +1,6 @@
+.renderer {
+  position: absolute;
+  top: var(--top, 0);
+  left: var(--left, 0);
+  width: max-content;
+}

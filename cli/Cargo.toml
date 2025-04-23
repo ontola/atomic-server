@@ -13,6 +13,7 @@ atomic_lib = { version = "0.40.0", path = "../lib", features = [
     "config",
     "rdf",
 ] }
+base64 = "0.21"
 clap = { version = "4", features = ["cargo", "derive"] }
 colored = "2"
 dirs = "4"

@@ -138,3 +138,19 @@ example:
   9883
 ]
 ```
+
+## YDoc
+
+_URL: `https://atomicdata.dev/datatypes/ydoc`_
+
+A [Yjs document](https://github.com/yjs/yjs).
+Stores a Yjs document state. (uses the update v2 format).
+They are updated using commits via the [yUpdate](https://atomicdata.dev/properties/yUpdate) property.
+When encoded into a JSON-AD value it will look like this:
+
+```json
+{
+  "type": "ydoc",
+  "data": "base64-encoded-updates"
+}
+```

@@ -24,6 +24,7 @@ The types of values allowed are determined by the [datatype](../schema/datatypes
 - **atomic-url** datatype fields must be either a `string` (url) or an `object` (nested resource).
 - **resource-array** datatype fields must be an `array` of strings (must be a url) or objects (must be an nested resource).
 - **json** datatype fields can be any valid JSON value.
+- **ydoc** datatype fields must be an `object` with a `type` field set to `"ydoc"` and a `data` field set to a base64-encoded [Yjs update v2](https://github.com/yjs/yjs).
 
 Named Resources are only allowed in the following places:
 

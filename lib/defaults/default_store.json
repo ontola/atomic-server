@@ -761,6 +761,16 @@
         "https://atomicdata.dev/properties/shortname": "set"
     },
     {
+        "@id": "https://atomicdata.dev/properties/yUpdate",
+        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+        "https://atomicdata.dev/properties/description": "A field in a commit.\\\nNested resource mapping properties to Yjs state updates.",
+        "https://atomicdata.dev/properties/isA": [
+            "https://atomicdata.dev/classes/Property"
+        ],
+        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+        "https://atomicdata.dev/properties/shortname": "y-update"
+    },
+    {
         "@id": "https://atomicdata.dev/properties/secret",
         "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
         "https://atomicdata.dev/properties/description": "A base64 serialized JSON object containing a [`privateKey`](https://atomicdata.dev/properties/privateKey) and an [`agent`](https://atomicdata.dev/classes/Agent) URL. It is used as a single string that can sign in to Atomic Data apps.",
@@ -899,7 +909,9 @@
         "https://atomicdata.dev/properties/recommends": [
             "https://atomicdata.dev/properties/destroy",
             "https://atomicdata.dev/properties/remove",
-            "https://atomicdata.dev/properties/set"
+            "https://atomicdata.dev/properties/set",
+            "https://atomicdata.dev/properties/push",
+            "https://atomicdata.dev/properties/yUpdate"
         ],
         "https://atomicdata.dev/properties/requires": [
             "https://atomicdata.dev/properties/createdAt",
@@ -1147,6 +1159,15 @@
         ],
         "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/datatypes",
         "https://atomicdata.dev/properties/shortname": "json"
+    },
+    {
+        "@id": "https://atomicdata.dev/datatypes/ydoc",
+        "https://atomicdata.dev/properties/description": "A Yjs update-v2 encoded as base64",
+        "https://atomicdata.dev/properties/isA": [
+            "https://atomicdata.dev/classes/Datatype"
+        ],
+        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/datatypes",
+        "https://atomicdata.dev/properties/shortname": "ydoc"
     },
     {
         "@id": "https://atomicdata.dev/classes/Folder",

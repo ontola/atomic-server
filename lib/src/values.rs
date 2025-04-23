@@ -7,6 +7,7 @@ use crate::{
     utils::{check_valid_uri, check_valid_url},
     Resource,
 };
+use base64::{engine::general_purpose, Engine};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
@@ -29,6 +30,7 @@ pub enum Value {
     Boolean(bool),
     Uri(String),
     JSON(serde_json::Value),
+    YDoc(Vec<u8>),
     Unsupported(UnsupportedValue),
 }
 
@@ -85,6 +87,7 @@ impl Value {
             Value::Boolean(_) => DataType::Boolean,
             Value::Uri(_) => DataType::Uri,
             Value::JSON(_) => DataType::JSON,
+            Value::YDoc(_) => DataType::YDoc,
             Value::Unsupported(s) => DataType::Unsupported(s.datatype.clone()),
         }
     }
@@ -166,6 +169,12 @@ impl Value {
                     }
                 };
                 Ok(Value::Boolean(bool))
+            }
+            DataType::YDoc => {
+                let bin = general_purpose::STANDARD
+                    .decode(value)
+                    .map_err(|e| format!("Not a valid Base64 string: {}. {}", value, e))?;
+                Ok(Value::YDoc(bin))
             }
         }
     }
@@ -360,6 +369,7 @@ impl fmt::Display for Value {
             Value::Boolean(b) => write!(f, "{}", b),
             Value::Uri(s) => write!(f, "{}", s),
             Value::JSON(s) => write!(f, "{}", s),
+            Value::YDoc(s) => write!(f, "{}", general_purpose::STANDARD.encode(s)),
             Value::Unsupported(u) => write!(f, "{}", u.value),
         }
     }

@@ -1,6 +1,7 @@
 //! App state, which is accessible from handlers
 use crate::{
     commit_monitor::CommitMonitor, config::Config, errors::AtomicServerResult, search::SearchState,
+    y_awareness_broadcaster::YAwarenessBroadcaster,
 };
 use atomic_lib::{
     agents::Agent,
@@ -23,6 +24,7 @@ pub struct AppState {
     pub config: Config,
     /// The Actix Address of the CommitMonitor, which should receive updates when a commit is applied
     pub commit_monitor: actix::Addr<CommitMonitor>,
+    pub y_awareness_broadcaster: actix::Addr<YAwarenessBroadcaster>,
     pub search_state: SearchState,
 }
 
@@ -65,6 +67,9 @@ impl AppState {
 
         let commit_monitor_clone = commit_monitor.clone();
 
+        let y_awareness_broadcaster =
+            crate::y_awareness_broadcaster::create_y_awareness_broadcaster(store.clone());
+
         // This closure is called every time a Commit is created
         let send_commit = move |commit_response: &CommitResponse| {
             commit_monitor_clone.do_send(crate::actor_messages::CommitMessage {
@@ -98,6 +103,7 @@ impl AppState {
             store,
             config,
             commit_monitor,
+            y_awareness_broadcaster,
             search_state,
         })
     }
