@@ -8,6 +8,8 @@ import {
   warnDidAuthCompatibility,
 } from './serverCapabilities.js';
 import type { Store } from './store.js';
+import { AtomicError, ErrorType } from './error.js';
+import { classes } from './urls.js';
 
 const REQUEST_TIMEOUT = 5000;
 
@@ -315,10 +317,33 @@ export class WSClient {
         if (resource.subject === subject) {
           return resource;
         }
+
+        // Server sends error resources with the requested subject's URL as the
+        // resource subject when a GET fails (e.g. resource not found / deleted).
+        // Detect these and reject immediately rather than waiting for timeout.
+        const isA: string[] = resource.get(
+          'https://atomicdata.dev/properties/isA',
+        ) as string[];
+
+        if (
+          Array.isArray(isA) &&
+          isA.includes(classes.error) &&
+          resource.subject === subject
+        ) {
+          const description =
+            (resource.get(
+              'https://atomicdata.dev/properties/description',
+            ) as string) ?? 'Resource not found';
+          throw new AtomicError(description, ErrorType.NotFound);
+        }
       }
 
       return false;
     }).catch(e => {
+      if (e instanceof AtomicError) {
+        throw e;
+      }
+
       throw new Error(
         `WS GET timed out for subject "${subject}" on ${this.ws.url}`,
         { cause: e },

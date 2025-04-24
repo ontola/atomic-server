@@ -191,3 +191,7 @@ When serializing to [JSON-AD](core/json-ad.md), `Internal` subjects are resolved
 
 The main distinction of `did:ad` is that it separates mathematically pure identity (`did:ad:{genesis}`) from network discovery routing hints (`?drive=did:ad:{drive_genesis}`).
 Combined with Atomic Data's Commit-based trust model, this enables multi-node replication where any peer can serve verified data seamlessly.
+
+## Path Restrictions
+Unlike `http(s):` or `internal:` identifiers which are highly hierarchical, `did:ad:` identifiers **do not support sub-paths** (e.g. `did:ad:123/my-property`).
+Every individual resource within a DID hierarchy must be explicitly created with its own standalone genesis commit, leading to a flat namespace of `did:ad:<hash>` identifiers that relate to each other through the `parent` property, rather than structurally via paths.

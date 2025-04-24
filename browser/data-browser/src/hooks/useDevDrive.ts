@@ -49,6 +49,9 @@ export function useDevDrive() {
         driveResource.subject,
       );
 
+      // Expose for E2E tests so they can sign in as the same agent on other pages.
+      localStorage.setItem('atomic-test.dev-drive-secret', finalSecret);
+
       await saveAgentToIDB(finalSecret);
       setAgent(newAgent);
       setDrive(driveResource.subject);

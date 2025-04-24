@@ -47,6 +47,7 @@ describe('Commit signing and keys', () => {
         ['https://atomicdata.dev/properties/description', 'Genesis value'],
       ]),
     });
+    commitBuilder.setIsGenesis(true);
 
     const commit = await commitBuilder.signAt(agent, createdAt);
 
@@ -101,7 +102,8 @@ describe('Commit signing and keys', () => {
       false,
     );
 
-    // First save (Genesis)
+    // First save (Genesis) — must be explicitly marked
+    resource.markNextCommitAsGenesis();
     const firstCommitId = await resource.save();
     const genesisSubject = resource.subject;
     expect(genesisSubject).toMatch(/^did:ad:/);
@@ -153,6 +155,7 @@ describe('Commit signing and keys', () => {
         ['https://atomicdata.dev/properties/description', 'Genesis value'],
       ]),
     });
+    commitBuilder.setIsGenesis(true);
 
     const commit = await commitBuilder.signAt(didAgent, createdAt);
 

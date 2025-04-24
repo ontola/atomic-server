@@ -22,7 +22,9 @@
       "Read(//Users/joep/dev/github/atomicdata-dev/atomic-server/**)",
       "Bash(done)",
       "Bash(npx tsc:*)",
-      "mcp__charlotte__charlotte_screenshot"
+      "mcp__charlotte__charlotte_screenshot",
+      "Bash(npx vitest:*)",
+      "mcp__charlotte__charlotte_navigate"
     ]
   }
 }

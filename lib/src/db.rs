@@ -196,20 +196,35 @@ impl Db {
         origin: &str,
     ) -> AtomicResult<ResolvedTarget> {
         let full_subject = format!("{}{}", origin.trim_end_matches('/'), subject_string);
-        let mapped_subject = self
+        match self
             .map_request_subject(subject, host, subject_string)
-            .await?;
-
-        let alias_subject = if mapped_subject != *subject {
-            Some(full_subject)
-        } else {
-            None
-        };
-
-        Ok(ResolvedTarget {
-            subject: mapped_subject,
-            alias_subject,
-        })
+            .await
+        {
+            Ok(mapped_subject) => {
+                let alias_subject = if mapped_subject != *subject {
+                    Some(full_subject)
+                } else {
+                    None
+                };
+                Ok(ResolvedTarget {
+                    subject: mapped_subject,
+                    alias_subject,
+                })
+            }
+            Err(e) => {
+                // Drive-routing failed (e.g. ULID subject not found via shortname traversal).
+                // Fall back to a direct DB lookup for the full HTTP URL before giving up.
+                let direct = Subject::from_raw(&full_subject, None);
+                if self.get_resource(&direct).await.is_ok() {
+                    Ok(ResolvedTarget {
+                        subject: direct,
+                        alias_subject: None,
+                    })
+                } else {
+                    Err(e)
+                }
+            }
+        }
     }
 
     async fn map_request_subject(

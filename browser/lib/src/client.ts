@@ -54,6 +54,11 @@ interface FetchResourceOptions extends ParseOpts {
   method?: 'GET' | 'POST';
   /** The body is only used combined with the `POST` method */
   body?: ArrayBuffer | string;
+  /**
+   * The backend server URL, used for resolving DID subjects when no signInfo
+   * is available (e.g. before the agent has been loaded from IndexedDB).
+   */
+  serverURL?: string;
 }
 
 export interface ParseOpts {
@@ -148,7 +153,7 @@ export class Client {
     subject: string,
     opts: FetchResourceOptions = {},
   ): Promise<HTTPResourceResult> {
-    const { signInfo, from, body: bodyReq, method } = opts;
+    const { signInfo, from, body: bodyReq, method, serverURL } = opts;
     let createdResources: Resource[] = [];
     const parser = new JSONADParser();
     let resource = new Resource(subject);
@@ -169,6 +174,7 @@ export class Client {
         // We can't fetch DIDs directly, so we use the server's /did endpoint.
         const baseUrl =
           signInfo?.serverURL ||
+          serverURL ||
           (window as unknown as Record<'atomicServerUrl', string>)
             .atomicServerUrl ||
           window.location.origin;
@@ -279,6 +285,8 @@ export class Client {
     const body = await response.text();
 
     if (response.status !== 200) {
+      console.error('[postCommit] Server error body:', body);
+      console.error('[postCommit] Commit sent:', serialized);
       throw new AtomicError(body, ErrorType.Server);
     }
 

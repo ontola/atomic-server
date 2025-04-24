@@ -1,7 +1,6 @@
 import { test, expect } from '@playwright/test';
 import {
-  signIn,
-  newDrive,
+  devDrive,
   newResource,
   editTitle,
   getCurrentSubject,
@@ -12,6 +11,7 @@ import {
   setTitle,
   waitForSearchIndex,
 } from './test-utils';
+
 test.describe('documents', async () => {
   test.beforeEach(before);
 
@@ -21,10 +21,8 @@ test.describe('documents', async () => {
   }) => {
     const folderTitle = 'SomeFolder';
 
-    await signIn(page);
-    await newDrive(page);
+    await devDrive(page);
     await makeDrivePublic(page);
-    // Create a document
     await newResource('folder', page);
     await setTitle(page, folderTitle);
     await newResource('document', page);
@@ -59,7 +57,6 @@ test.describe('documents', async () => {
     await page2.getByLabel('Rich Text Editor').focus();
     await page2.keyboard.press('ArrowDown');
     await page2.keyboard.press('Enter');
-    // Add a new line on first page, check if it appears on the second
     const syncText = 'New paragraph';
     await page2.keyboard.type(syncText);
 
@@ -68,15 +65,13 @@ test.describe('documents', async () => {
       'New paragraph not found in first window. Sync might not be working.',
     ).toBeVisible();
 
-    // Delete a row, cmd + backspace
-    await page2.getByText(syncText).selectText();
-
     // Test if page1 can see the cursor of page2
+    await page2.getByText(syncText).selectText();
     await expect(
       page.getByLabel('Rich Text Editor').getByText('Test user edited'),
     ).toBeVisible();
 
-    // Delete the word paragraph.
+    // Delete the word with Alt+Backspace
     await page2.keyboard.press('ArrowRight');
     await page2.keyboard.down('Alt');
     await page2.keyboard.press('Backspace');
@@ -93,7 +88,7 @@ test.describe('documents', async () => {
 
     // Wait for AtomicServer to index the folder
     await waitForSearchIndex(page2);
-    // Add a link to a folder to the document
+    // Add a link to a folder via @ mention
     await page2.keyboard.press('Space');
     await page2.keyboard.type('@');
     await page2.waitForTimeout(500);
@@ -103,7 +98,6 @@ test.describe('documents', async () => {
     ).toBeVisible();
     await page2.keyboard.press('Enter');
 
-    // Check if the link is visible in the document
     await expect(
       page.getByLabel('Rich Text Editor').locator('a:has-text("SomeFolder")'),
     ).toBeVisible();
