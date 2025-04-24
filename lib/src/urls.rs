@@ -19,6 +19,7 @@ pub const MESSAGE: &str = "https://atomicdata.dev/classes/Message";
 pub const IMPORTER: &str = "https://atomicdata.dev/classes/Importer";
 pub const ERROR: &str = "https://atomicdata.dev/classes/Error";
 pub const BOOKMARK: &str = "https://atomicdata.dev/class/Bookmark";
+pub const DOCUMENT_V2: &str = "https://atomicdata.dev/classes/DocumentV2";
 pub const ONTOLOGY: &str = "https://atomicdata.dev/class/ontology";
 pub const ENDPOINT_RESPONSE: &str =
     "https://atomicdata.dev/ontology/server/class/endpoint-response";
@@ -118,6 +119,8 @@ pub const IMAGE_HEIGHT: &str = "https://atomicdata.dev/properties/imageHeight";
 // ... for ChatRooms and Messages
 pub const MESSAGES: &str = "https://atomicdata.dev/properties/messages";
 pub const NEXT_PAGE: &str = "https://atomicdata.dev/properties/nextPage";
+// ... for DocumentV2
+pub const DOCUMENT_CONTENT: &str = "https://atomicdata.dev/properties/documentContent";
 // ... for Importers
 pub const IMPORTER_URL: &str = "https://atomicdata.dev/properties/importer/url";
 pub const IMPORTER_JSON: &str = "https://atomicdata.dev/properties/importer/json";

@@ -28,7 +28,10 @@ import { decodeB64, encodeB64 } from './base64.js';
 type ResourceCallback<C extends OptionalClass = UnknownClass> = (
   resource: Resource<C>,
 ) => void;
-type AwarenessCallback = (update: Uint8Array) => void;
+type YSyncCallback = (update: {
+  docUpdate?: Uint8Array;
+  awarenessUpdate?: Uint8Array;
+}) => void;
 type SubjectCallback = (subject: string) => void;
 /** Callback called when the stores agent changes */
 type AgentCallback = (agent: Agent | undefined) => void;
@@ -52,6 +55,13 @@ type CreateResourceOptions = {
   isA?: string | string[];
   /** Any additional properties the resource should have */
   propVals?: Record<string, JSONValue>;
+};
+
+type SerializedYSyncUpdate = {
+  subject: string;
+  property: string;
+  awareness_update?: string;
+  doc_update?: string;
 };
 
 export interface StoreOpts {
@@ -118,7 +128,8 @@ const supportsWebSockets = () => typeof WebSocket !== 'undefined';
 export class Store {
   /** A list of all functions that need to be called when a certain resource is updated */
   public subscribers: Map<string, ResourceCallback[]>;
-  private awarenessSubscribers: Map<string, AwarenessCallback[]> = new Map();
+  private ySyncSubscribers: Map<`${string}+${string}`, YSyncCallback[]> =
+    new Map();
   private injectedFetch: Fetch;
   /**
    * The base URL of an Atomic Server. This is where to send commits, create new
@@ -819,36 +830,46 @@ export class Store {
   }
 
   /**
-   * Subscribe to Yjs Awareness updates for a resource.
+   * Subscribe to Yjs Sync messages send over the websocket connection.
+   * These sync messages can be used for realtime collaboration and are not persisted on the server.
+   * For regular updates to normal values an ydocs use `store.subscribe()` instead.
    * @param subject The subject of the resource that you want to subscribe to.
-   * @param callback The callback that will be called when the awareness state changes. You should apply the update to your awareness instance here.
+   * @param property The property that contains the ydoc.
+   * @param callback The callback that will be called when the doc or awareness state changes.
    * @returns A function that can be called to unsubscribe.
    */
-  public subscribeAwareness(
+  public subscribeYSync(
     subject: string,
-    callback: (update: Uint8Array) => void,
+    property: string,
+    callback: YSyncCallback,
   ): () => void {
     const ws = this.getWebSocketForSubject(subject);
+    const key = `${subject}+${property}` as const;
+
+    const messageBody = JSON.stringify({
+      subject,
+      property,
+    });
 
     const unsub = () => {
-      const subscribers = this.awarenessSubscribers.get(subject);
+      const subscribers = this.ySyncSubscribers.get(key);
 
       if (subscribers) {
         const afterUnsub = subscribers.filter(item => item !== callback);
 
         if (afterUnsub.length === 0) {
-          this.awarenessSubscribers.delete(subject);
+          this.ySyncSubscribers.delete(key);
 
           if (ws?.readyState === 1) {
-            ws?.send(`Y_AWARENESS_UNSUBSCRIBE ${subject}`);
+            ws?.send(`Y_SYNC_UNSUBSCRIBE ${messageBody}`);
           }
         } else {
-          this.awarenessSubscribers.set(subject, afterUnsub);
+          this.ySyncSubscribers.set(key, afterUnsub);
         }
       }
     };
 
-    const subscribers = this.awarenessSubscribers.get(subject);
+    const subscribers = this.ySyncSubscribers.get(key);
 
     if (subscribers) {
       subscribers.push(callback);
@@ -856,30 +877,41 @@ export class Store {
       return unsub;
     }
 
-    this.awarenessSubscribers.set(subject, [callback]);
+    this.ySyncSubscribers.set(key, [callback]);
 
     if (ws?.readyState === 1) {
-      ws?.send(`Y_AWARENESS_SUBSCRIBE ${subject}`);
+      ws?.send(`Y_SYNC_SUBSCRIBE ${messageBody}`);
     }
 
     return unsub;
   }
 
   /**
-   * Notify the store that your awareness state changed, the store will send the update to the server.
-   * @param subject The subject of the resource that your awareness state changed for.
+   * Broadcast a change to a ydoc or awareness state to all other listeners via the open websocket.
+   * These messages are not persisted and are meant for fast realtime collaboration.
+   * To persist changes call `resource.save()` instead.
+   * @param subject The subject of the resource.
+   * @param property The property that contains the ydoc.
    * @param update The binary encoded update to send to the server.
    */
-  public notifyAwarenessUpdate(subject: string, update: Uint8Array): void {
+  public broadcastYSyncUpdate(
+    subject: string,
+    property: string,
+    update: { docUpdate?: Uint8Array; awarenessUpdate?: Uint8Array },
+  ): void {
     const ws = this.getWebSocketForSubject(subject);
+
+    const { docUpdate, awarenessUpdate } = update;
 
     const messageBody = {
       subject: subject,
-      update: encodeB64(update),
+      property: property,
+      ...(docUpdate && { doc_update: encodeB64(docUpdate) }),
+      ...(awarenessUpdate && { awareness_update: encodeB64(awarenessUpdate) }),
     };
 
     if (ws?.readyState === 1) {
-      ws?.send(`Y_AWARENESS_UPDATE ${JSON.stringify(messageBody)}`);
+      ws?.send(`Y_SYNC_UPDATE ${JSON.stringify(messageBody)}`);
     }
   }
 
@@ -887,13 +919,21 @@ export class Store {
    * @Internal
    */
   public __handleAwarenessUpdateMessage(message: string): void {
-    const messageBody = JSON.parse(message);
-    const update = decodeB64(messageBody.update);
+    const messageBody: SerializedYSyncUpdate = JSON.parse(message);
 
-    const subscribers = this.awarenessSubscribers.get(messageBody.subject);
+    const subscribers = this.ySyncSubscribers.get(
+      `${messageBody.subject}+${messageBody.property}`,
+    );
+
+    const awarenessUpdate = messageBody.awareness_update
+      ? decodeB64(messageBody.awareness_update)
+      : undefined;
+    const docUpdate = messageBody.doc_update
+      ? decodeB64(messageBody.doc_update)
+      : undefined;
 
     if (subscribers) {
-      subscribers.forEach(callback => callback(update));
+      subscribers.forEach(callback => callback({ docUpdate, awarenessUpdate }));
     }
   }
 

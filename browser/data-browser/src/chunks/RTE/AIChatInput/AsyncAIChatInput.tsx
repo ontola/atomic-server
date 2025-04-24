@@ -5,7 +5,7 @@ import Mention from '@tiptap/extension-mention';
 import FileHandler from '@tiptap/extension-file-handler';
 import { TiptapContextProvider } from '../TiptapContext';
 import { EditorWrapperBase } from '../EditorWrapperBase';
-import { searchSuggestionBuilder } from './resourceSuggestions';
+import { searchSuggestionBuilder } from './mcpSuggestions';
 import { useRef, useState } from 'react';
 import { EditorEvents } from '../EditorEvents';
 import { Markdown } from 'tiptap-markdown';

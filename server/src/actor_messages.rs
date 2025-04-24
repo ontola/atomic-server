@@ -13,11 +13,27 @@ pub struct Subscribe {
     pub agent: String,
 }
 
+#[derive(Deserialize, Serialize)]
+pub struct YSubscriptionJSON {
+    pub subject: String,
+    pub property: String,
+}
+
 #[derive(Message)]
 #[rtype(result = "()")]
-pub struct Unsubscribe {
+pub struct SubscribeYSync {
     pub addr: Addr<crate::handlers::web_sockets::WebSocketConnection>,
     pub subject: String,
+    pub property: String,
+    pub agent: String,
+}
+
+#[derive(Message)]
+#[rtype(result = "()")]
+pub struct UnsubscribeYSync {
+    pub addr: Addr<crate::handlers::web_sockets::WebSocketConnection>,
+    pub subject: String,
+    pub property: String,
 }
 
 /// A message containing a Resource, which should be sent to subscribers
@@ -28,9 +44,13 @@ pub struct CommitMessage {
     pub commit_response: atomic_lib::commit::CommitResponse,
 }
 
+/// A message that can contain both a Yjs Doc update or a Yjs Awareness update.
+/// It is used to enable live collaboration on Yjs Docs and does not store these updates on the server.
 #[derive(Message, Clone, Debug, Serialize, Deserialize)]
 #[rtype(result = "()")]
-pub struct YAwarenessUpdate {
+pub struct YSyncUpdate {
     pub subject: String,
-    pub update: String,
+    pub property: String,
+    pub awareness_update: Option<String>,
+    pub doc_update: Option<String>,
 }

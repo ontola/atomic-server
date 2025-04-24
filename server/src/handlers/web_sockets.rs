@@ -18,12 +18,12 @@ use atomic_lib::{
 use std::time::{Duration, Instant};
 
 use crate::{
-    actor_messages::{CommitMessage, YAwarenessUpdate},
+    actor_messages::{CommitMessage, YSubscriptionJSON, YSyncUpdate},
     appstate::AppState,
     commit_monitor::CommitMonitor,
     errors::AtomicServerResult,
     helpers::get_auth_headers,
-    y_awareness_broadcaster::YAwarenessBroadcaster,
+    y_sync_broadcaster::YSyncBroadcaster,
 };
 
 /// Get an HTTP request, upgrade it to a Websocket connection
@@ -44,7 +44,7 @@ pub async fn web_socket_handler(
     let result = ws::start(
         WebSocketConnection::new(
             appstate.commit_monitor.clone(),
-            appstate.y_awareness_broadcaster.clone(),
+            appstate.y_sync_broadcaster.clone(),
             for_agent,
             // We need to make sure this is easily clone-able
             appstate.store.clone(),
@@ -66,7 +66,7 @@ pub struct WebSocketConnection {
     subscribed: std::collections::HashSet<String>,
     /// The CommitMonitor Actor that receives and sends messages for Commits
     commit_monitor_addr: Addr<CommitMonitor>,
-    y_awareness_broadcaster_addr: Addr<YAwarenessBroadcaster>,
+    y_sync_broadcaster_addr: Addr<YSyncBroadcaster>,
     /// The Agent who is connected.
     /// If it's not specified, it's the Public Agent.
     agent: ForAgent,
@@ -135,34 +135,41 @@ fn handle_ws_message(
                         Err("UNSUBSCRIBE needs a subject".into())
                     }
                 }
-                s if s.starts_with("Y_AWARENESS_SUBSCRIBE ") => {
-                    let mut parts = s.split("Y_AWARENESS_SUBSCRIBE ");
-                    if let Some(subject) = parts.nth(1) {
-                        conn.y_awareness_broadcaster_addr.do_send(
-                            crate::actor_messages::Subscribe {
-                                addr: ctx.address(),
-                                subject: subject.to_string(),
-                                agent: conn.agent.to_string(),
-                            },
-                        );
-                        Ok(())
-                    } else {
-                        Err("Y_AWARENESS_SUBSCRIBE needs a subject".into())
-                    }
+                s if s.starts_with("Y_SYNC_SUBSCRIBE ") => {
+                    let mut parts = s.split("Y_SYNC_SUBSCRIBE ");
+
+                    let Some(json) = parts.nth(1) else {
+                        return Err("Y_SYNC_SUBSCRIBE needs a JSON object".into());
+                    };
+
+                    let message: YSubscriptionJSON = serde_json::from_str(json)?;
+
+                    conn.y_sync_broadcaster_addr
+                        .do_send(crate::actor_messages::SubscribeYSync {
+                            addr: ctx.address(),
+                            subject: message.subject.to_string(),
+                            property: message.property.to_string(),
+                            agent: conn.agent.to_string(),
+                        });
+                    Ok(())
                 }
-                s if s.starts_with("Y_AWARENESS_UNSUBSCRIBE ") => {
-                    let mut parts = s.split("Y_AWARENESS_UNSUBSCRIBE ");
-                    if let Some(subject) = parts.nth(1) {
-                        conn.y_awareness_broadcaster_addr.do_send(
-                            crate::actor_messages::Unsubscribe {
-                                addr: ctx.address(),
-                                subject: subject.to_string(),
-                            },
-                        );
-                        Ok(())
-                    } else {
-                        Err("Y_AWARENESS_UNSUBSCRIBE needs a subject".into())
-                    }
+                s if s.starts_with("Y_SYNC_UNSUBSCRIBE ") => {
+                    let mut parts = s.split("Y_SYNC_UNSUBSCRIBE ");
+
+                    let Some(json) = parts.nth(1) else {
+                        return Err("Y_SYNC_UNSUBSCRIBE needs a JSON object".into());
+                    };
+
+                    let message: YSubscriptionJSON = serde_json::from_str(json)?;
+
+                    conn.y_sync_broadcaster_addr
+                        .do_send(crate::actor_messages::UnsubscribeYSync {
+                            addr: ctx.address(),
+                            subject: message.subject.to_string(),
+                            property: message.property.to_string(),
+                        });
+
+                    Ok(())
                 }
                 s if s.starts_with("GET ") => {
                     let mut parts = s.split("GET ");
@@ -214,20 +221,20 @@ fn handle_ws_message(
                         Err("AUTHENTICATE needs a JSON object".into())
                     }
                 }
-                s if s.starts_with("Y_AWARENESS_UPDATE ") => {
-                    let mut parts = s.split("Y_AWARENESS_UPDATE ");
+                s if s.starts_with("Y_SYNC_UPDATE ") => {
+                    let mut parts = s.split("Y_SYNC_UPDATE ");
                     let Some(json) = parts.nth(1) else {
-                        return Err("Y_AWARENESS_UPDATE needs a JSON object".into());
+                        return Err("Y_SYNC_UPDATE needs a JSON object".into());
                     };
 
-                    let update: YAwarenessUpdate = match serde_json::from_str(json) {
+                    let update: YSyncUpdate = match serde_json::from_str(json) {
                         Ok(update) => update,
                         Err(err) => {
-                            return Err(format!("Invalid Y_AWARENESS_UPDATE JSON: {}", err).into())
+                            return Err(format!("Invalid Y_SYNC_UPDATE JSON: {}", err).into())
                         }
                     };
 
-                    conn.y_awareness_broadcaster_addr.do_send(update);
+                    conn.y_sync_broadcaster_addr.do_send(update);
                     Ok(())
                 }
                 other => {
@@ -252,7 +259,7 @@ fn handle_ws_message(
 impl WebSocketConnection {
     fn new(
         commit_monitor_addr: Addr<CommitMonitor>,
-        y_awareness_broadcaster_addr: Addr<YAwarenessBroadcaster>,
+        y_sync_broadcaster_addr: Addr<YSyncBroadcaster>,
         agent: ForAgent,
         store: Db,
     ) -> Self {
@@ -269,7 +276,7 @@ impl WebSocketConnection {
             // Maybe this should be stored only in the CommitMonitor, and not here.
             subscribed: std::collections::HashSet::new(),
             commit_monitor_addr,
-            y_awareness_broadcaster_addr,
+            y_sync_broadcaster_addr,
             agent,
             store,
         }
@@ -308,13 +315,13 @@ impl Handler<CommitMessage> for WebSocketConnection {
     }
 }
 
-impl Handler<YAwarenessUpdate> for WebSocketConnection {
+impl Handler<YSyncUpdate> for WebSocketConnection {
     type Result = ();
 
     #[tracing::instrument(name = "handle_y_awareness_update", skip_all)]
-    fn handle(&mut self, msg: YAwarenessUpdate, ctx: &mut ws::WebsocketContext<Self>) {
+    fn handle(&mut self, msg: YSyncUpdate, ctx: &mut ws::WebsocketContext<Self>) {
         ctx.text(format!(
-            "Y_AWARENESS_UPDATE {}",
+            "Y_SYNC_UPDATE {}",
             serde_json::to_string(&msg).unwrap()
         ));
     }

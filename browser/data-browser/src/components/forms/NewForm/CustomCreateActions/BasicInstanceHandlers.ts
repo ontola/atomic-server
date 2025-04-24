@@ -54,6 +54,21 @@ export const registerBasicInstanceHandlers = () => {
   );
 
   registerBasicInstanceHandler(
+    dataBrowser.classes.documentV2,
+    async (parent, createAndNavigate) => {
+      createAndNavigate(
+        dataBrowser.classes.documentV2,
+        {
+          [core.properties.name]: 'Untitled Document',
+        },
+        {
+          parent,
+        },
+      );
+    },
+  );
+
+  registerBasicInstanceHandler(
     ai.classes.aiChat,
     async (parent, createAndNavigate) => {
       await createAndNavigate(

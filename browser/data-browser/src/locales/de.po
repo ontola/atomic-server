@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2025-09-29T10:47:38.272Z\n"
-"PO-Revision-Date: 2025-10-14T09:30:37.541Z\n"
+"PO-Revision-Date: 2025-10-22T08:13:10.872Z\n"
 "Last-Translator: \n"
 "Language: de\n"
 "Language-Team: \n"
@@ -27,8 +27,8 @@ msgstr "Keine Klassen"
 
 #: src/components/ComboBox.tsx
 #: src/views/Element.tsx
-#: src/views/TablePage/EditorCells/MultiRelationCell.tsx
 #: src/views/TablePage/EditorCells/AtomicURLCell.tsx
+#: src/views/TablePage/EditorCells/MultiRelationCell.tsx
 msgid "No results"
 msgstr "Keine Ergebnisse"
 
@@ -38,17 +38,17 @@ msgstr "Keine Ergebnisse"
 #: src/routes/History/HistoryMobileView.tsx
 #: src/components/forms/EditFormDialog.tsx
 #: src/components/forms/ResourceForm.tsx
-#: src/views/OntologyPage/NewPropertyButton.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
+#: src/views/OntologyPage/NewPropertyButton.tsx
 #: src/components/forms/NewForm/NewFormDialog.tsx
 #: src/components/forms/ValueForm/ValueFormEdit.tsx
 #: src/views/TablePage/PropertyForm/ExternalPropertyDialog.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
 #: src/views/TablePage/PropertyForm/NewPropertyDialog.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
 msgid "Cancel"
 msgstr "Abbrechen"
@@ -82,14 +82,17 @@ msgid "Copy to clipboard"
 msgstr "In die Zwischenablage kopieren"
 
 #: src/components/HighlightedCodeBlock.tsx
-#: src/chunks/AI/AIChatPage.tsx
-#: src/components/Searchbar/TagSuggestionOverlay.tsx
 #: src/views/ResourcePage.tsx
+#: src/chunks/AI/AIChatPage.tsx
 #: src/views/ResourceLine.tsx
-#: src/chunks/AI/ModelSelect/OllamaModelSelector.tsx
+#: src/components/Searchbar/TagSuggestionOverlay.tsx
 #: src/views/Card/ResourceCard.tsx
-#: src/views/File/FilePreviewThumbnail.tsx
 #: src/views/File/FilePreview.tsx
+#: src/views/File/FilePreviewThumbnail.tsx
+#: src/chunks/AI/ModelSelect/OllamaModelSelector.tsx
+#: src/views/Card/DocumentV2Card.tsx
+#: src/views/Document/DocumentV2FullPage.tsx
+#: src/views/Document/DocumentV2FullPage.tsx
 msgid "Loading..."
 msgstr "Laden..."
 
@@ -112,8 +115,8 @@ msgstr "Nutzungen beschränken (optional)"
 #: src/components/InviteForm.tsx
 #: src/views/TablePage/PropertyForm/NewPropertyDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
 msgid "Create"
 msgstr "Erstellen"
@@ -140,7 +143,7 @@ msgid "Go forward"
 msgstr "Vorwärts"
 
 #: src/components/MetaSetter.tsx
-#: src/chunks/RTE/AIChatInput/resourceSuggestions.ts
+#: src/chunks/RTE/AIChatInput/mcpSuggestions.ts
 msgid "Atomic Data"
 msgstr "Atomic Data"
 
@@ -405,15 +408,15 @@ msgstr "<0/>{0} Tastatur-Drag & Drop in der Seitenleiste aktivieren"
 
 #. placeholder {0}: resource.title
 #. placeholder {0}: resource.title
-#: src/routes/DataRoute.tsx
 #: src/routes/EditRoute.tsx
+#: src/routes/DataRoute.tsx
 msgid "Back to {0}"
 msgstr "Zurück zu {0}"
 
 #: src/routes/EditRoute.tsx
+#: src/views/ResourcePageDefault.tsx
 #: src/chunks/AI/AgentConfigItem.tsx
 #: src/components/ResourceContextMenu/index.tsx
-#: src/views/ResourcePageDefault.tsx
 #: src/views/TablePage/TableHeadingMenu.tsx
 msgid "Edit"
 msgstr "Bearbeiten"
@@ -603,8 +606,8 @@ msgid "If you sign out, your secret will be removed. If you haven't saved your s
 msgstr "Wenn Sie sich abmelden, wird Ihr Geheimnis entfernt. Wenn Sie Ihr Geheimnis nicht gespeichert haben, verlieren Sie den Zugriff auf diesen Benutzer. Möchten Sie sich wirklich abmelden?"
 
 #: src/routes/SettingsAgent.tsx
-#: src/components/SideBar/AppMenu.tsx
 #: src/views/InvitePage.tsx
+#: src/components/SideBar/AppMenu.tsx
 msgid "User Settings"
 msgstr "Benutzereinstellungen"
 
@@ -1691,19 +1694,19 @@ msgstr "{0} um {1}"
 #. placeholder {0}: prop.shortname
 #. placeholder {0}: prop.shortname
 #: src/components/forms/EditFormDialog.tsx
-#: src/views/TablePage/EditorCells/MarkdownCell.tsx
 #: src/views/TablePage/EditorCells/JSONCell.tsx
+#: src/views/TablePage/EditorCells/MarkdownCell.tsx
 msgid "Edit {0}"
 msgstr "{0} bearbeiten"
 
 #: src/chunks/RTE/ImagePicker.tsx
 #: src/components/forms/EditFormDialog.tsx
-#: src/components/forms/ResourceForm.tsx
 #: src/routes/SettingsServer/index.tsx
+#: src/components/forms/ResourceForm.tsx
 #: src/routes/Share/ShareRoute.tsx
-#: src/views/OntologyPage/NewPropertyButton.tsx
-#: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/Article/ArticleDescription.tsx
+#: src/views/OntologyPage/NewClassButton.tsx
+#: src/views/OntologyPage/NewPropertyButton.tsx
 #: src/components/forms/NewForm/NewFormDialog.tsx
 #: src/views/TablePage/PropertyForm/EditPropertyDialog.tsx
 msgid "Save"
@@ -1730,23 +1733,23 @@ msgstr "Diese Eigenschaft löschen"
 msgid "Required field."
 msgstr "Pflichtfeld."
 
-#: src/components/forms/InputMarkdown.tsx
-#: src/components/forms/InputSlug.tsx
-#: src/components/forms/InputNumber.tsx
-#: src/components/forms/InputNumber.tsx
-#: src/components/forms/InputURI.tsx
-#: src/components/forms/InputTimestamp.tsx
 #: src/components/forms/InputDate.tsx
+#: src/components/forms/InputNumber.tsx
+#: src/components/forms/InputNumber.tsx
+#: src/components/forms/InputMarkdown.tsx
+#: src/components/forms/InputURI.tsx
 #: src/components/forms/InputString.tsx
+#: src/components/forms/InputSlug.tsx
 #: src/components/forms/InputResourceArray.tsx
 #: src/components/forms/InputResourceArray.tsx
 #: src/components/forms/InputResourceArray.tsx
-#: src/components/forms/FilePicker/FilePicker.tsx
+#: src/components/forms/InputTimestamp.tsx
 #: src/components/forms/ResourceSelector/ResourceSelector.tsx
+#: src/components/forms/formValidation/useValidation.ts
+#: src/components/forms/formValidation/useValidation.ts
+#: src/components/forms/formValidation/useValidation.ts
+#: src/components/forms/FilePicker/FilePicker.tsx
 #: src/views/TablePage/PropertyForm/PropertyForm.tsx
-#: src/components/forms/formValidation/useValidation.ts
-#: src/components/forms/formValidation/useValidation.ts
-#: src/components/forms/formValidation/useValidation.ts
 msgid "Required"
 msgstr "Erforderlich"
 
@@ -1856,8 +1859,8 @@ msgid "Upload file(s)..."
 msgstr "Datei(en) hochladen..."
 
 #: src/components/forms/UploadForm.tsx
-#: src/components/forms/FileDropzone/FileDropzoneInput.tsx
 #: src/components/forms/FileDropzone/FileDropzone.tsx
+#: src/components/forms/FileDropzone/FileDropzoneInput.tsx
 msgid "Uploading..."
 msgstr "Wird hochgeladen..."
 
@@ -2032,8 +2035,8 @@ msgstr "<0/> Herunterladen"
 msgid "Sorry, your browser doesn't support embedded videos."
 msgstr "Entschuldigung, Ihr Browser unterstützt keine eingebetteten Videos."
 
-#: src/views/File/FilePreviewThumbnail.tsx
 #: src/views/File/FilePreview.tsx
+#: src/views/File/FilePreviewThumbnail.tsx
 msgid "No preview available"
 msgstr "Keine Vorschau verfügbar"
 
@@ -2188,10 +2191,10 @@ msgstr "Keine Instanzen"
 msgid "Use <0/> in code"
 msgstr "<0/> im Code verwenden"
 
-#: src/components/SideBar/OntologySideBar/OntologiesPanel.tsx
 #: src/views/ResourceInline/ResourceInline.tsx
-#: src/components/forms/FilePicker/FilePickerItem.tsx
+#: src/components/SideBar/OntologySideBar/OntologiesPanel.tsx
 #: src/components/forms/NewForm/NewFormDialog.tsx
+#: src/components/forms/FilePicker/FilePickerItem.tsx
 msgid "loading"
 msgstr "lädt"
 
@@ -2403,14 +2406,13 @@ msgstr "<0/> Eigenschaft hinzufügen"
 msgid "New Property"
 msgstr "Neue Eigenschaft"
 
-#: src/chunks/RTE/AsyncMarkdownEditor.tsx
-#: src/chunks/RTE/AsyncMarkdownEditor.tsx
 #: src/chunks/RTE/CollaborativeEditor.tsx
+#: src/chunks/RTE/AsyncMarkdownEditor.tsx
+#: src/chunks/RTE/AsyncMarkdownEditor.tsx
 msgid "Start typing..."
 msgstr "Beginne zu tippen..."
 
 #: src/chunks/RTE/AsyncMarkdownEditor.tsx
-#: src/chunks/RTE/CollaborativeEditor.tsx
 msgid "Type '/' for options"
 msgstr "Gib '/' für Optionen ein"
 
@@ -2511,8 +2513,8 @@ msgstr "Servername"
 msgid "Enter server name"
 msgstr "Servernamen eingeben"
 
-#: src/components/AI/MCP/MCPServersManager.tsx
 #: src/components/AI/MCP/ServerItem.tsx
+#: src/components/AI/MCP/MCPServersManager.tsx
 msgid "Server URL"
 msgstr "Server-URL"
 
@@ -2524,8 +2526,8 @@ msgstr "Server-URL eingeben"
 msgid "Type"
 msgstr "Typ"
 
-#: src/components/AI/MCP/MCPServersManager.tsx
 #: src/components/AI/MCP/ServerItem.tsx
+#: src/components/AI/MCP/MCPServersManager.tsx
 msgid "Select transport type"
 msgstr "Transporttyp auswählen"
 
@@ -2755,13 +2757,13 @@ msgstr "Leerer Chat"
 
 #. placeholder {0}: classType.title
 #. placeholder {0}: classType.title
-#: src/views/TablePage/EditorCells/MultiRelationCell.tsx
 #: src/views/TablePage/EditorCells/AtomicURLCell.tsx
+#: src/views/TablePage/EditorCells/MultiRelationCell.tsx
 msgid "Search {0}"
 msgstr "{0} suchen"
 
-#: src/views/TablePage/EditorCells/MultiRelationCell.tsx
 #: src/views/TablePage/EditorCells/AtomicURLCell.tsx
+#: src/views/TablePage/EditorCells/MultiRelationCell.tsx
 msgid "Search..."
 msgstr "Suchen..."
 
@@ -2778,8 +2780,8 @@ msgstr "Einzelne Instanz"
 msgid "Table"
 msgstr "Tabelle"
 
-#: src/views/TablePage/EditorCells/MarkdownCell.tsx
 #: src/views/TablePage/EditorCells/JSONCell.tsx
+#: src/views/TablePage/EditorCells/MarkdownCell.tsx
 msgid "Open edit dialog"
 msgstr "Öffne Bearbeitungsdialog"
 
@@ -2803,8 +2805,8 @@ msgstr "Datentyp"
 msgid "Classtype"
 msgstr "Klassentyp"
 
-#: src/views/OntologyPage/Property/PropertyFormCommon.tsx
 #: src/views/OntologyPage/Property/EnumFormPart.tsx
+#: src/views/OntologyPage/Property/PropertyFormCommon.tsx
 msgid "Allows Only"
 msgstr "Erlaubt nur"
 
@@ -2935,6 +2937,7 @@ msgid "Untitled ChatRoom"
 msgstr "Unbenannter Chatraum"
 
 #: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
+#: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
 msgid "Untitled Document"
 msgstr "Unbenanntes Dokument"
 
@@ -2964,8 +2967,8 @@ msgstr "Mein Laufwerk"
 msgid "New Bookmark"
 msgstr "Neues Lesezeichen"
 
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
 msgid "Ok"
 msgstr "Ok"
 
@@ -3058,5 +3061,45 @@ msgid "Editing YDoc directly is not supported"
 msgstr "Das direkte Bearbeiten von YDoc wird nicht unterstützt"
 
 #: src/chunks/RTE/CollaborativeEditor.tsx
-msgid "Pieter Post"
-msgstr "Peter Post"
+msgid "Untitled Agent"
+msgstr "Unbenannter Agent"
+
+#: src/chunks/RTE/FullBubbleMenu.tsx
+msgid "Left"
+msgstr "Links"
+
+#: src/chunks/RTE/FullBubbleMenu.tsx
+msgid "Center"
+msgstr "Zentriert"
+
+#: src/chunks/RTE/FullBubbleMenu.tsx
+msgid "Right"
+msgstr "Rechts"
+
+#: src/chunks/RTE/NodeSelectMenu.tsx
+msgid "Ordered List"
+msgstr "Geordnete Liste"
+
+#: src/chunks/RTE/NodeSelectMenu.tsx
+msgid "Bullet List"
+msgstr "Aufzählungsliste"
+
+#: src/chunks/RTE/NodeSelectMenu.tsx
+msgid "Task List"
+msgstr "Aufgabenliste"
+
+#: src/chunks/RTE/ColorMenu.tsx
+msgid "Edit text color"
+msgstr "Textfarbe bearbeiten"
+
+#: src/chunks/RTE/ColorMenu.tsx
+msgid "Edit background color"
+msgstr "Hintergrundfarbe bearbeiten"
+
+#: src/views/Card/DocumentV2Card.tsx
+msgid "document"
+msgstr "Dokument"
+
+#: src/chunks/RTE/CollaborativeEditor.tsx
+msgid "Type '/' for options or '@' for resources"
+msgstr "Geben Sie '/' für Optionen oder '@' für Ressourcen ein"

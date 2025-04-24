@@ -1,4 +1,3 @@
-import type { Editor, Range } from '@tiptap/react';
 import { transparentize } from 'polished';
 import {
   forwardRef,
@@ -8,23 +7,17 @@ import {
   useId,
   useCallback,
 } from 'react';
-import type { IconType } from 'react-icons';
 import { styled } from 'styled-components';
 import { ScrollArea } from '../../../components/ScrollArea';
+import type { SuggestionItem } from '../types';
 
 export type CommandListRefType = {
   onKeyDown: (event: KeyboardEvent) => boolean;
 };
 
-export type CommandItem = {
-  title: string;
-  icon: IconType;
-  command: (props: { editor: Editor; range: Range }) => void;
-};
-
 export interface CommandListProps {
-  items: CommandItem[];
-  command: (item: CommandItem) => void;
+  items: SuggestionItem[];
+  command: (item: SuggestionItem) => void;
 }
 
 const buildItemId = (compId: string, index: number) =>
@@ -95,7 +88,7 @@ export const CommandList = forwardRef<CommandListRefType, CommandListProps>(
 
           return (
             <ListItemButton
-              key={item.title}
+              key={item.id}
               id={buildItemId(compId, index)}
               onClick={() => selectItem(index)}
               onMouseEnter={() => setSelectedIndex(index)}

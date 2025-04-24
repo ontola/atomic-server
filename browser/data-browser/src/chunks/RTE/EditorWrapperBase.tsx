@@ -15,6 +15,9 @@ export const EditorWrapperBase = styled.div<{ hideEditor: boolean }>`
   }
 
   & .tiptap {
+    :first-child {
+      margin-top: 0;
+    }
     display: ${p => (p.hideEditor ? 'none' : 'block')};
     outline: none;
     width: min(100%, 75ch);
@@ -71,6 +74,48 @@ export const EditorWrapperBase = styled.div<{ hideEditor: boolean }>`
       border-inline-start: 3px solid ${p => p.theme.colors.textLight2};
       color: ${p => p.theme.colors.textLight};
       padding-inline-start: 1rem;
+    }
+
+    /* List styles */
+    ul,
+    ol {
+      padding: 0 1rem;
+      li {
+        margin-bottom: 0;
+      }
+      li p {
+        margin-top: 0.25em;
+        margin-bottom: 0.25em;
+      }
+    }
+    /* Task list specific styles */
+    ul[data-type='taskList'] {
+      list-style: none;
+      margin-left: 0;
+      padding: 0;
+
+      li {
+        align-items: flex-start;
+        display: flex;
+
+        > label {
+          flex: 0 0 auto;
+          margin-right: 0.5rem;
+          user-select: none;
+        }
+
+        > div {
+          flex: 1 1 auto;
+        }
+      }
+
+      input[type='checkbox'] {
+        cursor: pointer;
+      }
+
+      ul[data-type='taskList'] {
+        margin: 0;
+      }
     }
   }
 `;

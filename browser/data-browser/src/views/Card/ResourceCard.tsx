@@ -30,6 +30,7 @@ import { Column, Row } from '../../components/Row';
 import { Tag } from '../../components/Tag';
 import { ResourceContextMenu } from '../../components/ResourceContextMenu';
 import { AIChatContentCard } from './AIChatContentCard';
+import { DocumentV2Card } from './DocumentV2Card';
 
 interface ResourceCardProps extends CardViewPropsBase {
   /** The subject URL - the identifier of the resource. */
@@ -117,6 +118,8 @@ function ResourceCardInner(props: ResourceCardProps): JSX.Element {
       return <ArticleCard resource={resource} {...props} />;
     case ai.classes.textPart:
       return <AIChatContentCard resource={resource} {...props} />;
+    case dataBrowser.classes.documentV2:
+      return <DocumentV2Card resource={resource} {...props} />;
     default:
       return <ResourceCardDefault resource={resource} {...props} />;
   }

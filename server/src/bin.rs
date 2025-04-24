@@ -15,7 +15,7 @@ mod https;
 mod jsonerrors;
 mod routes;
 pub mod serve;
-mod y_awareness_broadcaster;
+mod y_sync_broadcaster;
 // #[cfg(feature = "search")]
 mod search;
 #[cfg(test)]
