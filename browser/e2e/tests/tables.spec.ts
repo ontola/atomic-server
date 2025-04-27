@@ -179,7 +179,9 @@ test.describe('tables', async () => {
       page.getByRole('button', { name: selectColumnName }),
     ).toBeVisible();
 
-    await page.waitForLoadState('networkidle');
+    // Wait for all pending commits to be flushed before reload.
+    // 'networkidle' is unreliable on SPAs with persistent WebSocket connections.
+    await page.waitForTimeout(2000);
     await page.reload();
     await expect(
       page.getByRole('button', { name: selectColumnName }),

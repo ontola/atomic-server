@@ -24,7 +24,14 @@ export function constructOpenURL(
     return '#';
   }
 
-  const url = new URL(subject);
+  let url: URL;
+
+  try {
+    url = new URL(subject);
+  } catch {
+    // Non-URL subjects (e.g. DIDs) are always treated as remote resources
+    return constructURL(paths.show, { subject, ...extraParams });
+  }
 
   if (isRemoteResource(url)) {
     return constructURL(paths.show, { subject, ...extraParams });

@@ -36,6 +36,7 @@ export function useDevDrive() {
         noParent: true,
         propVals: {
           [core.properties.name]: 'dev',
+          [core.properties.description]: '# Welcome to your Drive\n\nThis is your personal Atomic Data drive. Edit this description to tell visitors what this space is about.',
           [core.properties.write]: [agentDID],
           [core.properties.read]: [agentDID],
         },

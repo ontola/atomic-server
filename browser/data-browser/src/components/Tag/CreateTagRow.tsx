@@ -21,10 +21,12 @@ export function CreateTagRow({ parent, onNewTag }: CreateTagRowProps) {
   const [resetKey, setResetKey] = useState<number>(0);
 
   const createNewTag = useCallback(async () => {
-    const subject = await store.buildUniqueSubjectFromParts(
-      ['tag', tagName],
-      parent,
-    );
+    // When the parent is a DID, subjects are derived from the genesis commit
+    // signature and must not have a path appended. Only pre-compute a path-based
+    // subject for HTTP parents.
+    const subject = parent.startsWith('did:')
+      ? undefined
+      : await store.buildUniqueSubjectFromParts(['tag', tagName], parent);
 
     const tag = await store.newResource({
       subject,

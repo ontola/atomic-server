@@ -359,9 +359,7 @@ function commitToJsonADObject(
     }
   }
 
-  // Commits are identified by their hash, so we should not include an @id field
-  // if the subject is a commit DID. This matches the server's serialization logic.
-  if (origin && commit.subject && !commit.subject.startsWith('did:ad:commit:')) {
+  if (origin && commit.subject) {
     jsonAdObj['@id'] = commit.subject;
   }
 
