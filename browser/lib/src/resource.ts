@@ -47,10 +47,12 @@ export const unknownSubject = 'unknown-subject';
 
 export enum ResourceEvents {
   LocalChange = 'local-change',
+  LoadingChange = 'loading-change',
 }
 
 type ResourceEventHandlers = {
   [ResourceEvents.LocalChange]: (prop: string, value: JSONValue) => void;
+  [ResourceEvents.LoadingChange]: (loading: boolean) => void;
 };
 
 /**
@@ -70,15 +72,12 @@ export class Resource<C extends OptionalClass = any> {
   /** Is true for locally created, unsaved resources */
   public new: boolean;
   /**
-   * Is true when the Resource is currently being fetched, awaiting a response
-   * from the Server
-   */
-  public loading = false;
-  /**
    * Every commit that has been applied should be stored here, which prevents
    * applying the same commit twice
    */
   public appliedCommitSignatures: Set<string> = new Set();
+
+  private _loading = false;
 
   private commitBuilder: CommitBuilder;
   private _subject: string;
@@ -117,6 +116,15 @@ export class Resource<C extends OptionalClass = any> {
 
   public get __internalObject(): Resource<C> {
     return this;
+  }
+
+  /**
+   * Is true when the Resource is currently being fetched, awaiting a response
+   * from the Server.
+   * Use `resource.on(ResourceEvents.LoadingChange, (loading) => {})` to listen for changes.
+   */
+  public get loading(): boolean {
+    return this._loading;
   }
 
   /** The subject URL of the resource */
@@ -208,6 +216,12 @@ export class Resource<C extends OptionalClass = any> {
     return this._store;
   }
 
+  public set loading(loading: boolean) {
+    if (this._loading === loading) return;
+
+    this._loading = loading;
+    this.eventManager.emit(ResourceEvents.LoadingChange, loading);
+  }
   public on<T extends ResourceEvents>(
     event: T,
     callback: ResourceEventHandlers[T],
@@ -348,6 +362,33 @@ export class Resource<C extends OptionalClass = any> {
     res.appliedCommitSignatures = this.appliedCommitSignatures;
 
     return res as Resource<C>;
+  }
+
+  /** Merges a resource into this resource. If this resource has uncommited changes those changes will be applied on top of the new propvals. */
+  public merge(resourceB: Resource): void {
+    if (this.subject !== resourceB.subject) {
+      throw new Error('Cannot merge resources with different subjects');
+    }
+
+    this.propvals = resourceB.getPropVals();
+    this.new = resourceB.new;
+    this.error = resourceB.error;
+    this.commitError = resourceB.commitError;
+
+    if (this.commitBuilder.hasUnsavedChanges()) {
+      // We have changes so we want to apply those on top of the propvals we just got.
+      const changes: Commit = {
+        ...this.commitBuilder.toPlainObject(),
+        signature: '',
+        signer: '',
+        createdAt: 0,
+      };
+
+      applyCommitToResource(this, changes);
+    }
+
+    // We set this last because it will trigger a loading change event.
+    this.loading = resourceB.loading;
   }
 
   /** Checks if the resource is both loaded and free from errors */

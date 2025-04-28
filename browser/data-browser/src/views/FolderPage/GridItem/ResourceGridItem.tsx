@@ -18,6 +18,7 @@ import { GridItemViewProps } from './GridItemViewProps';
 import { FaFolder } from 'react-icons/fa';
 import { ChatRoomGridItem } from './ChatRoomGridItem';
 import { DocumentGridItem } from './DocumentGridItem';
+import { DocumentV2GridItem } from './DocumentV2GridItem';
 import { ErrorBoundary } from '../../ErrorPage';
 import { useNavigateWithTransition } from '../../../hooks/useNavigateWithTransition';
 import { LoaderBlock } from '../../../components/Loader';
@@ -34,6 +35,7 @@ const gridItemMap = new Map<string, React.FC<GridItemViewProps>>([
   [core.classes.property, BasicGridItem],
   [dataBrowser.classes.chatroom, ChatRoomGridItem],
   [dataBrowser.classes.document, DocumentGridItem],
+  [dataBrowser.classes.documentV2, DocumentV2GridItem],
   [server.classes.file, FilePreviewThumbnail],
   [dataBrowser.classes.article, ArticleGridItem],
 ]);

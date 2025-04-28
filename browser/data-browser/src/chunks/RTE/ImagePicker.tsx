@@ -1,11 +1,11 @@
 import {
   NodeViewWrapper,
   ReactNodeViewRenderer,
-  type Editor,
+  type ReactNodeViewProps,
 } from '@tiptap/react';
-import { Image } from '@tiptap/extension-image';
+import { Image, type ImageOptions } from '@tiptap/extension-image';
 import { styled } from 'styled-components';
-import { forwardRef, useState } from 'react';
+import { useState } from 'react';
 import { Button } from '../../components/Button';
 import { InputStyled, InputWrapper } from '../../components/forms/InputStyles';
 import { Column, Row } from '../../components/Row';
@@ -19,29 +19,31 @@ import { imageMimeTypes } from '../../helpers/filetypes';
 import { useHTMLFormFieldValidation } from '../../helpers/useHTMLFormFieldValidation';
 import { transition } from '../../helpers/transition';
 
-type PartialImageNodeProps = {
-  node: {
-    attrs: {
-      src?: string;
-      alt?: string;
-    };
-  };
-  updateAttributes: (attrs: { src: string; alt?: string }) => void;
-  selected: boolean;
-  editor: Editor;
-};
+interface ExtendedImageProps extends ImageOptions {
+  uploadImage?: (file: File[]) => Promise<string[]>;
+}
 
-export const ExtendedImage = Image.extend({
+export const ExtendedImage = Image.extend<ExtendedImageProps>({
+  addOptions() {
+    return {
+      ...this.parent?.(),
+      onNewFilePicked: undefined,
+    } as ExtendedImageProps;
+  },
+
   addNodeView() {
-    // @ts-ignore. Weird type issue probably due to incorrect tiptap types.
     return ReactNodeViewRenderer(MarkdownEditorImage);
   },
 });
 
-const MarkdownEditorImage = forwardRef<
-  HTMLImageElement | HTMLDivElement,
-  PartialImageNodeProps
->(({ node, updateAttributes, selected, editor }, ref) => {
+const MarkdownEditorImage = ({
+  node,
+  updateAttributes,
+  selected,
+  editor,
+  extension,
+  ref,
+}: ReactNodeViewProps<HTMLDivElement | HTMLImageElement>) => {
   const store = useStore();
 
   const [showPicker, setShowPicker] = useState(false);
@@ -70,6 +72,13 @@ const MarkdownEditorImage = forwardRef<
 
     editor.chain().focus().run();
   };
+
+  const uploadAndSet = extension.options.uploadImage
+    ? async (file: File) => {
+        const subjects = await extension.options.uploadImage([file]);
+        setSelectedSubject(subjects[0]);
+      }
+    : undefined;
 
   if (node.attrs.src) {
     return (
@@ -130,16 +139,15 @@ const MarkdownEditorImage = forwardRef<
         </Column>
       </Wrapper>
       <FilePickerDialog
-        noUpload
         show={showPicker}
         onShowChange={setShowPicker}
         onResourcePicked={setSelectedSubject}
-        onNewFilePicked={() => undefined}
+        onNewFilePicked={uploadAndSet}
         allowedMimes={imageMimeTypes}
       />
     </NodeViewWrapper>
   );
-});
+};
 
 MarkdownEditorImage.displayName = 'MarkdownEditorImage';
 

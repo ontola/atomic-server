@@ -17,7 +17,7 @@ export function SimpleResourceLink({
 
   const url = useMemo(() => {
     try {
-      return constructOpenURL(resource.getSubject());
+      return constructOpenURL(resource.subject);
     } catch (e) {
       return '#';
     }
@@ -25,19 +25,14 @@ export function SimpleResourceLink({
 
   const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault();
-    // @ts-ignore
     navigate(url);
   };
 
-  try {
-    return (
-      <StyledAnchor href={url} onClick={handleClick} {...props}>
-        {children}
-      </StyledAnchor>
-    );
-  } catch (e) {
-    return <>{resource.getSubject()}</>;
-  }
+  return (
+    <StyledAnchor href={url} onClick={handleClick} {...props}>
+      {children}
+    </StyledAnchor>
+  );
 }
 
 const StyledAnchor = styled.a`

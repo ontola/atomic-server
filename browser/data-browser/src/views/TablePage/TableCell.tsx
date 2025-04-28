@@ -2,8 +2,8 @@ import {
   commits,
   JSONValue,
   Property,
-  Resource,
   useDebouncedSave,
+  useResource,
   useValue,
 } from '@tomic/react';
 import { useCallback, useContext, useMemo, type JSX } from 'react';
@@ -22,10 +22,10 @@ import { StringCell } from './EditorCells/StringCell';
 import { TablePageContext } from './tablePageContext';
 import { createValueChangedHistoryItem } from './helpers/useTableHistory';
 
-interface TableCell {
+interface TableCellProps {
   columnIndex: number;
   rowIndex: number;
-  resource: Resource;
+  subject: string;
   property: Property;
   onEditNextRow?: () => void;
 }
@@ -54,10 +54,13 @@ const emptyFunc = () => undefined;
 export function TableCell({
   columnIndex,
   rowIndex,
-  resource,
+  subject,
   property,
   onEditNextRow,
-}: TableCell): JSX.Element {
+}: TableCellProps): JSX.Element {
+  const resource = useResource(subject, {
+    track: [property.subject],
+  });
   const { setActiveCell } = useTableEditorContext();
   const { addItemsToHistoryStack } = useContext(TablePageContext);
   // We give an empty error handler to debouncedSave so it doesn't spam the user with error popups when the value is invalid.
@@ -103,7 +106,7 @@ export function TableCell({
       setCreatedAt,
       createdAt,
       resource,
-      property,
+      property.subject,
       save,
       addItemsToHistoryStack,
     ],
@@ -116,13 +119,15 @@ export function TableCell({
     [onChange, dataType],
   );
 
+  const propValCount = resource.getPropVals().size;
+
   const handleEditNextRow = useCallback(() => {
     if (!savePending) {
       onEditNextRow?.();
 
       // Only go to the next row if the resource has any properties set (It has two by default, isA and parent)
       // This prevents triggering a rerender and losing focus on the input.
-      if (resource.getPropVals().size > 2) {
+      if (propValCount > 2) {
         setActiveCell(rowIndex + 1, columnIndex);
       }
     }
@@ -132,7 +137,7 @@ export function TableCell({
     rowIndex,
     columnIndex,
     onEditNextRow,
-    resource,
+    propValCount,
   ]);
 
   return (
@@ -151,13 +156,11 @@ export function TableCell({
           resource={resource}
         />
       ) : (
-        <>
-          <Editor.Display
-            value={value}
-            onChange={onChange}
-            property={property.subject}
-          />
-        </>
+        <Editor.Display
+          value={value}
+          onChange={onChange}
+          property={property.subject}
+        />
       )}
     </Cell>
   );

@@ -98,7 +98,10 @@ export function ElementEdit({
   /** Auto focus on select, move cursor to end */
   React.useEffect(() => {
     ref?.current?.focus();
-    text && ref?.current?.setSelectionRange(text?.length, text?.length);
+
+    if (text) {
+      ref?.current?.setSelectionRange(text?.length, text?.length);
+    }
   }, [active]);
 
   /** Delete this element */
@@ -308,7 +311,10 @@ function SearchWidget({ query, setElement }: WidgetProps) {
     'tab,enter',
     e => {
       e.preventDefault();
-      results[index] && setElement(results[index]);
+
+      if (results[index]) {
+        setElement(results[index]);
+      }
     },
     { enableOnTags: ['TEXTAREA'] },
     [],

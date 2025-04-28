@@ -70,6 +70,7 @@ export class JSONADParser {
     resourceSubject: string = unknownSubject,
   ): Resource {
     const resource = new Resource(resourceSubject);
+    resource.loading = false;
 
     try {
       for (const [key, value] of Object.entries(object)) {
@@ -100,8 +101,6 @@ export class JSONADParser {
 
         resource.setUnsafe(key, value);
       }
-
-      resource.loading = false;
 
       if (resource.hasClasses(server.classes.error)) {
         resource.error = AtomicError.fromResource(resource);

@@ -6,35 +6,29 @@ import { dataBrowser, useResource } from '@tomic/react';
 import ResourceCard from '@views/Card/ResourceCard';
 import { styled } from 'styled-components';
 import { TableRTE } from '../TableRTE';
-
-const stopPropagation = (e: React.MouseEvent<HTMLDivElement>) =>
-  e.stopPropagation();
+import { RTENodeViewWrapper } from './RTENodeViewWrapper';
+import { ErrorBoundary } from '@views/ErrorPage';
 
 export const ResourceComponent = (
   props: ReactNodeViewProps<HTMLDivElement>,
 ) => {
   const resource = useResource(props.node.attrs.subject);
 
-  const Component = resource.matchClass(
+  const [Component, wide] = resource.matchClass(
     {
-      [dataBrowser.classes.table]: TableRTE,
+      [dataBrowser.classes.table]: [TableRTE, true],
     },
-    ResourceCard,
+    [ResourceCard, false],
   );
 
   return (
-    <StyledNodeViewWrapper
-      onClick={stopPropagation}
-      onMouseDown={stopPropagation}
-    >
-      <Component subject={props.node.attrs.subject} />
-    </StyledNodeViewWrapper>
+    <RTENodeViewWrapper wide={wide} key={props.node.attrs.subject}>
+      <ErrorBoundary>
+        <Component subject={props.node.attrs.subject} />
+      </ErrorBoundary>
+    </RTENodeViewWrapper>
   );
 };
-
-const StyledNodeViewWrapper = styled(NodeViewWrapper)`
-  margin-bottom: 1rem;
-`;
 
 export const ResourceInlineComponent = (
   props: ReactNodeViewProps<HTMLAnchorElement>,

@@ -3,11 +3,17 @@
  * Usefull if you want multiple refs to reference the same dom element.
  */
 export function useCombineRefs<T>(
-  refs: React.RefObject<T>[],
+  refs: Array<React.Ref<T> | undefined>,
 ): (node: T) => void {
   return (node: T) => {
     for (const ref of refs) {
-      ref.current = node;
+      if (!ref) continue;
+
+      if (typeof ref === 'function') {
+        ref(node);
+      } else if (ref) {
+        ref.current = node;
+      }
     }
   };
 }

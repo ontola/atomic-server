@@ -1,19 +1,14 @@
 import { Column, Row } from '@components/Row';
 import type { CardViewProps } from './CardViewProps';
 import { ResourceCardTitle } from './ResourceCardTitle';
-import {
-  dataBrowser,
-  useArray,
-  useYDoc,
-  type DataBrowser,
-  type Resource,
-} from '@tomic/react';
-import * as Y from 'yjs';
+import { dataBrowser, useArray } from '@tomic/react';
 import { Tag } from '@components/Tag';
 import { ResourceContextMenu } from '@components/ResourceContextMenu';
+import { useDocumentText } from '@hooks/useDocumentText';
 
 export const DocumentV2Card: React.FC<CardViewProps> = ({ resource }) => {
   const [tags] = useArray(resource, dataBrowser.properties.tags);
+  const text = useDocumentText(resource, 300);
 
   return (
     <Column gap='0.5rem'>
@@ -28,46 +23,7 @@ export const DocumentV2Card: React.FC<CardViewProps> = ({ resource }) => {
           <Tag subject={tag} key={tag} />
         ))}
       </Row>
-      <YdocTextRenderer resource={resource} />
+      <div>{text}</div>
     </Column>
   );
-};
-
-interface AsyncDocMarkdownRendererProps {
-  resource: Resource<DataBrowser.DocumentV2>;
-}
-
-const extractText = (doc: Y.Doc) => {
-  const fragment = doc.getXmlFragment('content');
-  let text = '';
-
-  for (const node of fragment.createTreeWalker(() => true)) {
-    if (node instanceof Y.XmlText) {
-      text += node.toString().replace(/<[^>]*>?/g, '');
-    }
-
-    if (node instanceof Y.XmlElement) {
-      text += ' ';
-    }
-
-    if (text.length > 300) {
-      break;
-    }
-  }
-
-  return text + '...';
-};
-
-const YdocTextRenderer: React.FC<AsyncDocMarkdownRendererProps> = ({
-  resource,
-}) => {
-  const doc = useYDoc(resource, dataBrowser.properties.documentContent);
-
-  if (!doc) {
-    return <div>Loading...</div>;
-  }
-
-  const text = extractText(doc);
-
-  return <div>{text}</div>;
 };

@@ -1,4 +1,4 @@
-import { EditorContent, useEditor } from '@tiptap/react';
+import { EditorContent, useEditor, type Editor } from '@tiptap/react';
 import { FloatingMenu } from '@tiptap/react/menus';
 import { StarterKit } from '@tiptap/starter-kit';
 import { Link } from '@tiptap/extension-link';
@@ -22,22 +22,23 @@ import {
   buildResourceSuggestion,
 } from './ResourceExtension/ResourceExtention';
 import { ExtendedImage } from './ImagePicker';
-import { usePopoverContainer } from '../../components/Popover';
 import { FloatingMenuText } from './sharedEditorStyles';
 import * as Y from 'yjs';
 import {
+  dataBrowser,
+  useCanWrite,
   useDebouncedSave,
   useResource,
   useStore,
   type Core,
   type Resource,
+  type Server,
 } from '@tomic/react';
 import { EditorEvents } from './EditorEvents';
 import { useYSync } from './useYSync';
 import { randomItem } from '@helpers/randomItem';
 import { EditorWrapperBase } from './EditorWrapperBase';
 import styled from 'styled-components';
-import { transition } from '@helpers/transition';
 import { useSettings } from '@helpers/AppSettings';
 import { FullBubbleMenu } from './FullBubbleMenu';
 import {
@@ -45,7 +46,13 @@ import {
   ResourceNodeInline,
 } from './ResourceExtension/ResourceNode';
 import { IsInRTEContex } from '@hooks/useIsInRTE';
-import { FaGripVertical } from 'react-icons/fa6';
+import { FaGripVertical, FaLink, FaTable } from 'react-icons/fa6';
+import { useUpload } from '@hooks/useUpload';
+import FileHandler from '@tiptap/extension-file-handler';
+import { supportedImageTypes } from '@views/File/fileTypeUtils';
+import type { SuggestionItem } from './types';
+import { useNewResourceUI } from '@components/forms/NewForm/useNewResourceUI';
+import { addIf } from '@helpers/addIf';
 
 export type CollaborativeEditorProps = {
   placeholder?: string;
@@ -71,101 +78,197 @@ export default function CollaborativeEditor({
   onBlur,
 }: CollaborativeEditorProps): React.JSX.Element {
   const store = useStore();
+  const [color] = useState(randomItem(COLORS));
+  const showNewResourceUI = useNewResourceUI();
   const [save] = useDebouncedSave(resource, 2000);
   const { agent, drive } = useSettings();
   const agentResource = useResource<Core.Agent>(agent?.subject);
-  const containerRef = usePopoverContainer();
-  const color = randomItem(COLORS);
-  const container = containerRef.current ?? document.body;
-
+  const { upload } = useUpload(resource);
   const awareness = useYSync(resource, property, doc);
+  const canWrite = useCanWrite(resource);
 
-  const [extensions] = useState(() => [
-    StarterKit.configure({
-      undoRedo: false,
-      link: false,
-    }),
-    Typography,
-    Link.configure({
-      autolink: true,
-      openOnClick: true,
-      protocols: [
-        'http',
-        'https',
-        'mailto',
-        {
-          scheme: 'tel',
-          optionalSlashes: true,
-        },
+  const uploadAndInsertImage = async (
+    currentEditor: Editor,
+    files: File[],
+    pos: number,
+  ) => {
+    const subjects = await upload(files);
+
+    for (const imageSubject of subjects) {
+      const image = await store.getResource<Server.File>(imageSubject);
+
+      currentEditor.commands.insertContentAt(pos, {
+        type: 'image',
+        attrs: { src: image.props.downloadUrl },
+      });
+    }
+  };
+
+  const editor = useEditor(
+    {
+      extensions: [
+        StarterKit.configure({
+          undoRedo: false,
+          link: false,
+        }),
+        Typography,
+        Link.extend({
+          parseHTML: () => [
+            {
+              tag: 'a[href]',
+              getAttrs: node => {
+                // Links with a data-type are custom nodes that should be ignored by the link extension
+                if (node.getAttribute('data-type')) {
+                  return false;
+                }
+
+                // Default link parsing
+                return {
+                  href: node.getAttribute('href'),
+                  target: node.getAttribute('target'),
+                };
+              },
+            },
+          ],
+        }).configure({
+          autolink: true,
+          openOnClick: true,
+          protocols: [
+            'http',
+            'https',
+            'mailto',
+            {
+              scheme: 'tel',
+              optionalSlashes: true,
+            },
+          ],
+          HTMLAttributes: {
+            class: 'tiptap-link',
+            rel: 'noopener noreferrer',
+            target: '_blank',
+          },
+        }),
+        ExtendedImage.configure({
+          uploadImage: upload,
+          HTMLAttributes: {
+            class: 'tiptap-image',
+          },
+        }),
+        Placeholder.configure({
+          placeholder: placeholder ?? 'Start typing...',
+        }),
+        SlashCommands.configure({
+          suggestion: buildSuggestion(document.body, [
+            {
+              title: 'Resource',
+              id: 'resource',
+              icon: FaLink,
+              command: ({ range }) =>
+                editor
+                  .chain()
+                  .focus()
+                  .deleteRange(range)
+                  .insertContent('@')
+                  .run(),
+            } as SuggestionItem,
+            {
+              title: 'Data Table',
+              id: 'data-table',
+              icon: FaTable,
+              command: ({ range }) => {
+                showNewResourceUI(dataBrowser.classes.table, resource.subject, {
+                  skipNavigation: true,
+                  onCreated: table => {
+                    editor
+                      .chain()
+                      .focus()
+                      .deleteRange(range)
+                      .setResource({ subject: table.subject })
+                      .run();
+                  },
+                });
+              },
+            },
+          ]),
+        }),
+        ResourceCommands.configure({
+          suggestion: buildResourceSuggestion(document.body, store, drive),
+        }),
+        ResourceNode.configure({
+          store,
+        }),
+        ResourceNodeInline.configure({
+          store,
+        }),
+        Collaboration.configure({
+          document: doc,
+          field: 'content',
+        }),
+        ...addIf(
+          canWrite,
+          CollaborationCaret.configure({
+            provider: {
+              awareness,
+            },
+            user: {
+              name: agentResource.title,
+              color,
+            },
+          }),
+        ),
+        TextAlign.configure({
+          types: ['heading', 'paragraph'],
+        }),
+        TaskList,
+        TaskItem.configure({
+          nested: true,
+        }),
+        TextStyle,
+        Color,
+        BackgroundColor,
+        FileHandler.configure({
+          allowedMimeTypes: Array.from(supportedImageTypes),
+          onDrop: (currentEditor, files, pos) => {
+            uploadAndInsertImage(currentEditor, files, pos);
+          },
+          onPaste: (currentEditor, files, htmlContent) => {
+            if (htmlContent) {
+              // if there is htmlContent, stop manual insertion & let other extensions handle insertion via inputRule
+              // you could extract the pasted file from this url string and upload it to a server for example
+
+              return false;
+            }
+
+            uploadAndInsertImage(
+              currentEditor,
+              files,
+              currentEditor.state.selection.anchor,
+            );
+          },
+        }),
       ],
-      HTMLAttributes: {
-        class: 'tiptap-link',
-        rel: 'noopener noreferrer',
-        target: '_blank',
-      },
-    }),
-    ExtendedImage.configure({
-      HTMLAttributes: {
-        class: 'tiptap-image',
-      },
-    }),
-    Placeholder.configure({
-      placeholder: placeholder ?? 'Start typing...',
-    }),
-    SlashCommands.configure({
-      suggestion: buildSuggestion(container),
-    }),
-    ResourceCommands.configure({
-      suggestion: buildResourceSuggestion(container, store, drive),
-    }),
-    ResourceNode,
-    ResourceNodeInline,
-    Collaboration.configure({
-      document: doc,
-      field: 'content',
-    }),
-    CollaborationCaret.configure({
-      provider: {
-        awareness,
-      },
-      user: {
-        name: agentResource.title,
-        color,
-      },
-    }),
-    TextAlign.configure({
-      types: ['heading', 'paragraph'],
-    }),
-    TaskList,
-    TaskItem.configure({
-      nested: true,
-    }),
-    TextStyle,
-    Color,
-    BackgroundColor,
-  ]);
-
-  const editor = useEditor({
-    extensions,
-    onBlur,
-    autofocus: !!autoFocus,
-    editorProps: {
-      attributes: {
-        ...(id && { id }),
-        ...(labelId && { 'aria-labelledby': labelId }),
-        spellcheck: 'true',
+      editable: canWrite,
+      onBlur,
+      autofocus: !!autoFocus,
+      editorProps: {
+        attributes: {
+          ...(id && { id }),
+          ...(labelId && { 'aria-labelledby': labelId }),
+          spellcheck: 'true',
+        },
       },
     },
-  });
+    [canWrite],
+  );
 
   useEffect(() => {
     if (agentResource) {
-      editor.commands.updateUser({
+      editor.commands.updateUser?.({
         name: agentResource.props.name ?? 'Untitled Agent',
         color,
       });
     }
-  }, [agentResource]);
+  }, [agentResource, editor.commands, color, canWrite]);
 
   return (
     <IsInRTEContex value={true}>
@@ -183,25 +286,31 @@ export default function CollaborativeEditor({
             <FullBubbleMenu />
             <EditorEvents onChange={save} />
           </EditorContent>
+          <ClickUnderHandler onClick={() => editor?.commands.focus('end')} />
         </StyledEditorWrapper>
       </TiptapContextProvider>
     </IsInRTEContex>
   );
 }
 
+const ClickUnderHandler = styled.div`
+  flex: 1;
+  width: 100%;
+  min-height: 10rem;
+`;
+
 export const StyledEditorWrapper = styled(EditorWrapperBase)`
   box-shadow: none;
-  min-height: 10rem;
+  min-height: 100%;
   border-radius: ${p => p.theme.radius};
   min-height: 10rem;
-  padding: ${p => p.theme.size()};
   width: 100%;
-  margin-bottom: 10rem;
-  ${transition('box-shadow')}
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 
   & .tiptap {
     width: 100%;
-    min-height: 10rem;
     ::spelling-error {
       text-decoration: wavy red underline;
     }
@@ -215,10 +324,5 @@ export const StyledEditorWrapper = styled(EditorWrapperBase)`
     justify-content: center;
     width: 1.5rem;
     color: ${p => p.theme.colors.textLight2};
-
-    /* svg {
-      width: 1.25rem;
-      height: 1.25rem;
-    } */
   }
 `;

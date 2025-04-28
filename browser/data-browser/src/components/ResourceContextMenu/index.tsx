@@ -41,6 +41,14 @@ import { addIf } from '../../helpers/addIf';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { newContextItem, useAISidebar } from '../AI/AISidebarContext';
 import { type AIAtomicResourceMessageContext } from '@chunks/AI/types';
+import { useCustomContextItemsContext } from './CustomContextItemsContext';
+
+export {
+  CustomContextItemsProvider,
+  useCustomContextItems,
+} from './CustomContextItemsContext';
+
+export { DIVIDER, type DropdownItem } from '../Dropdown';
 
 export const ContextMenuOptions = {
   View: 'view',
@@ -98,6 +106,7 @@ export function ResourceContextMenu({
   const canWrite = useCanWrite(resource);
   const { enableScope } = useQueryScopeHandler(subject);
   const { setContextItems, isOpen, setIsOpen } = useAISidebar();
+  const { items: customItems } = useCustomContextItemsContext();
   // Try to not have a useResource hook in here, as that will lead to many costly fetches when the user enters a new subject
 
   const addToChat = () => {
@@ -130,7 +139,7 @@ export function ResourceContextMenu({
     } catch (error) {
       toast.error(error.message);
     }
-  }, [resource, navigate, currentSubject, onAfterDelete]);
+  }, [resource, navigate, currentSubject, subject, onAfterDelete]);
 
   if (subject === undefined) {
     return null;
@@ -242,13 +251,16 @@ export function ResourceContextMenu({
     ),
   ];
 
+  // Add custom items from context (if any) before filtering
+  const allItems = [...items, ...customItems];
+
   const filteredItems = showOnly
-    ? items.filter(
+    ? allItems.filter(
         item =>
           !isItem(item) ||
           showOnly.includes(item.id as ContextMenuOptionsUnion),
       )
-    : items;
+    : allItems;
 
   const triggerComp =
     trigger ??

@@ -1,11 +1,6 @@
-import {
-  buildSearchSubject,
-  removeCachedSearchResults,
-  SearchOpts,
-  urls,
-} from '@tomic/lib';
-import { useEffect, useMemo, useState } from 'react';
-import { useArray, useResource, useServerURL, useStore } from './index.js';
+import { removeCachedSearchResults, SearchOpts } from '@tomic/lib';
+import { useEffect, useState } from 'react';
+import { useStore } from './index.js';
 import { useDebounce } from './useDebounce.js';
 
 interface SearchResults {
@@ -24,12 +19,6 @@ interface SearchOptsHook extends SearchOpts {
   allowEmptyQuery?: boolean;
 }
 
-const noResultsResult = {
-  results: [],
-  loading: false,
-  error: undefined,
-};
-
 /** Escape values for use in filter string */
 export const escapeFilterValue = (value: string) =>
   value.replace(/[+^`:{}"[\]()!\\*\s]/gm, '\\$&');
@@ -39,55 +28,53 @@ export function useServerSearch(
   query: string | undefined,
   opts: SearchOptsHook = {},
 ): SearchResults {
-  const { debounce = 50 } = opts;
+  const { debounce = 50, allowEmptyQuery = false, ...searchOpts } = opts;
   const store = useStore();
   const [results, setResults] = useState<string[]>([]);
-  const [serverURL] = useServerURL();
-  // Calculating the query takes a while, so we debounce it
+  const [error, setError] = useState<Error | undefined>(undefined);
+  const [loading, setLoading] = useState(false);
   const debouncedQuery = useDebounce(query, debounce) ?? '';
+  const [prevDebounedQuery, setPrevDebounedQuery] = useState(debouncedQuery);
 
-  const searchSubjectURL: string = useMemo(
-    () => buildSearchSubject(serverURL, debouncedQuery, opts),
-    [debouncedQuery, opts, serverURL],
-  );
+  if (prevDebounedQuery !== debouncedQuery) {
+    setPrevDebounedQuery(debouncedQuery);
+    setLoading(true);
 
-  const resource = useResource(searchSubjectURL, {
-    noWebSocket: true,
-  });
-
-  const [resultsIn] = useArray(resource, urls.properties.endpoint.results);
-
-  // Only set new results if the resource is no longer loading, which improves UX
-  useEffect(() => {
-    if (!resource.loading && resultsIn) {
-      setResults(resultsIn as string[]);
+    if (!debouncedQuery && !allowEmptyQuery) {
+      setResults([]);
     }
-  }, [
-    // Prevent re-rendering if the resultsIn is the same
-    resultsIn?.toString(),
-    resource.loading,
-  ]);
+  }
+
+  useEffect(() => {
+    if (!debouncedQuery && !allowEmptyQuery) {
+      return;
+    }
+
+    store
+      .search(debouncedQuery, searchOpts)
+      .then(r => {
+        setResults(r);
+        setError(undefined);
+      })
+      .catch(e => {
+        setError(e);
+        setResults([]);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [store, allowEmptyQuery, debouncedQuery, searchOpts]);
 
   // Remove cached results when component unmounts.
   useEffect(() => {
     return () => {
       removeCachedSearchResults(store);
     };
-  }, []);
+  }, [store]);
 
-  const result = useMemo(
-    () => ({
-      results,
-      loading: resource.loading,
-      error: resource.error,
-    }),
-    [results, resource.loading, resource.error],
-  );
-
-  if (!query && !opts.allowEmptyQuery) {
-    return noResultsResult;
-  }
-
-  // Return the width so we can use it in our components
-  return result;
+  return {
+    results,
+    loading,
+    error,
+  };
 }

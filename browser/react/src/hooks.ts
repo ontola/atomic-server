@@ -32,25 +32,44 @@ import {
 } from '@tomic/lib';
 import type * as Y from 'yjs';
 
+export type UseResourceOptions = FetchOpts & {
+  /**
+   * If provided, the hook will only update the resource when the properties in this array change value.
+   * Useful for avoiding large rerenders in performance critical components.
+   */
+  track?: string[];
+};
+
 /**
  * Hook for getting a Resource in a React component. Will try to fetch the
  * subject and add its parsed values to the store.
  */
 export function useResource<C extends OptionalClass = never>(
   subject: string = unknownSubject,
-  opts?: FetchOpts,
+  opts: UseResourceOptions = {},
 ): Resource<C> {
+  const { track, ...fetchOpts } = opts;
   const store = useStore();
+  const [prevSubject, setPrevSubject] = useState(subject);
   const [resource, setResource] = useState<Resource<C>>(() =>
-    store.getResourceLoading(subject, opts),
+    store.getResourceLoading(subject, fetchOpts),
+  );
+  const unsubLoadingChangeRef = useRef(
+    resource.on(ResourceEvents.LoadingChange, () => {
+      setResource(proxyResource(resource.__internalObject));
+    }),
   );
 
-  const memoizedOpts = useMemoizedOpts(opts);
-  // If the subject changes, make sure to change the resource!
-  // When a component mounts, it needs to let the store know that it will subscribe to changes to that resource.
-  useEffect(() => {
-    setResource(proxyResource(store.getResourceLoading(subject, memoizedOpts)));
+  const memoizedOpts = useMemoizedOpts(fetchOpts);
 
+  // Update the resource when the subject changes
+  if (subject !== prevSubject) {
+    setPrevSubject(subject);
+    setResource(proxyResource(store.getResourceLoading(subject, memoizedOpts)));
+  }
+
+  // When a component mounts or the subject changes, it needs to let the store know that it will subscribe to changes to that resource.
+  useEffect(() => {
     return store.subscribe(subject, (updated: Resource<C>) => {
       setResource(proxyResource(updated));
     });
@@ -59,10 +78,23 @@ export function useResource<C extends OptionalClass = never>(
   }, [store, subject, memoizedOpts]);
 
   useEffect(() => {
-    return resource.__internalObject.on(ResourceEvents.LocalChange, () => {
+    return resource.__internalObject.on(ResourceEvents.LocalChange, prop => {
+      if (track === undefined || track.includes(prop)) {
+        setResource(proxyResource(resource.__internalObject));
+      }
+    });
+  }, [resource.__internalObject, track]);
+
+  // Update the proxy when the resource is done loading.
+  useEffect(() => {
+    if (unsubLoadingChangeRef.current) {
+      unsubLoadingChangeRef.current();
+    }
+
+    return resource.__internalObject.on(ResourceEvents.LoadingChange, () => {
       setResource(proxyResource(resource.__internalObject));
     });
-  }, [store, resource.__internalObject]);
+  }, [resource.__internalObject]);
 
   return resource;
 }
@@ -245,12 +277,12 @@ export function useValue(
 
     timeoutId.current = setTimeout(async () => {
       try {
-        await resource.save();
+        await resource.__internalObject.save();
       } catch (e) {
         store.notifyError(e);
       }
     }, commitDebounce);
-  }, [resource, store, commitDebounce, commit]);
+  }, [resource.__internalObject, store, commitDebounce, commit]);
 
   /**
    * Validates the value. If it fails, it calls the function in the second
@@ -260,7 +292,7 @@ export function useValue(
     async (newVal: JSONValue): Promise<void> => {
       if (newVal === undefined) {
         // remove the value
-        resource.remove(propertyURL);
+        resource.__internalObject.remove(propertyURL);
         set(undefined);
         saveResource();
 
@@ -272,7 +304,7 @@ export function useValue(
       // Validates and sets a property / value combination. Will invoke the
       // callback if the value is not valid.
       try {
-        await resource.set(propertyURL, newVal, validate);
+        await resource.__internalObject.set(propertyURL, newVal, validate);
         saveResource();
         handleValidationError?.(undefined);
       } catch (e) {
@@ -285,7 +317,8 @@ export function useValue(
     },
 
     [
-      resource,
+      // Optimization: We don't need to track the whole resource here since the underlying reference is stable.
+      resource.__internalObject,
       handleValidationError,
       store,
       validate,
@@ -293,14 +326,6 @@ export function useValue(
       propertyURL,
     ],
   );
-
-  useEffect(() => {
-    return resource.on(ResourceEvents.LocalChange, (prop, value) => {
-      if (prop === propertyURL) {
-        set(value);
-      }
-    });
-  }, [resource, propertyURL]);
 
   // Update value when resource changes.
   if (resource !== prevResourceReference) {

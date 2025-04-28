@@ -1,4 +1,4 @@
-import { core, Resource, useString } from '@tomic/react';
+import { core, Resource, unknownSubject, useString } from '@tomic/react';
 import { useCallback, useEffect, useMemo, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { ErrorChip } from '../../../components/forms/ErrorChip';
@@ -28,6 +28,7 @@ export function PropertyForm({
     setError: setNameError,
     setTouched: setNameTouched,
   } = useValidation('Required');
+
   const valueOptions = useMemo(
     () => ({
       handleValidationError(e: Error | undefined) {
@@ -38,7 +39,7 @@ export function PropertyForm({
         }
       },
     }),
-    [],
+    [setNameError],
   );
 
   const [name, setName] = useString(
@@ -73,7 +74,12 @@ export function PropertyForm({
 
   // If name was already set remove the error.
   useEffect(() => {
-    if (existingProperty && !name && shortname) {
+    if (
+      resource.subject !== unknownSubject &&
+      existingProperty &&
+      !name &&
+      shortname
+    ) {
       setName(shortname);
       setNameError(undefined);
     }

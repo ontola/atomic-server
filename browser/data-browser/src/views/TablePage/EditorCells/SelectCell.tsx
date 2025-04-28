@@ -6,12 +6,10 @@ import {
   useResource,
   useStore,
 } from '@tomic/react';
-import { useCallback, useEffect, useMemo, useState, type JSX } from 'react';
+import { memo, useEffect, useState, type JSX } from 'react';
 import { FaPlus } from 'react-icons/fa';
-import * as RadixPopover from '@radix-ui/react-popover';
 import { styled } from 'styled-components';
 import { IconButton } from '../../../components/IconButton/IconButton';
-import { Popover } from '../../../components/Popover';
 import { TagButton, Tag } from '../../../components/Tag';
 import { CellContainer, DisplayCellProps, EditCellProps } from './Type';
 import {
@@ -27,9 +25,9 @@ import {
   useCellOptions,
 } from '../../../components/TableEditor';
 import { useTableEditorContext } from '../../../components/TableEditor/TableEditorContext';
-import { CellOptions } from '../../../components/TableEditor/hooks/useCellOptions';
 import { AbsoluteCell } from './CellComponents';
 import { FaXmark } from 'react-icons/fa6';
+import { CustomPopover } from '@components/CustomPopover';
 
 const TAG_SPACING = '0.5rem';
 
@@ -50,102 +48,103 @@ function buildListWithTitles(
     });
 }
 
+const Trigger: React.FC<{ popoverTarget: string }> = memo(
+  props => {
+    return (
+      <IconButton
+        title='Add tag'
+        type='button'
+        onClick={e => e.stopPropagation()}
+        {...props}
+      >
+        <StyledIcon />
+      </IconButton>
+    );
+  },
+  (prev, next) => prev.popoverTarget === next.popoverTarget,
+);
+
+Trigger.displayName = 'Trigger';
+
 function SelectCellEdit({
   value,
   property,
   onChange,
 }: EditCellProps<JSONValue>): JSX.Element {
   const val = (value as string[]) ?? emptyArray;
-
   const store = useStore();
   const propertyResource = useResource(property);
   const [allowsOnly] = useArray(propertyResource, core.properties.allowsOnly);
   const [query, setQuery] = useState('');
-  const filteredTags = useMemo(() => {
-    const listWithTitles = buildListWithTitles(store, allowsOnly, val);
 
-    return listWithTitles
-      .filter(v => v.title.includes(query))
-      .map(ft => ft.subject);
-  }, [store, allowsOnly, val, query]);
+  const filteredTags = buildListWithTitles(store, allowsOnly, val)
+    .filter(v => v.title.includes(query))
+    .map(ft => ft.subject);
+
   const [open, setOpen] = useState(true);
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   const { activeCellRef } = useTableEditorContext();
 
-  const cellOptions = useMemo((): CellOptions => {
-    const disabledKeyboardInteractions = new Set<KeyboardInteraction>([
-      KeyboardInteraction.EditNextRow,
-    ]);
+  const disabledKeyboardInteractions = new Set<KeyboardInteraction>([
+    KeyboardInteraction.EditNextRow,
+  ]);
 
-    if (open) {
-      disabledKeyboardInteractions.add(KeyboardInteraction.ExitEditMode);
-    }
+  if (open) {
+    disabledKeyboardInteractions.add(KeyboardInteraction.ExitEditMode);
+  }
 
-    return {
-      disabledKeyboardInteractions,
-      hideActiveIndicator: true,
-    };
-  }, [val, open]);
+  const cellOptions = {
+    disabledKeyboardInteractions,
+    hideActiveIndicator: true,
+  };
 
   useCellOptions(cellOptions);
 
-  const handleSearch = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setQuery(stringToSlug(e.target.value));
     setSelectedIndex(0);
-  }, []);
+  };
 
-  const handleAddTag = useCallback(
-    (subject: string) => {
-      onChange(Array.from(new Set([...val, subject])));
-    },
-    [val, onChange],
-  );
+  const handleAddTag = (subject: string) => {
+    onChange(Array.from(new Set([...val, subject])));
+  };
 
-  const handleRemoveTag = useCallback(
-    (subject: string) => {
-      onChange(val.filter(tagSubject => tagSubject !== subject));
-    },
-    [val, onChange],
-  );
+  const handleRemoveTag = (subject: string) => {
+    onChange(val.filter(tagSubject => tagSubject !== subject));
+  };
 
-  const changeSelection = useCallback(
-    (mod: number) => {
-      setSelectedIndex(prev => loopingIndex(prev + mod, filteredTags.length));
-    },
-    [filteredTags],
-  );
+  const changeSelection = (mod: number) => {
+    setSelectedIndex(prev => loopingIndex(prev + mod, filteredTags.length));
+  };
 
   useEffect(() => {
     if (!open) {
       activeCellRef.current?.focus();
     }
-  }, [open]);
+  }, [activeCellRef, open]);
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLDivElement>) => {
-      switch (e.key) {
-        case 'ArrowUp':
-          e.preventDefault();
-          changeSelection(-1);
-          break;
-        case 'ArrowDown':
-          e.preventDefault();
-          changeSelection(1);
-          break;
-        case 'Enter':
-          e.preventDefault();
-          handleAddTag(filteredTags[selectedIndex]);
-          break;
-        case 'Escape':
-          e.preventDefault();
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    switch (e.key) {
+      case 'ArrowUp':
+        e.preventDefault();
+        changeSelection(-1);
+        break;
+      case 'ArrowDown':
+        e.preventDefault();
+        changeSelection(1);
+        break;
+      case 'Enter':
+        e.preventDefault();
+        handleAddTag(filteredTags[selectedIndex]);
+        break;
+      case 'Escape':
+        e.preventDefault();
 
-          setOpen(false);
-          break;
-      }
-    },
-    [changeSelection, filteredTags, selectedIndex, open],
-  );
+        setOpen(false);
+        break;
+    }
+  };
 
   return (
     <AbsoluteCell>
@@ -160,23 +159,23 @@ function SelectCellEdit({
             </TagIconButton>
           </Tag>
         ))}
-        <Popover
+        <CustomPopover
           modal
-          defaultOpen
-          noLock
           open={open}
+          noLock
           onOpenChange={setOpen}
-          Trigger={
-            <IconButton title='Add tag' as={RadixPopover.Trigger}>
+          Trigger={props => (
+            <IconButton title='Add tag' type='button' {...props}>
               <StyledIcon />
             </IconButton>
-          }
+          )}
         >
           <Content onKeyDown={handleKeyDown}>
             <SearchInputWrapper>
               <InputStyled
                 placeholder='Filter tags...'
                 onChange={handleSearch}
+                autoFocus
               />
             </SearchInputWrapper>
             <ResultWrapper>
@@ -192,7 +191,7 @@ function SelectCellEdit({
               </Row>
             </ResultWrapper>
           </Content>
-        </Popover>
+        </CustomPopover>
       </Row>
     </AbsoluteCell>
   );

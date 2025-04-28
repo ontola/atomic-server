@@ -47,6 +47,10 @@ export const FullBubbleMenu: React.FC = () => {
     },
   ];
 
+  if (!editor.view) {
+    return null;
+  }
+
   return (
     <BubbleMenu
       extraItems={<>{colorMenuOpen && <ColorMenu />}</>}

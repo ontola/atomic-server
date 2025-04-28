@@ -16,10 +16,6 @@ export const TiptapContextProvider = ({
   editor,
   children,
 }: React.PropsWithChildren<TipTapContextProviderProps>) => {
-  if (!editor) {
-    return null;
-  }
-
   return (
     <TiptapContext.Provider value={editor}>{children}</TiptapContext.Provider>
   );

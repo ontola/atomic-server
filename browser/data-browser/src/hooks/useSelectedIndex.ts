@@ -1,10 +1,22 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { loopingIndex } from '../helpers/loopingIndex';
+import { useOnValueChange } from '@helpers/useOnValueChange';
 
+interface UseSelectedIndexOptions {
+  initialIndex?: number;
+  /** A key to identify if the list changed, usually this would be the search query. */
+  key?: string;
+}
+
+/**
+ * Building blocks for building a combobox or dropdown menu.
+ * Handles things like keyboard navigation, mouse over, click and keyboard/mouse takeover.
+ * Make sure to apply all listeners returned by this hook to the relevant elements.
+ */
 export function useSelectedIndex<T, K>(
   list: T[],
   onSelect: (index: number | undefined) => void,
-  initialIndex?: number,
+  { initialIndex, key }: UseSelectedIndexOptions = {},
 ): {
   selectedIndex: number | undefined;
   onKeyDown: (e: React.KeyboardEvent<K>) => void;
@@ -58,9 +70,9 @@ export function useSelectedIndex<T, K>(
     setSelectedIndex(initialIndex);
   };
 
-  useEffect(() => {
-    setSelectedIndex(undefined);
-  }, [list]);
+  useOnValueChange(() => {
+    setSelectedIndex(initialIndex);
+  }, [key]);
 
   return {
     selectedIndex,

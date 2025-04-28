@@ -1,4 +1,4 @@
-import { useEffect, useState, type JSX } from 'react';
+import { useState, type JSX } from 'react';
 import {
   Dialog,
   DialogActions,
@@ -10,6 +10,7 @@ import { ResourceSelector } from '../../../components/forms/ResourceSelector';
 import { Resource, urls, useArray } from '@tomic/react';
 import { Button } from '../../../components/Button';
 import { FormValidationContextProvider } from '../../../components/forms/formValidation/FormValidationContextProvider';
+import { useOnValueChange } from '@helpers/useOnValueChange';
 
 interface ExternalPropertyDialogProps {
   open: boolean;
@@ -39,12 +40,12 @@ export function ExternalPropertyDialog({
     }
   };
 
-  useEffect(() => {
+  useOnValueChange(() => {
     if (open) {
       show();
       setSubject(undefined);
     }
-  }, [open, show]);
+  }, [open]);
 
   return (
     <Dialog {...dialogProps}>

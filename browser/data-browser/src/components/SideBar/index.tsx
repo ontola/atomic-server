@@ -54,7 +54,7 @@ export function SideBar(): JSX.Element {
     if (!isWideScreen) {
       setSideBarLocked(false);
     }
-  }, [isWideScreen]);
+  }, [isWideScreen, setSideBarLocked]);
 
   const sidebarVisible = sideBarLocked || (hoveringOverSideBar && isWideScreen);
 
@@ -141,6 +141,10 @@ const StyledNav = styled.nav.attrs<StyledNavProps>(p => ({
   overflow-y: auto;
   overflow-x: hidden;
   padding-bottom: ${p => p.theme.size()};
+
+  @media print {
+    display: none;
+  }
 `;
 
 const MenuWrapper = styled.div`

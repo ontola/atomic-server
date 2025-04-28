@@ -6,9 +6,10 @@ import {
   useStore,
   useString,
 } from '@tomic/react';
-import { startTransition, useCallback, useEffect, useState } from 'react';
+import { startTransition, useState } from 'react';
 import { debounce } from '../../helpers/debounce';
 import { paths } from '../../routes/paths';
+import { useOnValueChange } from '@helpers/useOnValueChange';
 
 type UsePreviewReturnType = {
   preview?: string;
@@ -98,39 +99,36 @@ export function usePreview(resource: Resource): UsePreviewReturnType {
   const [error, setHasError] = useState<Error | undefined>(undefined);
   const [loading, setLoading] = useState<boolean>(false);
 
-  const update = useCallback(
-    (websiteURL: string) => {
-      try {
-        new URL(websiteURL);
-      } catch (e) {
-        setHasError(e);
+  const update = (websiteURL: string) => {
+    try {
+      new URL(websiteURL);
+    } catch (e) {
+      setHasError(e);
 
-        return;
-      }
+      return;
+    }
 
-      setLoading(true);
+    setLoading(true);
 
-      debouncedFetch(
-        websiteURL,
-        name,
-        store.getServerUrl(),
-        resource,
-        setPreview,
-        setName,
-        setHasError,
-        setLoading,
-        setImageUrl,
-        setDescription,
-      );
-    },
-    [name, resource, store],
-  );
+    debouncedFetch(
+      websiteURL,
+      name,
+      store.getServerUrl(),
+      resource,
+      setPreview,
+      setName,
+      setHasError,
+      setLoading,
+      setImageUrl,
+      setDescription,
+    );
+  };
 
-  useEffect(() => {
+  useOnValueChange(() => {
     if (resource.isReady() && preview === undefined && url) {
       update(url);
     }
-  }, [preview, resource.isReady()]);
+  }, [preview, resource.isReady(), url]);
 
   return { preview, error, update, loading };
 }

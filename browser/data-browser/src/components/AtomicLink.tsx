@@ -1,4 +1,4 @@
-import { ReactNode, forwardRef, type JSX } from 'react';
+import { ReactNode, useCallback, useEffect, useRef } from 'react';
 import { styled } from 'styled-components';
 import { constructOpenURL, pathToURL } from '../helpers/navigation';
 import { FaExternalLinkAlt } from 'react-icons/fa';
@@ -7,6 +7,7 @@ import { isRunningInTauri } from '../helpers/tauri';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import clsx from 'clsx';
 import { useIsInRTE } from '@hooks/useIsInRTE';
+import { useCombineRefs } from '@hooks/useCombineRefs';
 
 export interface AtomicLinkProps
   extends React.AnchorHTMLAttributes<HTMLAnchorElement> {
@@ -22,90 +23,130 @@ export interface AtomicLinkProps
   clean?: boolean;
   /** Used to extend with styled */
   className?: string;
+  ref?: React.Ref<HTMLAnchorElement>;
 }
 
 /**
  * Renders a link. Either a subject or a href is required. You can wrap this
  * around other components and pass the `clean` prop to skip styling.
  */
-export const AtomicLink = forwardRef<HTMLAnchorElement, AtomicLinkProps>(
-  (
-    { children, clean, subject, path, href, untabbable, className, ...props },
-    ref,
-  ): JSX.Element => {
-    const navigate = useNavigateWithTransition();
-    const isInRTE = useIsInRTE();
+export const AtomicLink: React.FC<React.PropsWithChildren<AtomicLinkProps>> = ({
+  children,
+  clean,
+  subject,
+  path,
+  href,
+  untabbable,
+  className,
+  ref,
+  ...props
+}) => {
+  const innerRef = useRef<HTMLAnchorElement>(null);
+  const combinedRef = useCombineRefs([ref, innerRef]);
+  const navigate = useNavigateWithTransition();
+  const isInRTE = useIsInRTE();
 
-    if (subject === undefined && href === undefined && path === undefined) {
-      return (
-        <ErrorLook>
-          No `subject`, `path` or `href` passed to this AtomicLink.
-        </ErrorLook>
-      );
+  let isOnCurrentPage: boolean;
+
+  const handleClick = (e: React.MouseEvent<HTMLElement>) => {
+    if (href) {
+      // When there is a regular URL, let the browser handle it
+      return;
     }
 
-    let isOnCurrentPage: boolean;
+    e.preventDefault();
 
-    try {
-      isOnCurrentPage = subject
-        ? window.location.toString() === constructOpenURL(subject)
-        : false;
-    } catch (e) {
-      return <span>{subject}</span>;
+    if (path) {
+      navigate(path);
+
+      return;
     }
 
-    const handleClick = (e: React.MouseEvent<HTMLElement>) => {
-      if (href) {
-        // When there is a regular URL, let the browser handle it
+    if (subject) {
+      if (isOnCurrentPage) {
         return;
       }
 
-      e.preventDefault();
+      navigate(constructOpenURL(subject));
+    }
+  };
 
-      if (path) {
-        navigate(path);
+  const constructHref = useCallback(
+    () => href || subject || pathToURL(path!),
+    [href, subject, path],
+  );
 
-        return;
-      }
+  let hrefConstructed: string | undefined = constructHref();
 
-      if (subject) {
-        if (isOnCurrentPage) {
-          return;
-        }
+  if (isInRTE) {
+    // HACK: The Tiptap editor has an event handler that always opens links in new tabs. We can't disable it so we have to remove the href from links when inside the editor.
+    hrefConstructed = undefined;
+  }
 
-        navigate(constructOpenURL(subject));
-      }
+  useEffect(() => {
+    if (!innerRef.current) return;
+
+    if (!isInRTE) return;
+
+    // HACK: Because we remove the href from the links in the RTE we need to restore them when printing.
+    const handleBeforePrint = () => {
+      innerRef.current?.setAttribute('href', constructHref());
     };
 
-    let hrefConstructed: string | undefined =
-      href || subject || pathToURL(path!);
+    const handleAfterPrint = () => {
+      innerRef.current?.removeAttribute('href');
+    };
 
-    if (isInRTE) {
-      // HACK: The Tiptap editor has an event handler that always opens links in new tabs. We can't disable it so we have to remove the href from links when inside the editor.
-      hrefConstructed = undefined;
-    }
+    window.addEventListener('beforeprint', handleBeforePrint);
+    window.addEventListener('afterprint', handleAfterPrint);
 
+    return () => {
+      window.removeEventListener('beforeprint', handleBeforePrint);
+      window.removeEventListener('afterprint', handleAfterPrint);
+    };
+  }, [constructHref, isInRTE]);
+
+  if (subject === undefined && href === undefined && path === undefined) {
     return (
-      <LinkView
-        clean={clean}
-        className={clsx(className, { 'atomic-link_external': href && !clean })}
-        about={subject}
-        onClick={handleClick}
-        href={hrefConstructed}
-        disabled={isOnCurrentPage}
-        tabIndex={isOnCurrentPage || untabbable ? -1 : 0}
-        // Tauri always opens `_blank` in new tab, and ignores preventDefault() for some reason.
-        // https://github.com/tauri-apps/tauri/issues/1657
-        target={isRunningInTauri() && !href ? '' : '_blank'}
-        {...props}
-        ref={ref}
-      >
-        {children}
-        {href && !clean && <FaExternalLinkAlt size='0.8em' />}
-      </LinkView>
+      <ErrorLook>
+        No `subject`, `path` or `href` passed to this AtomicLink.
+      </ErrorLook>
     );
-  },
-);
+  }
+
+  try {
+    isOnCurrentPage = subject
+      ? window.location.toString() === constructOpenURL(subject)
+      : false;
+  } catch (e) {
+    return <span>{subject}</span>;
+  }
+
+  return (
+    <LinkView
+      clean={clean}
+      className={clsx(className, { 'atomic-link_external': href && !clean })}
+      about={subject}
+      onClick={handleClick}
+      href={hrefConstructed}
+      disabled={isOnCurrentPage}
+      tabIndex={isOnCurrentPage || untabbable ? -1 : 0}
+      // Tauri always opens `_blank` in new tab, and ignores preventDefault() for some reason.
+      // https://github.com/tauri-apps/tauri/issues/1657
+      target={isRunningInTauri() && !href ? '' : '_blank'}
+      {...props}
+      ref={combinedRef}
+    >
+      {children}
+      {href && !clean && (
+        <>
+          {' '}
+          <FaExternalLinkAlt size='0.8em' />
+        </>
+      )}
+    </LinkView>
+  );
+};
 
 AtomicLink.displayName = 'AtomicLink';
 
@@ -132,7 +173,6 @@ export const LinkView = styled.a<LinkViewProps>`
   }
 
   &.atomic-link_external {
-    display: inline-flex;
     align-items: center;
     gap: 0.6ch;
   }

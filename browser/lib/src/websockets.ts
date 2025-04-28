@@ -96,12 +96,13 @@ export async function authenticate(
   client.send('AUTHENTICATE ' + JSON.stringify(json));
 
   // Maybe this should happen after the authentication is confirmed?
-  fetchAll &&
+  if (fetchAll) {
     store.resources.forEach(r => {
       if (r.isUnauthorized() || r.loading) {
         store.fetchResourceFromServer(r.subject);
       }
     });
+  }
 }
 
 const defaultTimeout = 5000;
@@ -112,16 +113,7 @@ export async function fetchWebSocket(
   subject: string,
 ): Promise<Resource> {
   return new Promise((resolve, reject) => {
-    client.addEventListener('message', function listener(ev) {
-      const timeoutId = setTimeout(() => {
-        client.removeEventListener('message', listener);
-        reject(
-          new Error(
-            `Request for subject "${subject}" timed out after ${defaultTimeout}ms.`,
-          ),
-        );
-      }, defaultTimeout);
-
+    const listener = (ev: MessageEvent) => {
       if (ev.data.startsWith('RESOURCE ')) {
         parseResourceMessage(ev).forEach(resource => {
           // if it is the requested subject, return the resource
@@ -132,7 +124,18 @@ export async function fetchWebSocket(
           }
         });
       }
-    });
+    };
+
+    const timeoutId = setTimeout(() => {
+      client.removeEventListener('message', listener);
+      reject(
+        new Error(
+          `Request for subject "${subject}" timed out after ${defaultTimeout}ms.`,
+        ),
+      );
+    }, defaultTimeout);
+
+    client.addEventListener('message', listener);
     client.send('GET ' + subject);
   });
 }

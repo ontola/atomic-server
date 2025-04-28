@@ -16,7 +16,11 @@ import { CustomResourceDialogProps } from '../../useNewResourceUI';
 import { useCreateAndNavigate } from '../../../../../hooks/useCreateAndNavigate';
 import { useSettings } from '../../../../../helpers/AppSettings';
 
-export const NewDriveDialog: FC<CustomResourceDialogProps> = ({ onClose }) => {
+export const NewDriveDialog: FC<CustomResourceDialogProps> = ({
+  onClose,
+  onCreated,
+  skipNavigation,
+}) => {
   const store = useStore();
   const nameFieldId = useId();
   const { setDrive } = useSettings();
@@ -44,6 +48,7 @@ export const NewDriveDialog: FC<CustomResourceDialogProps> = ({ onClose }) => {
       },
       {
         noParent: true,
+        skipNavigation,
         onCreated: async resource => {
           // Add drive to the agents drive list.
           const agentResource = await store.getResource(agent.subject!);
@@ -79,12 +84,22 @@ export const NewDriveDialog: FC<CustomResourceDialogProps> = ({ onClose }) => {
 
           // Change current drive to new drive - do this before navigation
           setDrive(resource.subject);
+
+          onCreated?.(resource);
         },
       },
     );
 
     onClose();
-  }, [name, createAndNavigate, onClose, setDrive, store]);
+  }, [
+    name,
+    createAndNavigate,
+    onClose,
+    setDrive,
+    store,
+    onCreated,
+    skipNavigation,
+  ]);
 
   const [dialogProps, show, hide] = useDialog({ onSuccess, onCancel: onClose });
 

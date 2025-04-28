@@ -10,6 +10,7 @@ import { formatDate } from '../../../helpers/dates/formatDate';
 import { InputBase } from './InputBase';
 import { CellContainer, DisplayCellProps, EditCellProps } from './Type';
 import { useDateTimeInput } from '../../../components/forms/hooks/useDateTimeInput';
+import { useOnValueChange } from '@helpers/useOnValueChange';
 
 function DateTimeCellEdit({
   value,
@@ -53,7 +54,10 @@ function DateTimeCellDisplay({
     ),
   );
 
-  useEffect(() => {
+  useOnValueChange(() => {
+    // Relative date formatting is handled by the interval in useEffect
+    if (format === urls.instances.dateFormats.localRelative) return;
+
     setDisplayData(
       toDisplayData(
         value,
@@ -61,16 +65,18 @@ function DateTimeCellDisplay({
         true,
       ),
     );
+  }, [value, format]);
 
-    if (format === urls.instances.dateFormats.localRelative) {
-      const interval = setInterval(() => {
-        setDisplayData(
-          toDisplayData(value, urls.instances.dateFormats.localRelative, true),
-        );
-      }, 1000 * 60);
+  useEffect(() => {
+    if (format !== urls.instances.dateFormats.localRelative) return;
 
-      return () => clearInterval(interval);
-    }
+    const interval = setInterval(() => {
+      setDisplayData(
+        toDisplayData(value, urls.instances.dateFormats.localRelative, true),
+      );
+    }, 1000 * 60);
+
+    return () => clearInterval(interval);
   }, [value, format]);
 
   return <>{displayData}</>;

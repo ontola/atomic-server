@@ -17,6 +17,8 @@ import { ResourceSelector } from '../../../ResourceSelector';
 export const NewCollectionDialog: FC<CustomResourceDialogProps> = ({
   parent,
   onClose,
+  skipNavigation,
+  onCreated,
 }) => {
   const [name, setName] = useState('New Collection');
   const [valueFilter, setValue] = useState<string | undefined>();
@@ -41,12 +43,23 @@ export const NewCollectionDialog: FC<CustomResourceDialogProps> = ({
         },
         {
           parent,
+          onCreated,
+          skipNavigation,
         },
       );
 
       onClose();
     },
-    [valueFilter, onClose, propertyFilter],
+    [
+      valueFilter,
+      createResourceAndNavigate,
+      onClose,
+      parent,
+      skipNavigation,
+      onCreated,
+      name,
+      propertyFilter,
+    ],
   );
 
   useEffect(() => {

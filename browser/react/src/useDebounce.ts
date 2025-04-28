@@ -1,4 +1,4 @@
-import type { Resource } from '@tomic/lib';
+import { Resource } from '@tomic/lib';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 // T is a generic type for value parameter, our case this will be string
@@ -41,7 +41,7 @@ export function useDebouncedSave(
 
     timeoutId.current = setTimeout(async () => {
       try {
-        await resource.save();
+        await resource.__internalObject.save();
         setSavePending(false);
       } catch (e) {
         if (onError) {
@@ -53,7 +53,7 @@ export function useDebouncedSave(
     }, timeout);
 
     setSavePending(true);
-  }, [resource, timeout, onError]);
+  }, [resource.__internalObject, timeout, onError]);
 
   return [save, savePending];
 }

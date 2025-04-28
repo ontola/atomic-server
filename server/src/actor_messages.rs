@@ -53,4 +53,6 @@ pub struct YSyncUpdate {
     pub property: String,
     pub awareness_update: Option<String>,
     pub doc_update: Option<String>,
+    #[serde(skip)]
+    pub addr: Option<Addr<crate::handlers::web_sockets::WebSocketConnection>>,
 }

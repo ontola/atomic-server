@@ -1,7 +1,6 @@
 {
   // The linter in the CI is quite strict, so running `cargo fmt` on save is probably a good idea!
   "editor.formatOnSave": true,
-  "files.autoSave": "onFocusChange",
   "rust-analyzer.checkOnSave.command": "clippy",
   "search.exclude": {
     "**/.git": true,
@@ -20,17 +19,10 @@
   "eslint.alwaysShowStatus": true,
   "eslint.format.enable": true,
   "eslint.lintTask.enable": true,
-  "eslint.quiet": true,
   "editor.codeActionsOnSave": {
     "source.fixAll.eslint": "explicit"
   },
-  "eslint.workingDirectories": [
-    "./data-browser",
-    "./react",
-    "./lib",
-    "./cli",
-    "./svelte"
-  ],
+  "eslint.workingDirectories": [{ "directory": "browser" }],
   "typescript.preferences.preferTypeOnlyAutoImports": true,
   "rustTestExplorer.rootCargoManifestFilePath": "./Cargo.toml",
   // This won't work in multi-root workspaces, could be fixed by using a rust-analyzer.toml once there is some more documentation on that.

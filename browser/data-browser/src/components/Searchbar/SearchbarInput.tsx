@@ -239,7 +239,7 @@ export const SearchbarInput: React.FC<SearchbarInputProps> = ({
     onClick: onTagClick,
     resetIndex,
     usingKeyboard,
-  } = useSelectedIndex(filteredTagList, onSelect);
+  } = useSelectedIndex(filteredTagList, onSelect, { key: tagQueryValue });
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (tagRect) {

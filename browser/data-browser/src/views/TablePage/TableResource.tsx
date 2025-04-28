@@ -36,7 +36,6 @@ const columnToKey = (column: Property) => column.subject;
 export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
   const store = useStore();
   const titleId = useId();
-
   const canWrite = useCanWrite(resource);
 
   const { tableClass, sorting, setSortBy, collection, invalidateCollection } =
@@ -123,7 +122,7 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
     },
 
     // Resource can update a lot but its internals are stable so removing it from the array saves a lot of rerenders and shouldn't cause issues.
-    // eslint-disable-next-line react-hooks/react-compiler, react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [collection, columns, invalidateCollection, resource.subject],
   );
 

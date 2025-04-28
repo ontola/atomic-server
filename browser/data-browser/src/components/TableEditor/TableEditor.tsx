@@ -58,6 +58,7 @@ interface FancyTableProps<T> {
   onRowExpand?: (index: number) => void;
   HeadingComponent: TableHeadingComponent<T>;
   NewColumnButtonComponent: React.ComponentType;
+  ref?: React.RefObject<HTMLDivElement | null>;
 }
 
 interface RowProps {
@@ -101,7 +102,6 @@ function FancyTableInner<T>({
   const ariaUsageId = useId();
   const scrollerRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
-
   const {
     listRef,
     tableRef,
@@ -109,6 +109,7 @@ function FancyTableInner<T>({
     disabledKeyboardInteractions,
     readOnly,
   } = useTableEditorContext();
+
   const [onScroll, setOnScroll] = useState<OnScroll>(() => undefined);
 
   const { templateColumns, contentRowWidth, resizeCell } = useCellSizes(
@@ -210,6 +211,7 @@ function FancyTableInner<T>({
         tabIndex={0}
         onKeyDown={handleKeyDown}
         totalContentHeight={itemCount * rowHeight!}
+        columnSizes={columnSizes ?? []}
         ref={tableRef}
       >
         <RelativeScrollArea ref={scrollerRef} type='hover'>
@@ -240,6 +242,7 @@ function FancyTableInner<T>({
 
 interface TableProps {
   gridTemplateColumns: string;
+  columnSizes: number[];
   contentRowWidth: string;
   rowHeight: number;
   totalContentHeight: number;
@@ -249,6 +252,13 @@ const Table = styled.div.attrs<TableProps>(p => ({
   style: {
     '--table-template-columns': p.gridTemplateColumns,
     '--table-content-width': p.contentRowWidth,
+    ...p.columnSizes.reduce(
+      (acc, size, i) => ({
+        ...acc,
+        [`--cell-width-${i + 1}`]: `${size}px`,
+      }),
+      {},
+    ),
   } as Record<string, string>,
 }))`
   --table-height: 80vh;

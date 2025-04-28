@@ -1,14 +1,24 @@
-import { mergeAttributes, Node } from '@tiptap/core';
+import { Node } from '@tiptap/core';
 import { ReactNodeViewRenderer } from '@tiptap/react';
-import { unknownSubject } from '@tomic/react';
+import { unknownSubject, type Store } from '@tomic/react';
 import {
   ResourceComponent,
   ResourceInlineComponent,
 } from './ResourceComponent';
+import styles from './ResourceNode.module.css';
 
-export interface ResourceNodeOptions {
+interface ResourceNodeOptions {
+  store?: Store;
+}
+
+export interface SetResourceNodeOptions {
   subject: string;
 }
+
+const TYPES = {
+  BLOCK: 'resource-block',
+  INLINE: 'resource-inline',
+} as const;
 
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
@@ -17,51 +27,57 @@ declare module '@tiptap/core' {
        * Add a resource view to the document.
        * @param options Object containing the subject.
        */
-      setResource: (options: ResourceNodeOptions) => ReturnType;
+      setResource: (options: SetResourceNodeOptions) => ReturnType;
     };
     resourceInline: {
-      setResourceInline: (options: ResourceNodeOptions) => ReturnType;
+      setResourceInline: (options: SetResourceNodeOptions) => ReturnType;
     };
   }
 }
 
-export const ResourceNode = Node.create({
+export const ResourceNode = Node.create<ResourceNodeOptions>({
   name: 'atomic-data-resource',
   group: 'block',
+  atom: true,
+
+  addOptions() {
+    return {
+      store: undefined,
+    };
+  },
 
   parseHTML() {
     return [
       {
-        tag: 'a',
+        tag: `a[data-type="${TYPES.BLOCK}"]`,
         getAttrs: node => {
           const dataType = node.getAttribute('data-type');
 
-          if (dataType !== 'resource-block') {
+          if (dataType !== TYPES.BLOCK) {
             return false; // Not a resource-block, ignore
           }
 
           return {
-            subject: node.getAttribute('data-subject'), // Extract the attribute
+            subject: node.getAttribute('href'), // Extract the attribute
           };
         },
       },
     ];
   },
 
-  renderHTML({ HTMLAttributes, node }) {
+  renderHTML({ HTMLAttributes }) {
+    const title =
+      this.options.store?.getResourceLoading(HTMLAttributes['subject']).title ??
+      '';
+
     return [
       'a',
-      mergeAttributes(HTMLAttributes, {
-        'data-type': 'resource-block',
-        'data-subject': node.attrs['subject'],
-      }),
+      {
+        'data-type': TYPES.BLOCK,
+        href: HTMLAttributes['subject'],
+      },
+      title,
     ];
-  },
-
-  addOptions() {
-    return {
-      subject: unknownSubject,
-    };
   },
 
   addCommands() {
@@ -81,16 +97,21 @@ export const ResourceNode = Node.create({
     return {
       subject: {
         default: unknownSubject,
-        parseHTML: e => e.getAttribute('data-subject'),
       },
     };
   },
-  addNodeView() {
-    if (this.options.inline) {
-      return ReactNodeViewRenderer(ResourceInlineComponent);
-    }
 
-    return ReactNodeViewRenderer(ResourceComponent);
+  addNodeView() {
+    return ReactNodeViewRenderer(ResourceComponent, {
+      className: styles.nodeRenderer,
+      contentDOMElementTag: 'div',
+      ignoreMutation: ({ mutation }) => {
+        return (
+          mutation.type === 'attributes' &&
+          mutation.attributeName === 'aria-hidden'
+        );
+      },
+    });
   },
 });
 
@@ -101,30 +122,35 @@ export const ResourceNodeInline = ResourceNode.extend<ResourceNodeOptions>({
   parseHTML() {
     return [
       {
-        tag: 'a',
+        tag: `a[data-type="${TYPES.INLINE}"]`,
         getAttrs: node => {
           const dataType = node.getAttribute('data-type');
 
-          if (dataType !== 'resource-inline') {
+          if (dataType !== TYPES.INLINE) {
             return false; // Not a resource-block, ignore
           }
 
           return {
-            'data-type': 'resource-inline',
-            subject: node.getAttribute('data-subject'),
+            'data-type': TYPES.INLINE,
+            subject: node.getAttribute('href'),
           };
         },
       },
     ];
   },
 
-  renderHTML({ HTMLAttributes, node }) {
+  renderHTML({ HTMLAttributes }) {
+    const title =
+      this.options.store?.getResourceLoading(HTMLAttributes['subject']).title ??
+      '';
+
     return [
       'a',
-      mergeAttributes(HTMLAttributes, {
-        'data-type': 'resource-inline',
-        'data-subject': node.attrs['subject'],
-      }),
+      {
+        'data-type': TYPES.INLINE,
+        href: HTMLAttributes['subject'],
+      },
+      title,
     ];
   },
 

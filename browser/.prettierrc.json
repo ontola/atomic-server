@@ -1,4 +1,7 @@
 {
+  "plugins": [
+    "prettier-plugin-svelte"
+  ],
   "semi": true,
   "printWidth": 80,
   "tabWidth": 2,
@@ -7,6 +10,5 @@
   "useTabs": false,
   "arrowParens": "avoid",
   "jsxSingleQuote": true,
-  "trailingComma": "all",
-  "jsdocParser": true
+  "trailingComma": "all"
 }

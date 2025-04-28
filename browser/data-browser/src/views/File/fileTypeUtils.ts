@@ -1,4 +1,4 @@
-const supportedApplicationFormats = new Set([
+export const supportedApplicationFormats = new Set([
   'application/json',
   'application/ld+json',
   'application/ad+json',
@@ -8,7 +8,7 @@ const supportedApplicationFormats = new Set([
   'application/x-sh',
 ]);
 
-const supportedImageTypes = new Set([
+export const supportedImageTypes = new Set([
   'image/png',
   'image/jpeg',
   'image/gif',

@@ -15,13 +15,13 @@ import { Button } from '../../Button';
 import { Row } from '../../Row';
 import { useSettings } from '../../../helpers/AppSettings';
 import { useMediaQuery } from '../../../hooks/useMediaQuery';
+import { useOnValueChange } from '@helpers/useOnValueChange';
 
 interface FilePickerProps {
   show: boolean;
   onShowChange?: (show: boolean) => void;
   onResourcePicked: (subject: string) => void;
-  onNewFilePicked: (file: File) => void;
-  noUpload?: boolean;
+  onNewFilePicked?: (file: File) => void;
   allowedMimes?: Set<string>;
 }
 
@@ -31,7 +31,6 @@ export function FilePickerDialog({
   onNewFilePicked,
   onResourcePicked,
   allowedMimes,
-  noUpload = false,
 }: FilePickerProps): React.JSX.Element {
   const { drive } = useSettings();
   const [dialogProps, showDialog, closeDialog] = useDialog({
@@ -64,7 +63,7 @@ export function FilePickerDialog({
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
 
-    if (file) {
+    if (file && onNewFilePicked) {
       onNewFilePicked(file);
       closeDialog(true);
     }
@@ -80,10 +79,11 @@ export function FilePickerDialog({
     }
   };
 
+  useOnValueChange(() => updateQuery(''), [show]);
+
   useEffect(() => {
     if (show) {
       showDialog();
-      updateQuery('');
     }
   }, [show, showDialog]);
 
@@ -102,7 +102,7 @@ export function FilePickerDialog({
                   onChange={e => updateQuery(e.target.value)}
                 />
               </InputWrapper>
-              {!noUpload && (
+              {!!onNewFilePicked && (
                 <StyledLabel>
                   <Button as='div'>
                     <FaPlus aria-hidden /> {isScreenSmall ? '' : 'Upload'}

@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle } from 'react';
+import { forwardRef, useImperativeHandle } from 'react';
 import styled from 'styled-components';
 import { getIconForClass } from '../../../helpers/iconMap';
 import { useSelectedIndex } from '../../../hooks/useSelectedIndex';
@@ -21,25 +21,22 @@ export interface MentionListRef {
 }
 
 export const MentionList = forwardRef<MentionListRef, MentionListProps>(
-  ({ items, onSelect }, ref) => {
-    const { selectedIndex, onKeyDown, onMouseOver, onClick, resetIndex } =
-      useSelectedIndex(
-        items,
-        index => {
-          if (index === undefined) {
-            return;
-          }
+  ({ items, onSelect, query }, ref) => {
+    const { selectedIndex, onKeyDown, onMouseOver, onClick } = useSelectedIndex(
+      items,
+      index => {
+        if (index === undefined) {
+          return;
+        }
 
-          const item = items[index];
+        const item = items[index];
 
-          if (item) {
-            onSelect(item);
-          }
-        },
-        0,
-      );
-
-    useEffect(() => resetIndex(), [items]);
+        if (item) {
+          onSelect(item);
+        }
+      },
+      { initialIndex: 0, key: query },
+    );
 
     useImperativeHandle(ref, () => ({
       onKeyDown: ({ event }) => {

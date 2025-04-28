@@ -227,13 +227,14 @@ fn handle_ws_message(
                         return Err("Y_SYNC_UPDATE needs a JSON object".into());
                     };
 
-                    let update: YSyncUpdate = match serde_json::from_str(json) {
+                    let mut update: YSyncUpdate = match serde_json::from_str(json) {
                         Ok(update) => update,
                         Err(err) => {
                             return Err(format!("Invalid Y_SYNC_UPDATE JSON: {}", err).into())
                         }
                     };
 
+                    update.addr = Some(ctx.address());
                     conn.y_sync_broadcaster_addr.do_send(update);
                     Ok(())
                 }

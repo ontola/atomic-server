@@ -197,6 +197,7 @@ export class Client {
     }
 
     resource.loading = false;
+    createdResources.forEach(r => (r.loading = false));
 
     return { resource, createdResources };
   }
@@ -208,7 +209,7 @@ export class Client {
     endpoint: string,
   ): Promise<Commit> {
     const serialized = serializeDeterministically({ ...commit });
-    const requestHeaders: HeadersInit = new Headers();
+    const requestHeaders = new Headers();
     requestHeaders.set('Content-Type', 'application/ad+json');
     let response: Response;
 

@@ -17,6 +17,8 @@ import { useCreateAndNavigate } from '../../../../../hooks/useCreateAndNavigate'
 export const NewArticleDialog: FC<CustomResourceDialogProps> = ({
   parent,
   onClose,
+  skipNavigation,
+  onCreated,
 }) => {
   const [name, setName] = useState('');
   const [valid, setValid] = useState(false);
@@ -38,11 +40,20 @@ export const NewArticleDialog: FC<CustomResourceDialogProps> = ({
       {
         parent,
         subject,
+        onCreated,
+        skipNavigation,
       },
     );
 
     onClose();
-  }, [name, createResourceAndNavigate, onClose, parent]);
+  }, [
+    name,
+    createResourceAndNavigate,
+    onClose,
+    parent,
+    skipNavigation,
+    onCreated,
+  ]);
 
   const [dialogProps, show, hide] = useDialog({ onSuccess, onCancel: onClose });
 

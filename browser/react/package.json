@@ -13,13 +13,13 @@
   },
   "dependencies": {
     "@tomic/lib": "workspace:*",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.17.0",
-    "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
     "@types/react-router-dom": "^5.3.3",
     "tsup": "^8.3.5",
     "typescript": "^5.9.3",
@@ -58,9 +58,10 @@
   },
   "scripts": {
     "build": "tsup",
-    "lint": "eslint ./src --ext .js,.jsx,.ts,.tsx",
+    "lint": "eslint ./src --ext .js,.jsx,.ts,.tsx && pnpm prettier-check ./src",
     "lint-fix": "eslint ./src --ext .js,.jsx,.ts,.tsx --fix",
     "lint-package": "pnpm attw && pnpm publint",
+    "prettier-check": "prettier --check ./src",
     "prepublishOnly": "pnpm run lint && pnpm run build && pnpm run lint-package",
     "start": "pnpm watch",
     "watch": "tsup --watch",

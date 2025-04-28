@@ -41,13 +41,25 @@ export const TagSelectPopover: React.FC<TagSelectPopoverProps> = ({
     .filter(tag => tag.title.includes(filterValue))
     .map(t => t.subject);
 
+  const modifyTags = (add: boolean, tag: string) => {
+    if (add) {
+      setSelectedTags([...selectedTags, tag]);
+    } else if (selectedTags.includes(tag)) {
+      setSelectedTags(selectedTags.filter(t => t !== tag));
+    }
+  };
+
   const { selectedIndex, onKeyDown, onMouseOver, resetIndex, usingKeyboard } =
-    useSelectedIndex(filteredTags, index => {
-      if (index !== undefined) {
-        const tag = filteredTags[index];
-        modifyTags(!selectedTags.includes(tag), tag);
-      }
-    });
+    useSelectedIndex(
+      filteredTags,
+      index => {
+        if (index !== undefined) {
+          const tag = filteredTags[index];
+          modifyTags(!selectedTags.includes(tag), tag);
+        }
+      },
+      { key: filterValue },
+    );
 
   const handleNewTag = async (tag: Resource) => {
     try {
@@ -62,14 +74,6 @@ export const TagSelectPopover: React.FC<TagSelectPopoverProps> = ({
   const reset = () => {
     resetIndex();
     setFilterValue('');
-  };
-
-  const modifyTags = (add: boolean, tag: string) => {
-    if (add) {
-      setSelectedTags([...selectedTags, tag]);
-    } else if (selectedTags.includes(tag)) {
-      setSelectedTags(selectedTags.filter(t => t !== tag));
-    }
   };
 
   return (

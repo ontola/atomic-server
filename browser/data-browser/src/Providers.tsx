@@ -21,6 +21,7 @@ import { Toaster } from './components/Toaster';
 import { McpServersProvider } from './components/AI/MCP/useMcpServers';
 import { AISettingsContextProvider } from '@components/AI/AISettingsContext';
 import { LocaleProvider } from '@components/LocaleContext';
+import { CustomContextItemsProvider } from './components/ResourceContextMenu';
 
 // Setup bugsnag for error handling, but only if there's an API key
 const ErrBoundary = window.bugsnagApiKey
@@ -66,10 +67,12 @@ export const Providers: React.FC<React.PropsWithChildren> = ({ children }) => {
                             <DialogGlobalContextProvider>
                               <PopoverContainer>
                                 <DropdownContainer>
-                                  <NewResourceUIProvider>
-                                    <SkipNav />
-                                    <NavWrapper>{children}</NavWrapper>
-                                  </NewResourceUIProvider>
+                                  <CustomContextItemsProvider>
+                                    <NewResourceUIProvider>
+                                      <SkipNav />
+                                      <NavWrapper>{children}</NavWrapper>
+                                    </NewResourceUIProvider>
+                                  </CustomContextItemsProvider>
                                 </DropdownContainer>
                               </PopoverContainer>
                               <NetworkIndicator />

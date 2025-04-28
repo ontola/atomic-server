@@ -12,7 +12,7 @@ interface BaseButtonsProps {
 const buttons = [
   dataBrowser.classes.table,
   dataBrowser.classes.folder,
-  dataBrowser.classes.document,
+  dataBrowser.classes.documentV2,
   dataBrowser.classes.chatroom,
   dataBrowser.classes.bookmark,
   core.classes.ontology,

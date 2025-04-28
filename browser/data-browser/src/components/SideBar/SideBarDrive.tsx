@@ -1,4 +1,5 @@
 import {
+  core,
   dataBrowser,
   useArray,
   useCanWrite,
@@ -58,7 +59,9 @@ export function SideBarDrive({
   const navigate = useNavigateWithTransition();
   const agentCanWrite = useCanWrite(driveResource);
   const [currentSubject] = useCurrentSubject();
-  const currentResource = useResource(currentSubject);
+  const currentResource = useResource(currentSubject, {
+    track: [core.properties.parent],
+  });
   const [ancestry, setAncestry] = useState<string[]>([]);
 
   useEffect(() => {

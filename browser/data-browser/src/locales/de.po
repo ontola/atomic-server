@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2025-09-29T10:47:38.272Z\n"
-"PO-Revision-Date: 2025-10-22T08:13:10.872Z\n"
+"PO-Revision-Date: 2025-10-30T12:45:39.165Z\n"
 "Last-Translator: \n"
 "Language: de\n"
 "Language-Team: \n"
@@ -90,7 +90,6 @@ msgstr "In die Zwischenablage kopieren"
 #: src/views/File/FilePreview.tsx
 #: src/views/File/FilePreviewThumbnail.tsx
 #: src/chunks/AI/ModelSelect/OllamaModelSelector.tsx
-#: src/views/Card/DocumentV2Card.tsx
 #: src/views/Document/DocumentV2FullPage.tsx
 #: src/views/Document/DocumentV2FullPage.tsx
 msgid "Loading..."
@@ -1370,7 +1369,6 @@ msgid "Create a new resource under this resource."
 msgstr "Erstelle eine neue Ressource unter dieser Ressource."
 
 #: src/components/ResourceContextMenu/index.tsx
-#: src/views/TablePage/TablePage.tsx
 msgid "Use in code"
 msgstr "Im Code verwenden"
 
@@ -1651,6 +1649,7 @@ msgid "New tag"
 msgstr "Neuer Tag"
 
 #: src/components/Tag/CreateTagRow.tsx
+#: src/views/TablePage/EditorCells/SelectCell.tsx
 #: src/views/TablePage/EditorCells/SelectCell.tsx
 msgid "Add tag"
 msgstr "Tag hinzufügen"
@@ -3060,9 +3059,8 @@ msgstr "Verstecke den kodierten Status"
 msgid "Editing YDoc directly is not supported"
 msgstr "Das direkte Bearbeiten von YDoc wird nicht unterstützt"
 
-#: src/chunks/RTE/CollaborativeEditor.tsx
-msgid "Untitled Agent"
-msgstr "Unbenannter Agent"
+#~ msgid "Untitled Agent"
+#~ msgstr "Unbenannter Agent"
 
 #: src/chunks/RTE/FullBubbleMenu.tsx
 msgid "Left"
@@ -3103,3 +3101,26 @@ msgstr "Dokument"
 #: src/chunks/RTE/CollaborativeEditor.tsx
 msgid "Type '/' for options or '@' for resources"
 msgstr "Geben Sie '/' für Optionen oder '@' für Ressourcen ein"
+
+#~ msgid "Get HTML"
+#~ msgstr "HTML abrufen"
+
+#~ msgid "Print"
+#~ msgstr "Drucken"
+
+#~ msgid "Print this document"
+#~ msgstr "Dieses Dokument drucken"
+
+#~ msgid "Export to PDF"
+#~ msgstr "Als PDF exportieren"
+
+#~ msgid "Print this document to a PDF file"
+#~ msgstr "Dieses Dokument als PDF-Datei drucken"
+
+#: src/chunks/RTE/SlashMenu/CommandList.tsx
+msgid "No results found"
+msgstr "Keine Ergebnisse gefunden"
+
+#: src/chunks/RTE/CollaborativeEditor.tsx
+msgid "Data Table"
+msgstr "Datentabelle"

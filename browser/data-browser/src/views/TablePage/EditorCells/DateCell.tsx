@@ -7,10 +7,11 @@ import {
   useString,
   validateDatatype,
 } from '@tomic/react';
-import { useCallback, useEffect, useState, type JSX } from 'react';
+import { useCallback, useState, type JSX } from 'react';
 import { formatDate } from '../../../helpers/dates/formatDate';
 import { InputBase } from './InputBase';
 import { CellContainer, DisplayCellProps, EditCellProps } from './Type';
+import { useOnValueChange } from '@helpers/useOnValueChange';
 
 function DateCellEdit({
   value,
@@ -29,14 +30,14 @@ function DateCellEdit({
       try {
         validateDatatype(e.target.value, Datatype.DATE);
         onChange(e.target.value);
-      } catch (err) {
+      } catch (_) {
         // Do nothing.
       }
     },
     [onChange],
   );
 
-  useEffect(() => {
+  useOnValueChange(() => {
     setInnerValue(value as string);
   }, [value]);
 

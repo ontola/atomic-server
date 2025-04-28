@@ -16,6 +16,7 @@ import { SearchbarFakeInput } from './Searchbar/SearchbarInput';
 import { CalculatedPageHeight } from '../globalCssVars';
 import { AISidebarContextProvider } from './AI/AISidebarContext';
 import { AISidebarContainer } from './AI/AISidebarContainer';
+import { HideInPrint } from './HideInPrint';
 
 export const NAVBAR_HEIGHT = '2.5rem';
 
@@ -43,8 +44,6 @@ const AISidebarMemo = React.memo(AISidebarContainer);
 /** Wraps the entire app and adds a navbar at the bottom or the top */
 export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
   const { navbarTop, navbarFloating } = useSettings();
-  const contentRef = React.useRef<HTMLDivElement>(null);
-
   const navbarPosition = getPosition(navbarTop, navbarFloating);
 
   return (
@@ -52,14 +51,12 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
       {navbarTop && <NavBar />}
       <SideBarWrapper navbarPosition={navbarPosition}>
         <SideBar />
-        <Content
-          ref={contentRef}
-          navbarTop={navbarTop}
-          navbarFloating={navbarFloating}
-        >
+        <Content navbarTop={navbarTop} navbarFloating={navbarFloating}>
           {children}
         </Content>
-        <AISidebarMemo />
+        <HideInPrint>
+          <AISidebarMemo />
+        </HideInPrint>
       </SideBarWrapper>
       {!navbarTop && <NavBar />}
     </AISidebarContextProvider>
@@ -74,7 +71,6 @@ interface ContentProps {
 const Content = styled.div<ContentProps>`
   display: block;
   flex: 1;
-  overflow-y: auto;
 `;
 
 /** Persistently shown navigation bar */
@@ -158,6 +154,10 @@ const NavBarBase = styled.div<NavBarStyledProps>`
       display: none;
     }
   }
+
+  @media print {
+    display: none;
+  }
 `;
 
 /** Width of the floating navbar in rem */
@@ -230,5 +230,12 @@ const SideBarWrapper = styled.div<{ navbarPosition: NavBarPosition }>`
   transition: opacity 0.3s ease-out;
   @starting-style {
     opacity: 0;
+  }
+
+  @media print {
+    height: auto;
+    ${CalculatedPageHeight.define('auto')}
+    position: static;
+    display: block;
   }
 `;

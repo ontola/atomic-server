@@ -12,7 +12,7 @@ import * as RadixPopover from '@radix-ui/react-popover';
 import { Column, Row } from '../../components/Row';
 
 import { Popover } from '../../components/Popover';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { transparentize } from 'polished';
 import { EditLinkForm } from './EditLinkForm';
 import { useTipTapEditor } from './TiptapContext';
@@ -31,7 +31,6 @@ export function BubbleMenu({
   extraItems,
   onShow,
 }: BubbleMenuProps): React.JSX.Element {
-  const bubbleMenuElement = useRef<HTMLDivElement>(null);
   const editor = useTipTapEditor();
   const [linkMenuOpen, setLinkMenuOpen] = useState(false);
 
@@ -48,16 +47,12 @@ export function BubbleMenu({
       }),
     });
 
-  if (!editor.view) {
+  if (!editor.isInitialized) {
     return <></>;
   }
 
   return (
-    <TipTapBubbleMenu
-      editor={editor}
-      ref={bubbleMenuElement}
-      options={{ onShow }}
-    >
+    <TipTapBubbleMenu editor={editor} options={{ onShow }}>
       <BubbleMenuInner>
         <Row gap='0.5ch'>
           <NodeSelectMenu />
