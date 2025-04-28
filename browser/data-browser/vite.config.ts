@@ -159,5 +159,9 @@ export default defineConfig({
       // Fixes an issue with HMR
       port: 5174,
     },
+    headers: {
+      // Prevent browsers from re-fetching static assets (e.g. favicon) on every SPA navigation
+      'Cache-Control': 'public, max-age=86400',
+    },
   },
 });
