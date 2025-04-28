@@ -773,11 +773,31 @@ impl Commit {
         let mut commit_resource = self.into_resource(store).await?;
         // A deterministic serialization should not contain the hash (signature), since that would influence the hash.
         commit_resource.remove_propval(urls::SIGNATURE);
-        // Special logic for did:ad genesis commits: remove subject from serialization
-        if self.subject.starts_with("did:ad:")
-            && !self.subject.starts_with("did:ad:agent:")
-            && self.previous_commit.is_none()
-        {
+
+        let is_did_non_agent = self.subject.starts_with("did:ad:")
+            && !self.subject.starts_with("did:ad:agent:");
+        let is_genesis_flag = self.is_genesis == Some(true);
+        let has_previous = self.previous_commit.is_some();
+
+        // Validate consistency between is_genesis flag and structural state.
+        if is_genesis_flag && has_previous {
+            return Err(format!(
+                "Commit has is_genesis=true but also has a previous_commit ({}). A genesis commit cannot have a predecessor.",
+                self.previous_commit.as_ref().unwrap()
+            ).into());
+        }
+        if is_did_non_agent && !has_previous && !is_genesis_flag {
+            return Err(format!(
+                "Commit targets did:ad: subject '{}' with no previous_commit but is_genesis is not set. \
+                 DID genesis commits must explicitly set is_genesis=true.",
+                self.subject
+            ).into());
+        }
+
+        // For genesis commits the subject is derived from the signature, so it
+        // must not be part of the signed bytes (circular dependency). is_genesis
+        // is also excluded to match the client's serializeDeterministically logic.
+        if is_genesis_flag {
             commit_resource.remove_propval(urls::SUBJECT);
             commit_resource.remove_propval(urls::IS_GENESIS);
         }
@@ -831,6 +851,9 @@ pub struct CommitBuilder {
     /// The previous Commit that was applied to the target resource (the subject) of this Commit. You should be able to follow these from Commit to Commit to establish an audit trail.
     /// https://atomicdata.dev/properties/previousCommit
     previous_commit: Option<String>,
+    /// Whether this is a genesis commit (the first commit for a DID resource).
+    /// Must be set explicitly for did:ad: subjects with no previous_commit.
+    pub is_genesis: bool,
 }
 
 impl CommitBuilder {
@@ -844,6 +867,7 @@ impl CommitBuilder {
             remove: HashSet::new(),
             destroy: false,
             previous_commit: None,
+            is_genesis: false,
         }
     }
 
@@ -975,7 +999,7 @@ async fn sign_at(
         destroy: Some(commitbuilder.destroy),
         created_at: sign_date,
         previous_commit: commitbuilder.previous_commit,
-        is_genesis: None,
+        is_genesis: if commitbuilder.is_genesis { Some(true) } else { None },
         signature: None,
         push: Some(commitbuilder.push),
         url: None,
@@ -1177,8 +1201,13 @@ mod test {
             store.apply_commit(commit, &OPTS).await.unwrap();
         }
         {
+            // A did:ad: subject with a subpath is structurally invalid.
+            // sign() now enforces that did:ad: commits without a previous_commit
+            // must have is_genesis=true, so we set that here. apply_commit then
+            // rejects the subpath as "Invalid DID".
             let subject = "did:ad:cbXxQGm7UBBS5JPvl/NR/p9RJNbSMUjvA7lRYQt9lZvKZrU1FBo6Icl5uctr7i1AMZ/mElWZ3X1dApo5ifzmBg==/subpath";
-            let commitbuilder = crate::commit::CommitBuilder::new(subject.into());
+            let mut commitbuilder = crate::commit::CommitBuilder::new(subject.into());
+            commitbuilder.is_genesis = true;
             let commit = commitbuilder.sign(&agent, &store, &resource).await.unwrap();
             let err = store.apply_commit(commit, &OPTS).await.unwrap_err();
             assert!(
@@ -1187,6 +1216,185 @@ mod test {
                 err
             );
         }
+    }
+
+    // ── DID commit tests ────────────────────────────────────────────────────
+
+    /// Helper: build a store with a known agent whose private key we control.
+    async fn store_with_known_agent() -> (crate::Store, Agent) {
+        let store = Store::init().await.unwrap();
+        store.set_base_url("http://localhost:9883");
+        store.populate().await.unwrap();
+        let private_key = "CapMWIhFUT+w7ANv9oCPqrHrwZpkP2JhzF9JnyT6WcI=";
+        let agent = Agent::new_from_private_key(None, private_key).unwrap();
+        store
+            .add_resource(&agent.to_resource().unwrap())
+            .await
+            .unwrap();
+        (store, agent)
+    }
+
+    /// Creating a new `did:ad:` resource via genesis commit should succeed and
+    /// the resulting resource subject must start with `did:ad:`.
+    #[tokio::test]
+    async fn did_genesis_commit_creates_resource() {
+        let (store, agent) = store_with_known_agent().await;
+        let mut builder = CommitBuilder::new("placeholder".into());
+        builder.set(
+            crate::urls::DESCRIPTION.into(),
+            Value::new("hello", &DataType::Markdown).unwrap(),
+        );
+        let commit = Commit::create_did(builder, &agent, &store).await.unwrap();
+        assert!(
+            commit.subject.starts_with("did:ad:"),
+            "genesis subject should start with did:ad:, got {}",
+            commit.subject
+        );
+        assert!(!commit.subject.starts_with("did:ad:agent:"));
+        let opts = CommitOpts {
+            validate_signature: true,
+            validate_timestamp: false,
+            validate_previous_commit: false,
+            validate_rights: false,
+            ..CommitOpts::no_validations_no_index()
+        };
+        let result = store.apply_commit(commit, &opts).await.unwrap();
+        let new_subject = result.resource_new
+            .as_ref()
+            .map(|r| r.get_subject().to_string())
+            .unwrap_or_default();
+        assert!(
+            new_subject.starts_with("did:ad:"),
+            "created resource subject should be a did:ad: DID, got: {}",
+            new_subject
+        );
+    }
+
+    /// A follow-up commit to a `did:ad:` resource (after genesis) should
+    /// succeed when signed by the same agent.
+    #[tokio::test]
+    async fn did_followup_commit_succeeds() {
+        let (store, agent) = store_with_known_agent().await;
+        let mut builder = CommitBuilder::new("placeholder".into());
+        builder.set(
+            crate::urls::DESCRIPTION.into(),
+            Value::new("v1", &DataType::Markdown).unwrap(),
+        );
+        let genesis = Commit::create_did(builder, &agent, &store).await.unwrap();
+        let did_subject = genesis.subject.clone();
+        let genesis_url = genesis.url.clone();
+        let opts_no_rights = CommitOpts {
+            validate_signature: true,
+            validate_timestamp: false,
+            validate_previous_commit: false,
+            validate_rights: false,
+            ..CommitOpts::no_validations_no_index()
+        };
+        store.apply_commit(genesis, &opts_no_rights).await.unwrap();
+
+        let mut update_builder = CommitBuilder::new(did_subject.clone());
+        update_builder.set(
+            crate::urls::DESCRIPTION.into(),
+            Value::new("v2", &DataType::Markdown).unwrap(),
+        );
+        if let Some(url) = genesis_url {
+            update_builder.previous_commit = Some(url);
+        }
+        let resource = store.get_resource(&did_subject.as_str().into()).await.unwrap();
+        let update = update_builder.sign(&agent, &store, &resource).await.unwrap();
+        store.apply_commit(update, &opts_no_rights).await.unwrap();
+
+        let updated = store.get_resource(&did_subject.as_str().into()).await.unwrap();
+        assert_eq!(
+            updated.get(crate::urls::DESCRIPTION).unwrap().to_string(),
+            "v2"
+        );
+    }
+
+    /// Tampering with the signature of an otherwise valid commit must be
+    /// rejected when signature validation is enabled.
+    #[tokio::test]
+    async fn tampered_signature_is_rejected() {
+        let (store, agent) = store_with_known_agent().await;
+        let subject = "https://localhost/tamper_target";
+        let resource = Resource::new(subject.into());
+        let mut builder = CommitBuilder::new(subject.into());
+        builder.set(
+            crate::urls::DESCRIPTION.into(),
+            Value::new("legit", &DataType::Markdown).unwrap(),
+        );
+        let mut commit = builder.sign(&agent, &store, &resource).await.unwrap();
+        // Flip the first character of the signature to invalidate it.
+        commit.signature = Some(format!("XXXX{}", &commit.signature.unwrap()[4..]));
+
+        let opts = CommitOpts {
+            validate_signature: true,
+            validate_timestamp: false,
+            validate_previous_commit: false,
+            validate_rights: false,
+            ..CommitOpts::no_validations_no_index()
+        };
+        let err = store.apply_commit(commit, &opts).await.unwrap_err();
+        assert!(
+            err.to_string().to_lowercase().contains("signature"),
+            "expected a signature error, got: {}",
+            err
+        );
+    }
+
+    /// Signing a commit with agent B but writing to a resource that agent A
+    /// created (and owns) must fail signature validation.
+    #[tokio::test]
+    async fn wrong_agent_signature_is_rejected() {
+        let (store, agent_a) = store_with_known_agent().await;
+        let agent_b = store.create_agent(Some("agent_b")).await.unwrap();
+
+        let subject = "https://localhost/agent_a_resource";
+        let resource = Resource::new(subject.into());
+        let mut builder = CommitBuilder::new(subject.into());
+        builder.set(
+            crate::urls::DESCRIPTION.into(),
+            Value::new("by agent_a", &DataType::Markdown).unwrap(),
+        );
+        // Sign with agent_b but claim agent_a signed it by manually overriding the signer.
+        let mut commit = builder.sign(&agent_b, &store, &resource).await.unwrap();
+        commit.signer = agent_a.subject.as_str().to_owned();
+
+        let opts = CommitOpts {
+            validate_signature: true,
+            validate_timestamp: false,
+            validate_previous_commit: false,
+            validate_rights: false,
+            ..CommitOpts::no_validations_no_index()
+        };
+        let err = store.apply_commit(commit, &opts).await.unwrap_err();
+        assert!(
+            err.to_string().to_lowercase().contains("signature"),
+            "expected a signature error, got: {}",
+            err
+        );
+    }
+
+    /// A genesis commit's deterministic serialization must NOT include `@id`,
+    /// so that the subject (= the signature) is not part of the signed bytes.
+    #[tokio::test]
+    async fn genesis_deterministic_serialization_excludes_id() {
+        let (store, agent) = store_with_known_agent().await;
+        let mut builder = CommitBuilder::new("placeholder".into());
+        builder.set(
+            crate::urls::DESCRIPTION.into(),
+            Value::new("test", &DataType::Markdown).unwrap(),
+        );
+        let commit = Commit::create_did(builder, &agent, &store).await.unwrap();
+        let serialized = commit
+            .serialize_deterministically_json_ad(&store)
+            .await
+            .unwrap();
+        assert!(
+            !serialized.contains("@id"),
+            "deterministic serialization must not contain @id, got: {}",
+            serialized
+        );
     }
 
     #[tokio::test]
