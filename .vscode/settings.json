@@ -13,7 +13,9 @@
     "javascript",
     "javascriptreact",
     "typescript",
-    "typescriptreact"
+    "typescriptreact",
+    "svelte",
+    "svlete.ts"
   ],
   "typescript.preferences.importModuleSpecifierEnding": "minimal",
   "eslint.alwaysShowStatus": true,
