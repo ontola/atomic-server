@@ -3789,3 +3789,6 @@ msgstr "Create a fresh agent + drive on localhost:9883"
 #: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
 msgid "New {0} Column"
 msgstr "New {0} Column"
+
+#~ msgid "AbortError"
+#~ msgstr "AbortError"

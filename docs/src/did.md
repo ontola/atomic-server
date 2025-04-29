@@ -70,6 +70,15 @@ The **Core Identity** of a resource is mathematically pure—it is simply the si
 did:ad:{genesis}
 ```
 
+#### Genesis commit signing
+
+A genesis commit is a regular commit with `isGenesis: true` and no `previousCommit`.
+When signing, the `subject` field is **excluded** from the canonical bytes because the subject is the signature itself (a circular dependency).
+All other fields — including `isGenesis` — are part of the signed bytes.
+The server verifies this by applying the same exclusion before checking the signature.
+
+This means the subject is derived post-signing as `did:ad:{signature}`, and `isGenesis: true` must be explicitly present in the commit sent to the server so that it can reconstruct the correct canonical bytes for verification.
+
 However, to discover this resource over a decentralized network, a client needs to know *which* Drive theoretically hosts it. This is done by appending a standard W3C DID query parameter containing the Drive's DID as a routing hint:
 
 ```text

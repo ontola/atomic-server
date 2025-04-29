@@ -608,6 +608,15 @@ export class Store {
     subjectRaw: string = unknownSubject,
     opts: FetchOpts = {},
   ): Resource<C> {
+    // Guard before normalization: 'unknown-subject' would otherwise be
+    // resolved to `{serverUrl}/unknown-subject` and trigger a real fetch.
+    if (subjectRaw === unknownSubject || subjectRaw === null) {
+      const newR = new Resource<C>(unknownSubject, opts.newResource);
+      newR.setStore(this);
+
+      return newR;
+    }
+
     const normalized = this.normalizeSubject(subjectRaw);
     const resolved = this.aliases.get(normalized) ?? normalized;
     const isTemporarySubject =

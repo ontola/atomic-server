@@ -3744,3 +3744,6 @@ msgstr ""
 #: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
 msgid "New {0} Column"
 msgstr ""
+
+#~ msgid "AbortError"
+#~ msgstr ""

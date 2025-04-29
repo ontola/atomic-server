@@ -7,6 +7,7 @@ They list a bunch of Messages.
 use atomic_lib::{
     class_extender::{BoxFuture, ClassExtender, CommitExtenderContext, GetExtenderContext},
     commit::{CommitBuilder, CommitOpts},
+    db::drive_prefix_from_subject,
     errors::AtomicResult,
     storelike::{Query, QueryResult, ResourceResponse},
     urls::{self, PARENT},
@@ -54,6 +55,7 @@ pub fn construct_chatroom<'a>(
             include_external: false,
             include_nested: true,
             for_agent: for_agent.clone(),
+            drive: Some(drive_prefix_from_subject(resource.get_subject())),
         };
 
         let QueryResult {

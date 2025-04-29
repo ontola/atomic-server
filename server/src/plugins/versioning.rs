@@ -86,6 +86,7 @@ fn handle_all_versions_request<'a>(
             name: Some(format!("Versions of {}", target)),
             include_nested: false,
             include_external: false,
+            drive: None,
         };
         let mut collection = collection_builder.into_collection(store, for_agent).await?;
         let mut new_members = Vec::new();

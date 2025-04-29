@@ -600,6 +600,10 @@ pub struct Query {
     pub include_nested: bool,
     /// For which Agent the query is executed. Pass `None` if you want to skip permission checks.
     pub for_agent: ForAgent,
+    /// Scope the query to a specific drive. When set, only resources whose subjects
+    /// start with the drive's prefix are included. Also scopes the query index so watched queries
+    /// are drive-specific, preventing spurious cross-tenant index updates.
+    pub drive: Option<Subject>,
 }
 
 impl Query {
@@ -616,6 +620,7 @@ impl Query {
             include_external: false,
             include_nested: true,
             for_agent: ForAgent::Sudo,
+            drive: None,
         }
     }
 
