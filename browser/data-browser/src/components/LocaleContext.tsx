@@ -1,13 +1,14 @@
 import { useLocalStorage } from '@hooks/useLocalStorage';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { loadLocale } from 'wuchale/load-utils';
+import { useOnValueChange } from '@helpers/useOnValueChange';
 
-interface LocaleContext {
+interface LocaleContextType {
   locale: string;
   setLocale: (locale: string) => void;
 }
 
-const LocaleContext = createContext<LocaleContext>({
+const LocaleContext = createContext<LocaleContextType>({
   locale: 'en',
   setLocale: () => {},
 });
@@ -21,8 +22,11 @@ export const LocaleProvider = ({ children }: React.PropsWithChildren) => {
   );
   const [localeLoaded, setLocaleLoaded] = useState(false);
 
-  useEffect(() => {
+  useOnValueChange(() => {
     setLocaleLoaded(false);
+  }, [locale]);
+
+  useEffect(() => {
     loadLocale(locale).then(() => setLocaleLoaded(true));
   }, [locale]);
 

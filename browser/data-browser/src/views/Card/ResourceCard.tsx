@@ -33,6 +33,7 @@ import { AIChatContentCard } from './AIChatContentCard';
 import { DocumentV2Card } from './DocumentV2Card';
 import { HideInPrint } from '@components/HideInPrint';
 import { useOnValueChange } from '@helpers/useOnValueChange';
+import { FolderCard } from './FolderCard';
 
 interface ResourceCardProps extends CardViewPropsBase {
   /** The subject URL - the identifier of the resource. */
@@ -122,6 +123,8 @@ function ResourceCardInner(props: ResourceCardProps): JSX.Element {
       return <AIChatContentCard resource={resource} {...props} />;
     case dataBrowser.classes.documentV2:
       return <DocumentV2Card resource={resource} {...props} />;
+    case dataBrowser.classes.folder:
+      return <FolderCard resource={resource} {...props} />;
     default:
       return <ResourceCardDefault resource={resource} {...props} />;
   }

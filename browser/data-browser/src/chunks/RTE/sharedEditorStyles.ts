@@ -31,6 +31,15 @@ export const StyledEditorWrapper = styled(EditorWrapperBase)`
   & .tiptap {
     width: min(100%, 75ch);
     min-height: ${MIN_EDITOR_HEIGHT};
+
+    table {
+      border-collapse: collapse;
+      td,
+      th {
+        border: 1px solid ${p => p.theme.colors.bg2};
+        padding: ${p => p.theme.size(2)};
+      }
+    }
   }
 `;
 

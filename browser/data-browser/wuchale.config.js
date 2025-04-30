@@ -32,8 +32,13 @@ export default defineConfig({
   otherLocales: ['es', 'fr', 'de'],
   adapters: {
     main: jsx({
-      loaderPath: './src/locales/loader.ts',
-      heuristic: (msg, details) => {
+      runtime: {
+        useReactive: () => ({ init: false, use: false, }),
+      },
+      loader: 'react',
+      heuristic: ({ msgStr, details }) => {
+        const [msg] = msgStr;
+
         if (details.scope === 'script') {
           // Ignore certain functions
           if (details.call && IGNORED_FUNCTIONS.includes(details.call)) {

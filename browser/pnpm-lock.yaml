@@ -201,6 +201,9 @@ importers:
       '@tiptap/extension-placeholder':
         specifier: ^3.7.2
         version: 3.7.2(@tiptap/extensions@3.7.2(@tiptap/core@3.7.2(@tiptap/pm@3.7.2))(@tiptap/pm@3.7.2))
+      '@tiptap/extension-table':
+        specifier: ^3.10.5
+        version: 3.10.5(@tiptap/core@3.7.2(@tiptap/pm@3.7.2))(@tiptap/pm@3.7.2)
       '@tiptap/extension-text-align':
         specifier: ^3.7.2
         version: 3.7.2(@tiptap/core@3.7.2(@tiptap/pm@3.7.2))
@@ -238,11 +241,11 @@ importers:
         specifier: ^4.24.1
         version: 4.24.1(@babel/runtime@7.27.6)(@codemirror/autocomplete@6.18.6)(@codemirror/language@6.11.2)(@codemirror/lint@6.8.5)(@codemirror/search@6.5.11)(@codemirror/state@6.5.2)(@codemirror/theme-one-dark@6.1.3)(@codemirror/view@6.38.1)(codemirror@6.0.2)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       '@wuchale/jsx':
-        specifier: ^0.7.4
-        version: 0.7.4(react@19.2.0)
+        specifier: ^0.9.4
+        version: 0.9.4(react@19.2.0)
       '@wuchale/vite-plugin':
-        specifier: ^0.14.6
-        version: 0.14.6
+        specifier: ^0.15.3
+        version: 0.15.3
       ai:
         specifier: ^5.0.29
         version: 5.0.29(zod@4.1.5)
@@ -322,8 +325,8 @@ importers:
         specifier: ^0.8.10
         version: 0.8.10(@tiptap/core@3.7.2(@tiptap/pm@3.7.2))
       wuchale:
-        specifier: ^0.16.5
-        version: 0.16.5
+        specifier: ^0.18.3
+        version: 0.18.3
       y-protocols:
         specifier: ^1.0.6
         version: 1.0.6(yjs@13.6.27)
@@ -525,7 +528,7 @@ importers:
         version: 5.1.4
       svelte-check:
         specifier: ^3.8.6
-        version: 3.8.6(@babel/core@7.28.4)(postcss-load-config@3.1.4(postcss@8.4.47)(ts-node@10.9.2(@swc/core@1.7.39)(@types/node@24.7.0)(typescript@5.6.3)))(postcss@8.4.47)(svelte@5.1.4)
+        version: 3.8.6(@babel/core@7.28.4)(postcss-load-config@3.1.4(postcss@8.5.6)(ts-node@10.9.2(@swc/core@1.7.39)(@types/node@24.7.0)(typescript@5.6.3)))(postcss@8.5.6)(svelte@5.1.4)
       typescript:
         specifier: ^5.6.3
         version: 5.6.3
@@ -2175,9 +2178,6 @@ packages:
   '@jridgewell/sourcemap-codec@1.5.0':
     resolution: {integrity: sha512-gv3ZRaISU3fjPAgNsriBRqGWQL6quFx04YMPW/zD8XMLsU32mhCCbfbO6KZFLjvYpCZ8zyDEgqsgf+PwPaM7GQ==}
 
-  '@jridgewell/sourcemap-codec@1.5.2':
-    resolution: {integrity: sha512-gKYheCylLIedI+CSZoDtGkFV9YEBxRRVcfCH7OfAqh4TyUyRjEE6WVE/aXDXX0p8BIe/QgLcaAoI0220KRRFgg==}
-
   '@jridgewell/sourcemap-codec@1.5.5':
     resolution: {integrity: sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og==}
 
@@ -3386,8 +3386,8 @@ packages:
   '@surma/rollup-plugin-off-main-thread@2.2.3':
     resolution: {integrity: sha512-lR8q/9W7hZpMWweNiAKU7NQerBnzQQLvi8qnTDU/fxItPhtZVMbPV3lbCwjhIlNBe9Bbr5V+KHshvWmVSG9cxQ==}
 
-  '@sveltejs/acorn-typescript@1.0.5':
-    resolution: {integrity: sha512-IwQk4yfwLdibDlrXVE04jTZYlLnwsTT2PIOQQGNLWfjavGifnk1JD1LcZjZaBTRcxZu2FfPfNLOE04DSu9lqtQ==}
+  '@sveltejs/acorn-typescript@1.0.6':
+    resolution: {integrity: sha512-4awhxtMh4cx9blePWl10HRHj8Iivtqj+2QdDCSMDzxG+XKa9+VCNupQuCuvzEhYPzZSrX+0gC+0lHA/0fFKKQQ==}
     peerDependencies:
       acorn: ^8.9.0
 
@@ -3713,6 +3713,12 @@ packages:
     resolution: {integrity: sha512-I1G+4vZbCBTpAMmyVwaO8cLBJgXEf1DyEzc0B+HhTJiBa9qA9OKgRQEGFgisxu1kggjbzB6+d0+taHfjsZC1SQ==}
     peerDependencies:
       '@tiptap/core': ^3.7.2
+
+  '@tiptap/extension-table@3.10.5':
+    resolution: {integrity: sha512-kuMgvrZBGsYtTcN8t8dN92xez99OY251Yig2B3/3aOIqapMkAFTJ2tZVPeTSiGSJpo1Tuw6ly2hs4neOOjpzvQ==}
+    peerDependencies:
+      '@tiptap/core': ^3.10.5
+      '@tiptap/pm': ^3.10.5
 
   '@tiptap/extension-text-align@3.7.2':
     resolution: {integrity: sha512-tUdoatcxM8u16tFVfEURFZwmxvZQR33f9VLtkyR+1aXgy0Pi87cNoFC60pTjH7gNtktEuagNfPE00tGMvqIehg==}
@@ -4272,8 +4278,8 @@ packages:
   '@vitest/utils@2.1.3':
     resolution: {integrity: sha512-xpiVfDSg1RrYT0tX6czgerkpcKFmFOF/gCr30+Mve5V2kewCy4Prn1/NDMSRwaSmT7PRaOF83wu+bEtsY1wrvA==}
 
-  '@wuchale/jsx@0.7.4':
-    resolution: {integrity: sha512-wyXFYTd8IPs9aQNqPf34mmaMpWAc7i2SKe0CwAMDlKA9ags2SLKdZmvxzzjJjCz5ahiBf9jYnIHWa4npGCpJMA==}
+  '@wuchale/jsx@0.9.4':
+    resolution: {integrity: sha512-IWDXB05jWuMbL5qusb+LWFwrq9yQOAOMEE6lXPPENM4ShpQjZnwBhkMg1vqDod0dprtUfZIzuUUnpxU6zMf6Og==}
     peerDependencies:
       react: ^19.1.1
       solid-js: ^1.9.9
@@ -4283,8 +4289,8 @@ packages:
       solid-js:
         optional: true
 
-  '@wuchale/vite-plugin@0.14.6':
-    resolution: {integrity: sha512-/OPj/tK56xco16YscktzKbdc8hy0MtoEw4Bl5ifACxbTIFZ8CwFudiM37PrIwWqPHPlpzlxTjFdeauIu4X5qow==}
+  '@wuchale/vite-plugin@0.15.3':
+    resolution: {integrity: sha512-GtPT1gwAGJAb1oc7R5MuGyl1R8m50QdoqFiW/76g2e81d9iPUYNi/CTg8BEeg4WmQJ+91JRR//rwgEo+jG0fZQ==}
 
   '@xhmikosr/archive-type@6.0.1':
     resolution: {integrity: sha512-PB3NeJL8xARZt52yDBupK0dNPn8uIVQDe15qNehUpoeeLWCZyAOam4vGXnoZGz2N9D1VXtjievJuCsXam2TmbQ==}
@@ -6128,14 +6134,6 @@ packages:
   fd-slicer@1.1.0:
     resolution: {integrity: sha512-cE1qsB/VwyQozZ+q1dGxR8LBYNZeofhEdUNGSMbQD3Gw2lAzX9Zb3uIU6Ebc/Fmyjo9AWWfnn0AUCHqtevs/8g==}
 
-  fdir@6.4.4:
-    resolution: {integrity: sha512-1NZP+GK4GfuAv3PqKvxQRDMjdSRZjnkq7KfhlNrCNNlZ0ygQFpebfrnfnq/W7fpUnAv9aGWmY1zKx7FYL3gwhg==}
-    peerDependencies:
-      picomatch: ^3 || ^4
-    peerDependenciesMeta:
-      picomatch:
-        optional: true
-
   fdir@6.5.0:
     resolution: {integrity: sha512-tIbYtZbucOs0BRGqPJkshJUYdL+SDH7dVM8gjy+ERp3WAUjLEFJE+02kanyHtwjWOnwrKYBiwAmM0p4kLJAnXg==}
     engines: {node: '>=12.0.0'}
@@ -7516,6 +7514,9 @@ packages:
   magic-string@0.30.19:
     resolution: {integrity: sha512-2N21sPY9Ws53PZvsEpVtNuSW+ScYbQdp4b9qUaL+9QkHUrGFKo56Lg9Emg5s9V/qrtNBmiR01sYhUOwu3H+VOw==}
 
+  magic-string@0.30.21:
+    resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
+
   make-cancellable-promise@2.0.0:
     resolution: {integrity: sha512-3SEQqTpV9oqVsIWqAcmDuaNeo7yBO3tqPtqGRcKkEo0lrzD3wqbKG9mkxO65KoOgXqj+zH2phJ2LiAsdzlogSw==}
 
@@ -8395,6 +8396,9 @@ packages:
     resolution: {integrity: sha512-TdrF7fW9Rphjq4RjrW0Kp2AW0Ahwu9sRGTkS6bvDi0SCwZlEZYmcfDbEsTz8RVk0EHIS/Vd1bv3JhG+1xZuAyQ==}
     engines: {node: '>=16'}
 
+  path-to-regexp@8.3.0:
+    resolution: {integrity: sha512-7jdwVIRtsP8MYpdXSwOS0YdD0Du+qOoF/AEPIt88PcCFrZCzx41oxku1jD88hZBwbNUIEfpqvuhjFaMAqMTWnA==}
+
   path-type@4.0.0:
     resolution: {integrity: sha512-gDKb8aZMDeD/tZWs9P6+q0J9Mwkdl6xMV8TjnGP3qJVJ06bdMgkbBlLU8IdfOsIsFz2BW1rNVT3XuNEl8zPAvw==}
     engines: {node: '>=8'}
@@ -8427,10 +8431,6 @@ packages:
   picomatch@2.3.1:
     resolution: {integrity: sha512-JU3teHTNjmE2VCGFzuY8EXzCDVwEqB2a8fsIvwaStHhAWJEeVd1o1QD80CU6+ZdEXXSLbSsuLwJjkCBWqRQUVA==}
     engines: {node: '>=8.6'}
-
-  picomatch@4.0.2:
-    resolution: {integrity: sha512-M7BAV6Rlcy5u+m6oPhAPFgJTzAioX/6B0DxyvDlo9l8+T3nLKbrczg2WLUyzd45L8RqfUMyGPzekbMvX2Ldkwg==}
-    engines: {node: '>=12'}
 
   picomatch@4.0.3:
     resolution: {integrity: sha512-5gTmgEY/sqK6gFXLIsQNH19lWb4ebPDLA4SdLP7dsWkIXHWlG66oPuVvXSGFPppYZz8ZDZq0dYYrbHfBCVUb1Q==}
@@ -9043,8 +9043,8 @@ packages:
   remark-parse@11.0.0:
     resolution: {integrity: sha512-FCxlKLNGknS5ba/1lmpYijMUzX2esxW5xQqjWxw2eHFfS2MSdaHVINFmhjo+qN1WhZhNimq0dZATN9pH0IDrpA==}
 
-  remark-rehype@11.1.1:
-    resolution: {integrity: sha512-g/osARvjkBXb6Wo0XvAeXQohVta8i84ACbenPpoSsxTOQH/Ae0/RGP4WZgnMH5pMLpsj4FG7OHmcIcXxpza8eQ==}
+  remark-rehype@11.1.2:
+    resolution: {integrity: sha512-Dh7l57ianaEoIpzbp0PC9UKAdCSVklD8E5Rpw7ETfbTl3FqcOOgq5q2LVDhgGCkaBv7p24JXikPdvhhmHvKMsw==}
 
   remark-stringify@11.0.0:
     resolution: {integrity: sha512-1OSmLd3awB/t8qdoEOMazZkNsfVTeY4fTsgzcQFdXNq8ToTN4ZGwrMnlda4K6smTFKD+GRV6O48i6Z4iKgPPpw==}
@@ -10699,8 +10699,8 @@ packages:
       utf-8-validate:
         optional: true
 
-  wuchale@0.16.5:
-    resolution: {integrity: sha512-g/6ZR+gBhzZq227y5MJvhrJkG/wYUfUvUa+zvAo1Q6K9dhiMWSz6YS2p3Aix2uM3sAx0KeCe9y8XAKprXnQiFg==}
+  wuchale@0.18.3:
+    resolution: {integrity: sha512-l4JxOjfGLiqY1u33I3TRlvrTGyMZfrXPei73Gw9wgdIGDicMI85eKN+fBNQxlunOTDavxY1M0qQNRBuv7gjmKQ==}
     hasBin: true
 
   xdg-basedir@5.1.0:
@@ -12183,6 +12183,11 @@ snapshots:
       eslint: 9.13.0(jiti@2.3.3)
       eslint-visitor-keys: 3.4.3
 
+  '@eslint-community/eslint-utils@4.9.0(eslint@9.13.0(jiti@2.3.3))':
+    dependencies:
+      eslint: 9.13.0(jiti@2.3.3)
+      eslint-visitor-keys: 3.4.3
+
   '@eslint-community/eslint-utils@4.9.0(eslint@9.39.0(jiti@2.3.3))':
     dependencies:
       eslint: 9.39.0(jiti@2.3.3)
@@ -12385,14 +12390,12 @@ snapshots:
 
   '@jridgewell/sourcemap-codec@1.5.0': {}
 
-  '@jridgewell/sourcemap-codec@1.5.2': {}
-
   '@jridgewell/sourcemap-codec@1.5.5': {}
 
   '@jridgewell/trace-mapping@0.3.25':
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
-      '@jridgewell/sourcemap-codec': 1.5.2
+      '@jridgewell/sourcemap-codec': 1.5.5
 
   '@jridgewell/trace-mapping@0.3.27':
     dependencies:
@@ -12585,7 +12588,7 @@ snapshots:
       chalk: 5.3.0
       clean-stack: 4.2.0
       execa: 6.1.0
-      fdir: 6.4.4(picomatch@4.0.3)
+      fdir: 6.5.0(picomatch@4.0.3)
       figures: 5.0.0
       filter-obj: 5.1.0
       got: 12.6.1
@@ -13699,7 +13702,7 @@ snapshots:
       magic-string: 0.25.9
       string.prototype.matchall: 4.0.12
 
-  '@sveltejs/acorn-typescript@1.0.5(acorn@8.15.0)':
+  '@sveltejs/acorn-typescript@1.0.6(acorn@8.15.0)':
     dependencies:
       acorn: 8.15.0
 
@@ -14002,6 +14005,11 @@ snapshots:
   '@tiptap/extension-strike@3.7.2(@tiptap/core@3.7.2(@tiptap/pm@3.7.2))':
     dependencies:
       '@tiptap/core': 3.7.2(@tiptap/pm@3.7.2)
+
+  '@tiptap/extension-table@3.10.5(@tiptap/core@3.7.2(@tiptap/pm@3.7.2))(@tiptap/pm@3.7.2)':
+    dependencies:
+      '@tiptap/core': 3.7.2(@tiptap/pm@3.7.2)
+      '@tiptap/pm': 3.7.2
 
   '@tiptap/extension-text-align@3.7.2(@tiptap/core@3.7.2(@tiptap/pm@3.7.2))':
     dependencies:
@@ -14575,7 +14583,7 @@ snapshots:
 
   '@typescript-eslint/utils@8.11.0(eslint@9.13.0(jiti@2.3.3))(typescript@5.6.3)':
     dependencies:
-      '@eslint-community/eslint-utils': 4.4.0(eslint@9.13.0(jiti@2.3.3))
+      '@eslint-community/eslint-utils': 4.9.0(eslint@9.13.0(jiti@2.3.3))
       '@typescript-eslint/scope-manager': 8.11.0
       '@typescript-eslint/types': 8.11.0
       '@typescript-eslint/typescript-estree': 8.11.0(typescript@5.6.3)
@@ -14694,7 +14702,7 @@ snapshots:
     dependencies:
       '@vitest/spy': 2.1.3
       estree-walker: 3.0.3
-      magic-string: 0.30.12
+      magic-string: 0.30.19
     optionalDependencies:
       vite: 5.4.10(@types/node@24.7.0)(terser@5.43.1)
 
@@ -14710,7 +14718,7 @@ snapshots:
   '@vitest/snapshot@2.1.3':
     dependencies:
       '@vitest/pretty-format': 2.1.3
-      magic-string: 0.30.12
+      magic-string: 0.30.19
       pathe: 1.1.2
 
   '@vitest/spy@2.1.3':
@@ -14723,17 +14731,17 @@ snapshots:
       loupe: 3.1.2
       tinyrainbow: 1.2.0
 
-  '@wuchale/jsx@0.7.4(react@19.2.0)':
+  '@wuchale/jsx@0.9.4(react@19.2.0)':
     dependencies:
-      '@sveltejs/acorn-typescript': 1.0.5(acorn@8.15.0)
+      '@sveltejs/acorn-typescript': 1.0.6(acorn@8.15.0)
       acorn: 8.15.0
-      wuchale: 0.16.5
+      wuchale: 0.18.3
     optionalDependencies:
       react: 19.2.0
 
-  '@wuchale/vite-plugin@0.14.6':
+  '@wuchale/vite-plugin@0.15.3':
     dependencies:
-      wuchale: 0.16.5
+      wuchale: 0.18.3
 
   '@xhmikosr/archive-type@6.0.1':
     dependencies:
@@ -16069,8 +16077,8 @@ snapshots:
   detective-postcss@6.1.3:
     dependencies:
       is-url: 1.2.4
-      postcss: 8.4.49
-      postcss-values-parser: 6.0.2(postcss@8.4.49)
+      postcss: 8.5.6
+      postcss-values-parser: 6.0.2(postcss@8.5.6)
 
   detective-sass@5.0.3:
     dependencies:
@@ -16669,15 +16677,15 @@ snapshots:
 
   eslint-plugin-svelte@2.46.0(eslint@9.13.0(jiti@2.3.3))(svelte@5.1.4)(ts-node@10.9.2(@swc/core@1.7.39)(@types/node@24.7.0)(typescript@5.6.3)):
     dependencies:
-      '@eslint-community/eslint-utils': 4.4.0(eslint@9.13.0(jiti@2.3.3))
-      '@jridgewell/sourcemap-codec': 1.5.2
+      '@eslint-community/eslint-utils': 4.9.0(eslint@9.13.0(jiti@2.3.3))
+      '@jridgewell/sourcemap-codec': 1.5.5
       eslint: 9.13.0(jiti@2.3.3)
       eslint-compat-utils: 0.5.1(eslint@9.13.0(jiti@2.3.3))
       esutils: 2.0.3
       known-css-properties: 0.35.0
-      postcss: 8.4.47
-      postcss-load-config: 3.1.4(postcss@8.4.47)(ts-node@10.9.2(@swc/core@1.7.39)(@types/node@24.7.0)(typescript@5.6.3))
-      postcss-safe-parser: 6.0.0(postcss@8.4.47)
+      postcss: 8.5.6
+      postcss-load-config: 3.1.4(postcss@8.5.6)(ts-node@10.9.2(@swc/core@1.7.39)(@types/node@24.7.0)(typescript@5.6.3))
+      postcss-safe-parser: 6.0.0(postcss@8.5.6)
       postcss-selector-parser: 6.1.2
       semver: 7.7.2
       svelte-eslint-parser: 0.43.0(svelte@5.1.4)
@@ -16818,7 +16826,7 @@ snapshots:
 
   esrap@1.2.2:
     dependencies:
-      '@jridgewell/sourcemap-codec': 1.5.2
+      '@jridgewell/sourcemap-codec': 1.5.5
       '@types/estree': 1.0.8
 
   esrecurse@4.3.0:
@@ -17086,14 +17094,6 @@ snapshots:
   fd-slicer@1.1.0:
     dependencies:
       pend: 1.2.0
-
-  fdir@6.4.4(picomatch@4.0.2):
-    optionalDependencies:
-      picomatch: 4.0.2
-
-  fdir@6.4.4(picomatch@4.0.3):
-    optionalDependencies:
-      picomatch: 4.0.3
 
   fdir@6.5.0(picomatch@4.0.3):
     optionalDependencies:
@@ -18553,9 +18553,13 @@ snapshots:
 
   magic-string@0.30.12:
     dependencies:
-      '@jridgewell/sourcemap-codec': 1.5.2
+      '@jridgewell/sourcemap-codec': 1.5.5
 
   magic-string@0.30.19:
+    dependencies:
+      '@jridgewell/sourcemap-codec': 1.5.5
+
+  magic-string@0.30.21:
     dependencies:
       '@jridgewell/sourcemap-codec': 1.5.5
 
@@ -19740,6 +19744,8 @@ snapshots:
 
   path-to-regexp@8.2.0: {}
 
+  path-to-regexp@8.3.0: {}
+
   path-type@4.0.0: {}
 
   path-type@5.0.0: {}
@@ -19759,8 +19765,6 @@ snapshots:
   picocolors@1.1.1: {}
 
   picomatch@2.3.1: {}
-
-  picomatch@4.0.2: {}
 
   picomatch@4.0.3: {}
 
@@ -19834,12 +19838,12 @@ snapshots:
 
   possible-typed-array-names@1.1.0: {}
 
-  postcss-load-config@3.1.4(postcss@8.4.47)(ts-node@10.9.2(@swc/core@1.7.39)(@types/node@24.7.0)(typescript@5.6.3)):
+  postcss-load-config@3.1.4(postcss@8.5.6)(ts-node@10.9.2(@swc/core@1.7.39)(@types/node@24.7.0)(typescript@5.6.3)):
     dependencies:
       lilconfig: 2.1.0
       yaml: 1.10.2
     optionalDependencies:
-      postcss: 8.4.47
+      postcss: 8.5.6
       ts-node: 10.9.2(@swc/core@1.7.39)(@types/node@24.7.0)(typescript@5.6.3)
 
   postcss-load-config@6.0.1(jiti@2.3.3)(postcss@8.5.6)(yaml@2.6.0):
@@ -19850,13 +19854,13 @@ snapshots:
       postcss: 8.5.6
       yaml: 2.6.0
 
-  postcss-safe-parser@6.0.0(postcss@8.4.47):
+  postcss-safe-parser@6.0.0(postcss@8.5.6):
     dependencies:
-      postcss: 8.4.47
+      postcss: 8.5.6
 
-  postcss-scss@4.0.9(postcss@8.4.47):
+  postcss-scss@4.0.9(postcss@8.5.6):
     dependencies:
-      postcss: 8.4.47
+      postcss: 8.5.6
 
   postcss-selector-parser@6.1.2:
     dependencies:
@@ -19865,11 +19869,11 @@ snapshots:
 
   postcss-value-parser@4.2.0: {}
 
-  postcss-values-parser@6.0.2(postcss@8.4.49):
+  postcss-values-parser@6.0.2(postcss@8.5.6):
     dependencies:
       color-name: 1.1.4
       is-url-superb: 4.0.0
-      postcss: 8.4.49
+      postcss: 8.5.6
       quote-unquote: 1.0.0
 
   postcss@8.4.47:
@@ -20244,7 +20248,7 @@ snapshots:
       mdast-util-to-hast: 13.2.0
       react: 19.2.0
       remark-parse: 11.0.0
-      remark-rehype: 11.1.1
+      remark-rehype: 11.1.2
       unified: 11.0.5
       unist-util-visit: 5.0.0
       vfile: 6.0.3
@@ -20468,7 +20472,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  remark-rehype@11.1.1:
+  remark-rehype@11.1.2:
     dependencies:
       '@types/hast': 3.0.4
       '@types/mdast': 4.0.4
@@ -21219,14 +21223,14 @@ snapshots:
 
   supports-preserve-symlinks-flag@1.0.0: {}
 
-  svelte-check@3.8.6(@babel/core@7.28.4)(postcss-load-config@3.1.4(postcss@8.4.47)(ts-node@10.9.2(@swc/core@1.7.39)(@types/node@24.7.0)(typescript@5.6.3)))(postcss@8.4.47)(svelte@5.1.4):
+  svelte-check@3.8.6(@babel/core@7.28.4)(postcss-load-config@3.1.4(postcss@8.5.6)(ts-node@10.9.2(@swc/core@1.7.39)(@types/node@24.7.0)(typescript@5.6.3)))(postcss@8.5.6)(svelte@5.1.4):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.25
       chokidar: 3.6.0
       picocolors: 1.1.1
       sade: 1.8.1
       svelte: 5.1.4
-      svelte-preprocess: 5.1.4(@babel/core@7.28.4)(postcss-load-config@3.1.4(postcss@8.4.47)(ts-node@10.9.2(@swc/core@1.7.39)(@types/node@24.7.0)(typescript@5.6.3)))(postcss@8.4.47)(svelte@5.1.4)(typescript@5.9.3)
+      svelte-preprocess: 5.1.4(@babel/core@7.28.4)(postcss-load-config@3.1.4(postcss@8.5.6)(ts-node@10.9.2(@swc/core@1.7.39)(@types/node@24.7.0)(typescript@5.6.3)))(postcss@8.5.6)(svelte@5.1.4)(typescript@5.9.3)
       typescript: 5.9.3
     transitivePeerDependencies:
       - '@babel/core'
@@ -21244,23 +21248,23 @@ snapshots:
       eslint-scope: 7.2.2
       eslint-visitor-keys: 3.4.3
       espree: 9.6.1
-      postcss: 8.4.47
-      postcss-scss: 4.0.9(postcss@8.4.47)
+      postcss: 8.5.6
+      postcss-scss: 4.0.9(postcss@8.5.6)
     optionalDependencies:
       svelte: 5.1.4
 
-  svelte-preprocess@5.1.4(@babel/core@7.28.4)(postcss-load-config@3.1.4(postcss@8.4.47)(ts-node@10.9.2(@swc/core@1.7.39)(@types/node@24.7.0)(typescript@5.6.3)))(postcss@8.4.47)(svelte@5.1.4)(typescript@5.9.3):
+  svelte-preprocess@5.1.4(@babel/core@7.28.4)(postcss-load-config@3.1.4(postcss@8.5.6)(ts-node@10.9.2(@swc/core@1.7.39)(@types/node@24.7.0)(typescript@5.6.3)))(postcss@8.5.6)(svelte@5.1.4)(typescript@5.9.3):
     dependencies:
       '@types/pug': 2.0.10
       detect-indent: 6.1.0
-      magic-string: 0.30.12
+      magic-string: 0.30.19
       sorcery: 0.11.1
       strip-indent: 3.0.0
       svelte: 5.1.4
     optionalDependencies:
       '@babel/core': 7.28.4
-      postcss: 8.4.47
-      postcss-load-config: 3.1.4(postcss@8.4.47)(ts-node@10.9.2(@swc/core@1.7.39)(@types/node@24.7.0)(typescript@5.6.3))
+      postcss: 8.5.6
+      postcss-load-config: 3.1.4(postcss@8.5.6)(ts-node@10.9.2(@swc/core@1.7.39)(@types/node@24.7.0)(typescript@5.6.3))
       typescript: 5.9.3
 
   svelte2tsx@0.7.22(svelte@5.1.4)(typescript@5.6.3):
@@ -21449,8 +21453,8 @@ snapshots:
 
   tinyglobby@0.2.9:
     dependencies:
-      fdir: 6.4.4(picomatch@4.0.2)
-      picomatch: 4.0.2
+      fdir: 6.5.0(picomatch@4.0.3)
+      picomatch: 4.0.3
 
   tinypool@1.0.1: {}
 
@@ -22387,12 +22391,13 @@ snapshots:
 
   ws@8.17.1: {}
 
-  wuchale@0.16.5:
+  wuchale@0.18.3:
     dependencies:
-      '@sveltejs/acorn-typescript': 1.0.5(acorn@8.15.0)
+      '@sveltejs/acorn-typescript': 1.0.6(acorn@8.15.0)
       acorn: 8.15.0
       chokidar: 4.0.3
-      magic-string: 0.30.19
+      magic-string: 0.30.21
+      path-to-regexp: 8.3.0
       picomatch: 4.0.3
       pofile: 1.1.4
       tinyglobby: 0.2.15

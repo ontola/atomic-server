@@ -4,13 +4,14 @@ import { StarterKit } from '@tiptap/starter-kit';
 import { Link } from '@tiptap/extension-link';
 import { Placeholder } from '@tiptap/extension-placeholder';
 import { Typography } from '@tiptap/extension-typography';
-import { Markdown } from 'tiptap-markdown';
+import { Markdown } from '@tiptap/markdown';
 import { EditorEvents } from './EditorEvents';
 import { FaCode } from 'react-icons/fa6';
 import { useCallback, useState } from 'react';
 import { BubbleMenu } from './BubbleMenu';
 import { TiptapContextProvider } from './TiptapContext';
 import { SlashCommands, buildSuggestion } from './SlashMenu/CommandsExtension';
+import { TableKit } from '@tiptap/extension-table';
 import { ExtendedImage } from './ImagePicker';
 import { usePopoverContainer } from '../../components/Popover';
 import {
@@ -19,6 +20,7 @@ import {
   FloatingMenuText,
   FloatingCodeButton,
 } from './sharedEditorStyles';
+import { TaskItem, TaskList } from '@tiptap/extension-list';
 
 export type AsyncMarkdownEditorProps = {
   placeholder?: string;
@@ -49,8 +51,13 @@ export default function AsyncMarkdownEditor({
     StarterKit.configure({
       link: false,
     }),
-    Markdown,
+    Markdown.configure({
+      markedOptions: {
+        gfm: true,
+      },
+    }),
     Typography,
+    TableKit,
     Link.configure({
       protocols: [
         'http',
@@ -66,6 +73,10 @@ export default function AsyncMarkdownEditor({
         rel: 'noopener noreferrer',
         target: '_blank',
       },
+    }),
+    TaskList,
+    TaskItem.configure({
+      nested: true,
     }),
     ExtendedImage.configure({
       HTMLAttributes: {
@@ -86,6 +97,7 @@ export default function AsyncMarkdownEditor({
   const editor = useEditor({
     extensions,
     content: markdown,
+    contentType: 'markdown',
     onBlur,
     autofocus: !!autoFocus,
     editorProps: {
@@ -98,12 +110,11 @@ export default function AsyncMarkdownEditor({
   });
 
   const handleChange = useCallback(() => {
-    // @ts-expect-error - markdown is a valid storage
-    const value = editor.storage.markdown.getMarkdown();
+    const value = editor.getMarkdown();
 
     setMarkdown(value);
     onChange?.(value);
-  }, [onChange]);
+  }, [onChange, editor]);
 
   const handleRawChange = useCallback(
     (val: string) => {
@@ -117,7 +128,7 @@ export default function AsyncMarkdownEditor({
     setCodeMode(enable);
 
     if (!enable) {
-      editor?.commands.setContent(markdown);
+      editor?.commands.setContent(markdown, { contentType: 'markdown' });
     }
   };
 

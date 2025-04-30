@@ -132,6 +132,11 @@ export class Resource<C extends OptionalClass = any> {
     return this._subject;
   }
 
+  /** Stable reference to the resource, even when the resource is proxied, for example when using @tomic/react or @tomic/svelte. */
+  public get stable(): Resource<C> {
+    return this.__internalObject;
+  }
+
   /** A human readable title for the resource, returns first of either: name, shortname, filename or subject */
   public get title(): string {
     return (this.get(core.properties.name) ??
@@ -364,13 +369,43 @@ export class Resource<C extends OptionalClass = any> {
     return res as Resource<C>;
   }
 
-  /** Merges a resource into this resource. If this resource has uncommited changes those changes will be applied on top of the new propvals. */
+  /** Merges a resource into this resource. If this resource has uncommited changes those changes will be applied on top of the new propvals.
+   * Any unsaved changes on the incoming resource will not be merged.
+   */
   public merge(resourceB: Resource): void {
     if (this.subject !== resourceB.subject) {
       throw new Error('Cannot merge resources with different subjects');
     }
 
-    this.propvals = resourceB.getPropVals();
+    const remoteProps = resourceB.getPropVals();
+
+    // Remove any propvals that are not present in the remote resource.
+    for (const [key] of this.propvals.entries()) {
+      if (!remoteProps.has(key)) {
+        this.propvals.delete(key);
+      }
+    }
+
+    // Merge the remote propvals into this resource.
+    for (const [key, value] of remoteProps.entries()) {
+      // We handle YDoc instances separately because they need to be stable references.
+      if (YLoader.isLoaded() && isYDoc(value)) {
+        const Y = YLoader.Y;
+        const localDoc = this.propvals.get(key) as Y.Doc | undefined;
+
+        if (!localDoc) {
+          this.setUnsafe(key, value);
+        } else {
+          const remoteState = Y.encodeStateAsUpdateV2(value);
+          Y.applyUpdateV2(localDoc, remoteState);
+        }
+
+        continue;
+      }
+
+      this.propvals.set(key, value);
+    }
+
     this.new = resourceB.new;
     this.error = resourceB.error;
     this.commitError = resourceB.commitError;

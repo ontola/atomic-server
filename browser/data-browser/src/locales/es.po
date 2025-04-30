@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2025-09-26T09:59:41.856Z\n"
-"PO-Revision-Date: 2025-10-30T12:45:39.153Z\n"
+"PO-Revision-Date: 2025-11-12T12:53:58.904Z\n"
 "Last-Translator: \n"
 "Language: es\n"
 "Language-Team: \n"
@@ -25,29 +25,28 @@ msgstr "Selecciona una clase"
 msgid "No classes"
 msgstr "No hay clases"
 
-#: src/components/ConfirmationDialog.tsx
 #: src/chunks/AI/AgentConfig.tsx
+#: src/components/ConfirmationDialog.tsx
 #: src/components/ParentPicker/ParentPickerDialog.tsx
-#: src/routes/History/HistoryMobileView.tsx
 #: src/components/forms/EditFormDialog.tsx
-#: src/components/forms/ResourceForm.tsx
-#: src/views/OntologyPage/NewPropertyButton.tsx
-#: src/views/OntologyPage/NewClassButton.tsx
-#: src/components/forms/NewForm/NewFormDialog.tsx
-#: src/components/forms/ValueForm/ValueFormEdit.tsx
-#: src/views/TablePage/PropertyForm/ExternalPropertyDialog.tsx
-#: src/views/TablePage/PropertyForm/NewPropertyDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
+#: src/components/forms/NewForm/NewFormDialog.tsx
+#: src/components/forms/ResourceForm.tsx
+#: src/components/forms/ValueForm/ValueFormEdit.tsx
+#: src/routes/History/HistoryMobileView.tsx
+#: src/views/OntologyPage/NewClassButton.tsx
+#: src/views/OntologyPage/NewPropertyButton.tsx
+#: src/views/TablePage/PropertyForm/ExternalPropertyDialog.tsx
+#: src/views/TablePage/PropertyForm/NewPropertyDialog.tsx
 msgid "Cancel"
 msgstr "Cancelar"
 
 #: src/components/ComboBox.tsx
-#: src/views/Element.tsx
 #: src/views/TablePage/EditorCells/AtomicURLCell.tsx
 #: src/views/TablePage/EditorCells/MultiRelationCell.tsx
 msgid "No results"
@@ -90,11 +89,11 @@ msgid "Limit Usages (optional)"
 msgstr "Limitar usos (opcional)"
 
 #: src/components/InviteForm.tsx
-#: src/views/TablePage/PropertyForm/NewPropertyDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
+#: src/views/TablePage/PropertyForm/NewPropertyDialog.tsx
 msgid "Create"
 msgstr "Crear"
 
@@ -102,22 +101,22 @@ msgstr "Crear"
 msgid "Invite created and copied to clipboard! 🚀"
 msgstr "¡Invitación creada y copiada al portapapeles! 🚀"
 
-#: src/components/HighlightedCodeBlock.tsx
-#: src/views/ResourcePage.tsx
 #: src/chunks/AI/AIChatPage.tsx
-#: src/views/ResourceLine.tsx
+#: src/chunks/AI/ModelSelect/OllamaModelSelector.tsx
+#: src/components/HighlightedCodeBlock.tsx
 #: src/components/Searchbar/TagSuggestionOverlay.tsx
-#: src/views/Document/DocumentV2FullPage.tsx
-#: src/views/Document/DocumentV2FullPage.tsx
 #: src/views/Card/ResourceCard.tsx
+#: src/views/Document/DocumentV2FullPage.tsx
+#: src/views/Document/DocumentV2FullPage.tsx
 #: src/views/File/FilePreview.tsx
 #: src/views/File/FilePreviewThumbnail.tsx
-#: src/chunks/AI/ModelSelect/OllamaModelSelector.tsx
+#: src/views/ResourceLine.tsx
+#: src/views/ResourcePage.tsx
 msgid "Loading..."
 msgstr "Cargando..."
 
-#: src/components/MetaSetter.tsx
 #: src/chunks/RTE/AIChatInput/mcpSuggestions.ts
+#: src/components/MetaSetter.tsx
 msgid "Atomic Data"
 msgstr "Atomic Data"
 
@@ -215,8 +214,8 @@ msgstr "Iniciar sesión"
 msgid "Go the the User Settings page"
 msgstr "Ir a la página de Configuración de usuario"
 
-#: src/routes/AppSettings.tsx
 #: src/components/SideBar/AppMenu.tsx
+#: src/routes/AppSettings.tsx
 msgid "Settings"
 msgstr "Configuración"
 
@@ -310,17 +309,6 @@ msgid ""
 "connectivity of RDF (linked data) and the reliability of type-safety."
 msgstr "Atomic Data es una especificación modular para compartir, modificar y modelar datos de gráficos. Combina la facilidad de uso de JSON, la conectividad de RDF (datos enlazados) y la confiabilidad de la seguridad de tipos."
 
-#. placeholder {0}: ' '
-#. placeholder {1}: ' '
-#: src/routes/AboutRoute.tsx
-msgid ""
-"Atomic Data is especially suitable for knowledge graphs, distributed\n"
-"datasets, semantic data, p2p applications, decentralized apps, and data\n"
-"that is meant to be shared. It is designed to be highly extensible, easy\n"
-"to use, and to make the process of domain specific standardization as\n"
-"simple as possible. Check out{0} <0><0>the docs</0></0>{1} for more information about Atomic Data."
-msgstr "Atomic Data es especialmente adecuado para gráficos de conocimiento, conjuntos de datos distribuidos, datos semánticos, aplicaciones p2p, aplicaciones descentralizadas y datos destinados a ser compartidos. Está diseñado para ser altamente extensible, fácil de usar y para simplificar al máximo el proceso de estandarización específica del dominio. Consulta{0} <0><0>la documentación</0></0>{1} para obtener más información sobre Atomic Data."
-
 #: src/routes/AboutRoute.tsx
 msgid "About this app"
 msgstr "Acerca de esta aplicación"
@@ -397,8 +385,8 @@ msgstr "No se ha pasado ningún asunto"
 msgid "Loading {0}..."
 msgstr "Cargando {0}..."
 
-#: src/routes/DataRoute.tsx
 #: src/chunks/AI/RealAIChat.tsx
+#: src/routes/DataRoute.tsx
 msgid "Accept"
 msgstr "Aceptar"
 
@@ -438,7 +426,6 @@ msgid "Code"
 msgstr "Código"
 
 #: src/routes/DataRoute.tsx
-#: src/views/ImporterPage.tsx
 msgid "JSON-AD"
 msgstr "JSON-AD"
 
@@ -454,10 +441,10 @@ msgstr "Turtle / N-triples / N3"
 msgid "Usage"
 msgstr "Uso"
 
-#: src/routes/EditRoute.tsx
-#: src/views/ResourcePageDefault.tsx
 #: src/chunks/AI/AgentConfigItem.tsx
 #: src/components/ResourceContextMenu/index.tsx
+#: src/routes/EditRoute.tsx
+#: src/views/ResourcePageDefault.tsx
 #: src/views/TablePage/TableHeadingMenu.tsx
 msgid "Edit"
 msgstr "Editar"
@@ -492,8 +479,8 @@ msgstr "Eliminando, esto podría tardar un poco..."
 msgid "No code verifier found"
 msgstr "No se ha encontrado el verificador de código"
 
-#: src/routes/LinkOpenRouter.tsx
 #: src/components/forms/SearchBox/SearchBox.tsx
+#: src/routes/LinkOpenRouter.tsx
 msgid "Error"
 msgstr "Error"
 
@@ -538,10 +525,6 @@ msgid "<0/> Show these keyboard shortcuts"
 msgstr "<0/> Mostrar estos atajos de teclado"
 
 #: src/routes/ShortcutsRoute.tsx
-msgid "<0/> <1>E</1>dit resource"
-msgstr "<0/> <1>E</1>ditar recurso"
-
-#: src/routes/ShortcutsRoute.tsx
 msgid "<0/> Show <1>d</1>ata for resource"
 msgstr "<0/> Mostrar <1>d</1>atos del recurso"
 
@@ -550,20 +533,8 @@ msgid "<0/> Show <1>h</1>ome page"
 msgstr "<0/> Mostrar página de <1>i</1>nicio"
 
 #: src/routes/ShortcutsRoute.tsx
-msgid "<0/> <1>N</1>ew resource"
-msgstr "<0/> <1>N</1>uevo recurso"
-
-#: src/routes/ShortcutsRoute.tsx
 msgid "<0/> Open <1>m</1>enu"
 msgstr "<0/> Abrir <1>m</1>enú"
-
-#: src/routes/ShortcutsRoute.tsx
-msgid "<0/> <1>U</1>ser settings"
-msgstr "<0/> <1>C</1>onfiguración de usuario"
-
-#: src/routes/ShortcutsRoute.tsx
-msgid "<0/> <1>T</1>heme settings"
-msgstr "<0/> <1>T</1>ema"
 
 #: src/routes/ShortcutsRoute.tsx
 msgid "Document"
@@ -585,9 +556,9 @@ msgstr "<0/> Borrar línea"
 msgid "If you sign out, your secret will be removed. If you haven't saved your secret somewhere, you will lose access to this User. Are you sure you want to sign out?"
 msgstr "Si cierras sesión, tu secreto será eliminado. Si no has guardado tu secreto en algún lugar, perderás el acceso a este Usuario. ¿Estás seguro de que quieres cerrar sesión?"
 
+#: src/components/SideBar/AppMenu.tsx
 #: src/routes/SettingsAgent.tsx
 #: src/views/InvitePage.tsx
-#: src/components/SideBar/AppMenu.tsx
 msgid "User Settings"
 msgstr "Configuración de usuario"
 
@@ -720,8 +691,8 @@ msgstr "Inténtalo de nuevo"
 msgid "Chat input"
 msgstr "Entrada de chat"
 
-#: src/views/ChatRoomPage.tsx
 #: src/chunks/RTE/AIChatInput/AsyncAIChatInput.tsx
+#: src/views/ChatRoomPage.tsx
 msgid "Send"
 msgstr "Enviar"
 
@@ -753,9 +724,9 @@ msgstr "Copiar enlace a este mensaje"
 msgid "Copy message text"
 msgstr "Copiar texto del mensaje"
 
-#: src/views/ChatRoomPage.tsx
-#: src/views/ChatRoomPage.tsx
 #: src/views/BookmarkPage/BookmarkPreview.tsx
+#: src/views/ChatRoomPage.tsx
+#: src/views/ChatRoomPage.tsx
 #: src/views/TablePage/PropertyForm/NumberPropertyForm.tsx
 msgid "loading..."
 msgstr "cargando..."
@@ -763,22 +734,6 @@ msgstr "cargando..."
 #: src/views/ChatRoomPage.tsx
 msgid "to"
 msgstr "a"
-
-#: src/views/DocumentPage.tsx
-msgid "Upload succeeded!"
-msgstr "¡Subida exitosa!"
-
-#: src/views/DocumentPage.tsx
-msgid "Read mode"
-msgstr "Modo lectura"
-
-#: src/views/DocumentPage.tsx
-msgid "Edit mode"
-msgstr "Modo edición"
-
-#: src/views/DocumentPage.tsx
-msgid "Grab to re-order"
-msgstr "Arrastra para reordenar"
 
 #: src/views/DrivePage.tsx
 msgid "Set as current drive"
@@ -796,44 +751,12 @@ msgid ""
 "you should set this up at a Domain on a server."
 msgstr "Estás ejecutando Atomic-Server en `localhost`, lo que significa que no estará disponible desde ninguna otra máquina que no sea tu dispositivo local actual. Si quieres que tu Atomic-Server esté disponible desde la web, deberías configurarlo en un dominio en un servidor."
 
-#: src/views/Element.tsx
-msgid "Agent does not have edit rights"
-msgstr "El agente no tiene derechos de edición"
-
-#: src/views/Element.tsx
-msgid "[link text](https://example.com)"
-msgstr "[texto del enlace](https://example.com)"
-
-#: src/views/Element.tsx
-msgid "# Big Header"
-msgstr "# Encabezado Grande"
-
-#: src/views/Element.tsx
-msgid "## Header"
-msgstr "## Encabezado"
-
-#: src/views/Element.tsx
-msgid "### Smaller Header"
-msgstr "### Encabezado Más Pequeño"
-
-#: src/views/Element.tsx
-msgid "Search something..."
-msgstr "Buscar algo..."
-
-#: src/views/Element.tsx
-msgid "(press tab to select, left / right to browse)"
-msgstr "(presione tab para seleccionar, izquierda / derecha para navegar)"
-
-#: src/views/Element.tsx
-msgid "Try typing these:"
-msgstr "Intenta escribir esto:"
-
-#. placeholder {0}: resource.error.message
 #. placeholder {0}: JSON.stringify(error)
 #. placeholder {0}: searchError.message
-#: src/views/ResourceLine.tsx
+#. placeholder {0}: resource.error.message
 #: src/components/forms/Field.tsx
 #: src/components/forms/SearchBox/SearchBoxWindow.tsx
+#: src/views/ResourceLine.tsx
 msgid "Error: {0}"
 msgstr "Error: {0}"
 
@@ -877,8 +800,8 @@ msgstr "Endpoint {0}"
 msgid "Go"
 msgstr "Ir"
 
-#: src/views/EndpointPage.tsx
 #: src/routes/Search/SearchRoute.tsx
+#: src/views/EndpointPage.tsx
 msgid "No hits"
 msgstr "Sin resultados"
 
@@ -1055,10 +978,10 @@ msgstr "No hay ningún proveedor de IA configurado."
 
 #: src/chunks/AI/MessageContextItem.tsx
 #: src/chunks/RTE/EditLinkForm.tsx
-#: src/views/TablePage/TableHeadingMenu.tsx
-#: src/views/TablePage/TableHeadingMenu.tsx
 #: src/components/forms/ResourceSelector/ResourceSelector.tsx
 #: src/views/OntologyPage/Property/PropertyLineWrite.tsx
+#: src/views/TablePage/TableHeadingMenu.tsx
+#: src/views/TablePage/TableHeadingMenu.tsx
 msgid "Remove"
 msgstr "Eliminar"
 
@@ -1173,9 +1096,9 @@ msgstr "Elige un emoji"
 msgid "Copy code"
 msgstr "Copiar código"
 
+#: src/chunks/RTE/AsyncMarkdownEditor.tsx
+#: src/chunks/RTE/AsyncMarkdownEditor.tsx
 #: src/chunks/RTE/CollaborativeEditor.tsx
-#: src/chunks/RTE/AsyncMarkdownEditor.tsx
-#: src/chunks/RTE/AsyncMarkdownEditor.tsx
 msgid "Start typing..."
 msgstr "Empieza a escribir..."
 
@@ -1201,19 +1124,19 @@ msgstr "Texto alternativo"
 
 #: src/chunks/RTE/ImagePicker.tsx
 #: src/components/forms/EditFormDialog.tsx
-#: src/routes/SettingsServer/index.tsx
+#: src/components/forms/NewForm/NewFormDialog.tsx
 #: src/components/forms/ResourceForm.tsx
+#: src/routes/SettingsServer/index.tsx
 #: src/routes/Share/ShareRoute.tsx
 #: src/views/Article/ArticleDescription.tsx
-#: src/views/OntologyPage/NewPropertyButton.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
-#: src/components/forms/NewForm/NewFormDialog.tsx
+#: src/views/OntologyPage/NewPropertyButton.tsx
 #: src/views/TablePage/PropertyForm/EditPropertyDialog.tsx
 msgid "Save"
 msgstr "Guardar"
 
-#: src/views/MessagePage.tsx
 #: src/views/Card/MessageCard.tsx
+#: src/views/MessagePage.tsx
 msgid "Message in <0/>"
 msgstr "Mensaje en <0/>"
 
@@ -1610,8 +1533,8 @@ msgid "Load drives not displayed in this list."
 msgstr "Cargar unidades no mostradas en esta lista."
 
 #: src/components/SideBar/DriveSwitcher.tsx
-#: src/routes/SettingsServer/DrivesCard.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
+#: src/routes/SettingsServer/DrivesCard.tsx
 msgid "New Drive"
 msgstr "Nueva unidad"
 
@@ -1760,8 +1683,8 @@ msgstr "Historial de {0}"
 msgid "Version"
 msgstr "Versión"
 
-#: src/routes/History/HistoryMobileView.tsx
 #: src/routes/History/HistoryDesktopView.tsx
+#: src/routes/History/HistoryMobileView.tsx
 msgid "Make current version"
 msgstr "Convertir en la versión actual"
 
@@ -1793,16 +1716,6 @@ msgstr "{0}{1} {2} para{3} <0/>"
 msgid "With Tags:"
 msgstr "Con etiquetas:"
 
-#: src/routes/Search/SearchRoute.tsx
-msgid ""
-"Search matches on the names and descriptions of resources.\n"
-"Additionally you can search for resources with specific tags\n"
-"by adding <0>tag:[name]</0> to your search."
-msgstr ""
-"La búsqueda coincide con los nombres y descripciones de los recursos.\n"
-"Además, puedes buscar recursos con etiquetas específicas\n"
-"añadiendo <0>tag:[nombre]</0> a tu búsqueda."
-
 #: src/routes/NewResource/BaseButtons.tsx
 msgid "Base classes"
 msgstr "Clases base"
@@ -1822,8 +1735,8 @@ msgstr "Crear nuevo recurso{0} {1}"
 #. placeholder {0}: prop.shortname
 #. placeholder {0}: prop.shortname
 #: src/components/forms/EditFormDialog.tsx
-#: src/views/TablePage/EditorCells/MarkdownCell.tsx
 #: src/views/TablePage/EditorCells/JSONCell.tsx
+#: src/views/TablePage/EditorCells/MarkdownCell.tsx
 msgid "Edit {0}"
 msgstr "Editar {0}"
 
@@ -1860,18 +1773,18 @@ msgstr "Campo obligatorio."
 msgid "Invalid JSON"
 msgstr "JSON no válido"
 
-#: src/components/forms/InputMarkdown.tsx
-#: src/components/forms/InputDate.tsx
-#: src/components/forms/InputNumber.tsx
-#: src/components/forms/InputNumber.tsx
-#: src/components/forms/InputString.tsx
-#: src/components/forms/InputSlug.tsx
-#: src/components/forms/InputURI.tsx
-#: src/components/forms/InputResourceArray.tsx
-#: src/components/forms/InputResourceArray.tsx
-#: src/components/forms/InputResourceArray.tsx
-#: src/components/forms/InputTimestamp.tsx
 #: src/components/forms/FilePicker/FilePicker.tsx
+#: src/components/forms/InputDate.tsx
+#: src/components/forms/InputMarkdown.tsx
+#: src/components/forms/InputNumber.tsx
+#: src/components/forms/InputNumber.tsx
+#: src/components/forms/InputResourceArray.tsx
+#: src/components/forms/InputResourceArray.tsx
+#: src/components/forms/InputResourceArray.tsx
+#: src/components/forms/InputSlug.tsx
+#: src/components/forms/InputString.tsx
+#: src/components/forms/InputTimestamp.tsx
+#: src/components/forms/InputURI.tsx
 #: src/components/forms/ResourceSelector/ResourceSelector.tsx
 #: src/components/forms/formValidation/useValidation.ts
 #: src/components/forms/formValidation/useValidation.ts
@@ -1930,9 +1843,9 @@ msgstr "Arrastra los archivos aquí..."
 msgid "Upload file(s)..."
 msgstr "Subir archivo(s)..."
 
-#: src/components/forms/UploadForm.tsx
 #: src/components/forms/FileDropzone/FileDropzone.tsx
 #: src/components/forms/FileDropzone/FileDropzoneInput.tsx
+#: src/components/forms/UploadForm.tsx
 msgid "Uploading..."
 msgstr "Subiendo..."
 
@@ -2209,10 +2122,10 @@ msgstr "Crear nuevo recurso"
 msgid "New Resource"
 msgstr "Nuevo recurso"
 
-#: src/views/ResourceInline/ResourceInline.tsx
 #: src/components/SideBar/OntologySideBar/OntologiesPanel.tsx
-#: src/components/forms/NewForm/NewFormDialog.tsx
 #: src/components/forms/FilePicker/FilePickerItem.tsx
+#: src/components/forms/NewForm/NewFormDialog.tsx
+#: src/views/ResourceInline/ResourceInline.tsx
 msgid "loading"
 msgstr "cargando"
 
@@ -2221,8 +2134,8 @@ msgstr "cargando"
 msgid "{0} is not a valid subject."
 msgstr "{0} no es un asunto válido."
 
-#: src/views/FolderPage/ListView.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
+#: src/views/FolderPage/ListView.tsx
 msgid "Title"
 msgstr "Título"
 
@@ -2414,10 +2327,10 @@ msgstr "Proveedor"
 msgid "OpenRouter is not enabled"
 msgstr "OpenRouter no está habilitado"
 
-#. placeholder {0}: modelList.length
 #. placeholder {0}: models.length
-#: src/chunks/AI/ModelSelect/OpenRouterModelSelector.tsx
+#. placeholder {0}: modelList.length
 #: src/chunks/AI/ModelSelect/OllamaModelSelector.tsx
+#: src/chunks/AI/ModelSelect/OpenRouterModelSelector.tsx
 msgid "{0} Models"
 msgstr "{0} Modelos"
 
@@ -2444,8 +2357,8 @@ msgstr "{0} /M tokens de salida"
 msgid "{0} /1K web search results"
 msgstr "{0} /1K resultados de búsqueda web"
 
-#: src/chunks/AI/ModelSelect/OpenRouterModelSelector.tsx
 #: src/chunks/AI/ModelSelect/OllamaModelSelector.tsx
+#: src/chunks/AI/ModelSelect/OpenRouterModelSelector.tsx
 msgid "Select a model"
 msgstr "Selecciona un modelo"
 
@@ -2497,8 +2410,8 @@ msgstr "Nombre del Servidor"
 msgid "Enter server name"
 msgstr "Introduce el nombre del servidor"
 
-#: src/components/AI/MCP/ServerItem.tsx
 #: src/components/AI/MCP/MCPServersManager.tsx
+#: src/components/AI/MCP/ServerItem.tsx
 msgid "Server URL"
 msgstr "URL del Servidor"
 
@@ -2510,8 +2423,8 @@ msgstr "Introduce la URL del servidor"
 msgid "Type"
 msgstr "Tipo"
 
-#: src/components/AI/MCP/ServerItem.tsx
 #: src/components/AI/MCP/MCPServersManager.tsx
+#: src/components/AI/MCP/ServerItem.tsx
 msgid "Select transport type"
 msgstr "Selecciona el tipo de transporte"
 
@@ -2757,8 +2670,8 @@ msgstr "Chat vacío"
 msgid "Add resource"
 msgstr "Añadir recurso"
 
-#: src/views/TablePage/EditorCells/MarkdownCell.tsx
 #: src/views/TablePage/EditorCells/JSONCell.tsx
+#: src/views/TablePage/EditorCells/MarkdownCell.tsx
 msgid "Open edit dialog"
 msgstr "Abrir diálogo de edición"
 
@@ -3034,9 +2947,6 @@ msgstr "Ocultar estado codificado"
 msgid "Editing YDoc directly is not supported"
 msgstr "La edición directa de YDoc no es compatible"
 
-#~ msgid "Untitled Agent"
-#~ msgstr "Agente sin título"
-
 #: src/chunks/RTE/FullBubbleMenu.tsx
 msgid "Left"
 msgstr "Izquierda"
@@ -3077,21 +2987,6 @@ msgstr "documento"
 msgid "Type '/' for options or '@' for resources"
 msgstr "Escribe '/' para ver las opciones o '@' para ver los recursos"
 
-#~ msgid "Get HTML"
-#~ msgstr "Obtener HTML"
-
-#~ msgid "Print"
-#~ msgstr "Imprimir"
-
-#~ msgid "Print this document"
-#~ msgstr "Imprimir este documento"
-
-#~ msgid "Export to PDF"
-#~ msgstr "Exportar a PDF"
-
-#~ msgid "Print this document to a PDF file"
-#~ msgstr "Imprimir este documento a un archivo PDF"
-
 #: src/chunks/RTE/SlashMenu/CommandList.tsx
 msgid "No results found"
 msgstr "No se encontraron resultados"
@@ -3099,3 +2994,68 @@ msgstr "No se encontraron resultados"
 #: src/chunks/RTE/CollaborativeEditor.tsx
 msgid "Data Table"
 msgstr "Tabla de datos"
+
+#: src/views/DocumentPage.tsx
+msgid "Update Document"
+msgstr "Actualizar Documento"
+
+#: src/views/DocumentPage.tsx
+msgid ""
+"<0/> This document needs to be updated to the new format in order to\n"
+"be edited."
+msgstr "<0/> Este documento debe actualizarse al nuevo formato para poder editarse."
+
+#: src/views/DocumentPage.tsx
+msgid "Could not update document"
+msgstr "No se pudo actualizar el documento"
+
+#: src/views/Card/FolderCard.tsx
+msgid "folder"
+msgstr "carpeta"
+
+#: src/routes/ShortcutsRoute.tsx
+msgid "<0/> <1/>dit resource"
+msgstr "<0/> <1/>ditar recurso"
+
+#: src/routes/ShortcutsRoute.tsx
+msgid "<0/> <1/>ew resource"
+msgstr "<0/> <1/>uevo recurso"
+
+#: src/routes/ShortcutsRoute.tsx
+msgid "<0/> <1/>ser settings"
+msgstr "<0/> <1/>justes de usuario"
+
+#: src/routes/ShortcutsRoute.tsx
+msgid "<0/> <1/>heme settings"
+msgstr "<0/> <1/>justes de tema"
+
+#: src/routes/Search/SearchRoute.tsx
+msgid ""
+"Search matches on the names and descriptions of resources.\n"
+"Additionally you can search for resources with specific tags\n"
+"by adding <0/> to your search."
+msgstr ""
+"La búsqueda coincide con los nombres y descripciones de los recursos.\n"
+"Además, puede buscar recursos con etiquetas específicas\n"
+"agregando <0/> a su búsqueda."
+
+#. placeholder {0}: ' '
+#. placeholder {1}: ' '
+#: src/routes/AboutRoute.tsx
+msgid ""
+"Atomic Data is especially suitable for knowledge graphs, distributed\n"
+"datasets, semantic data, p2p applications, decentralized apps, and data\n"
+"that is meant to be shared. It is designed to be highly extensible, easy\n"
+"to use, and to make the process of domain specific standardization as\n"
+"simple as possible. Check out{0} <0>the docs</0>{1} for more information about Atomic Data."
+msgstr ""
+"Atomic Data es especialmente adecuado para gráficos de conocimiento, datos\n"
+"distribuidos, datos semánticos, aplicaciones p2p, aplicaciones\n"
+"descentralizadas y datos destinados a ser compartidos. Está diseñado para\n"
+"ser altamente extensible, fácil de usar y para simplificar al máximo el\n"
+"proceso de estandarización específica del dominio. Consulte{0} <0>la\n"
+"documentación</0>{1} para obtener más información sobre Atomic Data."
+
+#: src/chunks/RTE/CollaborativeEditor.tsx
+msgid "Untitled Agent"
+msgstr "Agente sin título"
