@@ -3792,3 +3792,16 @@ msgstr "New {0} Column"
 
 #~ msgid "AbortError"
 #~ msgstr "AbortError"
+
+#~ msgid ""
+#~ "Welcome to your Drive.\n"
+#~ "\n"
+#~ "This is your personal Atomic Data drive. Edit this description to tell visitors what this space is about."
+#~ msgstr ""
+#~ "Welcome to your Drive.\n"
+#~ "\n"
+#~ "This is your personal Atomic Data drive. Edit this description to tell visitors what this space is about."
+
+#: src/components/NewIdentitySection.tsx
+msgid "This is your personal Atomic Data drive. Edit this description to tell visitors what this space is about."
+msgstr "This is your personal Atomic Data drive. Edit this description to tell visitors what this space is about."

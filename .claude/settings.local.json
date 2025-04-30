@@ -37,7 +37,10 @@
       "Bash(curl -s http://localhost:5173)",
       "mcp__charlotte__charlotte_tools",
       "mcp__charlotte__charlotte_observe",
-      "mcp__charlotte__charlotte_type"
+      "mcp__charlotte__charlotte_type",
+      "Bash(while read:*)",
+      "Bash(do if:*)",
+      "Bash(then echo:*)"
     ]
   }
 }
