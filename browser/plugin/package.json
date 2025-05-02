@@ -27,6 +27,10 @@
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
+    "format-check": "oxfmt -c ../.oxfmtrc.json --check ./src",
+    "format": "oxfmt -c ../.oxfmtrc.json ./src",
+    "lint": "oxlint -c ../.oxlintrc.json . && pnpm format-check",
+    "lint-fix": "oxlint -c ../.oxlintrc.json --fix . && pnpm format",
     "start": "tsdown --watch",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "pnpm run build"

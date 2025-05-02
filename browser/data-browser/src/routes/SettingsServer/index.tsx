@@ -139,7 +139,9 @@ function SettingsServer(): JSX.Element {
             disabled={isHttpDrive}
           />
 
-          <LabelStyled htmlFor={currentServerId}>Add Gateway by URL</LabelStyled>
+          <LabelStyled htmlFor={currentServerId}>
+            Add Gateway by URL
+          </LabelStyled>
           <Row>
             <InputWrapper>
               <InputStyled

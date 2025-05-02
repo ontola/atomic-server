@@ -33,7 +33,6 @@ export function bootstrap(store: Store): void {
     addBootstrapped(chatroomDefaults);
     addBootstrapped(ontologiesDefaults);
     addBootstrapped(aiDefaults);
-
   } catch (e) {
     console.error('Failed to bootstrap store:', e);
   }

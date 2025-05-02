@@ -3,11 +3,10 @@ import { styled } from 'styled-components';
 import type { JSX } from 'react';
 import { transition } from '../../helpers/transition';
 
-interface CheckboxProps
-  extends Omit<
-    React.InputHTMLAttributes<HTMLInputElement>,
-    'type' | 'onChange'
-  > {
+interface CheckboxProps extends Omit<
+  React.InputHTMLAttributes<HTMLInputElement>,
+  'type' | 'onChange'
+> {
   checked?: boolean;
   selected?: boolean;
   onChange: (value: boolean) => void;

@@ -19,9 +19,8 @@ export async function upgradeDocument(
   store: Store,
 ) {
   const { MarkdownManager } = await import('@tiptap/markdown');
-  const { getCollaborativeEditorSchema } = await import(
-    '@chunks/RTE/getCollaborativeEditorSchema'
-  );
+  const { getCollaborativeEditorSchema } =
+    await import('@chunks/RTE/getCollaborativeEditorSchema');
   const { prosemirrorJSONToYXmlFragment } = await import('@tiptap/y-tiptap');
 
   const { schema, extensions } = getCollaborativeEditorSchema(store);

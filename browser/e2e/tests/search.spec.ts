@@ -19,7 +19,9 @@ test.describe('search', async () => {
   test('text search', async ({ page }) => {
     const navigateToSearchPromise = page.waitForURL(
       '**/app/search?query=welcome',
-      { timeout: 10000 },
+      {
+        timeout: 10000,
+      },
     );
     await addressBar(page).pressSequentially('welcome');
     await navigateToSearchPromise;

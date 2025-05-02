@@ -75,7 +75,9 @@ const createModel = async (page: Page) => {
       dialog,
       'Search for a class',
       'https://atomicdata.dev/classes/File',
-      { label: 'Classtype' },
+      {
+        label: 'Classtype',
+      },
     );
 
     const commitPromise = waitForCommit(page);

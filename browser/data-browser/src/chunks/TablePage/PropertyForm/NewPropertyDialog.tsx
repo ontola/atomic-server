@@ -37,15 +37,33 @@ const getCategoryGenesisPropVals = (
 ): { isA: string | string[]; propVals: Record<string, unknown> } => {
   switch (category) {
     case 'number':
-      return { isA: core.classes.property, propVals: { [core.properties.datatype]: Datatype.INTEGER } };
+      return {
+        isA: core.classes.property,
+        propVals: { [core.properties.datatype]: Datatype.INTEGER },
+      };
     case 'date':
-      return { isA: core.classes.property, propVals: { [core.properties.datatype]: Datatype.DATE } };
+      return {
+        isA: core.classes.property,
+        propVals: { [core.properties.datatype]: Datatype.DATE },
+      };
     case 'checkbox':
-      return { isA: core.classes.property, propVals: { [core.properties.datatype]: Datatype.BOOLEAN } };
+      return {
+        isA: core.classes.property,
+        propVals: { [core.properties.datatype]: Datatype.BOOLEAN },
+      };
     case 'file':
-      return { isA: core.classes.property, propVals: { [core.properties.datatype]: Datatype.ATOMIC_URL, [core.properties.classtype]: server.classes.file } };
+      return {
+        isA: core.classes.property,
+        propVals: {
+          [core.properties.datatype]: Datatype.ATOMIC_URL,
+          [core.properties.classtype]: server.classes.file,
+        },
+      };
     case 'json':
-      return { isA: core.classes.property, propVals: { [core.properties.datatype]: Datatype.JSON } };
+      return {
+        isA: core.classes.property,
+        propVals: { [core.properties.datatype]: Datatype.JSON },
+      };
     case 'select':
       return {
         isA: [core.classes.property, dataBrowser.classes.selectProperty],
@@ -56,10 +74,16 @@ const getCategoryGenesisPropVals = (
         },
       };
     case 'relation':
-      return { isA: core.classes.property, propVals: { [core.properties.datatype]: Datatype.ATOMIC_URL } };
+      return {
+        isA: core.classes.property,
+        propVals: { [core.properties.datatype]: Datatype.ATOMIC_URL },
+      };
     case 'text':
     default:
-      return { isA: core.classes.property, propVals: { [core.properties.datatype]: Datatype.STRING } };
+      return {
+        isA: core.classes.property,
+        propVals: { [core.properties.datatype]: Datatype.STRING },
+      };
   }
 };
 
@@ -80,7 +104,9 @@ export function NewPropertyDialog({
   bindShow,
 }: NewPropertyDialogProps): JSX.Element {
   const store = useStore();
-  const [propertyResource, setPropertyResource] = useState<Resource | null>(null);
+  const [propertyResource, setPropertyResource] = useState<Resource | null>(
+    null,
+  );
   const [valid, setValid] = useState(true);
 
   const [_properties, _setProperties, pushProp] = useArray(
@@ -177,7 +203,13 @@ export function NewPropertyDialog({
     <FormValidationContextProvider onValidationChange={setValid}>
       <Dialog {...dialogProps}>
         <DialogTitle>
-          <h1>New {selectedCategory ? selectedCategory[0].toUpperCase() + selectedCategory.slice(1) : ''} Column</h1>
+          <h1>
+            New{' '}
+            {selectedCategory
+              ? selectedCategory[0].toUpperCase() + selectedCategory.slice(1)
+              : ''}{' '}
+            Column
+          </h1>
         </DialogTitle>
         <DialogContent>
           {propertyResource && (

@@ -39,7 +39,7 @@ describe('resource.ts', () => {
   it('maintains unbreakable commit chain even if prop lastCommit is clobbered', async ({
     expect,
   }) => {
-    // This test simulates Step 2 of onboarding where a remote merge might 
+    // This test simulates Step 2 of onboarding where a remote merge might
     // clobber the local lastCommit property before the next save.
     const resource = new Resource('https://example.com/res');
     const store = {
@@ -58,20 +58,24 @@ describe('resource.ts', () => {
     // 1. Initial Save
     await resource.set('https://example.com/p1', 'val1', false);
     await resource.save();
-    const firstCommitId = resource.get('https://atomicdata.dev/properties/lastCommit');
+    const firstCommitId = resource.get(
+      'https://atomicdata.dev/properties/lastCommit',
+    );
     expect(firstCommitId).toBeDefined();
 
     // 2. Simulate Remote Merge clobbering the property (e.g. from an old websocket message)
     const clobberedResource = new Resource('https://example.com/res');
     // It has no lastCommit!
     resource.merge(clobberedResource);
-    expect(resource.get('https://atomicdata.dev/properties/lastCommit')).toBeUndefined();
+    expect(
+      resource.get('https://atomicdata.dev/properties/lastCommit'),
+    ).toBeUndefined();
 
     // 3. Second Save
     await resource.set('https://example.com/p2', 'val2', false);
     await resource.save();
 
-    // The second save MUST have used the first commit as previousCommit 
+    // The second save MUST have used the first commit as previousCommit
     // despite the property being missing.
     const secondCommitCall = store.postCommit.mock.calls[1][0];
     expect(secondCommitCall.previousCommit).toBe(firstCommitId);

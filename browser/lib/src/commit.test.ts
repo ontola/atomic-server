@@ -62,9 +62,9 @@ describe('Commit signing and keys', () => {
     expect(
       jsonCorrect['https://atomicdata.dev/properties/subject'],
     ).toBeUndefined();
-    expect(
-      jsonCorrect['https://atomicdata.dev/properties/isGenesis'],
-    ).toBe(true);
+    expect(jsonCorrect['https://atomicdata.dev/properties/isGenesis']).toBe(
+      true,
+    );
   });
 
   it('preserves DID subject and chains commits on sequential saves', async ({

@@ -123,9 +123,10 @@
   },
   "scripts": {
     "build": "vite build",
-    "lint": "eslint --quiet ./src --ext .js,.jsx,.ts,.tsx && pnpm prettier-check ./src",
-    "lint-fix": "eslint ./src --ext .js,.jsx,.ts,.tsx --fix",
-    "prettier-check": "prettier --check ./src",
+    "format-check": "oxfmt -c ../.oxfmtrc.json --check ./src",
+    "format": "oxfmt -c ../.oxfmtrc.json ./src",
+    "lint": "oxlint -c ../.oxlintrc.json . && pnpm format-check",
+    "lint-fix": "oxlint -c ../.oxlintrc.json --fix . && pnpm format",
     "preview": "vite preview",
     "start": "vite",
     "test": "vitest run",

@@ -11,8 +11,7 @@
   },
   "dependencies": {
     "@tomic/lib": "workspace:*",
-    "chalk": "^5.3.0",
-    "prettier": "3.0.3"
+    "chalk": "^5.3.0"
   },
   "devDependencies": {
     "@types/node": "^20.17.0",
@@ -26,15 +25,16 @@
   },
   "scripts": {
     "build": "tsc",
-    "lint": "eslint ./src --ext .js,.ts && pnpm prettier-check",
-    "lint-fix": "eslint ./src --ext .js,.ts --fix",
+    "format-check": "oxfmt -c ../.oxfmtrc.json --check ./src",
+    "format": "oxfmt -c ../.oxfmtrc.json ./src",
+    "lint": "oxlint -c ../.oxlintrc.json . && pnpm format-check",
+    "lint-fix": "oxlint -c ../.oxlintrc.json --fix . && pnpm format",
     "prepublishOnly": "pnpm run build && pnpm run lint && pnpm run lint-package",
     "lint-package": "pnpm dlx publint",
     "watch": "tsc --build --watch",
     "start": "pnpm exec tsc --build --watch",
     "tsc": "pnpm exec tsc --build",
-    "typecheck": "pnpm exec tsc --noEmit",
-    "prettier-check": "prettier --check ./src"
+    "typecheck": "pnpm exec tsc --noEmit"
   },
   "bin": {
     "create-template": "./bin/src/index.js"

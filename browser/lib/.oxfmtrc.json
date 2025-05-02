@@ -1,4 +1,5 @@
 {
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
   "semi": true,
   "printWidth": 80,
   "tabWidth": 2,
@@ -8,13 +9,6 @@
   "arrowParens": "avoid",
   "jsxSingleQuote": true,
   "trailingComma": "all",
-  "plugins": ["prettier-plugin-svelte"],
-  "overrides": [
-    {
-      "files": "*.svelte",
-      "options": {
-        "parser": "svelte"
-      }
-    }
-  ]
+  "sortPackageJson": false,
+  "ignorePatterns": ["dist", "node_modules", ".temp", "tmp"]
 }
