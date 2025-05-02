@@ -107,7 +107,8 @@ export default defineConfig([
       'react-hooks/set-state-in-effect': 'warn',
       'react-hooks/static-components': 'off',
       // This rule is way to aggressive and seems to be designed for people that don't understand refs.
-      'react-hooks/refs': 'off',
+      // But it looks like sometimes it matters for react compiler so we'll set it to warn instead.
+      'react-hooks/refs': 'warn',
     }
   }
 ]);

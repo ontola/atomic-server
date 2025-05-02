@@ -21,7 +21,6 @@ export const AbsoluteCell = styled.div`
 
 export const SearchPopover = styled(CustomPopover)`
   border: 1px solid ${p => p.theme.colors.bg2};
-  background-color: ${p => p.theme.colors.bg};
   ${CustomPopover.Content} {
     padding: 1rem;
     display: flex;
@@ -37,7 +36,7 @@ export const SearchResultWrapper = styled.div`
   overflow-y: auto;
 
   ol {
-    padding: 0;
+    padding: 0 !important;
     margin: 0;
   }
 
@@ -46,7 +45,7 @@ export const SearchResultWrapper = styled.div`
     &[data-selected='true'] button {
       background: ${p => p.theme.colors.mainSelectedBg};
       color: ${p => p.theme.colors.mainSelectedFg};
-
+      box-shadow: 0 0 0 1px inset ${p => p.theme.colors.mainSelectedFg};
       svg {
         color: ${p => p.theme.colors.mainSelectedFg};
       }

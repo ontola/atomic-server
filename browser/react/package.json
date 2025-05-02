@@ -26,8 +26,8 @@
     "yjs": "^13.6.27"
   },
   "peerDependencies": {
-    "react": ">18.3.0",
-    "react-dom": ">18.3.0"
+    "react": ">19.2.0",
+    "react-dom": ">19.2.0"
   },
   "files": [
     "dist",

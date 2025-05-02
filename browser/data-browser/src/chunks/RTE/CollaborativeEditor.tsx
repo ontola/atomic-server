@@ -57,11 +57,9 @@ import { addIf } from '@helpers/addIf';
 export type CollaborativeEditorProps = {
   placeholder?: string;
   doc: Y.Doc;
-  autoFocus?: boolean;
   resource: Resource;
   property: string;
   id?: string;
-  labelId?: string;
   onBlur?: () => void;
 };
 
@@ -69,11 +67,9 @@ const COLORS = ['#70d6ff', '#ff70a6', '#ff9770', '#ffd670', '#e9ff70'];
 
 export default function CollaborativeEditor({
   placeholder,
-  autoFocus,
   doc,
   property,
   id,
-  labelId,
   resource,
   onBlur,
 }: CollaborativeEditorProps): React.JSX.Element {
@@ -249,11 +245,12 @@ export default function CollaborativeEditor({
       ],
       editable: canWrite,
       onBlur,
-      autofocus: !!autoFocus,
       editorProps: {
         attributes: {
           ...(id && { id }),
-          ...(labelId && { 'aria-labelledby': labelId }),
+          'aria-label': 'Rich Text Editor',
+          'aria-multiline': 'true',
+          'aria-readonly': canWrite ? 'true' : 'false',
           spellcheck: 'true',
         },
       },

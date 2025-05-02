@@ -24,11 +24,7 @@ import { FileDropzoneInput } from '../../../components/forms/FileDropzone/FileDr
 import {
   InputStyled,
   InputWrapper,
-} from '../../../components/forms/InputStyles';
-import {
-  CursorMode,
-  useTableEditorContext,
-} from '../../../components/TableEditor/TableEditorContext';
+} from '../../../components/forms/InputStyles'; ////
 import { getIconForClass } from '../../../helpers/iconMap';
 import { CellContainer, DisplayCellProps, EditCellProps } from './Type';
 import { useResourceSearch } from './useResourceSearch';
@@ -45,7 +41,7 @@ import {
   SearchResultWrapper,
 } from './CellComponents';
 import { FaXmark } from 'react-icons/fa6';
-import type { TriggerProps } from '@components/CustomPopover';
+import { usePopover } from '@components/CustomPopover';
 
 const useClassType = (subject: string) => {
   const property = useResource<Core.Property>(subject);
@@ -65,17 +61,20 @@ function AtomicURLCellEdit({
   property,
   resource: row,
 }: EditCellProps<JSONValue>): JSX.Element {
+  const inputRef = useRef<HTMLInputElement>(null);
   const cell = useResource(value as string);
   const { classType, hasClassType } = useClassType(property);
   const [title] = useTitle(cell);
-  const [open, setOpen] = useState(true);
-  const { setCursorMode } = useTableEditorContext();
+  const { triggerProps, popoverProps, isOpen, closePopover } = usePopover({
+    defaultOpen: true,
+    autoFocusElement: inputRef,
+  });
   const selectedElement = useRef<HTMLLIElement>(null);
 
   const [searchValue, setSearchValue] = useState('');
 
   const cellOptions = useMemo(() => {
-    if (open) {
+    if (isOpen) {
       return {
         disabledKeyboardInteractions: new Set([
           KeyboardInteraction.ExitEditMode,
@@ -84,7 +83,7 @@ function AtomicURLCellEdit({
     } else {
       return {};
     }
-  }, [open]);
+  }, [isOpen]);
 
   useCellOptions(cellOptions);
 
@@ -97,29 +96,23 @@ function AtomicURLCellEdit({
   const handleResultClick = useCallback(
     (result: string) => {
       onChange(result);
-      setOpen(false);
+      closePopover();
     },
-    [onChange],
+    [onChange, closePopover],
   );
 
-  const handleOpenChange = useCallback(
-    (state: boolean) => {
-      setOpen(state);
-
-      if (!state) {
-        setCursorMode(CursorMode.Visual);
-      }
-    },
-    [setCursorMode],
+  const {
+    results,
+    selectedIndex,
+    handleKeyDown,
+    onMouseOver,
+    onClick,
+    usingKeyboard,
+  } = useResourceSearch(
+    searchValue,
+    hasClassType ? classType.subject : undefined,
+    handleResultClick,
   );
-
-  const { results, selectedIndex, handleKeyDown, onMouseOver, onClick } =
-    useResourceSearch(
-      searchValue,
-      hasClassType ? classType.subject : undefined,
-      setOpen,
-      handleResultClick,
-    );
 
   const handleFilesUploaded = useCallback(
     (files: string[]) => {
@@ -127,31 +120,28 @@ function AtomicURLCellEdit({
 
       if (file) {
         onChange(file);
-        setOpen(false);
+        closePopover();
       }
     },
-    [onChange, setOpen],
+    [onChange, closePopover],
   );
 
-  const Trigger = useCallback(
-    (props: TriggerProps) => {
-      return (
-        <PopoverTrigger {...props}>
-          <FaEdit />{' '}
-          {cell.subject === unknownSubject
-            ? `select ${hasClassType ? classType.title : 'resource'}`
-            : title}
-        </PopoverTrigger>
-      );
-    },
-    [title, cell, classType, hasClassType],
-  );
+  const Trigger = useMemo(() => {
+    return (
+      <PopoverTrigger {...triggerProps}>
+        <FaEdit />{' '}
+        {cell.subject === unknownSubject
+          ? `select ${hasClassType ? classType.title : 'resource'}`
+          : title}
+      </PopoverTrigger>
+    );
+  }, [title, cell, classType, hasClassType, triggerProps]);
 
   useEffect(() => {
-    if (selectedElement.current) {
+    if (selectedElement.current && usingKeyboard) {
       selectedElement.current.scrollIntoView({ block: 'nearest' });
     }
-  }, [selectedIndex]);
+  }, [selectedIndex, usingKeyboard]);
 
   const placehoder = hasClassType ? `Search ${classType.title}` : 'Search...';
 
@@ -161,13 +151,7 @@ function AtomicURLCellEdit({
     results.length === 0 && classType.subject !== server.classes.file;
 
   return (
-    <SearchPopover
-      modal
-      Trigger={Trigger}
-      open={open}
-      onOpenChange={handleOpenChange}
-      noLock
-    >
+    <SearchPopover Trigger={Trigger} noLock {...popoverProps}>
       <InputWrapper>
         <InputStyled
           type='search'
@@ -175,6 +159,7 @@ function AtomicURLCellEdit({
           placeholder={placehoder}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
+          ref={inputRef}
         />
       </InputWrapper>
       <SearchResultWrapper>

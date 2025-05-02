@@ -90,7 +90,7 @@ export default function InputResourceArray({
         setError(newArray.length === 0 ? 'Required' : undefined);
       }
     },
-    [property.datatype, setArray, setError, required, addingNewItem, array],
+    [property.datatype, setArray, setError, required, array],
   );
 
   const handleSetSubjectMemos = useMemo(() => {
@@ -198,7 +198,7 @@ export default function InputResourceArray({
           >
             <FaPlus />
           </AddButton>
-          {array.length > 1 && (
+          {array.length > 0 && (
             <StyledButton
               title='Remove all items from this list'
               data-testid={`input-${property.shortname}-clear`}

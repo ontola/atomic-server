@@ -1,7 +1,13 @@
 import { useState } from 'react';
 
-export function useOnValueChange(callback: () => void, dependants: unknown[]) {
-  const [deps, setDeps] = useState(dependants);
+const initialUnique = [Symbol('uniqueValue')];
+
+export function useOnValueChange(
+  callback: () => void,
+  dependants: unknown[],
+  runOnMount: boolean = false,
+) {
+  const [deps, setDeps] = useState(runOnMount ? initialUnique : dependants);
 
   if (deps.some((d, i) => d !== dependants[i])) {
     setDeps(dependants);

@@ -6,7 +6,7 @@ import {
   useResource,
   useStore,
 } from '@tomic/react';
-import { memo, useEffect, useState, type JSX } from 'react';
+import { useEffect, useRef, useState, type JSX } from 'react';
 import { FaPlus } from 'react-icons/fa';
 import { styled } from 'styled-components';
 import { IconButton } from '../../../components/IconButton/IconButton';
@@ -27,7 +27,7 @@ import {
 import { useTableEditorContext } from '../../../components/TableEditor/TableEditorContext';
 import { AbsoluteCell } from './CellComponents';
 import { FaXmark } from 'react-icons/fa6';
-import { CustomPopover } from '@components/CustomPopover';
+import { CustomPopover, usePopover } from '@components/CustomPopover';
 
 const TAG_SPACING = '0.5rem';
 
@@ -48,29 +48,12 @@ function buildListWithTitles(
     });
 }
 
-const Trigger: React.FC<{ popoverTarget: string }> = memo(
-  props => {
-    return (
-      <IconButton
-        title='Add tag'
-        type='button'
-        onClick={e => e.stopPropagation()}
-        {...props}
-      >
-        <StyledIcon />
-      </IconButton>
-    );
-  },
-  (prev, next) => prev.popoverTarget === next.popoverTarget,
-);
-
-Trigger.displayName = 'Trigger';
-
 function SelectCellEdit({
   value,
   property,
   onChange,
 }: EditCellProps<JSONValue>): JSX.Element {
+  const inputRef = useRef<HTMLInputElement>(null);
   const val = (value as string[]) ?? emptyArray;
   const store = useStore();
   const propertyResource = useResource(property);
@@ -81,7 +64,10 @@ function SelectCellEdit({
     .filter(v => v.title.includes(query))
     .map(ft => ft.subject);
 
-  const [open, setOpen] = useState(true);
+  const { isOpen, closePopover, triggerProps, popoverProps } = usePopover({
+    defaultOpen: true,
+    autoFocusElement: inputRef,
+  });
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   const { activeCellRef } = useTableEditorContext();
@@ -90,7 +76,7 @@ function SelectCellEdit({
     KeyboardInteraction.EditNextRow,
   ]);
 
-  if (open) {
+  if (isOpen) {
     disabledKeyboardInteractions.add(KeyboardInteraction.ExitEditMode);
   }
 
@@ -119,10 +105,10 @@ function SelectCellEdit({
   };
 
   useEffect(() => {
-    if (!open) {
+    if (!isOpen) {
       activeCellRef.current?.focus();
     }
-  }, [activeCellRef, open]);
+  }, [activeCellRef, isOpen]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     switch (e.key) {
@@ -141,7 +127,7 @@ function SelectCellEdit({
       case 'Escape':
         e.preventDefault();
 
-        setOpen(false);
+        closePopover();
         break;
     }
   };
@@ -160,22 +146,20 @@ function SelectCellEdit({
           </Tag>
         ))}
         <CustomPopover
-          modal
-          open={open}
           noLock
-          onOpenChange={setOpen}
-          Trigger={props => (
-            <IconButton title='Add tag' type='button' {...props}>
+          Trigger={
+            <IconButton title='Add tag' type='button' {...triggerProps}>
               <StyledIcon />
             </IconButton>
-          )}
+          }
+          {...popoverProps}
         >
           <Content onKeyDown={handleKeyDown}>
             <SearchInputWrapper>
               <InputStyled
                 placeholder='Filter tags...'
                 onChange={handleSearch}
-                autoFocus
+                ref={inputRef}
               />
             </SearchInputWrapper>
             <ResultWrapper>
@@ -188,6 +172,7 @@ function SelectCellEdit({
                     selected={i === selectedIndex}
                   />
                 ))}
+                {filteredTags.length === 0 && 'No results'}
               </Row>
             </ResultWrapper>
           </Content>
@@ -240,6 +225,11 @@ const Content = styled.div`
 
 const ResultWrapper = styled.div`
   padding: ${p => p.theme.margin}rem;
+  border: ${p =>
+    p.theme.darkMode ? '1px solid ' + p.theme.colors.bg2 : 'none'};
+  border-top: none;
+  border-bottom-left-radius: ${p => p.theme.radius};
+  border-bottom-right-radius: ${p => p.theme.radius};
 `;
 
 const SearchInputWrapper = styled(InputWrapper)`

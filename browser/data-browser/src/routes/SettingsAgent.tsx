@@ -52,9 +52,13 @@ const SettingsAgent: React.FunctionComponent = () => {
   }, [agent]);
 
   // When the key or subject changes, update the secret
-  useOnValueChange(() => {
-    renewSecret();
-  }, [subject, privateKey]);
+  useOnValueChange(
+    () => {
+      renewSecret();
+    },
+    [subject, privateKey],
+    true,
+  );
 
   function renewSecret() {
     if (agent) {
