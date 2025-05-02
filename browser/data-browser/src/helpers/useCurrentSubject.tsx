@@ -75,7 +75,10 @@ export function useSubjectParam(
     }
 
     const newUrl = new URL(subject);
-    newVal && newUrl.searchParams.set(key, newVal);
+
+    if (newVal) {
+      newUrl.searchParams.set(key, newVal);
+    }
 
     if (newVal === undefined || newVal === '' || newVal === null) {
       newUrl.searchParams.delete(key);

@@ -31,7 +31,8 @@ const KBD = styled.kbd`
   background-color: ${p => p.theme.colors.bg1};
   text-transform: capitalize;
   border-radius: 5px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI Adjusted',
-    'Segoe UI', 'Liberation Sans', sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI Adjusted', 'Segoe UI',
+    'Liberation Sans', sans-serif;
   padding: 0.3em;
 `;

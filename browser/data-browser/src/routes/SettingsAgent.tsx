@@ -23,6 +23,7 @@ import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { createRoute } from '@tanstack/react-router';
 import { pathNames } from './paths';
 import { appRoute } from './RootRoutes';
+import { useOnValueChange } from '@helpers/useOnValueChange';
 
 export const AgentSettingsRoute = createRoute({
   path: pathNames.agentSettings,
@@ -42,7 +43,7 @@ const SettingsAgent: React.FunctionComponent = () => {
 
   // When there is an agent, set the advanced values
   // Otherwise, reset the secret value
-  React.useEffect(() => {
+  useOnValueChange(() => {
     if (agent !== undefined) {
       fillAdvanced();
     } else {
@@ -51,7 +52,7 @@ const SettingsAgent: React.FunctionComponent = () => {
   }, [agent]);
 
   // When the key or subject changes, update the secret
-  React.useEffect(() => {
+  useOnValueChange(() => {
     renewSecret();
   }, [subject, privateKey]);
 
@@ -113,7 +114,9 @@ const SettingsAgent: React.FunctionComponent = () => {
   }
 
   function handleCopy() {
-    secret && navigator.clipboard.writeText(secret);
+    if (secret) {
+      navigator.clipboard.writeText(secret);
+    }
   }
 
   /** When the Secret updates, parse it and try if the */

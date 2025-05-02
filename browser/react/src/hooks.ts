@@ -31,6 +31,7 @@ import {
   server,
 } from '@tomic/lib';
 import type * as Y from 'yjs';
+import { useOnValueChange } from './helpers/useOnValueChange.js';
 
 export type UseResourceOptions = FetchOpts & {
   /**
@@ -110,9 +111,29 @@ export function useResources(
   opts: FetchOpts = {},
 ): Map<string, Resource> {
   const [resources, setResources] = useState(new Map<string, Resource>());
+  const [prevSubjects, setPrevSubjects] = useState<string[]>([]);
   const store = useStore();
 
   const memoizedOpts = useMemoizedOpts(opts);
+
+  if (subjects !== prevSubjects) {
+    setPrevSubjects(subjects);
+    setResources(prev => {
+      const newResources = new Map<string, Resource>();
+
+      for (const subject of subjects) {
+        const resource = store.getResourceLoading(subject, memoizedOpts);
+
+        if (!prev.has(subject)) {
+          newResources.set(subject, proxyResource(resource));
+        } else {
+          newResources.set(subject, prev.get(subject)!);
+        }
+      }
+
+      return newResources;
+    });
+  }
 
   useEffect(() => {
     // When a change happens, set the new Resource.
@@ -125,25 +146,33 @@ export function useResources(
       });
     }
 
-    setResources(prev => {
-      for (const subject of subjects) {
-        const resource = store.getResourceLoading(subject, memoizedOpts);
-        prev.set(subject, proxyResource(resource));
+    const unsubLoadingFuncs: (() => void)[] = [];
 
-        // Let the store know to call handleNotify when a resource is updated.
-        store.subscribe(subject, handleNotify);
-      }
+    for (const resource of resources.values()) {
+      store.subscribe(resource.subject, handleNotify);
+      unsubLoadingFuncs.push(
+        resource.on(ResourceEvents.LoadingChange, () => {
+          setResources(prev => {
+            prev.set(resource.subject, proxyResource(resource));
 
-      return new Map(prev);
-    });
+            // We need to create new Maps for react hooks to update - React only checks references, not content
+            return new Map(prev);
+          });
+        }),
+      );
+    }
 
     return () => {
       // When the component is unmounted, unsubscribe from the store.
-      for (const subject of subjects) {
-        store.unsubscribe(subject, handleNotify);
+      for (const resource of resources.values()) {
+        store.unsubscribe(resource.subject, handleNotify);
+      }
+
+      for (const unsubLoadingFunc of unsubLoadingFuncs) {
+        unsubLoadingFunc();
       }
     };
-  }, [subjects, store, memoizedOpts]);
+  }, [resources, store, memoizedOpts]);
 
   return resources;
 }
@@ -572,20 +601,14 @@ export function useYDoc(
   );
 
   useEffect(() => {
-    if (resource.loading) {
-      return;
-    }
-
-    setDoc(resource.getYDoc(propertyURL));
-
-    return resource.on(ResourceEvents.LocalChange, prop => {
-      if (prop !== propertyURL) {
-        return;
-      }
-
-      setDoc(resource.getYDoc(propertyURL));
+    return resource.stable.on(ResourceEvents.LoadingChange, () => {
+      setDoc(
+        resource.stable.loading
+          ? undefined
+          : resource.stable.getYDoc(propertyURL),
+      );
     });
-  }, [resource]);
+  }, [resource.stable, propertyURL]);
 
   return doc;
 }
@@ -611,8 +634,7 @@ export function useCanWrite(resource: Resource): boolean {
   const [canWrite, setCanWrite] = useState<boolean>(false);
   const agent = store.getAgent();
 
-  // If the subject changes, make sure to change the resource!
-  useEffect(() => {
+  useOnValueChange(() => {
     if (agent?.subject === undefined) {
       setCanWrite(false);
 
@@ -621,14 +643,17 @@ export function useCanWrite(resource: Resource): boolean {
 
     if (resource.new) {
       setCanWrite(true);
-
-      return;
     }
-
-    resource.canWrite(agent.subject).then(([result]) => {
-      setCanWrite(result);
-    });
   }, [resource, agent?.subject]);
+
+  // If the subject changes, make sure to change the resource!
+  useEffect(() => {
+    if (agent && !resource.new) {
+      resource.canWrite(agent.subject).then(([result]) => {
+        setCanWrite(result);
+      });
+    }
+  }, [resource, agent]);
 
   return canWrite;
 }

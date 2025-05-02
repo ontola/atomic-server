@@ -57,7 +57,7 @@ export function useMarkdown(resource: Resource): string {
     }
 
     getPropValTexts();
-  }, [resource]);
+  }, [resource, description, store, title]);
 
   if (resource.error) {
     return resource.error.message;

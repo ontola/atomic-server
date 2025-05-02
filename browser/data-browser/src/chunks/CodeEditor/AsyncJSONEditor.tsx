@@ -56,7 +56,7 @@ const AsyncJSONEditor: React.FC<JSONEditorProps> = ({
   );
 
   // Wrap jsonParseLinter so we can tap into diagnostics
-  const validationLinter = useCallback(() => {
+  const validationLinter = useMemo(() => {
     const delegate = jsonParseLinter();
 
     return (view: EditorView) => {
@@ -85,8 +85,7 @@ const AsyncJSONEditor: React.FC<JSONEditorProps> = ({
   }, [onValidationChange, required]);
 
   const extensions = useMemo(
-    // eslint-disable-next-line react-hooks/react-compiler
-    () => [json(), linter(validationLinter())],
+    () => [json(), linter(validationLinter)],
     [validationLinter],
   );
 

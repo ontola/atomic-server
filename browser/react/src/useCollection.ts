@@ -55,11 +55,11 @@ const buildCollection = (
 ) => {
   const builder = new CollectionBuilder(store, server);
 
-  property && builder.setProperty(property);
-  value && builder.setValue(value);
-  sort_by && builder.setSortBy(sort_by);
-  sort_desc !== undefined && builder.setSortDesc(sort_desc);
-  pageSize && builder.setPageSize(pageSize);
+  if (property) builder.setProperty(property);
+  if (value) builder.setValue(value);
+  if (sort_by) builder.setSortBy(sort_by);
+  if (sort_desc !== undefined) builder.setSortDesc(sort_desc);
+  if (pageSize) builder.setPageSize(pageSize);
 
   return builder.build();
 };
@@ -102,12 +102,11 @@ export function useCollection(
     collection.waitForReady().then(() => {
       setCollection(proxyCollection(collection.__internalObject));
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     if (firstRun) {
-      setFirstRun(false);
-
       return;
     }
 
@@ -120,13 +119,14 @@ export function useCollection(
 
     newCollection.waitForReady().then(() => {
       setCollection(proxyCollection(newCollection.__internalObject));
+      setFirstRun(false);
     });
-  }, [queryFilterMemo, pageSize, store, server]);
+  }, [queryFilterMemo, pageSize, store, server, firstRun]);
 
   const invalidateCollection = useCallback(async () => {
-    await collection.refresh();
+    await collection.__internalObject.refresh();
     setCollection(proxyCollection(collection.__internalObject));
-  }, [collection, store, server, queryFilter, pageSize]);
+  }, [collection.__internalObject]);
 
   return { collection, invalidateCollection, mapAll };
 }
@@ -134,6 +134,7 @@ export function useCollection(
 function useQueryFilterMemo(queryFilter: QueryFilter) {
   return useMemo(
     () => queryFilter,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       queryFilter.property,
       queryFilter.value,

@@ -74,7 +74,10 @@ function HotKeysWrapper({ children }: Props): JSX.Element {
     shortcuts.edit,
     e => {
       e.preventDefault();
-      Client.isValidSubject(subject) && navigate(editURL(subject!));
+
+      if (Client.isValidSubject(subject)) {
+        navigate(editURL(subject!));
+      }
     },
     {},
     [subject],
@@ -83,7 +86,10 @@ function HotKeysWrapper({ children }: Props): JSX.Element {
     shortcuts.data,
     e => {
       e.preventDefault();
-      Client.isValidSubject(subject) && navigate(dataURL(subject!));
+
+      if (Client.isValidSubject(subject)) {
+        navigate(dataURL(subject!));
+      }
     },
     {},
     [subject],

@@ -18,9 +18,9 @@ export function focusOffsetElement(offset: number, origin?: Element) {
     document.querySelectorAll(QUERY).forEach(element => {
       //check for visibility while always include the current activeElement
       if (
-        // @ts-ignore
+        // @ts-expect-error All elements have this.
         element.offsetWidth > 0 ||
-        // @ts-ignore
+        // @ts-expect-error All elements have this.
         element.offsetHeight > 0 ||
         element === startElement
       ) {
@@ -35,7 +35,7 @@ export function focusOffsetElement(offset: number, origin?: Element) {
         focussable[loopingIndex(index + offset, focussable.length)] ||
         focussable[0];
 
-      // @ts-ignore
+      // @ts-expect-error All elements have this.
       nextElement.focus();
     }
   }

@@ -52,9 +52,8 @@ type CreateOption = {
   type: 'createOption';
 };
 
-function isCreateOption(option: unknown): option is CreateOption {
-  // @ts-ignore
-  return option?.type === 'createOption';
+function isCreateOption(option: Hit | CreateOption): option is CreateOption {
+  return 'type' in option && option?.type === 'createOption';
 }
 
 // TODO: Component is still used in collection page because we want to show a list of properties there even if the user is not searching anything. We should add predetermined options to Searchbox instead.
@@ -134,7 +133,11 @@ export const DropdownInput: React.FC<DropDownListProps> = ({
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const val = e.target.value;
       setInputValue(val);
-      onInputChange && onInputChange(val);
+
+      if (onInputChange) {
+        onInputChange(val);
+      }
+
       setUseKeys(true);
       setIsFocus(true);
       setIsOpen(true);
@@ -241,6 +244,7 @@ export const DropdownInput: React.FC<DropDownListProps> = ({
             )}
           </InputWrapper>
         </RadixPopover.Anchor>
+        {/* eslint-disable-next-line react-hooks/refs */}
         <RadixPopover.Portal container={containerRef.current}>
           <RadixPopover.Content collisionPadding={2} sideOffset={8}>
             <div onMouseEnter={() => setUseKeys(false)}>
@@ -327,7 +331,7 @@ function DropDownItemsMenu({
       const item = items[selectedIndex];
 
       if (isCreateOption(item)) {
-        onCreateClick && onCreateClick();
+        onCreateClick?.();
 
         return;
       }

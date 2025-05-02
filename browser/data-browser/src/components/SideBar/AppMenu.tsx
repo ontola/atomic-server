@@ -44,19 +44,17 @@ export function AppMenu({ onItemClick }: AppMenuProps): JSX.Element {
         setShowInstallButton(false);
       }
     });
-  }, [event.current]);
+  }, []);
 
   useEffect(() => {
-    const listener = (e: BeforeInstallPromptEvent) => {
+    const listener = (e: Event) => {
       e.preventDefault();
       setShowInstallButton(true);
-      event.current = e;
+      event.current = e as unknown as BeforeInstallPromptEvent;
     };
 
-    //@ts-ignore
     window.addEventListener('beforeinstallprompt', listener);
 
-    //@ts-ignore
     return () => window.removeEventListener('beforeinstallprompt', listener);
   }, []);
 
@@ -66,7 +64,7 @@ export function AppMenu({ onItemClick }: AppMenuProps): JSX.Element {
         icon={<FaUser />}
         label={
           agent
-            ? agentResource.get(core.properties.name) ?? 'User Settings'
+            ? (agentResource.get(core.properties.name) ?? 'User Settings')
             : 'Login'
         }
         helper='See and edit the current Agent / User (u)'

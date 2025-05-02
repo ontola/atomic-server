@@ -59,7 +59,7 @@ export function Base({
           {label}
         </IconWrapper>
       ) : (
-        label ?? title
+        (label ?? title)
       )}
       {children}
     </Button>
