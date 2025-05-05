@@ -42,6 +42,7 @@ export function BookmarkPage({ resource }: ResourcePageProps): JSX.Element {
               <FieldWrapper>
                 <InputWrapper>
                   <InputStyled
+                    aria-label='Bookmark URL'
                     placeholder='https://example.com'
                     value={url}
                     onChange={handleUrlChange}

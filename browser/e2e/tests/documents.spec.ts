@@ -9,6 +9,8 @@ import {
   openNewSubjectWindow,
   timestamp,
   before,
+  setTitle,
+  waitForSearchIndex,
 } from './test-utils';
 test.describe('documents', async () => {
   test.beforeEach(before);
@@ -17,10 +19,14 @@ test.describe('documents', async () => {
     page,
     browser,
   }) => {
+    const folderTitle = 'SomeFolder';
+
     await signIn(page);
     await newDrive(page);
     await makeDrivePublic(page);
     // Create a document
+    await newResource('folder', page);
+    await setTitle(page, folderTitle);
     await newResource('document', page);
     const title = `Document ${timestamp()}`;
     await editTitle(title, page);
@@ -36,30 +42,30 @@ test.describe('documents', async () => {
     await page.keyboard.press('Enter');
     await page.keyboard.type(teststring);
 
-    await expect(
-      page.getByRole('heading', { name: teststring, exact: true }),
-    ).toBeVisible();
+    await expect(page.getByRole('heading', { name: teststring })).toBeVisible();
 
     // multi-user
     const currentSubject = await getCurrentSubject(page);
     const page2 = await openNewSubjectWindow(browser, currentSubject!, true);
 
+    await page2.getByRole('button', { name: 'Set Drive' }).click();
     await expect(page2.getByText('loading...')).not.toBeVisible();
     await expect(
-      page2.getByRole('heading', { name: teststring, exact: true }),
+      page2.getByRole('heading', { name: teststring }),
       'First paragraph title not visible in second tab. Not a websocket issue',
     ).toBeVisible();
     expect(await page2.title()).toEqual(title);
 
     await page2.getByLabel('Rich Text Editor').focus();
     await page2.keyboard.press('ArrowDown');
+    await page2.keyboard.press('Enter');
     // Add a new line on first page, check if it appears on the second
     const syncText = 'New paragraph';
     await page2.keyboard.type(syncText);
 
     await expect(
       page.locator(`text=${syncText}`),
-      'New paragraph not found in first window. Websockets may not be working.',
+      'New paragraph not found in first window. Sync might not be working.',
     ).toBeVisible();
 
     // Delete a row, cmd + backspace
@@ -74,6 +80,7 @@ test.describe('documents', async () => {
     await page2.keyboard.press('ArrowRight');
     await page2.keyboard.down('Alt');
     await page2.keyboard.press('Backspace');
+    await page2.keyboard.up('Alt');
 
     await expect(
       page.locator(`text=${syncText}`),
@@ -83,5 +90,22 @@ test.describe('documents', async () => {
       page2.locator(`text=${syncText}`),
       'Paragraph not deleted in second window',
     ).not.toBeVisible();
+
+    // Wait for AtomicServer to index the folder
+    await waitForSearchIndex(page2);
+    // Add a link to a folder to the document
+    await page2.keyboard.press('Space');
+    await page2.keyboard.type('@');
+    await page2.waitForTimeout(500);
+    await page2.keyboard.type(folderTitle, { delay: 50 });
+    await expect(
+      page2.getByTestId('rte-command-list').getByText(folderTitle),
+    ).toBeVisible();
+    await page2.keyboard.press('Enter');
+
+    // Check if the link is visible in the document
+    await expect(
+      page.getByLabel('Rich Text Editor').locator('a:has-text("SomeFolder")'),
+    ).toBeVisible();
   });
 });

@@ -17,6 +17,7 @@ import { CalculatedPageHeight } from '../globalCssVars';
 import { AISidebarContextProvider } from './AI/AISidebarContext';
 import { AISidebarContainer } from './AI/AISidebarContainer';
 import { HideInPrint } from './HideInPrint';
+import { MAIN_CONTAINER } from '@helpers/containers';
 
 export const NAVBAR_HEIGHT = '2.5rem';
 
@@ -71,6 +72,7 @@ interface ContentProps {
 const Content = styled.div<ContentProps>`
   display: block;
   flex: 1;
+  container: ${MAIN_CONTAINER} / inline-size;
 `;
 
 /** Persistently shown navigation bar */

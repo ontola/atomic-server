@@ -4,7 +4,7 @@ import { MdFormatColorFill, MdFormatColorText } from 'react-icons/md';
 import { useLocalStorage } from '@hooks/useLocalStorage';
 import styled from 'styled-components';
 import { transition } from '@helpers/transition';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useEditorState } from '@tiptap/react';
 import { FaPencil } from 'react-icons/fa6';
 import { desaturate, readableColor, setLightness } from 'polished';
@@ -82,6 +82,11 @@ export const ColorMenu: React.FC = () => {
   const preventDefault = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
   };
+
+  useEffect(() => {
+    // The bubble menu might need to be repositioned if this component is shown.
+    editor.commands.setMeta('bubbleMenu', 'updatePosition');
+  }, [editor]);
 
   return (
     <Column>

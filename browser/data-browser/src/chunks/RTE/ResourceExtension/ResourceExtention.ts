@@ -38,7 +38,7 @@ export const buildResourceSuggestion = (
   drive: string,
 ): Partial<SuggestionOptions> => ({
   items: async ({ query }: { query: string }): Promise<SuggestionItem[]> => {
-    const results = await store.search(query, {
+    const results = await store.search(query.toLowerCase(), {
       limit: 10,
       // Including the results could lead to weird behavior when the document itself is returned from the server.
       include: false,
@@ -53,11 +53,7 @@ export const buildResourceSuggestion = (
       icon: getIconForClass(r.getClasses()[0]),
       command: ({ editor, range }) => {
         const subject = r.subject;
-        const textBeforeQuery = getTextBeforeQuery(editor, range);
-
-        // If there is text before the query we are in not in a block context and the resource should be inserted inline.
-        const isBlockContext = textBeforeQuery.length === 0;
-
+        const isBlockContext = getIsBlockContext(editor, range);
         const command = editor.chain().focus().deleteRange(range);
 
         if (isBlockContext) {
@@ -72,17 +68,12 @@ export const buildResourceSuggestion = (
   render: createRenderFunction<SuggestionItem>(container),
 });
 
-const getTextBeforeQuery = (editor: Editor, range: Range) => {
+const getIsBlockContext = (editor: Editor, range: Range) => {
   const { from } = range;
-
-  const queryText = editor.state.doc.textBetween(range.from, range.to);
 
   // Resolve the position and the parent node
   const $pos = editor.state.doc.resolve(from);
-  const parentNode = $pos.parent;
 
-  // Calculate the offset within the parent node where the query starts
-  const startOfQueryOffset = $pos.parentOffset - queryText.length;
-
-  return parentNode.textContent.substring(0, startOfQueryOffset).trim();
+  // Text offset tells us the distance to a previous node. This is 0 if there is no previous node meaning we are in a block context.
+  return $pos.textOffset === 0;
 };

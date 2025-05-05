@@ -18,28 +18,30 @@ export function useYSync(
   const awareness = new awarenessProtocol.Awareness(doc);
 
   useEffect(() => {
-    awareness.on(
-      'update',
-      ({ added, updated, removed }: AwarenessUpdate, origin: string) => {
-        if (origin !== 'local') {
-          // Only send local updates to the server.
-          return;
-        }
+    const handleAwarenessUpdate = (
+      { added, updated, removed }: AwarenessUpdate,
+      origin: string,
+    ) => {
+      if (origin !== 'local') {
+        // Only send local updates to the server.
+        return;
+      }
 
-        const changedClients = [...updated, ...added, ...removed];
+      const changedClients = [...updated, ...added, ...removed];
 
-        const encodedUpdate = awarenessProtocol.encodeAwarenessUpdate(
-          awareness,
-          changedClients,
-        );
+      const encodedUpdate = awarenessProtocol.encodeAwarenessUpdate(
+        awareness,
+        changedClients,
+      );
 
-        store.broadcastYSyncUpdate(resource.subject, property, {
-          awarenessUpdate: encodedUpdate,
-        });
-      },
-    );
+      store.broadcastYSyncUpdate(resource.subject, property, {
+        awarenessUpdate: encodedUpdate,
+      });
+    };
 
-    return store.subscribeYSync(
+    awareness.on('update', handleAwarenessUpdate);
+
+    const unsubYSync = store.subscribeYSync(
       resource.subject,
       property,
       ({ awarenessUpdate, docUpdate }) => {
@@ -56,6 +58,11 @@ export function useYSync(
         }
       },
     );
+
+    return () => {
+      awareness.off('update', handleAwarenessUpdate);
+      unsubYSync();
+    };
   }, [awareness, resource.subject, property, store, doc]);
 
   useEffect(() => {
