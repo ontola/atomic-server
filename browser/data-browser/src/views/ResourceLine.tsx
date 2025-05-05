@@ -9,10 +9,20 @@ type Props = {
   subject: string;
   clickable?: boolean;
   className?: string;
+  selected?: boolean;
 };
 
+const RootDiv = styled.div`
+  width: 100%;
+`;
+
 /** Renders a Resource in a small line item. Not a link. Useful in dropdown. */
-function ResourceLine({ subject, clickable, className }: Props): JSX.Element {
+function ResourceLine({
+  subject,
+  clickable,
+  className,
+  selected,
+}: Props): JSX.Element {
   const resource = useResource(subject);
   const [title] = useTitle(resource);
   let [description] = useString(resource, urls.properties.description);
@@ -34,7 +44,7 @@ function ResourceLine({ subject, clickable, className }: Props): JSX.Element {
   }
 
   return (
-    <span about={subject} className={className}>
+    <RootDiv about={subject} className={className}>
       {clickable ? (
         <ResourceInline untabbable subject={subject} basic />
       ) : (
@@ -43,7 +53,7 @@ function ResourceLine({ subject, clickable, className }: Props): JSX.Element {
       <ResourceLineDescription>
         {description ? ` - ${description}` : null}
       </ResourceLineDescription>
-    </span>
+    </RootDiv>
   );
 }
 

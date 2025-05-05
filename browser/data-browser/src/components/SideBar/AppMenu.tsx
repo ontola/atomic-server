@@ -80,13 +80,6 @@ export function AppMenu({ onItemClick }: AppMenuProps): JSX.Element {
         onClick={onItemClick}
       />
       <SideBarMenuItem
-        icon={<FaKeyboard />}
-        label='Keyboard Shortcuts'
-        helper='View the keyboard shortcuts (?)'
-        path={paths.shortcuts}
-        onClick={onItemClick}
-      />
-      <SideBarMenuItem
         icon={<FaInfo />}
         label='About'
         helper='Welcome page, tells about this app'

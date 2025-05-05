@@ -1,66 +1,45 @@
-import { Client, dataBrowser, useResource, useTitle } from '@tomic/react';
+import { Client, useResource, useTitle } from '@tomic/react';
 import { transparentize } from 'polished';
 import { useEffect, useRef, type JSX } from 'react';
-import { useHotkeys } from 'react-hotkeys-hook';
 import { styled } from 'styled-components';
 import { constructOpenURL } from '../../helpers/navigation';
 import { useQueryScopeHandler } from '../../hooks/useQueryScope';
-import { shortcuts } from '../HotKeyWrapper';
 import { IconButton, IconButtonVariant } from '../IconButton/IconButton';
 import { FaMagnifyingGlass, FaXmark } from 'react-icons/fa6';
-import { useNavigate } from '@tanstack/react-router';
-import { paths } from '../../routes/paths';
 import { useCurrentSubject } from '../../helpers/useCurrentSubject';
 import { SearchbarFakeInput, SearchbarInput } from './SearchbarInput';
-import {
-  base64StringToFilter,
-  filterToBase64String,
-} from '../../routes/Search/searchUtils';
-import { addFieldsIf } from '@helpers/addIf';
-
-function addTagsToFilter(
-  base64Filter: string | undefined,
-  tags: string[],
-): string {
-  const filter = base64Filter ? base64StringToFilter(base64Filter) : {};
-
-  filter[dataBrowser.properties.tags] = tags;
-
-  return filterToBase64String(filter);
-}
-
-const getText = (inputRef: React.RefObject<HTMLInputElement | null>) => {
-  if (!inputRef.current) return '';
-
-  return inputRef.current.textContent ?? '';
-};
+import { useSearchOverlay } from './SearchOverlayContext';
 
 export function Searchbar(): JSX.Element {
   const [currentSubject] = useCurrentSubject();
   const { scope, clearScope } = useQueryScopeHandler();
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
-  const navigate = useNavigate();
+  const { openSearch } = useSearchOverlay();
 
-  const setQuery = useDebouncedCallback((q: string, tags: string[]) => {
+  const handleQueryChange = (_q: string, _tags: string[]) => {
+    // No-op: query changes go through the command palette
+  };
+
+  const handleUrlChange = (url: string) => {
     try {
-      Client.tryValidSubject(q);
-      // Replace instead of push to make the back-button behavior better.
-      navigate({ to: constructOpenURL(q), replace: true });
-    } catch (_err) {
-      navigate({
-        to: paths.search,
-        search: prev => ({
-          query: q,
-          ...addFieldsIf(!!scope, { queryscope: scope }),
-          ...addFieldsIf(tags.length > 0, {
-            filters: addTagsToFilter(prev.filters, tags),
-          }),
-        }),
-        replace: true,
-      });
+      Client.tryValidSubject(url);
+      window.location.href = constructOpenURL(url);
+    } catch {
+      // Not a valid subject, do nothing
     }
-  }, 20);
+  };
+
+  useEffect(() => {
+    if (scope !== undefined) {
+      if (inputRef.current) {
+        inputRef.current.innerText = '';
+      }
+      inputRef.current?.focus();
+
+      return;
+    }
+  }, [scope]);
 
   const mutateText = (str: string) => {
     if (inputRef.current) {
@@ -68,55 +47,13 @@ export function Searchbar(): JSX.Element {
     }
   };
 
-  const handleQueryChange = (q: string, tags: string[]) => {
-    setQuery(q, tags);
-  };
-
-  const handleUrlChange = (url: string) => {
-    Client.tryValidSubject(url);
-    // Replace instead of push to make the back-button behavior better.
-    navigate({ to: constructOpenURL(url), replace: true });
-  };
-
-  const onSearchButtonClick = () => {
-    navigate({ to: paths.search });
-    inputRef.current?.focus();
-  };
-
-  useHotkeys(shortcuts.search, e => {
-    e.preventDefault();
-
-    inputRef.current?.focus();
-  });
-
-  useHotkeys(
-    'backspace',
-    _ => {
-      if (getText(inputRef) === '') {
-        if (scope) {
-          clearScope();
-        }
-      }
-    },
-    { enableOnTags: ['INPUT'], enableOnContentEditable: true },
-  );
-
-  useEffect(() => {
-    if (scope !== undefined) {
-      mutateText('');
-      inputRef.current?.focus();
-
-      return;
-    }
-  }, [scope]);
-
   return (
     <Wrapper>
       <IconButton
         color='textLight'
-        title='Start searching'
+        title='Search (Cmd+K)'
         type='button'
-        onClick={onSearchButtonClick}
+        onClick={() => openSearch()}
       >
         <FaMagnifyingGlass />
       </IconButton>
@@ -130,25 +67,6 @@ export function Searchbar(): JSX.Element {
       />
     </Wrapper>
   );
-}
-
-function useDebouncedCallback(
-  callback: (query: string, tags: string[]) => void,
-  timeout: number,
-): (query: string, tags: string[]) => void {
-  const timeoutId = useRef<ReturnType<typeof setTimeout>>(undefined);
-
-  const cb = (query: string, tags: string[]) => {
-    if (timeoutId.current) {
-      clearTimeout(timeoutId.current);
-    }
-
-    timeoutId.current = setTimeout(async () => {
-      callback(query, tags);
-    }, timeout);
-  };
-
-  return cb;
 }
 
 interface ParentTagProps {
@@ -197,8 +115,8 @@ const Wrapper = styled.div`
 `;
 
 const Tag = styled.span`
-  background-color: ${props => props.theme.colors.bg1};
-  border-radius: ${props => props.theme.radius};
+  background-color: ${p => p.theme.colors.bg1};
+  border-radius: ${p => p.theme.radius};
   padding: 0.2rem 0.5rem;
   display: flex;
   flex-direction: row;

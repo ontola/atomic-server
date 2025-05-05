@@ -6,6 +6,7 @@ import { useCurrentSubject } from '../helpers/useCurrentSubject';
 import { Client } from '@tomic/react';
 import { useSettings } from '../helpers/AppSettings';
 import { paths } from '../routes/paths';
+import { openSearchOverlay, openShortcutsOverlay } from './OverlayContainer';
 
 import type { JSX } from 'react';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
@@ -30,8 +31,8 @@ export const shortcuts = {
   themeSettings: osCtrl('t'),
   /** Open keyboard shortcuts page */
   keyboardShortcuts: 'shift+/',
-  /** Focus search bar */
-  search: '/',
+  /** Open command palette / search */
+  search: osCtrl('k'),
   /** Open resource menu */
   menu: osCtrl('m'),
   /** Locks the sidebar menu */
@@ -110,9 +111,13 @@ function HotKeysWrapper({ children }: Props): JSX.Element {
     e.preventDefault();
     navigate(paths.appSettings);
   });
+  useHotkeys(shortcuts.search, e => {
+    e.preventDefault();
+    openSearchOverlay();
+  });
   useHotkeys(shortcuts.keyboardShortcuts, e => {
     e.preventDefault();
-    navigate(paths.shortcuts);
+    openShortcutsOverlay();
   });
   useHotkeys(
     shortcuts.sidebarToggle,
