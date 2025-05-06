@@ -34,20 +34,28 @@ export function BubbleMenu({
   const editor = useTipTapEditor();
   const [linkMenuOpen, setLinkMenuOpen] = useState(false);
 
-  const { isBold, isItalic, isStrikethrough, isBlockquote, isCode, isLink } =
-    useEditorState({
-      editor,
-      selector: snapshot => ({
-        isBold: snapshot.editor.isActive('bold'),
-        isItalic: snapshot.editor.isActive('italic'),
-        isStrikethrough: snapshot.editor.isActive('strike'),
-        isBlockquote: snapshot.editor.isActive('blockquote'),
-        isCode: snapshot.editor.isActive('code'),
-        isLink: snapshot.editor.isActive('link'),
-      }),
-    });
+  const {
+    isBold,
+    isItalic,
+    isStrikethrough,
+    isBlockquote,
+    isCode,
+    isLink,
+    isInitialized,
+  } = useEditorState({
+    editor,
+    selector: snapshot => ({
+      isBold: snapshot.editor.isActive('bold'),
+      isItalic: snapshot.editor.isActive('italic'),
+      isStrikethrough: snapshot.editor.isActive('strike'),
+      isBlockquote: snapshot.editor.isActive('blockquote'),
+      isCode: snapshot.editor.isActive('code'),
+      isLink: snapshot.editor.isActive('link'),
+      isInitialized: snapshot.editor.isInitialized,
+    }),
+  });
 
-  if (!editor.isInitialized) {
+  if (!isInitialized) {
     return <></>;
   }
 

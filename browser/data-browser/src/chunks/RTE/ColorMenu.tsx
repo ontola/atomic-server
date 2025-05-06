@@ -34,9 +34,16 @@ export const ColorMenu: React.FC = () => {
     editor,
     selector: snapshot => {
       return {
-        selectedTextColor: snapshot.editor.getAttributes('textStyle').color,
+        selectedTextColor:
+          (snapshot.editor.getAttributes('textStyle').color as
+            | string
+            | undefined
+            | null) || undefined,
         selectedBackgroundColor:
-          snapshot.editor.getAttributes('textStyle').backgroundColor,
+          (snapshot.editor.getAttributes('textStyle').backgroundColor as
+            | string
+            | undefined
+            | null) || undefined,
       };
     },
   });
@@ -51,7 +58,13 @@ export const ColorMenu: React.FC = () => {
       defaultBackgroundColors,
     );
 
-  const setTextColor = (color: string) => {
+  const setTextColor = (color: string | undefined) => {
+    if (color === undefined) {
+      editor.chain().focus().unsetColor().run();
+
+      return;
+    }
+
     editor.chain().setColor(color).run();
     setLastUsedTextColors(prev => [
       color,
@@ -61,7 +74,13 @@ export const ColorMenu: React.FC = () => {
     ]);
   };
 
-  const setBackgroundColor = (color: string) => {
+  const setBackgroundColor = (color: string | undefined) => {
+    if (color === undefined) {
+      editor.chain().focus().unsetBackgroundColor().run();
+
+      return;
+    }
+
     editor.chain().setBackgroundColor(color).run();
     setLastUsedBackgroundColor(prev => [
       color,
@@ -144,7 +163,10 @@ export const ColorMenu: React.FC = () => {
   );
 };
 
-const useColor = (initialColor: string, onSelect: (color: string) => void) => {
+const useColor = (
+  initialColor: string | undefined,
+  onSelect: (color: string | undefined) => void,
+) => {
   const [isChanging, setIsChanging] = useState(false);
   const colorRef = useRef(initialColor);
 
@@ -203,14 +225,14 @@ const ColorButton = styled.button<{ color: string }>`
 
 interface ColorInputProps {
   label: string;
-  value: string;
+  value: string | undefined;
   onChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
   onBlur: (event: React.FocusEvent<HTMLInputElement>) => void;
 }
 
 const ColorInput: React.FC<ColorInputProps> = ({
   label,
-  value,
+  value = '#ffffff',
   onChange,
   onBlur,
 }) => {
@@ -221,7 +243,7 @@ const ColorInput: React.FC<ColorInputProps> = ({
       </div>
       <HiddenColorInput
         type='color'
-        value={value ?? '#ffffff'}
+        value={value}
         onChange={onChange}
         onBlur={onBlur}
       />
@@ -239,8 +261,8 @@ const HiddenColorInput = styled.input`
   width: 1px;
 `;
 
-const ColorInputLabel = styled.label<{ color: string }>`
-  --CIL_foreground: ${p => readableColor(p.color ?? p.theme.colors.bg)};
+const ColorInputLabel = styled.label<{ color: string | undefined }>`
+  --CIL_foreground: ${p => readableColor(p.color || p.theme.colors.bg)};
   cursor: pointer;
   position: relative;
   gap: 0.5rem;

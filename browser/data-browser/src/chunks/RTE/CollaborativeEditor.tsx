@@ -46,13 +46,17 @@ import {
   ResourceNodeInline,
 } from './ResourceExtension/ResourceNode';
 import { IsInRTEContex } from '@hooks/useIsInRTE';
-import { FaGripVertical, FaLink, FaTable } from 'react-icons/fa6';
+import { FaCircleInfo, FaGripVertical, FaLink, FaTable } from 'react-icons/fa6';
 import { useUpload } from '@hooks/useUpload';
 import FileHandler from '@tiptap/extension-file-handler';
 import { supportedImageTypes } from '@views/File/fileTypeUtils';
 import type { SuggestionItem } from './types';
 import { useNewResourceUI } from '@components/forms/NewForm/useNewResourceUI';
 import { addIf } from '@helpers/addIf';
+import toast from 'react-hot-toast';
+import { Row } from '@components/Row';
+import { Button } from '@components/Button';
+import { Note } from './NoteExtention/NoteExtention';
 
 export type CollaborativeEditorProps = {
   placeholder?: string;
@@ -107,6 +111,7 @@ export default function CollaborativeEditor({
           undoRedo: false,
           link: false,
         }),
+        Note,
         Typography,
         Link.extend({
           parseHTML: () => [
@@ -155,6 +160,19 @@ export default function CollaborativeEditor({
         }),
         SlashCommands.configure({
           suggestion: buildSuggestion(document.body, [
+            {
+              title: 'Note',
+              id: 'note',
+              icon: FaCircleInfo,
+              command: ({ range, editor: internalEditor }) => {
+                internalEditor
+                  .chain()
+                  .focus()
+                  .deleteRange(range)
+                  .toggleNote()
+                  .run();
+              },
+            },
             {
               title: 'Resource',
               id: 'resource',
@@ -244,6 +262,7 @@ export default function CollaborativeEditor({
         }),
       ],
       editable: canWrite,
+      enableContentCheck: true,
       onBlur,
       editorProps: {
         attributes: {
@@ -253,6 +272,30 @@ export default function CollaborativeEditor({
           'aria-readonly': canWrite ? 'true' : 'false',
           spellcheck: 'true',
         },
+      },
+      onContentError({ editor: currentEditor, error, disableCollaboration }) {
+        // Removes the collaboration extension.
+        disableCollaboration();
+
+        // Since the content is invalid, we don't want to emit an update
+        // Preventing synchronization with other editors or to a server
+        const emitUpdate = false;
+
+        // Disable the editor to prevent further user input
+        currentEditor.setEditable(false, emitUpdate);
+
+        console.error(error);
+        // Maybe show a notification to the user that they need to refresh the app
+        toast.error(
+          <Row wrapItems>
+            There was an error in the editor, please refresh the page to
+            continue.{' '}
+            <Button subtle onClick={() => window.location.reload()}>
+              Refresh
+            </Button>
+          </Row>,
+          { duration: Infinity },
+        );
       },
     },
     [canWrite, drive],

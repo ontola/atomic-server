@@ -51,7 +51,7 @@ const MarkdownEditorImage = ({
   const [urlValue, setUrlValue] = useState<string>();
   const [selectedSubject, setSelectedSubject] = useState<string>();
   const [altText, setAltText] = useState<string>();
-
+  const [imageError, setImageError] = useState<boolean>(false);
   const [urlValid, urlRef] = useHTMLFormFieldValidation();
 
   const canSave = () => {
@@ -80,6 +80,14 @@ const MarkdownEditorImage = ({
       }
     : undefined;
 
+  if (imageError) {
+    return (
+      <NodeViewWrapper>
+        <ImageError selected={selected}>Failed to load image.</ImageError>
+      </NodeViewWrapper>
+    );
+  }
+
   if (node.attrs.src) {
     return (
       <NodeViewWrapper>
@@ -88,6 +96,7 @@ const MarkdownEditorImage = ({
           src={node.attrs.src}
           alt=''
           selected={selected}
+          onError={() => setImageError(true)}
         />
       </NodeViewWrapper>
     );
@@ -200,5 +209,25 @@ const StyledInputWrapper = styled(InputWrapper)`
   flex: unset;
   &:has(:user-invalid) {
     border-color: ${p => p.theme.colors.alert} !important;
+  }
+`;
+
+const ImageError = styled.div<SelectableProps>`
+  background-color: ${p => p.theme.colors.bg1};
+  padding: ${p => p.theme.size()};
+  border-radius: ${p => p.theme.radius};
+  color: ${p => p.theme.colors.textLight};
+  width: 50%;
+  aspect-ratio: 1/1;
+  display: grid;
+  place-items: center;
+  font-size: 1.5rem;
+  font-weight: 500;
+  ${transition('box-shadow', 'filter')}
+
+  .tiptap:focus-within & {
+    box-shadow: 0 0 0 2px
+      ${p => (p.selected ? p.theme.colors.main : 'transparent')};
+    filter: ${p => (p.selected ? 'brightness(0.9)' : 'none')};
   }
 `;

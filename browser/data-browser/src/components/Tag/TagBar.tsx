@@ -5,7 +5,6 @@ import {
   useResource,
   useStore,
   type Resource,
-  type Store,
 } from '@tomic/react';
 import { FaPlus, FaTags } from 'react-icons/fa6';
 import { Row } from '../Row';
@@ -15,21 +14,11 @@ import styled from 'styled-components';
 import { ResourceInline } from '../../views/ResourceInline';
 import { useEffect, useState } from 'react';
 import { TagSelectPopover } from './TagSelectPopover';
+import { getResourcesDrive } from '@helpers/getResourcesDrive';
 
 interface TagBarProps {
   resource: Resource;
 }
-
-const getResourcesDrive = async (resource: Resource, store: Store) => {
-  const ancestry = await store.getResourceAncestry(resource);
-  const driveSubject = ancestry.at(-1);
-
-  if (!driveSubject) {
-    throw new Error('ResourceWithoutDrive');
-  }
-
-  return driveSubject;
-};
 
 const useDriveTags = (resource: Resource) => {
   const store = useStore();
@@ -64,6 +53,7 @@ const useDriveTags = (resource: Resource) => {
 export const TagBar: React.FC<TagBarProps> = ({ resource }) => {
   const { driveTags, addDriveTag, driveSubject, canCreateTags } =
     useDriveTags(resource);
+  const canWrite = useCanWrite(resource);
   const [tags, setTags] = useArray(resource, dataBrowser.properties.tags, {
     commit: true,
   });
@@ -89,18 +79,20 @@ export const TagBar: React.FC<TagBarProps> = ({ resource }) => {
       {tags.map(tag => (
         <ResourceInline key={tag} subject={tag} />
       ))}
-      <TagSelectPopover
-        tags={driveTags}
-        selectedTags={tags}
-        setSelectedTags={setTags}
-        onNewTag={canCreateTags ? handleNewTag : undefined}
-        newTagParent={canCreateTags ? driveSubject : undefined}
-        Trigger={
-          <NewTagButton as={RadixPopover.Trigger} title='Add tags'>
-            <FaPlus />
-          </NewTagButton>
-        }
-      />
+      {canWrite && (
+        <TagSelectPopover
+          tags={driveTags}
+          selectedTags={tags}
+          setSelectedTags={setTags}
+          onNewTag={canCreateTags ? handleNewTag : undefined}
+          newTagParent={canCreateTags ? driveSubject : undefined}
+          Trigger={
+            <NewTagButton as={RadixPopover.Trigger} title='Add tags'>
+              <FaPlus />
+            </NewTagButton>
+          }
+        />
+      )}
     </Row>
   );
 };

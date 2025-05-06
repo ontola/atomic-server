@@ -1,6 +1,6 @@
 import {
   AtomicError,
-  properties,
+  dataBrowser,
   Resource,
   useArray,
   useStore,
@@ -15,18 +15,13 @@ export interface UseUploadResult {
   error: Error | undefined;
 }
 
-const opts = {
-  commit: true,
-};
-
 export function useUpload(parentResource: Resource): UseUploadResult {
   const store = useStore();
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<Error | undefined>(undefined);
   const [subResources, setSubResources] = useArray(
     parentResource,
-    properties.subResources,
-    opts,
+    dataBrowser.properties.subResources,
   );
 
   const upload = useCallback(
@@ -36,11 +31,13 @@ export function useUpload(parentResource: Resource): UseUploadResult {
         setIsUploading(true);
         const netUploaded = await store.uploadFiles(
           acceptedFiles,
-          parentResource.getSubject(),
+          parentResource.subject,
         );
         const allUploaded = [...netUploaded];
+
+        await setSubResources([...subResources, ...allUploaded]);
+        await parentResource.save();
         setIsUploading(false);
-        setSubResources([...subResources, ...allUploaded]);
 
         return allUploaded;
       } catch (e) {
