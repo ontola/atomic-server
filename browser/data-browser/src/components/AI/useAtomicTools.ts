@@ -18,10 +18,10 @@ export const TOOL_NAMES = {
   GET_ATOMIC_RESOURCE: 'get_atomic_resource',
   GET_SCHEMA: 'get_schema',
   EDIT_ATOMIC_RESOURCE: 'edit_atomic_resource',
-  FLIP_SCREEN: 'flip_screen',
   CHANGE_THEME: 'change_theme',
   NAVIGATE_TO_RESOURCE: 'navigate_to_resource',
   CREATE_RESOURCE: 'create_resource',
+  SHOW_SVG: 'show_svg',
 } as const;
 
 const toResultObject = (resource: Resource, includeCommitData: boolean) => {
@@ -151,6 +151,20 @@ export function useAtomicMCPTools({
           return `Navigated to resource ${subject}`;
         },
       }),
+      [TOOL_NAMES.SHOW_SVG]: tool({
+        description:
+          "Show an SVG image to the user. The svg will be shown so you don't have to tell the user the exact svg code afterwards.",
+        parameters: z.object({
+          svg: z.string().describe('The SVG code to show'),
+        }),
+        execute: async ({ svg }) => {
+          return {
+            message:
+              'Success, the user can now see the svg, no need to tell them the exact svg code',
+            data: svg,
+          };
+        },
+      }),
     },
     write: {
       [TOOL_NAMES.EDIT_ATOMIC_RESOURCE]: tool({
@@ -177,18 +191,6 @@ export function useAtomicMCPTools({
           } catch (error) {
             return `Error changing property ${property} on resource ${subject}: ${error}`;
           }
-        },
-      }),
-      [TOOL_NAMES.FLIP_SCREEN]: tool({
-        description: 'Flip the screen of the Atomic Data Browser',
-        parameters: z.object({
-          direction: z.enum(['upside-down']).optional(),
-        }),
-        execute: async () => {
-          // eslint-disable-next-line react-compiler/react-compiler
-          document.body.style.transform = `rotate(180deg)`;
-
-          return 'Screen flipped';
         },
       }),
       [TOOL_NAMES.CHANGE_THEME]: tool({

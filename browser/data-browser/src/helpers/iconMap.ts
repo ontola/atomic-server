@@ -1,4 +1,5 @@
 import {
+  ai,
   collections,
   commits,
   core,
@@ -34,6 +35,7 @@ import {
   FaLink,
   FaCode,
 } from 'react-icons/fa6';
+import { AIIcon } from '../components/AI/AIIcon';
 
 const iconMap = new Map<string, IconType>([
   [dataBrowser.classes.folder, FaFolder],
@@ -52,6 +54,7 @@ const iconMap = new Map<string, IconType>([
   [core.classes.property, FaHashtag],
   [core.classes.ontology, FaShapes],
   [dataBrowser.classes.tag, FaTag],
+  [ai.classes.aiChat, AIIcon],
 ]);
 
 export function getIconForClass(

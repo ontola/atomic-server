@@ -1,4 +1,4 @@
-import { core, dataBrowser } from '@tomic/react';
+import { ai, core, dataBrowser } from '@tomic/react';
 import { OutlinedSection } from '../../components/OutlinedSection';
 import { ClassButton } from './ClassButton';
 
@@ -15,6 +15,7 @@ const buttons = [
   dataBrowser.classes.chatroom,
   dataBrowser.classes.bookmark,
   core.classes.ontology,
+  ai.classes.aiChat,
 ];
 
 export function BaseButtons({ parent }: BaseButtonsProps): JSX.Element {
