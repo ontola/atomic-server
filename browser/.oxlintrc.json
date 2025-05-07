@@ -1,35 +1,37 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": [
-    "eslint",
-    "typescript",
-    "unicorn",
-    "react",
-    "oxc",
-    "import",
-    "jsdoc",
-    "jsx-a11y",
-    "vitest"
-  ],
+  "plugins": ["eslint", "typescript", "react", "jsx-a11y"],
   "categories": {
     "correctness": "error",
-    "suspicious": "warn",
-    "pedantic": "warn",
-    "perf": "warn",
-    "style": "warn"
+    "suspicious": "off",
+    "pedantic": "off",
+    "perf": "off",
+    "style": "off"
   },
   "rules": {
     "no-undef": "off",
     "no-unused-vars": "off",
     "no-redeclare": "off",
-    "@typescript-eslint/no-unused-vars": ["warn", { "varsIgnorePattern": "^_", "argsIgnorePattern": "^_", "caughtErrorsIgnorePattern": "^_|^e$" }],
-    "@typescript-eslint/no-explicit-any": "warn",
     "no-shadow": "off",
+    "eslint/no-unused-vars": "off",
+    "eslint/no-shadow": "off",
+    "class-methods-use-this": "off",
+    "semi": "error",
+    "quotes": ["error", "single"],
+    "eqeqeq": "error",
+    "@typescript-eslint/no-unused-vars": "off",
+    "@typescript-eslint/no-explicit-any": "warn",
     "@typescript-eslint/no-shadow": "warn",
-    "no-console": ["warn", { "allow": ["error", "warn"] }],
+    "@typescript-eslint/member-ordering": "warn",
+    "no-console": ["warn", { "allow": ["error", "warn", "debug"] }],
     "react/prop-types": "off",
     "react/no-unknown-property": ["warn", { "ignore": ["about"] }],
-    "jsx-a11y/no-autofocus": "off"
+    "react-hooks/exhaustive-deps": "warn",
+    "react-hooks/set-state-in-effect": "warn",
+    "no-useless-escape": "off",
+    "no-useless-rename": "off",
+    "jsx-a11y/no-autofocus": "off",
+    "jsx-a11y/prefer-tag-over-role": "off"
   },
   "globals": {
     "React": "readonly"

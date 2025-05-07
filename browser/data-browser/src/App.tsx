@@ -62,7 +62,7 @@ if (isDev()) {
 function App(): JSX.Element {
   // Handle uncaught errors
   useEffect(() => {
-    window.onerror = (message, source, lineno, colno, error) => {
+    window.onerror = (message, _source, _lineno, _colno, error) => {
       if (!error) {
         errorHandler(new Error(`message: ${message}`));
       }
