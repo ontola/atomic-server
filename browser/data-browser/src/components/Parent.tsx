@@ -15,11 +15,11 @@ import { Button } from './Button';
 import { BREADCRUMB_BAR_TRANSITION_TAG } from '../helpers/transitionName';
 import { ResourceContextMenu } from './ResourceContextMenu';
 import { MenuBarDropdownTrigger } from './ResourceContextMenu/MenuBarDropdownTrigger';
-import { FaStroopwafel } from 'react-icons/fa6';
 import { IconButton } from './IconButton/IconButton';
 
 import type { JSX } from 'react';
 import { useAISidebar } from './AI/AISidebarContext';
+import { AIIcon } from './AI/AIIcon';
 
 type ParentProps = {
   resource: Resource;
@@ -45,7 +45,7 @@ function Parent({ resource }: ParentProps): JSX.Element {
             title='Toggle AI panel'
             onClick={() => setIsOpen(prev => !prev)}
           >
-            <FaStroopwafel />
+            <AIIcon />
           </IconButton>
           <ResourceContextMenu
             isMainMenu

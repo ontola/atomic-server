@@ -4,6 +4,7 @@ import remarkGFM from 'remark-gfm';
 import { Button } from '../Button';
 import { truncateMarkdown } from '../../helpers/markdown';
 import { FC, useState } from 'react';
+import { AtomicLink } from '../AtomicLink';
 
 type Props = {
   text: string;
@@ -23,13 +24,11 @@ const disableElementsInLink = ['a'];
 const Markdown: FC<Props> = ({
   text,
   renderGFM = true,
-  maxLength,
+  maxLength = 5000,
   className,
   nestedInLink = false,
 }) => {
   const [collapsed, setCollapsed] = useState(true);
-
-  maxLength = maxLength || 5000;
 
   if (!text) {
     return null;
@@ -40,6 +39,11 @@ const Markdown: FC<Props> = ({
       <ReactMarkdown
         remarkPlugins={renderGFM ? [remarkGFM] : []}
         disallowedElements={nestedInLink ? disableElementsInLink : undefined}
+        components={{
+          a: ({ node: _node, children, ...props }) => {
+            return <AtomicLink {...props}>{children}</AtomicLink>;
+          },
+        }}
       >
         {collapsed ? truncateMarkdown(text, maxLength) : text}
       </ReactMarkdown>
