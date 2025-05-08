@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { styled } from 'styled-components';
+import { styled, useTheme } from 'styled-components';
 import { Row, Column } from '../Row';
-import { FaPencil, FaPlus, FaTrash } from 'react-icons/fa6';
+import { FaPencil, FaPlus, FaTrash, FaStar } from 'react-icons/fa6';
 import { IconButton } from '../IconButton/IconButton';
 import { ModelSelect } from './ModelSelect';
-import type { AIAgent, MCPServer } from './types';
+import type { AIAgent } from './types';
 import {
   Dialog,
   DialogTitle,
@@ -17,9 +17,6 @@ import { Button } from '../Button';
 import { SkeletonButton } from '../SkeletonButton';
 import { useSettings } from '../../helpers/AppSettings';
 import { Checkbox, CheckboxLabel } from '../forms/Checkbox';
-import { generateObject } from 'ai';
-import { createOpenRouter } from '@openrouter/ai-sdk-provider';
-import { z } from 'zod';
 
 // Helper function to generate a unique ID
 const generateId = () => {
@@ -86,6 +83,10 @@ export const useAIAgentConfig = () => {
     'atomic.ai.autoAgentSelect',
     true,
   );
+  const [defaultAgentId, setDefaultAgentId] = useLocalStorage<string>(
+    'atomic.ai.defaultAgentId',
+    agents[0]?.id || '',
+  );
 
   // Save agents to settings
   const saveAgents = (newAgents: AIAgent[]) => {
@@ -97,55 +98,9 @@ export const useAIAgentConfig = () => {
     autoAgentSelectEnabled,
     setAutoAgentSelectEnabled,
     saveAgents,
+    defaultAgentId,
+    setDefaultAgentId,
   };
-};
-
-function agentToText(agent: AIAgent, mcpServers: MCPServer[]) {
-  return `ID: ${agent.id} Name: ${agent.name} Description: ${agent.description} Tools: ${agent.availableTools.map(t => mcpServers.find(s => s.id === t)?.name).join(', ')}`;
-}
-
-export const useAutoAgentSelect = () => {
-  const { mcpServers, openRouterApiKey } = useSettings();
-  const { agents } = useAIAgentConfig();
-
-  const openrouter = createOpenRouter({
-    apiKey: openRouterApiKey,
-    compatibility: 'strict',
-  });
-
-  const basePrompt = `You are a tool that determines what agent to use to answer the users question.
-These are the agents to choose from
-
-${agents.map(agent => agentToText(agent, mcpServers)).join('\n')}
-
-Answer with only the ID of the agent you pick
-
-User question: `;
-
-  const pickAgent = async (question: string): Promise<AIAgent> => {
-    const prompt = basePrompt + question.trim();
-
-    const { object } = await generateObject({
-      // model: openrouter('google/gemma-3-27b-it:free'),
-      model: openrouter('google/gemini-2.0-flash-lite-preview-02-05:free'),
-      schemaName: 'Agent',
-      schemaDescription: 'The agent to use for the question.',
-      schema: z.object({
-        agentId: z.string(),
-      }),
-      prompt,
-    });
-
-    const agent = agents.find(a => a.id === object.agentId);
-
-    if (!agent) {
-      throw new Error('Agent not found');
-    }
-
-    return agent;
-  };
-
-  return pickAgent;
 };
 
 export const AgentConfig = ({
@@ -159,10 +114,12 @@ export const AgentConfig = ({
     autoAgentSelectEnabled,
     setAutoAgentSelectEnabled,
     saveAgents,
+    defaultAgentId,
+    setDefaultAgentId,
   } = useAIAgentConfig();
   const [editingAgent, setEditingAgent] = useState<AIAgent | null>(null);
   const [isCreating, setIsCreating] = useState(false);
-
+  const theme = useTheme();
   const [dialogProps, show, close, isOpen] = useDialog({
     bindShow: onOpenChange,
   });
@@ -262,7 +219,29 @@ export const AgentConfig = ({
                       onClick={() => onSelectAgent(agent)}
                     >
                       <Column>
-                        <AgentName>{agent.name}</AgentName>
+                        <Row gap='0.2ch' center>
+                          <IconButton
+                            onClick={e => {
+                              e.stopPropagation();
+                              setDefaultAgentId(agent.id);
+                            }}
+                            title={
+                              defaultAgentId === agent.id
+                                ? 'Default agent'
+                                : 'Set as default'
+                            }
+                            edgeAlign='start'
+                          >
+                            <FaStar
+                              color={
+                                defaultAgentId === agent.id
+                                  ? theme.colors.main
+                                  : theme.colors.bg2
+                              }
+                            />
+                          </IconButton>
+                          <AgentName>{agent.name}</AgentName>
+                        </Row>
                         <AgentDescription>{agent.description}</AgentDescription>
                       </Column>
                       <Row gap='0.5rem'>

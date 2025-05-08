@@ -36,14 +36,12 @@ import {
   type AIChatDisplayMessage,
   type AIMessageContext,
 } from './types';
-import {
-  AgentConfig,
-  useAIAgentConfig,
-  useAutoAgentSelect,
-} from './AgentConfig';
+import { AgentConfig, useAIAgentConfig } from './AgentConfig';
 import { Button } from '../Button';
 import { MessageContextItem } from './MessageContextItem';
 import { useProcessMessages } from './useProcessMessages';
+import { NoKeyOverlay } from './NoKeyOverlay';
+import { useAutoAgentSelect } from './useAgentAutoSelect';
 type OngoingMessagePart = {
   type: 'reasoning' | 'text';
   text: string;
@@ -95,11 +93,13 @@ export const SimpleAIChat: React.FC<
   const abortSignalRef = useRef<AbortController>(null);
   const [aiState, setAiState] = useState<AIState>(AIState.Stopped);
   const [editedResources, setEditedResources] = useState<string[]>([]);
-  const { agents, autoAgentSelectEnabled } = useAIAgentConfig();
+  const { agents, autoAgentSelectEnabled, defaultAgentId } = useAIAgentConfig();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [attachedFile, setAttachedFile] = useState<FileAttachment | null>(null);
   const store = useStore();
-  const [selectedAgent, setSelectedAgent] = useState<AIAgent>(agents[0]);
+  const [selectedAgent, setSelectedAgent] = useState<AIAgent>(
+    agents.find(a => a.id === defaultAgentId) || agents[0],
+  );
   const [userInput, setUserInput] = useState('');
   const [userSelectedContextItems, setUserSelectedContextItems] = useState<
     AIMessageContext[]
@@ -108,6 +108,9 @@ export const SimpleAIChat: React.FC<
   const openrouter = createOpenRouter({
     apiKey: openRouterApiKey,
     compatibility: 'strict',
+    extraBody: {
+      transforms: ['middle-out'],
+    },
   });
   const [ongoingMessage, setOngoingMessage] = useState<OngoingMessagePart>({
     type: 'text',
@@ -617,6 +620,7 @@ export const SimpleAIChat: React.FC<
                   </IconButton>
                 </Row>
               </Column>
+              <NoKeyOverlay />
             </ChatInputWrapper>
             <TokensUsed>
               Tokens used: {tokensUsed[0]} input, {tokensUsed[1]} output
@@ -736,6 +740,7 @@ const AttachmentPreview = styled.div`
 
 const ChatWindow = styled.div<{ fullView?: boolean }>`
   padding-top: ${p => (p.fullView ? p.theme.size(2) : 0)};
+  position: relative;
   display: grid;
   grid-template-rows: auto 1fr auto;
   height: 90vh;
