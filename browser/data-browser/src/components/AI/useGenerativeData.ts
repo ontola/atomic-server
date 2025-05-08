@@ -39,7 +39,7 @@ export const useGenerativeData = () => {
       return cleaned;
     }
 
-    return null;
+    return undefined;
   };
 
   return { generateTitleFromConversation };
