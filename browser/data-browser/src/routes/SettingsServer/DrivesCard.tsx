@@ -22,7 +22,7 @@ export function DrivesCard({
 }: DriveCardProps): JSX.Element {
   const { drive } = useSettings();
 
-  if (drives.length === 0) {
+  if (drives.length === 0 && !showNewOption) {
     return <span>Nothing to show</span>;
   }
 

@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useState } from 'react';
-import { Agent } from '@tomic/react';
+import { Agent, server } from '@tomic/react';
 import { useSettings } from '../helpers/AppSettings';
 import {
   InputStyled,
@@ -24,6 +24,10 @@ import { saveAgentToIDB } from '@helpers/agentStorage';
 import { FaKey, FaUser } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import { NewIdentitySection } from '../components/NewIdentitySection';
+import { DrivesCard } from './SettingsServer/DrivesCard';
+import { useSavedDrives } from '../hooks/useSavedDrives';
+import { useDriveHistory } from '../hooks/useDriveHistory';
+import { constructOpenURL } from '../helpers/navigation';
 
 export const AgentSettingsRoute = createRoute({
   path: pathNames.agentSettings,
@@ -32,10 +36,13 @@ export const AgentSettingsRoute = createRoute({
 });
 
 const SettingsAgent: React.FunctionComponent = () => {
-  const { agent, setAgent } = useSettings();
+  const { agent, setAgent, setDrive } = useSettings();
   const [error, setError] = useState<Error | undefined>(undefined);
   const navigate = useNavigateWithTransition();
   const [showCreate, setShowCreate] = useState(false);
+
+  const [savedDrives] = useSavedDrives();
+  const [, addToHistory] = useDriveHistory(savedDrives);
 
   function handleSignOut() {
     setAgent(undefined);
@@ -55,6 +62,12 @@ const SettingsAgent: React.FunctionComponent = () => {
       const err = new Error('Invalid secret. ' + e);
       setError(err);
     }
+  }
+
+  function handleSetDrive(url: string) {
+    setDrive(url);
+    addToHistory(url);
+    navigate(constructOpenURL(url));
   }
 
   return (
@@ -92,7 +105,15 @@ const SettingsAgent: React.FunctionComponent = () => {
                 Sign Out
               </Button>
             </Row>
+
             <Margin />
+
+            <Heading as='h2'>Drives</Heading>
+            <DrivesCard
+              showNewOption
+              drives={savedDrives}
+              onDriveSelect={handleSetDrive}
+            />
           </Column>
         ) : (
           <Column gap='2rem'>
@@ -140,5 +161,9 @@ const Divider = styled.hr`
   width: 100%;
   border: none;
   border-top: 1px solid ${p => p.theme.colors.bg2};
+  margin: 0;
+`;
+
+const Heading = styled.h1`
   margin: 0;
 `;

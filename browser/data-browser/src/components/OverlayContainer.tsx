@@ -4,7 +4,7 @@ import { styled } from 'styled-components';
 import { shortcuts } from './HotKeyWrapper';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { constructOpenURL } from '../helpers/navigation';
-import { useServerSearch } from '@tomic/react';
+import { useServerSearch, useStore, ai, core, type Ai } from '@tomic/react';
 import { useSettings } from '../helpers/AppSettings';
 import { useQueryScopeHandler } from '../hooks/useQueryScope';
 import { Column, Row } from './Row';
@@ -12,7 +12,7 @@ import { ErrorBoundary } from '../views/ErrorPage';
 import { ErrorLook } from './ErrorLook';
 
 import { InlineFormattedResourceList } from './InlineFormattedResourceList';
-import { FaMagnifyingGlass } from 'react-icons/fa6';
+import { FaMagnifyingGlass, FaComments } from 'react-icons/fa6';
 import ResourceLine from '../views/ResourceLine';
 import ResourceCard from '../views/Card/ResourceCard';
 
@@ -133,12 +133,36 @@ const ResultsList = styled.div`
 const PreviewFloat = styled.div`
   position: absolute;
   top: 0;
-  right: -1rem;
+  right: 0;
   transform: translateX(100%);
   z-index: ${p => p.theme.zIndex.searchOverlay + 1};
   width: 18rem;
   height: 30rem;
   overflow-y: auto;
+`;
+
+const AIChatRow = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border: none;
+  border-top: 1px solid ${p => p.theme.colors.bg2};
+  background: transparent;
+  color: ${p => p.theme.colors.text};
+  font-size: 0.875rem;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+
+  &:hover {
+    background: ${p => p.theme.colors.bg1};
+  }
+
+  svg {
+    color: ${p => p.theme.colors.main};
+    flex-shrink: 0;
+  }
 `;
 
 const OverlayInputWrapper = styled.div`
@@ -237,6 +261,26 @@ function SearchOverlay(): JSX.Element {
   const { drive } = useSettings();
   const { scope } = useQueryScopeHandler();
   const navigate = useNavigateWithTransition();
+  const store = useStore();
+
+  const handleStartAIChat = async (
+    q: string,
+    s: Store,
+    d: string,
+    n: (url: string) => void,
+  ): Promise<void> => {
+    const chatResource = await s.newResource<Ai.AiChat>({
+      parent: d,
+      isA: ai.classes.aiChat,
+      propVals: {
+        [core.properties.name]: q.slice(0, 50) || 'New Chat',
+      },
+    });
+
+    await chatResource.save();
+
+    n(constructOpenURL(chatResource.subject));
+  };
   const resultsRef = useRef<HTMLDivElement | null>(null);
 
   const [query, setQuery] = useState('');
@@ -264,7 +308,7 @@ function SearchOverlay(): JSX.Element {
     setSelected(0);
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
@@ -288,6 +332,10 @@ function SearchOverlay(): JSX.Element {
           const openURL = constructOpenURL(results[selectedIndex]);
           navigate(openURL);
           closeOverlay();
+        } else if (query && results.length === 0) {
+          // No results — start AI chat with query
+          await handleStartAIChat(query, store, drive, navigate);
+          closeOverlay();
         }
         break;
       case 'Escape':
@@ -296,6 +344,18 @@ function SearchOverlay(): JSX.Element {
         break;
     }
   };
+
+  // Shift+Enter always starts an AI chat
+  useHotkeys(
+    'shift+enter',
+    async e => {
+      e.preventDefault();
+      await handleStartAIChat(query, store, drive, navigate);
+      closeOverlay();
+    },
+    { enableOnTags: ['INPUT'] },
+    [query, store, drive, navigate],
+  );
 
   useEffect(() => {
     if (selectedIndex >= 0 && resultsRef.current) {
@@ -385,6 +445,17 @@ function SearchOverlay(): JSX.Element {
                   ))}
                 </Column>
               </ResultsArea>
+              {query && results.length === 0 && (
+                <AIChatRow
+                  onClick={async () => {
+                    await handleStartAIChat(query, store, drive, navigate);
+                    closeOverlay();
+                  }}
+                >
+                  <FaComments size={16} />
+                  <span>Start AI Chat with "{query}"</span>
+                </AIChatRow>
+              )}
             </ResultsList>
           </PanelContent>
 
@@ -394,7 +465,10 @@ function SearchOverlay(): JSX.Element {
                 <kbd>↑</kbd> <kbd>↓</kbd> navigate
               </span>
               <span>
-                <kbd>↵</kbd> open
+                <kbd>↵</kbd> open / chat
+              </span>
+              <span>
+                <kbd>⇧↵</kbd> chat
               </span>
               <span>
                 <kbd>esc</kbd> close

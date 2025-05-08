@@ -52,7 +52,7 @@ describe('resource.ts', () => {
       batchResource: vi.fn(),
       saveBatchForParent: vi.fn(),
       subscribeWebSocket: vi.fn(),
-    } as any;
+    } as unknown as Store;
     resource.setStore(store);
 
     // 1. Initial Save
