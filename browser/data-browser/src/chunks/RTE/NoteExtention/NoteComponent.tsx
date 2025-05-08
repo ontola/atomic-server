@@ -21,6 +21,7 @@ const StyledNodeViewWrapper = styled(NodeViewWrapper)`
   border-left: 3px solid ${p => p.theme.colors.main};
   width: 100%;
   margin-bottom: ${p => p.theme.size()};
+  clear: both;
   & p:last-child {
     margin-bottom: 0;
   }

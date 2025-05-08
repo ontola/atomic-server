@@ -1,5 +1,4 @@
 import { EditorContent, useEditor, type Editor } from '@tiptap/react';
-import { FloatingMenu } from '@tiptap/react/menus';
 import { StarterKit } from '@tiptap/starter-kit';
 import { Link } from '@tiptap/extension-link';
 import { Placeholder } from '@tiptap/extension-placeholder';
@@ -22,7 +21,6 @@ import {
   buildResourceSuggestion,
 } from './ResourceExtension/ResourceExtention';
 import { ExtendedImage } from './ImagePicker';
-import { FloatingMenuText } from './sharedEditorStyles';
 import * as Y from 'yjs';
 import {
   dataBrowser,
@@ -38,7 +36,7 @@ import { EditorEvents } from './EditorEvents';
 import { useYSync } from './useYSync';
 import { randomItem } from '@helpers/randomItem';
 import { EditorWrapperBase } from './EditorWrapperBase';
-import styled from 'styled-components';
+import styled, { useTheme } from 'styled-components';
 import { useSettings } from '@helpers/AppSettings';
 import { FullBubbleMenu } from './FullBubbleMenu';
 import {
@@ -57,6 +55,9 @@ import toast from 'react-hot-toast';
 import { Row } from '@components/Row';
 import { Button } from '@components/Button';
 import { Note } from './NoteExtention/NoteExtention';
+import { FloatingHint } from './FloatingHint';
+import { TableKit } from '@tiptap/extension-table';
+import { useCustomBodyColor } from '@hooks/useCustomBodyColor';
 
 export type CollaborativeEditorProps = {
   placeholder?: string;
@@ -87,6 +88,9 @@ export default function CollaborativeEditor({
   const awareness = useYSync(resource, property, doc);
   const canWrite = useCanWrite(resource);
 
+  const theme = useTheme();
+  useCustomBodyColor(theme.colors.bg);
+
   const uploadAndInsertImage = async (
     currentEditor: Editor,
     files: File[],
@@ -110,6 +114,9 @@ export default function CollaborativeEditor({
         StarterKit.configure({
           undoRedo: false,
           link: false,
+          codeBlock: {
+            enableTabIndentation: true,
+          },
         }),
         Note,
         Typography,
@@ -238,6 +245,7 @@ export default function CollaborativeEditor({
           nested: true,
         }),
         TextStyle,
+        TableKit,
         Color,
         BackgroundColor,
         FileHandler.configure({
@@ -318,11 +326,9 @@ export default function CollaborativeEditor({
             <FaGripVertical />
           </DragHandle>
           <EditorContent key='rich-editor' editor={editor}>
-            <FloatingMenu editor={editor}>
-              <FloatingMenuText>
-                Type &apos;/&apos; for options or &apos;@&apos; for resources
-              </FloatingMenuText>
-            </FloatingMenu>
+            <FloatingHint editor={editor}>
+              Type &apos;/&apos; for options or &apos;@&apos; for resources
+            </FloatingHint>
             <FullBubbleMenu />
             <EditorEvents onChange={save} />
           </EditorContent>

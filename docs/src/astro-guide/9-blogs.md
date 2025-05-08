@@ -84,7 +84,7 @@ Now to display a list of blogposts we are going to query Atomic Server using col
 A collection is made up of a few properties, most importantly: `property` and `value`.
 The collection will collect all resources in the drive that have the specified property set to the specified value.
 
-> **NOTE:** </br>
+> **NOTE:** <br/>
 > You can also leave `property` or `value` empty meaning 'give me all resources with this property' or 'give me all resources with a property that has this value'
 
 By setting `property` to `https://atomicdata.dev/properties/isA` (the subject of [is-a](https://atomicdata.dev/properties/isA)) and `value` to the subject of our blog post class we tell the collection to collect all resources in our drive that are of class: `blogpost`.
@@ -280,7 +280,7 @@ Now when you click on one of the blog posts on your blog page you should no long
 ### Building the rest of the page
 
 <div style="background-color: #86caf836; padding: 1rem; border: 1px solid #86caf8;">
-<strong>NOTE:</strong></br>
+<strong>NOTE:</strong><br/>
 If you opted to use SSR and skipped the <code>getStaticPaths</code> function replace <code>const {subject} = Astro.props</code> with:
 
 ```ts

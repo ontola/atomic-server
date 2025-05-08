@@ -1,5 +1,4 @@
 import { EditorContent, useEditor } from '@tiptap/react';
-import { FloatingMenu } from '@tiptap/react/menus';
 import { StarterKit } from '@tiptap/starter-kit';
 import { Link } from '@tiptap/extension-link';
 import { Placeholder } from '@tiptap/extension-placeholder';
@@ -17,10 +16,10 @@ import { usePopoverContainer } from '../../components/Popover';
 import {
   StyledEditorWrapper,
   RawEditor,
-  FloatingMenuText,
   FloatingCodeButton,
 } from './sharedEditorStyles';
 import { TaskItem, TaskList } from '@tiptap/extension-list';
+import { FloatingHint } from './FloatingHint';
 
 export type AsyncMarkdownEditorProps = {
   placeholder?: string;
@@ -82,6 +81,7 @@ export default function AsyncMarkdownEditor({
       HTMLAttributes: {
         class: 'tiptap-image',
       },
+      markdownCompatible: true,
     }),
     Placeholder.configure({
       placeholder: placeholder ?? 'Start typing...',
@@ -143,9 +143,9 @@ export default function AsyncMarkdownEditor({
           />
         )}
         <EditorContent key='rich-editor' editor={editor}>
-          <FloatingMenu editor={editor ?? null}>
-            <FloatingMenuText>Type &apos;/&apos; for options</FloatingMenuText>
-          </FloatingMenu>
+          <FloatingHint editor={editor}>
+            Type &apos;/&apos; for options
+          </FloatingHint>
           <BubbleMenu />
           <EditorEvents onChange={handleChange} />
         </EditorContent>

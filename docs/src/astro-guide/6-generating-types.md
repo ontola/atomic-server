@@ -44,7 +44,7 @@ We're ready to generate the types, Run the following command:
 npx ad-generate ontologies
 ```
 
-> **NOTE:** </br>
+> **NOTE:** <br/>
 > If your data does not have public read rights you will have to specify the agent to use to fetch the ontology:
 > `npx ad-generate ontologies -a <YOUR_AGENT_SECRET>`.
 > However you should consider keeping at least your ontologies publicly readable if you want to make it more easy for other apps to integrate with your stuff

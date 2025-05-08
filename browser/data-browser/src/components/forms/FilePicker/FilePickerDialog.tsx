@@ -100,6 +100,7 @@ export function FilePickerDialog({
                   placeholder='Search or enter a URL...'
                   value={query}
                   onChange={e => updateQuery(e.target.value)}
+                  autoFocus
                 />
               </InputWrapper>
               {!!onNewFilePicked && (

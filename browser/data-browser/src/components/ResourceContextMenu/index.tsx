@@ -252,7 +252,10 @@ export function ResourceContextMenu({
   ];
 
   // Add custom items from context (if any) before filtering
-  const allItems = [...items, ...customItems];
+  const allItems = [
+    ...items,
+    ...addIf(subject === currentSubject, ...customItems),
+  ];
 
   const filteredItems = showOnly
     ? allItems.filter(

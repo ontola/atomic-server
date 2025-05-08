@@ -10,7 +10,7 @@ Since we need a `header-image` to create a homepage resource we should upload on
 You can use any image but you get bonus points if it's a cute image of your cat.
 To upload go to the 'Assets' folder and drag & drop an image into the folder.
 
-> **TIP:** </br>
+> **TIP:** <br/>
 > You can change the folder view mode by clicking on one of the two buttons in the top right.
 
 ![](img/5-2.webp)

@@ -107,7 +107,7 @@ await resource.save();
 By default, `.set` validates the value against the properties datatype.
 You should await the method when validation is enabled because the property's resource might not be in the store yet and has to be fetched.
 
-> **Note**</br>
+> **Note**<br/>
 > Setting validate to false only disables validation on the client. The server will always validate the data and respond with an error if the data is invalid.
 
 **Parameters**
@@ -141,7 +141,7 @@ resource.push(
 await resource.save();
 ```
 
-> **Note**</br>
+> **Note**<br/>
 > You **cannot** push values using `resource.props`.
 > For example: `resource.props.likedBy.push('https://my-atomicserver.com/users/1')` will not work.
 

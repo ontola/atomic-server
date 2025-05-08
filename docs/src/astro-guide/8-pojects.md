@@ -24,7 +24,7 @@ Now in your data folder create some projects and add them to your homepage resou
 
 ![](img/8-3.webp)
 
-> **NOTE:** </br>
+> **NOTE:** <br/>
 > To edit a resource press `Cmd + e` or `Ctrl + e`, alternatively you can click the context menu on the right of the search bar and click `Edit`
 
 Since we changed the ontology we will have to generate our types again:

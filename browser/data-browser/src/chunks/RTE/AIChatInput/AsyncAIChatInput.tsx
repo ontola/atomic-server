@@ -8,7 +8,7 @@ import { EditorWrapperBase } from '../EditorWrapperBase';
 import { searchSuggestionBuilder } from './mcpSuggestions';
 import { useRef, useState } from 'react';
 import { EditorEvents } from '../EditorEvents';
-import { Markdown } from 'tiptap-markdown';
+import { Markdown } from '@tiptap/markdown';
 import { useStore } from '@tomic/react';
 import { useSettings } from '../../../helpers/AppSettings';
 import type { Node } from '@tiptap/pm/model';
@@ -108,7 +108,9 @@ const AsyncAIChatInput: React.FC<
     {
       extensions: [
         Markdown.configure({
-          html: true,
+          markedOptions: {
+            gfm: true,
+          },
         }),
         StarterKit.extend({
           addKeyboardShortcuts() {
@@ -174,14 +176,14 @@ const AsyncAIChatInput: React.FC<
         ),
       ],
       autofocus: true,
+      contentType: 'markdown',
       editable: !disabled,
     },
     [serversWithResources, searchResourcesOfServer, disabled],
   );
 
   const handleChange = () => {
-    // @ts-expect-error - markdown is a valid storage
-    const value = editor.storage.markdown.getMarkdown();
+    const value = editor.getMarkdown();
     setMarkdown(value);
     markdownRef.current = value;
     onChange(value);

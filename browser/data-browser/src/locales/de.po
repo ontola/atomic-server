@@ -2330,34 +2330,42 @@ msgid "Set"
 msgstr "Setzen"
 
 #: src/chunks/RTE/NodeSelectMenu.tsx
+#: src/chunks/RTE/SlashMenu/CommandsExtension.ts
 msgid "Paragraph"
 msgstr "Absatz"
 
 #: src/chunks/RTE/NodeSelectMenu.tsx
+#: src/chunks/RTE/SlashMenu/CommandsExtension.ts
 msgid "Codeblock"
 msgstr "Codeblock"
 
 #: src/chunks/RTE/NodeSelectMenu.tsx
+#: src/chunks/RTE/SlashMenu/CommandsExtension.ts
 msgid "Heading 1"
 msgstr "Überschrift 1"
 
 #: src/chunks/RTE/NodeSelectMenu.tsx
+#: src/chunks/RTE/SlashMenu/CommandsExtension.ts
 msgid "Heading 2"
 msgstr "Überschrift 2"
 
 #: src/chunks/RTE/NodeSelectMenu.tsx
+#: src/chunks/RTE/SlashMenu/CommandsExtension.ts
 msgid "Heading 3"
 msgstr "Überschrift 3"
 
 #: src/chunks/RTE/NodeSelectMenu.tsx
+#: src/chunks/RTE/SlashMenu/CommandsExtension.ts
 msgid "Heading 4"
 msgstr "Überschrift 4"
 
 #: src/chunks/RTE/NodeSelectMenu.tsx
+#: src/chunks/RTE/SlashMenu/CommandsExtension.ts
 msgid "Heading 5"
 msgstr "Überschrift 5"
 
 #: src/chunks/RTE/NodeSelectMenu.tsx
+#: src/chunks/RTE/SlashMenu/CommandsExtension.ts
 msgid "Heading 6"
 msgstr "Überschrift 6"
 
@@ -2585,6 +2593,7 @@ msgstr "URL der neuen Ressource..."
 msgid "The identifier of the resource. This also determines where the resource is saved, by default."
 msgstr "Die Kennung der Ressource. Dies bestimmt standardmäßig auch, wo die Ressource gespeichert wird."
 
+#: src/chunks/RTE/CollaborativeEditor.tsx
 #: src/components/forms/NewForm/NewFormTitle.tsx
 msgid "Resource"
 msgstr "Ressource"
@@ -2966,6 +2975,7 @@ msgid "Editing YDoc directly is not supported"
 msgstr "Das direkte Bearbeiten von YDoc wird nicht unterstützt"
 
 #: src/chunks/RTE/FullBubbleMenu.tsx
+#: src/chunks/RTE/ImagePicker.tsx
 msgid "Left"
 msgstr "Links"
 
@@ -2974,18 +2984,22 @@ msgid "Center"
 msgstr "Zentriert"
 
 #: src/chunks/RTE/FullBubbleMenu.tsx
+#: src/chunks/RTE/ImagePicker.tsx
 msgid "Right"
 msgstr "Rechts"
 
 #: src/chunks/RTE/NodeSelectMenu.tsx
+#: src/chunks/RTE/SlashMenu/CommandsExtension.ts
 msgid "Ordered List"
 msgstr "Geordnete Liste"
 
 #: src/chunks/RTE/NodeSelectMenu.tsx
+#: src/chunks/RTE/SlashMenu/CommandsExtension.ts
 msgid "Bullet List"
 msgstr "Aufzählungsliste"
 
 #: src/chunks/RTE/NodeSelectMenu.tsx
+#: src/chunks/RTE/SlashMenu/CommandsExtension.ts
 msgid "Task List"
 msgstr "Aufgabenliste"
 
@@ -3102,9 +3116,38 @@ msgstr "Bild konnte nicht geladen werden."
 msgid "Note"
 msgstr "Hinweis"
 
-#~ msgid "Hallo"
-#~ msgstr "Hallo"
-
 #: src/chunks/RTE/NoteExtention/NoteComponent.tsx
 msgid "<0/> Note"
 msgstr "<0/> Notiz"
+
+#: src/chunks/RTE/SlashMenu/CommandsExtension.ts
+msgid "Quote"
+msgstr "Zitat"
+
+#: src/chunks/RTE/SlashMenu/CommandsExtension.ts
+msgid "Image"
+msgstr "Bild"
+
+#: src/chunks/RTE/ImagePicker.tsx
+msgid "Add a caption..."
+msgstr "Bildunterschrift hinzufügen..."
+
+#: src/chunks/RTE/ImagePicker.tsx
+msgid "Caption <0/>"
+msgstr "Bildunterschrift <0/>"
+
+#: src/chunks/RTE/ImagePicker.tsx
+msgid "Textual Description <0/>"
+msgstr "Textuelle Beschreibung <0/>"
+
+#: src/chunks/RTE/ImagePicker.tsx
+msgid "Text Flow <0/>"
+msgstr "Textfluss <0/>"
+
+#: src/chunks/RTE/ImagePicker.tsx
+msgid "Choose an image <0/>"
+msgstr "Wähle ein Bild <0/>"
+
+#: src/chunks/RTE/ImagePicker.tsx
+msgid "Inline"
+msgstr "Fließtext"

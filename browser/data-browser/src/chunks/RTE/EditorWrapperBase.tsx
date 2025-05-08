@@ -117,5 +117,13 @@ export const EditorWrapperBase = styled.div<{ hideEditor: boolean }>`
         margin: 0;
       }
     }
+    table {
+      border-collapse: collapse;
+      td,
+      th {
+        border: 1px solid ${p => p.theme.colors.bg2};
+        padding: ${p => p.theme.size(2)};
+      }
+    }
   }
 `;
