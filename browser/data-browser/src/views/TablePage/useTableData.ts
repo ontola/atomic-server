@@ -6,7 +6,7 @@ import {
   useResource,
   useSubject,
 } from '@tomic/react';
-import { useMemo, useReducer } from 'react';
+import { useReducer } from 'react';
 import { TableSorting, DEFAULT_SORT_PROP } from './tableSorting';
 
 const PAGE_SIZE = 30;
@@ -46,23 +46,27 @@ export function useTableData(resource: Resource): UseTableDataResult {
   const [classSubject] = useSubject(resource, core.properties.classtype);
   const tableClass = useResource(classSubject);
 
-  const queryFilter = useMemo(
-    () => ({
-      property: core.properties.parent,
-      value: resource.subject,
-      sort_by: sorting.prop,
-      sort_desc: sorting.sortDesc,
-    }),
-    [resource.subject, sorting.prop, sorting.sortDesc],
+  const queryFilter = {
+    property: core.properties.parent,
+    value: resource.subject,
+    sort_by: sorting.prop,
+    sort_desc: sorting.sortDesc,
+  };
+
+  const { collection, invalidateCollection, mapAll } = useCollection(
+    queryFilter,
+    {
+      pageSize: PAGE_SIZE,
+      server: new URL(resource.subject).origin,
+    },
   );
 
   return {
     tableClass,
     sorting,
     setSortBy,
-    ...useCollection(queryFilter, {
-      pageSize: PAGE_SIZE,
-      server: new URL(resource.subject).origin,
-    }),
+    collection,
+    invalidateCollection,
+    mapAll,
   };
 }

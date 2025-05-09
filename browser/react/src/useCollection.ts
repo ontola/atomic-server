@@ -5,7 +5,7 @@ import {
   QueryFilter,
   Store,
 } from '@tomic/lib';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from './hooks.js';
 
 export type CollectionItemProps = { collection: Collection; index: number };
@@ -76,7 +76,7 @@ export function useCollection(
     server: undefined,
   },
 ): UseCollectionResult {
-  const [firstRun, setFirstRun] = useState(true);
+  const firstRunRef = useRef(true);
 
   const store = useStore();
   const queryFilterMemo = useQueryFilterMemo(queryFilter);
@@ -106,7 +106,9 @@ export function useCollection(
   }, []);
 
   useEffect(() => {
-    if (firstRun) {
+    if (firstRunRef.current) {
+      firstRunRef.current = false;
+
       return;
     }
 
@@ -119,9 +121,9 @@ export function useCollection(
 
     newCollection.waitForReady().then(() => {
       setCollection(proxyCollection(newCollection.__internalObject));
-      setFirstRun(false);
+      firstRunRef.current = false;
     });
-  }, [queryFilterMemo, pageSize, store, server, firstRun]);
+  }, [queryFilterMemo, pageSize, store, server]);
 
   const invalidateCollection = useCallback(async () => {
     await collection.__internalObject.refresh();
