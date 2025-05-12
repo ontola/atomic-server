@@ -5,13 +5,10 @@ import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 
 const generateTitleSystemPrompt = `You are part of a well oiled machine that responds to user input.
 It is your job to think of a short title that fits the given conversation.
-You are known for your incredible wordplay and cleverness.
-Make the title funny and clever, things like wordplay, puns or titles that just sound funny.
-
 The user will provide a JSON object containing the conversation.
 
 ALWAYS USE THE SAME LANGUAGE AS THE USER!
-ONLY RESPOND WITH THE TITLE, NOTHING ELSE!`;
+ONLY RESPOND WITH JUST THE TITLE, NOTHING ELSE! NO FORMATTING OR EXTRA TEXT!`;
 
 export const useGenerativeData = () => {
   const { openRouterApiKey } = useSettings() as { openRouterApiKey?: string };
@@ -26,7 +23,7 @@ export const useGenerativeData = () => {
     const convoString = JSON.stringify(conversation);
 
     const { text } = await generateText({
-      model: openrouter('google/gemma-3-12b-it:free'),
+      model: openrouter('google/gemma-3-4b-it:free'),
       system: generateTitleSystemPrompt,
       prompt: convoString,
     });

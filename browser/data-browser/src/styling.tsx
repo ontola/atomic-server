@@ -3,7 +3,7 @@ import {
   DefaultTheme,
   ThemeProvider,
 } from 'styled-components';
-import { darken, lighten, setLightness } from 'polished';
+import { complement, darken, lighten, setLightness } from 'polished';
 import './reset.css';
 import { useContext, type JSX } from 'react';
 import { SettingsContext } from './helpers/AppSettings';
@@ -80,6 +80,10 @@ size.raw = (multiplier: number) => `${multiplier}rem`;
 /** Construct a StyledComponents theme object */
 export const buildTheme = (darkMode: boolean, mainIn: string): DefaultTheme => {
   const main = darkMode ? lighten(0.2, mainIn) : mainIn;
+  const complementaryIn = complement(mainIn);
+  const complementary = darkMode
+    ? lighten(0.2, complementaryIn)
+    : complementaryIn;
   const bg = darkMode ? '#000000' : '#ffffff';
   const text = darkMode ? '#fff' : '#000';
   const shadowColor = darkMode ? 'rgba(255,255,255,.15)' : 'rgba(0,0,0,0.07)';
@@ -116,6 +120,7 @@ export const buildTheme = (darkMode: boolean, mainIn: string): DefaultTheme => {
       main,
       mainLight: darkMode ? lighten(0.08)(main) : lighten(0.08)(main),
       mainDark: darkMode ? darken(0.08)(main) : darken(0.08)(main),
+      complementary,
       bg: bg,
       // Use pitch black for dark mode
       bgBody: darkMode ? bg : darken(0.02)(bg),
@@ -205,6 +210,8 @@ declare module 'styled-components' {
       mainSelectedBg: string;
       /** Foreground color of selected items */
       mainSelectedFg: string;
+      /** Complementary color of main */
+      complementary: string;
       /** The background color of the body, which is subtly different from bg */
       bgBody: string;
       /** Most common background color */

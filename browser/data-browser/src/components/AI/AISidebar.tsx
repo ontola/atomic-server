@@ -1,20 +1,71 @@
 import { styled } from 'styled-components';
 import { SimpleAIChat } from './SimpleAIChat';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { newContextItem, useAISidebar } from './AISidebarContext';
 import type { AIChatDisplayMessage } from './types';
 import { useCurrentSubject } from '../../helpers/useCurrentSubject';
-import { FaPlus, FaXmark } from 'react-icons/fa6';
+import { FaFloppyDisk, FaPlus, FaXmark } from 'react-icons/fa6';
 import { IconButton } from '../IconButton/IconButton';
 import { Row } from '../Row';
+import { ParentPickerDialog } from '../ParentPicker/ParentPickerDialog';
+import { ai, core, useStore, type Ai } from '@tomic/react';
+import { useGenerativeData } from './useGenerativeData';
+import { displayMessageToResource } from './chatConversionUtils';
+import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
+import { constructOpenURL } from '../../helpers/navigation';
 
 export const AISidebar: React.FC = () => {
+  const store = useStore();
   const { isOpen, contextItems, setContextItems, setIsOpen } = useAISidebar();
   const [messages, setMessages] = useState<AIChatDisplayMessage[]>([]);
   const [currentSubject] = useCurrentSubject();
+  const [showParentPicker, setShowParentPicker] = useState(false);
+  const titlePromiseRef = useRef<Promise<string | undefined> | undefined>(
+    undefined,
+  );
+  const { generateTitleFromConversation } = useGenerativeData();
+  const navigate = useNavigateWithTransition();
 
   const addNewMessage = (message: AIChatDisplayMessage) => {
     setMessages(prev => [...prev, message]);
+  };
+
+  const handleParentSelect = async (parent: string) => {
+    const chatResource = await store.newResource<Ai.AiChat>({
+      parent,
+      isA: ai.classes.aiChat,
+      propVals: {
+        [core.properties.name]: 'New Chat',
+      },
+    });
+
+    for (const message of messages) {
+      const messageResource = await displayMessageToResource(
+        message,
+        chatResource,
+        store,
+      );
+
+      chatResource.push(ai.properties.messages, [messageResource.subject]);
+      messageResource.save();
+    }
+
+    if (titlePromiseRef.current) {
+      const name = await titlePromiseRef.current;
+
+      if (name) {
+        await chatResource.set(core.properties.name, name);
+      }
+
+      titlePromiseRef.current = undefined;
+    }
+
+    await chatResource.save();
+
+    store.notifyResourceManuallyCreated(chatResource);
+
+    setMessages([]);
+    navigate(constructOpenURL(chatResource.subject));
   };
 
   useEffect(() => {
@@ -35,6 +86,12 @@ export const AISidebar: React.FC = () => {
     }
   }, [isOpen, currentSubject]);
 
+  useEffect(() => {
+    if (messages.length > 2 && !titlePromiseRef.current) {
+      titlePromiseRef.current = generateTitleFromConversation(messages);
+    }
+  }, [messages]);
+
   return (
     <SidebarContainer data-open={isOpen ? '' : undefined}>
       <SimpleAIChat
@@ -44,7 +101,7 @@ export const AISidebar: React.FC = () => {
         setExternalContextItems={setContextItems}
       >
         <Row center justify='space-between' fullWidth>
-          <Row center gap='1ch'>
+          <Row center gap='0.5ch'>
             <IconButton
               title='Reset'
               onClick={() => setMessages([])}
@@ -55,19 +112,35 @@ export const AISidebar: React.FC = () => {
             </IconButton>
             <Heading>Atomic Assistant</Heading>
           </Row>
-          <IconButton
-            title='Close AI Sidebar'
-            color='textLight'
-            style={{ alignSelf: 'flex-end' }}
-            onClick={() => {
-              // abortSignalRef.current?.abort();
-              setIsOpen(false);
-            }}
-          >
-            <FaXmark />
-          </IconButton>
+          <Row center gap='0.5ch'>
+            <IconButton
+              title='Save Chat'
+              onClick={() => setShowParentPicker(true)}
+              disabled={messages.length < 2}
+              color='textLight'
+              style={{ alignSelf: 'flex-end' }}
+            >
+              <FaFloppyDisk />
+            </IconButton>
+            <IconButton
+              title='Close AI Sidebar'
+              color='textLight'
+              style={{ alignSelf: 'flex-end' }}
+              onClick={() => {
+                // abortSignalRef.current?.abort();
+                setIsOpen(false);
+              }}
+            >
+              <FaXmark />
+            </IconButton>
+          </Row>
         </Row>
       </SimpleAIChat>
+      <ParentPickerDialog
+        open={showParentPicker}
+        onOpenChange={setShowParentPicker}
+        onSelect={handleParentSelect}
+      />
     </SidebarContainer>
   );
 };
