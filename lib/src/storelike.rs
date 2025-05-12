@@ -166,12 +166,9 @@ pub trait Storelike: Sized {
     ) -> AtomicResult<Vec<Resource>> {
         let server_url = self.get_server_url()?;
         let subject = crate::client::search::build_search_subject(&server_url, query, opts);
-        println!("subject: {:?}", subject);
-        // let resource = self.fetch_resource(&subject, self.get_default_agent().ok().as_ref())?;
-        let resource = self.fetch_resource("https://atomicdata.dev/search?q=a&include=true&limit=30&parents=https%3A%2F%2Fatomicdata.dev%2Fdrive%2Fxzpv34r5ibr", self.get_default_agent().ok().as_ref())?;
+        let resource = self.fetch_resource(&subject, self.get_default_agent().ok().as_ref())?;
         let results: Vec<Resource> = match resource.get(urls::ENDPOINT_RESULTS) {
             Ok(Value::ResourceArray(vec)) => {
-                println!("members: {:?}", vec);
                 vec.iter().cloned().map(|r| r.try_into().unwrap()).collect()
             }
             _ => return Err("No 'ENDPOINT_RESULTS' in response from server.".into()),

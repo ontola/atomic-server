@@ -6,6 +6,7 @@ pub fn search(
     context: &crate::Context,
     query: String,
     parent: Option<String>,
+    server: Option<String>,
     serialize: &crate::SerializeOptions,
 ) -> AtomicResult<()> {
     context.read_config();
@@ -15,6 +16,9 @@ pub fn search(
         parents: Some(vec![parent.unwrap_or_default()]),
         ..Default::default()
     };
+    if let Some(server) = server {
+        context.store.set_server_url(&server);
+    }
     let resources = context.store.search(&query, opts)?;
     if resources.is_empty() {
         println!("No results found for query: {}", query);

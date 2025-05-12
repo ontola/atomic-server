@@ -101,6 +101,11 @@ enum Commands {
         /// Subject URL of the parent Resource to filter by
         #[arg(long)]
         parent: Option<String>,
+        /// Server URL to search on
+        /// Will query this + `/search` if provided.
+        /// Defaults to the server in the config.
+        #[arg(long)]
+        server: Option<String>,
         /// Serialization format
         #[arg(long, value_enum, default_value = "pretty")]
         as_: SerializeOptions,
@@ -268,8 +273,13 @@ fn exec_command(context: &mut Context) -> AtomicResult<()> {
         } => {
             commit::set(context, &subject, &property, &value)?;
         }
-        Commands::Search { query, parent, as_ } => {
-            search::search(context, query, parent, &as_)?;
+        Commands::Search {
+            query,
+            parent,
+            server,
+            as_,
+        } => {
+            search::search(context, query, parent, server, &as_)?;
         }
         Commands::Validate => {
             validate(context);
