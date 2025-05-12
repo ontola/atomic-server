@@ -3,7 +3,7 @@ import {
   ButtonHTMLAttributes,
   AnchorHTMLAttributes,
 } from 'react';
-import { styled, DefaultTheme } from 'styled-components';
+import { styled, DefaultTheme, keyframes } from 'styled-components';
 import { transition } from '../../helpers/transition';
 
 export enum IconButtonVariant {
@@ -12,6 +12,7 @@ export enum IconButtonVariant {
   Fill,
   Colored,
   Square,
+  Magic,
 }
 
 type ColorProp = keyof DefaultTheme['colors'] | 'inherit';
@@ -191,10 +192,80 @@ const ColoredIconButton = styled(IconButtonBase)<ButtonStyleProps>`
   }
 `;
 
+const cycle = keyframes`
+  from {
+    filter: hue-rotate(0deg) brightness(var(--brightness-factor)) saturate(1.5);
+  }
+  to {
+    filter: hue-rotate(360deg) brightness(var(--brightness-factor)) saturate(1.5);
+  }
+`;
+
+const MagicIconButton = styled(IconButtonBase)<ButtonStyleProps>`
+  --border-width: 2px;
+  --brightness-factor: ${p => (p.theme.darkMode ? 1 : 1.5)};
+  --bg-opacity: ${p => (p.theme.darkMode ? 0.5 : 0.8)};
+  background: transparent;
+  position: relative;
+  color: inherit;
+  aspect-ratio: 1/1;
+  ${transition('color', 'background')}
+
+  &::before,
+  &::after {
+    aspect-ratio: 1/1;
+    content: '';
+    position: absolute;
+    transform: scale(0);
+    ${transition('opacity', 'transform')}
+  }
+
+  &::before {
+    border-radius: ${p => p.theme.radius};
+    inset: 0;
+    opacity: 0;
+    z-index: -2;
+    background: linear-gradient(
+      45deg,
+      ${p => p.theme.colors.main},
+      ${p => p.theme.colors.complementary}
+    );
+  }
+  &::after {
+    content: '';
+    aspect-ratio: 1/1;
+    backdrop-filter: blur(9px);
+    position: absolute;
+    inset: var(--border-width);
+    opacity: var(--bg-opacity);
+    border-radius: calc(${p => p.theme.radius} - var(--border-width));
+    background: ${p => p.theme.colors.bg};
+    z-index: -1;
+  }
+
+  &:hover,
+  &:focus-visible {
+    color: ${p => p.theme.colors.text};
+    &::before,
+    &::after {
+      transform: scale(1);
+    }
+    &::before {
+      opacity: 1;
+      animation: ${cycle} 3s linear infinite;
+    }
+  }
+
+  &:active {
+    filter: brightness(0.8);
+  }
+`;
+
 const ComponentMap = new Map([
   [IconButtonVariant.Simple, SimpleIconButton],
   [IconButtonVariant.Outline, OutlineIconButton],
   [IconButtonVariant.Fill, FillIconButton],
   [IconButtonVariant.Colored, ColoredIconButton],
   [IconButtonVariant.Square, SquareIconButton],
+  [IconButtonVariant.Magic, MagicIconButton],
 ]);

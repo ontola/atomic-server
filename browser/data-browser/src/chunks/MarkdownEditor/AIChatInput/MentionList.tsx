@@ -1,9 +1,12 @@
-import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle } from 'react';
 import styled from 'styled-components';
+import { getIconForClass } from '../../../helpers/iconMap';
+import { useSelectedIndex } from '../../../hooks/useSelectedIndex';
 
 export type SearchSuggestion = {
   id: string;
   label: string;
+  isA: string[];
 };
 export interface MentionListProps {
   items: SearchSuggestion[];
@@ -11,52 +14,35 @@ export interface MentionListProps {
 }
 
 export interface MentionListRef {
-  onKeyDown: ({ event }: { event: KeyboardEvent }) => boolean;
+  onKeyDown: ({ event }: { event: React.KeyboardEvent<unknown> }) => boolean;
 }
 
 export const MentionList = forwardRef<MentionListRef, MentionListProps>(
   ({ items, command }, ref) => {
-    const [selectedIndex, setSelectedIndex] = useState(0);
+    const { selectedIndex, onKeyDown, onMouseOver, onClick, resetIndex } =
+      useSelectedIndex(
+        items,
+        index => {
+          if (index === undefined) {
+            return;
+          }
 
-    const selectItem = (index: number) => {
-      const item = items[index];
+          const item = items[index];
 
-      if (item) {
-        command(item);
-      }
-    };
+          if (item) {
+            command(item);
+          }
+        },
+        0,
+      );
 
-    const upHandler = () => {
-      setSelectedIndex((selectedIndex + items.length - 1) % items.length);
-    };
-
-    const downHandler = () => {
-      setSelectedIndex((selectedIndex + 1) % items.length);
-    };
-
-    const enterHandler = () => {
-      selectItem(selectedIndex);
-    };
-
-    useEffect(() => setSelectedIndex(0), [items]);
+    useEffect(() => resetIndex(), [items]);
 
     useImperativeHandle(ref, () => ({
       onKeyDown: ({ event }) => {
-        if (event.key === 'ArrowUp') {
-          upHandler();
+        onKeyDown(event);
 
-          return true;
-        }
-
-        if (event.key === 'ArrowDown') {
-          downHandler();
-
-          return true;
-        }
-
-        if (event.key === 'Enter') {
-          enterHandler();
-
+        if (['ArrowDown', 'ArrowUp', 'Enter'].includes(event.key)) {
           return true;
         }
 
@@ -68,13 +54,13 @@ export const MentionList = forwardRef<MentionListRef, MentionListProps>(
       <DropdownMenu>
         {items.length ? (
           items.map((item, index) => (
-            <button
-              className={index === selectedIndex ? 'is-selected' : ''}
+            <DropdownItem
               key={item.id}
-              onClick={() => selectItem(index)}
-            >
-              {item.label}
-            </button>
+              item={item}
+              selected={index === selectedIndex}
+              onMouseOver={() => onMouseOver(index)}
+              onClick={() => onClick(index)}
+            />
           ))
         ) : (
           <div className='item'>No result</div>
@@ -85,6 +71,35 @@ export const MentionList = forwardRef<MentionListRef, MentionListProps>(
 );
 
 MentionList.displayName = 'MentionList';
+
+interface DropdownItemProps {
+  item: SearchSuggestion;
+  selected: boolean;
+  onClick: () => void;
+  onMouseOver: () => void;
+}
+
+const DropdownItem = ({
+  item,
+  selected,
+  onClick,
+  onMouseOver,
+}: DropdownItemProps) => {
+  const Icon = getIconForClass(item.isA[0]);
+
+  return (
+    <button
+      className={selected ? 'is-selected' : ''}
+      onClick={onClick}
+      // Focus is handled by selectedIndex
+      // eslint-disable-next-line jsx-a11y/mouse-events-have-key-events
+      onMouseOver={onMouseOver}
+    >
+      <Icon />
+      {item.label}
+    </button>
+  );
+};
 
 const DropdownMenu = styled.div`
   background: ${p => p.theme.colors.bg};
@@ -103,11 +118,13 @@ const DropdownMenu = styled.div`
     border: none;
     border-radius: ${p => p.theme.radius};
     display: flex;
-    gap: 0.25rem;
+    align-items: center;
+    gap: ${p => p.theme.size(1)};
     text-align: left;
     width: 100%;
+    padding: 0.5rem;
+    cursor: pointer;
 
-    &:hover,
     &.is-selected {
       background-color: ${p => p.theme.colors.mainSelectedBg};
       color: ${p => p.theme.colors.mainSelectedFg};

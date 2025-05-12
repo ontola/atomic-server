@@ -42,6 +42,11 @@ import { MessageContextItem } from './MessageContextItem';
 import { useProcessMessages } from './useProcessMessages';
 import { NoKeyOverlay } from './NoKeyOverlay';
 import { useAutoAgentSelect } from './useAgentAutoSelect';
+
+const AIChatInput = React.lazy(
+  () => import('../../chunks/MarkdownEditor/AIChatInput/AsyncAIChatInput'),
+);
+
 type OngoingMessagePart = {
   type: 'reasoning' | 'text';
   text: string;
@@ -63,10 +68,6 @@ const IMAGE_MIME_TYPES = [
   'image/webp',
   'image/svg+xml',
 ];
-
-const AIChatInput = React.lazy(
-  () => import('../../chunks/MarkdownEditor/AIChatInput/AsyncAIChatInput'),
-);
 
 interface SimpleAIChatProps {
   messages: AIChatDisplayMessage[];
@@ -208,8 +209,6 @@ export const SimpleAIChat: React.FC<
       ...getToolsForAgent(pickedAgent),
     };
 
-    console.log('toolsToUse', toolsToUse);
-
     const allContextItems = [
       ...externalContextItems,
       ...userSelectedContextItems,
@@ -257,7 +256,7 @@ export const SimpleAIChat: React.FC<
         onError: err => {
           if (InvalidToolArgumentsError.isInstance(err)) {
             // Handle the error
-            console.log('Invalid tool arguments error', err);
+            console.error('Invalid tool arguments error', err);
 
             onNewMessage({
               role: 'error',
@@ -287,7 +286,6 @@ export const SimpleAIChat: React.FC<
 
           console.log('arg error', error);
           console.log('Repairing tool call', toolCall.toolName);
-          // const tool = tools[toolCall.toolName as keyof typeof tools];
 
           const { object: repairedArgs } = await generateObject({
             model: openrouter('qwen/qwq-32b:free'),
@@ -321,7 +319,7 @@ export const SimpleAIChat: React.FC<
       text: '',
     };
 
-    let pendingToolCalls: ToolCallPart[] = [];
+    const pendingToolCalls: ToolCallPart[] = [];
     let isReasoning = false;
 
     try {
@@ -352,17 +350,16 @@ export const SimpleAIChat: React.FC<
           pendingToolCalls.push(part);
         }
 
-        if (part.type === 'tool-result') {
-          console.log('tool-result', part);
-          onNewMessage({
-            role: 'tool',
-            content: [part],
-          });
+        // if (part.type === 'tool-result') {
+        //   onNewMessage({
+        //     role: 'tool',
+        //     content: [part],
+        //   });
 
-          pendingToolCalls = pendingToolCalls.filter(
-            call => call.toolCallId !== part.toolCallId,
-          );
-        }
+        //   pendingToolCalls = pendingToolCalls.filter(
+        //     call => call.toolCallId !== part.toolCallId,
+        //   );
+        // }
 
         if (part.type === 'reasoning') {
           isReasoning = true;
@@ -392,8 +389,6 @@ export const SimpleAIChat: React.FC<
         }
 
         if (part.type === 'finish') {
-          console.log('Stream finished', part);
-
           if (ownOnGoingMessage) {
             onNewMessage({
               role: 'assistant',
@@ -494,7 +489,10 @@ export const SimpleAIChat: React.FC<
   return (
     <ChatWindow fullView={fullView}>
       {children}
-      <ChatMessagesContainer enableAutoScroll={aiState !== AIState.Stopped}>
+      <ChatMessagesContainer
+        enableAutoScroll={aiState !== AIState.Stopped}
+        fullView={fullView}
+      >
         {messages.filter(cleanMessages).map(message => (
           <AIChatMessage key={JSON.stringify(message)} message={message} />
         ))}

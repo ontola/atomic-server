@@ -27,6 +27,7 @@ export const searchSuggestionBuilder = (
     return resultResources.map(resource => ({
       id: resource.subject,
       label: resource.title,
+      isA: resource.getClasses(),
     }));
   },
 
@@ -79,6 +80,7 @@ export const searchSuggestionBuilder = (
           return false;
         }
 
+        // @ts-expect-error Tiptap uses a different event type from React but the core properties are the same.
         return component.ref.onKeyDown(props);
       },
 
