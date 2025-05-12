@@ -4,15 +4,17 @@
 
 Core typescript library for fetching data, handling JSON-AD parsing, storing data, signing Commits, setting up WebSockets and full-text search and more.
 
-Runs in most common JS contexts like the browser, node, bun etc.
+Runs in most common JS contexts like the browser, node, deno, bun etc.
 
 ## Installation
 
+Install using your preferred package manager:
+
 ```sh
 npm install @tomic/lib
+pnpm add @tomic/lib
+deno add npm:@tomic/lib
 ```
-
-## TL;DR
 
 ### Create a Store
 

@@ -26,7 +26,7 @@ These offer better typescript typing and validation on writes.
 
 The following value hooks are available:
 
-- `useString` for string, slug and markdown values.
+- `useString` for string, slug, uri and markdown values.
 - `useNumber` for float and integer values.
 - `useBoolean` for boolean values.
 - `useDate` for date and timestamp values.

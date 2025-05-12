@@ -1213,5 +1213,30 @@
         ],
         "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
         "https://atomicdata.dev/properties/shortname": "tag-list"
+    },
+    {
+        "@id": "https://atomicdata.dev/classes/DocumentV2",
+        "https://atomicdata.dev/properties/description": "A collaborative document containing rich text",
+        "https://atomicdata.dev/properties/isA": [
+            "https://atomicdata.dev/classes/Class"
+        ],
+        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+        "https://atomicdata.dev/properties/recommends": [
+            "https://atomicdata.dev/properties/documentContent"
+        ],
+        "https://atomicdata.dev/properties/requires": [
+            "https://atomicdata.dev/properties/name"
+        ],
+        "https://atomicdata.dev/properties/shortname": "document-v2"
+    },
+    {
+        "@id": "https://atomicdata.dev/properties/documentContent",
+        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/ydoc",
+        "https://atomicdata.dev/properties/description": "The content of a Document",
+        "https://atomicdata.dev/properties/isA": [
+            "https://atomicdata.dev/classes/Property"
+        ],
+        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+        "https://atomicdata.dev/properties/shortname": "document-content"
     }
 ]
