@@ -91,7 +91,7 @@ export async function setTitle(page: Page, title: string) {
 
 export async function signIn(page: Page, secret: string = SECRET) {
   await page.getByRole('link', { name: 'Login / New User' }).click();
-  await page.locator('#current-password').fill(secret);
+  await page.getByLabel('Enter your Agent Secret').fill(secret);
   await page.goBack();
 }
 

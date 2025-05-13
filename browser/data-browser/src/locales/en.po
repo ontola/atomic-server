@@ -854,12 +854,14 @@ msgid "Initializing Resource"
 msgstr "Initializing Resource"
 
 #. placeholder {0}: metadata.version
+#. placeholder {0}: resource.props.version
 #: src/chunks/Plugins/NewPluginButton.tsx
 #: src/views/Plugin/PluginPage.tsx
 msgid "v{0}"
 msgstr "v{0}"
 
 #. placeholder {0}: metadata.author
+#. placeholder {0}: resource.props.pluginAuthor
 #: src/chunks/Plugins/NewPluginButton.tsx
 #: src/views/Plugin/PluginPage.tsx
 msgid "by {0}"
@@ -1283,7 +1285,6 @@ msgid "This server node is currently uninitialized for{0} <0/>."
 msgstr "This server node is currently uninitialized for{0} <0/>."
 
 #: src/components/NewIdentitySection.tsx
-#: src/views/OnboardingPage.tsx
 msgid "Yes, I've stored it safely"
 msgstr "Yes, I've stored it safely"
 
@@ -1367,7 +1368,6 @@ msgstr "Set Active"
 msgid "Default ontology for the {0} drive"
 msgstr "Default ontology for the {0} drive"
 
-#: src/components/NewIdentitySection.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 msgid "My Drive"
 msgstr "My Drive"
@@ -1376,8 +1376,10 @@ msgstr "My Drive"
 msgid "Subdomain"
 msgstr "Subdomain"
 
-#~ msgid "This is your personal Atomic Data drive. Edit this description to tell visitors what this space is about."
-#~ msgstr "This is your personal Atomic Data drive. Edit this description to tell visitors what this space is about."
+#: src/components/NewIdentitySection.tsx
+#: src/hooks/useDevDrive.ts
+msgid "This is your personal Atomic Data drive. Edit this description to tell visitors what this space is about."
+msgstr "This is your personal Atomic Data drive. Edit this description to tell visitors what this space is about."
 
 #: src/components/NewIdentitySection.tsx
 msgid "Your new identity is ready"
@@ -2289,6 +2291,7 @@ msgstr "Change what model is used for generative features"
 msgid "MCP Servers"
 msgstr "MCP Servers"
 
+#: src/chunks/RTE/CollaborativeEditor.tsx
 #: src/components/forms/NewForm/NewFormTitle.tsx
 #: src/hooks/useCreateAndNavigate.ts
 #: src/views/Plugin/AssignRights.tsx
@@ -3434,6 +3437,7 @@ msgstr "Parameter Size:"
 
 #: src/chunks/RTE/AsyncMarkdownEditor.tsx
 #: src/chunks/RTE/AsyncMarkdownEditor.tsx
+#: src/chunks/RTE/CollaborativeEditor.tsx
 msgid "Start typing..."
 msgstr "Start typing..."
 
@@ -3508,6 +3512,7 @@ msgstr "Heading 6"
 msgid "Paragraph"
 msgstr "Paragraph"
 
+#: src/chunks/RTE/FullBubbleMenu.tsx
 #: src/chunks/RTE/ImagePicker.tsx
 msgid "Left"
 msgstr "Left"
@@ -3516,6 +3521,7 @@ msgstr "Left"
 msgid "Inline"
 msgstr "Inline"
 
+#: src/chunks/RTE/FullBubbleMenu.tsx
 #: src/chunks/RTE/ImagePicker.tsx
 msgid "Right"
 msgstr "Right"
@@ -3634,9 +3640,8 @@ msgstr "Enter your name"
 msgid "Profile Name"
 msgstr "Profile Name"
 
-#: src/components/NewIdentitySection.tsx
-msgid "Saving..."
-msgstr "Saving..."
+#~ msgid "Saving..."
+#~ msgstr "Saving..."
 
 #: src/components/NewIdentitySection.tsx
 #: src/components/NewIdentitySection.tsx
@@ -3710,3 +3715,72 @@ msgstr "Yes, I've stored it — sign me out to verify"
 #: src/components/NewIdentitySection.tsx
 msgid "The secret is invalid. You can start over."
 msgstr "The secret is invalid. You can start over."
+
+#: src/chunks/RTE/CollaborativeEditor.tsx
+msgid "Note"
+msgstr "Note"
+
+#: src/chunks/RTE/CollaborativeEditor.tsx
+msgid "Data Table"
+msgstr "Data Table"
+
+#: src/chunks/RTE/CollaborativeEditor.tsx
+msgid "Rich Text Editor"
+msgstr "Rich Text Editor"
+
+#. placeholder {0}: ' '
+#: src/chunks/RTE/CollaborativeEditor.tsx
+msgid ""
+"There was an error in the editor, please refresh the page to\n"
+"continue.{0} <0>Refresh</0>"
+msgstr ""
+"There was an error in the editor, please refresh the page to\n"
+"continue.{0} <0>Refresh</0>"
+
+#: src/chunks/RTE/CollaborativeEditor.tsx
+msgid "Untitled Agent"
+msgstr "Untitled Agent"
+
+#: src/chunks/RTE/CollaborativeEditor.tsx
+msgid "Type '/' for options or '@' for resources"
+msgstr "Type '/' for options or '@' for resources"
+
+#: src/chunks/RTE/FullBubbleMenu.tsx
+msgid "Center"
+msgstr "Center"
+
+#: src/chunks/RTE/NoteExtention/NoteComponent.tsx
+msgid "<0/> Note"
+msgstr "<0/> Note"
+
+#: src/chunks/RTE/ColorMenu.tsx
+msgid "Edit text color"
+msgstr "Edit text color"
+
+#: src/chunks/RTE/ColorMenu.tsx
+msgid "Edit background color"
+msgstr "Edit background color"
+
+#: src/routes/DevDriveRoute.tsx
+msgid "Setting up dev drive..."
+msgstr "Setting up dev drive..."
+
+#: src/routes/PruneTestsRoute.tsx
+msgid "Prune Test Data"
+msgstr "Prune Test Data"
+
+#: src/routes/PruneTestsRoute.tsx
+msgid ""
+"Pruning test data will delete all drives on the server that have\n"
+"’testdrive’ in their name."
+msgstr ""
+"Pruning test data will delete all drives on the server that have\n"
+"’testdrive’ in their name."
+
+#: src/routes/PruneTestsRoute.tsx
+msgid "Prune"
+msgstr "Prune"
+
+#: src/routes/PruneTestsRoute.tsx
+msgid "Pruning, this might take a while..."
+msgstr "Pruning, this might take a while..."

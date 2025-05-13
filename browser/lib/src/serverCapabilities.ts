@@ -76,24 +76,18 @@ export function recordServerVersionFromResponse(
   supportsDidAuthByOrigin.set(origin, versionSupportsDidAuth(version));
 }
 
-export async function ensureServerVersionKnown(url: string): Promise<void> {
-  if (!hasBrowserAPI()) {
-    return;
-  }
+/**
+ * Records server version and DID auth support based on WebSocket protocol.
+ * V1 protocol ('atomicdata-ws.v0.1') supports DID auth, legacy does not.
+ */
+export function recordServerVersionFromWsProtocol(
+  protocol: string | undefined,
+  origin: string,
+): void {
+  const isV1 = protocol === 'atomicdata-ws.v0.1';
 
-  const origin = tryGetOrigin(url);
-
-  if (!origin || serverVersionByOrigin.has(origin)) {
-    return;
-  }
-
-  try {
-    const response = await fetch(`${origin}/`, { method: 'GET' });
-    recordServerVersionFromResponse(origin, response);
-  } catch {
-    // Can't reach the server - treat as legacy (no DID auth support)
-    supportsDidAuthByOrigin.set(origin, false);
-  }
+  serverVersionByOrigin.set(origin, protocol ?? 'legacy');
+  supportsDidAuthByOrigin.set(origin, isV1);
 }
 
 function versionSupportsDidAuth(version: string): boolean {

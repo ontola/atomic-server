@@ -3,7 +3,7 @@ import { parseAndApplyCommit } from './index.js';
 import { JSONADParser } from './parse.js';
 import type { Resource } from './resource.js';
 import {
-  ensureServerVersionKnown,
+  recordServerVersionFromWsProtocol,
   shouldSkipDidAuthForLegacyServer,
   warnDidAuthCompatibility,
 } from './serverCapabilities.js';
@@ -174,7 +174,7 @@ export class WSClient {
     this.isAuthenticating = true;
 
     // Gate authPromise immediately so that any ws.fetch() calls issued during
-    // the async setup (ensureServerVersionKnown, createAuthentication, etc.)
+    // the async setup (recordServerVersionFromWsProtocol, createAuthentication, etc.)
     // block until the server has actually confirmed authentication.
     let releaseGate!: () => void;
     let rejectGate!: (e: unknown) => void;
@@ -184,7 +184,7 @@ export class WSClient {
     });
 
     try {
-      await ensureServerVersionKnown(this.ws.url);
+      recordServerVersionFromWsProtocol(this.version, this.serverOrigin);
 
       if (shouldSkipDidAuthForLegacyServer(this.ws.url, agent.subject)) {
         warnDidAuthCompatibility(this.ws.url);

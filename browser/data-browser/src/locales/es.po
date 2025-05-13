@@ -3705,7 +3705,6 @@ msgid "Copy the secret key to continue"
 msgstr "Copia la clave secreta para continuar"
 
 #: src/components/NewIdentitySection.tsx
-#: src/views/OnboardingPage.tsx
 msgid "Yes, I've stored it safely"
 msgstr "Sí, lo he guardado de forma segura"
 
@@ -3757,6 +3756,7 @@ msgstr ""
 #~ "This is your personal Atomic Data drive. Edit this description to tell visitors what this space is about."
 #~ msgstr ""
 
+#: src/components/NewIdentitySection.tsx
 #: src/hooks/useDevDrive.ts
 msgid "This is your personal Atomic Data drive. Edit this description to tell visitors what this space is about."
 msgstr ""
@@ -3970,9 +3970,8 @@ msgstr ""
 msgid "Profile Name"
 msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid "Saving..."
-msgstr ""
+#~ msgid "Saving..."
+#~ msgstr ""
 
 #: src/components/NewIdentitySection.tsx
 #: src/components/NewIdentitySection.tsx

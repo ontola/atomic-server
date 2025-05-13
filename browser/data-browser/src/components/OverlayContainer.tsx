@@ -133,7 +133,7 @@ const ResultsList = styled.div`
 const PreviewFloat = styled.div`
   position: absolute;
   top: 0;
-  right: 0;
+  right: -1rem;
   transform: translateX(100%);
   z-index: ${p => p.theme.zIndex.searchOverlay + 1};
   width: 18rem;
