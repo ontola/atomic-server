@@ -73,7 +73,7 @@
     "typecheck": "pnpm exec tsc --noEmit",
     "watch": "pnpm exec tsup --watch",
     "publint": "pnpm dlx publint",
-    "attw": "pnpm exec attw $(pnpm pack)"
+    "attw": "pnpm pack --out tomic-lib.tgz && pnpm exec attw tomic-lib.tgz"
   },
   "source": "src/index.ts",
   "type": "module",

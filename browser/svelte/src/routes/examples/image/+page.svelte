@@ -9,8 +9,8 @@
 <h1>Image example</h1>
 
 <p>
-  The {'<'}Image /{'>'} component renders a file resource as an image and optimizes
-  it based on the screen size and supported image formats.
+  The &lt;Image /&gt; component renders a file resource as an image and
+  optimizes it based on the screen size and supported image formats.
 </p>
 
 <div class="image-styler">

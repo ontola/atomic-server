@@ -3151,3 +3151,7 @@ msgstr "Wähle ein Bild <0/>"
 #: src/chunks/RTE/ImagePicker.tsx
 msgid "Inline"
 msgstr "Fließtext"
+
+#: src/components/Toaster.tsx
+msgid "Nothing to copy."
+msgstr "Nichts zum Kopieren."

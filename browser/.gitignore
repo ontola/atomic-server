@@ -29,11 +29,11 @@ data-browser/coverage
 .DS_Store
 **/.trunk/*
 
-**/tomic-lib-**.tgz
-**/tomic-react-**.tgz
-**/tomic-svelte-**.tgz
-**/tomic-cli-**.tgz
-**/tomic-create-template-**.tgz
+**/tomic-lib**.tgz
+**/tomic-react**.tgz
+**/tomic-svelte**.tgz
+**/tomic-cli**.tgz
+**/tomic-create-template**.tgz
 
 data-browser/src/locales/.wuchale
 data-browser/src/locales/data.js
