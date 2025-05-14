@@ -9,6 +9,7 @@ import {
   dataBrowser,
   collections,
   useArray,
+  ai,
 } from '@tomic/react';
 import AllProps from '../../components/AllProps';
 import { AtomicLink } from '../../components/AtomicLink';
@@ -28,6 +29,7 @@ import { ResourceCardTitle } from './ResourceCardTitle';
 import { Column, Row } from '../../components/Row';
 import { Tag } from '../../components/Tag';
 import { ResourceContextMenu } from '../../components/ResourceContextMenu';
+import { AIChatContentCard } from './AIChatContentCard';
 
 interface ResourceCardProps extends CardViewPropsBase {
   /** The subject URL - the identifier of the resource. */
@@ -113,6 +115,8 @@ function ResourceCardInner(props: ResourceCardProps): JSX.Element {
       return <ElementCard resource={resource} {...props} />;
     case dataBrowser.classes.article:
       return <ArticleCard resource={resource} {...props} />;
+    case ai.classes.textPart:
+      return <AIChatContentCard resource={resource} {...props} />;
     default:
       return <ResourceCardDefault resource={resource} {...props} />;
   }

@@ -15,6 +15,7 @@ export interface AIAgent {
   model: string;
   canReadAtomicData: boolean;
   canWriteAtomicData: boolean;
+  temperature?: number;
 }
 
 export enum AIState {
