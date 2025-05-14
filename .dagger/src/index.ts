@@ -149,7 +149,7 @@ export class AtomicServer {
       .withMountedDirectory('/docs', actualDocsDirectory)
       .withWorkdir('/docs')
       .withExec(['mdbook', 'build'])
-      .directory('/docs/build/html');
+      .directory('/docs/build');
   }
 
   @func()
