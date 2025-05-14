@@ -1,25 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Column, Row } from '../Row';
 import Markdown from '../datatypes/Markdown';
 import styled from 'styled-components';
 import { BasicSelect } from '../forms/BasicSelect';
+import { FaTriangleExclamation } from 'react-icons/fa6';
+import { useOpenRouterModels } from './useOpenRouterModels';
 
 interface ModelSelectProps {
   onSelect?: (model: string) => void;
   defaultModel: string;
+  enforceToolSupport?: boolean;
 }
-
-let modelDataCache: OpenRouterAIModel[] | undefined = undefined;
-
-export type OpenRouterAIModel = {
-  id: string;
-  name: string;
-  description: string;
-  pricing: {
-    prompt: number;
-    completion: number;
-  };
-};
 
 const formatter = new Intl.NumberFormat('en-US', {
   style: 'currency',
@@ -27,46 +18,51 @@ const formatter = new Intl.NumberFormat('en-US', {
   minimumFractionDigits: 2,
 });
 
-export const ModelSelect = ({ onSelect, defaultModel }: ModelSelectProps) => {
-  const [models, setModels] = useState<OpenRouterAIModel[]>(
-    modelDataCache ?? [],
-  );
+export const ModelSelect = ({
+  onSelect,
+  defaultModel,
+  enforceToolSupport = false,
+}: ModelSelectProps) => {
+  const { models } = useOpenRouterModels();
+
   const [selectedId, setSelectedId] = useState<string>(defaultModel);
   const selectedModel = models.find(m => m.id === selectedId);
 
-  useEffect(() => {
-    if (modelDataCache) {
-      return;
-    }
+  const modelList = enforceToolSupport
+    ? models.filter(m => m.supported_parameters.includes('tools'))
+    : models;
 
-    fetch('https://openrouter.ai/api/v1/models?supported_parameters=tools')
-      .then(res => res.json())
-      .then(data => {
-        setModels(data.data as OpenRouterAIModel[]);
-        modelDataCache = data.data as OpenRouterAIModel[];
-      });
-  }, []);
+  const showSupportWarning =
+    selectedModel && !modelList.includes(selectedModel);
 
   return (
     <Wrapper>
       <Column>
-        <BasicSelect
-          value={selectedModel?.id}
-          onChange={e => {
-            console.log(e.target.value);
-            setSelectedId(e.target.value);
-            onSelect?.(e.target.value);
-          }}
-        >
-          {models.map(model => (
-            <option key={model.id} value={model.id}>
-              {model.name}
-            </option>
-          ))}
-        </BasicSelect>
+        <Column gap='0.2rem'>
+          <ModelAmount>{modelList.length} Models</ModelAmount>
+          <BasicSelect
+            value={selectedModel?.id}
+            onChange={e => {
+              setSelectedId(e.target.value);
+              onSelect?.(e.target.value);
+            }}
+          >
+            {modelList.map(model => (
+              <option key={model.id} value={model.id}>
+                {model.name}
+              </option>
+            ))}
+          </BasicSelect>
+          {showSupportWarning && (
+            <SupportWarning center gap='1ch'>
+              <FaTriangleExclamation />
+              The selected model does not support tool use.
+            </SupportWarning>
+          )}
+        </Column>
         {selectedModel && (
           <>
-            <Row>
+            <Row wrapItems>
               <span>
                 {formatter.format(selectedModel?.pricing.prompt * 1000000)}/M
                 input tokens
@@ -75,6 +71,14 @@ export const ModelSelect = ({ onSelect, defaultModel }: ModelSelectProps) => {
                 {formatter.format(selectedModel?.pricing.completion * 1000000)}
                 /M output tokens
               </span>
+              {selectedModel.supported_parameters.includes(
+                'web_search_options',
+              ) && (
+                <span>
+                  {formatter.format(selectedModel?.pricing.web_search * 1000)}
+                  /1K web search results
+                </span>
+              )}
             </Row>
 
             <About>
@@ -98,4 +102,13 @@ const Wrapper = styled.div`
   width: min(90vw, 30rem);
   padding: ${p => p.theme.size()};
   border-radius: ${p => p.theme.radius};
+`;
+
+const ModelAmount = styled.div`
+  font-size: 0.8em;
+  color: ${p => p.theme.colors.textLight};
+`;
+
+const SupportWarning = styled(Row)`
+  color: ${p => p.theme.colors.warning};
 `;

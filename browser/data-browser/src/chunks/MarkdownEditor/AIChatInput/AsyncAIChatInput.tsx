@@ -96,6 +96,7 @@ const AsyncAIChatInput: React.FC<AsyncAIChatInputProps> = ({
         placeholder: 'Ask me anything...',
       }),
     ],
+    autofocus: true,
   });
 
   const handleChange = (value: string) => {

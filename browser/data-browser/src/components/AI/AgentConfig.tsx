@@ -17,6 +17,14 @@ import { Button } from '../Button';
 import { SkeletonButton } from '../SkeletonButton';
 import { useSettings } from '../../helpers/AppSettings';
 import { Checkbox, CheckboxLabel } from '../forms/Checkbox';
+import { InputWrapper, InputStyled } from '../forms/InputStyles';
+import { transition } from '../../helpers/transition';
+
+// Add this formatter at the top of the file, after imports
+const temperatureFormatter = new Intl.NumberFormat(undefined, {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
 
 // Helper function to generate a unique ID
 const generateId = () => {
@@ -35,9 +43,10 @@ const defaultNewAgent: Omit<AIAgent, 'id'> = {
   description: '',
   systemPrompt: '',
   availableTools: [],
-  model: 'google/gemini-2.0-flash-lite-001',
+  model: 'openai/gpt-4o-mini',
   canReadAtomicData: false,
   canWriteAtomicData: false,
+  temperature: 0.1,
 };
 
 const defaultAgents: AIAgent[] = [
@@ -56,10 +65,11 @@ Keep the following things in mind:
 - When talking about a resource, always wrap the title in a link using markdown.
 - If you don't know the answer to the users question, try to figure it out by using the tools provided to you.
 `,
-    availableTools: ['atomic-tools'],
+    availableTools: [],
     model: 'openai/gpt-4o-mini',
     canReadAtomicData: true,
     canWriteAtomicData: true,
+    temperature: 0.1,
   },
   {
     name: 'General Agent',
@@ -67,9 +77,10 @@ Keep the following things in mind:
     description: "A basic agent that doesn't have any special purpose.",
     systemPrompt: ``,
     availableTools: [],
-    model: 'google/gemini-2.0-flash-lite-001',
-    canReadAtomicData: true,
-    canWriteAtomicData: true,
+    model: 'openai/gpt-4.1-nano',
+    canReadAtomicData: false,
+    canWriteAtomicData: false,
+    temperature: 0.1,
   },
 ];
 
@@ -120,7 +131,7 @@ export const AgentConfig = ({
   const [editingAgent, setEditingAgent] = useState<AIAgent | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const theme = useTheme();
-  const [dialogProps, show, close, isOpen] = useDialog({
+  const [dialogProps, show, _close, isOpen] = useDialog({
     bindShow: onOpenChange,
   });
 
@@ -283,7 +294,6 @@ export const AgentConfig = ({
               <Button
                 onClick={() => {
                   handleSaveAgent();
-                  close(true);
                 }}
               >
                 {isCreating ? 'Create Agent' : 'Save Changes'}
@@ -304,7 +314,10 @@ interface AgentFormProps {
 const AgentForm = ({ agent, onChange }: AgentFormProps) => {
   const { mcpServers } = useSettings();
 
-  const handleChange = (field: keyof AIAgent, value: string | boolean) => {
+  const handleChange = (
+    field: keyof AIAgent,
+    value: string | boolean | number,
+  ) => {
     onChange({
       ...agent,
       [field]: value,
@@ -334,6 +347,11 @@ const AgentForm = ({ agent, onChange }: AgentFormProps) => {
       });
     }
   }, [mcpServers]);
+
+  const enforceToolSupport =
+    agent.availableTools.length > 0 ||
+    agent.canReadAtomicData ||
+    agent.canWriteAtomicData;
 
   return (
     <FormContainer>
@@ -409,8 +427,39 @@ const AgentForm = ({ agent, onChange }: AgentFormProps) => {
           <ModelSelect
             defaultModel={agent.model}
             onSelect={model => handleChange('model', model)}
+            enforceToolSupport={enforceToolSupport}
           />
         </ModelDropdown>
+      </FormGroup>
+
+      <FormGroup>
+        <Label htmlFor='agent-temperature'>Temperature</Label>
+        <Row center fullWidth>
+          <RangeInput
+            id='agent-temperature'
+            type='range'
+            min={0}
+            max={2}
+            step={0.01}
+            value={agent.temperature ?? 0}
+            onChange={e =>
+              handleChange('temperature', parseFloat(e.target.value))
+            }
+          />
+          <InputWrapper>
+            <InputStyled
+              type='number'
+              min={0}
+              max={2}
+              step={0.01}
+              value={temperatureFormatter.format(agent.temperature ?? 0)}
+              onChange={e =>
+                handleChange('temperature', parseFloat(e.target.value))
+              }
+              aria-label='Temperature value'
+            />
+          </InputWrapper>
+        </Row>
       </FormGroup>
     </FormContainer>
   );
@@ -436,9 +485,9 @@ const AgentListItem = styled.li<{ selected: boolean }>`
   display: flex;
   justify-content: space-between;
   align-items: center;
-
   box-shadow: ${p =>
     p.selected ? `0 0 0 2px ${p.theme.colors.main}` : 'none'};
+  ${transition('box-shadow')}
   &:hover {
     filter: brightness(0.95);
   }
@@ -527,4 +576,9 @@ const ToolList = styled.ul`
     margin: 0;
     padding: 0;
   }
+`;
+
+const RangeInput = styled.input`
+  flex: 1;
+  flex-basis: 75%;
 `;

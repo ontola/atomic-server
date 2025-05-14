@@ -68,14 +68,17 @@ export const AISidebar: React.FC = () => {
     navigate(constructOpenURL(chatResource.subject));
   };
 
+  const handleMessageDelete = (message: AIChatDisplayMessage) => {
+    setMessages(prev => prev.filter(m => m !== message));
+  };
+
   useEffect(() => {
     // When the user opens the AI sidebar and the chat is completely empty, we add the current subject to the context.
     if (
       isOpen &&
       currentSubject &&
       messages.length === 0 &&
-      // userInput.length === 0 &&
-      contextItems.length === 0
+      contextItems.length < 2
     ) {
       setContextItems([
         newContextItem({
@@ -99,6 +102,7 @@ export const AISidebar: React.FC = () => {
         onNewMessage={addNewMessage}
         externalContextItems={contextItems}
         setExternalContextItems={setContextItems}
+        onDeleteMessage={handleMessageDelete}
       >
         <Row center justify='space-between' fullWidth>
           <Row center gap='0.5ch'>
@@ -127,7 +131,6 @@ export const AISidebar: React.FC = () => {
               color='textLight'
               style={{ alignSelf: 'flex-end' }}
               onClick={() => {
-                // abortSignalRef.current?.abort();
                 setIsOpen(false);
               }}
             >
