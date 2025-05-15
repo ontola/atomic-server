@@ -23,7 +23,6 @@ const SerializableMention = Mention.extend({
           state.write('@' + (node.attrs.label || ''));
           state.renderContent(node);
           state.flushClose(1);
-          state.closeBlock(node);
         },
       },
     };
