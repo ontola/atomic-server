@@ -9,7 +9,8 @@ use crate::{
 pub fn build_collection_extender() -> ClassExtender {
     ClassExtender {
         class: urls::COLLECTION.to_string(),
-        on_resource_get: Some(|context| -> AtomicResult<ResourceResponse> {
+        on_resource_get: Some(ClassExtender::wrap_get_handler(
+            |context| -> AtomicResult<ResourceResponse> {
             let GetExtenderContext {
                 store,
                 url,
@@ -17,7 +18,8 @@ pub fn build_collection_extender() -> ClassExtender {
                 for_agent,
             } = context;
             construct_collection_from_params(store, url.query_pairs(), resource, for_agent)
-        }),
+            },
+        )),
         before_commit: None,
         after_commit: None,
     }

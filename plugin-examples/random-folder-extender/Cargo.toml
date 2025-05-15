@@ -1,0 +1,19 @@
+[package]
+name = "random-folder-extender"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+cargo-component-bindings = "0.6.0"
+rand = { version = "0.8", features = ["std", "std_rng"] }
+serde_json = "1"
+wit-bindgen-rt = "0.24.0"
+
+[package.metadata.component]
+package = "example:random-folder-extender"
+
+[package.metadata.component.target]
+world = "folder-extender"

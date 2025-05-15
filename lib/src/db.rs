@@ -30,7 +30,7 @@ use crate::{
     },
     endpoints::{Endpoint, HandleGetContext},
     errors::{AtomicError, AtomicResult},
-    plugins::plugins,
+    plugins::{plugins, wasm},
     resources::PropVals,
     storelike::{Query, QueryResult, ResourceResponse, Storelike},
     values::SortableValue,
@@ -108,6 +108,9 @@ impl Db {
         let query_index = db.open_tree(Tree::QueryMembers)?;
         let prop_val_sub_index = db.open_tree(Tree::PropValSub)?;
         let watched_queries = db.open_tree(Tree::WatchedQueries)?;
+        let mut class_extenders = plugins::default_class_extenders();
+        class_extenders.extend(wasm::load_wasm_class_extenders(path));
+
         let store = Db {
             path: path.into(),
             db,
@@ -119,7 +122,7 @@ impl Db {
             server_url,
             watched_queries,
             endpoints: plugins::default_endpoints(),
-            class_extenders: plugins::default_class_extenders(),
+            class_extenders,
             on_commit: None,
         };
         migrate_maybe(&store).map(|e| format!("Error during migration of database: {:?}", e))?;
@@ -696,7 +699,7 @@ impl Storelike for Db {
         if let Some(resource_new) = &commit_response.resource_new {
             for extender in self.class_extenders.iter() {
                 if extender.resource_has_extender(resource_new)? {
-                    let Some(handler) = extender.before_commit else {
+                    let Some(handler) = extender.before_commit.as_ref() else {
                         continue;
                     };
 
@@ -761,7 +764,7 @@ impl Storelike for Db {
                 if extender.resource_has_extender(resource_new)? {
                     use crate::class_extender::CommitExtenderContext;
 
-                    let Some(handler) = extender.after_commit else {
+                    let Some(handler) = extender.after_commit.as_ref() else {
                         continue;
                     };
 
@@ -861,7 +864,7 @@ impl Storelike for Db {
                     return Ok(resource.into());
                 }
 
-                if let Some(handler) = extender.on_resource_get {
+                if let Some(handler) = extender.on_resource_get.as_ref() {
                     let resource_response = (handler)(GetExtenderContext {
                         store: self,
                         url: &url,
