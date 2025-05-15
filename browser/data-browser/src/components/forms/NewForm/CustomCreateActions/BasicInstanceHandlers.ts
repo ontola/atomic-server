@@ -13,7 +13,7 @@ export const registerBasicInstanceHandlers = () => {
       await createAndNavigate(
         dataBrowser.classes.folder,
         {
-          [core.properties.name]: 'Untitled Folder',
+          [core.properties.name]: 'Folder',
           [dataBrowser.properties.displayStyle]: classes.displayStyles.list,
         },
         {
@@ -29,7 +29,7 @@ export const registerBasicInstanceHandlers = () => {
       await createAndNavigate(
         dataBrowser.classes.chatroom,
         {
-          [core.properties.name]: 'Untitled ChatRoom',
+          [core.properties.name]: 'ChatRoom',
         },
         {
           parent,
@@ -44,7 +44,7 @@ export const registerBasicInstanceHandlers = () => {
       createAndNavigate(
         dataBrowser.classes.document,
         {
-          [core.properties.name]: 'Untitled Document',
+          [core.properties.name]: 'Document',
         },
         {
           parent,
@@ -59,7 +59,7 @@ export const registerBasicInstanceHandlers = () => {
       createAndNavigate(
         dataBrowser.classes.documentV2,
         {
-          [core.properties.name]: 'Untitled Document',
+          [core.properties.name]: 'Document',
         },
         {
           parent,

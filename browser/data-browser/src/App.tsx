@@ -9,6 +9,7 @@ import { serverURLStorage } from './helpers/serverURLStorage';
 import { useEffect, type JSX } from 'react';
 import { RouterProvider } from '@tanstack/react-router';
 import { router } from './routes/Router';
+
 import { errorHandler } from './handlers/errorHandler';
 
 function fixDevUrl(url: string) {
@@ -23,7 +24,6 @@ function fixDevUrl(url: string) {
  * Defaulting to the current URL's origin will make sense in most non-dev environments.
  * In dev envs, we want to default to port 9883
  */
-
 const serverUrl = fixDevUrl(serverURLStorage.get() ?? window.location.origin);
 const initalAgent = await getAgentFromIDB();
 

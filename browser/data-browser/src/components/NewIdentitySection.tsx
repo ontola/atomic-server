@@ -122,6 +122,14 @@ export function NewIdentitySection({
         throw new Error('No agent set');
       }
 
+      // Get the agent resource and load it fromset profile name BEFORE creating drive
+      // This ensures profile name is saved atomically with the drive
+      const agentResource = await store.getResource(identity.agentSubject);
+      if (identity.profileName) {
+        agentResource.set(core.properties.name, identity.profileName);
+      }
+
+      // Create the drive resource (not yet saved)
       const resource = await store.newResource({
         isA: server.classes.drive,
         noParent: true,
@@ -134,21 +142,14 @@ export function NewIdentitySection({
         },
       });
 
-      await resource.save();
+      // Add the new drive to the agent's drives array
+      agentResource.push(server.properties.drives, [resource.subject]);
 
-      // Add the new drive to the agent's drives array on the server
-      const agentResource = await store.getResource(identity.agentSubject);
-      const currentDrives =
-        (agentResource.get(server.properties.drives) as string[]) || [];
-      if (!currentDrives.includes(resource.subject)) {
-        agentResource.set(server.properties.drives, [
-          ...currentDrives,
-          resource.subject,
-        ]);
-        await agentResource.save();
-      }
+      // Save BOTH the agent (with profile name + drives) and the drive
+      // This ensures everything is persisted atomically - no partial state
+      await Promise.all([agentResource.save(), resource.save()]);
 
-      // Build the secret WITH the drive URL and persist it
+      // Build the secret WITH the drive URL
       const finalSecret = Agent.buildSecret(
         identity.privateKey,
         identity.agentSubject,
@@ -223,9 +224,6 @@ export function NewIdentitySection({
       await saveAgentToIDB(trimmedInput);
       setAgent(agent);
 
-      // Save profile name AFTER verifying the secret
-      await saveProfileName();
-
       // Navigate to the drive
       if (agent.initialDrive) {
         setDrive(agent.initialDrive);
@@ -252,18 +250,6 @@ export function NewIdentitySection({
     setProfileName('');
     setError(undefined);
     setStep('idle');
-  }
-
-  async function saveProfileName() {
-    if (!identity || !identity.profileName) return;
-
-    try {
-      const agentResource = await store.getResource(identity.agentSubject);
-      agentResource.set(core.properties.name, identity.profileName);
-      await agentResource.save();
-    } catch (e) {
-      console.error('Failed to save profile name:', e);
-    }
   }
 
   // ─── Render ────────────────────────────────────────────────────────────────
