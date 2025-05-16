@@ -336,18 +336,20 @@ export async function newResource(klass: string, page: Page) {
 export async function openNewSubjectWindow(
   browser: Browser,
   url: string,
-  doSignIn: boolean = false,
+  /** If set, sign in as this user */
+  secret: string | undefined = undefined,
 ) {
   const context2 = await browser.newContext();
   const page = await context2.newPage();
   await page.goto(FRONTEND_URL);
 
-  if (doSignIn) {
-    await signIn(page);
+  if (secret) {
+    if (secret.length < 1) throw new Error('Secret must be provided');
+    await signIn(page, secret);
   }
 
   await openSubject(page, url);
-  await page.setViewportSize({ width: 1000, height: 400 });
+  // await page.setViewportSize({ width: 1000, height: 400 });
 
   return page;
 }
