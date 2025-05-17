@@ -1471,6 +1471,21 @@ impl Storelike for Db {
                     .await;
             }
 
+            // Only attempt a network fetch for external subjects.
+            // Fetching a local URL would cause the server to request itself,
+            // creating an infinite loop.
+            let resolved_subject_obj =
+                Subject::from_raw(&resolved_url, self.get_base_domain().as_deref());
+            if resolved_subject_obj.is_local() {
+                return self
+                    .handle_not_found(
+                        &resolved_url,
+                        "Not found in DB".into(),
+                        self.get_default_agent().ok().as_ref(),
+                    )
+                    .await;
+            }
+
             if let Ok(resource) = self
                 .fetch_resource(&resolved_url, self.get_default_agent().ok().as_ref())
                 .await
