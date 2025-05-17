@@ -29,8 +29,6 @@ pub fn construct_chatroom<'a>(
             for_agent,
         } = context;
 
-        println!("tesw!!!awdwdawdawd11as!!!st");
-
         // TODO: From range
         let mut start_val = utils::now();
         for (k, v) in url.query_pairs() {
