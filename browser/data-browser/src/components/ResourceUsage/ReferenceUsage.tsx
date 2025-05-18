@@ -10,7 +10,10 @@ export function ReferenceUsage({
   resource,
   initialOpenState,
 }: ReferenceUsageProps) {
-  const { collection } = useCollection({ value: resource.subject });
+  const { collection } = useCollection(
+    { value: resource.subject },
+    { pageSize: 10 },
+  );
 
   return (
     <UsageCard

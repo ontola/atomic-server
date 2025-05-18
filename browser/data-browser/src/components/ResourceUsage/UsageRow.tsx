@@ -1,10 +1,10 @@
 import { commits, unknownSubject, useResource } from '@tomic/react';
 
-import { ResourceInline } from '../../views/ResourceInline';
 import { styled } from 'styled-components';
 import { ErrorLook } from '../ErrorLook';
 
 import type { JSX } from 'react';
+import { ResourceRow } from '@views/ResourceRow';
 
 interface UsageRowProps {
   subject: string;
@@ -25,11 +25,7 @@ export function UsageRow({ subject }: UsageRowProps): JSX.Element {
     return <></>;
   }
 
-  return (
-    <ListItem>
-      <ResourceInline subject={subject} />
-    </ListItem>
-  );
+  return <ResourceRow clickable subject={subject} />;
 }
 
 const ListItem = styled.li`

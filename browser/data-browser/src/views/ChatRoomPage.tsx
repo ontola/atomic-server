@@ -26,7 +26,7 @@ import { editURL } from '../helpers/navigation';
 import { ResourceInline } from './ResourceInline';
 import { ResourcePageProps } from './ResourcePage';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
-import { TagBar } from '../components/Tag/TagBar';
+
 import { Column } from '../components/Row';
 
 /** Full page ChatRoom that shows a message list and a form to add Messages. */
@@ -166,7 +166,6 @@ export function ChatRoomPage({ resource }: ResourcePageProps) {
     <FullPageWrapper>
       <Column fullHeight>
         <EditableTitle resource={resource} />
-        <TagBar resource={resource} />
         <ScrollingContent ref={scrollRef} onScroll={handleScroll}>
           <MessagesPage subject={resource.subject} setReplyTo={handleReply} />
         </ScrollingContent>

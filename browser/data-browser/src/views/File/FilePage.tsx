@@ -29,7 +29,6 @@ export function FilePage({ resource }: ResourcePageProps) {
             <DownloadIconButton downloadFile={downloadFile} fileSize={bytes} />
           )}
         </Row>
-        <TagBar resource={resource} />
         <ValueForm resource={resource} propertyURL={properties.description} />
         <FilePreview resource={resource} />
       </Column>

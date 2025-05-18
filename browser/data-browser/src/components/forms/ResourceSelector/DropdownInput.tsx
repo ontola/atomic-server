@@ -14,9 +14,7 @@ import { styled, css } from 'styled-components';
 import { Hit, useLocalSearch } from '../../../helpers/useLocalSearch';
 import { ButtonInput } from '../../Button';
 import { InputOverlay, InputStyled, InputWrapper } from '../InputStyles';
-import ResourceLine, {
-  ResourceLineDescription,
-} from '../../../views/ResourceLine';
+import ResourceRow, { ResourceRowDescription } from '@views/ResourceRow';
 import { useClickAwayListener } from '../../../hooks/useClickAwayListener';
 import { useAvailableSpace } from '../hooks/useAvailableSpace';
 import { DropdownPortalContext } from '../../Dropdown/dropdownContext';
@@ -411,7 +409,7 @@ function DropDownItemsMenu({
               useKeys={useKeys}
               ref={index === selectedIndex ? selectedItemRef : null}
             >
-              <ResourceLine subject={item.item.subject} />
+              <ResourceRow subject={item.item.subject} />
             </DropDownItem>
           );
         })}
@@ -486,7 +484,7 @@ const DropDownItem = styled.li<DropDownItemProps>`
       background-color: ${p => p.theme.colors.main};
       color: ${p => p.theme.colors.bg};
 
-      & ${ResourceLineDescription} {
+      & ${ResourceRowDescription} {
         color: ${p => p.theme.colors.bg};
       }
     `}
@@ -500,7 +498,7 @@ const DropDownItem = styled.li<DropDownItemProps>`
         background-color: ${p => p.theme.colors.main};
         color: ${p => p.theme.colors.bg};
 
-        & ${ResourceLineDescription} {
+        & ${ResourceRowDescription} {
           color: ${p => p.theme.colors.bg};
         }
       }

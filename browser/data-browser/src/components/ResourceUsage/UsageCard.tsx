@@ -2,12 +2,12 @@ import { Collection, useCollectionPage } from '@tomic/react';
 
 import { styled } from 'styled-components';
 import { Details } from '../Details';
-import { UsageRow } from './UsageRow';
-import { Column, Row } from '../Row';
+import { Column } from '../Row';
 import { useState, type JSX } from 'react';
 import { FaChevronLeft, FaChevronRight } from 'react-icons/fa6';
 import { IconButton } from '../IconButton/IconButton';
-
+import { CardInsideFull, CardRow } from '../Card';
+import { ResourceRow } from '@views/ResourceRow';
 interface UsageCardProps {
   collection: Collection;
   title: string | React.ReactNode;
@@ -23,49 +23,51 @@ export function UsageCard({
   const [isOpen, setIsOpen] = useState(initialOpenState);
   const members = useCollectionPage(collection, page);
 
-  const PageButtons = (
-    <Row center>
-      <IconButton
-        title='Previous page'
-        onClick={() => setPage(p => p - 1)}
-        disabled={page === 0}
-      >
-        <FaChevronLeft />
-      </IconButton>
-      <PageNumber>{page + 1}</PageNumber>
-      <IconButton
-        title='Next page'
-        onClick={() => setPage(p => p + 1)}
-        disabled={page === collection.totalPages - 1}
-      >
-        <FaChevronRight />
-      </IconButton>
-    </Row>
-  );
-
   return (
     <DetailsCard>
       <Details
         noIndent
         disabled={collection.totalMembers === 0}
         title={
-          <Row justify='space-between'>
+          <DetailsTitleRow>
             <span>{title}</span>
-            {isOpen && PageButtons}
-          </Row>
+            {isOpen && collection.totalPages > 1 && (
+              <PageButtons>
+                <IconButton
+                  title='Previous page'
+                  onClick={() => setPage(p => p - 1)}
+                  disabled={page === 0}
+                >
+                  <FaChevronLeft />
+                </IconButton>
+                <PageNumber>{page + 1}</PageNumber>
+                <IconButton
+                  title='Next page'
+                  onClick={() => setPage(p => p + 1)}
+                  disabled={page === collection.totalPages - 1}
+                >
+                  <FaChevronRight />
+                </IconButton>
+              </PageButtons>
+            )}
+          </DetailsTitleRow>
         }
         initialState={initialOpenState}
         onStateToggle={setIsOpen}
       >
-        <ContentWrapper>
-          <List>
-            {/* We need to filter out duplicate members because react will do weird things when duplicate keys are present */}
-            {Array.from(new Set(members)).map(s => (
-              <UsageRow subject={s} key={s} />
-            ))}
-          </List>
-          <Row justify='end'>{PageButtons}</Row>
-        </ContentWrapper>
+        <Column gap='0.5rem'>
+          {members.length === 0 ? (
+            <Empty>No resources</Empty>
+          ) : (
+            <CardInsideFull>
+              {members.map(member => (
+                <CardRow key={member}>
+                  <ResourceRow clickable subject={member} />
+                </CardRow>
+              ))}
+            </CardInsideFull>
+          )}
+        </Column>
       </Details>
     </DetailsCard>
   );
@@ -74,20 +76,27 @@ export function UsageCard({
 const DetailsCard = styled.div`
   border: 1px solid ${({ theme }) => theme.colors.bg2};
   border-radius: ${({ theme }) => theme.radius};
-  padding: ${({ theme }) => theme.margin}rem;
-
   background-color: ${({ theme }) => theme.colors.bg};
 `;
 
-const List = styled.ul`
-  margin: 0;
-  padding: 0;
+const DetailsTitleRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
 `;
 
-const ContentWrapper = styled(Column)`
-  margin-top: ${({ theme }) => theme.margin}rem;
+const PageButtons = styled.div`
+  display: flex;
+  align-items: center;
+  gap: ${({ theme }) => theme.size(1)};
 `;
 
 const PageNumber = styled.span`
+  color: ${({ theme }) => theme.colors.textLight};
+  font-size: 0.875rem;
+`;
+
+const Empty = styled.span`
   color: ${({ theme }) => theme.colors.textLight};
 `;
