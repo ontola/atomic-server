@@ -1,21 +1,25 @@
 # Random Folder Class Extender
 
-This crate shows how to build a Wasm-based class extender for Atomic Server. It targets the `class-extender` world defined in `lib/wit/class-extender.wit` and appends a random four-digit suffix to every folder name whenever a resource of class [`https://atomicdata.dev/classes/Folder`](https://atomicdata.dev/classes/Folder) is fetched.
+This crate shows how to build a Wasm-based class extender for Atomic Server.
+It appends a random number to the end of the folder name each time it is fetched.
+It also prevents commits to the folder if the name contains uppercase letters.
 
 ## Building
 
-You'll need [`cargo-component`](https://github.com/bytecodealliance/cargo-component) to compile the component:
+AtomicServer plugins are compiled to WebAssempbly (Wasm) using the component model.
+You should target the `wasm32-wasip2` architecture when building the project.
 
 ```bash
-cargo component build --release -p random-folder-extender --target wasm32-wasip2
+# Install the target if you haven't already.
+rustup target add wasm32-wasip2
+
+# Build the plugin.
+cargo build --release -p random-folder-extender --target wasm32-wasip2
 ```
 
-The compiled Wasm component will be written to:
+In this example the build output location is `target/wasm32-wasip2/release/random-folder-extender.wasm`.
 
-```
-target/wasm32-wasip2/release/random-folder-extender.wasm
-```
-
-Copy that file into your server's `wasm-class-extenders/` directory (sits next to the sled database). Atomic Server will discover it on startup and automatically append random suffixes to folder names.
-
-
+Copy that file into your servers `plugins/class-extenders/` directory and restart AtomicServer.
+The plugin should be automatically loaded.
+The plugin folder is located in the same directory as your AtomicServer store.
+Check the [docs](https://docs.atomicdata.dev/atomicserver/faq.html#where-is-my-data-stored-on-my-machine) to find this directory.

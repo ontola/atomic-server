@@ -591,6 +591,7 @@ macro_rules! __export_class_extender_impl {
     };
 }
 #[doc(inline)]
+#[allow(unused)]
 pub(crate) use __export_class_extender_impl as export;
 #[cfg(target_arch = "wasm32")]
 #[unsafe(link_section = "component-type:wit-bindgen:0.41.0:atomic:class-extender@0.1.0:class-extender:encoded world")]
