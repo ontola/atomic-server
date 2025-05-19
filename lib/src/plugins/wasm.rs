@@ -4,21 +4,21 @@ use std::{
     sync::Arc,
 };
 
+use crate::{
+    agents::ForAgent,
+    class_extender::ClassExtender,
+    errors::{AtomicError, AtomicResult},
+    parse::{parse_json_ad_resource, ParseOpts, SaveOpts},
+    storelike::{Query, ResourceResponse},
+    Db, Resource, Storelike,
+};
 use tracing::{error, info, warn};
 use wasmtime::{
     component::{Component, Linker, ResourceTable},
     Config, Engine, Store,
 };
 use wasmtime_wasi::{p2, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
-
-use crate::{
-    agents::ForAgent,
-    class_extender::ClassExtender,
-    errors::{AtomicError, AtomicResult},
-    parse::{parse_json_ad_resource, ParseOpts, SaveOpts},
-    storelike::ResourceResponse,
-    Resource,
-};
+use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 
 mod bindings {
     wasmtime::component::bindgen!({
@@ -34,7 +34,7 @@ use bindings::atomic::class_extender::types::{
 
 const WASM_EXTENDER_DIR: &str = "../plugins/class-extenders"; // Relative to the store path.
 
-pub fn load_wasm_class_extenders(store_path: &Path) -> Vec<ClassExtender> {
+pub fn load_wasm_class_extenders(store_path: &Path, db: &Db) -> Vec<ClassExtender> {
     let plugins_dir = store_path.join(WASM_EXTENDER_DIR);
     // Create the plugin directory if it doesn't exist
     if !plugins_dir.exists() {
@@ -74,16 +74,19 @@ pub fn load_wasm_class_extenders(store_path: &Path) -> Vec<ClassExtender> {
     };
 
     let mut extenders = Vec::new();
+
+    info!("Loading plugins...");
+
     for entry in entries.flatten() {
         let path = entry.path();
         if path.extension() != Some(OsStr::new("wasm")) {
             continue;
         }
 
-        match WasmPlugin::load(engine.clone(), &path) {
+        match WasmPlugin::load(engine.clone(), &path, db) {
             Ok(plugin) => {
                 info!(
-                    path = %path.display(),
+                    path = %path.file_name().unwrap_or(OsStr::new("Unknown")).display(),
                     class = %plugin.class_url(),
                     "Loaded Wasm class extender"
                 );
@@ -104,6 +107,7 @@ pub fn load_wasm_class_extenders(store_path: &Path) -> Vec<ClassExtender> {
 
 fn build_engine() -> AtomicResult<Engine> {
     let mut config = Config::new();
+    // config.strategy(wasmtime::Strategy::Cranelift);
     config.wasm_component_model(true);
     Engine::new(&config).map_err(AtomicError::from)
 }
@@ -118,10 +122,12 @@ struct WasmPluginInner {
     component: Component,
     path: PathBuf,
     class_url: String,
+    db: Arc<Db>,
 }
 
 impl WasmPlugin {
-    fn load(engine: Arc<Engine>, path: &Path) -> AtomicResult<Self> {
+    fn load(engine: Arc<Engine>, path: &Path, db: &Db) -> AtomicResult<Self> {
+        let db = Arc::new(db.clone());
         let component = Component::from_file(&engine, path).map_err(AtomicError::from)?;
         let runtime = WasmPlugin {
             inner: Arc::new(WasmPluginInner {
@@ -129,6 +135,7 @@ impl WasmPlugin {
                 component,
                 path: path.to_path_buf(),
                 class_url: String::new(),
+                db: Arc::clone(&db),
             }),
         };
 
@@ -139,6 +146,7 @@ impl WasmPlugin {
                 component: runtime.inner.component.clone(),
                 path: runtime.inner.path.clone(),
                 class_url,
+                db,
             }),
         })
     }
@@ -216,9 +224,20 @@ impl WasmPlugin {
     }
 
     fn instantiate(&self) -> AtomicResult<(bindings::ClassExtender, Store<PluginHostState>)> {
-        let mut store = Store::new(&self.inner.engine, PluginHostState::new()?);
+        let mut store = Store::new(
+            &self.inner.engine,
+            PluginHostState::new(Arc::clone(&self.inner.db))?,
+        );
         let mut linker = Linker::new(&self.inner.engine);
         p2::add_to_linker_sync(&mut linker).map_err(|err| AtomicError::from(err.to_string()))?;
+        wasmtime_wasi_http::add_only_http_to_linker_sync(&mut linker)
+            .map_err(|err| AtomicError::from(err.to_string()))?;
+        bindings::atomic::class_extender::host::add_to_linker::<
+            PluginHostState,
+            wasmtime::component::HasSelf<PluginHostState>,
+        >(&mut linker, |state: &mut PluginHostState| state)
+        .map_err(|err| AtomicError::from(err.to_string()))?;
+
         let instance =
             bindings::ClassExtender::instantiate(&mut store, &self.inner.component, &linker)
                 .map_err(AtomicError::from)?;
@@ -287,16 +306,24 @@ impl WasmPlugin {
 struct PluginHostState {
     table: ResourceTable,
     ctx: WasiCtx,
+    http: WasiHttpCtx,
+    db: Arc<Db>,
 }
 
 impl PluginHostState {
-    fn new() -> AtomicResult<Self> {
+    fn new(db: Arc<Db>) -> AtomicResult<Self> {
         let mut builder = WasiCtxBuilder::new();
-        builder.inherit_stdout().inherit_stderr().inherit_stdin();
+        builder
+            .inherit_stdout()
+            .inherit_stderr()
+            .inherit_stdin()
+            .inherit_network();
         let ctx = builder.build();
         Ok(Self {
             table: ResourceTable::new(),
             ctx,
+            http: WasiHttpCtx::new(),
+            db,
         })
     }
 }
@@ -307,5 +334,65 @@ impl WasiView for PluginHostState {
             ctx: &mut self.ctx,
             table: &mut self.table,
         }
+    }
+}
+
+impl WasiHttpView for PluginHostState {
+    fn ctx(&mut self) -> &mut WasiHttpCtx {
+        &mut self.http
+    }
+
+    fn table(&mut self) -> &mut ResourceTable {
+        &mut self.table
+    }
+}
+
+impl bindings::atomic::class_extender::host::Host for PluginHostState {
+    fn get_resource(
+        &mut self,
+        subject: String,
+        agent: Option<String>,
+    ) -> Result<WasmResourceJson, String> {
+        let for_agent = agent.map(ForAgent::from).unwrap_or(ForAgent::Public);
+
+        let resource = self
+            .db
+            .get_resource_extended(&subject, false, &for_agent)
+            .map_err(|e| e.to_string())?
+            .to_single();
+
+        Ok(WasmResourceJson {
+            subject: resource.get_subject().to_string(),
+            json_ad: resource.to_json_ad().map_err(|e| e.to_string())?,
+        })
+    }
+
+    fn query(
+        &mut self,
+        property: String,
+        value: String,
+        agent: Option<String>,
+    ) -> Result<Vec<WasmResourceJson>, String> {
+        let for_agent = agent.map(ForAgent::from).unwrap_or(ForAgent::Public);
+
+        let mut query = Query::new_prop_val(&property, &value);
+        query.for_agent = for_agent;
+
+        let result = self.db.query(&query).map_err(|e| e.to_string())?;
+
+        let mut resources = Vec::new();
+
+        for resource in result.resources {
+            resources.push(WasmResourceJson {
+                subject: resource.get_subject().to_string(),
+                json_ad: resource.to_json_ad().map_err(|e| e.to_string())?,
+            });
+        }
+
+        Ok(resources)
+    }
+
+    fn get_plugin_agent(&mut self) -> String {
+        String::new()
     }
 }

@@ -5,9 +5,11 @@ pub mod bindings;
 pub use bindings::*;
 
 // Types re-exports
+pub use bindings::atomic::class_extender::host;
 pub use bindings::atomic::class_extender::types::{
     CommitContext, GetContext, ResourceJson, ResourceResponse,
 };
+
 pub use bindings::Guest;
 
 use serde::Deserialize;
@@ -142,6 +144,24 @@ macro_rules! export_plugin {
 
        $crate::__export_world_class_extender_cabi!(Shim with_types_in $crate::bindings);
     };
+}
+
+/// Gets a resource from the store, optionally uses the given agent. If no agent is provided the public agent is used.
+pub fn get_resource(subject: String, agent: Option<String>) -> Result<Resource, String> {
+    host::get_resource(&subject, agent.as_deref())
+        .map(|json| Resource::try_from(json).map_err(|e| e.to_string()))?
+}
+
+pub fn query(
+    property: String,
+    value: String,
+    agent: Option<String>,
+) -> Result<Vec<Resource>, String> {
+    host::query(&property, &value, agent.as_deref()).map(|json| {
+        json.into_iter()
+            .map(|json| Resource::try_from(json).map_err(|e| e.to_string()))
+            .collect::<Result<Vec<Resource>, String>>()
+    })?
 }
 
 impl TryFrom<ResourceJson> for Resource {
