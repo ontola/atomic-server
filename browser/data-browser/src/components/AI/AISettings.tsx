@@ -21,6 +21,8 @@ const AISettings: React.FC = () => {
     setOpenRouterApiKey,
     mcpServers,
     setMcpServers,
+    showTokenUsage,
+    setShowTokenUsage,
   } = useSettings();
 
   const [creditUsage, setCreditUsage] = useState<CreditUsage | undefined>();
@@ -71,6 +73,10 @@ const AISettings: React.FC = () => {
             )}
           </Column>
         </label>
+        <CheckboxLabel>
+          <Checkbox checked={showTokenUsage} onChange={setShowTokenUsage} />
+          Show token usage in chats
+        </CheckboxLabel>
         <Heading>MCP Servers</Heading>
         <MCPServersManager servers={mcpServers} setServers={setMcpServers} />
       </ConditionalSettings>

@@ -64,6 +64,7 @@ export const MCPServersManager: React.FC<MCPServersManagerProps> = ({
         )}
       </ServerList>
       <Column gap='0.5rem'>
+        <h4>Add Server</h4>
         <Row gap='1rem' center>
           <Column gap='0.5rem' style={{ flex: 1 }}>
             <label htmlFor='server-name'>Server Name</label>
@@ -107,7 +108,6 @@ export const MCPServersManager: React.FC<MCPServersManagerProps> = ({
   );
 };
 
-// Styled components for MCP servers UI
 const ServerList = styled.div`
   display: flex;
   flex-direction: column;
