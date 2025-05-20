@@ -1,8 +1,10 @@
 import { urls, useString, useResource, useTitle, core } from '@tomic/react';
-import { ResourceInline } from './ResourceInline';
+import { ResourceInline } from './ResourceInline/ResourceInline';
 import { ErrorLook } from '../components/ErrorLook';
 import { styled } from 'styled-components';
 import { getIconForClass } from '../helpers/iconMap';
+import { constructOpenURL } from '../helpers/navigation';
+import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 
 import type { JSX } from 'react';
 
@@ -13,14 +15,15 @@ type Props = {
   selected?: boolean;
 };
 
-const RootDiv = styled.div`
+const RootDiv = styled.div<{ $clickable?: boolean }>`
   width: 100%;
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  cursor: ${p => (p.$clickable ? 'pointer' : 'default')};
 `;
 
-/** Renders a Resource in a small line item. Not a link. Useful in dropdown. */
+/** Renders a Resource in a single row. Each row is clickable. Used in search preview and various cards showing multiple resources. */
 function ResourceRow({
   subject,
   clickable,
@@ -30,6 +33,7 @@ function ResourceRow({
   const resource = useResource(subject);
   const [title] = useTitle(resource);
   let [description] = useString(resource, urls.properties.description);
+  const navigate = useNavigateWithTransition();
 
   if (resource.loading) {
     return <span about={subject}>Loading...</span>;
@@ -51,8 +55,24 @@ function ResourceRow({
   const mainClass = classes[0];
   const ClassIcon = mainClass ? getIconForClass(mainClass) : null;
 
+  const handleClick = () => {
+    if (clickable) {
+      navigate(constructOpenURL(subject));
+    }
+  };
+
   return (
-    <RootDiv about={subject} className={className}>
+    <RootDiv
+      about={subject}
+      className={className}
+      onClick={handleClick}
+      $clickable={clickable}
+    >
+      {ClassIcon && (
+        <IconWrapper>
+          <ClassIcon />
+        </IconWrapper>
+      )}
       <Content>
         {clickable ? (
           <ResourceInline untabbable subject={subject} basic />
@@ -63,11 +83,6 @@ function ResourceRow({
           {description ? ` - ${description}` : null}
         </ResourceRowDescription>
       </Content>
-      {ClassIcon && (
-        <IconWrapper>
-          <ClassIcon />
-        </IconWrapper>
-      )}
     </RootDiv>
   );
 }
@@ -87,12 +102,6 @@ export const ResourceRowDescription = styled.span`
   color: ${p => p.theme.colors.textLight};
 `;
 
-// Alias for backwards compatibility
-export const ResourceLineDescription = ResourceRowDescription;
-
 export { ResourceRow };
 
 export default ResourceRow;
-
-// Alias for backwards compatibility
-export { ResourceRow as ResourceLine };

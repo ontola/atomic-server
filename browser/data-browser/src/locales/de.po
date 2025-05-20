@@ -1551,6 +1551,7 @@ msgstr "{0} bearbeiten"
 
 #: src/chunks/RTE/ImagePicker.tsx
 #: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
+#: src/components/Share/ShareDialog.tsx
 #: src/components/forms/EditFormDialog.tsx
 #: src/components/forms/NewForm/NewFormDialog.tsx
 #: src/components/forms/ResourceForm.tsx
@@ -2391,28 +2392,35 @@ msgstr "Server hinzufügen"
 msgid "Permissions for"
 msgstr "Berechtigungen für"
 
+#: src/components/Share/ShareDialog.tsx
 #: src/routes/Share/ShareRoute.tsx
 msgid "<0/> Create Invite"
 msgstr "<0/> Einladung erstellen"
 
+#: src/components/Share/ShareDialog.tsx
 #: src/routes/Share/ShareRoute.tsx
 msgid "Permissions set here:"
 msgstr "Hier festgelegte Berechtigungen:"
 
+#: src/components/Share/ShareDialog.tsx
 #: src/routes/Share/ShareRoute.tsx
 msgid "Inherited permissions:"
 msgstr "Geerbte Berechtigungen:"
 
 #. placeholder {0}: ' '
+#. placeholder {0}: ' '
+#: src/components/Share/ShareDialog.tsx
 #: src/routes/Share/ShareRoute.tsx
 msgid "Read more about permissions in the{0} <0>Atomic Data Docs</0>"
 msgstr "Weitere Informationen zu Berechtigungen findest du in den{0} <0>Atomic Data Docs</0>"
 
+#: src/components/Share/ShareDialog.tsx
 #: src/routes/Share/ShareRoute.tsx
 #: src/views/Plugin/AssignRights.tsx
 msgid "Read"
 msgstr "Lesen"
 
+#: src/components/Share/ShareDialog.tsx
 #: src/routes/Share/ShareRoute.tsx
 #: src/views/Plugin/AssignRights.tsx
 msgid "Write"
@@ -3120,6 +3128,7 @@ msgstr "v{0}"
 msgid "by {0}"
 msgstr "von {0}"
 
+#: src/components/Share/ShareDialog.tsx
 #: src/routes/Share/ShareRoute.tsx
 msgid "Share settings saved"
 msgstr "Freigabeeinstellungen gespeichert"
@@ -4063,6 +4072,7 @@ msgid "ChatRoom"
 msgstr ""
 
 #: src/components/Parent.tsx
+#: src/components/Share/ShareDialog.tsx
 msgid "Share"
 msgstr ""
 
