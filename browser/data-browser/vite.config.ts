@@ -21,7 +21,12 @@ export default defineConfig({
     wuchale(),
     react({
       babel: {
-        plugins: ['babel-plugin-styled-components'],
+        plugins: [
+          [
+            'babel-plugin-styled-components',
+            { displayName: true, fileName: false },
+          ],
+        ],
       },
     }),
     VitePWA({
