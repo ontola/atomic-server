@@ -1,5 +1,9 @@
 import { core, dataBrowser } from '@tomic/react';
-import type { Template } from '../template';
+import type {
+  TemplateFn,
+  TemplateContext,
+  TemplateDescription,
+} from '../template';
 
 const Image: React.FC = () => {
   return (
@@ -130,21 +134,24 @@ const Image: React.FC = () => {
   );
 };
 
-export const website: Template = {
-  title: 'website',
-  id: 'website',
-  description:
-    context => `This template adds a website ontology to your AtomicServer along with some sample website data.
+const description = (
+  context: TemplateContext,
+) => `Based on the Atomic Website Template.
 The website features blog posts, nested menu items and content blocks to create expressive pages from data.\n
 An \`@tomic/template\` template is also available to setup a fully working website in a variety of front-end frameworks that you can then customize to your preferences.
 \`\`\`
-npm create @tomic/template my-project -- --template sveltekit-site --server-url ${context.serverUrl}
-pnpm create @tomic/template my-project --template sveltekit-site --server-url ${context.serverUrl}
-yarn create @tomic/template my-project --template sveltekit-site --server-url ${context.serverUrl}
+npm create @tomic/template my-project -- --template sveltekit-site --server-url ${context.driveURL}
+pnpm create @tomic/template my-project --template sveltekit-site --server-url ${context.driveURL}
+yarn create @tomic/template my-project --template sveltekit-site --server-url ${context.driveURL}
 \`\`\`
 Currently available @tomic/templates for the website template are:
 - sveltekit-site
-- nextjs-site`,
+- nextjs-site`;
+
+export const website: TemplateFn = context => ({
+  title: 'website',
+  id: 'website',
+  description: description(context),
   Image,
   rootResourceLocalIDs: ['website', 'site-data'],
   resources: [
@@ -160,7 +167,7 @@ Currently available @tomic/templates for the website template are:
         'website/class/text-block',
         'website/class/website',
       ],
-      [core.properties.description]: 'Ontology for the template website.',
+      [core.properties.description]: description(context),
       [core.properties.instances]: [],
       [core.properties.isA]: [core.classes.ontology],
       [core.properties.properties]: [
@@ -620,4 +627,4 @@ Currently available @tomic/templates for the website template are:
       [core.properties.parent]: 'site-data',
     },
   ],
-};
+});
