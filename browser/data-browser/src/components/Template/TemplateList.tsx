@@ -1,32 +1,50 @@
 import { TemplateListItem } from './TemplateListItem';
 import { styled } from 'styled-components';
 import { website } from './templates/website';
-import type { Template } from './template';
+import type { Template, TemplateFn } from './template';
 import { useState } from 'react';
 import { ApplyTemplateDialog } from './ApplyTemplateDialog';
+import { useSettings } from '../../helpers/AppSettings';
 
-const templates: Template[] = [website];
+const templates: TemplateFn[] = [website];
 
 export function TemplateList(): React.JSX.Element {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<Template>();
+  const { drive } = useSettings();
 
   return (
     <>
       <List>
-        {templates.map(template => (
-          <li key={template.id}>
-            <TemplateListItem
-              id={template.id}
-              title={template.title}
-              Image={template.Image}
-              onClick={id => {
-                setSelectedTemplate(templates.find(t => t.id === id));
-                setDialogOpen(true);
-              }}
-            />
-          </li>
-        ))}
+        {templates.map(templatefn => {
+          const context = {
+            driveURL: drive,
+          };
+
+          const template = templatefn(context);
+
+          const { id, title, Image } = template;
+
+          return (
+            <li key={id}>
+              <TemplateListItem
+                id={id}
+                title={title}
+                Image={Image}
+                onClick={tmpl => {
+                  const newTemplate = templates.find(
+                    t => t(context).id === tmpl,
+                  );
+
+                  if (!newTemplate) return;
+
+                  setSelectedTemplate(template);
+                  setDialogOpen(true);
+                }}
+              />
+            </li>
+          );
+        })}
       </List>
       <ApplyTemplateDialog
         template={selectedTemplate}

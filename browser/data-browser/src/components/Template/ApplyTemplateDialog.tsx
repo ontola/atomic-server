@@ -10,7 +10,6 @@ import {
   useDialog,
 } from '../Dialog';
 import { Column } from '../Row';
-import type { Template } from './template';
 import { useEffect, useMemo, useState } from 'react';
 import Markdown from '../datatypes/Markdown';
 import { dataBrowser, useResource, useResources, useStore } from '@tomic/react';
@@ -19,6 +18,7 @@ import { InlineErrMessage } from '../forms/InputStyles';
 import { useSettings } from '../../helpers/AppSettings';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { constructOpenURL } from '../../helpers/navigation';
+import type { Template } from './template';
 
 interface ApplyTemplateDialogProps {
   template?: Template;
@@ -95,9 +95,7 @@ export function ApplyTemplateDialog({
           </DialogTitle>
           <DialogContent>
             <Column>
-              <Markdown
-                text={template.description({ serverUrl: store.getServerUrl() })}
-              />
+              <Markdown text={template.description} />
               <Details title='Preview JSON-AD'>
                 <CodeBlock content={formattedJSONAD} />
               </Details>
