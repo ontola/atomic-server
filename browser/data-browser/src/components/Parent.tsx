@@ -20,7 +20,6 @@ import { BREADCRUMB_BAR_TRANSITION_TAG } from '../helpers/transitionName';
 import { ResourceContextMenu } from './ResourceContextMenu';
 import { MenuBarDropdownTrigger } from './ResourceContextMenu/MenuBarDropdownTrigger';
 import { FaMagnifyingGlass, FaShare, FaTags } from 'react-icons/fa6';
-import { TagSelectPopover } from './Tag/TagSelectPopover';
 import { ResourceInline } from '../views/ResourceInline';
 import type { JSX } from 'react';
 import { useState, useEffect } from 'react';
@@ -28,6 +27,10 @@ import { useAISidebar } from './AI/AISidebarContext';
 import { AIIcon } from './AI/AIIcon';
 import { useAISettings } from './AI/AISettingsContext';
 import { openSearchOverlay } from './OverlayContainer';
+import { TagSelectPopover } from './Tag/TagSelectPopover';
+import { getResourcesDrive } from '@helpers/getResourcesDrive';
+import * as RadixPopover from '@radix-ui/react-popover';
+import { SkeletonButton } from './SkeletonButton';
 
 type ParentProps = {
   resource: Resource;
@@ -49,9 +52,7 @@ function TagSelectPopoverWrapper({ resource }: { resource: Resource }) {
   const canCreateTags = useCanWrite(drive);
 
   useEffect(() => {
-    import('@helpers/getResourcesDrive').then(({ getResourcesDrive }) => {
-      getResourcesDrive(resource, store).then(setDriveSubject);
-    });
+    getResourcesDrive(resource, store).then(setDriveSubject);
   }, [resource, store]);
 
   const handleNewTag = (newTag: string) => {
@@ -60,7 +61,7 @@ function TagSelectPopoverWrapper({ resource }: { resource: Resource }) {
 
   if (driveSubject === undefined || resource.loading) {
     return (
-      <TagsButton>
+      <TagsButton disabled>
         <FaTags />
         <span>Tags</span>
       </TagsButton>
@@ -75,7 +76,7 @@ function TagSelectPopoverWrapper({ resource }: { resource: Resource }) {
       onNewTag={canCreateTags ? handleNewTag : undefined}
       newTagParent={canCreateTags ? driveSubject : undefined}
       Trigger={
-        <TagsButton>
+        <TagsButton as={RadixPopover.Trigger}>
           <FaTags />
           <span>Tags</span>
         </TagsButton>
@@ -192,7 +193,23 @@ const LabelButton = styled.button`
   }
 `;
 
-const TagsButton = styled(LabelButton)`
+const TagsButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5ch;
+  padding: 0.25rem 0.5rem;
+  border: none;
+  border-radius: ${p => p.theme.radius};
+  background: transparent;
+  color: ${p => p.theme.colors.textLight};
+  cursor: pointer;
+  font-size: 0.875rem;
+
+  &:hover {
+    background: ${p => p.theme.colors.bg1};
+    color: ${p => p.theme.colors.text};
+  }
+
   @container (max-width: 600px) {
     span {
       display: none;

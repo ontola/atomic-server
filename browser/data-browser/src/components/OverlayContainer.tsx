@@ -14,6 +14,7 @@ import { ErrorLook } from './ErrorLook';
 import { InlineFormattedResourceList } from './InlineFormattedResourceList';
 import { FaMagnifyingGlass, FaComments } from 'react-icons/fa6';
 import ResourceCard from '../views/Card/ResourceCard';
+import ResourceRow from '@views/ResourceRow';
 
 // ─── Module-level overlay state ────────────────────────────────────────────────
 
