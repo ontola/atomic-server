@@ -1,11 +1,12 @@
 use atomic_lib::errors::AtomicResult;
 use atomic_lib::{storelike::Query, Store, Storelike};
 
-fn main() -> AtomicResult<()> {
+#[tokio::main]
+async fn main() -> AtomicResult<()> {
     // Initialize a new store
-    let store = Store::init()?;
+    let store = Store::init().await?;
     // Populate it with some default data
-    store.populate()?;
+    store.populate().await?;
 
     // Create a query for all resources that are instances of the Class class
     let mut query = Query::new_class("https://atomicdata.dev/classes/Class");
@@ -13,23 +14,25 @@ fn main() -> AtomicResult<()> {
     query.include_external = true;
 
     // Execute the query
-    let result = store.query(&query)?;
+    let result = store.query(&query).await?;
 
     println!("Found {} instances of Class:", result.subjects.len());
 
     // Iterate through all found resources
     for subject in result.subjects {
         // Get the full resource
-        match store.get_resource(&subject) {
+        match store.get_resource(&subject).await {
             Ok(resource) => {
                 // Try to get the shortname and description
                 let shortname = resource
                     .get_shortname("shortname", &store)
+                    .await
                     .map(|v| v.to_string())
                     .unwrap_or_else(|_| "No shortname".to_string());
 
                 let description = resource
                     .get_shortname("description", &store)
+                    .await
                     .map(|v| v.to_string())
                     .unwrap_or_else(|_| "No description".to_string());
 

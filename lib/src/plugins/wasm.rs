@@ -1,3 +1,6 @@
+use std::future::Future;
+use std::pin::Pin;
+
 use std::{
     ffi::OsStr,
     path::{Path, PathBuf},
@@ -22,8 +25,10 @@ use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 
 mod bindings {
     wasmtime::component::bindgen!({
-        path: "wit/class-extender.wit",
-        world: "class-extender",
+    path: "wit/class-extender.wit",
+    world: "class-extender",
+    imports: { default: async },
+    exports: { default: async },
     });
 }
 
@@ -34,7 +39,7 @@ use bindings::atomic::class_extender::types::{
 
 const WASM_EXTENDER_DIR: &str = "../plugins/class-extenders"; // Relative to the store path.
 
-pub fn load_wasm_class_extenders(store_path: &Path, db: &Db) -> Vec<ClassExtender> {
+pub async fn load_wasm_class_extenders(store_path: &Path, db: &Db) -> Vec<ClassExtender> {
     let plugins_dir = store_path.join(WASM_EXTENDER_DIR);
     // Create the plugin directory if it doesn't exist
     if !plugins_dir.exists() {
@@ -83,7 +88,7 @@ pub fn load_wasm_class_extenders(store_path: &Path, db: &Db) -> Vec<ClassExtende
             continue;
         }
 
-        match WasmPlugin::load(engine.clone(), &path, db) {
+        match WasmPlugin::load(engine.clone(), &path, db).await {
             Ok(plugin) => {
                 info!(
                     path = %path.file_name().unwrap_or(OsStr::new("Unknown")).display(),
@@ -107,8 +112,8 @@ pub fn load_wasm_class_extenders(store_path: &Path, db: &Db) -> Vec<ClassExtende
 
 fn build_engine() -> AtomicResult<Engine> {
     let mut config = Config::new();
-    // config.strategy(wasmtime::Strategy::Cranelift);
     config.wasm_component_model(true);
+    config.async_support(true);
     Engine::new(&config).map_err(AtomicError::from)
 }
 
@@ -126,7 +131,7 @@ struct WasmPluginInner {
 }
 
 impl WasmPlugin {
-    fn load(engine: Arc<Engine>, path: &Path, db: &Db) -> AtomicResult<Self> {
+    async fn load(engine: Arc<Engine>, path: &Path, db: &Db) -> AtomicResult<Self> {
         let db = Arc::new(db.clone());
         let component = Component::from_file(&engine, path).map_err(AtomicError::from)?;
         let runtime = WasmPlugin {
@@ -139,7 +144,7 @@ impl WasmPlugin {
             }),
         };
 
-        let class_url = runtime.call_class_url()?;
+        let class_url = runtime.call_class_url().await?;
         Ok(WasmPlugin {
             inner: Arc::new(WasmPluginInner {
                 engine,
@@ -163,74 +168,81 @@ impl WasmPlugin {
         ClassExtender {
             class: self.inner.class_url.clone(),
             on_resource_get: Some(ClassExtender::wrap_get_handler(move |context| {
-                get_plugin.call_on_resource_get(context)
+                let get_plugin = get_plugin.clone();
+                Box::pin(async move { get_plugin.call_on_resource_get(context).await })
             })),
             before_commit: Some(ClassExtender::wrap_commit_handler(move |context| {
-                before_plugin.call_before_commit(context)
+                let before_plugin = before_plugin.clone();
+                Box::pin(async move { before_plugin.call_before_commit(context).await })
             })),
             after_commit: Some(ClassExtender::wrap_commit_handler(move |context| {
-                after_plugin.call_after_commit(context)
+                let after_plugin = after_plugin.clone();
+                Box::pin(async move { after_plugin.call_after_commit(context).await })
             })),
         }
     }
 
-    fn call_class_url(&self) -> AtomicResult<String> {
-        let (instance, mut store) = self.instantiate()?;
+    async fn call_class_url(&self) -> AtomicResult<String> {
+        let (instance, mut store) = self.instantiate().await?;
         instance
             .call_class_url(&mut store)
+            .await
             .map_err(AtomicError::from)
     }
 
-    fn call_on_resource_get(
-        &self,
-        context: crate::class_extender::GetExtenderContext,
+    async fn call_on_resource_get<'a>(
+        &'a self,
+        context: crate::class_extender::GetExtenderContext<'a>,
     ) -> AtomicResult<ResourceResponse> {
         let payload = self.build_get_context(&context)?;
-        let (instance, mut store) = self.instantiate()?;
+        let (instance, mut store) = self.instantiate().await?;
         let response = instance
             .call_on_resource_get(&mut store, &payload)
+            .await
             .map_err(AtomicError::from)?
             .map_err(AtomicError::other_error)?;
 
         if let Some(payload) = response {
-            self.inflate_resource_response(payload, context.store)
+            self.inflate_resource_response(payload, context.store).await
         } else {
             Ok(ResourceResponse::Resource(context.db_resource.clone()))
         }
     }
 
-    fn call_before_commit(
-        &self,
-        context: crate::class_extender::CommitExtenderContext,
+    async fn call_before_commit<'a>(
+        &'a self,
+        context: crate::class_extender::CommitExtenderContext<'a>,
     ) -> AtomicResult<()> {
-        let payload = self.build_commit_context(&context)?;
-        let (instance, mut store) = self.instantiate()?;
+        let payload = self.build_commit_context(&context).await?;
+        let (instance, mut store) = self.instantiate().await?;
         instance
             .call_before_commit(&mut store, &payload)
+            .await
             .map_err(AtomicError::from)?
             .map_err(AtomicError::other_error)
     }
 
-    fn call_after_commit(
-        &self,
-        context: crate::class_extender::CommitExtenderContext,
+    async fn call_after_commit<'a>(
+        &'a self,
+        context: crate::class_extender::CommitExtenderContext<'a>,
     ) -> AtomicResult<()> {
-        let payload = self.build_commit_context(&context)?;
-        let (instance, mut store) = self.instantiate()?;
+        let payload = self.build_commit_context(&context).await?;
+        let (instance, mut store) = self.instantiate().await?;
         instance
             .call_after_commit(&mut store, &payload)
+            .await
             .map_err(AtomicError::from)?
             .map_err(AtomicError::other_error)
     }
 
-    fn instantiate(&self) -> AtomicResult<(bindings::ClassExtender, Store<PluginHostState>)> {
+    async fn instantiate(&self) -> AtomicResult<(bindings::ClassExtender, Store<PluginHostState>)> {
         let mut store = Store::new(
             &self.inner.engine,
             PluginHostState::new(Arc::clone(&self.inner.db))?,
         );
         let mut linker = Linker::new(&self.inner.engine);
-        p2::add_to_linker_sync(&mut linker).map_err(|err| AtomicError::from(err.to_string()))?;
-        wasmtime_wasi_http::add_only_http_to_linker_sync(&mut linker)
+        p2::add_to_linker_async(&mut linker).map_err(|err| AtomicError::from(err.to_string()))?;
+        wasmtime_wasi_http::add_only_http_to_linker_async(&mut linker)
             .map_err(|err| AtomicError::from(err.to_string()))?;
         bindings::atomic::class_extender::host::add_to_linker::<
             PluginHostState,
@@ -239,7 +251,8 @@ impl WasmPlugin {
         .map_err(|err| AtomicError::from(err.to_string()))?;
 
         let instance =
-            bindings::ClassExtender::instantiate(&mut store, &self.inner.component, &linker)
+            bindings::ClassExtender::instantiate_async(&mut store, &self.inner.component, &linker)
+                .await
                 .map_err(AtomicError::from)?;
         Ok((instance, store))
     }
@@ -256,15 +269,16 @@ impl WasmPlugin {
         })
     }
 
-    fn build_commit_context(
+    async fn build_commit_context<'a>(
         &self,
-        context: &crate::class_extender::CommitExtenderContext,
+        context: &'a crate::class_extender::CommitExtenderContext<'a>,
     ) -> AtomicResult<WasmCommitContext> {
         Ok(WasmCommitContext {
             subject: context.resource.get_subject().to_string(),
             commit_json: context
                 .commit
-                .serialize_deterministically_json_ad(context.store)?,
+                .serialize_deterministically_json_ad(context.store)
+                .await?,
             snapshot: Some(self.encode_resource(context.resource)?),
         })
     }
@@ -276,30 +290,34 @@ impl WasmPlugin {
         })
     }
 
-    fn inflate_resource_response(
+    fn inflate_resource_response<'a>(
         &self,
         payload: WasmResourceResponse,
-        store: &crate::Db,
-    ) -> AtomicResult<ResourceResponse> {
-        let mut parse_opts = ParseOpts::default();
-        parse_opts.save = SaveOpts::DontSave;
-        parse_opts.for_agent = ForAgent::Sudo;
+        store: &'a crate::Db,
+    ) -> Pin<Box<dyn Future<Output = AtomicResult<ResourceResponse>> + Send + 'a>> {
+        Box::pin(async move {
+            let mut parse_opts = ParseOpts::default();
+            parse_opts.save = SaveOpts::DontSave;
+            parse_opts.for_agent = ForAgent::Sudo;
 
-        let mut base = parse_json_ad_resource(&payload.primary.json_ad, store, &parse_opts)?;
-        base.set_subject(payload.primary.subject);
+            let mut base =
+                parse_json_ad_resource(&payload.primary.json_ad, store, &parse_opts).await?;
+            base.set_subject(payload.primary.subject);
 
-        let mut referenced = Vec::new();
-        for item in payload.referenced {
-            let mut resource = parse_json_ad_resource(&item.json_ad, store, &parse_opts)?;
-            resource.set_subject(item.subject);
-            referenced.push(resource);
-        }
+            let mut referenced = Vec::new();
+            for item in payload.referenced {
+                let mut resource =
+                    parse_json_ad_resource(&item.json_ad, store, &parse_opts).await?;
+                resource.set_subject(item.subject);
+                referenced.push(resource);
+            }
 
-        if referenced.is_empty() {
-            Ok(ResourceResponse::Resource(base))
-        } else {
-            Ok(ResourceResponse::ResourceWithReferenced(base, referenced))
-        }
+            if referenced.is_empty() {
+                Ok(ResourceResponse::Resource(base))
+            } else {
+                Ok(ResourceResponse::ResourceWithReferenced(base, referenced))
+            }
+        })
     }
 }
 
@@ -348,7 +366,7 @@ impl WasiHttpView for PluginHostState {
 }
 
 impl bindings::atomic::class_extender::host::Host for PluginHostState {
-    fn get_resource(
+    async fn get_resource(
         &mut self,
         subject: String,
         agent: Option<String>,
@@ -358,6 +376,7 @@ impl bindings::atomic::class_extender::host::Host for PluginHostState {
         let resource = self
             .db
             .get_resource_extended(&subject, false, &for_agent)
+            .await
             .map_err(|e| e.to_string())?
             .to_single();
 
@@ -367,7 +386,7 @@ impl bindings::atomic::class_extender::host::Host for PluginHostState {
         })
     }
 
-    fn query(
+    async fn query(
         &mut self,
         property: String,
         value: String,
@@ -378,7 +397,7 @@ impl bindings::atomic::class_extender::host::Host for PluginHostState {
         let mut query = Query::new_prop_val(&property, &value);
         query.for_agent = for_agent;
 
-        let result = self.db.query(&query).map_err(|e| e.to_string())?;
+        let result = self.db.query(&query).await.map_err(|e| e.to_string())?;
 
         let mut resources = Vec::new();
 
@@ -392,7 +411,7 @@ impl bindings::atomic::class_extender::host::Host for PluginHostState {
         Ok(resources)
     }
 
-    fn get_plugin_agent(&mut self) -> String {
+    async fn get_plugin_agent(&mut self) -> String {
         String::new()
     }
 }

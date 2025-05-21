@@ -17,7 +17,7 @@ pub async fn post_commit(
     }
     let store = &appstate.store;
     let mut builder = HttpResponse::Ok();
-    let incoming_commit_resource = parse_json_ad_commit_resource(&body, store)?;
+    let incoming_commit_resource = parse_json_ad_commit_resource(&body, store).await?;
     let incoming_commit = Commit::from_resource(incoming_commit_resource)?;
     if !incoming_commit.subject.contains(
         &store
@@ -36,7 +36,7 @@ pub async fn post_commit(
         validate_for_agent: Some(incoming_commit.signer.to_string()),
         update_index: true,
     };
-    let commit_response = store.apply_commit(incoming_commit, &opts)?;
+    let commit_response = store.apply_commit(incoming_commit, &opts).await?;
 
     let message = commit_response.commit_resource.to_json_ad()?;
 

@@ -7,12 +7,18 @@ use crate::{
     agents::ForAgent, errors::AtomicResult, storelike::ResourceResponse, urls, Db, Resource,
     Storelike, Value,
 };
+use std::future::Future;
+use std::pin::Pin;
+
+pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 /// The function that is called when a GET request matches the path
-type HandleGet = fn(context: HandleGetContext) -> AtomicResult<ResourceResponse>;
+pub type HandleGet =
+    for<'a> fn(context: HandleGetContext<'a>) -> BoxFuture<'a, AtomicResult<ResourceResponse>>;
 
 /// The function that is called when a POST request matches the path
-type HandlePost = fn(context: HandlePostContext) -> AtomicResult<ResourceResponse>;
+pub type HandlePost =
+    for<'a> fn(context: HandlePostContext<'a>) -> BoxFuture<'a, AtomicResult<ResourceResponse>>;
 
 /// Passed to an Endpoint GET request handler.
 #[derive(Debug)]
@@ -58,24 +64,33 @@ pub struct PostEndpoint {
 
 impl Endpoint {
     /// Converts Endpoint to resource. Does not save it.
-    pub fn to_resource(&self, store: &impl Storelike) -> AtomicResult<Resource> {
+    pub async fn to_resource(&self, store: &impl Storelike) -> AtomicResult<Resource> {
         let subject = format!("{}{}", store.get_server_url()?, self.path);
-        let mut resource = store.get_resource_new(&subject);
-        resource.set_string(urls::DESCRIPTION.into(), &self.description, store)?;
-        resource.set_string(urls::SHORTNAME.into(), &self.shortname, store)?;
+        let mut resource = store.get_resource_new(&subject).await;
+        resource
+            .set_string(urls::DESCRIPTION.into(), &self.description, store)
+            .await?;
+        resource
+            .set_string(urls::SHORTNAME.into(), &self.shortname, store)
+            .await?;
         let is_a = [urls::ENDPOINT.to_string()].to_vec();
-        resource.set(urls::IS_A.into(), is_a.into(), store)?;
+        resource.set(urls::IS_A.into(), is_a.into(), store).await?;
         let params_vec: Vec<String> = self.params.clone();
-        resource.set(
-            urls::ENDPOINT_PARAMETERS.into(),
-            Value::from(params_vec),
-            store,
-        )?;
+        resource
+            .set(
+                urls::ENDPOINT_PARAMETERS.into(),
+                Value::from(params_vec),
+                store,
+            )
+            .await?;
         Ok(resource)
     }
 
-    pub fn to_resource_response(&self, store: &impl Storelike) -> AtomicResult<ResourceResponse> {
-        let resource = self.to_resource(store)?;
+    pub async fn to_resource_response(
+        &self,
+        store: &impl Storelike,
+    ) -> AtomicResult<ResourceResponse> {
+        let resource = self.to_resource(store).await?;
         Ok(resource.into())
     }
 }

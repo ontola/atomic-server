@@ -155,18 +155,19 @@ impl Commit {
     }
 
     /// Check if the Commit's signature matches the signer's public key.
-    pub fn validate_signature(&self, store: &impl Storelike) -> AtomicResult<()> {
+    pub async fn validate_signature(&self, store: &impl Storelike) -> AtomicResult<()> {
         let commit = self;
         let signature = match commit.signature.as_ref() {
             Some(sig) => sig,
             None => return Err("No signature set".into()),
         };
         let pubkey_b64 = store
-            .get_resource(&commit.signer)?
+            .get_resource(&commit.signer)
+            .await?
             .get(urls::PUBLIC_KEY)?
             .to_string();
         let agent_pubkey = decode_base64(&pubkey_b64)?;
-        let stringified_commit = commit.serialize_deterministically_json_ad(store)?;
+        let stringified_commit = commit.serialize_deterministically_json_ad(store).await?;
         let peer_public_key =
             ring::signature::UnparsedPublicKey::new(&ring::signature::ED25519, agent_pubkey);
         let signature_bytes = decode_base64(signature)?;
@@ -184,7 +185,7 @@ impl Commit {
     /// Performs the checks specified in CommitOpts and constructs a new Resource.
     /// Warning: Does not save the new resource to the Store - doet not delete if it `destroy: true`.
     /// Use [Storelike::apply_commit] to save the resource to the Store.
-    pub fn validate_and_build_response(
+    pub async fn validate_and_build_response(
         self,
         opts: &CommitOpts,
         store: &impl Storelike,
@@ -198,7 +199,7 @@ impl Commit {
         }
 
         if opts.validate_signature {
-            commit.validate_signature(store)?;
+            commit.validate_signature(store).await?;
         }
         if opts.validate_timestamp {
             commit.validate_timestamp()?;
@@ -207,7 +208,7 @@ impl Commit {
         commit.check_for_circular_parents()?;
         let mut is_new = false;
         // Create a new resource if it doesn't exist yet
-        let resource_old = match store.get_resource(&commit.subject) {
+        let resource_old = match store.get_resource(&commit.subject).await {
             Ok(rs) => rs,
             Err(_) => {
                 is_new = true;
@@ -222,6 +223,7 @@ impl Commit {
 
         let mut applied = commit
             .apply_changes(resource_old.clone(), store)
+            .await
             .map_err(|e| {
                 format!(
                     "Error applying changes to Resource {}. {}",
@@ -232,25 +234,29 @@ impl Commit {
         if opts.validate_rights {
             let validate_for = opts.validate_for_agent.as_ref().unwrap_or(&commit.signer);
             if is_new {
-                crate::hierarchy::check_append(store, &applied.resource_new, &validate_for.into())?;
+                crate::hierarchy::check_append(store, &applied.resource_new, &validate_for.into())
+                    .await?;
             } else {
                 // This should use the _old_ resource, no the new one, as the new one might maliciously give itself write rights.
-                crate::hierarchy::check_write(store, &resource_old, &validate_for.into())?;
+                crate::hierarchy::check_write(store, &resource_old, &validate_for.into()).await?;
             }
         };
         // Check if all required props are there
         if opts.validate_schema {
-            applied.resource_new.check_required_props(store)?;
+            applied.resource_new.check_required_props(store).await?;
         }
 
-        let commit_resource: Resource = commit.into_resource(store)?;
+        let commit_resource: Resource = commit.into_resource(store).await?;
 
         // Set the `lastCommit` to the newly created Commit
-        applied.resource_new.set(
-            urls::LAST_COMMIT.to_string(),
-            Value::AtomicUrl(commit_resource.get_subject().into()),
-            store,
-        )?;
+        applied
+            .resource_new
+            .set(
+                urls::LAST_COMMIT.to_string(),
+                Value::AtomicUrl(commit_resource.get_subject().into()),
+                store,
+            )
+            .await?;
 
         let destroyed = commit.destroy.unwrap_or(false);
 
@@ -281,7 +287,7 @@ impl Commit {
     /// Updates the values in the Resource according to the `set`, `remove`, `push`, and `destroy` attributes in the Commit.
     /// Optionally also returns the updated Atoms.
     #[tracing::instrument(skip(store))]
-    pub fn apply_changes(
+    pub async fn apply_changes(
         &self,
         mut resource: Resource,
         store: &impl Storelike,
@@ -311,6 +317,7 @@ impl Commit {
             for (prop, new_val) in set.iter() {
                 resource
                     .set(prop.into(), new_val.to_owned(), store)
+                    .await
                     .map_err(|e| {
                         format!(
                             "Failed to set property '{}' to '{}' in Commit. Error: {}",
@@ -375,13 +382,17 @@ impl Commit {
                             let merged_update = yrs::merge_updates_v2(vec![bin, update_bin])
                                 .map_err(|e| format!("Error merging Yjs updates: {}", e))?;
 
-                            resource.set(prop.into(), Value::YDoc(merged_update), store)?;
+                            resource
+                                .set(prop.into(), Value::YDoc(merged_update), store)
+                                .await?;
                         }
                         _ => return Err(format!("Property is not of type YDoc: {}", prop).into()),
                     },
                     _ => {
                         // The property was not set yet so we initialize it with the update.
-                        resource.set(prop.into(), Value::YDoc(update_bin.clone()), store)?;
+                        resource
+                            .set(prop.into(), Value::YDoc(update_bin.clone()), store)
+                            .await?;
                     }
                 };
                 // We don't create any atoms because indexing yjs updates doesn't make much sense.
@@ -456,7 +467,7 @@ impl Commit {
     /// Creates an identifier using the server_url
     /// Works for both Signed and Unsigned Commits
     #[tracing::instrument(skip(store))]
-    pub fn into_resource(&self, store: &impl Storelike) -> AtomicResult<Resource> {
+    pub async fn into_resource(&self, store: &impl Storelike) -> AtomicResult<Resource> {
         let commit_subject = match self.signature.as_ref() {
             Some(sig) => format!("{}/commits/{}", store.get_server_url()?, sig),
             None => {
@@ -464,7 +475,7 @@ impl Commit {
                 format!("{}/commitsUnsigned/{}", store.get_server_url()?, now)
             }
         };
-        let mut resource = Resource::new_instance(urls::COMMIT, store)?;
+        let mut resource = Resource::new_instance(urls::COMMIT, store).await?;
         resource.set_subject(commit_subject);
         resource.set_unsafe(
             urls::SUBJECT.into(),
@@ -534,11 +545,11 @@ impl Commit {
     /// Generates a deterministic serialized JSON-AD representation of the Commit.
     /// Removes the signature from the object before serializing, since this function is used to check if the signature is correct.
     #[tracing::instrument(skip(store))]
-    pub fn serialize_deterministically_json_ad(
+    pub async fn serialize_deterministically_json_ad(
         &self,
         store: &impl Storelike,
     ) -> AtomicResult<String> {
-        let mut commit_resource = self.into_resource(store)?;
+        let mut commit_resource = self.into_resource(store).await?;
         // A deterministic serialization should not contain the hash (signature), since that would influence the hash.
         commit_resource.remove_propval(urls::SIGNATURE);
         let json_obj =
@@ -612,7 +623,7 @@ impl CommitBuilder {
     /// Does not send it - see [atomic_lib::client::post_commit].
     /// Private key is the base64 encoded pkcs8 for the signer.
     /// Sets the `previousCommit` using the `lastCommit`.
-    pub fn sign(
+    pub async fn sign(
         mut self,
         agent: &crate::agents::Agent,
         store: &impl Storelike,
@@ -623,7 +634,7 @@ impl CommitBuilder {
         }
 
         let now = crate::utils::now();
-        sign_at(self, agent, now, store)
+        sign_at(self, agent, now, store).await
     }
 
     /// Set Property / Value combinations that will either be created or overwritten.
@@ -659,7 +670,7 @@ impl CommitBuilder {
 
 /// Signs a CommitBuilder at a specific unix timestamp.
 #[tracing::instrument(skip(store))]
-fn sign_at(
+async fn sign_at(
     commitbuilder: CommitBuilder,
     agent: &crate::agents::Agent,
     sign_date: i64,
@@ -680,6 +691,7 @@ fn sign_at(
     };
     let stringified = commit
         .serialize_deterministically_json_ad(store)
+        .await
         .map_err(|e| format!("Failed serializing commit: {}", e))?;
     let private_key = agent.private_key.clone().ok_or("No private key in agent")?;
     let signature = sign_message(&stringified, &private_key, &agent.public_key).map_err(|e| {
@@ -729,12 +741,12 @@ mod test {
     use super::*;
     use crate::{agents::Agent, Store, Storelike};
 
-    #[test]
-    fn agent_and_commit() {
-        let store = Store::init().unwrap();
+    #[tokio::test]
+    async fn agent_and_commit() {
+        let store = Store::init().await.unwrap();
         store.set_server_url("http://localhost:9883");
-        store.populate().unwrap();
-        let agent = store.create_agent(Some("test_actor")).unwrap();
+        store.populate().await.unwrap();
+        let agent = store.create_agent(Some("test_actor")).await.unwrap();
         let subject = "https://localhost/new_thing";
         let resource = Resource::new(subject.into());
         let mut commitbuiler = crate::commit::CommitBuilder::new(subject.into());
@@ -744,29 +756,30 @@ mod test {
         let property2 = crate::urls::SHORTNAME;
         let value2 = Value::new("someval", &DataType::Slug).unwrap();
         commitbuiler.set(property2.into(), value2);
-        let commit = commitbuiler.sign(&agent, &store, &resource).unwrap();
+        let commit = commitbuiler.sign(&agent, &store, &resource).await.unwrap();
         let commit_subject = commit.get_subject().to_string();
-        let _created_resource = store.apply_commit(commit, &OPTS).unwrap();
+        let _created_resource = store.apply_commit(commit, &OPTS).await.unwrap();
 
-        let resource = store.get_resource(subject).unwrap();
+        let resource = store.get_resource(subject).await.unwrap();
         assert!(resource.get(property1).unwrap().to_string() == value1.to_string());
-        let found_commit = store.get_resource(&commit_subject).unwrap();
+        let found_commit = store.get_resource(&commit_subject).await.unwrap();
         println!("{}", found_commit.get_subject());
 
         assert!(
             found_commit
                 .get_shortname("description", &store)
+                .await
                 .unwrap()
                 .to_string()
                 == value1.to_string()
         );
     }
 
-    #[test]
-    fn serialize_commit() {
-        let store = Store::init().unwrap();
+    #[tokio::test]
+    async fn serialize_commit() {
+        let store = Store::init().await.unwrap();
         store.set_server_url("http://localhost:9883");
-        store.populate().unwrap();
+        store.populate().await.unwrap();
         let mut set: HashMap<String, Value> = HashMap::new();
         let shortname = Value::new("shortname", &DataType::String).unwrap();
         let description = Value::new("Some description", &DataType::String).unwrap();
@@ -787,14 +800,17 @@ mod test {
             signature: None,
             url: None,
         };
-        let serialized = commit.serialize_deterministically_json_ad(&store).unwrap();
+        let serialized = commit
+            .serialize_deterministically_json_ad(&store)
+            .await
+            .unwrap();
         let should_be = "{\"https://atomicdata.dev/properties/createdAt\":1603638837,\"https://atomicdata.dev/properties/isA\":[\"https://atomicdata.dev/classes/Commit\"],\"https://atomicdata.dev/properties/remove\":[\"https://atomicdata.dev/properties/isA\"],\"https://atomicdata.dev/properties/set\":{\"https://atomicdata.dev/properties/description\":\"Some description\",\"https://atomicdata.dev/properties/shortname\":\"shortname\"},\"https://atomicdata.dev/properties/signer\":\"https://localhost/author\",\"https://atomicdata.dev/properties/subject\":\"https://localhost/test\"}";
         assert_eq!(serialized, should_be)
     }
 
-    #[test]
-    fn signature_matches() {
-        let store = Store::init().unwrap();
+    #[tokio::test]
+    async fn signature_matches() {
+        let store = Store::init().await.unwrap();
         store.set_server_url("http://localhost:9883");
         let private_key = "CapMWIhFUT+w7ANv9oCPqrHrwZpkP2JhzF9JnyT6WcI=";
         let agent = Agent::new_from_private_key(None, &store, private_key).unwrap();
@@ -802,7 +818,10 @@ mod test {
             &agent.subject,
             "http://localhost:9883/agents/7LsjMW5gOfDdJzK/atgjQ1t20J/rw8MjVg6xwqm+h8U="
         );
-        store.add_resource(&agent.to_resource().unwrap()).unwrap();
+        store
+            .add_resource(&agent.to_resource().unwrap())
+            .await
+            .unwrap();
         let subject = "https://localhost/new_thing";
         let mut commitbuilder = crate::commit::CommitBuilder::new(subject.into());
         let property1 = crate::urls::DESCRIPTION;
@@ -811,9 +830,12 @@ mod test {
         let property2 = crate::urls::SHORTNAME;
         let value2 = Value::new("someval", &DataType::String).unwrap();
         commitbuilder.set(property2.into(), value2);
-        let commit = sign_at(commitbuilder, &agent, 0, &store).unwrap();
+        let commit = sign_at(commitbuilder, &agent, 0, &store).await.unwrap();
         let signature = commit.signature.clone().unwrap();
-        let serialized = commit.serialize_deterministically_json_ad(&store).unwrap();
+        let serialized = commit
+            .serialize_deterministically_json_ad(&store)
+            .await
+            .unwrap();
 
         assert_eq!(serialized, "{\"https://atomicdata.dev/properties/createdAt\":0,\"https://atomicdata.dev/properties/isA\":[\"https://atomicdata.dev/classes/Commit\"],\"https://atomicdata.dev/properties/set\":{\"https://atomicdata.dev/properties/description\":\"Some value\",\"https://atomicdata.dev/properties/shortname\":\"someval\"},\"https://atomicdata.dev/properties/signer\":\"http://localhost:9883/agents/7LsjMW5gOfDdJzK/atgjQ1t20J/rw8MjVg6xwqm+h8U=\",\"https://atomicdata.dev/properties/subject\":\"https://localhost/new_thing\"}");
         assert_eq!(signature, "pYkM6dC4qFGGh6EXbys6NwmhaPIA6Z7Ij//rPejo5mnBOvs1EFxP0iErfJiUXZgJDi5yK4QOBMb2nf2FIKcUCA==");
@@ -829,30 +851,33 @@ mod test {
         assert_eq!(signature, signature_expected);
     }
 
-    #[test]
-    fn invalid_subjects() {
-        let store = Store::init().unwrap();
+    #[tokio::test]
+    async fn invalid_subjects() {
+        let store = Store::init().await.unwrap();
         store.set_server_url("http://localhost:9883");
-        store.populate().unwrap();
-        let agent = store.create_agent(Some("test_actor")).unwrap();
+        store.populate().await.unwrap();
+        let agent = store.create_agent(Some("test_actor")).await.unwrap();
         let resource = Resource::new("https://localhost/test_resource".into());
 
         {
             let subject = "invalid URL";
             let commitbuiler = crate::commit::CommitBuilder::new(subject.into());
-            let _ = commitbuiler.sign(&agent, &store, &resource).unwrap_err();
+            let _ = commitbuiler
+                .sign(&agent, &store, &resource)
+                .await
+                .unwrap_err();
         }
         {
             let subject = "https://localhost/?q=invalid";
             let commitbuiler = crate::commit::CommitBuilder::new(subject.into());
-            let commit = commitbuiler.sign(&agent, &store, &resource).unwrap();
-            store.apply_commit(commit, &OPTS).unwrap_err();
+            let commit = commitbuiler.sign(&agent, &store, &resource).await.unwrap();
+            store.apply_commit(commit, &OPTS).await.unwrap_err();
         }
         {
             let subject = "https://localhost/valid";
             let commitbuiler = crate::commit::CommitBuilder::new(subject.into());
-            let commit = commitbuiler.sign(&agent, &store, &resource).unwrap();
-            store.apply_commit(commit, &OPTS).unwrap();
+            let commit = commitbuiler.sign(&agent, &store, &resource).await.unwrap();
+            store.apply_commit(commit, &OPTS).await.unwrap();
         }
     }
 }

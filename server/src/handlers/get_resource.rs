@@ -53,7 +53,7 @@ pub async fn handle_get_resource(
     let store = &appstate.store;
     timer.add("parse_headers");
 
-    let for_agent = get_client_agent(headers, &appstate, subject.clone())?;
+    let for_agent = get_client_agent(headers, &appstate, subject.clone()).await?;
     timer.add("get_agent");
 
     let mut builder = HttpResponse::Ok();
@@ -67,17 +67,19 @@ pub async fn handle_get_resource(
         "no-store, no-cache, must-revalidate, private",
     ));
 
-    let resource = store.get_resource_extended(&subject, false, &for_agent)?;
+    let resource = store
+        .get_resource_extended(&subject, false, &for_agent)
+        .await?;
     timer.add("get_resource");
 
     let response_body = match content_type {
-        ContentType::Json => resource.to_json(store)?,
-        ContentType::JsonLd => resource.to_json_ld(store)?,
+        ContentType::Json => resource.to_json(store).await?,
+        ContentType::JsonLd => resource.to_json_ld(store).await?,
         ContentType::JsonAd => resource.to_json_ad()?,
         ContentType::Html => resource.to_json_ad()?,
         ContentType::Turtle | ContentType::NTriples => {
             let atoms = resource.to_atoms();
-            atomic_lib::serialize::atoms_to_ntriples(atoms, store)?
+            atomic_lib::serialize::atoms_to_ntriples(atoms, store).await?
         }
     };
     timer.add("serialize");

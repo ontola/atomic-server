@@ -6,13 +6,18 @@ Removes navigation elements and sidebars if possible, so we get a `reader` like 
 use kuchikiki::{parse_html, traits::TendrilSink, NodeRef};
 use lol_html::{element, rewrite_str, text, ElementContentHandlers, RewriteStrSettings, Selector};
 use rand::Rng;
-use std::{borrow::Cow, collections::HashMap, string::FromUtf8Error};
+use std::{
+    borrow::Cow,
+    collections::HashMap,
+    string::FromUtf8Error,
+    sync::{Arc, Mutex},
+};
 use url::Url;
 use urlencoding::encode;
 
 use crate::{
     client::fetch_body,
-    endpoints::{Endpoint, HandleGetContext},
+    endpoints::{BoxFuture, Endpoint, HandleGetContext},
     errors::AtomicResult,
     storelike::ResourceResponse,
     urls,
@@ -34,66 +39,78 @@ pub fn bookmark_endpoint() -> Endpoint {
 }
 
 #[tracing::instrument(skip(context))]
-fn handle_bookmark_request(context: HandleGetContext) -> AtomicResult<ResourceResponse> {
-    let HandleGetContext {
-        subject,
-        store,
-        for_agent: _,
-    } = context;
-    let params = subject.query_pairs();
-    let mut path = None;
-    let mut name = None;
+fn handle_bookmark_request<'a>(
+    context: HandleGetContext<'a>,
+) -> BoxFuture<'a, AtomicResult<ResourceResponse>> {
+    Box::pin(async move {
+        let HandleGetContext {
+            subject,
+            store,
+            for_agent: _,
+        } = context;
+        let params = subject.query_pairs();
+        let mut path = None;
+        let mut name = None;
 
-    for (k, v) in params {
-        if let "url" = k.as_ref() {
-            path = Some(v.to_string())
+        for (k, v) in params {
+            if let "url" = k.as_ref() {
+                path = Some(v.to_string())
+            };
+
+            if let "name" = k.as_ref() {
+                name = Some(v.to_string())
+            };
+        }
+
+        let (name, path) = match (name, path) {
+            (Some(name), Some(path)) => (name, path),
+            _ => return bookmark_endpoint().to_resource_response(store).await,
         };
 
-        if let "name" = k.as_ref() {
-            name = Some(v.to_string())
-        };
-    }
+        let mut resource = Resource::new(subject.to_string());
+        resource.set_class(urls::BOOKMARK);
+        resource.set_string(urls::URL.into(), &path, store).await?;
 
-    let (name, path) = match (name, path) {
-        (Some(name), Some(path)) => (name, path),
-        _ => return bookmark_endpoint().to_resource_response(store),
-    };
+        // Fetch the data and create a parser from it.
+        let content = fetch_data(&path)?;
+        let mut parser = Parser::from_html(&path, &content)?;
 
-    let mut resource = Resource::new(subject.to_string());
-    resource.set_class(urls::BOOKMARK);
-    resource.set_string(urls::URL.into(), &path, store)?;
+        // Extract the title, description and preview image from the HTML
+        let site_meta = parser.get_meta();
 
-    // Fetch the data and create a parser from it.
-    let content = fetch_data(&path)?;
-    let mut parser = Parser::from_html(&path, &content)?;
+        if let Some(title) = site_meta.title {
+            resource
+                .set_string(urls::NAME.into(), &title, store)
+                .await?;
+        } else {
+            resource.set_string(urls::NAME.into(), &name, store).await?;
+        }
 
-    // Extract the title, description and preview image from the HTML
-    let site_meta = parser.get_meta();
+        if let Some(description) = site_meta.description {
+            resource
+                .set_string(urls::DESCRIPTION.into(), &description, store)
+                .await?;
+        }
 
-    if let Some(title) = site_meta.title {
-        resource.set_string(urls::NAME.into(), &title, store)?;
-    } else {
-        resource.set_string(urls::NAME.into(), &name, store)?;
-    }
+        if let Some(image) = site_meta.image {
+            resource
+                .set_string(urls::IMAGE_URL.into(), &image, store)
+                .await?;
+        }
 
-    if let Some(description) = site_meta.description {
-        resource.set_string(urls::DESCRIPTION.into(), &description, store)?;
-    }
+        // Clean and transform the HTML to markdown.
+        let cleaned_html = parser.clean_document()?;
+        let md = html2md::parse_html(&cleaned_html);
+        // Remove empty characters.
+        // https://github.com/atomicdata-dev/atomic-server/issues/474
+        let md = regex::Regex::new(r"\s{5,}").unwrap().replace_all(&md, "");
 
-    if let Some(image) = site_meta.image {
-        resource.set_string(urls::IMAGE_URL.into(), &image, store)?;
-    }
+        resource
+            .set(urls::PREVIEW.into(), Value::Markdown(md.into()), store)
+            .await?;
 
-    // Clean and transform the HTML to markdown.
-    let cleaned_html = parser.clean_document()?;
-    let md = html2md::parse_html(&cleaned_html);
-    // Remove empty characters.
-    // https://github.com/atomicdata-dev/atomic-server/issues/474
-    let md = regex::Regex::new(r"\s{5,}").unwrap().replace_all(&md, "");
-
-    resource.set(urls::PREVIEW.into(), Value::Markdown(md.into()), store)?;
-
-    Ok(ResourceResponse::Resource(resource))
+        Ok(ResourceResponse::Resource(resource))
+    })
 }
 
 fn fetch_data(url: &str) -> AtomicResult<String> {
@@ -105,7 +122,7 @@ struct Parser {
     internal_html: String,
     /// The root element used to parse the rest of the Document from. Defaults to body, but can be more specific if possible.
     root_element: String,
-    anchor_text_buffer: std::rc::Rc<std::cell::RefCell<String>>,
+    anchor_text_buffer: Arc<Mutex<String>>,
     svg_map: HashMap<String, String>,
 }
 
@@ -121,7 +138,7 @@ impl Parser {
             url: Url::parse(url)?,
             internal_html: html.to_string(),
             root_element: "body".to_string(),
-            anchor_text_buffer: std::rc::Rc::new(std::cell::RefCell::new(String::new())),
+            anchor_text_buffer: Arc::new(Mutex::new(String::new())),
             svg_map: HashMap::new(),
         })
     }
@@ -405,7 +422,7 @@ impl Parser {
     fn trim_link_text_handler(&self) -> Handler {
         vec![
             element!("a", |el| {
-                self.anchor_text_buffer.borrow_mut().clear();
+                self.anchor_text_buffer.lock().unwrap().clear();
                 let buffer = self.anchor_text_buffer.clone();
                 let href = el
                     .get_attribute("href")
@@ -413,7 +430,7 @@ impl Parser {
 
                 if let Some(handlers) = el.end_tag_handlers() {
                     handlers.push(Box::new(move |end| {
-                        let s = buffer.borrow();
+                        let s = buffer.lock().unwrap();
                         let mut text = s.as_str().trim();
 
                         if text.is_empty() {
@@ -433,7 +450,8 @@ impl Parser {
                 let prepared_text = text.trim().to_owned() + " ";
 
                 self.anchor_text_buffer
-                    .borrow_mut()
+                    .lock()
+                    .unwrap()
                     .push_str(&prepared_text);
                 chunk.remove();
                 Ok(())

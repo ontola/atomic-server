@@ -1,5 +1,5 @@
 use crate::{
-    endpoints::{Endpoint, HandleGetContext},
+    endpoints::{BoxFuture, Endpoint, HandleGetContext},
     errors::AtomicResult,
     storelike::ResourceResponse,
     urls, Resource,
@@ -28,24 +28,29 @@ pub fn query_endpoint() -> Endpoint {
 }
 
 #[tracing::instrument(skip(context))]
-fn handle_query_request(context: HandleGetContext) -> AtomicResult<ResourceResponse> {
-    let HandleGetContext {
-        subject,
-        store,
-        for_agent,
-    } = context;
+fn handle_query_request<'a>(
+    context: HandleGetContext<'a>,
+) -> BoxFuture<'a, AtomicResult<ResourceResponse>> {
+    Box::pin(async move {
+        let HandleGetContext {
+            subject,
+            store,
+            for_agent,
+        } = context;
 
-    if subject.query_pairs().into_iter().next().is_none() {
-        return query_endpoint().to_resource_response(store);
-    }
+        if subject.query_pairs().into_iter().next().is_none() {
+            return query_endpoint().to_resource_response(store).await;
+        }
 
-    let mut resource = Resource::new(subject.to_string());
-    let collection_resource_response = crate::collections::construct_collection_from_params(
-        store,
-        subject.query_pairs(),
-        &mut resource,
-        for_agent,
-    )?;
+        let mut resource = Resource::new(subject.to_string());
+        let collection_resource_response = crate::collections::construct_collection_from_params(
+            store,
+            subject.query_pairs(),
+            &mut resource,
+            for_agent,
+        )
+        .await?;
 
-    Ok(collection_resource_response)
+        Ok(collection_resource_response)
+    })
 }

@@ -1,8 +1,12 @@
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 
 use crate::{
     agents::ForAgent, errors::AtomicResult, storelike::ResourceResponse, urls, Commit, Db, Resource,
 };
+
+pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 pub struct GetExtenderContext<'a> {
     pub store: &'a Db,
@@ -17,9 +21,13 @@ pub struct CommitExtenderContext<'a> {
     pub resource: &'a Resource,
 }
 
-pub type ResourceGetHandler =
-    Arc<dyn Fn(GetExtenderContext) -> AtomicResult<ResourceResponse> + Send + Sync>;
-pub type CommitHandler = Arc<dyn Fn(CommitExtenderContext) -> AtomicResult<()> + Send + Sync>;
+pub type ResourceGetHandler = Arc<
+    dyn for<'a> Fn(GetExtenderContext<'a>) -> BoxFuture<'a, AtomicResult<ResourceResponse>>
+        + Send
+        + Sync,
+>;
+pub type CommitHandler =
+    Arc<dyn for<'a> Fn(CommitExtenderContext<'a>) -> BoxFuture<'a, AtomicResult<()>> + Send + Sync>;
 
 #[derive(Clone)]
 pub struct ClassExtender {
@@ -40,14 +48,20 @@ impl ClassExtender {
 
     pub fn wrap_get_handler<F>(handler: F) -> ResourceGetHandler
     where
-        F: Fn(GetExtenderContext) -> AtomicResult<ResourceResponse> + Send + Sync + 'static,
+        F: for<'a> Fn(GetExtenderContext<'a>) -> BoxFuture<'a, AtomicResult<ResourceResponse>>
+            + Send
+            + Sync
+            + 'static,
     {
         Arc::new(handler)
     }
 
     pub fn wrap_commit_handler<F>(handler: F) -> CommitHandler
     where
-        F: Fn(CommitExtenderContext) -> AtomicResult<()> + Send + Sync + 'static,
+        F: for<'a> Fn(CommitExtenderContext<'a>) -> BoxFuture<'a, AtomicResult<()>>
+            + Send
+            + Sync
+            + 'static,
     {
         Arc::new(handler)
     }

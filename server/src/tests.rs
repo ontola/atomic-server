@@ -49,7 +49,9 @@ async fn server_tests() {
     // This prevents folder access issues when running concurrent tests
     config.search_index_path = format!("./.temp/{}/search_index", unique_string).into();
 
-    let appstate = crate::appstate::AppState::init(config.clone()).expect("failed init appstate");
+    let appstate = crate::appstate::AppState::init(config.clone())
+        .await
+        .expect("failed init appstate");
     let data = Data::new(appstate.clone());
     let app = test::init_service(
         App::new()
@@ -92,15 +94,19 @@ async fn server_tests() {
     assert!(resp.status().is_client_error());
 
     // Edit the main drive, make it hidden to the public agent
-    let mut drive = store.get_resource(&appstate.config.server_url).unwrap();
+    let mut drive = store
+        .get_resource(&appstate.config.server_url)
+        .await
+        .unwrap();
     drive
         .set(
             urls::READ.into(),
             vec![appstate.store.get_default_agent().unwrap().subject].into(),
             &appstate.store,
         )
+        .await
         .unwrap();
-    drive.save(store).unwrap();
+    drive.save(store).await.unwrap();
 
     // Should 401 (Unauthorized)
     let req =

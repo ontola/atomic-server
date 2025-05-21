@@ -4,7 +4,7 @@ Importers allow users to (periodically) import JSON-AD files from a remote sourc
 
 use crate::{
     agents::ForAgent,
-    endpoints::{Endpoint, HandleGetContext, HandlePostContext},
+    endpoints::{BoxFuture, Endpoint, HandleGetContext, HandlePostContext},
     errors::AtomicResult,
     storelike::ResourceResponse,
     urls, Storelike,
@@ -26,73 +26,78 @@ pub fn import_endpoint() -> Endpoint {
     }
 }
 
-pub fn handle_get(context: HandleGetContext) -> AtomicResult<ResourceResponse> {
-    import_endpoint().to_resource_response(context.store)
+pub fn handle_get<'a>(
+    context: HandleGetContext<'a>,
+) -> BoxFuture<'a, AtomicResult<ResourceResponse>> {
+    Box::pin(async move { import_endpoint().to_resource_response(context.store).await })
 }
 
 /// When an importer is shown, we list a bunch of Parameters and a list of previously imported items.
 #[tracing::instrument]
-pub fn handle_post(context: HandlePostContext) -> AtomicResult<ResourceResponse> {
-    let HandlePostContext {
-        store,
-        body,
-        for_agent,
-        subject,
-    } = context;
-    let mut url = None;
-    let mut json = None;
-    let mut parent_maybe = None;
-    let mut overwrite_outside = false;
-    for (k, v) in subject.query_pairs() {
-        match k.as_ref() {
-            "json" | urls::IMPORTER_URL => return Err("JSON must be POSTed in the body".into()),
-            "url" | urls::IMPORTER_JSON => url = Some(v.to_string()),
-            "parent" | urls::IMPORTER_PARENT => parent_maybe = Some(v.to_string()),
-            "overwrite-outside" | urls::IMPORTER_OVERWRITE_OUTSIDE => {
-                overwrite_outside = v == "true"
+pub fn handle_post<'a>(
+    context: HandlePostContext<'a>,
+) -> BoxFuture<'a, AtomicResult<ResourceResponse>> {
+    Box::pin(async move {
+        let HandlePostContext {
+            store,
+            body,
+            for_agent,
+            subject,
+        } = context;
+        let mut url = None;
+        let mut json = None;
+        let mut parent_maybe = None;
+        let mut overwrite_outside = false;
+        for (k, v) in subject.query_pairs() {
+            match k.as_ref() {
+                "json" | urls::IMPORTER_URL => return Err("JSON must be POSTed in the body".into()),
+                "url" | urls::IMPORTER_JSON => url = Some(v.to_string()),
+                "parent" | urls::IMPORTER_PARENT => parent_maybe = Some(v.to_string()),
+                "overwrite-outside" | urls::IMPORTER_OVERWRITE_OUTSIDE => {
+                    overwrite_outside = v == "true"
+                }
+                _ => {}
             }
-            _ => {}
         }
-    }
 
-    let parent = parent_maybe.ok_or("No parent specified for importer")?;
+        let parent = parent_maybe.ok_or("No parent specified for importer")?;
 
-    if !body.is_empty() {
-        json =
-            Some(String::from_utf8(body).map_err(|e| {
+        if !body.is_empty() {
+            json = Some(String::from_utf8(body).map_err(|e| {
                 format!("Error while decoding body, expected a JSON string: {}", e)
             })?);
-    }
-
-    if let Some(fetch_url) = url {
-        json = Some(
-            crate::client::fetch_body(&fetch_url, crate::parse::JSON_AD_MIME, None)
-                .map_err(|e| format!("Error while fetching {}: {}", fetch_url, e))?,
-        );
-    }
-
-    let parse_opts = crate::parse::ParseOpts {
-        for_agent: for_agent.clone(),
-        importer: Some(parent),
-        overwrite_outside,
-        // We sign the importer Commits with the default agent,
-        // not the one performing the import, because we don't have their private key.
-        signer: Some(store.get_default_agent()?),
-        save: crate::parse::SaveOpts::Commit,
-    };
-
-    if let Some(json_string) = json {
-        if for_agent == &ForAgent::Public {
-            return Err("No agent specified for importer".to_string().into());
         }
-        store.import(&json_string, &parse_opts)?;
-    } else {
-        return Err(
-            "No JSON specified for importer. Pass a `url` query param, or post a JSON-AD body."
-                .to_string()
-                .into(),
-        );
-    }
 
-    import_endpoint().to_resource_response(context.store)
+        if let Some(fetch_url) = url {
+            json = Some(
+                crate::client::fetch_body(&fetch_url, crate::parse::JSON_AD_MIME, None)
+                    .map_err(|e| format!("Error while fetching {}: {}", fetch_url, e))?,
+            );
+        }
+
+        let parse_opts = crate::parse::ParseOpts {
+            for_agent: for_agent.clone(),
+            importer: Some(parent),
+            overwrite_outside,
+            // We sign the importer Commits with the default agent,
+            // not the one performing the import, because we don't have their private key.
+            signer: Some(store.get_default_agent()?),
+            save: crate::parse::SaveOpts::Commit,
+        };
+
+        if let Some(json_string) = json {
+            if for_agent == &ForAgent::Public {
+                return Err("No agent specified for importer".to_string().into());
+            }
+            store.import(&json_string, &parse_opts).await?;
+        } else {
+            return Err(
+                "No JSON specified for importer. Pass a `url` query param, or post a JSON-AD body."
+                    .to_string()
+                    .into(),
+            );
+        }
+
+        import_endpoint().to_resource_response(context.store).await
+    })
 }

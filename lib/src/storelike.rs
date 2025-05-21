@@ -11,6 +11,8 @@ use crate::{
 };
 use crate::{errors::AtomicResult, parse::parse_json_ad_string};
 use crate::{mapping::Mapping, values::Value, Atom, Resource};
+use async_trait::async_trait;
+use futures::future;
 
 // A path can return one of many things
 pub enum PathReturn {
@@ -43,24 +45,24 @@ impl ResourceResponse {
         }
     }
 
-    pub fn to_json(&self, store: &impl Storelike) -> AtomicResult<String> {
+    pub async fn to_json(&self, store: &impl Storelike) -> AtomicResult<String> {
         match self {
-            ResourceResponse::Resource(resource) => Ok(resource.to_json(store)?),
+            ResourceResponse::Resource(resource) => Ok(resource.to_json(store).await?),
             ResourceResponse::ResourceWithReferenced(resource, references) => {
                 let mut list = references.clone();
                 list.push(resource.clone());
-                Ok(Resource::vec_to_json(&list, store)?)
+                Ok(Resource::vec_to_json(&list, store).await?)
             }
         }
     }
 
-    pub fn to_json_ld(&self, store: &impl Storelike) -> AtomicResult<String> {
+    pub async fn to_json_ld(&self, store: &impl Storelike) -> AtomicResult<String> {
         match self {
-            ResourceResponse::Resource(resource) => Ok(resource.to_json_ld(store)?),
+            ResourceResponse::Resource(resource) => Ok(resource.to_json_ld(store).await?),
             ResourceResponse::ResourceWithReferenced(resource, references) => {
                 let mut list = references.clone();
                 list.push(resource.clone());
-                Ok(Resource::vec_to_json_ld(&list, store)?)
+                Ok(Resource::vec_to_json_ld(&list, store).await?)
             }
         }
     }
@@ -77,13 +79,13 @@ impl ResourceResponse {
     }
 
     #[cfg(feature = "rdf")]
-    pub fn to_n_triples(&self, store: &impl Storelike) -> AtomicResult<String> {
+    pub async fn to_n_triples(&self, store: &impl Storelike) -> AtomicResult<String> {
         match self {
-            ResourceResponse::Resource(resource) => Ok(resource.to_n_triples(store)?),
+            ResourceResponse::Resource(resource) => Ok(resource.to_n_triples(store).await?),
             ResourceResponse::ResourceWithReferenced(resource, references) => {
                 let mut list = references.clone();
                 list.push(resource.clone());
-                Ok(Resource::vec_to_n_triples(&list, store)?)
+                Ok(Resource::vec_to_n_triples(&list, store).await?)
             }
         }
     }
@@ -128,7 +130,8 @@ pub type ResourceCollection = Vec<Resource>;
 /// It serves as a basic store Trait, agnostic of how it functions under the hood.
 /// This is useful, because we can create methods for Storelike that will work with either in-memory
 /// stores, as well as with persistent on-disk stores.
-pub trait Storelike: Sized {
+#[async_trait]
+pub trait Storelike: Sized + Send + Sync {
     /// Adds Atoms to the store.
     /// Will replace existing Atoms that share Subject / Property combination.
     /// Validates datatypes and required props presence.
@@ -136,21 +139,21 @@ pub trait Storelike: Sized {
         since = "0.28.0",
         note = "The atoms abstraction has been deprecated in favor of Resources"
     )]
-    fn add_atoms(&self, atoms: Vec<Atom>) -> AtomicResult<()>;
+    async fn add_atoms(&self, atoms: Vec<Atom>) -> AtomicResult<()>;
 
     /// Adds a Resource to the store.
     /// Replaces existing resource with the contents.
     /// Updates the index.
     /// Validates the fields (checks required props).
     /// In most cases, you should use `resource.save()` instead, which uses Commits.
-    fn add_resource(&self, resource: &Resource) -> AtomicResult<()> {
-        self.add_resource_opts(resource, true, true, true)
+    async fn add_resource(&self, resource: &Resource) -> AtomicResult<()> {
+        self.add_resource_opts(resource, true, true, true).await
     }
 
     /// Adds a Resource to the store.
     /// Replaces existing resource with the contents.
     /// Does not do any validations.
-    fn add_resource_opts(
+    async fn add_resource_opts(
         &self,
         resource: &Resource,
         check_required_props: bool,
@@ -160,33 +163,33 @@ pub trait Storelike: Sized {
 
     /// Returns an iterator that iterates over all resources in the store.
     /// If Include_external is false, this is filtered by selecting only resoureces that match the `self` URL of the store.
-    fn all_resources(&self, include_external: bool) -> Box<dyn Iterator<Item = Resource>>;
+    fn all_resources(&self, include_external: bool) -> Box<dyn Iterator<Item = Resource> + Send>;
 
     /// Takes a Commit and applies it to the Store.
     /// This includes changing the resource, writing the changes, verifying the checks specified in your CommitOpts
     /// The returned CommitResponse contains the new resource and the saved Commit Resource.
-    fn apply_commit(
+    async fn apply_commit(
         &self,
         commit: crate::Commit,
         opts: &crate::commit::CommitOpts,
     ) -> AtomicResult<CommitResponse> {
-        let applied = commit.validate_and_build_response(opts, self)?;
+        let applied = commit.validate_and_build_response(opts, self).await?;
 
-        self.add_resource(&applied.commit_resource)?;
+        self.add_resource(&applied.commit_resource).await?;
 
         match (&applied.resource_old, &applied.resource_new) {
             (None, None) => {
                 return Err("Neither an old nor a new resource is returned from the commit - something went wrong.".into())
             },
             (None, Some(new)) => {
-                self.add_resource(new)?;
+                self.add_resource(new).await?;
             },
             (Some(_old), Some(new)) => {
-                self.add_resource(new)?;
+                self.add_resource(new).await?;
             },
             (Some(_old), None) => {
                 assert_eq!(_old.get_subject(), &applied.commit.subject);
-                self.remove_resource(&applied.commit.subject)?;
+                self.remove_resource(&applied.commit.subject).await?;
             }
         }
 
@@ -194,8 +197,9 @@ pub trait Storelike: Sized {
     }
 
     /// Returns a single [Value] from a [Resource]
-    fn get_value(&self, subject: &str, property: &str) -> AtomicResult<Value> {
+    async fn get_value(&self, subject: &str, property: &str) -> AtomicResult<Value> {
         self.get_resource(subject)
+            .await
             .and_then(|r| r.get(property).cloned())
     }
 
@@ -224,9 +228,9 @@ pub trait Storelike: Sized {
     /// Returns a tuple of (subject, private_key).
     /// Make sure to store the private_key somewhere safe!
     /// Does not create a Commit - the recommended way is to use `agent.to_resource().save_locally()`.
-    fn create_agent(&self, name: Option<&str>) -> AtomicResult<crate::agents::Agent> {
+    async fn create_agent(&self, name: Option<&str>) -> AtomicResult<crate::agents::Agent> {
         let agent = Agent::new(name, self)?;
-        self.add_resource(&agent.to_resource()?)?;
+        self.add_resource(&agent.to_resource()?).await?;
         Ok(agent)
     }
 
@@ -252,23 +256,23 @@ pub trait Storelike: Sized {
     /// Fetches a resource, makes sure its subject matches.
     /// Save to the store.
     /// Uses `client_agent` for Authentication.
-    fn fetch_resource(
+    async fn fetch_resource(
         &self,
         subject: &str,
         client_agent: Option<&Agent>,
     ) -> AtomicResult<Resource> {
-        let response = crate::client::fetch_resource(subject, self, client_agent)?;
+        let response = crate::client::fetch_resource(subject, self, client_agent).await?;
 
         match response {
             ResourceResponse::Resource(resource) => {
-                self.add_resource_opts(&resource, true, true, true)?;
+                self.add_resource_opts(&resource, true, true, true).await?;
 
                 Ok(resource)
             }
             ResourceResponse::ResourceWithReferenced(resource, referenced) => {
-                self.add_resource_opts(&resource, true, true, true)?;
+                self.add_resource_opts(&resource, true, true, true).await?;
                 for r in referenced {
-                    self.add_resource_opts(&r, true, true, true)?;
+                    self.add_resource_opts(&r, true, true, true).await?;
                 }
 
                 Ok(resource)
@@ -278,65 +282,79 @@ pub trait Storelike: Sized {
 
     /// Performs a full-text search on the Server's /search endpoint.
     /// Requires a server URL to be set.
-    fn search(
+    async fn search(
         &self,
         query: &str,
         opts: crate::client::search::SearchOpts,
     ) -> AtomicResult<Vec<Resource>> {
         let server_url = self.get_server_url()?;
         let subject = crate::client::search::build_search_subject(&server_url, query, opts);
-        let resource = self.fetch_resource(&subject, self.get_default_agent().ok().as_ref())?;
-        let results: Vec<Resource> = match resource.get(urls::ENDPOINT_RESULTS) {
-            Ok(Value::ResourceArray(vec)) => vec
-                .iter()
-                .filter_map(|s| match s {
-                    SubResource::Subject(result_subject) => {
-                        match self.get_resource(result_subject) {
-                            Ok(r) => Some(r),
-                            Err(err) => Some(err.into_resource(subject.clone())),
-                        }
-                    }
-                    SubResource::Nested(_) => None,
-                })
-                .collect(),
-            _ => return Err("No 'ENDPOINT_RESULTS' in response from server.".into()),
+
+        let resource = self
+            .fetch_resource(&subject, self.get_default_agent().ok().as_ref())
+            .await?;
+
+        let Ok(Value::ResourceArray(vec)) = resource.get(urls::ENDPOINT_RESULTS) else {
+            return Err("No 'ENDPOINT_RESULTS' in response from server.".into());
         };
+
+        // Collect all subjects for concurrent execution
+        let futures: Vec<_> = vec
+            .iter()
+            .filter_map(|s| {
+                if let SubResource::Subject(result_subject) = s {
+                    Some(async move {
+                        match self.get_resource(&result_subject).await {
+                            Ok(r) => r,
+                            Err(err) => err.into_resource(result_subject.clone()),
+                        }
+                    })
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let results = future::join_all(futures).await;
+
         Ok(results)
     }
 
     /// Returns a full Resource with native Values.
     /// Note that this does _not_ construct dynamic Resources, such as collections.
     /// If you're not sure what to use, use `get_resource_extended`.
-    fn get_resource(&self, subject: &str) -> AtomicResult<Resource>;
+    async fn get_resource(&self, subject: &str) -> AtomicResult<Resource>;
 
     /// Returns an existing resource, or creates a new one with the given Subject
-    fn get_resource_new(&self, subject: &str) -> Resource {
-        match self.get_resource(subject) {
+    async fn get_resource_new(&self, subject: &str) -> Resource {
+        match self.get_resource(subject).await {
             Ok(r) => r,
             Err(_) => Resource::new(subject.into()),
         }
     }
 
     /// Retrieves a Class from the store by subject URL and converts it into a Class useful for forms
-    fn get_class(&self, subject: &str) -> AtomicResult<Class> {
+    async fn get_class(&self, subject: &str) -> AtomicResult<Class> {
         let resource = self
             .get_resource(subject)
+            .await
             .map_err(|e| format!("Failed getting class {}. {}", subject, e))?;
         Class::from_resource(resource)
     }
 
     /// Finds all classes (isA) for any subject.
     /// Returns an empty vector if there are none.
-    fn get_classes_for_subject(&self, subject: &str) -> AtomicResult<Vec<Class>> {
-        let classes = self.get_resource(subject)?.get_classes(self)?;
+    async fn get_classes_for_subject(&self, subject: &str) -> AtomicResult<Vec<Class>> {
+        let classes = self.get_resource(subject).await?.get_classes(self).await?;
         Ok(classes)
     }
 
     /// Fetches a property by URL, returns a Property instance
     #[tracing::instrument(skip(self))]
-    fn get_property(&self, subject: &str) -> AtomicResult<Property> {
+    async fn get_property(&self, subject: &str) -> AtomicResult<Property> {
         let prop = self
             .get_resource(subject)
+            .await
             .map_err(|e| format!("Failed getting property {}. {}", subject, e))?;
         Property::from_resource(prop)
     }
@@ -346,15 +364,15 @@ pub trait Storelike: Sized {
     /// If `for_agent` is None, no authorization checks will be done, and all resources will return.
     /// If you want public only resurces, pass `Some(crate::authentication::public_agent)` as the agent.
     /// - *skip_dynamic* Does not calculte dynamic properties. Adds an `incomplete=true` property if the resource should have been dynamic.
-    fn get_resource_extended(
+    async fn get_resource_extended(
         &self,
         subject: &str,
         skip_dynamic: bool,
         for_agent: &ForAgent,
     ) -> AtomicResult<ResourceResponse> {
         let _ignore = skip_dynamic;
-        let resource = self.get_resource(subject)?;
-        hierarchy::check_read(self, &resource, for_agent)?;
+        let resource = self.get_resource(subject).await?;
+        hierarchy::check_read(self, &resource, for_agent).await?;
         Ok(resource.into())
     }
 
@@ -362,7 +380,7 @@ pub trait Storelike: Sized {
     /// Implement this if you want to have custom handlers for Commits.
     fn handle_commit(&self, _commit_response: &CommitResponse) {}
 
-    fn handle_not_found(
+    async fn handle_not_found(
         &self,
         subject: &str,
         _error: AtomicError,
@@ -376,18 +394,22 @@ pub trait Storelike: Sized {
                 )));
             }
         }
-        self.fetch_resource(subject, for_agent)
+        self.fetch_resource(subject, for_agent).await
     }
 
     /// Imports a JSON-AD string, returns the amount of imported resources.
-    fn import(&self, string: &str, parse_opts: &crate::parse::ParseOpts) -> AtomicResult<usize> {
-        let vec = parse_json_ad_string(string, self, parse_opts)?;
+    async fn import(
+        &self,
+        string: &str,
+        parse_opts: &crate::parse::ParseOpts,
+    ) -> AtomicResult<usize> {
+        let vec = parse_json_ad_string(string, self, parse_opts).await?;
         let len = vec.len();
         Ok(len)
     }
 
     /// Removes a resource and its children from the store. Errors if not present.
-    fn remove_resource(&self, subject: &str) -> AtomicResult<()>;
+    async fn remove_resource(&self, subject: &str) -> AtomicResult<()>;
 
     /// Accepts an Atomic Path string, returns the result value (resource or property value)
     /// E.g. `https://example.com description` or `thing isa 0`
@@ -396,7 +418,7 @@ pub trait Storelike: Sized {
     /// You can pass `None` if you don't care about the rights (e.g. in client side apps)
     /// If you want to perform read rights checks, pass Some `for_agent` subject
     //  Todo: return something more useful, give more context.
-    fn get_path(
+    async fn get_path(
         &self,
         atomic_path: &str,
         mapping: Option<&Mapping>,
@@ -419,7 +441,8 @@ pub trait Storelike: Sized {
         let mut subject = id_url;
         // Set the currently selectred resource parent, which starts as the root of the search
         let mut resource = self
-            .get_resource_extended(&subject, false, for_agent)?
+            .get_resource_extended(&subject, false, for_agent)
+            .await?
             .to_single();
         // During each of the iterations of the loop, the scope changes.
         // Try using pathreturn...
@@ -455,7 +478,8 @@ pub trait Storelike: Sized {
                             .to_string();
                         subject = url;
                         resource = self
-                            .get_resource_extended(&subject, false, for_agent)?
+                            .get_resource_extended(&subject, false, for_agent)
+                            .await?
                             .to_single();
                         current = PathReturn::Subject(subject.clone());
                         continue;
@@ -474,8 +498,8 @@ pub trait Storelike: Sized {
             }
             // Set the parent for the next loop equal to the next node.
             // TODO: skip this step if the current iteration is the last one
-            let value = resource.get_shortname(item, self)?.clone();
-            let property = resource.resolve_shortname_to_property(item, self)?;
+            let value = resource.get_shortname(item, self).await?.clone();
+            let property = resource.resolve_shortname_to_property(item, self).await?;
             current = PathReturn::Atom(Box::new(Atom::new(
                 subject.clone(),
                 property.subject,
@@ -487,7 +511,7 @@ pub trait Storelike: Sized {
 
     /// Handles a HTTP POST request to the store.
     /// This is where [crate::endpoints::Endpoint] are used.
-    fn post_resource(
+    async fn post_resource(
         &self,
         _subject: &str,
         _body: Vec<u8>,
@@ -497,20 +521,20 @@ pub trait Storelike: Sized {
     }
 
     /// Loads the default store. For DBs it also adds default Collections and Endpoints.
-    fn populate(&self) -> AtomicResult<()> {
-        crate::populate::populate_base_models(self)?;
-        crate::populate::populate_default_store(self)
+    async fn populate(&self) -> AtomicResult<()> {
+        crate::populate::populate_base_models(self).await?;
+        crate::populate::populate_default_store(self).await
     }
 
     /// Search the Store, returns the matching subjects.
-    fn query(&self, q: &Query) -> AtomicResult<QueryResult>;
+    async fn query(&self, q: &Query) -> AtomicResult<QueryResult>;
 
     /// Sets the default Agent for applying commits.
     fn set_default_agent(&self, agent: crate::agents::Agent);
 
     /// Performs a light validation, without fetching external data
-    fn validate(&self) -> crate::validate::ValidationReport {
-        crate::validate::validate_store(self, false)
+    async fn validate(&self) -> crate::validate::ValidationReport {
+        crate::validate::validate_store(self, false).await
     }
 }
 

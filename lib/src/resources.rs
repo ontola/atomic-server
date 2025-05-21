@@ -33,8 +33,8 @@ pub type PropVals = HashMap<String, Value>;
 
 impl Resource {
     /// Fetches all 'required' properties. Returns an error if any are missing in this Resource.
-    pub fn check_required_props(&self, store: &impl Storelike) -> AtomicResult<()> {
-        let classvec = self.get_classes(store)?;
+    pub async fn check_required_props(&self, store: &impl Storelike) -> AtomicResult<()> {
+        let classvec = self.get_classes(store).await?;
         for class in classvec.iter() {
             for required_prop in class.requires.clone() {
                 self.get(&required_prop).map_err(|_e| {
@@ -51,18 +51,21 @@ impl Resource {
     /// Removes / deletes the resource from the store by performing a Commit.
     /// Recursively deletes the resource's children.
     #[tracing::instrument(skip(store))]
-    pub fn destroy(
+    pub async fn destroy(
         &mut self,
         store: &impl Storelike,
     ) -> AtomicResult<crate::commit::CommitResponse> {
         self.commit.destroy(true);
         self.save(store)
+            .await
             .map_err(|e| format!("Failed to destroy {} : {}", self.subject, e).into())
     }
 
     /// Gets the children of this resource.
-    pub fn get_children(&self, store: &impl Storelike) -> AtomicResult<Vec<Resource>> {
-        let result = store.query(&Query::new_prop_val(urls::PARENT, self.get_subject()))?;
+    pub async fn get_children(&self, store: &impl Storelike) -> AtomicResult<Vec<Resource>> {
+        let result = store
+            .query(&Query::new_prop_val(urls::PARENT, self.get_subject()))
+            .await?;
         Ok(result.resources)
     }
 
@@ -88,11 +91,11 @@ impl Resource {
 
     /// Checks if the classes are there, if not, fetches them.
     /// Returns an empty vector if there are no classes found.
-    pub fn get_classes(&self, store: &impl Storelike) -> AtomicResult<Vec<Class>> {
+    pub async fn get_classes(&self, store: &impl Storelike) -> AtomicResult<Vec<Class>> {
         let mut classes: Vec<Class> = Vec::new();
         if let Ok(val) = self.get(crate::urls::IS_A) {
             for class in val.to_subjects(None)? {
-                classes.push(store.get_class(&class)?)
+                classes.push(store.get_class(&class).await?)
             }
         }
         Ok(classes)
@@ -114,10 +117,10 @@ impl Resource {
 
     /// Returns the `Parent` of this Resource.
     /// Throws in case of recursion
-    pub fn get_parent(&self, store: &impl Storelike) -> AtomicResult<Resource> {
+    pub async fn get_parent(&self, store: &impl Storelike) -> AtomicResult<Resource> {
         match self.get(urls::PARENT) {
             Ok(parent_val) => {
-                match store.get_resource(&parent_val.to_string()) {
+                match store.get_resource(&parent_val.to_string()).await {
                     Ok(parent) => {
                         if self.get_subject() == parent.get_subject() {
                             return Err(format!(
@@ -143,11 +146,11 @@ impl Resource {
     }
 
     /// Walks the parent tree upwards until there is no parent, then returns them as a vector.
-    pub fn get_parent_tree(&self, store: &impl Storelike) -> AtomicResult<Vec<Resource>> {
+    pub async fn get_parent_tree(&self, store: &impl Storelike) -> AtomicResult<Vec<Resource>> {
         let mut parents: Vec<Resource> = Vec::new();
         let mut current = self.clone();
 
-        while let Ok(parent) = current.get_parent(store) {
+        while let Ok(parent) = current.get_parent(store).await {
             parents.push(parent.clone());
             current = parent;
         }
@@ -163,8 +166,12 @@ impl Resource {
 
     /// Gets a value by its property shortname or property URL.
     // Todo: should use both the Classes AND the existing props
-    pub fn get_shortname(&self, shortname: &str, store: &impl Storelike) -> AtomicResult<&Value> {
-        let prop = self.resolve_shortname_to_property(shortname, store)?;
+    pub async fn get_shortname(
+        &self,
+        shortname: &str,
+        store: &impl Storelike,
+    ) -> AtomicResult<&Value> {
+        let prop = self.resolve_shortname_to_property(shortname, store).await?;
         self.get(&prop.subject)
     }
 
@@ -173,10 +180,10 @@ impl Resource {
     }
 
     /// checks if a resouce has a specific parent. iterates over all parents.
-    pub fn has_parent(&self, store: &impl Storelike, parent: &str) -> bool {
+    pub async fn has_parent(&self, store: &impl Storelike, parent: &str) -> bool {
         let mut mut_res = self.to_owned();
         loop {
-            if let Ok(found_parent) = mut_res.get_parent(store) {
+            if let Ok(found_parent) = mut_res.get_parent(store).await {
                 if found_parent.get_subject() == parent {
                     return true;
                 }
@@ -216,9 +223,9 @@ impl Resource {
     /// Create a new instance of some Class.
     /// The subject is generated, but can be changed.
     /// Does not save the resource to the store.
-    pub fn new_instance(class_url: &str, store: &impl Storelike) -> AtomicResult<Resource> {
+    pub async fn new_instance(class_url: &str, store: &impl Storelike) -> AtomicResult<Resource> {
         let propvals: PropVals = HashMap::new();
-        let class = store.get_class(class_url)?;
+        let class = store.get_class(class_url).await?;
         let subject = format!(
             "{}/{}/{}",
             store.get_server_url()?,
@@ -231,7 +238,9 @@ impl Resource {
             commit: CommitBuilder::new(subject),
         };
         let class_urls = Vec::from([String::from(class_url)]);
-        resource.set(crate::urls::IS_A.into(), class_urls.into(), store)?;
+        resource
+            .set(crate::urls::IS_A.into(), class_urls.into(), store)
+            .await?;
         Ok(resource)
     }
 
@@ -275,12 +284,14 @@ impl Resource {
 
     /// Remove a propval from a resource by property URL or shortname.
     /// Returns error if propval does not exist in this resource or its class.
-    pub fn remove_propval_shortname(
+    pub async fn remove_propval_shortname(
         &mut self,
         property_shortname: &str,
         store: &impl Storelike,
     ) -> AtomicResult<()> {
-        let property_url = self.resolve_shortname_to_property(property_shortname, store)?;
+        let property_url = self
+            .resolve_shortname_to_property(property_shortname, store)
+            .await?;
         self.remove_propval(&property_url.subject);
         Ok(())
     }
@@ -289,35 +300,35 @@ impl Resource {
     /// Currently only tries the shortnames for linked classes - not for other properties.
     // TODO: Not spec compliant - does not use the correct order (required, recommended, other)
     // TODO: Seems more costly then needed. Maybe resources need to keep a hashmap for resolving shortnames?
-    pub fn resolve_shortname_to_property(
+    pub async fn resolve_shortname_to_property(
         &self,
         shortname: &str,
         store: &impl Storelike,
     ) -> AtomicResult<Property> {
         // If it's a URL, were done quickly!
         if is_url(shortname) {
-            return store.get_property(shortname);
+            return store.get_property(shortname).await;
         }
         // First, iterate over all existing properties, see if any of these work.
         for (url, _val) in self.propvals.iter() {
-            if let Ok(prop) = store.get_property(url) {
+            if let Ok(prop) = store.get_property(url).await {
                 if prop.shortname == shortname {
                     return Ok(prop);
                 }
             }
         }
         // If that fails, load the classes for the resource, iterate over these
-        let classes = self.get_classes(store)?;
+        let classes = self.get_classes(store).await?;
         // Loop over all Requires and Recommends props
         for class in classes {
             for required_prop_subject in class.requires {
-                let required_prop = store.get_property(&required_prop_subject)?;
+                let required_prop = store.get_property(&required_prop_subject).await?;
                 if required_prop.shortname == shortname {
                     return Ok(required_prop);
                 }
             }
             for recommended_prop_subject in class.recommends {
-                let recommended_prop = store.get_property(&recommended_prop_subject)?;
+                let recommended_prop = store.get_property(&recommended_prop_subject).await?;
                 if recommended_prop.shortname == shortname {
                     return Ok(recommended_prop);
                 }
@@ -334,10 +345,13 @@ impl Resource {
     /// Uses default Agent to sign the Commit.
     /// Stores changes on the Subject's Server by sending a Commit.
     /// Returns the generated Commit, the new Resource and the old Resource.
-    pub fn save(&mut self, store: &impl Storelike) -> AtomicResult<crate::commit::CommitResponse> {
+    pub async fn save(
+        &mut self,
+        store: &impl Storelike,
+    ) -> AtomicResult<crate::commit::CommitResponse> {
         let agent = store.get_default_agent()?;
         let commit_builder = self.get_commit_builder().clone();
-        let commit = commit_builder.sign(&agent, store, self)?;
+        let commit = commit_builder.sign(&agent, store, self).await?;
         // If the current client is a server, and the subject is hosted here, don't post
         let should_post = if let Some(self_url) = store.get_self_url() {
             !self.subject.starts_with(&self_url)
@@ -346,7 +360,7 @@ impl Resource {
             true
         };
         if should_post {
-            crate::client::post_commit(&commit, store)?;
+            crate::client::post_commit(&commit, store).await?;
         }
         let opts = CommitOpts {
             validate_schema: true,
@@ -358,7 +372,7 @@ impl Resource {
             validate_previous_commit: false,
             update_index: true,
         };
-        let commit_response = store.apply_commit(commit, &opts)?;
+        let commit_response = store.apply_commit(commit, &opts).await?;
         if let Some(new) = &commit_response.resource_new {
             self.subject = new.subject.clone();
             self.propvals = new.propvals.clone();
@@ -372,10 +386,10 @@ impl Resource {
     /// Returns the generated Commit and the new Resource.
     /// Does not validate rights / hierarchy.
     /// Does not store these changes on the server of the Subject - the Commit will be lost, unless you handle it manually.
-    pub fn save_locally(&mut self, store: &impl Storelike) -> AtomicResult<CommitResponse> {
+    pub async fn save_locally(&mut self, store: &impl Storelike) -> AtomicResult<CommitResponse> {
         let agent = store.get_default_agent()?;
         let commitbuilder = self.get_commit_builder().clone();
-        let commit = commitbuilder.sign(&agent, store, self)?;
+        let commit = commitbuilder.sign(&agent, store, self).await?;
         let opts = CommitOpts {
             validate_schema: true,
             validate_signature: false,
@@ -386,7 +400,7 @@ impl Resource {
             validate_previous_commit: false,
             update_index: true,
         };
-        let commit_response = store.apply_commit(commit, &opts)?;
+        let commit_response = store.apply_commit(commit, &opts).await?;
         if let Some(new) = &commit_response.resource_new {
             self.subject = new.subject.clone();
             self.propvals = new.propvals.clone();
@@ -406,13 +420,13 @@ impl Resource {
     /// Insert a Property/Value combination.
     /// Overwrites existing Property/Value.
     /// Validates the datatype.
-    pub fn set_string(
+    pub async fn set_string(
         &mut self,
         property_url: String,
         value: &str,
         store: &impl Storelike,
     ) -> AtomicResult<&mut Self> {
-        let fullprop = store.get_property(&property_url).map_err(|e| {
+        let fullprop = store.get_property(&property_url).await.map_err(|e| {
             format!(
                 "Failed setting propval for '{}' because property '{}' could not be found. {}",
                 self.get_subject(),
@@ -429,13 +443,13 @@ impl Resource {
     /// Checks datatype.
     /// Overwrites existing.
     /// Adds the change to the commit builder's `set` map.
-    pub fn set(
+    pub async fn set(
         &mut self,
         property: String,
         value: Value,
         store: &impl Storelike,
     ) -> AtomicResult<&mut Self> {
-        let full_prop = store.get_property(&property)?;
+        let full_prop = store.get_property(&property).await?;
         if let Some(allowed) = full_prop.allows_only {
             let error = Err(format!(
                 "Property '{}' does not allow value '{}'. Allowed: {:?}",
@@ -485,13 +499,13 @@ impl Resource {
     /// Sets a property / value combination.
     /// Property can be a shortname (e.g. 'description' instead of the full URL).
     /// Returns error if propval does not exist in this resource or its class.
-    pub fn set_shortname(
+    pub async fn set_shortname(
         &mut self,
         property: &str,
         value: &str,
         store: &impl Storelike,
     ) -> AtomicResult<&mut Self> {
-        let fullprop = self.resolve_shortname_to_property(property, store)?;
+        let fullprop = self.resolve_shortname_to_property(property, store).await?;
         let fullval = Value::new(value, &fullprop.data_type)?;
         self.set_unsafe(fullprop.subject, fullval);
         Ok(self)
@@ -523,25 +537,27 @@ impl Resource {
 
     /// Converts Resource to plain JSON string.
     #[instrument(skip_all)]
-    pub fn to_json(&self, store: &impl Storelike) -> AtomicResult<String> {
+    pub async fn to_json(&self, store: &impl Storelike) -> AtomicResult<String> {
         let obj = crate::serialize::propvals_to_json_ld(
             self.get_propvals(),
             Some(self.get_subject().clone()),
             store,
             false,
-        )?;
+        )
+        .await?;
         serde_json::to_string_pretty(&obj).map_err(|_| "Could not serialize to JSON".into())
     }
 
     /// Converts Resource to JSON-LD string, with @context object and RDF compatibility.
     #[instrument(skip_all)]
-    pub fn to_json_ld(&self, store: &impl Storelike) -> AtomicResult<String> {
+    pub async fn to_json_ld(&self, store: &impl Storelike) -> AtomicResult<String> {
         let obj = crate::serialize::propvals_to_json_ld(
             self.get_propvals(),
             Some(self.get_subject().clone()),
             store,
             true,
-        )?;
+        )
+        .await?;
         serde_json::to_string_pretty(&obj).map_err(|_| "Could not serialize to JSON-LD".into())
     }
 
@@ -559,8 +575,8 @@ impl Resource {
     #[instrument(skip_all)]
     #[cfg(feature = "rdf")]
     /// Serializes the Resource to the RDF N-Triples format.
-    pub fn to_n_triples(&self, store: &impl Storelike) -> AtomicResult<String> {
-        crate::serialize::atoms_to_ntriples(self.to_atoms(), store)
+    pub async fn to_n_triples(&self, store: &impl Storelike) -> AtomicResult<String> {
+        crate::serialize::atoms_to_ntriples(self.to_atoms(), store).await
     }
 
     pub fn vec_to_json_ad(resources: &Vec<Resource>) -> AtomicResult<String> {
@@ -573,25 +589,28 @@ impl Resource {
         Ok(format!("[{}]", str))
     }
 
-    pub fn vec_to_json(resources: &Vec<Resource>, store: &impl Storelike) -> AtomicResult<String> {
-        let str = resources
-            .iter()
-            .map(|r| r.to_json(store))
-            .collect::<AtomicResult<Vec<String>>>()?
-            .join(",");
+    pub async fn vec_to_json(
+        resources: &Vec<Resource>,
+        store: &impl Storelike,
+    ) -> AtomicResult<String> {
+        let mut strings = Vec::new();
+        for r in resources {
+            strings.push(r.to_json(store).await?);
+        }
+        let str = strings.join(",");
 
         Ok(format!("[{}]", str))
     }
 
-    pub fn vec_to_json_ld(
+    pub async fn vec_to_json_ld(
         resources: &Vec<Resource>,
         store: &impl Storelike,
     ) -> AtomicResult<String> {
-        let str = resources
-            .iter()
-            .map(|r| r.to_json_ld(store))
-            .collect::<AtomicResult<Vec<String>>>()?
-            .join(",");
+        let mut strings = Vec::new();
+        for r in resources {
+            strings.push(r.to_json_ld(store).await?);
+        }
+        let str = strings.join(",");
 
         Ok(format!("[{}]", str))
     }
@@ -607,12 +626,12 @@ impl Resource {
     }
 
     #[cfg(feature = "rdf")]
-    pub fn vec_to_n_triples(
+    pub async fn vec_to_n_triples(
         resources: &Vec<Resource>,
         store: &impl Storelike,
     ) -> AtomicResult<String> {
         let atoms = Self::vec_to_atoms(resources);
-        crate::serialize::atoms_to_ntriples(atoms, store)
+        crate::serialize::atoms_to_ntriples(atoms, store).await
     }
 }
 
@@ -633,121 +652,145 @@ mod test {
     use super::*;
     use crate::{test_utils::init_store, urls};
 
-    #[test]
-    fn get_and_set_resource_props() {
-        let store = init_store();
-        let mut resource = store.get_resource(urls::CLASS).unwrap();
+    #[tokio::test]
+    async fn get_and_set_resource_props() {
+        let store = init_store().await;
+        let mut resource = store.get_resource(urls::CLASS).await.unwrap();
         assert!(
             resource
                 .get_shortname("shortname", &store)
+                .await
                 .unwrap()
                 .to_string()
                 == "class"
         );
         resource
             .set_shortname("shortname", "something-valid", &store)
+            .await
             .unwrap();
         assert!(
             resource
                 .get_shortname("shortname", &store)
+                .await
                 .unwrap()
                 .to_string()
                 == "something-valid"
         );
         resource
             .set_shortname("shortname", "should not contain spaces", &store)
+            .await
             .unwrap_err();
     }
 
-    #[test]
-    fn check_required_props() {
-        let store = init_store();
-        let mut new_resource = Resource::new_instance(urls::CLASS, &store).unwrap();
+    #[tokio::test]
+    async fn check_required_props() {
+        let store = init_store().await;
+        let mut new_resource = Resource::new_instance(urls::CLASS, &store).await.unwrap();
         new_resource
             .set_shortname("shortname", "should-fail", &store)
+            .await
             .unwrap();
-        new_resource.check_required_props(&store).unwrap_err();
+        new_resource.check_required_props(&store).await.unwrap_err();
         new_resource
             .set_shortname("description", "Should succeed!", &store)
+            .await
             .unwrap();
-        new_resource.check_required_props(&store).unwrap();
+        new_resource.check_required_props(&store).await.unwrap();
     }
 
-    #[test]
-    fn new_instance() {
-        let store = init_store();
-        let mut new_resource = Resource::new_instance(urls::CLASS, &store).unwrap();
+    #[tokio::test]
+    async fn new_instance() {
+        let store = init_store().await;
+        let mut new_resource = Resource::new_instance(urls::CLASS, &store).await.unwrap();
         new_resource
             .set_shortname("shortname", "person", &store)
+            .await
             .unwrap();
         assert!(
             new_resource
                 .get_shortname("shortname", &store)
+                .await
                 .unwrap()
                 .to_string()
                 == "person"
         );
         new_resource
             .set_shortname("shortname", "human", &store)
+            .await
             .unwrap();
         new_resource
             .set_shortname("description", "A real human being", &store)
+            .await
             .unwrap();
-        new_resource.save_locally(&store).unwrap();
+        new_resource.save_locally(&store).await.unwrap();
         assert!(
             new_resource
                 .get_shortname("shortname", &store)
+                .await
                 .unwrap()
                 .to_string()
                 == "human"
         );
-        let resource_from_store = store.get_resource(new_resource.get_subject()).unwrap();
+        let resource_from_store = store
+            .get_resource(new_resource.get_subject())
+            .await
+            .unwrap();
         assert!(
             resource_from_store
                 .get_shortname("shortname", &store)
+                .await
                 .unwrap()
                 .to_string()
                 == "human"
         );
         println!(
             "{}",
-            resource_from_store.get_shortname("is-a", &store).unwrap()
+            resource_from_store
+                .get_shortname("is-a", &store)
+                .await
+                .unwrap()
         );
         assert_eq!(
             resource_from_store
                 .get_shortname("is-a", &store)
+                .await
                 .unwrap()
                 .to_string(),
             "https://atomicdata.dev/classes/Class"
         );
-        assert!(resource_from_store.get_classes(&store).unwrap()[0].shortname == "class");
+        assert!(resource_from_store.get_classes(&store).await.unwrap()[0].shortname == "class");
     }
 
-    #[test]
-    fn new_instance_using_commit() {
-        let store = init_store();
+    #[tokio::test]
+    async fn new_instance_using_commit() {
+        let store = init_store().await;
         let agent = store.get_default_agent().unwrap();
-        let mut new_resource = Resource::new_instance(urls::CLASS, &store).unwrap();
+        let mut new_resource = Resource::new_instance(urls::CLASS, &store).await.unwrap();
         new_resource
             .set_shortname("shortname", "person", &store)
+            .await
             .unwrap();
         assert!(
             new_resource
                 .get_shortname("shortname", &store)
+                .await
                 .unwrap()
                 .to_string()
                 == "person"
         );
         new_resource
             .set_shortname("shortname", "human", &store)
+            .await
             .unwrap();
         new_resource
             .set_shortname("description", "A real human being", &store)
+            .await
             .unwrap();
         let commit = new_resource
             .get_commit_builder()
             .clone()
             .sign(&agent, &store, &new_resource)
+            .await
             .unwrap();
         store
             .apply_commit(
@@ -762,40 +805,50 @@ mod test {
                     update_index: true,
                 },
             )
+            .await
             .unwrap();
         assert!(
             new_resource
                 .get_shortname("shortname", &store)
+                .await
                 .unwrap()
                 .to_string()
                 == "human"
         );
-        let resource_from_store = store.get_resource(new_resource.get_subject()).unwrap();
+        let resource_from_store = store
+            .get_resource(new_resource.get_subject())
+            .await
+            .unwrap();
         assert!(
             resource_from_store
                 .get_shortname("shortname", &store)
+                .await
                 .unwrap()
                 .to_string()
                 == "human"
         );
         println!(
             "{}",
-            resource_from_store.get_shortname("is-a", &store).unwrap()
+            resource_from_store
+                .get_shortname("is-a", &store)
+                .await
+                .unwrap()
         );
         assert_eq!(
             resource_from_store
                 .get_shortname("is-a", &store)
+                .await
                 .unwrap()
                 .to_string(),
             "https://atomicdata.dev/classes/Class"
         );
-        assert!(resource_from_store.get_classes(&store).unwrap()[0].shortname == "class");
+        assert!(resource_from_store.get_classes(&store).await.unwrap()[0].shortname == "class");
     }
 
-    #[test]
-    fn iterate() {
-        let store = init_store();
-        let new_resource = Resource::new_instance(urls::CLASS, &store).unwrap();
+    #[tokio::test]
+    async fn iterate() {
+        let store = init_store().await;
+        let new_resource = Resource::new_instance(urls::CLASS, &store).await.unwrap();
         let mut success = false;
         for (prop, val) in new_resource.get_propvals() {
             if prop == urls::IS_A {
@@ -806,24 +859,26 @@ mod test {
         assert!(success);
     }
 
-    #[test]
-    fn save() {
-        let store = init_store();
+    #[tokio::test]
+    async fn save() {
+        let store = init_store().await;
         let property: String = urls::DESCRIPTION.into();
         let value = Value::Markdown("joe".into());
-        let mut new_resource = Resource::new_instance(urls::CLASS, &store).unwrap();
+        let mut new_resource = Resource::new_instance(urls::CLASS, &store).await.unwrap();
         new_resource
             .set(property.clone(), value.clone(), &store)
+            .await
             .unwrap();
         // Should fail, because a propval is missing
-        assert!(new_resource.save_locally(&store).is_err());
+        assert!(new_resource.save_locally(&store).await.is_err());
         new_resource
             .set(urls::SHORTNAME.into(), Value::Slug("joe".into()), &store)
+            .await
             .unwrap();
         let subject = new_resource.get_subject().clone();
         println!("subject new {}", new_resource.get_subject());
-        new_resource.save_locally(&store).unwrap();
-        let found_resource = store.get_resource(&subject).unwrap();
+        new_resource.save_locally(&store).await.unwrap();
+        let found_resource = store.get_resource(&subject).await.unwrap();
         println!("subject found {}", found_resource.get_subject());
         println!("subject all {:?}", found_resource.get_propvals());
 
@@ -831,9 +886,9 @@ mod test {
         assert_eq!(found_prop.to_string(), value.to_string());
     }
 
-    #[test]
-    fn push_propval() {
-        let store = init_store();
+    #[tokio::test]
+    async fn push_propval() {
+        let store = init_store().await;
         let property: String = urls::CHILDREN.into();
         let append_value = "http://localhost/someURL";
         let mut resource = Resource::new_generate_subject(&store).unwrap();
@@ -846,7 +901,7 @@ mod test {
             vec.first().unwrap(),
             "The first element should be the appended value"
         );
-        let resp = resource.save_locally(&store).unwrap();
+        let resp = resource.save_locally(&store).await.unwrap();
         assert!(resp.commit_resource.get(urls::PUSH).is_ok());
 
         let new_val = resp
@@ -859,21 +914,22 @@ mod test {
         assert_eq!(new_val.first().unwrap(), append_value);
     }
 
-    #[test]
-    fn get_children() {
-        let store = init_store();
+    #[tokio::test]
+    async fn get_children() {
+        let store = init_store().await;
         let mut resource1 = Resource::new_generate_subject(&store).unwrap();
         let subject1 = resource1.get_subject().to_string();
-        resource1.save_locally(&store).unwrap();
+        resource1.save_locally(&store).await.unwrap();
 
         let mut resource2 = Resource::new_generate_subject(&store).unwrap();
         resource2
             .set(urls::PARENT.into(), Value::AtomicUrl(subject1), &store)
+            .await
             .unwrap();
         let subject2 = resource2.get_subject().to_string();
-        resource2.save_locally(&store).unwrap();
+        resource2.save_locally(&store).await.unwrap();
 
-        let children = resource1.get_children(&store).unwrap();
+        let children = resource1.get_children(&store).await.unwrap();
 
         assert_eq!(children.len(), 1);
         assert_eq!(children[0].get_subject(), &subject2);

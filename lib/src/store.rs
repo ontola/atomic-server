@@ -6,6 +6,7 @@ use crate::storelike::QueryResult;
 use crate::Value;
 use crate::{atoms::Atom, storelike::Storelike};
 use crate::{errors::AtomicResult, Resource};
+use async_trait::async_trait;
 use std::{collections::HashMap, sync::Arc, sync::Mutex};
 
 /// The in-memory store of data, containing the Resources, Properties and Classes
@@ -21,13 +22,13 @@ pub struct Store {
 impl Store {
     /// Creates an empty Store.
     /// Run `.populate()` to get useful standard models loaded into your store.
-    pub fn init() -> AtomicResult<Store> {
+    pub async fn init() -> AtomicResult<Store> {
         let store = Store {
             hashmap: Arc::new(Mutex::new(HashMap::new())),
             default_agent: Arc::new(Mutex::new(None)),
             server_url: Arc::new(Mutex::new(None)),
         };
-        crate::populate::populate_base_models(&store)?;
+        crate::populate::populate_base_models(&store).await?;
         Ok(store)
     }
 
@@ -42,7 +43,7 @@ impl Store {
     /// Returns an empty array if nothing is found.
     // Very costly, slow implementation.
     // Does not assume any indexing.
-    fn tpf(
+    async fn tpf(
         &self,
         q_subject: Option<&str>,
         q_property: Option<&str>,
@@ -91,7 +92,7 @@ impl Store {
         };
 
         match q_subject {
-            Some(sub) => match self.get_resource(sub) {
+            Some(sub) => match self.get_resource(sub).await {
                 Ok(resource) => {
                     if hasprop | hasval {
                         find_in_resource(&resource);
@@ -112,31 +113,32 @@ impl Store {
     }
 }
 
+#[async_trait]
 impl Storelike for Store {
-    fn add_atoms(&self, atoms: Vec<Atom>) -> AtomicResult<()> {
+    async fn add_atoms(&self, atoms: Vec<Atom>) -> AtomicResult<()> {
         // Start with a nested HashMap, containing only strings.
         let mut map: HashMap<String, Resource> = HashMap::new();
         for atom in atoms {
             match map.get_mut(&atom.subject) {
                 // Resource exists in map
                 Some(resource) => {
-                    resource.set(atom.property, atom.value, self)?;
+                    resource.set_unsafe(atom.property, atom.value);
                 }
                 // Resource does not exist
                 None => {
                     let mut resource = Resource::new(atom.subject.clone());
-                    resource.set(atom.property, atom.value, self)?;
+                    resource.set_unsafe(atom.property, atom.value);
                     map.insert(atom.subject, resource);
                 }
             }
         }
         for (_subject, resource) in map.iter() {
-            self.add_resource(resource)?
+            self.add_resource(resource).await?
         }
         Ok(())
     }
 
-    fn add_resource_opts(
+    async fn add_resource_opts(
         &self,
         resource: &Resource,
         check_required_props: bool,
@@ -144,7 +146,7 @@ impl Storelike for Store {
         overwrite_existing: bool,
     ) -> AtomicResult<()> {
         if check_required_props {
-            resource.check_required_props(self)?;
+            resource.check_required_props(self).await?;
         }
         if !overwrite_existing {
             let subject = resource.get_subject();
@@ -162,7 +164,7 @@ impl Storelike for Store {
     }
 
     // TODO: Fix this for local stores, include external does not make sense here
-    fn all_resources(&self, _include_external: bool) -> Box<dyn Iterator<Item = Resource>> {
+    fn all_resources(&self, _include_external: bool) -> Box<dyn Iterator<Item = Resource> + Send> {
         Box::new(self.hashmap.lock().unwrap().clone().into_values())
     }
 
@@ -185,12 +187,15 @@ impl Storelike for Store {
         }
     }
 
-    fn get_resource(&self, subject: &str) -> AtomicResult<Resource> {
+    async fn get_resource(&self, subject: &str) -> AtomicResult<Resource> {
         if let Some(resource) = self.hashmap.lock().unwrap().get(subject) {
             return Ok(resource.clone());
         }
 
-        if let Ok(resource) = self.fetch_resource(subject, self.get_default_agent().ok().as_ref()) {
+        if let Ok(resource) = self
+            .fetch_resource(subject, self.get_default_agent().ok().as_ref())
+            .await
+        {
             return Ok(resource);
         };
 
@@ -199,12 +204,13 @@ impl Storelike for Store {
             "Not found in HashMap.".into(),
             self.get_default_agent().ok().as_ref(),
         )
+        .await
     }
 
-    fn remove_resource(&self, subject: &str) -> AtomicResult<()> {
-        let resource = self.get_resource(subject)?;
-        for child in resource.get_children(self)? {
-            self.remove_resource(child.get_subject())?;
+    async fn remove_resource(&self, subject: &str) -> AtomicResult<()> {
+        let resource = self.get_resource(subject).await?;
+        for child in resource.get_children(self).await? {
+            Box::pin(self.remove_resource(child.get_subject())).await?;
         }
         self.hashmap
             .lock()
@@ -221,13 +227,18 @@ impl Storelike for Store {
         self.default_agent.lock().unwrap().replace(agent);
     }
 
-    fn query(&self, q: &crate::storelike::Query) -> AtomicResult<crate::storelike::QueryResult> {
-        let atoms = self.tpf(
-            None,
-            q.property.as_deref(),
-            q.value.as_ref(),
-            q.include_external,
-        )?;
+    async fn query(
+        &self,
+        q: &crate::storelike::Query,
+    ) -> AtomicResult<crate::storelike::QueryResult> {
+        let atoms = self
+            .tpf(
+                None,
+                q.property.as_deref(),
+                q.value.as_ref(),
+                q.include_external,
+            )
+            .await?;
 
         // Remove duplicate subjects
         let mut subjects_deduplicated: Vec<String> = atoms
@@ -246,7 +257,10 @@ impl Storelike for Store {
         let mut resources = Vec::new();
         for subject in subjects_deduplicated.iter() {
             // These nested resources are not fully calculated - they will be presented as -is
-            match self.get_resource_extended(subject, true, &q.for_agent) {
+            match self
+                .get_resource_extended(subject, true, &q.for_agent)
+                .await
+            {
                 Ok(resource) => {
                     resources.push(resource.to_single());
                 }
@@ -283,86 +297,93 @@ mod test {
     use super::*;
     use crate::{agents::ForAgent, urls, Value};
 
-    fn init_store() -> Store {
-        let store = Store::init().unwrap();
-        store.populate().unwrap();
+    async fn init_store() -> Store {
+        let store = Store::init().await.unwrap();
+        store.populate().await.unwrap();
         store
     }
 
-    #[test]
-    fn populate_base_models() {
-        let store = Store::init().unwrap();
-        crate::populate::populate_base_models(&store).unwrap();
-        let property = store.get_property(urls::DESCRIPTION).unwrap();
+    #[tokio::test]
+    async fn populate_base_models() {
+        let store = Store::init().await.unwrap();
+        crate::populate::populate_base_models(&store).await.unwrap();
+        let property = store.get_property(urls::DESCRIPTION).await.unwrap();
         assert_eq!(property.shortname, "description")
     }
 
-    #[test]
-    fn single_get_empty_server_to_class() {
-        let store = Store::init().unwrap();
-        crate::populate::populate_base_models(&store).unwrap();
+    #[tokio::test]
+    async fn single_get_empty_server_to_class() {
+        let store = Store::init().await.unwrap();
+        crate::populate::populate_base_models(&store).await.unwrap();
         // Should fetch the agent class, since it's not in the store
-        let agent = store.get_class(urls::AGENT).unwrap();
+        let agent = store.get_class(urls::AGENT).await.unwrap();
         assert_eq!(agent.shortname, "agent")
     }
 
-    #[test]
-    fn get_full_resource_and_shortname() {
-        let store = init_store();
-        let resource = store.get_resource(urls::CLASS).unwrap();
+    #[tokio::test]
+    async fn get_full_resource_and_shortname() {
+        let store = init_store().await;
+        let resource = store.get_resource(urls::CLASS).await.unwrap();
         let shortname = resource
             .get_shortname("shortname", &store)
+            .await
             .unwrap()
             .to_string();
         assert!(shortname == "class");
     }
 
-    #[test]
-    fn serialize() {
-        let store = init_store();
+    #[tokio::test]
+    async fn serialize() {
+        let store = init_store().await;
         let subject = urls::CLASS;
-        let resource = store.get_resource(subject).unwrap();
+        let resource = store.get_resource(subject).await.unwrap();
         resource.to_json_ad().unwrap();
     }
 
-    #[test]
-    fn tpf() {
-        let store = init_store();
+    #[tokio::test]
+    async fn tpf() {
+        let store = init_store().await;
         let val = &Value::Slug("class".into());
         let val_url = &Value::AtomicUrl(urls::CLASS.into());
         // All atoms
-        let atoms = store.tpf(None, None, None, true).unwrap();
+        let atoms = store.tpf(None, None, None, true).await.unwrap();
         assert!(atoms.len() > 10);
         // Find by subject
-        let atoms = store.tpf(Some(urls::CLASS), None, None, true).unwrap();
+        let atoms = store
+            .tpf(Some(urls::CLASS), None, None, true)
+            .await
+            .unwrap();
         assert_eq!(atoms.len(), 6);
         // Find by value
-        let atoms = store.tpf(None, None, Some(val), true).unwrap();
+        let atoms = store.tpf(None, None, Some(val), true).await.unwrap();
         assert_eq!(atoms[0].subject, urls::CLASS);
         assert_eq!(atoms.len(), 1);
         // Find by property and value
         let atoms = store
             .tpf(None, Some(urls::SHORTNAME), Some(val), true)
+            .await
             .unwrap();
         assert!(atoms[0].subject == urls::CLASS);
         assert_eq!(atoms.len(), 1);
         // Find item in array
         let atoms = store
             .tpf(None, Some(urls::IS_A), Some(val_url), true)
+            .await
             .unwrap();
         println!("{:?}", atoms);
         assert!(atoms.len() > 3, "Find item in array");
     }
 
-    #[test]
-    fn path() {
-        let store = init_store();
+    #[tokio::test]
+    async fn path() {
+        let store = init_store().await;
         let res = store
             .get_path(
                 "https://atomicdata.dev/classes/Class shortname",
                 None,
                 &ForAgent::Sudo,
             )
+            .await
             .unwrap();
         match res {
             crate::storelike::PathReturn::Subject(_) => panic!("Should be an Atom"),
@@ -376,6 +397,7 @@ mod test {
                 None,
                 &ForAgent::Sudo,
             )
+            .await
             .unwrap();
         match res {
             crate::storelike::PathReturn::Subject(sub) => {
@@ -387,35 +409,40 @@ mod test {
 
     #[test]
     fn get_external_resource() {
-        let store = Store::init().unwrap();
-        store.populate().unwrap();
-        // If nothing happens - this night be deadlock.
-        store.get_resource(urls::CLASS).unwrap();
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        runtime.block_on(async {
+            let store = Store::init().await.unwrap();
+            store.populate().await.unwrap();
+            // If nothing happens - this night be deadlock.
+            store.get_resource(urls::CLASS).await.unwrap();
+        });
     }
 
-    #[test]
+    #[tokio::test]
     #[should_panic]
-    fn path_fail() {
-        let store = init_store();
+    async fn path_fail() {
+        let store = init_store().await;
         store
             .get_path(
                 "https://atomicdata.dev/classes/Class requires isa description",
                 None,
                 &ForAgent::Sudo,
             )
+            .await
             .unwrap();
     }
 
-    #[test]
+    #[tokio::test]
     #[should_panic]
-    fn path_fail2() {
-        let store = init_store();
+    async fn path_fail2() {
+        let store = init_store().await;
         store
             .get_path(
                 "https://atomicdata.dev/classes/Class requires requires",
                 None,
                 &ForAgent::Sudo,
             )
+            .await
             .unwrap();
     }
 }

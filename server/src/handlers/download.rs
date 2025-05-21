@@ -36,11 +36,12 @@ pub async fn handle_download(
         return Err("Put `/download` in front of an File URL to download it.".into());
     };
 
-    let for_agent = get_client_agent(headers, &appstate, subject.clone())?;
+    let for_agent = get_client_agent(headers, &appstate, subject.clone()).await?;
     tracing::info!("handle_download: {}", subject);
 
     let resource = store
-        .get_resource_extended(&subject, false, &for_agent)?
+        .get_resource_extended(&subject, false, &for_agent)
+        .await?
         .to_single();
 
     download_file_handler_partial(&resource, &req, &params, &appstate)

@@ -96,7 +96,7 @@ pub fn propvals_to_json_ad_map(
 /// Supports both JSON and JSON-LD.
 /// If you opt in for JSON-LD, an @context object is created mapping the shortnames to URLs.
 /// https://docs.atomicdata.dev/interoperability/json.html#from-atomic-data-to-json-ld
-pub fn propvals_to_json_ld(
+pub async fn propvals_to_json_ld(
     propvals: &PropVals,
     subject: Option<String>,
     store: &impl Storelike,
@@ -109,7 +109,7 @@ pub fn propvals_to_json_ld(
     // For every atom, find the key, datatype and add it to the @context
     for (prop_url, value) in propvals.iter() {
         // The property is only needed in JSON-LD and JSON for shortnames
-        let property = store.get_property(prop_url)?;
+        let property = store.get_property(prop_url).await?;
         if json_ld {
             // In JSON-LD, the value of a Context Item can be a string or an object.
             // This object can contain information about the translation or datatype of the value
@@ -175,7 +175,10 @@ pub fn serialize_json_array(items: &[String]) -> AtomicResult<String> {
 
 #[cfg(feature = "rdf")]
 /// Serializes Atoms to Ntriples (which is also valid Turtle / Notation3).
-pub fn atoms_to_ntriples(atoms: Vec<crate::Atom>, store: &impl Storelike) -> AtomicResult<String> {
+pub async fn atoms_to_ntriples(
+    atoms: Vec<crate::Atom>,
+    store: &impl Storelike,
+) -> AtomicResult<String> {
     use rio_api::formatter::TriplesFormatter;
     use rio_api::model::{Literal, NamedNode, Term, Triple};
     use rio_turtle::NTriplesFormatter;
@@ -186,7 +189,7 @@ pub fn atoms_to_ntriples(atoms: Vec<crate::Atom>, store: &impl Storelike) -> Ato
         let predicate = NamedNode {
             iri: &atom.property,
         };
-        let datatype = store.get_property(&atom.property)?.data_type;
+        let datatype = store.get_property(&atom.property).await?.data_type;
         let value = &atom.value.to_string();
         let datatype_url = datatype.to_string();
         let object: Term = match &datatype {
@@ -213,7 +216,10 @@ pub fn atoms_to_ntriples(atoms: Vec<crate::Atom>, store: &impl Storelike) -> Ato
 
 #[cfg(feature = "rdf")]
 /// Serializes Atoms to Ntriples (which is also valid Turtle / Notation3).
-pub fn atoms_to_turtle(atoms: Vec<crate::Atom>, store: &impl Storelike) -> AtomicResult<String> {
+pub async fn atoms_to_turtle(
+    atoms: Vec<crate::Atom>,
+    store: &impl Storelike,
+) -> AtomicResult<String> {
     use rio_api::formatter::TriplesFormatter;
     use rio_api::model::{Literal, NamedNode, Term, Triple};
     use rio_turtle::TurtleFormatter;
@@ -225,7 +231,7 @@ pub fn atoms_to_turtle(atoms: Vec<crate::Atom>, store: &impl Storelike) -> Atomi
         let predicate = NamedNode {
             iri: &atom.property,
         };
-        let datatype = store.get_property(&atom.property)?.data_type;
+        let datatype = store.get_property(&atom.property).await?.data_type;
         let value = &atom.value.to_string();
         let datatype_url = datatype.to_string();
         let object: Term = match &datatype {
@@ -264,12 +270,13 @@ mod test {
     use super::*;
     use crate::Storelike;
 
-    #[test]
-    fn serialize_json_ad() {
-        let store = crate::Store::init().unwrap();
-        store.populate().unwrap();
+    #[tokio::test]
+    async fn serialize_json_ad() {
+        let store = crate::Store::init().await.unwrap();
+        store.populate().await.unwrap();
         let json = store
             .get_resource(crate::urls::AGENT)
+            .await
             .unwrap()
             .to_json_ad()
             .unwrap();
@@ -309,14 +316,16 @@ mod test {
         assert_eq!(serialized, correct_json);
     }
 
-    #[test]
-    fn serialize_json() {
-        let store = crate::Store::init().unwrap();
-        store.populate().unwrap();
+    #[tokio::test]
+    async fn serialize_json() {
+        let store = crate::Store::init().await.unwrap();
+        store.populate().await.unwrap();
         let json = store
             .get_resource(crate::urls::AGENT)
+            .await
             .unwrap()
             .to_json(&store)
+            .await
             .unwrap();
         println!("json: {}", json);
         let correct_json = r#"{
@@ -342,14 +351,16 @@ mod test {
         assert_eq!(our_value, correct_value)
     }
 
-    #[test]
-    fn serialize_json_ld() {
-        let store = crate::Store::init().unwrap();
-        store.populate().unwrap();
+    #[tokio::test]
+    async fn serialize_json_ld() {
+        let store = crate::Store::init().await.unwrap();
+        store.populate().await.unwrap();
         let json = store
             .get_resource(crate::urls::AGENT)
+            .await
             .unwrap()
             .to_json_ld(&store)
+            .await
             .unwrap();
         println!("json: {}", json);
         let correct_json = r#"{
@@ -395,16 +406,16 @@ mod test {
         assert_eq!(our_value, correct_value)
     }
 
-    #[test]
+    #[tokio::test]
     #[cfg(feature = "rdf")]
-    fn serialize_ntriples() {
+    async fn serialize_ntriples() {
         use crate::Storelike;
-        let store = crate::Store::init().unwrap();
-        store.populate().unwrap();
+        let store = crate::Store::init().await.unwrap();
+        store.populate().await.unwrap();
         let subject = crate::urls::DESCRIPTION;
-        let resource = store.get_resource(subject).unwrap();
+        let resource = store.get_resource(subject).await.unwrap();
         let atoms = resource.to_atoms();
-        let serialized = atoms_to_ntriples(atoms, &store).unwrap();
+        let serialized = atoms_to_ntriples(atoms, &store).await.unwrap();
         let _out = r#"
         <https://atomicdata.dev/properties/description> <https://atomicdata.dev/properties/description> "A textual description of the thing."^^<https://atomicdata.dev/datatypes/markdown> .
 <https://atomicdata.dev/properties/description> <https://atomicdata.dev/properties/isA> "[\"https://atomicdata.dev/classes/Property\"]"^^<https://atomicdata.dev/datatypes/resourceArray> .

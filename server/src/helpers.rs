@@ -165,7 +165,7 @@ pub fn get_auth(
 /// Checks for authentication headers and returns Some agent's subject if everything is well.
 /// Skips these checks in public_mode and returns Ok(None).
 #[tracing::instrument(skip(appstate))]
-pub fn get_client_agent(
+pub async fn get_client_agent(
     headers: &HeaderMap,
     appstate: &AppState,
     requested_subject: String,
@@ -179,6 +179,7 @@ pub fn get_client_agent(
         auth_header_values,
         &appstate.store,
     )
+    .await
     .map_err(|e| format!("Authentication failed: {}", e))?;
     Ok(for_agent)
 }

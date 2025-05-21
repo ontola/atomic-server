@@ -1,7 +1,7 @@
 use tracing::info;
 
 use crate::{
-    endpoints::{Endpoint, HandleGetContext, HandlePostContext},
+    endpoints::{BoxFuture, Endpoint, HandleGetContext, HandlePostContext},
     errors::AtomicResult,
     storelike::{Query, ResourceResponse},
     urls, Resource, Storelike, Value,
@@ -18,49 +18,59 @@ pub fn prune_tests_endpoint() -> Endpoint {
     }
 }
 
-pub fn handle_get(context: HandleGetContext) -> AtomicResult<ResourceResponse> {
-    prune_tests_endpoint().to_resource_response(context.store)
+pub fn handle_get<'a>(
+    context: HandleGetContext<'a>,
+) -> BoxFuture<'a, AtomicResult<ResourceResponse>> {
+    Box::pin(async move {
+        prune_tests_endpoint()
+            .to_resource_response(context.store)
+            .await
+    })
 }
 
 // Delete all drives with 'testdrive-' in their name. (These drive are generated with each e2e test run)
-fn handle_prune_tests_request(context: HandlePostContext) -> AtomicResult<ResourceResponse> {
-    let HandlePostContext { store, .. } = context;
+fn handle_prune_tests_request<'a>(
+    context: HandlePostContext<'a>,
+) -> BoxFuture<'a, AtomicResult<ResourceResponse>> {
+    Box::pin(async move {
+        let HandlePostContext { store, .. } = context;
 
-    let mut query = Query::new_class(urls::DRIVE);
-    query.for_agent = context.for_agent.clone();
-    let mut deleted_drives = 0;
+        let mut query = Query::new_class(urls::DRIVE);
+        query.for_agent = context.for_agent.clone();
+        let mut deleted_drives = 0;
 
-    if let Ok(mut query_result) = store.query(&query) {
-        info!(
-            "Received prune request, deleting {} drives",
-            query_result.resources.len()
-        );
+        if let Ok(mut query_result) = store.query(&query).await {
+            info!(
+                "Received prune request, deleting {} drives",
+                query_result.resources.len()
+            );
 
-        let total_drives = query_result.resources.len();
+            let total_drives = query_result.resources.len();
 
-        for resource in query_result.resources.iter_mut() {
-            if let Value::String(name) = resource
-                .get(urls::NAME)
-                .unwrap_or(&Value::String("".to_string()))
-            {
-                if name.contains("testdrive-") {
-                    resource.destroy(store)?;
-                    deleted_drives += 1;
+            for resource in query_result.resources.iter_mut() {
+                if let Value::String(name) = resource
+                    .get(urls::NAME)
+                    .unwrap_or(&Value::String("".to_string()))
+                {
+                    if name.contains("testdrive-") {
+                        resource.destroy(store).await?;
+                        deleted_drives += 1;
 
-                    if (deleted_drives % 10) == 0 {
-                        info!("Deleted {} of {} drives", deleted_drives, total_drives);
+                        if (deleted_drives % 10) == 0 {
+                            info!("Deleted {} of {} drives", deleted_drives, total_drives);
+                        }
                     }
                 }
             }
+
+            info!("Done pruning drives");
+        } else {
+            info!("Received prune request but there are no drives to prune");
         }
 
-        info!("Done pruning drives");
-    } else {
-        info!("Received prune request but there are no drives to prune");
-    }
-
-    let resource = build_response(store, 200, format!("Deleted {} drives", deleted_drives))?;
-    Ok(ResourceResponse::Resource(resource))
+        let resource = build_response(store, 200, format!("Deleted {} drives", deleted_drives))?;
+        Ok(ResourceResponse::Resource(resource))
+    })
 }
 
 fn build_response(store: &impl Storelike, status: i32, message: String) -> AtomicResult<Resource> {

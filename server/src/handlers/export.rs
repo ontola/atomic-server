@@ -39,7 +39,7 @@ pub async fn handle_export(
         return Err("No format provided".into());
     };
 
-    let for_agent = get_client_agent(headers, &appstate, subject.clone())?;
+    let for_agent = get_client_agent(headers, &appstate, subject.clone()).await?;
     let display_refs_as_name = params.display_refs_as_name.unwrap_or(false);
 
     match format.as_str() {
@@ -50,7 +50,7 @@ pub async fn handle_export(
                 display_refs_as_name,
             };
 
-            let (name, csv) = exporter.resource_to_csv(&subject)?;
+            let (name, csv) = exporter.resource_to_csv(&subject).await?;
             Ok(HttpResponse::Ok()
                 .content_type("text/csv")
                 .insert_header((
@@ -73,22 +73,25 @@ struct CSVExporter<'a> {
 }
 
 impl<'a> CSVExporter<'a> {
-    pub fn resource_to_csv(&self, subject: &str) -> AtomicResult<(String, String)> {
+    pub async fn resource_to_csv(&self, subject: &str) -> AtomicResult<(String, String)> {
         println!("Exporting resource to CSV: {}", subject);
         let resource = self
             .store
-            .get_resource_extended(subject, false, self.agent)?
+            .get_resource_extended(subject, false, self.agent)
+            .await?
             .to_single();
 
-        let binding = resource.get_classes(self.store)?;
+        let binding = resource.get_classes(self.store).await?;
 
         let classes: Vec<&str> = binding.iter().map(|c| c.subject.as_str()).collect();
 
         // Check the classes of the resource to determine how to export it.
         if classes.contains(&urls::TABLE) {
-            let prop_order = self.get_prop_order_from_table(&resource)?;
+            let prop_order = self.get_prop_order_from_table(&resource).await?;
 
-            let data = self.build_csv_from_children(&resource, Some(prop_order))?;
+            let data = self
+                .build_csv_from_children(&resource, Some(prop_order))
+                .await?;
             let Ok(Value::String(name)) = resource.get(urls::NAME) else {
                 return Err("Resource does not have a name".into());
             };
@@ -103,20 +106,22 @@ impl<'a> CSVExporter<'a> {
         }
     }
 
-    fn get_prop_order_from_table(&self, resource: &Resource) -> AtomicResult<Vec<String>> {
+    async fn get_prop_order_from_table(&self, resource: &Resource) -> AtomicResult<Vec<String>> {
         let class_value = resource.get(urls::CLASSTYPE_PROP)?;
 
         let propvals = match class_value {
             Value::AtomicUrl(subject) => self
                 .store
-                .get_resource_extended(subject, false, self.agent)?
+                .get_resource_extended(subject, false, self.agent)
+                .await?
                 .to_single()
                 .get_propvals()
                 .clone(),
             Value::NestedResource(nested) => match nested {
                 SubResource::Subject(subject) => self
                     .store
-                    .get_resource_extended(subject, false, self.agent)?
+                    .get_resource_extended(subject, false, self.agent)
+                    .await?
                     .to_single()
                     .get_propvals()
                     .clone(),
@@ -153,7 +158,7 @@ impl<'a> CSVExporter<'a> {
         }
     }
 
-    fn build_csv_from_children(
+    async fn build_csv_from_children(
         &self,
         resource: &Resource,
         prop_order: Option<Vec<String>>,
@@ -172,7 +177,7 @@ impl<'a> CSVExporter<'a> {
             for_agent: self.agent.clone(),
         };
 
-        let results = self.store.query(&query)?;
+        let results = self.store.query(&query).await?;
         let mut body_csv = String::new();
         let mut encountered_properties = prop_order.unwrap_or_default();
 
@@ -185,7 +190,7 @@ impl<'a> CSVExporter<'a> {
                     continue;
                 }
 
-                let fixed_value = CSVExporter::escape_csv_value(self.value_to_string(value));
+                let fixed_value = CSVExporter::escape_csv_value(self.value_to_string(value).await);
 
                 if let Some(index) = encountered_properties.iter().position(|p| p == prop) {
                     line_vec[index + 1] = fixed_value;
@@ -199,17 +204,21 @@ impl<'a> CSVExporter<'a> {
             body_csv.push_str(&format!("\n{}", line));
         }
 
-        let header = self.create_csv_header_from_props(&encountered_properties)?;
+        let header = self
+            .create_csv_header_from_props(&encountered_properties)
+            .await?;
         let csv = format!("{}{}", header, body_csv);
 
         Ok(csv)
     }
 
-    fn create_csv_header_from_props(&self, props: &[String]) -> AtomicResult<String> {
+    async fn create_csv_header_from_props(&self, props: &[String]) -> AtomicResult<String> {
         let mut header = "subject".to_string();
         for prop in props.iter() {
-            let name: String = if let Ok(resource_response) =
-                self.store.get_resource_extended(prop, true, self.agent)
+            let name: String = if let Ok(resource_response) = self
+                .store
+                .get_resource_extended(prop, true, self.agent)
+                .await
             {
                 resource_response
                     .to_single()
@@ -224,7 +233,7 @@ impl<'a> CSVExporter<'a> {
         Ok(header)
     }
 
-    fn value_to_string(&self, value: &Value) -> String {
+    async fn value_to_string(&self, value: &Value) -> String {
         match value {
             Value::Timestamp(ts) => {
                 // Convert the timestamp to a NaiveDateTime (no timezone)
@@ -241,25 +250,29 @@ impl<'a> CSVExporter<'a> {
                 datetime.to_rfc3339()
             }
             Value::ResourceArray(values) => {
-                let names: Vec<String> = values
-                    .iter()
-                    .map(|v| match v {
-                        SubResource::Subject(subject) => self.get_name_from_subject(subject),
-                        SubResource::Nested(nested) => {
-                            self.get_name_from_propvals(nested, "".to_string())
+                let mut names = Vec::new();
+                for v in values {
+                    match v {
+                        SubResource::Subject(subject) => {
+                            names.push(self.get_name_from_subject(subject).await)
                         }
-                    })
-                    .collect();
-
+                        SubResource::Nested(nested) => {
+                            names.push(self.get_name_from_propvals(nested, "".to_string()))
+                        }
+                    }
+                }
                 names.join(", ")
             }
-            Value::AtomicUrl(subject) => self.get_name_from_subject(subject),
+            Value::AtomicUrl(subject) => self.get_name_from_subject(subject).await,
             _ => value.to_string(),
         }
     }
 
-    fn get_name_from_subject(&self, subject: &str) -> String {
-        let Ok(resource_response) = self.store.get_resource_extended(subject, true, self.agent)
+    async fn get_name_from_subject(&self, subject: &str) -> String {
+        let Ok(resource_response) = self
+            .store
+            .get_resource_extended(subject, true, self.agent)
+            .await
         else {
             return subject.to_string();
         };

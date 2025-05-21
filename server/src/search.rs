@@ -82,7 +82,7 @@ impl SearchState {
 
     /// Indexes all resources from the store to search.
     /// At this moment does not remove existing index.
-    pub fn add_all_resources(&self, store: &Db) -> AtomicServerResult<()> {
+    pub async fn add_all_resources(&self, store: &Db) -> AtomicServerResult<()> {
         tracing::info!("Building search index...");
 
         let resources = store
@@ -90,7 +90,7 @@ impl SearchState {
             .filter(|resource| !resource.get_subject().contains("/commits/"));
 
         for resource in resources {
-            self.add_resource(&resource, store).map_err(|e| {
+            self.add_resource(&resource, store).await.map_err(|e| {
                 format!(
                     "Failed to add resource to search index: {}. Error: {}",
                     resource.get_subject(),
@@ -108,7 +108,7 @@ impl SearchState {
     /// Does not index outgoing links, or resourcesArrays
     /// `appstate.search_index_writer.write()?.commit()?;`
     #[tracing::instrument(skip(self, store))]
-    pub fn add_resource(&self, resource: &Resource, store: &Db) -> AtomicServerResult<()> {
+    pub async fn add_resource(&self, resource: &Resource, store: &Db) -> AtomicServerResult<()> {
         let fields = self.get_schema_fields()?;
         let subject = resource.get_subject().to_string();
         let writer = self.writer.read()?;
@@ -150,7 +150,7 @@ impl SearchState {
             doc.add_text(fields.description, content);
         }
 
-        let hierarchy = resource_to_facet(resource, store)?;
+        let hierarchy = resource_to_facet(resource, store).await?;
         doc.add_facet(fields.hierarchy, hierarchy);
 
         writer.add_document(doc)?;
@@ -235,8 +235,8 @@ pub fn subject_to_facet(subject: String) -> AtomicServerResult<Facet> {
         .map_err(|e| format!("Failed to create facet from subject. Error: {}", e).into())
 }
 
-pub fn resource_to_facet(resource: &Resource, store: &Db) -> AtomicServerResult<Facet> {
-    let mut parent_tree = resource.get_parent_tree(store)?;
+pub async fn resource_to_facet(resource: &Resource, store: &Db) -> AtomicServerResult<Facet> {
+    let mut parent_tree = resource.get_parent_tree(store).await?;
     parent_tree.reverse();
 
     let mut hierarchy_bytes: Vec<u8> = Vec::new();
@@ -312,9 +312,9 @@ mod tests {
     use super::*;
     use atomic_lib::{urls, Resource, Storelike};
 
-    #[test]
-    fn facet_contains_subfacet() {
-        let store = atomic_lib::Db::init_temp("facet_contains").unwrap();
+    #[actix_rt::test]
+    async fn facet_contains_subfacet() {
+        let store = atomic_lib::Db::init_temp("facet_contains").await.unwrap();
         let mut prev_subject: Option<String> = None;
         let mut resources = Vec::new();
 
@@ -325,36 +325,37 @@ mod tests {
             if let Some(prev_subject) = prev_subject.clone() {
                 resource
                     .set_string(urls::PARENT.into(), &prev_subject, &store)
+                    .await
                     .unwrap();
             }
 
             prev_subject = Some(subject.clone());
 
-            store.add_resource(&resource).unwrap();
+            store.add_resource(&resource).await.unwrap();
             resources.push(resource);
         }
 
-        let parent_tree = resources[2].get_parent_tree(&store).unwrap();
+        let parent_tree = resources[2].get_parent_tree(&store).await.unwrap();
         assert_eq!(parent_tree.len(), 2);
 
-        let index_facet = resource_to_facet(&resources[2], &store).unwrap();
+        let index_facet = resource_to_facet(&resources[2], &store).await.unwrap();
 
-        let query_facet_direct_parent = resource_to_facet(&resources[1], &store).unwrap();
-        let query_facet_root = resource_to_facet(&resources[0], &store).unwrap();
+        let query_facet_direct_parent = resource_to_facet(&resources[1], &store).await.unwrap();
+        let query_facet_root = resource_to_facet(&resources[0], &store).await.unwrap();
 
         assert!(query_facet_direct_parent.is_prefix_of(&index_facet));
         assert!(query_facet_root.is_prefix_of(&index_facet));
     }
 
-    #[test]
-    fn test_update_resource() {
+    #[actix_rt::test]
+    async fn test_update_resource() {
         let unique_string = atomic_lib::utils::random_string(10);
 
         let config = crate::config::build_temp_config(&unique_string)
             .map_err(|e| format!("Initialization failed: {}", e))
             .expect("failed init config");
 
-        let store = atomic_lib::Db::init_temp(&unique_string).unwrap();
+        let store = atomic_lib::Db::init_temp(&unique_string).await.unwrap();
 
         let search_state = SearchState::new(&config).unwrap();
         let fields = search_state.get_schema_fields().unwrap();
@@ -363,24 +364,26 @@ mod tests {
         let mut resource = Resource::new_generate_subject(&store).unwrap();
         resource
             .set_string(urls::NAME.into(), "Initial Title", &store)
+            .await
             .unwrap();
-        store.add_resource(&resource).unwrap();
+        store.add_resource(&resource).await.unwrap();
 
         // Add to search index
-        search_state.add_resource(&resource, &store).unwrap();
+        search_state.add_resource(&resource, &store).await.unwrap();
         search_state.writer.write().unwrap().commit().unwrap();
 
         // Update the resource
         resource
             .set_string(urls::NAME.into(), "Updated Title", &store)
+            .await
             .unwrap();
-        resource.save(&store).unwrap();
+        resource.save(&store).await.unwrap();
 
         // Update in search index
         search_state
             .remove_resource(resource.get_subject())
             .unwrap();
-        search_state.add_resource(&resource, &store).unwrap();
+        search_state.add_resource(&resource, &store).await.unwrap();
         search_state.writer.write().unwrap().commit().unwrap();
 
         // Make sure changes are visible to searcher
