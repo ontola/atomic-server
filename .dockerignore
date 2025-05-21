@@ -1,0 +1,49 @@
+# Dependencies
+node_modules
+.pnpm-store
+.npm
+.yarn
+.yarn-cache
+
+# Build outputs
+artifact
+dist
+build
+docs/book
+target
+*.o
+*.so
+*.dylib
+
+# Development files
+.git
+.github
+.vscode
+.idea
+*.swp
+*.swo
+.DS_Store
+
+# Test files
+coverage
+.nyc_output
+test-results
+playwright-report
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Cache directories
+.cache
+.temp
+.tmp
+
+# Documentation
