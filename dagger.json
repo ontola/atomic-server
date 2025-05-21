@@ -4,5 +4,15 @@
   "sdk": {
     "source": "typescript"
   },
+  "exclude": [
+    "node_modules",
+    "dist",
+    "build",
+    ".env",
+    ".git",
+    ".github",
+    ".husky",
+    ".vscode"
+  ],
   "source": ".dagger"
 }
