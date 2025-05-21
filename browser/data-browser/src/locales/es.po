@@ -1381,7 +1381,9 @@ msgid "Delete resource"
 msgstr "Eliminar recurso"
 
 #. placeholder {0}: shortcuts.menu
+#. placeholder {0}: shortcuts.menu
 #: src/components/ResourceContextMenu/MenuBarDropdownTrigger.tsx
+#: src/components/ResourceContextMenu/ParentContextMenuTrigger.tsx
 msgid "Open menu ({0})"
 msgstr "Abrir menú ({0})"
 
@@ -4065,4 +4067,8 @@ msgstr ""
 #: src/components/Parent.tsx
 #: src/components/Parent.tsx
 msgid "Tags"
+msgstr ""
+
+#: src/components/ResourceContextMenu/ParentContextMenuTrigger.tsx
+msgid "More"
 msgstr ""

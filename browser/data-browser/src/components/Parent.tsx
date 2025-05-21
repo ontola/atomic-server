@@ -18,7 +18,7 @@ import { useSettings } from '../helpers/AppSettings';
 import { Button } from './Button';
 import { BREADCRUMB_BAR_TRANSITION_TAG } from '../helpers/transitionName';
 import { ResourceContextMenu } from './ResourceContextMenu';
-import { MenuBarDropdownTrigger } from './ResourceContextMenu/MenuBarDropdownTrigger';
+import { ParentContextMenuTrigger } from './ResourceContextMenu/ParentContextMenuTrigger';
 import { FaMagnifyingGlass, FaShare, FaTags } from 'react-icons/fa6';
 import { ResourceInline } from '../views/ResourceInline';
 import type { JSX } from 'react';
@@ -135,7 +135,7 @@ function Parent({ resource }: ParentProps): JSX.Element {
         <ResourceContextMenu
           isMainMenu
           subject={resource.subject}
-          trigger={MenuBarDropdownTrigger}
+          trigger={ParentContextMenuTrigger}
         />
       </ButtonArea>
     </ParentWrapper>
