@@ -16,6 +16,7 @@ Check out the [Roadmap](https://docs.atomicdata.dev/roadmap.html) if you want to
 - [Running \& compiling](#running--compiling)
   - [Running locally (with local development browser)](#running-locally-with-local-development-browser)
   - [IDE setup (VSCode)](#ide-setup-vscode)
+  - [Using Dagger](#using-dagger)
   - [Compilation using Earthly](#compilation-using-earthly)
   - [Improve local compilation speed](#improve-local-compilation-speed)
   - [Cross compilation](#cross-compilation)
@@ -58,6 +59,17 @@ That doesn't mean that you should, too, but it means you're less likely to run i
 - **Tasks**: The `/.vscode` directory contains various `tasks` (open command palette => search "run task")
 - **Debugging**: Install the `CodeLLDB` plugin, and press F5 to start debugging. Breakpoints, inspect... The good stuff.
 - **Extensions**: That same directory will give a couple of suggestions for extensions to install.
+
+### Using Dagger
+
+Dagger is a tool that's used for building the project.
+The `.dagger` directory and the `dagger.json` file contain most of the configuration.
+Install the Dagger CLI from [here](https://docs.dagger.io/install/) and run the `dagger` command in the root of the project.
+Then you can run the commands from the `.dagger/src/index.ts` file, e.g. `dagger call build-browser`.
+Add `-i` to the command to run in interactive mode, add `--output` to save the output to a folder.
+Note that the camelCase functions in the `index.ts` file are converted to kebab-case commands in the Dagger API.
+
+Check out the [Dagger docs](https://docs.dagger.io/) for more information.
 
 ### Compilation using Earthly
 
