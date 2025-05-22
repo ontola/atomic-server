@@ -692,9 +692,8 @@ msgstr "Set Drive"
 msgid "Set {0} as current drive"
 msgstr "Set {0} as current drive"
 
-#: src/components/Parent.tsx
-msgid "Set as drive"
-msgstr "Set as drive"
+#~ msgid "Set as drive"
+#~ msgstr "Set as drive"
 
 #: src/views/InvitePage.tsx
 msgid "Failed to add invited drive to agent"
@@ -3898,9 +3897,23 @@ msgstr "Share"
 
 #: src/components/Parent.tsx
 #: src/components/Parent.tsx
+#: src/views/Drive/DrivePage.tsx
 msgid "Tags"
 msgstr "Tags"
 
 #: src/components/ResourceContextMenu/ParentContextMenuTrigger.tsx
 msgid "More"
 msgstr "More"
+
+#. placeholder {0}: tags.length
+#: src/components/Tag/TagCountPopover.tsx
+msgid "Tags +{0}"
+msgstr "Tags +{0}"
+
+#: src/views/Drive/DrivePage.tsx
+msgid "Remove tag"
+msgstr "Remove tag"
+
+#: src/components/Tag/TagSelectPopover.tsx
+msgid "Open tag page"
+msgstr "Open tag page"

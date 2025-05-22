@@ -1,3 +1,4 @@
+import { forwardRef } from 'react';
 import { styled } from 'styled-components';
 import { FaEllipsisVertical } from 'react-icons/fa6';
 import type { DropdownTriggerComponent } from '../Dropdown/DropdownTrigger';
@@ -21,22 +22,20 @@ const MenuButton = styled.button`
   }
 `;
 
-export const ParentContextMenuTrigger: DropdownTriggerComponent = ({
-  onClick,
-  menuId,
-  ref,
-}) => (
-  <MenuButton
-    aria-controls={menuId}
-    ref={ref}
-    title={`Open menu (${shortcuts.menu})`}
-    type='button'
-    data-test='context-menu'
-    onClick={onClick}
-  >
-    <FaEllipsisVertical />
-    <span>More</span>
-  </MenuButton>
+export const ParentContextMenuTrigger: DropdownTriggerComponent = forwardRef(
+  ({ onClick, menuId }, ref) => (
+    <MenuButton
+      aria-controls={menuId}
+      ref={ref}
+      title={`Open menu (${shortcuts.menu})`}
+      type='button'
+      data-test='context-menu'
+      onClick={onClick}
+    >
+      <FaEllipsisVertical />
+      <span>More</span>
+    </MenuButton>
+  ),
 );
 
 ParentContextMenuTrigger.displayName = 'ParentContextMenuTrigger';

@@ -179,9 +179,8 @@ msgstr "Drive festlegen"
 msgid "Set {0} as current drive"
 msgstr "Lege {0} als aktuellen Drive fest"
 
-#: src/components/Parent.tsx
-msgid "Set as drive"
-msgstr "Als Drive festlegen"
+#~ msgid "Set as drive"
+#~ msgstr "Als Drive festlegen"
 
 #. placeholder {0}: truncated
 #: src/components/PropVal.tsx
@@ -4080,9 +4079,23 @@ msgstr ""
 
 #: src/components/Parent.tsx
 #: src/components/Parent.tsx
+#: src/views/Drive/DrivePage.tsx
 msgid "Tags"
 msgstr ""
 
 #: src/components/ResourceContextMenu/ParentContextMenuTrigger.tsx
 msgid "More"
+msgstr ""
+
+#. placeholder {0}: tags.length
+#: src/components/Tag/TagCountPopover.tsx
+msgid "Tags +{0}"
+msgstr ""
+
+#: src/views/Drive/DrivePage.tsx
+msgid "Remove tag"
+msgstr ""
+
+#: src/components/Tag/TagSelectPopover.tsx
+msgid "Open tag page"
 msgstr ""

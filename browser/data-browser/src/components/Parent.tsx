@@ -20,6 +20,7 @@ import { BREADCRUMB_BAR_TRANSITION_TAG } from '../helpers/transitionName';
 import { ResourceContextMenu } from './ResourceContextMenu';
 import { ParentContextMenuTrigger } from './ResourceContextMenu/ParentContextMenuTrigger';
 import { FaMagnifyingGlass, FaShare, FaTags } from 'react-icons/fa6';
+import * as RadixPopover from '@radix-ui/react-popover';
 import { ResourceInline } from '../views/ResourceInline';
 import type { JSX } from 'react';
 import { useState, useEffect } from 'react';
@@ -28,16 +29,15 @@ import { AIIcon } from './AI/AIIcon';
 import { useAISettings } from './AI/AISettingsContext';
 import { openSearchOverlay } from './OverlayContainer';
 import { TagSelectPopover } from './Tag/TagSelectPopover';
+import { Tag } from './Tag/Tag';
 import { getResourcesDrive } from '@helpers/getResourcesDrive';
-import * as RadixPopover from '@radix-ui/react-popover';
-import { SkeletonButton } from './SkeletonButton';
 import { ShareDialog } from './Share/ShareDialog';
 
 type ParentProps = {
   resource: Resource;
 };
 
-/** Tag select popover wrapper - needs to be a separate component to use hooks */
+/** Tag select popover wrapper - needs to be separate component to use hooks */
 function TagSelectPopoverWrapper({ resource }: { resource: Resource }) {
   const store = useStore();
   const [driveSubject, setDriveSubject] = useState<string>();
@@ -70,37 +70,109 @@ function TagSelectPopoverWrapper({ resource }: { resource: Resource }) {
   }
 
   return (
+    <>
     <TagSelectPopover
-      tags={driveTags}
-      selectedTags={tags}
-      setSelectedTags={setTags}
-      onNewTag={canCreateTags ? handleNewTag : undefined}
-      newTagParent={canCreateTags ? driveSubject : undefined}
-      Trigger={
-        <TagsButton as={RadixPopover.Trigger}>
-          <FaTags />
-          <span>Tags</span>
-        </TagsButton>
-      }
-    />
+        tags={driveTags}
+        selectedTags={tags}
+        setSelectedTags={setTags}
+        onNewTag={canCreateTags ? handleNewTag : undefined}
+        newTagParent={canCreateTags ? driveSubject : undefined}
+        Trigger={
+          <TagsButton as={RadixPopover.Trigger}>
+            <FaTags />
+            <span>Tags</span>
+            {tags.length > 0 && <TagsCount>+{tags.length}</TagsCount>}
+          </TagsButton>
+        }
+      />
+      {tags.length > 0 && (
+        <InlineTagsRow>
+          {tags.map(t => (
+            <TagPageLink key={t} subject={t} />
+          ))}
+        </InlineTagsRow>
+      )}
+    </>
   );
 }
 
-/** Breadcrumb list. Recursively renders parents. */
+/** Shows a "Set drive" button if the current drive is different from the Subject */
+function DriveMismatch({ subject }: { subject: string }) {
+  const { drive, setDrive } = useSettings();
+  const resource = useResource(subject, { allowIncomplete: true });
+  const [title] = useTitle(resource);
+  const classes = resource.getClasses();
+
+  const handleSetDrive = () => {
+    setDrive(subject);
+  };
+
+  const mismatch = subject && subject !== drive;
+
+  if (mismatch && classes[0] === server.classes.drive) {
+    return (
+      <Button
+        title={`Set ${title} as current drive`}
+        subtle
+        onClick={handleSetDrive}
+      >
+        Set Drive
+      </Button>
+    );
+  }
+
+  return null;
+}
+
+/** Direct parent breadcrumb only */
+function DirectParent({ subject }: { subject: string }): JSX.Element {
+  const resource = useResource(subject, { allowIncomplete: true });
+  const [title] = useTitle(resource);
+  const navigate = useNavigateWithTransition();
+
+  const handleClick: React.MouseEventHandler<HTMLAnchorElement> = e => {
+    e.preventDefault();
+    navigate(constructOpenURL(subject));
+  };
+
+  return (
+    <>
+      <DriveMismatch subject={subject} />
+      <Breadcrumb href={subject} onClick={handleClick}>
+        {title}
+      </Breadcrumb>
+      <Divider>/</Divider>
+    </>
+  );
+}
+
+/** A tag chip that links to the tag's page */
+function TagPageLink({ subject }: { subject: string }): JSX.Element {
+  const navigate = useNavigateWithTransition();
+
+  const handleClick: React.MouseEventHandler<HTMLAnchorElement> = e => {
+    e.preventDefault();
+    navigate(constructOpenURL(subject));
+  };
+
+  return (
+    <TagAnchor href={constructOpenURL(subject)} onClick={handleClick}>
+      <Tag subject={subject} />
+    </TagAnchor>
+  );
+}
+
+/** Breadcrumb list */
 function Parent({ resource }: ParentProps): JSX.Element {
   const [parent] = useString(resource, core.properties.parent);
   const { enableAI } = useAISettings();
   const { setIsOpen } = useAISidebar();
-  const navigate = useNavigateWithTransition();
   const [tags] = useArray(resource, dataBrowser.properties.tags);
 
   return (
     <ParentWrapper aria-label='Breadcrumbs'>
-      {!parent && <DriveMismatch subject={resource.subject} />}
-      <BreadcrumbRow center gap='initial'>
-        {parent && <NestedParent subject={parent} depth={0} />}
-        <BreadCrumbCurrent>{resource.title}</BreadCrumbCurrent>
-      </BreadcrumbRow>
+      {parent && <DirectParent subject={parent} />}
+      <BreadCrumbCurrent>{resource.title}</BreadCrumbCurrent>
       <Spacer />
       <ButtonArea>
         <LabelButton onClick={() => openSearchOverlay()}>
@@ -123,15 +195,6 @@ function Parent({ resource }: ParentProps): JSX.Element {
           </LabelButton>
         )}
         <TagSelectPopoverWrapper resource={resource} />
-        {tags.length > 0 && (
-          <SelectedTagsRow>
-            {tags.map(tag => (
-              <SmallTag key={tag}>
-                <ResourceInline subject={tag} />
-              </SmallTag>
-            ))}
-          </SelectedTagsRow>
-        )}
         <ResourceContextMenu
           isMainMenu
           subject={resource.subject}
@@ -154,18 +217,10 @@ const ParentWrapper = styled.nav`
 
   view-transition-name: ${BREADCRUMB_BAR_TRANSITION_TAG};
 
+  container: breadcrumb-bar / inline-size;
+
   @media print {
     display: none;
-  }
-`;
-
-const BreadcrumbRow = styled(Row)`
-  flex-shrink: 1;
-  min-width: 0;
-  overflow: hidden;
-  max-width: 80vw;
-  & > * {
-    min-width: 0;
   }
 `;
 
@@ -179,6 +234,13 @@ const ButtonArea = styled.div`
   color: ${p => p.theme.colors.textLight};
   gap: ${p => p.theme.size(1)};
   align-items: center;
+
+  /* Icon-only mode on small screens */
+  @container breadcrumb-bar (max-width: 600px) {
+    & > * > span {
+      display: none;
+    }
+  }
 `;
 
 const LabelButton = styled.button`
@@ -215,92 +277,35 @@ const TagsButton = styled.button`
     background: ${p => p.theme.colors.bg1};
     color: ${p => p.theme.colors.text};
   }
-
-  @container (max-width: 600px) {
-    span {
-      display: none;
-    }
-  }
 `;
 
-const SelectedTagsRow = styled.div`
-  display: flex;
+/** Tag chips row — visible on wide, hidden on narrow */
+const InlineTagsRow = styled.span`
+  display: inline-flex;
   align-items: center;
-  gap: ${p => p.theme.size(1)};
-  flex-wrap: wrap;
-`;
-
-const SmallTag = styled.span`
+  gap: 0.4ch;
   font-size: 0.75rem;
-  opacity: 0.8;
+
+  @container breadcrumb-bar (max-width: 600px) {
+    display: none;
+  }
 `;
 
-type NestedParentProps = {
-  subject: string;
-  depth: number;
-};
+const TagAnchor = styled.a`
+  text-decoration: none;
+  display: contents;
+`;
 
-const MAX_BREADCRUMB_DEPTH = 4;
+/** "+N" badge inside the Tags button — uses <b> to avoid ButtonArea's span-hiding rule */
+const TagsCount = styled.b`
+  font-weight: inherit;
+  font-size: 0.75em;
+  opacity: 0.7;
 
-/** Shows a "Set drive" button if the current drive is different from the Subject */
-function DriveMismatch({ subject }: { subject: string }) {
-  const { drive, setDrive } = useSettings();
-  const resource = useResource(subject, { allowIncomplete: true });
-  const [title] = useTitle(resource);
-  const classes = resource.getClasses();
-
-  const handleSetDrive = () => {
-    setDrive(subject);
-  };
-
-  const mismatch = subject && subject !== drive;
-
-  if (mismatch && classes[0] === server.classes.drive) {
-    return (
-      <Button
-        title={`Set ${title} as current drive`}
-        subtle
-        onClick={handleSetDrive}
-      >
-        Set Drive
-      </Button>
-    );
+  @container breadcrumb-bar (min-width: 601px) {
+    display: none;
   }
-
-  return null;
-}
-
-/** The actually recursive part */
-function NestedParent({ subject, depth }: NestedParentProps): JSX.Element {
-  const resource = useResource(subject, { allowIncomplete: true });
-  const [parent] = useString(resource, core.properties.parent);
-  const navigate = useNavigateWithTransition();
-  const [title] = useTitle(resource);
-
-  // Prevent infinite recursion, set a limit to parent breadcrumbs
-  if (depth > MAX_BREADCRUMB_DEPTH) {
-    return <Breadcrumb>Set as drive</Breadcrumb>;
-  }
-
-  const handleClick: React.MouseEventHandler<HTMLAnchorElement> = e => {
-    e.preventDefault();
-    navigate(constructOpenURL(subject));
-  };
-
-  return (
-    <>
-      {parent ? (
-        <NestedParent subject={parent} depth={depth + 1} />
-      ) : (
-        <DriveMismatch subject={subject} />
-      )}
-      <Breadcrumb href={subject} onClick={handleClick}>
-        {title}
-      </Breadcrumb>
-      <Divider>{'/'}</Divider>
-    </>
-  );
-}
+`;
 
 const Divider = styled.div`
   padding: 0.1rem 0.2rem;
