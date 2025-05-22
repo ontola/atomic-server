@@ -2,7 +2,7 @@ use atomic_lib::{errors::AtomicResult, Storelike};
 
 use crate::print::print_resource;
 
-pub fn search(
+pub async fn search(
     context: &crate::Context,
     query: String,
     parent: Option<String>,
@@ -19,13 +19,13 @@ pub fn search(
     if let Some(server) = server {
         context.store.set_server_url(&server);
     }
-    let resources = context.store.search(&query, opts)?;
+    let resources = context.store.search(&query, opts).await?;
     if resources.is_empty() {
         println!("No results found for query: {}", query);
         return Ok(());
     } else {
         for member in resources {
-            print_resource(context, &member, serialize)?;
+            print_resource(context, &member, serialize).await?;
         }
     }
     Ok(())

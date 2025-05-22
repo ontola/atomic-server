@@ -9,6 +9,7 @@ repository = "https://github.com/atomicdata-dev/atomic-server"
 version = "0.40.0"
 
 [dependencies]
+async-recursion = "1.1.1"
 atomic_lib = { version = "0.40.0", path = "../lib", features = [
     "config",
     "rdf",
@@ -20,6 +21,7 @@ dirs = "4"
 edit = { version = "0.1", optional = true }
 promptly = "0.3"
 regex = "1"
+tokio = { version = "1.48.0", features = ["full"] }
 
 [dev-dependencies]
 assert_cmd = "2"
