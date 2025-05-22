@@ -7,7 +7,7 @@
   ],
   "excludeExternals": true,
   "includeVersion": true,
-  "readme": "DOCS.md",
+  "readme": "typedoc-entry.md",
   "name": "@tomic",
   "out": "data-browser/publish/docs"
 }
