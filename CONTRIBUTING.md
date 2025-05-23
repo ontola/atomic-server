@@ -69,8 +69,8 @@ Then you can run the commands from the `.dagger/src/index.ts` file, e.g. `dagger
 Add `-i` to the command to run in interactive mode, add `--output` to save the output to a folder.
 You can pass secrets / ENVS to dagger like so:
 `dagger call typedoc-publish --netlify-auth-token="env://NETLIFY_AUTH_TOKEN"`
+If Dagger is taking up a lot of storage, run `dagger core engine local-cache prune`.
 Note that the camelCase functions in the `index.ts` file are converted to kebab-case commands in the Dagger API.
-
 Check out the [Dagger docs](https://docs.dagger.io/) for more information.
 
 ### Compilation using Earthly

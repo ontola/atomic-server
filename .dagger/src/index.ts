@@ -10,6 +10,7 @@ import {
 } from "@dagger.io/dagger";
 
 const NODE_IMAGE = "node:24";
+const RUST_IMAGE = "rust:bookworm";
 
 @object()
 export class AtomicServer {
@@ -101,6 +102,42 @@ export class AtomicServer {
       .withWorkdir("/app")
       .withExec(["pnpm", "run", "test"])
       .stdout();
+  }
+
+  @func()
+  docsPublish(
+    @argument({ defaultPath: "/docs" }) source: Directory,
+    @argument() netlifyAuthToken: Secret
+  ): Promise<string> {
+    return dag
+      .container()
+      .from(NODE_IMAGE)
+      .withExec(["npm", "install", "-g", "netlify-cli"])
+      .withSecretVariable("NETLIFY_AUTH_TOKEN", netlifyAuthToken)
+      .withDirectory("/html", this.docsFolder(source.directory(".")))
+      .withWorkdir("/html")
+      .withExec([
+        "sh",
+        "-c",
+        "netlify link --name atomic-docs --auth $NETLIFY_AUTH_TOKEN",
+      ])
+      .withExec(["netlify", "deploy", "--dir", ".", "--prod"])
+      .stdout();
+  }
+
+  @func()
+  docsFolder(@argument({ defaultPath: "/docs" }) source: Directory): Directory {
+    const docsContainer = dag
+      .container()
+      .from(RUST_IMAGE)
+      .withExec(["cargo", "install", "mdbook"])
+      .withExec(["cargo", "install", "mdbook-linkcheck"]);
+    // We skip installing mdbook-sitemap-generator because it's broken
+    return docsContainer
+      .withDirectory("/docs", source)
+      .withWorkdir("/docs")
+      .withExec(["mdbook", "build"])
+      .directory("/docs/book/html");
   }
 
   @func()
