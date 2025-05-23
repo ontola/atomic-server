@@ -50,11 +50,14 @@ export function Details({
 
   return (
     <>
-      <SummaryWrapper>
+      <SummaryWrapper onClick={disabled ? undefined : toggleOpen}>
         <StyledIconButton
           type='button'
           title={isOpen ? 'collapse' : 'expand'}
-          onClick={toggleOpen}
+          onClick={e => {
+            e.stopPropagation();
+            toggleOpen();
+          }}
           hide={!!disabled}
           aria-label={isOpen ? 'collapse' : 'expand'}
         >
@@ -74,6 +77,8 @@ const SummaryWrapper = styled.div`
   display: flex;
   align-items: center;
   gap: 0.4rem;
+  cursor: pointer;
+  user-select: none;
 `;
 
 const TitleWrapper = styled.div`

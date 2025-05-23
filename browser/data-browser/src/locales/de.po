@@ -3100,7 +3100,7 @@ msgstr "Fließtext"
 msgid "Nothing to copy."
 msgstr "Nichts zum Kopieren."
 
-#: src/views/Drive/PluginList.tsx
+#: src/views/Drive/DrivePage.tsx
 msgid "Plugins"
 msgstr "Plugins"
 

@@ -19,14 +19,17 @@ import { Column, Row } from '@components/Row';
 import { styled } from 'styled-components';
 import InputSwitcher from '@components/forms/InputSwitcher';
 import { WarningBlock } from '@components/WarningBlock';
+import { Details } from '@components/Details';
 
-import { type JSX } from 'react';
+import { lazy, Suspense, type JSX } from 'react';
 import { PluginList } from './PluginList';
 import { Tag } from '@components/Tag/Tag';
 import { CreateTagRow } from '@components/Tag/CreateTagRow';
 import { constructOpenURL } from '@helpers/navigation';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { FaXmark } from 'react-icons/fa6';
+
+const NewPluginButton = lazy(() => import('@chunks/Plugins/NewPluginButton'));
 
 /** A View for Drives, which function similar to a homepage or dashboard. */
 function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
@@ -63,18 +66,44 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
           propertyURL={core.properties.description}
           datatype={Datatype.MARKDOWN}
         />
-        <div>
-          <h2>Tags</h2>
-          <DriveTagList resource={resource} />
-          <Heading>Default Ontology</Heading>
-          <InputSwitcher
-            commit
-            resource={resource}
-            property={defaultOntologyProp}
-            disabled={!canEdit}
-          />
-        </div>
-        <PluginList drive={resource} />
+        <SettingsArea>
+          <SettingsSection>
+            <Details noIndent title={<SettingsLabel>Tags</SettingsLabel>}>
+              <SettingsContent>
+                <DriveTagList resource={resource} />
+              </SettingsContent>
+            </Details>
+          </SettingsSection>
+          <SettingsSection>
+            <Details
+              noIndent
+              title={<SettingsLabel>Default Ontology</SettingsLabel>}
+            >
+              <SettingsContent>
+                <InputSwitcher
+                  commit
+                  resource={resource}
+                  property={defaultOntologyProp}
+                  disabled={!canEdit}
+                />
+              </SettingsContent>
+            </Details>
+          </SettingsSection>
+          <SettingsSection>
+            <Details noIndent title={<SettingsLabel>Plugins</SettingsLabel>}>
+              <SettingsContent>
+                <Column gap='1rem'>
+                  <PluginList drive={resource} />
+                  {canEdit && (
+                    <Suspense fallback={null}>
+                      <NewPluginButton drive={resource} />
+                    </Suspense>
+                  )}
+                </Column>
+              </SettingsContent>
+            </Details>
+          </SettingsSection>
+        </SettingsArea>
       </Column>
     </ContainerNarrow>
   );
@@ -108,7 +137,7 @@ function DriveTagList({ resource }: { resource: Resource }) {
   }
 
   return (
-    <Column gap='0.5rem'>
+    <Column gap='0.75rem'>
       <Row gap='0.5rem' wrapItems>
         {tags.map(tag => (
           <TagItem key={tag}>
@@ -136,8 +165,31 @@ function DriveTagList({ resource }: { resource: Resource }) {
 
 export default DrivePage;
 
-const Heading = styled.h2`
-  /* font-size: 1.3rem; */
+const SettingsArea = styled.div`
+  border-top: 1px solid ${p => p.theme.colors.bg2};
+
+  /* Tone down the Details toggle button for this context */
+  button[aria-label='collapse'],
+  button[aria-label='expand'] {
+    height: 1.5em;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+`;
+
+const SettingsSection = styled.div`
+  border-bottom: 1px solid ${p => p.theme.colors.bg2};
+  padding-block: 0.4rem;
+`;
+
+const SettingsLabel = styled.span`
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: ${p => p.theme.colors.textLight};
+`;
+
+const SettingsContent = styled.div`
+  padding-block: 0.5rem 0.25rem;
 `;
 
 const TagItem = styled.span`

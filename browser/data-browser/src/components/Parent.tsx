@@ -21,7 +21,6 @@ import { ResourceContextMenu } from './ResourceContextMenu';
 import { ParentContextMenuTrigger } from './ResourceContextMenu/ParentContextMenuTrigger';
 import { FaMagnifyingGlass, FaShare, FaTags } from 'react-icons/fa6';
 import * as RadixPopover from '@radix-ui/react-popover';
-import { ResourceInline } from '../views/ResourceInline';
 import type { JSX } from 'react';
 import { useState, useEffect } from 'react';
 import { useAISidebar } from './AI/AISidebarContext';
@@ -71,7 +70,7 @@ function TagSelectPopoverWrapper({ resource }: { resource: Resource }) {
 
   return (
     <>
-    <TagSelectPopover
+      <TagSelectPopover
         tags={driveTags}
         selectedTags={tags}
         setSelectedTags={setTags}
@@ -167,7 +166,6 @@ function Parent({ resource }: ParentProps): JSX.Element {
   const [parent] = useString(resource, core.properties.parent);
   const { enableAI } = useAISettings();
   const { setIsOpen } = useAISidebar();
-  const [tags] = useArray(resource, dataBrowser.properties.tags);
 
   return (
     <ParentWrapper aria-label='Breadcrumbs'>
