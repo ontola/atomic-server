@@ -114,9 +114,12 @@ test.describe('data-browser', async () => {
 
     const secret = await devDrive(page);
     await newResource('chatroom', page);
-    // EditableTitle auto-enters edit mode on creation; press Escape to see heading.
-    await page.keyboard.press('Escape');
-    await expect(page.getByRole('heading', { name: 'ChatRoom' })).toBeVisible();
+    // EditableTitle auto-focuses on creation; type a title and press Enter.
+    // Focus should then move to the chat input.
+    await page.keyboard.type('Test Chat');
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('heading', { name: 'Test Chat' })).toBeVisible();
+    await expect(inputLocator(page)).toBeFocused();
     const teststring = `My test: ${timestamp()}`;
     await inputLocator(page).fill(teststring);
     await page.keyboard.press('Enter');

@@ -3917,3 +3917,15 @@ msgstr "Remove tag"
 #: src/components/Tag/TagSelectPopover.tsx
 msgid "Open tag page"
 msgstr "Open tag page"
+
+#: src/views/ChatRoomPage.tsx
+msgid "No messages yet"
+msgstr "No messages yet"
+
+#: src/views/ChatRoomPage.tsx
+msgid "Be the first to say something"
+msgstr "Be the first to say something"
+
+#: src/views/Drive/DrivePage.tsx
+msgid "The Ontology that"
+msgstr "The Ontology that"

@@ -13,7 +13,7 @@ import {
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useHotkeys } from 'react-hotkeys-hook';
-import { FaCopy, FaLink, FaPencil, FaReply, FaXmark } from 'react-icons/fa6';
+import { FaCopy, FaLink, FaMessage, FaPencil, FaReply, FaXmark } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import { AtomicLink } from '../components/AtomicLink';
 import { Button } from '../components/Button';
@@ -165,7 +165,10 @@ export function ChatRoomPage({ resource }: ResourcePageProps) {
   return (
     <FullPageWrapper>
       <Column fullHeight>
-        <EditableTitle resource={resource} />
+        <EditableTitle
+          resource={resource}
+          onCommit={() => inputRef.current?.focus()}
+        />
         <ScrollingContent ref={scrollRef} onScroll={handleScroll}>
           <MessagesPage subject={resource.subject} setReplyTo={handleReply} />
         </ScrollingContent>
@@ -414,6 +417,32 @@ const FullPageWrapper = styled.div`
   flex: 1;
 `;
 
+const EmptyChatState = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding-block: 4rem;
+  color: ${p => p.theme.colors.textLight};
+  opacity: 0.5;
+
+  & > svg {
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  & > p {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 500;
+  }
+
+  & > span {
+    font-size: 0.8rem;
+  }
+`;
+
 const ScrollingContent = styled.div`
   margin-left: -1rem;
   margin-right: -1rem;
@@ -434,6 +463,16 @@ function MessagesPage({ subject, setReplyTo }: MessagesPageProps) {
 
   if (!resource.isReady()) {
     return <>loading...</>;
+  }
+
+  if (messages.length === 0 && !nextPage) {
+    return (
+      <EmptyChatState>
+        <FaMessage />
+        <p>No messages yet</p>
+        <span>Be the first to say something</span>
+      </EmptyChatState>
+    );
   }
 
   return (

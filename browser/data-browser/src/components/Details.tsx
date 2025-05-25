@@ -113,6 +113,5 @@ const StyledIconButton = styled(IconButton)<{ hide: boolean }>`
 `;
 
 const StyledCollapse = styled(Collapse)<{ noIndent?: boolean }>`
-  overflow-x: hidden;
   margin-left: ${p => (p.noIndent ? 0 : p.theme.margin) + 'rem'};
 `;

@@ -23,6 +23,8 @@ export interface EditableTitleProps {
   parentRef?: React.RefObject<HTMLInputElement | null>;
   id?: string;
   className?: string;
+  /** Called when the user commits the title (Enter or blur) */
+  onCommit?: () => void;
 }
 
 const opts = {
@@ -35,6 +37,7 @@ export function EditableTitle({
   parentRef,
   id,
   className,
+  onCommit,
   ...props
 }: EditableTitleProps): JSX.Element {
   const store = useStore();
@@ -58,6 +61,7 @@ export function EditableTitle({
     'enter',
     () => {
       setIsEditing(false);
+      onCommit?.();
     },
     { enableOnTags: ['INPUT'] },
   );
@@ -91,7 +95,7 @@ export function EditableTitle({
       placeholder={placeholder}
       onChange={e => setText(e.target.value)}
       value={text || ''}
-      onBlur={() => setIsEditing(false)}
+      onBlur={() => { setIsEditing(false); onCommit?.(); }}
       className={className}
     />
   ) : (

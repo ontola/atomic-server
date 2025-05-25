@@ -79,6 +79,7 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
               noIndent
               title={<SettingsLabel>Default Ontology</SettingsLabel>}
             >
+              <p>The Ontology that </p>
               <SettingsContent>
                 <InputSwitcher
                   commit
@@ -189,7 +190,7 @@ const SettingsLabel = styled.span`
 `;
 
 const SettingsContent = styled.div`
-  padding-block: 0.5rem 0.25rem;
+  padding-block: 0.5rem 1rem;
 `;
 
 const TagItem = styled.span`
