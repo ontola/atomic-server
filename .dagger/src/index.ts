@@ -38,8 +38,8 @@ export class AtomicServer {
   async ci(@argument() netlifyAuthToken: Secret): Promise<string> {
     await Promise.all([
       this.docsPublish(netlifyAuthToken),
-      this.lintBrowser(),
-      this.testBrowser(),
+      this.jsLint(),
+      this.jsTest(),
       this.endToEnd(netlifyAuthToken),
       this.rustTest(),
       this.rustClippy(),
@@ -50,21 +50,8 @@ export class AtomicServer {
   }
 
   @func()
-  buildBrowser(): Container {
-    const source = this.source.directory("browser");
-    const depsContainer = this.getDeps(source.directory("."));
-
-    const buildContainer = depsContainer
-      .withWorkdir("/app")
-      .withExec(["pnpm", "run", "build"]);
-
-    return buildContainer;
-  }
-
-  @func()
-  async lintBrowser(): Promise<string> {
-    const source = this.source.directory("browser");
-    const depsContainer = this.getDeps(source.directory("."));
+  async jsLint(): Promise<string> {
+    const depsContainer = this.jsBuild();
     return depsContainer
       .withWorkdir("/app")
       .withExec(["pnpm", "run", "lint"])
@@ -72,9 +59,8 @@ export class AtomicServer {
   }
 
   @func()
-  async testBrowser(): Promise<string> {
-    const source = this.source.directory("browser");
-    const depsContainer = this.getDeps(source.directory("."));
+  async jsTest(): Promise<string> {
+    const depsContainer = this.jsBuild();
     return depsContainer
       .withWorkdir("/app")
       .withExec(["pnpm", "run", "test"])
@@ -126,7 +112,7 @@ export class AtomicServer {
   }
   @func()
   typedocPublish(@argument() netlifyAuthToken: Secret): Promise<string> {
-    const browserDir = this.buildBrowser();
+    const browserDir = this.jsBuild();
     return browserDir
       .withWorkdir("/app")
       .withSecretVariable("NETLIFY_AUTH_TOKEN", netlifyAuthToken)
@@ -135,7 +121,9 @@ export class AtomicServer {
   }
 
   @func()
-  private getDeps(source: Directory): Container {
+  private jsBuild(): Container {
+    const source = this.source.directory("browser");
+
     // Create a container with PNPM installed
     const pnpmContainer = dag
       .container()
@@ -167,7 +155,10 @@ export class AtomicServer {
     ]);
 
     // Copy the source so installed dependencies persist in the container
-    return depsContainer.withDirectory("/app", source);
+    const sourceContainer = depsContainer.withDirectory("/app", source);
+
+    // Build all packages since they may depend on each other's built artifacts
+    return sourceContainer.withExec(["pnpm", "run", "build"]);
   }
 
   @func()
@@ -198,7 +189,13 @@ export class AtomicServer {
       .withWorkdir("/code")
       .withExec(["cargo", "fetch"]);
 
-    return sourceContainer
+    const browserDir = this.jsBuild().directory("/app/data-browser/dist");
+    const containerWithAssets = sourceContainer.withDirectory(
+      "/code/server/assets_tmp",
+      browserDir
+    );
+
+    return containerWithAssets
       .withExec(["cargo", "build", "--release"])
       .withExec(["./target/release/atomic-server", "--version"])
       .withExec([
