@@ -23,10 +23,16 @@ export class AtomicServer {
         "**/.git",
         "**/target",
         "**/tmp",
+        "**/.temp",
+        "**/.cargo",
         "**/.DS_Store",
         "**/.vscode",
         "**/dist",
+        "**/assets_tmp",
         "**/build",
+        "**/artifact",
+        "**/.env",
+        "**/.envrc",
       ],
     })
     source: Directory
