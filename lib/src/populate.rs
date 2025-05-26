@@ -318,7 +318,7 @@ pub async fn populate_collections(store: &impl Storelike) -> AtomicResult<()> {
 /// Adds default Endpoints (versioning) to the Db.
 /// Makes sure they are fetchable
 pub async fn populate_endpoints(store: &crate::Db) -> AtomicResult<()> {
-    let endpoints = crate::plugins::plugins::default_endpoints();
+    let endpoints = store.get_endpoints();
     let endpoints_collection = format!("{}/endpoints", store.get_server_url()?);
     for endpoint in endpoints {
         let mut resource = endpoint.to_resource(store).await?;

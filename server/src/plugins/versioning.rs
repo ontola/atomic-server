@@ -1,6 +1,4 @@
-use tracing::warn;
-
-use crate::{
+use atomic_lib::{
     agents::ForAgent,
     collections::CollectionBuilder,
     endpoints::{BoxFuture, Endpoint, HandleGetContext},
@@ -110,7 +108,7 @@ async fn get_commits_for_resource(
     let filtered: Vec<Commit> = result
         .resources
         .iter()
-        .filter_map(|r| crate::Commit::from_resource(r.clone()).ok())
+        .filter_map(|r| Commit::from_resource(r.clone()).ok())
         .collect();
 
     Ok(filtered)
@@ -142,7 +140,7 @@ pub async fn construct_version(
     // Get all the commits for the subject of that Commit
     let subject = &commit.get(urls::SUBJECT)?.to_string();
     let current_resource = store.get_resource(subject).await?;
-    crate::hierarchy::check_read(store, &current_resource, for_agent).await?;
+    atomic_lib::hierarchy::check_read(store, &current_resource, for_agent).await?;
     let commits = get_commits_for_resource(subject, store).await?;
     let mut version = Resource::new(subject.into());
     for commit in commits {

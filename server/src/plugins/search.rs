@@ -1,4 +1,4 @@
-use crate::{
+use atomic_lib::{
     endpoints::{BoxFuture, Endpoint, HandleGetContext},
     errors::AtomicResult,
     storelike::ResourceResponse,

@@ -1,4 +1,4 @@
-use crate::endpoints::Endpoint;
+use atomic_lib::endpoints::Endpoint;
 
 pub fn export_endpoint() -> Endpoint {
     Endpoint {

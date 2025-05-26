@@ -1,7 +1,7 @@
-use crate::{
+use atomic_lib::{
     endpoints::{BoxFuture, Endpoint, HandleGetContext},
     errors::AtomicResult,
-    storelike::ResourceResponse,
+    storelike::{PathReturn, ResourceResponse},
     urls, Resource, Storelike,
 };
 
@@ -38,12 +38,12 @@ fn handle_path_request<'a>(
         }
         let result = store.get_path(&path.unwrap(), None, for_agent).await?;
         match result {
-            crate::storelike::PathReturn::Subject(subject) => {
+            PathReturn::Subject(subject) => {
                 store
                     .get_resource_extended(&subject, false, for_agent)
                     .await
             }
-            crate::storelike::PathReturn::Atom(atom) => {
+            PathReturn::Atom(atom) => {
                 let mut resource = Resource::new(subject.to_string());
                 resource
                     .set_string(urls::ATOM_SUBJECT.into(), &atom.subject, store)

@@ -1,6 +1,6 @@
 use tracing::info;
 
-use crate::{
+use atomic_lib::{
     endpoints::{BoxFuture, Endpoint, HandleGetContext, HandlePostContext},
     errors::AtomicResult,
     storelike::{Query, ResourceResponse},

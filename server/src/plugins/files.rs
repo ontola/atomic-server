@@ -1,4 +1,4 @@
-use crate::{endpoints::Endpoint, urls};
+use atomic_lib::{endpoints::Endpoint, urls};
 
 pub fn upload_endpoint() -> Endpoint {
     Endpoint {
