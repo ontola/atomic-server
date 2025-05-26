@@ -16,5 +16,5 @@ jobs:
         with:
           version: "latest"
           verb: call
-          args: ci --netlify-auth-token ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          args: ci --netlify-auth-token ${{ secrets.NETLIFY_TOKEN }}
           cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
