@@ -1,3 +1,6 @@
+[build]
+build-dir = "build"
+
 [book]
 title = "Atomic Data Docs"
 authors = ["Joep Meindertsma"]

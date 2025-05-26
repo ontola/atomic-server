@@ -98,17 +98,21 @@ export class AtomicServer {
   @func()
   docsFolder(): Directory {
     const actualDocsDirectory = this.source.directory("docs");
+    const cargoCache = dag.cacheVolume("cargo");
+    const cargoBinCache = dag.cacheVolume("cargo-bin");
 
     const docsContainer = dag
       .container()
       .from(RUST_IMAGE)
+      .withMountedCache("/usr/local/cargo/registry", cargoCache)
+      .withMountedCache("/usr/local/cargo/bin", cargoBinCache)
       .withExec(["cargo", "install", "mdbook"])
       .withExec(["cargo", "install", "mdbook-linkcheck"]);
     return docsContainer
       .withMountedDirectory("/docs", actualDocsDirectory)
       .withWorkdir("/docs")
       .withExec(["mdbook", "build"])
-      .directory("/docs/book/html");
+      .directory("/docs/build/html");
   }
   @func()
   typedocPublish(@argument() netlifyAuthToken: Secret): Promise<string> {
