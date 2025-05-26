@@ -40,7 +40,7 @@ export class AtomicServer {
       this.docsPublish(netlifyAuthToken),
       this.lintBrowser(),
       this.testBrowser(),
-      this.ee(netlifyAuthToken),
+      this.endToEnd(netlifyAuthToken),
       this.rustTest(),
       this.rustClippy(),
       this.rustFmt(),
@@ -215,13 +215,7 @@ export class AtomicServer {
 
   @func()
   rustClippy(): Promise<string> {
-    const source = this.source;
-    const rustContainer = dag
-      .container()
-      .from(RUST_IMAGE)
-      .withExec(["rustup", "component", "add", "clippy"])
-      .withMountedDirectory("/code", source)
-      .withWorkdir("/code");
+    const rustContainer = this.rustBuild();
 
     return rustContainer
       .withExec([
@@ -236,13 +230,7 @@ export class AtomicServer {
 
   @func()
   rustFmt(): Promise<string> {
-    const source = this.source;
-    const rustContainer = dag
-      .container()
-      .from(RUST_IMAGE)
-      .withExec(["rustup", "component", "add", "rustfmt"])
-      .withMountedDirectory("/code", source)
-      .withWorkdir("/code");
+    const rustContainer = this.rustBuild();
 
     return rustContainer.withExec(["cargo", "fmt", "--check"]).stdout();
   }
@@ -263,7 +251,7 @@ export class AtomicServer {
   }
 
   @func()
-  ee(@argument() netlifyAuthToken: Secret): Promise<string> {
+  endToEnd(@argument() netlifyAuthToken: Secret): Promise<string> {
     const e2eSource = this.source.directory("browser/e2e");
 
     // Setup Playwright container - debug and fix package manager
