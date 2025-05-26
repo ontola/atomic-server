@@ -136,14 +136,18 @@ msgid "Start of main content"
 msgstr "Inicio del contenido principal"
 
 #. placeholder {0}: shortcuts.sidebarToggle
+#. placeholder {0}: shortcuts.sidebarToggle
+#: src/components/NavBar.tsx
 #: src/components/Navigation.tsx
 msgid "Show / hide sidebar ({0})"
 msgstr "Mostrar / ocultar la barra lateral ({0})"
 
+#: src/components/NavBar.tsx
 #: src/components/Navigation.tsx
 msgid "Go back"
 msgstr "Retroceder"
 
+#: src/components/NavBar.tsx
 #: src/components/Navigation.tsx
 msgid "Go forward"
 msgstr "Avanzar"
@@ -151,15 +155,19 @@ msgstr "Avanzar"
 #~ msgid "Toggle AI panel"
 #~ msgstr "Alternar panel de IA"
 
+#: src/components/NavBar.tsx
 #: src/components/Parent.tsx
 msgid "Breadcrumbs"
 msgstr "Ruta de navegación"
 
+#: src/components/NavBar.tsx
 #: src/components/Parent.tsx
 msgid "Set Drive"
 msgstr "Establecer Drive"
 
 #. placeholder {0}: title
+#. placeholder {0}: title
+#: src/components/NavBar.tsx
 #: src/components/Parent.tsx
 msgid "Set {0} as current drive"
 msgstr "Establecer {0} como el Drive actual"
@@ -4058,11 +4066,14 @@ msgstr ""
 msgid "ChatRoom"
 msgstr ""
 
+#: src/components/NavBar.tsx
 #: src/components/Parent.tsx
 #: src/components/Share/ShareDialog.tsx
 msgid "Share"
 msgstr ""
 
+#: src/components/NavBar.tsx
+#: src/components/NavBar.tsx
 #: src/components/Parent.tsx
 #: src/components/Parent.tsx
 #: src/views/Drive/DrivePage.tsx
@@ -4096,4 +4107,9 @@ msgstr ""
 
 #: src/views/Drive/DrivePage.tsx
 msgid "The Ontology that"
+msgstr ""
+
+#. placeholder {0}: shortcuts.search
+#: src/components/NavBar.tsx
+msgid "Search ({0})"
 msgstr ""

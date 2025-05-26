@@ -295,6 +295,7 @@ function SearchOverlay(): JSX.Element {
     parents: scope || drive,
     include: true,
     filters,
+    limit: 10,
     allowEmptyQuery: !filterIsEmpty,
   });
 
