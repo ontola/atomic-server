@@ -33,6 +33,8 @@
     "!dist/**/*.d.ts.map"
   ],
   "license": "MIT",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
   "exports": {
     ".": {
       "import": {
