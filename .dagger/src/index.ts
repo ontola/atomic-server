@@ -21,7 +21,19 @@ export class AtomicServer {
       ignore: [
         "**/node_modules",
         "**/.git",
+        "**/.github",
+        "**/.husky",
+        "**/.vscode",
+        // rust
         "**/target",
+        "**/artifact",
+        // browser
+        "**/.swc",
+        "**/.netlify",
+        // e2e
+        "**/test-results",
+        "**/template-tests",
+        "**/playwright-report",
         "**/tmp",
         "**/.temp",
         "**/.cargo",
@@ -30,7 +42,6 @@ export class AtomicServer {
         "**/dist",
         "**/assets_tmp",
         "**/build",
-        "**/artifact",
         "**/.env",
         "**/.envrc",
       ],
@@ -101,20 +112,25 @@ export class AtomicServer {
       .stdout();
   }
 
+  /** Extracts the unique deploy URL from netlify output */
+  private extractDeployUrl(netlifyOutput: string): string {
+    const match = netlifyOutput.match(/https:\/\/[a-f0-9]+--.+\.netlify\.app/);
+    return match ? match[0] : "Deploy URL not found";
+  }
+
   @func()
   docsFolder(): Directory {
-    const actualDocsDirectory = this.source.directory("docs");
     const cargoCache = dag.cacheVolume("cargo");
 
-    const docsContainer = dag
+    const mdBookContainer = dag
       .container()
       .from(RUST_IMAGE)
-      .withExec(["sh", "-c", ". $HOME/.cargo/env"])
-      .withEnvVariable("PATH", "$HOME/.cargo/bin:$PATH")
       .withMountedCache("/usr/local/cargo/registry", cargoCache)
       .withExec(["cargo", "install", "mdbook"])
       .withExec(["cargo", "install", "mdbook-linkcheck"]);
-    return docsContainer
+
+    const actualDocsDirectory = this.source.directory("docs");
+    return mdBookContainer
       .withMountedDirectory("/docs", actualDocsDirectory)
       .withWorkdir("/docs")
       .withExec(["mdbook", "build"])
@@ -187,7 +203,6 @@ export class AtomicServer {
       .withExec(["cargo", "install", "cargo-nextest"])
       .withMountedCache("/usr/local/cargo/registry", cargoCache);
 
-    // Copy source files like in Earthfile, but more selectively
     const sourceContainer = rustContainer
       .withFile("/code/Cargo.toml", source.file("Cargo.toml"))
       .withFile("/code/Cargo.lock", source.file("Cargo.lock"))
@@ -258,7 +273,7 @@ export class AtomicServer {
   }
 
   @func()
-  endToEnd(@argument() netlifyAuthToken: Secret): Promise<string> {
+  async endToEnd(@argument() netlifyAuthToken: Secret): Promise<string> {
     const e2eSource = this.source.directory("browser/e2e");
 
     // Setup Playwright container - debug and fix package manager
@@ -293,6 +308,9 @@ export class AtomicServer {
       })
       .withSecretVariable("NETLIFY_AUTH_TOKEN", netlifyAuthToken);
 
+    // Test the binary
+    e2eContainer.withExec(["/atomic-server-bin", "--version"]);
+
     // Start atomic-server in background
     const serverStarted = e2eContainer
       .withExec([
@@ -302,24 +320,39 @@ export class AtomicServer {
       ])
       .withExec(["sleep", "3"]);
 
-    // Run the tests from the correct directory (always succeed to collect artifacts)
-    const testResult = serverStarted
-      .withExec([
-        "/bin/sh",
-        "-c",
-        "pnpm run test-e2e || echo 'Tests completed with failures, but continuing to collect artifacts'",
-      ])
-      .withExec(["zip", "-r", "test.zip", "playwright-report"])
-      .withExec(["unzip", "-o", "test.zip", "-d", "/artifact"]);
+    // Check if atomic-server is running, if its responding with a 200
+    serverStarted.withExec([
+      "/bin/sh",
+      "-c",
+      "curl -f -s http://localhost:9883/ || (echo 'Server not responding with 200' && exit 1)",
+    ]);
+
+    // Run the tests and capture exit code, but continue regardless
+    const testResult = serverStarted.withExec([
+      "/bin/sh",
+      "-c",
+      "pnpm run test-e2e; echo $? > /test-exit-code",
+    ]);
 
     // Extract the test results directory and upload to Netlify
-    const testReportDirectory = testResult.directory(
-      "/artifact/app/playwright-report"
-    );
-    return this.netlifyDeploy(
+    const testReportDirectory = testResult.directory("playwright-report");
+    const deployOutput = await this.netlifyDeploy(
       testReportDirectory,
       "atomic-tests",
       netlifyAuthToken
     );
+
+    // Extract the deploy URL
+    const deployUrl = this.extractDeployUrl(deployOutput);
+
+    // Check the test exit code and fail if tests failed
+    const exitCode = await testResult.file("/test-exit-code").contents();
+    if (exitCode.trim() !== "0") {
+      throw new Error(
+        `E2E tests failed (exit code: ${exitCode.trim()}). Test report deployed to: \n ${deployUrl}`
+      );
+    }
+
+    return deployUrl;
   }
 }
