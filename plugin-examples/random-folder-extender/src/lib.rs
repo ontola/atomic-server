@@ -1,6 +1,6 @@
 use atomic_plugin::{ClassExtender, Commit, Resource};
 use rand::Rng;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use waki::Client;
 
 struct RandomFolderExtender;
@@ -10,10 +10,14 @@ struct DiscordWebhookBody {
     content: String,
 }
 
+#[derive(Deserialize)]
+struct Config {
+    webhook_url: String,
+}
+
 const FOLDER_CLASS: &str = "https://atomicdata.dev/classes/Folder";
 const NAME_PROP: &str = "https://atomicdata.dev/properties/name";
 const IS_A: &str = "https://atomicdata.dev/properties/isA";
-const DISCORD_WEBHOOK_URL: &str = "<YOUR DISCORD WEBHOOK URL>";
 
 fn get_name_from_folder(folder: &Resource) -> Result<&str, String> {
     let name = folder
@@ -78,6 +82,9 @@ impl ClassExtender for RandomFolderExtender {
             return Ok(());
         };
 
+        let config_str = std::fs::read_to_string("/config.toml").map_err(|e| e.to_string())?;
+        let config: Config = toml::from_str(&config_str).map_err(|e| e.to_string())?;
+
         let name = get_name_from_folder(resource)?;
         let client = Client::new();
 
@@ -86,7 +93,7 @@ impl ClassExtender for RandomFolderExtender {
         };
 
         let res = client
-            .post(DISCORD_WEBHOOK_URL)
+            .post(&config.webhook_url)
             .header("Content-Type", "application/json")
             .body(serde_json::to_string(&body).map_err(|e| e.to_string())?)
             .send()

@@ -1,6 +1,8 @@
 use std::future::Future;
 use std::pin::Pin;
 
+use futures::future::join_all;
+
 use std::{
     collections::HashSet,
     ffi::OsStr,
@@ -24,7 +26,7 @@ use wasmtime::{
     component::{Component, Linker, ResourceTable},
     Config, Engine, Store,
 };
-use wasmtime_wasi::{p2, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
+use wasmtime_wasi::{p2, DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 
 mod bindings {
@@ -74,7 +76,7 @@ pub async fn load_wasm_class_extenders(
     plugin_path: &Path,
     plugin_cache_path: &Path,
     db: &Db,
-) -> Vec<ClassExtender> {
+) -> AtomicResult<Vec<ClassExtender>> {
     // Create the plugin directory if it doesn't exist
     let plugin_dir = plugin_path.join(CLASS_EXTENDER_DIR_NAME);
 
@@ -91,7 +93,7 @@ pub async fn load_wasm_class_extenders(
                 "Created empty Wasm extender directory (drop .wasm files here to enable runtime plugins)"
             );
         }
-        return Vec::new();
+        return Ok(Vec::new());
     }
 
     if !plugin_cache_path.exists() {
@@ -108,7 +110,7 @@ pub async fn load_wasm_class_extenders(
         Ok(engine) => Arc::new(engine),
         Err(err) => {
             error!(error = %err, "Failed to initialize Wasm engine. Skipping dynamic class extenders");
-            return Vec::new();
+            return Ok(Vec::new());
         }
     };
 
@@ -119,43 +121,72 @@ pub async fn load_wasm_class_extenders(
 
     let wasm_files = find_wasm_files(&plugin_dir);
 
-    for path in wasm_files {
-        let wasm_bytes = match std::fs::read(&path) {
-            Ok(bytes) => bytes,
-            Err(e) => {
-                error!("Failed to read Wasm file at {}: {}", path.display(), e);
-                continue;
-            }
-        };
+    let futures = wasm_files.into_iter().map(|path| {
+        let plugin_dir = plugin_dir.clone();
+        let plugin_cache_path = plugin_cache_path.to_path_buf();
+        let engine = engine.clone();
+        let db = db.clone();
 
-        let hash = digest(&SHA256, &wasm_bytes);
-        let hash_hex = hex_encode(hash.as_ref());
-        let cwasm_filename = format!("{}.cwasm", hash_hex);
-        let cwasm_path = plugin_cache_path.join(cwasm_filename);
+        async move {
+            let owned_folder_path = setup_plugin_data_dir(&path, &plugin_dir);
 
-        used_cwasm_files.insert(cwasm_path.clone());
+            let wasm_bytes = match std::fs::read(&path) {
+                Ok(bytes) => bytes,
+                Err(e) => {
+                    error!("Failed to read Wasm file at {}: {}", path.display(), e);
+                    return None;
+                }
+            };
 
-        match WasmPlugin::load(engine.clone(), &wasm_bytes, &path, &cwasm_path, db).await {
-            Ok(plugin) => {
-                info!(
-                    "Loaded {}",
-                    path.file_name().unwrap_or(OsStr::new("Unknown")).display()
-                );
-                extenders.push(plugin.into_class_extender());
+            let hash = digest(&SHA256, &wasm_bytes);
+            let hash_hex = hex_encode(hash.as_ref());
+            let cwasm_filename = format!("{}.cwasm", hash_hex);
+            let cwasm_path = plugin_cache_path.join(cwasm_filename);
+
+            let cwasm_path_ret = cwasm_path.clone();
+
+            match WasmPlugin::load(
+                engine.clone(),
+                &wasm_bytes,
+                &path,
+                &cwasm_path,
+                owned_folder_path,
+                &db,
+            )
+            .await
+            {
+                Ok(plugin) => {
+                    info!(
+                        "Loaded {}",
+                        path.file_name().unwrap_or(OsStr::new("Unknown")).display()
+                    );
+                    Some((Some(plugin.into_class_extender()), cwasm_path_ret))
+                }
+                Err(err) => {
+                    error!(
+                        error = %err,
+                        path = %path.display(),
+                        "Failed to load Wasm class extender"
+                    );
+                    Some((None, cwasm_path_ret))
+                }
             }
-            Err(err) => {
-                error!(
-                    error = %err,
-                    path = %path.display(),
-                    "Failed to load Wasm class extender"
-                );
-            }
+        }
+    });
+
+    let results = join_all(futures).await;
+
+    for res in results.into_iter().flatten() {
+        let (extender_opt, cwasm_path) = res;
+        used_cwasm_files.insert(cwasm_path);
+        if let Some(extender) = extender_opt {
+            extenders.push(extender);
         }
     }
 
     cleanup_cache(&plugin_cache_path, &used_cwasm_files);
 
-    extenders
+    Ok(extenders)
 }
 
 fn build_engine() -> AtomicResult<Engine> {
@@ -174,6 +205,7 @@ struct WasmPluginInner {
     engine: Arc<Engine>,
     component: Component,
     path: PathBuf,
+    owned_folder_path: Option<PathBuf>,
     class_url: String,
     db: Arc<Db>,
 }
@@ -184,6 +216,7 @@ impl WasmPlugin {
         wasm_bytes: &[u8],
         path: &Path,
         cwasm_path: &Path,
+        owned_folder_path: Option<PathBuf>,
         db: &Db,
     ) -> AtomicResult<Self> {
         let db = Arc::new(db.clone());
@@ -218,6 +251,7 @@ impl WasmPlugin {
                 engine: engine.clone(),
                 component,
                 path: path.to_path_buf(),
+                owned_folder_path,
                 class_url: String::new(),
                 db: Arc::clone(&db),
             }),
@@ -229,6 +263,7 @@ impl WasmPlugin {
                 engine,
                 component: runtime.inner.component.clone(),
                 path: runtime.inner.path.clone(),
+                owned_folder_path: runtime.inner.owned_folder_path.clone(),
                 class_url,
                 db,
             }),
@@ -312,7 +347,7 @@ impl WasmPlugin {
     async fn instantiate(&self) -> AtomicResult<(bindings::ClassExtender, Store<PluginHostState>)> {
         let mut store = Store::new(
             &self.inner.engine,
-            PluginHostState::new(Arc::clone(&self.inner.db))?,
+            PluginHostState::new(Arc::clone(&self.inner.db), &self.inner.owned_folder_path)?,
         );
         let mut linker = Linker::new(&self.inner.engine);
         p2::add_to_linker_async(&mut linker).map_err(|err| AtomicError::from(err.to_string()))?;
@@ -403,13 +438,25 @@ struct PluginHostState {
 }
 
 impl PluginHostState {
-    fn new(db: Arc<Db>) -> AtomicResult<Self> {
+    fn new(db: Arc<Db>, owned_folder_path: &Option<PathBuf>) -> AtomicResult<Self> {
         let mut builder = WasiCtxBuilder::new();
         builder
             .inherit_stdout()
             .inherit_stderr()
             .inherit_stdin()
             .inherit_network();
+
+        if let Some(owned_folder_path) = owned_folder_path {
+            builder
+                .preopened_dir(
+                    owned_folder_path.clone(),
+                    "/",
+                    DirPerms::READ | DirPerms::MUTATE,
+                    FilePerms::WRITE | FilePerms::READ,
+                )
+                .map_err(|e| AtomicError::from(format!("Failed to preopen directory: {}", e)))?;
+        }
+
         let ctx = builder.build();
         Ok(Self {
             table: ResourceTable::new(),
@@ -495,21 +542,57 @@ fn find_wasm_files(dir: &Path) -> Vec<PathBuf> {
     if let Ok(entries) = std::fs::read_dir(dir) {
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.is_dir() {
-                if let Ok(sub_entries) = std::fs::read_dir(&path) {
-                    for sub_entry in sub_entries.flatten() {
-                        let sub_path = sub_entry.path();
-                        if sub_path.extension() == Some(OsStr::new("wasm")) {
-                            files.push(sub_path);
-                        }
-                    }
-                }
-            } else if path.extension() == Some(OsStr::new("wasm")) {
+            if path.is_file() && path.extension() == Some(OsStr::new("wasm")) {
                 files.push(path);
             }
         }
     }
     files
+}
+
+fn setup_plugin_data_dir(wasm_file_path: &Path, plugin_dir: &Path) -> Option<PathBuf> {
+    let filename = wasm_file_path.file_name().and_then(|s| s.to_str())?;
+
+    // Remove .wasm extension
+    let stem = wasm_file_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or(filename);
+
+    let stem_path = Path::new(stem);
+
+    // If there is no second extension (e.g. just my-plugin.wasm), we don't grant access to a folder.
+    // This is to prevent plugins from accessing arbitrary folders.
+    // Only namespaced plugins (e.g. google.calendar.wasm or my-plugin.plugin.wasm) get a folder.
+    if stem_path.extension().is_none() {
+        return None;
+    }
+
+    // Remove the second extension (e.g. .plugin in my_script.plugin.wasm), if present.
+    // This allows for any suffix without dots.
+    let plugin_name = stem_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or(stem);
+
+    let data_dir = plugin_dir.join(plugin_name);
+
+    if !data_dir.exists() {
+        if let Err(err) = std::fs::create_dir_all(&data_dir) {
+            warn!(
+                error = %err,
+                path = %data_dir.display(),
+                "Failed to create data directory for plugin"
+            );
+            return None;
+        }
+    }
+
+    if data_dir.exists() {
+        Some(data_dir)
+    } else {
+        None
+    }
 }
 
 fn compile_and_save_component(
