@@ -109,7 +109,7 @@ impl Db {
         let prop_val_sub_index = db.open_tree(Tree::PropValSub)?;
         let watched_queries = db.open_tree(Tree::WatchedQueries)?;
 
-        let store = Db {
+        let mut store = Db {
             path: path.into(),
             db,
             default_agent: Arc::new(Mutex::new(None)),
@@ -123,6 +123,8 @@ impl Db {
             class_extenders: vec![],
             on_commit: None,
         };
+
+        store.add_class_extender(crate::collections::get_collection_class_extender())?;
 
         migrate_maybe(&store).map(|e| format!("Error during migration of database: {:?}", e))?;
         crate::populate::populate_base_models(&store)
@@ -856,15 +858,15 @@ impl Storelike for Db {
         let url_span = tracing::span!(tracing::Level::TRACE, "URL parse").entered();
         // This might add a trailing slash
         let url = url::Url::parse(subject)?;
-        let mut removed_query_params = {
+        let mut subject_without_params = {
             let mut url_altered = url.clone();
             url_altered.set_query(None);
             url_altered.to_string()
         };
 
         // Remove trailing slash
-        if removed_query_params.ends_with('/') {
-            removed_query_params.pop();
+        if subject_without_params.ends_with('/') {
+            subject_without_params.pop();
         }
 
         url_span.exit();
@@ -880,7 +882,7 @@ impl Storelike for Db {
         }
 
         async move {
-            let mut resource = self.get_resource(&removed_query_params).await?;
+            let mut resource = self.get_resource(&subject_without_params).await?;
 
             let _explanation = crate::hierarchy::check_read(self, &resource, for_agent).await?;
 
