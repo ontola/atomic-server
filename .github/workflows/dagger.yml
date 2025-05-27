@@ -8,6 +8,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+    env:
+      NETLIFY_TOKEN: ${{ secrets.NETLIFY_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -16,5 +18,5 @@ jobs:
         with:
           version: "latest"
           verb: call
-          args: ci --netlify-auth-token ${{ secrets.NETLIFY_TOKEN }}
+          args: ci --netlify-auth-token env://NETLIFY_TOKEN
           cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
