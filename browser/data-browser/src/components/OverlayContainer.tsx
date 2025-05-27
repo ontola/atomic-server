@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState, type JSX } from 'react';
+import { useEffect, useRef, useState, type JSX, useMemo } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { styled } from 'styled-components';
 import { shortcuts } from './HotKeyWrapper';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { constructOpenURL } from '../helpers/navigation';
-import { useServerSearch, useStore, ai, core, type Ai } from '@tomic/react';
+import { useServerSearch, useStore, ai, core, type Ai, type Store } from '@tomic/react';
 import { useSettings } from '../helpers/AppSettings';
 import { useQueryScopeHandler } from '../hooks/useQueryScope';
 import { Column, Row } from './Row';
@@ -65,7 +65,7 @@ export function setSearchResults(results: string[], index: number): void {
 const OverlayBackdrop = styled.div`
   position: fixed;
   inset: 0;
-  z-index: ${p => p.theme.zIndex.searchOverlay};
+  z-index: 999;
   background: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(6px);
   animation: fadeIn 100ms ease-out;
@@ -83,9 +83,9 @@ const OverlayBackdrop = styled.div`
 const OverlayPanel = styled.div`
   position: fixed;
   top: 15vh;
-  left: 40%;
+  left: 50%;
   transform: translateX(-50%);
-  z-index: ${p => p.theme.zIndex.searchOverlay};
+  z-index: 999;
   width: 100%;
   max-width: 30rem;
   height: 30rem;
@@ -100,34 +100,108 @@ const OverlayPanel = styled.div`
 
   @keyframes slideIn {
     from {
+      transform: translate(-50%, -20px);
       opacity: 0;
-      transform: translateX(-50%) translateY(-12px);
     }
     to {
+      transform: translate(-50%, 0);
       opacity: 1;
-      transform: translateX(-50%) translateY(0);
     }
   }
+`;
+
+const OverlayInputWrapper = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  border-bottom: 1px solid ${p => p.theme.colors.bg2};
+  color: ${p => p.theme.colors.textLight};
+`;
+
+const OverlayInput = styled.input`
+  flex: 1;
+  background: transparent;
+  border: none;
+  font-size: 1.125rem;
+  color: ${p => p.theme.colors.text};
+  outline: none;
+
+  &::placeholder {
+    color: ${p => p.theme.colors.textLight};
+  }
+`;
+
+const ShortcutHint = styled.kbd`
+  padding: 0.2rem 0.4rem;
+  background: ${p => p.theme.colors.bg1};
+  border: 1px solid ${p => p.theme.colors.bg2};
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  color: ${p => p.theme.colors.textLight};
+  cursor: pointer;
 `;
 
 const PanelContent = styled.div`
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  overflow: hidden;
-
-  @media (min-width: 40rem) {
-    flex-direction: row;
-  }
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
 `;
 
 const ResultsList = styled.div`
-  flex: 1;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
-  min-width: 0;
+`;
+
+const ResultsArea = styled.div`
+  flex: 1;
+`;
+
+const HeadingRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: ${p => p.theme.colors.bg1};
+  border-bottom: 1px solid ${p => p.theme.colors.bg2};
+  color: ${p => p.theme.colors.textLight};
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+`;
+
+const TagHeading = styled.span`
+  color: ${p => p.theme.colors.textLight};
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+`;
+
+const FooterRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid ${p => p.theme.colors.bg2};
+  color: ${p => p.theme.colors.textLight};
+  font-size: 0.75rem;
+  background: ${p => p.theme.colors.bg};
+  border-bottom-left-radius: inherit;
+  border-bottom-right-radius: inherit;
+`;
+
+const FooterHints = styled.div`
+  display: flex;
+  gap: 1rem;
+
+  kbd {
+    background: ${p => p.theme.colors.bg1};
+    border: 1px solid ${p => p.theme.colors.bg2};
+    border-radius: 0.2rem;
+    padding: 0.1rem 0.3rem;
+    font-family: inherit;
+  }
 `;
 
 const PreviewFloat = styled.div`
@@ -135,28 +209,33 @@ const PreviewFloat = styled.div`
   top: 0;
   right: -1rem;
   transform: translateX(100%);
-  z-index: ${p => p.theme.zIndex.searchOverlay + 1};
+  z-index: 1000;
   width: 18rem;
   height: 30rem;
   overflow-y: auto;
 `;
 
-const AIChatRow = styled.button`
+const AIChatRow = styled.button<{ $selected?: boolean }>`
   display: flex;
   align-items: center;
+  width: 100%;
   gap: 0.75rem;
   padding: 0.75rem 1rem;
   border: none;
-  border-top: 1px solid ${p => p.theme.colors.bg2};
-  background: transparent;
+  border-bottom: 1px solid ${p => p.theme.colors.bg2};
+  background: ${p => (p.$selected ? p.theme.colors.bg1 : 'transparent')};
   color: ${p => p.theme.colors.text};
   font-size: 0.875rem;
   cursor: pointer;
-  width: 100%;
   text-align: left;
+  transition: background 80ms;
 
   &:hover {
     background: ${p => p.theme.colors.bg1};
+  }
+
+  span {
+    flex: 1;
   }
 
   svg {
@@ -165,89 +244,7 @@ const AIChatRow = styled.button`
   }
 `;
 
-const OverlayInputWrapper = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.875rem 1rem;
-  border-bottom: 1px solid ${p => p.theme.colors.bg2};
-
-  svg {
-    color: ${p => p.theme.colors.textLight};
-    flex-shrink: 0;
-  }
-`;
-
-const OverlayInput = styled.input`
-  flex: 1;
-  background: transparent;
-  border: none;
-  outline: none;
-  font-size: 1rem;
-  color: ${p => p.theme.colors.text};
-  font-family: inherit;
-
-  &::placeholder {
-    color: ${p => p.theme.colors.textLight};
-  }
-`;
-
-const ShortcutHint = styled.kbd`
-  background: ${p => p.theme.colors.bg1};
-  border: 1px solid ${p => p.theme.colors.bg2};
-  border-radius: 0.25rem;
-  padding: 0.1rem 0.35rem;
-  font-size: 0.7rem;
-  color: ${p => p.theme.colors.textLight};
-  font-family: inherit;
-  cursor: pointer;
-  flex-shrink: 0;
-`;
-
-const ResultsArea = styled.div`
-  flex: 1;
-  overflow-y: auto;
-  &:empty {
-    display: none;
-  }
-`;
-
-const TagHeading = styled.span`
-  color: ${p => p.theme.colors.textLight};
-  font-weight: bold;
-`;
-
-const HelperMessage = styled.p`
-  color: ${p => p.theme.colors.textLight};
-  font-size: 0.875rem;
-  padding: 0.75rem 1rem;
-  line-height: 1.5;
-`;
-
-const FooterRow = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.5rem 1rem;
-  border-top: 1px solid ${p => p.theme.colors.bg2};
-  font-size: 0.75rem;
-  color: ${p => p.theme.colors.textLight};
-`;
-
-const FooterHints = styled.div`
-  display: flex;
-  gap: 1rem;
-  span {
-    display: flex;
-    align-items: center;
-    gap: 0.3rem;
-  }
-`;
-
-const HeadingRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+const TagSelectRow = styled.div`
   padding: 0.75rem 1rem;
   border-bottom: 1px solid ${p => p.theme.colors.bg2};
   color: ${p => p.theme.colors.textLight};
@@ -299,6 +296,9 @@ function SearchOverlay(): JSX.Element {
     allowEmptyQuery: !filterIsEmpty,
   });
 
+  const showAIChatRow = query && results.length === 0;
+  const totalItemCount = results.length + (showAIChatRow ? 1 : 0);
+
   useEffect(() => {
     const timer = setTimeout(() => inputRef.current?.focus(), 50);
     return () => clearTimeout(timer);
@@ -313,19 +313,11 @@ function SearchOverlay(): JSX.Element {
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
-        setSelected(prev => {
-          const next = prev === results.length - 1 ? prev : prev + 1;
-          setSearchResults(results, next);
-          return next;
-        });
+        setSelected(prev => (prev >= totalItemCount - 1 ? prev : prev + 1));
         break;
       case 'ArrowUp':
         e.preventDefault();
-        setSelected(prev => {
-          const next = prev > 0 ? prev - 1 : 0;
-          setSearchResults(results, next);
-          return next;
-        });
+        setSelected(prev => (prev > 0 ? prev - 1 : 0));
         break;
       case 'Enter':
         e.preventDefault();
@@ -333,8 +325,8 @@ function SearchOverlay(): JSX.Element {
           const openURL = constructOpenURL(results[selectedIndex]);
           navigate(openURL);
           closeOverlay();
-        } else if (query && results.length === 0) {
-          // No results — start AI chat with query
+        } else if (showAIChatRow && selectedIndex === results.length) {
+          // AI Chat row selected
           await handleStartAIChat(query, store, drive, navigate);
           closeOverlay();
         }
@@ -372,14 +364,6 @@ function SearchOverlay(): JSX.Element {
     setSearchResults(results, selectedIndex);
   }, [results, selectedIndex]);
 
-  const heading = !query
-    ? undefined
-    : results.length === 0
-      ? 'No hits'
-      : undefined;
-
-  const showHelper = !query && filterIsEmpty;
-
   return (
     <ErrorBoundary>
       <OverlayInputWrapper>
@@ -402,13 +386,6 @@ function SearchOverlay(): JSX.Element {
         <ErrorLook style={{ padding: '1rem' }}>{error.message}</ErrorLook>
       ) : (
         <>
-          {heading && (
-            <HeadingRow>
-              <FaMagnifyingGlass size={12} />
-              {heading}
-            </HeadingRow>
-          )}
-
           {tags.length > 0 && (
             <Row
               center
@@ -444,19 +421,21 @@ function SearchOverlay(): JSX.Element {
                       }}
                     />
                   ))}
+                  {showAIChatRow && (
+                    <AIChatRow
+                      data-index={results.length}
+                      $selected={selectedIndex === results.length}
+                      onClick={async () => {
+                        await handleStartAIChat(query, store, drive, navigate);
+                        closeOverlay();
+                      }}
+                    >
+                      <FaComments size={16} />
+                      <span>Start AI Chat with "{query}"</span>
+                    </AIChatRow>
+                  )}
                 </Column>
               </ResultsArea>
-              {query && results.length === 0 && (
-                <AIChatRow
-                  onClick={async () => {
-                    await handleStartAIChat(query, store, drive, navigate);
-                    closeOverlay();
-                  }}
-                >
-                  <FaComments size={16} />
-                  <span>Start AI Chat with "{query}"</span>
-                </AIChatRow>
-              )}
             </ResultsList>
           </PanelContent>
 
@@ -715,9 +694,9 @@ export function OverlayContainer(): JSX.Element | null {
       <OverlayPanel onClick={e => e.stopPropagation()}>
         {overlay === 'search' && <SearchOverlay />}
         {overlay === 'shortcuts' && <ShortcutsOverlay />}
-        {overlay === 'search' && previewState.results[previewState.index] && (
+        {previewSubject && (
           <PreviewFloat>
-            <CardPreview subject={previewState.results[previewState.index]} />
+            <CardPreview subject={previewSubject} />
           </PreviewFloat>
         )}
       </OverlayPanel>
