@@ -29,7 +29,7 @@ const config: PlaywrightTestConfig = {
       },
     ],
   ],
-  retries: 3,
+  retries: 0,
   // timeout: 1000 * 120, // 2 minutes
   projects: [
     {
