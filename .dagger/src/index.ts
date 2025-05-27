@@ -349,7 +349,7 @@ export class AtomicServer {
     const exitCode = await testResult.file("/test-exit-code").contents();
     if (exitCode.trim() !== "0") {
       throw new Error(
-        `E2E tests failed (exit code: ${exitCode.trim()}). Test report deployed to: \n ${deployUrl}`
+        `E2E tests failed (exit code: ${exitCode.trim()}). Test report deployed to: \n${deployUrl}`
       );
     }
 
