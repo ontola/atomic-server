@@ -3,7 +3,7 @@
 
 use crate::{
     agents::ForAgent, atoms::IndexAtom, errors::AtomicResult, storelike::Query,
-    values::SortableValue, Atom, Db, Resource, Storelike, Value,
+    utils::truncate_string, values::SortableValue, Atom, Db, Resource, Storelike, Value,
 };
 use serde::{Deserialize, Serialize};
 
@@ -339,12 +339,7 @@ pub fn create_query_index_key(
     q_filter_bytes.push(SEPARATION_BIT);
 
     let mut value_bytes: Vec<u8> = if let Some(val) = value {
-        let val_string = val;
-        let shorter = if val_string.len() > MAX_LEN {
-            &val_string[0..MAX_LEN]
-        } else {
-            val_string
-        };
+        let shorter = truncate_string(val, MAX_LEN);
         let lowercase = shorter.to_lowercase();
         lowercase.as_bytes().to_vec()
     } else {
