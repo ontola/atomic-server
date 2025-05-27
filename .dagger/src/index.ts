@@ -188,7 +188,7 @@ export class AtomicServer {
   }
 
   @func()
-  rustBuild(): Container {
+  rustBuild(@argument() release: boolean = false): Container {
     const source = this.source;
     const cargoCache = dag.cacheVolume("cargo");
 
@@ -220,14 +220,25 @@ export class AtomicServer {
       browserDir
     );
 
+    const buildArgs = release
+      ? ["cargo", "build", "--release"]
+      : ["cargo", "build"];
+    const binaryPath = release
+      ? "./target/release/atomic-server"
+      : "./target/debug/atomic-server";
+    const targetPath = release
+      ? "/code/target/release/atomic-server"
+      : "/code/target/debug/atomic-server";
+
     return containerWithAssets
-      .withExec(["cargo", "build"])
-      .withExec(["./target/release/atomic-server", "--version"])
-      .withExec([
-        "cp",
-        "/code/target/release/atomic-server",
-        "/atomic-server-binary",
-      ]);
+      .withExec(buildArgs)
+      .withExec([binaryPath, "--version"])
+      .withExec(["cp", targetPath, "/atomic-server-binary"]);
+  }
+
+  @func()
+  rustReleaseBuild(): Container {
+    return this.rustBuild(true);
   }
 
   @func()
@@ -265,7 +276,8 @@ export class AtomicServer {
       .from(RUST_IMAGE)
       .withExec(["cargo", "install", "cross"])
       .withMountedDirectory("/code", source)
-      .withWorkdir("/code");
+      .withWorkdir("/code")
+      .withExec(["rustup", "target", "add", target]);
 
     return rustContainer
       .withExec(["cross", "build", "--target", target, "--release"])
@@ -354,5 +366,89 @@ export class AtomicServer {
     }
 
     return deployUrl;
+  }
+
+  @func()
+  async deployServer(
+    @argument() remoteHost: string,
+    @argument() remoteUser: Secret,
+    @argument() sshPrivateKey: Secret
+  ): Promise<string> {
+    // Build the cross-compiled binary for x86_64-unknown-linux-musl
+    const crossBuildContainer = this.rustCrossBuild(
+      "x86_64-unknown-linux-musl"
+    );
+    const binaryFile = crossBuildContainer.file(
+      "/code/target/x86_64-unknown-linux-musl/release/atomic-server"
+    );
+
+    // Create deployment container with SSH client
+    const deployContainer = dag
+      .container()
+      .from("alpine:latest")
+      .withExec(["apk", "add", "--no-cache", "openssh-client", "rsync"])
+      .withFile("/atomic-server-binary", binaryFile, { permissions: 0o755 });
+
+    // Setup SSH key
+    const sshContainer = deployContainer
+      .withExec(["mkdir", "-p", "/root/.ssh"])
+      .withSecretVariable("SSH_PRIVATE_KEY", sshPrivateKey)
+      .withExec(["sh", "-c", 'echo "$SSH_PRIVATE_KEY" > /root/.ssh/id_rsa'])
+      .withExec(["chmod", "600", "/root/.ssh/id_rsa"])
+      .withExec(["ssh-keyscan", "-H", remoteHost])
+      .withExec([
+        "sh",
+        "-c",
+        `ssh-keyscan -H ${remoteHost} >> /root/.ssh/known_hosts`,
+      ]);
+
+    // Transfer binary using rsync
+    const transferResult = await sshContainer
+      .withSecretVariable("REMOTE_USER", remoteUser)
+      .withExec([
+        "sh",
+        "-c",
+        `rsync -rltgoDzvO /atomic-server-binary $REMOTE_USER@${remoteHost}:~/atomic-server-x86_64-unknown-linux-musl`,
+      ])
+      .stdout();
+
+    // Execute deployment commands on remote server
+    const deployResult = await sshContainer
+      .withSecretVariable("REMOTE_USER", remoteUser)
+      .withExec([
+        "sh",
+        "-c",
+        `ssh -i /root/.ssh/id_rsa $REMOTE_USER@${remoteHost} '
+          mv ~/atomic-server-x86_64-unknown-linux-musl ~/atomic-server &&
+          cp ~/atomic-server ~/atomic-server-$(date +"%Y-%m-%dT%H:%M:%S") &&
+          systemctl stop atomic &&
+          ./atomic-server export &&
+          systemctl start atomic &&
+          systemctl status atomic
+        '`,
+      ])
+      .stdout();
+
+    return `Deployment to ${remoteHost} completed successfully:\n${deployResult}`;
+  }
+
+  @func()
+  async deployStaging(
+    @argument() remoteUser: Secret,
+    @argument() sshPrivateKey: Secret
+  ): Promise<string> {
+    return this.deployServer(
+      "staging.atomicdata.dev",
+      remoteUser,
+      sshPrivateKey
+    );
+  }
+
+  @func()
+  async deployProduction(
+    @argument() remoteUser: Secret,
+    @argument() sshPrivateKey: Secret
+  ): Promise<string> {
+    return this.deployServer("atomicdata.dev", remoteUser, sshPrivateKey);
   }
 }
