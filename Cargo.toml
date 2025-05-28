@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["server", "cli", "lib", "plugin-examples/random-folder-extender"]
+members = ["server", "cli", "lib", "plugin-examples/random-folder-extender", "atomic-plugin"]
 # Tauri build is deprecated, see
 # https://github.com/atomicdata-dev/atomic-server/issues/718
 exclude = ["desktop"]

@@ -12,6 +12,15 @@ pub use bindings::atomic::class_extender::types::{
 
 pub use bindings::Guest;
 
+const IS_A: &str = "https://atomicdata.dev/properties/isA";
+
+#[cfg(not(target_arch = "wasm32"))]
+pub mod packaging;
+
+// Re-export contents of packaging module directly if it exists
+#[cfg(not(target_arch = "wasm32"))]
+pub use packaging::packaging_impl;
+
 use serde::Deserialize;
 use serde_json::Value as JsonValue;
 
@@ -58,7 +67,7 @@ pub struct Commit {
 
 /// High-level trait for implementing a Class Extender plugin.
 pub trait ClassExtender {
-    fn class_url() -> String;
+    fn class_url() -> Vec<String>;
 
     /// Called when a resource is fetched from the server. You can modify the resource in place.
     fn on_resource_get<'a>(resource: &'a mut Resource) -> Result<Option<&'a Resource>, String> {
@@ -66,12 +75,12 @@ pub trait ClassExtender {
     }
 
     /// Called before a Commit that targets the class is persisted. If you return an error, the commit will be rejected.
-    fn before_commit(_commit: &Commit, _snapshot: Option<&Resource>) -> Result<(), String> {
+    fn before_commit(_commit: &Commit, _snapshot: &Resource) -> Result<(), String> {
         Ok(())
     }
 
     /// Called after a Commit that targets the class has been applied. Returning an error will not cancel the commit.
-    fn after_commit(_commit: &Commit, _resource: Option<&Resource>) -> Result<(), String> {
+    fn after_commit(_commit: &Commit, _resource: &Resource) -> Result<(), String> {
         Ok(())
     }
 }
@@ -80,7 +89,7 @@ pub trait ClassExtender {
 pub struct PluginWrapper<T>(std::marker::PhantomData<T>);
 
 impl<T: ClassExtender> Guest for PluginWrapper<T> {
-    fn class_url() -> String {
+    fn class_url() -> Vec<String> {
         T::class_url()
     }
 
@@ -104,22 +113,16 @@ impl<T: ClassExtender> Guest for PluginWrapper<T> {
 
     fn before_commit(ctx: CommitContext) -> Result<(), String> {
         let commit: Commit = serde_json::from_str(&ctx.commit_json).map_err(|e| e.to_string())?;
-        let snapshot: Option<Resource> = match ctx.snapshot {
-            Some(snapshot) => Some(Resource::try_from(snapshot)?),
-            None => None,
-        };
+        let snapshot: Resource = Resource::try_from(ctx.snapshot)?;
 
-        T::before_commit(&commit, snapshot.as_ref())
+        T::before_commit(&commit, &snapshot)
     }
 
     fn after_commit(ctx: CommitContext) -> Result<(), String> {
         let commit: Commit = serde_json::from_str(&ctx.commit_json).map_err(|e| e.to_string())?;
-        let snapshot: Option<Resource> = match ctx.snapshot {
-            Some(snapshot) => Some(Resource::try_from(snapshot)?),
-            None => None,
-        };
+        let snapshot: Resource = Resource::try_from(ctx.snapshot)?;
 
-        T::after_commit(&commit, snapshot.as_ref())
+        T::after_commit(&commit, &snapshot)
     }
 }
 
@@ -128,7 +131,7 @@ macro_rules! export_plugin {
     ($plugin_type:ty) => {
         struct Shim;
         impl $crate::Guest for Shim {
-            fn class_url() -> String {
+            fn class_url() -> Vec<String> {
                 <$crate::PluginWrapper<$plugin_type> as $crate::Guest>::class_url()
             }
             fn on_resource_get(ctx: $crate::GetContext) -> Result<Option<$crate::ResourceResponse>, String> {
@@ -190,5 +193,19 @@ impl Resource {
         let mut props = self.props.clone();
         props.insert("@id".to_string(), JsonValue::String(self.subject.clone()));
         serde_json::to_string(&props).map_err(|e| format!("Serialize error: {e}"))
+    }
+
+    pub fn is_a(&self, class: &str) -> bool {
+        let Some(is_a) = self.props.get(IS_A) else {
+            return false;
+        };
+
+        let Some(is_a_subjects) = is_a.as_array() else {
+            return false;
+        };
+
+        is_a_subjects
+            .iter()
+            .any(|subject| subject.as_str() == Some(class))
     }
 }

@@ -206,7 +206,7 @@ struct WasmPluginInner {
     component: Component,
     path: PathBuf,
     owned_folder_path: Option<PathBuf>,
-    class_url: String,
+    class_url: Vec<String>,
     db: Arc<Db>,
 }
 
@@ -252,7 +252,7 @@ impl WasmPlugin {
                 component,
                 path: path.to_path_buf(),
                 owned_folder_path,
-                class_url: String::new(),
+                class_url: Vec::new(),
                 db: Arc::clone(&db),
             }),
         };
@@ -276,7 +276,7 @@ impl WasmPlugin {
         let after_plugin = self.clone();
 
         ClassExtender {
-            class: self.inner.class_url.clone(),
+            classes: self.inner.class_url.clone(),
             on_resource_get: Some(ClassExtender::wrap_get_handler(move |context| {
                 let get_plugin = get_plugin.clone();
                 Box::pin(async move { get_plugin.call_on_resource_get(context).await })
@@ -292,7 +292,7 @@ impl WasmPlugin {
         }
     }
 
-    async fn call_class_url(&self) -> AtomicResult<String> {
+    async fn call_class_url(&self) -> AtomicResult<Vec<String>> {
         let (instance, mut store) = self.instantiate().await?;
         instance
             .call_class_url(&mut store)
@@ -388,7 +388,7 @@ impl WasmPlugin {
                 .commit
                 .serialize_deterministically_json_ad(context.store)
                 .await?,
-            snapshot: Some(self.encode_resource(context.resource)?),
+            snapshot: self.encode_resource(context.resource)?,
         })
     }
 

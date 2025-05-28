@@ -1,0 +1,5 @@
+{
+  "name": "extender",
+  "namespace": "random-folder",
+  "description": "A plugin that extends the Folder class, it prevents folders from having the same name."
+}

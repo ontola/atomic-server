@@ -10,7 +10,7 @@ use crate::{
 
 pub fn get_collection_class_extender() -> ClassExtender {
     ClassExtender {
-        class: urls::COLLECTION.to_string(),
+        classes: vec![urls::COLLECTION.to_string()],
         on_resource_get: Some(ClassExtender::wrap_get_handler(|context| {
             Box::pin(async move {
                 let GetExtenderContext {
