@@ -4,5 +4,12 @@
   "sdk": {
     "source": "typescript"
   },
+  "dependencies": [
+    {
+      "name": "docker",
+      "source": "github.com/shykes/x/docker@811fa8a47958c484441304cec08d6fe30a7550b3",
+      "pin": "811fa8a47958c484441304cec08d6fe30a7550b3"
+    }
+  ],
   "source": ".dagger"
 }
