@@ -90,16 +90,22 @@ function ResourceRow({
 const Content = styled.div`
   flex: 1;
   min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 `;
 
 const IconWrapper = styled.div`
   flex-shrink: 0;
   opacity: 0.5;
   font-size: 0.875em;
+  display: flex;
+  align-items: center;
 `;
 
 export const ResourceRowDescription = styled.span`
   color: ${p => p.theme.colors.textLight};
+  white-space: nowrap;
 `;
 
 export { ResourceRow };
