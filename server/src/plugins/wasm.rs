@@ -10,7 +10,11 @@ use std::{
     sync::Arc,
 };
 
-use atomic_lib::{class_extender, AtomicErrorType};
+use atomic_lib::{
+    class_extender::{self, ClassExtenderScope},
+    AtomicErrorType,
+};
+use base64::{engine::general_purpose, Engine as _};
 use ring::digest::{digest, SHA256};
 
 use atomic_lib::{
@@ -79,6 +83,8 @@ pub async fn load_wasm_class_extenders(
 ) -> AtomicResult<Vec<ClassExtender>> {
     // Create the plugin directory if it doesn't exist
     let plugin_dir = plugin_path.join(CLASS_EXTENDER_DIR_NAME);
+    let global_dir = plugin_dir.join("global");
+    let scoped_dir = plugin_dir.join("scoped");
 
     if !plugin_dir.exists() {
         if let Err(err) = std::fs::create_dir_all(&plugin_dir) {
@@ -88,22 +94,42 @@ pub async fn load_wasm_class_extenders(
                 "Failed to create Wasm extender directory"
             );
         } else {
+            // Create global and scoped directories
+            std::fs::create_dir_all(&global_dir).ok();
+            std::fs::create_dir_all(&scoped_dir).ok();
             info!(
                 path = %plugin_dir.display(),
-                "Created empty Wasm extender directory (drop .wasm files here to enable runtime plugins)"
+                "Created empty Wasm extender directory (drop .wasm files in 'global' or 'scoped/<base64_drive_url>' folders)"
             );
         }
         return Ok(Vec::new());
     }
 
+    // Ensure subdirectories exist
+    if !global_dir.exists() {
+        std::fs::create_dir_all(&global_dir).ok();
+    }
+    if !scoped_dir.exists() {
+        std::fs::create_dir_all(&scoped_dir).ok();
+    }
+
+    // Setup cache directories
     if !plugin_cache_path.exists() {
-        if let Err(err) = std::fs::create_dir_all(&plugin_cache_path) {
+        if let Err(err) = std::fs::create_dir_all(plugin_cache_path) {
             warn!(
                 error = %err,
                 path = %plugin_cache_path.display(),
                 "Failed to create Wasm cache directory"
             );
         }
+    }
+    let global_cache = plugin_cache_path.join("global");
+    if !global_cache.exists() {
+        std::fs::create_dir_all(&global_cache).ok();
+    }
+    let scoped_cache = plugin_cache_path.join("scoped");
+    if !scoped_cache.exists() {
+        std::fs::create_dir_all(&scoped_cache).ok();
     }
 
     let engine = match build_engine() {
@@ -116,63 +142,108 @@ pub async fn load_wasm_class_extenders(
 
     let mut extenders = Vec::new();
     let mut used_cwasm_files = HashSet::new();
+    let mut cache_dirs = vec![global_cache.clone()];
 
     info!("Loading plugins...");
 
-    let wasm_files = find_wasm_files(&plugin_dir);
+    let mut tasks = Vec::new();
 
-    let futures = wasm_files.into_iter().map(|path| {
-        let plugin_dir = plugin_dir.clone();
-        let plugin_cache_path = plugin_cache_path.to_path_buf();
-        let engine = engine.clone();
-        let db = db.clone();
+    // Global Plugins
+    let global_wasm_files = find_wasm_files(&global_dir);
+    for path in global_wasm_files {
+        tasks.push((
+            path,
+            global_dir.clone(),
+            global_cache.clone(),
+            ClassExtenderScope::Global,
+        ));
+    }
 
-        async move {
-            let owned_folder_path = setup_plugin_data_dir(&path, &plugin_dir);
+    // Scoped Plugins
+    if let Ok(entries) = std::fs::read_dir(&scoped_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                let dir_name = entry.file_name();
+                let dir_name_str = dir_name.to_string_lossy();
 
-            let wasm_bytes = match std::fs::read(&path) {
-                Ok(bytes) => bytes,
-                Err(e) => {
-                    error!("Failed to read Wasm file at {}: {}", path.display(), e);
-                    return None;
-                }
-            };
-
-            let hash = digest(&SHA256, &wasm_bytes);
-            let hash_hex = hex_encode(hash.as_ref());
-            let cwasm_filename = format!("{}.cwasm", hash_hex);
-            let cwasm_path = plugin_cache_path.join(cwasm_filename);
-
-            let cwasm_path_ret = cwasm_path.clone();
-
-            match WasmPlugin::load(
-                engine.clone(),
-                &wasm_bytes,
-                &path,
-                &cwasm_path,
-                owned_folder_path,
-                &db,
-            )
-            .await
-            {
-                Ok(plugin) => {
-                    info!(
-                        "Loaded {}",
-                        path.file_name().unwrap_or(OsStr::new("Unknown")).display()
+                // Get the scope subject from the directory name
+                let Ok(sope_subject) = decode_subject(&dir_name_str) else {
+                    warn!(
+                        "Skipping invalid base64 scoped plugin directory: {}",
+                        dir_name_str
                     );
-                    Some((Some(plugin.into_class_extender()), cwasm_path_ret))
+                    continue;
+                };
+
+                let scope = ClassExtenderScope::Drive(sope_subject);
+                let drive_wasm_files = find_wasm_files(&path);
+                let drive_cache = scoped_cache.join(&dir_name);
+                if !drive_cache.exists() {
+                    std::fs::create_dir_all(&drive_cache).ok();
                 }
-                Err(err) => {
-                    error!(
-                        error = %err,
-                        path = %path.display(),
-                        "Failed to load Wasm class extender"
-                    );
-                    Some((None, cwasm_path_ret))
+                cache_dirs.push(drive_cache.clone());
+
+                for wasm_path in drive_wasm_files {
+                    tasks.push((wasm_path, path.clone(), drive_cache.clone(), scope.clone()));
                 }
             }
         }
-    });
+    }
+
+    let futures = tasks
+        .into_iter()
+        .map(|(path, plugin_dir, plugin_cache_path, scope)| {
+            let engine = engine.clone();
+            let db = db.clone();
+
+            async move {
+                let owned_folder_path = setup_plugin_data_dir(&path, &plugin_dir);
+
+                let wasm_bytes = match std::fs::read(&path) {
+                    Ok(bytes) => bytes,
+                    Err(e) => {
+                        error!("Failed to read Wasm file at {}: {}", path.display(), e);
+                        return None;
+                    }
+                };
+
+                let hash = digest(&SHA256, &wasm_bytes);
+                let hash_hex = hex_encode(hash.as_ref());
+                let cwasm_filename = format!("{}.cwasm", hash_hex);
+                let cwasm_path = plugin_cache_path.join(cwasm_filename);
+
+                let cwasm_path_ret = cwasm_path.clone();
+
+                match WasmPlugin::load(
+                    engine.clone(),
+                    &wasm_bytes,
+                    &path,
+                    &cwasm_path,
+                    owned_folder_path,
+                    &db,
+                    scope,
+                )
+                .await
+                {
+                    Ok(plugin) => {
+                        info!(
+                            "Loaded {}",
+                            path.file_name().unwrap_or(OsStr::new("Unknown")).display()
+                        );
+                        Some((Some(plugin.into_class_extender()), cwasm_path_ret))
+                    }
+                    Err(err) => {
+                        error!(
+                            error = %err,
+                            path = %path.display(),
+                            "Failed to load Wasm class extender"
+                        );
+                        Some((None, cwasm_path_ret))
+                    }
+                }
+            }
+        });
 
     let results = join_all(futures).await;
 
@@ -184,7 +255,9 @@ pub async fn load_wasm_class_extenders(
         }
     }
 
-    cleanup_cache(&plugin_cache_path, &used_cwasm_files);
+    for cache_dir in cache_dirs {
+        cleanup_cache(&cache_dir, &used_cwasm_files);
+    }
 
     Ok(extenders)
 }
@@ -206,6 +279,7 @@ struct WasmPluginInner {
     component: Component,
     path: PathBuf,
     owned_folder_path: Option<PathBuf>,
+    scope: ClassExtenderScope,
     class_url: Vec<String>,
     db: Arc<Db>,
 }
@@ -218,6 +292,7 @@ impl WasmPlugin {
         cwasm_path: &Path,
         owned_folder_path: Option<PathBuf>,
         db: &Db,
+        scope: ClassExtenderScope,
     ) -> AtomicResult<Self> {
         let db = Arc::new(db.clone());
 
@@ -253,6 +328,7 @@ impl WasmPlugin {
                 path: path.to_path_buf(),
                 owned_folder_path,
                 class_url: Vec::new(),
+                scope: scope.clone(),
                 db: Arc::clone(&db),
             }),
         };
@@ -265,6 +341,7 @@ impl WasmPlugin {
                 path: runtime.inner.path.clone(),
                 owned_folder_path: runtime.inner.owned_folder_path.clone(),
                 class_url,
+                scope,
                 db,
             }),
         })
@@ -289,6 +366,7 @@ impl WasmPlugin {
                 let after_plugin = after_plugin.clone();
                 Box::pin(async move { after_plugin.call_after_commit(context).await })
             })),
+            scope: self.inner.scope.clone(),
         }
     }
 
@@ -577,6 +655,8 @@ fn setup_plugin_data_dir(wasm_file_path: &Path, plugin_dir: &Path) -> Option<Pat
 
     let data_dir = plugin_dir.join(plugin_name);
 
+    println!("Data dir: {}", data_dir.display());
+
     if !data_dir.exists() {
         if let Err(err) = std::fs::create_dir_all(&data_dir) {
             warn!(
@@ -650,4 +730,15 @@ fn cleanup_cache(cache_dir: &Path, used_files: &HashSet<PathBuf>) {
             }
         }
     }
+}
+
+fn decode_subject(b64_subject: &str) -> AtomicResult<String> {
+    let subject = String::from_utf8(
+        general_purpose::URL_SAFE
+            .decode(b64_subject.as_bytes())
+            .map_err(|e| AtomicError::from(format!("Failed to decode subject: {}", e)))?,
+    )
+    .map_err(|e| AtomicError::from(format!("Failed to decode subject: {}", e)))?;
+
+    Ok(subject)
 }

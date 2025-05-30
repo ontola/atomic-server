@@ -29,12 +29,19 @@ pub type ResourceGetHandler = Arc<
 pub type CommitHandler =
     Arc<dyn for<'a> Fn(CommitExtenderContext<'a>) -> BoxFuture<'a, AtomicResult<()>> + Send + Sync>;
 
+#[derive(Clone, Debug)]
+pub enum ClassExtenderScope {
+    Global,
+    Drive(String),
+}
+
 #[derive(Clone)]
 pub struct ClassExtender {
     pub classes: Vec<String>,
     pub on_resource_get: Option<ResourceGetHandler>,
     pub before_commit: Option<CommitHandler>,
     pub after_commit: Option<CommitHandler>,
+    pub scope: ClassExtenderScope,
 }
 
 impl ClassExtender {
@@ -65,5 +72,45 @@ impl ClassExtender {
             + 'static,
     {
         Arc::new(handler)
+    }
+
+    /// Checks if the resource is within the scope of the extender.
+    /// To prevent unnecessary database lookups, the cached root can be supplied.
+    /// Returns a tuple of (is_in_scope, cached_root).
+    pub async fn check_scope(
+        &self,
+        resource: &Resource,
+        store: &Db,
+        cached_root: Option<String>,
+    ) -> AtomicResult<(bool, Option<String>)> {
+        match &self.scope {
+            ClassExtenderScope::Drive(scope) => {
+                // If the resource is the scope itself we can just return true.
+                if resource.get_subject().clone() == scope.clone() {
+                    return Ok((true, Some(resource.get_subject().clone())));
+                }
+
+                // Find the root parent of the resource or use the cached root.
+                let rs = if let Some(rs) = &cached_root {
+                    rs.clone()
+                } else {
+                    let parents = resource.get_parent_tree(store).await?;
+                    let Some(root) = parents.last() else {
+                        return Ok((false, None));
+                    };
+
+                    root.get_subject().clone()
+                };
+
+                if rs != *scope {
+                    return Ok((false, Some(rs)));
+                }
+
+                return Ok((true, Some(rs)));
+            }
+            ClassExtenderScope::Global => {
+                return Ok((true, cached_root));
+            }
+        }
     }
 }

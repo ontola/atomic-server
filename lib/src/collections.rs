@@ -1,6 +1,6 @@
 //! Collections are dynamic resources that refer to multiple resources.
 //! They are constructed using a [Query]
-use crate::class_extender::{ClassExtender, GetExtenderContext};
+use crate::class_extender::{ClassExtender, ClassExtenderScope, GetExtenderContext};
 use crate::{
     agents::ForAgent,
     errors::AtomicResult,
@@ -25,6 +25,7 @@ pub fn get_collection_class_extender() -> ClassExtender {
         })),
         before_commit: None,
         after_commit: None,
+        scope: ClassExtenderScope::Global,
     }
 }
 
