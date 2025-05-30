@@ -5,7 +5,6 @@ import { styled } from 'styled-components';
 import { ContainerNarrow } from '../components/Containers';
 import { Button } from '../components/Button';
 import { useSettings } from '../helpers/AppSettings';
-import { NavStyleButton } from '../components/NavStyleButton';
 import { DarkModeOption } from '../helpers/useDarkMode';
 import { Column, Row } from '../components/Row';
 import { Checkbox, CheckboxLabel } from '../components/forms/Checkbox';
@@ -40,6 +39,8 @@ const AppSettings: React.FunctionComponent = () => {
     setSidebarKeyboardDndEnabled,
     hideTemplates,
     setHideTemplates,
+    navbarTop,
+    setNavbarTop,
   } = useSettings();
 
   const { locale, setLocale } = useLocale();
@@ -92,11 +93,14 @@ const AppSettings: React.FunctionComponent = () => {
               🌕 Light
             </Button>
           </Row>
-          <Heading as='h3'>Navigation bar position</Heading>
+          <Heading as='h3'>NavBar position</Heading>
           <Row>
-            <NavStyleButton floating={true} top={false} title='Floating' />
-            <NavStyleButton floating={false} top={false} title='Bottom' />
-            <NavStyleButton floating={false} top={true} title='Top' />
+            <Button subtle={!navbarTop} onClick={() => setNavbarTop(true)}>
+              Top
+            </Button>
+            <Button subtle={navbarTop} onClick={() => setNavbarTop(false)}>
+              Bottom
+            </Button>
           </Row>
           <Heading as='h3'>Main color</Heading>
           <MainColorPicker />

@@ -136,19 +136,15 @@ msgid "Start of main content"
 msgstr "Inicio del contenido principal"
 
 #. placeholder {0}: shortcuts.sidebarToggle
-#. placeholder {0}: shortcuts.sidebarToggle
 #: src/components/NavBar.tsx
-#: src/components/Navigation.tsx
 msgid "Show / hide sidebar ({0})"
 msgstr "Mostrar / ocultar la barra lateral ({0})"
 
 #: src/components/NavBar.tsx
-#: src/components/Navigation.tsx
 msgid "Go back"
 msgstr "Retroceder"
 
 #: src/components/NavBar.tsx
-#: src/components/Navigation.tsx
 msgid "Go forward"
 msgstr "Avanzar"
 
@@ -255,13 +251,11 @@ msgstr "🌑 Oscuro"
 msgid "🌕 Light"
 msgstr "🌕 Claro"
 
-#: src/routes/AppSettings.tsx
-msgid "Navigation bar position"
-msgstr "Posición de la barra de navegación"
+#~ msgid "Navigation bar position"
+#~ msgstr "Posición de la barra de navegación"
 
-#: src/routes/AppSettings.tsx
-msgid "Floating"
-msgstr "Flotante"
+#~ msgid "Floating"
+#~ msgstr "Flotante"
 
 #: src/routes/AppSettings.tsx
 msgid "Bottom"
@@ -747,7 +741,6 @@ msgstr "Endpoint {0}"
 #~ msgid "Go"
 #~ msgstr "Ir"
 
-#: src/components/OverlayContainer.tsx
 #: src/routes/Search/SearchOverlay.tsx
 #: src/routes/Search/SearchRoute.tsx
 #: src/views/EndpointPage.tsx
@@ -4113,3 +4106,16 @@ msgstr ""
 #: src/components/NavBar.tsx
 msgid "Search ({0})"
 msgstr ""
+
+#: src/routes/AppSettings.tsx
+msgid "NavBar position"
+msgstr ""
+
+#~ msgid "Replying to"
+#~ msgstr ""
+
+#~ msgid "Clear reply"
+#~ msgstr ""
+
+#~ msgid "Reply"
+#~ msgstr ""

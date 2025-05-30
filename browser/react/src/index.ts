@@ -24,6 +24,7 @@
 
 export * from './hooks.js';
 export * from './useServerURL.js';
+export * from './useDrive.js';
 export * from './useCurrentAgent.js';
 export * from './useChildren.js';
 export { useDebouncedSave } from './useDebounce.js';
