@@ -175,7 +175,8 @@ export class Store {
 
     // Initialize drive from localStorage if available
     if (typeof window !== 'undefined') {
-      this.drive = localStorage.getItem('drive') ?? opts.serverUrl ?? '';
+      const storedDrive = localStorage.getItem('drive');
+      this.drive = storedDrive ? JSON.parse(storedDrive) : opts.serverUrl ?? '';
     } else {
       this.drive = opts.serverUrl ?? '';
     }
@@ -978,7 +979,7 @@ export class Store {
     this.drive = drive;
 
     if (typeof window !== 'undefined') {
-      localStorage.setItem('drive', drive);
+      localStorage.setItem('drive', JSON.stringify(drive));
     }
 
     // If the drive is an HTTP URL, also update the server URL
