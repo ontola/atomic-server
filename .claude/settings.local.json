@@ -40,7 +40,9 @@
       "mcp__charlotte__charlotte_type",
       "Bash(while read:*)",
       "Bash(do if:*)",
-      "Bash(then echo:*)"
+      "Bash(then echo:*)",
+      "Bash(pnpm run:*)",
+      "Bash(ls data-browser/tsconfig*.json)"
     ]
   }
 }
