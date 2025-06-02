@@ -1,4 +1,4 @@
-import { Resource, urls } from '@tomic/lib';
+import { Resource, urls, type Core } from '@tomic/lib';
 import { atomicConfig } from './config.js';
 import { ReverseMapping } from './generateBaseObject.js';
 import { store } from './store.js';
@@ -17,24 +17,24 @@ const NAMESPACE_TEMPLATE = `
 `;
 
 export const generateClassExports = (
-  ontology: Resource,
+  ontology: Resource<Core.Ontology>,
   reverseMapping: ReverseMapping,
 ): string => {
   const classes = ontology.getArray(urls.properties.classes) as string[];
 
   const body = classes
     .map(subject => {
-      const res = store.getResourceLoading(subject);
+      const res = store.getResourceLoading<Core.Class>(subject);
       const objectPath = reverseMapping[subject];
 
-      return createExportLine(res.title, objectPath);
+      return createExportLine(res.props.shortname, objectPath);
     })
     .join('\n');
 
   if (atomicConfig.useNamespaces) {
     return NAMESPACE_TEMPLATE.replace(
       Inserts.NamespaceName,
-      capitalize(ontology.title),
+      capitalize(ontology.props.shortname),
     ).replace(Inserts.NamespaceBody, body);
   } else {
     return body;
