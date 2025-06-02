@@ -34,6 +34,7 @@ import {
   FaRegSquareCheck,
   FaLink,
   FaCode,
+  FaPuzzlePiece,
 } from 'react-icons/fa6';
 import { AIIcon } from '../components/AI/AIIcon';
 
@@ -45,6 +46,7 @@ const iconMap = new Map<string, IconType>([
   [dataBrowser.classes.documentV2, FaFileLines],
   [server.classes.file, FaFile],
   [server.classes.drive, FaHardDrive],
+  [server.classes.plugin, FaPuzzlePiece],
   [commits.classes.commit, FaClock],
   [dataBrowser.classes.importer, FaFileImport],
   [server.classes.invite, FaShareFromSquare],

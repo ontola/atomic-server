@@ -209,7 +209,7 @@ const CloseButtonSlot = styled(Slot)`
 `;
 
 const DialogContentSlot = styled(Slot)`
-  overflow-x: auto;
+  overflow-x: clip;
   overflow-y: visible;
   /* The main section should leave room for the footer */
   max-height: calc(80vh - 8rem);

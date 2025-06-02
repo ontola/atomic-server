@@ -14,7 +14,7 @@ mod val_prop_sub_index;
 use std::{
     collections::{HashMap, HashSet},
     fs,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, RwLock},
     vec,
 };
 
@@ -88,7 +88,7 @@ pub struct Db {
     /// Endpoints are checked whenever a resource is requested. They calculate (some properties of) the resource and return it.
     endpoints: Vec<Endpoint>,
     /// List of class extenders.
-    class_extenders: Vec<ClassExtender>,
+    class_extenders: Arc<RwLock<Vec<ClassExtender>>>,
     /// Function called whenever a Commit is applied.
     on_commit: Option<Arc<HandleCommit>>,
     /// Where the DB is stored on disk.
@@ -109,7 +109,7 @@ impl Db {
         let prop_val_sub_index = db.open_tree(Tree::PropValSub)?;
         let watched_queries = db.open_tree(Tree::WatchedQueries)?;
 
-        let mut store = Db {
+        let store = Db {
             path: path.into(),
             db,
             default_agent: Arc::new(Mutex::new(None)),
@@ -120,7 +120,7 @@ impl Db {
             server_url,
             watched_queries,
             endpoints: vec![],
-            class_extenders: vec![],
+            class_extenders: Arc::new(RwLock::new(vec![])),
             on_commit: None,
         };
 
@@ -149,8 +149,20 @@ impl Db {
         Ok(store)
     }
 
-    pub fn add_class_extender(&mut self, class_extender: ClassExtender) -> AtomicResult<()> {
-        self.class_extenders.push(class_extender);
+    pub fn add_class_extender(&self, class_extender: ClassExtender) -> AtomicResult<()> {
+        self.class_extenders
+            .write()
+            .map_err(|e| format!("Failed to write to class extenders: {}", e))?
+            .push(class_extender);
+        Ok(())
+    }
+
+    pub fn remove_class_extender(&self, id: &str) -> AtomicResult<()> {
+        let mut extenders = self
+            .class_extenders
+            .write()
+            .map_err(|e| format!("Failed to write to class extenders: {}", e))?;
+        extenders.retain(|e| e.id.as_deref() != Some(id));
         Ok(())
     }
 
@@ -734,12 +746,21 @@ impl Storelike for Db {
         let mut root_subject: Option<String> = None;
 
         // BEFORE APPLY COMMIT HANDLERS
-        if let Some(resource_new) = &commit_response.resource_new {
-            for extender in self.class_extenders.iter() {
-                if extender.resource_has_extender(resource_new)? {
-                    let (is_in_scope, cached_root) = extender
-                        .check_scope(&resource_new, self, root_subject)
-                        .await?;
+        let resource_before = commit_response
+            .resource_new
+            .as_ref()
+            .or(commit_response.resource_old.as_ref());
+
+        if let Some(resource) = resource_before {
+            let extenders = self
+                .class_extenders
+                .read()
+                .map_err(|e| format!("Failed to read class extenders: {}", e))?
+                .clone();
+            for extender in extenders.iter() {
+                if extender.resource_has_extender(resource)? {
+                    let (is_in_scope, cached_root) =
+                        extender.check_scope(resource, self, root_subject).await?;
 
                     root_subject = cached_root;
 
@@ -754,7 +775,7 @@ impl Storelike for Db {
                     let fut = (handler)(CommitExtenderContext {
                         store,
                         commit: &commit_response.commit,
-                        resource: resource_new,
+                        resource,
                     });
                     fut.await?;
                 }
@@ -808,12 +829,21 @@ impl Storelike for Db {
         // AFTER APPLY COMMIT HANDLERS
         // Commit has been checked and saved.
         // Here you can add side-effects, such as creating new Commits.
-        if let Some(resource_new) = &commit_response.resource_new {
-            for extender in self.class_extenders.iter() {
-                if extender.resource_has_extender(resource_new)? {
-                    let (is_in_scope, cached_root) = extender
-                        .check_scope(&resource_new, self, root_subject)
-                        .await?;
+        let resource_after = commit_response
+            .resource_new
+            .as_ref()
+            .or(commit_response.resource_old.as_ref());
+
+        if let Some(resource) = resource_after {
+            let extenders = self
+                .class_extenders
+                .read()
+                .map_err(|e| format!("Failed to read class extenders: {}", e))?
+                .clone();
+            for extender in extenders.iter() {
+                if extender.resource_has_extender(resource)? {
+                    let (is_in_scope, cached_root) =
+                        extender.check_scope(resource, self, root_subject).await?;
 
                     root_subject = cached_root;
 
@@ -830,7 +860,7 @@ impl Storelike for Db {
                     let fut = (handler)(CommitExtenderContext {
                         store,
                         commit: &commit_response.commit,
-                        resource: resource_new,
+                        resource,
                     });
                     fut.await?;
                 }
@@ -910,8 +940,12 @@ impl Storelike for Db {
 
             let mut root_subject: Option<String> = None;
 
-            // If a certain class needs to be extended, add it to this match statement
-            for extender in self.class_extenders.iter() {
+            let extenders = self
+                .class_extenders
+                .read()
+                .map_err(|e| format!("Failed to read class extenders: {}", e))?
+                .clone();
+            for extender in extenders.iter() {
                 if extender.resource_has_extender(&resource)? {
                     let (is_in_scope, cached_root) =
                         extender.check_scope(&resource, self, root_subject).await?;

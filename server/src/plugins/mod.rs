@@ -35,11 +35,13 @@ They are used for performing custom queries, or calculating dynamic attributes.
 
 pub mod bookmark;
 pub mod chatroom;
+pub mod drive;
 pub mod export;
 pub mod files;
 pub mod importer;
 pub mod invite;
 pub mod path;
+pub mod plugin;
 pub mod prunetests;
 pub mod query;
 pub mod search;

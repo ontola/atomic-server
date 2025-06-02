@@ -1,0 +1,122 @@
+import { Button } from '@components/Button';
+import {
+  ConfirmationDialog,
+  ConfirmationDialogTheme,
+} from '@components/ConfirmationDialog';
+import { ContainerNarrow } from '@components/Containers';
+import Markdown from '@components/datatypes/Markdown';
+import { JSONEditor } from '@components/JSONEditor';
+import { Column, Row } from '@components/Row';
+import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
+import { core, server, useString, useValue, type Server } from '@tomic/react';
+import { useCreatePlugin } from '@views/Drive/createPlugin';
+import type { ResourcePageProps } from '@views/ResourcePage';
+import type { JSONSchema7 } from 'ai';
+import { constructOpenURL } from '@helpers/navigation';
+import { useId, useState } from 'react';
+import { FaFloppyDisk, FaTrash, FaUpload } from 'react-icons/fa6';
+import { styled } from 'styled-components';
+import toast from 'react-hot-toast';
+
+export const PluginPage: React.FC<ResourcePageProps<Server.Plugin>> = ({
+  resource,
+}) => {
+  const configLabelId = useId();
+  const navigate = useNavigateWithTransition();
+  const [showUninstallDialog, setShowUninstallDialog] = useState(false);
+  const [name] = useString(resource, core.properties.name);
+  const [namespace] = useString(resource, server.properties.namespace);
+  const [config, setConfig] = useValue(resource, server.properties.config);
+  const [configValid, setConfigValid] = useState(true);
+  const title = `${namespace ? `${namespace}/` : ''}${name}`;
+
+  const parent = resource.props.parent;
+
+  const { uninstallPlugin } = useCreatePlugin();
+
+  return (
+    <ContainerNarrow>
+      <Column>
+        <div>
+          <Row justify='space-between'>
+            <PluginName>{title}</PluginName>
+            <span>v{resource.props.version}</span>
+          </Row>
+          <PluginAuthor>by {resource.props.pluginAuthor}</PluginAuthor>
+        </div>
+        <Row>
+          <Button>
+            <FaUpload />
+            Update
+          </Button>
+          <Button alert onClick={() => setShowUninstallDialog(true)}>
+            <FaTrash />
+            Uninstall
+          </Button>
+        </Row>
+        {resource.props.description && (
+          <DescriptionWrapper>
+            <Markdown text={resource.props.description!} />
+          </DescriptionWrapper>
+        )}
+        <Row center justify='space-between'>
+          <Label id={configLabelId}>Config</Label>
+          <Button disabled={!configValid} onClick={() => resource.save()}>
+            <FaFloppyDisk />
+            Save
+          </Button>
+        </Row>
+        <JSONEditor
+          labelId={configLabelId}
+          initialValue={JSON.stringify(config, null, 2)}
+          onChange={v => {
+            try {
+              setConfig(JSON.parse(v));
+            } catch (e) {
+              // Do nothing
+            }
+          }}
+          schema={resource.props.jsonSchema as JSONSchema7}
+          showErrorStyling={!configValid}
+          onValidationChange={setConfigValid}
+        />
+      </Column>
+      <ConfirmationDialog
+        title='Uninstall Plugin'
+        show={showUninstallDialog}
+        theme={ConfirmationDialogTheme.Alert}
+        confirmLabel='Uninstall'
+        bindShow={setShowUninstallDialog}
+        onConfirm={async () => {
+          await uninstallPlugin(resource);
+          navigate(constructOpenURL(parent));
+          toast.success('Plugin uninstalled');
+        }}
+        onCancel={() => setShowUninstallDialog(false)}
+      >
+        Are you sure you want to uninstall this plugin?
+      </ConfirmationDialog>
+    </ContainerNarrow>
+  );
+};
+
+const PluginName = styled.span`
+  font-weight: bold;
+  font-size: 1.2rem;
+`;
+
+const DescriptionWrapper = styled.div`
+  background-color: ${p => p.theme.colors.bg1};
+  padding: ${p => p.theme.size()};
+  border-radius: ${p => p.theme.radius};
+  max-height: 33rem;
+  overflow-y: auto;
+`;
+
+const PluginAuthor = styled.span`
+  color: ${p => p.theme.colors.textLight};
+`;
+
+const Label = styled.label`
+  font-weight: bold;
+`;

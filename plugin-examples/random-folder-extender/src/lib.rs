@@ -12,7 +12,12 @@ struct DiscordWebhookBody {
 
 #[derive(Deserialize)]
 struct Config {
-    webhook_url: String,
+    #[serde(rename = "discordWebhookUrl")]
+    discord_webhook_url: String,
+    #[serde(rename = "updateMessage")]
+    update_message: String,
+    #[serde(rename = "blacklistedFolderNames")]
+    blacklisted_folder_names: Option<Vec<String>>,
 }
 
 const FOLDER_CLASS: &str = "https://atomicdata.dev/classes/Folder";
@@ -73,23 +78,39 @@ impl ClassExtender for RandomFolderExtender {
             return Err("Folder name must be unique".into());
         }
 
+        let config = atomic_plugin::get_config::<Config>()
+            .map_err(|_| "Could not parse plugin config".to_string())?;
+
+        // Check if the folder name is in the blacklist.
+        if config.blacklisted_folder_names.is_some()
+            && config
+                .blacklisted_folder_names
+                .unwrap()
+                .contains(&name.to_string())
+        {
+            return Err("Folder name is not allowed".into());
+        }
+
         Ok(())
     }
 
     // Send a message to a Discord webhook when a folder is updated.
     fn after_commit(_commit: &Commit, resource: &Resource) -> Result<(), String> {
-        let config_str = std::fs::read_to_string("/config.toml").map_err(|e| e.to_string())?;
-        let config: Config = toml::from_str(&config_str).map_err(|e| e.to_string())?;
+        let config = atomic_plugin::get_config::<Config>()
+            .map_err(|_| "Could not parse plugin config".to_string())?;
 
         let name = get_name_from_folder(resource)?;
         let client = Client::new();
 
         let body = DiscordWebhookBody {
-            content: format!("📁 [Folder]({}) updated: {}", resource.subject, name),
+            content: config
+                .update_message
+                .replace("{{name}}", name)
+                .replace("{{subject}}", &resource.subject),
         };
 
         let res = client
-            .post(&config.webhook_url)
+            .post(&config.discord_webhook_url)
             .header("Content-Type", "application/json")
             .body(serde_json::to_string(&body).map_err(|e| e.to_string())?)
             .send()

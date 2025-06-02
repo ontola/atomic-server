@@ -167,6 +167,15 @@ pub fn query(
     })?
 }
 
+pub fn get_config<'a, T>() -> Result<T, String>
+where
+    T: for<'de> Deserialize<'de>,
+{
+    let config_str = host::get_config();
+    serde_json::from_str::<T>(&config_str)
+        .map_err(|e| format!("Failed to deserialize config: {}", e))
+}
+
 impl TryFrom<ResourceJson> for Resource {
     type Error = String;
 

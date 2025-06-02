@@ -1,18 +1,30 @@
 import CodeMirror, {
+  hoverTooltip,
   type BasicSetupOptions,
   type EditorView,
   type ReactCodeMirrorRef,
 } from '@uiw/react-codemirror';
 import { githubLight, githubDark } from '@uiw/codemirror-theme-github';
-import { json, jsonParseLinter } from '@codemirror/lang-json';
-import { linter, type Diagnostic } from '@codemirror/lint';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { json, jsonParseLinter, jsonLanguage } from '@codemirror/lang-json';
+import {
+  jsonSchemaLinter,
+  jsonSchemaHover,
+  jsonCompletion,
+  stateExtensions,
+  handleRefresh,
+} from 'codemirror-json-schema';
+import { linter, lintGutter, type Diagnostic } from '@codemirror/lint';
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { styled, useTheme } from 'styled-components';
+import type { JSONSchema7 } from 'ai';
+import { addIf } from '@helpers/addIf';
+import { useOnValueChange } from '@helpers/useOnValueChange';
 
 export interface JSONEditorProps {
   labelId?: string;
   initialValue?: string;
   showErrorStyling?: boolean;
+  schema?: JSONSchema7;
   required?: boolean;
   maxWidth?: string;
   autoFocus?: boolean;
@@ -22,11 +34,13 @@ export interface JSONEditorProps {
 }
 
 const basicSetup: BasicSetupOptions = {
-  lineNumbers: false,
+  lineNumbers: true,
   foldGutter: false,
   highlightActiveLine: true,
   indentOnInput: true,
 };
+
+type Reports = Record<string, boolean>;
 
 /**
  * ASYNC COMPONENT DO NOT IMPORT DIRECTLY, USE {@link JSONEditor.tsx}.
@@ -37,15 +51,29 @@ const AsyncJSONEditor: React.FC<JSONEditorProps> = ({
   showErrorStyling,
   required,
   maxWidth,
+  schema,
   autoFocus,
   onChange,
   onValidationChange,
   onBlur,
 }) => {
   const editorRef = useRef<ReactCodeMirrorRef>(null);
+  const jsonParserLinterRef = useRef(jsonParseLinter());
+  const schemaLinterRef = useRef(jsonSchemaLinter());
   const theme = useTheme();
   const [value, setValue] = useState(initialValue ?? '');
-  const latestDiagnostics = useRef<Diagnostic[]>([]);
+  const [reports, setReports] = useState<Reports>({});
+
+  const reporter = useCallback((key: string, valid: boolean) => {
+      setReports((prev) => ({ ...prev, [key]: valid }))
+  }, []);
+
+
+  useOnValueChange(() => {
+    // We can't move this to the report event because we need the most up to date reports which are modified in that event.
+    onValidationChange?.(Object.values(reports).every(Boolean));
+  }, [reports]);
+
   // We need to use callback because the compiler can't optimize the CodeMirror component.
   const handleChange = useCallback(
     (val: string) => {
@@ -55,38 +83,28 @@ const AsyncJSONEditor: React.FC<JSONEditorProps> = ({
     [onChange],
   );
 
-  // Wrap jsonParseLinter so we can tap into diagnostics
-  const validationLinter = useMemo(() => {
-    const delegate = jsonParseLinter();
-
-    return (view: EditorView) => {
-      const isEmpty = view.state.doc.length === 0;
-      let diagnostics = delegate(view);
-
-      if (!required && isEmpty) {
-        diagnostics = [];
-      }
-
-      // Compare the diagnostics so we don't call the onValidationChange callback unnecessarily.
-      const prev = latestDiagnostics.current;
-      const changed =
-        diagnostics.length !== prev.length ||
-        diagnostics.some(
-          (d, i) => d.from !== prev[i]?.from || d.message !== prev[i]?.message,
-        );
-
-      if (changed) {
-        latestDiagnostics.current = diagnostics;
-        onValidationChange?.(diagnostics.length === 0);
-      }
-
-      return diagnostics;
-    };
-  }, [onValidationChange, required]);
+  const jsonLinter = useHookIntoValidator('json', jsonParserLinterRef, reporter, !!required);
+  const schemaLinter = useHookIntoValidator('jsonSchema', schemaLinterRef, reporter, true);
 
   const extensions = useMemo(
-    () => [json(), linter(validationLinter)],
-    [validationLinter],
+    () => [
+      json(),
+      linter(jsonLinter, {
+        delay: 300,
+      }),
+      lintGutter(),
+      addIf(!!schema,
+        linter(schemaLinter, {
+          needsRefresh: handleRefresh,
+        }),
+        jsonLanguage.data.of({
+          autocomplete: jsonCompletion(),
+        }),
+        hoverTooltip(jsonSchemaHover()),
+        stateExtensions(schema),
+      )
+    ],
+    [jsonLinter, schemaLinter, schema],
   );
 
   useEffect(() => {
@@ -129,6 +147,38 @@ const AsyncJSONEditor: React.FC<JSONEditorProps> = ({
   );
 };
 
+function useHookIntoValidator(key: string, validator: RefObject<(view: EditorView) => Diagnostic[]>, reporter: (key: string, valid: boolean) => void, required: boolean): (view: EditorView) => Diagnostic[] {
+    const lastDiagnostics = useRef<Diagnostic[]>([]);
+
+    const validationLinter = useMemo(() => {
+    return (view: EditorView) => {
+      const isEmpty = view.state.doc.length === 0;
+      let diagnostics = validator.current(view);
+
+      if (!required && isEmpty) {
+        diagnostics = [];
+      }
+
+      // Compare the diagnostics so we don't call the onValidationChange callback unnecessarily.
+      const prev = lastDiagnostics.current;
+      const changed =
+        diagnostics.length !== prev.length ||
+        diagnostics.some(
+          (d, i) => d.from !== prev[i]?.from || d.message !== prev[i]?.message,
+        );
+
+      if (changed) {
+        lastDiagnostics.current = diagnostics;
+        reporter(key, diagnostics.length === 0);
+      }
+
+      return diagnostics;
+    };
+  }, [key, validator, reporter, required]);
+
+  return validationLinter;
+}
+
 export default AsyncJSONEditor;
 
 const CodeEditorWrapper = styled.div`
@@ -141,11 +191,70 @@ const CodeEditorWrapper = styled.div`
   & .cm-editor {
     border: 1px solid ${p => p.theme.colors.bg2};
     border-radius: ${p => p.theme.radius};
-    /* padding: ${p => p.theme.size(2)}; */
     outline: none;
 
     &:focus-within {
       border-color: ${p => p.theme.colors.main};
+    }
+
+    & .cm-scroller {
+      min-height: 150px;
+    }
+  }
+
+  & .cm-tooltip-hover {
+    background-color: ${p => p.theme.colors.bg};
+    padding: ${p => p.theme.size(2)};
+    box-shadow: ${p => p.theme.boxShadowSoft};
+    border-radius: ${p => p.theme.radius};
+    border: ${p => p.theme.darkMode ? '1px solid' : 'none'} ${p => p.theme.colors.bg2};
+
+    & .cm-tooltip-arrow {
+      display: none;
+    }
+  }
+
+  & .cm-gutters {
+    background: transparent;
+    min-height: 150px;
+
+    & .cm-gutterElement {
+      display: grid;
+      place-items: center;
+    }
+
+    & .cm-lint-marker-error {
+      content: '';
+      background: ${p => p.theme.colors.alert};
+      border-radius: 50%;
+      height: 0.5rem;
+      width: 0.5rem;
+    }
+  }
+
+  & .cm-tooltip {
+    background-color: ${p => p.theme.colors.bg};
+    box-shadow: ${p => p.theme.boxShadowSoft};
+    border-radius: ${p => p.theme.radius};
+    border: none;
+
+    & > ul > li {
+      background-color: none;
+      padding: ${p => p.theme.size(2)} !important;
+      margin:0;
+
+      &:first-of-type {
+        border-top-left-radius: ${p => p.theme.radius};
+        border-top-right-radius: ${p => p.theme.radius};
+      }
+      &:last-of-type {
+        border-bottom-left-radius: ${p => p.theme.radius};
+        border-bottom-right-radius: ${p => p.theme.radius};
+      }
+      &[aria-selected='true'] {
+        background-color: ${p => p.theme.colors.mainSelectedBg};
+        color: ${p => p.theme.colors.mainSelectedFg};
+      }
     }
   }
 `;

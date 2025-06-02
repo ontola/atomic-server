@@ -3,9 +3,13 @@ package atomic:class-extender@0.1.0;
 interface host {
   use types.{resource-json, atomic-agent};
 
+  // Returns a resource by subject.
   get-resource: func(subject: string, agent: option<string>) -> result<resource-json, string>;
+  // Returns a list of resources that match the query.
   query: func(property: string, value: string, agent: option<string>) -> result<list<resource-json>, string>;
   get-plugin-agent: func() -> string;
+  // Returns the JSON config of the plugin as a string. The user can edit this config at any time.
+  get-config: func() -> string;
 }
 
 interface types {
