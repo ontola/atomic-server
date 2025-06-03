@@ -17,6 +17,7 @@ import { rootRoute, topRoute, appRoute } from './RootRoutes';
 import { unavailableLazyRoute } from './UnavailableLazyRoute';
 import { ImportRoute } from './ImportRoute';
 import { HistoryRoute } from './History/HistoryRoute';
+import { LinkOpenRouter } from './LinkOpenRouter';
 
 const PruneTestsRoute = createRoute({
   getParentRoute: () => appRoute,
@@ -58,6 +59,7 @@ const routeTree = rootRoute.addChildren({
     NewRoute,
     PruneTestsRoute,
     SandboxRoute,
+    LinkOpenRouter,
   }),
   topRoute,
 });

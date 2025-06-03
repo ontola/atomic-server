@@ -32,7 +32,7 @@ export const AppSettingsContextProvider = (
   );
   const [openRouterApiKey, setOpenRouterApiKey] = useLocalStorage<
     string | undefined
-  >('openRouterApiKey', undefined);
+  >('atomic.ai.openrouter-api-key', undefined);
   const [mcpServers, setMcpServers] = useLocalStorage<MCPServer[]>(
     'atomic.ai.mcpServers',
     [],

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Column } from '../Row';
+import { Column, Row } from '../Row';
 import { Checkbox, CheckboxLabel } from '../forms/Checkbox';
 import { InputStyled, InputWrapper } from '../forms/InputStyles';
 import { MCPServersManager } from '../MCPServersManager';
@@ -7,11 +7,14 @@ import styled from 'styled-components';
 import { transition } from '../../helpers/transition';
 import { useSettings } from '../../helpers/AppSettings';
 import { useEffect, useState } from 'react';
+import { OpenRouterLoginButton } from './OpenRouterLoginButton';
 
 interface CreditUsage {
   total: number;
   used: number;
 }
+
+const CREDITS_ENDPOINT = 'https://openrouter.ai/api/v1/credits';
 
 const AISettings: React.FC = () => {
   const {
@@ -29,10 +32,12 @@ const AISettings: React.FC = () => {
 
   useEffect(() => {
     if (!openRouterApiKey) {
+      setCreditUsage(undefined);
+
       return;
     }
 
-    fetch('https://openrouter.ai/api/v1/credits', {
+    fetch(CREDITS_ENDPOINT, {
       headers: {
         Authorization: `Bearer ${openRouterApiKey}`,
       },
@@ -57,18 +62,38 @@ const AISettings: React.FC = () => {
         <label htmlFor='openrouter-api-key'>
           <Column gap='0.5rem'>
             OpenRouter API Key
-            <InputWrapper>
-              <InputStyled
-                id='openrouter-api-key'
-                type='password'
-                value={openRouterApiKey || ''}
-                onChange={e => setOpenRouterApiKey(e.target.value || undefined)}
-                placeholder='Enter your OpenRouter API key'
-              />
-            </InputWrapper>
+            <Row center>
+              {!openRouterApiKey && (
+                <>
+                  <OpenRouterLoginButton />
+                  or
+                </>
+              )}
+              <InputWrapper>
+                <InputStyled
+                  id='openrouter-api-key'
+                  type='password'
+                  value={openRouterApiKey || ''}
+                  onChange={e =>
+                    setOpenRouterApiKey(e.target.value || undefined)
+                  }
+                  placeholder='Enter your OpenRouter API key'
+                />
+              </InputWrapper>
+            </Row>
             {creditUsage && (
               <CreditUsage>
                 Credits used: {creditUsage.used} / Total: {creditUsage.total}
+              </CreditUsage>
+            )}
+            {!openRouterApiKey && (
+              <CreditUsage>
+                <p>
+                  OpenRouter provides a unified API that gives you access to
+                  hundreds of AI models from all major vendors, while
+                  automatically handling fallbacks and selecting the most
+                  cost-effective options.
+                </p>
               </CreditUsage>
             )}
           </Column>
