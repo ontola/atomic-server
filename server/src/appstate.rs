@@ -62,6 +62,9 @@ impl AppState {
         store.add_class_extender(plugins::plugin::build_plugin_extender(
             config.plugin_path.clone(),
         ))?;
+        store.add_class_extender(plugins::files::build_file_extender(
+            config.uploads_path.clone(),
+        ))?;
 
         // Register all built-in endpoints
         store.add_endpoint(plugins::versioning::version_endpoint())?;

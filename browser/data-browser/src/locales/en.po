@@ -1158,17 +1158,14 @@ msgid "Set {0} as current drive"
 msgstr "Set {0} as current drive"
 
 #: src/views/Drive/DrivePage.tsx
-#: src/views/DrivePage.tsx
 msgid "Set as current drive"
 msgstr "Set as current drive"
 
 #: src/views/Drive/DrivePage.tsx
-#: src/views/DrivePage.tsx
 msgid "Default Ontology"
 msgstr "Default Ontology"
 
 #: src/views/Drive/DrivePage.tsx
-#: src/views/DrivePage.tsx
 msgid ""
 "You are running Atomic-Server on `localhost`, which means that it\n"
 "will not be available from any other machine than your current local\n"
@@ -3180,22 +3177,10 @@ msgstr "Plugins"
 msgid "Add Plugin"
 msgstr "Add Plugin"
 
-#~ msgid "<0/> Add Plugin"
-#~ msgstr "<0/> Add Plugin"
-
-#~ msgid "New Plugin"
-#~ msgstr "New Plugin"
-
 #: src/views/Drive/NewPluginButton.tsx
 #: src/views/Drive/NewPluginButton.tsx
 msgid "<0/> Upload Plugin"
 msgstr "<0/> Upload Plugin"
-
-#~ msgid "Invalid plugin zip file. It must contain plugin.wasm and plugin.json at the root, and optionally an assets folder."
-#~ msgstr "Invalid plugin zip file. It must contain plugin.wasm and plugin.json at the root, and optionally an assets folder."
-
-#~ msgid "Invalid plugin zip file."
-#~ msgstr "Invalid plugin zip file."
 
 #. placeholder {0}: metadata.version
 #. placeholder {0}: resource.props.version
@@ -3210,9 +3195,6 @@ msgstr "v{0}"
 #: src/views/Plugin/PluginPage.tsx
 msgid "by {0}"
 msgstr "by {0}"
-
-#~ msgid "Configure"
-#~ msgstr "Configure"
 
 #: src/routes/SettingsAgent.tsx
 msgid "Cannot fill subject and privatekey fields."
@@ -3315,9 +3297,6 @@ msgstr "Invalid URI"
 msgid "Content saved"
 msgstr "Content saved"
 
-#~ msgid "Config <0/>"
-#~ msgstr "Config <0/>"
-
 #: src/views/Drive/NewPluginButton.tsx
 #: src/views/Plugin/PluginPage.tsx
 msgid "Config"
@@ -3343,32 +3322,14 @@ msgstr "Install"
 msgid "Please fill in all fields"
 msgstr "Please fill in all fields"
 
-#~ msgid "Failed to create plugin resource, error: {0}"
-#~ msgstr "Failed to create plugin resource, error: {0}"
-
 #. placeholder {0}: err.message
 #: src/views/Drive/NewPluginButton.tsx
 msgid "Failed to install plugin, error: {0}"
 msgstr "Failed to install plugin, error: {0}"
 
-#~ msgid "Go to plugin"
-#~ msgstr "Go to plugin"
-
-#~ msgid "<0/>Save"
-#~ msgstr "<0/>Save"
-
-#~ msgid "Update"
-#~ msgstr "Update"
-
 #: src/views/Plugin/PluginPage.tsx
 msgid "Uninstall"
 msgstr "Uninstall"
-
-#~ msgid "<0/>Update"
-#~ msgstr "<0/>Update"
-
-#~ msgid "<0/>Uninstall"
-#~ msgstr "<0/>Uninstall"
 
 #: src/views/Plugin/PluginPage.tsx
 msgid "<0/> Update"

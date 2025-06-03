@@ -1,4 +1,11 @@
-use atomic_lib::{endpoints::Endpoint, urls};
+use std::path::PathBuf;
+
+use atomic_lib::{
+    class_extender::{BoxFuture, ClassExtender, ClassExtenderScope, CommitExtenderContext},
+    endpoints::Endpoint,
+    errors::AtomicResult,
+    urls, AtomicError, Storelike, Value,
+};
 
 pub fn upload_endpoint() -> Endpoint {
     Endpoint {
@@ -31,5 +38,57 @@ The following query parameters are available:
         shortname: "download".to_string(),
         handle: None,
         handle_post: None,
+    }
+}
+
+// Removes the file from the filesystem after the resource has been deleted.
+fn on_after_commit(
+    context: CommitExtenderContext,
+    uploads_dir: PathBuf,
+) -> BoxFuture<AtomicResult<()>> {
+    Box::pin(async move {
+        let CommitExtenderContext {
+            store,
+            commit,
+            resource,
+        } = context;
+
+        if commit.destroy != Some(true) {
+            return Ok(());
+        }
+
+        let Ok(Value::String(file_name)) = resource.get(urls::INTERNAL_ID) else {
+            return Ok(());
+        };
+
+        let correct_subject = format!("{}/files/{}", store.get_server_url()?, file_name);
+
+        if resource.get_subject() != &correct_subject {
+            return Err(AtomicError::from(format!(
+                "Internal ID {} does not match resource subject {}",
+                file_name,
+                resource.get_subject()
+            )));
+        }
+
+        let file_path = uploads_dir.join(file_name);
+        if file_path.exists() {
+            std::fs::remove_file(file_path)?;
+        }
+
+        Ok(())
+    })
+}
+
+pub fn build_file_extender(uploads_dir: PathBuf) -> ClassExtender {
+    ClassExtender {
+        id: Some("file".to_string()),
+        classes: vec![urls::FILE.to_string()],
+        on_resource_get: None,
+        before_commit: None,
+        after_commit: Some(ClassExtender::wrap_commit_handler(move |context| {
+            on_after_commit(context, uploads_dir.clone())
+        })),
+        scope: ClassExtenderScope::Global,
     }
 }
