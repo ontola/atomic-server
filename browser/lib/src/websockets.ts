@@ -4,58 +4,7 @@ import { JSONADParser } from './parse.js';
 import type { Resource } from './resource.js';
 import type { Store } from './store.js';
 
-/** Opens a Websocket Connection at `/ws` for the current Drive */
-export function startWebsocket(url: string, store: Store): WebSocket {
-  const wsURL = new URL(url);
-
-  // Default to a secure WSS connection, but allow WS for unsecured server connections
-  if (wsURL.protocol === 'http:') {
-    wsURL.protocol = 'ws';
-  } else {
-    wsURL.protocol = 'wss';
-  }
-
-  wsURL.pathname = '/ws';
-  const client = new WebSocket(wsURL.toString());
-  client.onopen = _e => handleOpen(store, client);
-  client.onmessage = (ev: MessageEvent) => handleMessage(ev, store);
-  client.onerror = handleError;
-
-  // client.onclose = handleClose;
-  return client;
-}
-
-function handleOpen(store: Store, client: WebSocket) {
-  // Make sure user is authenticated before sending any messages
-  authenticate(client, store).then(() => {
-    // Subscribe to all existing messages
-    // TODO: Add a way to subscribe to multiple resources in one request
-    for (const subject of store.subscribers.keys()) {
-      store.subscribeWebSocket(subject);
-    }
-  });
-}
-
-function handleMessage(ev: MessageEvent, store: Store) {
-  if (ev.data.startsWith('COMMIT ')) {
-    const commit = ev.data.slice(7);
-    parseAndApplyCommit(commit, store);
-  } else if (ev.data.startsWith('ERROR ')) {
-    store.notifyError(ev.data.slice(6));
-  } else if (ev.data.startsWith('RESOURCE ')) {
-    const resources = parseResourceMessage(ev);
-    store.addResources(resources);
-  } else if (ev.data.startsWith('Y_SYNC_UPDATE ')) {
-    const update = ev.data.slice(14);
-    store.__handleAwarenessUpdateMessage(update);
-  } else {
-    console.warn('Unknown websocket message:', ev);
-  }
-}
-
-function handleError(ev: Event) {
-  console.error('websocket error:', ev);
-}
+const REQUEST_TIMEOUT = 5000;
 
 function parseResourceMessage(ev: MessageEvent): Resource[] {
   const resourceJSON: string = ev.data.slice(9);
@@ -65,47 +14,6 @@ function parseResourceMessage(ev: MessageEvent): Resource[] {
 
   return resources;
 }
-
-/**
- * Authenticates current Agent over current WebSocket. Doesn't do anything if
- * there is no agent
- */
-export async function authenticate(
-  client: WebSocket,
-  store: Store,
-  fetchAll = false,
-) {
-  const agent = store.getAgent();
-
-  if (!agent || !agent.subject) {
-    return;
-  }
-
-  if (
-    !client.url.startsWith('ws://localhost') &&
-    agent?.subject?.startsWith('http://localhost')
-  ) {
-    console.warn(
-      `Can't authenticate localhost Agent over websocket with remote server ${client.url} because the server will nog be able to retrieve your Agent and verify your public key.`,
-    );
-
-    return;
-  }
-
-  const json = await createAuthentication(client.url, agent);
-  client.send('AUTHENTICATE ' + JSON.stringify(json));
-
-  // Maybe this should happen after the authentication is confirmed?
-  if (fetchAll) {
-    store.resources.forEach(r => {
-      if (r.isUnauthorized() || r.loading) {
-        store.fetchResourceFromServer(r.subject);
-      }
-    });
-  }
-}
-
-const defaultTimeout = 5000;
 
 /** Sends a GET message for some resource over websockets. */
 export async function fetchWebSocket(
@@ -130,12 +38,282 @@ export async function fetchWebSocket(
       client.removeEventListener('message', listener);
       reject(
         new Error(
-          `Request for subject "${subject}" timed out after ${defaultTimeout}ms.`,
+          `Request for subject "${subject}" timed out after ${REQUEST_TIMEOUT}ms.`,
         ),
       );
-    }, defaultTimeout);
+    }, REQUEST_TIMEOUT);
 
     client.addEventListener('message', listener);
     client.send('GET ' + subject);
   });
+}
+
+/**
+ * A client that does authentication and message handling for a single WebSocket connection.
+ */
+export class WSClient {
+  // private url: string;
+  private ws: WebSocket;
+  private store: Store;
+  private authPromise: Promise<void>;
+  private openPromise: Promise<void>;
+
+  private authenticatedWith: string | undefined;
+  private isAuthenticating = false;
+
+  constructor(url: string, store: Store) {
+    this.store = store;
+    this.handleMessage = this.handleMessage.bind(this);
+    this.handleOpen = this.handleOpen.bind(this);
+
+    const wsURL = new URL(url);
+
+    // Default to a secure WSS connection, but allow WS for unsecured server connections
+    if (wsURL.protocol === 'http:') {
+      wsURL.protocol = 'ws';
+    } else {
+      wsURL.protocol = 'wss';
+    }
+
+    wsURL.pathname = '/ws';
+    this.ws = new WebSocket(wsURL.toString());
+    this.authPromise = Promise.resolve();
+    this.openPromise = new Promise(resolve => {
+      this.ws.addEventListener('open', () => {
+        resolve();
+        this.handleOpen();
+      });
+    });
+    this.ws.addEventListener('message', this.handleMessage);
+    this.ws.addEventListener('error', e =>
+      console.error('websocket error:', e),
+    );
+  }
+  public get readyState(): number {
+    return this.ws.readyState;
+  }
+
+  /**
+   * Authenticates current Agent over current WebSocket. Doesn't do anything if
+   * there is no agent
+   */
+  public async authenticate(fetchAll = false): Promise<void> {
+    const agent = this.store.getAgent();
+
+    if (!agent || !agent.subject) {
+      return;
+    }
+
+    if (
+      !this.ws.url.startsWith('ws://localhost') &&
+      agent?.subject?.startsWith('http://localhost')
+    ) {
+      console.warn(
+        `Can't authenticate localhost Agent over websocket with remote server ${this.ws.url} because the server will not be able to retrieve your Agent and verify your public key.`,
+      );
+
+      return;
+    }
+
+    await this.openPromise;
+
+    if (this.authenticatedWith === agent.subject) {
+      return;
+    }
+
+    if (this.isAuthenticating) {
+      try {
+        await this.authPromise;
+      } catch (e) {
+        // Authentication failed, continue as public agent.
+      }
+
+      return;
+    }
+
+    this.isAuthenticating = true;
+
+    try {
+      this.authPromise = this.waitForMessage('AUTHENTICATED');
+
+      const json = await createAuthentication(this.ws.url, agent);
+      this.ws.send('AUTHENTICATE ' + JSON.stringify(json));
+
+      await this.authPromise;
+
+      if (fetchAll) {
+        this.store.resources.forEach(r => {
+          if (r.isUnauthorized() || r.loading) {
+            this.store.fetchResourceFromServer(r.subject);
+          }
+        });
+      }
+
+      this.authenticatedWith = agent?.subject;
+    } finally {
+      this.isAuthenticating = false;
+    }
+
+    return;
+  }
+
+  public subscribeResource(subject: string): void {
+    if (this.readyState !== WebSocket.OPEN) {
+      console.warn('WebSocket is not open, cannot subscribe to resource');
+
+      return;
+    }
+
+    this.authPromise
+      .catch(() => {
+        // We don't want to log the error here, as it's already handled in the authenticate() method
+      })
+      .finally(() => {
+        this.ws.send('SUBSCRIBE ' + subject);
+      });
+  }
+
+  public unsubscribeResource(subject: string): void {
+    if (this.readyState !== WebSocket.OPEN) {
+      console.warn('WebSocket is not open, cannot unsubscribe from resource');
+
+      return;
+    }
+
+    this.ws.send('UNSUBSCRIBE ' + subject);
+  }
+
+  public subscribeYSync(subject: string, property: string): void {
+    if (this.readyState !== WebSocket.OPEN) {
+      console.warn('WebSocket is not open, cannot subscribe to YSync');
+
+      return;
+    }
+
+    this.ws.send('Y_SYNC_SUBSCRIBE ' + JSON.stringify({ subject, property }));
+  }
+
+  public unsubscribeYSync(subject: string, property: string): void {
+    if (this.readyState !== WebSocket.OPEN) {
+      console.warn('WebSocket is not open, cannot unsubscribe from YSync');
+
+      return;
+    }
+
+    this.ws.send('Y_SYNC_UNSUBSCRIBE ' + JSON.stringify({ subject, property }));
+  }
+
+  public sendYSyncUpdate(message: string): void {
+    if (this.readyState !== WebSocket.OPEN) {
+      console.warn('WebSocket is not open, cannot send YSync update');
+
+      return;
+    }
+
+    this.ws.send('Y_SYNC_UPDATE ' + message);
+  }
+  /** Sends a GET message for some resource over websockets. */
+  public async fetch(subject: string): Promise<Resource> {
+    // If we are authenticating we do not want to fetch any resources yet.
+    try {
+      await this.authPromise;
+    } catch (e) {
+      // Authentication failed, continue as public agent.
+    }
+
+    const promise = this.waitForMessage('RESOURCE ', (ev: MessageEvent) => {
+      for (const resource of parseResourceMessage(ev)) {
+        if (resource.subject === subject) {
+          return resource;
+        }
+      }
+
+      return false;
+    });
+
+    this.ws.send('GET ' + subject);
+
+    return await promise;
+  }
+
+  private handleOpen() {
+    // Make sure user is authenticated before sending any messages
+    this.authenticate()
+      .then(() => {
+        // Subscribe to all existing messages
+        for (const subject of this.store.subscribers.keys()) {
+          if (subject.startsWith(this.ws.url)) {
+            this.subscribeResource(subject);
+          }
+        }
+      })
+      .catch(e => {
+        console.error('Error handling open:', e);
+      });
+  }
+
+  private handleMessage(ev: MessageEvent) {
+    if (ev.data.startsWith('COMMIT ')) {
+      const commit = ev.data.slice(7);
+      parseAndApplyCommit(commit, this.store);
+    } else if (ev.data.startsWith('ERROR ')) {
+      this.store.notifyError(ev.data.slice(6));
+    } else if (ev.data.startsWith('RESOURCE ')) {
+      const resources = parseResourceMessage(ev);
+      this.store.addResources(resources);
+    } else if (ev.data.startsWith('Y_SYNC_UPDATE ')) {
+      const update = ev.data.slice(14);
+      this.store.__handleAwarenessUpdateMessage(update);
+    } else if (ev.data.startsWith('AUTHENTICATED')) {
+      // Do nothing, handled by the authenticate() method
+    } else {
+      console.warn('Unknown websocket message:', ev);
+    }
+  }
+
+  private waitForMessage(message: string): Promise<void>;
+  private waitForMessage<T>(
+    message: string,
+    condition: (ev: MessageEvent) => T | false,
+  ): Promise<T>;
+  private waitForMessage<T>(
+    message: string,
+    condition?: (ev: MessageEvent) => T | false,
+  ): Promise<T | void> {
+    return new Promise((resolve, reject) => {
+      let timeoutId: NodeJS.Timeout;
+
+      const listener = (ev: MessageEvent) => {
+        if (!ev.data.startsWith(message)) {
+          return;
+        }
+
+        if (!condition) {
+          clearTimeout(timeoutId);
+          this.ws.removeEventListener('message', listener);
+
+          return resolve();
+        }
+
+        let result = condition(ev);
+
+        if (result !== false) {
+          clearTimeout(timeoutId);
+          this.ws.removeEventListener('message', listener);
+          resolve(result);
+        }
+      };
+
+      timeoutId = setTimeout(() => {
+        this.ws.removeEventListener('message', listener);
+        reject(
+          new Error(
+            `WS Request timed out after ${REQUEST_TIMEOUT}ms. on ${this.ws.url}, message: ${message}`,
+          ),
+        );
+      }, REQUEST_TIMEOUT);
+
+      this.ws.addEventListener('message', listener);
+    });
+  }
 }

@@ -19,7 +19,7 @@ import { Resource, unknownSubject } from './resource.js';
 import { type SearchOpts, buildSearchSubject } from './search.js';
 import { stringToSlug } from './stringToSlug.js';
 import type { JSONValue } from './value.js';
-import { authenticate, fetchWebSocket, startWebsocket } from './websockets.js';
+import { WSClient } from './websockets.js';
 import { endpoints } from './urls.js';
 import { initOntologies } from './ontologies/index.js';
 import { decodeB64, encodeB64 } from './base64.js';
@@ -145,7 +145,7 @@ export class Store {
   /** Current Agent, used for signing commits. Is required for posting things. */
   private agent?: Agent;
   /** Mapped from origin to websocket */
-  private webSockets: Map<string, WebSocket>;
+  private webSockets: Map<string, WSClient>;
 
   private eventManager = new EventManager<StoreEvents, StoreEventHandlers>();
 
@@ -375,7 +375,7 @@ export class Store {
       ws?.readyState === WebSocket.OPEN
     ) {
       // Use WebSocket
-      await fetchWebSocket(ws, subject);
+      await ws.fetch(subject);
       // Resource should now have been added to the store by the websocket client.
     } else {
       // Use HTTPS
@@ -404,12 +404,12 @@ export class Store {
   }
 
   /** Returns the WebSocket for the current Server URL */
-  public getDefaultWebSocket(): WebSocket | undefined {
+  public getDefaultWebSocket(): WSClient | undefined {
     return this.webSockets.get(this.getServerUrl());
   }
 
   /** Opens a Websocket for some subject URL, or returns the existing one. */
-  public getWebSocketForSubject(subject: string): WebSocket | undefined {
+  public getWebSocketForSubject(subject: string): WSClient | undefined {
     try {
       const url = new URL(subject);
       const found = this.webSockets.get(url.origin);
@@ -418,7 +418,7 @@ export class Store {
         return found;
       } else {
         if (typeof window !== 'undefined') {
-          this.webSockets.set(url.origin, startWebsocket(url.origin, this));
+          this.webSockets.set(url.origin, new WSClient(url.origin, this));
         }
       }
 
@@ -743,15 +743,9 @@ export class Store {
       }
 
       this.webSockets.forEach(ws => {
-        // If WebSocket is already open, authenticate immediately
-        if (ws.readyState === ws.OPEN) {
-          authenticate(ws, this, true);
-        } else {
-          // Otherwise, wait for it to open before authenticating
-          ws.onopen = () => {
-            authenticate(ws, this, true);
-          };
-        }
+        ws.authenticate(true).catch(e => {
+          this.notifyError(e);
+        });
       });
     } else {
       if (hasBrowserAPI()) {
@@ -787,7 +781,7 @@ export class Store {
         return;
       }
 
-      this.webSockets.set(url, startWebsocket(url, this));
+      this.webSockets.set(url, new WSClient(url, this));
     } else {
       console.warn('WebSockets not supported, no window available');
     }
@@ -825,14 +819,11 @@ export class Store {
       return;
     }
 
-    // TODO: check if there is a websocket for this server URL or not
     try {
       const ws = this.getWebSocketForSubject(subject);
 
       // Only subscribe if there's a websocket. When it's opened, all subject will be iterated and subscribed
-      if (ws?.readyState === 1) {
-        ws?.send(`SUBSCRIBE ${subject}`);
-      }
+      ws?.subscribeResource(subject);
     } catch (e) {
       console.error(e);
     }
@@ -855,11 +846,6 @@ export class Store {
     const ws = this.getWebSocketForSubject(subject);
     const key = `${subject}+${property}` as const;
 
-    const messageBody = JSON.stringify({
-      subject,
-      property,
-    });
-
     const unsub = () => {
       const subscribers = this.ySyncSubscribers.get(key);
 
@@ -869,9 +855,7 @@ export class Store {
         if (afterUnsub.length === 0) {
           this.ySyncSubscribers.delete(key);
 
-          if (ws?.readyState === 1) {
-            ws?.send(`Y_SYNC_UNSUBSCRIBE ${messageBody}`);
-          }
+          ws?.unsubscribeYSync(subject, property);
         } else {
           this.ySyncSubscribers.set(key, afterUnsub);
         }
@@ -888,9 +872,7 @@ export class Store {
 
     this.ySyncSubscribers.set(key, [callback]);
 
-    if (ws?.readyState === 1) {
-      ws?.send(`Y_SYNC_SUBSCRIBE ${messageBody}`);
-    }
+    ws?.subscribeYSync(subject, property);
 
     return unsub;
   }
@@ -919,9 +901,7 @@ export class Store {
       ...(awarenessUpdate && { awareness_update: encodeB64(awarenessUpdate) }),
     };
 
-    if (ws?.readyState === 1) {
-      ws?.send(`Y_SYNC_UPDATE ${JSON.stringify(messageBody)}`);
-    }
+    ws?.sendYSyncUpdate(JSON.stringify(messageBody));
   }
 
   /**
@@ -952,7 +932,7 @@ export class Store {
     }
 
     try {
-      this.getDefaultWebSocket()?.send(`UNSUBSCRIBE ${subject}`);
+      this.getDefaultWebSocket()?.unsubscribeResource(subject);
     } catch (e) {
       console.error(e);
     }
