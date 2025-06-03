@@ -6,6 +6,8 @@ import {
   useProperty,
   useCanWrite,
   useArray,
+  useResource,
+  useStore,
   type Resource,
   type Server,
 } from '@tomic/react';
@@ -21,19 +23,34 @@ import InputSwitcher from '@components/forms/InputSwitcher';
 import { WarningBlock } from '@components/WarningBlock';
 import { SettingsGroup, SettingsSection } from '@components/Settings';
 
-import { lazy, Suspense, type JSX } from 'react';
+import { lazy, Suspense, useEffect, useState, type JSX } from 'react';
 import { PluginList } from './PluginList';
 import { Tag } from '@components/Tag/Tag';
 import { CreateTagRow } from '@components/Tag/CreateTagRow';
 import { constructOpenURL } from '@helpers/navigation';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { FaXmark } from 'react-icons/fa6';
+import { QuickCreateRow } from '@components/NewInstanceButton';
+import { ResourceSideBar } from '@components/SideBar/ResourceSideBar/ResourceSideBar';
+import { ScrollArea } from '@components/ScrollArea';
 
 const NewPluginButton = lazy(() => import('@chunks/Plugins/NewPluginButton'));
 
 /** A View for Drives, which function similar to a homepage or dashboard. */
 function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
   const { drive: baseURL, setDrive: setBaseURL } = useSettings();
+  const store = useStore();
+  const [subResources] = useArray(
+    resource,
+    dataBrowser.properties.subResources,
+  );
+  const [ancestry, setAncestry] = useState<string[]>([]);
+
+  useEffect(() => {
+    store.getResourceAncestry(resource).then(result => {
+      setAncestry(result);
+    });
+  }, [store, resource]);
 
   const defaultOntologyProp = useProperty(server.properties.defaultOntology);
   const canEdit = useCanWrite(resource);
@@ -45,7 +62,7 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
   return (
     <ContainerNarrow>
       <Column gap='2rem'>
-        <Row>
+        <Row wrapItems gap='1rem'>
           <EditableTitle resource={resource} />
           {baseURL !== resource.subject && (
             <Button onClick={() => setBaseURL(resource.subject)}>
@@ -53,19 +70,26 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
             </Button>
           )}
         </Row>
-        {baseURL.startsWith('http://localhost') && (
-          <WarningBlock>
-            You are running Atomic-Server on `localhost`, which means that it
-            will not be available from any other machine than your current local
-            device. If you want your Atomic-Server to be available from the web,
-            you should set this up at a Domain on a server.
-          </WarningBlock>
-        )}
         <ValueForm
           resource={resource}
           propertyURL={core.properties.description}
           datatype={Datatype.MARKDOWN}
         />
+        {canEdit && <QuickCreateRow parent={resource.subject} />}
+
+        <DriveSubResourcesSection>
+          <ScrollArea>
+            {subResources.map((child, index) => (
+              <ResourceSideBar
+                key={child}
+                subject={child}
+                renderedHierarchy={[resource.subject]}
+                ancestry={ancestry}
+              />
+            ))}
+          </ScrollArea>
+        </DriveSubResourcesSection>
+
         <SettingsGroup>
           <SettingsSection label='Tags'>
             <DriveTagList resource={resource} />
@@ -180,4 +204,8 @@ const DeleteTagButton = styled.button`
   &:hover {
     color: ${p => p.theme.colors.alert};
   }
+`;
+
+const DriveSubResourcesSection = styled.div`
+  margin-top: 1rem;
 `;

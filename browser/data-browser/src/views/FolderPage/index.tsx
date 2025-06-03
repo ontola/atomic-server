@@ -79,6 +79,7 @@ export function FolderPage({
               subResources={subResources}
               onNewClick={navigateToNewRoute}
               showNewButton={canEdit!}
+              parent={resource.subject}
             />
           </FileDropZone>
         </Wrapper>
