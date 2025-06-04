@@ -28,6 +28,7 @@ interface TableCellProps {
   subject: string;
   property: Property;
   onEditNextRow?: () => void;
+  onAddNewRow?: () => void;
 }
 
 const SAVE_DEBOUNCE_TIME = 200;
@@ -57,6 +58,7 @@ export function TableCell({
   subject,
   property,
   onEditNextRow,
+  onAddNewRow,
 }: TableCellProps): JSX.Element {
   const resource = useResource(subject, {
     track: [property.subject],
@@ -64,7 +66,7 @@ export function TableCell({
   const { setActiveCell } = useTableEditorContext();
   const { addItemsToHistoryStack } = useContext(TablePageContext);
   // We give an empty error handler to debouncedSave so it doesn't spam the user with error popups when the value is invalid.
-  const [save, savePending] = useDebouncedSave(
+  const [save] = useDebouncedSave(
     resource,
     SAVE_DEBOUNCE_TIME,
     emptyFunc,
@@ -122,21 +124,20 @@ export function TableCell({
   const propValCount = resource.getPropVals().size;
 
   const handleEditNextRow = useCallback(() => {
-    if (!savePending) {
-      onEditNextRow?.();
+    onEditNextRow?.();
 
-      // Only go to the next row if the resource has any properties set (It has two by default, isA and parent)
-      // This prevents triggering a rerender and losing focus on the input.
-      if (propValCount > 2) {
-        setActiveCell(rowIndex + 1, columnIndex);
-      }
+    // Only go to the next row if the resource has any properties set (It has two by default, isA and parent)
+    // This prevents triggering a rerender and losing focus on the input.
+    if (propValCount > 2) {
+      onAddNewRow?.();
+      setActiveCell(rowIndex + 1, columnIndex);
     }
   }, [
-    savePending,
     setActiveCell,
     rowIndex,
     columnIndex,
     onEditNextRow,
+    onAddNewRow,
     propValCount,
   ]);
 

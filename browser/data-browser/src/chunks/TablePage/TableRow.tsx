@@ -109,6 +109,7 @@ export function TableRow({
 type TableNewRowProps = Omit<TableRowProps, 'collection'> & {
   parent: Resource<DataBrowser.Table>;
   invalidateTable: () => void;
+  addNewRow: () => void;
 };
 
 const resourceOpts = {
@@ -120,6 +121,7 @@ export function TableNewRow({
   columns,
   parent,
   invalidateTable,
+  addNewRow,
 }: TableNewRowProps): JSX.Element {
   const store = useStore();
   const [subject, setSubject] = useState<string>(unknownSubject);
@@ -175,6 +177,7 @@ export function TableNewRow({
           subject={resource.subject}
           property={column}
           onEditNextRow={onEditNextRow}
+          onAddNewRow={addNewRow}
         />
       ))}
     </>

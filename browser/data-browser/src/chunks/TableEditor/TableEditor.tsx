@@ -56,6 +56,7 @@ interface FancyTableProps<T> {
   onCellResize?: (sizes: number[]) => void;
   onColumnReorder?: ColumnReorderHandler;
   onRowExpand?: (index: number) => void;
+  itemKey?: (index: number) => string;
   HeadingComponent: TableHeadingComponent<T>;
   NewColumnButtonComponent: React.ComponentType;
   ref?: React.RefObject<HTMLDivElement | null>;
@@ -96,6 +97,7 @@ function FancyTableInner<T>({
   onPasteCommand,
   onColumnReorder,
   onRowExpand = () => undefined,
+  itemKey,
   HeadingComponent,
   NewColumnButtonComponent,
 }: FancyTableProps<T>): JSX.Element {
@@ -172,6 +174,7 @@ function FancyTableInner<T>({
         width='100%'
         itemSize={rowHeight!}
         itemCount={itemCount}
+        itemKey={itemKey}
         overscanCount={4}
         onScroll={onScroll}
         ref={listRef}
@@ -179,7 +182,7 @@ function FancyTableInner<T>({
         {Row}
       </StyledFixedSizeList>
     ),
-    [rowHeight, itemCount, listRef, Row, onScroll],
+    [rowHeight, itemCount, itemKey, listRef, Row, onScroll],
   );
 
   useEffect(() => {

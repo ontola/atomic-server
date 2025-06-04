@@ -42,7 +42,10 @@
       "Bash(do if:*)",
       "Bash(then echo:*)",
       "Bash(pnpm run:*)",
-      "Bash(ls data-browser/tsconfig*.json)"
+      "Bash(ls data-browser/tsconfig*.json)",
+      "Bash(grep -r \"localResource\\\\|new.*resource\\\\|uncommitted\" /Users/joep/dev/github/atomicdata-dev/atomic-server/browser/data-browser/src/chunks/TableEditor --include=*.ts --include=*.tsx)",
+      "Bash(grep -E \"\\\\.\\(tsx?|jsx?\\)$\")",
+      "Bash(grep -E \"\\\\.ts$\")"
     ]
   }
 }

@@ -22,7 +22,7 @@ export function useTableInvalidation(
   }, [invalidateTable, markedForInvalidation]);
 
   useOnValueChange(() => {
-    if (markedForInvalidation) {
+    if (markedForInvalidation && cursorMode !== CursorMode.Edit) {
       invalidateTable();
     }
   }, [selectedRow, selectedColumn]);
