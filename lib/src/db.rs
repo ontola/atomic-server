@@ -150,10 +150,16 @@ impl Db {
     }
 
     pub fn add_class_extender(&self, class_extender: ClassExtender) -> AtomicResult<()> {
-        self.class_extenders
+        let mut extenders = self
+            .class_extenders
             .write()
-            .map_err(|e| format!("Failed to write to class extenders: {}", e))?
-            .push(class_extender);
+            .map_err(|e| format!("Failed to write to class extenders: {}", e))?;
+
+        if let Some(id) = &class_extender.id {
+            extenders.retain(|e| e.id.as_ref() != Some(id));
+        }
+
+        extenders.push(class_extender);
         Ok(())
     }
 
@@ -894,7 +900,11 @@ impl Storelike for Db {
                 Ok(resource)
             }
             Err(e) => {
-                tracing::error!("Error getting resource: {:?}", e);
+                if e.error_type != crate::errors::AtomicErrorType::NotFoundError {
+                    tracing::error!("Error getting resource: {:?}", e);
+                } else {
+                    tracing::debug!("Resource not found: {}", subject);
+                }
                 self.handle_not_found(subject, e, None).await
             }
         }

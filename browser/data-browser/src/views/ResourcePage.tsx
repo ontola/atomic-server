@@ -34,7 +34,7 @@ import { OntologyPage } from './OntologyPage';
 import { TagPage } from './TagPage/TagPage';
 import { AIChatPage } from '@views/AIChat/AIChatPage';
 import { DocumentV2FullPage } from './Document/DocumentV2FullPage';
-import { PluginPage } from './Plugin/PluginPage';
+import { PluginPage } from '@views/Plugin/PluginPage';
 
 /** These properties are passed to every View at Page level */
 export type ResourcePageProps<Subject extends OptionalClass = never> = {

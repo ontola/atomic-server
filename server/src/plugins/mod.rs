@@ -35,7 +35,6 @@ They are used for performing custom queries, or calculating dynamic attributes.
 
 pub mod bookmark;
 pub mod chatroom;
-pub mod drive;
 pub mod export;
 pub mod files;
 pub mod importer;

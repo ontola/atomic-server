@@ -11,6 +11,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=n == 1 ? 0 : 1;\n"
 "MIME-Version: 1.0\n"
+"Source-Language: en\n"
 
 #: src/components/AtomicLink.tsx
 msgid "No `subject`, `path` or `href` passed to this AtomicLink."
@@ -33,6 +34,8 @@ msgid "No results"
 msgstr "Keine Ergebnisse"
 
 #: src/chunks/AI/AgentConfig.tsx
+#: src/chunks/Plugins/NewPluginButton.tsx
+#: src/chunks/Plugins/UpdatePluginButton.tsx
 #: src/components/ConfirmationDialog.tsx
 #: src/components/ParentPicker/ParentPickerDialog.tsx
 #: src/components/forms/EditFormDialog.tsx
@@ -71,6 +74,7 @@ msgid "Stack trace:"
 msgstr "Stack-Trace:"
 
 #: src/components/CodeBlock.tsx
+#: src/components/InviteForm.tsx
 msgid "Copied to clipboard"
 msgstr "In die Zwischenablage kopiert"
 
@@ -1674,6 +1678,7 @@ msgid "Required"
 msgstr "Erforderlich"
 
 #: src/components/forms/InputJSON.tsx
+#: src/components/forms/InputJSON.tsx
 msgid "Invalid JSON"
 msgstr "Ungültiges JSON"
 
@@ -2648,6 +2653,7 @@ msgid "Will be uploaded when resource is saved"
 msgstr "Wird hochgeladen, wenn die Ressource gespeichert wird"
 
 #: src/components/forms/ValueForm/ValueFormEdit.tsx
+#: src/views/Plugin/PluginPage.tsx
 msgid "<0/> Save"
 msgstr "<0/> Speichern"
 
@@ -3163,11 +3169,12 @@ msgstr "Nichts zum Kopieren."
 
 #: src/views/Drive/PluginList.tsx
 msgid "Plugins"
-msgstr ""
+msgstr "Plugins"
 
+#: src/chunks/Plugins/NewPluginButton.tsx
 #: src/views/Drive/NewPluginButton.tsx
 msgid "Add Plugin"
-msgstr ""
+msgstr "Plugin hinzufügen"
 
 #: src/views/Drive/NewPluginButton.tsx
 msgid "<0/> Add Plugin"
@@ -3176,9 +3183,11 @@ msgstr ""
 #~ msgid "New Plugin"
 #~ msgstr ""
 
+#: src/chunks/Plugins/NewPluginButton.tsx
+#: src/chunks/Plugins/NewPluginButton.tsx
 #: src/views/Drive/NewPluginButton.tsx
 msgid "<0/> Upload Plugin"
-msgstr ""
+msgstr "<0/> Plugin hochladen"
 
 #~ msgid "Invalid plugin zip file. It must contain plugin.wasm and plugin.json at the root, and optionally an assets folder."
 #~ msgstr ""
@@ -3187,15 +3196,210 @@ msgstr ""
 #~ msgstr ""
 
 #. placeholder {0}: metadata.version
+#. placeholder {0}: resource.props.version
+#. placeholder {0}: resource.props.version
+#: src/chunks/Plugins/NewPluginButton.tsx
 #: src/views/Drive/NewPluginButton.tsx
+#: src/views/Plugin/PluginPage.tsx
 msgid "v{0}"
-msgstr ""
+msgstr "v{0}"
 
 #. placeholder {0}: metadata.author
+#. placeholder {0}: resource.props.pluginAuthor
+#. placeholder {0}: resource.props.pluginAuthor
+#: src/chunks/Plugins/NewPluginButton.tsx
 #: src/views/Drive/NewPluginButton.tsx
+#: src/views/Plugin/PluginPage.tsx
 msgid "by {0}"
-msgstr ""
+msgstr "von {0}"
 
 #: src/views/Drive/NewPluginButton.tsx
 msgid "Configure"
 msgstr ""
+
+#: src/routes/Share/ShareRoute.tsx
+msgid "Share settings saved"
+msgstr "Freigabeeinstellungen gespeichert"
+
+#: src/routes/SettingsAgent.tsx
+msgid "Cannot fill subject and privatekey fields."
+msgstr "Betreff- und Privatekey-Felder können nicht ausgefüllt werden."
+
+#: src/routes/SettingsAgent.tsx
+msgid "Invalid Agent"
+msgstr "Ungültiger Agent"
+
+#: src/routes/SettingsAgent.tsx
+msgid "Invalid secret."
+msgstr "Ungültiges Geheimnis."
+
+#: src/helpers/AppSettings.tsx
+msgid "Signed in!"
+msgstr "Angemeldet!"
+
+#: src/helpers/AppSettings.tsx
+msgid "Signed out."
+msgstr "Abgemeldet."
+
+#: src/helpers/AppSettings.tsx
+msgid "Agent setting failed:"
+msgstr "Agent-Einstellung fehlgeschlagen:"
+
+#: src/views/ImporterPage.tsx
+msgid "Imported!"
+msgstr "Importiert!"
+
+#: src/hooks/useCreateAndNavigate.ts
+msgid "Failed to save new resource"
+msgstr "Fehler beim Speichern der neuen Ressource"
+
+#: src/components/forms/ValueForm/ValueFormEdit.tsx
+#: src/components/forms/hooks/useSaveResource.ts
+msgid "Resource saved"
+msgstr "Ressource gespeichert"
+
+#: src/components/forms/hooks/useSaveResource.ts
+msgid "Could not save resource"
+msgstr "Ressource konnte nicht gespeichert werden"
+
+#: src/views/Plugin/PluginPage.tsx
+msgid "<0/> Uninstall"
+msgstr "<0/> Deinstallieren"
+
+#: src/chunks/Plugins/NewPluginButton.tsx
+#: src/views/Plugin/PluginPage.tsx
+msgid "Config"
+msgstr "Konfiguration"
+
+#: src/views/Plugin/PluginPage.tsx
+msgid "Are you sure you want to uninstall this plugin?"
+msgstr "Möchten Sie dieses Plugin wirklich deinstallieren?"
+
+#: src/views/Plugin/PluginPage.tsx
+msgid "Uninstall Plugin"
+msgstr "Plugin deinstallieren"
+
+#: src/views/Plugin/PluginPage.tsx
+msgid "Uninstall"
+msgstr "Deinstallieren"
+
+#: src/views/Plugin/PluginPage.tsx
+msgid "Plugin uninstalled"
+msgstr "Plugin deinstalliert"
+
+#. placeholder {0}: e.message
+#. placeholder {1}: value?.toString()
+#: src/components/ValueComp.tsx
+msgid "{0} original value: {1}"
+msgstr "{0} ursprünglicher Wert: {1}"
+
+#: src/components/ResourceContextMenu/index.tsx
+msgid "Resource deleted!"
+msgstr "Ressource gelöscht!"
+
+#: src/components/Template/ApplyTemplateDialog.tsx
+msgid "Template applied!"
+msgstr "Vorlage angewendet!"
+
+#: src/routes/SettingsServer/WSIndicator.tsx
+msgid "Websocket Connected"
+msgstr "Websocket verbunden"
+
+#: src/routes/SettingsServer/WSIndicator.tsx
+msgid "Websocket Closing"
+msgstr "Websocket wird geschlossen"
+
+#: src/routes/SettingsServer/WSIndicator.tsx
+msgid "Websocket Closed"
+msgstr "Websocket geschlossen"
+
+#: src/routes/SettingsServer/WSIndicator.tsx
+msgid "Websocket Connecting..."
+msgstr "Websocket verbindet..."
+
+#: src/components/forms/InputMarkdown.tsx
+#: src/components/forms/InputString.tsx
+msgid "Invalid value"
+msgstr "Ungültiger Wert"
+
+#: src/components/forms/InputNumber.tsx
+msgid "Invalid Number"
+msgstr "Ungültige Zahl"
+
+#: src/components/forms/InputSlug.tsx
+msgid "Invalid Slug"
+msgstr "Ungültiger Slug"
+
+#: src/components/forms/InputURI.tsx
+msgid "Invalid URI"
+msgstr "Ungültige URI"
+
+#: src/components/forms/ValueForm/ValueFormEdit.tsx
+#: src/views/Article/ArticleDescription.tsx
+msgid "Could not save resource..."
+msgstr "Ressource konnte nicht gespeichert werden..."
+
+#: src/views/Article/ArticleDescription.tsx
+msgid "Content saved"
+msgstr "Inhalt gespeichert"
+
+#: src/views/Plugin/ConfigReference.tsx
+msgid "Config Reference"
+msgstr "Konfigurationsreferenz"
+
+#: src/views/Plugin/ConfigReference.tsx
+msgid "required"
+msgstr "erforderlich"
+
+#: src/views/Plugin/ConfigReference.tsx
+msgid "Default:"
+msgstr "Standard:"
+
+#: src/views/Plugin/ConfigReference.tsx
+msgid "Possible values:"
+msgstr "Mögliche Werte:"
+
+#: src/chunks/Plugins/NewPluginButton.tsx
+msgid "Please fill in all fields"
+msgstr "Bitte füllen Sie alle Felder aus"
+
+#. placeholder {0}: err.message
+#: src/chunks/Plugins/NewPluginButton.tsx
+msgid "Failed to install plugin, error: {0}"
+msgstr "Plugin-Installation fehlgeschlagen, Fehler: {0}"
+
+#: src/chunks/Plugins/NewPluginButton.tsx
+msgid "Install"
+msgstr "Installieren"
+
+#: src/chunks/AI/AIChatPage.tsx
+msgid "Failed to create message resource"
+msgstr "Nachrichtenressource konnte nicht erstellt werden"
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Changes Saved!"
+msgstr "Änderungen gespeichert!"
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Failed to save changes"
+msgstr "Änderungen konnten nicht gespeichert werden."
+
+#: src/chunks/Plugins/UpdatePluginButton.tsx
+msgid "The update's identifier does not match the existing plugin."
+msgstr "Die Kennung des Updates stimmt nicht mit dem vorhandenen Plugin überein."
+
+#: src/chunks/Plugins/UpdatePluginButton.tsx
+msgid "<0/> Update"
+msgstr "<0/> Aktualisieren"
+
+#: src/chunks/Plugins/UpdatePluginButton.tsx
+msgid "Change Version"
+msgstr "Version ändern"
+
+#: src/chunks/Plugins/UpdatePluginButton.tsx
+msgid "Your config is not fully compatible with the new version."
+msgstr "Ihre Konfiguration ist nicht vollständig mit der neuen Version kompatibel."
+
+#: src/chunks/Plugins/UpdatePluginButton.tsx
+msgid "Apply"
+msgstr "Anwenden"

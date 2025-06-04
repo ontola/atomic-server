@@ -1,3 +1,4 @@
+import type { PluginMetadata } from '@chunks/Plugins/plugins';
 import {
   core,
   server,
@@ -6,20 +7,10 @@ import {
   type Resource,
   type Server,
 } from '@tomic/react';
-import type { JSONSchema7 } from 'ai';
-
-export interface PluginMetadata {
-  name: string;
-  namespace?: string;
-  author?: string;
-  description?: string;
-  version: string;
-  defaultConfig?: JSONValue;
-  configSchema?: JSONSchema7;
-}
 
 interface CreatePluginProps {
   metadata: PluginMetadata;
+  config: JSONValue;
   file: File;
   drive: Resource<Server.Drive>;
 }
@@ -31,6 +22,7 @@ export function useCreatePlugin() {
     metadata,
     file,
     drive,
+    config,
   }: CreatePluginProps): Promise<Resource<Server.Plugin>> => {
     const plugin = await store.newResource({
       isA: server.classes.plugin,
@@ -41,9 +33,8 @@ export function useCreatePlugin() {
         [server.properties.version]: metadata.version,
         [server.properties.pluginAuthor]: metadata.author,
         [server.properties.namespace]: metadata.namespace,
-        [server.properties.config]: metadata.defaultConfig,
+        [server.properties.config]: config,
         [server.properties.jsonSchema]: metadata.configSchema as JSONValue,
-        [server.properties.pluginFile]: 'https://placeholder',
       },
     });
 
@@ -79,9 +70,43 @@ export function useCreatePlugin() {
     await drive.save();
   };
 
+  const updatePlugin = async (
+    plugin: Resource<Server.Plugin>,
+    metadata: PluginMetadata,
+    file: File,
+    updatedConfig?: JSONValue,
+  ): Promise<void> => {
+    if (
+      metadata.name !== plugin.props.name ||
+      metadata.namespace !== plugin.props.namespace
+    ) {
+      throw new Error(
+        "The update's identifier does not match the existing plugin.",
+      );
+    }
+
+    const [fileSubject] = await store.uploadFiles([file], plugin.subject);
+
+    await plugin.set(server.properties.version, metadata.version);
+    await plugin.set(core.properties.description, metadata.description);
+    await plugin.set(server.properties.pluginAuthor, metadata.author);
+    await plugin.set(
+      server.properties.jsonSchema,
+      metadata.configSchema as JSONValue,
+    );
+    await plugin.set(server.properties.pluginFile, fileSubject);
+
+    if (updatedConfig) {
+      await plugin.set(server.properties.config, updatedConfig);
+    }
+
+    await plugin.save();
+  };
+
   return {
     createPluginResource,
     installPlugin,
     uninstallPlugin,
+    updatePlugin,
   };
 }

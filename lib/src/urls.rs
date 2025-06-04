@@ -24,7 +24,7 @@ pub const ONTOLOGY: &str = "https://atomicdata.dev/class/ontology";
 pub const ENDPOINT_RESPONSE: &str =
     "https://atomicdata.dev/ontology/server/class/endpoint-response";
 pub const TABLE: &str = "https://atomicdata.dev/classes/Table";
-pub const PLUGIN: &str = "https://atomicdata.dev/ontology/server/class/plugin";
+pub const PLUGIN: &str = "https://atomicdata.dev/classes/Plugin";
 
 // Properties
 pub const SHORTNAME: &str = "https://atomicdata.dev/properties/shortname";
@@ -137,12 +137,13 @@ pub const STATUS: &str = "https://atomicdata.dev/ontology/server/property/status
 pub const RESPONSE_MESSAGE: &str =
     "https://atomicdata.dev/ontology/server/property/response-message";
 // ... for Plugins
-pub const PLUGIN_FILE: &str = "https://atomicdata.dev/ontology/server/property/plugin-file";
-pub const VERSION: &str = "https://atomicdata.dev/ontology/server/property/version";
-pub const CONFIG: &str = "https://atomicdata.dev/ontology/server/property/config";
-pub const NAMESPACE: &str = "https://atomicdata.dev/ontology/server/property/namespace";
-pub const PLUGINS: &str = "https://atomicdata.dev/ontology/server/property/plugins";
-
+pub const PLUGIN_FILE: &str = "https://atomicdata.dev/properties/pluginFile";
+pub const VERSION: &str = "https://atomicdata.dev/properties/version";
+pub const CONFIG: &str = "https://atomicdata.dev/properties/config";
+pub const NAMESPACE: &str = "https://atomicdata.dev/properties/namespace";
+pub const PLUGINS: &str = "https://atomicdata.dev/properties/plugins";
+pub const JSON_SCHEMA: &str = "https://atomicdata.dev/properties/jsonSchema";
+pub const PLUGIN_AUTHOR: &str = "https://atomicdata.dev/properties/pluginAuthor";
 // Datatypes
 pub const STRING: &str = "https://atomicdata.dev/datatypes/string";
 pub const MARKDOWN: &str = "https://atomicdata.dev/datatypes/markdown";

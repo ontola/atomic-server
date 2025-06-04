@@ -14,4 +14,4 @@ export const PluginCard: React.FC<CardViewProps> = ({ resource }) => {
       <ResourceCardTitle resource={resource} alternateTitle={title} />
     </Column>
   );
-}
+};

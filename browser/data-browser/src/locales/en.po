@@ -708,6 +708,8 @@ msgid "Name"
 msgstr "Name"
 
 #: src/chunks/AI/AgentConfig.tsx
+#: src/chunks/Plugins/NewPluginButton.tsx
+#: src/chunks/Plugins/UpdatePluginButton.tsx
 #: src/components/ConfirmationDialog.tsx
 #: src/components/ParentPicker/ParentPickerDialog.tsx
 #: src/components/forms/EditFormDialog.tsx
@@ -721,7 +723,6 @@ msgstr "Name"
 #: src/components/forms/ResourceForm.tsx
 #: src/components/forms/ValueForm/ValueFormEdit.tsx
 #: src/routes/History/HistoryMobileView.tsx
-#: src/views/Drive/NewPluginButton.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/OntologyPage/NewPropertyButton.tsx
 #: src/views/TablePage/PropertyForm/ExternalPropertyDialog.tsx
@@ -3173,25 +3174,27 @@ msgstr "Nothing to copy."
 msgid "Plugins"
 msgstr "Plugins"
 
-#: src/views/Drive/NewPluginButton.tsx
+#: src/chunks/Plugins/NewPluginButton.tsx
 msgid "Add Plugin"
 msgstr "Add Plugin"
 
-#: src/views/Drive/NewPluginButton.tsx
-#: src/views/Drive/NewPluginButton.tsx
+#: src/chunks/Plugins/NewPluginButton.tsx
+#: src/chunks/Plugins/NewPluginButton.tsx
 msgid "<0/> Upload Plugin"
 msgstr "<0/> Upload Plugin"
 
 #. placeholder {0}: metadata.version
 #. placeholder {0}: resource.props.version
-#: src/views/Drive/NewPluginButton.tsx
+#. placeholder {0}: resource.props.version
+#: src/chunks/Plugins/NewPluginButton.tsx
 #: src/views/Plugin/PluginPage.tsx
 msgid "v{0}"
 msgstr "v{0}"
 
 #. placeholder {0}: metadata.author
 #. placeholder {0}: resource.props.pluginAuthor
-#: src/views/Drive/NewPluginButton.tsx
+#. placeholder {0}: resource.props.pluginAuthor
+#: src/chunks/Plugins/NewPluginButton.tsx
 #: src/views/Plugin/PluginPage.tsx
 msgid "by {0}"
 msgstr "by {0}"
@@ -3297,7 +3300,7 @@ msgstr "Invalid URI"
 msgid "Content saved"
 msgstr "Content saved"
 
-#: src/views/Drive/NewPluginButton.tsx
+#: src/chunks/Plugins/NewPluginButton.tsx
 #: src/views/Plugin/PluginPage.tsx
 msgid "Config"
 msgstr "Config"
@@ -3314,16 +3317,16 @@ msgstr "Changes Saved!"
 msgid "Failed to save changes"
 msgstr "Failed to save changes"
 
-#: src/views/Drive/NewPluginButton.tsx
+#: src/chunks/Plugins/NewPluginButton.tsx
 msgid "Install"
 msgstr "Install"
 
-#: src/views/Drive/NewPluginButton.tsx
+#: src/chunks/Plugins/NewPluginButton.tsx
 msgid "Please fill in all fields"
 msgstr "Please fill in all fields"
 
 #. placeholder {0}: err.message
-#: src/views/Drive/NewPluginButton.tsx
+#: src/chunks/Plugins/NewPluginButton.tsx
 msgid "Failed to install plugin, error: {0}"
 msgstr "Failed to install plugin, error: {0}"
 
@@ -3331,7 +3334,7 @@ msgstr "Failed to install plugin, error: {0}"
 msgid "Uninstall"
 msgstr "Uninstall"
 
-#: src/views/Plugin/PluginPage.tsx
+#: src/chunks/Plugins/UpdatePluginButton.tsx
 msgid "<0/> Update"
 msgstr "<0/> Update"
 
@@ -3350,3 +3353,35 @@ msgstr "Uninstall Plugin"
 #: src/views/Plugin/PluginPage.tsx
 msgid "Plugin uninstalled"
 msgstr "Plugin uninstalled"
+
+#: src/views/Plugin/ConfigReference.tsx
+msgid "Config Reference"
+msgstr "Config Reference"
+
+#: src/views/Plugin/ConfigReference.tsx
+msgid "required"
+msgstr "required"
+
+#: src/views/Plugin/ConfigReference.tsx
+msgid "Default:"
+msgstr "Default:"
+
+#: src/views/Plugin/ConfigReference.tsx
+msgid "Possible values:"
+msgstr "Possible values:"
+
+#: src/chunks/Plugins/UpdatePluginButton.tsx
+msgid "Change Version"
+msgstr "Change Version"
+
+#: src/chunks/Plugins/UpdatePluginButton.tsx
+msgid "The update's identifier does not match the existing plugin."
+msgstr "The update's identifier does not match the existing plugin."
+
+#: src/chunks/Plugins/UpdatePluginButton.tsx
+msgid "Apply"
+msgstr "Apply"
+
+#: src/chunks/Plugins/UpdatePluginButton.tsx
+msgid "Your config is not fully compatible with the new version."
+msgstr "Your config is not fully compatible with the new version."

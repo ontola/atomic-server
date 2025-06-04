@@ -14,8 +14,8 @@ export const server = {
     error: 'https://atomicdata.dev/classes/Error',
     file: 'https://atomicdata.dev/classes/File',
     invite: 'https://atomicdata.dev/classes/Invite',
-    plugin: 'https://atomicdata.dev/ontology/server/class/plugin',
     redirect: 'https://atomicdata.dev/classes/Redirect',
+    plugin: 'https://atomicdata.dev/classes/Plugin',
   },
   properties: {
     agent: 'https://atomicdata.dev/properties/invite/agent',
@@ -23,7 +23,6 @@ export const server = {
     attachments: 'https://atomicdata.dev/properties/attachments',
     checksum: 'https://atomicdata.dev/properties/checksum',
     children: 'https://atomicdata.dev/properties/children',
-    config: 'https://atomicdata.dev/ontology/server/property/config',
     createdBy: 'https://atomicdata.dev/properties/createdBy',
     defaultOntology:
       'https://atomicdata.dev/ontology/server/property/default-ontology',
@@ -35,14 +34,8 @@ export const server = {
     imageHeight: 'https://atomicdata.dev/properties/imageHeight',
     imageWidth: 'https://atomicdata.dev/properties/imageWidth',
     internalId: 'https://atomicdata.dev/properties/internalId',
-    jsonSchema: 'https://atomicdata.dev/ontology/server/property/json-schema',
     mimetype: 'https://atomicdata.dev/properties/mimetype',
-    namespace: 'https://atomicdata.dev/ontology/server/property/namespace',
     parameters: 'https://atomicdata.dev/properties/endpoint/parameters',
-    pluginAuthor:
-      'https://atomicdata.dev/ontology/server/property/plugin-author',
-    pluginFile: 'https://atomicdata.dev/ontology/server/property/plugin-file',
-    plugins: 'https://atomicdata.dev/ontology/server/property/plugins',
     property: 'https://atomicdata.dev/properties/search/property',
     publicKey: 'https://atomicdata.dev/properties/invite/publicKey',
     redirectAgent: 'https://atomicdata.dev/properties/invite/redirectAgent',
@@ -53,8 +46,14 @@ export const server = {
     target: 'https://atomicdata.dev/properties/invite/target',
     usagesLeft: 'https://atomicdata.dev/properties/invite/usagesLeft',
     users: 'https://atomicdata.dev/properties/invite/users',
-    version: 'https://atomicdata.dev/ontology/server/property/version',
     write: 'https://atomicdata.dev/properties/invite/write',
+    config: 'https://atomicdata.dev/properties/config',
+    jsonSchema: 'https://atomicdata.dev/properties/jsonSchema',
+    namespace: 'https://atomicdata.dev/properties/namespace',
+    version: 'https://atomicdata.dev/properties/version',
+    pluginAuthor: 'https://atomicdata.dev/properties/pluginAuthor',
+    plugins: 'https://atomicdata.dev/properties/plugins',
+    pluginFile: 'https://atomicdata.dev/properties/pluginFile',
   },
   __classDefs: {
     ['https://atomicdata.dev/classes/Drive']: [
@@ -64,7 +63,7 @@ export const server = {
       'https://atomicdata.dev/properties/subresources',
       'https://atomicdata.dev/properties/write',
       'https://atomicdata.dev/ontology/server/property/default-ontology',
-      'https://atomicdata.dev/ontology/server/property/plugins',
+      'https://atomicdata.dev/properties/plugins',
     ],
     ['https://atomicdata.dev/classes/Endpoint']: [
       'https://atomicdata.dev/properties/description',
@@ -96,19 +95,19 @@ export const server = {
       'https://atomicdata.dev/properties/invite/users',
       'https://atomicdata.dev/properties/invite/usagesLeft',
     ],
-    ['https://atomicdata.dev/ontology/server/class/plugin']: [
-      'https://atomicdata.dev/properties/name',
-      'https://atomicdata.dev/ontology/server/property/plugin-file',
-      'https://atomicdata.dev/ontology/server/property/version',
-      'https://atomicdata.dev/ontology/server/property/namespace',
-      'https://atomicdata.dev/properties/description',
-      'https://atomicdata.dev/ontology/server/property/config',
-      'https://atomicdata.dev/ontology/server/property/plugin-author',
-      'https://atomicdata.dev/ontology/server/property/json-schema',
-    ],
     ['https://atomicdata.dev/classes/Redirect']: [
       'https://atomicdata.dev/properties/destination',
       'https://atomicdata.dev/properties/invite/redirectAgent',
+    ],
+    ['https://atomicdata.dev/classes/Plugin']: [
+      'https://atomicdata.dev/properties/name',
+      'https://atomicdata.dev/properties/version',
+      'https://atomicdata.dev/properties/config',
+      'https://atomicdata.dev/properties/namespace',
+      'https://atomicdata.dev/properties/pluginAuthor',
+      'https://atomicdata.dev/properties/jsonSchema',
+      'https://atomicdata.dev/properties/pluginFile',
+      'https://atomicdata.dev/properties/description',
     ],
   },
 } as const satisfies OntologyBaseObject;
@@ -121,8 +120,8 @@ export namespace Server {
   export type Error = typeof server.classes.error;
   export type File = typeof server.classes.file;
   export type Invite = typeof server.classes.invite;
-  export type Plugin = typeof server.classes.plugin;
   export type Redirect = typeof server.classes.redirect;
+  export type Plugin = typeof server.classes.plugin;
 }
 
 declare module '../index.js' {
@@ -177,22 +176,22 @@ declare module '../index.js' {
         | typeof server.properties.users
         | typeof server.properties.usagesLeft;
     };
+    [server.classes.redirect]: {
+      requires: BaseProps | typeof server.properties.destination;
+      recommends: typeof server.properties.redirectAgent;
+    };
     [server.classes.plugin]: {
       requires:
         | BaseProps
         | 'https://atomicdata.dev/properties/name'
-        | typeof server.properties.pluginFile
         | typeof server.properties.version;
       recommends:
-        | typeof server.properties.namespace
-        | 'https://atomicdata.dev/properties/description'
         | typeof server.properties.config
+        | typeof server.properties.namespace
         | typeof server.properties.pluginAuthor
-        | typeof server.properties.jsonSchema;
-    };
-    [server.classes.redirect]: {
-      requires: BaseProps | typeof server.properties.destination;
-      recommends: typeof server.properties.redirectAgent;
+        | typeof server.properties.jsonSchema
+        | typeof server.properties.pluginFile
+        | 'https://atomicdata.dev/properties/description';
     };
   }
 
@@ -202,7 +201,6 @@ declare module '../index.js' {
     [server.properties.attachments]: string[];
     [server.properties.checksum]: string;
     [server.properties.children]: string[];
-    [server.properties.config]: JSONValue;
     [server.properties.createdBy]: string;
     [server.properties.defaultOntology]: string;
     [server.properties.destination]: string;
@@ -213,13 +211,8 @@ declare module '../index.js' {
     [server.properties.imageHeight]: number;
     [server.properties.imageWidth]: number;
     [server.properties.internalId]: string;
-    [server.properties.jsonSchema]: JSONValue;
     [server.properties.mimetype]: string;
-    [server.properties.namespace]: string;
     [server.properties.parameters]: string[];
-    [server.properties.pluginAuthor]: string;
-    [server.properties.pluginFile]: string;
-    [server.properties.plugins]: string[];
     [server.properties.property]: string;
     [server.properties.publicKey]: string;
     [server.properties.redirectAgent]: string;
@@ -229,8 +222,14 @@ declare module '../index.js' {
     [server.properties.target]: string;
     [server.properties.usagesLeft]: number;
     [server.properties.users]: string[];
-    [server.properties.version]: string;
     [server.properties.write]: boolean;
+    [server.properties.config]: JSONValue;
+    [server.properties.jsonSchema]: JSONValue;
+    [server.properties.namespace]: string;
+    [server.properties.version]: string;
+    [server.properties.pluginAuthor]: string;
+    [server.properties.plugins]: string[];
+    [server.properties.pluginFile]: string;
   }
 
   interface PropSubjectToNameMapping {
@@ -239,7 +238,6 @@ declare module '../index.js' {
     [server.properties.attachments]: 'attachments';
     [server.properties.checksum]: 'checksum';
     [server.properties.children]: 'children';
-    [server.properties.config]: 'config';
     [server.properties.createdBy]: 'createdBy';
     [server.properties.defaultOntology]: 'defaultOntology';
     [server.properties.destination]: 'destination';
@@ -250,13 +248,8 @@ declare module '../index.js' {
     [server.properties.imageHeight]: 'imageHeight';
     [server.properties.imageWidth]: 'imageWidth';
     [server.properties.internalId]: 'internalId';
-    [server.properties.jsonSchema]: 'jsonSchema';
     [server.properties.mimetype]: 'mimetype';
-    [server.properties.namespace]: 'namespace';
     [server.properties.parameters]: 'parameters';
-    [server.properties.pluginAuthor]: 'pluginAuthor';
-    [server.properties.pluginFile]: 'pluginFile';
-    [server.properties.plugins]: 'plugins';
     [server.properties.property]: 'property';
     [server.properties.publicKey]: 'publicKey';
     [server.properties.redirectAgent]: 'redirectAgent';
@@ -266,7 +259,13 @@ declare module '../index.js' {
     [server.properties.target]: 'target';
     [server.properties.usagesLeft]: 'usagesLeft';
     [server.properties.users]: 'users';
-    [server.properties.version]: 'version';
     [server.properties.write]: 'write';
+    [server.properties.config]: 'config';
+    [server.properties.jsonSchema]: 'jsonSchema';
+    [server.properties.namespace]: 'namespace';
+    [server.properties.version]: 'version';
+    [server.properties.pluginAuthor]: 'pluginAuthor';
+    [server.properties.plugins]: 'plugins';
+    [server.properties.pluginFile]: 'pluginFile';
   }
 }

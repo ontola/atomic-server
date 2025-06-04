@@ -17,24 +17,17 @@ const IGNORE_MESSAGES = [
   'Shift',
   'Ctrl',
   'Alt',
-  'SHA-256'
+  'SHA-256',
 ];
 
 // Any strings defined in these functions will not be translated.
-const IGNORED_FUNCTIONS = [
-  'effectFetch',
-  'JSON.stringify',
-  'JSON.parse',
-];
+const IGNORED_FUNCTIONS = ['effectFetch', 'JSON.stringify', 'JSON.parse'];
 
 export default defineConfig({
   // sourceLocale is en by default
-  otherLocales: ['es', 'fr', 'de'],
+  locales: ['en', 'es', 'fr', 'de'],
   adapters: {
     main: jsx({
-      runtime: {
-        useReactive: () => ({ init: false, use: false, }),
-      },
       loader: 'react',
       heuristic: ({ msgStr, details }) => {
         const [msg] = msgStr;
@@ -59,7 +52,7 @@ export default defineConfig({
           // console.log('Ignoring', msg);
           return false;
         }
-      }
+      },
     }),
   },
 });

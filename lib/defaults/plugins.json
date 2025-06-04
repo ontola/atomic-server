@@ -1,0 +1,94 @@
+[
+  {
+    "@id": "https://atomicdata.dev/properties/config",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "A json config",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes/Plugin",
+    "https://atomicdata.dev/properties/shortname": "config"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/namespace",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "A namespace",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes/Plugin",
+    "https://atomicdata.dev/properties/shortname": "namespace"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/pluginFile",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/File",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "A Wasm file containing AtomicServer Plugin code",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "plugin-file"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/pluginAuthor",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "The person or organisation that made the plugin.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "plugin-author"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/jsonSchema",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "A JSON schema describing the shape of a JSON object",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "json-schema"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/version",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "The version of something.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "version"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/plugins",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Plugin",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
+    "https://atomicdata.dev/properties/description": "List of installed plugins on a Drive",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "plugins"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/Plugin",
+    "https://atomicdata.dev/properties/description": "A Wasm plugin for AtomicServer",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/config",
+      "https://atomicdata.dev/properties/namespace",
+      "https://atomicdata.dev/properties/pluginFile",
+      "https://atomicdata.dev/properties/pluginAuthor",
+      "https://atomicdata.dev/properties/jsonSchema"
+    ],
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/name",
+      "https://atomicdata.dev/properties/version"
+    ],
+    "https://atomicdata.dev/properties/shortname": "plugin"
+  }
+]

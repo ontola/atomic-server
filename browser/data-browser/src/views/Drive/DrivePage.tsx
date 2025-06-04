@@ -17,9 +17,8 @@ import { styled } from 'styled-components';
 import InputSwitcher from '@components/forms/InputSwitcher';
 import { WarningBlock } from '@components/WarningBlock';
 
-import { lazy, Suspense, type JSX } from 'react';
-
-const PluginList = lazy(() => import('./PluginList'));
+import { type JSX } from 'react';
+import { PluginList } from './PluginList';
 
 /** A View for Drives, which function similar to a homepage or dashboard. */
 function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
@@ -65,9 +64,7 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
             disabled={!canEdit}
           />
         </div>
-        <Suspense>
-          <PluginList drive={resource} />
-        </Suspense>
+        <PluginList drive={resource} />
       </Column>
     </ContainerNarrow>
   );

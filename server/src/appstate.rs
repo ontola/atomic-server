@@ -54,13 +54,10 @@ impl AppState {
         store.add_class_extender(plugins::chatroom::build_chatroom_extender())?;
         store.add_class_extender(plugins::chatroom::build_message_extender())?;
         store.add_class_extender(plugins::invite::build_invite_extender())?;
-        store.add_class_extender(plugins::drive::build_drive_extender(
+        store.add_class_extender(plugins::plugin::build_plugin_extender(
             config.plugin_path.clone(),
             config.plugin_cache_path.clone(),
             config.uploads_path.clone(),
-        ))?;
-        store.add_class_extender(plugins::plugin::build_plugin_extender(
-            config.plugin_path.clone(),
         ))?;
         store.add_class_extender(plugins::files::build_file_extender(
             config.uploads_path.clone(),
