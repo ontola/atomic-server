@@ -5,6 +5,7 @@ import {
   waitForCommit,
   before,
   inDialog,
+  REBUILD_INDEX_TIME,
 } from './test-utils';
 
 type Row = {
@@ -251,5 +252,62 @@ test.describe('tables', async () => {
     await expect(
       page.getByRole('gridcell', { name: 'Drum or Bass' }),
     ).not.toBeVisible();
+  });
+
+  test('fast row entry - rapidly adding rows with Enter', async ({ page }) => {
+    await devDrive(page);
+    // Use the quick-create "New Table" button on the drive page directly.
+    await page.getByTitle('New Table').first().click();
+
+    await page.getByPlaceholder('New Table').fill('Fast Entry Test');
+    await page.locator('dialog[open] button:has-text("Create")').click();
+    await expect(page.locator('h1:has-text("Fast Entry Test")')).toBeVisible();
+
+    // Wait for table to be ready
+    await page.waitForTimeout(500);
+
+    // Click first cell to focus the table
+    await page.getByRole('gridcell').first().click({ force: true });
+    await page.waitForTimeout(300);
+
+    const values = ['alpha', 'bravo', 'charlie', 'delta', 'echo'];
+
+    // Type each value and immediately press Enter to move to the next row
+    for (const value of values) {
+      await page.keyboard.press('Enter');
+      await page.waitForTimeout(100);
+      await page.keyboard.type(value, { delay: 30 });
+      await page.waitForTimeout(100);
+    }
+
+    // Wait for last typed value to register before exiting edit mode
+    await page.waitForTimeout(500);
+
+    // Exit edit mode
+    await page.keyboard.press('Escape');
+
+    // Wait for all debounced saves to complete
+    await page.waitForTimeout(2000);
+
+    // Verify all values are displayed correctly before refresh
+    for (const value of values) {
+      await expect(
+        page.getByRole('gridcell', { name: value }),
+        `Row "${value}" should be visible before refresh`,
+      ).toBeVisible();
+    }
+
+    // Refresh and wait for the page to reload
+    await page.reload();
+    await expect(page.locator('h1:has-text("Fast Entry Test")')).toBeVisible();
+    await page.waitForTimeout(REBUILD_INDEX_TIME);
+
+    // Verify all values are still correct after refresh
+    for (const value of values) {
+      await expect(
+        page.getByRole('gridcell', { name: value }),
+        `Row "${value}" should be visible after refresh`,
+      ).toBeVisible();
+    }
   });
 });

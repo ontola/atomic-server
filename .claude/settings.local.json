@@ -45,7 +45,12 @@
       "Bash(ls data-browser/tsconfig*.json)",
       "Bash(grep -r \"localResource\\\\|new.*resource\\\\|uncommitted\" /Users/joep/dev/github/atomicdata-dev/atomic-server/browser/data-browser/src/chunks/TableEditor --include=*.ts --include=*.tsx)",
       "Bash(grep -E \"\\\\.\\(tsx?|jsx?\\)$\")",
-      "Bash(grep -E \"\\\\.ts$\")"
+      "Bash(grep -E \"\\\\.ts$\")",
+      "mcp__charlotte__charlotte_tabs",
+      "mcp__chrome-devtools__press_key",
+      "mcp__chrome-devtools__type_text",
+      "mcp__chrome-devtools__evaluate_script",
+      "mcp__chrome-devtools__list_pages"
     ]
   }
 }
