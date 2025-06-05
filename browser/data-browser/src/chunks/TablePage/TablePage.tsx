@@ -5,7 +5,6 @@ import type { ResourcePageProps } from '@views/ResourcePage';
 import { Row as FlexRow, Column } from '@components/Row';
 import { FaFileCsv } from 'react-icons/fa6';
 import { TableExportDialog } from './TableExportDialog';
-import { TagBar } from '@components/Tag/TagBar';
 import { TableResource } from './TableResource';
 import { useCustomContextItems } from '@components/ResourceContextMenu/CustomContextItemsContext';
 import { DIVIDER } from '@components/Dropdown';
@@ -30,13 +29,32 @@ export function TablePage({ resource }: ResourcePageProps): JSX.Element {
 
   useCustomContextItems(customMenuItems);
 
+  const focusTable = () => {
+    // Focus the first editable cell (row 0, col 1)
+    const firstCell = document.querySelector<HTMLElement>(
+      '[role="row"][aria-rowindex="2"] > [role="gridcell"][aria-colindex="2"]',
+    );
+
+    if (firstCell) {
+      firstCell.dispatchEvent(
+        new MouseEvent('mousedown', { bubbles: true, cancelable: true }),
+      );
+      firstCell.focus();
+    } else {
+      document.querySelector<HTMLElement>('[role="grid"]')?.focus();
+    }
+  };
+
   return (
     <ContainerFull>
       <Column>
         <FlexRow justify='space-between'>
-          <EditableTitle resource={resource} id={titleId} />
+          <EditableTitle
+            resource={resource}
+            id={titleId}
+            onCommit={focusTable}
+          />
         </FlexRow>
-        <TagBar resource={resource} />
         <TableResource resource={resource} />
       </Column>
       <TableExportDialog
