@@ -6,7 +6,6 @@ import {
   useTitle,
 } from '@tomic/react';
 import { useEffect, useRef, useState, type JSX } from 'react';
-import { useHotkeys } from 'react-hotkeys-hook';
 import { FaPencil } from 'react-icons/fa6';
 import { styled, css } from 'styled-components';
 import {
@@ -57,24 +56,6 @@ export function EditableTitle({
     });
   }, [store, resource.subject]);
 
-  useHotkeys(
-    'enter',
-    e => {
-      e.preventDefault();
-      setIsEditing(false);
-      onCommit?.();
-    },
-    { enableOnTags: ['INPUT'] },
-  );
-
-  useHotkeys(
-    'esc',
-    () => {
-      setIsEditing(false);
-    },
-    { enableOnTags: ['INPUT'] },
-  );
-
   function handleClick() {
     setIsEditing(true);
   }
@@ -86,6 +67,16 @@ export function EditableTitle({
     ref.current?.select();
   }, [isEditing]);
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      setIsEditing(false);
+      onCommit?.();
+    } else if (e.key === 'Escape') {
+      setIsEditing(false);
+    }
+  };
+
   return isEditing ? (
     <TitleInput
       ref={ref}
@@ -96,6 +87,7 @@ export function EditableTitle({
       placeholder={placeholder}
       onChange={e => setText(e.target.value)}
       value={text || ''}
+      onKeyDown={handleKeyDown}
       onBlur={() => {
         setIsEditing(false);
         onCommit?.();
