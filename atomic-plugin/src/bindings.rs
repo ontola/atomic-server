@@ -905,6 +905,66 @@ pub mod atomic {
                     result5
                 }
             }
+            #[allow(unused_unsafe, clippy::all)]
+            /// Creates a commit and signs it using the plugin's agent.
+            ///   The commit parameter should be a stringified JSON object of a CommitBuilder.
+            pub fn commit(commit: &str) -> Result<(), _rt::String> {
+                unsafe {
+                    #[cfg_attr(target_pointer_width = "64", repr(align(8)))]
+                    #[cfg_attr(target_pointer_width = "32", repr(align(4)))]
+                    struct RetArea(
+                        [::core::mem::MaybeUninit<
+                            u8,
+                        >; 3 * ::core::mem::size_of::<*const u8>()],
+                    );
+                    let mut ret_area = RetArea(
+                        [::core::mem::MaybeUninit::uninit(); 3
+                            * ::core::mem::size_of::<*const u8>()],
+                    );
+                    let vec0 = commit;
+                    let ptr0 = vec0.as_ptr().cast::<u8>();
+                    let len0 = vec0.len();
+                    let ptr1 = ret_area.0.as_mut_ptr().cast::<u8>();
+                    #[cfg(target_arch = "wasm32")]
+                    #[link(wasm_import_module = "atomic:class-extender/host@0.1.0")]
+                    unsafe extern "C" {
+                        #[link_name = "commit"]
+                        fn wit_import2(_: *mut u8, _: usize, _: *mut u8);
+                    }
+                    #[cfg(not(target_arch = "wasm32"))]
+                    unsafe extern "C" fn wit_import2(_: *mut u8, _: usize, _: *mut u8) {
+                        unreachable!()
+                    }
+                    unsafe { wit_import2(ptr0.cast_mut(), len0, ptr1) };
+                    let l3 = i32::from(*ptr1.add(0).cast::<u8>());
+                    let result7 = match l3 {
+                        0 => {
+                            let e = ();
+                            Ok(e)
+                        }
+                        1 => {
+                            let e = {
+                                let l4 = *ptr1
+                                    .add(::core::mem::size_of::<*const u8>())
+                                    .cast::<*mut u8>();
+                                let l5 = *ptr1
+                                    .add(2 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<usize>();
+                                let len6 = l5;
+                                let bytes6 = _rt::Vec::from_raw_parts(
+                                    l4.cast(),
+                                    len6,
+                                    len6,
+                                );
+                                _rt::string_lift(bytes6)
+                            };
+                            Err(e)
+                        }
+                        _ => _rt::invalid_enum_discriminant(),
+                    };
+                    result7
+                }
+            }
         }
     }
 }
@@ -974,8 +1034,8 @@ pub(crate) use __export_class_extender_impl as export;
 #[unsafe(link_section = "component-type:wit-bindgen:0.41.0:atomic:class-extender@0.1.0:class-extender:encoded world")]
 #[doc(hidden)]
 #[allow(clippy::octal_escapes)]
-pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 965] = *b"\
-\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\xc0\x06\x01A\x02\x01\
+pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 994] = *b"\
+\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\xdd\x06\x01A\x02\x01\
 A\x17\x01B\x0b\x01r\x01\x07subjects\x04\0\x0catomic-agent\x03\0\0\x01r\x02\x07su\
 bjects\x07json-ads\x04\0\x0dresource-json\x03\0\x02\x01p\x03\x01r\x02\x07primary\
 \x03\x0areferenced\x04\x04\0\x11resource-response\x03\0\x05\x01r\x04\x0brequest-\
@@ -984,18 +1044,19 @@ t\x03\0\x07\x01r\x03\x07subjects\x0bcommit-jsons\x08snapshot\x03\x04\0\x0ecommit
 -context\x03\0\x09\x03\0!atomic:class-extender/types@0.1.0\x05\0\x02\x03\0\0\x11\
 resource-response\x03\0\x11resource-response\x03\0\x01\x02\x03\0\0\x0bget-contex\
 t\x03\0\x0bget-context\x03\0\x03\x02\x03\0\0\x0ecommit-context\x03\0\x0ecommit-c\
-ontext\x03\0\x05\x02\x03\0\0\x0dresource-json\x02\x03\0\0\x0catomic-agent\x01B\x0f\
+ontext\x03\0\x05\x02\x03\0\0\x0dresource-json\x02\x03\0\0\x0catomic-agent\x01B\x12\
 \x02\x03\x02\x01\x07\x04\0\x0dresource-json\x03\0\0\x02\x03\x02\x01\x08\x04\0\x0c\
 atomic-agent\x03\0\x02\x01ks\x01j\x01\x01\x01s\x01@\x02\x07subjects\x05agent\x04\
 \0\x05\x04\0\x0cget-resource\x01\x06\x01p\x01\x01j\x01\x07\x01s\x01@\x03\x08prop\
 ertys\x05values\x05agent\x04\0\x08\x04\0\x05query\x01\x09\x01@\0\0s\x04\0\x10get\
--plugin-agent\x01\x0a\x04\0\x0aget-config\x01\x0a\x03\0\x20atomic:class-extender\
-/host@0.1.0\x05\x09\x01ps\x01@\0\0\x0a\x04\0\x09class-url\x01\x0b\x01k\x02\x01j\x01\
-\x0c\x01s\x01@\x01\x03ctx\x04\0\x0d\x04\0\x0fon-resource-get\x01\x0e\x01j\0\x01s\
-\x01@\x01\x03ctx\x06\0\x0f\x04\0\x0dbefore-commit\x01\x10\x04\0\x0cafter-commit\x01\
-\x10\x04\0*atomic:class-extender/class-extender@0.1.0\x04\0\x0b\x14\x01\0\x0ecla\
-ss-extender\x03\0\0\0G\x09producers\x01\x0cprocessed-by\x02\x0dwit-component\x07\
-0.227.1\x10wit-bindgen-rust\x060.41.0";
+-plugin-agent\x01\x0a\x04\0\x0aget-config\x01\x0a\x01j\0\x01s\x01@\x01\x06commit\
+s\0\x0b\x04\0\x06commit\x01\x0c\x03\0\x20atomic:class-extender/host@0.1.0\x05\x09\
+\x01ps\x01@\0\0\x0a\x04\0\x09class-url\x01\x0b\x01k\x02\x01j\x01\x0c\x01s\x01@\x01\
+\x03ctx\x04\0\x0d\x04\0\x0fon-resource-get\x01\x0e\x01j\0\x01s\x01@\x01\x03ctx\x06\
+\0\x0f\x04\0\x0dbefore-commit\x01\x10\x04\0\x0cafter-commit\x01\x10\x04\0*atomic\
+:class-extender/class-extender@0.1.0\x04\0\x0b\x14\x01\0\x0eclass-extender\x03\0\
+\0\0G\x09producers\x01\x0cprocessed-by\x02\x0dwit-component\x070.227.1\x10wit-bi\
+ndgen-rust\x060.41.0";
 #[inline(never)]
 #[doc(hidden)]
 pub fn __link_custom_section_describing_imports() {

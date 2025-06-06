@@ -1,6 +1,8 @@
 #[doc(hidden)]
 pub mod bindings;
 
+use std::collections::{HashMap, HashSet};
+
 #[doc(hidden)]
 pub use bindings::*;
 
@@ -21,7 +23,7 @@ pub mod packaging;
 #[cfg(not(target_arch = "wasm32"))]
 pub use packaging::packaging_impl;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
 pub struct Resource {
@@ -63,6 +65,74 @@ pub struct Commit {
     pub previous_commit: Option<String>,
     /// The URL of the Commit
     pub url: Option<String>,
+}
+
+/// Use this for creating Commits.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CommitBuilder {
+    /// The subject URL that is to be modified by this Delta.
+    /// Not the URL of the Commit itself.
+    /// https://atomicdata.dev/properties/subject
+    pub subject: String,
+    /// The set of PropVals that need to be added.
+    /// Overwrites existing values
+    /// https://atomicdata.dev/properties/set
+    set: std::collections::HashMap<String, JsonValue>,
+    /// The set of PropVals that need to be appended to resource arrays.
+    push: std::collections::HashMap<String, Vec<String>>,
+    /// A map of Propvals containing Yjs updates to be applied to the YDocs
+    y_update: std::collections::HashMap<String, JsonValue>,
+    /// The set of property URLs that need to be removed
+    /// https://atomicdata.dev/properties/remove
+    remove: HashSet<String>,
+    /// If set to true, deletes the entire resource
+    /// https://atomicdata.dev/properties/destroy
+    destroy: bool,
+    previous_commit: Option<String>,
+}
+
+impl CommitBuilder {
+    pub fn new(subject: String) -> Self {
+        Self {
+            subject,
+            set: HashMap::new(),
+            push: HashMap::new(),
+            y_update: HashMap::new(),
+            remove: HashSet::new(),
+            destroy: false,
+            previous_commit: None,
+        }
+    }
+
+    /// Set Property / Value combinations that will either be created or overwritten.
+    pub fn set(&mut self, prop: String, val: JsonValue) -> &Self {
+        self.set.insert(prop, val);
+
+        self
+    }
+
+    /// Set Property URLs which values to be removed
+    pub fn remove(&mut self, prop: String) -> &Self {
+        self.remove.insert(prop);
+
+        self
+    }
+
+    /// Whether the resource needs to be removed fully
+    pub fn destroy(&mut self, destroy: bool) {
+        self.destroy = destroy;
+    }
+
+    /// Appends a Resource subject to a ResourceArray.
+    pub fn push(&mut self, property: &str, value: String) -> &Self {
+        let Some(vec) = self.push.get_mut(property) else {
+            self.push.insert(property.to_string(), vec![value]);
+            return self;
+        };
+
+        vec.push(value.clone());
+        self
+    }
 }
 
 /// High-level trait for implementing a Class Extender plugin.
@@ -149,24 +219,23 @@ macro_rules! export_plugin {
     };
 }
 
-/// Gets a resource from the store, optionally uses the given agent. If no agent is provided the public agent is used.
-pub fn get_resource(subject: String, agent: Option<String>) -> Result<Resource, String> {
-    host::get_resource(&subject, agent.as_deref())
+/// Gets a resource from the store by subject, the plugin's agent is used to authorize the request.
+pub fn get_resource(subject: String) -> Result<Resource, String> {
+    host::get_resource(&subject, None)
         .map(|json| Resource::try_from(json).map_err(|e| e.to_string()))?
 }
 
-pub fn query(
-    property: String,
-    value: String,
-    agent: Option<String>,
-) -> Result<Vec<Resource>, String> {
-    host::query(&property, &value, agent.as_deref()).map(|json| {
+/// Queries the store for resources that match the given property and value, the plugin's agent is used to authorize the request.
+pub fn query(property: String, value: String) -> Result<Vec<Resource>, String> {
+    host::query(&property, &value, None).map(|json| {
         json.into_iter()
             .map(|json| Resource::try_from(json).map_err(|e| e.to_string()))
             .collect::<Result<Vec<Resource>, String>>()
     })?
 }
 
+/// Gets the config of the plugin deserialized to the given type.
+/// The user can edit this config at any time.
 pub fn get_config<'a, T>() -> Result<T, String>
 where
     T: for<'de> Deserialize<'de>,
@@ -174,6 +243,13 @@ where
     let config_str = host::get_config();
     serde_json::from_str::<T>(&config_str)
         .map_err(|e| format!("Failed to deserialize config: {}", e))
+}
+
+/// Creates a commit and signs it using the plugin's agent.
+pub fn commit(commit: &CommitBuilder) -> Result<(), String> {
+    let commit_str =
+        serde_json::to_string(commit).map_err(|e| format!("Failed to serialize commit: {}", e))?;
+    host::commit(&commit_str).map_err(|e| format!("Failed to commit: {}", e))
 }
 
 impl TryFrom<ResourceJson> for Resource {

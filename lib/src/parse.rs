@@ -264,7 +264,7 @@ fn parse_anonymous_resource<'a>(
     })
 }
 
-fn parse_propval<'a>(
+pub fn parse_propval<'a>(
     key: &'a str,
     val: &'a serde_json::Value,
     subject: Option<&'a str>,

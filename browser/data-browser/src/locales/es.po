@@ -3369,3 +3369,19 @@ msgstr "Tu configuración no es totalmente compatible con la nueva versión."
 #: src/chunks/Plugins/UpdatePluginButton.tsx
 msgid "Apply"
 msgstr "Aplicar"
+
+#: src/views/Drive/PluginList.tsx
+msgid "No plugins installed"
+msgstr "No hay plugins instalados"
+
+#: src/chunks/AI/AIChatPage.tsx
+msgid "Failed to create message resource"
+msgstr "No se pudo crear el recurso del mensaje."
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Changes Saved!"
+msgstr "¡Cambios guardados!"
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Failed to save changes"
+msgstr "Error al guardar los cambios"

@@ -4,6 +4,7 @@ use crate::{
     agents::{decode_base64, encode_base64},
     datatype::DataType,
     errors::AtomicResult,
+    parse::{ParseOpts, SaveOpts},
     resources::PropVals,
     urls,
     values::SubResource,
@@ -560,13 +561,24 @@ impl Commit {
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CommitBuilderJSON {
+    pub subject: String,
+    pub set: Option<std::collections::HashMap<String, serde_json::Value>>,
+    pub push: Option<std::collections::HashMap<String, Vec<String>>>,
+    pub y_update: Option<std::collections::HashMap<String, serde_json::Value>>,
+    pub remove: Option<Vec<String>>,
+    pub destroy: bool,
+    pub previous_commit: Option<String>,
+}
+
 /// Use this for creating Commits.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CommitBuilder {
     /// The subject URL that is to be modified by this Delta.
     /// Not the URL of the Commit itself.
     /// https://atomicdata.dev/properties/subject
-    subject: String,
+    pub subject: String,
     /// The set of PropVals that need to be added.
     /// Overwrites existing values
     /// https://atomicdata.dev/properties/set
@@ -599,6 +611,49 @@ impl CommitBuilder {
             destroy: false,
             previous_commit: None,
         }
+    }
+
+    pub async fn from_commit_builder_json(
+        commit_builder_json: CommitBuilderJSON,
+        store: &impl Storelike,
+    ) -> AtomicResult<Self> {
+        let mut commit_builder = CommitBuilder::new(commit_builder_json.subject);
+        let mut parse_opts = ParseOpts::default();
+        parse_opts.save = SaveOpts::DontSave;
+
+        if let Some(set) = commit_builder_json.set {
+            for (prop, val) in set.iter() {
+                let (_, parsed_val) =
+                    crate::parse::parse_propval(prop, val, None, store, &parse_opts).await?;
+                commit_builder.set(prop.into(), parsed_val);
+            }
+        }
+
+        if let Some(y_update) = commit_builder_json.y_update {
+            for (prop, val) in y_update.iter() {
+                let (_, parsed_val) =
+                    crate::parse::parse_propval(prop, val, None, store, &parse_opts).await?;
+                commit_builder.add_y_update(prop.into(), parsed_val)?;
+            }
+        }
+
+        if let Some(push) = commit_builder_json.push {
+            for (prop, vec) in push.iter() {
+                for value in vec {
+                    commit_builder.push_propval(prop, SubResource::Subject(value.clone()))?;
+                }
+            }
+        }
+
+        if let Some(remove) = commit_builder_json.remove {
+            for prop in remove {
+                commit_builder.remove(prop);
+            }
+        }
+
+        commit_builder.destroy(commit_builder_json.destroy);
+
+        Ok(commit_builder)
     }
 
     /// Appends a URL or (nested anonymous) Resource to a ResourceArray.
@@ -879,5 +934,59 @@ mod test {
             let commit = commitbuiler.sign(&agent, &store, &resource).await.unwrap();
             store.apply_commit(commit, &OPTS).await.unwrap();
         }
+    }
+
+    #[tokio::test]
+    async fn deserialize_from_json() {
+        let store = Store::init().await.unwrap();
+        store.set_server_url("http://localhost:9883");
+        store.populate().await.unwrap();
+
+        let json = r#"
+        {
+            "subject": "https://localhost/test",
+            "set": {
+                "https://atomicdata.dev/properties/description": "Some description"
+            },
+            "push": {
+                "https://atomicdata.dev/properties/isA": ["https://localhost/classes/Test"]
+            },
+            "remove": ["https://atomicdata.dev/properties/name"],
+            "destroy": false,
+            "y_update": null
+        }
+        "#;
+
+        let commit_builder_json: CommitBuilderJSON = serde_json::from_str(json).unwrap();
+        let commit_builder = CommitBuilder::from_commit_builder_json(commit_builder_json, &store)
+            .await
+            .unwrap();
+
+        assert_eq!(commit_builder.subject, "https://localhost/test");
+        assert_eq!(
+            commit_builder
+                .set
+                .get("https://atomicdata.dev/properties/description")
+                .unwrap()
+                .to_string(),
+            "Some description"
+        );
+        assert_eq!(
+            commit_builder
+                .push
+                .get("https://atomicdata.dev/properties/isA")
+                .unwrap()
+                .to_subjects(None)
+                .unwrap(),
+            ["https://localhost/classes/Test"]
+        );
+        assert_eq!(
+            commit_builder
+                .remove
+                .contains("https://atomicdata.dev/properties/name"),
+            true
+        );
+        assert_eq!(commit_builder.destroy, false);
+        assert_eq!(commit_builder.y_update.is_empty(), true);
     }
 }

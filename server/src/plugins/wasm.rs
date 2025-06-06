@@ -12,8 +12,10 @@ use std::{
 };
 
 use atomic_lib::{
-    agents::ForAgent,
+    agents::{Agent, ForAgent},
     class_extender::ClassExtender,
+    commit::{CommitBuilder, CommitBuilderJSON, CommitOpts},
+    db::plugin_meta::PluginMeta,
     errors::{AtomicError, AtomicResult},
     parse::{parse_json_ad_resource, ParseOpts, SaveOpts},
     storelike::{Query, ResourceResponse},
@@ -33,6 +35,8 @@ use wasmtime::{
 use wasmtime_wasi::{p2, DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 
+use atomic_lib::db::plugin_meta::PluginMetaKey;
+
 mod bindings {
     wasmtime::component::bindgen!({
     path: "wit/class-extender.wit",
@@ -50,7 +54,7 @@ use bindings::atomic::class_extender::types::{
 const CLASS_EXTENDER_DIR_NAME: &str = "class-extenders"; // Relative to the store path.
 
 #[derive(serde::Deserialize, serde::Serialize)]
-struct PluginMetadata {
+struct PluginJSON {
     name: String,
     namespace: String,
     author: String,
@@ -60,10 +64,9 @@ struct PluginMetadata {
     default_config: Option<serde_json::Value>,
     #[serde(rename = "configSchema")]
     config_schema: Option<serde_json::Value>,
-    pub subject: Option<String>,
 }
 
-impl PluginMetadata {
+impl PluginJSON {
     fn from_json(json: &str) -> AtomicResult<Self> {
         serde_json::from_str(json)
             .map_err(|e| AtomicError::from(format!("Failed to parse plugin metadata: {}", e)))
@@ -263,6 +266,7 @@ struct WasmPluginInner {
     class_url: Vec<String>,
     db: Arc<Db>,
     plugin_subject: Option<String>,
+    agent: Option<Agent>,
 }
 
 impl WasmPlugin {
@@ -275,6 +279,7 @@ impl WasmPlugin {
         db: &Db,
         scope: ClassExtenderScope,
         plugin_subject: Option<String>,
+        agent: Option<Agent>,
     ) -> AtomicResult<Self> {
         let db = Arc::new(db.clone());
 
@@ -313,6 +318,7 @@ impl WasmPlugin {
                 scope: scope.clone(),
                 db: Arc::clone(&db),
                 plugin_subject: plugin_subject.clone(),
+                agent: agent.clone(),
             }),
         };
 
@@ -327,6 +333,7 @@ impl WasmPlugin {
                 scope,
                 db,
                 plugin_subject,
+                agent,
             }),
         })
     }
@@ -403,6 +410,13 @@ impl WasmPlugin {
         &'a self,
         context: class_extender::CommitExtenderContext<'a>,
     ) -> AtomicResult<()> {
+        if let Some(agent) = &self.inner.agent {
+            // If the commit was signed by the plugin's agent, we skip the handler to prevent infinite loops.
+            if agent.subject == context.commit.signer {
+                return Ok(());
+            }
+        }
+
         let payload = self.build_commit_context(&context).await?;
         let (instance, mut store) = self.instantiate().await?;
         instance
@@ -416,6 +430,13 @@ impl WasmPlugin {
         &'a self,
         context: class_extender::CommitExtenderContext<'a>,
     ) -> AtomicResult<()> {
+        if let Some(agent) = &self.inner.agent {
+            // If the commit was signed by the plugin's agent, we skip the handler to prevent infinite loops.
+            if agent.subject == context.commit.signer {
+                return Ok(());
+            }
+        }
+
         let payload = self.build_commit_context(&context).await?;
         let (instance, mut store) = self.instantiate().await?;
         instance
@@ -432,6 +453,7 @@ impl WasmPlugin {
                 Arc::clone(&self.inner.db),
                 &self.inner.owned_folder_path,
                 self.inner.plugin_subject.clone(),
+                self.inner.agent.clone(),
             )?,
         );
         let mut linker = Linker::new(&self.inner.engine);
@@ -521,6 +543,7 @@ struct PluginHostState {
     http: WasiHttpCtx,
     db: Arc<Db>,
     plugin_subject: Option<String>,
+    agent: Option<Agent>,
 }
 
 impl PluginHostState {
@@ -528,6 +551,7 @@ impl PluginHostState {
         db: Arc<Db>,
         owned_folder_path: &Option<PathBuf>,
         plugin_subject: Option<String>,
+        agent: Option<Agent>,
     ) -> AtomicResult<Self> {
         let mut builder = WasiCtxBuilder::new();
         builder
@@ -554,6 +578,7 @@ impl PluginHostState {
             http: WasiHttpCtx::new(),
             db,
             plugin_subject,
+            agent,
         })
     }
 }
@@ -623,8 +648,47 @@ impl bindings::atomic::class_extender::host::Host for PluginHostState {
         Ok(resources)
     }
 
-    async fn get_plugin_agent(&mut self) -> String {
-        String::new()
+    async fn commit(&mut self, commit: String) -> Result<(), String> {
+        let Some(agent) = &self.agent else {
+            return Err("Plugin does not have an agent".to_string());
+        };
+
+        let commit_builder_json: CommitBuilderJSON =
+            serde_json::from_str(&commit).map_err(|e| e.to_string())?;
+
+        let commit_builder =
+            CommitBuilder::from_commit_builder_json(commit_builder_json, &*self.db)
+                .await
+                .map_err(|e| format!("Failed to deserialize commit: {}", e))?;
+
+        let resource = self
+            .db
+            .get_resource_extended(&commit_builder.subject, false, &agent.into())
+            .await
+            .map_err(|e| e.to_string())?
+            .to_single();
+
+        let commit = commit_builder
+            .sign(agent, &*self.db, &resource)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let opts = CommitOpts {
+            validate_schema: true,
+            validate_signature: true,
+            validate_timestamp: false,
+            validate_rights: true,
+            validate_previous_commit: false,
+            update_index: true,
+            validate_for_agent: None,
+        };
+
+        self.db
+            .apply_commit(commit, &opts)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        Ok(())
     }
 
     async fn get_config(&mut self) -> String {
@@ -665,7 +729,7 @@ fn validate_plugin_zip(
 
         file.read_to_string(&mut content)
             .map_err(|e| AtomicError::from(format!("Failed to read plugin.json: {}", e)))?;
-        let metadata: PluginMetadata = PluginMetadata::from_json(&content)?;
+        let metadata: PluginJSON = PluginJSON::from_json(&content)?;
         (metadata.namespace, metadata.name)
     };
 
@@ -915,6 +979,8 @@ pub async fn uninstall_plugin(
         }
     }
 
+    delete_plugin_meta(store, drive_subject, namespace, name).await?;
+
     info!("Uninstalled plugin {}.{}", namespace, name);
 
     Ok(())
@@ -937,19 +1003,10 @@ pub async fn install_plugin(
     let target_dir =
         extract_plugin_to_disk(zip_file, plugins_dir, &encoded_subject, &namespace, &name)?;
 
-    // Update plugin.json with the plugin subject
-    let json_path = target_dir.join(format!("{}.{}.json", namespace, name));
-    if json_path.exists() {
-        let json_content = std::fs::read_to_string(&json_path)
-            .map_err(|e| AtomicError::from(format!("Failed to read plugin.json: {}", e)))?;
-        let mut metadata: PluginMetadata = serde_json::from_str(&json_content)
-            .map_err(|e| AtomicError::from(format!("Failed to parse plugin.json: {}", e)))?;
-        metadata.subject = Some(plugin_subject.to_string());
-        std::fs::write(&json_path, serde_json::to_string_pretty(&metadata).unwrap())
-            .map_err(|e| AtomicError::from(format!("Failed to write plugin.json: {}", e)))?;
-    }
+    // 3. Create a new agent for the plugin if needed
+    create_and_plugin_meta(store, drive_subject, &namespace, &name, plugin_subject).await?;
 
-    // 3. Load Plugin
+    // 4. Load Plugin
     let engine = Arc::new(build_engine()?);
     let wasm_path = target_dir.join(&wasm_target_name);
 
@@ -972,6 +1029,70 @@ pub async fn install_plugin(
     Ok(())
 }
 
+async fn create_and_plugin_meta(
+    store: &Db,
+    drive_subject: &str,
+    namespace: &str,
+    name: &str,
+    plugin_subject: &str,
+) -> AtomicResult<()> {
+    let key = PluginMetaKey::new(&drive_subject, &namespace, &name);
+    let plugin_meta = store.get_plugin_meta(&key)?;
+
+    // If the metadata already exists we end here.
+    if plugin_meta.is_some() {
+        return Ok(());
+    }
+
+    // Create a new agent for the plugin
+    let agent = Agent::new(Some(&name), store)?;
+
+    let mut agent_resource = agent.to_resource()?;
+    let full_name = format!("{}/{}", namespace, name);
+    agent_resource
+        .set(
+            urls::NAME.into(),
+            atomic_lib::Value::String(full_name),
+            store,
+        )
+        .await?;
+    agent_resource.save_locally(store).await?;
+
+    store.set_plugin_meta(
+        &key,
+        &PluginMeta {
+            subject: plugin_subject.to_string(),
+            agent_secret: agent.build_secret()?.clone(),
+        },
+    )?;
+
+    Ok(())
+}
+
+async fn delete_plugin_meta(
+    store: &Db,
+    drive_subject: &str,
+    namespace: &str,
+    name: &str,
+) -> AtomicResult<()> {
+    let key = PluginMetaKey::new(&drive_subject, &namespace, &name);
+
+    let Some(plugin_meta) = store.get_plugin_meta(&key)? else {
+        // The plugin does not have any metadata so we don't have to delete anything.
+        return Ok(());
+    };
+
+    // Delete the agent resource
+    let agent = Agent::from_secret(&plugin_meta.agent_secret)?;
+    let mut agent_resource = store.get_resource(&agent.subject).await?;
+    agent_resource.destroy(store).await?;
+
+    // Delete the plugin metadata
+    store.delete_plugin_meta(&key)?;
+
+    Ok(())
+}
+
 async fn load_plugin_from_disk(
     path: &Path,
     plugin_dir: &Path,
@@ -982,18 +1103,37 @@ async fn load_plugin_from_disk(
 ) -> AtomicResult<(Option<ClassExtender>, PathBuf)> {
     let owned_folder_path = setup_plugin_data_dir(path, plugin_dir);
 
-    // Attempt to read plugin.json to find the subject
-    let json_path = path.with_extension("json");
-    let plugin_subject = if json_path.exists() {
-        let content = std::fs::read_to_string(&json_path).ok();
-        if let Some(content) = content {
-            let meta: Result<PluginMetadata, _> = serde_json::from_str(&content);
-            meta.ok().and_then(|m| m.subject)
-        } else {
-            None
+    // Attempt to find the plugin subject from the store metadata
+    let (plugin_subject, agent) = match &scope {
+        ClassExtenderScope::Drive(drive_subject) => {
+            let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+            let stem_path = Path::new(stem);
+            let namespace = stem_path.file_stem().and_then(|s| s.to_str());
+            let name = stem_path.extension().and_then(|s| s.to_str());
+
+            if let (Some(namespace), Some(name)) = (namespace, name) {
+                let key = PluginMetaKey::new(drive_subject, namespace, name);
+                let meta = db.get_plugin_meta(&key).map_err(|e| {
+                    AtomicError::from(format!("Failed to get plugin metadata from store: {}", e))
+                })?;
+
+                if let Some(m) = meta {
+                    let agent = Agent::from_secret(&m.agent_secret)?;
+                    (Some(m.subject), Some(agent))
+                } else {
+                    return Err(AtomicError::from(format!(
+                        "Plugin metadata not found in store for {}.{}",
+                        namespace, name
+                    )));
+                }
+            } else {
+                return Err(AtomicError::from(format!(
+                    "Invalid plugin filename (expected namespace.name.wasm): {}",
+                    path.display()
+                )));
+            }
         }
-    } else {
-        None
+        ClassExtenderScope::Global => (None, None),
     };
 
     let wasm_bytes = match std::fs::read(path) {
@@ -1019,6 +1159,7 @@ async fn load_plugin_from_disk(
         db,
         scope,
         plugin_subject,
+        agent,
     )
     .await
     {

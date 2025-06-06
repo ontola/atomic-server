@@ -61,6 +61,19 @@
     "https://atomicdata.dev/properties/shortname": "version"
   },
   {
+    "@id": "https://atomicdata.dev/properties/pluginAgent",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Agent",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "The agent associated with the plugin, this value is set dynamically by the server",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/isDynamic": true,
+    "https://atomicdata.dev/properties/isLocked": true,
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "plugin-agent"
+  },
+  {
     "@id": "https://atomicdata.dev/properties/plugins",
     "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Plugin",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
@@ -81,9 +94,11 @@
     "https://atomicdata.dev/properties/recommends": [
       "https://atomicdata.dev/properties/config",
       "https://atomicdata.dev/properties/namespace",
-      "https://atomicdata.dev/properties/pluginFile",
       "https://atomicdata.dev/properties/pluginAuthor",
-      "https://atomicdata.dev/properties/jsonSchema"
+      "https://atomicdata.dev/properties/jsonSchema",
+      "https://atomicdata.dev/properties/pluginFile",
+      "https://atomicdata.dev/properties/description",
+      "https://atomicdata.dev/properties/pluginAgent"
     ],
     "https://atomicdata.dev/properties/requires": [
       "https://atomicdata.dev/properties/name",

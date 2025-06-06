@@ -1,9 +1,13 @@
 use std::path::{Path, PathBuf};
 
 use atomic_lib::{
-    agents::ForAgent,
-    class_extender::{BoxFuture, ClassExtender, ClassExtenderScope, CommitExtenderContext},
+    agents::{Agent, ForAgent},
+    class_extender::{
+        BoxFuture, ClassExtender, ClassExtenderScope, CommitExtenderContext, GetExtenderContext,
+    },
+    db::plugin_meta::PluginMetaKey,
     errors::AtomicResult,
+    storelike::ResourceResponse,
     urls::{self, DOWNLOAD_URL, MIMETYPE},
     AtomicError, Db, Resource, Storelike, Value,
 };
@@ -37,6 +41,24 @@ async fn get_parent_drive(resource: &Resource, store: &Db) -> AtomicResult<Strin
     };
 
     Ok(parent_subject.to_string())
+}
+
+fn get_namespace_and_name(resource: &Resource) -> AtomicResult<(String, String)> {
+    let Ok(Value::String(name)) = resource.get(urls::NAME) else {
+        return Err(AtomicError::from(format!(
+            "Plugin {} has no name",
+            resource.get_subject()
+        )));
+    };
+
+    let Ok(Value::String(namespace)) = resource.get(urls::NAMESPACE) else {
+        return Err(AtomicError::from(format!(
+            "Plugin {} has no namespace",
+            resource.get_subject()
+        )));
+    };
+
+    Ok((namespace.to_string(), name.to_string()))
 }
 
 async fn do_uninstall_plugin(
@@ -237,6 +259,35 @@ fn on_before_commit(
     })
 }
 
+fn on_resource_get(context: GetExtenderContext) -> BoxFuture<AtomicResult<ResourceResponse>> {
+    Box::pin(async move {
+        let GetExtenderContext {
+            store, db_resource, ..
+        } = context;
+
+        let drive = get_parent_drive(db_resource, store).await?;
+
+        let (namespace, name) = get_namespace_and_name(db_resource)?;
+
+        let Some(meta) = store.get_plugin_meta(&PluginMetaKey::new(&drive, &namespace, &name))?
+        else {
+            return Ok(db_resource.clone().into());
+        };
+
+        let agent = Agent::from_secret(&meta.agent_secret)?;
+
+        db_resource
+            .set(
+                urls::PLUGIN_AGENT.to_string(),
+                Value::AtomicUrl(agent.subject.clone()),
+                store,
+            )
+            .await?;
+
+        Ok(db_resource.clone().into())
+    })
+}
+
 pub fn build_plugin_extender(
     plugins_dir: PathBuf,
     plugin_cache_dir: PathBuf,
@@ -245,7 +296,9 @@ pub fn build_plugin_extender(
     ClassExtender {
         id: Some("plugin".to_string()),
         classes: vec![urls::PLUGIN.to_string()],
-        on_resource_get: None,
+        on_resource_get: Some(ClassExtender::wrap_get_handler(move |context| {
+            on_resource_get(context)
+        })),
         before_commit: Some(ClassExtender::wrap_commit_handler(move |context| {
             on_before_commit(
                 context,
