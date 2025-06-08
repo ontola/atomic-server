@@ -1,15 +1,9 @@
 import * as React from 'react';
 import { useState } from 'react';
-import { Agent, server } from '@tomic/react';
+import { Agent } from '@tomic/react';
 import { useSettings } from '../helpers/AppSettings';
-import {
-  InputStyled,
-  InputWrapper,
-  LabelStyled,
-} from '../components/forms/InputStyles';
 import { Button } from '../components/Button';
 import { Margin } from '../components/Card';
-import Field from '../components/forms/Field';
 import { ResourceInline } from '../views/ResourceInline';
 import { ContainerNarrow } from '../components/Containers';
 import { editURL } from '../helpers/navigation';
@@ -21,9 +15,11 @@ import { createRoute } from '@tanstack/react-router';
 import { pathNames } from './paths';
 import { appRoute } from './RootRoutes';
 import { saveAgentToIDB } from '@helpers/agentStorage';
-import { FaKey, FaUser } from 'react-icons/fa6';
+import { FaUser } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import { NewIdentitySection } from '../components/NewIdentitySection';
+import { LoggedOutAgentPanel } from '../components/LoggedOutAgentPanel';
+import { LabelStyled } from '../components/forms/InputStyles';
 import { DrivesCard } from './SettingsServer/DrivesCard';
 import { useSavedDrives } from '../hooks/useSavedDrives';
 import { useDriveHistory } from '../hooks/useDriveHistory';
@@ -38,6 +34,7 @@ export const AgentSettingsRoute = createRoute({
 const SettingsAgent: React.FunctionComponent = () => {
   const { agent, setAgent, setDrive } = useSettings();
   const [error, setError] = useState<Error | undefined>(undefined);
+  const [signInLoading, setSignInLoading] = useState(false);
   const navigate = useNavigateWithTransition();
   const [showCreate, setShowCreate] = useState(false);
 
@@ -50,17 +47,18 @@ const SettingsAgent: React.FunctionComponent = () => {
     saveAgentToIDB(undefined);
   }
 
-  async function handleUpdateSecret(updateSecret: string) {
+  async function handleSignInWithSecret(secret: string) {
     setError(undefined);
+    setSignInLoading(true);
 
     try {
-      const newAgent = await Agent.fromSecret(updateSecret);
-
+      const newAgent = await Agent.fromSecret(secret);
       setAgent(newAgent);
-      saveAgentToIDB(updateSecret);
+      await saveAgentToIDB(secret);
     } catch (e) {
-      const err = new Error('Invalid secret. ' + e);
-      setError(err);
+      setError(new Error('Invalid secret. ' + e));
+    } finally {
+      setSignInLoading(false);
     }
   }
 
@@ -120,54 +118,17 @@ const SettingsAgent: React.FunctionComponent = () => {
             />
           </Column>
         ) : (
-          <Column gap='2rem'>
-            <Column gap='1rem'>
-              <h3>Create a new identity</h3>
-              <p>
-                Generate a new self-sovereign Agent and Drive on this server.
-              </p>
-              <Button onClick={() => setShowCreate(true)}>
-                Create new identity
-              </Button>
-            </Column>
-            <Divider />
-            <Column gap='1rem'>
-              <h3>Sign in with existing secret</h3>
-              <Field
-                label='Enter your Agent Secret'
-                fieldId='agent-secret'
-                helper={
-                  "The Agent Secret is a long string of characters that encodes both the Subject and the Private Key. You can think of it as a combined username + password. Store it safely, and don't share it with others."
-                }
-                error={error}
-              >
-                <InputWrapper hasPrefix>
-                  <FaKey />
-                  <InputStyled
-                    id='agent-secret'
-                    onChange={e => handleUpdateSecret(e.target.value)}
-                    type='password'
-                    disabled={agent !== undefined}
-                    name='secret'
-                    autoComplete='current-password'
-                    spellCheck='false'
-                  />
-                </InputWrapper>
-              </Field>
-            </Column>
-          </Column>
+          <LoggedOutAgentPanel
+            onCreateIdentityClick={() => setShowCreate(true)}
+            onSignInWithSecret={handleSignInWithSecret}
+            error={error}
+            loading={signInLoading}
+          />
         )}
       </ContainerNarrow>
     </Main>
   );
 };
-
-const Divider = styled.hr`
-  width: 100%;
-  border: none;
-  border-top: 1px solid ${p => p.theme.colors.bg2};
-  margin: 0;
-`;
 
 const Heading = styled.h1`
   margin: 0;

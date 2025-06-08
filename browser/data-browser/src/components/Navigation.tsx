@@ -14,6 +14,8 @@ import { useResource, type Resource } from '@tomic/react';
 import NavBarContent from './NavBar';
 import { useLocation } from '@tanstack/react-router';
 import { useSettings } from '../helpers/AppSettings';
+import { paths } from '../routes/paths';
+import { useRootWelcomeLayout } from '../context/RootWelcomeLayoutContext';
 
 interface NavWrapperProps {
   children: React.ReactNode;
@@ -24,8 +26,14 @@ const AISidebarMemo = React.memo(AISidebarContainer);
 /** Wraps the entire app and adds a navbar at the top or bottom */
 export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
   const { navbarTop } = useSettings();
+  const { rootWelcomeChromeHidden } = useRootWelcomeLayout();
   const [subject] = useCurrentSubject();
-  const { searchStr } = useLocation();
+  const { pathname, searchStr } = useLocation();
+
+  const onboardingOrChild =
+    pathname === paths.onboarding ||
+    pathname.startsWith(`${paths.onboarding}/`);
+  const hideGlobalChrome = rootWelcomeChromeHidden || onboardingOrChild;
 
   const search = useMemo(() => new URLSearchParams(searchStr), [searchStr]);
 
@@ -43,15 +51,18 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
 
   return (
     <AISidebarContextProvider>
-      <TopBar resource={resource} top={navbarTop} />
-      <SideBarWrapper top={navbarTop}>
-        <SideBar />
-        <Content>
-          {children}
-        </Content>
-        <HideInPrint>
-          <AISidebarMemo />
-        </HideInPrint>
+      {!hideGlobalChrome && <TopBar resource={resource} top={navbarTop} />}
+      <SideBarWrapper
+        top={navbarTop}
+        fullViewportContent={hideGlobalChrome}
+      >
+        {!hideGlobalChrome && <SideBar />}
+        <Content>{children}</Content>
+        {!hideGlobalChrome && (
+          <HideInPrint>
+            <AISidebarMemo />
+          </HideInPrint>
+        )}
       </SideBarWrapper>
       <OverlayContainer />
     </AISidebarContextProvider>
@@ -102,12 +113,23 @@ const NavBarStyled = styled.div<{ top: boolean }>`
   }
 `;
 
-const SideBarWrapper = styled.div<{ top: boolean }>`
-  ${p => CalculatedPageHeight.define(`calc(100dvh - ${p.theme.heights.breadCrumbBar})`)}
+const SideBarWrapper = styled.div<{ top: boolean; fullViewportContent?: boolean }>`
+  ${p =>
+    p.fullViewportContent
+      ? CalculatedPageHeight.define(`100dvh`)
+      : CalculatedPageHeight.define(
+          `calc(100dvh - ${p.theme.heights.breadCrumbBar})`,
+        )}
   display: flex;
   height: ${CalculatedPageHeight.var()};
   position: fixed;
-  ${p => p.top ? `top: ${p.theme.heights.breadCrumbBar};` : 'top: 0;'}
+  ${p => {
+    if (p.fullViewportContent) {
+      return 'top: 0;';
+    }
+
+    return p.top ? `top: ${p.theme.heights.breadCrumbBar};` : 'top: 0;';
+  }}
   left: 0;
   right: 0;
 

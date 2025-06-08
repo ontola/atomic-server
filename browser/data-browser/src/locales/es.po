@@ -214,6 +214,7 @@ msgstr "Borrar"
 msgid "Copy"
 msgstr "Copiar"
 
+#: src/components/LoggedOutAgentPanel.tsx
 #: src/components/SignInButton.tsx
 #: src/views/InvitePage.tsx
 msgid "Sign in"
@@ -581,12 +582,12 @@ msgstr "Editar perfil"
 msgid "Agent Secret"
 msgstr "Secreto del Agente"
 
+#: src/components/LoggedOutAgentPanel.tsx
 #: src/components/NewIdentitySection.tsx
-#: src/routes/SettingsAgent.tsx
 msgid "Enter your Agent Secret"
 msgstr "Introduce tu Secreto de Agente"
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/LoggedOutAgentPanel.tsx
 msgid "The Agent Secret is a long string of characters that encodes both the Subject and the Private Key. You can think of it as a combined username + password. Store it safely, and don't share it with others."
 msgstr "El Secreto del Agente es una larga cadena de caracteres que codifica tanto el Sujeto como la Clave Privada. Puedes pensar en ello como una combinación de nombre de usuario + contraseña. Guárdalo de forma segura y no lo compartas con otros."
 
@@ -3664,21 +3665,21 @@ msgstr "Tu nueva identidad está lista"
 #~ msgid "Done"
 #~ msgstr ""
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/LoggedOutAgentPanel.tsx
 msgid "Create a new identity"
 msgstr "Crear una nueva identidad"
 
+#: src/components/LoggedOutAgentPanel.tsx
 #: src/components/NewIdentitySection.tsx
-#: src/routes/SettingsAgent.tsx
 msgid "Generate a new self-sovereign Agent and Drive on this server."
 msgstr "Genera un nuevo Agente y Drive auto-soberano en este servidor."
 
+#: src/components/LoggedOutAgentPanel.tsx
 #: src/components/NewIdentitySection.tsx
-#: src/routes/SettingsAgent.tsx
 msgid "Create new identity"
 msgstr "Crear nueva identidad"
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/LoggedOutAgentPanel.tsx
 msgid "Sign in with existing secret"
 msgstr "Iniciar sesión con secreto existente"
 
@@ -3717,10 +3718,8 @@ msgstr "Iniciar sesión / Nuevo usuario"
 #~ msgid "This host is not bound to a Drive yet:{0} <0/>."
 #~ msgstr ""
 
-#. placeholder {0}: ' '
-#: src/views/ErrorPage.tsx
-msgid "If this host has not been bound to a Drive yet, continue at{0} <0>the onboarding page</0> ."
-msgstr ""
+#~ msgid "If this host has not been bound to a Drive yet, continue at{0} <0>the onboarding page</0> ."
+#~ msgstr ""
 
 #~ msgid ""
 #~ "Are you sure you{0}ve stored this secret somewhere safe? You\n"
@@ -3954,15 +3953,13 @@ msgstr ""
 msgid "Start over"
 msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid "You're signed in!"
-msgstr ""
+#~ msgid "You're signed in!"
+#~ msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid ""
-"Now, set your profile name. Note that this is only set for this specific\n"
-"server, but you can use your secret also on other servers."
-msgstr ""
+#~ msgid ""
+#~ "Now, set your profile name. Note that this is only set for this specific\n"
+#~ "server, but you can use your secret also on other servers."
+#~ msgstr ""
 
 #: src/components/NewIdentitySection.tsx
 msgid "Enter your name"
@@ -4166,4 +4163,94 @@ msgstr ""
 
 #: src/components/NewInstanceButton/QuickCreateRow.tsx
 msgid "<0/> New"
+msgstr ""
+
+#~ msgid ""
+#~ "You are connecting to <0/>. Create a new\n"
+#~ "identity and drive to get started, or use User Settings to sign in\n"
+#~ "with an existing secret."
+#~ msgstr ""
+
+#. placeholder {0}: ' '
+#: src/views/ErrorPage.tsx
+msgid "If you have not set up an identity on this server yet,{0} <0>create one here</0>."
+msgstr ""
+
+#: src/views/RootWelcomeGate.tsx
+msgid "Could not parse that secret."
+msgstr ""
+
+#~ msgid "Welcome"
+#~ msgstr ""
+
+#~ msgid ""
+#~ "You are connected to <0/>. There is no default\n"
+#~ "data space at the site root yet, or you need to sign in. Create a\n"
+#~ "new identity on this server, or sign in with a secret you already\n"
+#~ "have."
+#~ msgstr ""
+
+#~ msgid "New here"
+#~ msgstr ""
+
+#~ msgid ""
+#~ "Create an agent and a personal drive. You will get a secret to\n"
+#~ "store safely—this is your account on this server."
+#~ msgstr ""
+
+#~ msgid "Create your account"
+#~ msgstr ""
+
+#~ msgid "Already have a secret"
+#~ msgstr ""
+
+#~ msgid "Agent secret"
+#~ msgstr ""
+
+#~ msgid "Paste the full secret (the long base64 string from when you created or exported your identity)."
+#~ msgstr ""
+
+#: src/components/LoggedOutAgentPanel.tsx
+msgid "Signing in…"
+msgstr ""
+
+#~ msgid "<0>Open User Settings</0>{0} for more options (e.g. switching drives)."
+#~ msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Set your profile name!"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid ""
+"Note that this is only set for this specific\n"
+"server, but you can use your secret also on other servers."
+msgstr ""
+
+#: src/views/RootWelcomeGate.tsx
+msgid "Welcome to AtomicServer"
+msgstr ""
+
+#~ msgid ""
+#~ "You are connected to <0/>. There is no default\n"
+#~ "data space at the site root yet, or you need to sign in. Use the\n"
+#~ "same options as in User Settings below."
+#~ msgstr ""
+
+#~ msgid "<0>User Settings</0>{0} for drive switching and your profile."
+#~ msgstr ""
+
+#~ msgid ""
+#~ "You are connected to <0/>. There is no default\n"
+#~ "data space at the site root yet, or you need to sign in."
+#~ msgstr ""
+
+#: src/views/FullScreenNewIdentityPage.tsx
+msgid "Set up your identity"
+msgstr ""
+
+#: src/views/FullScreenNewIdentityPage.tsx
+msgid ""
+"On <0/>. You already chose to create a new\n"
+"identity — continue with your profile and drive below."
 msgstr ""

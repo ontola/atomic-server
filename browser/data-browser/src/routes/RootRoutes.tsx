@@ -8,6 +8,8 @@ import { pathNames } from './paths';
 // import { TanStackRouterDevtools } from '@tanstack/router-devtools';
 import { Providers } from '../Providers';
 import ResourcePage from '../views/ResourcePage';
+import { useSettings } from '../helpers/AppSettings';
+import { isDev } from '../config';
 
 export const appRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -28,10 +30,16 @@ export const rootRoute = createRootRoute({
 
 const TopRouteComponent: React.FC = () => {
   const { pathname, searchStr } = useLocation();
+  const { baseURL } = useSettings();
 
-  // We want the origin together with the path and search string but not the hash.
-  // We use the useLocation hook to get the pathname and searchStr because the window.location is not reactive.
-  const subject = window.location.origin + pathname + searchStr;
+  // In dev, the UI is often on :5173 while JSON-AD is served from the Atomic
+  // server (e.g. :9883). Resolve `/` and other top-level paths against baseURL
+  // so the root resource matches the server you configured.
+  const origin =
+    isDev() && baseURL ? new URL(baseURL).origin : window.location.origin;
+
+  // Pathname + search from the router; origin from the Atomic server in dev.
+  const subject = `${origin}${pathname}${searchStr}`;
 
   return <ResourcePage subject={subject} key={subject} />;
 };

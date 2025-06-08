@@ -96,7 +96,7 @@ impl AppState {
 
         let should_init = !&config.store_path.exists() || config.initialize;
         // If the store is empty, populate the core models (classes, properties, etc.).
-        // We don't create a Drive here anymore; that's handled by the frontend onboarding.
+        // We don't create a Drive here anymore; that's handled in the data-browser (new identity flow).
         if should_init {
             tracing::info!("Initialize: bootstrapping core models...");
             atomic_lib::populate::bootstrap(&store)
