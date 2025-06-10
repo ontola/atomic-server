@@ -59,6 +59,7 @@
     "codemirror-json-schema": "^0.8.1",
     "downshift": "^9.0.10",
     "emoji-mart": "^5.6.0",
+    "idb-keyval": "^6.2.2",
     "ollama-ai-provider-v2": "^1.5.5",
     "polished": "^4.3.1",
     "prismjs": "^1.30.0",

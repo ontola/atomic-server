@@ -16,6 +16,13 @@ export const ErrorLook = styled.span`
   ${errorLookStyle}
 `;
 
+export const SimpleErrorBlock = styled.div`
+  color: ${props => props.theme.colors.alert};
+  border-radius: ${props => props.theme.radius};
+  border: 1px solid ${props => props.theme.colors.alert};
+  padding: ${props => props.theme.size(2)};
+`;
+
 export interface ErrorBlockProps {
   error: Error;
   showTrace?: boolean;

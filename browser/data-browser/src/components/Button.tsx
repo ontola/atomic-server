@@ -191,8 +191,6 @@ export const ButtonSubtle = styled(ButtonDefault)`
   --button-border-color-hover: ${p => p.theme.colors.main};
   --button-text-color: ${p => p.theme.colors.textLight};
   --button-text-color-hover: ${p => p.theme.colors.main};
-
-  box-shadow: ${p => (p.theme.darkMode ? 'none' : p.theme.boxShadow)};
 `;
 
 export const ButtonAlert = styled(ButtonDefault)`

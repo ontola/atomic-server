@@ -28,11 +28,13 @@ const ErrBoundary = window.bugsnagApiKey
   ? initBugsnag(window.bugsnagApiKey)
   : ErrorBoundary;
 
+const VALID_PROPS = ['popover', 'closedby'];
+
 // This implements the default behavior from styled-components v5
 const shouldForwardProp: ShouldForwardProp<'web'> = (propName, target) => {
   if (typeof target === 'string') {
     // @emotion/is-prop-valid does not support popover, so we need to forward it manually.
-    if (propName === 'popover') {
+    if (VALID_PROPS.includes(propName)) {
       return true;
     }
 

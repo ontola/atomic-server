@@ -1,6 +1,6 @@
 import type { Agent } from './agent.js';
 import type { HeadersObject } from './client.js';
-import { getTimestampNow, signToBase64 } from './commit.js';
+import { getTimestampNow } from './commit.js';
 
 /** Returns a JSON-AD resource of an Authentication */
 export async function createAuthentication(subject: string, agent: Agent) {
@@ -16,25 +16,11 @@ export async function createAuthentication(subject: string, agent: Agent) {
     'https://atomicdata.dev/properties/auth/publicKey':
       await agent.getPublicKey(),
     'https://atomicdata.dev/properties/auth/timestamp': timestamp,
-    'https://atomicdata.dev/properties/auth/signature': await signatureMessage(
-      subject,
-      agent,
-      timestamp,
-    ),
+    'https://atomicdata.dev/properties/auth/signature':
+      await agent.createSignature(subject, timestamp),
   };
 
   return object;
-}
-
-/** Returns a string used to sign requests. */
-export async function signatureMessage(
-  subject: string,
-  agent: Agent,
-  timestamp: number,
-) {
-  const message = `${subject} ${timestamp}`;
-
-  return await signToBase64(message, agent.privateKey);
 }
 
 /** Localhost Agents are not allowed to sign requests to external domain */
@@ -60,13 +46,15 @@ export async function signRequest(
 
   if (agent?.subject && !localTryingExternal(subject, agent)) {
     newHeaders['x-atomic-public-key'] = await agent.getPublicKey();
-    newHeaders['x-atomic-signature'] = await signatureMessage(
+    newHeaders['x-atomic-signature'] = await agent.createSignature(
       subject,
-      agent,
       timestamp,
     );
     newHeaders['x-atomic-timestamp'] = timestamp.toString();
-    newHeaders['x-atomic-agent'] = agent?.subject;
+
+    if (agent.subject) {
+      newHeaders['x-atomic-agent'] = agent.subject;
+    }
   }
 
   return newHeaders;

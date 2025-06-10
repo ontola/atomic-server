@@ -336,23 +336,20 @@ msgstr "Read"
 msgid "Write"
 msgstr "Write"
 
-#: src/routes/SettingsAgent.tsx
-msgid "If you sign out, your secret will be removed. If you haven't saved your secret somewhere, you will lose access to this User. Are you sure you want to sign out?"
-msgstr "If you sign out, your secret will be removed. If you haven't saved your secret somewhere, you will lose access to this User. Are you sure you want to sign out?"
+#~ msgid "If you sign out, your secret will be removed. If you haven't saved your secret somewhere, you will lose access to this User. Are you sure you want to sign out?"
+#~ msgstr "If you sign out, your secret will be removed. If you haven't saved your secret somewhere, you will lose access to this User. Are you sure you want to sign out?"
 
 #: src/components/SideBar/AppMenu.tsx
 #: src/routes/SettingsAgent.tsx
-#: src/views/InvitePage.tsx
 msgid "User Settings"
 msgstr "User Settings"
 
-#: src/routes/SettingsAgent.tsx
-msgid ""
-"An Agent is a user, consisting of a Subject (its URL) and Private\n"
-"Key. Together, these can be used to edit data and sign Commits."
-msgstr ""
-"An Agent is a user, consisting of a Subject (its URL) and Private\n"
-"Key. Together, these can be used to edit data and sign Commits."
+#~ msgid ""
+#~ "An Agent is a user, consisting of a Subject (its URL) and Private\n"
+#~ "Key. Together, these can be used to edit data and sign Commits."
+#~ msgstr ""
+#~ "An Agent is a user, consisting of a Subject (its URL) and Private\n"
+#~ "Key. Together, these can be used to edit data and sign Commits."
 
 #: src/routes/SettingsAgent.tsx
 msgid "Warning:"
@@ -371,35 +368,26 @@ msgstr "<0/> You{0}re signed in as"
 msgid "Edit profile"
 msgstr "Edit profile"
 
-#. placeholder {0}: ' '
-#. placeholder {1}: ' '
-#. placeholder {2}: ' '
-#. placeholder {3}: "'s"
-#: src/routes/SettingsAgent.tsx
-msgid "You can create your own Agent by hosting an{0} <0>atomic-server</0> . Alternatively, you can use{1} <1>an Invite</1>{2} to get a guest Agent on someone else{3} Atomic Server."
-msgstr "You can create your own Agent by hosting an{0} <0>atomic-server</0> . Alternatively, you can use{1} <1>an Invite</1>{2} to get a guest Agent on someone else{3} Atomic Server."
+#~ msgid "You can create your own Agent by hosting an{0} <0>atomic-server</0> . Alternatively, you can use{1} <1>an Invite</1>{2} to get a guest Agent on someone else{3} Atomic Server."
+#~ msgstr "You can create your own Agent by hosting an{0} <0>atomic-server</0> . Alternatively, you can use{1} <1>an Invite</1>{2} to get a guest Agent on someone else{3} Atomic Server."
+
+#~ msgid "Hide secret"
+#~ msgstr "Hide secret"
+
+#~ msgid "Show secret"
+#~ msgstr "Show secret"
+
+#~ msgid "Hide advanced"
+#~ msgstr "Hide advanced"
+
+#~ msgid "Show advanced"
+#~ msgstr "Show advanced"
+
+#~ msgid "copy"
+#~ msgstr "copy"
 
 #: src/routes/SettingsAgent.tsx
-msgid "Hide secret"
-msgstr "Hide secret"
-
-#: src/routes/SettingsAgent.tsx
-msgid "Show secret"
-msgstr "Show secret"
-
-#: src/routes/SettingsAgent.tsx
-msgid "Hide advanced"
-msgstr "Hide advanced"
-
-#: src/routes/SettingsAgent.tsx
-msgid "Show advanced"
-msgstr "Show advanced"
-
-#: src/routes/SettingsAgent.tsx
-msgid "copy"
-msgstr "copy"
-
-#: src/routes/SettingsAgent.tsx
+#: src/views/InvitePage.tsx
 msgid "Agent Secret"
 msgstr "Agent Secret"
 
@@ -411,33 +399,26 @@ msgstr "Enter your Agent Secret"
 msgid "The Agent Secret is a long string of characters that encodes both the Subject and the Private Key. You can think of it as a combined username + password. Store it safely, and don't share it with others."
 msgstr "The Agent Secret is a long string of characters that encodes both the Subject and the Private Key. You can think of it as a combined username + password. Store it safely, and don't share it with others."
 
-#: src/routes/SettingsAgent.tsx
-msgid "Subject URL"
-msgstr "Subject URL"
+#~ msgid "Subject URL"
+#~ msgstr "Subject URL"
 
-#: src/routes/SettingsAgent.tsx
-msgid "The link to your Agent, e.g. https://atomicdata.dev/agents/someAgent"
-msgstr "The link to your Agent, e.g. https://atomicdata.dev/agents/someAgent"
+#~ msgid "The link to your Agent, e.g. https://atomicdata.dev/agents/someAgent"
+#~ msgstr "The link to your Agent, e.g. https://atomicdata.dev/agents/someAgent"
 
-#: src/routes/SettingsAgent.tsx
-msgid "Hide private key"
-msgstr "Hide private key"
+#~ msgid "Hide private key"
+#~ msgstr "Hide private key"
 
-#: src/routes/SettingsAgent.tsx
-msgid "Show private key"
-msgstr "Show private key"
+#~ msgid "Show private key"
+#~ msgstr "Show private key"
 
-#: src/routes/SettingsAgent.tsx
-msgid "Private Key"
-msgstr "Private Key"
+#~ msgid "Private Key"
+#~ msgstr "Private Key"
 
-#: src/routes/SettingsAgent.tsx
-msgid "The private key of the Agent, which is a Base64 encoded string."
-msgstr "The private key of the Agent, which is a Base64 encoded string."
+#~ msgid "The private key of the Agent, which is a Base64 encoded string."
+#~ msgstr "The private key of the Agent, which is a Base64 encoded string."
 
-#: src/routes/SettingsAgent.tsx
-msgid "sign out"
-msgstr "sign out"
+#~ msgid "sign out"
+#~ msgstr "sign out"
 
 #: src/routes/SettingsAgent.tsx
 msgid "Sign out with current Agent and reset this form"
@@ -1092,6 +1073,7 @@ msgstr "Initializing Resource"
 msgid "Base classes"
 msgstr "Base classes"
 
+#: src/components/SideBar/SideBarDrive.tsx
 #: src/views/ErrorPage.tsx
 msgid "Unauthorized"
 msgstr "Unauthorized"
@@ -1178,9 +1160,8 @@ msgstr ""
 "device. If you want your Atomic-Server to be available from the web,\n"
 "you should set this up at a Domain on a server."
 
-#: src/views/InvitePage.tsx
-msgid "New User created!"
-msgstr "New User created!"
+#~ msgid "New User created!"
+#~ msgstr "New User created!"
 
 #. placeholder {0}: write ? 'edit' : 'view'
 #: src/views/InvitePage.tsx
@@ -3199,13 +3180,11 @@ msgstr "v{0}"
 msgid "by {0}"
 msgstr "by {0}"
 
-#: src/routes/SettingsAgent.tsx
-msgid "Cannot fill subject and privatekey fields."
-msgstr "Cannot fill subject and privatekey fields."
+#~ msgid "Cannot fill subject and privatekey fields."
+#~ msgstr "Cannot fill subject and privatekey fields."
 
-#: src/routes/SettingsAgent.tsx
-msgid "Invalid Agent"
-msgstr "Invalid Agent"
+#~ msgid "Invalid Agent"
+#~ msgstr "Invalid Agent"
 
 #: src/routes/SettingsAgent.tsx
 msgid "Invalid secret."
@@ -3389,3 +3368,89 @@ msgstr "Your config is not fully compatible with the new version."
 #: src/views/Drive/PluginList.tsx
 msgid "No plugins installed"
 msgstr "No plugins installed"
+
+#: src/routes/SettingsAgent.tsx
+msgid "Sign Out"
+msgstr "Sign Out"
+
+#. placeholder {0}: ' '
+#. placeholder {1}: "'s"
+#: src/routes/SettingsAgent.tsx
+msgid ""
+"You can create your own Agent by hosting an{0} <0>atomic-server</0> . Alternatively, you can use an Invite to get a guest Agent on\n"
+"someone else{1} Atomic Server."
+msgstr ""
+"You can create your own Agent by hosting an{0} <0>atomic-server</0> . Alternatively, you can use an Invite to get a guest Agent on\n"
+"someone else{1} Atomic Server."
+
+#: src/views/InvitePage.tsx
+msgid "Agent created!"
+msgstr "Agent created!"
+
+#~ msgid ""
+#~ "IMPORTANT! You must save your agent secret somewhere safe right now.\n"
+#~ "If you lose it you will not be able to access this user again."
+#~ msgstr ""
+#~ "IMPORTANT! You must save your agent secret somewhere safe right now.\n"
+#~ "If you lose it you will not be able to access this user again."
+
+#: src/views/InvitePage.tsx
+msgid "Continue"
+msgstr "Continue"
+
+#~ msgid ""
+#~ "IMPORTANT! Below is your agent secret, you use this to log in as\n"
+#~ "this user in the future. Save it somewhere safe, the secret will not\n"
+#~ "be show again and if you lose it you will not be able to access this\n"
+#~ "user again."
+#~ msgstr ""
+#~ "IMPORTANT! Below is your agent secret, you use this to log in as\n"
+#~ "this user in the future. Save it somewhere safe, the secret will not\n"
+#~ "be show again and if you lose it you will not be able to access this\n"
+#~ "user again."
+
+#: src/views/InvitePage.tsx
+msgid "Copy secret to continue"
+msgstr "Copy secret to continue"
+
+#~ msgid "{0} Continue"
+#~ msgstr "{0} Continue"
+
+#~ msgid "Give your agent a name <0/>"
+#~ msgstr "Give your agent a name <0/>"
+
+#~ msgid "Give your agent a name"
+#~ msgstr "Give your agent a name"
+
+#: src/views/InvitePage.tsx
+msgid ""
+"IMPORTANT! Below is your agent secret, you use this to login. Save\n"
+"it somewhere safe, the secret will not be show again and if you\n"
+"lose it you will not be able to access this user again."
+msgstr ""
+"IMPORTANT! Below is your agent secret, you use this to login. Save\n"
+"it somewhere safe, the secret will not be show again and if you\n"
+"lose it you will not be able to access this user again."
+
+#: src/views/InvitePage.tsx
+msgid "Enter a name"
+msgstr "Enter a name"
+
+#: src/views/InvitePage.tsx
+msgid "Agent Name"
+msgstr "Agent Name"
+
+#~ msgid "awdawawd {0}"
+#~ msgstr "awdawawd {0}"
+
+#: src/components/SideBar/SideBarDrive.tsx
+msgid "This drive is private, sign in to view it"
+msgstr "This drive is private, sign in to view it"
+
+#: src/routes/SettingsAgent.tsx
+msgid ""
+"An Agent is a user, consisting of a Subject (its URL) and Private Key.\n"
+"Together, these can be used to edit data and sign Commits."
+msgstr ""
+"An Agent is a user, consisting of a Subject (its URL) and Private Key.\n"
+"Together, these can be used to edit data and sign Commits."
