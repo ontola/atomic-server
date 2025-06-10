@@ -85,7 +85,7 @@ export class AtomicServer {
 
   @func()
   async jsLint(): Promise<string> {
-    const depsContainer = this.jsBuild(this.source.directory('browser'));
+    const depsContainer = this.jsBuild();
     return depsContainer
       .withWorkdir('/app')
       .withExec(['pnpm', 'run', 'lint'])
@@ -94,7 +94,7 @@ export class AtomicServer {
 
   @func()
   async jsTest(): Promise<string> {
-    const depsContainer = this.jsBuild(this.source.directory('browser'));
+    const depsContainer = this.jsBuild();
     return depsContainer
       .withWorkdir('/app')
       .withExec(['pnpm', 'run', 'test'])
@@ -154,7 +154,7 @@ export class AtomicServer {
 
   @func()
   typedocPublish(@argument() netlifyAuthToken: Secret): Promise<string> {
-    const browserDir = this.jsBuild(this.source.directory('browser'));
+    const browserDir = this.jsBuild();
     return browserDir
       .withWorkdir('/app')
       .withSecretVariable('NETLIFY_AUTH_TOKEN', netlifyAuthToken)
@@ -163,9 +163,8 @@ export class AtomicServer {
   }
 
   @func()
-  private jsBuild(
-    @argument({ ignore: ['**/e2e'] }) source: Directory,
-  ): Container {
+  private jsBuild(): Container {
+    const browser = this.source.directory('browser');
     // Create a container with PNPM installed
     const pnpmContainer = dag
       .container()
@@ -177,21 +176,23 @@ export class AtomicServer {
 
     // Copy workspace files first for caching node_modules.
     const workspaceContainer = pnpmContainer
-      .withFile('/app/package.json', source.file('package.json'))
-      .withFile('/app/pnpm-lock.yaml', source.file('pnpm-lock.yaml'))
-      .withFile('/app/pnpm-workspace.yaml', source.file('pnpm-workspace.yaml'))
+      .withFile('/app/package.json', browser.file('package.json'))
+      .withFile('/app/pnpm-lock.yaml', browser.file('pnpm-lock.yaml'))
+      .withFile('/app/pnpm-workspace.yaml', browser.file('pnpm-workspace.yaml'))
       .withFile(
         '/app/data-browser/package.json',
-        source.file('data-browser/package.json'),
+        browser.file('data-browser/package.json'),
       )
-      .withFile('/app/lib/package.json', source.file('lib/package.json'))
-      .withFile('/app/react/package.json', source.file('react/package.json'))
-      .withFile('/app/svelte/package.json', source.file('svelte/package.json'))
-      .withFile('/app/cli/package.json', source.file('cli/package.json'))
+      .withFile('/app/lib/package.json', browser.file('lib/package.json'))
+      .withFile('/app/react/package.json', browser.file('react/package.json'))
+      .withFile('/app/svelte/package.json', browser.file('svelte/package.json'))
+      .withFile('/app/cli/package.json', browser.file('cli/package.json'))
       .withFile(
         '/app/create-template/package.json',
-        source.file('create-template/package.json'),
+        browser.file('create-template/package.json'),
       )
+      .withFile('/app/plugin/package.json', browser.file('plugin/package.json'))
+      .withFile('/app/e2e/package.json', browser.file('e2e/package.json'))
       // .withMountedCache('/app/.pnpm-store', dag.cacheVolume('pnpm-store'))
       .withExec([
         'sh',
@@ -199,8 +200,15 @@ export class AtomicServer {
         'yes | pnpm install --frozen-lockfile --shamefully-hoist',
       ]);
 
-    // Copy the source so installed dependencies persist in the container
-    const sourceContainer = workspaceContainer.withDirectory('/app', source);
+    // data-browser bootstrap JSON lives in repo-root lib/defaults. Vite resolves ../../../lib
+    // from data-browser/src to filesystem /lib if /app is only browser — do not mount there
+    // (it overwrites OS /lib). Mount alongside browser and resolve via alias in vite.config.
+    const sourceContainer = workspaceContainer
+      .withDirectory('/app', browser)
+      .withDirectory(
+        '/app/lib-defaults',
+        this.source.directory('lib/defaults'),
+      );
 
     // Build all packages since they may depend on each other's built artifacts
     return sourceContainer.withExec(['pnpm', 'run', 'build']);
@@ -238,9 +246,7 @@ export class AtomicServer {
       .withWorkdir('/code')
       .withExec(['cargo', 'fetch']);
 
-    const browserDir = this.jsBuild(this.source.directory('browser')).directory(
-      '/app/data-browser/dist',
-    );
+    const browserDir = this.jsBuild().directory('/app/data-browser/dist');
     const containerWithAssets = sourceContainer.withDirectory(
       '/code/server/assets_tmp',
       browserDir,
@@ -385,7 +391,7 @@ export class AtomicServer {
 
   @func()
   async endToEnd(@argument() netlifyAuthToken: Secret): Promise<string> {
-    const browserContainer = this.jsBuild(this.source.directory('browser'));
+    const browserContainer = this.jsBuild();
 
     // Setup Playwright container - debug and fix package manager
     const playwrightContainer = dag
