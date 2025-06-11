@@ -23,7 +23,7 @@ const getAgent = (): Agent | undefined => {
 
   if (!secret) return undefined;
 
-  return Agent.fromSecret(secret);
+  return Agent.fromSecret(secret, 'js');
 };
 
 export const store = new Store();

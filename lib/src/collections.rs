@@ -507,6 +507,7 @@ pub async fn create_collection_resource_for_class(
 mod test {
     use super::*;
     use crate::urls;
+    use crate::values::SubResource;
     use crate::Storelike;
 
     #[tokio::test]
@@ -556,6 +557,318 @@ mod test {
         resource_collection
             .get(urls::COLLECTION_INCLUDE_NESTED)
             .unwrap_err();
+    }
+
+    #[tokio::test]
+    async fn query_on_resource_arrays() {
+        let store = crate::db::Db::init_temp("query_on_resource_arrays")
+            .await
+            .unwrap();
+
+        store.populate().await.unwrap();
+        let mut resource1 = Resource::new_instance(urls::TAG, &store).await.unwrap();
+        resource1
+            .set(urls::SHORTNAME.into(), Value::Slug("tag1".into()), &store)
+            .await
+            .unwrap();
+        resource1
+            .push(
+                urls::ENDPOINT_RESULTS.into(),
+                SubResource::Subject("https://example.com/resource1".into()),
+                false,
+            )
+            .unwrap();
+
+        resource1.save(&store).await.unwrap();
+
+        let collection_builder = CollectionBuilder {
+            subject: "test_subject".into(),
+            property: Some(urls::ENDPOINT_RESULTS.into()),
+            value: Some("https://example.com/resource1".into()),
+            sort_by: None,
+            sort_desc: false,
+            page_size: DEFAULT_PAGE_SIZE,
+            current_page: 0,
+            name: None,
+            include_nested: false,
+            include_external: false,
+        };
+        let collection = Collection::collect_members(&store, collection_builder, &ForAgent::Sudo)
+            .await
+            .unwrap();
+
+        assert!(collection.members.contains(resource1.get_subject()));
+
+        resource1
+            .set(
+                urls::ENDPOINT_RESULTS.into(),
+                Value::ResourceArray(vec![SubResource::Subject(
+                    "https://example.com/resource3".into(),
+                )]),
+                &store,
+            )
+            .await
+            .unwrap();
+
+        resource1.save(&store).await.unwrap();
+
+        let collection_builder = CollectionBuilder {
+            subject: "test_subject".into(),
+            property: Some(urls::ENDPOINT_RESULTS.into()),
+            value: Some("https://example.com/resource1".into()),
+            sort_by: None,
+            sort_desc: false,
+            page_size: DEFAULT_PAGE_SIZE,
+            current_page: 0,
+            name: None,
+            include_nested: false,
+            include_external: false,
+        };
+
+        let collection = Collection::collect_members(&store, collection_builder, &ForAgent::Sudo)
+            .await
+            .unwrap();
+
+        assert_eq!(collection.members.contains(resource1.get_subject()), false);
+
+        resource1
+            .push(
+                urls::ENDPOINT_RESULTS.into(),
+                SubResource::Subject("https://example.com/resource2".into()),
+                false,
+            )
+            .unwrap();
+
+        resource1.save(&store).await.unwrap();
+
+        let collection_builder = CollectionBuilder {
+            subject: "test_subject".into(),
+            property: Some(urls::ENDPOINT_RESULTS.into()),
+            value: Some("https://example.com/resource2".into()),
+            sort_by: None,
+            sort_desc: false,
+            page_size: DEFAULT_PAGE_SIZE,
+            current_page: 0,
+            name: None,
+            include_nested: false,
+            include_external: false,
+        };
+
+        let collection = Collection::collect_members(&store, collection_builder, &ForAgent::Sudo)
+            .await
+            .unwrap();
+
+        assert!(collection.members.contains(resource1.get_subject()));
+    }
+
+    /// Tests that multiple consecutive push operations work correctly with collections.
+    /// This specifically tests the scenario where array length changes with each push,
+    /// ensuring the query index keys remain consistent.
+    #[tokio::test]
+    async fn query_on_resource_arrays_multiple_pushes() {
+        let store = crate::db::Db::init_temp("query_on_resource_arrays_multiple_pushes")
+            .await
+            .unwrap();
+
+        store.populate().await.unwrap();
+        let mut resource1 = Resource::new_instance(urls::TAG, &store).await.unwrap();
+        resource1
+            .set(urls::SHORTNAME.into(), Value::Slug("tag1".into()), &store)
+            .await
+            .unwrap();
+
+        // Push first item
+        resource1
+            .push(
+                urls::ENDPOINT_RESULTS.into(),
+                SubResource::Subject("https://example.com/item1".into()),
+                false,
+            )
+            .unwrap();
+        resource1.save(&store).await.unwrap();
+
+        // Should find resource when querying for item1
+        let collection = Collection::collect_members(
+            &store,
+            CollectionBuilder {
+                subject: "test_subject".into(),
+                property: Some(urls::ENDPOINT_RESULTS.into()),
+                value: Some("https://example.com/item1".into()),
+                sort_by: None,
+                sort_desc: false,
+                page_size: DEFAULT_PAGE_SIZE,
+                current_page: 0,
+                name: None,
+                include_nested: false,
+                include_external: false,
+            },
+            &ForAgent::Sudo,
+        )
+        .await
+        .unwrap();
+        assert!(
+            collection.members.contains(resource1.get_subject()),
+            "Should find resource after first push"
+        );
+
+        // Push second item (array length changes from 1 to 2)
+        resource1
+            .push(
+                urls::ENDPOINT_RESULTS.into(),
+                SubResource::Subject("https://example.com/item2".into()),
+                false,
+            )
+            .unwrap();
+        resource1.save(&store).await.unwrap();
+
+        // Should still find resource when querying for item1
+        let collection = Collection::collect_members(
+            &store,
+            CollectionBuilder {
+                subject: "test_subject".into(),
+                property: Some(urls::ENDPOINT_RESULTS.into()),
+                value: Some("https://example.com/item1".into()),
+                sort_by: None,
+                sort_desc: false,
+                page_size: DEFAULT_PAGE_SIZE,
+                current_page: 0,
+                name: None,
+                include_nested: false,
+                include_external: false,
+            },
+            &ForAgent::Sudo,
+        )
+        .await
+        .unwrap();
+        assert!(
+            collection.members.contains(resource1.get_subject()),
+            "Should still find resource for item1 after second push"
+        );
+
+        // Should also find resource when querying for item2
+        let collection = Collection::collect_members(
+            &store,
+            CollectionBuilder {
+                subject: "test_subject".into(),
+                property: Some(urls::ENDPOINT_RESULTS.into()),
+                value: Some("https://example.com/item2".into()),
+                sort_by: None,
+                sort_desc: false,
+                page_size: DEFAULT_PAGE_SIZE,
+                current_page: 0,
+                name: None,
+                include_nested: false,
+                include_external: false,
+            },
+            &ForAgent::Sudo,
+        )
+        .await
+        .unwrap();
+        assert!(
+            collection.members.contains(resource1.get_subject()),
+            "Should find resource for item2 after second push"
+        );
+
+        // Push third item (array length changes from 2 to 3)
+        resource1
+            .push(
+                urls::ENDPOINT_RESULTS.into(),
+                SubResource::Subject("https://example.com/item3".into()),
+                false,
+            )
+            .unwrap();
+        resource1.save(&store).await.unwrap();
+
+        // Should find resource for all three items
+        for item in ["item1", "item2", "item3"] {
+            let collection = Collection::collect_members(
+                &store,
+                CollectionBuilder {
+                    subject: "test_subject".into(),
+                    property: Some(urls::ENDPOINT_RESULTS.into()),
+                    value: Some(format!("https://example.com/{}", item)),
+                    sort_by: None,
+                    sort_desc: false,
+                    page_size: DEFAULT_PAGE_SIZE,
+                    current_page: 0,
+                    name: None,
+                    include_nested: false,
+                    include_external: false,
+                },
+                &ForAgent::Sudo,
+            )
+            .await
+            .unwrap();
+            assert!(
+                collection.members.contains(resource1.get_subject()),
+                "Should find resource for {} after third push",
+                item
+            );
+        }
+
+        // Now set to replace with completely different items
+        resource1
+            .set(
+                urls::ENDPOINT_RESULTS.into(),
+                Value::ResourceArray(vec![SubResource::Subject(
+                    "https://example.com/newitem".into(),
+                )]),
+                &store,
+            )
+            .await
+            .unwrap();
+        resource1.save(&store).await.unwrap();
+
+        // Old items should no longer be found
+        for item in ["item1", "item2", "item3"] {
+            let collection = Collection::collect_members(
+                &store,
+                CollectionBuilder {
+                    subject: "test_subject".into(),
+                    property: Some(urls::ENDPOINT_RESULTS.into()),
+                    value: Some(format!("https://example.com/{}", item)),
+                    sort_by: None,
+                    sort_desc: false,
+                    page_size: DEFAULT_PAGE_SIZE,
+                    current_page: 0,
+                    name: None,
+                    include_nested: false,
+                    include_external: false,
+                },
+                &ForAgent::Sudo,
+            )
+            .await
+            .unwrap();
+            assert!(
+                !collection.members.contains(resource1.get_subject()),
+                "Should NOT find resource for {} after set replacement",
+                item
+            );
+        }
+
+        // New item should be found
+        let collection = Collection::collect_members(
+            &store,
+            CollectionBuilder {
+                subject: "test_subject".into(),
+                property: Some(urls::ENDPOINT_RESULTS.into()),
+                value: Some("https://example.com/newitem".into()),
+                sort_by: None,
+                sort_desc: false,
+                page_size: DEFAULT_PAGE_SIZE,
+                current_page: 0,
+                name: None,
+                include_nested: false,
+                include_external: false,
+            },
+            &ForAgent::Sudo,
+        )
+        .await
+        .unwrap();
+        assert!(
+            collection.members.contains(resource1.get_subject()),
+            "Should find resource for newitem after set"
+        );
     }
 
     #[tokio::test]

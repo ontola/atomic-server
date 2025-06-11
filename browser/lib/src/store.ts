@@ -357,6 +357,8 @@ export class Store {
       method?: 'GET' | 'POST';
       /** HTTP Body for POSTing */
       body?: ArrayBuffer | string;
+      /** Always override the existing resource with the remote version, even if the commits are the same */
+      forceOverride?: boolean;
     } = {},
   ): Promise<Resource<C>> {
     if (opts.setLoading) {
@@ -393,7 +395,9 @@ export class Store {
         },
       );
 
-      this.addResources(createdResources);
+      this.addResources(createdResources, {
+        skipCommitCompare: !!opts.forceOverride,
+      });
     }
 
     return this.resources.get(subject)!;

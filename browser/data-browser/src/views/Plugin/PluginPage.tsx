@@ -21,10 +21,11 @@ import type { ResourcePageProps } from '@views/ResourcePage';
 import type { JSONSchema7 } from 'ai';
 import { constructOpenURL } from '@helpers/navigation';
 import { lazy, useId, useState } from 'react';
-import { FaFloppyDisk, FaTrash } from 'react-icons/fa6';
+import { FaFloppyDisk, FaGear, FaTrash } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import toast from 'react-hot-toast';
 import { ConfigReference } from './ConfigReference';
+import { AssignPermissions } from './AssignPermissions';
 
 const UpdatePluginButton = lazy(
   () => import('@chunks/Plugins/UpdatePluginButton'),
@@ -48,7 +49,7 @@ export const PluginPage: React.FC<ResourcePageProps<Server.Plugin>> = ({
 
   return (
     <ContainerNarrow>
-      <Column>
+      <Column gap='2rem'>
         <div>
           <Row justify='space-between'>
             <PluginName>{title}</PluginName>
@@ -56,41 +57,54 @@ export const PluginPage: React.FC<ResourcePageProps<Server.Plugin>> = ({
           </Row>
           <PluginAuthor>by {resource.props.pluginAuthor}</PluginAuthor>
         </div>
-        {canWrite && (
-          <Row justify='flex-end'>
-            <UpdatePluginButton plugin={resource} />
-            <Button alert onClick={() => setShowUninstallDialog(true)}>
-              <FaTrash />
-              Uninstall
+        <Column>
+          {canWrite && (
+            <Row justify='flex-end'>
+              <UpdatePluginButton plugin={resource} />
+              <Button alert onClick={() => setShowUninstallDialog(true)}>
+                <FaTrash />
+                Uninstall
+              </Button>
+            </Row>
+          )}
+          {resource.props.description && (
+            <DescriptionWrapper aria-label='Plugin Description'>
+              <Markdown text={resource.props.description!} />
+            </DescriptionWrapper>
+          )}
+        </Column>
+        {canWrite && <AssignPermissions plugin={resource} />}
+        <Column>
+          <Row center justify='space-between'>
+            <h3 id={configLabelId}>
+              <Row gap='0.5ch' center>
+                <FaGear />
+                Config
+              </Row>
+            </h3>
+            <Button
+              disabled={!configValid || !resource.hasUnsavedChanges()}
+              onClick={() => resource.save()}
+            >
+              <FaFloppyDisk />
+              Save
             </Button>
           </Row>
-        )}
-        {resource.props.description && (
-          <DescriptionWrapper>
-            <Markdown text={resource.props.description!} />
-          </DescriptionWrapper>
-        )}
-        <Row center justify='space-between'>
-          <Label id={configLabelId}>Config</Label>
-          <Button disabled={!configValid} onClick={() => resource.save()}>
-            <FaFloppyDisk />
-            Save
-          </Button>
-        </Row>
-        <JSONEditor
-          labelId={configLabelId}
-          initialValue={JSON.stringify(config, null, 2)}
-          onChange={v => {
-            try {
-              setConfig(JSON.parse(v));
-            } catch (e) {
-              // Do nothing
-            }
-          }}
-          schema={resource.props.jsonSchema as JSONSchema7}
-          showErrorStyling={!configValid}
-          onValidationChange={setConfigValid}
-        />
+          <JSONEditor
+            labelId={configLabelId}
+            initialValue={JSON.stringify(config, null, 2)}
+            onChange={v => {
+              try {
+                setConfig(JSON.parse(v));
+              } catch (e) {
+                // Do nothing
+              }
+            }}
+            schema={resource.props.jsonSchema as JSONSchema7}
+            showErrorStyling={!configValid}
+            onValidationChange={setConfigValid}
+          />
+        </Column>
         {resource.props.jsonSchema && (
           <ConfigReference schema={resource.props.jsonSchema as JSONSchema7} />
         )}
@@ -119,7 +133,7 @@ const PluginName = styled.span`
   font-size: 1.2rem;
 `;
 
-const DescriptionWrapper = styled.div`
+const DescriptionWrapper = styled.section`
   background-color: ${p => p.theme.colors.bg1};
   padding: ${p => p.theme.size()};
   border-radius: ${p => p.theme.radius};
@@ -129,8 +143,4 @@ const DescriptionWrapper = styled.div`
 
 const PluginAuthor = styled.span`
   color: ${p => p.theme.colors.textLight};
-`;
-
-const Label = styled.label`
-  font-weight: bold;
 `;

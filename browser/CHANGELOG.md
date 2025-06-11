@@ -44,6 +44,7 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 - BREAKING CHANGE: `useDebounce` and `useDebouncedCallback` are no longer exported.
 - BREAKING CHANGE: @tomic/react now requires React 19.2.0 or above.
 - Added `useDebouncedSave` hook.
+- Added `VirtualizedCollectionList` component.
 - Add a cjs build.
 
 ### @tomic/cli

@@ -16,18 +16,20 @@ export const ConfigReference: React.FC<ConfigReferenceProps> = ({ schema }) => {
   }
 
   return (
-    <Details noIndent title={<Title>Config Reference</Title>}>
-      <ReferenceContent gap='1rem'>
-        {Object.entries(properties).map(([key, value]) => (
-          <PropertyRow
-            key={key}
-            name={key}
-            definition={value}
-            required={schema.required?.includes(key)}
-          />
-        ))}
-      </ReferenceContent>
-    </Details>
+    <Column>
+      <Details noIndent title={<Title>Config Reference</Title>}>
+        <ReferenceContent gap='1rem'>
+          {Object.entries(properties).map(([key, value]) => (
+            <PropertyRow
+              key={key}
+              name={key}
+              definition={value}
+              required={schema.required?.includes(key)}
+            />
+          ))}
+        </ReferenceContent>
+      </Details>
+    </Column>
   );
 };
 

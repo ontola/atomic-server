@@ -12,6 +12,7 @@ export interface QueryFilter {
 
 export interface CollectionParams extends QueryFilter {
   page_size: string;
+  include_nested: boolean;
 }
 
 export interface CollectionOptions {

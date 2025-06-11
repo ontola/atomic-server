@@ -11,6 +11,7 @@ import { Spinner } from '@components/Spinner';
 import { Card } from '@components/Card';
 import { AtomicLink } from '@components/AtomicLink';
 import styled from 'styled-components';
+import { TableList } from '@components/TableList';
 
 const NewPluginButton = lazy(() => import('@chunks/Plugins/NewPluginButton'));
 interface PluginListProps {
@@ -60,20 +61,6 @@ const PluginItem: React.FC<{ subject: string }> = ({ subject }) => {
     </tr>
   );
 };
-
-const TableList = styled.table`
-  width: 100%;
-  border-collapse: collapse;
-
-  td {
-    padding: ${p => p.theme.size(2)};
-  }
-  tr {
-    &:not(:last-child) {
-      border-bottom: 1px solid ${p => p.theme.colors.bg2};
-    }
-  }
-`;
 
 const NoPluginsInstalled = styled.p`
   text-align: center;

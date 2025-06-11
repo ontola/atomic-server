@@ -42,13 +42,17 @@ export function useCreatePlugin() {
 
     const [fileSubject] = await store.uploadFiles([file], plugin.subject);
 
+    // Setting the file triggers the installation on the server.
     await plugin.set(server.properties.pluginFile, fileSubject);
     await plugin.save();
+
+    // We refresh the resource so we can see the dynamic plugin-agent property that was added by the server.
+    await plugin.refresh();
 
     return plugin;
   };
 
-  const installPlugin = async (
+  const addPluginToDrive = async (
     plugin: Resource<Server.Plugin>,
     drive: Resource<Server.Drive>,
   ): Promise<void> => {
@@ -105,7 +109,7 @@ export function useCreatePlugin() {
 
   return {
     createPluginResource,
-    installPlugin,
+    addPluginToDrive,
     uninstallPlugin,
     updatePlugin,
   };

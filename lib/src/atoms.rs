@@ -34,7 +34,8 @@ impl Atom {
 
     /// Converts one Atom to a series of stringified values that can be indexed.
     pub fn to_indexable_atoms(&self) -> Vec<IndexAtom> {
-        let sort_value = self.value.to_sortable_string();
+        // Using sort_value causes issues but we really need to look at how to do this properly.
+        // let sort_value = self.value.to_sortable_string();
         let index_atoms = match &self.value.to_reference_index_strings() {
             Some(v) => v,
             None => return vec![],
@@ -42,7 +43,7 @@ impl Atom {
         .iter()
         .map(|v| IndexAtom {
             ref_value: v.into(),
-            sort_value: sort_value.clone(),
+            sort_value: v.into(),
             subject: self.subject.clone(),
             property: self.property.clone(),
         })

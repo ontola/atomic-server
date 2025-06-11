@@ -45,6 +45,7 @@ msgstr "No hay clases"
 #: src/views/Drive/NewPluginButton.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/OntologyPage/NewPropertyButton.tsx
+#: src/views/Plugin/AssignPermissions.tsx
 #: src/views/TablePage/PropertyForm/ExternalPropertyDialog.tsx
 #: src/views/TablePage/PropertyForm/NewPropertyDialog.tsx
 msgid "Cancel"
@@ -1939,10 +1940,12 @@ msgid "Read more about permissions in the{0} <0>Atomic Data Docs</0>"
 msgstr "Lee más sobre los permisos en la{0} <0>Documentación de Atomic Data</0>"
 
 #: src/routes/Share/ShareRoute.tsx
+#: src/views/Plugin/AssignPermissions.tsx
 msgid "Read"
 msgstr "Leer"
 
 #: src/routes/Share/ShareRoute.tsx
+#: src/views/Plugin/AssignPermissions.tsx
 msgid "Write"
 msgstr "Escribir"
 
@@ -2513,6 +2516,7 @@ msgstr "Inicializando recurso"
 
 #: src/chunks/RTE/CollaborativeEditor.tsx
 #: src/components/forms/NewForm/NewFormTitle.tsx
+#: src/views/Plugin/AssignPermissions.tsx
 msgid "Resource"
 msgstr "Recurso"
 
@@ -3234,7 +3238,6 @@ msgid "<0/> Uninstall"
 msgstr "<0/> Desinstalar"
 
 #: src/chunks/Plugins/NewPluginButton.tsx
-#: src/views/Plugin/PluginPage.tsx
 msgid "Config"
 msgstr "Configuración"
 
@@ -3441,3 +3444,29 @@ msgid ""
 msgstr ""
 "Un agente es un usuario, que consiste en un Asunto (su URL) y una Clave Privada.\n"
 "Juntos, estos pueden ser usados para editar datos y firmar Commits."
+
+#~ msgid "Assign Permissions"
+#~ msgstr "Asignar Permisos"
+
+#: src/views/Plugin/AssignPermissions.tsx
+msgid "Pick a resource"
+msgstr "Elige un recurso"
+
+#: src/views/Plugin/AssignPermissions.tsx
+msgid "Assign"
+msgstr "Asignar"
+
+#~ msgid "Give full permissons <0/>"
+#~ msgstr "Dar permisos completos <0/>"
+
+#: src/views/Plugin/AssignPermissions.tsx
+msgid "<0/> Assign Permissions"
+msgstr "<0/> Asignar Permisos"
+
+#: src/views/Plugin/PluginPage.tsx
+msgid "<0/> Config"
+msgstr "<0/> Configuración"
+
+#: src/views/Plugin/PluginPage.tsx
+msgid "Plugin Description"
+msgstr "Descripción del Plugin"

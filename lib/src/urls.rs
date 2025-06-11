@@ -25,6 +25,7 @@ pub const ENDPOINT_RESPONSE: &str =
     "https://atomicdata.dev/ontology/server/class/endpoint-response";
 pub const TABLE: &str = "https://atomicdata.dev/classes/Table";
 pub const PLUGIN: &str = "https://atomicdata.dev/classes/Plugin";
+pub const TAG: &str = "https://atomicdata.dev/classes/Tag";
 
 // Properties
 pub const SHORTNAME: &str = "https://atomicdata.dev/properties/shortname";

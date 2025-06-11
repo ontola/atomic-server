@@ -6,66 +6,43 @@ import {
   useArray,
   useCollection,
   useResource,
-  useStore,
+  VirtualizedCollectionList,
 } from '@tomic/react';
 import { Details } from '../Details';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { getIconForClass } from '../../helpers/iconMap';
 import { styled } from 'styled-components';
 
-const shouldBeRendered = (resource: Resource) =>
+const defaultShouldBeRendered = (resource: Resource) =>
   resource.hasClasses(dataBrowser.classes.folder) ||
   resource.hasClasses(server.classes.drive);
 
 interface ParentPickerItemProps {
   subject: string;
   selectedValue: string | undefined;
-  inialOpen?: boolean;
+  initialOpen?: boolean;
+  shouldBeRendered?: (resource: Resource) => boolean;
   onClick: (subject: string) => void;
 }
 
 export const ParentPickerItem: React.FC<ParentPickerItemProps> = ({
   subject,
-  ...props
-}) => {
-  const resource = useResource(subject);
-
-  if (
-    !resource.hasClasses(dataBrowser.classes.folder) &&
-    !resource.hasClasses(server.classes.drive)
-  ) {
-    return null;
-  }
-
-  return <InnerItem subject={subject} {...props} />;
-};
-
-const InnerItem = ({
-  subject,
   selectedValue,
-  inialOpen,
+  initialOpen,
+  shouldBeRendered = defaultShouldBeRendered,
   onClick,
-}: ParentPickerItemProps) => {
-  const store = useStore();
-  const { collection } = useCollection({
-    property: core.properties.parent,
-    value: subject,
-  });
+}) => {
+  const { collection } = useCollection(
+    {
+      property: core.properties.parent,
+      value: subject,
+    },
+    { includeNested: true },
+  );
 
-  const [children, setChildren] = useState<string[]>([]);
+  const [open, setOpen] = useState(initialOpen);
 
-  useEffect(() => {
-    collection.getAllMembers().then(async (members: string[]) => {
-      const resources = await Promise.all(
-        members.map(s => store.getResource(s)),
-      );
-      const filtered = resources.filter(shouldBeRendered);
-
-      setChildren(filtered.map(r => r.subject));
-    });
-  }, [collection]);
-
-  if (children.length === 0) {
+  if (collection.totalMembers === 0) {
     return (
       <Title
         indented
@@ -78,8 +55,9 @@ const InnerItem = ({
 
   return (
     <Details
-      initialState={inialOpen}
-      open={inialOpen}
+      initialState={initialOpen}
+      open={open}
+      onStateToggle={setOpen}
       title={
         <Title
           subject={subject}
@@ -88,14 +66,25 @@ const InnerItem = ({
         />
       }
     >
-      {children.map(child => (
-        <ParentPickerItem
-          key={child}
-          subject={child}
-          selectedValue={selectedValue}
-          onClick={onClick}
-        />
-      ))}
+      {open && (
+        <VirtualizedCollectionList collection={collection}>
+          {({ resource }) => {
+            if (resource.loading || !shouldBeRendered(resource)) {
+              return null;
+            }
+
+            return (
+              <ParentPickerItem
+                key={resource.subject}
+                subject={resource.subject}
+                selectedValue={selectedValue}
+                onClick={onClick}
+                shouldBeRendered={shouldBeRendered}
+              />
+            );
+          }}
+        </VirtualizedCollectionList>
+      )}
     </Details>
   );
 };
@@ -140,6 +129,11 @@ const FolderButton = styled.button<{ indented?: boolean; selected?: boolean }>`
   margin-inline-start: ${p => (p.indented ? '2rem' : '0')};
   border-radius: ${p => p.theme.radius};
   user-select: none;
+  text-align: start;
+
+  & svg {
+    flex-shrink: 0;
+  }
 
   &:hover {
     background-color: ${p => p.theme.colors.bg1};

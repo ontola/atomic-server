@@ -1003,6 +1003,7 @@ export class Resource<C extends OptionalClass = any> {
   public async refresh(): Promise<void> {
     await this.store.fetchResourceFromServer(this.subject, {
       noWebSocket: true,
+      forceOverride: true,
     });
   }
 
