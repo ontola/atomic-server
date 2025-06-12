@@ -46,7 +46,6 @@ import { useMediaQuery } from '../hooks/useMediaQuery';
 import { isRunningInTauri } from '../helpers/tauri';
 import { openSearchOverlay } from './OverlayContainer';
 
-
 export type NavBarProps = {
   resource?: Resource;
 };

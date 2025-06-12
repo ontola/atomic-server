@@ -52,7 +52,9 @@ export function queryMatches(query: string, haystack: string): boolean {
 /** Extracts text content from React children without rendering them to DOM.
  *  Walks the React element tree and collects string content. */
 function extractTextFromChildren(node: ReactNode): string {
-  if (node == null || typeof node === 'boolean') return '';
+  if (node === null || node === undefined || typeof node === 'boolean') {
+    return '';
+  }
   if (typeof node === 'string' || typeof node === 'number') return String(node);
 
   if (Array.isArray(node)) {

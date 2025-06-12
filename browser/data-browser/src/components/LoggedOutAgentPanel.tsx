@@ -43,9 +43,7 @@ export function LoggedOutAgentPanel({
     <Column gap='2rem'>
       <Column gap='1rem'>
         <h3>Create a new identity</h3>
-        <p>
-          Generate a new self-sovereign Agent and Drive on this server.
-        </p>
+        <p>Generate a new self-sovereign Agent and Drive on this server.</p>
         <Button type='button' onClick={onCreateIdentityClick}>
           Create new identity
         </Button>

@@ -480,8 +480,8 @@ function ProfileStep({
     <Column gap='1rem'>
       <h3>Set your profile name!</h3>
       <p>
-        Note that this is only set for this specific
-        server, but you can use your secret also on other servers.
+        Note that this is only set for this specific server, but you can use
+        your secret also on other servers.
       </p>
       <form onSubmit={handleSave}>
         <Column gap='1rem'>

@@ -83,7 +83,6 @@ export function RootWelcomeGate({ subject }: Props) {
             loading={loading}
             fieldId='root-welcome-agent-secret'
           />
-
         </Column>
       </Inner>
     </Shell>

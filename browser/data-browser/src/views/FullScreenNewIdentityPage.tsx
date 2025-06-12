@@ -29,11 +29,9 @@ export const FullScreenNewIdentityPage: React.FC = () => {
         <Inner>
           <Column gap='1.5rem'>
             <header>
-              <h1>Set up your identity</h1>
-              <p>
-                On <strong>{host}</strong>. You already chose to create a new
-                identity — continue with your profile and drive below.
-              </p>
+              <h1>
+                Set up your Agent on <strong>{host}</strong>.
+              </h1>
             </header>
             <NewIdentitySection
               autoStart

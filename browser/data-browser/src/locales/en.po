@@ -4097,14 +4097,19 @@ msgstr "Welcome to AtomicServer"
 #~ "You are connected to <0/>. There is no default\n"
 #~ "data space at the site root yet, or you need to sign in."
 
-#: src/views/FullScreenNewIdentityPage.tsx
-msgid "Set up your identity"
-msgstr "Set up your identity"
+#~ msgid "Set up your identity"
+#~ msgstr "Set up your identity"
+
+#~ msgid ""
+#~ "On <0/>. You already chose to create a new\n"
+#~ "identity — continue with your profile and drive below."
+#~ msgstr ""
+#~ "On <0/>. You already chose to create a new\n"
+#~ "identity — continue with your profile and drive below."
+
+#~ msgid "On <0/>."
+#~ msgstr "On <0/>."
 
 #: src/views/FullScreenNewIdentityPage.tsx
-msgid ""
-"On <0/>. You already chose to create a new\n"
-"identity — continue with your profile and drive below."
-msgstr ""
-"On <0/>. You already chose to create a new\n"
-"identity — continue with your profile and drive below."
+msgid "Set up your Agent on <0/>."
+msgstr "Set up your Agent on <0/>."

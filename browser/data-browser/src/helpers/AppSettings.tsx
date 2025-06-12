@@ -8,7 +8,13 @@ import {
   type JSX,
 } from 'react';
 import { DarkModeOption, useDarkMode } from './useDarkMode';
-import { useCurrentAgent, useServerURL, Agent, useStore, StoreEvents } from '@tomic/react';
+import {
+  useCurrentAgent,
+  useServerURL,
+  Agent,
+  useStore,
+  StoreEvents,
+} from '@tomic/react';
 import toast from 'react-hot-toast';
 import { SIDEBAR_TOGGLE_WIDTH } from '../components/SideBar';
 import { serverURLStorage } from './serverURLStorage';

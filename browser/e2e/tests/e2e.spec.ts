@@ -118,7 +118,9 @@ test.describe('data-browser', async () => {
     // Focus should then move to the chat input.
     await page.keyboard.type('Test Chat');
     await page.keyboard.press('Enter');
-    await expect(page.getByRole('heading', { name: 'Test Chat' })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Test Chat' }),
+    ).toBeVisible();
     await expect(inputLocator(page)).toBeFocused();
     const teststring = `My test: ${timestamp()}`;
     await inputLocator(page).fill(teststring);

@@ -13,7 +13,8 @@
       "@views/*": ["./src/views/*"],
       "@hooks/*": ["./src/hooks/*"],
       "@helpers/*": ["./src/helpers/*"],
-      "@chunks/*": ["./src/chunks/*"]
+      "@chunks/*": ["./src/chunks/*"],
+      "@repo-lib-defaults/*": ["../../lib/defaults/*"]
     }
   },
   "include": ["./src"]
