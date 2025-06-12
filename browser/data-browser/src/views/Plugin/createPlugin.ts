@@ -7,6 +7,7 @@ import {
   type Resource,
   type Server,
 } from '@tomic/react';
+import toast from 'react-hot-toast';
 
 interface CreatePluginProps {
   metadata: PluginMetadata;
@@ -29,12 +30,9 @@ export function useCreatePlugin() {
       parent: drive.subject,
       propVals: {
         [core.properties.name]: metadata.name,
-        [core.properties.description]: metadata.description,
-        [server.properties.version]: metadata.version,
-        [server.properties.pluginAuthor]: metadata.author,
         [server.properties.namespace]: metadata.namespace,
+        [server.properties.version]: metadata.version,
         [server.properties.config]: config,
-        [server.properties.jsonSchema]: metadata.configSchema as JSONValue,
       },
     });
 
@@ -44,10 +42,11 @@ export function useCreatePlugin() {
 
     // Setting the file triggers the installation on the server.
     await plugin.set(server.properties.pluginFile, fileSubject);
+
     await plugin.save();
+    await plugin.refresh();
 
     // We refresh the resource so we can see the dynamic plugin-agent property that was added by the server.
-    await plugin.refresh();
 
     return plugin;
   };
@@ -91,20 +90,20 @@ export function useCreatePlugin() {
 
     const [fileSubject] = await store.uploadFiles([file], plugin.subject);
 
-    await plugin.set(server.properties.version, metadata.version);
-    await plugin.set(core.properties.description, metadata.description);
-    await plugin.set(server.properties.pluginAuthor, metadata.author);
-    await plugin.set(
-      server.properties.jsonSchema,
-      metadata.configSchema as JSONValue,
-    );
     await plugin.set(server.properties.pluginFile, fileSubject);
 
     if (updatedConfig) {
       await plugin.set(server.properties.config, updatedConfig);
     }
 
-    await plugin.save();
+    try {
+      await plugin.save();
+    } catch (err) {
+      toast.error(err.message);
+    }
+
+    // Refresh so we see any new dynamic properties if those were added.
+    await plugin.refresh();
   };
 
   return {

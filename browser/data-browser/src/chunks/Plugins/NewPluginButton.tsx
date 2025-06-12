@@ -10,6 +10,8 @@ import Markdown from '@components/datatypes/Markdown';
 import { useCreatePlugin } from '@views/Plugin/createPlugin';
 import { readZip, type PluginMetadata } from './plugins';
 import { ConfigReference } from '@views/Plugin/ConfigReference';
+import { PluginPermissions } from '@views/Plugin/PluginPermissions';
+import toast from 'react-hot-toast';
 
 interface NewPluginButtonProps {
   drive: Resource<Server.Drive>;
@@ -50,9 +52,10 @@ const NewPluginButton: React.FC<NewPluginButtonProps> = ({ drive }) => {
           config,
         });
         await addPluginToDrive(plugin, drive);
+        reset();
       } catch (err) {
-        setError(`Failed to install plugin, error: ${err.message}`);
-      } finally {
+        toast.error('Failed to install plugin');
+        console.error(err);
         reset();
       }
     },
@@ -113,6 +116,7 @@ const NewPluginButton: React.FC<NewPluginButtonProps> = ({ drive }) => {
                   <Markdown text={metadata.description} />
                 </DescriptionWrapper>
               )}
+              <PluginPermissions permissions={metadata.permissions} />
 
               <Label id={configLabelId}>Config</Label>
               <JSONEditor

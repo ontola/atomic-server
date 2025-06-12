@@ -19,8 +19,9 @@ import { FaPlus, FaShield } from 'react-icons/fa6';
 import { DashedButton } from '@views/OntologyPage/DashedButton';
 import { styled } from 'styled-components';
 
-interface AssignPermissionsProps {
+interface AssignRightsProps {
   plugin: Resource<Server.Plugin>;
+  disabled?: boolean;
 }
 
 const shouldRender = (resource: Resource) => {
@@ -31,8 +32,9 @@ const shouldRender = (resource: Resource) => {
   ].every(c => !resource.hasClasses(c));
 };
 
-export const AssignPermissions: React.FC<AssignPermissionsProps> = ({
+export const AssignRights: React.FC<AssignRightsProps> = ({
   plugin,
+  disabled,
 }) => {
   const store = useStore();
   const [selectedResource, setSelectedResource] = useState<string>();
@@ -70,10 +72,10 @@ export const AssignPermissions: React.FC<AssignPermissionsProps> = ({
       <h3>
         <Row gap='0.5ch'>
           <FaShield />
-          Assign Permissions
+          Assign Rights
         </Row>
       </h3>
-      <StyledTableList>
+      <StyledTableList disabled={disabled}>
         <thead>
           <tr>
             <ResourceHeading>Resource</ResourceHeading>
@@ -132,7 +134,10 @@ const ResourceHeading = styled.th`
   text-align: start;
 `;
 
-const StyledTableList = styled(TableList)`
+const StyledTableList = styled(TableList)<{ disabled?: boolean }>`
+  opacity: ${p => (p.disabled ? 0.5 : 1)};
+  pointer-events: ${p => (p.disabled ? 'none' : 'auto')};
+
   & th {
     font-weight: normal;
   }

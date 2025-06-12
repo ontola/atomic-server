@@ -14,7 +14,7 @@ use atomic_lib::{
 use tracing::{error, info};
 use zip::ZipArchive;
 
-use crate::plugins::wasm::{install_plugin, uninstall_plugin};
+use crate::plugins::wasm::{install_or_update_plugin, uninstall_plugin};
 
 async fn get_parent_drive(resource: &Resource, store: &Db) -> AtomicResult<String> {
     let Ok(Value::AtomicUrl(parent_subject)) = resource.get(urls::PARENT) else {
@@ -200,7 +200,7 @@ async fn do_install_plugin(
     let mut zip_file = ZipArchive::new(std::io::Cursor::new(bytes))
         .map_err(|e| AtomicError::from(format!("Failed to create zip archive: {}", e)))?;
 
-    install_plugin(
+    install_or_update_plugin(
         &mut zip_file,
         &parent_subject,
         resource.get_subject(),
@@ -242,6 +242,7 @@ fn on_before_commit(
                     "New plugin file found for plugin {}, installing...",
                     resource.get_subject()
                 );
+
                 do_install_plugin(
                     resource,
                     &parent_subject,
@@ -276,13 +277,59 @@ fn on_resource_get(context: GetExtenderContext) -> BoxFuture<AtomicResult<Resour
 
         let agent = Agent::from_secret(&meta.agent_secret)?;
 
+        // Populate the resource with the data from the plugin manifest.
+        db_resource.set_unsafe(
+            urls::PLUGIN_AGENT.to_string(),
+            Value::AtomicUrl(agent.subject.clone()),
+        );
+
         db_resource
             .set(
-                urls::PLUGIN_AGENT.to_string(),
-                Value::AtomicUrl(agent.subject.clone()),
+                urls::VERSION.to_string(),
+                Value::String(meta.manifest.version.clone()),
                 store,
             )
             .await?;
+
+        if let Some(description) = meta.manifest.description {
+            db_resource
+                .set(
+                    urls::DESCRIPTION.to_string(),
+                    Value::Markdown(description),
+                    store,
+                )
+                .await?;
+        }
+
+        if let Some(author) = meta.manifest.author {
+            db_resource
+                .set(
+                    urls::PLUGIN_AUTHOR.to_string(),
+                    Value::String(author),
+                    store,
+                )
+                .await?;
+        }
+
+        if let Some(permissions) = meta.manifest.permissions {
+            db_resource
+                .set(
+                    urls::PLUGIN_PERMISSIONS.to_string(),
+                    Value::JSON(serde_json::to_value(permissions)?),
+                    store,
+                )
+                .await?;
+        }
+
+        if let Some(json_schema) = meta.manifest.config_schema {
+            db_resource
+                .set(
+                    urls::JSON_SCHEMA.to_string(),
+                    Value::JSON(serde_json::to_value(json_schema)?),
+                    store,
+                )
+                .await?;
+        }
 
         Ok(db_resource.clone().into())
     })

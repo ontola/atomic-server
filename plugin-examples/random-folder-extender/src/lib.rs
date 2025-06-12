@@ -112,6 +112,12 @@ impl ClassExtender for RandomFolderExtender {
             .map_err(|_| "Could not parse plugin config".to_string())?;
         let client = Client::new();
 
+        // verify if the discord webhook url is valid
+        let Ok(_) = url::Url::parse(&config.discord_webhook_url) else {
+            // If the discord webhook url is not valid, we don't send the message.
+            return Ok(());
+        };
+
         let body = DiscordWebhookBody {
             content: config
                 .update_message
@@ -119,14 +125,13 @@ impl ClassExtender for RandomFolderExtender {
                 .replace("{{subject}}", &resource.subject),
         };
 
-        let res = client
+        client
             .post(&config.discord_webhook_url)
             .header("Content-Type", "application/json")
             .body(serde_json::to_string(&body).map_err(|e| e.to_string())?)
             .send()
             .map_err(|e| e.to_string())?;
 
-        println!("Response: {:?}", res.status_code());
         Ok(())
     }
 }

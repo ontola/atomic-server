@@ -14,21 +14,21 @@ Simply implement the `ClassExtender` trait on a struct and export it using the `
 ```rust
 use atomic_plugin::{ClassExtender, Commit, Resource};
 
-struct FolderExtender;
+struct MyExtender;
 
-impl ClassExtender for FolderExtender {
+impl ClassExtender for MyExtender {
   // REQUIRED: Returns the class that this class extender applies to.
-    fn class_url() -> String {
-        "https://atomicdata.dev/classes/Folder".to_string()
+    fn class_url() -> Vec<String> {
+        vec!["https://atomicdata.dev/classes/Folder".to_string()]
     }
 
     // Prevent commits where the name contains "Tailwind CSS".
-    fn before_commit(commit: &Commit, _snapshot: Option<&Resource>) -> Result<(), String> {
+    fn before_commit(commit: &Commit, _snapshot: &Resource) -> Result<(), String> {
         let Some(set) = &commit.set else {
             return Ok(());
         };
 
-        let Some(name) = set.get(NAME_PROP).and_then(|val| val.as_str()) else {
+        let Some(name) = set.get("https://atomicdata.dev/properties/name".to_string()).and_then(|val| val.as_str()) else {
             return Ok(());
         };
 
@@ -40,5 +40,5 @@ impl ClassExtender for FolderExtender {
     }
 }
 
-atomic_plugin::export_plugin!(FolderExtender);
+atomic_plugin::export_plugin!(MyExtender);
 ```

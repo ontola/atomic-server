@@ -55,6 +55,7 @@ export const server = {
     plugins: 'https://atomicdata.dev/properties/plugins',
     pluginFile: 'https://atomicdata.dev/properties/pluginFile',
     pluginAgent: 'https://atomicdata.dev/properties/pluginAgent',
+    pluginPermissions: 'https://atomicdata.dev/properties/pluginPermissions',
   },
   __classDefs: {
     ['https://atomicdata.dev/classes/Drive']: [
@@ -102,14 +103,15 @@ export const server = {
     ],
     ['https://atomicdata.dev/classes/Plugin']: [
       'https://atomicdata.dev/properties/name',
+      'https://atomicdata.dev/properties/namespace',
       'https://atomicdata.dev/properties/version',
       'https://atomicdata.dev/properties/config',
-      'https://atomicdata.dev/properties/namespace',
       'https://atomicdata.dev/properties/pluginAuthor',
       'https://atomicdata.dev/properties/jsonSchema',
       'https://atomicdata.dev/properties/pluginFile',
       'https://atomicdata.dev/properties/description',
       'https://atomicdata.dev/properties/pluginAgent',
+      'https://atomicdata.dev/properties/pluginPermissions',
     ],
   },
 } as const satisfies OntologyBaseObject;
@@ -186,15 +188,16 @@ declare module '../index.js' {
       requires:
         | BaseProps
         | 'https://atomicdata.dev/properties/name'
+        | typeof server.properties.namespace
         | typeof server.properties.version;
       recommends:
         | typeof server.properties.config
-        | typeof server.properties.namespace
         | typeof server.properties.pluginAuthor
         | typeof server.properties.jsonSchema
         | typeof server.properties.pluginFile
         | 'https://atomicdata.dev/properties/description'
-        | typeof server.properties.pluginAgent;
+        | typeof server.properties.pluginAgent
+        | typeof server.properties.pluginPermissions;
     };
   }
 
@@ -234,6 +237,7 @@ declare module '../index.js' {
     [server.properties.plugins]: string[];
     [server.properties.pluginFile]: string;
     [server.properties.pluginAgent]: string;
+    [server.properties.pluginPermissions]: JSONValue;
   }
 
   interface PropSubjectToNameMapping {
@@ -272,5 +276,6 @@ declare module '../index.js' {
     [server.properties.plugins]: 'plugins';
     [server.properties.pluginFile]: 'pluginFile';
     [server.properties.pluginAgent]: 'pluginAgent';
+    [server.properties.pluginPermissions]: 'pluginPermissions';
   }
 }
