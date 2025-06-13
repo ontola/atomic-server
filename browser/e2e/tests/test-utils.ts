@@ -25,7 +25,8 @@ export const testFilePath = (filename: string) => {
 };
 
 export const timestamp = () => new Date().toLocaleTimeString();
-export const sideBarDriveSwitcher = '[title="Open Drive Settings"]';
+export const sideBarDriveSwitcher = (page: Page) =>
+  page.getByTitle('Open Drive Settings');
 export const sideBarNewResourceTestId = 'sidebar-new-resource';
 export const editableTitle = (page: Page) => page.getByTestId('editable-title');
 export const currentDriveTitle = (page: Page) =>
@@ -39,7 +40,7 @@ export const publicReadRightLocator = (page: Page) =>
 export const contextMenu = '[data-test="context-menu"]';
 export const addressBar = (page: Page) => page.getByTestId('adress-bar');
 export const newDriveMenuItem = '[data-test="menu-item-new-drive"]';
-
+export const sidebarDriveButtonId = 'sidebar-drive-open';
 export const defaultDevServer = 'http://localhost:9883';
 export const currentDialogOkButton = 'dialog[open] >> footer >> text=Ok';
 // Depends on server index throttle time, `commit_monitor.rs`
@@ -83,6 +84,7 @@ export async function signIn(page: Page) {
   await page.click('#current-password');
   await page.fill('#current-password', test_agent);
   await expect(page.locator('text=Edit profile')).toBeVisible();
+  await expect(page.getByRole('main').getByText('Test User')).toBeVisible();
   await page.goBack();
 }
 
@@ -93,7 +95,7 @@ export async function signIn(page: Page) {
 export async function newDrive(page: Page) {
   // Create new drive to prevent polluting the main drive
   const driveTitle = `testdrive-${timestamp()}`;
-  await page.locator(sideBarDriveSwitcher).click();
+  await sideBarDriveSwitcher(page).click();
   await page.locator('button:has-text("New Drive")').click();
   await waitForCurrentDialog(page);
 
@@ -298,7 +300,7 @@ export async function openNewSubjectWindow(
   // Only when we run on `localhost` we don't need to change drive during tests
   if (SERVER_URL !== FRONTEND_URL) {
     try {
-      await page.waitForSelector('[data-test="sidebar-drive-open"]', {
+      await page.waitForSelector(`[data-testid="${sidebarDriveButtonId}"]`, {
         timeout: 5000,
       });
       await changeDrive(SERVER_URL, page);
@@ -306,7 +308,7 @@ export async function openNewSubjectWindow(
       console.error('Error changing drive in new window:', error);
       // Try reloading the page if the sidebar drive element is not found
       await page.reload();
-      await page.waitForSelector('[data-test="sidebar-drive-open"]', {
+      await page.waitForSelector(`[data-testid="${sidebarDriveButtonId}"]`, {
         timeout: 5000,
       });
       await changeDrive(SERVER_URL, page);
@@ -322,39 +324,47 @@ export async function openNewSubjectWindow(
 export async function openConfigureDrive(page: Page) {
   // Make sure the drive switched dropdown is not open
   if (await page.locator(newDriveMenuItem).isVisible()) {
-    await page.click(sideBarDriveSwitcher);
+    await sideBarDriveSwitcher(page).click();
     await page.waitForTimeout(100);
   }
 
-  await page.click(sideBarDriveSwitcher);
+  await sideBarDriveSwitcher(page).click();
   await page.click('text=Configure Drives');
   await expect(page.locator('text=Drive Configuration')).toBeVisible();
 }
 
-export async function changeDrive(subject: string, page: Page) {
+export async function changeDrive(
+  subject: string,
+  page: Page,
+  validate: boolean = true,
+) {
   try {
-    // Check if the current drive matches the requested subject using both methods
-    if (await isCurrentDrive(subject, page)) {
+    const driveLink = page.getByTestId(sidebarDriveButtonId);
+    await expect(driveLink).toBeVisible();
+    await openConfigureDrive(page);
+    const currentDriveInput = page.getByLabel('Current Drive');
+
+    if ((await currentDriveInput.inputValue()) === subject) {
+      // We are already on the correct drive, do nothing.
+      driveLink.click();
+
+      if (validate) {
+        await expect(
+          page.getByRole('heading', { name: 'Default Ontology' }),
+        ).toBeVisible();
+      }
+
       return;
     }
 
-    // Also check the drive title text
-    const driveTitleText = await currentDriveTitle(page).textContent();
-    // Get the domain from the subject to compare with the drive title
-    const subjectDomain = new URL(subject).hostname;
+    await currentDriveInput.fill(subject);
+    await page.getByRole('button', { name: 'Save' }).click();
 
-    if (driveTitleText && driveTitleText.trim().includes(subjectDomain)) {
-      return;
+    if (validate) {
+      await expect(
+        page.getByRole('heading', { name: 'Default Ontology' }),
+      ).toBeVisible();
     }
-
-    const sidebarDriveOpen = page.locator('[data-test="sidebar-drive-open"]');
-    if (await sidebarDriveOpen.isVisible()) await openConfigureDrive(page);
-    await expect(page.locator('text=Drive Configuration')).toBeVisible();
-    await page.fill('[data-test="server-url-input"]', subject);
-    await page.click('[data-test="server-url-save"]');
-    await expect(
-      page.getByRole('heading', { name: 'Default Ontology' }),
-    ).toBeVisible();
   } catch (error) {
     console.error('Error in changeDrive:', error);
     throw error;
@@ -372,14 +382,14 @@ export async function isCurrentDrive(
   page: Page,
 ): Promise<boolean> {
   try {
-    const sidebarDriveOpen = page.locator('[data-test="sidebar-drive-open"]');
+    const driveButton = page.getByTestId(sidebarDriveButtonId);
 
-    if (!(await sidebarDriveOpen.isVisible())) {
+    if (!(await driveButton.isVisible())) {
       return false;
     }
 
     // Get the title attribute which contains the current drive URL
-    const titleAttr = await sidebarDriveOpen.getAttribute('title');
+    const titleAttr = await driveButton.getAttribute('title');
 
     if (!titleAttr) {
       return false;
@@ -522,4 +532,17 @@ export async function inDialog(
   await fn(currentDialog(page), closeDialogWith);
 
   await currentDialog(page).waitFor({ state: 'hidden' });
+}
+
+export async function acceptInvite(page: Page) {
+  await page.getByRole('button', { name: 'Accept as new user' }).click();
+
+  await inDialog(page, async (dialog, closeDialog) => {
+    await expect(
+      dialog.getByRole('heading', { name: 'Agent created!' }),
+    ).toBeVisible();
+    await dialog.getByLabel('Name').fill(`Test User ${timestamp()}`);
+    await dialog.getByRole('button', { name: 'Copy to clipboard' }).click();
+    await closeDialog('Continue');
+  });
 }

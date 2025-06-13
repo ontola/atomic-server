@@ -4,7 +4,7 @@ import {
   InputWrapper,
   LabelStyled,
 } from '../../components/forms/InputStyles';
-import { useState, type JSX } from 'react';
+import { useId, useState, type JSX } from 'react';
 import { useSettings } from '../../helpers/AppSettings';
 import { ContainerWide } from '../../components/Containers';
 import { Column, Row } from '../../components/Row';
@@ -27,6 +27,7 @@ export const ServerSettingsRoute = createRoute({
 });
 
 function SettingsServer(): JSX.Element {
+  const currentDriveId = useId();
   const { drive: baseURL, setDrive: setBaseURL } = useSettings();
   const navigate = useNavigateWithTransition();
   const [baseUrlInput, setBaseUrlInput] = useState<string>(baseURL);
@@ -53,11 +54,12 @@ function SettingsServer(): JSX.Element {
       <ContainerWide>
         <Column>
           <Heading>Drive Configuration</Heading>
-          <LabelStyled>Current Drive</LabelStyled>
+          <LabelStyled htmlFor={currentDriveId}>Current Drive</LabelStyled>
           <Row>
             <InputWrapper>
               <InputStyled
-                data-test='server-url-input'
+                id={currentDriveId}
+                data-testid='server-url-input'
                 value={baseUrlInput}
                 onChange={e => setBaseUrlInput(e.target.value)}
               />

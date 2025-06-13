@@ -1414,10 +1414,8 @@ msgstr "{0} is not a valid subject."
 msgid "<0/> This field is calculated server-side."
 msgstr "<0/> This field is calculated server-side."
 
-#. placeholder {0}: drive
-#: src/components/SideBar/SideBarDrive.tsx
-msgid "Your current baseURL is {0}"
-msgstr "Your current baseURL is {0}"
+#~ msgid "Your current baseURL is {0}"
+#~ msgstr "Your current baseURL is {0}"
 
 #: src/components/SideBar/SideBarDrive.tsx
 msgid "New resource"
