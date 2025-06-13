@@ -5,7 +5,7 @@ import {
   makeDrivePublic,
   newDrive,
   signIn,
-  sideBarNewResourceTestId,
+  sidebarNewResourceButton,
   FRONTEND_URL,
   inDialog,
 } from './test-utils';
@@ -146,7 +146,7 @@ test.describe('Test create-template package', () => {
     await makeDrivePublic(page);
 
     // Apply the template in data browser
-    await page.getByTestId(sideBarNewResourceTestId).click();
+    await sidebarNewResourceButton(page).click();
     await expect(page).toHaveURL(`${FRONTEND_URL}/app/new`);
 
     await page.getByTestId('template-button').click();
@@ -204,7 +204,7 @@ test.describe('Test create-template package', () => {
     await makeDrivePublic(page);
 
     // Apply the template in data browser
-    await page.getByTestId(sideBarNewResourceTestId).click();
+    await sidebarNewResourceButton(page).click();
     await expect(page).toHaveURL(`${FRONTEND_URL}/app/new`);
 
     const button = page.getByTestId('template-button');

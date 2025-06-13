@@ -4,6 +4,7 @@ import { Button } from '../components/Button';
 import { ContainerFull } from '../components/Containers';
 import { Column } from '../components/Row';
 import { createLazyRoute } from '@tanstack/react-router';
+import { DEV_DRIVE_PRUNE_MARKER } from '../hooks/useDevDrive';
 
 const PruneTestsRoute: React.FC = () => {
   const store = useStore();
@@ -23,8 +24,10 @@ const PruneTestsRoute: React.FC = () => {
       <ContainerFull>
         <h1>Prune Test Data</h1>
         <p>
-          Pruning test data will delete all drives on the server that have
-          &rsquo;testdrive&rsquo; in their name.
+          This removes drives created for automated tests or local dev: names
+          containing <code>testdrive-</code> (E2E), or descriptions containing{' '}
+          <code>{DEV_DRIVE_PRUNE_MARKER}</code> (from{' '}
+          <code>/app/dev-drive</code>).
         </p>
         <Column>
           <Button onClick={postPruneTest} disabled={isWaiting} alert>

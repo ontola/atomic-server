@@ -8,7 +8,7 @@ import {
   inDialog,
   newDrive,
   newResource,
-  sideBarNewResourceTestId,
+  sidebarNewResourceButton,
   signIn,
   testFilePath,
   waitForCommit,
@@ -18,7 +18,7 @@ import {
 const ONTOLOGY_NAME = 'filepicker-test';
 
 const uploadFile = async (page: Page, fileName: string) => {
-  await page.getByTestId(sideBarNewResourceTestId).click();
+  await sidebarNewResourceButton(page).click();
   await expect(page).toHaveURL(`${FRONTEND_URL}/app/new`);
 
   const fileChooserPromise = page.waitForEvent('filechooser');

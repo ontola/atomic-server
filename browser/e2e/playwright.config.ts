@@ -41,13 +41,8 @@ const config: PlaywrightTestConfig = {
   // timeout: 1000 * 120, // 2 minutes
   projects: [
     {
-      name: 'setup',
-      testMatch: /global.setup\.ts/,
-    },
-    {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
-      dependencies: ['setup'],
     },
   ],
   // projects: [

@@ -1,4 +1,4 @@
-import React, { useState, type JSX } from 'react';
+import React, { cloneElement, isValidElement, useState, type JSX } from 'react';
 import { useCanWrite, useResource } from '@tomic/react';
 import { Dialog, useDialog } from '../Dialog';
 import { Button } from '../Button';
@@ -46,25 +46,21 @@ export function ShareDialog({
     show();
   };
 
-  const handleTriggerKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      e.stopPropagation();
-      show();
-    }
-  };
+  const triggerEl = trigger as React.ReactElement<{
+    onClick?: (e: React.MouseEvent) => void;
+  }>;
+  const triggerWithOpen = isValidElement(trigger)
+    ? cloneElement(triggerEl, {
+        onClick: (e: React.MouseEvent) => {
+          triggerEl.props.onClick?.(e);
+          handleTriggerClick(e);
+        },
+      })
+    : trigger;
 
   return (
     <>
-      <div
-        role='button'
-        tabIndex={0}
-        onClick={handleTriggerClick}
-        onKeyDown={handleTriggerKeyDown}
-        style={{ display: 'contents' }}
-      >
-        {trigger}
-      </div>
+      {triggerWithOpen}
       <Dialog {...dialogProps} width='500px'>
         {isOpen && (
           <>

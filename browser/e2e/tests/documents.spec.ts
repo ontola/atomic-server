@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import {
-  devDrive,
+  getDevDriveSecret,
   newResource,
   editTitle,
   getCurrentSubject,
@@ -21,7 +21,7 @@ test.describe('documents', async () => {
   }) => {
     const folderTitle = 'SomeFolder';
 
-    const secret = await devDrive(page);
+    const secret = await getDevDriveSecret(page);
     await makeDrivePublic(page);
     await newResource('folder', page);
     await setTitle(page, folderTitle);
