@@ -13,7 +13,7 @@ import {
 } from '../../../helpers/transitionName';
 import { useSettings } from '../../../helpers/AppSettings';
 import { IconButton } from '../../IconButton/IconButton';
-import { FaGripVertical } from 'react-icons/fa6';
+import { FaCaretRight, FaGripVertical } from 'react-icons/fa6';
 import { UnsavedIndicator } from '../../UnsavedIndicator';
 
 interface SidebarItemTitleProps {
@@ -24,7 +24,17 @@ interface SidebarItemTitleProps {
   hideActionButtons?: boolean;
   isDragging?: boolean;
   onClick?: () => unknown;
+  /** When true, expand caret is shown in the class-icon slot (Details summary has no separate caret). */
+  expandable?: boolean;
+  expanded?: boolean;
+  /** Toggle folder open (separate from navigation link hover). */
+  onToggleExpand?: () => void;
 }
+
+const NavResourceLink = styled(StyledLink)`
+  min-width: 0;
+  display: flex;
+`;
 
 export const SidebarItemTitle = forwardRef<
   HTMLAnchorElement,
@@ -39,6 +49,9 @@ export const SidebarItemTitle = forwardRef<
       hideActionButtons,
       isDragging,
       onClick,
+      expandable = false,
+      expanded = false,
+      onToggleExpand,
     },
     ref,
   ): React.JSX.Element => {
@@ -48,42 +61,118 @@ export const SidebarItemTitle = forwardRef<
     const [description] = useString(resource, core.properties.description);
     const Icon = getIconForClass(classType[0]!);
 
+    const expandLabel = expanded ? 'Collapse folder' : 'Expand folder';
+
     return (
       <ActionWrapper
         isDragging={isDragging}
         data-sidebar-id={getTransitionName(SIDEBAR_TRANSITION_TAG, subject)}
+        $expandable={expandable}
       >
         {sidebarKeyboardDndEnabled ? (
-          <StyledLink subject={subject} clean ref={ref}>
-            <SideBarItem
-              onClick={onClick}
-              disabled={active}
-              resource={subject}
-              title={description}
+          expandable ? (
+            <>
+              <ExpandToggleButton
+                type='button'
+                aria-expanded={expanded}
+                aria-label={expandLabel}
+                title={`Rearrange ${resource.title}`}
+                onClick={e => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onToggleExpand?.();
+                }}
+                {...(listeners ?? {})}
+                {...(attributes ?? {})}
+              >
+                <ExpandCaret $open={expanded} />
+              </ExpandToggleButton>
+              <RowBody>
+                <NavResourceLink subject={subject} clean ref={ref}>
+                  <ResourceLinkSideBarItem
+                    onClick={onClick}
+                    disabled={active}
+                    resource={subject}
+                    title={description}
+                    $compactLeading
+                  >
+                    <TextWrapper>
+                      {resource.title}
+                      <UnsavedIndicator resource={resource} />
+                    </TextWrapper>
+                  </ResourceLinkSideBarItem>
+                </NavResourceLink>
+              </RowBody>
+            </>
+          ) : (
+            <NavResourceLink subject={subject} clean ref={ref}>
+              <SideBarItem
+                onClick={onClick}
+                disabled={active}
+                resource={subject}
+                title={description}
+              >
+                <TextWrapper>
+                  <StyledIconButton
+                    title={`Rearange ${resource.title}`}
+                    {...(listeners ?? {})}
+                    {...(attributes ?? {})}
+                    role='link'
+                  >
+                    <Icon />
+                    <FaGripVertical />
+                  </StyledIconButton>
+                  {resource.title}
+                  <UnsavedIndicator resource={resource} />
+                </TextWrapper>
+              </SideBarItem>
+            </NavResourceLink>
+          )
+        ) : expandable ? (
+          <>
+            <ExpandToggleButton
+              type='button'
+              aria-expanded={expanded}
+              aria-label={expandLabel}
+              title={expandLabel}
+              onClick={e => {
+                e.preventDefault();
+                e.stopPropagation();
+                onToggleExpand?.();
+              }}
             >
-              <TextWrapper>
-                <StyledIconButton
-                  title={`Rearange ${resource.title}`}
-                  {...(listeners ?? {})}
-                  {...(attributes ?? {})}
-                  role='link'
+              <ExpandCaret $open={expanded} />
+            </ExpandToggleButton>
+            <RowBody>
+              <NavResourceLink
+                subject={subject}
+                clean
+                ref={ref}
+                {...(listeners ?? {})}
+                {...(attributes ?? {})}
+              >
+                <ResourceLinkSideBarItem
+                  onClick={onClick}
+                  disabled={active}
+                  resource={subject}
+                  title={description}
+                  $compactLeading
                 >
-                  <Icon />
-                  <FaGripVertical />
-                </StyledIconButton>
-                {resource.title}
-                <UnsavedIndicator resource={resource} />
-              </TextWrapper>
-            </SideBarItem>
-          </StyledLink>
+                  <TextWrapper>
+                    {resource.title}
+                    <UnsavedIndicator resource={resource} />
+                  </TextWrapper>
+                </ResourceLinkSideBarItem>
+              </NavResourceLink>
+            </RowBody>
+          </>
         ) : (
-          <StyledLink
+          <NavResourceLink
             subject={subject}
             clean
             ref={ref}
             {...(listeners ?? {})}
             {...(attributes ?? {})}
-            role='link'
           >
             <SideBarItem
               onClick={onClick}
@@ -92,12 +181,14 @@ export const SidebarItemTitle = forwardRef<
               title={description}
             >
               <TextWrapper>
-                <Icon />
+                <LeadingSlot>
+                  <Icon />
+                </LeadingSlot>
                 {resource.title}
                 <UnsavedIndicator resource={resource} />
               </TextWrapper>
             </SideBarItem>
-          </StyledLink>
+          </NavResourceLink>
         )}
         {!hideActionButtons && <FloatingActions subject={subject} />}
       </ActionWrapper>
@@ -121,14 +212,80 @@ const StyledIconButton = styled(IconButton)`
   --button-padding: 0;
 `;
 
-const ActionWrapper = styled.div<{ isDragging?: boolean }>`
+/** Same width as expand control so class icons line up with carets. */
+const LeadingSlot = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 1.5rem;
+`;
+
+const ExpandToggleButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin: 0;
+  /* Align with SideBarItem padding-left so caret column matches class-icon rows */
+  margin-inline-start: 0.5rem;
+  padding: 0;
+  border: none;
+  border-radius: ${p => p.theme.radius};
+  background: transparent;
+  cursor: pointer;
+  color: ${p => p.theme.colors.main};
+
+  &:hover {
+    background-color: ${p => p.theme.colors.bg1};
+  }
+
+  &:active {
+    background-color: ${p => p.theme.colors.bg2};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${p => p.theme.colors.main};
+    outline-offset: 1px;
+  }
+`;
+
+const ExpandCaret = styled(FaCaretRight)<{ $open: boolean }>`
+  flex-shrink: 0;
+  transition: transform ${p => p.theme.animation.duration} ease-in-out;
+  transform: rotate(${p => (p.$open ? '90deg' : '0deg')});
+  font-size: 0.8rem;
+`;
+
+const RowBody = styled.div`
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+`;
+
+const ResourceLinkSideBarItem = styled(SideBarItem)<{ $compactLeading?: boolean }>`
+  flex: 1;
+  min-width: 0;
+  ${p =>
+    p.$compactLeading &&
+    `
+    padding-left: 0;
+  `}
+`;
+
+const ActionWrapper = styled.div<{ isDragging?: boolean; $expandable?: boolean }>`
   --aw-box-shadow-start: 0 0 0 0px rgba(0, 0, 0, 0.1);
   --aw-box-shadow-end:
     0 0 0 1px ${p => p.theme.colors.main}, ${p => p.theme.boxShadowSoft};
 
   display: flex;
+  align-items: center;
   width: 100%;
-  margin-left: -0.7rem;
+  gap: ${p => (p.$expandable ? '0.4rem' : '0')};
   ${floatingHoverStyles}
   border-radius: ${p => p.theme.radius};
   ${p =>

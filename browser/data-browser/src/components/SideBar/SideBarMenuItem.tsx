@@ -33,14 +33,15 @@ export function SideBarMenuItem({
         onClick={onClick}
         current={current}
       >
-        {icon && <SideBarIcon>{icon}</SideBarIcon>}
+        {icon && <SideBarMenuRowIcon>{icon}</SideBarMenuRowIcon>}
         {label}
       </SideBarItem>
     </AtomicLink>
   );
 }
 
-const SideBarIcon = styled.span`
+/** Icon column for APP menu rows and Shared with me (matches alignment). */
+export const SideBarMenuRowIcon = styled.span`
   display: flex;
   margin-right: 0.5rem;
   font-size: 1.5rem;

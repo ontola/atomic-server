@@ -335,6 +335,8 @@ mod test {
   "https://atomicdata.dev/properties/recommends": [
     "https://atomicdata.dev/properties/name",
     "https://atomicdata.dev/properties/description",
+    "https://atomicdata.dev/properties/personalDrive",
+    "https://atomicdata.dev/properties/sharedWithMe",
     "https://atomicdata.dev/properties/drives"
   ],
     "https://atomicdata.dev/properties/requires": [
@@ -378,6 +380,8 @@ mod test {
             "recommends": [
               "https://atomicdata.dev/properties/name",
               "https://atomicdata.dev/properties/description",
+              "https://atomicdata.dev/properties/personalDrive",
+              "https://atomicdata.dev/properties/sharedWithMe",
               "https://atomicdata.dev/properties/drives"
             ],
             "requires": [
@@ -433,6 +437,8 @@ mod test {
             "recommends": [
               "https://atomicdata.dev/properties/name",
               "https://atomicdata.dev/properties/description",
+              "https://atomicdata.dev/properties/personalDrive",
+              "https://atomicdata.dev/properties/sharedWithMe",
               "https://atomicdata.dev/properties/drives"
             ],
             "requires": [

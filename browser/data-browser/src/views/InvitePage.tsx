@@ -27,6 +27,7 @@ import { Row } from '../components/Row';
 import { useId, useState, type JSX } from 'react';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { getResourcesDrive } from '@helpers/getResourcesDrive';
+import { fetchPersonalDriveSubject } from '@helpers/personalDrive';
 import { saveAgentToIDB } from '@helpers/agentStorage';
 import { Dialog, useDialog } from '@components/Dialog';
 import { CodeBlock } from '@components/CodeBlock';
@@ -70,22 +71,25 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
   const goToRedirect = (destination?: string) => {
     const url = destination ?? redirectURL;
     if (!url) return;
-    // React needs a cycle to update the agent so we defer navigation.
     requestAnimationFrame(() => {
       navigate(constructOpenURL(url));
-      // Best-effort prefetch to set the active drive; navigation should not depend on this.
-      store
-        .fetchResourceFromServer(url)
-        .then((target: Resource) => {
-          getResourcesDrive(target, store)
-            .then(setDrive)
-            .catch(() => undefined);
-        })
-        .catch(() => undefined);
+      void store.fetchResourceFromServer(url).finally(() => {
+        const signedIn = store.getAgent();
+
+        if (!signedIn?.subject) {
+          return;
+        }
+
+        void fetchPersonalDriveSubject(store, signedIn).then(home => {
+          if (home) {
+            setDrive(home);
+          }
+        });
+      });
     });
   };
 
-  /** Persist agent (isA, name, drives) to the server. Used after accepting an invite for both new and existing agents. */
+  /** Persist agent after invite: personal drive, host drive bookmark, sharedWithMe. */
   const persistAgentAfterInvite = async (
     subject: string,
     destination: string | undefined,
@@ -95,7 +99,7 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
 
     try {
       if (name?.trim()) {
-        await resourceToSave.set(core.properties.name, name);
+        await resourceToSave.set(core.properties.name, name.trim());
       }
 
       const currentIsA =
@@ -110,17 +114,49 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
 
       if (destination) {
         try {
-          const target = await store.fetchResourceFromServer(destination);
-          const driveSubject = await getResourcesDrive(target, store);
+          await store.fetchResourceFromServer(destination);
+          const target = store.getResourceLoading(destination);
+          const hostDrive = await getResourcesDrive(target, store);
 
-          if (driveSubject) {
-            resourceToSave.push(server.properties.drives, [driveSubject]);
+          if (hostDrive) {
+            resourceToSave.push(server.properties.drives, [hostDrive], true);
           }
+
+          const existingPersonal = resourceToSave.get(
+            core.properties.personalDrive,
+          ) as string | undefined;
+
+          if (!existingPersonal) {
+            const driveLabel = name?.trim()
+              ? `${name.trim()}'s Drive`
+              : 'Personal';
+            const pd = await store.newResource({
+              isA: server.classes.drive,
+              noParent: true,
+              propVals: {
+                [core.properties.name]: driveLabel,
+                [core.properties.description]:
+                  'Your private space on this server. Only you can read and write here.',
+                [core.properties.write]: [subject],
+                [core.properties.read]: [subject],
+              },
+            });
+
+            await pd.save();
+            await resourceToSave.set(core.properties.personalDrive, pd.subject);
+            resourceToSave.push(server.properties.drives, [pd.subject], true);
+          }
+
+          resourceToSave.push(
+            core.properties.sharedWithMe,
+            [destination],
+            true,
+          );
         } catch (e) {
           store.notifyError(
             e instanceof Error
               ? e
-              : new Error('Failed to add invited drive to agent'),
+              : new Error('Failed to update agent after invite'),
           );
         }
       }
@@ -146,8 +182,8 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
         return;
       }
 
+      await persistAgentAfterInvite(agentSubject, redirectURL, agentName);
       goToRedirect();
-      void persistAgentAfterInvite(agentSubject, redirectURL, agentName);
     },
   });
 
@@ -235,11 +271,12 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
       setAgent(newAgent);
       setIsNewAgent(true);
     } else {
-      // Existing agent: persist agent (isA, drives) and redirect immediately — no dialog
       setIsNewAgent(false);
       setRedirectURL(destination);
-      goToRedirect(destination);
-      void persistAgentAfterInvite(agentSubject!, destination, undefined);
+      void (async () => {
+        await persistAgentAfterInvite(agentSubject!, destination, undefined);
+        goToRedirect(destination);
+      })();
 
       return;
     }

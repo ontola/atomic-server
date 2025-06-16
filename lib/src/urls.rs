@@ -61,6 +61,10 @@ pub const IS_GENESIS: &str = "https://atomicdata.dev/properties/isGenesis";
 pub const PUBLIC_KEY: &str = "https://atomicdata.dev/properties/publicKey";
 pub const NAME: &str = "https://atomicdata.dev/properties/name";
 pub const DRIVES: &str = "https://atomicdata.dev/properties/drives";
+/// The agent's single private home drive on a server (shared-with-me, personal data, etc.).
+pub const PERSONAL_DRIVE: &str = "https://atomicdata.dev/properties/personalDrive";
+/// Resources shared with this agent (e.g. accepted invites); clients show as "Shared with me".
+pub const SHARED_WITH_ME: &str = "https://atomicdata.dev/properties/sharedWithMe";
 pub const AVAILABLE_DOMAINS: &str = "https://atomicdata.dev/properties/availableDomains";
 // ... for Collections
 pub const COLLECTION_PROPERTY: &str = "https://atomicdata.dev/properties/collection/property";

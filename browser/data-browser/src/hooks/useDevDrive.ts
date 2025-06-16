@@ -11,7 +11,7 @@ export const DEV_DRIVE_TESTID = 'dev-drive-button';
 /** In drive description; server `/prunetests` deletes drives containing this. Keep in sync with `prunetests.rs`. */
 export const DEV_DRIVE_PRUNE_MARKER = '[atomic-data:dev-drive]';
 
-const DEV_DRIVE_DISPLAY_NAME = 'Atomic dev drive';
+const DEV_DRIVE_DISPLAY_NAME = 'Dev drive';
 
 /**
  * Creates a fresh agent and drive on the local dev server (localhost:9883) and
@@ -41,13 +41,18 @@ export function useDevDrive() {
         noParent: true,
         propVals: {
           [core.properties.name]: DEV_DRIVE_DISPLAY_NAME,
-          [core.properties.description]: `${DEV_DRIVE_PRUNE_MARKER} Created via /app/dev-drive for local development and E2E. You can remove these with Prune test data on /app/prunetests.`,
+          [core.properties.description]: `Created via \`/app/dev-drive\` for local development and E2E. You can remove these with Prune test data on \`/app/prunetests\`. \n\n${DEV_DRIVE_PRUNE_MARKER}`,
           [core.properties.write]: [agentDID],
           [core.properties.read]: [agentDID],
         },
       });
 
       await driveResource.save();
+
+      const agentResource = await store.getResource(agentDID);
+      agentResource.set(core.properties.personalDrive, driveResource.subject);
+      agentResource.push(server.properties.drives, [driveResource.subject]);
+      await agentResource.save();
 
       const finalSecret = Agent.buildSecret(
         agentKeys.privateKey,
@@ -59,7 +64,9 @@ export function useDevDrive() {
       localStorage.setItem('atomic-test.dev-drive-secret', finalSecret);
 
       await saveAgentToIDB(finalSecret);
-      setAgent(newAgent);
+      const updatedAgent = await Agent.fromSecret(finalSecret);
+      store.setAgent(updatedAgent);
+      setAgent(updatedAgent);
       setDrive(driveResource.subject);
       navigate(constructOpenURL(driveResource.subject));
     } finally {

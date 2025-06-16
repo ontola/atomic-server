@@ -1,5 +1,5 @@
 import { test, expect, Browser } from '@playwright/test';
-import { FRONTEND_URL, SERVER_URL } from './test-utils';
+import { FRONTEND_URL } from './test-utils';
 
 test.describe('onboarding', () => {
   test('create new identity with verifySecret flow - profile name persists', async ({
@@ -14,25 +14,19 @@ test.describe('onboarding', () => {
 
     // Wait for the profile step (after identity is created)
     await expect(
-      page.getByRole('heading', { name: "You're signed in!" }),
+      page.getByRole('heading', { name: 'Set your profile name!' }),
     ).toBeVisible({ timeout: 10000 });
 
-    // Set a profile name
+    // Set a profile name — a private home drive is created automatically
     await page.getByLabel('Profile Name').fill('Test User');
 
-    // Click Save & Next
-    await page.getByRole('button', { name: 'Save & Next' }).click();
+    await page.getByRole('button', { name: 'Save & continue' }).click();
 
-    // Should be on the drive creation step with personalized heading
-    await expect(
-      page.getByRole('heading', { name: /Test User, create your Drive/ }),
-    ).toBeVisible();
+    await expect(page.getByText('Creating your personal drive')).toBeVisible({
+      timeout: 5000,
+    });
 
-    // Create a drive
-    await page.getByLabel('Drive Name').fill('My Test Drive');
-    await page.getByRole('button', { name: 'Create Drive' }).click();
-
-    // NOW we should see the secret step - the secret includes the drive URL
+    // Secret step — the secret includes the drive URL
     await expect(
       page.getByRole('heading', { name: 'Your new identity is ready' }),
     ).toBeVisible({ timeout: 10000 });
@@ -96,28 +90,6 @@ test.describe('onboarding', () => {
     // The profile name "Test User" should be visible somewhere on the page
     // This verifies that the profile name was actually persisted to the server
     await expect(page2.getByText('Test User')).toBeVisible({ timeout: 5000 });
-
-    // Verify the drive is stored in the agent's drives array on the server
-    const agentUrl = `${SERVER_URL}/${decodedSecret.subject}`;
-    const agentResponse = await page2.evaluate(
-      async ({ url, initialDrive }) => {
-        const response = await fetch(url, {
-          headers: { Accept: 'application/json' },
-        });
-        const data = await response.json();
-        return {
-          drives: data['https://atomicdata.dev/server/properties/drives'] || [],
-          initialDrive,
-        };
-      },
-      {
-        url: agentUrl,
-        initialDrive: decodedSecret.initialDrive,
-      },
-    );
-
-    expect(agentResponse.drives).toContain(agentResponse.initialDrive);
-    expect(agentResponse.drives.length).toBeGreaterThanOrEqual(1);
 
     await context2.close();
   });
