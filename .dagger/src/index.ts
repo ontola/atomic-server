@@ -6,6 +6,8 @@ import {
   func,
   argument,
   Secret,
+  File,
+  type Platform,
 } from "@dagger.io/dagger";
 
 const NODE_IMAGE = "node:24";
@@ -188,18 +190,34 @@ export class AtomicServer {
   }
 
   @func()
-  rustBuild(@argument() release: boolean = false): Container {
+  /** Builds the Rust server binary on the host architecture */
+  rustBuild(
+    @argument() release: boolean = false,
+    @argument() target: string = "x86_64-unknown-linux-musl"
+  ): Container {
     const source = this.source;
     const cargoCache = dag.cacheVolume("cargo");
 
+    let image = RUST_IMAGE;
+    if (target === "x86_64-unknown-linux-musl") {
+      image = "ghcr.io/rust-cross/rust-musl-cross:x86_64-musl";
+    } else if (target === "aarch64-unknown-linux-musl") {
+      image = "ghcr.io/rust-cross/rust-musl-cross:aarch64-musl";
+    } else if (target === "armv7-unknown-linux-musleabihf") {
+      image = "ghcr.io/rust-cross/rust-musl-cross:armv7-musleabihf";
+    } else {
+      throw new Error(
+        `Unknown target: ${target}. Supported targets are: x86_64-unknown-linux-musl, aarch64-unknown-linux-musl, armv7-unknown-linux-musleabihf.`
+      );
+    }
+
     const rustContainer = dag
       .container()
-      .from(RUST_IMAGE)
+      .from(image)
       .withExec(["apt-get", "update", "-qq"])
       .withExec(["apt", "install", "-y", "nasm"])
       .withExec(["rustup", "component", "add", "clippy"])
       .withExec(["rustup", "component", "add", "rustfmt"])
-      .withExec(["cargo", "install", "cross"])
       .withExec(["cargo", "install", "cargo-nextest"])
       .withMountedCache("/usr/local/cargo/registry", cargoCache);
 
@@ -223,22 +241,25 @@ export class AtomicServer {
     const buildArgs = release
       ? ["cargo", "build", "--release"]
       : ["cargo", "build"];
-    const binaryPath = release
-      ? "./target/release/atomic-server"
-      : "./target/debug/atomic-server";
     const targetPath = release
-      ? "/code/target/release/atomic-server"
-      : "/code/target/debug/atomic-server";
+      ? `/code/target/${target}/release/atomic-server`
+      : `/code/target/${target}/debug/atomic-server`;
 
-    return containerWithAssets
-      .withExec(buildArgs)
-      .withExec([binaryPath, "--version"])
-      .withExec(["cp", targetPath, "/atomic-server-binary"]);
+    return (
+      containerWithAssets
+        .withExec(buildArgs)
+        // .withExec([targetPath, "--version"])
+        .withExec(["cp", targetPath, "/atomic-server-binary"])
+    );
   }
 
   @func()
-  rustReleaseBuild(): Container {
-    return this.rustBuild(true);
+  /** Returns the release binary */
+  rustBuildRelease(
+    @argument() target: string = "x86_64-unknown-linux-musl"
+  ): File {
+    const container = this.rustBuild(true, target);
+    return container.file("/atomic-server-binary");
   }
 
   @func()
@@ -268,73 +289,74 @@ export class AtomicServer {
     return rustContainer.withExec(["cargo", "fmt", "--check"]).stdout();
   }
 
-  @func()
-  /** Doesn't work on M1 macs */
-  rustCrossBuild(@argument() target: string): Container {
-    let engineSvc = dag.docker().engine();
-    const source = this.source;
+  // @func()
+  // /** Doesn't work on M1 macs */
+  // rustCrossBuild(@argument() target: string): Container {
+  //   let engineSvc = dag.docker().engine();
+  //   const source = this.source;
 
-    const sourceContainer = dag
-      .container()
-      .from("docker:cli")
-      .withServiceBinding("docker", engineSvc)
-      .withEnvVariable("DOCKER_HOST", "tcp://docker:2375")
-      .withExec(["docker", "ps"])
-      .withExec([
-        "apk",
-        "add",
-        "--no-cache",
-        // For installing rust
-        "curl",
-        // CC linker deps, compiling cross
-        "build-base",
-        "gcc",
-        "musl-dev",
-        "cmake",
-      ])
-      .withExec([
-        "sh",
-        "-c",
-        "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable",
-      ])
-      .withEnvVariable(
-        "PATH",
-        "/root/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-      )
-      .withExec(["docker", "ps"])
-      .withExec(["cargo", "install", "cross"])
-      .withExec(["rustup", "target", "add", target])
-      .withExec([
-        "rustup",
-        "toolchain",
-        "add",
-        "stable-x86_64-unknown-linux-gnu",
-        "--profile",
-        "minimal",
-        "--force-non-host",
-      ])
-      .withFile("/home/rust/src/Cargo.toml", source.file("Cargo.toml"))
-      .withFile("/home/rust/src/Cargo.lock", source.file("Cargo.lock"))
-      .withDirectory("/home/rust/src/server", source.directory("server"))
-      .withDirectory("/home/rust/src/lib", source.directory("lib"))
-      .withDirectory("/home/rust/src/cli", source.directory("cli"))
-      .withMountedCache("/home/rust/src/target", dag.cacheVolume("rust-target"))
-      .withWorkdir("/home/rust/src");
+  //   const sourceContainer = dag
+  //     // To allow cross-compilation to work on M1 macs
+  //     .container({ platform: "linux/amd64" as Platform })
+  //     .from("docker:cli")
+  //     .withServiceBinding("docker", engineSvc)
+  //     .withEnvVariable("DOCKER_HOST", "tcp://docker:2375")
+  //     .withExec(["docker", "ps"])
+  //     .withExec([
+  //       "apk",
+  //       "add",
+  //       "--no-cache",
+  //       // For installing rust
+  //       "curl",
+  //       // CC linker deps, compiling cross
+  //       "build-base",
+  //       "gcc",
+  //       "musl-dev",
+  //       "cmake",
+  //     ])
+  //     .withExec([
+  //       "sh",
+  //       "-c",
+  //       "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable",
+  //     ])
+  //     .withEnvVariable(
+  //       "PATH",
+  //       "/root/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  //     )
+  //     .withExec(["docker", "ps"])
+  //     .withExec(["cargo", "install", "cross"])
+  //     .withExec(["rustup", "target", "add", target])
+  //     .withExec([
+  //       "rustup",
+  //       "toolchain",
+  //       "add",
+  //       "stable-x86_64-unknown-linux-gnu",
+  //       "--profile",
+  //       "minimal",
+  //       "--force-non-host",
+  //     ])
+  //     .withFile("/home/rust/src/Cargo.toml", source.file("Cargo.toml"))
+  //     .withFile("/home/rust/src/Cargo.lock", source.file("Cargo.lock"))
+  //     .withDirectory("/home/rust/src/server", source.directory("server"))
+  //     .withDirectory("/home/rust/src/lib", source.directory("lib"))
+  //     .withDirectory("/home/rust/src/cli", source.directory("cli"))
+  //     .withMountedCache("/home/rust/src/target", dag.cacheVolume("rust-target"))
+  //     .withWorkdir("/home/rust/src");
 
-    // Include frontend assets for the server build
-    const browserDir = this.jsBuild().directory("/app/data-browser/dist");
-    const containerWithAssets = sourceContainer.withDirectory(
-      "/home/rust/src/server/assets_tmp",
-      browserDir
-    );
+  //   // Include frontend assets for the server build
+  //   const browserDir = this.jsBuild().directory("/app/data-browser/dist");
+  //   const containerWithAssets = sourceContainer.withDirectory(
+  //     "/home/rust/src/server/assets_tmp",
+  //     browserDir
+  //   );
 
-    // Build using native cargo with target specification
-    const binaryPath = `./target/${target}/release/atomic-server`;
+  //   // Build using native cargo with target specification
+  //   const binaryPath = `./target/${target}/release/atomic-server`;
 
-    return containerWithAssets
-      .withExec(["cross", "build", "--target", target, "--release"])
-      .withExec(["cp", binaryPath, "/atomic-server-binary"]);
-  }
+  //   return containerWithAssets
+  //     .withExec(["cross", "build", "--target", target, "--release"])
+  //     .withExec(["cp", binaryPath, "/atomic-server-binary"]);
+  // }
 
   @func()
   async endToEnd(@argument() netlifyAuthToken: Secret): Promise<string> {
@@ -427,10 +449,7 @@ export class AtomicServer {
     @argument() sshPrivateKey: Secret
   ): Promise<string> {
     // Build the cross-compiled binary for x86_64-unknown-linux-musl
-    const crossBuildContainer = this.rustCrossBuild(
-      "x86_64-unknown-linux-musl"
-    );
-    const binaryFile = crossBuildContainer.file("/atomic-server-binary");
+    const binaryFile = this.rustBuildRelease("x86_64-unknown-linux-musl");
 
     // Create deployment container with SSH client
     const deployContainer = dag
@@ -483,7 +502,7 @@ export class AtomicServer {
   }
 
   @func()
-  async rustCrossMultiBuild(
+  async releaseAssets(
     @argument()
     targets: string[] = [
       "x86_64-unknown-linux-musl",
@@ -492,7 +511,7 @@ export class AtomicServer {
     ]
   ): Promise<Directory> {
     const builds = targets.map((target) => {
-      const container = this.rustCrossBuild(target);
+      const container = this.rustBuild(true, target);
       return {
         target,
         binary: container.file("/atomic-server-binary"),
