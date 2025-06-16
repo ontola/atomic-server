@@ -807,6 +807,10 @@ impl Storelike for Db {
                 .clone();
             for extender in extenders.iter() {
                 if extender.resource_has_extender(resource)? {
+                    if !extender.can_extend(resource) {
+                        continue;
+                    }
+
                     let (is_in_scope, cached_root) =
                         extender.check_scope(resource, self, root_subject).await?;
 
@@ -824,6 +828,7 @@ impl Storelike for Db {
                         store,
                         commit: &commit_response.commit,
                         resource,
+                        is_new: commit_response.resource_old.is_none(),
                     });
                     fut.await?;
                 }
@@ -890,6 +895,10 @@ impl Storelike for Db {
                 .clone();
             for extender in extenders.iter() {
                 if extender.resource_has_extender(resource)? {
+                    if !extender.can_extend(resource) {
+                        continue;
+                    }
+
                     let (is_in_scope, cached_root) =
                         extender.check_scope(resource, self, root_subject).await?;
 
@@ -909,6 +918,7 @@ impl Storelike for Db {
                         store,
                         commit: &commit_response.commit,
                         resource,
+                        is_new: commit_response.resource_old.is_none(),
                     });
                     fut.await?;
                 }
@@ -998,6 +1008,10 @@ impl Storelike for Db {
                 .map_err(|e| format!("Failed to read class extenders: {}", e))?
                 .clone();
             for extender in extenders.iter() {
+                if !extender.can_extend(&resource) {
+                    continue;
+                }
+
                 if extender.resource_has_extender(&resource)? {
                     let (is_in_scope, cached_root) =
                         extender.check_scope(&resource, self, root_subject).await?;

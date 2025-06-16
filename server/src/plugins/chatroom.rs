@@ -5,9 +5,7 @@ They list a bunch of Messages.
 */
 
 use atomic_lib::{
-    class_extender::{
-        BoxFuture, ClassExtender, ClassExtenderScope, CommitExtenderContext, GetExtenderContext,
-    },
+    class_extender::{BoxFuture, ClassExtender, CommitExtenderContext, GetExtenderContext},
     commit::{CommitBuilder, CommitOpts},
     errors::AtomicResult,
     storelike::{Query, QueryResult, ResourceResponse},
@@ -107,6 +105,7 @@ pub fn after_apply_commit_message<'a>(
             store,
             commit: applied_commit,
             resource,
+            is_new: _,
         } = context;
 
         // only update the ChatRoom for _new_ messages, not for edits
@@ -146,25 +145,19 @@ pub fn after_apply_commit_message<'a>(
 }
 
 pub fn build_chatroom_extender() -> ClassExtender {
-    ClassExtender {
-        id: Some("chatroom".to_string()),
-        classes: vec![urls::CHATROOM.to_string()],
-        on_resource_get: Some(ClassExtender::wrap_get_handler(construct_chatroom)),
-        before_commit: None,
-        after_commit: None,
-        scope: ClassExtenderScope::Global,
-    }
+    ClassExtender::builder()
+        .id("chatroom".to_string())
+        .classes(vec![urls::CHATROOM.to_string()])
+        .on_resource_get(ClassExtender::wrap_get_handler(construct_chatroom))
+        .build()
 }
 
 pub fn build_message_extender() -> ClassExtender {
-    ClassExtender {
-        id: Some("message".to_string()),
-        classes: vec![urls::MESSAGE.to_string()],
-        on_resource_get: None,
-        before_commit: None,
-        after_commit: Some(ClassExtender::wrap_commit_handler(
+    ClassExtender::builder()
+        .id("message".to_string())
+        .classes(vec![urls::MESSAGE.to_string()])
+        .after_commit(ClassExtender::wrap_commit_handler(
             after_apply_commit_message,
-        )),
-        scope: ClassExtenderScope::Global,
-    }
+        ))
+        .build()
 }

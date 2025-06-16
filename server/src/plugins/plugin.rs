@@ -2,9 +2,7 @@ use std::path::{Path, PathBuf};
 
 use atomic_lib::{
     agents::{Agent, ForAgent},
-    class_extender::{
-        BoxFuture, ClassExtender, ClassExtenderScope, CommitExtenderContext, GetExtenderContext,
-    },
+    class_extender::{BoxFuture, ClassExtender, CommitExtenderContext, GetExtenderContext},
     db::plugin_meta::PluginMetaKey,
     errors::AtomicResult,
     storelike::ResourceResponse,
@@ -224,6 +222,7 @@ fn on_before_commit(
             store,
             commit,
             resource,
+            is_new,
         } = context;
 
         // Gets the parent drive and returns an error if the parent is not a drive.
@@ -236,6 +235,21 @@ fn on_before_commit(
         }
 
         if let Some(set) = &commit.set {
+            // If the plugin is not new, we don't allow updating values that identify the plugin as that could lead to corrupted state.
+            if !is_new {
+                if set.contains_key(urls::NAME) || set.contains_key(urls::NAMESPACE) {
+                    return Err(AtomicError::from(
+                        "Cannot update plugin namespace/name after it has been created",
+                    ));
+                }
+
+                if set.contains_key(urls::PARENT) {
+                    return Err(AtomicError::from(
+                        "Cannot update plugin parent after it has been created",
+                    ));
+                }
+            }
+
             // The plugin file has been set or updated, so we need to (re)install the plugin.
             if set.contains_key(urls::PLUGIN_FILE) {
                 tracing::info!(
@@ -340,21 +354,19 @@ pub fn build_plugin_extender(
     plugin_cache_dir: PathBuf,
     uploads_dir: PathBuf,
 ) -> ClassExtender {
-    ClassExtender {
-        id: Some("plugin".to_string()),
-        classes: vec![urls::PLUGIN.to_string()],
-        on_resource_get: Some(ClassExtender::wrap_get_handler(move |context| {
+    ClassExtender::builder()
+        .id("plugin".to_string())
+        .classes(vec![urls::PLUGIN.to_string()])
+        .on_resource_get(ClassExtender::wrap_get_handler(move |context| {
             on_resource_get(context)
-        })),
-        before_commit: Some(ClassExtender::wrap_commit_handler(move |context| {
+        }))
+        .before_commit(ClassExtender::wrap_commit_handler(move |context| {
             on_before_commit(
                 context,
                 plugins_dir.clone(),
                 plugin_cache_dir.clone(),
                 uploads_dir.clone(),
             )
-        })),
-        after_commit: None,
-        scope: ClassExtenderScope::Global,
-    }
+        }))
+        .build()
 }

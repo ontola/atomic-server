@@ -40,6 +40,7 @@ export const InputWrapper = styled.div<InputWrapperProps>`
   --border-color: ${({ $invalid, theme }) =>
     $invalid ? theme.colors.alert : theme.colors.bg2};
   border: solid 1px var(--border-color);
+  background-color: ${props => props.theme.colors.bg};
   border-radius: ${props => props.theme.radius};
   overflow: hidden;
   align-items: center;

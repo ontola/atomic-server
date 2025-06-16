@@ -47,6 +47,8 @@ interface types {
     subject: string,
     commit-json: string,
     snapshot: resource-json,
+    /// True if this is the first commit for the resource.
+    is-new: bool,
   }
 }
 

@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use atomic_lib::{
-    class_extender::{BoxFuture, ClassExtender, ClassExtenderScope, CommitExtenderContext},
+    class_extender::{BoxFuture, ClassExtender, CommitExtenderContext},
     endpoints::Endpoint,
     errors::AtomicResult,
     urls, AtomicError, Storelike, Value,
@@ -51,6 +51,7 @@ fn on_after_commit(
             store,
             commit,
             resource,
+            is_new: _,
         } = context;
 
         if commit.destroy != Some(true) {
@@ -81,14 +82,11 @@ fn on_after_commit(
 }
 
 pub fn build_file_extender(uploads_dir: PathBuf) -> ClassExtender {
-    ClassExtender {
-        id: Some("file".to_string()),
-        classes: vec![urls::FILE.to_string()],
-        on_resource_get: None,
-        before_commit: None,
-        after_commit: Some(ClassExtender::wrap_commit_handler(move |context| {
+    ClassExtender::builder()
+        .id("file".to_string())
+        .classes(vec![urls::FILE.to_string()])
+        .after_commit(ClassExtender::wrap_commit_handler(move |context| {
             on_after_commit(context, uploads_dir.clone())
-        })),
-        scope: ClassExtenderScope::Global,
-    }
+        }))
+        .build()
 }

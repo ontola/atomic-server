@@ -350,7 +350,7 @@ impl WasmPlugin {
                 .file_name()
                 .and_then(|s| s.to_str())
                 .unwrap_or("");
-            Some(format!("{}:{}", drive, filename))
+            format!("{}:{}", drive, filename)
         } else {
             let filename = self
                 .inner
@@ -358,26 +358,31 @@ impl WasmPlugin {
                 .file_name()
                 .and_then(|s| s.to_str())
                 .unwrap_or("");
-            Some(format!("global:{}", filename))
+            format!("global:{}", filename)
         };
 
-        ClassExtender {
-            id,
-            classes: self.inner.class_url.clone(),
-            on_resource_get: Some(ClassExtender::wrap_get_handler(move |context| {
+        let mut builder = ClassExtender::builder()
+            .id(id)
+            .classes(self.inner.class_url.clone())
+            .on_resource_get(ClassExtender::wrap_get_handler(move |context| {
                 let get_plugin = get_plugin.clone();
                 Box::pin(async move { get_plugin.call_on_resource_get(context).await })
-            })),
-            before_commit: Some(ClassExtender::wrap_commit_handler(move |context| {
+            }))
+            .before_commit(ClassExtender::wrap_commit_handler(move |context| {
                 let before_plugin = before_plugin.clone();
                 Box::pin(async move { before_plugin.call_before_commit(context).await })
-            })),
-            after_commit: Some(ClassExtender::wrap_commit_handler(move |context| {
+            }))
+            .after_commit(ClassExtender::wrap_commit_handler(move |context| {
                 let after_plugin = after_plugin.clone();
                 Box::pin(async move { after_plugin.call_after_commit(context).await })
-            })),
-            scope: self.inner.scope.clone(),
+            }))
+            .scope(self.inner.scope.clone());
+
+        if let Some(subject) = self.inner.plugin_subject.clone() {
+            builder = builder.subject(subject);
         }
+
+        builder.build()
     }
 
     async fn call_class_url(&self) -> AtomicResult<Vec<String>> {
@@ -523,6 +528,7 @@ impl WasmPlugin {
                 .serialize_deterministically_json_ad(context.store)
                 .await?,
             snapshot: self.encode_resource(context.resource)?,
+            is_new: context.is_new,
         })
     }
 
@@ -613,9 +619,7 @@ impl PluginHostState {
 
             builder
                 .preopened_dir(owned_folder_path.clone(), "/", dir_perms, file_perms)
-                .map_err(|e| {
-                    AtomicError::from(format!("Failed to preopen directory: {}", e))
-                })?;
+                .map_err(|e| AtomicError::from(format!("Failed to preopen directory: {}", e)))?;
         }
 
         let ctx = builder.build();
