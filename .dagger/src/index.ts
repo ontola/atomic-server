@@ -7,6 +7,7 @@ import {
   argument,
   Secret,
   File,
+  Platform,
 } from "@dagger.io/dagger";
 
 const NODE_IMAGE = "node:24";
@@ -521,5 +522,53 @@ export class AtomicServer {
     }
 
     return outputDir;
+  }
+
+  @func()
+  /** Creates a Docker image for a specific target architecture */
+  createDockerImage(
+    @argument() target: string = "x86_64-unknown-linux-musl"
+  ): Container {
+    const binary = this.rustBuild(true, target).file("/atomic-server-binary");
+
+    // Map targets to their corresponding platform strings
+    const platformMap = {
+      "x86_64-unknown-linux-musl": "linux/amd64" as Platform,
+      "aarch64-unknown-linux-musl": "linux/arm64" as Platform,
+      "armv7-unknown-linux-musleabihf": "linux/arm/v7" as Platform,
+    };
+
+    const platform = platformMap[target as keyof typeof platformMap];
+    if (!platform) {
+      throw new Error(`Unknown platform for target: ${target}`);
+    }
+
+    return dag
+      .container({ platform })
+      .from("alpine:latest")
+      .withFile("/usr/local/bin/atomic-server", binary)
+      .withExec(["chmod", "+x", "/usr/local/bin/atomic-server"])
+      .withEntrypoint(["/usr/local/bin/atomic-server"])
+      .withDefaultArgs([]);
+  }
+
+  @func()
+  /** Creates Docker images for all supported architectures */
+  async createDockerImages(): Promise<void> {
+    const targets = Object.keys(TARGET_IMAGE_MAP);
+    const tag = "latest";
+
+    // Build the amd64 variant first (this will be our base)
+    const amd64Image = this.createDockerImage("x86_64-unknown-linux-musl");
+
+    // Build other variants
+    const otherVariants = targets
+      .filter((target) => target !== "x86_64-unknown-linux-musl")
+      .map((target) => this.createDockerImage(target));
+
+    // Publish the multi-platform image with all variants
+    await amd64Image.publish(`joepmeneer/atomic-server:${tag}`, {
+      platformVariants: otherVariants,
+    });
   }
 }
