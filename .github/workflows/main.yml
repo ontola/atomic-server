@@ -5,13 +5,7 @@ jobs:
   earthly:
     name: Earthly
     runs-on: ubuntu-latest
-    env:
-      EARTHLY_TOKEN: ${{ secrets.EARTHLY_TOKEN }}
     steps:
-      - uses: earthly/actions-setup@v1
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          version: "latest"
       - uses: actions/checkout@v2
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
@@ -24,11 +18,21 @@ jobs:
         with:
           images: joepmeneer/atomic-server
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Earthly +tests
-        run: earthly --org ontola --ci --sat henk -P +tests
-      - name: Earthly +builds
+      - name: Dagger CI
+        uses: dagger/dagger-for-github@8.0.0
+        with:
+          version: "latest"
+          cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
+          verb: call
+          args: ci
+      - name: Docker images
         if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
-        run: earthly --org ontola --ci --sat henk -P --push +builds --tags="${{ steps.meta.outputs.tags }}"
+        uses: dagger/dagger-for-github@8.0.0
+        with:
+          version: "latest"
+          cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
+          verb: call
+          args: create-docker-images --tags ${{ steps.meta.outputs.tags }}
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
