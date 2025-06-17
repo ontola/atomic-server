@@ -554,20 +554,20 @@ export class AtomicServer {
 
   @func()
   /** Creates Docker images for all supported architectures */
-  async createDockerImages(): Promise<void> {
+  async createDockerImages(@argument() tag: string = "latest"): Promise<void> {
     const targets = Object.keys(TARGET_IMAGE_MAP);
-    const tag = "latest";
 
-    // Build the amd64 variant first (this will be our base)
-    const amd64Image = this.createDockerImage("x86_64-unknown-linux-musl");
+    // Build one variant first.
+    let firstImageArchitecture = "x86_64-unknown-linux-musl";
+    const firstImage = this.createDockerImage(firstImageArchitecture);
 
     // Build other variants
     const otherVariants = targets
-      .filter((target) => target !== "x86_64-unknown-linux-musl")
+      .filter((target) => target !== firstImageArchitecture)
       .map((target) => this.createDockerImage(target));
 
     // Publish the multi-platform image with all variants
-    await amd64Image.publish(`joepmeneer/atomic-server:${tag}`, {
+    await firstImage.publish(`joepmeneer/atomic-server:${tag}`, {
       platformVariants: otherVariants,
     });
   }
