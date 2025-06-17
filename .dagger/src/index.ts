@@ -7,11 +7,19 @@ import {
   argument,
   Secret,
   File,
-  type Platform,
 } from "@dagger.io/dagger";
 
 const NODE_IMAGE = "node:24";
 const RUST_IMAGE = "rust:bookworm";
+
+// See https://github.com/rust-cross/rust-musl-cross?tab=readme-ov-file#prebuilt-images
+const TARGET_IMAGE_MAP = {
+  "x86_64-unknown-linux-musl": "ghcr.io/rust-cross/rust-musl-cross:x86_64-musl",
+  "aarch64-unknown-linux-musl":
+    "ghcr.io/rust-cross/rust-musl-cross:aarch64-musl",
+  "armv7-unknown-linux-musleabihf":
+    "ghcr.io/rust-cross/rust-musl-cross:armv7-musleabihf",
+} as const;
 
 @object()
 export class AtomicServer {
@@ -198,18 +206,7 @@ export class AtomicServer {
     const source = this.source;
     const cargoCache = dag.cacheVolume("cargo");
 
-    let image = RUST_IMAGE;
-    if (target === "x86_64-unknown-linux-musl") {
-      image = "ghcr.io/rust-cross/rust-musl-cross:x86_64-musl";
-    } else if (target === "aarch64-unknown-linux-musl") {
-      image = "ghcr.io/rust-cross/rust-musl-cross:aarch64-musl";
-    } else if (target === "armv7-unknown-linux-musleabihf") {
-      image = "ghcr.io/rust-cross/rust-musl-cross:armv7-musleabihf";
-    } else {
-      throw new Error(
-        `Unknown target: ${target}. Supported targets are: x86_64-unknown-linux-musl, aarch64-unknown-linux-musl, armv7-unknown-linux-musleabihf.`
-      );
-    }
+    const image = TARGET_IMAGE_MAP[target as keyof typeof TARGET_IMAGE_MAP];
 
     const rustContainer = dag
       .container()
@@ -502,14 +499,9 @@ export class AtomicServer {
   }
 
   @func()
-  async releaseAssets(
-    @argument()
-    targets: string[] = [
-      "x86_64-unknown-linux-musl",
-      "aarch64-unknown-linux-musl",
-      "armv7-unknown-linux-musleabihf",
-    ]
-  ): Promise<Directory> {
+  async releaseAssets(): Promise<Directory> {
+    const targets = Object.keys(TARGET_IMAGE_MAP);
+
     const builds = targets.map((target) => {
       const container = this.rustBuild(true, target);
       return {
