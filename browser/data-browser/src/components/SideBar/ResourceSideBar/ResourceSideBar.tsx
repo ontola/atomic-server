@@ -121,26 +121,26 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = ({
 
   if (resource.loading) {
     return (
-      <SideBarItem
+      <TreeLoadingRow
         onClick={onClick}
         disabled={active}
         resource={subject}
         title={`${subject} is loading...`}
       >
         <LoaderInline />
-      </SideBarItem>
+      </TreeLoadingRow>
     );
   }
 
   if (resource.error) {
     return (
       <StyledLink subject={subject} clean>
-        <SideBarItem onClick={onClick} disabled={active} resource={subject}>
+        <TreeLoadingRow onClick={onClick} disabled={active} resource={subject}>
           <SideBarErrorWrapper>
             <FaTriangleExclamation />
             Resource with error
           </SideBarErrorWrapper>
-        </SideBarItem>
+        </TreeLoadingRow>
       </StyledLink>
     );
   }
@@ -185,8 +185,17 @@ const Wrapper = styled.div<{ highlight: boolean }>`
   ${transition('background-color')}
 `;
 
+const TreeLoadingRow = styled(SideBarItem)`
+  box-sizing: border-box;
+  width: 100%;
+`;
+
 const StyledLink = styled(AtomicLink)`
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   white-space: nowrap;
 `;

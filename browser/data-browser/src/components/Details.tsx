@@ -84,6 +84,8 @@ export function Details({
 }
 
 const SummaryWrapper = styled.div`
+  box-sizing: border-box;
+  width: 100%;
   max-width: 100%;
   display: flex;
   align-items: center;
@@ -95,6 +97,7 @@ const SummaryWrapper = styled.div`
 const TitleWrapper = styled.div<{ $noLeadingCaret: boolean }>`
   flex: 1;
   min-width: 0;
+  max-width: 100%;
   ${p =>
     p.$noLeadingCaret
       ? ''

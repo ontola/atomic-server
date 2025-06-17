@@ -32,8 +32,8 @@ interface SidebarItemTitleProps {
 }
 
 const NavResourceLink = styled(StyledLink)`
-  min-width: 0;
   display: flex;
+  align-self: stretch;
 `;
 
 export const SidebarItemTitle = forwardRef<
@@ -67,7 +67,6 @@ export const SidebarItemTitle = forwardRef<
       <ActionWrapper
         isDragging={isDragging}
         data-sidebar-id={getTransitionName(SIDEBAR_TRANSITION_TAG, subject)}
-        $expandable={expandable}
       >
         {sidebarKeyboardDndEnabled ? (
           expandable ? (
@@ -94,10 +93,9 @@ export const SidebarItemTitle = forwardRef<
                     disabled={active}
                     resource={subject}
                     title={description}
-                    $compactLeading
                   >
                     <TextWrapper>
-                      {resource.title}
+                      <TreeRowTitle>{resource.title}</TreeRowTitle>
                       <UnsavedIndicator resource={resource} />
                     </TextWrapper>
                   </ResourceLinkSideBarItem>
@@ -106,7 +104,7 @@ export const SidebarItemTitle = forwardRef<
             </>
           ) : (
             <NavResourceLink subject={subject} clean ref={ref}>
-              <SideBarItem
+              <ResourceTreeRow
                 onClick={onClick}
                 disabled={active}
                 resource={subject}
@@ -122,10 +120,10 @@ export const SidebarItemTitle = forwardRef<
                     <Icon />
                     <FaGripVertical />
                   </StyledIconButton>
-                  {resource.title}
+                  <TreeRowTitle>{resource.title}</TreeRowTitle>
                   <UnsavedIndicator resource={resource} />
                 </TextWrapper>
-              </SideBarItem>
+              </ResourceTreeRow>
             </NavResourceLink>
           )
         ) : expandable ? (
@@ -156,10 +154,9 @@ export const SidebarItemTitle = forwardRef<
                   disabled={active}
                   resource={subject}
                   title={description}
-                  $compactLeading
                 >
                   <TextWrapper>
-                    {resource.title}
+                    <TreeRowTitle>{resource.title}</TreeRowTitle>
                     <UnsavedIndicator resource={resource} />
                   </TextWrapper>
                 </ResourceLinkSideBarItem>
@@ -174,7 +171,7 @@ export const SidebarItemTitle = forwardRef<
             {...(listeners ?? {})}
             {...(attributes ?? {})}
           >
-            <SideBarItem
+            <ResourceTreeRow
               onClick={onClick}
               disabled={active}
               resource={subject}
@@ -184,13 +181,17 @@ export const SidebarItemTitle = forwardRef<
                 <LeadingSlot>
                   <Icon />
                 </LeadingSlot>
-                {resource.title}
+                <TreeRowTitle>{resource.title}</TreeRowTitle>
                 <UnsavedIndicator resource={resource} />
               </TextWrapper>
-            </SideBarItem>
+            </ResourceTreeRow>
           </NavResourceLink>
         )}
-        {!hideActionButtons && <FloatingActions subject={subject} />}
+        {!hideActionButtons && (
+          <FloatingActionsCell>
+            <FloatingActions subject={subject} />
+          </FloatingActionsCell>
+        )}
       </ActionWrapper>
     );
   },
@@ -221,18 +222,25 @@ const LeadingSlot = styled.span`
   width: 1.5rem;
 `;
 
+const TreeRowTitle = styled.span`
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`;
+
+/** Same box model as {@link SideBarItem}: padded cell for the 1.5rem leading slot. */
 const ExpandToggleButton = styled.button`
+  box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  box-sizing: border-box;
-  width: 1.5rem;
-  height: 1.5rem;
+  min-height: ${p => p.theme.margin * 0.5 + 1}rem;
+  width: calc(1.5rem + 0.4rem);
   margin: 0;
-  /* Align with SideBarItem padding-left so caret column matches class-icon rows */
-  margin-inline-start: 0.5rem;
-  padding: 0;
+  padding: 0.2rem;
   border: none;
   border-radius: ${p => p.theme.radius};
   background: transparent;
@@ -264,28 +272,38 @@ const RowBody = styled.div`
   flex: 1;
   min-width: 0;
   display: flex;
+  align-items: stretch;
+`;
+
+/** Fills {@link RowBody} so hover/background spans the sidebar (minus caret + actions). */
+const ResourceTreeRow = styled(SideBarItem)`
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  align-self: stretch;
+`;
+
+const ResourceLinkSideBarItem = ResourceTreeRow;
+
+const FloatingActionsCell = styled.span`
+  align-self: center;
+  flex-shrink: 0;
+  display: inline-flex;
   align-items: center;
 `;
 
-const ResourceLinkSideBarItem = styled(SideBarItem)<{ $compactLeading?: boolean }>`
-  flex: 1;
-  min-width: 0;
-  ${p =>
-    p.$compactLeading &&
-    `
-    padding-left: 0;
-  `}
-`;
-
-const ActionWrapper = styled.div<{ isDragging?: boolean; $expandable?: boolean }>`
+const ActionWrapper = styled.div<{ isDragging?: boolean }>`
   --aw-box-shadow-start: 0 0 0 0px rgba(0, 0, 0, 0.1);
   --aw-box-shadow-end:
     0 0 0 1px ${p => p.theme.colors.main}, ${p => p.theme.boxShadowSoft};
 
+  box-sizing: border-box;
   display: flex;
-  align-items: center;
+  align-items: stretch;
   width: 100%;
-  gap: ${p => (p.$expandable ? '0.4rem' : '0')};
+  min-width: 0;
+  gap: 0;
   ${floatingHoverStyles}
   border-radius: ${p => p.theme.radius};
   ${p =>

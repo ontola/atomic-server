@@ -19,6 +19,8 @@ interface QuickCreateRowProps {
   className?: string;
   /** E2E: only set on the sidebar row so "New" is unique (drive/folder rows omit this). */
   newResourceButtonTestId?: string;
+  /** e.g. close sidebar on narrow viewports (same callback as sidebar resource links). */
+  onItemClick?: () => unknown;
 }
 
 /** Leading column width matches sidebar tree class / caret slot (see SidebarItemTitle). */
@@ -29,23 +31,22 @@ export function QuickCreateRow({
   parent,
   className,
   newResourceButtonTestId,
+  onItemClick,
 }: QuickCreateRowProps): JSX.Element {
   const createNewResource = useNewResourceUI();
   const navigate = useNavigateWithTransition();
 
   return (
-    <QuickCreateRowRoot
-      gap='0.15rem'
-      center
-      align='center'
-      className={className}
-    >
+    <Row gap='0.15rem' center align='center' className={className}>
       <NewResourceOpacity>
         <NewResourceTrigger
           type='button'
           title='New resource'
           data-testid={newResourceButtonTestId}
-          onClick={() => navigate(paths.new)}
+          onClick={() => {
+            onItemClick?.();
+            navigate(paths.new);
+          }}
         >
           <PlusSlot>
             <FaPlus />
@@ -57,9 +58,10 @@ export function QuickCreateRow({
         <IconButton
           color='textLight'
           title='New Document'
-          onClick={() =>
-            createNewResource(dataBrowser.classes.documentV2, parent)
-          }
+          onClick={() => {
+            onItemClick?.();
+            createNewResource(dataBrowser.classes.documentV2, parent);
+          }}
         >
           <FaFileLines />
         </IconButton>
@@ -68,7 +70,10 @@ export function QuickCreateRow({
         <IconButton
           color='textLight'
           title='New Table'
-          onClick={() => createNewResource(dataBrowser.classes.table, parent)}
+          onClick={() => {
+            onItemClick?.();
+            createNewResource(dataBrowser.classes.table, parent);
+          }}
         >
           <FaTable />
         </IconButton>
@@ -77,7 +82,10 @@ export function QuickCreateRow({
         <IconButton
           color='textLight'
           title='New Folder'
-          onClick={() => createNewResource(dataBrowser.classes.folder, parent)}
+          onClick={() => {
+            onItemClick?.();
+            createNewResource(dataBrowser.classes.folder, parent);
+          }}
         >
           <FaFolder />
         </IconButton>
@@ -86,21 +94,17 @@ export function QuickCreateRow({
         <IconButton
           color='textLight'
           title='New ChatRoom'
-          onClick={() =>
-            createNewResource(dataBrowser.classes.chatroom, parent)
-          }
+          onClick={() => {
+            onItemClick?.();
+            createNewResource(dataBrowser.classes.chatroom, parent);
+          }}
         >
           <FaComment />
         </IconButton>
       </IconButtonWrapper>
-    </QuickCreateRowRoot>
+    </Row>
   );
 }
-
-const QuickCreateRowRoot = styled(Row)`
-  /* Same inset as SideBarItem padding-left so icons line up with the tree */
-  margin-inline-start: 0.5rem;
-`;
 
 const NewResourceOpacity = styled.span`
   display: inline-flex;
@@ -113,13 +117,14 @@ const NewResourceOpacity = styled.span`
 `;
 
 const NewResourceTrigger = styled.button`
+  box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
   border: none;
   background: transparent;
   margin: 0;
-  padding: 0.2rem 0.35rem 0.2rem 0;
+  padding: 0.2rem;
   border-radius: ${p => p.theme.radius};
   cursor: pointer;
   color: ${p => p.theme.colors.textLight};

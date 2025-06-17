@@ -65,9 +65,11 @@ export function About() {
 }
 
 const AboutWrapper = styled.div`
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  /* Align icon row with SideBarMenuItem (panel inset + SideBarItem padding) */
-  margin-left: ${p => p.theme.size(2)};
+  width: 100%;
+  /* Match {@link SideBarItem} padding-inline so icons line up with App menu rows */
+  padding-inline-start: 0.2rem;
 `;
