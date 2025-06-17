@@ -41,6 +41,7 @@ import { useClientOnlyTransport } from './ClientOnlyTransport';
 import { useGenerativeData } from './useGenerativeData';
 import { FollowUpPrompt } from './FollowUpPrompt';
 import { useAISettings } from '@components/AI/AISettingsContext';
+import UsesMCPServers from '@components/AI/MCP/UsesMCPServers';
 
 const AIChatInput = React.lazy(
   () => import('@chunks/RTE/AIChatInput/AsyncAIChatInput'),
@@ -61,6 +62,17 @@ interface RealAIChatProps {
 }
 
 export const RealAIChat: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
+  children,
+  ...props
+}) => {
+  return (
+    <UsesMCPServers>
+      <RealAIChatInner {...props}>{children}</RealAIChatInner>
+    </UsesMCPServers>
+  );
+};
+
+const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   fullView = false,
   readonly = false,
   initialMessages,
@@ -93,7 +105,8 @@ export const RealAIChat: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   } = useAIAgentConfig();
   const addContextToMessages = useProcessMessages();
   const getToolsForAgent = useTools();
-  const { checkORModelSupportsImageInput } = useOpenRouterModels();
+  const { checkORModelSupportsImageInput, getOutputModalities } =
+    useOpenRouterModels();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -141,7 +154,7 @@ export const RealAIChat: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     },
     autoSelectAgent: autoAgentSelectEnabled,
     webSearchEnabled,
-    modalities: ['image', 'text'],
+    resolveOutputModalities: getOutputModalities,
     addContextToMessages,
   });
 

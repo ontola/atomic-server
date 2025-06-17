@@ -6,7 +6,7 @@ import { Row } from '../../../components/Row';
 import InputString from '../../../components/forms/InputString';
 import { PropertyDatatypePicker } from '../PropertyDatatypePicker';
 import { IconButton } from '../../../components/IconButton/IconButton';
-import { FaSlidersH, FaTimes } from 'react-icons/fa';
+import { FaSliders, FaXmark } from 'react-icons/fa6';
 import { useDialog } from '../../../components/Dialog';
 import { PropertyWriteDialog } from './PropertyWriteDialog';
 import { useOntologyContext } from '../OntologyContext';
@@ -75,14 +75,14 @@ export function PropertyLineWrite({
             color='textLight'
             onClick={show}
           >
-            <FaSlidersH />
+            <FaSliders />
           </IconButton>
           <IconButton
             title='remove'
             color='textLight'
             onClick={() => onRemove(subject)}
           >
-            <FaTimes />
+            <FaXmark />
           </IconButton>
         </Row>
       </Row>

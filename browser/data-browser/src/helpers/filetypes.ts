@@ -1,7 +1,7 @@
 import {
   FaFile,
-  FaFileAlt,
-  FaFileArchive,
+  FaFileLines,
+  FaFileZipper,
   FaFileAudio,
   FaFileCsv,
   FaFileExcel,
@@ -9,7 +9,7 @@ import {
   FaFilePdf,
   FaFileVideo,
   FaFileWord,
-} from 'react-icons/fa';
+} from 'react-icons/fa6';
 
 export const imageMimeTypes = new Set([
   'image/png',
@@ -69,7 +69,7 @@ export function getFileIcon(mimeType: string) {
   }
 
   if (archiveMimeTypes.has(mimeType)) {
-    return FaFileArchive;
+    return FaFileZipper;
   }
 
   if (mimeType === 'text/csv') {
@@ -89,7 +89,7 @@ export function getFileIcon(mimeType: string) {
   }
 
   if (mimeType?.startsWith('text/')) {
-    return FaFileAlt;
+    return FaFileLines;
   }
 
   return FaFile;

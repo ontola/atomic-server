@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { FaRegStar, FaStar } from 'react-icons/fa';
+import { FaRegStar, FaStar } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import { useDriveHistory } from '../../hooks/useDriveHistory';
 import { useSavedDrives } from '../../hooks/useSavedDrives';
@@ -26,11 +26,11 @@ export function FavoriteButton({ subject, className }: FavoriteButtonProps) {
     }
   }, [
     subject,
-    savedDrives,
     removeFromHistory,
     addDriveToHistory,
     addSaveDrive,
     removeSaveDrive,
+    isFavorite,
   ]);
 
   return (

@@ -5,7 +5,7 @@ import {
 import { urls, useArray, useProperty, useResource } from '@tomic/react';
 import { useCallback, type JSX } from 'react';
 import { styled } from 'styled-components';
-import { FaCube } from 'react-icons/fa';
+import { FaCube } from 'react-icons/fa6';
 import { Column, Row } from '../../../components/Row';
 import { OntologyDescription } from '../OntologyDescription';
 import { PropertyLineWrite } from '../Property/PropertyLineWrite';

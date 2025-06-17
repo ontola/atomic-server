@@ -9,7 +9,7 @@ import {
 import { useHotkeys } from 'react-hotkeys-hook';
 import * as RadixPopover from '@radix-ui/react-popover';
 import { useResource, useTitle } from '@tomic/react';
-import { FaCaretDown, FaTimes, FaTrash } from 'react-icons/fa';
+import { FaCaretDown, FaXmark, FaTrash } from 'react-icons/fa6';
 import { styled, css } from 'styled-components';
 import { Hit, useLocalSearch } from '../../../helpers/useLocalSearch';
 import { ButtonInput } from '../../Button';
@@ -216,7 +216,7 @@ export const DropdownInput: React.FC<DropDownListProps> = ({
                 title='clear selection'
                 aria-label='clear selection'
               >
-                <FaTimes />
+                <FaXmark />
               </ButtonInput>
             ) : null}
             {options.length > 0 && selectedItem === undefined && (

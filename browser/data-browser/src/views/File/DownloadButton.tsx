@@ -1,4 +1,4 @@
-import { FaDownload } from 'react-icons/fa';
+import { FaDownload } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import { Button } from '../../components/Button';
 import { IconButton } from '../../components/IconButton/IconButton';

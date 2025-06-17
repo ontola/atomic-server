@@ -1,7 +1,7 @@
 import { useState, type JSX } from 'react';
 import { useArray, useCanWrite, dataBrowser, useStore } from '@tomic/react';
 import { styled } from 'styled-components';
-import { FaInfoCircle } from 'react-icons/fa';
+import { FaCircleInfo } from 'react-icons/fa6';
 
 import { ElementShow } from './Element';
 import { Button } from '../components/Button';
@@ -29,7 +29,7 @@ export function DocumentPage({ resource }: ResourcePageProps): JSX.Element {
           {canWrite && (
             <UpgradeMessage>
               <Row align='baseline'>
-                <FaInfoCircle />
+                <FaCircleInfo />
                 This document needs to be updated to the new format in order to
                 be edited.
               </Row>

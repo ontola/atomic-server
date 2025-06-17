@@ -2,13 +2,12 @@ import { Client, dataBrowser, useResource, useTitle } from '@tomic/react';
 import { transparentize } from 'polished';
 import { useEffect, useRef, type JSX } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
-import { FaTimes } from 'react-icons/fa';
 import { styled } from 'styled-components';
 import { constructOpenURL } from '../../helpers/navigation';
 import { useQueryScopeHandler } from '../../hooks/useQueryScope';
 import { shortcuts } from '../HotKeyWrapper';
 import { IconButton, IconButtonVariant } from '../IconButton/IconButton';
-import { FaMagnifyingGlass } from 'react-icons/fa6';
+import { FaMagnifyingGlass, FaXmark } from 'react-icons/fa6';
 import { useNavigate } from '@tanstack/react-router';
 import { paths } from '../../routes/paths';
 import { useCurrentSubject } from '../../helpers/useCurrentSubject';
@@ -172,7 +171,7 @@ function ParentTag({ subject, onClick }: ParentTagProps): JSX.Element {
         size='0.7rem'
         type='button'
       >
-        <FaTimes />
+        <FaXmark />
       </IconButton>
     </Tag>
   );

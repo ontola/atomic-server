@@ -18,10 +18,10 @@ import CrashPage from './views/CrashPage';
 import { AppSettingsContextProvider } from './helpers/AppSettings';
 import { NavStateProvider } from './components/NavState';
 import { Toaster } from './components/Toaster';
-import { McpServersProvider } from './components/AI/MCP/useMcpServers';
 import { AISettingsContextProvider } from '@components/AI/AISettingsContext';
 import { LocaleProvider } from '@components/LocaleContext';
 import { CustomContextItemsProvider } from './components/ResourceContextMenu';
+import { LazyMCPProvider } from '@components/AI/MCP/LazyMCPProvider';
 
 // Setup bugsnag for error handling, but only if there's an API key
 const ErrBoundary = window.bugsnagApiKey
@@ -52,7 +52,7 @@ export const Providers: React.FC<React.PropsWithChildren> = ({ children }) => {
       <LocaleProvider>
         <AppSettingsContextProvider>
           <AISettingsContextProvider>
-            <McpServersProvider>
+            <LazyMCPProvider>
               <ControlLockProvider>
                 <HotKeysWrapper>
                   <StyleSheetManager shouldForwardProp={shouldForwardProp}>
@@ -86,7 +86,7 @@ export const Providers: React.FC<React.PropsWithChildren> = ({ children }) => {
                   </StyleSheetManager>
                 </HotKeysWrapper>
               </ControlLockProvider>
-            </McpServersProvider>
+            </LazyMCPProvider>
           </AISettingsContextProvider>
         </AppSettingsContextProvider>
       </LocaleProvider>

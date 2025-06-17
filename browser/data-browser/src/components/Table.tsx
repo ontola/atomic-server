@@ -8,7 +8,7 @@ import {
 } from '@tomic/react';
 import { ResourceInline } from '../views/ResourceInline';
 import { useSubjectParam } from '../helpers/useCurrentSubject';
-import { FaSort, FaSortDown, FaSortUp } from 'react-icons/fa';
+import { FaSort, FaSortDown, FaSortUp } from 'react-icons/fa6';
 import { Button } from './Button';
 import { ValueForm } from './forms/ValueForm';
 import { memo, type JSX } from 'react';

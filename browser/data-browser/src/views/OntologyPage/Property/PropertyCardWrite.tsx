@@ -1,6 +1,6 @@
 import { useCallback, type JSX } from 'react';
-import { urls, useCanWrite, useProperty, useResource } from '@tomic/react';
-import { FaHashtag } from 'react-icons/fa';
+import { core, useCanWrite, useProperty, useResource } from '@tomic/react';
+import { FaHashtag } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import { Column, Row } from '../../../components/Row';
 import InputSwitcher from '../../../components/forms/InputSwitcher';
@@ -25,7 +25,7 @@ export function PropertyCardWrite({
     ContextMenuOptions.History,
   ];
   const resource = useResource(subject);
-  const shortnameProp = useProperty(urls.properties.shortname);
+  const shortnameProp = useProperty(core.properties.shortname);
   const canEdit = useCanWrite(resource);
 
   const { removeProperty } = useOntologyContext();

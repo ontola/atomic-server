@@ -1,5 +1,5 @@
 import { styled } from 'styled-components';
-import { FaExternalLinkAlt } from 'react-icons/fa';
+import { FaArrowUpRightFromSquare } from 'react-icons/fa6';
 
 import type { JSX } from 'react';
 
@@ -26,7 +26,7 @@ export function ExternalLink({
   return (
     <Comp href={to} target='_blank' rel='noreferrer'>
       {children}
-      <FaExternalLinkAlt />
+      <FaArrowUpRightFromSquare />
     </Comp>
   );
 }

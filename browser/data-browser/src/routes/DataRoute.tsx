@@ -16,7 +16,7 @@ import { ErrorLook } from '../components/ErrorLook';
 import { ResourceUsage } from '../components/ResourceUsage';
 import { Main } from '../components/Main';
 import { IconButton } from '../components/IconButton/IconButton';
-import { FaArrowLeft } from 'react-icons/fa';
+import { FaArrowLeft } from 'react-icons/fa6';
 import { constructOpenURL } from '../helpers/navigation';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { pathNames } from './paths';

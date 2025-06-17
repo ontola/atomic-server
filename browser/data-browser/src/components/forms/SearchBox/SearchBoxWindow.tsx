@@ -10,7 +10,7 @@ import {
   useState,
   type JSX,
 } from 'react';
-import { FaSearch } from 'react-icons/fa';
+import { FaMagnifyingGlass } from 'react-icons/fa6';
 import { styled, css } from 'styled-components';
 import { ResourceResultLine, ResultLine } from './ResultLine';
 import { fadeIn } from '../../../helpers/commonAnimations';
@@ -267,7 +267,7 @@ export function SearchBoxWindow({
       onMouseLeave={() => setIndex(undefined)}
     >
       <SearchInputWrapper>
-        <FaSearch />
+        <FaMagnifyingGlass />
         <Input
           autoFocus
           placeholder={placeholder}

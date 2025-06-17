@@ -1,6 +1,6 @@
 import { core, useResource, useString, useTitle } from '@tomic/react';
 import { useState, type JSX } from 'react';
-import { FaInfo } from 'react-icons/fa';
+import { FaInfo } from 'react-icons/fa6';
 import Markdown from '../../datatypes/Markdown';
 import { Column, Row } from '../../Row';
 import { styled } from 'styled-components';

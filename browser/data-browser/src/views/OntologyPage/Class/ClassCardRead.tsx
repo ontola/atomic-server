@@ -2,7 +2,7 @@ import { core, useArray, useResource, useString } from '@tomic/react';
 
 import { PropertyLineRead } from '../Property/PropertyLineRead';
 import { styled } from 'styled-components';
-import { FaCube } from 'react-icons/fa';
+import { FaCube } from 'react-icons/fa6';
 import { Column, Row } from '../../../components/Row';
 import Markdown from '../../../components/datatypes/Markdown';
 import { AtomicLink } from '../../../components/AtomicLink';

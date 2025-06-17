@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
-import { FaEdit } from 'react-icons/fa';
+import { FaPencil } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import {
   useProperty,
@@ -63,7 +63,7 @@ export function ValueForm({ resource, propertyURL, datatype }: ValueFormProps) {
         <ValueComp value={value} datatype={datatype || property.datatype} />
         {shouldShowEditButton && (
           <EditButton title='Edit value'>
-            <FaEdit onClick={() => setEditMode(!editMode)} />
+            <FaPencil onClick={() => setEditMode(!editMode)} />
           </EditButton>
         )}
       </ValueFormWrapper>

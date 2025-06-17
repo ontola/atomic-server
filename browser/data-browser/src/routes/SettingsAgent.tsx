@@ -1,8 +1,6 @@
 import * as React from 'react';
 import { useState } from 'react';
 import { Agent } from '@tomic/react';
-import { FaUser } from 'react-icons/fa';
-
 import { useSettings } from '../helpers/AppSettings';
 import {
   InputStyled,
@@ -24,7 +22,7 @@ import { createRoute } from '@tanstack/react-router';
 import { pathNames } from './paths';
 import { appRoute } from './RootRoutes';
 import { saveAgentToIDB } from '@helpers/agentStorage';
-import { FaKey } from 'react-icons/fa6';
+import { FaKey, FaUser } from 'react-icons/fa6';
 
 export const AgentSettingsRoute = createRoute({
   path: pathNames.agentSettings,

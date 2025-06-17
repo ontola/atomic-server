@@ -1,5 +1,5 @@
 import React, { useState, type JSX } from 'react';
-import { FaAsterisk, FaInfo, FaTrash } from 'react-icons/fa';
+import { FaAsterisk, FaInfo, FaTrash } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import { Collapse } from '../Collapse';
 import { IconButton, IconButtonVariant } from '../IconButton/IconButton';

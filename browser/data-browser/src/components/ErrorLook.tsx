@@ -1,7 +1,7 @@
 import { lighten } from 'polished';
 import { styled, css } from 'styled-components';
 
-import { FaExclamationTriangle } from 'react-icons/fa';
+import { FaTriangleExclamation } from 'react-icons/fa6';
 
 import type { JSX } from 'react';
 import { getMessageForErrorType } from '@tomic/react';
@@ -32,7 +32,7 @@ export function ErrorBlock({ error, showTrace }: ErrorBlockProps): JSX.Element {
   return (
     <ErrorLookBig>
       <BiggerText>
-        <FaExclamationTriangle />
+        <FaTriangleExclamation />
         {getMessageForErrorType(error)}
       </BiggerText>
       <Pre>

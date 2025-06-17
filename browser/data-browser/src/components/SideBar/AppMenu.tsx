@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
 import {
-  FaCog,
+  FaGear,
   FaInfo,
   FaKeyboard,
-  FaPlusCircle,
+  FaCirclePlus,
   FaUser,
-} from 'react-icons/fa';
+} from 'react-icons/fa6';
 import { constructOpenURL } from '../../helpers/navigation';
 import { useCurrentSubject } from '../../helpers/useCurrentSubject';
 import { SideBarMenuItem } from './SideBarMenuItem';
@@ -72,7 +72,7 @@ export function AppMenu({ onItemClick }: AppMenuProps): JSX.Element {
         onClick={onItemClick}
       />
       <SideBarMenuItem
-        icon={<FaCog />}
+        icon={<FaGear />}
         label='Settings'
         helper='Change client settings (t)'
         path={paths.appSettings}
@@ -94,7 +94,7 @@ export function AppMenu({ onItemClick }: AppMenuProps): JSX.Element {
       />
       {showInstallButton && (
         <SideBarMenuItem
-          icon={<FaPlusCircle />}
+          icon={<FaCirclePlus />}
           label='Install App'
           helper='Install app to desktop'
           path={constructOpenURL(subject ?? window.location.href)}

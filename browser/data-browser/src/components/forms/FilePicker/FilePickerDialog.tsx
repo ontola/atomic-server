@@ -7,7 +7,7 @@ import {
   useDialog,
 } from '../../Dialog';
 import { InputStyled, InputWrapper } from '../InputStyles';
-import { FaPlus, FaSearch } from 'react-icons/fa';
+import { FaPlus, FaMagnifyingGlass } from 'react-icons/fa6';
 import { Client, core, server, useServerSearch } from '@tomic/react';
 import { styled } from 'styled-components';
 import { FilePickerItem } from './FilePickerItem';
@@ -94,7 +94,7 @@ export function FilePickerDialog({
           <DialogTitle>
             <Row wrapItems>
               <InputWrapper hasPrefix>
-                <FaSearch />
+                <FaMagnifyingGlass />
                 <InputStyled
                   type='search'
                   placeholder='Search or enter a URL...'

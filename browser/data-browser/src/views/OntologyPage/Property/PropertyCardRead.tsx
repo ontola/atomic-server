@@ -1,5 +1,5 @@
 import { core, useArray, useResource, useString } from '@tomic/react';
-import { FaHashtag } from 'react-icons/fa';
+import { FaHashtag } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import Markdown from '../../../components/datatypes/Markdown';
 import { Column, Row } from '../../../components/Row';

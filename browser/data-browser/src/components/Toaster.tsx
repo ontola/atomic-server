@@ -5,7 +5,7 @@ import toast, {
   resolveValue,
   type Renderable,
 } from 'react-hot-toast';
-import { FaCopy, FaTimes } from 'react-icons/fa';
+import { FaCopy, FaXmark } from 'react-icons/fa6';
 import styled, { useTheme } from 'styled-components';
 import { zIndex } from '../styling';
 import { Row } from './Row';
@@ -90,7 +90,7 @@ function ToastMessage({ icon, message, t }: ToastMessageProps) {
           }}
         >
           <IconButton title='Clear' onClick={() => toast.dismiss(t.id)}>
-            <FaTimes />
+            <FaXmark />
           </IconButton>
           {t.type !== 'success' && (
             <IconButton title='Copy' onClick={handleCopy}>

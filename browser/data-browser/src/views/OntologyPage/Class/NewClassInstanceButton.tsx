@@ -1,5 +1,5 @@
 import { Core, Resource } from '@tomic/react';
-import { FaPlus, FaAtom, FaTable } from 'react-icons/fa';
+import { FaPlus, FaAtom, FaTable } from 'react-icons/fa6';
 import { DropdownItem, DropdownMenu } from '../../../components/Dropdown';
 import { buildDefaultTrigger } from '../../../components/Dropdown/DefaultTrigger';
 import { useState } from 'react';

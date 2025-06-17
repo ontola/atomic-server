@@ -1,6 +1,6 @@
 import { Datatype, Resource, useStore, validateDatatype } from '@tomic/react';
 import { useRef, useState, type JSX } from 'react';
-import { FaPlus } from 'react-icons/fa';
+import { FaPlus } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import {
   Dialog,

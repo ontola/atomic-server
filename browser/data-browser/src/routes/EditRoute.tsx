@@ -10,7 +10,7 @@ import { Title } from '../components/Title';
 import { Main } from '../components/Main';
 import { Column, Row } from '../components/Row';
 import { IconButton } from '../components/IconButton/IconButton';
-import { FaArrowLeft } from 'react-icons/fa';
+import { FaArrowLeft } from 'react-icons/fa6';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { createRoute } from '@tanstack/react-router';
 import { pathNames } from './paths';

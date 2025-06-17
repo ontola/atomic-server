@@ -6,7 +6,7 @@ import ResourceCard from '../../views/Card/ResourceCard';
 import { dataBrowser, useServerSearch } from '@tomic/react';
 import { ErrorLook } from '../../components/ErrorLook';
 import { styled } from 'styled-components';
-import { FaSearch } from 'react-icons/fa';
+import { FaMagnifyingGlass } from 'react-icons/fa6';
 import { useQueryScopeHandler } from '../../hooks/useQueryScope';
 import { useSettings } from '../../helpers/AppSettings';
 import { Column, Row } from '../../components/Row';
@@ -137,7 +137,7 @@ export function Search(): JSX.Element {
           <>
             <Column gap='1rem'>
               <Heading>
-                <FaSearch />
+                <FaMagnifyingGlass />
                 <span>
                   {heading ? (
                     heading

@@ -1,4 +1,4 @@
-import { FaPlus } from 'react-icons/fa';
+import { FaPlus } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import { GridCard } from '../views/FolderPage/GridItem/components';
 

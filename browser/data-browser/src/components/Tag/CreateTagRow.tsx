@@ -1,6 +1,6 @@
 import { Resource, core, dataBrowser, useStore } from '@tomic/react';
 import { useState, useCallback } from 'react';
-import { FaPlus } from 'react-icons/fa';
+import { FaPlus } from 'react-icons/fa6';
 import { randomItem } from '../../helpers/randomItem';
 import { stringToSlug } from '../../helpers/stringToSlug';
 import { Button } from '../Button';

@@ -26,16 +26,18 @@ msgstr "Wähle eine Klasse"
 msgid "No classes"
 msgstr "Keine Klassen"
 
+#: src/chunks/TablePage/EditorCells/AtomicURLCell.tsx
+#: src/chunks/TablePage/EditorCells/MultiRelationCell.tsx
+#: src/chunks/TablePage/EditorCells/SelectCell.tsx
 #: src/components/ComboBox.tsx
-#: src/views/TablePage/EditorCells/AtomicURLCell.tsx
-#: src/views/TablePage/EditorCells/MultiRelationCell.tsx
-#: src/views/TablePage/EditorCells/SelectCell.tsx
 msgid "No results"
 msgstr "Keine Ergebnisse"
 
 #: src/chunks/AI/AgentConfig.tsx
 #: src/chunks/Plugins/NewPluginButton.tsx
 #: src/chunks/Plugins/UpdatePluginButton.tsx
+#: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
+#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
 #: src/components/ConfirmationDialog.tsx
 #: src/components/ParentPicker/ParentPickerDialog.tsx
 #: src/components/forms/EditFormDialog.tsx
@@ -49,13 +51,9 @@ msgstr "Keine Ergebnisse"
 #: src/components/forms/ResourceForm.tsx
 #: src/components/forms/ValueForm/ValueFormEdit.tsx
 #: src/routes/History/HistoryMobileView.tsx
-#: src/views/Drive/NewPluginButton.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/OntologyPage/NewPropertyButton.tsx
-#: src/views/Plugin/AssignPermissions.tsx
 #: src/views/Plugin/AssignRights.tsx
-#: src/views/TablePage/PropertyForm/ExternalPropertyDialog.tsx
-#: src/views/TablePage/PropertyForm/NewPropertyDialog.tsx
 msgid "Cancel"
 msgstr "Abbrechen"
 
@@ -118,12 +116,12 @@ msgstr "Einladungstext (optional)"
 msgid "Limit Usages (optional)"
 msgstr "Nutzungen beschränken (optional)"
 
+#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
 #: src/components/InviteForm.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
-#: src/views/TablePage/PropertyForm/NewPropertyDialog.tsx
 msgid "Create"
 msgstr "Erstellen"
 
@@ -217,8 +215,8 @@ msgstr "Subjekt"
 msgid "Copied error to clipboard"
 msgstr "Fehler in die Zwischenablage kopiert"
 
+#: src/chunks/TablePage/EditorCells/AtomicURLCell.tsx
 #: src/components/Toaster.tsx
-#: src/views/TablePage/EditorCells/AtomicURLCell.tsx
 msgid "Clear"
 msgstr "Leeren"
 
@@ -405,10 +403,10 @@ msgid "Back to {0}"
 msgstr "Zurück zu {0}"
 
 #: src/chunks/AI/AgentConfigItem.tsx
+#: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/components/ResourceContextMenu/index.tsx
 #: src/routes/EditRoute.tsx
 #: src/views/ResourcePageDefault.tsx
-#: src/views/TablePage/TableHeadingMenu.tsx
 msgid "Edit"
 msgstr "Bearbeiten"
 
@@ -575,20 +573,10 @@ msgstr "<0/> Zeile / Abschnitt nach unten verschieben"
 msgid "<0/> Delete line"
 msgstr "<0/> Zeile löschen"
 
-#~ msgid "If you sign out, your secret will be removed. If you haven't saved your secret somewhere, you will lose access to this User. Are you sure you want to sign out?"
-#~ msgstr "Wenn Sie sich abmelden, wird Ihr Geheimnis entfernt. Wenn Sie Ihr Geheimnis nicht gespeichert haben, verlieren Sie den Zugriff auf diesen Benutzer. Möchten Sie sich wirklich abmelden?"
-
 #: src/components/SideBar/AppMenu.tsx
 #: src/routes/SettingsAgent.tsx
 msgid "User Settings"
 msgstr "Benutzereinstellungen"
-
-#~ msgid ""
-#~ "An Agent is a user, consisting of a Subject (its URL) and Private\n"
-#~ "Key. Together, these can be used to edit data and sign Commits."
-#~ msgstr ""
-#~ "Ein Agent ist ein Benutzer, bestehend aus einem Subjekt (seiner URL) und einem privaten\n"
-#~ "Schlüssel. Zusammen können diese verwendet werden, um Daten zu bearbeiten und Commits zu signieren."
 
 #: src/routes/SettingsAgent.tsx
 msgid "Warning:"
@@ -607,24 +595,6 @@ msgstr "<0/> Sie sind angemeldet als"
 msgid "Edit profile"
 msgstr "Profil bearbeiten"
 
-#~ msgid "You can create your own Agent by hosting an{0} <0>atomic-server</0> . Alternatively, you can use{1} <1>an Invite</1>{2} to get a guest Agent on someone else{3} Atomic Server."
-#~ msgstr "Sie können Ihren eigenen Agenten erstellen, indem Sie einen{0} <0>atomic-server</0> hosten. Alternativ können Sie{1} <1>eine Einladung</1>{2} verwenden, um einen Gast-Agenten auf dem Atomic Server von jemand anderem{3} zu erhalten."
-
-#~ msgid "Hide secret"
-#~ msgstr "Geheimnis verbergen"
-
-#~ msgid "Show secret"
-#~ msgstr "Geheimnis anzeigen"
-
-#~ msgid "Hide advanced"
-#~ msgstr "Erweitert ausblenden"
-
-#~ msgid "Show advanced"
-#~ msgstr "Erweitert anzeigen"
-
-#~ msgid "copy"
-#~ msgstr "kopieren"
-
 #: src/routes/SettingsAgent.tsx
 #: src/views/InvitePage.tsx
 msgid "Agent Secret"
@@ -637,27 +607,6 @@ msgstr "Geben Sie Ihr Agenten-Geheimnis ein"
 #: src/routes/SettingsAgent.tsx
 msgid "The Agent Secret is a long string of characters that encodes both the Subject and the Private Key. You can think of it as a combined username + password. Store it safely, and don't share it with others."
 msgstr "Das Agenten-Geheimnis ist eine lange Zeichenkette, die sowohl das Subjekt als auch den privaten Schlüssel codiert. Sie können es sich als eine Kombination aus Benutzername und Passwort vorstellen. Bewahren Sie es sicher auf und geben Sie es nicht an Dritte weiter."
-
-#~ msgid "Subject URL"
-#~ msgstr "Subjekt-URL"
-
-#~ msgid "The link to your Agent, e.g. https://atomicdata.dev/agents/someAgent"
-#~ msgstr "Der Link zu Ihrem Agenten, z. B. https://atomicdata.dev/agents/someAgent"
-
-#~ msgid "Hide private key"
-#~ msgstr "Privaten Schlüssel verbergen"
-
-#~ msgid "Show private key"
-#~ msgstr "Privaten Schlüssel anzeigen"
-
-#~ msgid "Private Key"
-#~ msgstr "Privater Schlüssel"
-
-#~ msgid "The private key of the Agent, which is a Base64 encoded string."
-#~ msgstr "Der private Schlüssel des Agenten, der eine Base64-codierte Zeichenkette ist."
-
-#~ msgid "sign out"
-#~ msgstr "Abmelden"
 
 #: src/routes/SettingsAgent.tsx
 msgid "Sign out with current Agent and reset this form"
@@ -704,10 +653,10 @@ msgstr "Link zu dieser Nachricht kopieren"
 msgid "Copy message text"
 msgstr "Nachrichtentext kopieren"
 
+#: src/chunks/TablePage/PropertyForm/NumberPropertyForm.tsx
 #: src/views/BookmarkPage/BookmarkPreview.tsx
 #: src/views/ChatRoomPage.tsx
 #: src/views/ChatRoomPage.tsx
-#: src/views/TablePage/PropertyForm/NumberPropertyForm.tsx
 msgid "loading..."
 msgstr "Laden..."
 
@@ -784,17 +733,14 @@ msgid "No hits"
 msgstr "Keine Treffer"
 
 #: src/views/Drive/DrivePage.tsx
-#: src/views/DrivePage.tsx
 msgid "Set as current drive"
 msgstr "Als aktuelles Laufwerk festlegen"
 
 #: src/views/Drive/DrivePage.tsx
-#: src/views/DrivePage.tsx
 msgid "Default Ontology"
 msgstr "Standard-Ontologie"
 
 #: src/views/Drive/DrivePage.tsx
-#: src/views/DrivePage.tsx
 msgid ""
 "You are running Atomic-Server on `localhost`, which means that it\n"
 "will not be available from any other machine than your current local\n"
@@ -805,9 +751,6 @@ msgstr ""
 "anderen Rechner als Ihrem aktuellen lokalen Gerät aus erreichbar ist. Wenn Sie\n"
 "Ihren Atomic-Server über das Web erreichbar machen wollen, sollten Sie diesen auf\n"
 "einer Domain auf einem Server einrichten."
-
-#~ msgid "New User created!"
-#~ msgstr "Neuer Benutzer erstellt!"
 
 #. placeholder {0}: write ? 'edit' : 'view'
 #: src/views/InvitePage.tsx
@@ -980,10 +923,10 @@ msgstr "Temperaturwert"
 
 #: src/chunks/AI/MessageContextItem.tsx
 #: src/chunks/RTE/EditLinkForm.tsx
+#: src/chunks/TablePage/TableHeadingMenu.tsx
+#: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/components/forms/ResourceSelector/ResourceSelector.tsx
 #: src/views/OntologyPage/Property/PropertyLineWrite.tsx
-#: src/views/TablePage/TableHeadingMenu.tsx
-#: src/views/TablePage/TableHeadingMenu.tsx
 msgid "Remove"
 msgstr "Entfernen"
 
@@ -1479,9 +1422,9 @@ msgstr "Ein neues Laufwerk erstellen"
 msgid "Select a location"
 msgstr "Einen Speicherort auswählen"
 
+#: src/chunks/TablePage/NewColumnButton.tsx
 #: src/components/ParentPicker/ParentPickerDialog.tsx
 #: src/routes/SettingsServer/DriveRow.tsx
-#: src/views/TablePage/NewColumnButton.tsx
 msgid "Select"
 msgstr "Auswählen"
 
@@ -1492,9 +1435,6 @@ msgstr "Vorherige Seite"
 #: src/components/ResourceUsage/UsageCard.tsx
 msgid "Next page"
 msgstr "Nächste Seite"
-
-#~ msgid "Your current baseURL is {0}"
-#~ msgstr "Ihre aktuelle Basis-URL ist {0}"
 
 #: src/components/SideBar/SideBarDrive.tsx
 msgid "New resource"
@@ -1508,7 +1448,7 @@ msgstr "Ontologien"
 msgid "App"
 msgstr "App"
 
-#: src/components/TableEditor/Cell.tsx
+#: src/chunks/TableEditor/Cell.tsx
 msgid "Open resource"
 msgstr "Ressource öffnen"
 
@@ -1554,8 +1494,8 @@ msgstr "Ziehen abgebrochen"
 msgid "New tag"
 msgstr "Neuer Tag"
 
+#: src/chunks/TablePage/EditorCells/SelectCell.tsx
 #: src/components/Tag/CreateTagRow.tsx
-#: src/views/TablePage/EditorCells/SelectCell.tsx
 msgid "Add tag"
 msgstr "Tag hinzufügen"
 
@@ -1594,26 +1534,25 @@ msgstr "<0/> Vorlage anwenden"
 msgid "{0} at {1}"
 msgstr "{0} um {1}"
 
+#. placeholder {0}: prop.shortname
+#. placeholder {0}: prop.shortname
 #. placeholder {0}: title
-#. placeholder {0}: prop.shortname
-#. placeholder {0}: prop.shortname
+#: src/chunks/TablePage/EditorCells/JSONCell.tsx
+#: src/chunks/TablePage/EditorCells/MarkdownCell.tsx
 #: src/components/forms/EditFormDialog.tsx
-#: src/views/TablePage/EditorCells/JSONCell.tsx
-#: src/views/TablePage/EditorCells/MarkdownCell.tsx
 msgid "Edit {0}"
 msgstr "{0} bearbeiten"
 
 #: src/chunks/RTE/ImagePicker.tsx
+#: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
 #: src/components/forms/EditFormDialog.tsx
 #: src/components/forms/NewForm/NewFormDialog.tsx
 #: src/components/forms/ResourceForm.tsx
 #: src/routes/SettingsServer/index.tsx
 #: src/routes/Share/ShareRoute.tsx
 #: src/views/Article/ArticleDescription.tsx
-#: src/views/Drive/NewPluginButton.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/OntologyPage/NewPropertyButton.tsx
-#: src/views/TablePage/PropertyForm/EditPropertyDialog.tsx
 msgid "Save"
 msgstr "Speichern"
 
@@ -1638,6 +1577,7 @@ msgstr "Diese Eigenschaft löschen"
 msgid "Required field."
 msgstr "Pflichtfeld."
 
+#: src/chunks/TablePage/PropertyForm/PropertyForm.tsx
 #: src/components/forms/FilePicker/FilePicker.tsx
 #: src/components/forms/InputDate.tsx
 #: src/components/forms/InputMarkdown.tsx
@@ -1654,7 +1594,6 @@ msgstr "Pflichtfeld."
 #: src/components/forms/formValidation/useValidation.ts
 #: src/components/forms/formValidation/useValidation.ts
 #: src/components/forms/formValidation/useValidation.ts
-#: src/views/TablePage/PropertyForm/PropertyForm.tsx
 msgid "Required"
 msgstr "Erforderlich"
 
@@ -1922,8 +1861,8 @@ msgstr "<0/> Typescript"
 msgid "Download file ({0})"
 msgstr "Datei herunterladen ({0})"
 
+#: src/chunks/TablePage/TableExportDialog.tsx
 #: src/views/File/DownloadButton.tsx
-#: src/views/TablePage/TableExportDialog.tsx
 msgid "<0/> Download"
 msgstr "<0/> Herunterladen"
 
@@ -2099,74 +2038,74 @@ msgstr "lädt"
 msgid "{0} is not a valid subject."
 msgstr "{0} ist kein gültiges Subjekt."
 
-#: src/views/TablePage/NewColumnButton.tsx
+#: src/chunks/TablePage/NewColumnButton.tsx
 msgid "Text"
 msgstr "Text"
 
-#: src/views/TablePage/NewColumnButton.tsx
-#: src/views/TablePage/PropertyForm/NumberPropertyForm.tsx
+#: src/chunks/TablePage/NewColumnButton.tsx
+#: src/chunks/TablePage/PropertyForm/NumberPropertyForm.tsx
 msgid "Number"
 msgstr "Zahl"
 
-#: src/views/TablePage/NewColumnButton.tsx
+#: src/chunks/TablePage/NewColumnButton.tsx
 msgid "Date"
 msgstr "Datum"
 
-#: src/views/TablePage/NewColumnButton.tsx
+#: src/chunks/TablePage/NewColumnButton.tsx
 msgid "Checkbox"
 msgstr "Kontrollkästchen"
 
-#: src/views/TablePage/NewColumnButton.tsx
+#: src/chunks/TablePage/NewColumnButton.tsx
 msgid "File"
 msgstr "Datei"
 
-#: src/views/TablePage/NewColumnButton.tsx
+#: src/chunks/TablePage/NewColumnButton.tsx
 msgid "Relation"
 msgstr "Beziehung"
 
-#: src/views/TablePage/NewColumnButton.tsx
+#: src/chunks/TablePage/NewColumnButton.tsx
 msgid "External Property"
 msgstr "Externe Eigenschaft"
 
-#: src/views/TablePage/TableHeadingMenu.tsx
+#: src/chunks/TablePage/TableHeadingMenu.tsx
 msgid "View"
 msgstr "Ansicht"
 
 #. placeholder {0}: ' '
-#: src/views/TablePage/TableHeadingMenu.tsx
+#: src/chunks/TablePage/TableHeadingMenu.tsx
 msgid "Remove <0/> from{0} <1/>"
 msgstr "<0/> entfernen von{0} <1/>"
 
-#: src/views/TablePage/TableHeadingMenu.tsx
+#: src/chunks/TablePage/TableHeadingMenu.tsx
 msgid "<0/> Delete property and its children"
 msgstr "<0/> Eigenschaft und zugehörige Kindelemente löschen"
 
-#: src/views/TablePage/TableHeadingMenu.tsx
+#: src/chunks/TablePage/TableHeadingMenu.tsx
 msgid "Delete property"
 msgstr "Eigenschaft löschen"
 
-#: src/views/TablePage/TableHeadingMenu.tsx
+#: src/chunks/TablePage/TableHeadingMenu.tsx
 msgid "Remove column"
 msgstr "Spalte entfernen"
 
-#: src/views/TablePage/TableHeading.tsx
+#: src/chunks/TablePage/TableHeading.tsx
 msgid "Drag column"
 msgstr "Spalte ziehen"
 
-#: src/views/TablePage/TableRow.tsx
+#: src/chunks/TablePage/TableRow.tsx
 msgid "Row is incomplete or has invalid data"
 msgstr "Zeile ist unvollständig oder enthält ungültige Daten"
 
-#: src/views/TablePage/TablePage.tsx
+#: src/chunks/TablePage/TablePage.tsx
 msgid "Export to CSV"
 msgstr "Als CSV exportieren"
 
-#: src/views/TablePage/TableExportDialog.tsx
+#: src/chunks/TablePage/TableExportDialog.tsx
 msgid "Export table as CSV"
 msgstr "Tabelle als CSV exportieren"
 
 #. placeholder {0}: ' '
-#: src/views/TablePage/TableExportDialog.tsx
+#: src/chunks/TablePage/TableExportDialog.tsx
 msgid "<0/>{0} Reference resources by subject instead of name."
 msgstr "<0/>{0} Ressourcen anhand des Subjekts anstelle des Namens referenzieren."
 
@@ -2461,13 +2400,11 @@ msgid "Read more about permissions in the{0} <0>Atomic Data Docs</0>"
 msgstr "Weitere Informationen zu Berechtigungen findest du in den{0} <0>Atomic Data Docs</0>"
 
 #: src/routes/Share/ShareRoute.tsx
-#: src/views/Plugin/AssignPermissions.tsx
 #: src/views/Plugin/AssignRights.tsx
 msgid "Read"
 msgstr "Lesen"
 
 #: src/routes/Share/ShareRoute.tsx
-#: src/views/Plugin/AssignPermissions.tsx
 #: src/views/Plugin/AssignRights.tsx
 msgid "Write"
 msgstr "Schreiben"
@@ -2590,7 +2527,6 @@ msgstr "Die Kennung der Ressource. Dies bestimmt standardmäßig auch, wo die Re
 
 #: src/chunks/RTE/CollaborativeEditor.tsx
 #: src/components/forms/NewForm/NewFormTitle.tsx
-#: src/views/Plugin/AssignPermissions.tsx
 #: src/views/Plugin/AssignRights.tsx
 msgid "Resource"
 msgstr "Ressource"
@@ -2669,13 +2605,13 @@ msgstr "Leerer Chat"
 
 #. placeholder {0}: classType.title
 #. placeholder {0}: classType.title
-#: src/views/TablePage/EditorCells/AtomicURLCell.tsx
-#: src/views/TablePage/EditorCells/MultiRelationCell.tsx
+#: src/chunks/TablePage/EditorCells/AtomicURLCell.tsx
+#: src/chunks/TablePage/EditorCells/MultiRelationCell.tsx
 msgid "Search {0}"
 msgstr "{0} suchen"
 
-#: src/views/TablePage/EditorCells/AtomicURLCell.tsx
-#: src/views/TablePage/EditorCells/MultiRelationCell.tsx
+#: src/chunks/TablePage/EditorCells/AtomicURLCell.tsx
+#: src/chunks/TablePage/EditorCells/MultiRelationCell.tsx
 msgid "Search..."
 msgstr "Suchen..."
 
@@ -2692,16 +2628,16 @@ msgstr "Einzelne Instanz"
 msgid "Table"
 msgstr "Tabelle"
 
-#: src/views/TablePage/EditorCells/JSONCell.tsx
-#: src/views/TablePage/EditorCells/MarkdownCell.tsx
+#: src/chunks/TablePage/EditorCells/JSONCell.tsx
+#: src/chunks/TablePage/EditorCells/MarkdownCell.tsx
 msgid "Open edit dialog"
 msgstr "Öffne Bearbeitungsdialog"
 
-#: src/views/TablePage/EditorCells/MultiRelationCell.tsx
+#: src/chunks/TablePage/EditorCells/MultiRelationCell.tsx
 msgid "Add resource"
 msgstr "Ressource hinzufügen"
 
-#: src/views/TablePage/EditorCells/SelectCell.tsx
+#: src/chunks/TablePage/EditorCells/SelectCell.tsx
 msgid "Filter tags..."
 msgstr "Filtere Tags..."
 
@@ -2752,83 +2688,83 @@ msgstr "Eigenschaftenbeschreibung"
 msgid "Configure {0}"
 msgstr "{0} konfigurieren"
 
-#: src/views/TablePage/PropertyForm/ExternalPropertyDialog.tsx
+#: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
 msgid "Add external property"
 msgstr "Externe Eigenschaft hinzufügen"
 
-#: src/views/TablePage/PropertyForm/ExternalPropertyDialog.tsx
+#: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
 msgid "Add"
 msgstr "Hinzufügen"
 
-#: src/views/TablePage/PropertyForm/EditPropertyDialog.tsx
+#: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
 msgid "Edit Column"
 msgstr "Spalte bearbeiten"
 
-#: src/views/TablePage/PropertyForm/NewPropertyDialog.tsx
+#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
 msgid "A column in a table"
 msgstr "Eine Spalte in einer Tabelle"
 
-#: src/views/TablePage/PropertyForm/NewPropertyDialog.tsx
+#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
 msgid "New <0/> Column"
 msgstr "Neue <0/> Spalte"
 
-#: src/views/TablePage/PropertyForm/RelationPropertyForm.tsx
+#: src/chunks/TablePage/PropertyForm/RelationPropertyForm.tsx
 msgid "Resource type:"
 msgstr "Ressourcentyp:"
 
-#: src/views/TablePage/PropertyForm/RelationPropertyForm.tsx
+#: src/chunks/TablePage/PropertyForm/RelationPropertyForm.tsx
 msgid "<0/> Allow multiple values"
 msgstr "<0/> Mehrere Werte zulassen"
 
-#: src/views/TablePage/PropertyForm/PropertyForm.tsx
+#: src/chunks/TablePage/PropertyForm/PropertyForm.tsx
 msgid "Invalid Name"
 msgstr "Ungültiger Name"
 
-#: src/views/TablePage/PropertyForm/PropertyForm.tsx
+#: src/chunks/TablePage/PropertyForm/PropertyForm.tsx
 msgid "New Column"
 msgstr "Neue Spalte"
 
-#: src/views/TablePage/PropertyForm/NumberPropertyForm.tsx
+#: src/chunks/TablePage/PropertyForm/NumberPropertyForm.tsx
 msgid "Number Format"
 msgstr "Zahlenformat"
 
-#: src/views/TablePage/PropertyForm/NumberPropertyForm.tsx
+#: src/chunks/TablePage/PropertyForm/NumberPropertyForm.tsx
 msgid "Percentage"
 msgstr "Prozentsatz"
 
-#: src/views/TablePage/PropertyForm/NumberPropertyForm.tsx
+#: src/chunks/TablePage/PropertyForm/NumberPropertyForm.tsx
 msgid "Currency"
 msgstr "Währung"
 
-#: src/views/TablePage/PropertyForm/NumberPropertyForm.tsx
+#: src/chunks/TablePage/PropertyForm/NumberPropertyForm.tsx
 msgid "Range"
 msgstr "Bereich"
 
-#: src/views/TablePage/PropertyForm/categories.tsx
+#: src/chunks/TablePage/PropertyForm/categories.tsx
 msgid "No Type selected"
 msgstr "Kein Typ ausgewählt"
 
-#: src/views/TablePage/PropertyForm/TextPropertyForm.tsx
+#: src/chunks/TablePage/PropertyForm/TextPropertyForm.tsx
 msgid "Text Format:"
 msgstr "Textformat:"
 
-#: src/views/TablePage/PropertyForm/TextPropertyForm.tsx
+#: src/chunks/TablePage/PropertyForm/TextPropertyForm.tsx
 msgid "Plain text"
 msgstr "Reiner Text"
 
-#: src/views/TablePage/PropertyForm/TextPropertyForm.tsx
+#: src/chunks/TablePage/PropertyForm/TextPropertyForm.tsx
 msgid "Rich text"
 msgstr "Rich Text"
 
-#: src/views/TablePage/PropertyForm/TextPropertyForm.tsx
+#: src/chunks/TablePage/PropertyForm/TextPropertyForm.tsx
 msgid "Slug"
 msgstr "Slug"
 
-#: src/views/TablePage/PropertyForm/TextPropertyForm.tsx
+#: src/chunks/TablePage/PropertyForm/TextPropertyForm.tsx
 msgid "Length"
 msgstr "Länge"
 
-#: src/views/TablePage/PropertyForm/DatePropertyForm.tsx
+#: src/chunks/TablePage/PropertyForm/DatePropertyForm.tsx
 msgid "<0/> Include Time"
 msgstr "<0/> Zeit einschließen"
 
@@ -2853,15 +2789,15 @@ msgstr "Unbenannter Chatraum"
 msgid "Untitled Document"
 msgstr "Unbenanntes Dokument"
 
-#: src/views/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
+#: src/chunks/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
 msgid "Numeric"
 msgstr "Numerisch"
 
-#: src/views/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
+#: src/chunks/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
 msgid "Long"
 msgstr "Lang"
 
-#: src/views/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
+#: src/chunks/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
 msgid "Relative"
 msgstr "Relativ"
 
@@ -2944,11 +2880,11 @@ msgstr ""
 msgid "Shortname"
 msgstr "Kurzname"
 
-#: src/views/TablePage/PropertyForm/Inputs/DecimalPlacesInput.tsx
+#: src/chunks/TablePage/PropertyForm/Inputs/DecimalPlacesInput.tsx
 msgid "Value must be between 0 and 20."
 msgstr "Der Wert muss zwischen 0 und 20 liegen."
 
-#: src/views/TablePage/PropertyForm/Inputs/DecimalPlacesInput.tsx
+#: src/chunks/TablePage/PropertyForm/Inputs/DecimalPlacesInput.tsx
 msgid "Decimal Places"
 msgstr "Dezimalstellen"
 
@@ -3159,34 +3095,18 @@ msgid "Plugins"
 msgstr "Plugins"
 
 #: src/chunks/Plugins/NewPluginButton.tsx
-#: src/views/Drive/NewPluginButton.tsx
 msgid "Add Plugin"
 msgstr "Plugin hinzufügen"
 
-#: src/views/Drive/NewPluginButton.tsx
-msgid "<0/> Add Plugin"
-msgstr ""
-
-#~ msgid "New Plugin"
-#~ msgstr ""
-
 #: src/chunks/Plugins/NewPluginButton.tsx
 #: src/chunks/Plugins/NewPluginButton.tsx
-#: src/views/Drive/NewPluginButton.tsx
 msgid "<0/> Upload Plugin"
 msgstr "<0/> Plugin hochladen"
-
-#~ msgid "Invalid plugin zip file. It must contain plugin.wasm and plugin.json at the root, and optionally an assets folder."
-#~ msgstr ""
-
-#~ msgid "Invalid plugin zip file."
-#~ msgstr ""
 
 #. placeholder {0}: metadata.version
 #. placeholder {0}: resource.props.version
 #. placeholder {0}: resource.props.version
 #: src/chunks/Plugins/NewPluginButton.tsx
-#: src/views/Drive/NewPluginButton.tsx
 #: src/views/Plugin/PluginPage.tsx
 msgid "v{0}"
 msgstr "v{0}"
@@ -3195,24 +3115,13 @@ msgstr "v{0}"
 #. placeholder {0}: resource.props.pluginAuthor
 #. placeholder {0}: resource.props.pluginAuthor
 #: src/chunks/Plugins/NewPluginButton.tsx
-#: src/views/Drive/NewPluginButton.tsx
 #: src/views/Plugin/PluginPage.tsx
 msgid "by {0}"
 msgstr "von {0}"
 
-#: src/views/Drive/NewPluginButton.tsx
-msgid "Configure"
-msgstr ""
-
 #: src/routes/Share/ShareRoute.tsx
 msgid "Share settings saved"
 msgstr "Freigabeeinstellungen gespeichert"
-
-#~ msgid "Cannot fill subject and privatekey fields."
-#~ msgstr "Betreff- und Privatekey-Felder können nicht ausgefüllt werden."
-
-#~ msgid "Invalid Agent"
-#~ msgstr "Ungültiger Agent"
 
 #: src/routes/SettingsAgent.tsx
 msgid "Invalid secret."
@@ -3347,9 +3256,6 @@ msgstr "Mögliche Werte:"
 msgid "Please fill in all fields"
 msgstr "Bitte füllen Sie alle Felder aus"
 
-#~ msgid "Failed to install plugin, error: {0}"
-#~ msgstr "Plugin-Installation fehlgeschlagen, Fehler: {0}"
-
 #: src/chunks/Plugins/NewPluginButton.tsx
 msgid "Install"
 msgstr "Installieren"
@@ -3406,40 +3312,13 @@ msgstr "Sie können Ihren eigenen Agent erstellen, indem Sie einen{0} <0>atomic-
 msgid "Agent created!"
 msgstr "Agent erstellt!"
 
-#~ msgid ""
-#~ "IMPORTANT! You must save your agent secret somewhere safe right now.\n"
-#~ "If you lose it you will not be able to access this user again."
-#~ msgstr ""
-#~ "WICHTIG! Sie müssen Ihr Agenten-Geheimnis sofort an einem sicheren Ort speichern.\n"
-#~ "Wenn Sie es verlieren, können Sie diesen Benutzer nicht mehr aufrufen."
-
 #: src/views/InvitePage.tsx
 msgid "Continue"
 msgstr "Weiter"
 
-#~ msgid ""
-#~ "IMPORTANT! Below is your agent secret, you use this to log in as\n"
-#~ "this user in the future. Save it somewhere safe, the secret will not\n"
-#~ "be show again and if you lose it you will not be able to access this\n"
-#~ "user again."
-#~ msgstr ""
-#~ "WICHTIG! Hier ist Ihr Agentengeheimnis. Sie benötigen es, um sich zukünftig als\n"
-#~ "dieser Benutzer anzumelden. Bewahren Sie es sicher auf. Das Geheimnis wird nicht\n"
-#~ "wieder angezeigt, und wenn Sie es verlieren, können Sie nicht mehr auf diesen\n"
-#~ "Benutzer zugreifen."
-
 #: src/views/InvitePage.tsx
 msgid "Copy secret to continue"
 msgstr "Geheimnis kopieren, um fortzufahren"
-
-#~ msgid "{0} Continue"
-#~ msgstr "{0} Weiter"
-
-#~ msgid "Give your agent a name <0/>"
-#~ msgstr "Gib deinem Agenten einen Namen <0/>"
-
-#~ msgid "Give your agent a name"
-#~ msgstr "Geben Sie Ihrem Agenten einen Namen"
 
 #: src/views/InvitePage.tsx
 msgid ""
@@ -3456,9 +3335,6 @@ msgstr "Namen eingeben"
 msgid "Agent Name"
 msgstr "Agentenname"
 
-#~ msgid "awdawawd {0}"
-#~ msgstr "awdawawd {0}"
-
 #: src/components/SideBar/SideBarDrive.tsx
 msgid "This drive is private, sign in to view it"
 msgstr "Dieses Laufwerk ist privat, melden Sie sich an, um es anzuzeigen"
@@ -3469,24 +3345,13 @@ msgid ""
 "Together, these can be used to edit data and sign Commits."
 msgstr "Ein Agent ist ein Benutzer, der aus einem Subjekt (seiner URL) und einem privaten Schlüssel besteht. Zusammen können diese verwendet werden, um Daten zu bearbeiten und Commits zu signieren."
 
-#~ msgid "Assign Permissions"
-#~ msgstr "Berechtigungen zuweisen"
-
-#: src/views/Plugin/AssignPermissions.tsx
 #: src/views/Plugin/AssignRights.tsx
 msgid "Pick a resource"
 msgstr "Wählen Sie eine Ressource aus"
 
-#: src/views/Plugin/AssignPermissions.tsx
 #: src/views/Plugin/AssignRights.tsx
 msgid "Assign"
 msgstr "Zuweisen"
-
-#~ msgid "Give full permissons <0/>"
-#~ msgstr "Vollständige Berechtigungen erteilen <0/>"
-
-#~ msgid "<0/> Assign Permissions"
-#~ msgstr "<0/> Berechtigungen zuweisen"
 
 #: src/views/Plugin/PluginPage.tsx
 msgid "<0/> Config"
@@ -3496,13 +3361,9 @@ msgstr "<0/> Konfiguration"
 msgid "Plugin Description"
 msgstr "Plugin-Beschreibung"
 
-#: src/views/Plugin/AssignPermissions.tsx
 #: src/views/Plugin/AssignRights.tsx
 msgid "<0/> Assign Rights"
 msgstr "<0/> Rechte zuweisen"
-
-#~ msgid "Permissions"
-#~ msgstr "Berechtigungen"
 
 #: src/views/Plugin/PluginPermissions.tsx
 msgid "No reason provided"

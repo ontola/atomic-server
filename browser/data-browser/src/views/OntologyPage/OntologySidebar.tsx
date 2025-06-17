@@ -2,7 +2,7 @@ import { core, Resource, useArray, useResource } from '@tomic/react';
 
 import { styled } from 'styled-components';
 import { Details } from '../../components/Details';
-import { FaAtom, FaCube, FaHashtag } from 'react-icons/fa';
+import { FaAtom, FaCube, FaHashtag } from 'react-icons/fa6';
 import { ScrollArea } from '../../components/ScrollArea';
 import { toAnchorId } from '../../helpers/toAnchorId';
 

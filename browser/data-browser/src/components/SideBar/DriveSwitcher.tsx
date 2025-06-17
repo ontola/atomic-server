@@ -1,11 +1,11 @@
 import { Resource, core, server, useResources } from '@tomic/react';
 import {
-  FaCog,
-  FaHdd,
+  FaGear,
+  FaHardDrive,
   FaPlus,
-  FaRegCheckCircle,
+  FaSquareCheck,
   FaRegCircle,
-} from 'react-icons/fa';
+} from 'react-icons/fa6';
 import { useSettings } from '../../helpers/AppSettings';
 import { constructOpenURL } from '../../helpers/navigation';
 import { useDriveHistory } from '../../hooks/useDriveHistory';
@@ -16,7 +16,7 @@ import { buildDefaultTrigger } from '../Dropdown/DefaultTrigger';
 import { useNewResourceUI } from '../forms/NewForm/useNewResourceUI';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 
-const Trigger = buildDefaultTrigger(<FaHdd />, 'Open Drive Settings');
+const Trigger = buildDefaultTrigger(<FaHardDrive />, 'Open Drive Settings');
 
 function getTitle(resource: Resource): string {
   return (
@@ -57,7 +57,7 @@ export function DriveSwitcher() {
           setDrive(subject);
           navigate(constructOpenURL(subject));
         },
-        icon: subject === drive ? <FaRegCheckCircle /> : <FaRegCircle />,
+        icon: subject === drive ? <FaSquareCheck /> : <FaRegCircle />,
       })),
     DIVIDER,
     // Dedupe history from savedDrives bause not all savedDrives might be loaded yet.
@@ -66,7 +66,7 @@ export function DriveSwitcher() {
         label: getTitle(resource),
         id: subject,
         helper: `Switch to ${getTitle(resource)}`,
-        icon: subject === drive ? <FaRegCheckCircle /> : <FaRegCircle />,
+        icon: subject === drive ? <FaSquareCheck /> : <FaRegCircle />,
         onClick: buildHandleHistoryDriveClick(subject),
         disabled: subject === drive,
       }))
@@ -75,7 +75,7 @@ export function DriveSwitcher() {
     {
       id: 'configure-drives',
       label: 'Configure Drives',
-      icon: <FaCog />,
+      icon: <FaGear />,
       helper: 'Load drives not displayed in this list.',
       onClick: () => navigate(paths.serverSettings),
     },

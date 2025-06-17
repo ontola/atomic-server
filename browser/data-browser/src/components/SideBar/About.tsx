@@ -1,6 +1,6 @@
 import { styled } from 'styled-components';
 
-import { FaGithub, FaDiscord, FaBook } from 'react-icons/fa';
+import { FaGithub, FaDiscord, FaBook } from 'react-icons/fa6';
 import { IconButtonLink, IconButtonVariant } from '../IconButton/IconButton';
 import { FaRadiation } from 'react-icons/fa6';
 import { isDev } from '../../config';
