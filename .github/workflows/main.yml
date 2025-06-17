@@ -5,6 +5,8 @@ jobs:
   Main:
     name: Main
     runs-on: ubuntu-latest
+    env:
+      NETLIFY_TOKEN: ${{ secrets.NETLIFY_TOKEN }}
     steps:
       - uses: actions/checkout@v2
       - name: Log in to Docker Hub
@@ -18,13 +20,13 @@ jobs:
         with:
           images: joepmeneer/atomic-server
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Dagger CI
+      - name: Call Dagger Function to build and publish to ghcr.io
         uses: dagger/dagger-for-github@8.0.0
         with:
           version: "latest"
           cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
           verb: call
-          args: ci --netlify-auth-token ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          args: ci --netlify-auth-token env://NETLIFY_TOKEN
       - name: Docker images
         if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
         uses: dagger/dagger-for-github@8.0.0
