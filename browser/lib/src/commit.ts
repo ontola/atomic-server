@@ -445,7 +445,7 @@ export function applyCommitToResource(
   resource: Resource,
   commit: Commit,
 ): Resource {
-  const { set, remove, push } = commit;
+  const { set, remove, push, destroy } = commit;
 
   if (set) {
     execSetCommit(set, resource);
@@ -457,6 +457,12 @@ export function applyCommitToResource(
 
   if (push) {
     execPushCommit(push, resource);
+  }
+
+  if (destroy) {
+    for (const [key] of resource.getPropVals()) {
+      resource.setUnsafe(key, undefined);
+    }
   }
 
   return resource;
