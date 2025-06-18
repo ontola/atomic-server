@@ -105,7 +105,7 @@ export async function newDrive(page: Page) {
   await expect(currentDriveTitle(page)).not.toHaveText('localhost');
   await expect(currentDriveTitle(page)).toHaveText(driveTitle);
   const driveURL = await getCurrentSubject(page);
-  expect(driveURL).toContain('localhost');
+  expect(driveURL).toContain(FRONTEND_URL);
 
   return { driveURL: driveURL as string, driveTitle };
 }

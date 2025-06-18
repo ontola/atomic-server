@@ -67,9 +67,10 @@ export class AtomicServer {
   async ci(@argument() netlifyAuthToken: Secret): Promise<string> {
     await Promise.all([
       this.docsPublish(netlifyAuthToken),
+      this.typedocPublish(netlifyAuthToken),
+      this.endToEnd(netlifyAuthToken),
       this.jsLint(),
       this.jsTest(),
-      this.endToEnd(netlifyAuthToken),
       this.rustTest(),
       this.rustClippy(),
       this.rustFmt(),

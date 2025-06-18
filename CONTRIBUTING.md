@@ -96,7 +96,7 @@ cargo install cross
 cross build --target x86_64-unknown-linux-musl --bin atomic-server --release
 ```
 
-Note that this is also done in the `earthly` file.
+Check the Dagger index.ts file to see how cross compilation is done in the CI.
 
 ## Git policy
 
@@ -231,7 +231,7 @@ Note:
 
 ### CI situation
 
-- Github Action for `push`: builds + tests + docker (using `earthly`, see `Earthfile`)
+- Github Action for `push`: builds + tests + docker (using `dagger`, see `.dagger` and the `.github` folders)
 - Github Action for `tag`: create release + publish binaries
 
 ### Publishing manually - doing the CI's work
