@@ -1,9 +1,9 @@
 import { Page, expect, Browser, Locator } from '@playwright/test';
 
-export const SERVER_URL = 'http://localhost:9883';
 export const DELETE_PREVIOUS_TEST_DRIVES =
   process.env.DELETE_PREVIOUS_TEST_DRIVES === 'false' ? false : true;
 
+export const SERVER_URL = process.env.SERVER_URL || 'http://localhost:9883';
 export const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 // TODO: Should use an env var so the CI can test the setup test.
 export const INITIAL_TEST = false;
