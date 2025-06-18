@@ -58,7 +58,7 @@ export class AtomicServer {
         "**/.envrc",
       ],
     })
-    source: Directory
+    source: Directory,
   ) {
     this.source = source;
   }
@@ -107,7 +107,7 @@ export class AtomicServer {
     /** The directory to deploy */
     directory: Directory,
     siteName: string,
-    netlifyAuthToken: Secret
+    netlifyAuthToken: Secret,
   ): Promise<string> {
     return dag
       .container()
@@ -179,7 +179,7 @@ export class AtomicServer {
       .withFile("/app/pnpm-workspace.yaml", source.file("pnpm-workspace.yaml"))
       .withFile(
         "/app/data-browser/package.json",
-        source.file("data-browser/package.json")
+        source.file("data-browser/package.json"),
       )
       .withFile("/app/lib/package.json", source.file("lib/package.json"))
       .withFile("/app/react/package.json", source.file("react/package.json"))
@@ -204,7 +204,7 @@ export class AtomicServer {
   /** Builds the Rust server binary on the host architecture */
   rustBuild(
     @argument() release: boolean = false,
-    @argument() target: string = "x86_64-unknown-linux-musl"
+    @argument() target: string = "x86_64-unknown-linux-musl",
   ): Container {
     const source = this.source;
     const cargoCache = dag.cacheVolume("cargo");
@@ -235,7 +235,7 @@ export class AtomicServer {
     const browserDir = this.jsBuild().directory("/app/data-browser/dist");
     const containerWithAssets = sourceContainer.withDirectory(
       "/code/server/assets_tmp",
-      browserDir
+      browserDir,
     );
 
     const buildArgs = release
@@ -256,7 +256,7 @@ export class AtomicServer {
   @func()
   /** Returns the release binary */
   rustBuildRelease(
-    @argument() target: string = "x86_64-unknown-linux-musl"
+    @argument() target: string = "x86_64-unknown-linux-musl",
   ): File {
     const container = this.rustBuild(true, target);
     return container.file("/atomic-server-binary");
@@ -390,7 +390,7 @@ export class AtomicServer {
       ])
       .withEnvVariable(
         "PATH",
-        "/root/.local/share/pnpm:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        "/root/.local/share/pnpm:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
       )
       .withExec(["pnpm", "dlx", "playwright", "install", "--with-deps"])
       .withExec(["npm", "install", "-g", "netlify-cli"]);
@@ -403,6 +403,7 @@ export class AtomicServer {
       .withEnvVariable("LANGUAGE", "en_GB")
       .withEnvVariable("DELETE_PREVIOUS_TEST_DRIVES", "false")
       .withEnvVariable("FRONTEND_URL", "http://atomic:9883")
+      .withEnvVariable("SERVER_URL", "http://atomic:9883")
       .withServiceBinding("atomic", this.atomicService())
       // Wait for the server to be ready
       .withExec([
@@ -422,7 +423,7 @@ export class AtomicServer {
     const deployOutput = await this.netlifyDeploy(
       testReportDirectory,
       "atomic-tests",
-      netlifyAuthToken
+      netlifyAuthToken,
     );
 
     // Extract the deploy URL
@@ -432,7 +433,7 @@ export class AtomicServer {
     const exitCode = await e2eContainer.file("/test-exit-code").contents();
     if (exitCode.trim() !== "0") {
       throw new Error(
-        `E2E tests failed (exit code: ${exitCode.trim()}). Test report deployed to: \n${deployUrl}`
+        `E2E tests failed (exit code: ${exitCode.trim()}). Test report deployed to: \n${deployUrl}`,
       );
     }
 
@@ -443,7 +444,7 @@ export class AtomicServer {
   async deployServer(
     @argument() remoteHost: string,
     @argument() remoteUser: Secret,
-    @argument() sshPrivateKey: Secret
+    @argument() sshPrivateKey: Secret,
   ): Promise<string> {
     // Build the cross-compiled binary for x86_64-unknown-linux-musl
     const binaryFile = this.rustBuildRelease("x86_64-unknown-linux-musl");
@@ -516,7 +517,7 @@ export class AtomicServer {
     for (const build of builds) {
       outputDir = outputDir.withFile(
         `atomic-server-${build.target}`,
-        build.binary
+        build.binary,
       );
     }
 
@@ -526,7 +527,7 @@ export class AtomicServer {
   @func()
   /** Creates a Docker image for a specific target architecture */
   createDockerImage(
-    @argument() target: string = "x86_64-unknown-linux-musl"
+    @argument() target: string = "x86_64-unknown-linux-musl",
   ): Container {
     const binary = this.rustBuild(true, target).file("/atomic-server-binary");
 
