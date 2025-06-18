@@ -15,6 +15,7 @@ export function useCurrentSubject(
   replace?: boolean,
 ): [string | undefined, setFunc] {
   const { subject: subjectQ } = useSearch({ strict: false });
+
   const navigate = useNavigateWithTransition();
   const navigateShow = ShowRoute.useNavigate();
   const { pathname } = useLocation();
@@ -37,7 +38,7 @@ export function useCurrentSubject(
     }
 
     // The pathname defaults to a trailing slash, which leads to issues
-    const correctedPathName = pathname === '/' ? '' : '/' + pathname;
+    const correctedPathName = pathname === '/' ? '' : pathname;
     const subject =
       window.location.origin + correctedPathName + window.location.search;
 
