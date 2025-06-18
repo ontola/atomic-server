@@ -105,7 +105,7 @@ export async function newDrive(page: Page) {
   await expect(currentDriveTitle(page)).not.toHaveText('localhost');
   await expect(currentDriveTitle(page)).toHaveText(driveTitle);
   const driveURL = await getCurrentSubject(page);
-  expect(driveURL).toContain(FRONTEND_URL);
+  expect(driveURL).toContain(SERVER_URL);
 
   return { driveURL: driveURL as string, driveTitle };
 }
@@ -128,10 +128,16 @@ export async function openSubject(page: Page, subject: string) {
   await expect(page.locator(`main[about="${subject}"]`).first()).toBeVisible();
 }
 
-export async function getCurrentSubject(page: Page) {
+export async function getCurrentSubject(page: Page): Promise<string> {
   const selector = await page.waitForSelector('main[about]');
 
-  return selector.getAttribute('about');
+  const about = await selector.getAttribute('about');
+
+  if (!about) {
+    throw new Error('No subject found (no `main[about]` found)');
+  }
+
+  return about;
 }
 
 /** Waits until a commit for main resource is processed
