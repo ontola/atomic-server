@@ -237,7 +237,7 @@ pub trait Storelike: Sized {
         Ok(len)
     }
 
-    /// Removes a resource from the store. Errors if not present.
+    /// Removes a resource and its children from the store. Errors if not present.
     fn remove_resource(&self, subject: &str) -> AtomicResult<()>;
 
     /// Accepts an Atomic Path string, returns the result value (resource or property value)

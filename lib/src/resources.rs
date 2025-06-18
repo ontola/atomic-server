@@ -55,14 +55,6 @@ impl Resource {
         &mut self,
         store: &impl Storelike,
     ) -> AtomicResult<crate::commit::CommitResponse> {
-        let children = self.get_children(store);
-
-        if let Ok(children) = children {
-            for mut child in children {
-                child.destroy(store)?;
-            }
-        }
-
         self.commit.destroy(true);
         self.save(store)
             .map_err(|e| format!("Failed to destroy {} : {}", self.subject, e).into())
@@ -830,6 +822,11 @@ mod test {
         // Create 3 resources in a tree structure.
 
         let mut resource1 = Resource::new_generate_subject(&store);
+
+        resource1
+            .set(urls::NAME.into(), Value::String("resource1".into()), &store)
+            .unwrap();
+
         let subject1 = resource1.get_subject().to_string();
         resource1.save_locally(&store).unwrap();
 
@@ -841,11 +838,11 @@ mod test {
                 &store,
             )
             .unwrap();
+
         let subject2 = resource2.get_subject().to_string();
         resource2.save_locally(&store).unwrap();
 
         let mut resource3 = Resource::new_generate_subject(&store);
-        let resource3_subject = resource3.get_subject().to_string();
 
         resource3
             .set(
@@ -882,8 +879,8 @@ mod test {
         assert_panics!({ store.get_resource(&subject2).unwrap() });
         assert_panics!({ store.get_resource(&subject3).unwrap() });
 
-        // Create a new resource with the same subject as resource 3 to check if there's no old data left.
-        let mut resource4 = Resource::new(resource3_subject.to_string());
+        // Create a new resource with the same subject as resource 1 to check if there's no old data left and if the children did not come back.
+        let mut resource4 = Resource::new(subject1.to_string());
 
         resource4
             .set(
@@ -900,5 +897,9 @@ mod test {
         );
 
         assert!(resource4.get(urls::NAME).is_err());
+
+        // Resource 2 and 3 should not exist again.
+        assert_panics!({ store.get_resource(&subject2).unwrap() });
+        assert_panics!({ store.get_resource(&subject3).unwrap() });
     }
 }

@@ -119,9 +119,8 @@ impl CommitMonitor {
             tracing::debug!("No subscribers for {}", target);
         }
 
-        self.search_state.remove_resource(&target)?;
-
         // Update the search index
+        self.search_state.remove_resource(&target)?;
         if let Some(resource) = &msg.commit_response.resource_new {
             // We could one day re-(allow) to keep old resources,
             // but then we also should index the older versions when re-indexing.
