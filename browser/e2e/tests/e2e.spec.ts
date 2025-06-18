@@ -386,6 +386,28 @@ test.describe('data-browser', async () => {
     await expect(page.locator('text=Resource Saved')).toBeVisible();
   });
 
+  test('delete resource', async ({ page }) => {
+    await signIn(page);
+    await newDrive(page);
+    await newResource('folder', page);
+    // Create a nested resource
+    const parentResource = await getCurrentSubject(page);
+    await page.click('button:has-text("New Resource")');
+    await page.click('button:has-text("folder")');
+    // Get current URL
+    const nestedResource = await getCurrentSubject(page);
+    await openSubject(page, parentResource);
+    await contextMenuClick('delete', page);
+    await page.click('button:has-text("Delete")');
+    await expect(page.locator('text=Resource deleted')).toBeVisible();
+    await openSubject(page, nestedResource);
+    // Expect a 404
+    await expect(
+      page.locator('text=Resource not found'),
+      'Nested resource not deleted',
+    ).toBeVisible();
+  });
+
   test('sidebar subresource', async ({ page }) => {
     await signIn(page);
     await newDrive(page);
