@@ -81,6 +81,15 @@ impl Operation {
             val: None,
         }
     }
+
+    pub fn remove_resource(subject: &str) -> Self {
+        Operation {
+            tree: Tree::Resources,
+            method: Method::Delete,
+            key: subject.as_bytes().to_vec(),
+            val: None,
+        }
+    }
 }
 
 /// A set of [Operation]s that should be executed atomically by the database.
