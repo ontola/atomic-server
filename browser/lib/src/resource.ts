@@ -737,6 +737,7 @@ export class Resource<C extends OptionalClass = any> {
       // If it fails, revert to the old resource with the old CommitBuilder
       this.commitBuilder = oldCommitBuilder;
       this.commitError = e;
+      this.new = wasNew;
       this.store.addResources(this, { skipCommitCompare: true });
       reportDone();
       throw e;
