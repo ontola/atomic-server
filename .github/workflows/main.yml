@@ -20,14 +20,14 @@ jobs:
         with:
           images: joepmeneer/atomic-server
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Call Dagger Function to build and publish to ghcr.io
+      - name: Dagger CI (test, lint, build)
         uses: dagger/dagger-for-github@8.0.0
         with:
           version: "latest"
           cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
           verb: call
           args: ci --netlify-auth-token env://NETLIFY_TOKEN
-      - name: Docker images
+      - name: Dagger docker images (build images & publish)
         if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
         uses: dagger/dagger-for-github@8.0.0
         with:
