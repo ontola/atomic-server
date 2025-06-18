@@ -72,7 +72,7 @@ export const generateOntology = async (
     .replace(Inserts.PROP_SUBJECT_TO_NAME_MAPPING, subToNameStr);
 
   return {
-    filename: `${camelCaseify(ontology.title)}.ts`,
+    filename: `${camelCaseify(ontology.props.shortname)}.ts`,
     content,
   };
 };

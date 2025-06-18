@@ -20,7 +20,7 @@ export const generateBaseObject = async (
 
   const classes = dedupe(ontology.props.classes ?? []);
   const properties = dedupe(ontology.props.properties ?? []);
-  const name = camelCaseify(ontology.title);
+  const name = camelCaseify(ontology.props.shortname);
 
   const baseObj = {
     classes: await listToObj(classes, 'classes'),
@@ -45,7 +45,7 @@ const listToObj = async (
     list.map(async subject => {
       const resource = await store.getResource(subject);
 
-      return [camelCaseify(resource.title), subject];
+      return [camelCaseify(resource.get(core.properties.shortname)), subject];
     }),
   );
 

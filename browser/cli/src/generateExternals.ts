@@ -13,7 +13,7 @@ enum Inserts {
 
 const TEMPLATE = `
 /* -----------------------------------
-* GENERATED WITH @tomic-cli
+* GENERATED WITH @tomic/cli
 * -------------------------------- */
 
 export const externals = {
@@ -21,6 +21,7 @@ export const externals = {
   properties: {
     ${Inserts.BaseObjectProperties}
   },
+  __classDefs: {},
 } as const;
 
 declare module '${Inserts.ModuleAlias}' {
