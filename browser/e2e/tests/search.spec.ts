@@ -115,6 +115,8 @@ test.describe('search', async () => {
 
     // Search for the folder by the first tag
     await addressBar(page).fill('tag:first');
+    await expect(page.locator(`text=${firstTagName}`).first()).toBeVisible();
+    await page.keyboard.press('ArrowDown');
     await page.keyboard.press('Enter');
 
     // Verify the folder is found in search results
@@ -122,6 +124,8 @@ test.describe('search', async () => {
 
     // Search for the folder by the second tag
     await addressBar(page).fill(`tag:${secondTagName}`);
+    await expect(page.locator(`text=${secondTagName}`).first()).toBeVisible();
+    await page.keyboard.press('ArrowDown');
     await page.keyboard.press('Enter');
 
     // Verify the folder is found in search results
@@ -130,6 +134,7 @@ test.describe('search', async () => {
     // Verify that searching for a non-existent tag doesn't find the folder
     const nonExistentTag = `nonexistent-tag`;
     await addressBar(page).fill(`tag:${nonExistentTag}`);
+    await page.keyboard.press('ArrowDown');
     await page.keyboard.press('Enter');
 
     // Verify the folder is not found
