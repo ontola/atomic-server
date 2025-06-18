@@ -8,6 +8,7 @@ import {
   Secret,
   File,
   Platform,
+  Service,
 } from "@dagger.io/dagger";
 
 const NODE_IMAGE = "node:24";
@@ -117,7 +118,7 @@ export class AtomicServer {
       .withExec([
         "sh",
         "-c",
-        `netlify link --name ${siteName} --auth $NETLIFY_AUTH_TOKEN`,
+        `for i in $(seq 1 5); do netlify link --name ${siteName} --auth $NETLIFY_AUTH_TOKEN && break || sleep 2; done`,
       ])
       .withExec(["netlify", "deploy", "--dir", ".", "--prod"])
       .stdout();
@@ -357,6 +358,23 @@ export class AtomicServer {
   // }
 
   @func()
+  /** Returns a Service running atomic-server for use in tests */
+  atomicService(): Service {
+    const atomicServerBinary = this.rustBuild().file("/atomic-server-binary");
+    return dag
+      .container()
+      .from("alpine:latest")
+      .withFile("/atomic-server-bin", atomicServerBinary, {
+        permissions: 0o755,
+      })
+      .withEnvVariable("ATOMIC_DOMAIN", "atomic")
+      .withExposedPort(9883)
+      .withEntrypoint(["/atomic-server-bin"])
+      .asService()
+      .withHostname("atomic");
+  }
+
+  @func()
   async endToEnd(@argument() netlifyAuthToken: Secret): Promise<string> {
     const e2eSource = this.source.directory("browser/e2e");
 
@@ -376,9 +394,6 @@ export class AtomicServer {
       .withExec(["pnpm", "dlx", "playwright", "install", "--with-deps"])
       .withExec(["npm", "install", "-g", "netlify-cli"]);
 
-    // Get the atomic-server binary from the build (copied out of cache)
-    const atomicServerBinary = this.rustBuild().file("/atomic-server-binary");
-
     // Setup e2e test environment
     const e2eContainer = playwrightContainer
       .withMountedDirectory("/app", e2eSource)
@@ -386,40 +401,23 @@ export class AtomicServer {
       .withExec(["pnpm", "install"])
       .withEnvVariable("LANGUAGE", "en_GB")
       .withEnvVariable("DELETE_PREVIOUS_TEST_DRIVES", "false")
-      .withEnvVariable("FRONTEND_URL", "http://localhost:9883")
-      .withFile("/atomic-server-bin", atomicServerBinary, {
-        permissions: 0o755,
-      })
-      .withSecretVariable("NETLIFY_AUTH_TOKEN", netlifyAuthToken);
-
-    // Test the binary
-    e2eContainer.withExec(["/atomic-server-bin", "--version"]);
-
-    // Start atomic-server in background
-    const serverStarted = e2eContainer
+      .withEnvVariable("FRONTEND_URL", "http://atomic:9883")
+      .withServiceBinding("atomic", this.atomicService())
+      // Wait for the server to be ready
+      .withExec([
+        "sh",
+        "-c",
+        "for i in $(seq 1 10); do curl http://atomic:9883/setup && exit 0 || sleep 1; done; exit 1",
+      ])
+      // Test the server is running
       .withExec([
         "/bin/sh",
         "-c",
-        "nohup /atomic-server-bin --initialize > /dev/null 2>&1 & echo 'Server started'",
-      ])
-      .withExec(["sleep", "3"]);
-
-    // Check if atomic-server is running, if its responding with a 200
-    serverStarted.withExec([
-      "/bin/sh",
-      "-c",
-      "curl -f -s http://localhost:9883/ || (echo 'Server not responding with 200' && exit 1)",
-    ]);
-
-    // Run the tests and capture exit code, but continue regardless
-    const testResult = serverStarted.withExec([
-      "/bin/sh",
-      "-c",
-      "pnpm run test-e2e; echo $? > /test-exit-code",
-    ]);
+        "pnpm run test-e2e; echo $? > /test-exit-code",
+      ]);
 
     // Extract the test results directory and upload to Netlify
-    const testReportDirectory = testResult.directory("playwright-report");
+    const testReportDirectory = e2eContainer.directory("playwright-report");
     const deployOutput = await this.netlifyDeploy(
       testReportDirectory,
       "atomic-tests",
@@ -430,7 +428,7 @@ export class AtomicServer {
     const deployUrl = this.extractDeployUrl(deployOutput);
 
     // Check the test exit code and fail if tests failed
-    const exitCode = await testResult.file("/test-exit-code").contents();
+    const exitCode = await e2eContainer.file("/test-exit-code").contents();
     if (exitCode.trim() !== "0") {
       throw new Error(
         `E2E tests failed (exit code: ${exitCode.trim()}). Test report deployed to: \n${deployUrl}`
