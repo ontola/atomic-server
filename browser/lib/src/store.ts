@@ -437,7 +437,12 @@ export class Store {
 
     if (!resource) {
       resource = new Resource<C>(subject, opts.newResource);
-      resource.loading = true;
+
+      // New resources don't have to load, they are just created.
+      if (!opts.newResource) {
+        resource.loading = true;
+      }
+
       this.addResources(resource);
 
       if (!opts.newResource) {
