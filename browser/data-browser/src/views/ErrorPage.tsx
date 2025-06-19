@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { isUnauthorized, useStore } from '@tomic/react';
+import { useLocation } from '@tanstack/react-router';
 import { ContainerWide } from '../components/Containers';
 import { ErrorBlock } from '../components/ErrorLook';
 import { Button } from '../components/Button';
@@ -13,6 +14,7 @@ import { AtomicLink } from '../components/AtomicLink';
 import { paths } from '../routes/paths';
 import { isRootWelcomeResourceError } from '../helpers/isRootWelcomeResourceError';
 import { RootWelcomeGate } from './RootWelcomeGate';
+import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 
 import type { JSX } from 'react';
 
@@ -23,12 +25,31 @@ import type { JSX } from 'react';
 function ErrorPage({ resource }: ResourcePageProps): JSX.Element {
   const { agent, baseURL } = useSettings();
   const store = useStore();
+  const navigate = useNavigateWithTransition();
+  const location = useLocation();
+
+  const shouldGoToWelcome =
+    (!agent && isRootWelcomeResourceError(resource, agent, baseURL)) ||
+    (!agent && isUnauthorized(resource.error));
+
+  React.useEffect(() => {
+    if (!shouldGoToWelcome) return;
+    if (location.pathname === paths.welcome) return;
+
+    navigate({ to: paths.welcome, replace: true });
+  }, [location.pathname, navigate, shouldGoToWelcome]);
 
   if (isRootWelcomeResourceError(resource, agent, baseURL)) {
-    return <RootWelcomeGate subject={resource.subject} />;
+    // Redirect effect above will handle the URL; render something safe meanwhile.
+    return <RootWelcomeGate subject={baseURL || resource.subject} />;
   }
 
   if (isUnauthorized(resource.error)) {
+    if (!agent) {
+      // Redirect effect above will handle the URL.
+      return <RootWelcomeGate subject={baseURL || resource.subject} />;
+    }
+
     return (
       <ContainerWide>
         <Column>

@@ -247,6 +247,7 @@ Dialog.Content = DialogContent;
 Dialog.Actions = DialogActions;
 
 const CloseButtonSlot = styled(Slot)`
+  align-self: center;
   justify-self: end;
 `;
 
@@ -276,11 +277,15 @@ const DialogActionsSlot = styled(Slot)`
 
 const StyledInnerDialog = styled.div`
   display: grid;
-  grid-template-columns: auto 2rem;
-  grid-template-rows: 1fr auto auto;
-  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr) 2.25rem;
+  /* Title row auto height; main grows and scrolls; footer auto */
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  column-gap: ${p => p.theme.size()};
+  row-gap: ${p => p.theme.size()};
   grid-template-areas: 'title close' 'content content' 'actions actions';
   max-block-size: calc(100vh - ${p => p.theme.size()} * 2);
+  /* Extra breathing room so the header matches side padding visually */
+  padding-block-start: ${p => p.theme.size(2)};
 `;
 
 const fadeInForground = keyframes`
@@ -378,7 +383,11 @@ const StyledDialog = styled.dialog<{ $width?: CSS.Property.Width }>`
 export { useDialog };
 
 const TitleSlot = styled(Slot)`
+  min-width: 0;
+  align-self: center;
+
   & :is(h1, h2, h3, h4, h5, h6) {
     margin: 0;
+    line-height: 1.25;
   }
 `;

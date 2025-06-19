@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Agent, JSCryptoProvider, core, server, useStore } from '@tomic/react';
 import { fetchPersonalDriveSubject } from '../helpers/personalDrive';
 import { useSettings } from '../helpers/AppSettings';
@@ -32,6 +33,8 @@ interface NewIdentitySectionProps {
    * must re-enter the secret to verify they saved it.
    */
   verifySecret?: boolean;
+  /** Optional portal target for the step dots indicator. */
+  stepIndicatorPortal?: Element | null;
 }
 
 interface IdentityData {
@@ -52,6 +55,7 @@ export function NewIdentitySection({
   onAfterCreate,
   autoStart = false,
   verifySecret = false,
+  stepIndicatorPortal,
 }: NewIdentitySectionProps) {
   const store = useStore();
   const { setAgent, setDrive } = useSettings();
@@ -105,11 +109,6 @@ export function NewIdentitySection({
     const trimmed = name.trim();
     setIdentity(prev => (prev ? { ...prev, profileName: trimmed } : null));
     void createPersonalDrive(trimmed);
-  }
-
-  function handleSkipProfile() {
-    setIdentity(prev => (prev ? { ...prev, profileName: '' } : null));
-    void createPersonalDrive('');
   }
 
   /** One private drive per user on this server; becomes default home / initialDrive. */
@@ -237,9 +236,15 @@ export function NewIdentitySection({
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
+  const stepIndicator = (
+    <StepIndicator step={step} verifySecret={verifySecret} />
+  );
+
   return (
     <Column gap='1.5rem'>
-      <StepIndicator step={step} verifySecret={verifySecret} />
+      {stepIndicatorPortal
+        ? createPortal(stepIndicator, stepIndicatorPortal)
+        : stepIndicator}
 
       {step === 'idle' && (
         <Column gap='1rem'>
@@ -265,7 +270,6 @@ export function NewIdentitySection({
           error={error}
           loading={loading}
           onSave={handleProfileSave}
-          onSkip={handleSkipProfile}
         />
       )}
 
@@ -347,7 +351,7 @@ const Dot = styled.span`
   border-radius: 50%;
 `;
 
-const StepDots = styled.div`
+const StepDots = styled.div.attrs({ 'data-step-dots': 'true' })`
   display: flex;
   gap: 6px;
   justify-content: center;
@@ -376,7 +380,24 @@ function SecretStep({
         access your data if you clear your browser cache or sign in from another
         device.
       </p>
-      <StyledCodeBlock wordWrap content={secret} onCopy={onCopy} />
+      <StyledCodeBlock
+        className='secret-protected'
+        wordWrap
+        content={secret}
+        renderContent={content => {
+          const raw = content ?? '';
+          const [firstLine, ...rest] = raw.split('\n');
+          const restText = rest.join('\n');
+
+          return (
+            <>
+              <span data-code-text-first>{firstLine}</span>
+              {restText ? <span data-code-text-rest>{'\n' + restText}</span> : null}
+            </>
+          );
+        }}
+        onCopy={onCopy}
+      />
       {hasCopied ? (
         <>
           <p>
@@ -435,6 +456,7 @@ function VerifyStep({
             placeholder='Paste your secret here'
             autoComplete='off'
             spellCheck='false'
+            autoFocus
           />
         </InputWrapper>
       </Field>
@@ -449,12 +471,10 @@ function ProfileStep({
   error,
   loading,
   onSave,
-  onSkip,
 }: {
   error: string | undefined;
   loading: boolean;
   onSave: (name: string) => void;
-  onSkip: () => void;
 }) {
   const [name, setName] = useState('');
 
@@ -493,12 +513,9 @@ function ProfileStep({
             </InputWrapper>
           </Field>
           <Row gap='1rem'>
-            <Button type='submit' disabled={loading || !name.trim()}>
+            <ContinueButton type='submit' disabled={loading || !name.trim()}>
               {loading ? 'Creating drive…' : 'Save & continue'}
-            </Button>
-            <Button type='button' subtle onClick={onSkip} disabled={loading}>
-              Skip (drive will be named &quot;Personal&quot;)
-            </Button>
+            </ContinueButton>
           </Row>
         </Column>
       </form>
@@ -511,6 +528,17 @@ function ProfileStep({
 const StyledCodeBlock = styled(CodeBlock)`
   word-break: break-word;
 
+  &.secret-protected [data-code-text-rest] {
+    filter: blur(8px);
+    user-select: none;
+  }
+
+  &.secret-protected:hover [data-code-text-rest],
+  &.secret-protected:focus-within [data-code-text-rest] {
+    filter: none;
+    user-select: text;
+  }
+
   & button {
     top: ${p => p.theme.size(1)};
     right: ${p => p.theme.size(1)};
@@ -520,4 +548,9 @@ const StyledCodeBlock = styled(CodeBlock)`
 const ErrorText = styled.p`
   color: ${p => p.theme.colors.alert};
   margin: 0;
+`;
+
+const ContinueButton = styled(Button)`
+  align-self: flex-start;
+  padding-inline: 1rem;
 `;

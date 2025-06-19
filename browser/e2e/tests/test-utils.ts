@@ -96,7 +96,7 @@ export async function setTitle(page: Page, title: string) {
 
 /**
  * Signs in with the shared test secret. Works from the drive (sidebar → Login)
- * or from the root welcome gate / `/app/agent` where the secret field is already shown.
+ * or from `/app/agent` / welcome gate (card: Sign in → secret → Continue).
  */
 export async function signIn(page: Page, secret: string = SECRET) {
   const loginLink = page.getByRole('link', { name: 'Login / New User' });
@@ -108,8 +108,9 @@ export async function signIn(page: Page, secret: string = SECRET) {
     await loginLink.click();
   }
 
-  await page.getByLabel('Enter your Agent Secret').fill(secret);
-  await page.getByRole('button', { name: 'Sign in' }).click();
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await page.getByLabel('Agent secret').fill(secret);
+  await page.getByRole('button', { name: 'Continue' }).click();
 
   if (usedSidebarNav) {
     await page.goBack();

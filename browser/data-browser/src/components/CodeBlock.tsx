@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import toast from 'react-hot-toast';
 import { FaCheck, FaCopy } from 'react-icons/fa6';
 import { styled } from 'styled-components';
@@ -11,6 +11,8 @@ interface CodeBlockProps {
   wordWrap?: boolean;
   className?: string;
   onCopy?: () => void;
+  /** Optional custom renderer for displaying `content` (copy still uses `content`). */
+  renderContent?: (content: string | undefined) => ReactNode;
 }
 
 export function CodeBlock({
@@ -19,6 +21,7 @@ export function CodeBlock({
   wordWrap = false,
   className,
   onCopy,
+  renderContent,
 }: CodeBlockProps) {
   const preRef = useRef<HTMLPreElement>(null);
   const [isCopied, setIsCopied] = useState<string | undefined>(undefined);
@@ -44,7 +47,11 @@ export function CodeBlock({
         'loading...'
       ) : (
         <>
-          {content}
+          {renderContent ? (
+            renderContent(content)
+          ) : (
+            <span data-code-text>{content}</span>
+          )}
           <Button
             subtle
             style={{
