@@ -32,7 +32,10 @@ const TopRouteComponent: React.FC = () => {
   // We need to combine origin with tanstack's href because tanstack does not include the origin in the href but the normal window.location.href is not reactive.
   const subject = window.location.origin + href;
 
-  return <ResourcePage subject={subject} key={subject} />;
+  // Remove trailing slash from subject
+  const cleanedSubject = subject.endsWith('/') ? subject.slice(0, -1) : subject;
+
+  return <ResourcePage subject={cleanedSubject} key={cleanedSubject} />;
 };
 
 export const topRoute = createRoute({
