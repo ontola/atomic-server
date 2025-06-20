@@ -847,12 +847,22 @@ fn validate_plugin_zip(
 
     let manifest = PluginManifest::from_reader(file)?;
 
+    let mut has_ui_js = false;
+
     for i in 0..zip.len() {
         let file = zip
             .by_index(i)
             .map_err(|e| AtomicError::from(e.to_string()))?;
         let name = file.name();
-        if name == "plugin.wasm" || name == "plugin.json" || name.starts_with("assets/") {
+        if name == "plugin.wasm"
+            || name == "plugin.json"
+            || name == "ui.js"
+            || name == "ui.css"
+            || name.starts_with("assets/")
+        {
+            if name == "ui.js" {
+                has_ui_js = true;
+            }
             continue;
         }
         // If it's a directory "assets/", that's fine too.
@@ -860,9 +870,15 @@ fn validate_plugin_zip(
             continue;
         }
         return Err(AtomicError::from(format!(
-            "Illegal file found in zip: {}. Only plugin.wasm, plugin.json and assets/ are allowed.",
+            "Illegal file found in zip: {}. Only plugin.wasm, plugin.json, ui.js, ui.css and assets/ are allowed.",
             name
         )));
+    }
+
+    if has_ui_js && !manifest.has_permission(PermissionType::CustomView) {
+        return Err(AtomicError::from(
+            "Plugin contains ui.js but does not have the 'custom-view' permission.",
+        ));
     }
 
     Ok(manifest)
@@ -896,6 +912,10 @@ fn extract_plugin_to_disk(
             target_dir.join(format!("{}.{}.wasm", namespace, name))
         } else if file_name == "plugin.json" {
             target_dir.join(format!("{}.{}.json", namespace, name))
+        } else if file_name == "ui.js" {
+            target_dir.join(format!("{}.{}.ui.js", namespace, name))
+        } else if file_name == "ui.css" {
+            target_dir.join(format!("{}.{}.ui.css", namespace, name))
         } else if file_name.starts_with("assets/") {
             // Replace "assets/" with "{namespace}/"
             let stripped = file_name.strip_prefix("assets/").unwrap();
@@ -1028,6 +1048,8 @@ pub async fn uninstall_plugin(
     let wasm_filename = format!("{}.{}.wasm", namespace, name);
     let wasm_path = target_dir.join(&wasm_filename);
     let json_path = target_dir.join(format!("{}.{}.json", namespace, name));
+    let ui_js_path = target_dir.join(format!("{}.{}.ui.js", namespace, name));
+    let ui_css_path = target_dir.join(format!("{}.{}.ui.css", namespace, name));
 
     if !wasm_path.exists() {
         return Err(AtomicError::not_found(format!(
@@ -1054,6 +1076,26 @@ pub async fn uninstall_plugin(
             AtomicError::from(format!(
                 "Failed to remove json file {}: {}",
                 json_path.display(),
+                e
+            ))
+        })?;
+    }
+
+    if ui_js_path.exists() {
+        std::fs::remove_file(&ui_js_path).map_err(|e| {
+            AtomicError::from(format!(
+                "Failed to remove ui.js file {}: {}",
+                ui_js_path.display(),
+                e
+            ))
+        })?;
+    }
+
+    if ui_css_path.exists() {
+        std::fs::remove_file(&ui_css_path).map_err(|e| {
+            AtomicError::from(format!(
+                "Failed to remove ui.css file {}: {}",
+                ui_css_path.display(),
                 e
             ))
         })?;
@@ -1128,6 +1170,8 @@ pub async fn install_or_update_plugin(
         .join(&encoded_subject);
     let wasm_path = target_dir.join(&wasm_target_name);
     let json_path = target_dir.join(&json_target_name);
+    let ui_js_path = target_dir.join(format!("{}.{}.ui.js", manifest.namespace, manifest.name));
+    let ui_css_path = target_dir.join(format!("{}.{}.ui.css", manifest.namespace, manifest.name));
 
     // Determine if this is a fresh install or an update by saving the old metadata
     let meta_key = PluginMetaKey::new(drive_subject, &manifest.namespace, &manifest.name);
@@ -1137,6 +1181,8 @@ pub async fn install_or_update_plugin(
     // Back up existing files before extraction so we can restore them on failure
     let wasm_backup = wasm_path.with_extension("wasm.bak");
     let json_backup = json_path.with_extension("json.bak");
+    let ui_js_backup = ui_js_path.with_extension("js.bak");
+    let ui_css_backup = ui_css_path.with_extension("css.bak");
 
     if is_update {
         if wasm_path.exists() {
@@ -1147,6 +1193,16 @@ pub async fn install_or_update_plugin(
         if json_path.exists() {
             std::fs::copy(&json_path, &json_backup).map_err(|e| {
                 AtomicError::from(format!("Failed to back up existing json file: {}", e))
+            })?;
+        }
+        if ui_js_path.exists() {
+            std::fs::copy(&ui_js_path, &ui_js_backup).map_err(|e| {
+                AtomicError::from(format!("Failed to back up existing ui.js file: {}", e))
+            })?;
+        }
+        if ui_css_path.exists() {
+            std::fs::copy(&ui_css_path, &ui_css_backup).map_err(|e| {
+                AtomicError::from(format!("Failed to back up existing ui.css file: {}", e))
             })?;
         }
     }
@@ -1202,6 +1258,8 @@ pub async fn install_or_update_plugin(
             if is_update {
                 std::fs::remove_file(&wasm_backup).ok();
                 std::fs::remove_file(&json_backup).ok();
+                std::fs::remove_file(&ui_js_backup).ok();
+                std::fs::remove_file(&ui_css_backup).ok();
             }
             Ok(())
         }
@@ -1216,8 +1274,12 @@ pub async fn install_or_update_plugin(
                 old_plugin_meta,
                 &wasm_path,
                 &json_path,
+                &ui_js_path,
+                &ui_css_path,
                 &wasm_backup,
                 &json_backup,
+                &ui_js_backup,
+                &ui_css_backup,
             )
             .await;
             Err(e)
@@ -1236,8 +1298,12 @@ async fn rollback_plugin_install(
     old_plugin_meta: Option<PluginMeta>,
     wasm_path: &Path,
     json_path: &Path,
+    ui_js_path: &Path,
+    ui_css_path: &Path,
     wasm_backup: &Path,
     json_backup: &Path,
+    ui_js_backup: &Path,
+    ui_css_backup: &Path,
 ) {
     if let Some(old_meta) = old_plugin_meta {
         // Update: restore backed up files
@@ -1249,6 +1315,16 @@ async fn rollback_plugin_install(
         if json_backup.exists() {
             if let Err(e) = std::fs::rename(json_backup, json_path) {
                 error!("Rollback: failed to restore json backup: {}", e);
+            }
+        }
+        if ui_js_backup.exists() {
+            if let Err(e) = std::fs::rename(ui_js_backup, ui_js_path) {
+                error!("Rollback: failed to restore ui.js backup: {}", e);
+            }
+        }
+        if ui_css_backup.exists() {
+            if let Err(e) = std::fs::rename(ui_css_backup, ui_css_path) {
+                error!("Rollback: failed to restore ui.css backup: {}", e);
             }
         }
 
@@ -1263,6 +1339,12 @@ async fn rollback_plugin_install(
         }
         if json_path.exists() {
             std::fs::remove_file(json_path).ok();
+        }
+        if ui_js_path.exists() {
+            std::fs::remove_file(ui_js_path).ok();
+        }
+        if ui_css_path.exists() {
+            std::fs::remove_file(ui_css_path).ok();
         }
 
         // Clean up metadata that was created during this failed install

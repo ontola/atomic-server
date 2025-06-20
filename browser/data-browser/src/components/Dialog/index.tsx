@@ -218,9 +218,9 @@ const InnerDialog: React.FC<React.PropsWithChildren<InternalDialogProps>> = ({
 };
 
 export const DialogTitle: DialogSlotComponent = ({ children, ...props }) => (
-  <Slot slot={DialogSlot.Title} as='header' {...props}>
+  <TitleSlot slot={DialogSlot.Title} as='header' {...props}>
     {children}
-  </Slot>
+  </TitleSlot>
 );
 
 /**
@@ -376,3 +376,9 @@ const StyledDialog = styled.dialog<{ $width?: CSS.Property.Width }>`
 `;
 
 export { useDialog };
+
+const TitleSlot = styled(Slot)`
+  & :is(h1, h2, h3, h4, h5, h6) {
+    margin: 0;
+  }
+`;

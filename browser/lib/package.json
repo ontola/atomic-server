@@ -53,6 +53,11 @@
         "types": "./dist/src/index.d.cts",
         "default": "./dist/index.cjs"
       }
+    },
+    "./ontologies/*.js": {
+      "types": "./dist/src/ontologies/*.d.ts",
+      "import": "./dist/ontologies/*.js",
+      "require": "./dist/ontologies/*.cjs"
     }
   },
   "main-dev": "src/index.ts",
@@ -76,6 +81,7 @@
     "attw": "pnpm pack --out tomic-lib.tgz && pnpm exec attw tomic-lib.tgz"
   },
   "source": "src/index.ts",
+  "sideEffects": false,
   "type": "module",
   "types": "dist/src/index.d.ts"
 }

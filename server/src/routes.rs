@@ -21,6 +21,8 @@ pub fn config_routes(app: &mut actix_web::web::ServiceConfig) {
     app.service(web::resource("/ws").to(handlers::web_sockets::web_socket_handler))
         .service(web::resource("/download/{path:[^{}]+}").to(handlers::download::handle_download))
         .service(web::resource("/export").to(handlers::export::handle_export))
+        .service(web::resource("/plugin-ui").to(handlers::plugin_ui::handle_plugin_ui))
+        .service(web::resource("/plugin-list").to(handlers::plugin_ui::handle_plugin_list))
         // This `generate` imports the static files from the `app_assets` folder
         .service(
             ResourceFiles::new("/", generate())

@@ -10,11 +10,13 @@ struct Config {
 }
 
 const FOLDER_CLASS: &str = "https://atomicdata.dev/classes/Folder";
+const BIRD_CLASS: &str =
+    "https://atomicdata.dev/01k10mtpp8fkkmsd6tkm9qrqyw/defaultontology/class/bird";
 const NAME_PROP: &str = "https://atomicdata.dev/properties/name";
 
 impl ClassExtender for TestPlugin {
     fn class_url() -> Vec<String> {
-        vec![FOLDER_CLASS.to_string()]
+        vec![FOLDER_CLASS.to_string(), BIRD_CLASS.to_string()]
     }
 
     // Modify the response from the server every time a folder is fetched.

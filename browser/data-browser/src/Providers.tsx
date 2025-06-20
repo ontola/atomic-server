@@ -22,6 +22,7 @@ import { AISettingsContextProvider } from '@components/AI/AISettingsContext';
 import { LocaleProvider } from '@components/LocaleContext';
 import { CustomContextItemsProvider } from './components/ResourceContextMenu';
 import { LazyMCPProvider } from '@components/AI/MCP/LazyMCPProvider';
+import { CustomViewProvider } from '@components/CustomViewProvider';
 
 // Setup bugsnag for error handling, but only if there's an API key
 const ErrBoundary = window.bugsnagApiKey
@@ -64,22 +65,24 @@ export const Providers: React.FC<React.PropsWithChildren> = ({ children }) => {
                           onValidationChange={() => undefined}
                         >
                           <Toaster />
-                          <MetaSetter />
-                          <DropdownContainer>
-                            <DialogGlobalContextProvider>
-                              <PopoverContainer>
-                                <DropdownContainer>
-                                  <CustomContextItemsProvider>
-                                    <NewResourceUIProvider>
-                                      <SkipNav />
-                                      <NavWrapper>{children}</NavWrapper>
-                                    </NewResourceUIProvider>
-                                  </CustomContextItemsProvider>
-                                </DropdownContainer>
-                              </PopoverContainer>
-                              <NetworkIndicator />
-                            </DialogGlobalContextProvider>
-                          </DropdownContainer>
+                          <CustomViewProvider>
+                            <MetaSetter />
+                            <DropdownContainer>
+                              <DialogGlobalContextProvider>
+                                <PopoverContainer>
+                                  <DropdownContainer>
+                                    <CustomContextItemsProvider>
+                                      <NewResourceUIProvider>
+                                        <SkipNav />
+                                        <NavWrapper>{children}</NavWrapper>
+                                      </NewResourceUIProvider>
+                                    </CustomContextItemsProvider>
+                                  </DropdownContainer>
+                                </PopoverContainer>
+                                <NetworkIndicator />
+                              </DialogGlobalContextProvider>
+                            </DropdownContainer>
+                          </CustomViewProvider>
                         </FormValidationContextProvider>
                       </ErrBoundary>
                     </ThemeWrapper>

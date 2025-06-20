@@ -55,6 +55,7 @@ pub enum PermissionType {
     FullDriveAccess,
     ExtendedFuel,
     ExtendedMemory,
+    CustomView,
 }
 
 impl PluginManifest {

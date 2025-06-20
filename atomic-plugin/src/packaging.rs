@@ -25,7 +25,15 @@ pub mod packaging_impl {
         #[arg(long, default_value = "plugin.json")]
         pub descriptor: PathBuf,
 
-        /// Output path for the zip file. Defaults to [namespace].zip in cwd
+        /// Path to the UI JS file. Defaults to ./ui/dist/ui.js
+        #[arg(long)]
+        pub ui_js: Option<PathBuf>,
+
+        /// Path to the UI CSS file. Defaults to ./ui/dist/ui.css
+        #[arg(long)]
+        pub ui_css: Option<PathBuf>,
+
+        /// Output path for the zip file. Defaults to [namespace].[name].zip in cwd
         #[arg(long)]
         pub out: Option<PathBuf>,
     }
@@ -59,6 +67,24 @@ pub mod packaging_impl {
 
         let assets_path = cli.assets.unwrap_or_else(|| PathBuf::from("assets"));
 
+        let ui_js_path = cli.ui_js.or_else(|| {
+            let p = PathBuf::from("ui/dist/ui.js");
+            if p.exists() {
+                Some(p)
+            } else {
+                None
+            }
+        });
+
+        let ui_css_path = cli.ui_css.or_else(|| {
+            let p = PathBuf::from("ui/dist/ui.css");
+            if p.exists() {
+                Some(p)
+            } else {
+                None
+            }
+        });
+
         let out_path = cli
             .out
             .unwrap_or_else(|| PathBuf::from(format!("dist/{}.zip", namespace)));
@@ -66,6 +92,12 @@ pub mod packaging_impl {
         println!("Packaging plugin: {}/{}", namespace, name);
         println!("  Wasm: {:?}", wasm_path);
         println!("  Assets: {:?}", assets_path);
+        if let Some(ui_js) = &ui_js_path {
+            println!("  UI JS: {:?}", ui_js);
+        }
+        if let Some(ui_css) = &ui_css_path {
+            println!("  UI CSS: {:?}", ui_css);
+        }
         println!("  Descriptor: {:?}", cli.descriptor);
         println!("  Output: {:?}", out_path);
 
@@ -90,6 +122,23 @@ pub mod packaging_impl {
         // Keep as plugin.json
         zip.start_file("plugin.json", options)?;
         zip.write_all(descriptor_content.as_bytes())?;
+
+        // Add UI files
+        if let Some(ui_js_path) = ui_js_path {
+            zip.start_file("ui.js", options)?;
+            let mut ui_js_file = File::open(&ui_js_path).context("Failed to open UI JS file")?;
+            let mut buffer = Vec::new();
+            ui_js_file.read_to_end(&mut buffer)?;
+            zip.write_all(&buffer)?;
+        }
+
+        if let Some(ui_css_path) = ui_css_path {
+            zip.start_file("ui.css", options)?;
+            let mut ui_css_file = File::open(&ui_css_path).context("Failed to open UI CSS file")?;
+            let mut buffer = Vec::new();
+            ui_css_file.read_to_end(&mut buffer)?;
+            zip.write_all(&buffer)?;
+        }
 
         // Add Assets
         if assets_path.exists() {

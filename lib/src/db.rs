@@ -22,7 +22,9 @@ use std::{
 use crate::{
     agents::ForAgent,
     atoms::IndexAtom,
-    class_extender::{ClassExtender, CommitExtenderContext, GetExtenderContext},
+    class_extender::{
+        ClassExtender, ClassExtenderScope, CommitExtenderContext, GetExtenderContext,
+    },
     commit::{CommitOpts, CommitResponse},
     db::{
         encoding::{decode_propvals, encode_propvals},
@@ -167,6 +169,20 @@ impl Db {
 
         extenders.push(class_extender);
         Ok(())
+    }
+
+    pub fn get_class_extenders_on_drive(&self, drive_subject: &str) -> Vec<ClassExtender> {
+        let Ok(extenders) = self.class_extenders.read() else {
+            return Vec::new();
+        };
+
+        extenders
+            .iter()
+            .filter(
+                |e| matches!(&e.scope, ClassExtenderScope::Drive(scope) if scope == drive_subject),
+            )
+            .cloned()
+            .collect()
     }
 
     pub fn remove_class_extender(&self, id: &str) -> AtomicResult<()> {

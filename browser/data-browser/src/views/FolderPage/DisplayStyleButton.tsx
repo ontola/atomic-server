@@ -1,6 +1,6 @@
 import { classes } from '@tomic/react';
 import { useMemo, type JSX } from 'react';
-import { FaList, FaGrip } from 'react-icons/fa6';
+import { FaList, FaTableCellsLarge } from 'react-icons/fa6';
 import { ButtonGroup } from '../../components/ButtonGroup';
 
 export interface DisplayStyleButtonProps {
@@ -23,7 +23,7 @@ export function DisplayStyleButton({
         checked: displayStyle === list,
       },
       {
-        icon: <FaGrip />,
+        icon: <FaTableCellsLarge />,
         label: 'Grid View',
         value: grid,
         checked: displayStyle === grid,

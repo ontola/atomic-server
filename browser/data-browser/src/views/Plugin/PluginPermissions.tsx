@@ -4,6 +4,7 @@ import type {
 } from '@chunks/Plugins/plugins';
 import { Column, Row } from '@components/Row';
 import {
+  FaDesktop,
   FaFire,
   FaGlobe,
   FaHardDrive,
@@ -23,6 +24,7 @@ const TITLES = {
   'full-drive-access': 'Full Drive Access',
   'extended-fuel': 'Extended Fuel',
   'extended-memory': 'Extended Memory',
+  'custom-view': 'Custom View',
 } satisfies Record<PluginPermissionType, string>;
 
 const ICONS = {
@@ -31,6 +33,7 @@ const ICONS = {
   'full-drive-access': <FaShield />,
   'extended-fuel': <FaFire />,
   'extended-memory': <FaMemory />,
+  'custom-view': <FaDesktop />,
 } satisfies Record<PluginPermissionType, React.ReactNode>;
 
 export const PluginPermissions: React.FC<PluginPermissionsProps> = ({

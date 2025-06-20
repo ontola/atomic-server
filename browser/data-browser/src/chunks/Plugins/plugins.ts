@@ -13,7 +13,8 @@ export type PluginPermissionType =
   | 'storage'
   | 'full-drive-access'
   | 'extended-fuel'
-  | 'extended-memory';
+  | 'extended-memory'
+  | 'custom-view';
 export interface PluginPermission {
   permission: PluginPermissionType;
   reason: string;
@@ -50,7 +51,7 @@ export async function readZip(file: File): Promise<PluginMetadata> {
 }
 
 function validateZip(entries: Entry[]): boolean {
-  const allowedRootFiles = ['plugin.json', 'plugin.wasm'];
+  const allowedRootFiles = ['plugin.json', 'plugin.wasm', 'ui.js', 'ui.css'];
   let foundWasm = false;
   let foundJson = false;
 

@@ -54,6 +54,7 @@ msgstr "Keine Ergebnisse"
 #: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/OntologyPage/NewPropertyButton.tsx
 #: src/views/Plugin/AssignRights.tsx
+#: src/views/PluginView/useResourcePicker.tsx
 msgid "Cancel"
 msgstr "Abbrechen"
 
@@ -3380,3 +3381,47 @@ msgstr "Neue Berechtigungen"
 #: src/chunks/Plugins/NewPluginButton.tsx
 msgid "Failed to install plugin"
 msgstr "Fehler bei der Installation des Plugins"
+
+#: src/views/PluginView/useResourcePicker.tsx
+msgid "Pick Resource"
+msgstr "Ressource auswählen"
+
+#: src/views/PluginView/useResourcePicker.tsx
+msgid "Confirm"
+msgstr "Bestätigen"
+
+#: src/views/PluginView/useRequestPermissionDialog.tsx
+msgid "Deny"
+msgstr "Verweigern"
+
+#: src/views/PluginView/useRequestPermissionDialog.tsx
+msgid "Allow"
+msgstr "Erlauben```"
+
+#: src/views/PluginView/useRequestPermissionDialog.tsx
+msgid "Read Request"
+msgstr "Leseanfrage"
+
+#: src/views/PluginView/useRequestPermissionDialog.tsx
+msgid "Write Request"
+msgstr "Schreibanfrage"
+
+#: src/views/PluginView/useRequestPermissionDialog.tsx
+msgid "Allow all reads done by this plugin"
+msgstr "Alle Lesevorgänge dieses Plugins zulassen"
+
+#: src/views/PluginView/useRequestPermissionDialog.tsx
+msgid "Allow all writes done by this plugin"
+msgstr "Alle Schreibvorgänge dieses Plugins zulassen"
+
+#: src/views/PluginView/useRequestPermissionDialog.tsx
+msgid ""
+"<0/> wants to read a resource that is not\n"
+"contained in the current scope."
+msgstr "<0/> möchte eine Ressource lesen, die nicht im aktuellen Geltungsbereich enthalten ist."
+
+#: src/views/PluginView/useRequestPermissionDialog.tsx
+msgid ""
+"<0/> wants to modify a resource that is not\n"
+"contained in the current scope."
+msgstr "<0/> möchte eine Ressource ändern, die nicht im aktuellen Geltungsbereich enthalten ist."

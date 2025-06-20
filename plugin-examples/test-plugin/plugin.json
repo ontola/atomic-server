@@ -8,6 +8,10 @@
     {
       "permission": "storage",
       "reason": "This plugin doesn't need storage access but the tests should check if it's there."
+    },
+    {
+      "permission": "custom-view",
+      "reason": "Custom UI where the user can edit the name of a resource."
     }
   ],
   "defaultConfig": {

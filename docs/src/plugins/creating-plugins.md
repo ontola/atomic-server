@@ -45,6 +45,7 @@ The following permissions are available:
 - `full-drive-access`: Allows the plugin access to all resources on the drive.
 - `extended-fuel`: Allows the plugin to use extended fuel.
 - `extended-memory`: Allows the plugin to use extended memory.
+- `custom-view`: Allows the plugin to display a custom view in the Data Browser.
 
 > [!NOTE]
 > If your Wasm component imports the `wasi-http` feature without requesting the `network` permission, installation of the plugin will fail.
@@ -64,6 +65,8 @@ A plugin should be packaged as a zip file containing the following files:
 - `plugin.wasm`: The compiled Wasm binary of the plugin.
 - `plugin.json`: The plugin manifest.
 - `assets/`: (Optional) A folder that will be included in the plugins zip file. The plugin will have access to this folder at runtime.
+- `ui.js`: (Optional) A javascript file used for displaying a custom view in the Data Browser.
+- `ui.css`: (Optional) A CSS file used for styling the custom view in the Data Browser.
 
 You can use `atomic-plugin` to help with automating this process, even if you are not using Rust.
 
@@ -114,7 +117,7 @@ The version of the plugin.
 
 ```ts
 Array<{
-  permission: "network" | "storage" | "full-drive-access" | "extended-fuel" | "extended-memory";
+  permission: "network" | "storage" | "full-drive-access" | "extended-fuel" | "extended-memory" | "custom-view";
   reason: string;
 }>
 ```

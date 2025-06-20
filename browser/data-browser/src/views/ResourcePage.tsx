@@ -1,6 +1,5 @@
-import { useEffect, type JSX, lazy, Suspense } from 'react';
+import { useEffect, lazy, Suspense } from 'react';
 import {
-  useString,
   useResource,
   Resource,
   type OptionalClass,
@@ -9,6 +8,7 @@ import {
   server,
   core,
   ai,
+  useArray,
 } from '@tomic/react';
 
 import { ContainerNarrow } from '../components/Containers';
@@ -34,6 +34,8 @@ import { TagPage } from './TagPage/TagPage';
 import { AIChatPage } from '@views/AIChat/AIChatPage';
 import { DocumentV2FullPage } from './Document/DocumentV2FullPage';
 import { PluginPage } from '@views/Plugin/PluginPage';
+import { useCustomViews } from '@components/CustomViewProvider';
+import { PluginView } from './PluginView/PluginView';
 
 const TablePage = lazy(() =>
   import('../chunks/TablePage').then(m => ({ default: m.TablePage })),
@@ -49,15 +51,18 @@ type Props = {
 };
 
 /**
- * Renders a Resource and all its Properties in a random order. Title
- * (shortname) is rendered prominently at the top. If the Resource has a
+ * Renders a Resource and all its Properties. Title
+ * is rendered prominently at the top. If the Resource has a
  * particular Class, it will render a different Component.
  */
-function ResourcePage({ subject }: Props): JSX.Element {
+const ResourcePage: React.FC<Props> = ({ subject }) => {
   const resource = useResource(subject);
-  const [klass] = useString(resource, core.properties.isA);
+  const { getPluginForClass, loading } = useCustomViews();
+  const [isAList] = useArray(resource, core.properties.isA);
+  const isA = isAList[0];
+
   // The body can have an inert attribute when the user navigated from an open dialog.
-  // we remove it to make the page becomes interactive again.
+  // we remove it to make the page interactive again.
   useEffect(() => {
     document.body.removeAttribute('inert');
   }, []);
@@ -81,7 +86,25 @@ function ResourcePage({ subject }: Props): JSX.Element {
     );
   }
 
-  const ReturnComponent = selectComponent(klass!);
+  let ReturnComponent = selectComponent(isA);
+
+  if (ReturnComponent === ResourcePageDefault) {
+    if (loading) return null;
+
+    const plugin = getPluginForClass(isA);
+
+    if (plugin) {
+      return (
+        <Main subject={subject}>
+          <ErrorBoundary>
+            <Suspense fallback={<Spinner />}>
+              <PluginView resource={resource} plugin={plugin} />
+            </Suspense>
+          </ErrorBoundary>
+        </Main>
+      );
+    }
+  }
 
   return (
     <Main subject={subject}>
@@ -92,9 +115,9 @@ function ResourcePage({ subject }: Props): JSX.Element {
       </ErrorBoundary>
     </Main>
   );
-}
+};
 
-function selectComponent(klass: string) {
+function selectComponent(klass: string | undefined) {
   switch (klass) {
     case collections.classes.collection:
       return Collection;
