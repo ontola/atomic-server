@@ -546,13 +546,31 @@ export class AtomicServer {
       throw new Error(`Unknown platform for target: ${target}`);
     }
 
-    return dag
-      .container({ platform })
-      .from("alpine:latest")
-      .withFile("/usr/local/bin/atomic-server", binary)
-      .withExec(["chmod", "+x", "/usr/local/bin/atomic-server"])
-      .withEntrypoint(["/usr/local/bin/atomic-server"])
-      .withDefaultArgs([]);
+    const innerImage = "alpine:latest";
+
+    // https://github.com/dagger/dagger/issues/9998
+    const dir = dag.directory().withNewFile(
+      "Dockerfile",
+      `FROM ${innerImage}
+
+VOLUME /atomic-storage
+`,
+    );
+
+    return (
+      dag
+        .container({ platform })
+        .build(dir)
+        // .from(innerImage)
+        .withFile("/usr/local/bin/atomic-server", binary)
+        .withExec(["chmod", "+x", "/usr/local/bin/atomic-server"])
+        .withEntrypoint(["/usr/local/bin/atomic-server"])
+        .withEnvVariable("ATOMIC_DATA_DIR", "/atomic-storage/data")
+        .withEnvVariable("ATOMIC_CONFIG_DIR", "/atomic-storage/config")
+        .withEnvVariable("ATOMIC_PORT", "80")
+        .withExposedPort(80)
+        .withDefaultArgs([])
+    );
   }
 
   @func()
