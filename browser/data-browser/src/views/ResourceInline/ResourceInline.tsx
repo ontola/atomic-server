@@ -3,11 +3,10 @@ import {
   useResource,
   Client,
   useArray,
-  isAtomicError,
-  ErrorType,
   core,
   dataBrowser,
   server,
+  getMessageForErrorType,
 } from '@tomic/react';
 import { AtomicLink } from '../../components/AtomicLink';
 import { ErrorLook } from '../../components/ErrorLook';
@@ -26,23 +25,6 @@ type ResourceInlineProps = {
   className?: string;
   basic?: boolean;
 } & ResourceInlineInstanceProps;
-
-function getMessageForErrorType(error: Error) {
-  if (isAtomicError(error)) {
-    switch (error.type) {
-      case ErrorType.NotFound:
-        return 'Resource not found';
-      case ErrorType.Unauthorized:
-        return 'Unauthorized';
-      case ErrorType.Server:
-        return 'Server error';
-      case ErrorType.Client:
-        return 'Something went wrong';
-    }
-  } else {
-    return 'Error loading resource';
-  }
-}
 
 /** Renders a Resource in a compact, inline link. Shows tooltip on hover. */
 export function ResourceInline({

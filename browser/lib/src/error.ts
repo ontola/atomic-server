@@ -1,6 +1,23 @@
 import { core } from './ontologies/core.js';
 import type { Resource } from './resource.js';
 
+export function getMessageForErrorType(error: Error) {
+  if (isAtomicError(error)) {
+    switch (error.type) {
+      case ErrorType.NotFound:
+        return 'Resource not found';
+      case ErrorType.Unauthorized:
+        return 'Unauthorized';
+      case ErrorType.Server:
+        return 'Server error';
+      case ErrorType.Client:
+        return 'Something went wrong';
+    }
+  } else {
+    return 'Error loading resource';
+  }
+}
+
 export enum ErrorType {
   Unauthorized = 'Unauthorized',
   NotFound = 'NotFound',
