@@ -11,6 +11,13 @@ import { OpenRouterLoginButton } from './OpenRouterLoginButton';
 import { TabPanel, Tabs } from '../Tabs';
 import { effectFetch } from '../../helpers/effectFetch';
 
+const intl = new Intl.NumberFormat('default', {
+  style: 'currency',
+  currency: 'USD',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
 interface CreditUsage {
   total: number;
   used: number;
@@ -99,8 +106,8 @@ const AISettings: React.FC = () => {
                 </Row>
                 {creditUsage && (
                   <Subtle as='p'>
-                    Credits used: {creditUsage.used} / Total:{' '}
-                    {creditUsage.total}
+                    Credits used: {intl.format(creditUsage.used)} /{' '}
+                    {intl.format(creditUsage.total)}
                   </Subtle>
                 )}
                 {!openRouterApiKey && (

@@ -1,7 +1,7 @@
 import styled from 'styled-components';
 import Markdown from '../datatypes/Markdown';
 import type { CoreAssistantMessage, CoreToolMessage } from 'ai';
-import { FaCircleExclamation, FaTrash } from 'react-icons/fa6';
+import { FaCircleExclamation, FaRetweet, FaTrash } from 'react-icons/fa6';
 import {
   isAIErrorMessage,
   isMessageWithContext,
@@ -14,6 +14,7 @@ import { IconButton } from '../IconButton/IconButton';
 interface MessageProps {
   message: AIChatDisplayMessage;
   onDeleteMessage?: (message: AIChatDisplayMessage) => void;
+  onRegenerateMessage?: (message: AIChatDisplayMessage) => void;
 }
 
 function isToolMessage(
@@ -31,6 +32,7 @@ function isAssistantMessage(
 export const AIChatMessage = ({
   message: messageIn,
   onDeleteMessage,
+  onRegenerateMessage,
 }: MessageProps) => {
   const [message, context] = isMessageWithContext(messageIn)
     ? [messageIn.message, messageIn.context]
@@ -38,7 +40,11 @@ export const AIChatMessage = ({
 
   if (message.role === 'user') {
     return (
-      <MessageActionWrapper message={message} onDeleteMessage={onDeleteMessage}>
+      <MessageActionWrapper
+        message={message}
+        onDeleteMessage={onDeleteMessage}
+        onRegenerateMessage={onRegenerateMessage}
+      >
         <UserMessage message={message} context={context} />
       </MessageActionWrapper>
     );
@@ -116,11 +122,12 @@ const MessageActionWrapper: React.FC<React.PropsWithChildren<MessageProps>> = ({
   children,
   message,
   onDeleteMessage,
+  onRegenerateMessage,
 }) => {
   return (
     <MessageTopWrapper>
-      {onDeleteMessage && (
-        <FloatingActionRow>
+      <FloatingActionRow>
+        {onDeleteMessage && (
           <IconButton
             color='textLight'
             onClick={() => onDeleteMessage(message)}
@@ -128,8 +135,17 @@ const MessageActionWrapper: React.FC<React.PropsWithChildren<MessageProps>> = ({
           >
             <FaTrash />
           </IconButton>
-        </FloatingActionRow>
-      )}
+        )}
+        {onRegenerateMessage && (
+          <IconButton
+            color='textLight'
+            onClick={() => onRegenerateMessage(message)}
+            title='Regenerate response'
+          >
+            <FaRetweet />
+          </IconButton>
+        )}
+      </FloatingActionRow>
       {children}
     </MessageTopWrapper>
   );

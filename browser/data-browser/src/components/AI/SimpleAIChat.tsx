@@ -47,6 +47,7 @@ import { NoKeyOverlay } from './NoKeyOverlay';
 import { useAutoAgentSelect } from './useAgentAutoSelect';
 import { useOpenRouterModels } from './useOpenRouterModels';
 import type { MentionItem } from '../../chunks/MarkdownEditor/AIChatInput/types';
+import { flushSync } from 'react-dom';
 
 const AIChatInput = React.lazy(
   () => import('../../chunks/MarkdownEditor/AIChatInput/AsyncAIChatInput'),
@@ -82,6 +83,7 @@ interface SimpleAIChatProps {
     React.SetStateAction<AIMessageContext[]>
   >;
   onDeleteMessage: (message: AIChatDisplayMessage) => void;
+  onRegenerateMessage: (message: AIChatDisplayMessage) => Promise<void>;
 }
 
 export const SimpleAIChat: React.FC<
@@ -94,6 +96,7 @@ export const SimpleAIChat: React.FC<
   setExternalContextItems,
   onNewMessage,
   onDeleteMessage,
+  onRegenerateMessage,
   children,
 }) => {
   const abortSignalRef = useRef<AbortController>(null);
@@ -140,10 +143,11 @@ export const SimpleAIChat: React.FC<
   const [tokensUsed, setTokensUsed] = useState<[number, number]>([0, 0]);
 
   const getToolsForAgent = useTools();
-  const [hasToolResultFollowUp, setHasToolResultFollowUp] = useState(false);
 
   const [agentConfigOpen, setAgentConfigOpen] = useState(false);
   const pickAgent = useAutoAgentSelect();
+
+  const [shouldRegenMessages, setShouldRegenMessages] = useState(false);
 
   const normalizeAndApplyContext = useProcessMessages();
 
@@ -225,7 +229,12 @@ export const SimpleAIChat: React.FC<
     setUserSelectedContextItems(newContextItems);
   };
 
-  const sendMessage = async (isFollowUp = false) => {
+  const sendMessage = async ({
+    regenerate = false,
+  }: {
+    /** Whether to regenerate the response */
+    regenerate?: boolean;
+  } = {}) => {
     if (readonly) {
       toast.error('You do not have the permissions to edit this chat.');
 
@@ -281,7 +290,9 @@ export const SimpleAIChat: React.FC<
       ...userSelectedContextItems,
     ];
 
-    if (!isFollowUp) {
+    if (regenerate) {
+      messagesToUse = messages;
+    } else {
       const userMessage = prepareUserMessage(
         userInput,
         attachedFile,
@@ -289,12 +300,17 @@ export const SimpleAIChat: React.FC<
       );
       messagesToUse = [...messages, userMessage];
       onNewMessage(userMessage);
-    } else {
-      messagesToUse = messages;
     }
 
     // Filter message to only include non-error messages, error messages are only intended for the user.
     const filteredMessages = await normalizeAndApplyContext(messagesToUse);
+
+    console.log(
+      'last message sent as context: "',
+      filteredMessages.at(-1).content[0].text,
+      'other mgss',
+      filteredMessages,
+    );
 
     // Update messages with the user message first
     setExternalContextItems([]);
@@ -545,13 +561,6 @@ export const SimpleAIChat: React.FC<
     }
   };
 
-  useEffect(() => {
-    if (hasToolResultFollowUp) {
-      setHasToolResultFollowUp(false);
-      sendMessage(true);
-    }
-  }, [hasToolResultFollowUp]);
-
   // Combine both context item lists when needed
   const allContextItems = [
     ...externalContextItems,
@@ -564,6 +573,24 @@ export const SimpleAIChat: React.FC<
     });
   };
 
+  const regenerateMessage = async (message: AIChatDisplayMessage) => {
+    flushSync(async () => {
+      // Removes the following messages
+      await onRegenerateMessage(message);
+
+      setShouldRegenMessages(true);
+    });
+  };
+
+  useEffect(() => {
+    if (shouldRegenMessages) {
+      sendMessage({
+        regenerate: true,
+      });
+      setShouldRegenMessages(false);
+    }
+  }, [shouldRegenMessages]);
+
   return (
     <ChatWindow fullView={fullView}>
       {children}
@@ -571,11 +598,12 @@ export const SimpleAIChat: React.FC<
         enableAutoScroll={aiState !== AIState.Stopped}
         fullView={fullView}
       >
-        {messages.filter(cleanMessages).map(message => (
+        {messages.filter(cleanMessages).map((message, index) => (
           <AIChatMessage
-            key={JSON.stringify(message)}
+            key={`${JSON.stringify(message)}-${index}`}
             message={message}
             onDeleteMessage={onDeleteMessage}
+            onRegenerateMessage={regenerateMessage}
           />
         ))}
         {ongoingMessage.text && (
