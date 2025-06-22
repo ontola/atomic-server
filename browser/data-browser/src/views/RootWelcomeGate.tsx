@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useWelcomeLayoutEffect } from '../hooks/useWelcomeLayoutEffect';
-import { Agent, useStore } from '@tomic/react';
+import { useStore } from '@tomic/react';
+import { Agent } from '@tomic/lib';
 import { fetchPersonalDriveSubject } from '../helpers/personalDrive';
 import { useSettings } from '../helpers/AppSettings';
 import { saveAgentToIDB } from '../helpers/agentStorage';
@@ -12,6 +13,7 @@ import { useDriveHistory } from '../hooks/useDriveHistory';
 import { css, styled } from 'styled-components';
 import { LoggedOutAgentPanel } from '../components/LoggedOutAgentPanel';
 import atomicServerLogoUrl from '../../../../logo.svg?url';
+import { welcomeBackgroundCss } from './welcomeBackground';
 
 type Props = {
   /** Canonical subject for the server home (used to refetch after sign-in). */
@@ -59,35 +61,38 @@ export function RootWelcomeGate({ subject }: Props) {
     }
   }
 
+  const slogans: string[] = [
+    'Make your knowledge work for you.',
+  ];
+
   return (
     <Shell>
       <Layout>
         <Pitch>
           <VisuallyHiddenH1>AtomicServer</VisuallyHiddenH1>
           <AtomicServerLogo src={atomicServerLogoUrl} alt='' decoding='async' />
+          <h2>{slogans[Math.floor(Math.random() * slogans.length)]}</h2>
           <PropList>
             <li>
-              <strong>Fastest all-in-one workspace</strong>: documents, tables,
-              linked data, and HTTP APIs together, without duct-taping half a
-              dozen services.
+              <strong>All-in-one workspace</strong>: documents, tables, files,
+              and APIs in one place, designed to stay coherent as it grows.
             </li>
             <li>
-              <strong>Integrated knowledge environment</strong>: build an
-              AI-ready knowledge base from your docs, structured data, and
-              files.
+              <strong>Fast and lightweight</strong>: a snappy workspace and API,
+              small download, minimal dependencies, runs anywhere.
             </li>
             <li>
-              <strong>Open source</strong>: inspect the stack, adapt it, and run
-              it wherever you need it.
+              <strong>Open source</strong>: inspect, fork, and self-host. Keep
+              control of your data and avoid lock-in.
             </li>
             <li>
-              <strong>Offline-first</strong>: keep working locally; sync and
-              resolve conflicts when you are back online.
+              <strong>Future of the web</strong>: decentralized by design, built
+              for interoperability so your data and tools can work together.
             </li>
             <li>
-              <strong>Fully featured</strong>: realtime collaboration, search,
-              invites, fine-grained rights, and extensible ontologies out of the
-              box.
+              <strong>Feature complete by default</strong>: rights, history,
+              search, invites, realtime sync, collaboration, and AI chat built
+              in.
             </li>
           </PropList>
         </Pitch>
@@ -114,44 +119,7 @@ const Shell = styled.div`
   justify-content: center;
   padding: ${p => p.theme.size(7)} ${p => p.theme.size(5)};
   box-sizing: border-box;
-  background: ${p => p.theme.colors.bgBody};
-
-  ${p =>
-    p.theme.darkMode
-      ? css`
-          background-image: radial-gradient(
-              900px 420px at 20% 15%,
-              rgba(0, 194, 255, 0.14),
-              transparent 60%
-            ),
-            radial-gradient(
-              800px 460px at 85% 25%,
-              rgba(255, 255, 255, 0.07),
-              transparent 62%
-            ),
-            radial-gradient(
-              900px 520px at 50% 110%,
-              rgba(0, 194, 255, 0.07),
-              transparent 60%
-            );
-        `
-      : css`
-          background-image: radial-gradient(
-              900px 420px at 18% 15%,
-              rgba(0, 194, 255, 0.12),
-              transparent 60%
-            ),
-            radial-gradient(
-              800px 460px at 85% 25%,
-              rgba(0, 0, 0, 0.06),
-              transparent 62%
-            ),
-            radial-gradient(
-              900px 520px at 50% 110%,
-              rgba(49, 120, 198, 0.08),
-              transparent 60%
-            );
-        `}
+  ${welcomeBackgroundCss}
 `;
 
 const Layout = styled.div`

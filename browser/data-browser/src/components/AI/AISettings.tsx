@@ -15,7 +15,6 @@ import { useIsOllamaUrlValid } from './useIsOllamaUrlValid';
 import { FaCheck, FaTriangleExclamation } from 'react-icons/fa6';
 import { Details } from '@components/Details';
 import {
-  SettingsSection,
   SettingsContent,
   SettingsSectionWrapper,
   SettingsLabel,
@@ -147,7 +146,8 @@ const AISettings: React.FC = () => {
                 </CheckboxLabel>
 
                 <SubGroup>
-                  <SettingsSection label='OpenRouter'>
+                  <SubSection>
+                    <SubSectionTitle>OpenRouter</SubSectionTitle>
                     <Column gap='0.5rem'>
                       <CheckboxLabel>
                         <Checkbox
@@ -204,9 +204,10 @@ const AISettings: React.FC = () => {
                         )}
                       </ConditionalSettings>
                     </Column>
-                  </SettingsSection>
+                  </SubSection>
 
-                  <SettingsSection label='Ollama'>
+                  <SubSection>
+                    <SubSectionTitle>Ollama</SubSectionTitle>
                     <Column gap='0.5rem'>
                       <CheckboxDescriptor
                         label='Enable Ollama'
@@ -265,9 +266,10 @@ const AISettings: React.FC = () => {
                         </InputWrapper>
                       </ConditionalSettings>
                     </Column>
-                  </SettingsSection>
+                  </SubSection>
 
-                  <SettingsSection label='Generative Features'>
+                  <SubSection>
+                    <SubSectionTitle>Generative features</SubSectionTitle>
                     <Column gap='0.5rem'>
                       <CheckboxLabel>
                         <Checkbox
@@ -298,14 +300,15 @@ const AISettings: React.FC = () => {
                         </Suspense>
                       </Details>
                     </Column>
-                  </SettingsSection>
+                  </SubSection>
 
-                  <SettingsSection label='MCP Servers'>
+                  <SubSection>
+                    <SubSectionTitle>MCP servers</SubSectionTitle>
                     <MCPServersManager
                       servers={mcpServers}
                       setServers={setMcpServers}
                     />
-                  </SettingsSection>
+                  </SubSection>
                 </SubGroup>
               </ConditionalSettings>
             </Column>
@@ -326,6 +329,10 @@ const ConditionalSettings = styled(Column)<{ enabled: boolean }>`
 const SubGroup = styled.div`
   border-top: 1px solid ${p => p.theme.colors.bg2};
   margin-top: 0.25rem;
+  padding-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
 
   button[aria-label='collapse'],
   button[aria-label='expand'] {
@@ -333,6 +340,26 @@ const SubGroup = styled.div`
     background: transparent !important;
     box-shadow: none !important;
   }
+`;
+
+const SubSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid ${p => p.theme.colors.bg2};
+
+  &:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+  }
+`;
+
+const SubSectionTitle = styled.h3`
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 650;
+  color: ${p => p.theme.colors.text};
 `;
 
 const Subtle = styled.p`

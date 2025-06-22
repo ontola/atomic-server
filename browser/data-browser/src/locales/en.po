@@ -2271,9 +2271,8 @@ msgstr "Ollama API Url"
 msgid "Ollama"
 msgstr "Ollama"
 
-#: src/components/AI/AISettings.tsx
-msgid "Generative Features"
-msgstr "Generative Features"
+#~ msgid "Generative Features"
+#~ msgstr "Generative Features"
 
 #: src/components/AI/AISettings.tsx
 msgid "<0/> Generate AI Chat titles"
@@ -2295,9 +2294,8 @@ msgstr "(Tip) Choose a cheap and fast model"
 msgid "Change what model is used for generative features"
 msgstr "Change what model is used for generative features"
 
-#: src/components/AI/AISettings.tsx
-msgid "MCP Servers"
-msgstr "MCP Servers"
+#~ msgid "MCP Servers"
+#~ msgstr "MCP Servers"
 
 #: src/chunks/RTE/CollaborativeEditor.tsx
 #: src/components/forms/NewForm/NewFormTitle.tsx
@@ -4144,13 +4142,12 @@ msgstr ""
 msgid "Creating your personal drive…"
 msgstr "Creating your personal drive…"
 
-#: src/components/NewIdentitySection.tsx
-msgid ""
-"This name is shown on this server. We also create a private drive named\n"
-"after you as your home; you can add more drives later in settings."
-msgstr ""
-"This name is shown on this server. We also create a private drive named\n"
-"after you as your home; you can add more drives later in settings."
+#~ msgid ""
+#~ "This name is shown on this server. We also create a private drive named\n"
+#~ "after you as your home; you can add more drives later in settings."
+#~ msgstr ""
+#~ "This name is shown on this server. We also create a private drive named\n"
+#~ "after you as your home; you can add more drives later in settings."
 
 #~ msgid "Agent: {0}"
 #~ msgstr "Agent: {0}"
@@ -4337,48 +4334,179 @@ msgstr "Get started"
 #~ "A production-grade data workspace. Graph-native, permission-aware,\n"
 #~ "and ready to self-host."
 
-#: src/views/RootWelcomeGate.tsx
-msgid ""
-"<0>Fastest all-in-one workspace</0>: documents, tables,\n"
-"linked data, and HTTP APIs together, without duct-taping half a\n"
-"dozen services."
-msgstr ""
-"<0>Fastest all-in-one workspace</0>: documents, tables,\n"
-"linked data, and HTTP APIs together, without duct-taping half a\n"
-"dozen services."
+#~ msgid ""
+#~ "<0>Fastest all-in-one workspace</0>: documents, tables,\n"
+#~ "linked data, and HTTP APIs together, without duct-taping half a\n"
+#~ "dozen services."
+#~ msgstr ""
+#~ "<0>Fastest all-in-one workspace</0>: documents, tables,\n"
+#~ "linked data, and HTTP APIs together, without duct-taping half a\n"
+#~ "dozen services."
+
+#~ msgid ""
+#~ "<0>Integrated knowledge environment</0>: build an\n"
+#~ "AI-ready knowledge base from your docs, structured data, and\n"
+#~ "files."
+#~ msgstr ""
+#~ "<0>Integrated knowledge environment</0>: build an\n"
+#~ "AI-ready knowledge base from your docs, structured data, and\n"
+#~ "files."
+
+#~ msgid ""
+#~ "<0>Open source</0>: inspect the stack, adapt it, and run\n"
+#~ "it wherever you need it."
+#~ msgstr ""
+#~ "<0>Open source</0>: inspect the stack, adapt it, and run\n"
+#~ "it wherever you need it."
+
+#~ msgid ""
+#~ "<0>Offline-first</0>: keep working locally; sync and\n"
+#~ "resolve conflicts when you are back online."
+#~ msgstr ""
+#~ "<0>Offline-first</0>: keep working locally; sync and\n"
+#~ "resolve conflicts when you are back online."
+
+#~ msgid ""
+#~ "<0>Fully featured</0>: realtime collaboration, search,\n"
+#~ "invites, fine-grained rights, and extensible ontologies out of the\n"
+#~ "box."
+#~ msgstr ""
+#~ "<0>Fully featured</0>: realtime collaboration, search,\n"
+#~ "invites, fine-grained rights, and extensible ontologies out of the\n"
+#~ "box."
+
+#~ msgid ""
+#~ "<0>One workspace for knowledge and apps</0>: documents,\n"
+#~ "tables, files, and APIs in one graph, built to stay coherent as it\n"
+#~ "grows."
+#~ msgstr ""
+#~ "<0>One workspace for knowledge and apps</0>: documents,\n"
+#~ "tables, files, and APIs in one graph, built to stay coherent as it\n"
+#~ "grows."
+
+#~ msgid ""
+#~ "<0>Your data, your rules</0>: self-host and keep control\n"
+#~ "over access, structure, and sharing. No vendor lock-in."
+#~ msgstr ""
+#~ "<0>Your data, your rules</0>: self-host and keep control\n"
+#~ "over access, structure, and sharing. No vendor lock-in."
+
+#~ msgid ""
+#~ "<0>Linked data that is practical</0>: a developer-friendly\n"
+#~ "take on the semantic web, with strict schemas and predictable\n"
+#~ "behavior."
+#~ msgstr ""
+#~ "<0>Linked data that is practical</0>: a developer-friendly\n"
+#~ "take on the semantic web, with strict schemas and predictable\n"
+#~ "behavior."
+
+#~ msgid ""
+#~ "<0>Standardized from the start</0>: reuse properties and\n"
+#~ "models, validate automatically, and keep systems interoperable."
+#~ msgstr ""
+#~ "<0>Standardized from the start</0>: reuse properties and\n"
+#~ "models, validate automatically, and keep systems interoperable."
+
+#~ msgid ""
+#~ "<0>Feature complete by default</0>: rights, history,\n"
+#~ "realtime sync, search, invites, and collaboration built in."
+#~ msgstr ""
+#~ "<0>Feature complete by default</0>: rights, history,\n"
+#~ "realtime sync, search, invites, and collaboration built in."
+
+#~ msgid ""
+#~ "<0>Fast</0>: a snappy workspace and API, optimized for\n"
+#~ "realtime interaction."
+#~ msgstr ""
+#~ "<0>Fast</0>: a snappy workspace and API, optimized for\n"
+#~ "realtime interaction."
+
+#~ msgid ""
+#~ "<0>Lightweight</0>: small download, minimal dependencies,\n"
+#~ "runs anywhere."
+#~ msgstr ""
+#~ "<0>Lightweight</0>: small download, minimal dependencies,\n"
+#~ "runs anywhere."
 
 #: src/views/RootWelcomeGate.tsx
 msgid ""
-"<0>Integrated knowledge environment</0>: build an\n"
-"AI-ready knowledge base from your docs, structured data, and\n"
-"files."
+"<0>Open source</0>: inspect, fork, and self-host. Keep\n"
+"control of your data and avoid lock-in."
 msgstr ""
-"<0>Integrated knowledge environment</0>: build an\n"
-"AI-ready knowledge base from your docs, structured data, and\n"
-"files."
+"<0>Open source</0>: inspect, fork, and self-host. Keep\n"
+"control of your data and avoid lock-in."
+
+#~ msgid ""
+#~ "<0>Feature complete by default</0>: rights, history,\n"
+#~ "search, invites, realtime sync, and collaboration built in."
+#~ msgstr ""
+#~ "<0>Feature complete by default</0>: rights, history,\n"
+#~ "search, invites, realtime sync, and collaboration built in."
 
 #: src/views/RootWelcomeGate.tsx
 msgid ""
-"<0>Open source</0>: inspect the stack, adapt it, and run\n"
-"it wherever you need it."
+"<0>All-in-one workspace</0>: documents, tables, files,\n"
+"and APIs in one place, designed to stay coherent as it grows."
 msgstr ""
-"<0>Open source</0>: inspect the stack, adapt it, and run\n"
-"it wherever you need it."
+"<0>All-in-one workspace</0>: documents, tables, files,\n"
+"and APIs in one place, designed to stay coherent as it grows."
 
 #: src/views/RootWelcomeGate.tsx
 msgid ""
-"<0>Offline-first</0>: keep working locally; sync and\n"
-"resolve conflicts when you are back online."
+"<0>Fast and lightweight</0>: a snappy workspace and API,\n"
+"small download, minimal dependencies, runs anywhere."
 msgstr ""
-"<0>Offline-first</0>: keep working locally; sync and\n"
-"resolve conflicts when you are back online."
+"<0>Fast and lightweight</0>: a snappy workspace and API,\n"
+"small download, minimal dependencies, runs anywhere."
 
 #: src/views/RootWelcomeGate.tsx
 msgid ""
-"<0>Fully featured</0>: realtime collaboration, search,\n"
-"invites, fine-grained rights, and extensible ontologies out of the\n"
-"box."
+"<0>Feature complete by default</0>: rights, history,\n"
+"search, invites, realtime sync, collaboration, and AI chat built\n"
+"in."
 msgstr ""
-"<0>Fully featured</0>: realtime collaboration, search,\n"
-"invites, fine-grained rights, and extensible ontologies out of the\n"
-"box."
+"<0>Feature complete by default</0>: rights, history,\n"
+"search, invites, realtime sync, collaboration, and AI chat built\n"
+"in."
+
+#: src/views/RootWelcomeGate.tsx
+msgid ""
+"<0>Future of the web</0>: decentralized by design, built\n"
+"for interoperability so your data and tools can work together."
+msgstr ""
+"<0>Future of the web</0>: decentralized by design, built\n"
+"for interoperability so your data and tools can work together."
+
+#: src/components/NewIdentitySection.tsx
+msgid "Others can read this. You can change this later."
+msgstr "Others can read this. You can change this later."
+
+#~ msgid "Your Integrated Knowledge Environment"
+#~ msgstr "Your Integrated Knowledge Environment"
+
+#~ msgid "Make your knowledge work for you"
+#~ msgstr "Make your knowledge work for you"
+
+#~ msgid "Fast and lightweight"
+#~ msgstr "Fast and lightweight"
+
+#~ msgid "Open source"
+#~ msgstr "Open source"
+
+#~ msgid "Future of the web"
+#~ msgstr "Future of the web"
+
+#~ msgid "Feature complete by default"
+#~ msgstr "Feature complete by default"
+
+#: src/views/RootWelcomeGate.tsx
+msgid "Make your knowledge work for you."
+msgstr "Make your knowledge work for you."
+
+#: src/components/AI/AISettings.tsx
+msgid "Generative features"
+msgstr "Generative features"
+
+#: src/components/AI/AISettings.tsx
+msgid "MCP servers"
+msgstr "MCP servers"
