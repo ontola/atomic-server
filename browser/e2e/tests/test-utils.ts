@@ -56,7 +56,7 @@ export const before = async ({ page }: { page: Page }) => {
 
   // Sometimes we run the test server on a different port, but we should
   // only change the drive if it is non-default.
-  if (SERVER_URL !== 'http://localhost:9883') {
+  if (SERVER_URL !== FRONTEND_URL) {
     await changeDrive(SERVER_URL, page);
   }
 
@@ -260,8 +260,21 @@ export async function openNewSubjectWindow(browser: Browser, url: string) {
   await page.goto(FRONTEND_URL);
 
   // Only when we run on `localhost` we don't need to change drive during tests
-  if (SERVER_URL !== defaultDevServer) {
-    await changeDrive(SERVER_URL, page);
+  if (SERVER_URL !== FRONTEND_URL) {
+    try {
+      await page.waitForSelector('[data-test="sidebar-drive-open"]', {
+        timeout: 5000,
+      });
+      await changeDrive(SERVER_URL, page);
+    } catch (error) {
+      console.error('Error changing drive in new window:', error);
+      // Try reloading the page if the sidebar drive element is not found
+      await page.reload();
+      await page.waitForSelector('[data-test="sidebar-drive-open"]', {
+        timeout: 5000,
+      });
+      await changeDrive(SERVER_URL, page);
+    }
   }
 
   await openSubject(page, url);
@@ -283,13 +296,83 @@ export async function openConfigureDrive(page: Page) {
 }
 
 export async function changeDrive(subject: string, page: Page) {
-  await openConfigureDrive(page);
-  await expect(page.locator('text=Drive Configuration')).toBeVisible();
-  await page.fill('[data-test="server-url-input"]', subject);
-  await page.click('[data-test="server-url-save"]');
-  await expect(
-    page.getByRole('heading', { name: 'Default Ontology' }),
-  ).toBeVisible();
+  try {
+    // Check if the current drive matches the requested subject using both methods
+    if (await isCurrentDrive(subject, page)) {
+      return;
+    }
+
+    // Also check the drive title text
+    const driveTitleText = await currentDriveTitle(page).textContent();
+    // Get the domain from the subject to compare with the drive title
+    const subjectDomain = new URL(subject).hostname;
+    if (driveTitleText && driveTitleText.trim().includes(subjectDomain)) {
+      return;
+    }
+
+    const sidebarDriveOpen = page.locator('[data-test="sidebar-drive-open"]');
+    if (await sidebarDriveOpen.isVisible()) await openConfigureDrive(page);
+    await expect(page.locator('text=Drive Configuration')).toBeVisible();
+    await page.fill('[data-test="server-url-input"]', subject);
+    await page.click('[data-test="server-url-save"]');
+    await expect(
+      page.getByRole('heading', { name: 'Default Ontology' }),
+    ).toBeVisible();
+  } catch (error) {
+    console.error('Error in changeDrive:', error);
+    throw error;
+  }
+}
+
+/**
+ * Checks if the current drive matches the given URL
+ * @param url The URL to compare with the current drive
+ * @param page The Playwright Page object
+ * @returns True if the current drive matches the URL
+ */
+export async function isCurrentDrive(
+  url: string,
+  page: Page,
+): Promise<boolean> {
+  try {
+    const sidebarDriveOpen = page.locator('[data-test="sidebar-drive-open"]');
+
+    if (!(await sidebarDriveOpen.isVisible())) {
+      return false;
+    }
+
+    // Get the title attribute which contains the current drive URL
+    const titleAttr = await sidebarDriveOpen.getAttribute('title');
+
+    if (!titleAttr) {
+      return false;
+    }
+
+    // Extract the URL from the title attribute
+    // Format: "Your current baseURL is {url}"
+    const currentUrl = titleAttr.replace('Your current baseURL is ', '');
+
+    // Normalize URLs for comparison (remove trailing slashes and protocol)
+    const normalizeUrl = (urlString: string): string => {
+      try {
+        // Remove trailing slashes
+        const cleanUrl = urlString.replace(/\/$/, '');
+        const urlObj = new URL(cleanUrl);
+        // Compare only hostname and path, ignoring protocol
+        return `${urlObj.hostname}${urlObj.pathname}`;
+      } catch (e) {
+        return urlString.replace(/\/$/, '');
+      }
+    };
+
+    const normalizedCurrentUrl = normalizeUrl(currentUrl);
+    const normalizedUrl = normalizeUrl(url);
+
+    return normalizedCurrentUrl === normalizedUrl;
+  } catch (error) {
+    console.error('Error in isCurrentDrive:', error);
+    return false;
+  }
 }
 
 export async function editTitle(title: string, page: Page) {
