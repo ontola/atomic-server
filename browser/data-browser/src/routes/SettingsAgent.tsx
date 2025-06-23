@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useState } from 'react';
-import { Agent, core, urls, useStore } from '@tomic/react';
+import { Agent, core, urls, useCurrentAgent, useStore } from '@tomic/react';
 import { fetchPersonalDriveSubject } from '../helpers/personalDrive';
 import { useSettings } from '../helpers/AppSettings';
 import { Button } from '../components/Button';
@@ -36,6 +36,11 @@ export const AgentSettingsRoute = createRoute({
 const SettingsAgent: React.FunctionComponent = () => {
   const store = useStore();
   const { agent, drive, setAgent, setDrive } = useSettings();
+  // Sometimes the settings context can briefly lag behind the store on first
+  // navigation. Fall back to the store-backed hook to avoid flashing the
+  // logged-out panel for signed-in users.
+  const [storeAgent] = useCurrentAgent();
+  const effectiveAgent = agent ?? storeAgent ?? store.getAgent();
   const [error, setError] = useState<Error | undefined>(undefined);
   const [signInLoading, setSignInLoading] = useState(false);
   const navigate = useNavigateWithTransition();
@@ -96,11 +101,11 @@ const SettingsAgent: React.FunctionComponent = () => {
   return (
     <Main>
       <ContainerNarrow>
-        {agent ? (
+        {effectiveAgent ? (
           <>
             <h1>User Settings</h1>
             <Column>
-              {agent.subject?.startsWith('http://localhost') && (
+              {effectiveAgent.subject?.startsWith('http://localhost') && (
                 <WarningBlock>
                   <WarningBlock.Title>Warning:</WarningBlock.Title>
                   {
@@ -112,10 +117,10 @@ const SettingsAgent: React.FunctionComponent = () => {
                 <LabelStyled>
                   <FaUser /> You{"'"}re signed in as
                 </LabelStyled>
-                <ResourceInline subject={agent.subject!} />
+                <ResourceInline subject={effectiveAgent.subject!} />
               </div>
               <Row>
-                <Button onClick={() => navigate(editURL(agent.subject!))}>
+                <Button onClick={() => navigate(editURL(effectiveAgent.subject!))}>
                   Edit profile
                 </Button>
                 <Button
