@@ -330,7 +330,8 @@ test.describe('data-browser', async () => {
   test('configure drive page', async ({ page }) => {
     await signIn(page);
     await openConfigureDrive(page);
-    await expect(currentDriveTitle(page)).toHaveText('localhost');
+    const expectedTitle = new URL(SERVER_URL);
+    await expect(currentDriveTitle(page)).toContainText(expectedTitle.hostname);
 
     // temp disable this, because of trailing slash in base URL
     // await page.click(':text("https://atomicdata.dev") + button:text("Select")');
