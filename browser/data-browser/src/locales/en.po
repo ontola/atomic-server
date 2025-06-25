@@ -1390,9 +1390,8 @@ msgstr "Subdomain"
 #~ msgid "This is your personal Atomic Data drive. Edit this description to tell visitors what this space is about."
 #~ msgstr "This is your personal Atomic Data drive. Edit this description to tell visitors what this space is about."
 
-#: src/components/NewIdentitySection.tsx
-msgid "Your new identity is ready"
-msgstr "Your new identity is ready"
+#~ msgid "Your new identity is ready"
+#~ msgstr "Your new identity is ready"
 
 #~ msgid ""
 #~ "<0>IMPORTANT:</0> Save this secret key. It is the only way\n"
@@ -1410,9 +1409,8 @@ msgstr "Your new identity is ready"
 #~ "Are you sure you{0}ve stored this secret somewhere safe? You\n"
 #~ "cannot recover it if you lose it."
 
-#: src/components/NewIdentitySection.tsx
-msgid "Copy the secret key to continue"
-msgstr "Copy the secret key to continue"
+#~ msgid "Copy the secret key to continue"
+#~ msgstr "Copy the secret key to continue"
 
 #: src/components/NewIdentitySection.tsx
 msgid "Generating..."
@@ -3683,15 +3681,14 @@ msgstr "Profile Name"
 msgid "Generating your identity..."
 msgstr "Generating your identity..."
 
-#: src/components/NewIdentitySection.tsx
-msgid ""
-"<0>IMPORTANT:</0> Save this secret key. It is the only way to\n"
-"access your data if you clear your browser cache or sign in from another\n"
-"device."
-msgstr ""
-"<0>IMPORTANT:</0> Save this secret key. It is the only way to\n"
-"access your data if you clear your browser cache or sign in from another\n"
-"device."
+#~ msgid ""
+#~ "<0>IMPORTANT:</0> Save this secret key. It is the only way to\n"
+#~ "access your data if you clear your browser cache or sign in from another\n"
+#~ "device."
+#~ msgstr ""
+#~ "<0>IMPORTANT:</0> Save this secret key. It is the only way to\n"
+#~ "access your data if you clear your browser cache or sign in from another\n"
+#~ "device."
 
 #: src/components/NewIdentitySection.tsx
 msgid ""
@@ -4554,9 +4551,8 @@ msgstr ""
 msgid "<0/> Back"
 msgstr "<0/> Back"
 
-#: src/components/NewIdentitySection.tsx
-msgid "The secret is invalid."
-msgstr "The secret is invalid."
+#~ msgid "The secret is invalid."
+#~ msgstr "The secret is invalid."
 
 #: src/components/NewIdentitySection.tsx
 msgid ""
@@ -4565,3 +4561,70 @@ msgid ""
 msgstr ""
 "You have been signed out to verify that you saved your secret. Enter it\n"
 "below to sign in."
+
+#: src/components/NewIdentitySection.tsx
+msgid "Atomic Server — agent secret backup"
+msgstr "Atomic Server — agent secret backup"
+
+#: src/components/NewIdentitySection.tsx
+msgid "IMPORTANT: Store this file (or the secret line) somewhere only you can access."
+msgstr "IMPORTANT: Store this file (or the secret line) somewhere only you can access."
+
+#: src/components/NewIdentitySection.tsx
+msgid "Without it you cannot sign in after clearing the browser or on another device."
+msgstr "Without it you cannot sign in after clearing the browser or on another device."
+
+#: src/components/NewIdentitySection.tsx
+msgid "Anyone who gets this secret can access your account on this server."
+msgstr "Anyone who gets this secret can access your account on this server."
+
+#. placeholder {0}: when
+#: src/components/NewIdentitySection.tsx
+msgid "Created: {0}"
+msgstr "Created: {0}"
+
+#: src/components/NewIdentitySection.tsx
+msgid "Backup file downloaded — move it out of Downloads if you share this computer"
+msgstr "Backup file downloaded — move it out of Downloads if you share this computer"
+
+#~ msgid ""
+#~ "<0>IMPORTANT:</0> You need this secret to sign in again. We\n"
+#~ "do not store a copy you can reset like a normal password."
+#~ msgstr ""
+#~ "<0>IMPORTANT:</0> You need this secret to sign in again. We\n"
+#~ "do not store a copy you can reset like a normal password."
+
+#. placeholder {0}: ' '
+#: src/components/NewIdentitySection.tsx
+msgid ""
+"<0>Ways to keep it:</0> a password manager (best),{0} <1>Save as file</1> below and move it to a private folder, or\n"
+"copy into a <2>locked note</2> (Apple Notes, Google Keep,\n"
+"etc.)—not email or chat."
+msgstr ""
+"<0>Ways to keep it:</0> a password manager (best),{0} <1>Save as file</1> below and move it to a private folder, or\n"
+"copy into a <2>locked note</2> (Apple Notes, Google Keep,\n"
+"etc.)—not email or chat."
+
+#: src/components/NewIdentitySection.tsx
+msgid "<0/> Save backup file…"
+msgstr "<0/> Save backup file…"
+
+#: src/components/NewIdentitySection.tsx
+msgid "Copy the secret or save the backup file to continue"
+msgstr "Copy the secret or save the backup file to continue"
+
+#: src/components/NewIdentitySection.tsx
+msgid ""
+"<0>IMPORTANT:</0> You need this secret to sign in again. We do\n"
+"not store a copy you can reset like a normal password."
+msgstr ""
+"<0>IMPORTANT:</0> You need this secret to sign in again. We do\n"
+"not store a copy you can reset like a normal password."
+
+#: src/components/NewIdentitySection.tsx
+msgid "The secret is invalid. Make sure you copied it correctly."
+msgstr "The secret is invalid. Make sure you copied it correctly."
+
+#: src/components/NewIdentitySection.tsx
+msgid "Safely store your secret"
+msgstr "Safely store your secret"
