@@ -2901,16 +2901,13 @@ msgstr "Masquer l'état encodé"
 msgid "Editing YDoc directly is not supported"
 msgstr "La modification directe de YDoc n'est pas prise en charge"
 
-#: src/chunks/RTE/FullBubbleMenu.tsx
 #: src/chunks/RTE/ImagePicker.tsx
 msgid "Left"
 msgstr "Gauche"
 
-#: src/chunks/RTE/FullBubbleMenu.tsx
-msgid "Center"
-msgstr "Centrer"
+#~ msgid "Center"
+#~ msgstr "Centrer"
 
-#: src/chunks/RTE/FullBubbleMenu.tsx
 #: src/chunks/RTE/ImagePicker.tsx
 msgid "Right"
 msgstr "Droite"

@@ -5,7 +5,6 @@ import { Placeholder } from '@tiptap/extension-placeholder';
 import { Typography } from '@tiptap/extension-typography';
 import Collaboration from '@tiptap/extension-collaboration';
 import CollaborationCaret from '@tiptap/extension-collaboration-caret';
-import TextAlign from '@tiptap/extension-text-align';
 import { TaskList, TaskItem } from '@tiptap/extension-list';
 import DragHandle from '@tiptap/extension-drag-handle-react';
 import {
@@ -237,9 +236,6 @@ export default function CollaborativeEditor({
             },
           }),
         ),
-        TextAlign.configure({
-          types: ['heading', 'paragraph'],
-        }),
         TaskList,
         TaskItem.configure({
           nested: true,

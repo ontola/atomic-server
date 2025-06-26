@@ -2886,16 +2886,13 @@ msgstr "Ocultar estado codificado"
 msgid "Editing YDoc directly is not supported"
 msgstr "La edición directa de YDoc no es compatible"
 
-#: src/chunks/RTE/FullBubbleMenu.tsx
 #: src/chunks/RTE/ImagePicker.tsx
 msgid "Left"
 msgstr "Izquierda"
 
-#: src/chunks/RTE/FullBubbleMenu.tsx
-msgid "Center"
-msgstr "Centrar"
+#~ msgid "Center"
+#~ msgstr "Centrar"
 
-#: src/chunks/RTE/FullBubbleMenu.tsx
 #: src/chunks/RTE/ImagePicker.tsx
 msgid "Right"
 msgstr "Derecha"

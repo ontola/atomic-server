@@ -3519,7 +3519,6 @@ msgstr "Heading 6"
 msgid "Paragraph"
 msgstr "Paragraph"
 
-#: src/chunks/RTE/FullBubbleMenu.tsx
 #: src/chunks/RTE/ImagePicker.tsx
 msgid "Left"
 msgstr "Left"
@@ -3528,7 +3527,6 @@ msgstr "Left"
 msgid "Inline"
 msgstr "Inline"
 
-#: src/chunks/RTE/FullBubbleMenu.tsx
 #: src/chunks/RTE/ImagePicker.tsx
 msgid "Right"
 msgstr "Right"
@@ -3737,9 +3735,8 @@ msgstr "Untitled Agent"
 msgid "Type '/' for options or '@' for resources"
 msgstr "Type '/' for options or '@' for resources"
 
-#: src/chunks/RTE/FullBubbleMenu.tsx
-msgid "Center"
-msgstr "Center"
+#~ msgid "Center"
+#~ msgstr "Center"
 
 #: src/chunks/RTE/NoteExtention/NoteComponent.tsx
 msgid "<0/> Note"
