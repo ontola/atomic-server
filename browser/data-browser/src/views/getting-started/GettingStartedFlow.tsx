@@ -51,7 +51,10 @@ export function GettingStartedFlow({
   const [secret, setSecret] = useState('');
   const lastSubmittedSecret = useRef<string>('');
 
-  const slogans: string[] = useMemo(() => ['Make your knowledge work for you.'], []);
+  const slogans: string[] = useMemo(
+    () => ['Make your knowledge work for you.'],
+    [],
+  );
 
   async function handleSignInWithSecret(secret: string) {
     setLoading(true);
@@ -71,7 +74,9 @@ export function GettingStartedFlow({
         navigate(paths.agentSettings);
       }
     } catch (err) {
-      setError(err instanceof Error ? err : new Error('Could not parse that secret.'));
+      setError(
+        err instanceof Error ? err : new Error('Could not parse that secret.'),
+      );
     } finally {
       setLoading(false);
     }
@@ -106,28 +111,37 @@ export function GettingStartedFlow({
           <Layout>
             <Pitch>
               <VisuallyHiddenH1>AtomicServer</VisuallyHiddenH1>
-              <AtomicServerLogo src={atomicServerLogoUrl} alt='' decoding='async' />
-              <Slogan>{slogans[Math.floor(Math.random() * slogans.length)]}</Slogan>
+              <AtomicServerLogo
+                src={atomicServerLogoUrl}
+                alt=''
+                decoding='async'
+              />
+              <Slogan>
+                {slogans[Math.floor(Math.random() * slogans.length)]}
+              </Slogan>
               <PropList>
                 <li>
-                  <strong>All-in-one workspace</strong>: documents, tables, files, and APIs
-                  in one place, designed to stay coherent as it grows.
+                  <strong>All-in-one workspace</strong>: documents, tables,
+                  files, and APIs in one place, designed to stay coherent as it
+                  grows.
                 </li>
                 <li>
-                  <strong>Fast and lightweight</strong>: a snappy workspace and API, small
-                  download, minimal dependencies, runs anywhere.
+                  <strong>Fast and lightweight</strong>: a snappy workspace and
+                  API, small download, minimal dependencies, runs anywhere.
                 </li>
                 <li>
-                  <strong>Open source</strong>: inspect, fork, and self-host. Keep control
-                  of your data and avoid lock-in.
+                  <strong>Open source</strong>: inspect, fork, and self-host.
+                  Keep control of your data and avoid lock-in.
                 </li>
                 <li>
-                  <strong>Future of the web</strong>: decentralized by design, built for
-                  interoperability so your data and tools can work together.
+                  <strong>Future of the web</strong>: decentralized by design,
+                  built for interoperability so your data and tools can work
+                  together.
                 </li>
                 <li>
-                  <strong>Feature complete by default</strong>: rights, history, search,
-                  invites, realtime sync, collaboration, and AI chat built in.
+                  <strong>Feature complete by default</strong>: rights, history,
+                  search, invites, realtime sync, collaboration, and AI chat
+                  built in.
                 </li>
               </PropList>
             </Pitch>
@@ -150,7 +164,9 @@ export function GettingStartedFlow({
                     Sign in
                   </CtaButton>
                 </Column>
-                {error ? <CardError role='alert'>{error.message}</CardError> : null}
+                {error ? (
+                  <CardError role='alert'>{error.message}</CardError>
+                ) : null}
               </Card>
             </CardColumn>
           </Layout>
@@ -457,4 +473,3 @@ const StepDotsSlot = styled.div`
     gap: 6px;
   }
 `;
-

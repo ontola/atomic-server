@@ -1,10 +1,4 @@
-import React, {
-  FormEvent,
-  useEffect,
-  useRef,
-  useState,
-  type JSX,
-} from 'react';
+import React, { FormEvent, useEffect, useRef, useState, type JSX } from 'react';
 import { Button } from './Button';
 import { Column, Row } from './Row';
 import { InputStyled, InputWrapper } from './forms/InputStyles';

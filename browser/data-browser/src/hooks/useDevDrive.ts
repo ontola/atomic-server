@@ -41,7 +41,8 @@ export function useDevDrive() {
         noParent: true,
         propVals: {
           [core.properties.name]: DEV_DRIVE_DISPLAY_NAME,
-          [core.properties.description]: `Created via \`/app/dev-drive\` for local development and E2E. You can remove these with Prune test data on \`/app/prunetests\`. \n\n${DEV_DRIVE_PRUNE_MARKER}`,
+          [core.properties.description]:
+            `Created via \`/app/dev-drive\` for local development and E2E. You can remove these with Prune test data on \`/app/prunetests\`. \n\n${DEV_DRIVE_PRUNE_MARKER}`,
           [core.properties.write]: [agentDID],
           [core.properties.read]: [agentDID],
         },
@@ -50,7 +51,10 @@ export function useDevDrive() {
       await driveResource.save();
 
       const agentResource = await store.getResource(agentDID);
-      await agentResource.set(core.properties.personalDrive, driveResource.subject);
+      await agentResource.set(
+        core.properties.personalDrive,
+        driveResource.subject,
+      );
       agentResource.push(server.properties.drives, [driveResource.subject]);
       await agentResource.save();
 

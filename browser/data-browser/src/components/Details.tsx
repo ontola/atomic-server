@@ -56,7 +56,7 @@ export function Details({
 
   const summaryRowClickToggle =
     summaryCaret && !disabled ? toggleOpen : undefined;
-  const summaryClickable = summaryRowClickToggle != null;
+  const summaryClickable = summaryRowClickToggle !== null;
 
   return (
     <>

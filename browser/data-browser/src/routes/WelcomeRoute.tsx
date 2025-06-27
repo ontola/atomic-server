@@ -20,4 +20,3 @@ function WelcomeRouteComponent(): React.JSX.Element {
 
   return <RootWelcomeGate subject={subject} />;
 }
-
