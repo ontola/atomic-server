@@ -341,6 +341,7 @@ const Dot = styled.span`
   border-radius: 50%;
 `;
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const StepDots = styled.div.attrs(() => ({ 'data-step-dots': 'true' }) as any)`
   display: flex;
   gap: 6px;

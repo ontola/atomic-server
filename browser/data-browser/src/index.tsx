@@ -32,7 +32,8 @@ if (
       const algoStr =
         typeof algorithm === 'string'
           ? algorithm.toUpperCase()
-          : (algorithm as any).name.toUpperCase();
+          : // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (algorithm as unknown as { name: string }).name.toUpperCase();
 
       if (algoStr === 'SHA-256' || algoStr === 'SHA256') {
         const input =
