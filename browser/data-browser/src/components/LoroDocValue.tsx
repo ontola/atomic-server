@@ -1,16 +1,15 @@
 import { styled } from 'styled-components';
-import * as Y from 'yjs';
 import { FaEye } from 'react-icons/fa6';
 import { Button } from './Button';
 import { useState } from 'react';
 import { CodeBlock } from './CodeBlock';
 import { Column } from './Row';
 
-interface YDocValueProps {
-  value: Y.Doc | undefined;
+interface LoroDocValueProps {
+  value: Uint8Array | undefined;
 }
 
-export const YDocValue: React.FC<YDocValueProps> = ({ value }) => {
+export const LoroDocValue: React.FC<LoroDocValueProps> = ({ value }) => {
   const [showState, setShowState] = useState(false);
 
   if (!value) {
@@ -24,7 +23,10 @@ export const YDocValue: React.FC<YDocValueProps> = ({ value }) => {
         {showState ? 'Hide encoded state' : 'Show encoded state'}
       </SubtleButton>
       {showState && (
-        <CodeBlock wordWrap content={JSON.stringify(value.toJSON())} />
+        <CodeBlock
+          wordWrap
+          content={`Loro document (${value.byteLength} bytes)`}
+        />
       )}
     </Column>
   );

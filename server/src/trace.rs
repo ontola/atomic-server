@@ -22,7 +22,7 @@ pub fn init_tracing(config: &crate::config::Config) -> Option<tracing_chrome::Fl
     match config.opts.trace {
         crate::config::Tracing::Stdout => {
             let terminal_layer = tracing_subscriber::fmt::Layer::default();
-            tracing_registry.with(terminal_layer).init();
+            let _ = tracing_registry.with(terminal_layer).try_init();
         }
         crate::config::Tracing::Chrome => {
             let (chrome_layer, flush_guard) = tracing_chrome::ChromeLayerBuilder::new()

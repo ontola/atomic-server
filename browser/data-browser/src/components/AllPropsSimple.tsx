@@ -6,7 +6,6 @@ import {
   useResource,
   useSubject,
   useTitle,
-  isYDoc,
 } from '@tomic/react';
 import { useMemo, type JSX } from 'react';
 import { styled } from 'styled-components';
@@ -21,7 +20,7 @@ export function AllPropsSimple({ resource }: AllPropsSimpleProps): JSX.Element {
   return (
     <ul>
       {[...resource.getPropVals()]
-        .filter(([_, val]) => !isYDoc(val))
+        .filter(([_, val]) => !(val instanceof Uint8Array))
         .map(([prop, val]) => (
           <Row key={prop} prop={prop} val={val} />
         ))}

@@ -775,8 +775,7 @@ impl bindings::atomic::class_extender::host::Host for PluginHostState {
             serde_json::from_str(&commit).map_err(|e| e.to_string())?;
 
         let commit_builder =
-            CommitBuilder::from_commit_builder_json(commit_builder_json, &*self.db)
-                .await
+            CommitBuilder::from_commit_builder_json(commit_builder_json)
                 .map_err(|e| format!("Failed to deserialize commit: {}", e))?;
 
         let resource = self
@@ -1613,25 +1612,13 @@ fn check_if_commit_changes_plugin(commit: &Commit, resource: &Resource) -> Atomi
         }
     }
 
-    // Check if it tries to change the resource to a plugin.
-    if let Some(set) = &commit.set {
-        for (prop, val) in set {
-            if prop == urls::IS_A {
-                let resource_classes = val.to_subjects(None)?;
-                if resource_classes.contains(&urls::PLUGIN.to_string()) {
-                    return Ok(true);
-                }
-            }
-        }
-    }
-
-    if let Some(push) = &commit.push {
-        for (prop, val) in push {
-            if prop == urls::IS_A {
-                let resource_classes = val.to_subjects(None)?;
-                if resource_classes.contains(&urls::PLUGIN.to_string()) {
-                    return Ok(true);
-                }
+    // Check if the Loro update sets isA to include Plugin.
+    if let Some(loro_bytes) = &commit.loro_update {
+        let doc = atomic_lib::loro::AtomicLoroDoc::new();
+        let _ = doc.import_update(loro_bytes);
+        if let Some(is_a_str) = doc.get_string_property(urls::IS_A) {
+            if is_a_str.contains(urls::PLUGIN) {
+                return Ok(true);
             }
         }
     }

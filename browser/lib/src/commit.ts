@@ -1,15 +1,12 @@
 import stringify from 'fast-json-stable-stringify';
 // https://github.com/paulmillr/noble-ed25519/issues/38
 
-import { YLoader } from './yjs.js';
 import { Client } from './client.js';
 import { Resource } from './resource.js';
 import type { Store } from './store.js';
 import {
   type JSONValue,
   type JSONArray,
-  isSerializedYUpdate,
-  isJSONObject,
 } from './value.js';
 import { decodeB64, encodeB64 } from './base64.js';
 import { commits } from './ontologies/commits.js';
@@ -27,7 +24,8 @@ export interface CommitBuilderI {
    * be appended. https://atomicdata.dev/properties/push
    */
   push?: Record<string, JSONArray>;
-  yUpdate?: Record<string, Uint8Array>;
+  /** Loro CRDT binary update for the entire resource */
+  loroUpdate?: Uint8Array;
   /** The properties that need to be removed. https://atomicdata.dev/properties/remove */
   remove?: string[];
   /** If true, the resource must be deleted. https://atomicdata.dev/properties/destroy */
@@ -44,7 +42,7 @@ export interface CommitBuilderI {
 interface CommitBuilderBase {
   set?: Map<string, JSONValue>;
   push?: Map<string, Set<JSONValue>>;
-  yUpdate?: Map<string, Uint8Array>;
+  loroUpdate?: Uint8Array;
   remove?: Set<string>;
   destroy?: boolean;
   previousCommit?: string;
@@ -65,7 +63,7 @@ export class CommitBuilder {
   private _subject: string;
   private _set: Map<string, JSONValue>;
   private _push: Map<string, Set<JSONValue>>;
-  private _yUpdate: Map<string, Uint8Array>;
+  private _loroUpdate?: Uint8Array;
   private _remove: Set<string>;
   private _destroy?: boolean;
   private _previousCommit?: string;
@@ -76,7 +74,7 @@ export class CommitBuilder {
     this._subject = Client.removeQueryParamsFromURL(subject);
     this._set = base.set ?? new Map();
     this._push = base.push ?? new Map();
-    this._yUpdate = base.yUpdate ?? new Map();
+    this._loroUpdate = base.loroUpdate;
     this._remove = base.remove ?? new Set();
     this._destroy = base.destroy;
     this._previousCommit = base.previousCommit;
@@ -95,8 +93,8 @@ export class CommitBuilder {
     return this._push;
   }
 
-  public get yUpdate() {
-    return this._yUpdate;
+  public get loroUpdate() {
+    return this._loroUpdate;
   }
 
   public get remove() {
@@ -137,24 +135,14 @@ export class CommitBuilder {
   public addRemoveAction(property: string): CommitBuilder {
     this._set.delete(property);
     this._push.delete(property);
-    this._yUpdate.delete(property);
     this._remove.add(property);
 
     return this;
   }
 
-  public addYUpdateAction(property: string, update: Uint8Array): CommitBuilder {
-    YLoader.loadCheck();
-    const Y = YLoader.Y;
-
-    this.removeRemoveAction(property);
-    const existingUpdate = this._yUpdate.get(property);
-
-    if (existingUpdate) {
-      this._yUpdate.set(property, Y.mergeUpdatesV2([existingUpdate, update]));
-    } else {
-      this._yUpdate.set(property, update);
-    }
+  /** Set a Loro CRDT binary update for this commit. */
+  public setLoroUpdate(update: Uint8Array): CommitBuilder {
+    this._loroUpdate = update;
 
     return this;
   }
@@ -210,7 +198,7 @@ export class CommitBuilder {
       this.push.size > 0 ||
       this.destroy ||
       this.remove.size > 0 ||
-      this.yUpdate.size > 0
+      this.loroUpdate !== undefined
     );
   }
 
@@ -224,7 +212,7 @@ export class CommitBuilder {
     const base = {
       set: this.set,
       push: this.push,
-      yUpdate: this.yUpdate,
+      loroUpdate: this.loroUpdate,
       remove: this.remove,
       destroy: this.destroy,
       previousCommit: this.previousCommit,
@@ -245,7 +233,7 @@ export class CommitBuilder {
       destroy: this.destroy,
       previousCommit: this.previousCommit,
       isGenesis: this.isGenesis,
-      yUpdate: Object.fromEntries(this.yUpdate.entries()),
+      loroUpdate: this.loroUpdate,
     };
   }
 
@@ -337,7 +325,7 @@ const serializeMap = {
   createdAt: commits.properties.createdAt,
   signer: commits.properties.signer,
   signature: commits.properties.signature,
-  yUpdate: commits.properties.yUpdate,
+  loroUpdate: commits.properties.loroUpdate,
   id: 'id',
 };
 
@@ -370,17 +358,12 @@ function serializeCommitValue<K extends keyof Commit>(
   key: K,
   value: Commit[K],
 ): JSONValue {
-  // The value for yUpdate needs to be encoded to base64 before it is valid JSON-AD
-  if (key === 'yUpdate') {
-    const castValue = value as Commit['yUpdate'];
+  // loroUpdate is a binary blob, serialized as a plain base64 string
+  if (key === 'loroUpdate') {
+    const castValue = value as Commit['loroUpdate'];
 
     if (castValue !== undefined) {
-      return Object.fromEntries(
-        Object.entries(castValue).map(([k, v]) => [
-          k,
-          { type: 'ydoc', data: encodeB64(v) },
-        ]),
-      );
+      return encodeB64(castValue);
     }
 
     return undefined;
@@ -420,8 +403,8 @@ export function serializeDeterministically(
     delete commit.destroy;
   }
 
-  if (commit.yUpdate && Object.keys(commit.yUpdate).length === 0) {
-    delete commit.yUpdate;
+  if (commit.loroUpdate === undefined) {
+    delete commit.loroUpdate;
   }
 
   const jsonadCommit = commitToJsonADObject(commit);
@@ -452,7 +435,7 @@ export function parseCommitResource(resource: Resource): Commit {
     subject: resource.get(commits.properties.subject),
     set: resource.get(commits.properties.set),
     push: resource.get(commits.properties.push),
-    yUpdate: parseYUpdateValue(resource.get(commits.properties.yUpdate)),
+    loroUpdate: parseLoroUpdateValue(resource.get(commits.properties.loroUpdate)),
     signer: resource.get(commits.properties.signer),
     createdAt: resource.get(commits.properties.createdAt),
     remove: resource.get(commits.properties.remove),
@@ -477,7 +460,7 @@ export function parseCommitJSON(str: string): Commit {
     const subject = jsonAdObj[commits.properties.subject];
     const set = jsonAdObj[commits.properties.set];
     const push = jsonAdObj[commits.properties.push];
-    const yUpdate = parseYUpdateValue(jsonAdObj[commits.properties.yUpdate]);
+    const loroUpdate = parseLoroUpdateValue(jsonAdObj[commits.properties.loroUpdate]);
     const signer = jsonAdObj[commits.properties.signer];
     const createdAt = jsonAdObj[commits.properties.createdAt];
     const remove: string[] | undefined = jsonAdObj[commits.properties.remove];
@@ -497,7 +480,7 @@ export function parseCommitJSON(str: string): Commit {
       subject,
       set,
       push,
-      yUpdate,
+      loroUpdate,
       signer,
       createdAt,
       remove,
@@ -517,7 +500,7 @@ export function applyCommitToResource(
   resource: Resource,
   commit: Commit,
 ): Resource {
-  const { set, remove, push, destroy, yUpdate } = commit;
+  const { set, remove, push, destroy, loroUpdate } = commit;
 
   if (set) {
     execSetCommit(set, resource);
@@ -531,8 +514,8 @@ export function applyCommitToResource(
     execPushCommit(push, resource);
   }
 
-  if (yUpdate) {
-    execYUpdateCommit(yUpdate, resource);
+  if (loroUpdate) {
+    execLoroUpdateCommit(loroUpdate, resource);
   }
 
   if (destroy) {
@@ -579,28 +562,6 @@ export function parseAndApplyCommit(jsonAdObjStr: string, store: Store) {
   }
 }
 
-function parseYUpdateValue(
-  value: JSONValue,
-): Record<string, Uint8Array> | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-
-  if (!isJSONObject(value)) {
-    throw new Error(`YUpdate value is not an object: ${value}`);
-  }
-
-  return Object.fromEntries(
-    Object.entries(value).map(([k, v]) => {
-      if (isSerializedYUpdate(v)) {
-        return [k, decodeB64(v.data)];
-      } else {
-        throw new Error(`YUpdate contains invalid update: ${k}`);
-      }
-    }),
-  );
-}
-
 function execSetCommit(set: Record<string, JSONValue>, resource: Resource) {
   for (const [key, value] of Object.entries(set)) {
     resource.setUnsafe(key, value);
@@ -624,45 +585,29 @@ function execPushCommit(push: Record<string, JSONArray>, resource: Resource) {
   }
 }
 
-function execYUpdateCommit(
-  yUpdate: Record<string, Uint8Array>,
+function parseLoroUpdateValue(
+  value: JSONValue,
+): Uint8Array | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value === 'string') {
+    return decodeB64(value);
+  }
+
+  throw new Error(`Invalid loroUpdate value, expected base64 string: ${JSON.stringify(value)}`);
+}
+
+/**
+ * Stores the Loro CRDT binary update on the resource.
+ * The server handles the CRDT merge and property materialization;
+ * the client stores the raw binary so it can be round-tripped.
+ */
+function execLoroUpdateCommit(
+  loroUpdate: Uint8Array,
   resource: Resource,
 ) {
-  if (!YLoader.isLoaded()) {
-    console.warn(
-      'Commit contains yUpdate but Yjs is not loaded. Skipping applying yjs updates',
-    );
-
-    return;
-  }
-
-  const Y = YLoader.Y;
-
-  for (const [key, value] of Object.entries(yUpdate)) {
-    const doc = resource.get(key);
-
-    if (!doc) {
-      try {
-        const newDoc = new Y.Doc();
-        Y.applyUpdateV2(newDoc, value);
-        resource.setUnsafe(key, newDoc);
-      } catch (e) {
-        console.error(e);
-        throw new Error(`Error applying yUpdate to new document: ${key}: ${e}`);
-      }
-    } else {
-      if (!(doc instanceof Y.Doc)) {
-        throw new Error(`Property ${key} is not a YDoc`);
-      }
-
-      try {
-        Y.applyUpdateV2(doc, value);
-      } catch (e) {
-        console.error(e);
-        throw new Error(
-          `Error applying yUpdate to existing document: ${key}: ${e}`,
-        );
-      }
-    }
-  }
+  resource.setUnsafe(commits.properties.loroUpdate, loroUpdate);
 }
+

@@ -1,19 +1,12 @@
 import { JSONADParser } from './parse.js';
 import type { Resource } from './resource.js';
-import type * as Y from 'yjs';
-import { YLoader } from './yjs.js';
 
 export type JSONPrimitive = string | number | boolean;
 export type JSONValue = JSONPrimitive | JSONObject | JSONArray | undefined;
 export type JSONObject = { [key: string]: JSONValue };
 export type JSONArray = Array<JSONValue>;
 
-export type AtomicValue = JSONValue | Y.Doc;
-
-export type SerializedYUpdate = {
-  type: 'ydoc';
-  data: string;
-};
+export type AtomicValue = JSONValue | Uint8Array;
 
 /**
  * Tries to convert the value as an array of resources, which can be both URLs
@@ -103,22 +96,6 @@ export function valToResource(val: AtomicValue): string | Resource {
   throw new Error(`Not a resource: ${val}, is a ${typeof val}`);
 }
 
-export function isYDoc(val: AtomicValue): val is Y.Doc {
-  if (!YLoader.isLoaded()) {
-    return false;
-  }
-
-  const Y = YLoader.Y;
-
-  return val instanceof Y.Doc;
-}
-
 export const isJSONObject = (value: JSONValue): value is JSONObject =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-export const isSerializedYUpdate = (
-  value: JSONValue,
-): value is SerializedYUpdate =>
-  isJSONObject(value) &&
-  value.type === 'ydoc' &&
-  typeof value.data === 'string';

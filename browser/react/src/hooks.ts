@@ -30,7 +30,7 @@ import {
   core,
   server,
 } from '@tomic/lib';
-import type * as Y from 'yjs';
+import type { LoroDoc } from 'loro-crdt';
 import { useOnValueChange } from './helpers/useOnValueChange.js';
 
 export type UseResourceOptions = FetchOpts & {
@@ -574,25 +574,22 @@ export function useDate(
 }
 
 /**
- * Gets or creates a Yjs document for the given property. returns undefined if the resource is still loading.
+ * Gets or creates a Loro document for the resource. Returns undefined if the resource is still loading.
  */
-export function useYDoc(
+export function useLoroDoc(
   resource: Resource,
-  propertyURL: string,
-): Y.Doc | undefined {
-  const [doc, setDoc] = useState<Y.Doc | undefined>(() =>
-    resource.loading ? undefined : resource.getYDoc(propertyURL),
+): LoroDoc | undefined {
+  const [doc, setDoc] = useState<LoroDoc | undefined>(() =>
+    resource.loading ? undefined : resource.getLoroDoc(),
   );
 
   useEffect(() => {
     return resource.stable.on(ResourceEvents.LoadingChange, () => {
       setDoc(
-        resource.stable.loading
-          ? undefined
-          : resource.stable.getYDoc(propertyURL),
+        resource.stable.loading ? undefined : resource.stable.getLoroDoc(),
       );
     });
-  }, [resource.stable, propertyURL]);
+  }, [resource.stable]);
 
   return doc;
 }

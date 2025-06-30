@@ -20,7 +20,7 @@ export const commits = {
     remove: 'https://atomicdata.dev/properties/remove',
     destroy: 'https://atomicdata.dev/properties/destroy',
     signature: 'https://atomicdata.dev/properties/signature',
-    yUpdate: 'https://atomicdata.dev/properties/yUpdate',
+    loroUpdate: 'https://atomicdata.dev/properties/loroUpdate',
     isGenesis: 'https://atomicdata.dev/properties/isGenesis',
   },
   __classDefs: {
@@ -33,7 +33,7 @@ export const commits = {
       'https://atomicdata.dev/properties/remove',
       'https://atomicdata.dev/properties/set',
       'https://atomicdata.dev/properties/push',
-      'https://atomicdata.dev/properties/yUpdate',
+      'https://atomicdata.dev/properties/loroUpdate',
       'https://atomicdata.dev/properties/isGenesis',
     ],
   },
@@ -58,7 +58,7 @@ declare module '../index.js' {
         | typeof commits.properties.remove
         | typeof commits.properties.set
         | typeof commits.properties.push
-        | typeof commits.properties.yUpdate;
+        | typeof commits.properties.loroUpdate;
     };
   }
 
@@ -73,7 +73,7 @@ declare module '../index.js' {
     [commits.properties.remove]: string[];
     [commits.properties.destroy]: boolean;
     [commits.properties.signature]: string;
-    [commits.properties.yUpdate]: string;
+    [commits.properties.loroUpdate]: string;
     [commits.properties.isGenesis]: boolean;
   }
 
@@ -88,7 +88,7 @@ declare module '../index.js' {
     [commits.properties.remove]: 'remove';
     [commits.properties.destroy]: 'destroy';
     [commits.properties.signature]: 'signature';
-    [commits.properties.yUpdate]: 'yUpdate';
+    [commits.properties.loroUpdate]: 'loroUpdate';
     [commits.properties.isGenesis]: 'isGenesis';
   }
 }

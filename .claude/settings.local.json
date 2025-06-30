@@ -51,7 +51,9 @@
       "mcp__chrome-devtools__type_text",
       "mcp__chrome-devtools__evaluate_script",
       "mcp__chrome-devtools__list_pages",
-      "Bash(cargo check:*)"
+      "Bash(cargo check:*)",
+      "WebFetch(domain:loro.dev)",
+      "WebFetch(domain:github.com)"
     ]
   }
 }

@@ -1,4 +1,4 @@
-import { StoreContext, Store, enableYjs } from '@tomic/react';
+import { StoreContext, Store, enableLoro } from '@tomic/react';
 
 import { isDev } from './config';
 import { registerHandlers } from './handlers';
@@ -42,7 +42,7 @@ if (initialDrive) {
 import { bootstrap } from './bootstrap';
 bootstrap(store);
 
-await enableYjs();
+await enableLoro();
 
 store.parseMetaTags();
 

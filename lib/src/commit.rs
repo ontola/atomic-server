@@ -4,15 +4,13 @@ use crate::{
     agents::{decode_base64, encode_base64},
     datatype::DataType,
     errors::AtomicResult,
-    parse::{ParseOpts, SaveOpts},
-    resources::PropVals,
     urls,
     values::SubResource,
     Atom, Resource, Storelike, Subject, Value,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use urls::{SET, SIGNER};
+use urls::SIGNER;
 /// The `resource_new`, `resource_old` and `commit_resource` fields are only created if the Commit is persisted.
 /// When the Db is only notifying other of changes (e.g. if a new Message was added to a ChatRoom), these fields are not created.
 /// When deleting a resource, the `resource_new` field is None.
@@ -24,6 +22,8 @@ pub struct CommitResponse {
     pub resource_old: Option<Resource>,
     pub add_atoms: Vec<Atom>,
     pub remove_atoms: Vec<Atom>,
+    /// The property URLs that were changed by this commit's Loro update.
+    pub changed_props: HashSet<String>,
 }
 
 pub struct CommitApplied {
@@ -35,6 +35,8 @@ pub struct CommitApplied {
     pub add_atoms: Vec<Atom>,
     /// The atoms that should be removed from the store (for updating indexes)
     pub remove_atoms: Vec<Atom>,
+    /// The property URLs that were changed by this commit's Loro update.
+    pub changed_props: HashSet<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -85,25 +87,15 @@ pub struct Commit {
     /// The URL of the one signing this Commit
     #[serde(rename = "https://atomicdata.dev/properties/signer")]
     pub signer: String,
-    /// The set of PropVals that need to be added.
-    /// Overwrites existing values
-    #[serde(rename = "https://atomicdata.dev/properties/set")]
-    pub set: Option<std::collections::HashMap<String, Value>>,
-    /// A map of properties and the Yjs updates to be applied to them (must be Value::YDoc)
-    #[serde(rename = "https://atomicdata.dev/properties/yUpdate")]
-    pub y_update: Option<std::collections::HashMap<String, Value>>,
-    #[serde(rename = "https://atomicdata.dev/properties/remove")]
-    /// The set of property URLs that need to be removed
-    pub remove: Option<Vec<String>>,
+    /// A Loro CRDT binary update for the entire resource document
+    #[serde(rename = "https://atomicdata.dev/properties/loroUpdate")]
+    pub loro_update: Option<Vec<u8>>,
     /// If set to true, deletes the entire resource
     #[serde(rename = "https://atomicdata.dev/properties/destroy")]
     pub destroy: Option<bool>,
     /// Base64 encoded signature of the JSON serialized Commit
     #[serde(rename = "https://atomicdata.dev/properties/signature")]
     pub signature: Option<String>,
-    /// List of Properties and Arrays to be appended to them
-    #[serde(rename = "https://atomicdata.dev/properties/push")]
-    pub push: Option<std::collections::HashMap<String, Value>>,
     /// The previously applied commit to this Resource.
     #[serde(rename = "https://atomicdata.dev/properties/previousCommit")]
     pub previous_commit: Option<String>,
@@ -117,16 +109,21 @@ pub struct Commit {
 impl Commit {
     /// Throws an error if the parent is set to itself
     pub fn check_for_circular_parents(&self) -> AtomicResult<()> {
-        // Check if the set hashset has a parent property and if it matches with this subject.
-        if let Some(set) = &self.set {
-            if let Some(parent) = set.get(urls::PARENT) {
-                if parent.to_string() == self.subject {
+        // Check if the Loro update contains a parent property that matches the subject.
+        if let Some(loro_bytes) = &self.loro_update {
+            let doc = crate::loro::AtomicLoroDoc::from_snapshot(loro_bytes)
+                .or_else(|_| {
+                    let doc = crate::loro::AtomicLoroDoc::new();
+                    doc.import_update(loro_bytes)?;
+                    Ok::<_, crate::errors::AtomicError>(doc)
+                })?;
+            if let Some(parent) = doc.get_string_property(urls::PARENT) {
+                if parent == self.subject {
                     return Err("Circular parent reference".into());
                 }
             }
         }
 
-        // TODO: Check for circular parents by going up the parent tree.
         Ok(())
     }
 
@@ -171,18 +168,30 @@ impl Commit {
         let temp_subject = "did:ad:genesis".to_string();
         commit_builder.subject = temp_subject.clone();
 
+        let loro_update = if let Some(update) = commit_builder.loro_update {
+            Some(update)
+        } else if !commit_builder.set.is_empty() || !commit_builder.remove.is_empty() {
+            let doc = crate::loro::AtomicLoroDoc::new();
+            for (prop, val) in &commit_builder.set {
+                doc.set_property(prop, val)?;
+            }
+            for prop in &commit_builder.remove {
+                doc.remove_property(prop)?;
+            }
+            Some(doc.export_snapshot())
+        } else {
+            None
+        };
+
         let mut commit = Commit {
             subject: temp_subject,
             signer: agent.subject.to_string(),
-            set: Some(commit_builder.set),
-            y_update: Some(commit_builder.y_update),
-            remove: Some(commit_builder.remove.into_iter().collect()),
+            loro_update,
             destroy: Some(commit_builder.destroy),
             created_at: now,
             previous_commit: None,
             is_genesis: Some(true),
             signature: None,
-            push: Some(commit_builder.push),
             url: None,
         };
 
@@ -249,14 +258,21 @@ impl Commit {
                     if commit.destroy.unwrap_or(false) {
                         return Err("Cannot verify signature for self-signed destroy commit".into());
                     }
-                    if let Some(set) = &commit.set {
-                        if let Some(pk_val) = set.get(urls::PUBLIC_KEY) {
-                            pk_val.to_string()
+                    // Extract public key from the Loro update
+                    if let Some(loro_bytes) = &commit.loro_update {
+                        let doc = crate::loro::AtomicLoroDoc::from_snapshot(loro_bytes)
+                            .or_else(|_| {
+                                let doc = crate::loro::AtomicLoroDoc::new();
+                                doc.import_update(loro_bytes)?;
+                                Ok::<_, crate::errors::AtomicError>(doc)
+                            })?;
+                        if let Some(pk) = doc.get_string_property(urls::PUBLIC_KEY) {
+                            pk
                         } else {
-                            return Err("Self-signed genesis commit must contain public key in 'set' field for non-extractable signer URLs".into());
+                            return Err("Self-signed genesis commit must contain public key in Loro update".into());
                         }
                     } else {
-                        return Err("Self-signed genesis commit must contain 'set' field".into());
+                        return Err("Self-signed genesis commit must contain a Loro update".into());
                     }
                 } else {
                     return Err(format!("Signer {} not found in store, and this is not a self-signed genesis commit or extractable URL. Error: {}", commit.signer, e).into());
@@ -481,6 +497,7 @@ impl Commit {
             } else {
                 Some(applied.resource_old)
             },
+            changed_props: applied.changed_props,
         })
     }
 
@@ -490,8 +507,8 @@ impl Commit {
         crate::utils::check_timestamp_in_past(self.created_at, ACCEPTABLE_TIME_DIFFERENCE)
     }
 
-    /// Updates the values in the Resource according to the `set`, `remove`, `push`, and `destroy` attributes in the Commit.
-    /// Optionally also returns the updated Atoms.
+    /// Applies the Loro CRDT update and/or destroy to the Resource.
+    /// Returns the diff as atoms for index updates, plus the set of changed property URLs.
     #[tracing::instrument(skip(store))]
     pub async fn apply_changes(
         &self,
@@ -502,116 +519,47 @@ impl Commit {
 
         let mut remove_atoms: Vec<Atom> = Vec::new();
         let mut add_atoms: Vec<Atom> = Vec::new();
+        let mut changed_props: HashSet<String> = HashSet::new();
 
-        if let Some(remove) = self.remove.clone() {
-            for prop in remove.iter() {
-                resource.remove_propval(prop);
+        if let Some(loro_update_bytes) = &self.loro_update {
+            // Load existing Loro snapshot from the resource, or create a new doc
+            let loro_doc = match resource.get(urls::LORO_UPDATE) {
+                Ok(Value::LoroDoc(existing_snapshot)) => {
+                    crate::loro::AtomicLoroDoc::from_snapshot(existing_snapshot)?
+                }
+                _ => crate::loro::AtomicLoroDoc::new(),
+            };
 
-                if let Ok(val) = resource_unedited.get(prop) {
-                    let atom = Atom::new(resource.get_subject().clone(), prop.into(), val.clone());
-                    remove_atoms.push(atom);
-                } else {
-                    // The property does not exist, so nothing to remove.
-                    //
-                    // This may happen if another concurrent commit has removed it first, or
-                    // client removed it without validating it exists. (Currently rust and
-                    // typescript clients do not validate that.)
+            // Import the update and compute the property-level diff for indexing
+            let diff = loro_doc.import_update_with_diff(
+                loro_update_bytes,
+                &resource.get_subject().to_string(),
+            )?;
+
+            // Track which properties changed
+            for atom in &diff.add_atoms {
+                changed_props.insert(atom.property.clone());
+            }
+            for atom in &diff.remove_atoms {
+                changed_props.insert(atom.property.clone());
+            }
+
+            add_atoms.extend(diff.add_atoms);
+            remove_atoms.extend(diff.remove_atoms);
+
+            // Materialize changed Loro properties into the Resource's propvals
+            let properties = loro_doc.get_all_properties();
+            for (prop, loro_val) in &properties {
+                if let Some(atomic_val) = crate::loro::loro_value_to_atomic_value(loro_val) {
+                    resource.set_unsafe(prop.into(), atomic_val);
                 }
             }
-        }
-        if let Some(set) = self.set.clone() {
-            for (prop, mut new_val) in set {
-                new_val.normalize(store);
-                resource
-                    .set(prop.clone().into(), new_val.to_owned(), store)
-                    .await
-                    .map_err(|e| {
-                        format!(
-                            "Failed to set property '{}' to '{}' in Commit. Error: {}",
-                            prop, new_val, e
-                        )
-                    })?;
 
-                let new_atom = Atom::new(
-                    resource.get_subject().clone(),
-                    prop.clone(),
-                    new_val.clone(),
-                );
-                if let Ok(old_val) = resource_unedited.get(&prop) {
-                    let old_atom = Atom::new(
-                        resource.get_subject().clone(),
-                        prop.clone(),
-                        old_val.clone(),
-                    );
-                    remove_atoms.push(old_atom);
-                }
-                add_atoms.push(new_atom);
-            }
+            // Store the updated Loro snapshot on the resource for future merges
+            let snapshot = loro_doc.export_snapshot();
+            resource.set_unsafe(urls::LORO_UPDATE.into(), Value::LoroDoc(snapshot));
         }
-        if let Some(push) = self.push.clone() {
-            for (prop, mut val) in push {
-                val.normalize(store);
-                let mut old_vec = match resource.get(&prop) {
-                    Ok(val) => match val {
-                        Value::ResourceArray(res_arr) => res_arr.clone(),
-                        _other => return Err("Wrong datatype when pushing to array".into()),
-                    },
-                    Err(_) => Vec::new(),
-                };
-                let new_vec = match val {
-                    Value::ResourceArray(res_arr) => res_arr.clone(),
-                    _other => return Err("Wrong datatype when pushing to array".into()),
-                };
-                old_vec.append(&mut new_vec.clone());
-                resource.set_unsafe(prop.clone().into(), old_vec.into());
-                for added_resource in new_vec {
-                    let atom = Atom::new(
-                        resource.get_subject().clone(),
-                        prop.clone().into(),
-                        added_resource.into(),
-                    );
-                    add_atoms.push(atom);
-                }
-            }
-        }
-        if let Some(y_update) = self.y_update.clone() {
-            for (prop, update) in y_update.iter() {
-                let update_bin = match update {
-                    Value::YDoc(bin) => bin,
-                    _ => {
-                        return Err(
-                            format!("Value in y_update is not of type YDoc: {}", prop).into()
-                        )
-                    }
-                };
 
-                match resource.get(prop) {
-                    Ok(val) => match val {
-                        Value::YDoc(bin) => {
-                            // Resource already has state so we will merge the update into it.
-                            // let decoded_state = yrs::Update::decode_v2(bin)
-                            //     .map_err(|e| format!("Error decoding Yjs state: {}", e))?;
-
-                            // We can merge the state (that is saved as an update) and the incoming update without having to create a Yjs doc.
-                            let merged_update = yrs::merge_updates_v2(vec![bin, update_bin])
-                                .map_err(|e| format!("Error merging Yjs updates: {}", e))?;
-
-                            resource
-                                .set(prop.into(), Value::YDoc(merged_update), store)
-                                .await?;
-                        }
-                        _ => return Err(format!("Property is not of type YDoc: {}", prop).into()),
-                    },
-                    _ => {
-                        // The property was not set yet so we initialize it with the update.
-                        resource
-                            .set(prop.into(), Value::YDoc(update_bin.clone()), store)
-                            .await?;
-                    }
-                };
-                // We don't create any atoms because indexing yjs updates doesn't make much sense.
-            }
-        }
         // Remove all atoms from index if destroy
         if let Some(destroy) = self.destroy {
             if destroy {
@@ -626,6 +574,7 @@ impl Commit {
             resource_new: resource,
             add_atoms,
             remove_atoms,
+            changed_props,
         })
     }
 
@@ -634,21 +583,9 @@ impl Commit {
         let subject = resource.get(urls::SUBJECT)?.to_string();
         let created_at = resource.get(urls::CREATED_AT)?.to_int()?;
         let signer = resource.get(SIGNER)?.to_string();
-        let set = match resource.get(SET) {
-            Ok(found) => Some(found.to_nested()?.to_owned()),
-            Err(_) => None,
-        };
-        let push = match resource.get(urls::PUSH) {
-            Ok(found) => Some(found.to_nested()?.to_owned()),
-            Err(_) => None,
-        };
-        let y_update = match resource.get(urls::Y_UPDATE) {
-            Ok(found) => Some(found.to_nested()?.to_owned()),
-            Err(_) => None,
-        };
-        let remove = match resource.get(urls::REMOVE) {
-            Ok(found) => Some(found.to_subjects(None)?),
-            Err(_) => None,
+        let loro_update = match resource.get(urls::LORO_UPDATE) {
+            Ok(Value::LoroDoc(bin)) => Some(bin.clone()),
+            _ => None,
         };
         let destroy = match resource.get(urls::DESTROY) {
             Ok(found) => Some(found.to_bool()?),
@@ -669,10 +606,7 @@ impl Commit {
             subject,
             created_at,
             signer,
-            set,
-            push,
-            y_update,
-            remove,
+            loro_update,
             destroy,
             previous_commit,
             is_genesis,
@@ -709,18 +643,6 @@ impl Commit {
             SIGNER.into(),
             Value::new(&self.signer, &DataType::AtomicUrl)?,
         );
-        if let Some(set) = &self.set {
-            let mut newset = PropVals::new();
-            for (prop, val) in set {
-                newset.insert(prop.into(), val.clone());
-            }
-            resource.set_unsafe(urls::SET.into(), newset.into());
-        };
-        if let Some(remove) = &self.remove {
-            if !remove.is_empty() {
-                resource.set_unsafe(urls::REMOVE.into(), remove.clone().into());
-            }
-        };
         if let Some(destroy) = self.destroy {
             if destroy {
                 resource.set_unsafe(urls::DESTROY.into(), true.into());
@@ -735,13 +657,12 @@ impl Commit {
         if let Some(is_genesis) = self.is_genesis {
             resource.set_unsafe(urls::IS_GENESIS.into(), is_genesis.into());
         }
-        if let Some(y_update) = &self.y_update {
-            if !y_update.is_empty() {
-                let mut newy_update = PropVals::new();
-                for (prop, val) in y_update {
-                    newy_update.insert(prop.into(), val.clone());
-                }
-                resource.set_unsafe(urls::Y_UPDATE.into(), newy_update.into());
+        if let Some(loro_update) = &self.loro_update {
+            if !loro_update.is_empty() {
+                resource.set_unsafe(
+                    urls::LORO_UPDATE.into(),
+                    Value::LoroDoc(loro_update.clone()),
+                );
             }
         }
         resource.set_unsafe(
@@ -750,11 +671,6 @@ impl Commit {
         );
         if let Some(signature) = &self.signature {
             resource.set_unsafe(urls::SIGNATURE.into(), signature.clone().into());
-        }
-        if let Some(push) = &self.push {
-            if !push.is_empty() {
-                resource.set_unsafe(urls::PUSH.into(), push.clone().into());
-            }
         }
         Ok(resource)
     }
@@ -817,10 +733,7 @@ impl Commit {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CommitBuilderJSON {
     pub subject: String,
-    pub set: Option<std::collections::HashMap<String, serde_json::Value>>,
-    pub push: Option<std::collections::HashMap<String, Vec<String>>>,
-    pub y_update: Option<std::collections::HashMap<String, serde_json::Value>>,
-    pub remove: Option<Vec<String>>,
+    pub loro_update: Option<String>,
     pub destroy: bool,
     pub previous_commit: Option<String>,
 }
@@ -829,29 +742,19 @@ pub struct CommitBuilderJSON {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CommitBuilder {
     /// The subject URL that is to be modified by this Delta.
-    /// Not the URL of the Commit itself.
-    /// https://atomicdata.dev/properties/subject
     pub subject: String,
-    /// The set of PropVals that need to be added.
-    /// Overwrites existing values
-    /// https://atomicdata.dev/properties/set
+    /// Property changes accumulated on the server side.
+    /// These get converted to a Loro update at sign time.
     set: std::collections::HashMap<String, Value>,
-    /// The set of PropVals that need to be appended to resource arrays.
-    push: std::collections::HashMap<String, Value>,
-    /// A map of Propvals containing Yjs updates to be applied to the YDocs
-    y_update: std::collections::HashMap<String, Value>,
-    /// The set of property URLs that need to be removed
-    /// https://atomicdata.dev/properties/remove
+    /// Properties to remove. Converted to Loro operations at sign time.
     remove: HashSet<String>,
+    /// A Loro CRDT binary update (from client). Takes precedence over set/remove.
+    loro_update: Option<Vec<u8>>,
     /// If set to true, deletes the entire resource
-    /// https://atomicdata.dev/properties/destroy
     destroy: bool,
-    // pub signature: String,
-    /// The previous Commit that was applied to the target resource (the subject) of this Commit. You should be able to follow these from Commit to Commit to establish an audit trail.
-    /// https://atomicdata.dev/properties/previousCommit
+    /// The previous Commit that was applied to the target resource (the subject) of this Commit.
     previous_commit: Option<String>,
     /// Whether this is a genesis commit (the first commit for a DID resource).
-    /// Must be set explicitly for did:ad: subjects with no previous_commit.
     pub is_genesis: bool,
 }
 
@@ -859,77 +762,30 @@ impl CommitBuilder {
     /// Start constructing a Commit.
     pub fn new(subject: String) -> Self {
         CommitBuilder {
-            push: HashMap::new(),
             subject,
             set: HashMap::new(),
-            y_update: HashMap::new(),
             remove: HashSet::new(),
+            loro_update: None,
             destroy: false,
             previous_commit: None,
             is_genesis: false,
         }
     }
 
-    pub async fn from_commit_builder_json(
+    pub fn from_commit_builder_json(
         commit_builder_json: CommitBuilderJSON,
-        store: &impl Storelike,
     ) -> AtomicResult<Self> {
         let mut commit_builder = CommitBuilder::new(commit_builder_json.subject);
-        let mut parse_opts = ParseOpts::default();
-        parse_opts.save = SaveOpts::DontSave;
-
-        if let Some(set) = commit_builder_json.set {
-            for (prop, val) in set.iter() {
-                let (_, parsed_val) =
-                    crate::parse::parse_propval(prop, val, None, store, &parse_opts).await?;
-                commit_builder.set(prop.into(), parsed_val);
-            }
-        }
-
-        if let Some(y_update) = commit_builder_json.y_update {
-            for (prop, val) in y_update.iter() {
-                let (_, parsed_val) =
-                    crate::parse::parse_propval(prop, val, None, store, &parse_opts).await?;
-                commit_builder.add_y_update(prop.into(), parsed_val)?;
-            }
-        }
-
-        if let Some(push) = commit_builder_json.push {
-            for (prop, vec) in push.iter() {
-                for value in vec {
-                    commit_builder
-                        .push_propval(prop, SubResource::Subject(value.clone().into()))?;
-                }
-            }
-        }
-
-        if let Some(remove) = commit_builder_json.remove {
-            for prop in remove {
-                commit_builder.remove(prop);
-            }
-        }
 
         commit_builder.destroy(commit_builder_json.destroy);
 
-        Ok(commit_builder)
-    }
+        if let Some(loro_b64) = commit_builder_json.loro_update {
+            let bin = crate::agents::decode_base64(&loro_b64)
+                .map_err(|e| format!("Invalid base64 in loro_update: {e}"))?;
+            commit_builder.set_loro_update(bin);
+        }
 
-    /// Appends a URL or (nested anonymous) Resource to a ResourceArray.
-    pub fn push_propval(&mut self, property: &str, value: SubResource) -> AtomicResult<()> {
-        let mut vec = match self.push.get(property) {
-            Some(val) => match val {
-                Value::ResourceArray(resources) => resources.to_owned(),
-                other => {
-                    return Err(
-                        format!("Expected ResourceArray in push_propval, got {}", other).into(),
-                    )
-                }
-            },
-            None => Vec::new(),
-        };
-        vec.push(value);
-        self.push.insert(property.into(), Value::ResourceArray(vec));
-        Ok(())
+        Ok(commit_builder)
     }
 
     /// Creates the Commit and signs it using a signature.
@@ -950,9 +806,25 @@ impl CommitBuilder {
         sign_at(self, agent, now, store).await
     }
 
-    /// Set Property / Value combinations that will either be created or overwritten.
+    /// Set a property value. On sign, this gets converted to a Loro update.
     pub fn set(&mut self, prop: String, val: Value) {
         self.set.insert(prop, val);
+    }
+
+    /// Mark a property for removal. On sign, this gets converted to a Loro update.
+    pub fn remove(&mut self, prop: String) {
+        self.remove.insert(prop);
+    }
+
+    /// Appends a URL or nested Resource to a ResourceArray.
+    pub fn push_propval(&mut self, property: &str, value: SubResource) -> AtomicResult<()> {
+        let mut vec = match self.set.get(property) {
+            Some(Value::ResourceArray(resources)) => resources.to_owned(),
+            _ => Vec::new(),
+        };
+        vec.push(value);
+        self.set.insert(property.into(), Value::ResourceArray(vec));
+        Ok(())
     }
 
     /// Set a new subject for this Commit
@@ -960,19 +832,9 @@ impl CommitBuilder {
         self.subject = subject;
     }
 
-    pub fn add_y_update(&mut self, prop: String, update: Value) -> AtomicResult<()> {
-        match update {
-            Value::YDoc(_) => {
-                self.y_update.insert(prop, update);
-                Ok(())
-            }
-            _ => Err(format!("Expected YDoc in add_y_update, got {}", update).into()),
-        }
-    }
-
-    /// Set Property URLs which values to be removed
-    pub fn remove(&mut self, prop: String) {
-        self.remove.insert(prop);
+    /// Set a Loro CRDT binary update for this commit.
+    pub fn set_loro_update(&mut self, update: Vec<u8>) {
+        self.loro_update = Some(update);
     }
 
     /// Whether the resource needs to be removed fully
@@ -989,18 +851,32 @@ async fn sign_at(
     sign_date: i64,
     store: &impl Storelike,
 ) -> AtomicResult<Commit> {
+    // If no Loro update was provided (i.e. server-side commit), convert
+    // the accumulated set/remove operations into a Loro update.
+    let loro_update = if let Some(update) = commitbuilder.loro_update {
+        Some(update)
+    } else if !commitbuilder.set.is_empty() || !commitbuilder.remove.is_empty() {
+        let doc = crate::loro::AtomicLoroDoc::new();
+        for (prop, val) in &commitbuilder.set {
+            doc.set_property(prop, val)?;
+        }
+        for prop in &commitbuilder.remove {
+            doc.remove_property(prop)?;
+        }
+        Some(doc.export_snapshot())
+    } else {
+        None
+    };
+
     let mut commit = Commit {
         subject: commitbuilder.subject,
         signer: agent.subject.to_string(),
-        set: Some(commitbuilder.set),
-        y_update: Some(commitbuilder.y_update),
-        remove: Some(commitbuilder.remove.into_iter().collect()),
+        loro_update,
         destroy: Some(commitbuilder.destroy),
         created_at: sign_date,
         previous_commit: commitbuilder.previous_commit,
         is_genesis: if commitbuilder.is_genesis { Some(true) } else { None },
         signature: None,
-        push: Some(commitbuilder.push),
         url: None,
     };
     let stringified = commit
@@ -1098,24 +974,22 @@ mod test {
         let store = Store::init().await.unwrap();
         store.set_base_url("http://localhost:9883");
         store.populate().await.unwrap();
-        let mut set: HashMap<String, Value> = HashMap::new();
-        let shortname = Value::new("shortname", &DataType::String).unwrap();
-        let description = Value::new("Some description", &DataType::String).unwrap();
-        set.insert(urls::SHORTNAME.into(), shortname);
-        set.insert(urls::DESCRIPTION.into(), description);
-        let remove = vec![String::from(urls::IS_A)];
-        let destroy = false;
+        // Build a Loro update with some properties
+        let doc = crate::loro::AtomicLoroDoc::new();
+        doc.set_property(urls::SHORTNAME, &Value::String("shortname".into()))
+            .unwrap();
+        doc.set_property(urls::DESCRIPTION, &Value::String("Some description".into()))
+            .unwrap();
+        let loro_update = doc.export_snapshot();
+
         let commit = Commit {
             subject: String::from("https://localhost/test"),
             created_at: 1603638837,
             signer: String::from("https://localhost/author"),
-            set: Some(set),
-            push: None,
-            y_update: None,
-            remove: Some(remove),
+            loro_update: Some(loro_update),
             previous_commit: None,
             is_genesis: None,
-            destroy: Some(destroy),
+            destroy: None,
             signature: None,
             url: None,
         };
@@ -1123,8 +997,15 @@ mod test {
             .serialize_deterministically_json_ad(&store)
             .await
             .unwrap();
-        let should_be = "{\"https://atomicdata.dev/properties/createdAt\":1603638837,\"https://atomicdata.dev/properties/isA\":[\"https://atomicdata.dev/classes/Commit\"],\"https://atomicdata.dev/properties/remove\":[\"https://atomicdata.dev/properties/isA\"],\"https://atomicdata.dev/properties/set\":{\"https://atomicdata.dev/properties/description\":\"Some description\",\"https://atomicdata.dev/properties/shortname\":\"shortname\"},\"https://atomicdata.dev/properties/signer\":\"https://localhost/author\",\"https://atomicdata.dev/properties/subject\":\"https://localhost/test\"}";
-        assert_eq!(serialized, should_be)
+        // Verify deterministic: serialize twice, must match
+        let serialized2 = commit
+            .serialize_deterministically_json_ad(&store)
+            .await
+            .unwrap();
+        assert_eq!(serialized, serialized2);
+        // Must contain loroUpdate and core fields
+        assert!(serialized.contains("loroUpdate"));
+        assert!(serialized.contains("https://atomicdata.dev/properties/signer"));
     }
 
     #[tokio::test]
@@ -1155,9 +1036,10 @@ mod test {
             .await
             .unwrap();
 
-        assert_eq!(serialized, "{\"https://atomicdata.dev/properties/createdAt\":0,\"https://atomicdata.dev/properties/isA\":[\"https://atomicdata.dev/classes/Commit\"],\"https://atomicdata.dev/properties/set\":{\"https://atomicdata.dev/properties/description\":\"Some value\",\"https://atomicdata.dev/properties/shortname\":\"someval\"},\"https://atomicdata.dev/properties/signer\":\"did:ad:agent:7LsjMW5gOfDdJzK/atgjQ1t20J/rw8MjVg6xwqm+h8U=\",\"https://atomicdata.dev/properties/subject\":\"https://localhost/new_thing\"}");
-        // Verify signature is valid rather than checking a hardcoded value,
-        // since the serialized form changed with the did:ad: prefix.
+        // Commits now use loroUpdate instead of set
+        assert!(serialized.contains("loroUpdate"), "Commit should contain loroUpdate, got: {}", serialized);
+        assert!(!serialized.contains("\"set\""), "Commit should not contain legacy set field");
+        // Verify signature is valid
         commit.validate_signature(&store).await.unwrap();
     }
 
@@ -1398,52 +1280,20 @@ mod test {
 
     #[tokio::test]
     async fn deserialize_from_json() {
-        let store = Store::init().await.unwrap();
-        store.set_base_url("http://localhost:9883");
-        store.populate().await.unwrap();
-
         let json = r#"
         {
             "subject": "https://localhost/test",
-            "set": {
-                "https://atomicdata.dev/properties/description": "Some description"
-            },
-            "push": {
-                "https://atomicdata.dev/properties/isA": ["https://localhost/classes/Test"]
-            },
-            "remove": ["https://atomicdata.dev/properties/name"],
-            "destroy": false,
-            "y_update": null
+            "loro_update": "bG9ybw==",
+            "destroy": false
         }
         "#;
 
         let commit_builder_json: CommitBuilderJSON = serde_json::from_str(json).unwrap();
-        let commit_builder = CommitBuilder::from_commit_builder_json(commit_builder_json, &store)
-            .await
+        let commit_builder = CommitBuilder::from_commit_builder_json(commit_builder_json)
             .unwrap();
 
         assert_eq!(commit_builder.subject, "https://localhost/test");
-        assert_eq!(
-            commit_builder
-                .set
-                .get("https://atomicdata.dev/properties/description")
-                .unwrap()
-                .to_string(),
-            "Some description"
-        );
-        assert_eq!(
-            commit_builder
-                .push
-                .get("https://atomicdata.dev/properties/isA")
-                .unwrap()
-                .to_subjects(None)
-                .unwrap(),
-            ["https://localhost/classes/Test"]
-        );
-        assert!(commit_builder
-            .remove
-            .contains("https://atomicdata.dev/properties/name"));
+        assert!(commit_builder.loro_update.is_some());
         assert!(!commit_builder.destroy);
-        assert!(commit_builder.y_update.is_empty());
     }
 }

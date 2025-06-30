@@ -20,6 +20,17 @@ pub async fn post_commit(
     let origin = context.origin.clone();
     let store = &appstate.store;
     let mut builder = HttpResponse::Ok();
+    // Reject commits with deprecated set/push/remove fields — use loroUpdate instead.
+    if body.contains("\"https://atomicdata.dev/properties/set\"")
+        || body.contains("\"https://atomicdata.dev/properties/push\"")
+        || body.contains("\"https://atomicdata.dev/properties/remove\"")
+    {
+        return Err(
+            "Commits with `set`, `push`, or `remove` fields are no longer accepted. Use `loroUpdate` instead."
+                .into(),
+        );
+    }
+
     let incoming_commit_resource = parse_json_ad_commit_resource(&body, store).await?;
     let incoming_commit = Commit::from_resource(incoming_commit_resource)?;
     let is_internal = incoming_commit.subject.starts_with("internal:");

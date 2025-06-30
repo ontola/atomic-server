@@ -995,7 +995,8 @@
             "https://atomicdata.dev/properties/remove",
             "https://atomicdata.dev/properties/set",
             "https://atomicdata.dev/properties/push",
-            "https://atomicdata.dev/properties/yUpdate"
+            "https://atomicdata.dev/properties/yUpdate",
+            "https://atomicdata.dev/properties/loroUpdate"
         ],
         "https://atomicdata.dev/properties/requires": [
             "https://atomicdata.dev/properties/createdAt",
@@ -1370,5 +1371,24 @@
         ],
         "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
         "https://atomicdata.dev/properties/shortname": "server"
+    },
+    {
+        "@id": "https://atomicdata.dev/properties/loroUpdate",
+        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/lorodoc",
+        "https://atomicdata.dev/properties/description": "A Loro CRDT binary update for the resource, serialized as a base64 string.",
+        "https://atomicdata.dev/properties/isA": [
+            "https://atomicdata.dev/classes/Property"
+        ],
+        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+        "https://atomicdata.dev/properties/shortname": "loro-update"
+    },
+    {
+        "@id": "https://atomicdata.dev/datatypes/lorodoc",
+        "https://atomicdata.dev/properties/description": "A Loro CRDT document binary, serialized as a base64 string.",
+        "https://atomicdata.dev/properties/isA": [
+            "https://atomicdata.dev/classes/Datatype"
+        ],
+        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/datatypes",
+        "https://atomicdata.dev/properties/shortname": "lorodoc"
     }
 ]

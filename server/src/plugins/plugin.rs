@@ -233,6 +233,7 @@ fn on_before_commit(
             commit,
             resource,
             is_new,
+            changed_props,
         } = context;
 
         // Gets the parent drive and returns an error if the parent is not a drive.
@@ -245,16 +246,16 @@ fn on_before_commit(
             return Ok(());
         }
 
-        if let Some(set) = &commit.set {
+        if !changed_props.is_empty() {
             // If the plugin is not new, we don't allow updating values that identify the plugin as that could lead to corrupted state.
             if !is_new {
-                if set.contains_key(urls::NAME) || set.contains_key(urls::NAMESPACE) {
+                if changed_props.contains(urls::NAME) || changed_props.contains(urls::NAMESPACE) {
                     return Err(AtomicError::from(
                         "Cannot update plugin namespace/name after it has been created",
                     ));
                 }
 
-                if set.contains_key(urls::PARENT) {
+                if changed_props.contains(urls::PARENT) {
                     return Err(AtomicError::from(
                         "Cannot update plugin parent after it has been created",
                     ));
@@ -276,7 +277,7 @@ fn on_before_commit(
 
             // The plugin file has been set or updated, so we need to (re)install the plugin.
             #[cfg(feature = "wasm-plugins")]
-            if set.contains_key(urls::PLUGIN_FILE) {
+            if changed_props.contains(urls::PLUGIN_FILE) {
                 tracing::info!(
                     "New plugin file found for plugin {}, installing...",
                     resource.get_subject()

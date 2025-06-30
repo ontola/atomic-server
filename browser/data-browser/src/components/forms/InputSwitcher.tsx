@@ -72,7 +72,7 @@ export default function InputSwitcher(props: InputProps): JSX.Element {
       return <InputURI {...props} />;
     }
 
-    case Datatype.YDOC: {
+    case Datatype.LORODOC: {
       return <InputYDoc />;
     }
 

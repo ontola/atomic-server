@@ -487,6 +487,17 @@ pub fn parse_propval<'a>(
 
                 Value::new(data.as_str(), &DataType::YDoc)?
             }
+            DataType::LoroDoc => {
+                let serde_json::Value::String(data) = val else {
+                    return Err(AtomicError::parse_error(
+                        "Invalid value for LoroDoc, must be a base64 string",
+                        subject,
+                        Some(&prop),
+                    ));
+                };
+
+                Value::new(data.as_str(), &DataType::LoroDoc)?
+            }
         };
 
         Ok((prop, atomic_val))

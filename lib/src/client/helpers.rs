@@ -200,7 +200,13 @@ async fn post_commit_custom_endpoint(
     commit: &crate::Commit,
     store: &impl Storelike,
 ) -> AtomicResult<()> {
-    let json = commit.into_resource(store).await?.to_json_ad(None)?;
+    let mut json_val: serde_json::Value =
+        serde_json::from_str(&commit.into_resource(store).await?.to_json_ad(None)?)?;
+    // Remove @id — the server derives the commit subject from the signature
+    if let Some(obj) = json_val.as_object_mut() {
+        obj.remove("@id");
+    }
+    let json = serde_json::to_string(&json_val)?;
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))

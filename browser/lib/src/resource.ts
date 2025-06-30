@@ -1,5 +1,6 @@
-import type * as Y from 'yjs';
-import { YLoader } from './yjs.js';
+import type { LoroDoc, VersionVector } from 'loro-crdt';
+import { LoroLoader } from './loro-loader.js';
+import { decodeB64 } from './base64.js';
 import { EventManager } from './EventManager.js';
 import type { Agent } from './agent.js';
 import { Client } from './client.js';
@@ -33,7 +34,6 @@ import {
   type JSONArray,
   type JSONObject,
   type AtomicValue,
-  isYDoc,
 } from './value.js';
 
 /** Contains the PropertyURL / Value combinations */
@@ -78,10 +78,19 @@ export class Resource<C extends OptionalClass = any> {
   public appliedCommitSignatures: Set<string> = new Set();
 
   private _loading = false;
+  private _dirty = false;
 
   private commitBuilder: CommitBuilder;
   private _subject: string;
   private propvals: PropVals = new Map();
+
+  /** Loro CRDT document backing this resource. Lazily initialized. */
+  private _loroDoc?: LoroDoc;
+  /** The "properties" map inside the LoroDoc. Typed as any because the LoroMap generic causes issues with set(). */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private _loroMap?: any;
+  /** Version vector at the time of last save, used to export deltas */
+  private _loroVersionAtLastSave?: VersionVector;
 
   /**
    * Queue of commits that have been signed locally but not yet pushed to the
@@ -263,6 +272,120 @@ export class Resource<C extends OptionalClass = any> {
     this._store = store;
   }
 
+  /**
+   * Returns the LoroDoc backing this resource, creating one if needed.
+   * Returns undefined if Loro is not loaded.
+   */
+  public getLoroDoc(): LoroDoc | undefined {
+    if (!LoroLoader.isLoaded()) {
+      return undefined;
+    }
+
+    if (!this._loroDoc) {
+      const { LoroDoc: LoroDocClass } = LoroLoader.Loro;
+      this._loroDoc = new LoroDocClass();
+
+      // If the resource has a persisted Loro snapshot, import it.
+      const existingSnapshot = this.propvals.get(
+        commits.properties.loroUpdate,
+      );
+
+      if (existingSnapshot instanceof Uint8Array && existingSnapshot.length > 0) {
+        this._loroDoc.import(existingSnapshot);
+      } else if (typeof existingSnapshot === 'string' && existingSnapshot.length > 0) {
+        // May arrive as a base64 string from JSON-AD parsing
+        this._loroDoc.import(decodeB64(existingSnapshot));
+      }
+
+      this._loroMap = this._loroDoc.getMap('properties');
+      this._loroVersionAtLastSave = this._loroDoc.oplogVersion();
+    }
+
+    return this._loroDoc;
+  }
+
+  /** Returns the Loro properties map, or undefined if Loro isn't loaded */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private getLoroMap(): any {
+    if (!this._loroMap) {
+      this.getLoroDoc();
+    }
+
+    return this._loroMap;
+  }
+
+  /**
+   * Write a value to the Loro map. This is called internally by set().
+   * Converts JSON values to Loro-compatible types.
+   */
+  private loroSetProperty(prop: string, value: JSONValue): void {
+    const map = this.getLoroMap();
+
+    if (!map) return;
+
+    if (value === undefined || value === null) {
+      map.delete(prop);
+
+      return;
+    }
+
+    // Loro accepts primitives and containers directly
+    if (
+      typeof value === 'string' ||
+      typeof value === 'number' ||
+      typeof value === 'boolean'
+    ) {
+      map.set(prop, value);
+    } else {
+      // Arrays and objects: serialize to JSON string for now.
+      // We'll optimize with native Loro List/Map containers later.
+      map.set(prop, JSON.stringify(value));
+    }
+  }
+
+  /**
+   * Remove a property from the Loro map.
+   */
+  private loroDeleteProperty(prop: string): void {
+    const map = this.getLoroMap();
+
+    if (!map) return;
+
+    map.delete(prop);
+  }
+
+  /**
+   * Export the Loro delta since the last save.
+   * Returns undefined if there are no Loro changes or Loro isn't loaded.
+   */
+  private exportLoroDelta(): Uint8Array | undefined {
+    if (!this._loroDoc || !this._loroVersionAtLastSave) {
+      return undefined;
+    }
+
+    const updates = this._loroDoc.export({
+      mode: 'update',
+      from: this._loroVersionAtLastSave,
+    });
+
+    // Check if the update is empty (no real changes)
+    if (updates.length <= 4) {
+      return undefined;
+    }
+
+    return updates;
+  }
+
+  /**
+   * Mark the current Loro state as "saved" — subsequent deltas will be
+   * computed from this point.
+   */
+  private markLoroSaved(): void {
+    if (this._loroDoc) {
+      this._loroVersionAtLastSave = this._loroDoc.oplogVersion();
+    }
+  }
+
   /** Checks if the content of two Resource instances is equal */
   public equals(resourceB: Resource): boolean {
     if (this === resourceB.__internalObject) {
@@ -357,45 +480,31 @@ export class Resource<C extends OptionalClass = any> {
   public clone(): Resource<C> {
     const res = new Resource(this.subject);
 
-    // Filter out YDoc instances before cloning
-    if (YLoader.isLoaded()) {
-      const Y = YLoader.Y;
-
-      const nonYdocPropvals = new Map<string, AtomicValue>();
-      const ydocPropvals = new Map<string, Y.Doc>();
-
-      for (const [key, value] of this.propvals.entries()) {
-        if (!isYDoc(value)) {
-          // Property is not a YDoc so we can just clone it.
-          nonYdocPropvals.set(key, value);
-          continue;
-        }
-
-        // Property is a YDoc so we need to make a new Y.Doc instance and apply the state of the existing YDoc.
-        const newDoc = new Y.Doc();
-        Y.applyUpdateV2(newDoc, Y.encodeStateAsUpdateV2(value));
-        ydocPropvals.set(key, newDoc);
-      }
-
-      res.propvals = structuredClone(nonYdocPropvals);
-
-      // Set the YDoc instances using setUnsafe to setup any event listeners.
-      for (const [key, value] of ydocPropvals.entries()) {
-        res.setUnsafe(key, value);
-      }
-    } else {
-      // Yjs is not loaded, so the propvals can't contain YDoc instances.
-      res.propvals = structuredClone(this.propvals);
-    }
+    // Clone propvals — Uint8Array values (Loro snapshots) need special handling
+    // since structuredClone handles them correctly.
+    res.propvals = structuredClone(this.propvals);
 
     res.loading = this.loading;
     res.new = this.new;
     res.error = structuredClone(this.error);
     res.commitError = this.commitError;
     res.commitBuilder = this.commitBuilder.clone();
+    res._dirty = this._dirty;
     res.appliedCommitSignatures = this.appliedCommitSignatures;
     res._pendingCommits = [...this._pendingCommits];
     res._lastLocalSignature = this._lastLocalSignature;
+
+    // Clone the Loro document if present
+    if (this._loroDoc && LoroLoader.isLoaded()) {
+      const { LoroDoc: LoroDocClass } = LoroLoader.Loro;
+      const snapshot = this._loroDoc.export({ mode: 'snapshot' });
+      res._loroDoc = new LoroDocClass();
+      res._loroDoc.import(snapshot);
+      res._loroMap = res._loroDoc.getMap('properties');
+      res._loroVersionAtLastSave = this._loroVersionAtLastSave
+        ? res._loroDoc.oplogVersion()
+        : undefined;
+    }
 
     return res as Resource<C>;
   }
@@ -419,21 +528,6 @@ export class Resource<C extends OptionalClass = any> {
 
     // Merge the remote propvals into this resource.
     for (const [key, value] of remoteProps.entries()) {
-      // We handle YDoc instances separately because they need to be stable references.
-      if (YLoader.isLoaded() && isYDoc(value)) {
-        const Y = YLoader.Y;
-        const localDoc = this.propvals.get(key) as Y.Doc | undefined;
-
-        if (!localDoc) {
-          this.setUnsafe(key, value);
-        } else {
-          const remoteState = Y.encodeStateAsUpdateV2(value);
-          Y.applyUpdateV2(localDoc, remoteState);
-        }
-
-        continue;
-      }
-
       this.propvals.set(key, value);
     }
 
@@ -570,9 +664,16 @@ export class Resource<C extends OptionalClass = any> {
     );
   }
 
-  /** Returns true if the resource has changes in it's commit builder that are not yet saved to the server. */
+  /** Returns true if the resource has unsaved changes. */
   public hasUnsavedChanges(): boolean {
-    return this.commitBuilder.hasUnsavedChanges();
+    if (this._dirty || this.commitBuilder.hasUnsavedChanges()) {
+      return true;
+    }
+
+    // Check if the Loro doc has changes not yet exported
+    const delta = this.exportLoroDelta();
+
+    return delta !== undefined;
   }
 
   public getCommitsCollectionSubject(): string {
@@ -601,27 +702,6 @@ export class Resource<C extends OptionalClass = any> {
       .setProperty(core.properties.parent)
       .setValue(this.subject)
       .buildAndFetch();
-  }
-
-  /** Gets a YDoc from the resource, or creates a new one if it doesn't exist */
-  public getYDoc(property: string): Y.Doc {
-    YLoader.loadCheck();
-    const Y = YLoader.Y;
-
-    const value = this.get(property);
-
-    if (value instanceof Y.Doc) {
-      return value;
-    }
-
-    if (value !== undefined) {
-      throw new Error(`Value of property ${property} is not a YDoc`);
-    }
-
-    const doc = new Y.Doc();
-    this.setUnsafe(property, doc);
-
-    return doc;
   }
 
   /** builds all versions using the Commits */
@@ -684,16 +764,9 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     for (const [key, value] of versionPropvals.entries()) {
-      if (YLoader.isLoaded() && isYDoc(value)) {
-        // YDocs can't just be set so we need to handle them separately.
-        const Y = YLoader.Y;
-
-        const undoUpdate = this.createUndoUpdateFromVersion(key, value);
-        const currentDoc = this.getYDoc(key);
-
-        Y.applyUpdateV2(currentDoc, undoUpdate);
-        this.commitBuilder.addYUpdateAction(key, undoUpdate);
-
+      // Skip binary blobs (Loro snapshots) — version restore for CRDT
+      // properties will be handled via Loro checkout in the future.
+      if (value instanceof Uint8Array) {
         continue;
       }
 
@@ -827,9 +900,11 @@ export class Resource<C extends OptionalClass = any> {
         .filter((value, index, self) => self.indexOf(value) === index);
     }
 
-    this.commitBuilder.addPushAction(propUrl, ...values);
     // Build a new array so that the reference changes. This is needed in most UI frameworks.
-    this.propvals.set(propUrl, [...propVal, ...values]);
+    const newArray = [...propVal, ...values];
+    this.propvals.set(propUrl, newArray);
+    this.loroSetProperty(propUrl, newArray);
+    this._dirty = true;
   }
 
   /** @deprecated use `resource.remove()` */
@@ -837,13 +912,11 @@ export class Resource<C extends OptionalClass = any> {
     this.remove(propertyUrl);
   }
 
-  /** Removes a property value combination from the resource and adds it to the next Commit */
+  /** Removes a property value combination from the resource */
   public remove(propertyUrl: string): void {
-    // Delete from this resource
     this.propvals.delete(propertyUrl);
-
-    // Add it to the array of items that the server might need to remove after posting.
-    this.commitBuilder.addRemoveAction(propertyUrl);
+    this.loroDeleteProperty(propertyUrl);
+    this._dirty = true;
   }
 
   /**
@@ -873,7 +946,7 @@ export class Resource<C extends OptionalClass = any> {
       throw new Error('No agent has been set or passed, you cannot sign.');
     }
 
-    if (!this.commitBuilder.hasUnsavedChanges()) {
+    if (!this.hasUnsavedChanges()) {
       console.error('[signChanges] No changes to sign');
       throw new Error(`No changes to sign for ${this.subject}`);
     }
@@ -895,9 +968,18 @@ export class Resource<C extends OptionalClass = any> {
       }
     }
 
+    // Export Loro delta — this is the sole carrier of property changes.
+    const loroDelta = this.exportLoroDelta();
+
+    if (loroDelta) {
+      this.commitBuilder.setLoroUpdate(loroDelta);
+    }
+
     // Clone the builder so new changes after this call go into a fresh one.
     const builder = this.commitBuilder.clone();
     this.commitBuilder = new CommitBuilder(this.subject);
+    this._dirty = false;
+    this.markLoroSaved();
     const commit = await builder.sign(agent);
 
     // DID genesis: the real subject is derived from the signature.
@@ -1014,7 +1096,7 @@ export class Resource<C extends OptionalClass = any> {
    * This is equivalent to calling {@link signChanges} followed by {@link pushCommits}.
    */
   public async save(differentAgent?: Agent): Promise<string | undefined> {
-    const hasChanges = this.commitBuilder.hasUnsavedChanges();
+    const hasChanges = this.hasUnsavedChanges();
 
     if (!hasChanges && this._pendingCommits.length === 0) {
       console.warn(`No changes to ${this.subject}, not saving`);
@@ -1147,10 +1229,10 @@ export class Resource<C extends OptionalClass = any> {
       validate = false;
     }
 
-    // YDocs can not be set, sadly we can't really remove them from the value type so we have to throw an error.
-    if (isYDoc(value)) {
+    // Binary values (e.g. Loro updates) must go through setUnsafe, not set.
+    if (value instanceof Uint8Array) {
       throw new Error(
-        'YDoc values can not be set, you should edit the YDoc value directly.',
+        'Binary values (Uint8Array) cannot be set via set(). Use setUnsafe() instead.',
       );
     }
 
@@ -1176,9 +1258,9 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     this.propvals.set(prop, value);
-    // Add the change to the Commit Builder, so we can commit our changes later
-    this.commitBuilder.addSetAction(prop, value);
-    this.eventManager.emit(ResourceEvents.LocalChange, prop, value);
+    this.loroSetProperty(prop, value as JSONValue);
+    this._dirty = true;
+    this.eventManager.emit(ResourceEvents.LocalChange, prop, value as JSONValue);
   }
 
   /**
@@ -1187,10 +1269,6 @@ export class Resource<C extends OptionalClass = any> {
    */
   public setUnsafe(prop: string, val: AtomicValue): void {
     this.propvals.set(prop, val);
-
-    if (isYDoc(val)) {
-      val.on('updateV2', this.buildYDocCallback(prop));
-    }
   }
 
   /** Sets the error on the Resource. Does not Throw. */
@@ -1258,45 +1336,6 @@ export class Resource<C extends OptionalClass = any> {
     return parent.new;
   }
 
-  private createUndoUpdateFromVersion(key: string, oldDoc: Y.Doc): Uint8Array {
-    const Y = YLoader.Y;
-    YLoader.loadCheck();
-
-    const currentDoc = this.propvals.get(key) as Y.Doc | undefined;
-
-    // If the current value does not exist anymore we just return the old state as there is nothing to undo.
-    if (currentDoc === undefined) {
-      return Y.encodeStateAsUpdateV2(oldDoc);
-    }
-
-    const oldStateVector = Y.encodeStateVector(oldDoc);
-
-    // Get an update of all changes after the old document.
-    const diffUpdate = Y.encodeStateAsUpdateV2(currentDoc, oldStateVector);
-    const undoManager = new Y.UndoManager(oldDoc);
-
-    Y.applyUpdateV2(oldDoc, diffUpdate);
-    // The two docs are now in sync but the undo manager tracked the change to the old doc.
-    undoManager.undo();
-
-    // The undo manager created a new update that removes all the changes we just made effectively reverting all changes made since the old document.
-    return Y.encodeStateAsUpdateV2(oldDoc, Y.encodeStateVector(currentDoc));
-  }
-
-  private buildYDocCallback(
-    property: string,
-  ): (
-    update: Uint8Array,
-    _origin: unknown,
-    _doc: unknown,
-    transaction: Y.Transaction,
-  ) => void {
-    return (update, _origin, _doc, transaction) => {
-      if (transaction.local) {
-        this.commitBuilder.addYUpdateAction(property, update);
-      }
-    };
-  }
 }
 
 /** Type of Rights (e.g. read or write) */

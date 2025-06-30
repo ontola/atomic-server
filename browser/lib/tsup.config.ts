@@ -18,6 +18,7 @@ export default defineConfig(options => ({
   clean: true,
   format: ['esm', 'cjs'],
   target: 'es2023',
+  external: ['loro-crdt'],
   // We need to generate the type definition files ourselves because the build in rollup dts plugin does not work with the way we use module augmentation.
   // Tsup will switch to microsoft-api-extractor in the future but they don't even support rolling up module augments at all. https://github.com/microsoft/rushstack/issues/1709
   onSuccess: async () => {

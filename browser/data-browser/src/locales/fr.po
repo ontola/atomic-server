@@ -2885,14 +2885,17 @@ msgstr "La ligne est incomplète ou contient des données invalides"
 msgid "Add another property..."
 msgstr "Ajouter une autre propriété..."
 
+#: src/components/LoroDocValue.tsx
 #: src/components/YDocValue.tsx
 msgid "Empty"
 msgstr "Vide"
 
+#: src/components/LoroDocValue.tsx
 #: src/components/YDocValue.tsx
 msgid "Show encoded state"
 msgstr "Afficher l'état encodé"
 
+#: src/components/LoroDocValue.tsx
 #: src/components/YDocValue.tsx
 msgid "Hide encoded state"
 msgstr "Masquer l'état encodé"
@@ -4701,4 +4704,9 @@ msgid ""
 "<0>Feature complete by default</0>: rights, history,\n"
 "search, invites, realtime sync, collaboration, and AI chat\n"
 "built in."
+msgstr ""
+
+#. placeholder {0}: value.byteLength
+#: src/components/LoroDocValue.tsx
+msgid "Loro document ({0} bytes)"
 msgstr ""

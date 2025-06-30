@@ -13,7 +13,8 @@ macro_rules! p {
 struct Dirs {
     js_dist_source: PathBuf,
     js_dist_tmp: PathBuf,
-    src_browser: PathBuf,
+    /// All source directories to watch for changes
+    src_dirs: Vec<PathBuf>,
     browser_root: PathBuf,
 }
 
@@ -27,7 +28,11 @@ fn main() -> std::io::Result<()> {
         Dirs {
             js_dist_source: PathBuf::from("../browser/data-browser/dist"),
             js_dist_tmp: PathBuf::from("./assets_tmp"),
-            src_browser: PathBuf::from("../browser/data-browser/src"),
+            src_dirs: vec![
+                PathBuf::from("../browser/data-browser/src"),
+                PathBuf::from("../browser/lib/src"),
+                PathBuf::from("../browser/react/src"),
+            ],
             browser_root: PathBuf::from(BROWSER_ROOT),
         }
     };
@@ -113,22 +118,24 @@ fn should_build(dirs: &Dirs) -> bool {
     let dist_time = find_newest_file_time(&dirs.js_dist_source);
 
     if let Some(dist_time) = dist_time {
-        let has_changes = walkdir::WalkDir::new(&dirs.src_browser)
-            .into_iter()
-            .filter_entry(|entry| {
-                entry
-                    .file_name()
-                    .to_str()
-                    .map(|s| !s.starts_with(".DS_Store"))
-                    .unwrap_or(false)
-            })
-            .any(|entry| {
-                if let Ok(entry) = entry {
-                    is_newer_than_dist(&entry, dist_time)
-                } else {
-                    false
-                }
-            });
+        let has_changes = dirs.src_dirs.iter().any(|src_dir| {
+            walkdir::WalkDir::new(src_dir)
+                .into_iter()
+                .filter_entry(|entry| {
+                    entry
+                        .file_name()
+                        .to_str()
+                        .map(|s| !s.starts_with(".DS_Store"))
+                        .unwrap_or(false)
+                })
+                .any(|entry| {
+                    if let Ok(entry) = entry {
+                        is_newer_than_dist(&entry, dist_time)
+                    } else {
+                        false
+                    }
+                })
+        });
 
         if has_changes {
             return true;
@@ -136,11 +143,10 @@ fn should_build(dirs: &Dirs) -> bool {
 
         p!("No changes in JS source files, skipping JS build.");
         false
-    } else if dirs.src_browser.exists() {
+    } else if dirs.src_dirs.iter().any(|d| d.exists()) {
         p!(
-            "No JS dist folder found at {}, but did find source folder {}, building...",
+            "No JS dist folder found at {}, but source folders exist, building...",
             dirs.js_dist_tmp.display(),
-            dirs.src_browser.display()
         );
         true
     } else {

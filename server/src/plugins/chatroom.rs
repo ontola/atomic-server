@@ -108,6 +108,7 @@ pub fn after_apply_commit_message<'a>(
             commit: applied_commit,
             resource,
             is_new: _,
+            changed_props: _,
         } = context;
 
         // only update the ChatRoom for _new_ messages, not for edits

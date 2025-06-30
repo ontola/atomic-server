@@ -20,6 +20,7 @@ pub enum DataType {
     Uri,
     Json,
     YDoc,
+    LoroDoc,
     Unsupported(String),
 }
 
@@ -38,6 +39,7 @@ pub fn match_datatype(string: &str) -> DataType {
         urls::URI => DataType::Uri,
         urls::JSON => DataType::Json,
         urls::YDOC => DataType::YDoc,
+        urls::LORO_DOC => DataType::LoroDoc,
         unsupported_datatype => DataType::Unsupported(unsupported_datatype.into()),
     }
 }
@@ -60,6 +62,7 @@ impl std::str::FromStr for DataType {
             urls::URI => DataType::Uri,
             urls::JSON => DataType::Json,
             urls::YDOC => DataType::YDoc,
+            urls::LORO_DOC => DataType::LoroDoc,
             unsupported_datatype => DataType::Unsupported(unsupported_datatype.into()),
         })
     }
@@ -81,6 +84,7 @@ impl fmt::Display for DataType {
             DataType::Uri => write!(f, "{}", urls::URI),
             DataType::Json => write!(f, "{}", urls::JSON),
             DataType::YDoc => write!(f, "{}", urls::YDOC),
+            DataType::LoroDoc => write!(f, "{}", urls::LORO_DOC),
             DataType::Unsupported(url) => write!(f, "{}", url),
         }
     }
