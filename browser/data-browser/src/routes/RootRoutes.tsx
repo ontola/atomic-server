@@ -27,10 +27,11 @@ export const rootRoute = createRootRoute({
 });
 
 const TopRouteComponent: React.FC = () => {
-  const { href } = useLocation();
+  const { pathname, searchStr } = useLocation();
 
-  // We need to combine origin with tanstack's href because tanstack does not include the origin in the href but the normal window.location.href is not reactive.
-  const subject = window.location.origin + href;
+  // We want the origin together with the path and search string but not the hash.
+  // We use the useLocation hook to get the pathname and searchStr because the window.location is not reactive.
+  const subject = window.location.origin + pathname + searchStr;
 
   // Remove trailing slash from subject
   const cleanedSubject = subject.endsWith('/') ? subject.slice(0, -1) : subject;
