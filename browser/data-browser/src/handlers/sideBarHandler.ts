@@ -1,4 +1,11 @@
-import { Resource, Store, isString, dataBrowser, core } from '@tomic/react';
+import {
+  Resource,
+  Store,
+  isString,
+  dataBrowser,
+  core,
+  CollectionBuilder,
+} from '@tomic/react';
 
 export function buildSideBarNewResourceHandler(store: Store) {
   // When a resource is saved add it to the parents subResources list if it's not already there.
@@ -26,25 +33,33 @@ export function buildSideBarNewResourceHandler(store: Store) {
 
 export function buildSideBarRemoveResourceHandler(store: Store) {
   // When a resource is deleted remove it from the parents subResources list.
-  return async (resource: Resource) => {
-    const parentSubject = resource.get(core.properties.parent);
+  return async (subject: string) => {
+    const collection = new CollectionBuilder(store)
+      .setProperty(dataBrowser.properties.subResources)
+      .setValue(subject)
+      .build();
 
-    if (!isString(parentSubject)) {
-      throw new Error(`Resource doesn't have a parent: ${resource.subject} `);
-    }
+    for await (const member of collection) {
+      try {
+        const resource = await store.getResource(member);
 
-    const parent = await store.getResource(parentSubject);
-    const subResources = parent.getSubjects(
-      dataBrowser.properties.subResources,
-    );
+        if (!(await resource.canWrite(store.getAgent()?.subject))) {
+          continue;
+        }
 
-    if (subResources.length > 0) {
-      await parent.set(
-        dataBrowser.properties.subResources,
-        subResources.filter(r => r !== resource.subject),
-      );
+        const subResources = resource.getArray(
+          dataBrowser.properties.subResources,
+        ) as string[];
 
-      await parent.save();
+        await resource.set(
+          dataBrowser.properties.subResources,
+          subResources.filter(r => r !== subject),
+        );
+
+        await resource.save();
+      } catch (e) {
+        console.error('Error removing resource from parent', e);
+      }
     }
   };
 }
