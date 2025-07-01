@@ -38,9 +38,10 @@ interface ResourceCardProps extends CardViewPropsBase {
  * (shortname) is rendered prominently at the top.
  */
 function ResourceCard(
-  props: ResourceCardProps & JSX.IntrinsicElements['div'],
+  props: ResourceCardProps &
+    JSX.IntrinsicElements['div'] & { className?: string },
 ): JSX.Element {
-  const { subject, initialInView } = props;
+  const { initialInView, className, ...rest } = props;
   const [isShown, setIsShown] = useState(false);
   // The (more expensive) ResourceCardInner is only rendered when the component has been in View
   const { ref, inView } = useInView({
@@ -56,13 +57,13 @@ function ResourceCard(
 
   return (
     <Suspense>
-      <Card ref={ref} {...props} about={subject}>
+      <Card {...rest} ref={ref} about={props.subject} className={className}>
         {isShown ? (
           <ResourceCardInner {...props} />
         ) : (
           <>
             <h2>
-              <AtomicLink subject={subject}>{subject}</AtomicLink>
+              <AtomicLink subject={props.subject}>{props.subject}</AtomicLink>
             </h2>
             <p>Resource is loading...</p>
           </>

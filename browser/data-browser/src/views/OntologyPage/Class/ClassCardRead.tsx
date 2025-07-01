@@ -1,21 +1,15 @@
 import { core, useArray, useResource, useString } from '@tomic/react';
 
-import { Card } from '../../../components/Card';
 import { PropertyLineRead } from '../Property/PropertyLineRead';
 import { styled } from 'styled-components';
 import { FaCube } from 'react-icons/fa';
 import { Column, Row } from '../../../components/Row';
 import Markdown from '../../../components/datatypes/Markdown';
 import { AtomicLink } from '../../../components/AtomicLink';
-import { toAnchorId } from '../../../helpers/toAnchorId';
-import { ViewTransitionProps } from '../../../helpers/ViewTransitionProps';
-import {
-  RESOURCE_PAGE_TRANSITION_TAG,
-  transitionName,
-} from '../../../helpers/transitionName';
 import { NewClassInstanceButton } from './NewClassInstanceButton';
 
 import type { JSX } from 'react';
+import { TargetableCard } from '../TargetableCard';
 
 interface ClassCardReadProps {
   subject: string;
@@ -28,10 +22,10 @@ export function ClassCardRead({ subject }: ClassCardReadProps): JSX.Element {
   const [recommends] = useArray(resource, core.properties.recommends);
 
   return (
-    <StyledCard subject={subject}>
+    <TargetableCard subject={subject}>
       <Column>
         <Row center justify='space-between'>
-          <StyledH3 id={toAnchorId(subject)}>
+          <StyledH3>
             <FaCube />
             <AtomicLink subject={subject}>{resource.title}</AtomicLink>
           </StyledH3>
@@ -55,14 +49,9 @@ export function ClassCardRead({ subject }: ClassCardReadProps): JSX.Element {
           )}
         </StyledTable>
       </Column>
-    </StyledCard>
+    </TargetableCard>
   );
 }
-
-const StyledCard = styled(Card)<ViewTransitionProps>`
-  padding-bottom: ${p => p.theme.size()};
-  ${props => transitionName(RESOURCE_PAGE_TRANSITION_TAG, props.subject)};
-`;
 
 const StyledH3 = styled.h3`
   display: flex;
