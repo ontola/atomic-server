@@ -27,6 +27,7 @@ import { initOntologies } from './ontologies/index.js';
 type ResourceCallback<C extends OptionalClass = UnknownClass> = (
   resource: Resource<C>,
 ) => void;
+type SubjectCallback = (subject: string) => void;
 /** Callback called when the stores agent changes */
 type AgentCallback = (agent: Agent | undefined) => void;
 type ErrorCallback = (e: Error) => void;
@@ -92,7 +93,7 @@ export interface ImportJsonADOptions {
  */
 type StoreEventHandlers = {
   [StoreEvents.ResourceSaved]: ResourceCallback;
-  [StoreEvents.ResourceRemoved]: ResourceCallback;
+  [StoreEvents.ResourceRemoved]: SubjectCallback;
   [StoreEvents.ResourceManuallyCreated]: ResourceCallback;
   [StoreEvents.AgentChanged]: AgentCallback;
   [StoreEvents.ServerURLChanged]: ServerURLCallback;
@@ -662,13 +663,16 @@ export class Store {
     });
   }
 
-  /** Removes (destroys / deletes) resource from this store */
-  public removeResource(subject: string): void {
+  /** Removes resource from this store, does not delete it from the server, use `resource.destroy()` to delete it from the server. */
+  public removeResource(subject: string, shouldNotify = true): void {
     const resource = this.resources.get(subject);
 
     if (resource) {
       this.resources.delete(subject);
-      this.eventManager.emit(StoreEvents.ResourceRemoved, resource);
+
+      if (shouldNotify) {
+        this.eventManager.emit(StoreEvents.ResourceRemoved, subject);
+      }
     }
   }
 
@@ -1048,7 +1052,6 @@ export class Store {
   }
 
   /** Lets subscribers know that a resource has been changed. Time to update your views.
-   * Make sure the resource is a new reference, otherwise React will not rerender.
    */
   private async notify(resource: Resource): Promise<void> {
     const subject = resource.subject;
