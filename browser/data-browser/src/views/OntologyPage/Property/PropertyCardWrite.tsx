@@ -1,10 +1,8 @@
 import { useCallback, type JSX } from 'react';
-import { Card } from '../../../components/Card';
 import { urls, useCanWrite, useProperty, useResource } from '@tomic/react';
 import { FaHashtag } from 'react-icons/fa';
 import { styled } from 'styled-components';
 import { Column, Row } from '../../../components/Row';
-import { toAnchorId } from '../../../helpers/toAnchorId';
 import InputSwitcher from '../../../components/forms/InputSwitcher';
 import {
   ContextMenuOptions,
@@ -12,6 +10,7 @@ import {
 } from '../../../components/ResourceContextMenu';
 import { useOntologyContext } from '../OntologyContext';
 import { PropertyFormCommon } from './PropertyFormCommon';
+import { TargetableCard } from '../TargetableCard';
 
 interface PropertyCardWriteProps {
   subject: string;
@@ -36,7 +35,7 @@ export function PropertyCardWrite({
   }, [removeProperty, subject]);
 
   return (
-    <StyledCard id={toAnchorId(subject)}>
+    <StyledCard subject={subject}>
       <Column>
         <Row center justify='space-between'>
           <TitleWrapper>
@@ -71,7 +70,7 @@ const TitleWrapper = styled.div`
   }
 `;
 
-const StyledCard = styled(Card)`
+const StyledCard = styled(TargetableCard)`
   border: ${p =>
     p.theme.darkMode ? `1px solid ${p.theme.colors.bg2}` : 'none'};
   padding-bottom: ${p => p.theme.margin}rem;

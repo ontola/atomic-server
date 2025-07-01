@@ -10,14 +10,12 @@ import { OntologySidebar } from './OntologySidebar';
 import { styled } from 'styled-components';
 import { ClassCardRead } from './Class/ClassCardRead';
 import { PropertyCardRead } from './Property/PropertyCardRead';
-import ResourceCard from '../Card/ResourceCard';
 import { Button } from '../../components/Button';
 import { Column, Row } from '../../components/Row';
 import { FaEdit, FaEye } from 'react-icons/fa';
 import { OntologyDescription } from './OntologyDescription';
 import { ClassCardWrite } from './Class/ClassCardWrite';
 import { NewClassButton } from './NewClassButton';
-import { toAnchorId } from '../../helpers/toAnchorId';
 import { OntologyContextProvider } from './OntologyContext';
 import { PropertyCardWrite } from './Property/PropertyCardWrite';
 import { Graph } from './Graph';
@@ -25,6 +23,7 @@ import { CreateInstanceButton } from './CreateInstanceButton';
 import { useState } from 'react';
 import { NewPropertyButton } from './NewPropertyButton';
 import { InfoTitle } from './InfoTitle';
+import { TargetableResourceCard } from './TargetableCard';
 
 const isEmpty = (arr: Array<unknown>) => arr.length === 0;
 
@@ -124,7 +123,7 @@ export function OntologyPage({ resource }: ResourcePageProps) {
               {editMode && <CreateInstanceButton ontology={resource} />}
               {instances.map(c => (
                 <li key={c}>
-                  <ResourceCard subject={c} id={toAnchorId(c)} />
+                  <TargetableResourceCard subject={c} />
                 </li>
               ))}
               {!editMode && instances.length === 0 && <span>No instances</span>}
