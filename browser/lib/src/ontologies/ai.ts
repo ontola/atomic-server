@@ -27,6 +27,8 @@ export const ai = {
     content:
       'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/content',
     data: 'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/data',
+    mcpServerId:
+      'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/mcp-server-id',
     mcpUri:
       'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/mcp-uri',
     messages:
@@ -35,10 +37,6 @@ export const ai = {
       'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/provided-context',
     reasoningSignature:
       'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/reasoning-signature',
-    resourceBlob:
-      'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/resource-blob',
-    resourceText:
-      'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/resource-text',
     role: 'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/role',
     toolArguments:
       'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/tool-arguments',
@@ -69,9 +67,8 @@ export const ai = {
     ['https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/class/mcp-resource']: [
       'https://atomicdata.dev/properties/name',
       'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/mcp-uri',
+      'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/mcp-server-id',
       'https://atomicdata.dev/properties/mimetype',
-      'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/resource-text',
-      'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/resource-blob',
       'https://atomicdata.dev/properties/description',
     ],
     ['https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/class/reasoning-part']:
@@ -133,11 +130,10 @@ declare module '../index.js' {
       requires:
         | BaseProps
         | 'https://atomicdata.dev/properties/name'
-        | typeof ai.properties.mcpUri;
+        | typeof ai.properties.mcpUri
+        | typeof ai.properties.mcpServerId;
       recommends:
         | 'https://atomicdata.dev/properties/mimetype'
-        | typeof ai.properties.resourceText
-        | typeof ai.properties.resourceBlob
         | 'https://atomicdata.dev/properties/description';
     };
     [ai.classes.reasoningPart]: {
@@ -169,12 +165,11 @@ declare module '../index.js' {
   interface PropTypeMapping {
     [ai.properties.content]: string[];
     [ai.properties.data]: string;
+    [ai.properties.mcpServerId]: string;
     [ai.properties.mcpUri]: string;
     [ai.properties.messages]: string[];
     [ai.properties.providedContext]: string[];
     [ai.properties.reasoningSignature]: string;
-    [ai.properties.resourceBlob]: string;
-    [ai.properties.resourceText]: string;
     [ai.properties.role]: string;
     [ai.properties.toolArguments]: string;
     [ai.properties.toolId]: string;
@@ -186,12 +181,11 @@ declare module '../index.js' {
   interface PropSubjectToNameMapping {
     [ai.properties.content]: 'content';
     [ai.properties.data]: 'data';
+    [ai.properties.mcpServerId]: 'mcpServerId';
     [ai.properties.mcpUri]: 'mcpUri';
     [ai.properties.messages]: 'messages';
     [ai.properties.providedContext]: 'providedContext';
     [ai.properties.reasoningSignature]: 'reasoningSignature';
-    [ai.properties.resourceBlob]: 'resourceBlob';
-    [ai.properties.resourceText]: 'resourceText';
     [ai.properties.role]: 'role';
     [ai.properties.toolArguments]: 'toolArguments';
     [ai.properties.toolId]: 'toolId';
