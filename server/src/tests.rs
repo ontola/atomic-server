@@ -361,7 +361,7 @@ async fn test_did_agent_edit() {
         .unwrap();
 
     // 4. Create a commit to edit the agent's name
-    let mut builder = CommitBuilder::new(agent_did.clone());
+    let mut builder = CommitBuilder::new(agent_did.clone().into());
     builder.set(urls::NAME.into(), Value::String("Updated Name".into()));
 
     let commit = builder

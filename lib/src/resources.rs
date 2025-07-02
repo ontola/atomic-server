@@ -87,7 +87,7 @@ impl Resource {
     pub fn from_propvals(propvals: PropVals, subject: Subject) -> Resource {
         Resource {
             propvals,
-            commit: CommitBuilder::new(subject.to_string()),
+            commit: CommitBuilder::new(subject.clone()),
             subject,
         }
     }
@@ -223,10 +223,11 @@ impl Resource {
     /// Create a new, empty Resource.
     pub fn new(subject: String) -> Resource {
         let propvals: PropVals = HashMap::new();
+        let subj: Subject = subject.into();
         Resource {
             propvals,
-            subject: subject.clone().into(),
-            commit: CommitBuilder::new(subject),
+            commit: CommitBuilder::new(subj.clone()),
+            subject: subj,
         }
     }
 
@@ -247,10 +248,11 @@ impl Resource {
         let propvals: PropVals = HashMap::new();
         let class = store.get_class(class_url).await?;
         let subject = format!("/{}/{}", &class.shortname, random_string(10));
+        let subj: Subject = subject.into();
         let mut resource = Resource {
             propvals,
-            subject: subject.clone().into(),
-            commit: CommitBuilder::new(subject),
+            commit: CommitBuilder::new(subj.clone()),
+            subject: subj,
         };
         let class_urls = Vec::from([String::from(class_url)]);
         resource
@@ -353,7 +355,7 @@ impl Resource {
     }
 
     pub fn reset_commit_builder(&mut self) {
-        self.commit = CommitBuilder::new(self.get_subject().to_string());
+        self.commit = CommitBuilder::new(self.subject.clone());
     }
 
     /// Saves the resource (with all the changes) to the store by creating a Commit.
@@ -432,7 +434,7 @@ impl Resource {
         let agent = store.get_default_agent()?;
         // Use a placeholder that starts with did:ad: to trigger special genesis serialization logic
         self.subject = Subject::from_raw("did:ad:placeholder", None);
-        self.commit.set_subject(self.subject.to_string());
+        self.commit.set_subject(self.subject.clone());
 
         let mut commitbuilder = self.get_commit_builder().clone();
         commitbuilder.is_genesis = true;
@@ -447,7 +449,7 @@ impl Resource {
         // Update both the resource and the commit subject to the real DID
         self.subject = did_subject.clone();
         let mut final_commit = commit;
-        final_commit.subject = did_subject.to_string();
+        final_commit.subject = did_subject.clone();
 
         let opts = CommitOpts {
             validate_schema: true,
@@ -579,8 +581,9 @@ impl Resource {
     /// Does not 'move' the Resource
     /// See https://github.com/atomicdata-dev/atomic-server/issues/44
     pub fn set_subject(&mut self, url: String) -> &mut Self {
-        self.commit.set_subject(url.clone());
-        self.subject = url.into();
+        let subj: Subject = url.into();
+        self.commit.set_subject(subj.clone());
+        self.subject = subj;
         self
     }
 

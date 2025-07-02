@@ -91,7 +91,7 @@ impl Client {
         builder.set_loro_update(doc.export_snapshot());
 
         let commit = Commit::create_did(builder, agent, &self.store).await?;
-        let subject = commit.subject.clone();
+        let subject = commit.subject.to_string();
 
         crate::client::post_commit(&commit, &self.store).await?;
 
@@ -222,7 +222,7 @@ impl LiveResource {
 
             let resource = Resource::new("did:ad:placeholder".into());
             let commit = Commit::create_did(builder, agent, store).await?;
-            let subject = commit.subject.clone();
+            let subject = commit.subject.to_string();
 
             crate::client::post_commit(&commit, store).await?;
 
@@ -237,7 +237,7 @@ impl LiveResource {
                 .ok_or("Cannot save: resource has no subject")?
                 .clone();
 
-            let mut builder = CommitBuilder::new(subject.clone());
+            let mut builder = CommitBuilder::new(subject.clone().into());
             builder.set_loro_update(update);
 
             // Get the last commit for chaining

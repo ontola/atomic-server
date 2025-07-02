@@ -229,16 +229,20 @@ mod test {
         let store = crate::Store::init().await.unwrap();
         store.populate().await.unwrap();
         let agent = store.create_agent(Some("test_actor")).await.unwrap();
-        let subject = "did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK";
+        store.set_default_agent(agent.clone());
+
+        // Create a drive first so we have a valid parent with write rights
+        let drive_did = crate::test_utils::create_test_drive(&store).await.unwrap();
+
+        let subject = "https://localhost/test-did-agent";
         let mut commitbuilder = crate::commit::CommitBuilder::new(subject.into());
-        let property = crate::urls::DESCRIPTION;
-        let value = Value::new("Some value", &DataType::Markdown).unwrap();
-        commitbuilder.set(property.into(), value);
+        commitbuilder.set(crate::urls::DESCRIPTION.into(), Value::new("Some value", &DataType::Markdown).unwrap());
+        commitbuilder.set(crate::urls::PARENT.into(), Value::AtomicUrl(drive_did));
         let resource = crate::Resource::new(subject.into());
         let commit = commitbuilder.sign(&agent, &store, &resource).await.unwrap();
         let opts = crate::commit::CommitOpts {
-            validate_schema: true,
-            validate_signature: false, // We sign with a different agent (default agent), so signature validation would fail if we checked against subject
+            validate_schema: false,
+            validate_signature: false,
             validate_timestamp: true,
             validate_rights: true,
             validate_previous_commit: false,

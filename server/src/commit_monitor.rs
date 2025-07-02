@@ -141,22 +141,24 @@ impl Handler<CommitMessage> for CommitMonitor {
 
     #[tracing::instrument(name = "handle_commit_message", skip_all, fields(subscriptions = &self.subscriptions.len(), s = %msg.commit_response.commit_resource.get_subject()))]
     fn handle(&mut self, msg: CommitMessage, _: &mut Context<Self>) -> Self::Result {
-        let target = msg.commit_response.commit.subject.clone();
-        let target_subject =
-            atomic_lib::Subject::from_raw(&target, self.store.get_base_domain().as_deref());
+        // Normalize the subject using the base domain so it matches subscriptions
+        let target_subject = atomic_lib::Subject::from_raw(
+            msg.commit_response.commit.subject.as_str(),
+            self.store.get_base_domain().as_deref(),
+        );
 
         // Notify websocket listeners
         if let Some(subscribers) = self.subscriptions.get(&target_subject) {
             tracing::debug!(
                 "Sending commit {} to {} subscribers",
-                target,
+                target_subject,
                 subscribers.len()
             );
             for connection in subscribers {
                 connection.do_send(msg.clone());
             }
         } else {
-            tracing::debug!("No subscribers for {}", target);
+            tracing::debug!("No subscribers for {}", target_subject);
         }
 
         let store = self.store.clone();
