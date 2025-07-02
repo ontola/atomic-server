@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { styled } from 'styled-components';
-import { FaPlus, FaTrash } from 'react-icons/fa6';
-import { Column, Row } from './Row';
-import { InputStyled, InputWrapper } from './forms/InputStyles';
-import { IconButton, IconButtonVariant } from './IconButton/IconButton';
-import type { MCPServer } from './AI/types';
-import { BasicSelect } from './forms/BasicSelect';
+import { FaPlus } from 'react-icons/fa6';
+import { Column, Row } from '../../Row';
+import { InputStyled, InputWrapper } from '../../forms/InputStyles';
+import { IconButton, IconButtonVariant } from '../../IconButton/IconButton';
+import type { MCPServer } from '../types';
+import { BasicSelect } from '../../forms/BasicSelect';
+import { ServerItem } from './ServerItem';
 
 interface MCPServersManagerProps {
   servers: MCPServer[];
@@ -40,10 +41,12 @@ export const MCPServersManager: React.FC<MCPServersManagerProps> = ({
     setNewServerTransport('http');
   };
 
-  const removeMcpServer = (index: number) => {
-    const updatedServers = [...servers];
-    updatedServers.splice(index, 1);
-    setServers(updatedServers);
+  const onServerUpdated = (updated: MCPServer) => {
+    setServers(servers.map(s => (s.id === updated.id ? updated : s)));
+  };
+
+  const onRemoveServer = (id: string) => {
+    setServers(servers.filter(s => s.id !== id));
   };
 
   return (
@@ -52,21 +55,14 @@ export const MCPServersManager: React.FC<MCPServersManagerProps> = ({
         {servers.length === 0 ? (
           <EmptyMessage>No MCP servers configured</EmptyMessage>
         ) : (
-          servers.map((server, index) => (
-            <ServerItem key={index}>
-              <ServerDetails>
-                <ServerName>{server.name}</ServerName>
-                <ServerUrl>{server.url}</ServerUrl>
-                <TransportType>Transport: {server.transport}</TransportType>
-              </ServerDetails>
-              <IconButton
-                color='alert'
-                onClick={() => removeMcpServer(index)}
-                title='Remove server'
-              >
-                <FaTrash />
-              </IconButton>
-            </ServerItem>
+          servers.map(server => (
+            <ServerItem
+              key={server.id}
+              server={server}
+              onServerUpdated={onServerUpdated}
+              onRemove={() => onRemoveServer(server.id)}
+              disabled={false}
+            />
           ))
         )}
       </ServerList>
@@ -132,36 +128,6 @@ const ServerList = styled.div`
   flex-direction: column;
   gap: 0.5rem;
   margin-bottom: 1rem;
-`;
-
-const ServerItem = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.75rem;
-  border-radius: 4px;
-  background-color: ${p => p.theme.colors.bg1};
-  border: 1px solid ${p => p.theme.colors.bg2};
-`;
-
-const ServerDetails = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-`;
-
-const ServerName = styled.div`
-  font-weight: bold;
-`;
-
-const ServerUrl = styled.div`
-  font-size: 0.9em;
-  color: ${p => p.theme.colors.textLight};
-`;
-
-const TransportType = styled.div`
-  font-size: 0.8em;
-  color: ${p => p.theme.colors.textLight || '#888'};
 `;
 
 const EmptyMessage = styled.div`

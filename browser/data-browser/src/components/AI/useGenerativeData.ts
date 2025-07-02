@@ -7,12 +7,20 @@ import {
 import { useSettings } from '../../helpers/AppSettings';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 
-const generateTitleSystemPrompt = `You are part of a well oiled machine that responds to user input.
+const generateTitleSystemPrompt = (
+  conversation: string,
+) => `You are part of a well oiled machine that responds to user input.
 It is your job to think of a short title that fits the given conversation.
 The user will provide a JSON object containing the conversation.
 
 ALWAYS USE THE SAME LANGUAGE AS THE USER!
-ONLY RESPOND WITH JUST THE TITLE, NOTHING ELSE! NO FORMATTING OR EXTRA TEXT!`;
+ONLY RESPOND WITH JUST THE TITLE, NOTHING ELSE! NO FORMATTING OR EXTRA TEXT!
+
+Here follows the conversation as a JSON object:
+\`\`\`json
+${conversation}
+\`\`\`
+`;
 
 export const useGenerativeData = () => {
   const { openRouterApiKey } = useSettings() as { openRouterApiKey?: string };
@@ -34,8 +42,8 @@ export const useGenerativeData = () => {
 
     const { text } = await generateText({
       model: openrouter('google/gemma-3-4b-it:free'),
-      system: generateTitleSystemPrompt,
-      prompt: convoString,
+      // Google/gemma-3-4b-it:free doesn't support system prompts so we have to do it this way
+      prompt: generateTitleSystemPrompt(convoString),
     });
 
     const cleaned = text.trim();
