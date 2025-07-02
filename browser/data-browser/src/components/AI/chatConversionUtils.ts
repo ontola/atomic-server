@@ -14,7 +14,14 @@ import type {
   ToolResultPart,
 } from 'ai';
 import { newContextItem } from './AISidebarContext';
-import { type AIChatDisplayMessage, isMessageWithContext } from './types';
+import {
+  type AIAtomicResourceMessageContext,
+  type AIChatDisplayMessage,
+  type AIMCPResourceMessageContext,
+  type AIMessageContext,
+  isAtomicResource,
+  isMessageWithContext,
+} from './types';
 
 // Not exported from 'ai' for some reason, for now we need to define it ourselves.
 type ReasoningPart = {
@@ -40,17 +47,14 @@ export const displayMessageToResource = async (
   message: AIChatDisplayMessage,
   parent: Resource<Ai.AiChat>,
   store: Store,
-  context?: string[],
+  context?: AIMessageContext[],
 ): Promise<Resource<Ai.AiMessage>> => {
   if (isMessageWithContext(message)) {
-    // TODO: Add context to the resource
-    const contextSubjects = message.context.map(c => c.subject);
-
     return displayMessageToResource(
       message.message,
       parent,
       store,
-      contextSubjects,
+      message.context,
     );
   }
 
@@ -63,7 +67,11 @@ export const displayMessageToResource = async (
   });
 
   if (context && context.length > 0) {
-    messageResource.props.providedContext = context;
+    const subjects = await Promise.all(
+      context.map(c => contextToResource(c, messageResource, store)),
+    );
+
+    messageResource.props.providedContext = subjects;
   }
 
   if (typeof message.content === 'string') {
@@ -110,6 +118,33 @@ export const displayMessageToResource = async (
   return messageResource;
 };
 
+const contextToResource = async (
+  context: AIMessageContext,
+  message: Resource<Ai.AiMessage>,
+  store: Store,
+): Promise<string> => {
+  if (isAtomicResource(context)) {
+    return context.subject;
+  }
+
+  const contextResource = await store.newResource<Ai.AiMessage>({
+    isA: ai.classes.mcpResource,
+    parent: message.subject,
+    propVals: {
+      [core.properties.name]: context.name,
+      [ai.properties.mcpUri]: context.uri,
+      [ai.properties.mcpServerId]: context.serverId,
+      ...(context.mimetype
+        ? { [server.properties.mimetype]: context.mimetype }
+        : {}),
+    },
+  });
+
+  contextResource.save();
+
+  return contextResource.subject;
+};
+
 export const messageResourcesToDisplayMessages = async (
   subjects: string[],
   store: Store,
@@ -126,6 +161,7 @@ export const messageResourcesToDisplayMessages = async (
     }
 
     const role = tagToRole(resource.props.role);
+
     const contentResources = await Promise.all(
       resource.props.content.map(s => store.getResource(s)),
     );
@@ -151,15 +187,20 @@ export const messageResourcesToDisplayMessages = async (
       };
 
       if (resource.props.providedContext) {
+        const context = (
+          await Promise.allSettled(
+            resource.props.providedContext.map(c =>
+              resourceToAIMessageContext(c, store),
+            ),
+          )
+        )
+          .filter(c => c.status === 'fulfilled')
+          .map(c => c.value);
+
         message = {
           role: 'annotated-message',
           message,
-          context: resource.props.providedContext.map(c =>
-            newContextItem({
-              subject: c,
-              type: 'resource',
-            }),
-          ),
+          context,
         };
       }
     }
@@ -238,6 +279,32 @@ export const messageResourcesToDisplayMessages = async (
   }
 
   return messages;
+};
+
+const resourceToAIMessageContext = async (
+  subject: string,
+  store: Store,
+): Promise<AIMessageContext> => {
+  const resource = await store.getResource(subject);
+
+  if (resource.error) {
+    throw resource.error;
+  }
+
+  if (resource.hasClasses(ai.classes.mcpResource)) {
+    return newContextItem<AIMCPResourceMessageContext>({
+      type: 'mcp-resource',
+      name: resource.props.name,
+      uri: resource.props.mcpUri,
+      serverId: resource.props.mcpServerId,
+      mimetype: resource.props.mimetype,
+    });
+  }
+
+  return newContextItem<AIAtomicResourceMessageContext>({
+    type: 'atomic-resource',
+    subject: resource.subject,
+  });
 };
 
 const tagToRole = (subject: string) => {
