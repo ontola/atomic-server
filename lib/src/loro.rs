@@ -16,6 +16,14 @@ pub struct AtomicLoroDoc {
     doc: LoroDoc,
 }
 
+impl std::fmt::Debug for AtomicLoroDoc {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AtomicLoroDoc")
+            .field("peer_id", &self.doc.peer_id())
+            .finish()
+    }
+}
+
 /// The result of applying a Loro update to a document.
 /// Contains the atom-level diff needed to update indexes.
 pub struct LoroDiff {

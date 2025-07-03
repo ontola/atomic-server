@@ -1170,16 +1170,14 @@ mod test {
         };
         store.apply_commit(genesis, &opts_no_rights).await.unwrap();
 
-        let mut update_builder = CommitBuilder::new(did_subject.clone());
-        update_builder.set(
+        // Load the existing resource and edit on top of its Loro state
+        let mut resource = store.get_resource(&did_subject.as_str().into()).await.unwrap();
+        resource.set_unsafe(
             crate::urls::DESCRIPTION.into(),
             Value::new("v2", &DataType::Markdown).unwrap(),
         );
-        if let Some(url) = genesis_url {
-            update_builder.previous_commit = Some(url);
-        }
-        let resource = store.get_resource(&did_subject.as_str().into()).await.unwrap();
-        let update = update_builder.sign(&agent, &store, &resource).await.unwrap();
+        let update = resource.get_commit_builder().clone()
+            .sign(&agent, &store, &resource).await.unwrap();
         store.apply_commit(update, &opts_no_rights).await.unwrap();
 
         let updated = store.get_resource(&did_subject.as_str().into()).await.unwrap();

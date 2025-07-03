@@ -121,10 +121,10 @@ impl WsClient {
             "https://atomicdata.dev/properties/auth/signature": signature,
         });
 
-        self.send_raw(&format!("AUTHENTICATE {}", auth)).await?;
-
-        // Wait for AUTHENTICATED response
+        // Subscribe BEFORE sending so we don't miss the response
         let mut rx = self.subscribe();
+
+        self.send_raw(&format!("AUTHENTICATE {}", auth)).await?;
         let timeout = tokio::time::timeout(std::time::Duration::from_secs(5), async {
             while let Ok(msg) = rx.recv().await {
                 match msg {
@@ -187,9 +187,8 @@ impl WsClient {
 
     /// Fetch a resource over WebSocket (sends GET, waits for RESOURCE response).
     pub async fn get_resource(&self, subject: &str) -> AtomicResult<String> {
-        self.send_raw(&format!("GET {}", subject)).await?;
-
         let mut rx = self.subscribe();
+        self.send_raw(&format!("GET {}", subject)).await?;
         let timeout = tokio::time::timeout(std::time::Duration::from_secs(10), async {
             while let Ok(msg) = rx.recv().await {
                 match msg {
