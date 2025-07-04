@@ -47,10 +47,10 @@ export function VersionScroller({
                 <VersionButton
                   onClick={() => onSelectVersion(version)}
                   version={version}
-                  key={version.commit.id}
+                  key={`${version.peer}-${version.frontiers[0]?.counter ?? 0}`}
                   selected={
                     persistSelection &&
-                    selectedVersion?.commit.id === version.commit.id
+                    selectedVersion === version
                   }
                 />
               ))}

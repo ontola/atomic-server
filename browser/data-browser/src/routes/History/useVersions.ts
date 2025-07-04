@@ -1,24 +1,24 @@
 import { Resource, Version, unknownSubject } from '@tomic/react';
-import { useState, useEffect, useRef, useTransition } from 'react';
-import { dedupeVersions } from './versionHelpers';
+import { useState, useEffect, useRef } from 'react';
 
 export interface UseVersionsResult {
   versions: Version[];
   loading: boolean;
-  progress: number;
   error: Error | undefined;
 }
 
+/**
+ * Extracts version history from the resource's Loro OpLog.
+ * Instant — no network requests needed, no progress bar.
+ */
 export function useVersions(resource: Resource): UseVersionsResult {
   const [versions, setVersions] = useState<Version[]>([]);
-  const [progress, setProgress] = useState(0);
-  const isRunning = useRef(false);
-  const [_, startTransition] = useTransition();
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<Error | undefined>(undefined);
+  const isRunning = useRef(false);
 
   useEffect(() => {
-    if (resource.getSubject() === unknownSubject) {
+    if (resource.getSubject() === unknownSubject || resource.loading) {
       return;
     }
 
@@ -26,23 +26,19 @@ export function useVersions(resource: Resource): UseVersionsResult {
       return;
     }
 
-    startTransition(() => {
-      (async () => {
-        try {
-          isRunning.current = true;
-          const history = await resource.getHistory(setProgress);
-          const dedupedVersions = dedupeVersions(history);
-          setVersions(dedupedVersions);
-        } catch (e) {
-          console.error(e);
-          setError(e);
-        } finally {
-          setLoading(false);
-          isRunning.current = false;
-        }
-      })();
-    });
-  }, [resource]);
+    isRunning.current = true;
 
-  return { versions, loading, error, progress };
+    try {
+      const history = resource.getLoroHistory();
+      setVersions(history);
+    } catch (e) {
+      console.error('Failed to get Loro history:', e);
+      setError(e instanceof Error ? e : new Error(String(e)));
+    } finally {
+      setLoading(false);
+      isRunning.current = false;
+    }
+  }, [resource, resource.loading]);
+
+  return { versions, loading, error };
 }

@@ -419,7 +419,7 @@ impl Commit {
         };
 
         let mut applied = commit
-            .apply_changes(resource_old.clone(), store)
+            .apply_changes(resource_old.clone())
             .await
             .map_err(|e| {
                 format!(
@@ -512,11 +512,10 @@ impl Commit {
 
     /// Applies the Loro CRDT update and/or destroy to the Resource.
     /// Returns the diff as atoms for index updates, plus the set of changed property URLs.
-    #[tracing::instrument(skip(store))]
+    #[tracing::instrument]
     pub async fn apply_changes(
         &self,
         mut resource: Resource,
-        store: &impl Storelike,
     ) -> AtomicResult<CommitApplied> {
         let resource_unedited = resource.clone();
 

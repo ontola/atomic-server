@@ -1,4 +1,4 @@
-import { Version } from '@tomic/react';
+import type { Version } from '@tomic/react';
 
 import { DateTime } from '../../components/datatypes/DateTime';
 import { styled } from 'styled-components';
@@ -15,15 +15,19 @@ export function VersionButton({
   selected,
   onClick,
 }: VersionButtonProps) {
+  const key = `${version.peer}-${version.frontiers[0]?.counter ?? 0}`;
+
   return (
     <VersionRow
       selected={selected}
-      key={version.commit.signature}
+      key={key}
       onClick={onClick}
-      about={version.commit.id}
       data-testid='version-button'
     >
-      <DateTime date={new Date(version.commit.createdAt)} />
+      <DateTime date={new Date(version.timestamp)} />
+      {version.message && (
+        <Message>{version.message}</Message>
+      )}
     </VersionRow>
   );
 }
@@ -40,4 +44,10 @@ const VersionRow = styled(ButtonClean)<{ selected: boolean }>`
     background-color: ${p =>
       p.selected ? p.theme.colors.main : p.theme.colors.bg1};
   }
+`;
+
+const Message = styled.span`
+  font-size: 0.85em;
+  opacity: 0.7;
+  display: block;
 `;

@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState, type JSX } from 'react';
-import { useResource, Version } from '@tomic/react';
+import { useResource, type Version } from '@tomic/react';
 
 import { ContainerNarrow } from '../../components/Containers';
 import { useCurrentSubject } from '../../helpers/useCurrentSubject';
@@ -13,8 +13,6 @@ import { constructOpenURL } from '../../helpers/navigation';
 import { HistoryDesktopView } from './HistoryDesktopView';
 import { HistoryMobileView } from './HistoryMobileView';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
-import { Column, Row } from '../../components/Row';
-import { ProgressBar } from '../../components/ProgressBar';
 import { Main } from '../../components/Main';
 import { pathNames } from '../paths';
 import { appRoute } from '../RootRoutes';
@@ -27,13 +25,13 @@ export const HistoryRoute = createRoute({
   getParentRoute: () => appRoute,
 });
 
-/** Shows an activity log of previous versions */
+/** Shows an activity log of previous versions using Loro's OpLog */
 function History(): JSX.Element {
   const navigate = useNavigateWithTransition();
   const isSmallScreen = useMediaQuery('(max-width: 500px)');
   const [subject] = useCurrentSubject();
   const resource = useResource(subject);
-  const { versions, loading, error, progress } = useVersions(resource);
+  const { versions, loading, error } = useVersions(resource);
   const [selectedVersion, setSelectedVersion] = useState<Version | undefined>();
 
   const groupedVersions: {
@@ -48,10 +46,10 @@ function History(): JSX.Element {
 
   const setResourceToCurrentVersion = async () => {
     if (selectedVersion && subject) {
-      await resource.setVersion(selectedVersion);
-
-      toast.success('Resource version updated');
-      navigate(constructOpenURL(subject));
+      // TODO: Implement version restore with Loro checkout
+      // This would checkout the Loro doc to the selected frontiers,
+      // export the state, and save it as a new commit.
+      toast.error('Version restore not yet implemented for Loro');
     }
   };
 
@@ -79,17 +77,11 @@ function History(): JSX.Element {
 
   const isCurrentVersion = selectedVersion === versions[versions.length - 1];
 
-  if (loading) {
+  if (loading || resource.loading) {
     return (
       <ContainerNarrow>
         <Centered>
-          <Column fullWidth>
-            <span>Building history of {resource.title}</span>
-            <Row center fullWidth>
-              <ProgressBar value={progress} />
-              <span>{progress}%</span>
-            </Row>
-          </Column>
+          <span>Loading history of {resource.title}...</span>
         </Centered>
       </ContainerNarrow>
     );
@@ -99,6 +91,16 @@ function History(): JSX.Element {
     return (
       <ContainerNarrow>
         <ErrorLook>{error.message}</ErrorLook>
+      </ContainerNarrow>
+    );
+  }
+
+  if (versions.length === 0) {
+    return (
+      <ContainerNarrow>
+        <Centered>
+          <span>No history available for this resource.</span>
+        </Centered>
       </ContainerNarrow>
     );
   }
@@ -123,14 +125,12 @@ function History(): JSX.Element {
 
 const SplitView = styled.main`
   display: flex;
-  /* Fills entire view on all devices */
   width: 100%;
   height: 100%;
   height: calc(100vh - 6rem);
   padding: ${p => p.theme.margin}rem;
   gap: ${p => p.theme.margin}rem;
 
-  /* Fix code blocks not shrinking causing page overflow. */
   & code {
     word-break: break-word;
   }

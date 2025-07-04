@@ -1,14 +1,11 @@
-import { HistoryViewProps } from './HistoryViewProps';
+import type { HistoryViewProps } from './HistoryViewProps';
 import { styled } from 'styled-components';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Column, Row } from '../../components/Row';
 import { Title } from '../../components/Title';
-import { ResourceCardDefault } from '../../views/Card/ResourceCard';
 import { VersionTitle } from './VersionTitle';
 import { VersionScroller } from './VersionScroller';
-import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
-import { constructOpenURL } from '../../helpers/navigation';
 
 export function HistoryDesktopView({
   resource,
@@ -20,29 +17,33 @@ export function HistoryDesktopView({
   onSelectVersion,
   onVersionAccept,
 }: HistoryViewProps) {
-  const navigate = useNavigateWithTransition();
-
   return (
     <>
       <CurrentItem>
         <Column fullHeight>
           <Title resource={resource} prefix='History of' link />
-          {selectedVersion && selectedVersion?.resource && (
+          {selectedVersion && (
             <>
               <VersionTitle version={selectedVersion} />
               <StyledCard>
-                <ResourceCardDefault resource={selectedVersion.resource} />
+                <PropertiesList>
+                  {[...selectedVersion.propvals.entries()]
+                    .filter(([key]) => !key.includes('loroUpdate'))
+                    .map(([key, value]) => (
+                      <PropertyRow key={key}>
+                        <PropName>{key.split('/').pop()}</PropName>
+                        <PropValue>
+                          {typeof value === 'string'
+                            ? value
+                            : JSON.stringify(value)}
+                        </PropValue>
+                      </PropertyRow>
+                    ))}
+                </PropertiesList>
               </StyledCard>
               <Row>
                 <Button onClick={onVersionAccept} disabled={isCurrentVersion}>
-                  Make current version
-                </Button>
-                <Button
-                  onClick={() =>
-                    navigate(constructOpenURL(selectedVersion.commit.id!))
-                  }
-                >
-                  Show Commit
+                  Restore this version
                 </Button>
               </Row>
             </>
@@ -51,28 +52,46 @@ export function HistoryDesktopView({
       </CurrentItem>
       <VersionScroller
         persistSelection
+        title={`History of ${resource.title}`}
         subject={resource.getSubject()}
         groupedVersions={groupedVersions}
-        onNextItem={onPreviousVersion}
-        onPreviousItem={onNextVersion}
         selectedVersion={selectedVersion}
         onSelectVersion={onSelectVersion}
-        title='Versions'
+        onNextItem={onNextVersion}
+        onPreviousItem={onPreviousVersion}
       />
     </>
   );
 }
 
-const StyledCard = styled(Card)`
-  flex: 1;
-  overflow: auto;
-  width: 100%;
-`;
-
 const CurrentItem = styled.div`
   flex: 1;
+  overflow-y: auto;
+`;
 
-  & h1 {
-    margin-bottom: 0;
-  }
+const StyledCard = styled(Card)`
+  flex: 1;
+  overflow-y: auto;
+`;
+
+const PropertiesList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem;
+`;
+
+const PropertyRow = styled.div`
+  display: flex;
+  gap: 1rem;
+`;
+
+const PropName = styled.span`
+  font-weight: bold;
+  min-width: 120px;
+  color: ${p => p.theme.colors.textLight};
+`;
+
+const PropValue = styled.span`
+  word-break: break-word;
 `;

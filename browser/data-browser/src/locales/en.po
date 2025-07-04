@@ -1277,14 +1277,11 @@ msgstr "Enter your Agent Secret"
 #~ msgid "The Agent Secret is a long string of characters that encodes both the Subject and the Private Key. You can think of it as a combined username + password. Store it safely, and don't share it with others."
 #~ msgstr "The Agent Secret is a long string of characters that encodes both the Subject and the Private Key. You can think of it as a combined username + password. Store it safely, and don't share it with others."
 
-#: src/routes/History/HistoryRoute.tsx
-msgid "Resource version updated"
-msgstr "Resource version updated"
+#~ msgid "Resource version updated"
+#~ msgstr "Resource version updated"
 
-#. placeholder {0}: resource.title
-#: src/routes/History/HistoryRoute.tsx
-msgid "Building history of {0}"
-msgstr "Building history of {0}"
+#~ msgid "Building history of {0}"
+#~ msgstr "Building history of {0}"
 
 #: src/views/OnboardingPage.tsx
 msgid "Welcome to Atomic Data"
@@ -2172,20 +2169,18 @@ msgstr "This URL will be used as the default Parent for imported resources."
 msgid "History of"
 msgstr "History of"
 
-#: src/routes/History/HistoryDesktopView.tsx
-#: src/routes/History/HistoryMobileView.tsx
-msgid "Make current version"
-msgstr "Make current version"
+#~ msgid "Make current version"
+#~ msgstr "Make current version"
 
-#: src/routes/History/HistoryDesktopView.tsx
-msgid "Show Commit"
-msgstr "Show Commit"
+#~ msgid "Show Commit"
+#~ msgstr "Show Commit"
 
-#: src/routes/History/HistoryDesktopView.tsx
-msgid "Versions"
-msgstr "Versions"
+#~ msgid "Versions"
+#~ msgstr "Versions"
 
 #. placeholder {0}: resource.title
+#. placeholder {0}: resource.title
+#: src/routes/History/HistoryDesktopView.tsx
 #: src/routes/History/HistoryMobileView.tsx
 msgid "History of {0}"
 msgstr "History of {0}"
@@ -2476,10 +2471,8 @@ msgstr "Next item"
 msgid "All versions <0/>"
 msgstr "All versions <0/>"
 
-#. placeholder {0}: ' '
-#: src/routes/History/VersionTitle.tsx
-msgid "Editted <0/> by{0} <1/>"
-msgstr "Editted <0/> by{0} <1/>"
+#~ msgid "Editted <0/> by{0} <1/>"
+#~ msgstr "Editted <0/> by{0} <1/>"
 
 #: src/components/NetworkIndicator.tsx
 msgid "No internet connection"
@@ -4674,3 +4667,32 @@ msgstr ""
 #: src/components/LoroDocValue.tsx
 msgid "Loro document ({0} bytes)"
 msgstr "Loro document ({0} bytes)"
+
+#: src/routes/History/HistoryRoute.tsx
+msgid "Version restore not yet implemented for Loro"
+msgstr "Version restore not yet implemented for Loro"
+
+#. placeholder {0}: resource.title
+#: src/routes/History/HistoryRoute.tsx
+msgid "Loading history of {0}..."
+msgstr "Loading history of {0}..."
+
+#: src/routes/History/HistoryRoute.tsx
+msgid "No history available for this resource."
+msgstr "No history available for this resource."
+
+#: src/routes/History/HistoryDesktopView.tsx
+#: src/routes/History/HistoryMobileView.tsx
+msgid "Restore this version"
+msgstr "Restore this version"
+
+#. placeholder {0}: version.peer.slice(0, 8)
+#: src/routes/History/VersionTitle.tsx
+msgid "by peer {0}..."
+msgstr "by peer {0}..."
+
+#. placeholder {0}: version.peer && <> by peer {version.peer.slice(0, 8)}...</>
+#. placeholder {1}: version.message && <> — {version.message}</>
+#: src/routes/History/VersionTitle.tsx
+msgid "Edited <0/> {0} {1}"
+msgstr "Edited <0/> {0} {1}"
