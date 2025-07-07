@@ -34,11 +34,19 @@ pub struct AuthValues {
 pub fn check_auth_signature(subject: &str, auth_header: &AuthValues) -> AtomicResult<()> {
     let agent_pubkey = decode_base64(&auth_header.public_key)?;
     let message = format!("{} {}", subject, &auth_header.timestamp);
-    let peer_public_key =
-        ring::signature::UnparsedPublicKey::new(&ring::signature::ED25519, agent_pubkey);
+    let pubkey_bytes: [u8; 32] = agent_pubkey
+        .try_into()
+        .map_err(|_| "Ed25519 public key must be 32 bytes")?;
+    let verifying_key = ed25519_dalek::VerifyingKey::from_bytes(&pubkey_bytes)
+        .map_err(|e| format!("Invalid public key: {}", e))?;
     let signature_bytes = decode_base64(&auth_header.signature)?;
+    let sig_bytes: [u8; 64] = signature_bytes
+        .try_into()
+        .map_err(|_| "Ed25519 signature must be 64 bytes")?;
+    let sig = ed25519_dalek::Signature::from_bytes(&sig_bytes);
+    use ed25519_dalek::Verifier;
 
-    let result = peer_public_key.verify(message.as_bytes(), &signature_bytes);
+    let result = verifying_key.verify(message.as_bytes(), &sig);
 
     if result.is_err() {
         // In multi-tenant environments, the client might sign the full URL or just the path.
@@ -51,8 +59,8 @@ pub fn check_auth_signature(subject: &str, auth_header: &AuthValues) -> AtomicRe
             let path_and_query = format!("{}{}", path, query);
             if path_and_query != subject {
                 let message_path = format!("{} {}", path_and_query, &auth_header.timestamp);
-                if peer_public_key
-                    .verify(message_path.as_bytes(), &signature_bytes)
+                if verifying_key
+                    .verify(message_path.as_bytes(), &sig)
                     .is_ok()
                 {
                     return Ok(());
@@ -65,8 +73,8 @@ pub fn check_auth_signature(subject: &str, auth_header: &AuthValues) -> AtomicRe
                 url_no_query.set_query(None);
                 let message_no_query =
                     format!("{} {}", url_no_query, &auth_header.timestamp);
-                if peer_public_key
-                    .verify(message_no_query.as_bytes(), &signature_bytes)
+                if verifying_key
+                    .verify(message_no_query.as_bytes(), &sig)
                     .is_ok()
                 {
                     return Ok(());
@@ -74,8 +82,8 @@ pub fn check_auth_signature(subject: &str, auth_header: &AuthValues) -> AtomicRe
                 // Also try path-only without query params
                 let message_path_no_query =
                     format!("{} {}", path, &auth_header.timestamp);
-                if peer_public_key
-                    .verify(message_path_no_query.as_bytes(), &signature_bytes)
+                if verifying_key
+                    .verify(message_path_no_query.as_bytes(), &sig)
                     .is_ok()
                 {
                     return Ok(());
