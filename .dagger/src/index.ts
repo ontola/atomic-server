@@ -133,25 +133,24 @@ export class AtomicServer {
 
   @func()
   docsFolder(): Directory {
-    const cargoCache = dag.cacheVolume("cargo");
-
-    const cargoHomeCache = dag.cacheVolume("cargo_home");
+    const cargoHomeCache = dag.cacheVolume("mdbook_cargo_home_cache");
 
     const mdBookContainer = dag
       .container()
       .from(RUST_IMAGE)
-      .withMountedCache("/usr/local/cargo/registry", cargoCache)
-      .withMountedCache("/root/.cargo", cargoHomeCache) // Cache the Cargo home directory
+      .withMountedCache("/usr/local/cargo/registry", cargoHomeCache)
       .withExec(["cargo", "install", "mdbook"])
       .withExec(["cargo", "install", "mdbook-linkcheck"]);
 
     const actualDocsDirectory = this.source.directory("docs");
+
     return mdBookContainer
       .withMountedDirectory("/docs", actualDocsDirectory)
       .withWorkdir("/docs")
       .withExec(["mdbook", "build"])
       .directory("/docs/build/html");
   }
+
   @func()
   typedocPublish(@argument() netlifyAuthToken: Secret): Promise<string> {
     const browserDir = this.jsBuild();
