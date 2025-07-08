@@ -5,7 +5,7 @@ use crate::{
     errors::AtomicResult,
     urls,
     utils::check_timestamp_in_past,
-    Storelike,
+    AtomicError, Storelike,
 };
 
 /// Set of values extracted from the request.
@@ -38,13 +38,10 @@ pub fn check_auth_signature(subject: &str, auth_header: &AuthValues) -> AtomicRe
         ring::signature::UnparsedPublicKey::new(&ring::signature::ED25519, agent_pubkey);
     let signature_bytes = decode_base64(&auth_header.signature)?;
     peer_public_key
-                .verify(message.as_bytes(), &signature_bytes)
-                .map_err(|_e| {
-                    format!(
-                        "Incorrect signature for auth headers. This could be due to an error during signing or serialization of the commit. Compare this to the serialized message in the client: {}",
-                        message,
-                    )
-                })?;
+        .verify(message.as_bytes(), &signature_bytes)
+        .map_err(|_e| {
+            AtomicError::with_message(_e, &format!("Incorrect signature for auth headers. This could be due to an error during signing or serialization of the commit. Compare this to the serialized message in the client: {}", message))
+        })?;
     Ok(())
 }
 

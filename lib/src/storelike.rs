@@ -221,10 +221,7 @@ pub trait Storelike: Sized {
     ) -> AtomicResult<Resource> {
         if let Some(self_url) = self.get_self_url() {
             if subject.starts_with(&self_url) {
-                return Err(AtomicError::not_found(format!(
-                    "Failed to retrieve locally: '{}'",
-                    subject
-                )));
+                return Err(AtomicError::not_found(None, subject));
             }
         }
         self.fetch_resource(subject, for_agent)

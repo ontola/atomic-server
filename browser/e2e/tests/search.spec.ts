@@ -16,7 +16,8 @@ import {
 test.describe('search', async () => {
   test.beforeEach(before);
 
-  test('text search', async ({ page }) => {
+  test('text search', async ({ page }) => {€
+    await page.click(setitings);
     await addressBar(page).fill('welcome');
     await expect(page.locator('text=Welcome to your')).toBeVisible();
     await page.keyboard.press('Enter');

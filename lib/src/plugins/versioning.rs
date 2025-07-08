@@ -113,7 +113,8 @@ pub fn get_initial_commit_for_resource(
     let commits = get_commits_for_resource(subject, store)?;
     if commits.is_empty() {
         return Err(AtomicError::not_found(
-            "No commits found for this resource".to_string(),
+            Some("No commits found for this resource".to_string()),
+            subject,
         ));
     }
     Ok(commits.first().unwrap().clone())

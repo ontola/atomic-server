@@ -711,9 +711,9 @@ export class Resource<C extends OptionalClass = any> {
 
       return createdCommit.id as string;
     } catch (e) {
-      // Logic for handling error if the previousCommit is wrong.
-      // Is not stable enough, and maybe not required at the time.
       if (e.message.includes('previousCommit')) {
+        // Logic for handling error if the previousCommit is wrong.
+        // Is not stable enough, and maybe not required at the time.
         console.warn('previousCommit missing or mismatch, retrying...');
         // We try again, but first we fetch the latest version of the resource to get its `lastCommit`
         const resourceFetched = await this.store.fetchResourceFromServer(

@@ -27,7 +27,7 @@ function ErrorPage({ resource }: ResourcePageProps): JSX.Element {
           <h1>Unauthorized</h1>
           {agent ? (
             <>
-              <ErrorBlock error={resource.error!} />
+              <ErrorBlock error={resource.error!} showTrace={true} />
               <span>
                 <Button
                   onClick={() =>

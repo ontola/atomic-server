@@ -575,7 +575,7 @@ VOLUME /atomic-storage
 
   @func()
   /** Creates Docker images for all supported architectures */
-  async createDockerImages(@argument() tag: string = "latest"): Promise<void> {
+  async createDockerImages(@argument() tag: string = "develop"): Promise<void> {
     const targets = Object.keys(TARGET_IMAGE_MAP);
 
     // Build one variant first.

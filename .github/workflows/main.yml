@@ -40,3 +40,10 @@ jobs:
         with:
           name: build-artifacts
           path: ./artifact
+      - name: Publish Docker images
+        if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}

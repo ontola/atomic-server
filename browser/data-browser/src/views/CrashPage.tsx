@@ -28,7 +28,7 @@ function CrashPage({
     <StyledMain>
       <ContainerWide resource={resource?.subject}>
         <Column>
-          {children ? children : <ErrorBlock error={error} showTrace />}
+          {children ? children : <ErrorBlock error={error} showTrace={true} />}
           <Row>
             {clearError && <Button onClick={clearError}>Clear error</Button>}
             <Button

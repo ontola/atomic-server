@@ -4,32 +4,35 @@ Mostly contains implementations for Error types.
 The [AtomicError] type should be returned from any function that may fail, although it is not returned everywhere at this moment.
 */
 
-use std::{
-    convert::Infallible,
-    num::{ParseFloatError, ParseIntError},
-    str::ParseBoolError,
-};
-
-use base64::DecodeError;
+use std::convert::Infallible;
 
 use crate::{urls, Resource, Value};
 
 /// The default Error type for all Atomic Lib Errors.
 pub type AtomicResult<T> = std::result::Result<T, AtomicError>;
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct AtomicError {
+    /** Relatively short description of what went wrong and how it can be fixed */
     pub message: String,
     pub error_type: AtomicErrorType,
     pub subject: Option<String>,
+    /** Previous error. Note that this can be recursive. */
+    pub source: Option<Box<dyn std::error::Error + Send + Sync>>,
+    pub backtrace: Option<std::backtrace::Backtrace>,
 }
 
 #[derive(Debug, Clone)]
 pub enum AtomicErrorType {
+    /** HTTP 404 */
     NotFoundError,
+    /** HTTP 401 */
     UnauthorizedError,
+    /** HTTP 400 */
     ParseError,
+    /** HTTP 500 */
     OtherError,
+    /** HTTP 405 */
     MethodNotAllowed,
 }
 
@@ -40,21 +43,72 @@ impl std::error::Error for AtomicError {
 }
 
 impl AtomicError {
+    /// Create an AtomicError from any error type.
+    pub fn from_any<E>(e: E) -> Self
+    where
+        E: std::error::Error + Send + Sync + 'static,
+    {
+        AtomicError {
+            message: e.to_string(),
+            error_type: AtomicErrorType::OtherError,
+            subject: None,
+            source: Some(Box::new(e)),
+            backtrace: Some(std::backtrace::Backtrace::capture()),
+        }
+    }
+
+    pub fn with_message<E>(e: E, message: &str) -> Self
+    where
+        E: std::error::Error + Send + Sync + 'static,
+    {
+        AtomicError {
+            message: message.into(),
+            error_type: AtomicErrorType::OtherError,
+            subject: None,
+            source: Some(Box::new(e)),
+            backtrace: Some(std::backtrace::Backtrace::capture()),
+        }
+    }
+
     pub fn method_not_allowed(message: &str) -> AtomicError {
         AtomicError {
             message: message.into(),
             error_type: AtomicErrorType::MethodNotAllowed,
             subject: None,
+            source: None,
+            backtrace: Some(std::backtrace::Backtrace::capture()), // optional
+        }
+    }
+
+    pub fn from_boxed_error(e: Box<dyn std::error::Error + Send + Sync>) -> Self {
+        Self {
+            message: e.to_string(),
+            error_type: AtomicErrorType::OtherError,
+            subject: None,
+            source: Some(e),
+            backtrace: Some(std::backtrace::Backtrace::capture()),
+        }
+    }
+
+    pub fn from_msg(msg: impl Into<String>) -> Self {
+        Self {
+            message: msg.into(),
+            error_type: AtomicErrorType::OtherError,
+            subject: None,
+            source: None,
+            backtrace: Some(std::backtrace::Backtrace::capture()),
         }
     }
 
     #[allow(dead_code)]
-    /// A server will probably return a 404.
-    pub fn not_found(message: String) -> AtomicError {
+    /// A server will probably return this errors as a 404.
+    pub fn not_found(message: Option<String>, subject: &str) -> AtomicError {
         AtomicError {
-            message: format!("Resource not found. {}", message),
+            message: message.unwrap_or_else(|| format!("Resource not found: {}", subject)),
             error_type: AtomicErrorType::NotFoundError,
-            subject: None,
+            subject: Some(subject.to_string()),
+            source: None,
+            backtrace: Some(std::backtrace::Backtrace::capture()), // optional
         }
     }
 
@@ -64,15 +118,19 @@ impl AtomicError {
             message: format!("Unauthorized. {}", message),
             error_type: AtomicErrorType::UnauthorizedError,
             subject: None,
+            source: None,
+            backtrace: Some(std::backtrace::Backtrace::capture()), // optional
         }
     }
 
-    /// A server will probably return a 500.
+    /// A server will probably return this error as a 500.
     pub fn other_error(message: String) -> AtomicError {
         AtomicError {
             message,
             error_type: AtomicErrorType::OtherError,
             subject: None,
+            source: None,
+            backtrace: Some(std::backtrace::Backtrace::capture()), // optional
         }
     }
 
@@ -96,8 +154,10 @@ impl AtomicError {
 
         AtomicError {
             message: msg,
-            subject: None,
+            subject: subject.map(|s| s.to_string()),
+            source: None,
             error_type: AtomicErrorType::ParseError,
+            backtrace: Some(std::backtrace::Backtrace::capture()), // optional
         }
     }
 
@@ -117,160 +177,85 @@ impl AtomicError {
 
 impl std::fmt::Display for AtomicError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", &self.message)
+        writeln!(f, "\n{}", self.message)?;
+
+        if let Some(source) = &self.source {
+            writeln!(f, "Caused by: {}", source)?;
+        }
+
+        if let Some(backtrace) = &self.backtrace {
+            writeln!(f, "Backtrace:\n{}", backtrace)?;
+        }
+
+        Ok(())
     }
 }
 
-// Error conversions
-impl From<&str> for AtomicError {
-    fn from(message: &str) -> Self {
-        AtomicError {
-            message: message.into(),
-            error_type: AtomicErrorType::OtherError,
-            subject: None,
-        }
-    }
-}
+impl AtomicError {}
 
 impl From<String> for AtomicError {
     fn from(message: String) -> Self {
         AtomicError {
             message,
             subject: None,
+            source: None,
             error_type: AtomicErrorType::OtherError,
+            backtrace: Some(std::backtrace::Backtrace::capture()), // optional
         }
     }
 }
 
-impl From<std::boxed::Box<dyn std::error::Error>> for AtomicError {
-    fn from(error: std::boxed::Box<dyn std::error::Error>) -> Self {
-        AtomicError {
-            message: error.to_string(),
-            subject: None,
-            error_type: AtomicErrorType::OtherError,
-        }
+impl From<&str> for AtomicError {
+    fn from(message: &str) -> Self {
+        AtomicError::from(message.to_string())
     }
 }
 
-// The following feel very redundant. Can this be simplified?
-impl<T> From<std::sync::PoisonError<T>> for AtomicError {
-    fn from(error: std::sync::PoisonError<T>) -> Self {
-        AtomicError {
-            message: error.to_string(),
-            error_type: AtomicErrorType::OtherError,
-            subject: None,
-        }
+macro_rules! impl_from_atomic_error {
+    ($($ty:ty),* $(,)?) => {
+        $(
+            impl From<$ty> for AtomicError {
+                fn from(e: $ty) -> Self {
+                    AtomicError::from_any(e)
+                }
+            }
+        )*
+    };
+}
+
+impl_from_atomic_error!(
+    std::io::Error,
+    std::string::FromUtf8Error,
+    std::num::ParseFloatError,
+    std::num::ParseIntError,
+    std::str::ParseBoolError,
+    base64::DecodeError,
+    bincode::ErrorKind,
+    sled::Error,
+    serde_json::Error,
+    url::ParseError,
+    Infallible,
+);
+
+// ## Manual exceptions
+// Some errors can't be macro'd
+
+// Boxed errors
+impl From<Box<dyn std::error::Error + Send + Sync + 'static>> for AtomicError {
+    fn from(e: Box<dyn std::error::Error + Send + Sync + 'static>) -> Self {
+        AtomicError::from_boxed_error(e)
     }
 }
 
-impl From<std::io::Error> for AtomicError {
-    fn from(error: std::io::Error) -> Self {
-        AtomicError {
-            message: error.to_string(),
-            subject: None,
-            error_type: AtomicErrorType::OtherError,
-        }
-    }
-}
-
-impl From<url::ParseError> for AtomicError {
-    fn from(error: url::ParseError) -> Self {
-        AtomicError {
-            message: error.to_string(),
-            error_type: AtomicErrorType::OtherError,
-            subject: None,
-        }
-    }
-}
-
-impl From<serde_json::Error> for AtomicError {
-    fn from(error: serde_json::Error) -> Self {
-        AtomicError {
-            message: error.to_string(),
-            error_type: AtomicErrorType::OtherError,
-            subject: None,
-        }
-    }
-}
-
-impl From<std::string::FromUtf8Error> for AtomicError {
-    fn from(error: std::string::FromUtf8Error) -> Self {
-        AtomicError {
-            message: error.to_string(),
-            error_type: AtomicErrorType::OtherError,
-            subject: None,
-        }
-    }
-}
-
-impl From<ParseFloatError> for AtomicError {
-    fn from(error: ParseFloatError) -> Self {
-        AtomicError {
-            message: error.to_string(),
-            error_type: AtomicErrorType::OtherError,
-            subject: None,
-        }
-    }
-}
-
-impl From<ParseIntError> for AtomicError {
-    fn from(error: ParseIntError) -> Self {
-        AtomicError {
-            message: error.to_string(),
-            subject: None,
-            error_type: AtomicErrorType::OtherError,
-        }
-    }
-}
-
-impl From<DecodeError> for AtomicError {
-    fn from(error: DecodeError) -> Self {
-        AtomicError {
-            message: error.to_string(),
-            error_type: AtomicErrorType::OtherError,
-            subject: None,
-        }
-    }
-}
-
-impl From<ParseBoolError> for AtomicError {
-    fn from(error: ParseBoolError) -> Self {
-        AtomicError {
-            message: error.to_string(),
-            subject: None,
-            error_type: AtomicErrorType::OtherError,
-        }
-    }
-}
-
-impl From<Infallible> for AtomicError {
-    fn from(error: Infallible) -> Self {
-        AtomicError {
-            message: error.to_string(),
-            error_type: AtomicErrorType::OtherError,
-            subject: None,
-        }
-    }
-}
-
-#[cfg(feature = "db")]
-impl From<sled::Error> for AtomicError {
-    fn from(error: sled::Error) -> Self {
-        AtomicError {
-            message: error.to_string(),
-            error_type: AtomicErrorType::OtherError,
-            subject: None,
-        }
-    }
-}
-
-#[cfg(feature = "db")]
 impl From<Box<bincode::ErrorKind>> for AtomicError {
-    fn from(error: Box<bincode::ErrorKind>) -> Self {
-        AtomicError {
-            message: error.to_string(),
-            subject: None,
-            error_type: AtomicErrorType::OtherError,
-        }
+    fn from(e: Box<bincode::ErrorKind>) -> Self {
+        AtomicError::from_boxed_error(e)
+    }
+}
+
+// PoisonError isn't send + sync
+impl<T> From<std::sync::PoisonError<T>> for AtomicError {
+    fn from(e: std::sync::PoisonError<T>) -> Self {
+        AtomicError::from_msg(e.to_string())
     }
 }
