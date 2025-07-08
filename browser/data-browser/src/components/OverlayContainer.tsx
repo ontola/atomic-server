@@ -4,6 +4,7 @@ import { styled } from 'styled-components';
 import { shortcuts } from './HotKeyWrapper';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { constructOpenURL } from '../helpers/navigation';
+import { useCurrentSubject } from '../helpers/useCurrentSubject';
 import {
   useServerSearch,
   useStore,
@@ -481,6 +482,11 @@ interface ResultCardProps {
 }
 
 function CardPreview({ subject }: { subject: string }): JSX.Element {
+  const [currentSubject] = useCurrentSubject();
+  // Skip rendering the preview card if it's the same resource as the current page
+  // to avoid duplicate view-transition-name conflicts.
+  const skipCard = subject === currentSubject;
+
   return (
     <div
       style={{
@@ -488,7 +494,7 @@ function CardPreview({ subject }: { subject: string }): JSX.Element {
         top: 0,
       }}
     >
-      <ResourceCard subject={subject} />
+      {skipCard ? null : <ResourceCard subject={subject} />}
     </div>
   );
 }
