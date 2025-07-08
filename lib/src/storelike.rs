@@ -146,7 +146,8 @@ pub type ResourceCollection = Vec<Resource>;
 /// It serves as a basic store Trait, agnostic of how it functions under the hood.
 /// This is useful, because we can create methods for Storelike that will work with either in-memory
 /// stores, as well as with persistent on-disk stores.
-#[async_trait]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 pub trait Storelike: Sized + Send + Sync {
     /// Adds Atoms to the store.
     /// Will replace existing Atoms that share Subject / Property combination.

@@ -6,6 +6,11 @@ use core::fmt;
 
 use crate::{agents::ForAgent, errors::AtomicResult, urls, Resource, Storelike};
 
+#[cfg(target_arch = "wasm32")]
+type AsyncResult<'a, T> = std::pin::Pin<Box<dyn std::future::Future<Output = T> + 'a>>;
+#[cfg(not(target_arch = "wasm32"))]
+type AsyncResult<'a, T> = std::pin::Pin<Box<dyn std::future::Future<Output = T> + Send + 'a>>;
+
 #[derive(Debug)]
 pub enum Right {
     /// Full read access to the resource and its children.
@@ -36,7 +41,7 @@ pub fn check_write<'a>(
     store: &'a (impl Storelike + Sync),
     resource: &'a Resource,
     for_agent: &'a ForAgent,
-) -> std::pin::Pin<Box<dyn std::future::Future<Output = AtomicResult<String>> + Send + 'a>> {
+) -> AsyncResult<'a, AtomicResult<String>> {
     Box::pin(check_rights(store, resource, for_agent, Right::Write))
 }
 
@@ -47,7 +52,7 @@ pub fn check_read<'a>(
     store: &'a (impl Storelike + Sync),
     resource: &'a Resource,
     for_agent: &'a ForAgent,
-) -> std::pin::Pin<Box<dyn std::future::Future<Output = AtomicResult<String>> + Send + 'a>> {
+) -> AsyncResult<'a, AtomicResult<String>> {
     Box::pin(check_rights(store, resource, for_agent, Right::Read))
 }
 
@@ -95,7 +100,7 @@ pub fn check_rights<'a>(
     resource: &'a Resource,
     for_agent_enum: &'a ForAgent,
     right: Right,
-) -> std::pin::Pin<Box<dyn std::future::Future<Output = AtomicResult<String>> + Send + 'a>> {
+) -> AsyncResult<'a, AtomicResult<String>> {
     Box::pin(async move {
         if for_agent_enum == &ForAgent::Sudo {
             return Ok("Sudo has root access, and can edit anything.".into());

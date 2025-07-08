@@ -1088,7 +1088,8 @@ impl Drop for Db {
     }
 }
 
-#[async_trait]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 impl Storelike for Db {
     fn normalize_subject(&self, subject: &Subject) -> Subject {
         Subject::from_raw(subject.as_str(), self.get_base_domain().as_deref())

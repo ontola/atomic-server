@@ -8,6 +8,11 @@ use crate::{
 
 pub const JSON_AD_MIME: &str = "application/ad+json";
 
+#[cfg(target_arch = "wasm32")]
+type AsyncResult<'a, T> = std::pin::Pin<Box<dyn std::future::Future<Output = T> + 'a>>;
+#[cfg(not(target_arch = "wasm32"))]
+type AsyncResult<'a, T> = std::pin::Pin<Box<dyn std::future::Future<Output = T> + Send + 'a>>;
+
 pub fn parse_json_array(string: &str) -> AtomicResult<Vec<String>> {
     let vector: Vec<String> = serde_json::from_str(string)?;
     Ok(vector)
@@ -257,15 +262,12 @@ fn try_to_subject(subject: &str, prop: &str, parse_opts: &ParseOpts) -> AtomicRe
     }
 }
 
-use std::future::Future;
-use std::pin::Pin;
-
-fn parse_anonymous_resource<'a>(
+fn p arse_anonymous_resource<'a>(
     map: &'a Map<String, serde_json::Value>,
     subject: Option<&'a str>,
     store: &'a impl crate::Storelike,
     parse_opts: &'a ParseOpts,
-) -> Pin<Box<dyn Future<Output = AtomicResult<PropVals>> + Send + 'a>> {
+) -> AsyncResult<'a, AtomicResult<PropVals>> {
     Box::pin(async move {
         let mut propvals = PropVals::new();
 
@@ -293,7 +295,7 @@ pub fn parse_propval<'a>(
     subject: Option<&'a str>,
     store: &'a impl crate::Storelike,
     parse_opts: &'a ParseOpts,
-) -> Pin<Box<dyn Future<Output = AtomicResult<(String, Value)>> + Send + 'a>> {
+) -> AsyncResult<'a, AtomicResult<(String, Value)>> {
     Box::pin(async move {
         let prop = try_to_subject(key, key, parse_opts)?;
         let property = store.get_property(&prop).await?;
