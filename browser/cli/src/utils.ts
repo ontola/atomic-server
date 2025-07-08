@@ -15,9 +15,11 @@ export const getExtension = () => {
     if (!tsconfig) return '.js';
     const moduleResolution = tsconfig.config.compilerOptions?.moduleResolution;
     if (!moduleResolution) return '.js';
+
     return moduleResolution === 'Bundler' ? '' : '.js';
   } catch (error) {
     console.error('Error getting extension:', error);
+
     return '.js';
   }
 };
