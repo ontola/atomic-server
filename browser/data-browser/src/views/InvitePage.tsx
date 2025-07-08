@@ -24,6 +24,7 @@ import type { JSX } from 'react';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { useNavState } from '../components/NavState';
 import { toast } from 'react-hot-toast';
+import { errorHandler } from '../handlers/errorHandler';
 
 /** A View that opens an invite */
 function InvitePage({ resource }: ResourcePageProps): JSX.Element {
@@ -40,11 +41,15 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
   // When this happens, a new keypair is made, but the subject of the Agent is not yet known.
   // It will be created by the server, and will be accessible in the Redirect response.
   async function handleNew() {
-    const keypair = await generateKeyPair();
-    const newAgent = new Agent(keypair.privateKey);
+    try {
+      const keypair = await generateKeyPair();
+      const newAgent = new Agent(keypair.privateKey);
 
-    setAgent(newAgent);
-    handleAccept(keypair);
+      setAgent(newAgent);
+      handleAccept(keypair);
+    } catch (error) {
+      store.notifyError(error);
+    }
   }
 
   const handleAccept = async (keys?: {
@@ -61,7 +66,17 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
 
     const redirect = await store.getResource<Server.Redirect>(inviteURL.href);
 
-    if (redirect.props.redirectAgent && keys) {
+    if (keys) {
+      if (redirect.error) {
+        store.notifyError(redirect.error);
+
+        return;
+      }
+
+      if (!redirect.props.redirectAgent) {
+        throw new Error('Redirect agent not found');
+      }
+
       const newAgent = new Agent(keys.privateKey, redirect.props.redirectAgent);
       setAgent(newAgent);
 
