@@ -262,7 +262,7 @@ fn try_to_subject(subject: &str, prop: &str, parse_opts: &ParseOpts) -> AtomicRe
     }
 }
 
-fn p arse_anonymous_resource<'a>(
+fn parse_anonymous_resource<'a>(
     map: &'a Map<String, serde_json::Value>,
     subject: Option<&'a str>,
     store: &'a impl crate::Storelike,

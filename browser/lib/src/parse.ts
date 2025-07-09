@@ -15,7 +15,14 @@ import { decodeB64 } from './base64.js';
 export class JSONADParser {
   public parse(json: unknown, subject: string = unknownSubject): Resource[] {
     if (Array.isArray(json)) {
-      return json.flatMap(item => this.parse(item, subject));
+      // Array responses contain multiple resources (e.g. search with include=true).
+      // Each item has its own @id. Parse without enforcing a subject match — the
+      // caller (fetchResourceHTTP) will find the right one by subject.
+      return json.flatMap(item =>
+        typeof item === 'object' && item !== null && !Array.isArray(item)
+          ? [this.parseObject(item as JSONObject)]
+          : [],
+      );
     }
 
     if (typeof json !== 'object' || json === null) {
@@ -25,8 +32,8 @@ export class JSONADParser {
     return [this.parseObject(json as JSONObject, subject)];
   }
 
-  private parseObject(json: JSONObject, subject: string): Resource {
-    const resource = new Resource(subject);
+  private parseObject(json: JSONObject, subject?: string): Resource {
+    const resource = new Resource(subject ?? unknownSubject);
 
     try {
       for (const [key, value] of Object.entries(json)) {
@@ -35,10 +42,8 @@ export class JSONADParser {
             throw new Error('Expected @id to be a string');
           }
 
-          if (subject !== unknownSubject && value !== subject) {
-            // Subjects might differ between the request URL (which could
-            // include query params) and the canonical subject returned by
-            // the server. Only throw when the pure path/id parts conflict.
+          // Only enforce subject match when a specific subject was requested
+          if (subject && subject !== unknownSubject && value !== subject) {
             const subjectNoParams = Client.removeQueryParamsFromURL(subject);
             const valueNoParams = Client.removeQueryParamsFromURL(value);
 

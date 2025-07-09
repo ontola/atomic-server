@@ -230,7 +230,11 @@ export class Client {
               );
             }
 
-            resource = resources.at(-1) as Resource;
+            // For array responses, find the resource matching the requested subject.
+            // Falls back to the last item (the convention for non-array responses).
+            resource =
+              resources.find(r => r.subject === subject) ??
+              (resources.at(-1) as Resource);
             createdResources.push(...resources);
           }
         } catch (e) {

@@ -600,14 +600,49 @@ function parseLoroUpdateValue(
 }
 
 /**
- * Stores the Loro CRDT binary update on the resource.
- * The server handles the CRDT merge and property materialization;
- * the client stores the raw binary so it can be round-tripped.
+ * Imports a Loro CRDT update into the resource's LoroDoc and materializes
+ * the changed properties into the resource's propvals so the UI updates.
  */
 function execLoroUpdateCommit(
   loroUpdate: Uint8Array,
   resource: Resource,
 ) {
+  // Store the raw binary for round-tripping
   resource.setUnsafe(commits.properties.loroUpdate, loroUpdate);
+
+  // Import into the resource's LoroDoc and materialize properties
+  const doc = resource.getLoroDoc();
+
+  if (doc) {
+    try {
+      doc.import(loroUpdate);
+
+      // Read all properties from the Loro map and update propvals
+      const propsMap = doc.getMap('properties');
+      const json = propsMap?.toJSON();
+
+      if (json && typeof json === 'object') {
+        for (const [key, value] of Object.entries(json)) {
+          // Parse JSON-encoded arrays back to actual arrays
+          if (typeof value === 'string' && value.startsWith('[')) {
+            try {
+              const parsed = JSON.parse(value);
+
+              if (Array.isArray(parsed)) {
+                resource.setUnsafe(key, parsed as JSONValue);
+                continue;
+              }
+            } catch {
+              // Not valid JSON array, store as string
+            }
+          }
+
+          resource.setUnsafe(key, value as JSONValue);
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to import Loro update:', e);
+    }
+  }
 }
 

@@ -126,12 +126,24 @@ pub fn after_apply_commit_message<'a>(
             // We use the ChatRoom only for its `last_commit`
             let chat_room = store.get_resource(&parent_subject.clone().into()).await?;
 
-            let mut commit_builder = CommitBuilder::new(parent_subject.into());
+            // Build the full messages array: existing messages + new message.
+            // We can't use push_propval because Loro's Map set replaces the
+            // entire value — it doesn't append.
+            let mut all_messages: Vec<SubResource> = chat_room
+                .get(urls::MESSAGES)
+                .ok()
+                .and_then(|v| v.to_subjects(None).ok())
+                .unwrap_or_default()
+                .into_iter()
+                .map(|s| SubResource::Subject(s.into()))
+                .collect();
+            all_messages.push(SubResource::Subject(resource.get_subject().clone()));
 
-            commit_builder.push_propval(
-                urls::MESSAGES,
-                SubResource::Subject(resource.get_subject().clone()),
-            )?;
+            let mut commit_builder = CommitBuilder::new(parent_subject.into());
+            commit_builder.set(
+                urls::MESSAGES.into(),
+                Value::ResourceArray(all_messages),
+            );
 
             let commit = commit_builder
                 .sign(&store.get_default_agent()?, store, &chat_room)
