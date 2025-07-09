@@ -133,12 +133,9 @@ export class AtomicServer {
 
   @func()
   docsFolder(): Directory {
-    const cargoHomeCache = dag.cacheVolume("mdbook_cargo_home_cache");
-
     const mdBookContainer = dag
       .container()
       .from(RUST_IMAGE)
-      .withMountedCache("/usr/local/cargo/registry", cargoHomeCache)
       .withExec(["cargo", "install", "mdbook"])
       .withExec(["cargo", "install", "mdbook-linkcheck"]);
 
