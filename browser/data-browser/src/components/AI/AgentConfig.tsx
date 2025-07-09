@@ -3,8 +3,8 @@ import { styled, useTheme } from 'styled-components';
 import { Row, Column } from '../Row';
 import { FaPencil, FaPlus, FaTrash, FaStar } from 'react-icons/fa6';
 import { IconButton } from '../IconButton/IconButton';
-import { ModelSelect } from './ModelSelect';
-import type { AIAgent } from './types';
+import { ModelSelect } from './ModelSelect/ModelSelect';
+import { AIProvider, type AIAgent, type AIModelIdentifier } from './types';
 import {
   Dialog,
   DialogTitle,
@@ -43,7 +43,10 @@ const defaultNewAgent: Omit<AIAgent, 'id'> = {
   description: '',
   systemPrompt: '',
   availableTools: [],
-  model: 'openai/gpt-4o-mini',
+  model: {
+    id: 'openai/gpt-4o-mini',
+    provider: AIProvider.OpenRouter,
+  },
   canReadAtomicData: false,
   canWriteAtomicData: false,
   temperature: 0.1,
@@ -66,7 +69,10 @@ Keep the following things in mind:
 - If you don't know the answer to the users question, try to figure it out by using the tools provided to you.
 `,
     availableTools: [],
-    model: 'openai/gpt-4o-mini',
+    model: {
+      id: 'openai/gpt-4o-mini',
+      provider: AIProvider.OpenRouter,
+    },
     canReadAtomicData: true,
     canWriteAtomicData: true,
     temperature: 0.1,
@@ -77,7 +83,10 @@ Keep the following things in mind:
     description: "A basic agent that doesn't have any special purpose.",
     systemPrompt: ``,
     availableTools: [],
-    model: 'openai/gpt-4.1-nano',
+    model: {
+      id: 'openai/gpt-4.1-mini',
+      provider: AIProvider.OpenRouter,
+    },
     canReadAtomicData: false,
     canWriteAtomicData: false,
     temperature: 0.1,
@@ -316,7 +325,7 @@ const AgentForm = ({ agent, onChange }: AgentFormProps) => {
 
   const handleChange = (
     field: keyof AIAgent,
-    value: string | boolean | number,
+    value: string | boolean | number | AIModelIdentifier,
   ) => {
     onChange({
       ...agent,
@@ -423,13 +432,11 @@ const AgentForm = ({ agent, onChange }: AgentFormProps) => {
 
       <FormGroup>
         <Label>Model</Label>
-        <ModelDropdown>
-          <ModelSelect
-            defaultModel={agent.model}
-            onSelect={model => handleChange('model', model)}
-            enforceToolSupport={enforceToolSupport}
-          />
-        </ModelDropdown>
+        <ModelSelect
+          defaultModel={agent.model}
+          onSelect={model => handleChange('model', model)}
+          enforceToolSupport={enforceToolSupport}
+        />
       </FormGroup>
 
       <FormGroup>
@@ -556,14 +563,6 @@ const Textarea = styled.textarea`
     outline: none;
     border-color: ${p => p.theme.colors.main};
   }
-`;
-
-const ModelDropdown = styled.div`
-  /* This container helps with styling the ModelSelect component */
-  border: 1px solid ${p => p.theme.colors.bg2};
-  border-radius: ${p => p.theme.radius};
-  padding: ${p => p.theme.size(2)};
-  background-color: ${p => p.theme.colors.bg};
 `;
 
 const ToolList = styled.ul`
