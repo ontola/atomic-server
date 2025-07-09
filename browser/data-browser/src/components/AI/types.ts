@@ -13,7 +13,7 @@ export interface AIAgent {
   description: string;
   systemPrompt: string;
   availableTools: string[];
-  model: string;
+  model: AIModelIdentifier;
   canReadAtomicData: boolean;
   canWriteAtomicData: boolean;
   temperature?: number;
@@ -90,3 +90,13 @@ export function isAtomicResource(
 ): context is AIAtomicResourceMessageContext {
   return context.type === 'atomic-resource';
 }
+
+export enum AIProvider {
+  OpenRouter = 'openrouter',
+  Ollama = 'ollama',
+}
+
+export type AIModelIdentifier = {
+  id: string;
+  provider: AIProvider;
+};
