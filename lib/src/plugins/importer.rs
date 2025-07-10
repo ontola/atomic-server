@@ -4,7 +4,7 @@ Importers allow users to (periodically) import JSON-AD files from a remote sourc
 
 use crate::{
     agents::ForAgent,
-    endpoints::{Endpoint, HandleGetContext, HandlePostContext},
+    endpoints::{Endpoint, HandlePostContext},
     errors::AtomicResult,
     urls, Resource, Storelike,
 };
@@ -20,13 +20,9 @@ pub fn import_endpoint() -> Endpoint {
         description: "Imports one or more Resources to some parent. POST your JSON-AD and add a `parent` query param to the URL. See https://docs.atomicdata.dev/create-json-ad.html".to_string(),
         shortname: "path".to_string(),
         // Not sure if we need this, or if we should derive it from `None` here.
-        handle: Some(handle_get),
+        handle: None,
         handle_post: Some(handle_post),
     }
-}
-
-pub fn handle_get(context: HandleGetContext) -> AtomicResult<Resource> {
-    import_endpoint().to_resource(context.store)
 }
 
 /// When an importer is shown, we list a bunch of Parameters and a list of previously imported items.

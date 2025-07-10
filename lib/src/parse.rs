@@ -221,7 +221,7 @@ pub fn parse_json_ad_commit_resource(
         .get(urls::SUBJECT)
         .ok_or("No subject field in Commit.")?
         .to_string();
-    let subject = format!("{}/commits/{}", store.get_server_url(), signature);
+    let subject = format!("{}/commits/{}", store.get_server_url()?, signature);
     let mut resource = Resource::new(subject);
     let propvals = match parse_json_ad_map_to_resource(json, store, &ParseOpts::default())? {
         SubResource::Resource(r) => r.into_propvals(),
@@ -303,7 +303,7 @@ fn parse_json_ad_map_to_resource(
             }
             serde_json::Value::String(str) => {
                 // LocalIDs are mapped to @ids by appending the `localId` to the `importer`'s `parent`.
-                if prop == urls::LOCAL_ID {
+                if prop == urls::LOCAL_ID && parse_opts.importer.is_some() {
                     let parent = parse_opts.importer.as_ref()
                         .ok_or_else(|| AtomicError::parse_error(
                             "Encountered `localId`, which means we need a `parent` in the parsing options.",
@@ -672,7 +672,7 @@ mod test {
 
         // Try to overwrite the main drive with some malicious data
         let agent = store.get_default_agent().unwrap();
-        let mut resource = Resource::new_generate_subject(&store);
+        let mut resource = Resource::new_generate_subject(&store).unwrap();
         resource
             .set(
                 urls::WRITE.into(),

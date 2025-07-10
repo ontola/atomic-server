@@ -160,7 +160,7 @@ pub fn create_drive(store: &impl Storelike) -> AtomicResult<()> {
         .ok_or("No self_url set, cannot populate store with Drive")?;
     let mut drive = store.get_resource_new(&self_url);
     drive.set_class(urls::DRIVE);
-    let server_url = url::Url::parse(store.get_server_url())?;
+    let server_url = url::Url::parse(&store.get_server_url()?)?;
     drive.set_string(
         urls::NAME.into(),
         server_url.host_str().ok_or("Can't use current base URL")?,
@@ -172,7 +172,8 @@ pub fn create_drive(store: &impl Storelike) -> AtomicResult<()> {
 }
 
 pub fn create_default_ontology(store: &impl Storelike) -> AtomicResult<()> {
-    let mut drive = store.get_resource(store.get_server_url())?;
+    let server_url = store.get_server_url()?;
+    let mut drive = store.get_resource(&server_url).unwrap();
 
     let ontology_subject = format!("{}/{}", drive.get_subject(), DEFAULT_ONTOLOGY_PATH);
 
@@ -209,7 +210,7 @@ pub fn create_default_ontology(store: &impl Storelike) -> AtomicResult<()> {
 /// Adds rights to the default agent to the Drive resource (at the base URL). Optionally give Public Read rights.
 pub fn set_drive_rights(store: &impl Storelike, public_read: bool) -> AtomicResult<()> {
     // Now let's add the agent as the Root user and provide write access
-    let mut drive = store.get_resource(store.get_server_url())?;
+    let mut drive = store.get_resource(&store.get_server_url()?)?;
     let write_agent = store.get_default_agent()?.subject;
     let read_agent = write_agent.clone();
 
@@ -234,7 +235,7 @@ You can create folders to organise your resources.
 
 To use the data in your web apps checkout our client libraries: [@tomic/lib](https://docs.atomicdata.dev/js), [@tomic/react](https://docs.atomicdata.dev/usecases/react) and [@tomic/svelte](https://docs.atomicdata.dev/svelte)
 Use [@tomic/cli](https://docs.atomicdata.dev/js-cli) to generate typed ontologies inside your code.
-"#, store.get_server_url(), &format!("{}/{}", drive.get_subject(), DEFAULT_ONTOLOGY_PATH)), store)?;
+"#, store.get_server_url()?, &format!("{}/{}", drive.get_subject(), DEFAULT_ONTOLOGY_PATH)), store)?;
     }
     drive.save_locally(store)?;
     Ok(())
@@ -290,7 +291,7 @@ pub fn populate_collections(store: &impl Storelike) -> AtomicResult<()> {
 /// Makes sure they are fetchable
 pub fn populate_endpoints(store: &crate::Db) -> AtomicResult<()> {
     let endpoints = crate::endpoints::default_endpoints();
-    let endpoints_collection = format!("{}/endpoints", store.get_server_url());
+    let endpoints_collection = format!("{}/endpoints", store.get_server_url()?);
     for endpoint in endpoints {
         let mut resource = endpoint.to_resource(store)?;
         resource.set(

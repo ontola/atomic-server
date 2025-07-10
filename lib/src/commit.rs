@@ -429,10 +429,10 @@ impl Commit {
     #[tracing::instrument(skip(store))]
     pub fn into_resource(&self, store: &impl Storelike) -> AtomicResult<Resource> {
         let commit_subject = match self.signature.as_ref() {
-            Some(sig) => format!("{}/commits/{}", store.get_server_url(), sig),
+            Some(sig) => format!("{}/commits/{}", store.get_server_url()?, sig),
             None => {
                 let now = crate::utils::now();
-                format!("{}/commitsUnsigned/{}", store.get_server_url(), now)
+                format!("{}/commitsUnsigned/{}", store.get_server_url()?, now)
             }
         };
         let mut resource = Resource::new_instance(urls::COMMIT, store)?;

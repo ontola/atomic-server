@@ -86,9 +86,9 @@ impl CollectionBuilder {
         class_url: &str,
         path: &str,
         store: &impl Storelike,
-    ) -> CollectionBuilder {
-        CollectionBuilder {
-            subject: format!("{}/{}", store.get_server_url(), path),
+    ) -> AtomicResult<CollectionBuilder> {
+        Ok(CollectionBuilder {
+            subject: format!("{}/{}", store.get_server_url()?, path),
             property: Some(urls::IS_A.into()),
             value: Some(class_url.into()),
             sort_by: None,
@@ -98,7 +98,7 @@ impl CollectionBuilder {
             name: Some(format!("{} collection", path)),
             include_nested: true,
             include_external: false,
-        }
+        })
     }
 
     /// Converts the CollectionBuilder into a collection, with Members
@@ -394,7 +394,7 @@ pub fn create_collection_resource_for_class(
         other => format!("{}s", other),
     };
 
-    let mut collection = CollectionBuilder::class_collection(&class.subject, &pluralized, store);
+    let mut collection = CollectionBuilder::class_collection(&class.subject, &pluralized, store)?;
 
     collection.sort_by = match class_subject {
         urls::COMMIT => Some(urls::CREATED_AT.to_string()),
@@ -524,7 +524,7 @@ mod test {
         println!("{:?}", subjects);
         let collections_collection = store
             .get_resource_extended(
-                &format!("{}/collections", store.get_server_url()),
+                &format!("{}/collections", store.get_server_url().unwrap()),
                 false,
                 &ForAgent::Public,
             )
