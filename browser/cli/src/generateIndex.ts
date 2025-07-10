@@ -44,10 +44,8 @@ export const generateIndex = (
   const importLines = names.map(createImportLine).join('\n');
   const registerArgs = names.join(', ');
 
-  const content = TEMPLATE.replaceAll(
-    Inserts.MODULE_ALIAS,
-    atomicConfig.moduleAlias ?? '@tomic/lib',
-  )
+  const moduleAlias = atomicConfig.moduleAlias ?? '@tomic/lib';
+  const content = TEMPLATE.replaceAll(Inserts.MODULE_ALIAS, moduleAlias)
     .replace(Inserts.IMPORTS, importLines)
     .replace(Inserts.REGISTER_ARGS, registerArgs);
 

@@ -40,20 +40,19 @@ const TEMPLATE_DIR_NAME = 'template-tests';
 // test.describe.configure({ mode: 'serial' });
 
 async function setupTemplateSite(
-  templateDir: string,
   serverUrl: string,
-  siteType: string,
+  siteType: 'nextjs-site' | 'sveltekit-site',
 ) {
-  if (!fs.existsSync(templateDir)) {
-    fs.mkdirSync(templateDir);
+  if (!fs.existsSync(TEMPLATE_DIR_NAME)) {
+    fs.mkdirSync(TEMPLATE_DIR_NAME);
   }
 
   await execAsync('pnpm link ../create-template');
   await execAsync(
-    `pnpm exec create-template ${templateDir}/${siteType} --template ${siteType} --server-url ${serverUrl}`,
+    `pnpm exec create-template ${TEMPLATE_DIR_NAME}/${siteType} --template ${siteType} --server-url ${serverUrl}`,
   );
 
-  const sitePath = `${templateDir}/${siteType}`;
+  const sitePath = `${TEMPLATE_DIR_NAME}/${siteType}`;
   await execAsync('pnpm install', { cwd: sitePath });
   await execAsync('pnpm link ../../../cli', { cwd: sitePath });
   await execAsync('pnpm link ../../../lib', { cwd: sitePath });
@@ -62,6 +61,7 @@ async function setupTemplateSite(
     await execAsync('pnpm link ../../../react', { cwd: sitePath });
   } else if (siteType === 'sveltekit-site') {
     await execAsync('pnpm link ../../../svelte', { cwd: sitePath });
+    await execAsync('pnpm svelte-kit sync', { cwd: sitePath });
   }
 
   await execAsync('pnpm update-ontologies', { cwd: sitePath });
@@ -142,7 +142,7 @@ test.describe('Create Next.js Template', () => {
     });
     await applyTemplateButton.click();
 
-    await setupTemplateSite(TEMPLATE_DIR_NAME, drive.driveURL, 'nextjs-site');
+    await setupTemplateSite(drive.driveURL, 'nextjs-site');
 
     try {
       //start server
@@ -221,11 +221,7 @@ test.describe('Create SvelteKit Template', () => {
     });
     await applyTemplateButton.click();
 
-    await setupTemplateSite(
-      TEMPLATE_DIR_NAME,
-      drive.driveURL,
-      'sveltekit-site',
-    );
+    await setupTemplateSite(drive.driveURL, 'sveltekit-site');
 
     try {
       const child = startServer(TEMPLATE_DIR_NAME, 'sveltekit-site');

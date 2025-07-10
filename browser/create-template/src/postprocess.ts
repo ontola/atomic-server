@@ -35,7 +35,7 @@ export async function postProcess(context: PostProcessContext) {
       switch (ontology.error.type) {
         case ErrorType.NotFound:
           console.error(
-            `\nThe ${baseTemplate.name} template does not exist on your drive. To get the template go to the Create Resource page and select the ${baseTemplate.name} template`,
+            `\nThe '${baseTemplate.name}' template does not exist on your drive on '${ontologySubject}'. To get the template go to the Create Resource page and select the ${baseTemplate.name} template.`,
           );
           break;
         case ErrorType.Unauthorized:
