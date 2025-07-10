@@ -11,14 +11,11 @@ export const dedupe = <T>(array: T[]): T[] => {
 
 export const getExtension = () => {
   try {
-    const tsconfig = getTsconfig();
-    if (!tsconfig) return '.js';
-    const moduleResolution = tsconfig.config.compilerOptions?.moduleResolution;
-    if (!moduleResolution) return '.js';
-
-    return moduleResolution === 'Bundler' ? '' : '.js';
-  } catch (error) {
-    console.error('Error getting extension:', error);
+    return getTsconfig()?.config.compilerOptions?.moduleResolution === 'Bundler'
+      ? ''
+      : '.js';
+  } catch (e) {
+    console.warn('Something went wrong getting TS Config / file extension', e);
 
     return '.js';
   }
