@@ -211,6 +211,19 @@ pub fn verify_public_key(public_key: &str) -> AtomicResult<()> {
     Ok(())
 }
 
+impl From<Agent> for ForAgent {
+    fn from(agent: Agent) -> Self {
+        agent.subject.into()
+    }
+}
+
+impl<'a> From<&'a Agent> for ForAgent {
+    fn from(agent: &'a Agent) -> Self {
+        let subject: String = agent.subject.clone();
+        subject.into()
+    }
+}
+
 #[cfg(test)]
 mod test {
     #[cfg(test)]
