@@ -1,9 +1,5 @@
 import { core, dataBrowser } from '@tomic/react';
-import type {
-  TemplateFn,
-  TemplateContext,
-  TemplateDescription,
-} from '../template';
+import type { TemplateFn, TemplateContext } from '../template';
 
 const Image: React.FC = () => {
   return (
