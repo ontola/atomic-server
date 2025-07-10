@@ -10,12 +10,14 @@ pub fn get_path(
     // let subcommand_matches = context.matches.subcommand_matches("get").unwrap();
     let path_string: String = path_vec.join(" ");
 
+    context.read_config();
+
     // Returns a URL or Value
     let store = &mut context.store;
     let path = store.get_path(
         &path_string,
         Some(&context.mapping.lock().unwrap()),
-        &ForAgent::Sudo,
+        &store.get_default_agent()?.into(),
     )?;
     let out = match path {
         storelike::PathReturn::Subject(subject) => {
