@@ -187,6 +187,7 @@ mod test {
     fn constructs_versions() {
         let store = Store::init().unwrap();
         store.populate().unwrap();
+        store.set_server_url("http://localhost");
         let agent = store.create_agent(None).unwrap();
         store.set_default_agent(agent.clone());
         store.get_resource(&agent.subject).unwrap();

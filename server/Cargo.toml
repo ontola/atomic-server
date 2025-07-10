@@ -17,6 +17,7 @@ lto = true
 [[bin]]
 name = "atomic-server"
 path = "src/bin.rs"
+test = false
 
 [build-dependencies]
 dircpy = "0.3.15"
