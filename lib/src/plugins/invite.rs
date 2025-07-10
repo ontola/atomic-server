@@ -70,7 +70,7 @@ pub fn construct_invite_redirect(
 
     store
         .get_resource(target)
-        .map_err(|e| format!("Target for invite does not exist: {}", target))?;
+        .map_err(|_| format!("Target for invite does not exist: {}", target))?;
 
     // If any usages left value is present, make sure it's a positive number and decrement it by 1.
     if let Ok(usages_left) = invite_resource.get(urls::USAGES_LEFT) {

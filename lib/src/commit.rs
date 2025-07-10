@@ -206,7 +206,7 @@ impl Commit {
         commit.check_for_circular_parents()?;
         let mut is_new = false;
         // Create a new resource if it doesn't exist yet
-        let mut resource_old = match store.get_resource(&commit.subject) {
+        let resource_old = match store.get_resource(&commit.subject) {
             Ok(rs) => rs,
             Err(_) => {
                 is_new = true;
@@ -233,17 +233,6 @@ impl Commit {
             if is_new {
                 crate::hierarchy::check_append(store, &applied.resource_new, &validate_for.into())?;
             } else {
-                // Set a parent only if the rights checks are to be validated.
-                // If there is no explicit parent set on the previous resource, use a default.
-                // Unless it's a Drive!
-                if resource_old.get(urls::PARENT).is_err() {
-                    let default_parent = store.get_self_url().ok_or("There is no self_url set, and no parent in the Commit. The commit can not be applied.")?;
-                    resource_old.set(
-                        urls::PARENT.into(),
-                        Value::AtomicUrl(default_parent),
-                        store,
-                    )?;
-                }
                 // This should use the _old_ resource, no the new one, as the new one might maliciously give itself write rights.
                 crate::hierarchy::check_write(store, &resource_old, &validate_for.into())?;
             }
