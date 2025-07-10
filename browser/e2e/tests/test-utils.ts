@@ -13,17 +13,6 @@ export const testFilePath = (filename: string) => {
   const fixturesFolder = __dirname + '/fixtures';
 
   return `${fixturesFolder}/${filename}`;
-
-  // const processPath = process.cwd();
-  // if (processPath.endsWith('tests')) {
-  //   return `${processPath}/fixtures/${filename}`;
-  // } else if (processPath.endsWith('e2e')) {
-  //   return `${processPath}/tests/fixtures/${filename}`;
-  // } else if (processPath.endsWith('browser')) {
-  //   return `${processPath}/e2e/tests/fixtures/${filename}`;
-  // } else {
-  //   return `${processPath}/browser/e2e/tests/fixtures/${filename}`;
-  // }
 };
 
 export const timestamp = () => new Date().toLocaleTimeString();
@@ -199,7 +188,9 @@ export async function openAtomic(page: Page) {
 export async function editProfileAndCommit(page: Page) {
   await openAgentPage(page);
   await page.click('text=Edit profile');
-  await page.getByRole('button', { name: 'Advanced' }).click();
+  const advancedButton = await page.getByRole('button', { name: 'advanced' });
+  await advancedButton.scrollIntoViewIfNeeded();
+  await advancedButton.click();
   await expect(page.locator('text=add another property')).toBeVisible();
   const username = `Test user edited at ${new Date().toLocaleDateString()}`;
   await page.getByLabel('Name').fill(username);
