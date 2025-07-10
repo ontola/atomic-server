@@ -299,6 +299,7 @@ export async function changeDrive(subject: string, page: Page) {
     const driveTitleText = await currentDriveTitle(page).textContent();
     // Get the domain from the subject to compare with the drive title
     const subjectDomain = new URL(subject).hostname;
+
     if (driveTitleText && driveTitleText.trim().includes(subjectDomain)) {
       return;
     }
@@ -351,6 +352,7 @@ export async function isCurrentDrive(
         // Remove trailing slashes
         const cleanUrl = urlString.replace(/\/$/, '');
         const urlObj = new URL(cleanUrl);
+
         // Compare only hostname and path, ignoring protocol
         return `${urlObj.hostname}${urlObj.pathname}`;
       } catch (e) {
@@ -364,6 +366,7 @@ export async function isCurrentDrive(
     return normalizedCurrentUrl === normalizedUrl;
   } catch (error) {
     console.error('Error in isCurrentDrive:', error);
+
     return false;
   }
 }
