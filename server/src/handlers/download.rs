@@ -4,10 +4,7 @@ use actix_web::{web, HttpRequest, HttpResponse};
 use atomic_lib::{urls, Resource, Storelike};
 
 use serde::Deserialize;
-use std::{collections::HashSet, io::Write, path::PathBuf};
-
-#[cfg(feature = "image")]
-use crate::handlers::image::{is_image, process_image};
+use std::{collections::HashSet, path::PathBuf};
 
 #[serde_with::serde_as]
 #[serde_with::skip_serializing_none]
@@ -76,10 +73,12 @@ pub fn download_file_handler_partial(
     // only if image feature flag is on
     #[cfg(feature = "image")]
     {
+        use crate::handlers::image::{is_image, process_image};
         if !is_image(&file_path) {
             return Err("Quality or with parameter are not supported for non image files".into());
         }
-        process_image(&file_path, &processed_file_path, params)?;
+        let format = get_format(params)?;
+        process_image(&file_path, &processed_file_path, params, &format)?;
     }
 
     let file = NamedFile::open(processed_file_path)?;

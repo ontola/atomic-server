@@ -710,7 +710,7 @@
     },
     {
         "@id": "https://atomicdata.dev/properties/published-at",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/timestamp",
+        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/date",
         "https://atomicdata.dev/properties/description": "DateTime at which an item is made public.",
         "https://atomicdata.dev/properties/isA": [
             "https://atomicdata.dev/classes/Property"

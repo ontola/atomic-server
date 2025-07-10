@@ -74,12 +74,12 @@ pub fn fetch_body(
                 .into_string()
                 .unwrap_or_else(|_| "<failed to read response body>".to_string());
             return Err(format!(
-                "Error when server tried fetching {}: Status: {}. Body: {}",
+                "Error when fetching {}: Status: {}. Body: {}",
                 url, status, body
             )
             .into());
         }
-        Err(e) => return Err(format!("Error when server tried fetching {}: {}", url, e).into()),
+        Err(e) => return Err(format!("Error when fetching {}: {}", url, e).into()),
     };
     let status = resp.status();
     let body = resp

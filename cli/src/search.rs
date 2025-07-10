@@ -1,29 +1,27 @@
-use atomic_lib::{errors::AtomicResult, urls, Storelike};
+use atomic_lib::{errors::AtomicResult, Storelike};
 
-pub fn search(context: &crate::Context, query: String) -> AtomicResult<()> {
+use crate::print::print_resource;
+
+pub fn search(
+    context: &crate::Context,
+    query: String,
+    parent: Option<String>,
+    serialize: &crate::SerializeOptions,
+) -> AtomicResult<()> {
+    context.read_config();
     let opts = atomic_lib::client::search::SearchOpts {
         limit: Some(10),
         include: Some(true),
+        parents: Some(vec![parent.unwrap_or_default()]),
         ..Default::default()
     };
-    let subject = atomic_lib::client::search::build_search_subject(
-        &context.read_config().server,
-        &query,
-        opts,
-    );
-    let resource = context.store.get_resource(&subject)?;
-    let members = resource
-        .get(urls::ENDPOINT_RESULTS)
-        .expect("No members?")
-        .to_subjects(None)
-        .unwrap();
-    if members.is_empty() {
-        println!("No results found.");
-        println!("URL: {}", subject);
+    let resources = context.store.search(&query, opts)?;
+    if resources.is_empty() {
+        println!("No results found for query: {}", query);
         return Ok(());
     } else {
-        for member in members {
-            println!("{}", member);
+        for member in resources {
+            print_resource(context, &member, serialize)?;
         }
     }
     Ok(())

@@ -12,6 +12,8 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 - [#979](https://github.com/atomicdata-dev/atomic-server/issues/979) Fix nested resource deletion, use transactions
 - [#1057](https://github.com/atomicdata-dev/atomic-server/issues/1057) Fix double slashes in search bar
 - CLI should use Agent in requests - get #986
+- Search endpoint throws error for websocket requests #1047
+- Fix search in CLI / atomic_lib #958
 
 ## [v0.40.2]
 
