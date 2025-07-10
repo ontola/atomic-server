@@ -153,7 +153,7 @@ export const ButtonBar = styled(ButtonClean)<ButtonBarProps>`
   }
 
   padding-left: ${p => (p.leftPadding ? '1.2rem' : '')};
-  padding-right: ${p => (p.rightPadding ? '1.2rem' : '')};
+  padding-right: ${p => (p.rightPadding ? '1rem' : '')};
 `;
 
 /** Button with some optional margins around it */
