@@ -1,5 +1,5 @@
 import React, { cloneElement, isValidElement, useState, type JSX } from 'react';
-import { useCanWrite, useResource } from '@tomic/react';
+import { useCanWrite, useResource, useStore } from '@tomic/react';
 import { Dialog, useDialog } from '../Dialog';
 import { Button } from '../Button';
 import { InviteForm } from '../InviteForm';
@@ -7,7 +7,7 @@ import toast from 'react-hot-toast';
 import { Title } from '../Title';
 import { ErrorLook } from '../ErrorLook';
 import { Column } from '../Row';
-import { FaShare } from 'react-icons/fa6';
+import { FaLink, FaShare } from 'react-icons/fa6';
 import { useRights } from '../../routes/Share/useRights';
 import { AgentRights } from '../../routes/Share/AgentRights';
 import { useInheritedRights } from '../../routes/Share/useInheritedRights';
@@ -69,6 +69,7 @@ export function ShareDialog({
             </Dialog.Title>
             <Dialog.Content>
               <Column gap='1rem'>
+                <CopyLinkButton subject={subject} />
                 {canWrite && !showInviteForm && (
                   <Button onClick={() => setShowInviteForm(true)}>
                     <FaShare />
@@ -141,6 +142,33 @@ const RightsCard = styled.div`
   border: 1px solid ${p => p.theme.colors.bg2};
   border-radius: ${p => p.theme.radius};
 `;
+
+function CopyLinkButton({ subject }: { subject: string }): JSX.Element {
+  const store = useStore();
+
+  const handleCopy = () => {
+    // Build a full URL that can be opened in a browser.
+    // For DID subjects, use the server URL + DID path.
+    let link: string;
+
+    if (subject.startsWith('did:')) {
+      const server = store.getServerUrl().replace(/\/$/, '');
+      link = `${server}/${subject}`;
+    } else {
+      link = subject;
+    }
+
+    navigator.clipboard.writeText(link);
+    toast.success('Link copied to clipboard');
+  };
+
+  return (
+    <Button subtle onClick={handleCopy}>
+      <FaLink />
+      Copy link
+    </Button>
+  );
+}
 
 function RightsHeader({ children }: React.PropsWithChildren): JSX.Element {
   return (

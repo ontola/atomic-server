@@ -3,7 +3,7 @@
 //! and to update the Search index.
 
 use crate::{
-    actor_messages::{CommitMessage, Subscribe},
+    actor_messages::{CommitMessage, QueryUpdate, Subscribe, SubscribeQuery, UnsubscribeQuery},
     errors::AtomicServerResult,
     handlers::web_sockets::WebSocketConnection,
     search::SearchState,
@@ -19,9 +19,20 @@ use std::collections::{HashMap, HashSet};
 /// The Commit Monitor is an Actor that manages subscriptions for subjects and sends Commits to listeners.
 /// It's also responsible for checking whether the rights are present
 #[allow(clippy::mutable_key_type)]
+
+/// A query subscription entry: the filter + connections watching it.
+struct QuerySubscription {
+    property: Option<String>,
+    value: Option<String>,
+    drive: Option<String>,
+    connections: HashSet<Addr<WebSocketConnection>>,
+}
+
 pub struct CommitMonitor {
     /// Maintains a list of all the resources that are being subscribed to, and maps these to websocket connections.
     subscriptions: HashMap<atomic_lib::Subject, HashSet<Addr<WebSocketConnection>>>,
+    /// Query subscriptions: clients watching for new/removed resources matching a filter.
+    query_subscriptions: Vec<QuerySubscription>,
     store: Db,
     search_state: SearchState,
     last_search_commit: chrono::DateTime<Local>,
@@ -113,6 +124,52 @@ impl Handler<Subscribe> for CommitMonitor {
     }
 }
 
+impl Handler<SubscribeQuery> for CommitMonitor {
+    type Result = ();
+
+    fn handle(&mut self, msg: SubscribeQuery, _ctx: &mut Context<Self>) {
+        tracing::info!(
+            property = ?msg.query.property,
+            value = ?msg.query.value,
+            drive = ?msg.query.drive,
+            agent = %msg.agent,
+            "Query subscription registered"
+        );
+
+        // Check if a subscription with the same filter already exists
+        for sub in &mut self.query_subscriptions {
+            if sub.property == msg.query.property
+                && sub.value == msg.query.value
+                && sub.drive == msg.query.drive
+            {
+                sub.connections.insert(msg.addr);
+                return;
+            }
+        }
+
+        let mut connections = HashSet::new();
+        connections.insert(msg.addr);
+        self.query_subscriptions.push(QuerySubscription {
+            property: msg.query.property,
+            value: msg.query.value,
+            drive: msg.query.drive,
+            connections,
+        });
+    }
+}
+
+impl Handler<UnsubscribeQuery> for CommitMonitor {
+    type Result = ();
+
+    fn handle(&mut self, msg: UnsubscribeQuery, _ctx: &mut Context<Self>) {
+        for sub in &mut self.query_subscriptions {
+            sub.connections.remove(&msg.addr);
+        }
+        // Clean up empty subscriptions
+        self.query_subscriptions.retain(|sub| !sub.connections.is_empty());
+    }
+}
+
 impl CommitMonitor {
     /// Runs every X seconds to perform expensive operations.
     fn tick(&mut self, _ctx: &mut Context<Self>) {
@@ -159,6 +216,74 @@ impl Handler<CommitMessage> for CommitMonitor {
             }
         } else {
             tracing::debug!("No subscribers for {}", target_subject);
+        }
+
+        // Check if any query subscriptions match the commit's atoms.
+        if !self.query_subscriptions.is_empty() {
+            let commit_subject = msg.commit_response.commit.subject.to_string();
+
+            for sub in &self.query_subscriptions {
+                // Drive scope check
+                if let Some(drive) = &sub.drive {
+                    if !commit_subject.starts_with(drive.as_str())
+                        && !commit_subject.starts_with("did:")
+                    {
+                        continue;
+                    }
+                }
+
+                let mut matched_add = false;
+                let mut matched_remove = false;
+
+                // If no property/value filter, match everything in the drive (drive-wide subscription)
+                if sub.property.is_none() && sub.value.is_none() {
+                    if sub.drive.is_some() {
+                        // Drive-wide: any commit in this drive is a match
+                        matched_add = !msg.commit_response.add_atoms.is_empty();
+                        matched_remove = !msg.commit_response.remove_atoms.is_empty();
+                    }
+                } else {
+                    // Check added atoms
+                    for atom in &msg.commit_response.add_atoms {
+                        let prop_matches = sub.property.as_ref()
+                            .map(|p| p == &atom.property)
+                            .unwrap_or(true);
+                        let val_matches = sub.value.as_ref()
+                            .map(|v| v == &atom.value.to_string())
+                            .unwrap_or(true);
+                        if prop_matches && val_matches {
+                            matched_add = true;
+                            break;
+                        }
+                    }
+
+                    // Check removed atoms
+                    for atom in &msg.commit_response.remove_atoms {
+                        let prop_matches = sub.property.as_ref()
+                            .map(|p| p == &atom.property)
+                            .unwrap_or(true);
+                        let val_matches = sub.value.as_ref()
+                            .map(|v| v == &atom.value.to_string())
+                            .unwrap_or(true);
+                        if prop_matches && val_matches {
+                            matched_remove = true;
+                            break;
+                        }
+                    }
+                }
+
+                if matched_add || matched_remove {
+                    let update = QueryUpdate {
+                        property: sub.property.clone(),
+                        value: sub.value.clone(),
+                        added: if matched_add { vec![commit_subject.clone()] } else { vec![] },
+                        removed: if matched_remove { vec![commit_subject.clone()] } else { vec![] },
+                    };
+                    for conn in &sub.connections {
+                        conn.do_send(update.clone());
+                    }
+                }
+            }
         }
 
         let store = self.store.clone();
@@ -223,6 +348,7 @@ pub fn create_commit_monitor(store: Db, search_state: SearchState) -> Addr<Commi
     crate::commit_monitor::CommitMonitor::create(|_ctx: &mut Context<CommitMonitor>| {
         CommitMonitor {
             subscriptions: HashMap::new(),
+            query_subscriptions: Vec::new(),
             store,
             search_state,
             run_expensive_next_tick: false,

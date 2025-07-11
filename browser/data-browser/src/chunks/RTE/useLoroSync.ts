@@ -19,10 +19,12 @@ export function useLoroSync(
     return new CursorEphemeralStore(doc.peerIdStr, 30000);
   }, [doc]);
 
-  // Subscribe to local doc updates and broadcast them
+  // Subscribe to local doc updates, broadcast them, and mark resource dirty
   useEffect(() => {
     const unsub = doc.subscribeLocalUpdates((update: Uint8Array) => {
       store.broadcastLoroSyncUpdate(subject, update);
+      // Mark the resource as dirty so save() knows there are local changes
+      resource.markDirty();
     });
 
     return () => {

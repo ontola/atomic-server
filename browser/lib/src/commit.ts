@@ -610,14 +610,17 @@ function execLoroUpdateCommit(
   // Store the raw binary for round-tripping
   resource.setUnsafe(commits.properties.loroUpdate, loroUpdate);
 
-  // Import into the resource's LoroDoc and materialize properties
-  const doc = resource.getLoroDoc();
+  // Only import into an already-initialized LoroDoc (i.e. one being actively edited).
+  // For read-only resources, the server already materialized the properties —
+  // no need to import the blob and re-materialize client-side.
+  const doc = resource.hasLoroDoc() ? resource.getLoroDoc() : undefined;
 
   if (doc) {
     try {
       doc.import(loroUpdate);
 
-      // Read all properties from the Loro map and update propvals
+      // Read properties from the Loro map and update propvals directly
+      // (bypass setUnsafe to avoid circular Loro writes)
       const propsMap = doc.getMap('properties');
       const json = propsMap?.toJSON();
 
