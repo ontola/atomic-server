@@ -188,7 +188,7 @@ export async function openAtomic(page: Page) {
 export async function editProfileAndCommit(page: Page) {
   await openAgentPage(page);
   await page.click('text=Edit profile');
-  const advancedButton = await page.getByRole('button', { name: 'advanced' });
+  const advancedButton = page.getByRole('button', { name: 'advanced' });
   await advancedButton.scrollIntoViewIfNeeded();
   await advancedButton.click();
   await expect(page.locator('text=add another property')).toBeVisible();

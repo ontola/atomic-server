@@ -3,3 +3,4 @@ packages:
   - '*/**'
   # exclude packages that are inside test directories
   - '!create-template/templates/**'
+  - '!e2e/template-tests/**'
