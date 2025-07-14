@@ -1,15 +1,18 @@
 //! Persistent, ACID compliant, threadsafe to-disk store.
 //! Powered by Sled - an embedded database.
 
+pub mod btreemap_store;
 mod encoding;
+pub mod kv_store;
 mod migrations;
 pub mod plugin_meta;
 mod prop_val_sub_index;
 mod query_index;
 pub use query_index::drive_prefix_from_subject;
+pub mod sled_store;
 #[cfg(test)]
 pub mod test;
-mod trees;
+pub mod trees;
 mod v1_types;
 mod v2_types;
 mod val_prop_sub_index;
@@ -48,6 +51,7 @@ use tracing::{info, instrument};
 use trees::{Method, Operation, Transaction, Tree};
 
 use self::{
+    kv_store::KvStore,
     migrations::migrate_maybe,
     prop_val_sub_index::{add_atom_to_prop_val_sub_index, find_in_prop_val_sub_index},
     query_index::{
@@ -56,7 +60,6 @@ use self::{
     },
     val_prop_sub_index::add_atom_to_valpropsub_index,
 };
-use sled::{transaction::TransactionError, Transactional};
 
 // A function called by the Store when a Commit is accepted
 type HandleCommit = Box<dyn Fn(&CommitResponse) + Send + Sync>;
@@ -73,7 +76,7 @@ pub type PropSubjectMap = HashMap<String, HashSet<String>>;
 
 /// The Db is a persistent on-disk Atomic Data store.
 /// It's an implementation of [Storelike].
-/// It uses [sled::Tree]s as Key Value stores.
+/// It uses a [KvStore] backend for key-value storage (sled, BTreeMap, etc.).
 /// It stores [Resource]s as [PropVals]s by their subject as key.
 /// It builds a value index for performant [Query]s.
 /// It keeps track of Queries and updates their index when [crate::Commit]s are applied.
@@ -81,27 +84,10 @@ pub type PropSubjectMap = HashMap<String, HashSet<String>>;
 /// `Db` should be easily, cheaply clone-able, as users of this library could have one `Db` per connection.
 #[derive(Clone)]
 pub struct Db {
-    /// The Key-Value store that contains all data.
-    /// Resources can be found using their Subject.
-    /// Try not to use this directly, but use the Trees.
-    db: sled::Db,
+    /// The key-value store backend. Abstracted behind a trait so different
+    /// backends (sled, BTreeMap, etc.) can be used interchangeably.
+    pub(crate) kv: Arc<dyn KvStore>,
     default_agent: Arc<Mutex<Option<crate::agents::Agent>>>,
-    /// Stores all resources. The Key is the Subject as a `string.as_bytes()`, the value a [PropVals]. Propvals must be serialized using messagepack.
-    resources: sled::Tree,
-    /// [Tree::ValPropSub]
-    reference_index: sled::Tree,
-    /// [Tree::PropValSub]
-    prop_val_sub_index: sled::Tree,
-    /// [Tree::QueryMembers]
-    query_index: sled::Tree,
-    /// [Tree::WatchedQueries]
-    watched_queries: sled::Tree,
-    /// [Tree::PluginMeta]
-    plugin_meta: sled::Tree,
-    /// [Tree::DriveMapping]
-    drive_mapping: sled::Tree,
-    /// [Tree::DidMapping]
-    did_mapping: sled::Tree,
     /// Endpoints are checked whenever a resource is requested. They calculate (some properties of) the resource and return it.
     endpoints: Vec<Endpoint>,
     /// List of class extenders.
@@ -118,31 +104,19 @@ pub struct Db {
 
 impl Db {
     /// Creates a new store at the specified path, or opens the store if it already exists.
+    /// Uses sled as the storage backend.
     pub async fn init(path: &std::path::Path, base_domain: Option<String>) -> AtomicResult<Db> {
         tracing::info!("Opening database at {:?}", path);
 
-        let db = sled::open(path).map_err(|e|format!("Failed opening DB at this location: {:?} . Is another instance of Atomic Server running? {}", path, e))?;
-        let resources = db.open_tree(Tree::Resources).map_err(|e| format!("Failed building resources. Your DB might be corrupt. Go back to a previous version and export your data. {}", e))?;
-        let reference_index = db.open_tree(Tree::ValPropSub)?;
-        let query_index = db.open_tree(Tree::QueryMembers)?;
-        let prop_val_sub_index = db.open_tree(Tree::PropValSub)?;
-        let watched_queries = db.open_tree(Tree::WatchedQueries)?;
-        let plugin_meta = db.open_tree(Tree::PluginMeta)?;
-        let drive_mapping = db.open_tree(Tree::DriveMapping)?;
-        let did_mapping = db.open_tree(Tree::DidMapping)?;
+        let sled_store = sled_store::SledStore::open(path)?;
+
+        // Run migrations before wrapping in Arc (migrations need direct sled access)
+        migrate_maybe(&sled_store).map(|e| format!("Error during migration of database: {:?}", e))?;
 
         let store = Db {
             path: path.into(),
-            db,
+            kv: Arc::new(sled_store),
             default_agent: Arc::new(Mutex::new(None)),
-            resources,
-            reference_index,
-            query_index,
-            prop_val_sub_index,
-            watched_queries,
-            plugin_meta,
-            drive_mapping,
-            did_mapping,
             endpoints: vec![],
             class_extenders: Arc::new(RwLock::new(vec![])),
             dht: Arc::new(None),
@@ -152,7 +126,6 @@ impl Db {
 
         store.add_class_extender(crate::collections::get_collection_class_extender())?;
 
-        migrate_maybe(&store).map(|e| format!("Error during migration of database: {:?}", e))?;
         // Re-run on every startup so new vocabulary (properties, classes) added
         // to default_store.json is available without a manual `populate` command.
         crate::populate::bootstrap(&store)
@@ -161,9 +134,31 @@ impl Db {
         Ok(store)
     }
 
+    /// Creates a Db backed by an in-memory BTreeMap store.
+    /// Useful for tests and WASM targets.
+    pub async fn init_memory(base_domain: Option<String>) -> AtomicResult<Db> {
+        let store = Db {
+            path: std::path::PathBuf::new(),
+            kv: Arc::new(btreemap_store::BTreeMapStore::new()),
+            default_agent: Arc::new(Mutex::new(None)),
+            endpoints: vec![],
+            class_extenders: Arc::new(RwLock::new(vec![])),
+            dht: Arc::new(None),
+            on_commit: None,
+            base_domain,
+        };
+
+        store.add_class_extender(crate::collections::get_collection_class_extender())?;
+
+        crate::populate::bootstrap(&store)
+            .await
+            .map_err(|e| format!("Failed to populate base models. {}", e))?;
+        Ok(store)
+    }
+
     /// Creates a clone of the store with a different base_domain.
     /// This is useful for multi-tenant applications.
-    /// Cloning is very cheap, as it only clones the pointers to the Sled trees.
+    /// Cloning is very cheap, as it only clones Arc pointers.
     pub fn clone_with_url(&self, base_domain: String) -> Db {
         let mut clone = self.clone();
         clone.base_domain = Some(base_domain);
@@ -370,22 +365,22 @@ impl Db {
             _ => drive_did.to_string(),
         };
 
-        self.drive_mapping
-            .insert(host.as_bytes(), did_str.as_bytes())?;
+        self.kv
+            .insert(Tree::DriveMapping, host.as_bytes(), did_str.as_bytes())?;
         tracing::info!("Added drive mapping: {} -> {}", host, did_str);
         Ok(())
     }
 
     /// Removes the drive mapping for a given host.
     pub fn remove_drive_mapping(&self, host: &str) -> AtomicResult<()> {
-        self.drive_mapping.remove(host.as_bytes())?;
+        self.kv.remove(Tree::DriveMapping, host.as_bytes())?;
         tracing::info!("Removed drive mapping for host: {}", host);
         Ok(())
     }
 
     /// Returns the full Drive DID for a given host (domain/subdomain).
     pub async fn get_drive_did(&self, host: &str) -> AtomicResult<Option<Subject>> {
-        if let Some(did_bin) = self.drive_mapping.get(host.as_bytes())? {
+        if let Some(did_bin) = self.kv.get(Tree::DriveMapping, host.as_bytes())? {
             let did_str = std::str::from_utf8(&did_bin)
                 .map_err(|e| format!("Failed to parse DID from database: {}", e))?;
             return Ok(Some(Subject::from_raw(did_str, None)));
@@ -548,7 +543,7 @@ impl Db {
 
             if count % 10000 == 0 {
                 tracing::info!("Building index, flushing to disk");
-                self.db.flush()?;
+                self.kv.flush()?;
             }
         }
 
@@ -561,7 +556,8 @@ impl Db {
     fn set_propvals(&self, subject: &str, propvals: &PropVals) -> AtomicResult<()> {
         let resource_bin = encode_propvals(propvals)?;
 
-        self.resources.insert(subject.as_bytes(), resource_bin)?;
+        self.kv
+            .insert(Tree::Resources, subject.as_bytes(), &resource_bin)?;
         Ok(())
     }
 
@@ -572,16 +568,11 @@ impl Db {
     }
 
     /// Finds resource by Subject, return PropVals HashMap
-    /// Deals with the binary API of Sled
     #[instrument(skip(self), fields(subject))]
     fn get_propvals(&self, subject: &str) -> AtomicResult<PropVals> {
-        let propval_maybe = self
-            .resources
-            .get(subject.as_bytes())
-            .map_err(|e| format!("Can't open {} from store: {}", subject, e))?;
-        match propval_maybe.as_ref() {
+        match self.kv.get(Tree::Resources, subject.as_bytes())? {
             Some(binpropval) => {
-                let propval: PropVals = decode_propvals(binpropval)?;
+                let propval: PropVals = decode_propvals(&binpropval)?;
                 Ok(propval)
             }
             None => Err(AtomicError::not_found(format!(
@@ -593,19 +584,16 @@ impl Db {
 
     /// Removes all values from the indexes.
     pub fn clear_index(&self) -> AtomicResult<()> {
-        self.reference_index.clear()?;
-        self.prop_val_sub_index.clear()?;
-        self.query_index.clear()?;
-        self.watched_queries.clear()?;
+        self.kv.clear_tree(Tree::ValPropSub)?;
+        self.kv.clear_tree(Tree::PropValSub)?;
+        self.kv.clear_tree(Tree::QueryMembers)?;
+        self.kv.clear_tree(Tree::WatchedQueries)?;
         Ok(())
     }
 
     /// Flushes the current state to disk.
     pub fn flush(&self) -> AtomicResult<()> {
-        self.db
-            .flush()
-            .map_err(|e| format!("Failed to flush: {}", e).into())
-            .map(|_| ())
+        self.kv.flush()
     }
 
     /// Removes the DB and all content from disk.
@@ -618,13 +606,13 @@ impl Db {
         Ok(())
     }
 
-    fn map_sled_item_to_resource(
-        item: Result<(sled::IVec, sled::IVec), sled::Error>,
+    fn map_kv_item_to_resource(
+        subject_bytes: &[u8],
+        resource_bin: &[u8],
         include_external: bool,
         base_domain: Option<&str>,
     ) -> Option<Resource> {
-        let (subject, resource_bin) = item.expect(DB_CORRUPT_MSG);
-        let subject: String = String::from_utf8_lossy(&subject).to_string();
+        let subject: String = String::from_utf8_lossy(subject_bytes).to_string();
 
         let subject_obj = Subject::from_raw(&subject, base_domain);
 
@@ -632,14 +620,14 @@ impl Db {
             return None;
         }
 
-        let propvals: PropVals = decode_propvals(&resource_bin)
+        let propvals: PropVals = decode_propvals(resource_bin)
             .unwrap_or_else(|e| panic!("{}. {}", corrupt_db_message(&subject), e));
 
         Some(Resource::from_propvals(propvals, subject_obj))
     }
 
     pub fn get_plugin_meta(&self, key: &PluginMetaKey) -> AtomicResult<Option<PluginMeta>> {
-        let Some(plugin_meta_bin) = self.plugin_meta.get(key.encode()?)? else {
+        let Some(plugin_meta_bin) = self.kv.get(Tree::PluginMeta, &key.encode()?)? else {
             return Ok(None);
         };
         let plugin_meta = PluginMeta::from_bytes(&plugin_meta_bin)?;
@@ -652,13 +640,13 @@ impl Db {
         key: &PluginMetaKey,
         plugin_meta: &PluginMeta,
     ) -> AtomicResult<()> {
-        self.plugin_meta
-            .insert(key.encode()?, plugin_meta.encode()?)?;
+        self.kv
+            .insert(Tree::PluginMeta, &key.encode()?, &plugin_meta.encode()?)?;
         Ok(())
     }
 
     pub fn delete_plugin_meta(&self, key: &PluginMetaKey) -> AtomicResult<()> {
-        self.plugin_meta.remove(key.encode()?)?;
+        self.kv.remove(Tree::PluginMeta, &key.encode()?)?;
         Ok(())
     }
 
@@ -706,122 +694,7 @@ impl Db {
     /// Apply made changes to the store.
     #[instrument(skip(self))]
     fn apply_transaction(&self, transaction: &mut Transaction) -> AtomicResult<()> {
-        let mut batch_resources = sled::Batch::default();
-        let mut batch_propvalsub = sled::Batch::default();
-        let mut batch_valpropsub = sled::Batch::default();
-        let mut batch_watched_queries = sled::Batch::default();
-        let mut batch_query_members = sled::Batch::default();
-        let mut batch_plugin_meta = sled::Batch::default();
-        let mut batch_drive_mapping = sled::Batch::default();
-        let mut batch_did_mapping = sled::Batch::default();
-
-        for op in transaction.iter() {
-            match op.tree {
-                trees::Tree::Resources => match op.method {
-                    trees::Method::Insert => {
-                        batch_resources.insert::<&[u8], &[u8]>(&op.key, op.val.as_ref().unwrap());
-                    }
-                    trees::Method::Delete => {
-                        batch_resources.remove(op.key.clone());
-                    }
-                },
-                trees::Tree::PropValSub => match op.method {
-                    trees::Method::Insert => {
-                        batch_propvalsub.insert::<&[u8], &[u8]>(&op.key, op.val.as_ref().unwrap());
-                    }
-                    trees::Method::Delete => {
-                        batch_propvalsub.remove(op.key.clone());
-                    }
-                },
-                trees::Tree::ValPropSub => match op.method {
-                    trees::Method::Insert => {
-                        batch_valpropsub.insert::<&[u8], &[u8]>(&op.key, op.val.as_ref().unwrap());
-                    }
-                    trees::Method::Delete => {
-                        batch_valpropsub.remove(op.key.clone());
-                    }
-                },
-                trees::Tree::WatchedQueries => match op.method {
-                    trees::Method::Insert => {
-                        batch_watched_queries
-                            .insert::<&[u8], &[u8]>(&op.key, op.val.as_ref().unwrap());
-                    }
-                    trees::Method::Delete => {
-                        batch_watched_queries.remove(op.key.clone());
-                    }
-                },
-                trees::Tree::QueryMembers => match op.method {
-                    trees::Method::Insert => {
-                        batch_query_members
-                            .insert::<&[u8], &[u8]>(&op.key, op.val.as_ref().unwrap());
-                    }
-                    trees::Method::Delete => {
-                        batch_query_members.remove(op.key.clone());
-                    }
-                },
-                trees::Tree::PluginMeta => match op.method {
-                    trees::Method::Insert => {
-                        batch_plugin_meta.insert::<&[u8], &[u8]>(&op.key, op.val.as_ref().unwrap());
-                    }
-                    trees::Method::Delete => {
-                        batch_plugin_meta.remove(op.key.clone());
-                    }
-                },
-                trees::Tree::DriveMapping => match op.method {
-                    trees::Method::Insert => {
-                        batch_drive_mapping
-                            .insert::<&[u8], &[u8]>(&op.key, op.val.as_ref().unwrap());
-                    }
-                    trees::Method::Delete => {
-                        batch_drive_mapping.remove(op.key.clone());
-                    }
-                },
-                trees::Tree::DidMapping => match op.method {
-                    trees::Method::Insert => {
-                        batch_did_mapping.insert::<&[u8], &[u8]>(&op.key, op.val.as_ref().unwrap());
-                    }
-                    trees::Method::Delete => {
-                        batch_did_mapping.remove(op.key.clone());
-                    }
-                },
-            }
-        }
-
-        (
-            &self.resources,
-            &self.prop_val_sub_index,
-            &self.reference_index,
-            &self.watched_queries,
-            &self.query_index,
-            &self.plugin_meta,
-            &self.drive_mapping,
-            &self.did_mapping,
-        )
-            .transaction(
-                |(
-                    tx_resources,
-                    tx_prop_val_sub_index,
-                    tx_reference_index,
-                    tx_watched_queries,
-                    tx_query_index,
-                    tx_plugin_meta,
-                    tx_drive_mapping,
-                    tx_did_mapping,
-                )| {
-                    tx_resources.apply_batch(&batch_resources)?;
-                    tx_prop_val_sub_index.apply_batch(&batch_propvalsub)?;
-                    tx_reference_index.apply_batch(&batch_valpropsub)?;
-                    tx_watched_queries.apply_batch(&batch_watched_queries)?;
-                    tx_query_index.apply_batch(&batch_query_members)?;
-                    tx_plugin_meta.apply_batch(&batch_plugin_meta)?;
-                    tx_drive_mapping.apply_batch(&batch_drive_mapping)?;
-                    tx_did_mapping.apply_batch(&batch_did_mapping)?;
-                    Ok::<(), sled::transaction::ConflictableTransactionError<sled::Error>>(())
-                },
-            )
-            .map_err(|e: TransactionError<_>| format!("Failed to apply transaction: {}", e))?;
-
-        Ok(())
+        self.kv.apply_batch(transaction)
     }
 
     async fn query_basic(&self, q: &Query) -> AtomicResult<QueryResult> {
@@ -1079,14 +952,8 @@ mod resolver_tests {
     }
 }
 
-impl Drop for Db {
-    fn drop(&mut self) {
-        match self.db.flush() {
-            Ok(..) => (),
-            Err(e) => eprintln!("Failed to flush the database: {}", e),
-        };
-    }
-}
+// Drop is handled by SledStore's own Drop impl which flushes on drop.
+// No explicit Drop needed for Db since Arc<dyn KvStore> handles cleanup.
 
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
@@ -1125,7 +992,7 @@ impl Storelike for Db {
         for (_subject, resource) in map.iter() {
             self.add_resource(resource).await?
         }
-        self.db.flush()?;
+        self.kv.flush()?;
         Ok(())
     }
 
@@ -1406,7 +1273,7 @@ impl Storelike for Db {
                 drive_hint: None, ..
             } = &res_subject
             {
-                if let Ok(Some(hint_bin)) = self.did_mapping.get(subject_str.as_bytes()) {
+                if let Ok(Some(hint_bin)) = self.kv.get(Tree::DidMapping, subject_str.as_bytes()) {
                     if let Ok(hint) = std::str::from_utf8(&hint_bin) {
                         res_subject = res_subject.set_drive_hint(hint.to_string());
                     }
@@ -1635,8 +1502,14 @@ impl Storelike for Db {
         include_external: bool,
     ) -> Box<dyn std::iter::Iterator<Item = Resource> + Send> {
         let base_domain = self.base_domain.clone();
-        let result = self.resources.into_iter().filter_map(move |item| {
-            Db::map_sled_item_to_resource(item, include_external, base_domain.as_deref())
+        let result = self.kv.iter_tree(Tree::Resources).filter_map(move |item| {
+            let (subject_bytes, resource_bin) = item.expect(DB_CORRUPT_MSG);
+            Db::map_kv_item_to_resource(
+                &subject_bytes,
+                &resource_bin,
+                include_external,
+                base_domain.as_deref(),
+            )
         });
 
         Box::new(result)

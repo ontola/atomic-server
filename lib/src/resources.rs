@@ -348,8 +348,11 @@ impl Resource {
             None => Vec::new(),
         };
         vec.push(value.clone());
-        self.propvals.insert(property.into(), vec.into());
-        self.commit.push_propval(property, value)?;
+        let full_array: Value = vec.into();
+        self.propvals.insert(property.into(), full_array.clone());
+        // Store the full array value in the commit builder so the Loro update
+        // contains the complete state, not just the appended item.
+        self.commit.set(property.into(), full_array);
         Ok(self)
     }
 
@@ -1115,7 +1118,7 @@ mod test {
     async fn push_propval() {
         let store: crate::Db = init_store().await;
         let property: String = urls::CHILDREN.into();
-        let append_value = "http://localhost/someURL";
+        let append_value = "https://localhost/someURL";
         let mut resource = Resource::new_generate_subject(&store).unwrap();
         resource
             .push(&property, append_value.into(), false)
@@ -1127,7 +1130,10 @@ mod test {
             "The first element should be the appended value"
         );
         let resp = resource.save_locally(&store).await.unwrap();
-        assert!(resp.commit_resource.get(urls::PUSH).is_ok());
+        assert!(
+            resp.commit_resource.get(urls::LORO_UPDATE).is_ok(),
+            "Commit should have a loroUpdate"
+        );
 
         let new_val = resp
             .resource_new
@@ -1136,8 +1142,8 @@ mod test {
             .unwrap()
             .to_subjects(None)
             .unwrap();
-        // The URL is normalized to internal: format by the store
-        assert_eq!(new_val.first().unwrap(), "internal:/someURL");
+        // Loro preserves the value as-given (no URL normalization on property values)
+        assert_eq!(new_val.first().unwrap(), append_value);
     }
 
     #[tokio::test]

@@ -655,9 +655,12 @@ async fn test_migration_v2_to_v3() {
         crate::db::v2_types::ValueV2::AtomicUrl(subject_url.clone()),
     );
 
-    // Manually insert into resources_v2
+    // Manually insert into resources_v2 using raw sled access
+    // Drop the Db first so we can open the sled database directly
+    drop(store);
+    let sled_store = super::sled_store::SledStore::open(std::path::Path::new(tmp_dir_path)).unwrap();
     {
-        let v2_tree = store.db.open_tree("resources_v2").unwrap();
+        let v2_tree = sled_store.raw_db().open_tree("resources_v2").unwrap();
         v2_tree
             .insert(
                 subject_url.as_bytes(),
@@ -668,7 +671,16 @@ async fn test_migration_v2_to_v3() {
     }
 
     // Run migration
-    super::migrations::migrate_maybe(&store).unwrap();
+    super::migrations::migrate_maybe(&sled_store).unwrap();
+    drop(sled_store);
+
+    // Re-open the Db to pick up the migrated data
+    let store = crate::Db::init(
+        std::path::Path::new(&tmp_dir_path),
+        Some(server_url.to_string()),
+    )
+    .await
+    .unwrap();
 
     // Verify results in v3
     let resource = store
@@ -696,8 +708,10 @@ async fn test_migration_v2_to_v3() {
     }
 
     // Verify it is NOT in resources_v2 anymore (it should have been dropped)
-    assert!(!store
-        .db
+    drop(store);
+    let sled_store2 = super::sled_store::SledStore::open(std::path::Path::new(tmp_dir_path)).unwrap();
+    assert!(!sled_store2
+        .raw_db()
         .tree_names()
         .into_iter()
         .any(|n| n == "resources_v2".as_bytes()));
