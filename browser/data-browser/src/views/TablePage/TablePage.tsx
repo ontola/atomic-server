@@ -133,7 +133,7 @@ export function TablePage({ resource }: ResourcePageProps): JSX.Element {
                 <FaCode />
               </IconButton>
               <IconButton
-                title='Use in code'
+                title='Export to CSV'
                 onClick={() => setShowExportDialog(true)}
               >
                 <FaFileCsv />
