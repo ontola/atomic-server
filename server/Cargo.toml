@@ -64,6 +64,7 @@ reqwest = { version = "0.13.1", default-features = false, features = ["rustls", 
 mainline = "6"
 sha1 = "0.10"
 hex = "0.4"
+local-ip-address = "0.6.11"
 
 [dependencies.instant-acme]
 optional = true
@@ -122,7 +123,7 @@ version = "4.4"
 version = ">= 4.0.1"
 
 [dependencies.atomic_lib]
-features = ["config", "db", "rdf", "dht"]
+features = ["config", "db-sled", "rdf", "dht"]
 path = "../lib"
 version = "0.40.0"
 

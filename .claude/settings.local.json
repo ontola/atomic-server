@@ -53,7 +53,11 @@
       "mcp__chrome-devtools__list_pages",
       "Bash(cargo check:*)",
       "WebFetch(domain:loro.dev)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(export PATH=\"$HOME/.cargo/bin:$PATH\")",
+      "Bash(cargo tree:*)",
+      "Bash(RUSTFLAGS='--cfg getrandom_backend=\"wasm_js\"' cargo check -p atomic_lib --features db,wasm --target wasm32-unknown-unknown)",
+      "Bash(git checkout:*)"
     ]
   }
 }
