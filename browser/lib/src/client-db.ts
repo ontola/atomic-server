@@ -145,9 +145,37 @@ export class ClientDbWorker {
     await this.send({ type: 'populate' });
   }
 
+  /** Export all resources as a JSON array string. For snapshotting to IndexedDB. */
+  async exportAllResources(): Promise<string> {
+    const result = await this.send({ type: 'exportAllResources' });
+
+    return result as string;
+  }
+
+  /** Import resources from a JSON array string. For restoring from IndexedDB. Returns count. */
+  async importAllResources(jsonArray: string): Promise<number> {
+    const result = await this.send({ type: 'importAllResources', jsonArray });
+
+    return result as number;
+  }
+
   /** Whether the worker has been initialized. */
   get isReady(): boolean {
     return this.ready;
+  }
+
+  /** Wait for the WASM DB to finish initializing. Resolves immediately if already ready. */
+  async waitForReady(): Promise<boolean> {
+    if (this.ready) return true;
+    if (!this.initPromise) return false;
+
+    try {
+      await this.initPromise;
+
+      return this.ready;
+    } catch {
+      return false;
+    }
   }
 
   /** Terminate the worker. */

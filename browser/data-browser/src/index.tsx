@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { sha256 } from '@noble/hashes/sha256';
+import { sha512 } from '@noble/hashes/sha512';
 import App from './App';
 
 /**
@@ -35,17 +36,21 @@ if (
           : // eslint-disable-next-line @typescript-eslint/no-explicit-any
             (algorithm as unknown as { name: string }).name.toUpperCase();
 
+      const input =
+        data instanceof Uint8Array
+          ? data
+          : new Uint8Array(data as ArrayBuffer);
+
       if (algoStr === 'SHA-256' || algoStr === 'SHA256') {
-        const input =
-          data instanceof Uint8Array
-            ? data
-            : new Uint8Array(data as ArrayBuffer);
-        const hash = sha256(input);
-        return hash.buffer;
+        return sha256(input).buffer;
+      }
+
+      if (algoStr === 'SHA-512' || algoStr === 'SHA512') {
+        return sha512(input).buffer;
       }
 
       throw new Error(
-        `Polyfill: Unsupported hash algorithm: ${algoStr}. Only SHA-256 is supported in this context.`,
+        `Polyfill: Unsupported hash algorithm: ${algoStr}. Only SHA-256 and SHA-512 are supported in this context.`,
       );
     };
   }

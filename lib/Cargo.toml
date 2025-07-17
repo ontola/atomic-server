@@ -47,6 +47,19 @@ tokio-tungstenite = { version = "0.26", features = ["native-tls"], optional = tr
 # For WASM: enable JS-backed randomness via feature unification
 getrandom = { version = "0.2", optional = true }
 getrandom03 = { package = "getrandom", version = "0.3", optional = true }
+js-sys = { version = "0.3", optional = true }
+wasm-bindgen = { version = "0.2", optional = true }
+wasm-bindgen-futures = { version = "0.4", optional = true }
+web-sys = { version = "0.3", optional = true, features = [
+  "FileSystemDirectoryHandle",
+  "FileSystemFileHandle",
+  "FileSystemGetFileOptions",
+  "FileSystemSyncAccessHandle",
+  "FileSystemReadWriteOptions",
+  "StorageManager",
+  "WorkerGlobalScope",
+  "WorkerNavigator",
+] }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["async_tokio"] }
@@ -72,5 +85,5 @@ dht = ["mainline", "sha1"]
 ws = ["tokio-tungstenite"]
 rdf = ["rio_api", "rio_turtle"]
 telemetry = ["opentelemetry"]
-## Enable JS-backed randomness for WASM targets.
-wasm = ["getrandom/js", "getrandom03/wasm_js", "getrandom", "getrandom03"]
+## Enable JS-backed randomness, time, and OPFS for WASM targets.
+wasm = ["getrandom/js", "getrandom03/wasm_js", "getrandom", "getrandom03", "js-sys", "wasm-bindgen", "wasm-bindgen-futures", "web-sys"]

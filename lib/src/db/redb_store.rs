@@ -38,7 +38,8 @@ fn table_def(tree: Tree) -> TableDefinition<'static, &'static [u8], &'static [u8
     }
 }
 
-/// A KvStore backed by redb with an in-memory backend.
+/// A KvStore backed by redb.
+/// Supports InMemoryBackend (default) or OPFS backend (WASM persistent).
 /// Thread-safe via redb's internal locking (MVCC).
 pub struct RedbStore {
     db: Arc<Database>,
@@ -58,6 +59,38 @@ impl RedbStore {
                 .begin_write()
                 .map_err(|e| format!("Failed to begin write tx: {e}"))?;
             // Opening a table in a write transaction creates it if it doesn't exist
+            let _ = tx.open_table(TABLE_RESOURCES);
+            let _ = tx.open_table(TABLE_PROP_VAL_SUB);
+            let _ = tx.open_table(TABLE_VAL_PROP_SUB);
+            let _ = tx.open_table(TABLE_QUERY_MEMBERS);
+            let _ = tx.open_table(TABLE_WATCHED_QUERIES);
+            let _ = tx.open_table(TABLE_PLUGIN_META);
+            let _ = tx.open_table(TABLE_DRIVE_MAPPING);
+            let _ = tx.open_table(TABLE_DID_MAPPING);
+            tx.commit()
+                .map_err(|e| format!("Failed to commit initial tables: {e}"))?;
+        }
+
+        Ok(RedbStore { db: Arc::new(db) })
+    }
+
+    /// Create a RedbStore backed by OPFS for persistent storage in WASM Workers.
+    /// The file is created/opened in the Origin Private File System.
+    #[cfg(target_arch = "wasm32")]
+    pub async fn new_opfs(filename: &str) -> AtomicResult<Self> {
+        let backend = super::opfs_backend::OpfsBackend::open(filename)
+            .await
+            .map_err(|e| format!("Failed to open OPFS backend: {:?}", e))?;
+
+        let db = Database::builder()
+            .create_with_backend(backend)
+            .map_err(|e| format!("Failed to create redb with OPFS: {e}"))?;
+
+        // Create all tables upfront
+        {
+            let tx = db
+                .begin_write()
+                .map_err(|e| format!("Failed to begin write tx: {e}"))?;
             let _ = tx.open_table(TABLE_RESOURCES);
             let _ = tx.open_table(TABLE_PROP_VAL_SUB);
             let _ = tx.open_table(TABLE_VAL_PROP_SUB);

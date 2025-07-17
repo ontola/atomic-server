@@ -748,6 +748,7 @@ dependencies = [
  "getrandom 0.3.3",
  "hex",
  "iai",
+ "js-sys",
  "lazy_static",
  "loro",
  "mainline",
@@ -772,6 +773,9 @@ dependencies = [
  "ulid",
  "url",
  "urlencoding",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]

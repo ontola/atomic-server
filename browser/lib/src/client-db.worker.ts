@@ -30,7 +30,9 @@ export type WorkerRequest =
       includeResources?: boolean;
     }
   | { id: number; type: 'allSubjects' }
-  | { id: number; type: 'populate' };
+  | { id: number; type: 'populate' }
+  | { id: number; type: 'exportAllResources' }
+  | { id: number; type: 'importAllResources'; jsonArray: string };
 
 /** Message types sent from worker back to main thread */
 export type WorkerResponse =
@@ -104,6 +106,18 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
       await db!.populate();
 
       return;
+    }
+
+    case 'exportAllResources': {
+      await ensureInit();
+
+      return db!.exportAllResources();
+    }
+
+    case 'importAllResources': {
+      await ensureInit();
+
+      return db!.importAllResources(msg.jsonArray);
     }
 
     default:

@@ -215,9 +215,9 @@ export class Store {
     this.clientDb = clientDb;
   }
 
-  /** Returns the ClientDbWorker if one has been set and is ready. */
+  /** Returns the ClientDbWorker if one has been set (may still be initializing). */
   public getClientDb(): ClientDbWorker | undefined {
-    return this.clientDb?.isReady ? this.clientDb : undefined;
+    return this.clientDb;
   }
 
   /**
@@ -227,7 +227,14 @@ export class Store {
   public async queryLocalDb(
     opts: ClientDbQueryOpts,
   ): Promise<ClientDbQueryResult | null> {
-    if (!this.clientDb?.isReady) return null;
+    if (!this.clientDb) return null;
+
+    // Wait for the DB to be ready
+    if (!this.clientDb.isReady) {
+      const ready = await this.clientDb.waitForReady();
+
+      if (!ready) return null;
+    }
 
     try {
       return await this.clientDb.query(opts);
@@ -256,9 +263,13 @@ export class Store {
       return maybeTempSubject;
     }
 
-    // DIDs and full HTTP URLs are returned as-is, but normalized
+    // DIDs are returned as-is — new URL() would mangle base64 characters (+, /, =)
+    if (subject.startsWith('did:')) {
+      return subject;
+    }
+
+    // HTTP URLs are normalized
     if (
-      subject.startsWith('did:') ||
       subject.startsWith('http://') ||
       subject.startsWith('https://')
     ) {
@@ -369,8 +380,9 @@ export class Store {
 
     // Forward to WASM DB in the background (non-blocking).
     // Don't forward loading/new/incomplete resources.
+    // The worker queues messages if WASM isn't ready yet.
     if (
-      this.clientDb?.isReady &&
+      this.clientDb &&
       !resource.loading &&
       !resource.new &&
       !resource.get(core.properties.incomplete)
@@ -540,14 +552,29 @@ export class Store {
    * If the WASM DB has the resource, it's used immediately (and a background
    * server fetch can refresh it later). This keeps the UI fast while the
    * network catches up.
+   *
+   * If both the WASM DB and the server fail (offline + cold cache),
+   * the resource stays in `loading` state rather than throwing.
    */
   private async fetchResourceWithLocalFallback(
     subject: string,
     opts: FetchOpts = {},
   ): Promise<void> {
+    let hasLocalData = false;
+
+    // Wait for the WASM DB to initialize (if one is set).
+    // This is important on page reload: the DB may still be loading
+    // but it has data from a previous session that we need.
+    if (this.clientDb) {
+      const ready = await this.clientDb.waitForReady();
+      console.debug(`[ClientDb] waitForReady: ${ready}, isReady: ${this.clientDb.isReady}`);
+    }
+
+    // Try the WASM DB first
     if (this.clientDb?.isReady) {
       try {
         const jsonAd = await this.clientDb.getResource(subject);
+        console.debug(`[ClientDb] getResource(${subject.slice(0, 40)}...): ${jsonAd ? 'found' : 'not found'}`);
 
         if (jsonAd) {
           const parsed = JSON.parse(jsonAd);
@@ -559,21 +586,41 @@ export class Store {
           }
 
           resource.loading = false;
+          hasLocalData = true;
+          console.debug(`[ClientDb] Adding resource ${subject.slice(0, 40)}... with ${Object.keys(parsed).length} props`);
           this.addResources(resource, { alias: subject });
-
-          // Still fetch from server in the background to get the latest version
-          this.fetchResourceFromServer(subject, opts).catch(() => {
-            // If server fetch fails, we already have the local version
-          });
-
-          return;
         }
-      } catch {
-        // Fall through to server fetch
+      } catch (e) {
+        console.warn('[ClientDb] Error loading from local DB:', e);
+        // WASM DB failed — continue to server
       }
     }
 
-    this.fetchResourceFromServer(subject, opts);
+    // Try the server — skip background refresh if we already have local data
+    // and the server might be down (to avoid overwriting good data with error resources).
+    try {
+      if (hasLocalData) {
+        // We have local data — don't risk overwriting it with an errored fetch.
+        // The QUERY_UPDATE / COMMIT WS flow will bring in updates when the server is back.
+      } else {
+        // Blocking: we have no data, server is our only hope
+        await this.fetchResourceFromServer(subject, opts);
+      }
+    } catch {
+      // Server failed and no local data — resource stays in loading state.
+      // This is better than showing an error when the user might come back online.
+      if (!hasLocalData) {
+        const resource = this.resources.get(
+          this.aliases.get(subject) ?? subject,
+        );
+
+        if (resource) {
+          resource.loading = false;
+          resource.setError(new Error('Offline: resource not available locally'));
+          this.notify(resource);
+        }
+      }
+    }
   }
 
   /**

@@ -42,6 +42,11 @@ if (initialDrive) {
 import { bootstrap } from './bootstrap';
 bootstrap(store);
 
+// Initialize the WASM ClientDb in a background worker.
+// Non-blocking — the app works without it.
+import { initClientDb } from './helpers/initClientDb';
+initClientDb(store);
+
 await enableLoro();
 
 store.parseMetaTags();
