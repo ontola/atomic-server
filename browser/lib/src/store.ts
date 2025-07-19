@@ -566,16 +566,13 @@ export class Store {
     // This is important on page reload: the DB may still be loading
     // but it has data from a previous session that we need.
     if (this.clientDb) {
-      const ready = await this.clientDb.waitForReady();
-      console.debug(`[ClientDb] waitForReady: ${ready}, isReady: ${this.clientDb.isReady}`);
+      await this.clientDb.waitForReady();
     }
 
     // Try the WASM DB first
     if (this.clientDb?.isReady) {
       try {
         const jsonAd = await this.clientDb.getResource(subject);
-        console.debug(`[ClientDb] getResource(${subject.slice(0, 40)}...): ${jsonAd ? 'found' : 'not found'}`);
-
         if (jsonAd) {
           const parsed = JSON.parse(jsonAd);
           const resource = new Resource(subject);
@@ -587,11 +584,9 @@ export class Store {
 
           resource.loading = false;
           hasLocalData = true;
-          console.debug(`[ClientDb] Adding resource ${subject.slice(0, 40)}... with ${Object.keys(parsed).length} props`);
           this.addResources(resource, { alias: subject });
         }
-      } catch (e) {
-        console.warn('[ClientDb] Error loading from local DB:', e);
+      } catch {
         // WASM DB failed — continue to server
       }
     }

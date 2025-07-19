@@ -97,10 +97,49 @@ export default defineConfig({
       },
       workbox: {
         // See https://github.com/atomicdata-dev/atomic-data-browser/issues/294
+        // index.html is excluded from precaching because atomic-server injects
+        // CSP nonces dynamically. Instead we use runtime caching with NetworkFirst
+        // so the SW caches whatever HTML the server serves (with nonce), and falls
+        // back to it offline.
         globIgnores: ['**/index.html'],
         // Increased for WASM binaries (loro-crdt + atomic-wasm)
         maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
+        // index.html is NOT precached because atomic-server injects CSP nonces.
+        // Disable the default navigateFallback (which requires precached index.html).
+        // Instead we cache navigation responses at runtime with NetworkFirst.
+        navigateFallback: null,
         runtimeCaching: [
+          {
+            // Cache ALL navigation requests (SPA — same HTML shell for all routes).
+            // NetworkFirst: use server when online, fall back to cache offline.
+            urlPattern: ({ request }) => request.mode === 'navigate',
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'html-cache',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 7, // 7 days
+              },
+              cacheableResponse: {
+                statuses: [200],
+              },
+            },
+          },
+          {
+            // Cache WASM and worker files
+            urlPattern: /\/wasm\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'wasm-cache',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
             handler: 'CacheFirst',
