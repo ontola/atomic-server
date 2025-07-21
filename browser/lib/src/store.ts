@@ -471,7 +471,6 @@ export class Store {
 
     // Forward to WASM DB in the background (non-blocking).
     // Don't forward loading/new/incomplete resources.
-    // The worker queues messages if WASM isn't ready yet.
     if (
       this.clientDb &&
       !resource.loading &&
@@ -1807,6 +1806,10 @@ function resourceToJsonAd(resource: Resource): string | null {
   const obj: Record<string, unknown> = { '@id': resource.subject };
 
   for (const [key, value] of propvals) {
+    // Skip Uint8Array values (Loro snapshots) — JSON.stringify turns them
+    // into huge {"0":98,"1":71,...} objects that block the main thread.
+    // These are persisted separately through the offline save path.
+    if (value instanceof Uint8Array) continue;
     obj[key] = value;
   }
 
