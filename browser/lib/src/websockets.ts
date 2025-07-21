@@ -366,6 +366,11 @@ export class WSClient {
             this.ws.send('SYNC_DRIVE ' + syncRequest);
           }
         }
+
+        // Sync any resources that were edited offline
+        this.store.syncDirtyResources().catch(e => {
+          console.warn('[Sync] Failed to sync dirty resources:', e);
+        });
       })
       .catch(e => {
         console.error('Error handling open:', e);
