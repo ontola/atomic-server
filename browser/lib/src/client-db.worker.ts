@@ -28,6 +28,7 @@ export type WorkerRequest =
       limit?: number;
       offset?: number;
       includeResources?: boolean;
+      drive?: string;
     }
   | { id: number; type: 'allSubjects' }
   | { id: number; type: 'populate' }
@@ -92,6 +93,7 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
         msg.limit ?? null,
         msg.offset ?? null,
         msg.includeResources ?? null,
+        msg.drive ?? null,
       );
     }
 

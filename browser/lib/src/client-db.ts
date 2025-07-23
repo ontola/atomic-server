@@ -27,6 +27,8 @@ export interface ClientDbQueryOpts {
   limit?: number;
   offset?: number;
   includeResources?: boolean;
+  /** Drive scope — required for sorted queries. */
+  drive?: string;
 }
 
 type PendingRequest = {
