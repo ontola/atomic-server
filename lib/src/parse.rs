@@ -42,6 +42,10 @@ pub struct ParseOpts {
     /// This can be a dangerous value if true, because it can overwrite _all_ resources where the `for_agen` has write rights.
     /// Only parse items from sources that you trust!
     pub overwrite_outside: bool,
+    /// If true, silently skip properties whose definition cannot be found in the store.
+    /// The skipped properties will NOT be stored or indexed.
+    /// Useful for client-side seeding where not all property definitions are available.
+    pub skip_unknown_props: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -67,6 +71,7 @@ impl std::default::Default for ParseOpts {
             for_agent: ForAgent::Sudo,
             overwrite_outside: true,
             save: SaveOpts::Save,
+            skip_unknown_props: false,
         }
     }
 }
@@ -576,11 +581,20 @@ async fn parse_json_ad_map_to_resource(
             continue;
         }
 
-        let (new_key, atomic_val) =
-            parse_propval(&prop, &val, subject.as_deref(), store, parse_opts).await?;
+        let result =
+            parse_propval(&prop, &val, subject.as_deref(), store, parse_opts).await;
 
-        // Some of these values are _not correctly matched_ to the datatype.
-        propvals.insert(new_key, atomic_val);
+        match result {
+            Ok((new_key, atomic_val)) => {
+                // Some of these values are _not correctly matched_ to the datatype.
+                propvals.insert(new_key, atomic_val);
+            }
+            Err(_) if parse_opts.skip_unknown_props => {
+                // Silently skip properties we can't parse (e.g. unknown property definitions)
+                continue;
+            }
+            Err(e) => return Err(e),
+        }
     }
     // if there is no parent set, we set it to the Importer
     if let Some(importer) = &parse_opts.importer {
@@ -831,6 +845,7 @@ mod test {
             for_agent: ForAgent::Sudo,
             overwrite_outside: false,
             importer: Some(importer.clone()),
+            ..Default::default()
         };
 
         store.import(json, &parse_opts).await.unwrap();
@@ -878,6 +893,7 @@ mod test {
             for_agent: ForAgent::Sudo,
             overwrite_outside: false,
             importer: Some(importer.clone()),
+            ..Default::default()
         };
 
         store.import(json, &parse_opts).await.unwrap();
@@ -904,6 +920,7 @@ mod test {
             signer: Some(store.get_default_agent().unwrap()),
             overwrite_outside: false,
             importer: Some(importer.clone()),
+            ..Default::default()
         };
 
         store
@@ -971,6 +988,7 @@ mod test {
             for_agent: agent.subject.into(),
             overwrite_outside: false,
             importer: Some(importer),
+            ..Default::default()
         };
 
         // We can't allow this to happen, so we expect an error
@@ -1036,6 +1054,7 @@ mod test {
             // not the one performing the import, because we don't have their private key.
             signer: Some(store.get_default_agent().unwrap()),
             save: crate::parse::SaveOpts::Commit,
+            ..Default::default()
         };
 
         store.import(json, &parse_opts).await.unwrap();

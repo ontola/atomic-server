@@ -716,3 +716,103 @@ async fn test_migration_v2_to_v3() {
         .into_iter()
         .any(|n| n == "resources_v2".as_bytes()));
 }
+
+/// Test that resources added via add_resource_opts with update_index=true
+/// can be found via property-value queries (the pattern used by table/collection UI).
+#[tokio::test]
+async fn query_by_parent_after_add_resource() {
+    let store = Db::init_temp("query_parent").await.unwrap();
+
+    let parent_subject = "https://localhost/parent-folder";
+    let child1_subject = "https://localhost/child1";
+    let child2_subject = "https://localhost/child2";
+
+    // Create parent
+    let mut parent = crate::Resource::new(parent_subject.into());
+    parent.set_unsafe(urls::NAME.into(), Value::String("Parent Folder".into()));
+    store.add_resource_opts(&parent, false, true, true).await.unwrap();
+
+    // Create children with parent property
+    let mut child1 = crate::Resource::new(child1_subject.into());
+    child1.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(parent_subject.into()));
+    child1.set_unsafe(urls::NAME.into(), Value::String("Child 1".into()));
+    store.add_resource_opts(&child1, false, true, true).await.unwrap();
+
+    let mut child2 = crate::Resource::new(child2_subject.into());
+    child2.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(parent_subject.into()));
+    child2.set_unsafe(urls::NAME.into(), Value::String("Child 2".into()));
+    store.add_resource_opts(&child2, false, true, true).await.unwrap();
+
+    // Query: find children of parent (this is what the table UI does)
+    let query = crate::storelike::Query::new_prop_val(urls::PARENT, parent_subject);
+    let result = store.query(&query).await.unwrap();
+
+    assert_eq!(
+        result.count, 2,
+        "Should find 2 children, found {}. Subjects: {:?}",
+        result.count, result.subjects
+    );
+}
+
+/// Same test but with DID subjects (the real-world pattern).
+#[tokio::test]
+async fn query_by_parent_did_subjects() {
+    let store = Db::init_temp("query_parent_did").await.unwrap();
+
+    let parent_did = "did:ad:parentABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvwxyz012345678==";
+    let child1_did = "did:ad:child1ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz01234567890123456789==";
+    let child2_did = "did:ad:child2ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz01234567890123456789==";
+
+    // Create children with DID parent
+    let mut child1 = crate::Resource::new(child1_did.into());
+    child1.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(parent_did.into()));
+    child1.set_unsafe(urls::NAME.into(), Value::String("DID Child 1".into()));
+    store.add_resource_opts(&child1, false, true, true).await.unwrap();
+
+    let mut child2 = crate::Resource::new(child2_did.into());
+    child2.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(parent_did.into()));
+    child2.set_unsafe(urls::NAME.into(), Value::String("DID Child 2".into()));
+    store.add_resource_opts(&child2, false, true, true).await.unwrap();
+
+    // Query: find children of DID parent
+    let query = crate::storelike::Query::new_prop_val(urls::PARENT, parent_did);
+    let result = store.query(&query).await.unwrap();
+
+    assert_eq!(
+        result.count, 2,
+        "Should find 2 DID children, found {}. Subjects: {:?}",
+        result.count, result.subjects
+    );
+}
+
+/// Test that JSON-AD parsing + add_resource_opts indexes correctly
+/// (simulates the WASM putResource path).
+#[tokio::test]
+async fn query_after_json_ad_import() {
+    let store = Db::init_temp("query_json_import").await.unwrap();
+
+    let parent = "did:ad:parentXYZ0123456789abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRST==";
+    let json = format!(
+        r#"{{"@id": "did:ad:childXYZ0123456789abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUV==", "https://atomicdata.dev/properties/parent": "{}", "https://atomicdata.dev/properties/name": "JSON Child"}}"#,
+        parent
+    );
+
+    let resource = crate::parse::parse_json_ad_resource(
+        &json,
+        &store,
+        &crate::parse::ParseOpts::default(),
+    )
+    .await
+    .unwrap();
+
+    store.add_resource_opts(&resource, false, true, true).await.unwrap();
+
+    let query = crate::storelike::Query::new_prop_val(urls::PARENT, parent);
+    let result = store.query(&query).await.unwrap();
+
+    assert_eq!(
+        result.count, 1,
+        "Should find 1 child after JSON-AD import, found {}",
+        result.count
+    );
+}

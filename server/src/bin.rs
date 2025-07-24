@@ -85,6 +85,7 @@ async fn main_wrapped() -> errors::AtomicServerResult<()> {
                     atomic_lib::parse::SaveOpts::Commit
                 },
                 signer: Some(appstate.store.get_default_agent()?),
+                ..Default::default()
             };
             println!("Importing...");
             appstate.store.import(&readstring, &parse_opts).await?;

@@ -64,7 +64,10 @@ impl ClientDb {
         let resource = atomic_lib::parse::parse_json_ad_resource(
             json_ad,
             &self.db,
-            &ParseOpts::default(),
+            &ParseOpts {
+                skip_unknown_props: true,
+                ..Default::default()
+            },
         )
         .await
         .map_err(to_js_err)?;
@@ -192,7 +195,10 @@ impl ClientDb {
             if let Ok(resource) = atomic_lib::parse::parse_json_ad_resource(
                 &json_str,
                 &self.db,
-                &ParseOpts::default(),
+                &ParseOpts {
+                    skip_unknown_props: true,
+                    ..Default::default()
+                },
             )
             .await
             {
