@@ -142,6 +142,8 @@ pub const RESOURCE_ARRAY: &str = "https://atomicdata.dev/datatypes/resourceArray
 pub const BOOLEAN: &str = "https://atomicdata.dev/datatypes/boolean";
 pub const DATE: &str = "https://atomicdata.dev/datatypes/date";
 pub const TIMESTAMP: &str = "https://atomicdata.dev/datatypes/timestamp";
+pub const URI: &str = "https://atomicdata.dev/datatypes/uri";
+pub const JSON: &str = "https://atomicdata.dev/datatypes/json";
 
 // Methods
 pub const INSERT: &str = "https://atomicdata.dev/methods/insert";

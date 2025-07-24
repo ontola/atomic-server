@@ -1140,6 +1140,15 @@
         "https://atomicdata.dev/properties/shortname": "uri"
     },
     {
+        "@id": "https://atomicdata.dev/datatypes/json",
+        "https://atomicdata.dev/properties/description": "An untyped JSON object.",
+        "https://atomicdata.dev/properties/isA": [
+            "https://atomicdata.dev/classes/Datatype"
+        ],
+        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/datatypes",
+        "https://atomicdata.dev/properties/shortname": "json"
+    },
+    {
         "@id": "https://atomicdata.dev/classes/Folder",
         "https://atomicdata.dev/properties/description": "Acts as a parent for resources, useful for ordering data.",
         "https://atomicdata.dev/properties/isA": [

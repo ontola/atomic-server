@@ -1,13 +1,12 @@
 import { AtomicError } from './error.js';
-import { isArray } from './index.js';
+import { Client, isArray } from './index.js';
 import { server } from './ontologies/server.js';
 import { Resource, unknownSubject } from './resource.js';
-import type { JSONObject, JSONValue } from './value.js';
+import type { JSONObject, JSONValue, NamedJSONObject } from './value.js';
 
-/** Resources in JSON-AD can be referenced by their URL (string),
- * be entire (nested) resources, in which case they are JSONObjects */
-type StringOrNestedResource = string | JSONObject;
-
+/**
+ * Parses a JSON-AD object or array into resources. Create a new instance each time you need to parse a json-ad string.
+ */
 export class JSONADParser {
   private parsedResources: Resource[] = [];
 
@@ -42,10 +41,9 @@ export class JSONADParser {
 
   public parseValue(
     value: JSONValue,
-    key: string,
   ): [value: JSONValue, allParsedResources: Resource[]] {
     this.parsedResources = [];
-    const result = this.parseJsonAdResourceValue(value, key);
+    const result = this.parseJsonAdResourceValue(value);
 
     return [result, [...this.parsedResources]];
   }
@@ -60,8 +58,8 @@ export class JSONADParser {
     try {
       for (const [key, value] of Object.entries(object)) {
         if (key === '@id') {
-          if (typeof value !== 'string') {
-            throw new Error("'@id' field must be a string");
+          if (!Client.isValidSubject(value)) {
+            throw new Error(`@id value ${value} is not a valid subject`);
           }
 
           if (
@@ -74,26 +72,25 @@ export class JSONADParser {
             );
           }
 
-          resource.setSubject(value);
+          resource.setSubject(value as string);
           continue;
         }
 
         try {
           // Resource values can be either strings (URLs) or full Resources, which in turn can be either Anonymous (no @id) or Named (with an @id)
-          if (isArray(value)) {
-            const newarr = value.map(val =>
-              this.parseJsonAdResourceValue(val, key),
-            );
-            resource.setUnsafe(key, newarr);
-          } else if (typeof value === 'string') {
-            resource.setUnsafe(key, value);
-          } else if (typeof value === 'number') {
-            resource.setUnsafe(key, value);
-          } else if (typeof value === 'boolean') {
-            resource.setUnsafe(key, value);
+          if (Array.isArray(value)) {
+            const [namedResources, array] = pickNamedResourcesFromArray(value);
+
+            resource.setUnsafe(key, array);
+
+            for (const namedResource of namedResources) {
+              this.parseJsonAdResourceValue(namedResource);
+            }
+          } else if (isJSONObject(value)) {
+            const val = this.parseJsonAdResourceValue(value);
+            resource.setUnsafe(key, val);
           } else {
-            const subject = this.parseJsonAdResourceValue(value, key);
-            resource.setUnsafe(key, subject);
+            resource.setUnsafe(key, value);
           }
         } catch (e) {
           const baseMsg = `Failed creating value ${value} for key ${key} in resource ${resource.subject}`;
@@ -118,30 +115,16 @@ export class JSONADParser {
     return resource;
   }
 
-  private parseJsonAdResourceValue(
-    value: JSONValue,
-    key: string,
-  ): StringOrNestedResource {
-    if (typeof value === 'string') {
+  private parseJsonAdResourceValue(value: JSONValue): JSONValue {
+    if (!isNamedResource(value)) {
       return value;
     }
 
-    if (isJSONObject(value)) {
-      if ('@id' in value) {
-        // It's a named resource that should be parsed too
-        const nestedSubject = value['@id'] as string;
-        this.parseJsonADResource(value);
+    // It's a named resource that should be parsed too
+    const nestedSubject = value['@id'] as string;
+    this.parseJsonADResource(value);
 
-        return nestedSubject;
-      } else {
-        // It's an anonymous nested Resource
-        return value;
-      }
-    }
-
-    throw new Error(
-      `Value ${value} in ${key} not a string or a nested Resource`,
-    );
+    return nestedSubject;
   }
 
   /** Parses a JSON-AD array, returns array of Resources */
@@ -164,3 +147,24 @@ export class JSONADParser {
 
 const isJSONObject = (value: JSONValue): value is JSONObject =>
   typeof value === 'object' && value !== null && !isArray(value);
+
+const pickNamedResourcesFromArray = (
+  array: JSONValue[],
+): [namedResources: NamedJSONObject[], rest: JSONValue[]] => {
+  const named: NamedJSONObject[] = [];
+  const rest: JSONValue[] = [];
+
+  for (const item of array) {
+    if (isNamedResource(item)) {
+      rest.push(item['@id']);
+      named.push(item);
+    } else {
+      rest.push(item);
+    }
+  }
+
+  return [named, rest];
+};
+
+const isNamedResource = (value: JSONValue): value is NamedJSONObject =>
+  isJSONObject(value) && '@id' in value && Client.isValidSubject(value['@id']);

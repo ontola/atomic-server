@@ -6,10 +6,11 @@ const EXAMPLE_SUBJECT2 = 'http://example.com/2';
 const EXAMPLE_SUBJECT3 = 'http://example.com/3';
 const EXAMPLE_SUBJECT4 = 'http://example.com/4';
 
-const STRING_PROPERTY = 'http://some-string-property';
-const NUMBER_PROPERTY = 'http://some-number-property';
-const BOOLEAN_PROPERTY = 'http://some-boolean-property';
-const NESTED_RESOURCE_PROPERTY = 'http://some-nested-resource-property';
+const STRING_PROPERTY = 'http://example.com/some-string-property';
+const NUMBER_PROPERTY = 'http://example.com/some-number-property';
+const BOOLEAN_PROPERTY = 'http://example.com/some-boolean-property';
+const NESTED_RESOURCE_PROPERTY =
+  'http://example.com/some-nested-resource-property';
 describe('parse.ts', () => {
   it('parses a JSON-AD object and returns it as a resource', ({ expect }) => {
     const jsonObject = {
@@ -59,23 +60,22 @@ describe('parse.ts', () => {
 
     const parser = new JSONADParser();
     const [resource1, parsedResources1] = parser.parseObject(jsonObjectWithID);
-
-    const [resource2, parsedResources2] =
-      parser.parseObject(jsonObjectWithoutID);
-
-    const [resource3, parsedResources3] = parser.parseObject(
-      jsonWithArrayOfResources,
-    );
-
     expect(resource1.get(NESTED_RESOURCE_PROPERTY)).toBe(EXAMPLE_SUBJECT2);
     expect(parsedResources1).toHaveLength(2);
     expect(parsedResources1[1].get(STRING_PROPERTY)).toBe('Hoi');
+
+    const [resource2, parsedResources2] =
+      parser.parseObject(jsonObjectWithoutID);
 
     expect(resource2.get(NESTED_RESOURCE_PROPERTY)).toEqual({
       [STRING_PROPERTY]: 'Hoi',
     });
 
     expect(parsedResources2).toHaveLength(1);
+
+    const [resource3, parsedResources3] = parser.parseObject(
+      jsonWithArrayOfResources,
+    );
 
     expect(resource3.get(NESTED_RESOURCE_PROPERTY)).toEqual([
       EXAMPLE_SUBJECT2,

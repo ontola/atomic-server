@@ -23,6 +23,10 @@ export enum Datatype {
   STRING = 'https://atomicdata.dev/datatypes/string',
   /** Milliseconds since unix epoch */
   TIMESTAMP = 'https://atomicdata.dev/datatypes/timestamp',
+  /** JSON object */
+  JSON = 'https://atomicdata.dev/datatypes/json',
+  /** URI */
+  URI = 'https://atomicdata.dev/datatypes/uri',
   UNKNOWN = 'unknown-datatype',
 }
 
@@ -142,6 +146,26 @@ export const validateDatatype = (
 
       break;
     }
+
+    case Datatype.JSON: {
+      try {
+        JSON.stringify(value);
+      } catch (e) {
+        err = 'Not valid JSON';
+      }
+
+      break;
+    }
+
+    case Datatype.URI: {
+      try {
+        new URL(value as string);
+      } catch (e) {
+        err = 'Not a valid URI';
+      }
+
+      break;
+    }
   }
 
   if (err !== null) {
@@ -165,6 +189,8 @@ export const reverseDatatypeMapping = {
   [Datatype.STRING]: 'String',
   [Datatype.SLUG]: 'Slug',
   [Datatype.MARKDOWN]: 'Markdown',
+  [Datatype.URI]: 'URI',
+  [Datatype.JSON]: 'JSON',
   [Datatype.INTEGER]: 'Integer',
   [Datatype.FLOAT]: 'Float',
   [Datatype.BOOLEAN]: 'Boolean',

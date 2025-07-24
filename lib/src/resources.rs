@@ -12,6 +12,7 @@ use crate::{
     schema::{Class, Property},
     Atom, Storelike,
 };
+use bincode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tracing::instrument;
@@ -20,7 +21,7 @@ use ulid::Ulid;
 /// A Resource is a set of Atoms that shares a single Subject.
 /// A Resource only contains valid Values, but it _might_ lack required properties.
 /// All changes to the Resource are applied after committing them (e.g. by using).
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, Encode, Decode)]
 pub struct Resource {
     /// A hashMap of all the Property Value combinations
     propvals: PropVals,
@@ -545,14 +546,15 @@ impl Resource {
         serde_json::to_string_pretty(&obj).map_err(|_| "Could not serialize to JSON-LD".into())
     }
 
+    pub fn to_atoms_iter(&self) -> impl Iterator<Item = Atom> + '_ {
+        self.propvals.iter().map(|(property, value)| {
+            Atom::new(self.subject.to_string(), property.clone(), value.clone())
+        })
+    }
+
     #[instrument(skip_all)]
     pub fn to_atoms(&self) -> Vec<Atom> {
-        let mut atoms: Vec<Atom> = Vec::new();
-        for (property, value) in self.propvals.iter() {
-            let atom = Atom::new(self.subject.to_string(), property.clone(), value.clone());
-            atoms.push(atom);
-        }
-        atoms
+        self.to_atoms_iter().collect()
     }
 
     #[instrument(skip_all)]

@@ -17,6 +17,8 @@ pub enum DataType {
     Slug,
     String,
     Timestamp,
+    Uri,
+    JSON,
     Unsupported(String),
 }
 
@@ -32,6 +34,8 @@ pub fn match_datatype(string: &str) -> DataType {
         urls::SLUG => DataType::Slug,
         urls::STRING => DataType::String,
         urls::TIMESTAMP => DataType::Timestamp,
+        urls::URI => DataType::Uri,
+        urls::JSON => DataType::JSON,
         unsupported_datatype => DataType::Unsupported(unsupported_datatype.into()),
     }
 }
@@ -51,6 +55,8 @@ impl std::str::FromStr for DataType {
             urls::SLUG => DataType::Slug,
             urls::STRING => DataType::String,
             urls::TIMESTAMP => DataType::Timestamp,
+            urls::URI => DataType::Uri,
+            urls::JSON => DataType::JSON,
             unsupported_datatype => DataType::Unsupported(unsupported_datatype.into()),
         })
     }
@@ -69,6 +75,8 @@ impl fmt::Display for DataType {
             DataType::Slug => write!(f, "{}", urls::SLUG),
             DataType::String => write!(f, "{}", urls::STRING),
             DataType::Timestamp => write!(f, "{}", urls::TIMESTAMP),
+            DataType::Uri => write!(f, "{}", urls::URI),
+            DataType::JSON => write!(f, "{}", urls::JSON),
             DataType::Unsupported(url) => write!(f, "{}", url),
         }
     }

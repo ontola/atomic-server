@@ -17,7 +17,9 @@ name = "benchmarks"
 
 [dependencies]
 base64 = "0.21"
-bincode = { version = "1", optional = true }
+bincode = { version = "2.0.1", optional = true, features = ["derive"] }
+# Needed for migration to bincode v2
+bincode1 = { package = "bincode", version = "1", optional = true }
 directories = { version = ">= 2, < 5", optional = true }
 html2md = { version = "0.2.14", optional = true }
 kuchikiki = { version = "0.8.2", optional = true }
@@ -46,6 +48,6 @@ ntest = "0.9"
 
 [features]
 config = ["directories", "toml"]
-db = ["sled", "bincode"]
+db = ["sled", "bincode", "bincode1"]
 html = ["kuchikiki", "lol_html", "html2md"]
 rdf = ["rio_api", "rio_turtle"]

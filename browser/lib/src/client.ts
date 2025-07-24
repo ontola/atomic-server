@@ -82,13 +82,13 @@ export class Client {
   }
 
   /** Returns true if the given subject is valid */
-  public static isValidSubject(subject: string | undefined): boolean {
+  public static isValidSubject(subject: unknown): boolean {
     if (typeof subject !== 'string') return false;
 
     try {
       Client.tryValidSubject(subject);
 
-      return true;
+      return subject.startsWith('http');
     } catch (e) {
       return false;
     }

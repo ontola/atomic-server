@@ -13,7 +13,7 @@ export class PropertyRecord {
     ]);
   }
 
-  public repordPropertyDefined(subject: string) {
+  public reportPropertyDefined(subject: string) {
     this.knownProperties.add(subject);
 
     if (this.missingProperties.has(subject)) {
