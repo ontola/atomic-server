@@ -5,6 +5,7 @@ import { FaExternalLinkAlt } from 'react-icons/fa';
 import { ErrorLook } from '../components/ErrorLook';
 import { isRunningInTauri } from '../helpers/tauri';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
+import clsx from 'clsx';
 
 export interface AtomicLinkProps
   extends React.AnchorHTMLAttributes<HTMLAnchorElement> {
@@ -79,7 +80,7 @@ export const AtomicLink = forwardRef<HTMLAnchorElement, AtomicLinkProps>(
     return (
       <LinkView
         clean={clean}
-        className={className}
+        className={clsx(className, { 'atomic-link_external': href && !clean })}
         about={subject}
         onClick={handleClick}
         href={hrefConstructed}
@@ -92,7 +93,7 @@ export const AtomicLink = forwardRef<HTMLAnchorElement, AtomicLinkProps>(
         ref={ref}
       >
         {children}
-        {href && !clean && <FaExternalLinkAlt />}
+        {href && !clean && <FaExternalLinkAlt size='0.8em' />}
       </LinkView>
     );
   },
@@ -120,5 +121,11 @@ export const LinkView = styled.a<LinkViewProps>`
   }
   &:active {
     color: ${props => props.theme.colors.mainDark};
+  }
+
+  &.atomic-link_external {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6ch;
   }
 `;

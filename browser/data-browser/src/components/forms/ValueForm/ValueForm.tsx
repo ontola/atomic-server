@@ -84,7 +84,7 @@ const ValueFormWrapper = styled.div`
   position: relative;
   flex: 1;
   word-wrap: break-word;
-  max-width: 100%;
+  width: 100%;
 `;
 
 const EditButton = styled.button`

@@ -27,6 +27,18 @@ pub fn check_valid_url(url: &str) -> AtomicResult<()> {
     Ok(())
 }
 
+pub fn check_valid_uri(uri: &str) -> AtomicResult<()> {
+    url::Url::parse(uri).map_err(|e| format!("Invalid URI: {}. {}", uri, e))?;
+    Ok(())
+}
+
+pub fn check_valid_json(json: &str) -> AtomicResult<()> {
+    let _: serde_json::Value =
+        serde_json::from_str(json).map_err(|e| format!("Invalid JSON: {}. {}", json, e))?;
+
+    Ok(())
+}
+
 /// Returns the current timestamp in milliseconds since UNIX epoch
 pub fn now() -> i64 {
     std::time::SystemTime::now()

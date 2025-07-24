@@ -2,9 +2,9 @@ use crate::atoms::IndexAtom;
 
 use super::{prop_val_sub_index::propvalsub_key, val_prop_sub_index::valpropsub_key};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Tree {
-    /// Full resources, Key: Subject, Value: [Resource](crate::Resource)
+    /// Full resources, Key: Subject, Value: [Propvals](crate::resources::PropVals)
     Resources,
     /// Stores the members of Collections, easily sortable.
     QueryMembers,
@@ -13,12 +13,12 @@ pub enum Tree {
     /// Index sorted by {Property}-{Value}-{Subject}.
     /// Used for queries where the property is known.
     PropValSub,
-    /// Reference index, used for queries where the value (or one of the values, in case of an array) is but the subject is not.
+    /// Reference index, used for queries where the value (or one of the values, in case of an array) is known but the subject is not.
     /// Index sorted by {Value}-{Property}-{Subject}.
     ValPropSub,
 }
 
-const RESOURCES: &str = "resources_v1";
+const RESOURCES: &str = "resources_v2";
 const VALPROPSUB: &str = "reference_index_v1";
 const QUERY_MEMBERS: &str = "members_index";
 const PROPVALSUB: &str = "prop_val_sub_index";
@@ -49,14 +49,14 @@ impl AsRef<[u8]> for Tree {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Method {
     Insert,
     Delete,
 }
 
 /// A single operation to be executed on the database.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Operation {
     pub tree: Tree,
     pub method: Method,
