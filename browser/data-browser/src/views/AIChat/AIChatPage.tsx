@@ -24,7 +24,6 @@ import {
   messageResourcesToDisplayMessages,
 } from '../../components/AI/chatConversionUtils';
 import { TagBar } from '../../components/Tag/TagBar';
-import { flushSync } from 'react-dom';
 
 export const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({
   resource,
