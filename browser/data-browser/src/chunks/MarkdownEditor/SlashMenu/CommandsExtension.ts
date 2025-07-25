@@ -39,7 +39,9 @@ export const SlashCommands = Extension.create({
   },
 });
 
-export const suggestion: Partial<SuggestionOptions> = {
+export const buildSuggestion = (
+  container: HTMLElement,
+): Partial<SuggestionOptions> => ({
   items: ({ query }: { query: string }): CommandItem[] =>
     [
       {
@@ -157,7 +159,7 @@ export const suggestion: Partial<SuggestionOptions> = {
 
         popup = tippy('body', {
           getReferenceClientRect: props.clientRect! as () => DOMRect,
-          appendTo: () => document.body,
+          appendTo: () => container,
           content: component.element,
           showOnCreate: true,
           interactive: true,
@@ -198,4 +200,4 @@ export const suggestion: Partial<SuggestionOptions> = {
       },
     };
   },
-};
+});

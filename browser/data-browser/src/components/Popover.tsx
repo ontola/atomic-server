@@ -113,6 +113,10 @@ const Arrow = styled(RadixPopover.Arrow)`
 const PopoverContainerContext =
   createContext<RefObject<HTMLDivElement | null>>(createRef());
 
+export const usePopoverContainer = () => {
+  return useContext(PopoverContainerContext);
+};
+
 export const PopoverContainer: FC<PropsWithChildren> = ({ children }) => {
   const popoverContainerRef = useRef<HTMLDivElement>(null);
 
