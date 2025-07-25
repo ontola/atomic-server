@@ -1,6 +1,5 @@
 import {
   core,
-  dataBrowser,
   useArray,
   useCanWrite,
   useResource,
@@ -8,6 +7,7 @@ import {
   useTitle,
 } from '@tomic/react';
 import { Fragment, useEffect, useState, type JSX } from 'react';
+import { useChildren } from './useChildren';
 import { styled } from 'styled-components';
 import { useSettings } from '../../helpers/AppSettings';
 import { constructOpenURL } from '../../helpers/navigation';
@@ -54,10 +54,7 @@ export function SideBarDrive({
   const driveResource = useResource(drive);
   const agentResource = useResource(agent?.subject);
   const [sharedWithMe] = useArray(agentResource, core.properties.sharedWithMe);
-  const [subResources] = useArray(
-    driveResource,
-    dataBrowser.properties.subResources,
-  );
+  const subResources = useChildren(drive);
   const [title] = useTitle(driveResource);
   const navigate = useNavigateWithTransition();
   const agentCanWrite = useCanWrite(driveResource);

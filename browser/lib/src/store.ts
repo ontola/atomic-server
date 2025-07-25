@@ -166,6 +166,12 @@ export class Store {
   private localSearch = new LocalSearch();
   /** Resources with local changes that haven't been synced to the server yet. */
   private dirtyForSync: Set<string> = new Set();
+  /**
+   * Whether the Store has an active connection to the server.
+   * Driven by WebSocket open/close events. When false, commits are stored
+   * locally and synced when the connection is restored.
+   */
+  private _serverConnected = false;
 
   private eventManager = new EventManager<StoreEvents, StoreEventHandlers>();
 
@@ -703,14 +709,15 @@ export class Store {
       }
     }
 
-    // Try the server — skip background refresh if we already have local data
-    // and the server might be down (to avoid overwriting good data with error resources).
+    // Try the server if connected. Skip if we have local data and are offline
+    // to avoid overwriting good data with error responses.
     try {
-      if (hasLocalData) {
-        // We have local data — don't risk overwriting it with an errored fetch.
-        // The QUERY_UPDATE / COMMIT WS flow will bring in updates when the server is back.
+      if (!this._serverConnected) {
+        // Offline — use whatever local data we found, don't hit the server.
+      } else if (hasLocalData) {
+        // Online with local data — background refresh will come via WS COMMIT.
       } else {
-        // Blocking: we have no data, server is our only hope
+        // Online, no local data — server is our only source.
         await this.fetchResourceFromServer(subject, opts);
       }
     } catch {
@@ -1018,6 +1025,17 @@ export class Store {
       });
     }
 
+    // If offline, return what we have or throw
+    if (!this._serverConnected) {
+      const local = this.resources.get(resolved);
+
+      if (local) {
+        return local;
+      }
+
+      throw new Error(`Resource ${subjectRaw} not found locally and server is offline`);
+    }
+
     const result = await this.fetchResourceFromServer(resolved);
 
     // If the resource was not in the store yet, subscribe to changes so we don't return stale results when the resource is updated.
@@ -1098,13 +1116,33 @@ export class Store {
    * false. This may affect some functionality. For example, some checks will
    * not be performed client side when offline.
    */
-  public isOffline(): boolean {
-    // If we are in a node/server environment assume we are online.
-    if (!hasBrowserAPI()) {
-      return false;
-    }
+  /**
+   * Whether the Store has an active WebSocket connection to the server.
+   * Use this to decide whether to attempt server operations or store locally.
+   */
+  public get serverConnected(): boolean {
+    return this._serverConnected;
+  }
 
-    return !window?.navigator?.onLine;
+  /** Called by WebSocket client when connection state changes. */
+  public setServerConnected(connected: boolean): void {
+    if (this._serverConnected === connected) return;
+
+    this._serverConnected = connected;
+    console.info(`[Store] Server ${connected ? 'connected' : 'disconnected'}`);
+
+    if (connected) {
+      this.syncDirtyResources().catch(e => {
+        console.warn('[Sync] Failed to sync dirty resources on reconnect:', e);
+      });
+    }
+  }
+
+  /**
+   * @deprecated Use `serverConnected` instead. `navigator.onLine` is unreliable.
+   */
+  public isOffline(): boolean {
+    return !this._serverConnected;
   }
 
   public async notifyResourceSaved(resource: Resource): Promise<void> {

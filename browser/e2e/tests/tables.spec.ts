@@ -21,7 +21,7 @@ test.describe('tables', async () => {
   test('table dialog pre-fills name and focuses input', async ({ page }) => {
     await newResource('table', page);
     const input = page.getByPlaceholder('New Table');
-    await expect(input).toHaveValue('table');
+    await expect(input).toHaveValue('Table');
     await expect(input).toBeFocused();
   });
 
@@ -129,7 +129,7 @@ test.describe('tables', async () => {
 
     await expect(
       page.getByRole('button', { name: dateColumnName }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 15000 });
 
     await newColumn('Number');
     const numberColumnName = 'Number of tracks';

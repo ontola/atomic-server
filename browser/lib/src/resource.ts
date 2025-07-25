@@ -1012,6 +1012,12 @@ export class Resource<C extends OptionalClass = any> {
       this.commitBuilder.setLoroUpdate(loroDelta);
     }
 
+    // Auto-detect genesis: no previousCommit means this is a new resource.
+    // The server requires is_genesis=true for DID resources without a previous commit.
+    if (!this.commitBuilder.previousCommit && !this._lastLocalSignature) {
+      this.commitBuilder.setIsGenesis(true);
+    }
+
     // Clone the builder so new changes after this call go into a fresh one.
     const builder = this.commitBuilder.clone();
     this.commitBuilder = new CommitBuilder(this.subject);
@@ -1027,8 +1033,11 @@ export class Resource<C extends OptionalClass = any> {
       this.commitBuilder = new CommitBuilder(commit.subject);
 
       if (this._store) {
-        this.store.removeResource(oldSubject);
-        this.store.addResources(this, { skipCommitCompare: true });
+        // Silently move the resource in the store map — don't use removeResource()
+        // which emits events that trigger cascading fetches (sideBarHandler etc.)
+        this.store.resources.delete(oldSubject);
+        // Keep an alias so children that reference the old _new: subject can still find it.
+        this.store.addResources(this, { skipCommitCompare: true, alias: oldSubject });
       }
     }
 
@@ -1190,6 +1199,20 @@ export class Resource<C extends OptionalClass = any> {
         await this.signChanges(agent);
       }
 
+      // If the server is not connected, save locally and queue for sync.
+      if (!this.store.serverConnected) {
+        await this.applyPendingCommitsLocally();
+        this.store.markDirtyForSync(this.subject);
+        this.commitError = undefined;
+        this.loading = false;
+        // Notify subscribers so the UI updates (e.g. sidebar sees new subResources)
+        this.store.addResources(this, { skipCommitCompare: true });
+        this.store.notifyResourceSaved(this);
+        reportDone();
+
+        return undefined;
+      }
+
       // Push all queued commits to the server.
       const result = await this.pushCommits();
 
@@ -1197,17 +1220,15 @@ export class Resource<C extends OptionalClass = any> {
 
       return result;
     } catch (e) {
-      // Network error (server unreachable) — apply locally and queue for sync.
+      // Network error (server went down mid-request) — apply locally and queue for sync.
       if (isNetworkError(e)) {
-        // Apply pending commits to the WASM DB so they're persisted in OPFS.
+        this.store.setServerConnected(false);
         await this.applyPendingCommitsLocally();
-
-        // Mark this resource as needing sync when the server comes back.
         this.store.markDirtyForSync(this.subject);
-
-        // Clear the error that pushCommits set — the save succeeded locally.
         this.commitError = undefined;
         this.loading = false;
+        this.store.addResources(this, { skipCommitCompare: true });
+        this.store.notifyResourceSaved(this);
         reportDone();
 
         return undefined;
@@ -1303,8 +1324,8 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     // Clear pending commits — they've been incorporated into the resource state.
+    // Keep _lastLocalSignature so followup commits can chain correctly.
     this._pendingCommits = [];
-    this._lastLocalSignature = undefined;
   }
 
   /**

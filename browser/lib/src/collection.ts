@@ -180,6 +180,11 @@ export class Collection {
       return;
     }
 
+    // Don't attempt server fetch if we know we're offline
+    if (!this.store.serverConnected) {
+      return;
+    }
+
     try {
       await this.fetchPageFromServer(page);
     } catch {
