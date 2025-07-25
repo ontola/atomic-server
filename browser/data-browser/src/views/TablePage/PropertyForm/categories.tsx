@@ -7,6 +7,7 @@ import { RelationPropertyForm } from './RelationPropertyForm';
 import { SelectPropertyForm } from './SelectPropertyForm';
 import { TextPropertyForm } from './TextPropertyForm';
 import { buildComponentFactory } from '../../../helpers/buildComponentFactory';
+import { JSONPropertyForm } from './JSONPropertyForm';
 
 export type PropertyFormCategory =
   | 'text'
@@ -15,12 +16,14 @@ export type PropertyFormCategory =
   | 'checkbox'
   | 'file'
   | 'select'
-  | 'relation';
+  | 'relation'
+  | 'json';
 
 const TEXT_TYPES = new Set<string>([
   Datatype.STRING,
   Datatype.MARKDOWN,
   Datatype.SLUG,
+  Datatype.URI,
 ]);
 const NUMBER_TYPES = new Set<string>([Datatype.INTEGER, Datatype.FLOAT]);
 const DATE_TYPES = new Set<string>([Datatype.DATE, Datatype.TIMESTAMP]);
@@ -57,6 +60,10 @@ export const getCategoryFromResource = (
     return 'relation';
   }
 
+  if (datatype === Datatype.JSON) {
+    return 'json';
+  }
+
   if (datatype === Datatype.ATOMIC_URL) {
     return 'relation';
   }
@@ -76,6 +83,7 @@ export const categoryFormFactory = buildComponentFactory(
     ['select', SelectPropertyForm],
     ['date', DatePropertyForm],
     ['file', FilePropertyForm],
+    ['json', JSONPropertyForm],
     ['relation', RelationPropertyForm],
   ]),
   NoCategorySelected,

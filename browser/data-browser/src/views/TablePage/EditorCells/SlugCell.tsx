@@ -10,13 +10,24 @@ function SlugCellEdit({
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const v = e.target.value.toLowerCase().replace(/\s/g, '-');
+
+      if (v === '') {
+        onChange(undefined);
+
+        return;
+      }
+
       onChange(v);
     },
     [onChange],
   );
 
   return (
-    <InputBase value={value as string} autoFocus onChange={handleChange} />
+    <InputBase
+      value={(value as string | undefined) ?? ''}
+      autoFocus
+      onChange={handleChange}
+    />
   );
 }
 
