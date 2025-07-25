@@ -1,5 +1,9 @@
-import { generateText } from 'ai';
-import type { AIChatDisplayMessage } from './types';
+import { generateText, type CoreMessage } from 'ai';
+import {
+  type AIChatDisplayMessage,
+  isAIErrorMessage,
+  isMessageWithContext,
+} from './types';
 import { useSettings } from '../../helpers/AppSettings';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 
@@ -15,12 +19,18 @@ export const useGenerativeData = () => {
   const openrouter = createOpenRouter({
     apiKey: openRouterApiKey,
     compatibility: 'strict',
+    extraBody: {
+      transforms: ['middle-out'],
+    },
   });
 
   const generateTitleFromConversation = async (
     conversation: AIChatDisplayMessage[],
   ) => {
-    const convoString = JSON.stringify(conversation);
+    const filteredConversation = removeFilesAndImages(
+      conversation.slice(0, 2).filter(m => m.role !== 'system'),
+    );
+    const convoString = JSON.stringify(filteredConversation);
 
     const { text } = await generateText({
       model: openrouter('google/gemma-3-4b-it:free'),
@@ -39,3 +49,32 @@ export const useGenerativeData = () => {
 
   return { generateTitleFromConversation };
 };
+
+function removeFilesAndImages(
+  conversation: AIChatDisplayMessage[],
+): AIChatDisplayMessage[] {
+  return conversation.map(displayMessage => {
+    // If it's a MessageWithContext, check the nested message
+    const message = isMessageWithContext(displayMessage)
+      ? displayMessage.message
+      : displayMessage;
+
+    // We are only interested in CoreMessages that are not error messages
+    if (isAIErrorMessage(message) || !('content' in message)) {
+      return displayMessage;
+    }
+
+    const coreMessage = message as CoreMessage;
+
+    if (Array.isArray(coreMessage.content)) {
+      return {
+        ...coreMessage,
+        content: coreMessage.content.filter(
+          part => part.type !== 'file' && part.type !== 'image',
+        ),
+      };
+    }
+
+    return displayMessage;
+  }) as AIChatDisplayMessage[];
+}

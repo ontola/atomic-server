@@ -18,26 +18,6 @@ export const ToolResultMessage: React.FC<ToolResultMessageProps> = ({
       return <SearchResultMessage toolResultPart={c} key={key} />;
     }
 
-    if (c.toolName === TOOL_NAMES.SHOW_SVG) {
-      if (
-        typeof c.result === 'object' &&
-        c.result !== null &&
-        'data' in c.result &&
-        typeof (c.result as { data: unknown }).data === 'string'
-      ) {
-        return (
-          <div
-            key={key}
-            dangerouslySetInnerHTML={{
-              __html: (c.result as { data: string }).data,
-            }}
-          />
-        );
-      }
-
-      return null;
-    }
-
     let result;
 
     if (typeof c.result === 'string') {
