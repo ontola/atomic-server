@@ -38,11 +38,9 @@ export const VAR_DIALOG_INNER_WIDTH = '--dialog-inner-width';
 const ANIM_MS = 80;
 const ANIM_SPEED = `${ANIM_MS}ms`;
 
-interface DialogSlotProps {
-  className?: string;
-}
-
-type DialogSlotComponent = React.FC<React.PropsWithChildren<DialogSlotProps>>;
+type DialogSlotComponent = React.FC<
+  React.PropsWithChildren<React.HTMLAttributes<HTMLDivElement>>
+>;
 
 /**
  * Component to build a dialog. The content of this component are rendered in a
@@ -179,18 +177,17 @@ const InnerDialog: React.FC<React.PropsWithChildren<InternalDialogProps>> = ({
   );
 };
 
-export const DialogTitle: DialogSlotComponent = ({ children, className }) => (
-  <Slot slot={DialogSlot.Title} as='header' className={className}>
+export const DialogTitle: DialogSlotComponent = ({ children, ...props }) => (
+  <Slot slot={DialogSlot.Title} as='header' {...props}>
     {children}
   </Slot>
 );
 
 /**
- * Dialog section that is scrollable. Put your main content here. Should be no
- * larger than 4rem
+ * Dialog section that is scrollable. Put your main content here.
  */
-export const DialogContent: DialogSlotComponent = ({ children, className }) => (
-  <DialogContentSlot slot={DialogSlot.Content} as='main' className={className}>
+export const DialogContent: DialogSlotComponent = ({ children, ...props }) => (
+  <DialogContentSlot slot={DialogSlot.Content} as='main' {...props}>
     {children}
   </DialogContentSlot>
 );
@@ -199,15 +196,15 @@ export const DialogContent: DialogSlotComponent = ({ children, className }) => (
  * Bottom part of the Dialog that is always visible. Place your buttons here.
  * Should be no larger than 4rem
  */
-export const DialogActions: DialogSlotComponent = ({ children, className }) => (
-  <DialogActionsSlot
-    slot={DialogSlot.Actions}
-    as='footer'
-    className={className}
-  >
+export const DialogActions: DialogSlotComponent = ({ children, ...props }) => (
+  <DialogActionsSlot slot={DialogSlot.Actions} as='footer' {...props}>
     {children}
   </DialogActionsSlot>
 );
+
+Dialog.Title = DialogTitle;
+Dialog.Content = DialogContent;
+Dialog.Actions = DialogActions;
 
 const CloseButtonSlot = styled(Slot)`
   justify-self: end;

@@ -8,7 +8,9 @@ import { PropertyCategoryFormProps } from './PropertyCategoryFormProps';
 export const TextPropertyForm = ({
   resource,
 }: PropertyCategoryFormProps): JSX.Element => {
-  const [textFormat, setTextFormat] = useState<Datatype>(Datatype.STRING);
+  const [textFormat, setTextFormat] = useState<Datatype>(
+    resource.props.datatype as Datatype,
+  );
 
   const handleTextFormatChange = async (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -46,6 +48,14 @@ export const TextPropertyForm = ({
           onChange={handleTextFormatChange}
         >
           Slug
+        </RadioInput>
+        <RadioInput
+          name='text-format'
+          value={Datatype.URI}
+          checked={textFormat === Datatype.URI}
+          onChange={handleTextFormatChange}
+        >
+          URI
         </RadioInput>
       </RadioGroup>
       <FormGroupHeading>Length</FormGroupHeading>
