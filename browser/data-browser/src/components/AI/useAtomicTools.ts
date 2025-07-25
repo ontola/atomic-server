@@ -21,7 +21,6 @@ export const TOOL_NAMES = {
   CHANGE_THEME: 'change_theme',
   NAVIGATE_TO_RESOURCE: 'navigate_to_resource',
   CREATE_RESOURCE: 'create_resource',
-  SHOW_SVG: 'show_svg',
 } as const;
 
 const toResultObject = (resource: Resource, includeCommitData: boolean) => {
@@ -153,20 +152,6 @@ export function useAtomicMCPTools({
           await navigate(constructOpenURL(subject));
 
           return `Navigated to resource ${subject}`;
-        },
-      }),
-      [TOOL_NAMES.SHOW_SVG]: tool({
-        description:
-          "Show an SVG image to the user. The svg will be shown so you don't have to tell the user the exact svg code afterwards.",
-        parameters: z.object({
-          svg: z.string().describe('The SVG code to show'),
-        }),
-        execute: async ({ svg }) => {
-          return {
-            message:
-              'Success, the user can now see the svg, no need to tell them the exact svg code',
-            data: svg,
-          };
         },
       }),
     },

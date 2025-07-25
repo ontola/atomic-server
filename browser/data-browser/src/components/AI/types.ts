@@ -4,6 +4,7 @@ export interface MCPServer {
   name: string;
   url: string;
   id: string;
+  transport: 'http' | 'sse';
 }
 
 export interface AIAgent {
@@ -25,13 +26,23 @@ export enum AIState {
   SelectingAgent,
 }
 
-export type AIResourceMessageContext = {
-  type: 'resource';
+export type AIAtomicResourceMessageContext = {
+  type: 'atomic-resource';
   id: string;
   subject: string;
 };
 
-export type AIMessageContext = AIResourceMessageContext;
+export type AIMCPResourceMessageContext = {
+  type: 'mcp-resource';
+  id: string;
+  uri: string;
+  name: string;
+  serverId: string;
+};
+
+export type AIMessageContext =
+  | AIAtomicResourceMessageContext
+  | AIMCPResourceMessageContext;
 
 export type AIChatErrorMessage = {
   role: 'error';

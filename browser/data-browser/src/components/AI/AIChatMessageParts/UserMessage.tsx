@@ -1,5 +1,5 @@
 import type { CoreUserMessage, FilePart } from 'ai';
-import { type AIResourceMessageContext } from '../types';
+import { type AIAtomicResourceMessageContext } from '../types';
 import { styled } from 'styled-components';
 import { FaFile } from 'react-icons/fa6';
 import Markdown from '../../datatypes/Markdown';
@@ -9,7 +9,7 @@ import { ImageContent, isImagePart } from './ImageContent';
 
 interface UserMessageProps {
   message: CoreUserMessage;
-  context?: AIResourceMessageContext[];
+  context?: AIAtomicResourceMessageContext[];
 }
 
 function isFilePart(part: unknown): part is FilePart {
