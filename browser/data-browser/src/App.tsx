@@ -7,6 +7,7 @@ import { registerCustomCreateActions } from './components/forms/NewForm/CustomCr
 import { serverURLStorage } from './helpers/serverURLStorage';
 
 import { useEffect, type JSX } from 'react';
+import type { JSX } from 'react';
 import { RouterProvider } from '@tanstack/react-router';
 import { router } from './routes/Router';
 import { errorHandler } from './handlers/errorHandler';

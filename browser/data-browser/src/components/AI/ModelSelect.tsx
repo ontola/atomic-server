@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { Column, Row } from '../Row';
 import Markdown from '../datatypes/Markdown';
 import styled from 'styled-components';
-import { BasicSelect } from '../forms/BasicSelect';
 import { FaTriangleExclamation } from 'react-icons/fa6';
 import { useOpenRouterModels } from './useOpenRouterModels';
+import { ComboBox } from '../ComboBox';
 
 interface ModelSelectProps {
   onSelect?: (model: string) => void;
@@ -35,24 +35,26 @@ export const ModelSelect = ({
   const showSupportWarning =
     selectedModel && !modelList.includes(selectedModel);
 
+  const options = modelList.map(model => ({
+    label: model.name,
+    searchLabel: model.name.toLowerCase(),
+    value: model.id,
+  }));
+
   return (
     <Wrapper>
       <Column>
         <Column gap='0.2rem'>
           <ModelAmount>{modelList.length} Models</ModelAmount>
-          <BasicSelect
-            value={selectedModel?.id}
-            onChange={e => {
-              setSelectedId(e.target.value);
-              onSelect?.(e.target.value);
+          <ComboBox
+            selectedItem={selectedId}
+            options={options}
+            onSelect={value => {
+              const newVal = value ?? defaultModel;
+              setSelectedId(newVal);
+              onSelect?.(newVal);
             }}
-          >
-            {modelList.map(model => (
-              <option key={model.id} value={model.id}>
-                {model.name}
-              </option>
-            ))}
-          </BasicSelect>
+          />
           {showSupportWarning && (
             <SupportWarning center gap='1ch'>
               <FaTriangleExclamation />

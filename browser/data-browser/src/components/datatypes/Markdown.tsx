@@ -16,6 +16,7 @@ type Props = {
   maxLength?: number;
   className?: string;
   nestedInLink?: boolean;
+  markExternalLinks?: boolean;
 };
 
 const disableElementsInLink = ['a'];
@@ -27,6 +28,7 @@ const Markdown: FC<Props> = ({
   maxLength = 5000,
   className,
   nestedInLink = false,
+  markExternalLinks = false,
 }) => {
   const [collapsed, setCollapsed] = useState(true);
 
@@ -39,11 +41,15 @@ const Markdown: FC<Props> = ({
       <ReactMarkdown
         remarkPlugins={renderGFM ? [remarkGFM] : []}
         disallowedElements={nestedInLink ? disableElementsInLink : undefined}
-        components={{
-          a: ({ node: _node, children, ...props }) => {
-            return <AtomicLink {...props}>{children}</AtomicLink>;
-          },
-        }}
+        components={
+          markExternalLinks
+            ? {
+                a: ({ node: _node, children, ...props }) => {
+                  return <AtomicLink {...props}>{children}</AtomicLink>;
+                },
+              }
+            : {}
+        }
       >
         {collapsed ? truncateMarkdown(text, maxLength) : text}
       </ReactMarkdown>

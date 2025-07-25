@@ -18,6 +18,7 @@ export const AIChatContentCard: React.FC<CardViewProps> = ({ resource }) => {
         </Row>
       </ResourceCardTitle>
       <Markdown
+        markExternalLinks
         maxLength={1000}
         renderGFM
         text={resource.props.description ?? ''}
