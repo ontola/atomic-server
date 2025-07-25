@@ -10,7 +10,7 @@ const MessageWrapper = styled.div`
 export const BasicMessage = ({ text }: { text: string }) => {
   return (
     <MessageWrapper>
-      <Markdown text={text} maxLength={Infinity} />
+      <Markdown markExternalLinks text={text} maxLength={Infinity} />
     </MessageWrapper>
   );
 };
