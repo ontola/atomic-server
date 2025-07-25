@@ -216,8 +216,6 @@ export function useAtomicMCPTools({
             ),
         }),
         execute: async ({ jsonAD }) => {
-          console.log('creating resource', jsonAD);
-
           try {
             const data = JSON.parse(jsonAD);
 
@@ -248,8 +246,6 @@ export function useAtomicMCPTools({
               isA,
               propVals,
             });
-
-            console.log('created resource', resource);
 
             await resource.save();
 
