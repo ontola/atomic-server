@@ -1,5 +1,5 @@
 import { describe, it, beforeEach } from 'vitest';
-import { Agent, Store, core, JSCryptoProvider } from './index.js';
+import { Agent, Store, core, JSCryptoProvider, Resource, CollectionBuilder } from './index.js';
 
 /** Creates a fresh Store with the given agent, restoring any offline data. */
 function freshStore(agent: Agent): Store {
@@ -71,5 +71,60 @@ describe('Offline persistence across reloads', () => {
     const storeFinal = freshStore(agent);
     const rFinal = storeFinal.getResourceLoading(subject);
     expect(rFinal.get(core.properties.name)).toBe('v4');
+  });
+
+  it('children are sorted by name', async ({ expect }) => {
+    const store = freshStore(agent);
+    const drive = await store.createDrive('Sort Test');
+
+    // Create 3 children — they'll be created in this order
+    for (const name of ['Charlie', 'Alpha', 'Bravo']) {
+      const child = await store.newResource({
+        parent: drive.subject,
+        propVals: { [core.properties.name]: name },
+      });
+      await child.save();
+    }
+
+    // Query children and sort like Collection does
+    const children = store
+      .clientSideQuery(
+        r => r.get(core.properties.parent) === drive.subject,
+      )
+      .map(r => r.subject);
+
+    // Sort ascending by name
+    children.sort((a, b) => {
+      const valA = store.resources.get(a)?.get(core.properties.name);
+      const valB = store.resources.get(b)?.get(core.properties.name);
+
+      if (valA == null && valB == null) return 0;
+      if (valA == null) return 1;
+      if (valB == null) return -1;
+
+      return String(valA).localeCompare(String(valB));
+    });
+
+    const namesAsc = children.map(
+      s => store.resources.get(s)?.get(core.properties.name),
+    );
+    expect(namesAsc).toEqual(['Alpha', 'Bravo', 'Charlie']);
+
+    // Sort descending by name
+    children.sort((a, b) => {
+      const valA = store.resources.get(a)?.get(core.properties.name);
+      const valB = store.resources.get(b)?.get(core.properties.name);
+
+      if (valA == null && valB == null) return 0;
+      if (valA == null) return 1;
+      if (valB == null) return -1;
+
+      return -String(valA).localeCompare(String(valB));
+    });
+
+    const namesDesc = children.map(
+      s => store.resources.get(s)?.get(core.properties.name),
+    );
+    expect(namesDesc).toEqual(['Charlie', 'Bravo', 'Alpha']);
   });
 });
