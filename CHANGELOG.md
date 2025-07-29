@@ -15,6 +15,8 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 - Search endpoint throws error for websocket requests #1047
 - Fix search in CLI / atomic_lib #958
 
+BREAKING: `store.get_resource_extended()` now returns a `ResourceResponse` instead of a `Resource` due to the removal of named nested resources.
+
 ## [v0.40.2]
 
 - fix property sort order when importing + add tests #980

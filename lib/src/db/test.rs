@@ -70,12 +70,14 @@ fn populate_collections() {
         .get_resource_extended(&collections_collection_url, false, &ForAgent::Public)
         .unwrap();
     let member_count = collections_resource
+        .to_single()
         .get(crate::urls::COLLECTION_MEMBER_COUNT)
         .unwrap()
         .to_int()
         .unwrap();
     assert!(member_count > 11);
     let nested = collections_resource
+        .to_single()
         .get(crate::urls::COLLECTION_INCLUDE_NESTED)
         .unwrap()
         .to_bool()
@@ -100,6 +102,7 @@ fn destroy_resource_and_check_collection_and_commits() {
         agents_collection_1.to_json_ad().unwrap()
     );
     let agents_collection_count_1 = agents_collection_1
+        .to_single()
         .get(crate::urls::COLLECTION_MEMBER_COUNT)
         .unwrap()
         .to_int()
@@ -115,6 +118,7 @@ fn destroy_resource_and_check_collection_and_commits() {
         .get_resource_extended(&commits_url, false, for_agent)
         .unwrap();
     let commits_collection_count_1 = commits_collection_1
+        .to_single()
         .get(crate::urls::COLLECTION_MEMBER_COUNT)
         .unwrap()
         .to_int()
@@ -131,6 +135,7 @@ fn destroy_resource_and_check_collection_and_commits() {
         .get_resource_extended(&agents_url, false, for_agent)
         .unwrap();
     let agents_collection_count_2 = agents_collection_2
+        .to_single()
         .get(crate::urls::COLLECTION_MEMBER_COUNT)
         .unwrap()
         .to_int()
@@ -144,6 +149,7 @@ fn destroy_resource_and_check_collection_and_commits() {
         .get_resource_extended(&commits_url, false, for_agent)
         .unwrap();
     let commits_collection_count_2 = commits_collection_2
+        .to_single()
         .get(crate::urls::COLLECTION_MEMBER_COUNT)
         .unwrap()
         .to_int()
@@ -168,6 +174,7 @@ fn destroy_resource_and_check_collection_and_commits() {
         .get_resource_extended(&agents_url, false, for_agent)
         .unwrap();
     let agents_collection_count_3 = agents_collection_3
+        .to_single()
         .get(crate::urls::COLLECTION_MEMBER_COUNT)
         .unwrap()
         .to_int()
@@ -181,6 +188,7 @@ fn destroy_resource_and_check_collection_and_commits() {
         .get_resource_extended(&commits_url, false, for_agent)
         .unwrap();
     let commits_collection_count_3 = commits_collection_3
+        .to_single()
         .get(crate::urls::COLLECTION_MEMBER_COUNT)
         .unwrap()
         .to_int()
@@ -211,7 +219,8 @@ fn get_extended_resource_pagination() {
     let subject_with_page_size = format!("{}&page_size=1", subject);
     let resource = store
         .get_resource_extended(&subject_with_page_size, false, &ForAgent::Public)
-        .unwrap();
+        .unwrap()
+        .to_single();
     let cur_page = resource
         .get(urls::COLLECTION_CURRENT_PAGE)
         .unwrap()

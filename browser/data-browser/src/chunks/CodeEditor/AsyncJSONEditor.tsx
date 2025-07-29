@@ -1,14 +1,16 @@
 import CodeMirror, {
   type BasicSetupOptions,
   type EditorView,
+  type ReactCodeMirrorRef,
 } from '@uiw/react-codemirror';
 import { githubLight, githubDark } from '@uiw/codemirror-theme-github';
 import { json, jsonParseLinter } from '@codemirror/lang-json';
 import { linter, type Diagnostic } from '@codemirror/lint';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { styled, useTheme } from 'styled-components';
 
 export interface JSONEditorProps {
+  labelId?: string;
   initialValue?: string;
   showErrorStyling?: boolean;
   required?: boolean;
@@ -30,6 +32,7 @@ const basicSetup: BasicSetupOptions = {
  * ASYNC COMPONENT DO NOT IMPORT DIRECTLY, USE {@link JSONEditor.tsx}.
  */
 const AsyncJSONEditor: React.FC<JSONEditorProps> = ({
+  labelId,
   initialValue,
   showErrorStyling,
   required,
@@ -39,6 +42,7 @@ const AsyncJSONEditor: React.FC<JSONEditorProps> = ({
   onValidationChange,
   onBlur,
 }) => {
+  const editorRef = useRef<ReactCodeMirrorRef>(null);
   const theme = useTheme();
   const [value, setValue] = useState(initialValue ?? '');
   const latestDiagnostics = useRef<Diagnostic[]>([]);
@@ -86,15 +90,33 @@ const AsyncJSONEditor: React.FC<JSONEditorProps> = ({
     [validationLinter],
   );
 
+  useEffect(() => {
+    // The actual editor is not mounted immediately so we need to wait a cycle.
+    requestAnimationFrame(() => {
+      if (editorRef.current?.editor && labelId) {
+        const realEditor =
+          editorRef.current.editor.querySelector('.cm-content');
+
+        if (!realEditor) {
+          return;
+        }
+
+        realEditor.setAttribute('aria-labelledby', labelId);
+      }
+    });
+  }, [labelId]);
+
   return (
     <CodeEditorWrapper
       onBlur={() => onBlur?.()}
       className={showErrorStyling ? 'json-editor__error' : ''}
     >
       <CodeMirror
+        ref={editorRef}
         autoFocus={autoFocus}
         value={value}
         onChange={handleChange}
+        placeholder='Enter valid JSON...'
         // We disable tab indenting because that would mess with accessibility/keyboard navigation.
         indentWithTab={false}
         theme={theme.darkMode ? githubDark : githubLight}

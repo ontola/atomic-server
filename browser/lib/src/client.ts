@@ -165,13 +165,16 @@ export class Client {
           if (opts.noNested) {
             resource = json;
           } else {
-            const [parsedResource, parsedCreatedResources] = parser.parseObject(
-              json,
-              subject,
-            );
+            const resources = parser.parse(json, subject);
 
-            resource = parsedResource;
-            createdResources.push(...parsedCreatedResources);
+            if (resources.length === 0) {
+              throw new AtomicError(
+                `Could not parse JSON from fetching ${subject}. Is it an Atomic Data resource?`,
+              );
+            }
+
+            resource = resources.at(-1) as Resource;
+            createdResources.push(...resources);
           }
         } catch (e) {
           throw new AtomicError(
@@ -272,7 +275,7 @@ export class Client {
     }
 
     const json = JSON.parse(body);
-    const [resources] = parser.parseArray(json);
+    const resources = parser.parse(json);
 
     return resources;
   }

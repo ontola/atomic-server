@@ -389,18 +389,24 @@ export class Store {
 
   /** Opens a Websocket for some subject URL, or returns the existing one. */
   public getWebSocketForSubject(subject: string): WebSocket | undefined {
-    const url = new URL(subject);
-    const found = this.webSockets.get(url.origin);
+    try {
+      const url = new URL(subject);
+      const found = this.webSockets.get(url.origin);
 
-    if (found) {
-      return found;
-    } else {
-      if (typeof window !== 'undefined') {
-        this.webSockets.set(url.origin, startWebsocket(url.origin, this));
+      if (found) {
+        return found;
+      } else {
+        if (typeof window !== 'undefined') {
+          this.webSockets.set(url.origin, startWebsocket(url.origin, this));
+        }
       }
-    }
 
-    return;
+      return;
+    } catch (e) {
+      throw new Error(
+        `Could not open websocket for subject ${subject}: ${e.message}`,
+      );
+    }
   }
 
   /** Returns the base URL of the companion server */
@@ -626,7 +632,7 @@ export class Store {
         Uint8Array.from(atob(content), c => c.charCodeAt(0)),
       );
       const json = JSON.parse(jsonString);
-      const [_, resources] = parser.parseObject(json);
+      const resources = parser.parse(json);
       this.addResources(resources);
     });
   }

@@ -469,6 +469,10 @@ export class Resource<C extends OptionalClass = any> {
     return builtVersions;
   }
 
+  /**
+   * Sets the resource to the specified version and saves it.
+   * @param version The version to set the resource to, you can get this using `resource.getHistory()`
+   */
   public async setVersion(version: Version): Promise<void> {
     const versionPropvals = version.resource.getPropVals();
 
@@ -483,6 +487,7 @@ export class Resource<C extends OptionalClass = any> {
       await this.set(key, value);
     }
 
+    // TODO: We should let the user save, this is what we usually do.
     await this.save();
   }
 

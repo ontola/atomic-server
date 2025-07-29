@@ -30,15 +30,6 @@ impl fmt::Display for Right {
     }
 }
 
-/// Looks for children relations, adds to the resource. Performs a Query, might be expensive.
-pub fn add_children(store: &impl Storelike, resource: &mut Resource) -> AtomicResult<Resource> {
-    let results = store.query(&Query::new_prop_val(urls::PARENT, resource.get_subject()))?;
-    let mut children = results.subjects;
-    children.sort();
-    resource.set(urls::CHILDREN.into(), children.into(), store)?;
-    Ok(resource.to_owned())
-}
-
 /// Throws if not allowed.
 /// Returns string with explanation if allowed.
 pub fn check_write(

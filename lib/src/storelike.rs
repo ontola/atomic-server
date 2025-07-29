@@ -17,6 +17,76 @@ pub enum PathReturn {
     Atom(Box<Atom>),
 }
 
+pub enum ResourceResponse {
+    Resource(Resource),
+    ResourceWithReferenced(Resource, Vec<Resource>),
+}
+
+impl ResourceResponse {
+    /// Only take the main resource, discard any referenced resources.
+    pub fn to_single(&self) -> Resource {
+        match self {
+            ResourceResponse::Resource(resource) => resource.clone(),
+            ResourceResponse::ResourceWithReferenced(resource, _) => resource.clone(),
+        }
+    }
+
+    pub fn to_json_ad(&self) -> AtomicResult<String> {
+        match self {
+            ResourceResponse::Resource(resource) => Ok(resource.to_json_ad()?),
+            ResourceResponse::ResourceWithReferenced(resource, references) => {
+                let mut list = references.clone();
+                list.push(resource.clone());
+                Ok(Resource::vec_to_json_ad(&list)?)
+            }
+        }
+    }
+
+    pub fn to_json(&self, store: &impl Storelike) -> AtomicResult<String> {
+        match self {
+            ResourceResponse::Resource(resource) => Ok(resource.to_json(store)?),
+            ResourceResponse::ResourceWithReferenced(resource, references) => {
+                let mut list = references.clone();
+                list.push(resource.clone());
+                Ok(Resource::vec_to_json(&list, store)?)
+            }
+        }
+    }
+
+    pub fn to_json_ld(&self, store: &impl Storelike) -> AtomicResult<String> {
+        match self {
+            ResourceResponse::Resource(resource) => Ok(resource.to_json_ld(store)?),
+            ResourceResponse::ResourceWithReferenced(resource, references) => {
+                let mut list = references.clone();
+                list.push(resource.clone());
+                Ok(Resource::vec_to_json_ld(&list, store)?)
+            }
+        }
+    }
+
+    pub fn to_atoms(&self) -> Vec<Atom> {
+        match self {
+            ResourceResponse::Resource(resource) => resource.to_atoms(),
+            ResourceResponse::ResourceWithReferenced(resource, references) => {
+                let mut list = references.clone();
+                list.push(resource.clone());
+                Resource::vec_to_atoms(&list)
+            }
+        }
+    }
+
+    pub fn to_n_triples(&self, store: &impl Storelike) -> AtomicResult<String> {
+        match self {
+            ResourceResponse::Resource(resource) => Ok(resource.to_n_triples(store)?),
+            ResourceResponse::ResourceWithReferenced(resource, references) => {
+                let mut list = references.clone();
+                list.push(resource.clone());
+                Ok(Resource::vec_to_n_triples(&list, store)?)
+            }
+        }
+    }
+}
+
 pub type ResourceCollection = Vec<Resource>;
 
 /// Storelike provides many useful methods for interacting with an Atomic Store.
@@ -223,11 +293,11 @@ pub trait Storelike: Sized {
         subject: &str,
         skip_dynamic: bool,
         for_agent: &ForAgent,
-    ) -> AtomicResult<Resource> {
+    ) -> AtomicResult<ResourceResponse> {
         let _ignore = skip_dynamic;
         let resource = self.get_resource(subject)?;
         hierarchy::check_read(self, &resource, for_agent)?;
-        Ok(resource)
+        Ok(resource.into())
     }
 
     /// This function is called whenever a Commit is applied.
@@ -290,7 +360,9 @@ pub trait Storelike: Sized {
         // The URL of the next resource
         let mut subject = id_url;
         // Set the currently selectred resource parent, which starts as the root of the search
-        let mut resource = self.get_resource_extended(&subject, false, for_agent)?;
+        let mut resource = self
+            .get_resource_extended(&subject, false, for_agent)?
+            .to_single();
         // During each of the iterations of the loop, the scope changes.
         // Try using pathreturn...
         let mut current: PathReturn = PathReturn::Subject(subject.clone());
@@ -324,7 +396,9 @@ pub trait Storelike: Sized {
                             ))?
                             .to_string();
                         subject = url;
-                        resource = self.get_resource_extended(&subject, false, for_agent)?;
+                        resource = self
+                            .get_resource_extended(&subject, false, for_agent)?
+                            .to_single();
                         current = PathReturn::Subject(subject.clone());
                         continue;
                     }

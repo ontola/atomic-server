@@ -7,7 +7,7 @@ import { styled } from 'styled-components';
 import { Markdown } from 'tiptap-markdown';
 import { EditorEvents } from './EditorEvents';
 import { FaCode } from 'react-icons/fa6';
-import { useCallback, useContext, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { BubbleMenu } from './BubbleMenu';
 import { TiptapContextProvider } from './TiptapContext';
 import { ToggleButton } from './ToggleButton';

@@ -6,7 +6,8 @@ use crate::{
     agents::ForAgent,
     endpoints::{Endpoint, HandlePostContext},
     errors::AtomicResult,
-    urls, Resource, Storelike,
+    storelike::ResourceResponse,
+    urls, Storelike,
 };
 
 pub fn import_endpoint() -> Endpoint {
@@ -25,9 +26,13 @@ pub fn import_endpoint() -> Endpoint {
     }
 }
 
+pub fn handle_get(context: HandleGetContext) -> AtomicResult<ResourceResponse> {
+    import_endpoint().to_resource_response(context.store)
+}
+
 /// When an importer is shown, we list a bunch of Parameters and a list of previously imported items.
 #[tracing::instrument]
-pub fn handle_post(context: HandlePostContext) -> AtomicResult<Resource> {
+pub fn handle_post(context: HandlePostContext) -> AtomicResult<ResourceResponse> {
     let HandlePostContext {
         store,
         body,
@@ -89,5 +94,5 @@ pub fn handle_post(context: HandlePostContext) -> AtomicResult<Resource> {
         );
     }
 
-    import_endpoint().to_resource(context.store)
+    import_endpoint().to_resource_response(context.store)
 }
