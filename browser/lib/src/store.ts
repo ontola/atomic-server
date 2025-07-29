@@ -585,6 +585,110 @@ export class Store {
     return resource;
   }
 
+  /**
+   * Creates a new personal Drive for the current Agent, saves it, and links
+   * it to the Agent resource. Returns the Drive's Resource (already saved).
+   *
+   * This is the canonical way to create a drive — use it instead of
+   * duplicating the create-drive-save-link-agent pattern.
+   */
+  public async createDrive(
+    name: string,
+    description?: string,
+  ): Promise<Resource> {
+    const agent = this.getAgent();
+
+    if (!agent?.subject) {
+      throw new Error('Cannot create a drive without an Agent');
+    }
+
+    const drive = await this.newResource({
+      isA: server.classes.drive,
+      noParent: true,
+      propVals: {
+        [core.properties.name]: name,
+        [core.properties.description]:
+          description ?? 'Your personal drive.',
+        [core.properties.write]: [agent.subject],
+        [core.properties.read]: [agent.subject],
+      },
+    });
+
+    await drive.save();
+
+    // Link the drive to the Agent resource
+    const agentResource = this.getResourceLoading(agent.subject);
+    await agentResource.set(
+      core.properties.personalDrive,
+      drive.subject,
+      false,
+    );
+    agentResource.push(server.properties.drives, [drive.subject], true);
+    await agentResource.save();
+
+    return drive;
+  }
+
+  /**
+   * Restores resources that were saved offline from localStorage.
+   * These entries contain full Loro snapshots that survive page reloads.
+   * Call this early during app init, before components render.
+   */
+  public restoreOfflineResources(): number {
+    if (typeof localStorage === 'undefined') return 0;
+
+    const prefix = 'atomic.offline.';
+    const keys: string[] = [];
+
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+
+      if (key?.startsWith(prefix)) {
+        keys.push(key);
+      }
+    }
+
+    if (keys.length === 0) return 0;
+
+    let restored = 0;
+
+    for (const key of keys) {
+      try {
+        const json = localStorage.getItem(key);
+
+        if (!json) continue;
+
+        const parsed = JSON.parse(json);
+        const subject: string = parsed['@id'] ?? key.slice(prefix.length);
+        const res = new Resource(subject);
+
+        for (const [k, v] of Object.entries(parsed)) {
+          if (k === '@id' || k === '_lastLocalSignature') continue;
+          res.setUnsafe(k, v as JSONValue);
+        }
+
+        res.loading = false;
+        this.addResources(res, { alias: subject, skipCommitCompare: true });
+
+        // Restore commit chain state so followup saves don't trigger new genesis
+        if (parsed['_lastLocalSignature']) {
+          const stored = this.resources.get(subject);
+
+          if (stored) {
+            (stored as any)._lastLocalSignature =
+              parsed['_lastLocalSignature'];
+          }
+        }
+
+        restored++;
+      } catch {
+        // Skip corrupted entries
+      }
+    }
+
+    return restored;
+  }
+
   public async search(query: string, opts: SearchOpts = {}): Promise<string[]> {
     // Try local search first if the index has content and no filters are set.
     // Filters (property-value constraints) require server-side Tantivy for now.
@@ -1041,8 +1145,9 @@ export class Store {
       });
     }
 
-    // If offline, return what we have or throw
-    if (!this._serverConnected) {
+    // If offline and the resource can't be fetched via HTTP (DID subjects),
+    // return local data or throw. HTTP URLs can always be tried directly.
+    if (!this._serverConnected && resolved.startsWith('did:')) {
       const local = this.resources.get(resolved);
 
       if (local) {
