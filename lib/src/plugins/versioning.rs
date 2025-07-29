@@ -5,7 +5,7 @@ use crate::{
     collections::CollectionBuilder,
     endpoints::{Endpoint, HandleGetContext},
     errors::AtomicResult,
-    storelike::Query,
+    storelike::{Query, ResourceResponse},
     urls, AtomicError, Commit, Resource, Storelike,
 };
 
@@ -33,7 +33,7 @@ pub fn all_versions_endpoint() -> Endpoint {
 }
 
 #[tracing::instrument]
-fn handle_version_request(context: HandleGetContext) -> AtomicResult<Resource> {
+fn handle_version_request(context: HandleGetContext) -> AtomicResult<ResourceResponse> {
     let params = context.subject.query_pairs();
     let mut commit_url = None;
     for (k, v) in params {
@@ -42,15 +42,15 @@ fn handle_version_request(context: HandleGetContext) -> AtomicResult<Resource> {
         };
     }
     if commit_url.is_none() {
-        return version_endpoint().to_resource(context.store);
+        return version_endpoint().to_resource_response(context.store);
     }
     let mut resource = construct_version(&commit_url.unwrap(), context.store, context.for_agent)?;
     resource.set_subject(context.subject.to_string());
-    Ok(resource)
+    Ok(ResourceResponse::Resource(resource))
 }
 
 #[tracing::instrument]
-fn handle_all_versions_request(context: HandleGetContext) -> AtomicResult<Resource> {
+fn handle_all_versions_request(context: HandleGetContext) -> AtomicResult<ResourceResponse> {
     let HandleGetContext {
         store,
         for_agent,
@@ -64,7 +64,7 @@ fn handle_all_versions_request(context: HandleGetContext) -> AtomicResult<Resour
         };
     }
     if target_subject.is_none() {
-        return all_versions_endpoint().to_resource(store);
+        return all_versions_endpoint().to_resource_response(store);
     }
     let target = target_subject.unwrap();
     let collection_builder = CollectionBuilder {
@@ -86,7 +86,9 @@ fn handle_all_versions_request(context: HandleGetContext) -> AtomicResult<Resour
         .map(|commit_url| construct_version_endpoint_url(store, commit_url))
         .collect::<AtomicResult<Vec<String>>>()?;
     collection.members = new_members;
-    collection.to_resource(store)
+
+    let resource_response = collection.to_resource(store)?;
+    Ok(resource_response)
 }
 
 /// Searches the local store for all commits with this subject, returns sorted from old to new.

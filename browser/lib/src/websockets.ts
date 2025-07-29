@@ -58,7 +58,7 @@ function parseResourceMessage(ev: MessageEvent): Resource[] {
   const resourceJSON: string = ev.data.slice(9);
   const parsed = JSON.parse(resourceJSON);
   const parser = new JSONADParser();
-  const [_, resources] = parser.parseObject(parsed);
+  const resources = parser.parse(parsed);
 
   return resources;
 }

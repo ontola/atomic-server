@@ -2,8 +2,9 @@
 //! They are constructed using a [Query]
 use crate::{
     agents::ForAgent,
+    class_extender::{ClassExtender, GetExtenderContext},
     errors::AtomicResult,
-    storelike::{Query, ResourceCollection},
+    storelike::{Query, ResourceCollection, ResourceResponse},
     urls, Resource, Storelike, Value,
 };
 
@@ -125,7 +126,7 @@ pub struct Collection {
     /// The actual items that you're interested in. List the member subjects of the current page.
     pub members: Vec<String>,
     /// The members as full resources, instead of a list of subjects. Is only populated if `nested` is true.
-    pub members_nested: Option<Vec<Resource>>,
+    pub referenced_resources: Option<Vec<Resource>>,
     /// URL of the value to sort by
     pub sort_by: Option<String>,
     // Sorts ascending by default
@@ -212,7 +213,11 @@ impl Collection {
 
         let query_result = store.query(&q)?;
         let members = query_result.subjects;
-        let members_nested = Some(query_result.resources);
+        let referenced_resources = if collection_builder.include_nested {
+            Some(query_result.resources)
+        } else {
+            None
+        };
         let total_items = query_result.count;
         let pages_fraction = total_items as f64 / collection_builder.page_size as f64;
         let total_pages = pages_fraction.ceil() as usize;
@@ -227,7 +232,7 @@ impl Collection {
         let collection = Collection {
             total_pages,
             members,
-            members_nested,
+            referenced_resources,
             total_items,
             subject: collection_builder.subject,
             property: collection_builder.property,
@@ -243,10 +248,9 @@ impl Collection {
         Ok(collection)
     }
 
-    pub fn to_resource(&self, store: &impl Storelike) -> AtomicResult<crate::Resource> {
+    pub fn to_resource(&self, store: &impl Storelike) -> AtomicResult<ResourceResponse> {
         let mut resource = crate::Resource::new(self.subject.clone());
-        self.add_to_resource(&mut resource, store)?;
-        Ok(resource)
+        self.add_to_resource(&mut resource, store)
     }
 
     /// Adds the Collection props to an existing Resource.
@@ -254,14 +258,10 @@ impl Collection {
         &self,
         resource: &mut Resource,
         store: &impl Storelike,
-    ) -> AtomicResult<crate::Resource> {
+    ) -> AtomicResult<ResourceResponse> {
         resource.set(
             crate::urls::COLLECTION_MEMBERS.into(),
-            if let Some(nested_members) = &self.members_nested {
-                nested_members.clone().into()
-            } else {
-                self.members.clone().into()
-            },
+            self.members.clone().into(),
             store,
         )?;
         if let Some(prop) = &self.property {
@@ -306,7 +306,15 @@ impl Collection {
             store,
         )?;
 
-        Ok(resource.to_owned())
+        match &self.referenced_resources {
+            Some(referenced_resources) => {
+                return Ok(ResourceResponse::ResourceWithReferenced(
+                    resource.clone(),
+                    referenced_resources.clone(),
+                ));
+            }
+            None => Ok(ResourceResponse::Resource(resource.clone())),
+        }
     }
 }
 
@@ -319,7 +327,7 @@ pub fn construct_collection_from_params(
     query_params: url::form_urlencoded::Parse,
     resource: &mut Resource,
     for_agent: &ForAgent,
-) -> AtomicResult<Resource> {
+) -> AtomicResult<ResourceResponse> {
     let mut sort_by = None;
     let mut sort_desc = false;
     let mut current_page = 0;
@@ -429,6 +437,23 @@ pub fn create_collection_resource_for_class(
     Ok(collection_resource)
 }
 
+pub fn build_collection_extender() -> ClassExtender {
+    ClassExtender {
+        class: urls::COLLECTION.to_string(),
+        on_resource_get: Some(|context| -> AtomicResult<ResourceResponse> {
+            let GetExtenderContext {
+                store,
+                url,
+                db_resource: resource,
+                for_agent,
+            } = context;
+            construct_collection_from_params(store, url.query_pairs(), resource, for_agent)
+        }),
+        before_commit: None,
+        after_commit: None,
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -476,7 +501,7 @@ mod test {
             Collection::collect_members(&store, collection_builder, &ForAgent::Sudo).unwrap();
         assert!(collection.members.contains(&urls::PROPERTY.into()));
 
-        let resource_collection = &collection.to_resource(&store).unwrap();
+        let resource_collection = &collection.to_resource(&store).unwrap().to_single();
         resource_collection
             .get(urls::COLLECTION_INCLUDE_NESTED)
             .unwrap_err();
@@ -501,10 +526,10 @@ mod test {
         };
         let collection =
             Collection::collect_members(&store, collection_builder, &ForAgent::Sudo).unwrap();
-        let first_resource = &collection.members_nested.clone().unwrap()[0];
+        let first_resource = &collection.referenced_resources.clone().unwrap()[0];
         assert!(first_resource.get_subject().contains("Agent"));
 
-        let resource_collection = &collection.to_resource(&store).unwrap();
+        let resource_collection = &collection.to_resource(&store).unwrap().to_single();
         let val = resource_collection
             .get(urls::COLLECTION_INCLUDE_NESTED)
             .unwrap()
@@ -528,7 +553,8 @@ mod test {
                 false,
                 &ForAgent::Public,
             )
-            .unwrap();
+            .unwrap()
+            .to_single();
         assert!(
             collections_collection
                 .get(urls::COLLECTION_PROPERTY)
@@ -559,7 +585,8 @@ mod test {
                 false,
                 &ForAgent::Public,
             )
-            .unwrap();
+            .unwrap()
+            .to_single();
         assert!(
             collection_page_size
                 .get(urls::COLLECTION_PAGE_SIZE)
@@ -573,7 +600,8 @@ mod test {
                 false,
                 &ForAgent::Public,
             )
-            .unwrap();
+            .unwrap()
+            .to_single();
         assert!(
             collection_page_nr
                 .get(urls::COLLECTION_PAGE_SIZE)

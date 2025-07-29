@@ -563,6 +563,69 @@ impl Resource {
     pub fn to_n_triples(&self, store: &impl Storelike) -> AtomicResult<String> {
         crate::serialize::atoms_to_ntriples(self.to_atoms(), store)
     }
+
+    pub fn vec_to_json_ad(resources: &Vec<Resource>) -> AtomicResult<String> {
+        let str = resources
+            .iter()
+            .map(|r| r.to_json_ad())
+            .collect::<AtomicResult<Vec<String>>>()?
+            .join(",");
+
+        Ok(format!("[{}]", str))
+    }
+
+    pub fn vec_to_json(resources: &Vec<Resource>, store: &impl Storelike) -> AtomicResult<String> {
+        let str = resources
+            .iter()
+            .map(|r| r.to_json(store))
+            .collect::<AtomicResult<Vec<String>>>()?
+            .join(",");
+
+        Ok(format!("[{}]", str))
+    }
+
+    pub fn vec_to_json_ld(
+        resources: &Vec<Resource>,
+        store: &impl Storelike,
+    ) -> AtomicResult<String> {
+        let str = resources
+            .iter()
+            .map(|r| r.to_json_ld(store))
+            .collect::<AtomicResult<Vec<String>>>()?
+            .join(",");
+
+        Ok(format!("[{}]", str))
+    }
+
+    pub fn vec_to_atoms(resources: &Vec<Resource>) -> Vec<Atom> {
+        let mut atoms = Vec::new();
+
+        for resource in resources {
+            atoms.extend(resource.to_atoms_iter());
+        }
+
+        atoms
+    }
+
+    pub fn vec_to_n_triples(
+        resources: &Vec<Resource>,
+        store: &impl Storelike,
+    ) -> AtomicResult<String> {
+        let atoms = Self::vec_to_atoms(resources);
+        crate::serialize::atoms_to_ntriples(atoms, store)
+    }
+}
+
+impl From<Resource> for crate::storelike::ResourceResponse {
+    fn from(resource: Resource) -> Self {
+        crate::storelike::ResourceResponse::Resource(resource)
+    }
+}
+
+impl From<&Resource> for crate::storelike::ResourceResponse {
+    fn from(resource: &Resource) -> Self {
+        crate::storelike::ResourceResponse::Resource(resource.clone())
+    }
 }
 
 #[cfg(test)]

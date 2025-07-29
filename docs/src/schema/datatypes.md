@@ -24,8 +24,16 @@ A URL that should resolve to an [Atomic Resource](../core/concepts.md#Resource).
 
 _URL: `https://atomicdata.dev/datatypes/URI`_
 
-A Uniform Resource Identifier, preferably a URL (i.e. an URI that can be fetched).
+A Uniform Resource Identifier.
 Could be HTTP, HTTPS, or any other type of schema.
+
+Examples:
+
+```
+https://example.com/1
+file://home/user/file.txt
+mailto:user@example.com
+```
 
 ## String
 
@@ -64,10 +72,10 @@ e.g. `-420`
 
 _URL: `https://atomicdata.dev/datatypes/float`_
 
-Number with a comma.
-Max value: [`9223372036854775807`](https://en.wikipedia.org/wiki/9,223,372,036,854,775,807)
+A 64 bit decimal number.
+Max value: `1.7976931348623157e+308`
 
-e.g. `-420`
+e.g. `-4.20`
 
 ## Boolean
 
@@ -114,3 +122,22 @@ Note that other types of arrays are not included in this spec, but can be perfec
 ([Discussion](https://github.com/atomicdata-dev/atomic-data-docs/issues/127))
 
 - e.g. `["https://example.com/1", "https://example.com/1"]`
+
+## JSON
+
+_URL: `https://atomicdata.dev/datatypes/json`_
+
+Any valid JSON value.
+Can be used to store arbitrary json data.
+
+example:
+
+```json
+[
+  "thing",
+  {
+    "name": "thing",
+  },
+  9883
+]
+```

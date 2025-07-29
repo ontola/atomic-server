@@ -96,25 +96,29 @@ pub async fn search_query(
     // Get all resources returned by the search, this also performs authorization checks!
     let resources = get_resources(req, &appstate, &subject, subjects.clone(), limit)?;
 
-    if params.include.unwrap_or(false) {
-        results_resource.set(urls::ENDPOINT_RESULTS.into(), resources.into(), store)?;
-    } else {
-        // Convert the list of resources back into subjects.
-        let filtered_subjects: Vec<String> =
-            resources.iter().map(|r| r.get_subject().clone()).collect();
+    // Convert the list of resources back into subjects.
+    let filtered_subjects: Vec<String> =
+        resources.iter().map(|r| r.get_subject().clone()).collect();
 
-        results_resource.set(
-            urls::ENDPOINT_RESULTS.into(),
-            filtered_subjects.into(),
-            store,
-        )?;
-    }
+    results_resource.set(
+        urls::ENDPOINT_RESULTS.into(),
+        filtered_subjects.into(),
+        store,
+    )?;
+
+    let mut result_vec: Vec<Resource> = if params.include.unwrap_or(false) {
+        resources
+    } else {
+        vec![]
+    };
+
+    result_vec.push(results_resource);
 
     let mut builder = HttpResponse::Ok();
     builder.append_header(("Server-Timing", timer.header_value()));
 
     // TODO: support other serialization options
-    Ok(builder.body(results_resource.to_json_ad()?))
+    Ok(builder.body(Resource::vec_to_json_ad(&result_vec)?))
 }
 
 #[derive(Debug, std::hash::Hash, Eq, PartialEq)]
@@ -144,7 +148,7 @@ fn get_resources(
         match appstate.store.get_resource_extended(&s, true, &for_agent) {
             Ok(r) => {
                 if resources.len() < limit {
-                    resources.push(r);
+                    resources.push(r.to_single());
                 } else {
                     break;
                 }
