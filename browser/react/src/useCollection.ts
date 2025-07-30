@@ -11,6 +11,8 @@ import { useStore } from './hooks.js';
 export type CollectionItemProps = { collection: Collection; index: number };
 export type UseCollectionResult = {
   collection: Collection;
+  /** Whether the collection has completed its initial fetch. */
+  ready: boolean;
   invalidateCollection: () => Promise<void>;
   /**
    * Helper function for rendering a list of all a collections members.
@@ -89,6 +91,7 @@ export function useCollection(
   const [collection, setCollection] = useState(() =>
     buildCollection(store, server, queryFilterMemo, pageSize, includeNested),
   );
+  const [ready, setReady] = useState(false);
 
   const mapAll = useCallback(
     <T>(func: ({ index, collection }: CollectionItemProps) => T): T[] => {
@@ -106,6 +109,7 @@ export function useCollection(
   useEffect(() => {
     collection.waitForReady().then(() => {
       setCollection(proxyCollection(collection.__internalObject));
+      setReady(true);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -124,8 +128,11 @@ export function useCollection(
       pageSize,
     );
 
+    setReady(false);
+
     newCollection.waitForReady().then(() => {
       setCollection(proxyCollection(newCollection.__internalObject));
+      setReady(true);
       firstRunRef.current = false;
     });
   }, [queryFilterMemo, pageSize, store, server]);
@@ -135,7 +142,7 @@ export function useCollection(
     setCollection(proxyCollection(collection.__internalObject));
   }, [collection.__internalObject]);
 
-  return { collection, invalidateCollection, mapAll };
+  return { collection, ready, invalidateCollection, mapAll };
 }
 
 function useQueryFilterMemo(queryFilter: QueryFilter) {

@@ -55,7 +55,7 @@ export function useTableData(resource: Resource): UseTableDataResult {
     sort_desc: sorting.sortDesc,
   };
 
-  const { collection, invalidateCollection, mapAll } = useCollection(
+  const { collection, ready, invalidateCollection, mapAll } = useCollection(
     queryFilter,
     {
       pageSize: PAGE_SIZE,
@@ -70,6 +70,7 @@ export function useTableData(resource: Resource): UseTableDataResult {
     sorting,
     setSortBy,
     collection,
+    ready,
     invalidateCollection,
     mapAll,
   };

@@ -1294,6 +1294,12 @@ export class Resource<C extends OptionalClass = any> {
    * On reconnect, a fresh commit will be created from the Loro snapshot.
    */
   private async applyPendingCommitsLocally(): Promise<void> {
+    // Ensure createdAt is set — the server normally sets this when applying
+    // a commit, but offline we need to do it ourselves for sorting to work.
+    if (!this.propvals.has(commits.properties.createdAt)) {
+      this.propvals.set(commits.properties.createdAt, Date.now());
+    }
+
     // Build a JSON-AD representation with proper serialization.
     const obj: Record<string, unknown> = { '@id': this.subject };
 

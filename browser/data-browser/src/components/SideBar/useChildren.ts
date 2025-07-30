@@ -48,14 +48,11 @@ export function useChildren(parentSubject: string | undefined): string[] {
   parentRef.current = parentSubject;
 
   useEffect(() => {
-    const unsub = store.on(
-      StoreEvents.ResourceManuallyCreated,
-      resource => {
-        if (resource.get(core.properties.parent) === parentRef.current) {
-          invalidateRef.current();
-        }
-      },
-    );
+    const unsub = store.on(StoreEvents.ResourceManuallyCreated, resource => {
+      if (resource.get(core.properties.parent) === parentRef.current) {
+        invalidateRef.current();
+      }
+    });
 
     return unsub;
   }, [store]);
