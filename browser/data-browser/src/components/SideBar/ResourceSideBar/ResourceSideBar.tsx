@@ -46,7 +46,7 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = ({
   const active = currentUrl === subject;
   const [open, setOpen] = useState(active);
 
-  const subResources = useChildren(subject);
+  const { subjects: subResources } = useChildren(subject);
 
   const dragData: SideBarDragData = {
     renderedUnder: renderedHierarchy.at(-1)!,

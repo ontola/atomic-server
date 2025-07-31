@@ -39,7 +39,7 @@ const NewPluginButton = lazy(() => import('@chunks/Plugins/NewPluginButton'));
 function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
   const { drive: baseURL, setDrive: setBaseURL } = useSettings();
   const store = useStore();
-  const subResources = useChildren(resource.subject);
+  const { subjects: subResources } = useChildren(resource.subject);
   const [ancestry, setAncestry] = useState<string[]>([]);
 
   useEffect(() => {

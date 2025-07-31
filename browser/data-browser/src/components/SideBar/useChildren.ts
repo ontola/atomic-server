@@ -6,11 +6,14 @@ import { useEffect, useRef, useState } from 'react';
  * Uses the Collection system which queries the WASM DB first, then the server.
  * Automatically refreshes when a new resource is created under this parent.
  */
-export function useChildren(parentSubject: string | undefined): string[] {
+export function useChildren(parentSubject: string | undefined): {
+  subjects: string[];
+  loading: boolean;
+} {
   const store = useStore();
   const [subjects, setSubjects] = useState<string[]>([]);
 
-  const { collection, invalidateCollection } = useCollection(
+  const { collection, ready, invalidateCollection } = useCollection(
     {
       property: core.properties.parent,
       value: parentSubject,
@@ -57,5 +60,5 @@ export function useChildren(parentSubject: string | undefined): string[] {
     return unsub;
   }, [store]);
 
-  return subjects;
+  return { subjects, loading: !ready };
 }

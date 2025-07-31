@@ -83,8 +83,6 @@ export function useCollection(
     includeNested = false,
   }: UseCollectionOptions = {},
 ): UseCollectionResult {
-  const firstRunRef = useRef(true);
-
   const store = useStore();
   const queryFilterMemo = useQueryFilterMemo(queryFilter);
 
@@ -107,35 +105,29 @@ export function useCollection(
   );
 
   useEffect(() => {
-    collection.waitForReady().then(() => {
-      setCollection(proxyCollection(collection.__internalObject));
-      setReady(true);
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    if (firstRunRef.current) {
-      firstRunRef.current = false;
-
-      return;
-    }
-
-    const newCollection = buildCollection(
+    const col = buildCollection(
       store,
       server,
       queryFilterMemo,
       pageSize,
+      includeNested,
     );
+
+    let cancelled = false;
 
     setReady(false);
 
-    newCollection.waitForReady().then(() => {
-      setCollection(proxyCollection(newCollection.__internalObject));
+    col.waitForReady().then(() => {
+      if (cancelled) return;
+
+      setCollection(proxyCollection(col.__internalObject));
       setReady(true);
-      firstRunRef.current = false;
     });
-  }, [queryFilterMemo, pageSize, store, server]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [queryFilterMemo, pageSize, store, server, includeNested]);
 
   const invalidateCollection = useCallback(async () => {
     await collection.__internalObject.refresh();

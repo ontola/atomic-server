@@ -43,7 +43,9 @@ export class ClientDbWorker {
   private workerUrl: string;
   private wasmUrl: string;
   private ready = false;
+  private seeded = true;
   private initPromise: Promise<void> | null = null;
+  private seedPromise: Promise<void> | null = null;
 
   /**
    * @param wasmUrl - URL to the atomic_wasm.js glue module (e.g. '/wasm/atomic_wasm.js')
@@ -161,20 +163,35 @@ export class ClientDbWorker {
     return result as number;
   }
 
-  /** Whether the worker has been initialized. */
+  /** Whether the worker has been initialized and seeded. */
   get isReady(): boolean {
-    return this.ready;
+    return this.ready && this.seeded;
   }
 
-  /** Wait for the WASM DB to finish initializing. Resolves immediately if already ready. */
+  /**
+   * Set a promise that must resolve before the DB is considered fully ready.
+   * Used to include post-init seeding in the readiness gate.
+   */
+  setSeedPromise(promise: Promise<void>): void {
+    this.seeded = false;
+    this.seedPromise = promise.then(() => {
+      this.seeded = true;
+    });
+  }
+
+  /** Wait for the WASM DB to finish initializing and seeding. Resolves immediately if already ready. */
   async waitForReady(): Promise<boolean> {
-    if (this.ready) return true;
+    if (this.ready && this.seeded) return true;
     if (!this.initPromise) return false;
 
     try {
       await this.initPromise;
 
-      return this.ready;
+      if (this.seedPromise) {
+        await this.seedPromise;
+      }
+
+      return this.ready && this.seeded;
     } catch {
       return false;
     }
@@ -185,7 +202,9 @@ export class ClientDbWorker {
     this.worker?.terminate();
     this.worker = null;
     this.ready = false;
+    this.seeded = true;
     this.initPromise = null;
+    this.seedPromise = null;
 
     // Reject all pending requests
     for (const [, pending] of this.pending) {
