@@ -1,16 +1,10 @@
 {{#title Atomic Schema FAQ}}
 # Atomic Schema FAQ
 
-## How do I create a Property that supports multiple Datatypes?
-
-A property only has one single Datatype.
-However, feel free to create a new kind of Datatype that, in turn, refers to other Datatypes.
-Perhaps Generics, or Option like types should be part of the Atomic Base Datatypes.
-
 ## Do you have an `enum` datatype?
 
-In Atomic Data, `enum` is not a datatype, but it's a constraint that can be added to properties that have.
-You can set [`allows-only`](https://atomicdata.dev/properties/allowsOnly) on a Property, and use that to limit which values are allowed.
+There is no dedicated `enum` datatype but you can use the `allows-only` property to achieve the same effect.
+By setting `allows-only` on a Property you limit which specific values are allowed. They work on both `atomic-url` and `resource-array` properties.
 
 ## How should a client deal with Shortname collisions?
 
@@ -53,7 +47,7 @@ If that server is offline, or the URL has changed, the existing links will break
 This is a fundamental problem to HTTP, and not unique to Atomic Data.
 Like with websites, hosts should make sure that their server stays available, and that URLs remain static.
 
-One possible solution to this problem, is using Content Addressing, such as the [IPFS](../interoperability/ipfs.md) protocol enables, which is why we're planning for using that in the near future.
+One possible solution to this problem, is using Content Addressing, such as the [IPFS](../interoperability/ipfs.md) protocol enables, which is why we're planning on using something like that in the near future.
 
 Another approach, is using [foreign keys (see issue)](https://github.com/ontola/atomic-data-docs/issues/43).
 
@@ -69,7 +63,7 @@ For more information, see [RDF interoperability](../interoperability/rdf.md).
 
 Every time you use an external URL in your data, you kind of create a dependency.
 This is fundamental to linked data.
-In Atomic Data, not having access to the Property in some JSON-AD resource will lead to now knowing how to interpret the data itself.
+In Atomic Data, not having access to the Property in some JSON-AD resource will lead to not knowing how to interpret the data itself.
 You will no longer know what the Datatype was (other than the native JSON datatype, of course), or what the semantic meaning was of the relationship.
 
 There are multiple ways we can deal with this:
@@ -83,4 +77,3 @@ There are multiple ways we can deal with this:
 
 Atomic Data does not have a concept of inheritance.
 However, you can use the `isA` property to link to _multiple Classes_ from a single resource.
-This effectively
