@@ -251,19 +251,19 @@ pub fn populate_default_store(store: &impl Storelike) -> AtomicResult<()> {
         .map_err(|e| format!("Failed to import default_store.json: {e}"))?;
     store
         .import(
-            include_str!("../defaults/chatroom.json",),
+            include_str!("../defaults/chatroom.json"),
             &ParseOpts::default(),
         )
         .map_err(|e| format!("Failed to import chatroom.json: {e}"))?;
     store
         .import(
-            include_str!("../defaults/table.json",),
+            include_str!("../defaults/table.json"),
             &ParseOpts::default(),
         )
         .map_err(|e| format!("Failed to import table.json: {e}"))?;
     store
         .import(
-            include_str!("../defaults/ontologies.json",),
+            include_str!("../defaults/ontologies.json"),
             &ParseOpts::default(),
         )
         .map_err(|e| format!("Failed to import ontologies.json: {e}"))?;

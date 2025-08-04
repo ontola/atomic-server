@@ -38,5 +38,6 @@ pub fn default_class_extenders() -> Vec<ClassExtender> {
         crate::collections::build_collection_extender(),
         crate::plugins::invite::build_invite_extender(),
         crate::plugins::chatroom::build_chatroom_extender(),
+        crate::plugins::chatroom::build_message_extender(),
     ]
 }

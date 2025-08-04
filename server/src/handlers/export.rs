@@ -113,9 +113,7 @@ impl<'a> CSVExporter<'a> {
                 .to_single()
                 .get_propvals()
                 .clone(),
-            Value::Resource(resource) => resource.get_propvals().clone(),
             Value::NestedResource(nested) => match nested {
-                SubResource::Resource(resource) => resource.get_propvals().clone(),
                 SubResource::Subject(subject) => self
                     .store
                     .get_resource_extended(subject, false, self.agent)?
@@ -142,9 +140,6 @@ impl<'a> CSVExporter<'a> {
                 let mut order = vec![];
                 for value in requires.iter().chain(recommends.iter()) {
                     match value {
-                        SubResource::Resource(resource) => {
-                            order.push(resource.get_subject().clone());
-                        }
                         SubResource::Subject(subject) => {
                             order.push(subject.clone());
                         }
@@ -250,10 +245,6 @@ impl<'a> CSVExporter<'a> {
                     .iter()
                     .map(|v| match v {
                         SubResource::Subject(subject) => self.get_name_from_subject(subject),
-                        SubResource::Resource(resource) => self.get_name_from_propvals(
-                            resource.get_propvals(),
-                            resource.get_subject().clone(),
-                        ),
                         SubResource::Nested(nested) => {
                             self.get_name_from_propvals(nested, "".to_string())
                         }
@@ -261,9 +252,6 @@ impl<'a> CSVExporter<'a> {
                     .collect();
 
                 names.join(", ")
-            }
-            Value::Resource(resource) => {
-                self.get_name_from_propvals(resource.get_propvals(), resource.get_subject().clone())
             }
             Value::AtomicUrl(subject) => self.get_name_from_subject(subject),
             _ => value.to_string(),

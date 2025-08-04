@@ -153,13 +153,13 @@ export function ChatRoomPage({ resource }: ResourcePageProps) {
         )}
         <MessageForm onSubmit={sendMessage}>
           <MessageInput
+            aria-label='Chat input'
             rows={textAreaHight}
             ref={inputRef}
             autoFocus
             value={newMessageVal}
             onChange={handleChangeMessageText}
             placeholder={'type a message'}
-            data-test='message-input'
           />
           <SendButton
             title='Send message [enter]'

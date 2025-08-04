@@ -5,7 +5,7 @@ use crate::{
     agents::ForAgent, atoms::IndexAtom, errors::AtomicResult, storelike::Query,
     values::SortableValue, Atom, Db, Resource, Storelike, Value,
 };
-use bincode::{Decode, Encode};
+use rmp_serde::Serializer;
 use serde::{Deserialize, Serialize};
 
 use super::trees::{self, Operation, Transaction, Tree};
@@ -18,7 +18,7 @@ pub type IndexIterator = Box<dyn Iterator<Item = AtomicResult<IndexAtom>>>;
 /// A Value in the `watched_collections`.
 /// Used as keys in the query_index.
 /// These are used to check whether collections have to be updated when values have changed.
-#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueryFilter {
     /// Filtering by property URL
     pub property: Option<String>,
@@ -36,22 +36,20 @@ impl QueryFilter {
         if self.property.is_none() && self.value.is_none() {
             return Err("Cannot watch a query without a property or value. These types of queries are not implemented. See https://github.com/atomicdata-dev/atomic-server/issues/548 ".into());
         };
-        store.watched_queries.insert(
-            bincode::encode_to_vec(self, bincode::config::standard())
-                .map_err(|e| format!("Error encoding QueryFilter: {}", e))?,
-            b"",
-        )?;
+
+        let query_filter_bin = self.encode()?;
+
+        store.watched_queries.insert(query_filter_bin, b"")?;
         Ok(())
     }
 
     /// Check if this [QueryFilter] is being indexed
     pub fn is_watched(&self, store: &Db) -> bool {
+        let query_filter_bin = self.encode().expect("Failed to encode QueryFilter");
+
         store
             .watched_queries
-            .contains_key(
-                bincode::encode_to_vec(self, bincode::config::standard())
-                    .expect("Failed to encode QueryFilter"),
-            )
+            .contains_key(&query_filter_bin)
             .unwrap_or(false)
     }
 }
@@ -271,9 +269,7 @@ pub fn check_if_atom_matches_watched_query_filters(
     for query in store.watched_queries.iter() {
         // The keys store all the data
         if let Ok((k, _v)) = query {
-            let (q_filter, _): (QueryFilter, usize) =
-                bincode::decode_from_slice(&k, bincode::config::standard())
-                    .map_err(|e| format!("Could not deserialize QueryFilter: {}", e))?;
+            let q_filter: QueryFilter = QueryFilter::from_bytes(&k)?;
 
             if let Some(prop) = should_update_property(&q_filter, index_atom, resource) {
                 let update_val = match resource.get(prop) {
@@ -335,9 +331,7 @@ pub fn create_query_index_key(
     value: Option<&SortableValue>,
     subject: Option<&str>,
 ) -> AtomicResult<Vec<u8>> {
-    let mut q_filter_bytes: Vec<u8> =
-        bincode::encode_to_vec(query_filter, bincode::config::standard())
-            .map_err(|e| format!("Could not serialize QueryFilter: {}", e))?;
+    let mut q_filter_bytes = query_filter.encode()?;
 
     q_filter_bytes.push(SEPARATION_BIT);
 
@@ -375,9 +369,7 @@ pub fn parse_collection_members_key(bytes: &[u8]) -> AtomicResult<(QueryFilter, 
     let value_bytes = iter.next().ok_or("No value_bytes")?;
     let subject_bytes = iter.next().ok_or("No value_bytes")?;
 
-    let (q_filter, _): (QueryFilter, usize) =
-        bincode::decode_from_slice(q_filter_bytes, bincode::config::standard())
-            .map_err(|e| format!("Could not deserialize QueryFilter: {}", e))?;
+    let q_filter: QueryFilter = QueryFilter::from_bytes(q_filter_bytes)?;
 
     let value = if !value_bytes.is_empty() {
         std::str::from_utf8(value_bytes)
