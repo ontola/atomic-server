@@ -3,10 +3,9 @@
 
 use std::collections::{HashMap, HashSet};
 
-use bincode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Encode, Decode, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum ValueV1 {
     AtomicUrl(String),
     Date(String),
@@ -23,7 +22,7 @@ pub enum ValueV1 {
     Unsupported(crate::values::UnsupportedValue),
 }
 
-#[derive(Debug, Encode, Decode, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum SubResourceV1 {
     Resource(Box<ResourceV1>),
     Nested(PropValsV1),
@@ -32,21 +31,21 @@ pub enum SubResourceV1 {
 
 pub type PropValsV1 = HashMap<String, ValueV1>;
 
-#[derive(Debug, Encode, Decode, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct QueryFilterV1 {
     pub property: Option<String>,
     pub value: Option<ValueV1>,
     pub sort_by: Option<String>,
 }
 
-#[derive(Debug, Encode, Decode, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ResourceV1 {
     propvals: PropValsV1,
     subject: String,
     commit: CommitBuilderV1,
 }
 
-#[derive(Debug, Encode, Decode, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct CommitBuilderV1 {
     subject: String,
     set: std::collections::HashMap<String, ValueV1>,
@@ -85,7 +84,7 @@ pub fn propvals_v1_to_v2(propvals: PropValsV1) -> crate::resources::PropVals {
 impl From<SubResourceV1> for crate::values::SubResource {
     fn from(sub_resource: SubResourceV1) -> Self {
         match sub_resource {
-            SubResourceV1::Resource(resource) => Self::Resource(Box::new((*resource).into())),
+            SubResourceV1::Resource(_resource) => panic!("ResourceV1 is not supported"),
             SubResourceV1::Nested(propvals) => Self::Nested(propvals_v1_to_v2(propvals)),
             SubResourceV1::Subject(subject) => Self::Subject(subject),
         }
@@ -116,8 +115,8 @@ impl From<ValueV1> for crate::values::Value {
             crate::db::v1_types::ValueV1::NestedResource(sub_resource_v1) => {
                 Self::NestedResource(sub_resource_v1.into())
             }
-            crate::db::v1_types::ValueV1::Resource(resource_v1) => {
-                Self::Resource(Box::new((*resource_v1).into()))
+            crate::db::v1_types::ValueV1::Resource(_resource_v1) => {
+                panic!("ResourceV1 is not supported")
             }
             crate::db::v1_types::ValueV1::Boolean(v) => Self::Boolean(v),
             crate::db::v1_types::ValueV1::Unsupported(unsupported_value) => {

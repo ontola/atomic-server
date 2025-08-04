@@ -7,8 +7,6 @@ use crate::{
     utils::{check_valid_uri, check_valid_url},
     Resource,
 };
-use bincode::BorrowDecode;
-use bincode::{Decode, Encode};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
@@ -28,7 +26,6 @@ pub enum Value {
     /// Unix Epoch datetime in milliseconds
     Timestamp(i64),
     NestedResource(SubResource),
-    Resource(Box<Resource>),
     Boolean(bool),
     Uri(String),
     JSON(serde_json::Value),
@@ -36,9 +33,8 @@ pub enum Value {
 }
 
 /// A resource in a JSON-AD body can be any of these
-#[derive(Clone, Debug, Serialize, Deserialize, Encode, Decode)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum SubResource {
-    Resource(Box<Resource>),
     // I was considering using Resources for these, but that would involve
     // storing the paths in both the NestedResource as well as its parent
     // context, which could produce inconsistencies.
@@ -59,7 +55,7 @@ impl TryInto<Resource> for SubResource {
 }
 
 /// When the Datatype of a Value is not handled by this library
-#[derive(Clone, Debug, Serialize, Deserialize, Encode, Decode)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct UnsupportedValue {
     pub value: String,
     /// URL of the datatype
@@ -98,7 +94,6 @@ impl Value {
             Value::Timestamp(_) => DataType::Timestamp,
             // TODO: these datatypes are not the same
             Value::NestedResource(_) => DataType::AtomicUrl,
-            Value::Resource(_) => DataType::AtomicUrl,
             Value::Boolean(_) => DataType::Boolean,
             Value::Uri(_) => DataType::Uri,
             Value::JSON(_) => DataType::JSON,
@@ -202,7 +197,6 @@ impl Value {
                 arr.iter()
                     .enumerate()
                     .for_each(|(i, r)| match r.to_owned() {
-                        SubResource::Resource(e) => vec.push(e.get_subject().into()),
                         SubResource::Nested(_e) => {
                             let path_base = if let Some(p) = &parent_path {
                                 p.to_string()
@@ -222,10 +216,6 @@ impl Value {
             Value::NestedResource(_nr) => {
                 // TODO: change the data model of nested resources to store the subject of the parent, so we can construct a path
                 Err("Can't convert nested resources to subjects.".into())
-            }
-            Value::Resource(r) => {
-                vec.push(r.get_subject().into());
-                Ok(vec)
             }
             other => Err(format!("Value {} is not a Resource Array, but {}", self, other).into()),
         }
@@ -272,156 +262,11 @@ impl Value {
             Value::ResourceArray(_v) => self.to_subjects(None).unwrap_or_else(|_| vec![]),
             Value::AtomicUrl(v) => vec![v.into()],
             // TODO We don't index nested resources for now
-            Value::Resource(_r) => return None,
             Value::NestedResource(_r) => return None,
             // This might result in unnecessarily long strings, sometimes. We may want to shorten them later.
             val => vec![val.to_string()],
         };
         Some(vals)
-    }
-}
-
-impl Encode for Value {
-    fn encode<E: bincode::enc::Encoder>(
-        &self,
-        encoder: &mut E,
-    ) -> Result<(), bincode::error::EncodeError> {
-        // Tag each value type with a number so we can decode it later.
-        // Make sure to match these tags in the decode implementation.
-        // Changing these tags will break backwards compatibility with older data and will require a migration.
-        match self {
-            Value::AtomicUrl(s) => {
-                0u8.encode(encoder)?;
-                s.encode(encoder)
-            }
-            Value::Date(s) => {
-                1u8.encode(encoder)?;
-                s.encode(encoder)
-            }
-            Value::Integer(i) => {
-                2u8.encode(encoder)?;
-                i.encode(encoder)
-            }
-            Value::Float(f) => {
-                3u8.encode(encoder)?;
-                f.encode(encoder)
-            }
-            Value::Markdown(s) => {
-                4u8.encode(encoder)?;
-                s.encode(encoder)
-            }
-            Value::ResourceArray(v) => {
-                5u8.encode(encoder)?;
-                v.encode(encoder)
-            }
-            Value::Slug(s) => {
-                6u8.encode(encoder)?;
-                s.encode(encoder)
-            }
-            Value::String(s) => {
-                7u8.encode(encoder)?;
-                s.encode(encoder)
-            }
-            Value::Timestamp(i) => {
-                8u8.encode(encoder)?;
-                i.encode(encoder)
-            }
-            Value::NestedResource(n) => {
-                9u8.encode(encoder)?;
-                n.encode(encoder)
-            }
-            Value::Resource(r) => {
-                10u8.encode(encoder)?;
-                r.encode(encoder)
-            }
-            Value::Boolean(b) => {
-                11u8.encode(encoder)?;
-                b.encode(encoder)
-            }
-            Value::Uri(s) => {
-                12u8.encode(encoder)?;
-                s.encode(encoder)
-            }
-            Value::JSON(j) => {
-                13u8.encode(encoder)?;
-                crate::values::json_as_string::encode(j, encoder)
-            }
-            Value::Unsupported(u) => {
-                14u8.encode(encoder)?;
-                u.encode(encoder)
-            }
-        }
-    }
-}
-
-// Use the context generic for bincode v2
-impl<'de, CTX> BorrowDecode<'de, CTX> for Value
-where
-    SubResource: BorrowDecode<'de, CTX>,
-    UnsupportedValue: BorrowDecode<'de, CTX>,
-    Resource: BorrowDecode<'de, CTX>,
-{
-    fn borrow_decode<D>(decoder: &mut D) -> Result<Self, bincode::error::DecodeError>
-    where
-        D: bincode::de::BorrowDecoder<'de, Context = CTX>,
-    {
-        let tag = u8::borrow_decode(decoder)?;
-        match tag {
-            0 => Ok(Value::AtomicUrl(String::borrow_decode(decoder)?)),
-            1 => Ok(Value::Date(String::borrow_decode(decoder)?)),
-            2 => Ok(Value::Integer(i64::borrow_decode(decoder)?)),
-            3 => Ok(Value::Float(f64::borrow_decode(decoder)?)),
-            4 => Ok(Value::Markdown(String::borrow_decode(decoder)?)),
-            5 => Ok(Value::ResourceArray(Vec::borrow_decode(decoder)?)),
-            6 => Ok(Value::Slug(String::borrow_decode(decoder)?)),
-            7 => Ok(Value::String(String::borrow_decode(decoder)?)),
-            8 => Ok(Value::Timestamp(i64::borrow_decode(decoder)?)),
-            9 => Ok(Value::NestedResource(SubResource::borrow_decode(decoder)?)),
-            10 => Ok(Value::Resource(Box::new(Resource::borrow_decode(decoder)?))),
-            11 => Ok(Value::Boolean(bool::borrow_decode(decoder)?)),
-            12 => Ok(Value::Uri(String::borrow_decode(decoder)?)),
-            13 => Ok(Value::JSON(crate::values::json_as_string::decode(decoder)?)),
-            14 => Ok(Value::Unsupported(UnsupportedValue::borrow_decode(
-                decoder,
-            )?)),
-            _ => Err(bincode::error::DecodeError::OtherString(
-                "Unknown Value tag".to_string(),
-            )),
-        }
-    }
-}
-
-impl<CTX> Decode<CTX> for Value
-where
-    SubResource: Decode<CTX>,
-    UnsupportedValue: Decode<CTX>,
-    Resource: Decode<CTX>,
-{
-    fn decode<D: bincode::de::Decoder>(decoder: &mut D) -> Result<Self, bincode::error::DecodeError>
-    where
-        D: bincode::de::Decoder<Context = CTX>,
-    {
-        let tag = u8::decode(decoder)?;
-        match tag {
-            0 => Ok(Value::AtomicUrl(String::decode(decoder)?)),
-            1 => Ok(Value::Date(String::decode(decoder)?)),
-            2 => Ok(Value::Integer(i64::decode(decoder)?)),
-            3 => Ok(Value::Float(f64::decode(decoder)?)),
-            4 => Ok(Value::Markdown(String::decode(decoder)?)),
-            5 => Ok(Value::ResourceArray(Vec::decode(decoder)?)),
-            6 => Ok(Value::Slug(String::decode(decoder)?)),
-            7 => Ok(Value::String(String::decode(decoder)?)),
-            8 => Ok(Value::Timestamp(i64::decode(decoder)?)),
-            9 => Ok(Value::NestedResource(SubResource::decode(decoder)?)),
-            10 => Ok(Value::Resource(Box::new(Resource::decode(decoder)?))),
-            11 => Ok(Value::Boolean(bool::decode(decoder)?)),
-            12 => Ok(Value::Uri(String::decode(decoder)?)),
-            13 => Ok(Value::JSON(crate::values::json_as_string::decode(decoder)?)),
-            14 => Ok(Value::Unsupported(UnsupportedValue::decode(decoder)?)),
-            _ => Err(bincode::error::DecodeError::OtherString(
-                "Unknown Value tag".to_string(),
-            )),
-        }
     }
 }
 
@@ -479,7 +324,6 @@ impl From<Vec<SubResource>> for Value {
 impl From<SubResource> for Value {
     fn from(val: SubResource) -> Self {
         match val {
-            SubResource::Resource(r) => r.into(),
             SubResource::Nested(n) => n.into(),
             SubResource::Subject(s) => s.into(),
         }
@@ -504,28 +348,6 @@ impl From<f64> for Value {
     }
 }
 
-impl From<Resource> for Value {
-    fn from(val: Resource) -> Self {
-        Value::Resource(Box::new(val))
-    }
-}
-
-impl From<Box<Resource>> for Value {
-    fn from(val: Box<Resource>) -> Self {
-        Value::Resource((*val).into())
-    }
-}
-
-impl From<Vec<Resource>> for Value {
-    fn from(val: Vec<Resource>) -> Self {
-        let mut vec = Vec::new();
-        for i in val {
-            vec.push(SubResource::Resource(Box::new(i)));
-        }
-        Value::ResourceArray(vec)
-    }
-}
-
 use std::fmt;
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -546,12 +368,6 @@ impl fmt::Display for Value {
             Value::Slug(s) => write!(f, "{}", s),
             Value::String(s) => write!(f, "{}", s),
             Value::Timestamp(i) => write!(f, "{}", i),
-            Value::Resource(r) => write!(
-                f,
-                "{}",
-                r.to_json_ad()
-                    .unwrap_or_else(|_e| format!("Could not serialize resource: {:?}", r))
-            ),
             Value::NestedResource(n) => write!(f, "{:?}", n),
             Value::Boolean(b) => write!(f, "{}", b),
             Value::Uri(s) => write!(f, "{}", s),
@@ -566,12 +382,6 @@ impl fmt::Display for SubResource {
         let mut s: String = String::new();
 
         match self {
-            SubResource::Resource(r) => {
-                s.push_str(
-                    &r.to_json_ad()
-                        .unwrap_or_else(|_e| format!("Could not serialize resource: {:?}", r)),
-                );
-            }
             SubResource::Nested(pv) => {
                 let serialized = crate::serialize::propvals_to_json_ad_map(pv, None)
                     .unwrap_or_else(|_e| {
@@ -605,32 +415,7 @@ impl From<PropVals> for SubResource {
 
 impl From<Resource> for SubResource {
     fn from(val: Resource) -> Self {
-        SubResource::Resource(Box::new(val))
-    }
-}
-
-mod json_as_string {
-    use bincode::de::Decoder;
-    use bincode::enc::Encoder;
-    use bincode::{Decode, Encode};
-    use serde_json::Value;
-
-    pub fn encode<E>(val: &Value, encoder: &mut E) -> Result<(), bincode::error::EncodeError>
-    where
-        E: Encoder,
-    {
-        let json_str = serde_json::to_string(val)
-            .map_err(|e| bincode::error::EncodeError::OtherString(e.to_string()))?;
-        json_str.encode(encoder)
-    }
-
-    pub fn decode<D>(decoder: &mut D) -> Result<Value, bincode::error::DecodeError>
-    where
-        D: Decoder,
-    {
-        let json_str = String::decode(decoder)?;
-        serde_json::from_str(&json_str)
-            .map_err(|e| bincode::error::DecodeError::OtherString(e.to_string()))
+        SubResource::Subject(val.get_subject().into())
     }
 }
 
@@ -695,15 +480,6 @@ mod test {
         let converted = Value::from(8);
         assert_eq!(converted.datatype(), DataType::Integer);
         assert_eq!(converted.to_string(), "8");
-    }
-
-    #[test]
-    fn bincode_can_encode_json_value() {
-        let value = Value::new("{\"foo\": \"bar\", \"baz\": 123}", &DataType::JSON).unwrap();
-        let serialized = bincode::encode_to_vec(&value, bincode::config::standard()).unwrap();
-        let (deserialized, _): (Value, usize) =
-            bincode::decode_from_slice(&serialized, bincode::config::standard()).unwrap();
-        assert_eq!(deserialized.to_string(), value.to_string());
     }
 
     #[test]

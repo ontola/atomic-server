@@ -1,6 +1,7 @@
 //! Persistent, ACID compliant, threadsafe to-disk store.
 //! Powered by Sled - an embedded database.
 
+mod encoding;
 mod migrations;
 mod prop_val_sub_index;
 mod query_index;
@@ -17,9 +18,6 @@ use std::{
     vec,
 };
 
-use tracing::{info, instrument};
-use trees::{Method, Operation, Transaction, Tree};
-
 use crate::{
     agents::ForAgent,
     atoms::IndexAtom,
@@ -28,6 +26,7 @@ use crate::{
     },
     commit::{CommitOpts, CommitResponse},
     db::{
+        encoding::{decode_propvals, encode_propvals},
         query_index::{requires_query_index, NO_VALUE},
         val_prop_sub_index::find_in_val_prop_sub_index,
     },
@@ -35,10 +34,11 @@ use crate::{
     errors::{AtomicError, AtomicResult},
     resources::PropVals,
     storelike::{Query, QueryResult, ResourceResponse, Storelike},
-    urls,
     values::SortableValue,
     Atom, Commit, Resource,
 };
+use tracing::{info, instrument};
+use trees::{Method, Operation, Transaction, Tree};
 
 use self::{
     migrations::migrate_maybe,
@@ -176,8 +176,7 @@ impl Db {
         let subject = resource.get_subject();
         let propvals = resource.get_propvals();
 
-        let resource_bin = bincode::encode_to_vec(propvals, bincode::config::standard())
-            .map_err(|e| format!("Could not serialize PropVals: {}", e))?;
+        let resource_bin = encode_propvals(&propvals)?;
 
         transaction.push(Operation {
             tree: Tree::Resources,
@@ -237,8 +236,7 @@ impl Db {
     /// Internal method for fetching Resource data.
     #[instrument(skip(self))]
     fn set_propvals(&self, subject: &str, propvals: &PropVals) -> AtomicResult<()> {
-        let resource_bin = bincode::encode_to_vec(propvals, bincode::config::standard())
-            .map_err(|e| format!("Could not serialize PropVals: {}", e))?;
+        let resource_bin = encode_propvals(&propvals)?;
 
         self.resources.insert(subject.as_bytes(), resource_bin)?;
         Ok(())
@@ -260,16 +258,7 @@ impl Db {
             .map_err(|e| format!("Can't open {} from store: {}", subject, e))?;
         match propval_maybe.as_ref() {
             Some(binpropval) => {
-                let (propval, _): (PropVals, usize) =
-                    bincode::decode_from_slice(binpropval, bincode::config::standard()).map_err(
-                        |e| {
-                            format!(
-                                "Deserialize propval error: {} {}",
-                                corrupt_db_message(subject),
-                                e
-                            )
-                        },
-                    )?;
+                let propval: PropVals = decode_propvals(binpropval)?;
                 Ok(propval)
             }
             None => Err(AtomicError::not_found(format!(
@@ -310,9 +299,8 @@ impl Db {
             return None;
         }
 
-        let (propvals, _): (PropVals, usize) =
-            bincode::decode_from_slice(&resource_bin, bincode::config::standard())
-                .unwrap_or_else(|e| panic!("{}. {}", corrupt_db_message(&subject), e));
+        let propvals: PropVals = decode_propvals(&resource_bin)
+            .unwrap_or_else(|e| panic!("{}. {}", corrupt_db_message(&subject), e));
 
         Some(Resource::from_propvals(propvals, subject))
     }
