@@ -6,19 +6,31 @@ It is what the current [Rust](https://github.com/atomicdata-dev/atomic-data-brow
 It is designed to feel familiar to developers and to be easy and performant to parse and serialize.
 It is inspired by [JSON-LD](https://json-ld.org/).
 
-It uses [JSON](https://www.ecma-international.org/publications-and-standards/standards/ecma-404/), but has some additional constraints:
+It is [JSON](https://www.ecma-international.org/publications-and-standards/standards/ecma-404/) with the additional constraint that the root data structure must either be a Named Resource (with an `@id`), or an Array containing Named Resources.
 
-- Every single Object is a `Resource`.
-- Every Key is a [`Property`](https://atomicdata.dev/classes/Property) URL. Other keys are invalid. Each Property URL must resolve to an online Atomic Data Property.
-- The `@id` field is special: it defines the `Subject` of the `Resource`. If you send an HTTP GET request there with an `content-type: application/ad+json` header, you should get the full JSON-AD resource.
-- JSON arrays are mapped to [Resource Arrays](https://atomicdata.dev/datatypes/resourceArray)
-- Numbers can be [Integers](https://atomicdata.dev/datatypes/integer), [Timestamps](https://atomicdata.dev/datatypes/timestamp) or [Floats](https://atomicdata.dev/datatypes/float).
-- JSON booleans map to [Booleans](https://atomicdata.dev/datatypes/boolean).
-- JSON strings can be many datatypes, including [String](https://atomicdata.dev/datatypes/string), [Markdown](https://atomicdata.dev/datatypes/markdown), [Date](https://atomicdata.dev/datatypes/date) or other.
-- Nested JSON Objects are Nested Resources. A Nested Resource can either be _Anonymous_ (without an `@id` subject) or a Named Nested Resource (with an `@id` subject). Everywhere a Subject URL can be used as a value (i.e. all properties with the datatype [atomicURL](https://atomicdata.dev/datatypes/atomicURL)), a Nested Resource can be used instead. This also means that an item in an `ResourceArray` can be a Nested Resource.
-- The root data structure must either be a Named Resource (with an `@id`), or an Array containing Named Resources. When you want to describe multiple Resources in one JSON-AD document, use an array as the root item.
+The mime type (for HTTP content negotiation) is `application/ad+json` ([registration ongoing](https://github.com/ontola/atomic-data-docs/issues/60)).
 
-Let's look at an example JSON-AD Resource:
+## Named Resources
+
+A named resource is a JSON Object that represents an Atomic Data resource.
+Each key represents a property, therefore each key must be a valid [Property](https://atomicdata.dev/classes/Property) URL with the exception of the mandatory `@id` field.
+The `@id` field is special: it defines the `Subject` of the `Resource`. If you send an HTTP GET request there with an `content-type: application/ad+json` header, you should get the full JSON-AD resource.
+
+The types of values allowed are determined by the [datatype](../schema/datatypes.md) of the property.
+
+- **string**, **slug**, **markdown**, **uri** and **date** datatype fields must be a `string`.
+- **integer**, **float** and **timestamp** datatype fields must be a `number`.
+- **boolean** datatype fields must be a `boolean`.
+- **atomic-url** datatype fields must be either a `string` (url) or an `object` (nested resource).
+- **resource-array** datatype fields must be an `array` of strings (must be a url) or objects (must be an nested resource).
+- **json** datatype fields can be any valid JSON value.
+
+Named Resources are only allowed in the following places:
+
+- The root of the JSON-AD document.
+- As an item in an array that is directly under the root of the JSON-AD document.
+
+Example of a named resource in JSON-AD format:
 
 ```json
 {
@@ -32,19 +44,18 @@ Let's look at an example JSON-AD Resource:
 }
 ```
 
-The mime type (for HTTP content negotiation) is `application/ad+json` ([registration ongoing](https://github.com/ontola/atomic-data-docs/issues/60)).
+## Nested Resources
 
-## Nested, Anonymous and Named resources
+Nested resources are resources that do not have an `@id` field.
+It _does_ have its own unique [path](./paths.md), which can be used as its identifier.
 
-In JSON-AD, a Resource can be respresented in multiple ways:
+Nested resources are only allowed in the following places:
 
-- **Subject**: A URL string, such as `https://atomicdata.dev/classes/Class`.
-- **Named Resource**: A JSON Object with an `@id` field containing the Subject.
-- **Anonymous Nested Resource** A JSON Object without an `@id` field. This is only possible if it is a Nested Resource, which means that it has a parent Resource.
+- The value of a property with an **atomic-url** datatype.
+- As an item in a **resource-array** property's array value.
 
-Note that this is also valid for `ResourceArrays`, which usually only contain Subjects, but are allowed to contain Nested Resources.
-
-In the following JSON-AD example, the `address` is a nested resource:
+In the example below is a named resource with the subject: `https://example.com/arnold`.
+The `address` property has an nested resource as its value, therefore the path of the nested resource is: `https://example.com/arnold https://example.com/properties/address`.
 
 ```json
 {
@@ -57,13 +68,16 @@ In the following JSON-AD example, the `address` is a nested resource:
 }
 ```
 
-Nested Resources can be _named_ or _anonymous_. An _Anonymous Nested Resource_ does not have it's own `@id` field.
-It _does_ have its own unique [path](./paths.md), which can be used as its identifier.
-The `path` of the anonymous resource in the example above is `https://example.com/arnold https://example.com/properties/address`.
+## Regular JSON
+
+Properties with a **json** datatype can contain any valid JSON value.
+If any JSON-AD data is present in these values it will not be treated as JSON-AD, but as regular JSON.
+
+Because these JSON values do not benefit from any of Atomic Data's features you should avoid using them unless your value is truly JSON data, for example when you need to store a config of some application.
 
 ## JSON-AD Parsers, serializers and other libraries
 
-- **Typescript / Javacript**: [@tomic/lib](https://www.npmjs.com/package/@tomic/lib) JSON-AD parser + in-memory store. Works with [@tomic/react](https://www.npmjs.com/package/@tomic/lib) for rendering Atomic Data in React.
+- **Typescript / Javacript**: [@tomic/lib](https://www.npmjs.com/package/@tomic/lib) JSON-AD parser + in-memory store.
 - **Rust**: [atomic_lib](https://crates.io/crates/atomic_lib) has a JSON-AD parser / serializer (and does a lot more).
 
 ## Canonicalized JSON-AD
@@ -75,7 +89,7 @@ When you need deterministic serialization of Atomic Data (e.g. when calculating 
 1. All keys are sorted alphabetically (lexicographically) - both in the root object, as in any nested objects.
 1. The JSON-AD is minified: no newlines, no spaces.
 
-The last two steps of this process is more formally defined by the JSON Canonicalization Scheme (JCS, [rfc8785](https://tools.ietf.org/html/rfc8785)).
+The last two steps of this process are more formally defined by the JSON Canonicalization Scheme (JCS, [rfc8785](https://tools.ietf.org/html/rfc8785)).
 
 ## Interoperability with JSON and JSON-LD
 

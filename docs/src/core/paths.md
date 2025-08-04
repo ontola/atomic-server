@@ -71,7 +71,7 @@ Now the `employer` is simply a nested Object.
 Note that it no longer has its own `@id`.
 However, we can still identify this Nested Resource using its Path.
 
-The Subject of the nested resource is its path: `https://example.com/john https://example.com/employer`, including the spacebar.
+The Subject of the nested resource is its path: `https://example.com/john https://example.com/employer`, including the space.
 
 Note that the path from before still resolves:
 

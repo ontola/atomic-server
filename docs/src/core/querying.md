@@ -31,8 +31,8 @@ Connection: Closed
 }
 ```
 
-The server MAY also include other resources, if they are deemed relevant.
-For example, a search result might include nested children to speed up rendering.
+The server MAY respond with an array containing the requested resource along with other resources that are deemed relevant.
+For example, a search result might include the results as full resources to speed up rendering.
 
 Also note that AtomicServer supports other `Content-Type`s, such as `application/json`, `application/ld+json`, `text/turtle`.
 
