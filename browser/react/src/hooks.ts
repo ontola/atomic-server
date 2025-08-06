@@ -362,6 +362,10 @@ const titleHookOpts: useValueOptions = {
   commit: true,
 };
 
+const setTitleError = () => {
+  throw new Error('Cannot set title of resource with error');
+};
+
 /**
  * Returns the most fitting title / name for a Resource. This is either the
  * Name, Shortname, Filename or truncated Subject URL of that resource.
@@ -382,6 +386,10 @@ export function useTitle(
     server.properties.filename,
     opts,
   );
+
+  if (resource.error) {
+    return [truncateUrl(resource.subject, truncateLength), setTitleError];
+  }
 
   if (resource.loading) {
     return ['...', setName];

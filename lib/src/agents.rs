@@ -3,9 +3,17 @@
 //! https://docs.atomicdata.dev/commits/concepts.html
 
 use base64::{engine::general_purpose, Engine};
+use serde::{Deserialize, Serialize};
 use serde_json::from_slice;
 
 use crate::{errors::AtomicResult, urls, Resource, Storelike, Value};
+
+#[derive(Serialize, Deserialize)]
+struct DecodedSecret {
+    #[serde(rename = "privateKey")]
+    private_key: String,
+    subject: String,
+}
 
 /// None represents no right checks will be performed, effectively SUDO mode.
 #[derive(Clone, Debug, PartialEq)]
@@ -146,6 +154,17 @@ impl Agent {
             created_at: crate::utils::now(),
         })
     }
+
+    pub fn build_secret(&self) -> AtomicResult<String> {
+        let decoded_secret = DecodedSecret {
+            private_key: self.private_key.clone().ok_or("No private key on agent")?,
+            subject: self.subject.clone(),
+        };
+
+        let vec = serde_json::to_vec(&decoded_secret)?;
+        let encoded_secret = encode_base64(&vec);
+        Ok(encoded_secret)
+    }
 }
 
 /// keypair, serialized using base64
@@ -266,5 +285,15 @@ mod test {
             agent.subject,
             "http://localhost:9883/agents/RqPwpgHv+PK7Pnz/dVab8hmHjYnvTL1YrlVa6L9G9Zg="
         );
+    }
+
+    #[test]
+    fn can_build_secret() {
+        let og_secret = "eyJwcml2YXRlS2V5IjoiU015eFJnRjdRaGlDN0M1MDZxWFNVS2ZFK1NLQXRDZE5GdTVYZVRqemFkQT0iLCJzdWJqZWN0IjoiaHR0cDovL2xvY2FsaG9zdDo5ODgzL2FnZW50cy9ScVB3cGdIditQSzdQbnovZFZhYjhobUhqWW52VEwxWXJsVmE2TDlHOVpnPSJ9";
+        let agent = Agent::from_secret(og_secret).unwrap();
+        let secret = agent.build_secret().unwrap();
+
+        let agent2 = Agent::from_secret(&secret);
+        assert_eq!(agent2.unwrap().subject, agent.subject);
     }
 }

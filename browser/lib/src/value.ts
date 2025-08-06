@@ -15,8 +15,7 @@ export function valToArray(val?: JSONValue): JSONArray {
     throw new Error(`Not an array: ${val}, is ${typeof val}`);
   }
 
-  if (val.constructor === Array) {
-    // TODO: check this better
+  if (Array.isArray(val)) {
     return val;
   }
 
