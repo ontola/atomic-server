@@ -11,7 +11,7 @@ pub async fn single_page(
     path: actix_web::web::Path<String>,
 ) -> AtomicServerResult<HttpResponse> {
     let template = include_str!("../../assets_tmp/index.html");
-    let subject = format!("{}/{}", appstate.store.get_server_url(), path);
+    let subject = format!("{}/{}", appstate.store.get_server_url()?, path);
     let meta_tags: MetaTags = if let Ok(resource_response) =
         appstate
             .store

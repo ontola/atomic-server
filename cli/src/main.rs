@@ -1,6 +1,8 @@
+use atomic_lib::agents::Agent;
+use atomic_lib::config::Config;
+use atomic_lib::config::{ClientConfig, SharedConfig};
+use atomic_lib::mapping::Mapping;
 use atomic_lib::serialize::Format;
-use atomic_lib::{agents::generate_public_key, mapping::Mapping};
-use atomic_lib::{agents::Agent, config::Config};
 use atomic_lib::{errors::AtomicResult, Storelike};
 use clap::{crate_version, Parser, Subcommand, ValueEnum};
 use colored::*;
@@ -159,14 +161,11 @@ impl Context {
         let write_ctx =
             set_agent_config().expect("Issue while generating write context / agent configuration");
         self.write.borrow_mut().replace(write_ctx.clone());
-        self.store.set_default_agent(Agent {
-            subject: write_ctx.agent.clone(),
-            private_key: Some(write_ctx.private_key.clone()),
-            created_at: atomic_lib::utils::now(),
-            name: None,
-            public_key: generate_public_key(&write_ctx.private_key).public,
-        });
-        self.store.set_server_url(&write_ctx.server);
+        let agent = Agent::from_secret(&write_ctx.shared.agent_secret).unwrap();
+        self.store.set_default_agent(agent);
+        self.store
+            .set_server_url(&write_ctx.client.clone().unwrap().server_url);
+
         write_ctx
     }
 }
@@ -175,25 +174,43 @@ impl Context {
 fn set_agent_config() -> CLIResult<Config> {
     let agent_config_path = atomic_lib::config::default_config_file_path()?;
     match atomic_lib::config::read_config(Some(&agent_config_path)) {
-        Ok(found) => Ok(found),
+        Ok(found) => {
+            prompt_for_missing_config_values(&found)?;
+            Ok(found)
+        }
         Err(_e) => {
             println!(
                 "No config found at {:?}. Let's create one!",
                 &agent_config_path
             );
             let server = promptly::prompt("What's the base url of your Atomic Server?")?;
-            let agent = promptly::prompt("What's the URL of your Agent?")?;
-            let private_key = promptly::prompt("What's the private key of this Agent?")?;
+            let agent_secret = promptly::prompt("Enter your agent secret")?;
             let config = atomic_lib::config::Config {
-                server,
-                agent,
-                private_key,
+                shared: SharedConfig { agent_secret },
+                client: Some(ClientConfig { server_url: server }),
             };
-            atomic_lib::config::write_config(&agent_config_path, config.clone())?;
+            config.save(&agent_config_path)?;
             println!("New config file created at {:?}", agent_config_path);
             Ok(config)
         }
     }
+}
+
+fn prompt_for_missing_config_values(config: &Config) -> AtomicResult<Config> {
+    if config.client.is_none() {
+        println!("No server url found in config.");
+        let server = promptly::prompt("What's the base url of your Atomic Server?")
+            .map_err(|e| format!("Invalid input: {}", e))?;
+        let config = Config {
+            client: Some(ClientConfig { server_url: server }),
+            ..config.clone()
+        };
+        config.save(&atomic_lib::config::default_config_file_path()?)?;
+
+        return Ok(config);
+    }
+
+    Ok(config.clone())
 }
 
 fn main() -> AtomicResult<()> {
@@ -285,8 +302,9 @@ fn exec_command(context: &mut Context) -> AtomicResult<()> {
             validate(context);
         }
         Commands::Agent => {
-            let agent = context.read_config();
-            println!("{}", agent.agent);
+            let config = context.read_config();
+            let agent = Agent::from_secret(&config.shared.agent_secret).unwrap();
+            println!("{}", agent.subject);
         }
     };
     Ok(())

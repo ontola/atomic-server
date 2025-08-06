@@ -2,7 +2,6 @@
 //! They are constructed using a [Query]
 use crate::{
     agents::ForAgent,
-    class_extender::{ClassExtender, GetExtenderContext},
     errors::AtomicResult,
     storelike::{Query, ResourceCollection, ResourceResponse},
     urls, Resource, Storelike, Value,
@@ -435,23 +434,6 @@ pub fn create_collection_resource_for_class(
 
     // Should we use save_locally, which creates commits, or add_resource_unsafe, which is faster?
     Ok(collection_resource)
-}
-
-pub fn build_collection_extender() -> ClassExtender {
-    ClassExtender {
-        class: urls::COLLECTION.to_string(),
-        on_resource_get: Some(|context| -> AtomicResult<ResourceResponse> {
-            let GetExtenderContext {
-                store,
-                url,
-                db_resource: resource,
-                for_agent,
-            } = context;
-            construct_collection_from_params(store, url.query_pairs(), resource, for_agent)
-        }),
-        before_commit: None,
-        after_commit: None,
-    }
 }
 
 #[cfg(test)]

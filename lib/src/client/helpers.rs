@@ -3,7 +3,8 @@ use crate::{
     agents::Agent,
     commit::sign_message,
     errors::AtomicResult,
-    parse::{parse_json_ad_resource, ParseOpts},
+    parse::{parse_json_ad_string, ParseOpts},
+    storelike::ResourceResponse,
     Resource, Storelike,
 };
 
@@ -16,11 +17,38 @@ pub fn fetch_resource(
     subject: &str,
     store: &impl Storelike,
     client_agent: Option<&Agent>,
-) -> AtomicResult<Resource> {
+) -> AtomicResult<ResourceResponse> {
     let body = fetch_body(subject, crate::parse::JSON_AD_MIME, client_agent)?;
-    let resource = parse_json_ad_resource(&body, store, &ParseOpts::default())
+    let resources = parse_json_ad_string(&body, store, &ParseOpts::default())
         .map_err(|e| format!("Error parsing body of {}. {}", subject, e))?;
-    Ok(resource)
+
+    if resources.len() == 1 {
+        Ok(ResourceResponse::Resource(resources[0].clone()))
+    } else {
+        let mut main_resource: Option<Resource> = None;
+        let mut referenced: Vec<Resource> = Vec::new();
+
+        for r in resources {
+            if r.get_subject() == subject {
+                main_resource = Some(r);
+            } else {
+                referenced.push(r);
+            }
+        }
+
+        let Some(main_resource) = main_resource else {
+            return Err(format!(
+                "Requested subject not found in returned resources: {}",
+                subject
+            )
+            .into());
+        };
+
+        Ok(ResourceResponse::ResourceWithReferenced(
+            main_resource,
+            referenced,
+        ))
+    }
 }
 
 /// Returns the various x-atomic authentication headers, includign agent signature
@@ -143,7 +171,10 @@ mod test {
     #[ignore]
     fn fetch_resource_basic() {
         let store = crate::Store::init().unwrap();
-        let resource = fetch_resource(crate::urls::SHORTNAME, &store, None).unwrap();
+        let resource = fetch_resource(crate::urls::SHORTNAME, &store, None)
+            .unwrap()
+            .to_single();
+
         let shortname = resource.get(crate::urls::SHORTNAME).unwrap();
         assert!(shortname.to_string() == "shortname");
     }
