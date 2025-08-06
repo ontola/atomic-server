@@ -629,8 +629,6 @@ impl From<&Resource> for crate::storelike::ResourceResponse {
 
 #[cfg(test)]
 mod test {
-    use ntest::assert_panics;
-
     use super::*;
     use crate::{test_utils::init_store, urls};
 

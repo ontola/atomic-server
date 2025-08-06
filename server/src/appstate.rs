@@ -3,7 +3,7 @@ use crate::{
     commit_monitor::CommitMonitor, config::Config, errors::AtomicServerResult, search::SearchState,
 };
 use atomic_lib::{
-    agents::{generate_public_key, Agent},
+    agents::Agent,
     commit::CommitResponse,
     config::{ClientConfig, SharedConfig},
     Storelike,
