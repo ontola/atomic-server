@@ -423,6 +423,90 @@ fn test_db_resources_all() {
 }
 
 #[test]
+fn persistable_multi_store_dual_write_and_fallback() {
+    // New isolated store
+    let store = Db::init_temp("persistable_dual_write").unwrap();
+
+    // Create and save a resource
+    let mut r = crate::Resource::new_generate_subject(&store);
+    r.set_propval_string(crate::urls::SHORTNAME.into(), "dual", &store)
+        .unwrap();
+    r.save(&store).unwrap();
+    let subject = r.get_subject().to_string();
+
+    // Both OpenDAL operators should have the blob
+    let dash = store.dal_ops.get("dashmap").expect("dashmap op");
+    let sled = store.dal_ops.get("sled").expect("sled op");
+    let dash_bytes = store
+        .runtime
+        .block_on(async { dash.read(&subject).await.expect("dash read") });
+    let sled_bytes = store
+        .runtime
+        .block_on(async { sled.read(&subject).await.expect("sled read") });
+    assert!(dash_bytes.len() > 0);
+    assert_eq!(dash_bytes, sled_bytes, "stores should contain same bytes");
+
+    // Delete from the fastest store, ensure fallback (sled tree) still serves resource
+    store
+        .runtime
+        .block_on(async { store.dal_fastest.delete(&subject).await })
+        .ok();
+    // Should still be able to fetch via sled resources fallback
+    let fetched = store.get_resource(&subject).expect("fallback should work");
+    assert_eq!(fetched.get_subject(), subject);
+
+    // Remove from sled resources tree and ensure not found now
+    store
+        .resources
+        .remove(subject.as_bytes())
+        .expect("sled remove");
+    assert!(store.get_resource(&subject).is_err(), "should be gone now");
+}
+
+#[test]
+fn persistable_collections_still_work() {
+    let store = Db::init_temp("persistable_collections").unwrap();
+    let filter_prop = crate::urls::DESTINATION;
+    let sort_by = crate::urls::DESCRIPTION;
+
+    // Create a few resources that match collection filters
+    for _ in 0..8 {
+        let mut res = crate::Resource::new_generate_subject(&store);
+        res.set_propval(
+            filter_prop.into(),
+            crate::Value::AtomicUrl(crate::urls::PARAGRAPH.into()),
+            &store,
+        )
+        .unwrap();
+        res.set_propval(
+            sort_by.into(),
+            crate::Value::Markdown(crate::utils::random_string(10)),
+            &store,
+        )
+        .unwrap();
+        res.save(&store).unwrap();
+    }
+
+    // Build a collection via Query and check pagination + sorting paths remain valid
+    let q = crate::storelike::Query {
+        property: Some(filter_prop.into()),
+        value: Some(crate::Value::AtomicUrl(crate::urls::PARAGRAPH.into())),
+        limit: Some(5),
+        start_val: None,
+        end_val: None,
+        offset: 0,
+        sort_by: Some(sort_by.into()),
+        sort_desc: false,
+        include_external: true,
+        include_nested: true,
+        for_agent: ForAgent::Sudo,
+    };
+    let res = store.query(&q).unwrap();
+    assert_eq!(res.resources.len(), 5, "limit respected");
+    assert!(res.count >= 8, "count should include all members");
+}
+
+#[test]
 /// Changing these values actually correctly updates the index.
 fn index_invalidate_cache() {
     let store = &Db::init_temp("invalidate_cache").unwrap();
