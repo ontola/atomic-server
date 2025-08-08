@@ -41,6 +41,9 @@ use self::{
     val_prop_sub_index::{add_atom_to_reference_index, remove_atom_from_reference_index},
 };
 
+// External crates used in persistable multi-store setup
+use uuid;
+
 // A function called by the Store when a Commit is accepted
 type HandleCommit = Box<dyn Fn(&CommitResponse) + Send + Sync>;
 
@@ -63,8 +66,10 @@ pub struct Db {
     /// Try not to use this directly, but use the Trees.
     db: sled::Db,
     default_agent: Arc<Mutex<Option<crate::agents::Agent>>>,
-    /// Stores all resources in OpenDAL. The Key is the Subject as a `string.as_bytes()`, the value a [PropVals]. Propvals must be serialized using [bincode].
-    dal_resources: opendal::Operator,
+    /// OpenDAL operators by profile name (e.g., "sled", "dashmap") for resource blobs
+    dal_ops: std::collections::HashMap<String, opendal::Operator>,
+    /// Fastest OpenDAL operator chosen via a simple read benchmark
+    dal_fastest: opendal::Operator,
     /// Stores all resources. The Key is the Subject as a `string.as_bytes()`, the value a [PropVals]. Propvals must be serialized using [bincode].
     resources: sled::Tree,
     /// Index of all Atoms, sorted by {Value}-{Property}-{Subject}.
@@ -92,17 +97,54 @@ impl Db {
     /// The server_url is the domain where the db will be hosted, e.g. http://localhost/
     /// It is used for distinguishing locally defined items from externally defined ones.
     pub fn init(path: &std::path::Path, server_url: String) -> AtomicResult<Db> {
-        let mut dal_sled = opendal::services::Sled::default();
+        // Local runtime for async OpenDAL ops during initialization
+        let rt = tokio::runtime::Runtime::new()?;
 
+        // OpenDAL operator: Sled (on-disk)
+        let mut dal_sled = opendal::services::Sled::default();
         let dal_path = path.clone().join("opendal");
         dal_sled
             .datadir(dal_path.to_str().expect("wrong data dir string"))
             .tree("resources_v1");
-
-        let dal_op = opendal::Operator::new(dal_sled)
+        let sled_op = opendal::Operator::new(dal_sled)
             .map_err(|_e| format!("Error operator: {}", _e))?
             .layer(opendal::layers::LoggingLayer::default())
             .finish();
+
+        // OpenDAL operator: DashMap (in-memory, fast)
+        let dash_op = opendal::Operator::new(opendal::services::Dashmap::default())
+            .map_err(|_e| format!("Error operator: {}", _e))?
+            .layer(opendal::layers::LoggingLayer::default())
+            .finish();
+
+        // Simple speed check: write+read small payload and measure read latency
+        fn measure_read_ns(rt: &tokio::runtime::Runtime, op: &opendal::Operator) -> AtomicResult<u128> {
+            use std::time::Instant;
+            rt.block_on(async {
+                let key = format!("bench_{}", uuid::Uuid::new_v4());
+                let payload = b"atomic-bench".to_vec();
+                op.write(&key, payload).await.map_err(|e| format!("bench write error: {e}"))?;
+                let start = Instant::now();
+                let _ = op.read(&key).await.map_err(|e| format!("bench read error: {e}"))?;
+                let ns = start.elapsed().as_nanos();
+                // best-effort cleanup
+                let _ = op.delete(&key).await;
+                Ok::<u128, String>(ns)
+            }).map_err(|e| e.into())
+        }
+
+        let sled_ns = measure_read_ns(&rt, &sled_op)?;
+        let dash_ns = measure_read_ns(&rt, &dash_op)?;
+
+        let (fastest_name, fastest_op) = if dash_ns <= sled_ns {
+            ("dashmap".to_string(), dash_op.clone())
+        } else {
+            ("sled".to_string(), sled_op.clone())
+        };
+
+        let mut dal_ops = std::collections::HashMap::new();
+        dal_ops.insert("sled".to_string(), sled_op);
+        dal_ops.insert("dashmap".to_string(), dash_op);
 
         let db = sled::open(path).map_err(|e|format!("Failed opening DB at this location: {:?} . Is another instance of Atomic Server running? {}", path, e))?;
         let resources = db.open_tree("resources_v1").map_err(|e|format!("Failed building resources. Your DB might be corrupt. Go back to a previous version and export your data. {}", e))?;
@@ -111,7 +153,8 @@ impl Db {
         let prop_val_sub_index = db.open_tree("prop_val_sub_index")?;
         let watched_queries = db.open_tree("watched_queries")?;
         let store = Db {
-            dal_resources: dal_op,
+            dal_ops,
+            dal_fastest: fastest_op,
             db,
             default_agent: Arc::new(Mutex::new(None)),
             resources,
@@ -122,7 +165,7 @@ impl Db {
             watched_queries,
             endpoints: default_endpoints(),
             on_commit: None,
-            runtime: Arc::new(tokio::runtime::Runtime::new()?),
+            runtime: Arc::new(rt),
         };
         migrate_maybe(&store).map(|e| format!("Error during migration of database: {:?}", e))?;
         crate::populate::populate_base_models(&store)
@@ -165,6 +208,13 @@ impl Db {
     #[instrument(skip(self))]
     fn set_propvals(&self, subject: &str, propvals: &PropVals) -> AtomicResult<()> {
         let resource_bin = bincode::serialize(propvals)?;
+        // Write to all OpenDAL operators (multi-store), then to primary Sled tree used by indexes
+        self.runtime.block_on(async {
+            for (_name, op) in self.dal_ops.iter() {
+                // Ignore per-operator errors to allow others to succeed; surface first error if needed later
+                let _ = op.write(subject, resource_bin.clone()).await;
+            }
+        });
         self.resources.insert(subject.as_bytes(), resource_bin)?;
         Ok(())
     }
@@ -179,17 +229,21 @@ impl Db {
     /// Deals with the binary API of Sled
     #[instrument(skip(self))]
     fn get_propvals(&self, subject: &str) -> AtomicResult<PropVals> {
-        let propval_maybe = self.runtime.block_on(async {
-            self.dal_resources
+        // Try fastest OpenDAL operator first
+        let mut propval_maybe = self.runtime.block_on(async {
+            self.dal_fastest
                 .read(subject)
                 .await
-                .map_err(|e| format!("Can't open {} from store: {}", subject, e))
+                .map_err(|e| format!("Can't open {} from fastest store: {}", subject, e))
                 .ok()
         });
-        // let propval_maybe = self
-        //     .resources
-        //     .get(subject.as_bytes())
-        //     .map_err(|e| format!("Can't open {} from store: {}", subject, e))?;
+        // Fallback to Sled resources tree if OpenDAL miss
+        if propval_maybe.is_none() {
+            propval_maybe = self
+                .resources
+                .get(subject.as_bytes())
+                .map_err(|e| format!("Can't open {} from sled resources: {}", subject, e))?;
+        }
         match propval_maybe.as_ref() {
             Some(binpropval) => {
                 let propval: PropVals = bincode::deserialize(binpropval).map_err(|e| {
@@ -612,6 +666,12 @@ impl Storelike for Db {
                 let remove_atom = crate::Atom::new(subject.into(), prop.clone(), val.clone());
                 self.remove_atom_from_index(&remove_atom, &resource)?;
             }
+            // Remove from OpenDAL operators (best-effort)
+            self.runtime.block_on(async {
+                for (_name, op) in self.dal_ops.iter() {
+                    let _ = op.delete(subject).await;
+                }
+            });
             let _found = self.resources.remove(subject.as_bytes())?;
         } else {
             return Err(format!(
