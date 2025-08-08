@@ -102,7 +102,7 @@ impl Db {
 
         // OpenDAL operator: Sled (on-disk)
         let mut dal_sled = opendal::services::Sled::default();
-        let dal_path = path.clone().join("opendal");
+        let dal_path = path.join("opendal");
         dal_sled
             .datadir(dal_path.to_str().expect("wrong data dir string"))
             .tree("resources_v1");
@@ -118,28 +118,37 @@ impl Db {
             .finish();
 
         // Simple speed check: write+read small payload and measure read latency
-        fn measure_read_ns(rt: &tokio::runtime::Runtime, op: &opendal::Operator) -> AtomicResult<u128> {
+        fn measure_read_ns(
+            rt: &tokio::runtime::Runtime,
+            op: &opendal::Operator,
+        ) -> AtomicResult<u128> {
             use std::time::Instant;
             rt.block_on(async {
                 let key = format!("bench_{}", uuid::Uuid::new_v4());
                 let payload = b"atomic-bench".to_vec();
-                op.write(&key, payload).await.map_err(|e| format!("bench write error: {e}"))?;
+                op.write(&key, payload)
+                    .await
+                    .map_err(|e| format!("bench write error: {e}"))?;
                 let start = Instant::now();
-                let _ = op.read(&key).await.map_err(|e| format!("bench read error: {e}"))?;
+                let _ = op
+                    .read(&key)
+                    .await
+                    .map_err(|e| format!("bench read error: {e}"))?;
                 let ns = start.elapsed().as_nanos();
                 // best-effort cleanup
                 let _ = op.delete(&key).await;
                 Ok::<u128, String>(ns)
-            }).map_err(|e| e.into())
+            })
+            .map_err(|e| e.into())
         }
 
         let sled_ns = measure_read_ns(&rt, &sled_op)?;
         let dash_ns = measure_read_ns(&rt, &dash_op)?;
 
-        let (fastest_name, fastest_op) = if dash_ns <= sled_ns {
-            ("dashmap".to_string(), dash_op.clone())
+        let fastest_op = if dash_ns <= sled_ns {
+            dash_op.clone()
         } else {
-            ("sled".to_string(), sled_op.clone())
+            sled_op.clone()
         };
 
         let mut dal_ops = std::collections::HashMap::new();
@@ -239,10 +248,12 @@ impl Db {
         });
         // Fallback to Sled resources tree if OpenDAL miss
         if propval_maybe.is_none() {
+            // Map sled IVec into Vec<u8> to match OpenDAL read type
             propval_maybe = self
                 .resources
                 .get(subject.as_bytes())
-                .map_err(|e| format!("Can't open {} from sled resources: {}", subject, e))?;
+                .map_err(|e| format!("Can't open {} from sled resources: {}", subject, e))?
+                .map(|ivec| ivec.to_vec());
         }
         match propval_maybe.as_ref() {
             Some(binpropval) => {
