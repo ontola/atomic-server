@@ -434,17 +434,19 @@ fn persistable_multi_store_dual_write_and_fallback() {
     r.save(&store).unwrap();
     let subject = r.get_subject().to_string();
 
-    // Both OpenDAL operators should have the blob
-    let dash = store.dal_ops.get("dashmap").expect("dashmap op");
-    let sled = store.dal_ops.get("sled").expect("sled op");
-    let dash_bytes = store
-        .runtime
-        .block_on(async { dash.read(&subject).await.expect("dash read") });
-    let sled_bytes = store
-        .runtime
-        .block_on(async { sled.read(&subject).await.expect("sled read") });
-    assert!(dash_bytes.len() > 0);
-    assert_eq!(dash_bytes, sled_bytes, "stores should contain same bytes");
+    // All configured OpenDAL operators should have the blob
+    let mut blobs: Vec<Vec<u8>> = Vec::new();
+    for (name, op) in store.dal_ops.iter() {
+        let bytes = store
+            .runtime
+            .block_on(async { op.read(&subject).await.expect("op read") });
+        assert!(bytes.len() > 0, "{} empty", name);
+        blobs.push(bytes);
+    }
+    // Compare all blobs to the first
+    for b in blobs.iter() {
+        assert_eq!(b, &blobs[0], "stores should contain same bytes");
+    }
 
     // Delete from the fastest store, ensure fallback (sled tree) still serves resource
     store
@@ -453,7 +455,7 @@ fn persistable_multi_store_dual_write_and_fallback() {
         .ok();
     // Should still be able to fetch via sled resources fallback
     let fetched = store.get_resource(&subject).expect("fallback should work");
-    assert_eq!(fetched.get_subject(), subject);
+    assert_eq!(fetched.get_subject(), &subject);
 
     // Remove from sled resources tree and ensure not found now
     store
@@ -504,6 +506,21 @@ fn persistable_collections_still_work() {
     let res = store.query(&q).unwrap();
     assert_eq!(res.resources.len(), 5, "limit respected");
     assert!(res.count >= 8, "count should include all members");
+}
+
+#[test]
+fn persistable_profiles_available_and_benchmarked() {
+    let store = Db::init_temp("persistable_profiles").unwrap();
+    // Expect core profiles
+    assert!(store.dal_ops.contains_key("sled"));
+    assert!(store.dal_ops.contains_key("dashmap"));
+    // Optional ones if features enabled
+    #[cfg(feature = "persist-rocksdb")]
+    assert!(store.dal_ops.contains_key("rocksdb"));
+    #[cfg(feature = "persist-redb")]
+    assert!(store.dal_ops.contains_key("redb"));
+    #[cfg(feature = "persist-fs")]
+    assert!(store.dal_ops.contains_key("fs"));
 }
 
 #[test]

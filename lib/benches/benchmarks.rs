@@ -4,7 +4,8 @@
 
 use atomic_lib::utils::random_string;
 use atomic_lib::*;
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use std::time::Duration;
 
 fn random_atom() -> Atom {
     Atom::new(
@@ -21,9 +22,13 @@ fn random_resource(atom: &Atom) -> Resource {
 }
 
 fn criterion_benchmark(c: &mut Criterion) {
+    let mut g = c.benchmark_group("persistable");
+    g.sample_size(20);
+    g.measurement_time(Duration::from_secs(10));
+
     let store = Db::init_temp("bench").unwrap();
 
-    c.bench_function("add_atom_to_index", |b| {
+    g.bench_function("add_atom_to_index", |b| {
         b.iter(|| {
             let atom = random_atom();
             let resource = random_resource(&random_atom());
@@ -31,7 +36,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         })
     });
 
-    c.bench_function("add_resource", |b| {
+    g.bench_function("add_resource", |b| {
         b.iter(|| {
             let resource = random_resource(&random_atom());
             store
@@ -40,7 +45,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         })
     });
 
-    c.bench_function("resource.save()", |b| {
+    g.bench_function("resource.save()", |b| {
         b.iter(|| {
             let mut resource = random_resource(&random_atom());
             resource.save(&store).unwrap();
@@ -51,35 +56,55 @@ fn criterion_benchmark(c: &mut Criterion) {
         .get_resource_extended("https://localhost/collections", false, None)
         .unwrap();
 
-    c.bench_function("resource.to_json_ad()", |b| {
+    g.bench_function("resource.to_json_ad()", |b| {
         b.iter(|| {
             big_resource.to_json_ad().unwrap();
         })
     });
 
-    c.bench_function("resource.to_json_ld()", |b| {
+    g.bench_function("resource.to_json_ld()", |b| {
         b.iter(|| {
             big_resource.to_json_ld(&store).unwrap();
         })
     });
 
-    c.bench_function("resource.to_json()", |b| {
+    g.bench_function("resource.to_json()", |b| {
         b.iter(|| {
             big_resource.to_json(&store).unwrap();
         })
     });
 
-    c.bench_function("resource.to_n_triples()", |b| {
+    g.bench_function("resource.to_n_triples()", |b| {
         b.iter(|| {
             big_resource.to_n_triples(&store).unwrap();
         })
     });
 
-    c.bench_function("all_resources()", |b| {
+    g.bench_function("all_resources()", |b| {
         b.iter(|| {
-            let _all = store.all_resources(false).collect::<Vec<Resource>>();
+            let _all = black_box(store.all_resources(false).collect::<Vec<Resource>>());
         })
     });
+
+    // Persistable operator benchmarks: write/read single blob via each configured operator
+    for (name, op) in store.dal_ops.iter() {
+        let key = format!("bench_{}", name);
+        let data = vec![0u8; 16 * 1024];
+        g.bench_function(&format!("op_write_{}", name), |b| {
+            b.iter(|| {
+                // We ignore errors because operators may share keys across iterations
+                let _ = store
+                    .runtime
+                    .block_on(async { op.write(&key, data.clone()).await });
+            })
+        });
+        g.bench_function(&format!("op_read_{}", name), |b| {
+            b.iter(|| {
+                let _ = store.runtime.block_on(async { op.read(&key).await });
+            })
+        });
+    }
+    g.finish();
 }
 
 criterion_group!(benches, criterion_benchmark);

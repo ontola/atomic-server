@@ -22,7 +22,7 @@ directories = {version = ">= 2, < 5", optional = true}
 html2md = {version = "0.2.14", optional = true}
 kuchiki = {version = "0.8.1", optional = true}
 lol_html = {version = "0.3.1", optional = true}
-opendal = { version = "0.39", features = ["services-sled", "services-dashmap"] }
+opendal = { version = "0.39", features = ["services-sled", "services-dashmap", "services-rocksdb", "services-redb", "services-fs"] }
 rand = {version = "0.8"}
 regex = "1"
 ring = "0.16.19"
@@ -50,3 +50,6 @@ config = ["directories", "toml"]
 db = ["sled", "bincode"]
 html = ["kuchiki", "lol_html", "html2md"]
 rdf = ["rio_api", "rio_turtle"]
+persist-rocksdb = ["opendal/services-rocksdb"]
+persist-redb = ["opendal/services-redb"]
+persist-fs = ["opendal/services-fs"]

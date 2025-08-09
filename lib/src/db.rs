@@ -117,6 +117,39 @@ impl Db {
             .layer(opendal::layers::LoggingLayer::default())
             .finish();
 
+        // OpenDAL operator: RocksDB (on-disk kv)
+        #[cfg(feature = "persist-rocksdb")]
+        let rocks_op = {
+            let mut b = opendal::services::Rocksdb::default();
+            b.datadir(path.join("opendal_rocksdb").to_str().expect("rocks path"));
+            opendal::Operator::new(b)
+                .map_err(|_e| format!("Error operator: {}", _e))?
+                .layer(opendal::layers::LoggingLayer::default())
+                .finish()
+        };
+
+        // OpenDAL operator: ReDB (embedded db)
+        #[cfg(feature = "persist-redb")]
+        let redb_op = {
+            let mut b = opendal::services::Redb::default();
+            b.datadir(path.join("opendal_redb").to_str().expect("redb path"));
+            opendal::Operator::new(b)
+                .map_err(|_e| format!("Error operator: {}", _e))?
+                .layer(opendal::layers::LoggingLayer::default())
+                .finish()
+        };
+
+        // OpenDAL operator: FS (filesystem flat files)
+        #[cfg(feature = "persist-fs")]
+        let fs_op = {
+            let mut b = opendal::services::Fs::default();
+            b.root(path.join("opendal_fs").to_str().expect("fs path"));
+            opendal::Operator::new(b)
+                .map_err(|_e| format!("Error operator: {}", _e))?
+                .layer(opendal::layers::LoggingLayer::default())
+                .finish()
+        };
+
         // Simple speed check: write+read small payload and measure read latency
         fn measure_read_ns(
             rt: &tokio::runtime::Runtime,
@@ -144,16 +177,40 @@ impl Db {
 
         let sled_ns = measure_read_ns(&rt, &sled_op)?;
         let dash_ns = measure_read_ns(&rt, &dash_op)?;
+        #[cfg(feature = "persist-rocksdb")]
+        let rocks_ns = measure_read_ns(&rt, &rocks_op)?;
+        #[cfg(feature = "persist-redb")]
+        let redb_ns = measure_read_ns(&rt, &redb_op)?;
+        #[cfg(feature = "persist-fs")]
+        let fs_ns = measure_read_ns(&rt, &fs_op)?;
 
-        let fastest_op = if dash_ns <= sled_ns {
+        let mut fastest_op = if dash_ns <= sled_ns {
             dash_op.clone()
         } else {
             sled_op.clone()
         };
+        #[cfg(feature = "persist-rocksdb")]
+        if rocks_ns < measure_read_ns(&rt, &fastest_op)? {
+            fastest_op = rocks_op.clone();
+        }
+        #[cfg(feature = "persist-redb")]
+        if redb_ns < measure_read_ns(&rt, &fastest_op)? {
+            fastest_op = redb_op.clone();
+        }
+        #[cfg(feature = "persist-fs")]
+        if fs_ns < measure_read_ns(&rt, &fastest_op)? {
+            fastest_op = fs_op.clone();
+        }
 
         let mut dal_ops = std::collections::HashMap::new();
         dal_ops.insert("sled".to_string(), sled_op);
         dal_ops.insert("dashmap".to_string(), dash_op);
+        #[cfg(feature = "persist-rocksdb")]
+        dal_ops.insert("rocksdb".to_string(), rocks_op);
+        #[cfg(feature = "persist-redb")]
+        dal_ops.insert("redb".to_string(), redb_op);
+        #[cfg(feature = "persist-fs")]
+        dal_ops.insert("fs".to_string(), fs_op);
 
         let db = sled::open(path).map_err(|e|format!("Failed opening DB at this location: {:?} . Is another instance of Atomic Server running? {}", path, e))?;
         let resources = db.open_tree("resources_v1").map_err(|e|format!("Failed building resources. Your DB might be corrupt. Go back to a previous version and export your data. {}", e))?;
