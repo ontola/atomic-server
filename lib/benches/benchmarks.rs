@@ -26,7 +26,14 @@ fn criterion_benchmark(c: &mut Criterion) {
     g.sample_size(20);
     g.measurement_time(Duration::from_secs(10));
 
-    let store = Db::init_temp("bench").unwrap();
+    // Ensure db feature is available for benches
+    #[cfg(not(feature = "db"))]
+    {
+        panic!("benchmarks require 'db' feature enabled");
+    }
+    #[cfg(feature = "db")]
+    // Use a unique temp dir for benches and avoid optional backends unless configured
+    let store = Db::init_temp("bench_persistable").unwrap();
 
     g.bench_function("add_atom_to_index", |b| {
         b.iter(|| {
@@ -52,8 +59,13 @@ fn criterion_benchmark(c: &mut Criterion) {
         })
     });
 
+    #[cfg(feature = "db")]
     let big_resource = store
-        .get_resource_extended("https://localhost/collections", false, None)
+        .get_resource_extended(
+            "https://localhost/collections",
+            false,
+            &atomic_lib::agents::ForAgent::Sudo,
+        )
         .unwrap();
 
     g.bench_function("resource.to_json_ad()", |b| {
@@ -74,11 +86,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         })
     });
 
-    g.bench_function("resource.to_n_triples()", |b| {
-        b.iter(|| {
-            big_resource.to_n_triples(&store).unwrap();
-        })
-    });
+    // Skip to_n_triples in this bench configuration
 
     g.bench_function("all_resources()", |b| {
         b.iter(|| {
@@ -87,20 +95,17 @@ fn criterion_benchmark(c: &mut Criterion) {
     });
 
     // Persistable operator benchmarks: write/read single blob via each configured operator
-    for (name, op) in store.dal_ops.iter() {
+    for name in store.persistence_profiles().into_iter() {
         let key = format!("bench_{}", name);
         let data = vec![0u8; 16 * 1024];
         g.bench_function(&format!("op_write_{}", name), |b| {
             b.iter(|| {
-                // We ignore errors because operators may share keys across iterations
-                let _ = store
-                    .runtime
-                    .block_on(async { op.write(&key, data.clone()).await });
+                let _ = store.bench_write(&name, &key, &data);
             })
         });
         g.bench_function(&format!("op_read_{}", name), |b| {
             b.iter(|| {
-                let _ = store.runtime.block_on(async { op.read(&key).await });
+                let _ = store.bench_read(&name, &key);
             })
         });
     }

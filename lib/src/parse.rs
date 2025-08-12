@@ -232,14 +232,12 @@ fn parse_json_ad_map_to_resource(
             }
             serde_json::Value::String(str) => {
                 // LocalIDs are mapped to @ids by appending the `localId` to the `importer`'s `parent`.
-                if prop == urls::LOCAL_ID {
-                    let parent = parse_opts.importer.as_ref()
-                        .ok_or_else(|| AtomicError::parse_error(
-                            "Encountered `localId`, which means we need a `parent` in the parsing options.",
-                            subject.as_deref(),
-                            Some(&prop),
-                        ))?;
-                    subject = Some(generate_id_from_local_id(parent, &str));
+                // Only attempt subject generation if no explicit `@id` has been provided yet.
+                // Do NOT error when no importer is set; keep parsing and treat `localId` as a normal property.
+                if prop == urls::LOCAL_ID && subject.is_none() {
+                    if let Some(parent) = parse_opts.importer.as_ref() {
+                        subject = Some(generate_id_from_local_id(parent, &str));
+                    }
                 }
                 let property = store.get_property(&prop).map_err(|e| {
                     AtomicError::parse_error(

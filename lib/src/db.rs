@@ -43,6 +43,42 @@ use self::{
 
 // External crates used in persistable multi-store setup
 use uuid;
+/// Wrapper to ensure runtime is only dropped on a dedicated thread, avoiding panics when
+/// a runtime is dropped inside an async context (e.g., Actix tests).
+struct DropSafeRuntime {
+    inner: Option<tokio::runtime::Runtime>,
+}
+
+impl DropSafeRuntime {
+    fn from_runtime(rt: tokio::runtime::Runtime) -> Self {
+        Self { inner: Some(rt) }
+    }
+
+    fn block_on<F: std::future::Future>(&self, fut: F) -> F::Output {
+        self.inner.as_ref().unwrap().block_on(fut)
+    }
+}
+
+impl std::ops::Deref for DropSafeRuntime {
+    type Target = tokio::runtime::Runtime;
+
+    fn deref(&self) -> &Self::Target {
+        self.inner.as_ref().unwrap()
+    }
+}
+
+impl Drop for DropSafeRuntime {
+    fn drop(&mut self) {
+        if let Some(rt) = self.inner.take() {
+            std::thread::spawn(move || {
+                // Drop runtime on separate thread where blocking is allowed
+                drop(rt);
+            })
+            .join()
+            .ok();
+        }
+    }
+}
 
 // A function called by the Store when a Commit is accepted
 type HandleCommit = Box<dyn Fn(&CommitResponse) + Send + Sync>;
@@ -88,8 +124,8 @@ pub struct Db {
     endpoints: Vec<Endpoint>,
     /// Function called whenever a Commit is applied.
     on_commit: Option<Arc<HandleCommit>>,
-    /// Async runtime
-    runtime: Arc<tokio::runtime::Runtime>,
+    /// Async runtime with drop safety for nested runtimes
+    runtime: Arc<DropSafeRuntime>,
 }
 
 impl Db {
@@ -97,8 +133,11 @@ impl Db {
     /// The server_url is the domain where the db will be hosted, e.g. http://localhost/
     /// It is used for distinguishing locally defined items from externally defined ones.
     pub fn init(path: &std::path::Path, server_url: String) -> AtomicResult<Db> {
-        // Local runtime for async OpenDAL ops during initialization
-        let rt = tokio::runtime::Runtime::new()?;
+        // Local runtime for async OpenDAL ops during initialization.
+        // Use a current-thread runtime to avoid nested multi-thread runtimes inside Actix/Tokio tests.
+        let raw_rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?;
 
         // OpenDAL operator: Sled (on-disk)
         let mut dal_sled = opendal::services::Sled::default();
@@ -133,6 +172,7 @@ impl Db {
         let redb_op = {
             let mut b = opendal::services::Redb::default();
             b.datadir(path.join("opendal_redb").to_str().expect("redb path"));
+            b.table("resources_v1");
             opendal::Operator::new(b)
                 .map_err(|_e| format!("Error operator: {}", _e))?
                 .layer(opendal::layers::LoggingLayer::default())
@@ -153,52 +193,63 @@ impl Db {
         // Simple speed check: write+read small payload and measure read latency
         fn measure_read_ns(
             rt: &tokio::runtime::Runtime,
-            op: &opendal::Operator,
+            op: opendal::Operator,
         ) -> AtomicResult<u128> {
             use std::time::Instant;
-            rt.block_on(async {
+            let fut = async move {
                 let key = format!("bench_{}", uuid::Uuid::new_v4());
                 let payload = b"atomic-bench".to_vec();
                 op.write(&key, payload)
                     .await
                     .map_err(|e| format!("bench write error: {e}"))?;
                 let start = Instant::now();
-                let _ = op
-                    .read(&key)
-                    .await
-                    .map_err(|e| format!("bench read error: {e}"))?;
+                let _ = op.read(&key).await.map_err(|e| format!("bench read error: {e}"))?;
                 let ns = start.elapsed().as_nanos();
-                // best-effort cleanup
                 let _ = op.delete(&key).await;
                 Ok::<u128, String>(ns)
-            })
-            .map_err(|e| e.into())
+            };
+            if tokio::runtime::Handle::try_current().is_ok() {
+                // We're already in a runtime (possibly current-thread). Run the benchmark in a separate thread with its own runtime.
+                let (tx, rx) = std::sync::mpsc::sync_channel(1);
+                std::thread::spawn(move || {
+                    let tmp_rt = tokio::runtime::Builder::new_current_thread()
+                        .enable_all()
+                        .build()
+                        .expect("failed to build temp runtime");
+                    let res = tmp_rt.block_on(fut);
+                    let _ = tx.send(res);
+                });
+                rx.recv().unwrap().map_err(|e| e.into())
+            } else {
+                rt.block_on(fut).map_err(|e| e.into())
+            }
         }
 
-        let sled_ns = measure_read_ns(&rt, &sled_op)?;
-        let dash_ns = measure_read_ns(&rt, &dash_op)?;
+        let sled_ns = measure_read_ns(&raw_rt, sled_op.clone())?;
+        let dash_ns = measure_read_ns(&raw_rt, dash_op.clone())?;
         #[cfg(feature = "persist-rocksdb")]
-        let rocks_ns = measure_read_ns(&rt, &rocks_op)?;
+        let rocks_ns = measure_read_ns(&raw_rt, rocks_op.clone())?;
         #[cfg(feature = "persist-redb")]
-        let redb_ns = measure_read_ns(&rt, &redb_op)?;
+        let redb_ns = measure_read_ns(&raw_rt, redb_op.clone())?;
         #[cfg(feature = "persist-fs")]
-        let fs_ns = measure_read_ns(&rt, &fs_op)?;
+        let fs_ns = measure_read_ns(&raw_rt, fs_op.clone())?;
 
+        #[allow(unused_mut)]
         let mut fastest_op = if dash_ns <= sled_ns {
             dash_op.clone()
         } else {
             sled_op.clone()
         };
         #[cfg(feature = "persist-rocksdb")]
-        if rocks_ns < measure_read_ns(&rt, &fastest_op)? {
+        if rocks_ns < measure_read_ns(&raw_rt, fastest_op.clone())? {
             fastest_op = rocks_op.clone();
         }
         #[cfg(feature = "persist-redb")]
-        if redb_ns < measure_read_ns(&rt, &fastest_op)? {
+        if redb_ns < measure_read_ns(&raw_rt, fastest_op.clone())? {
             fastest_op = redb_op.clone();
         }
         #[cfg(feature = "persist-fs")]
-        if fs_ns < measure_read_ns(&rt, &fastest_op)? {
+        if fs_ns < measure_read_ns(&raw_rt, fastest_op.clone())? {
             fastest_op = fs_op.clone();
         }
 
@@ -231,12 +282,39 @@ impl Db {
             watched_queries,
             endpoints: default_endpoints(),
             on_commit: None,
-            runtime: Arc::new(rt),
+            runtime: Arc::new(DropSafeRuntime::from_runtime(raw_rt)),
         };
         migrate_maybe(&store).map(|e| format!("Error during migration of database: {:?}", e))?;
         crate::populate::populate_base_models(&store)
             .map_err(|e| format!("Failed to populate base models. {}", e))?;
         Ok(store)
+    }
+
+    /// Returns true if currently inside a Tokio runtime
+    fn in_async_runtime() -> bool {
+        tokio::runtime::Handle::try_current().is_ok()
+    }
+
+    /// Run an owned, Send future to completion regardless of current runtime context
+    fn run_async_owned<T, Fut>(&self, fut: Fut) -> T
+    where
+        Fut: std::future::Future<Output = T> + Send + 'static,
+        T: Send + 'static,
+    {
+        if Db::in_async_runtime() {
+            let (tx, rx) = std::sync::mpsc::sync_channel(1);
+            std::thread::spawn(move || {
+                let tmp_rt = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .expect("failed to build temp runtime");
+                let res = tmp_rt.block_on(fut);
+                let _ = tx.send(res);
+            });
+            rx.recv().expect("runtime thread panicked")
+        } else {
+            self.runtime.block_on(fut)
+        }
     }
 
     /// Create a temporary Db in `.temp/db/{id}`. Useful for testing.
@@ -275,14 +353,55 @@ impl Db {
     fn set_propvals(&self, subject: &str, propvals: &PropVals) -> AtomicResult<()> {
         let resource_bin = bincode::serialize(propvals)?;
         // Write to all OpenDAL operators (multi-store), then to primary Sled tree used by indexes
-        self.runtime.block_on(async {
-            for (_name, op) in self.dal_ops.iter() {
+        let ops: Vec<opendal::Operator> = self.dal_ops.values().cloned().collect();
+        let subject_owned = subject.to_string();
+        let resource_bin_async = resource_bin.clone();
+        self.run_async_owned(async move {
+            for op in ops.into_iter() {
                 // Ignore per-operator errors to allow others to succeed; surface first error if needed later
-                let _ = op.write(subject, resource_bin.clone()).await;
+                let _ = op.write(&subject_owned, resource_bin_async.clone()).await;
             }
         });
         self.resources.insert(subject.as_bytes(), resource_bin)?;
         Ok(())
+    }
+
+    /// Returns the names of configured persistence profiles (e.g., "sled", "dashmap", ...)
+    pub fn persistence_profiles(&self) -> Vec<String> {
+        self.dal_ops.keys().cloned().collect()
+    }
+
+    /// Write raw bytes to a specific persistence profile (for benchmarking/testing only)
+    pub fn bench_write(&self, profile_name: &str, key: &str, data: &[u8]) -> AtomicResult<()> {
+        let op = self
+            .dal_ops
+            .get(profile_name)
+            .ok_or_else(|| format!("Unknown profile: {}", profile_name))?
+            .clone();
+        let key_owned = key.to_string();
+        let data_vec = data.to_vec();
+        self.run_async_owned(async move {
+            op.write(&key_owned, data_vec)
+                .await
+                .map_err(|e| format!("bench_write error: {}", e))
+        })?;
+        Ok(())
+    }
+
+    /// Read raw bytes from a specific persistence profile (for benchmarking/testing only)
+    pub fn bench_read(&self, profile_name: &str, key: &str) -> AtomicResult<Vec<u8>> {
+        let op = self
+            .dal_ops
+            .get(profile_name)
+            .ok_or_else(|| format!("Unknown profile: {}", profile_name))?
+            .clone();
+        let key_owned = key.to_string();
+        let bytes = self.run_async_owned(async move {
+            op.read(&key_owned)
+                .await
+                .map_err(|e| format!("bench_read error: {}", e))
+        })?;
+        Ok(bytes)
     }
 
     /// Sets a function that is called whenever a [Commit::apply] is called.
@@ -296,11 +415,13 @@ impl Db {
     #[instrument(skip(self))]
     fn get_propvals(&self, subject: &str) -> AtomicResult<PropVals> {
         // Try fastest OpenDAL operator first
-        let mut propval_maybe = self.runtime.block_on(async {
-            self.dal_fastest
-                .read(subject)
+        let subject_owned = subject.to_string();
+        let op = self.dal_fastest.clone();
+        let mut propval_maybe = self.run_async_owned(async move {
+            op
+                .read(&subject_owned)
                 .await
-                .map_err(|e| format!("Can't open {} from fastest store: {}", subject, e))
+                .map_err(|e| format!("Can't open {} from fastest store: {}", subject_owned, e))
                 .ok()
         });
         // Fallback to Sled resources tree if OpenDAL miss
@@ -735,9 +856,11 @@ impl Storelike for Db {
                 self.remove_atom_from_index(&remove_atom, &resource)?;
             }
             // Remove from OpenDAL operators (best-effort)
-            self.runtime.block_on(async {
-                for (_name, op) in self.dal_ops.iter() {
-                    let _ = op.delete(subject).await;
+            let subject_owned = subject.to_string();
+            let ops: Vec<opendal::Operator> = self.dal_ops.values().cloned().collect();
+            self.run_async_owned(async move {
+                for op in ops.into_iter() {
+                    let _ = op.delete(&subject_owned).await;
                 }
             });
             let _found = self.resources.remove(subject.as_bytes())?;
