@@ -1,4 +1,4 @@
-import { core, StoreEvents, useCollection, useStore } from '@tomic/react';
+import { commits, core, StoreEvents, useCollection, useStore } from '@tomic/react';
 import { useEffect, useRef, useState } from 'react';
 
 /**
@@ -17,7 +17,7 @@ export function useChildren(parentSubject: string | undefined): {
     {
       property: core.properties.parent,
       value: parentSubject,
-      sort_by: core.properties.createdAt,
+      sort_by: commits.properties.createdAt,
       sort_desc: false,
     },
     { pageSize: 500 },
