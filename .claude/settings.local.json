@@ -61,7 +61,8 @@
       "Bash(export PATH=\"/opt/homebrew/bin:$PATH\")",
       "mcp__charlotte__charlotte_click_at",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5173/)",
-      "Bash(node -e ':*)"
+      "Bash(node -e ':*)",
+      "Bash(pnpm build:wasm)"
     ]
   }
 }

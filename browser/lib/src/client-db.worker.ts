@@ -33,7 +33,9 @@ export type WorkerRequest =
   | { id: number; type: 'allSubjects' }
   | { id: number; type: 'populate' }
   | { id: number; type: 'exportAllResources' }
-  | { id: number; type: 'importAllResources'; jsonArray: string };
+  | { id: number; type: 'importAllResources'; jsonArray: string }
+  | { id: number; type: 'putLoroSnapshot'; subject: string; data: Uint8Array }
+  | { id: number; type: 'getLoroSnapshot'; subject: string };
 
 /** Message types sent from worker back to main thread */
 export type WorkerResponse =
@@ -120,6 +122,19 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
       await ensureInit();
 
       return db!.importAllResources(msg.jsonArray);
+    }
+
+    case 'putLoroSnapshot': {
+      await ensureInit();
+      db!.putLoroSnapshot(msg.subject, msg.data);
+
+      return;
+    }
+
+    case 'getLoroSnapshot': {
+      await ensureInit();
+
+      return db!.getLoroSnapshot(msg.subject);
     }
 
     default:

@@ -346,6 +346,43 @@ export class Store {
   }
 
   /**
+   * Try to load a resource from the WASM DB (OPFS).
+   * Returns the Resource if found, or null if not available.
+   */
+  private async fetchResourceFromClientDb(
+    subject: string,
+  ): Promise<Resource | null> {
+    if (!this.clientDb) return null;
+
+    if (!this.clientDb.isReady) {
+      const ready = await this.clientDb.waitForReady();
+
+      if (!ready) return null;
+    }
+
+    try {
+      const jsonAd = await this.clientDb.getResource(subject);
+
+      if (!jsonAd) return null;
+
+      const parsed = JSON.parse(jsonAd);
+      const resource = new Resource(subject);
+
+      for (const [key, value] of Object.entries(parsed)) {
+        if (key === '@id') continue;
+        resource.setUnsafe(key, value as JSONValue);
+      }
+
+      resource.loading = false;
+      this.addResources(resource, { skipCommitCompare: true });
+
+      return resource;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Normalizes a subject: if it is a relative path, it becomes a full URL using the server's base URL.
    * DIDs and full HTTP URLs are returned as-is.
    */
@@ -466,9 +503,6 @@ export class Store {
       storeResource.merge(resource.__internalObject);
       this.notify(storeResource);
     } else {
-      // Debug: detect when a DID resource is being stored for the first time
-      // (should have been found if restoreOfflineResources ran)
-
       this.resources.set(subject, resource.__internalObject);
       this.notify(resource.__internalObject);
     }
@@ -629,65 +663,6 @@ export class Store {
     return drive;
   }
 
-  /**
-   * Restores resources that were saved offline from localStorage.
-   * These entries contain full Loro snapshots that survive page reloads.
-   * Call this early during app init, before components render.
-   */
-  public restoreOfflineResources(): number {
-    if (typeof localStorage === 'undefined') return 0;
-
-    const prefix = 'atomic.offline.';
-    const keys: string[] = [];
-
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-
-      if (key?.startsWith(prefix)) {
-        keys.push(key);
-      }
-    }
-
-    if (keys.length === 0) return 0;
-
-    let restored = 0;
-
-    for (const key of keys) {
-      try {
-        const json = localStorage.getItem(key);
-
-        if (!json) continue;
-
-        const parsed = JSON.parse(json);
-        const subject: string = parsed['@id'] ?? key.slice(prefix.length);
-        const res = new Resource(subject);
-
-        for (const [k, v] of Object.entries(parsed)) {
-          if (k === '@id' || k === '_lastLocalSignature') continue;
-          res.setUnsafe(k, v as JSONValue);
-        }
-
-        res.loading = false;
-        this.addResources(res, { alias: subject, skipCommitCompare: true });
-
-        // Restore commit chain state so followup saves don't trigger new genesis
-        if (parsed['_lastLocalSignature']) {
-          const stored = this.resources.get(subject);
-
-          if (stored) {
-            (stored as any)._lastLocalSignature =
-              parsed['_lastLocalSignature'];
-          }
-        }
-
-        restored++;
-      } catch {
-        // Skip corrupted entries
-      }
-    }
-
-    return restored;
-  }
 
   public async search(query: string, opts: SearchOpts = {}): Promise<string[]> {
     // Try local search first if the index has content and no filters are set.
@@ -782,26 +757,8 @@ export class Store {
       await this.clientDb.waitForReady();
     }
 
-    // Check localStorage first for offline-saved resources (these preserve
-    // loroUpdate snapshots that the WASM DB parser might drop).
-    if (typeof localStorage !== 'undefined') {
-      const offlineJson = localStorage.getItem(`atomic.offline.${subject}`);
-
-      if (offlineJson) {
-        try {
-          hasLocalData = this.hydrateResourceFromJson(
-            subject,
-            JSON.parse(offlineJson),
-          );
-        } catch {
-          // Corrupted — remove it
-          localStorage.removeItem(`atomic.offline.${subject}`);
-        }
-      }
-    }
-
-    // Try the WASM DB if localStorage didn't have it
-    if (!hasLocalData && this.clientDb?.isReady) {
+    // Try the WASM DB (OPFS) for persisted resources.
+    if (this.clientDb?.isReady) {
       try {
         const jsonAd = await this.clientDb.getResource(subject);
 
@@ -810,6 +767,22 @@ export class Store {
             subject,
             JSON.parse(jsonAd),
           );
+        }
+
+        // Restore Loro snapshot if available (stored separately from JSON-AD).
+        if (hasLocalData) {
+          const snapshot = await this.clientDb.getLoroSnapshot(subject);
+
+          if (snapshot && snapshot.length > 0) {
+            const resource = this.resources.get(subject);
+
+            if (resource) {
+              resource.setUnsafe(
+                commits.properties.loroUpdate,
+                snapshot,
+              );
+            }
+          }
         }
       } catch {
         // WASM DB failed — continue to server
@@ -1146,12 +1119,19 @@ export class Store {
     }
 
     // If offline and the resource can't be fetched via HTTP (DID subjects),
-    // return local data or throw. HTTP URLs can always be tried directly.
+    // check in-memory store first, then try the WASM DB (OPFS).
     if (!this._serverConnected && resolved.startsWith('did:')) {
       const local = this.resources.get(resolved);
 
       if (local) {
         return local;
+      }
+
+      // Try the WASM DB — the resource may have been persisted to OPFS.
+      const fromDb = await this.fetchResourceFromClientDb(resolved);
+
+      if (fromDb) {
+        return fromDb;
       }
 
       throw new Error(`Resource ${subjectRaw} not found locally and server is offline`);
@@ -1985,7 +1965,7 @@ function resourceToJsonAd(resource: Resource): string | null {
   for (const [key, value] of propvals) {
     // Skip Uint8Array values (Loro snapshots) — JSON.stringify turns them
     // into huge {"0":98,"1":71,...} objects that block the main thread.
-    // These are persisted separately through the offline save path.
+    // These are persisted separately in the LoroSnapshots table in OPFS.
     if (value instanceof Uint8Array) continue;
     obj[key] = value;
   }

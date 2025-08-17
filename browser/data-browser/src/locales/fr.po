@@ -677,7 +677,6 @@ msgstr "Copier le texte du message"
 #: src/chunks/TablePage/PropertyForm/NumberPropertyForm.tsx
 #: src/views/BookmarkPage/BookmarkPreview.tsx
 #: src/views/ChatRoomPage.tsx
-#: src/views/ChatRoomPage.tsx
 msgid "loading..."
 msgstr "chargement..."
 
@@ -4056,11 +4055,9 @@ msgid "Open tag page"
 msgstr ""
 
 #: src/views/ChatRoomPage.tsx
-#: src/views/ChatRoomPage.tsx
 msgid "No messages yet"
 msgstr ""
 
-#: src/views/ChatRoomPage.tsx
 #: src/views/ChatRoomPage.tsx
 msgid "Be the first to say something"
 msgstr ""
