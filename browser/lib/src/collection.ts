@@ -194,6 +194,11 @@ export class Collection {
 
   /** Try to resolve a page from the local WASM DB. Returns true if successful. */
   private async fetchPageFromLocalDb(page: number): Promise<boolean> {
+    // Both property and value are required for a meaningful local query.
+    if (!this.params.property || !this.params.value) {
+      return false;
+    }
+
     // Wait for WASM DB to be ready (important on initial page load).
     const clientDb = this.store.getClientDb();
 
