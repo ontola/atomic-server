@@ -38,8 +38,14 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
   const titleId = useId();
   const canWrite = useCanWrite(resource);
 
-  const { tableClass, sorting, setSortBy, collection, ready, invalidateCollection } =
-    useTableData(resource);
+  const {
+    tableClass,
+    sorting,
+    setSortBy,
+    collection,
+    ready,
+    invalidateCollection,
+  } = useTableData(resource);
 
   const { columns, reorderColumns } = useTableColumns(tableClass);
 
@@ -71,12 +77,13 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
     collection.totalMembers - prevTotalMembersRef.current;
 
   if (totalMembersDiff > 0) {
-    console.debug(`[TableResource] totalMembers grew by ${totalMembersDiff} (${prevTotalMembersRef.current} → ${collection.totalMembers}), newRowIds=${newRowIds.length}`);
     prevTotalMembersRef.current = collection.totalMembers;
     const remaining = newRowIds.slice(totalMembersDiff);
     setNewRowIds(remaining.length > 0 ? remaining : [generateRowId()]);
   } else if (totalMembersDiff < 0) {
-    console.debug(`[TableResource] totalMembers shrank by ${-totalMembersDiff} (${prevTotalMembersRef.current} → ${collection.totalMembers})`);
+    console.debug(
+      `[TableResource] totalMembers shrank by ${-totalMembersDiff} (${prevTotalMembersRef.current} → ${collection.totalMembers})`,
+    );
     prevTotalMembersRef.current = collection.totalMembers;
   }
 

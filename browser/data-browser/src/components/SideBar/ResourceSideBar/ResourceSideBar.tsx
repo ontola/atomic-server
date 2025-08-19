@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, memo, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   dataBrowser,
   useResource,
@@ -31,7 +31,7 @@ interface ResourceSideBarProps {
 }
 
 /** Renders a Resource as a nav item for in the sidebar. */
-export const ResourceSideBar: React.FC<ResourceSideBarProps> = ({
+export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(({
   subject,
   renderedHierarchy,
   ancestry,
@@ -188,7 +188,7 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = ({
       </Details>
     </Wrapper>
   );
-};
+});
 
 const Wrapper = styled.div<{ highlight: boolean }>`
   background-color: ${p =>

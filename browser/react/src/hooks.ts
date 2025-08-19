@@ -645,7 +645,9 @@ export function useCanWrite(resource: Resource): boolean {
     }
   }, [resource, agent?.subject]);
 
-  // If the subject changes, make sure to change the resource!
+  // Re-check write permissions when the subject or agent changes.
+  // Using resource.subject instead of the full proxy to avoid re-running
+  // on every property change.
   useEffect(() => {
     if (agent && !resource.new) {
       resource.canWrite(agent.subject).then(([result]) => {
@@ -665,7 +667,8 @@ export function useCanWrite(resource: Resource): boolean {
         }
       });
     }
-  }, [resource, agent]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resource.subject, agent?.subject]);
 
   return canWrite;
 }

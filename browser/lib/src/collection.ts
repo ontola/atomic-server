@@ -218,17 +218,20 @@ export class Collection {
       return false;
     }
 
-    // Client-side sorting
+    // Client-side sorting — pre-fetch sort keys to avoid repeated Map lookups.
     const sortBy = this.params.sort_by;
 
     if (sortBy) {
       const sortDesc = !!this.params.sort_desc;
+      const sortKeys = new Map<string, unknown>();
+
+      for (const s of result.subjects) {
+        sortKeys.set(s, this.store.resources.get(s)?.get(sortBy));
+      }
 
       result.subjects.sort((a, b) => {
-        const resA = this.store.resources.get(a);
-        const resB = this.store.resources.get(b);
-        const valA = resA?.get(sortBy);
-        const valB = resB?.get(sortBy);
+        const valA = sortKeys.get(a);
+        const valB = sortKeys.get(b);
 
         if (valA == null && valB == null) return 0;
         if (valA == null) return 1;
