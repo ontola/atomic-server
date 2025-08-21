@@ -93,7 +93,7 @@ pub mod values;
 pub use atoms::Atom;
 pub use commit::Commit;
 #[cfg(feature = "db")]
-pub use db::Db;
+pub use db::{Db, StorageConfig};
 pub use errors::AtomicError;
 pub use errors::AtomicErrorType;
 pub use resources::Resource;

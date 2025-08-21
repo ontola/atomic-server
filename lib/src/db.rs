@@ -83,6 +83,33 @@ impl Drop for DropSafeRuntime {
 // A function called by the Store when a Commit is accepted
 type HandleCommit = Box<dyn Fn(&CommitResponse) + Send + Sync>;
 
+/// Configuration for OpenDAL storage backends
+#[derive(Clone, Debug)]
+pub struct StorageConfig {
+    /// List of enabled storage backends (e.g., ["sled", "dashmap", "rocksdb"])
+    pub enabled_backends: Vec<String>,
+    /// Whether to prefer in-memory storage for better performance
+    pub prefer_memory: bool,
+    /// Custom path for RocksDB storage
+    pub rocksdb_path: Option<std::path::PathBuf>,
+    /// Custom path for ReDB storage
+    pub redb_path: Option<std::path::PathBuf>,
+    /// Custom path for filesystem storage
+    pub fs_path: Option<std::path::PathBuf>,
+}
+
+impl Default for StorageConfig {
+    fn default() -> Self {
+        Self {
+            enabled_backends: vec!["sled".to_string(), "dashmap".to_string()],
+            prefer_memory: false,
+            rocksdb_path: None,
+            redb_path: None,
+            fs_path: None,
+        }
+    }
+}
+
 /// Inside the reference_index, each value is mapped to this type.
 /// The String on the left represents a Property URL, and the second one is the set of subjects.
 pub type PropSubjectMap = HashMap<String, HashSet<String>>;
@@ -133,62 +160,103 @@ impl Db {
     /// The server_url is the domain where the db will be hosted, e.g. http://localhost/
     /// It is used for distinguishing locally defined items from externally defined ones.
     pub fn init(path: &std::path::Path, server_url: String) -> AtomicResult<Db> {
+        Self::init_with_config(path, server_url, StorageConfig::default())
+    }
+
+    /// Creates a new store with custom storage configuration.
+    /// The server_url is the domain where the db will be hosted, e.g. http://localhost/
+    /// It is used for distinguishing locally defined items from externally defined ones.
+    pub fn init_with_config(path: &std::path::Path, server_url: String, config: StorageConfig) -> AtomicResult<Db> {
         // Local runtime for async OpenDAL ops during initialization.
         // Use a current-thread runtime to avoid nested multi-thread runtimes inside Actix/Tokio tests.
         let raw_rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()?;
 
-        // OpenDAL operator: Sled (on-disk)
-        let mut dal_sled = opendal::services::Sled::default();
-        let dal_path = path.join("opendal");
-        dal_sled
-            .datadir(dal_path.to_str().expect("wrong data dir string"))
-            .tree("resources_v1");
-        let sled_op = opendal::Operator::new(dal_sled)
-            .map_err(|_e| format!("Error operator: {}", _e))?
-            .layer(opendal::layers::LoggingLayer::default())
-            .finish();
+        let mut dal_ops = std::collections::HashMap::new();
+        let mut all_ops = Vec::new();
+
+        // OpenDAL operator: Sled (on-disk) - always included as base storage
+        if config.enabled_backends.contains(&"sled".to_string()) {
+            let mut dal_sled = opendal::services::Sled::default();
+            let dal_path = path.join("opendal");
+            dal_sled
+                .datadir(dal_path.to_str().expect("wrong data dir string"))
+                .tree("resources_v1");
+            let sled_op = opendal::Operator::new(dal_sled)
+                .map_err(|_e| format!("Error operator: {}", _e))?
+                .layer(opendal::layers::LoggingLayer::default())
+                .finish();
+            dal_ops.insert("sled".to_string(), sled_op.clone());
+            all_ops.push(("sled".to_string(), sled_op));
+        }
 
         // OpenDAL operator: DashMap (in-memory, fast)
-        let dash_op = opendal::Operator::new(opendal::services::Dashmap::default())
-            .map_err(|_e| format!("Error operator: {}", _e))?
-            .layer(opendal::layers::LoggingLayer::default())
-            .finish();
+        if config.enabled_backends.contains(&"dashmap".to_string()) {
+            let dash_op = opendal::Operator::new(opendal::services::Dashmap::default())
+                .map_err(|_e| format!("Error operator: {}", _e))?
+                .layer(opendal::layers::LoggingLayer::default())
+                .finish();
+            dal_ops.insert("dashmap".to_string(), dash_op.clone());
+            all_ops.push(("dashmap".to_string(), dash_op));
+        }
 
         // OpenDAL operator: RocksDB (on-disk kv)
         #[cfg(feature = "persist-rocksdb")]
-        let rocks_op = {
-            let mut b = opendal::services::Rocksdb::default();
-            b.datadir(path.join("opendal_rocksdb").to_str().expect("rocks path"));
-            opendal::Operator::new(b)
-                .map_err(|_e| format!("Error operator: {}", _e))?
-                .layer(opendal::layers::LoggingLayer::default())
-                .finish()
-        };
+        if config.enabled_backends.contains(&"rocksdb".to_string()) {
+            let rocks_op = {
+                let mut b = opendal::services::Rocksdb::default();
+                let rocks_path = config.rocksdb_path.clone()
+                    .unwrap_or_else(|| path.join("opendal_rocksdb"));
+                b.datadir(rocks_path.to_str().expect("rocks path"));
+                opendal::Operator::new(b)
+                    .map_err(|_e| format!("Error operator: {}", _e))?
+                    .layer(opendal::layers::LoggingLayer::default())
+                    .finish()
+            };
+            dal_ops.insert("rocksdb".to_string(), rocks_op.clone());
+            all_ops.push(("rocksdb".to_string(), rocks_op));
+        }
 
         // OpenDAL operator: ReDB (embedded db)
         #[cfg(feature = "persist-redb")]
-        let redb_op = {
-            let mut b = opendal::services::Redb::default();
-            b.datadir(path.join("opendal_redb").to_str().expect("redb path"));
-            b.table("resources_v1");
-            opendal::Operator::new(b)
-                .map_err(|_e| format!("Error operator: {}", _e))?
-                .layer(opendal::layers::LoggingLayer::default())
-                .finish()
-        };
+        if config.enabled_backends.contains(&"redb".to_string()) {
+            let redb_op = {
+                let mut b = opendal::services::Redb::default();
+                let redb_path = config.redb_path.clone()
+                    .unwrap_or_else(|| path.join("opendal_redb"));
+                b.datadir(redb_path.to_str().expect("redb path"));
+                b.table("resources_v1");
+                opendal::Operator::new(b)
+                    .map_err(|_e| format!("Error operator: {}", _e))?
+                    .layer(opendal::layers::LoggingLayer::default())
+                    .finish()
+            };
+            dal_ops.insert("redb".to_string(), redb_op.clone());
+            all_ops.push(("redb".to_string(), redb_op));
+        }
 
         // OpenDAL operator: FS (filesystem flat files)
         #[cfg(feature = "persist-fs")]
-        let fs_op = {
-            let mut b = opendal::services::Fs::default();
-            b.root(path.join("opendal_fs").to_str().expect("fs path"));
-            opendal::Operator::new(b)
-                .map_err(|_e| format!("Error operator: {}", _e))?
-                .layer(opendal::layers::LoggingLayer::default())
-                .finish()
-        };
+        if config.enabled_backends.contains(&"fs".to_string()) {
+            let fs_op = {
+                let mut b = opendal::services::Fs::default();
+                let fs_path = config.fs_path.clone()
+                    .unwrap_or_else(|| path.join("opendal_fs"));
+                b.root(fs_path.to_str().expect("fs path"));
+                opendal::Operator::new(b)
+                    .map_err(|_e| format!("Error operator: {}", _e))?
+                    .layer(opendal::layers::LoggingLayer::default())
+                    .finish()
+            };
+            dal_ops.insert("fs".to_string(), fs_op.clone());
+            all_ops.push(("fs".to_string(), fs_op));
+        }
+
+        // Ensure we have at least one storage backend
+        if dal_ops.is_empty() {
+            return Err("No storage backends enabled. Please enable at least one backend.".into());
+        }
 
         // Simple speed check: write+read small payload and measure read latency
         fn measure_read_ns(
@@ -225,43 +293,52 @@ impl Db {
             }
         }
 
-        let sled_ns = measure_read_ns(&raw_rt, sled_op.clone())?;
-        let dash_ns = measure_read_ns(&raw_rt, dash_op.clone())?;
-        #[cfg(feature = "persist-rocksdb")]
-        let rocks_ns = measure_read_ns(&raw_rt, rocks_op.clone())?;
-        #[cfg(feature = "persist-redb")]
-        let redb_ns = measure_read_ns(&raw_rt, redb_op.clone())?;
-        #[cfg(feature = "persist-fs")]
-        let fs_ns = measure_read_ns(&raw_rt, fs_op.clone())?;
-
-        #[allow(unused_mut)]
-        let mut fastest_op = if dash_ns <= sled_ns {
-            dash_op.clone()
+        // Determine the fastest operator based on configuration preference or benchmarking
+        let fastest_op = if config.prefer_memory {
+            // If prefer_memory is set, use dashmap if available, otherwise benchmark
+            if let Some(dashmap_op) = dal_ops.get("dashmap") {
+                info!("Using dashmap as fastest operator due to prefer_memory setting");
+                dashmap_op.clone()
+            } else {
+                // Fall back to benchmarking
+                info!("Benchmarking storage backends to find fastest...");
+                let mut fastest_name = String::new();
+                let mut fastest_op = None;
+                let mut fastest_ns = u128::MAX;
+                
+                for (name, op) in &all_ops {
+                    let ns = measure_read_ns(&raw_rt, op.clone())?;
+                    info!("Backend '{}' read latency: {} ns", name, ns);
+                    if ns < fastest_ns {
+                        fastest_ns = ns;
+                        fastest_name = name.clone();
+                        fastest_op = Some(op.clone());
+                    }
+                }
+                
+                info!("Selected '{}' as fastest backend ({} ns)", fastest_name, fastest_ns);
+                fastest_op.expect("No operators available")
+            }
         } else {
-            sled_op.clone()
+            // Benchmark all available operators
+            info!("Benchmarking storage backends to find fastest...");
+            let mut fastest_name = String::new();
+            let mut fastest_op = None;
+            let mut fastest_ns = u128::MAX;
+            
+            for (name, op) in &all_ops {
+                let ns = measure_read_ns(&raw_rt, op.clone())?;
+                info!("Backend '{}' read latency: {} ns", name, ns);
+                if ns < fastest_ns {
+                    fastest_ns = ns;
+                    fastest_name = name.clone();
+                    fastest_op = Some(op.clone());
+                }
+            }
+            
+            info!("Selected '{}' as fastest backend ({} ns)", fastest_name, fastest_ns);
+            fastest_op.expect("No operators available")
         };
-        #[cfg(feature = "persist-rocksdb")]
-        if rocks_ns < measure_read_ns(&raw_rt, fastest_op.clone())? {
-            fastest_op = rocks_op.clone();
-        }
-        #[cfg(feature = "persist-redb")]
-        if redb_ns < measure_read_ns(&raw_rt, fastest_op.clone())? {
-            fastest_op = redb_op.clone();
-        }
-        #[cfg(feature = "persist-fs")]
-        if fs_ns < measure_read_ns(&raw_rt, fastest_op.clone())? {
-            fastest_op = fs_op.clone();
-        }
-
-        let mut dal_ops = std::collections::HashMap::new();
-        dal_ops.insert("sled".to_string(), sled_op);
-        dal_ops.insert("dashmap".to_string(), dash_op);
-        #[cfg(feature = "persist-rocksdb")]
-        dal_ops.insert("rocksdb".to_string(), rocks_op);
-        #[cfg(feature = "persist-redb")]
-        dal_ops.insert("redb".to_string(), redb_op);
-        #[cfg(feature = "persist-fs")]
-        dal_ops.insert("fs".to_string(), fs_op);
 
         let db = sled::open(path).map_err(|e|format!("Failed opening DB at this location: {:?} . Is another instance of Atomic Server running? {}", path, e))?;
         let resources = db.open_tree("resources_v1").map_err(|e|format!("Failed building resources. Your DB might be corrupt. Go back to a previous version and export your data. {}", e))?;

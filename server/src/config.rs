@@ -91,6 +91,29 @@ pub struct Opts {
     /// Combine with `log_level` to get more or less data (`trace` is the most verbose)
     #[clap(value_enum, long, env = "ATOMIC_TRACING", default_value = "stdout")]
     pub trace: Tracing,
+
+    /// Enable OpenDAL storage backends. Multiple backends can be enabled simultaneously.
+    /// Options: sled, dashmap, rocksdb, redb, fs
+    /// Default: ["sled", "dashmap"] for optimal speed/persistence balance
+    #[clap(long, env = "ATOMIC_STORAGE_BACKENDS", value_delimiter = ',')]
+    pub storage_backends: Option<Vec<String>>,
+
+    /// Prefer in-memory storage for better performance at the cost of persistence.
+    /// When enabled, dashmap will be prioritized over disk-based backends.
+    #[clap(long, env = "ATOMIC_PREFER_MEMORY")]
+    pub prefer_memory: bool,
+
+    /// Path for RocksDB storage (if rocksdb backend is enabled)
+    #[clap(long, env = "ATOMIC_ROCKSDB_PATH")]
+    pub rocksdb_path: Option<PathBuf>,
+
+    /// Path for ReDB storage (if redb backend is enabled)
+    #[clap(long, env = "ATOMIC_REDB_PATH")]
+    pub redb_path: Option<PathBuf>,
+
+    /// Path for filesystem flat file storage (if fs backend is enabled)
+    #[clap(long, env = "ATOMIC_FS_PATH")]
+    pub fs_path: Option<PathBuf>,
 }
 
 #[derive(clap::ValueEnum, Clone, Debug)]
@@ -189,6 +212,17 @@ pub struct Config {
     pub search_index_path: PathBuf,
     /// If true, the initialization scripts will be ran (create first Drive, Agent, indexing, etc)
     pub initialize: bool,
+    // === OpenDAL Storage Configuration ===
+    /// Enabled storage backends
+    pub storage_backends: Vec<String>,
+    /// Whether to prefer in-memory storage
+    pub prefer_memory: bool,
+    /// Path for RocksDB storage
+    pub rocksdb_path: PathBuf,
+    /// Path for ReDB storage
+    pub redb_path: PathBuf,
+    /// Path for filesystem flat file storage
+    pub fs_path: PathBuf,
 }
 
 /// Parse .env and CLI options
@@ -286,6 +320,32 @@ pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
         format!("{}://{}:{}", schema, opts.domain, opts.port)
     };
 
+    // OpenDAL storage configuration
+    let storage_backends = opts.storage_backends.clone().unwrap_or_else(|| {
+        vec!["sled".to_string(), "dashmap".to_string()]
+    });
+
+    let prefer_memory = opts.prefer_memory;
+
+    // Set default paths for OpenDAL storage backends
+    let rocksdb_path = opts.rocksdb_path.clone().unwrap_or_else(|| {
+        let mut path = store_path.clone();
+        path.push("opendal_rocksdb");
+        path
+    });
+
+    let redb_path = opts.redb_path.clone().unwrap_or_else(|| {
+        let mut path = store_path.clone();
+        path.push("opendal_redb");
+        path
+    });
+
+    let fs_path = opts.fs_path.clone().unwrap_or_else(|| {
+        let mut path = store_path.clone();
+        path.push("opendal_fs");
+        path
+    });
+
     Ok(Config {
         initialize,
         opts,
@@ -299,5 +359,10 @@ pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
         store_path,
         search_index_path,
         uploads_path,
+        storage_backends,
+        prefer_memory,
+        rocksdb_path,
+        redb_path,
+        fs_path,
     })
 }

@@ -42,7 +42,18 @@ pub fn init(config: Config) -> AtomicServerResult<AppState> {
 
     tracing::info!("Opening database at {:?}", &config.store_path);
     let should_init = !&config.store_path.exists() || config.initialize;
-    let mut store = atomic_lib::Db::init(&config.store_path, config.server_url.clone())?;
+    
+    // Create storage configuration from server config
+    let storage_config = atomic_lib::StorageConfig {
+        enabled_backends: config.storage_backends.clone(),
+        prefer_memory: config.prefer_memory,
+        rocksdb_path: Some(config.rocksdb_path.clone()),
+        redb_path: Some(config.redb_path.clone()),
+        fs_path: Some(config.fs_path.clone()),
+    };
+    
+    tracing::info!("Initializing database with storage backends: {:?}", storage_config.enabled_backends);
+    let mut store = atomic_lib::Db::init_with_config(&config.store_path, config.server_url.clone(), storage_config)?;
     if should_init {
         tracing::info!("Initialize: creating and populating new Database...");
         atomic_lib::populate::populate_default_store(&store)
