@@ -34,4 +34,36 @@ describe('resource.ts', () => {
       testsubject,
     ]);
   });
+
+  it('merges remote state without dropping local unsaved loro edits', async ({
+    expect,
+  }) => {
+    const subject = 'https://example.com/merge-test';
+    const name = 'https://atomicdata.dev/properties/name';
+    const description = 'https://atomicdata.dev/properties/description';
+
+    const base = new Resource(subject);
+    await base.set(name, 'Base', false);
+    const baseSnapshot = (base as any)._loroDoc.export({ mode: 'snapshot' }) as Uint8Array;
+
+    const local = new Resource(subject);
+    local.importLoroUpdate(baseSnapshot);
+    await local.set(description, 'Local unsaved edit', false);
+
+    const remoteSource = new Resource(subject);
+    remoteSource.importLoroUpdate(baseSnapshot);
+    await remoteSource.set(name, 'Remote update', false);
+    const remoteSnapshot = (remoteSource as any)._loroDoc.export({
+      mode: 'snapshot',
+    }) as Uint8Array;
+
+    const remote = new Resource(subject);
+    remote.importLoroUpdate(remoteSnapshot);
+
+    local.merge(remote);
+
+    expect(local.get(name)).toBe('Remote update');
+    expect(local.get(description)).toBe('Local unsaved edit');
+    expect(local.hasUnsavedChanges()).toBe(true);
+  });
 });

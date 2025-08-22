@@ -6,12 +6,12 @@ use crate::storelike::Query;
 use crate::urls;
 use crate::utils::random_string;
 use crate::values::{SubResource, Value};
-use crate::{commit::CommitBuilder, errors::AtomicResult};
 use crate::{
+    Atom, Storelike, Subject,
     mapping::is_url,
     schema::{Class, Property},
-    Atom, Storelike, Subject,
 };
+use crate::{commit::CommitBuilder, errors::AtomicResult};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tracing::instrument;
@@ -40,8 +40,7 @@ impl Clone for Resource {
     fn clone(&self) -> Self {
         let loro = self.loro.as_ref().map(|doc| {
             let snapshot = doc.export_snapshot();
-            crate::loro::AtomicLoroDoc::from_snapshot(&snapshot)
-                .expect("Failed to clone Loro doc")
+            crate::loro::AtomicLoroDoc::from_snapshot(&snapshot).expect("Failed to clone Loro doc")
         });
         Resource {
             propvals: self.propvals.clone(),
@@ -53,6 +52,80 @@ impl Clone for Resource {
 }
 
 impl Resource {
+    fn clone_loro_state(doc: &crate::loro::AtomicLoroDoc) -> crate::loro::AtomicLoroDoc {
+        let snapshot = doc.export_snapshot();
+        crate::loro::AtomicLoroDoc::from_snapshot(&snapshot)
+            .expect("Failed to clone Loro doc")
+    }
+
+    fn adopt_resource_state(&mut self, new: &Resource) {
+        self.subject = new.subject.clone();
+        self.propvals = new.propvals.clone();
+        self.loro = new.loro.as_ref().map(Self::clone_loro_state);
+    }
+
+    fn seed_loro_doc_from_propvals(
+        doc: &crate::loro::AtomicLoroDoc,
+        propvals: &PropVals,
+    ) -> AtomicResult<()> {
+        for (prop, val) in propvals {
+            if prop == urls::LORO_UPDATE {
+                continue;
+            }
+
+            doc.set_property(prop, val)?;
+        }
+
+        Ok(())
+    }
+
+    fn materialize_propvals_from_loro_doc(doc: &crate::loro::AtomicLoroDoc) -> PropVals {
+        let mut propvals = PropVals::new();
+
+        for (prop, loro_val) in doc.get_all_properties() {
+            if let Some(atomic_val) = crate::loro::loro_value_to_atomic_value(&loro_val) {
+                propvals.insert(prop, atomic_val);
+            }
+        }
+
+        propvals
+    }
+
+    pub(crate) fn build_loro_doc_from_state(&self) -> AtomicResult<crate::loro::AtomicLoroDoc> {
+        if let Some(doc) = &self.loro {
+            return crate::loro::AtomicLoroDoc::from_snapshot(&doc.export_snapshot());
+        }
+
+        if let Some(Value::LoroDoc(snapshot)) = self.propvals.get(urls::LORO_UPDATE) {
+            return crate::loro::AtomicLoroDoc::from_snapshot(snapshot);
+        }
+
+        let doc = crate::loro::AtomicLoroDoc::new();
+        Self::seed_loro_doc_from_propvals(&doc, &self.propvals)?;
+        Ok(doc)
+    }
+
+    /// Replace the resource's property state entirely from a Loro doc.
+    /// Used by the sync protocol to materialize state after importing deltas.
+    pub fn replace_state_from_loro_doc(
+        &mut self,
+        doc: crate::loro::AtomicLoroDoc,
+    ) -> AtomicResult<()> {
+        let snapshot = doc.export_snapshot();
+        let mut propvals = Self::materialize_propvals_from_loro_doc(&doc);
+        propvals.insert(urls::LORO_UPDATE.into(), Value::LoroDoc(snapshot));
+        self.propvals = propvals;
+        self.loro = Some(doc);
+        Ok(())
+    }
+
+    fn set_loro_snapshot_state(&mut self, snapshot: Vec<u8>) -> AtomicResult<()> {
+        self.propvals
+            .insert(urls::LORO_UPDATE.into(), Value::LoroDoc(snapshot.clone()));
+        self.loro = Some(crate::loro::AtomicLoroDoc::from_snapshot(&snapshot)?);
+        Ok(())
+    }
+
     /// Fetches all 'required' properties. Returns an error if any are missing in this Resource.
     pub async fn check_required_props(&self, store: &impl Storelike) -> AtomicResult<()> {
         let classvec = self.get_classes(store).await?;
@@ -119,14 +192,9 @@ impl Resource {
     /// Otherwise creates a new empty one.
     pub fn get_loro_doc(&mut self) -> &crate::loro::AtomicLoroDoc {
         if self.loro.is_none() {
-            // Check if there's a persisted snapshot to load
-            let doc = if let Ok(Value::LoroDoc(snapshot)) = self.get(urls::LORO_UPDATE) {
-                let snapshot = snapshot.clone();
-                crate::loro::AtomicLoroDoc::from_snapshot(&snapshot)
-                    .unwrap_or_else(|_| crate::loro::AtomicLoroDoc::new())
-            } else {
-                crate::loro::AtomicLoroDoc::new()
-            };
+            let doc = self
+                .build_loro_doc_from_state()
+                .unwrap_or_else(|_| crate::loro::AtomicLoroDoc::new());
             self.loro = Some(doc);
         }
         self.loro.as_ref().unwrap()
@@ -241,6 +309,19 @@ impl Resource {
     /// Useful if you want to iterate over all Atoms / Properties.
     pub fn get_propvals(&self) -> &PropVals {
         &self.propvals
+    }
+
+    fn propvals_for_serialization(&self) -> PropVals {
+        let mut propvals = self.propvals.clone();
+
+        if let Some(doc) = &self.loro {
+            propvals.insert(
+                urls::LORO_UPDATE.into(),
+                Value::LoroDoc(doc.export_snapshot()),
+            );
+        }
+
+        propvals
     }
 
     /// Gets a value by its property shortname or property URL.
@@ -453,8 +534,7 @@ impl Resource {
         };
         let commit_response = store.apply_commit(commit, &opts).await?;
         if let Some(new) = &commit_response.resource_new {
-            self.subject = new.subject.clone();
-            self.propvals = new.propvals.clone();
+            self.adopt_resource_state(new);
         }
         self.reset_commit_builder();
         Ok(commit_response)
@@ -481,8 +561,7 @@ impl Resource {
         };
         let commit_response = store.apply_commit(commit, &opts).await?;
         if let Some(new) = &commit_response.resource_new {
-            self.subject = new.subject.clone();
-            self.propvals = new.propvals.clone();
+            self.adopt_resource_state(new);
         }
         self.reset_commit_builder();
         Ok(commit_response)
@@ -526,8 +605,7 @@ impl Resource {
 
         let commit_response = store.apply_commit(final_commit, &opts).await?;
         if let Some(new) = &commit_response.resource_new {
-            self.subject = new.subject.clone();
-            self.propvals = new.propvals.clone();
+            self.adopt_resource_state(new);
         }
         self.reset_commit_builder();
         Ok(commit_response)
@@ -536,57 +614,47 @@ impl Resource {
     /// Save the resource to a remote server via HTTP POST.
     /// Signs the commit and sends it to the server's `/commit` endpoint.
     /// Use this for client-side code that talks to an AtomicServer.
-    pub async fn save_remote(
-        &mut self,
-        store: &impl Storelike,
-    ) -> AtomicResult<String> {
+    pub async fn save_remote(&mut self, store: &impl Storelike) -> AtomicResult<String> {
         let agent = store.get_default_agent()?;
-
-        // Ensure the Loro doc is initialized and reflects all propvals
-        self.get_loro_doc();
-        if let Some(doc) = &self.loro {
-            for (prop, val) in &self.propvals {
-                let _ = doc.set_property(prop, val);
-            }
-        }
+        let snapshot = self.build_loro_doc_from_state()?.export_snapshot();
 
         // If this is a genesis commit (new DID resource), use create_did
         if self.subject.as_str() == "did:ad:placeholder" {
             let mut commitbuilder = self.commit.clone();
             commitbuilder.is_genesis = true;
-
-            // Attach Loro snapshot
-            if let Some(snapshot) = self.export_loro_snapshot() {
-                commitbuilder.set_loro_update(snapshot);
-            }
+            commitbuilder.set_loro_update(snapshot.clone());
 
             let commit = crate::Commit::create_did(commitbuilder, &agent, store).await?;
             let subject = commit.subject.clone();
-            let commit_id = commit.signature.as_ref()
+            let commit_id = commit
+                .signature
+                .as_ref()
                 .map(|sig| format!("did:ad:commit:{}", sig));
             crate::client::post_commit(&commit, store).await?;
             self.subject = subject.clone();
             // Store lastCommit so subsequent saves can chain
             if let Some(id) = commit_id {
-                self.propvals.insert(urls::LAST_COMMIT.into(), Value::AtomicUrl(id.into()));
+                self.propvals
+                    .insert(urls::LAST_COMMIT.into(), Value::AtomicUrl(id.into()));
             }
+            self.set_loro_snapshot_state(snapshot)?;
             self.reset_commit_builder();
             Ok(subject.to_string())
         } else {
             let mut commitbuilder = self.commit.clone();
-
-            // Attach Loro snapshot if we have one
-            if let Some(snapshot) = self.export_loro_snapshot() {
-                commitbuilder.set_loro_update(snapshot);
-            }
+            commitbuilder.set_loro_update(snapshot.clone());
 
             let commit = commitbuilder.sign(&agent, store, self).await?;
-            let commit_id = commit.signature.as_ref()
+            let commit_id = commit
+                .signature
+                .as_ref()
                 .map(|sig| format!("did:ad:commit:{}", sig));
             crate::client::post_commit(&commit, store).await?;
             if let Some(id) = commit_id {
-                self.propvals.insert(urls::LAST_COMMIT.into(), Value::AtomicUrl(id.into()));
+                self.propvals
+                    .insert(urls::LAST_COMMIT.into(), Value::AtomicUrl(id.into()));
             }
+            self.set_loro_snapshot_state(snapshot)?;
             self.reset_commit_builder();
             Ok(self.subject.to_string())
         }
@@ -711,6 +779,7 @@ impl Resource {
     /// Overwrites all current PropVals. Does not perform validation.
     pub fn set_propvals_unsafe(&mut self, propvals: PropVals) {
         self.propvals = propvals;
+        self.loro = None;
     }
 
     /// Changes the subject of the Resource.
@@ -728,9 +797,9 @@ impl Resource {
     #[instrument(skip_all)]
     pub fn to_json_ad(&self, origin: Option<&str>) -> AtomicResult<String> {
         let origin = origin.unwrap_or("http://localhost");
-        let propvals = self.get_propvals();
+        let propvals = self.propvals_for_serialization();
         let res = crate::serialize::propvals_to_json_ad_map(
-            propvals,
+            &propvals,
             Some(self.get_subject().resolve(origin)),
             origin,
             true,
@@ -740,7 +809,7 @@ impl Resource {
 
     /// Serializes the resource to JSON-AD string, using the provided base_url for resolving Local subjects.
     pub fn to_json_ad_with_url(&self, base_url: &str) -> AtomicResult<String> {
-        let propvals = self.get_propvals();
+        let propvals = self.propvals_for_serialization();
         let mut map = serde_json::Map::new();
         for (prop, val) in propvals.iter() {
             map.insert(
@@ -758,8 +827,9 @@ impl Resource {
         store: &impl Storelike,
         origin: Option<&str>,
     ) -> AtomicResult<String> {
+        let propvals = self.propvals_for_serialization();
         let obj = crate::serialize::propvals_to_json_ld(
-            self.get_propvals(),
+            &propvals,
             Some(self.get_subject().to_string()),
             store,
             false,
@@ -776,8 +846,9 @@ impl Resource {
         store: &impl Storelike,
         origin: Option<&str>,
     ) -> AtomicResult<String> {
+        let propvals = self.propvals_for_serialization();
         let obj = crate::serialize::propvals_to_json_ld(
-            self.get_propvals(),
+            &propvals,
             Some(self.get_subject().to_string()),
             store,
             true,
@@ -1144,6 +1215,55 @@ mod test {
             .unwrap();
         // Loro preserves the value as-given (no URL normalization on property values)
         assert_eq!(new_val.first().unwrap(), append_value);
+    }
+
+    #[tokio::test]
+    async fn json_ad_serialization_includes_current_loro_snapshot() {
+        let store: crate::Db = init_store().await;
+        let mut resource = Resource::new_generate_subject(&store).unwrap();
+        resource.set_name("Loro-backed resource");
+        resource
+            .set_loro(
+                urls::DESCRIPTION,
+                &Value::String("Server-side snapshot".into()),
+            )
+            .unwrap();
+
+        let json = resource.to_json_ad(Some("http://localhost")).unwrap();
+
+        assert!(
+            json.contains(urls::LORO_UPDATE),
+            "serialized JSON-AD should include the latest loroUpdate"
+        );
+        assert!(
+            json.contains("Server-side snapshot"),
+            "serialized JSON-AD should still include materialized properties"
+        );
+    }
+
+    #[tokio::test]
+    async fn set_propvals_unsafe_resets_stale_loro_state() {
+        let store: crate::Db = init_store().await;
+        let mut resource = Resource::new_generate_subject(&store).unwrap();
+        resource
+            .set_loro(urls::DESCRIPTION, &Value::String("Old loro value".into()))
+            .unwrap();
+
+        let mut propvals = PropVals::new();
+        propvals.insert(urls::NAME.into(), Value::String("Fresh propvals".into()));
+        resource.set_propvals_unsafe(propvals);
+
+        let doc = resource.get_loro_doc();
+        let properties = doc.get_all_properties();
+
+        assert!(
+            !properties.contains_key(urls::DESCRIPTION),
+            "stale loro-only properties should be dropped when propvals are replaced"
+        );
+        assert_eq!(
+            resource.get(urls::NAME).unwrap().to_string(),
+            "Fresh propvals"
+        );
     }
 
     #[tokio::test]

@@ -11,7 +11,7 @@ describe('Store', () => {
     const subject = 'https://atomicdata.dev/test';
     const testval = 'Hi world';
     const newResource = new Resource(subject);
-    newResource.setUnsafe(core.properties.description, testval);
+    await newResource.set(core.properties.description, testval, false);
     store.addResources(newResource);
     const gotResource = store.getResourceLoading(subject);
     const atomString = gotResource!
@@ -100,7 +100,7 @@ describe('Store', () => {
     const did = 'did:ad:123';
 
     const resource = new Resource(did);
-    resource.setUnsafe(core.properties.description, 'Identity verified');
+    await resource.set(core.properties.description, 'Identity verified', false);
 
     // Explicitly add with alias
     store.addResources(resource, { alias });

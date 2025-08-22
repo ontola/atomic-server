@@ -10,6 +10,7 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 - New navbar design. Always access to important features & hierarchy.
 - New onboarding UX for new users & drives.
 - Switch to OxLint
+- #1178 Sync protocol
 - Client persistence & indexing with wasm #1175
 - Simplify agent & drive creation in client APIs #1177
 - Add `drive` to Store. This used to be a React API, but it's useful in far more contexts.

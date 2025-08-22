@@ -113,42 +113,9 @@ export class CommitBuilder {
     return this._isGenesis;
   }
 
-  public addSetAction(property: string, value: JSONValue): CommitBuilder {
-    this.removeRemoveAction(property);
-    this._set.set(property, value);
-
-    return this;
-  }
-
-  public addPushAction(property: string, ...values: JSONArray): CommitBuilder {
-    const pushSet = this._push.get(property) ?? new Set();
-
-    for (const value of values) {
-      pushSet.add(value);
-    }
-
-    this._push.set(property, pushSet);
-
-    return this;
-  }
-
-  public addRemoveAction(property: string): CommitBuilder {
-    this._set.delete(property);
-    this._push.delete(property);
-    this._remove.add(property);
-
-    return this;
-  }
-
   /** Set a Loro CRDT binary update for this commit. */
   public setLoroUpdate(update: Uint8Array): CommitBuilder {
     this._loroUpdate = update;
-
-    return this;
-  }
-
-  public removeRemoveAction(property: string): CommitBuilder {
-    this._remove.delete(property);
 
     return this;
   }
@@ -500,28 +467,14 @@ export function applyCommitToResource(
   resource: Resource,
   commit: Commit,
 ): Resource {
-  const { set, remove, push, destroy, loroUpdate } = commit;
-
-  if (set) {
-    execSetCommit(set, resource);
-  }
-
-  if (remove) {
-    execRemoveCommit(remove, resource);
-  }
-
-  if (push) {
-    execPushCommit(push, resource);
-  }
+  const { destroy, loroUpdate } = commit;
 
   if (loroUpdate) {
     execLoroUpdateCommit(loroUpdate, resource);
   }
 
   if (destroy) {
-    for (const [key] of resource.getPropVals()) {
-      resource.setUnsafe(key, undefined);
-    }
+    resource.clearUnsafe();
   }
 
   return resource;
@@ -548,7 +501,7 @@ export function parseAndApplyCommit(jsonAdObjStr: string, store: Store) {
 
   if (id) {
     // This is something that the server does, too.
-    resource.setUnsafe(commits.properties.lastCommit, id);
+    resource.setLastCommitValue(id);
   }
 
   if (destroy) {
@@ -557,31 +510,10 @@ export function parseAndApplyCommit(jsonAdObjStr: string, store: Store) {
     return;
   } else {
     resource.appliedCommitSignatures.add(signature);
+    resource.source = 'ws-commit';
+    resource.sourceTimestamp = Date.now();
 
     store.addResources(resource, { skipCommitCompare: true });
-  }
-}
-
-function execSetCommit(set: Record<string, JSONValue>, resource: Resource) {
-  for (const [key, value] of Object.entries(set)) {
-    resource.setUnsafe(key, value);
-  }
-}
-
-function execRemoveCommit(remove: string[], resource: Resource) {
-  for (const prop of remove) {
-    resource.removePropValLocally(prop);
-  }
-}
-
-function execPushCommit(push: Record<string, JSONArray>, resource: Resource) {
-  for (const [key, value] of Object.entries(push)) {
-    const current = (resource.get(key) as JSONArray) || [];
-    const newArr = value as JSONArray;
-    // Merge both the old and new items
-    const new_arr = [...current, ...newArr];
-    // Save it!
-    resource.setUnsafe(key, new_arr);
   }
 }
 
@@ -607,45 +539,5 @@ function execLoroUpdateCommit(
   loroUpdate: Uint8Array,
   resource: Resource,
 ) {
-  // Store the raw binary for round-tripping
-  resource.setUnsafe(commits.properties.loroUpdate, loroUpdate);
-
-  // Only import into an already-initialized LoroDoc (i.e. one being actively edited).
-  // For read-only resources, the server already materialized the properties —
-  // no need to import the blob and re-materialize client-side.
-  const doc = resource.hasLoroDoc() ? resource.getLoroDoc() : undefined;
-
-  if (doc) {
-    try {
-      doc.import(loroUpdate);
-
-      // Read properties from the Loro map and update propvals directly
-      // (bypass setUnsafe to avoid circular Loro writes)
-      const propsMap = doc.getMap('properties');
-      const json = propsMap?.toJSON();
-
-      if (json && typeof json === 'object') {
-        for (const [key, value] of Object.entries(json)) {
-          // Parse JSON-encoded arrays back to actual arrays
-          if (typeof value === 'string' && value.startsWith('[')) {
-            try {
-              const parsed = JSON.parse(value);
-
-              if (Array.isArray(parsed)) {
-                resource.setUnsafe(key, parsed as JSONValue);
-                continue;
-              }
-            } catch {
-              // Not valid JSON array, store as string
-            }
-          }
-
-          resource.setUnsafe(key, value as JSONValue);
-        }
-      }
-    } catch (e) {
-      console.warn('Failed to import Loro update:', e);
-    }
-  }
+  resource.importLoroUpdate(loroUpdate);
 }
-

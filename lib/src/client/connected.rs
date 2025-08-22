@@ -19,11 +19,7 @@
 //! # }
 //! ```
 
-use crate::{
-    agents::Agent,
-    errors::AtomicResult,
-    urls, Resource, Storelike, Value,
-};
+use crate::{agents::Agent, errors::AtomicResult, urls, Resource, Storelike, Value};
 
 /// A connected client to an AtomicServer.
 pub struct Client {
@@ -68,10 +64,19 @@ impl Client {
     pub async fn new_drive(&self, agent: &Agent, name: &str) -> AtomicResult<String> {
         self.store.set_default_agent(agent.clone());
         let mut drive = Resource::new("did:ad:placeholder".into());
-        drive.set_unsafe(urls::IS_A.into(), Value::ResourceArray(vec![urls::DRIVE.into()]));
+        drive.set_unsafe(
+            urls::IS_A.into(),
+            Value::ResourceArray(vec![urls::DRIVE.into()]),
+        );
         drive.set_name(name);
-        drive.set_unsafe(urls::WRITE.into(), Value::ResourceArray(vec![agent.subject.to_string().into()]));
-        drive.set_unsafe(urls::READ.into(), Value::ResourceArray(vec![agent.subject.to_string().into()]));
+        drive.set_unsafe(
+            urls::WRITE.into(),
+            Value::ResourceArray(vec![agent.subject.to_string().into()]),
+        );
+        drive.set_unsafe(
+            urls::READ.into(),
+            Value::ResourceArray(vec![agent.subject.to_string().into()]),
+        );
         drive.save_remote(&self.store).await
     }
 
@@ -80,10 +85,19 @@ impl Client {
     pub async fn new_public_drive(&self, agent: &Agent, name: &str) -> AtomicResult<String> {
         self.store.set_default_agent(agent.clone());
         let mut drive = Resource::new("did:ad:placeholder".into());
-        drive.set_unsafe(urls::IS_A.into(), Value::ResourceArray(vec![urls::DRIVE.into()]));
+        drive.set_unsafe(
+            urls::IS_A.into(),
+            Value::ResourceArray(vec![urls::DRIVE.into()]),
+        );
         drive.set_name(name);
-        drive.set_unsafe(urls::WRITE.into(), Value::ResourceArray(vec![agent.subject.to_string().into()]));
-        drive.set_unsafe(urls::READ.into(), Value::ResourceArray(vec![urls::PUBLIC_AGENT.into()]));
+        drive.set_unsafe(
+            urls::WRITE.into(),
+            Value::ResourceArray(vec![agent.subject.to_string().into()]),
+        );
+        drive.set_unsafe(
+            urls::READ.into(),
+            Value::ResourceArray(vec![urls::PUBLIC_AGENT.into()]),
+        );
         drive.save_remote(&self.store).await
     }
 

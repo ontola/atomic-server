@@ -24,9 +24,7 @@ async fn main() -> AtomicResult<()> {
     );
     resource.set_unsafe(
         atomic_lib::urls::IS_A.into(),
-        atomic_lib::Value::ResourceArray(vec![
-            atomic_lib::urls::CLASS.into(),
-        ]),
+        atomic_lib::Value::ResourceArray(vec![atomic_lib::urls::CLASS.into()]),
     );
     resource.set_unsafe(
         atomic_lib::urls::SHORTNAME.into(),
@@ -40,11 +38,17 @@ async fn main() -> AtomicResult<()> {
     // Edit
     resource.set_name("Updated name");
     resource.save_remote(client.store()).await?;
-    println!("  name (after edit): {}", resource.get_name().unwrap_or_default());
+    println!(
+        "  name (after edit): {}",
+        resource.get_name().unwrap_or_default()
+    );
 
     // Fetch from server
     let fetched = client.get_resource(&subject).await?;
-    println!("  name (fetched): {}", fetched.get_name().unwrap_or_default());
+    println!(
+        "  name (fetched): {}",
+        fetched.get_name().unwrap_or_default()
+    );
 
     println!("Done!");
     Ok(())

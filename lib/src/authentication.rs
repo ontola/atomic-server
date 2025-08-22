@@ -59,10 +59,7 @@ pub fn check_auth_signature(subject: &str, auth_header: &AuthValues) -> AtomicRe
             let path_and_query = format!("{}{}", path, query);
             if path_and_query != subject {
                 let message_path = format!("{} {}", path_and_query, &auth_header.timestamp);
-                if verifying_key
-                    .verify(message_path.as_bytes(), &sig)
-                    .is_ok()
-                {
+                if verifying_key.verify(message_path.as_bytes(), &sig).is_ok() {
                     return Ok(());
                 }
             }
@@ -71,8 +68,7 @@ pub fn check_auth_signature(subject: &str, auth_header: &AuthValues) -> AtomicRe
             if url.query().is_some() {
                 let mut url_no_query = url.clone();
                 url_no_query.set_query(None);
-                let message_no_query =
-                    format!("{} {}", url_no_query, &auth_header.timestamp);
+                let message_no_query = format!("{} {}", url_no_query, &auth_header.timestamp);
                 if verifying_key
                     .verify(message_no_query.as_bytes(), &sig)
                     .is_ok()
@@ -80,8 +76,7 @@ pub fn check_auth_signature(subject: &str, auth_header: &AuthValues) -> AtomicRe
                     return Ok(());
                 }
                 // Also try path-only without query params
-                let message_path_no_query =
-                    format!("{} {}", path, &auth_header.timestamp);
+                let message_path_no_query = format!("{} {}", path, &auth_header.timestamp);
                 if verifying_key
                     .verify(message_path_no_query.as_bytes(), &sig)
                     .is_ok()

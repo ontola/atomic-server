@@ -166,7 +166,8 @@ impl Handler<UnsubscribeQuery> for CommitMonitor {
             sub.connections.remove(&msg.addr);
         }
         // Clean up empty subscriptions
-        self.query_subscriptions.retain(|sub| !sub.connections.is_empty());
+        self.query_subscriptions
+            .retain(|sub| !sub.connections.is_empty());
     }
 }
 
@@ -245,10 +246,14 @@ impl Handler<CommitMessage> for CommitMonitor {
                 } else {
                     // Check added atoms
                     for atom in &msg.commit_response.add_atoms {
-                        let prop_matches = sub.property.as_ref()
+                        let prop_matches = sub
+                            .property
+                            .as_ref()
                             .map(|p| p == &atom.property)
                             .unwrap_or(true);
-                        let val_matches = sub.value.as_ref()
+                        let val_matches = sub
+                            .value
+                            .as_ref()
                             .map(|v| v == &atom.value.to_string())
                             .unwrap_or(true);
                         if prop_matches && val_matches {
@@ -259,10 +264,14 @@ impl Handler<CommitMessage> for CommitMonitor {
 
                     // Check removed atoms
                     for atom in &msg.commit_response.remove_atoms {
-                        let prop_matches = sub.property.as_ref()
+                        let prop_matches = sub
+                            .property
+                            .as_ref()
                             .map(|p| p == &atom.property)
                             .unwrap_or(true);
-                        let val_matches = sub.value.as_ref()
+                        let val_matches = sub
+                            .value
+                            .as_ref()
                             .map(|v| v == &atom.value.to_string())
                             .unwrap_or(true);
                         if prop_matches && val_matches {
@@ -276,8 +285,16 @@ impl Handler<CommitMessage> for CommitMonitor {
                     let update = QueryUpdate {
                         property: sub.property.clone(),
                         value: sub.value.clone(),
-                        added: if matched_add { vec![commit_subject.clone()] } else { vec![] },
-                        removed: if matched_remove { vec![commit_subject.clone()] } else { vec![] },
+                        added: if matched_add {
+                            vec![commit_subject.clone()]
+                        } else {
+                            vec![]
+                        },
+                        removed: if matched_remove {
+                            vec![commit_subject.clone()]
+                        } else {
+                            vec![]
+                        },
                     };
                     for conn in &sub.connections {
                         conn.do_send(update.clone());

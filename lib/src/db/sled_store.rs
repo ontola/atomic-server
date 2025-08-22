@@ -34,12 +34,9 @@ impl SledStore {
                 path, e
             )
         })?;
-        let resources = db.open_tree(Tree::Resources).map_err(|e| {
-            format!(
-                "Failed building resources. Your DB might be corrupt. {}",
-                e
-            )
-        })?;
+        let resources = db
+            .open_tree(Tree::Resources)
+            .map_err(|e| format!("Failed building resources. Your DB might be corrupt. {}", e))?;
         let reference_index = db.open_tree(Tree::ValPropSub)?;
         let query_index = db.open_tree(Tree::QueryMembers)?;
         let prop_val_sub_index = db.open_tree(Tree::PropValSub)?;

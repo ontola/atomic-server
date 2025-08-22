@@ -10,8 +10,7 @@ use atomic_lib::{
     errors::AtomicResult,
     storelike::{Query, QueryResult, ResourceResponse},
     urls::{self, PARENT},
-    utils,
-    Storelike, Value,
+    utils, Storelike, Value,
 };
 
 // Find the messages for the ChatRoom.

@@ -62,9 +62,35 @@ impl AtomicLoroDoc {
 
     /// Export only the updates since a given version.
     pub fn export_updates_since(&self, version: &VersionVector) -> Vec<u8> {
+        self.doc.export(ExportMode::updates(version)).unwrap()
+    }
+
+    /// Get the oplog version vector as a serializable map (peer_id → counter).
+    pub fn oplog_vv_map(&self) -> std::collections::HashMap<String, i32> {
         self.doc
-            .export(ExportMode::updates(version))
-            .unwrap()
+            .oplog_vv()
+            .iter()
+            .map(|(peer_id, counter)| (peer_id.to_string(), *counter))
+            .collect()
+    }
+
+    /// Get the raw oplog version vector.
+    pub fn oplog_vv(&self) -> VersionVector {
+        self.doc.oplog_vv()
+    }
+
+    /// Encode the version vector to bytes (for hashing).
+    pub fn oplog_vv_bytes(&self) -> Vec<u8> {
+        self.doc.oplog_vv().encode()
+    }
+
+    /// Build a VersionVector from a map of peer_id_string → counter.
+    pub fn vv_from_map(map: &std::collections::HashMap<String, i32>) -> VersionVector {
+        map.iter()
+            .filter_map(|(peer_str, &counter)| {
+                peer_str.parse::<u64>().ok().map(|pid| (pid, counter))
+            })
+            .collect()
     }
 
     /// Get a reference to the inner LoroDoc.
@@ -162,11 +188,7 @@ impl AtomicLoroDoc {
 
     /// Import an update and compute the diff as add/remove atoms.
     /// Compares the properties map before and after the import.
-    pub fn import_update_with_diff(
-        &self,
-        update: &[u8],
-        subject: &str,
-    ) -> AtomicResult<LoroDiff> {
+    pub fn import_update_with_diff(&self, update: &[u8], subject: &str) -> AtomicResult<LoroDiff> {
         let before = self.get_all_properties();
         self.import_update(update)?;
         let after = self.get_all_properties();
@@ -234,8 +256,12 @@ pub fn loro_value_to_atomic_value(lv: &loro::LoroValue) -> Option<Value> {
 
             // Try to detect JSON-encoded objects (e.g. NestedResource values)
             if s.starts_with('{') {
-                if let Ok(obj) = serde_json::from_str::<std::collections::HashMap<String, Value>>(&s) {
-                    return Some(Value::NestedResource(crate::values::SubResource::Nested(obj)));
+                if let Ok(obj) =
+                    serde_json::from_str::<std::collections::HashMap<String, Value>>(&s)
+                {
+                    return Some(Value::NestedResource(crate::values::SubResource::Nested(
+                        obj,
+                    )));
                 }
             }
 
@@ -258,13 +284,13 @@ mod test {
     #[test]
     fn create_doc_set_and_get_properties() {
         let doc = AtomicLoroDoc::new();
-        doc.set_property("https://atomicdata.dev/properties/name", &Value::String("Alice".into()))
-            .unwrap();
         doc.set_property(
-            "https://atomicdata.dev/properties/age",
-            &Value::Integer(30),
+            "https://atomicdata.dev/properties/name",
+            &Value::String("Alice".into()),
         )
         .unwrap();
+        doc.set_property("https://atomicdata.dev/properties/age", &Value::Integer(30))
+            .unwrap();
         doc.set_property(
             "https://atomicdata.dev/properties/score",
             &Value::Float(9.5),
@@ -284,8 +310,11 @@ mod test {
     #[test]
     fn snapshot_roundtrip() {
         let doc = AtomicLoroDoc::new();
-        doc.set_property("https://atomicdata.dev/properties/name", &Value::String("Bob".into()))
-            .unwrap();
+        doc.set_property(
+            "https://atomicdata.dev/properties/name",
+            &Value::String("Bob".into()),
+        )
+        .unwrap();
 
         let snapshot = doc.export_snapshot();
         let doc2 = AtomicLoroDoc::from_snapshot(&snapshot).unwrap();
@@ -300,7 +329,10 @@ mod test {
     fn incremental_update_sync() {
         let doc_a = AtomicLoroDoc::new();
         doc_a
-            .set_property("https://atomicdata.dev/properties/name", &Value::String("Alice".into()))
+            .set_property(
+                "https://atomicdata.dev/properties/name",
+                &Value::String("Alice".into()),
+            )
             .unwrap();
 
         // Sync doc_a -> doc_b via snapshot
@@ -335,7 +367,10 @@ mod test {
         // Two peers start from the same state
         let doc_a = AtomicLoroDoc::new();
         doc_a
-            .set_property("https://atomicdata.dev/properties/name", &Value::String("Original".into()))
+            .set_property(
+                "https://atomicdata.dev/properties/name",
+                &Value::String("Original".into()),
+            )
             .unwrap();
         let snapshot = doc_a.export_snapshot();
         let doc_b = AtomicLoroDoc::from_snapshot(&snapshot).unwrap();
@@ -397,8 +432,11 @@ mod test {
     #[test]
     fn remove_property_works() {
         let doc = AtomicLoroDoc::new();
-        doc.set_property("https://atomicdata.dev/properties/name", &Value::String("Alice".into()))
-            .unwrap();
+        doc.set_property(
+            "https://atomicdata.dev/properties/name",
+            &Value::String("Alice".into()),
+        )
+        .unwrap();
         assert!(doc
             .get_string_property("https://atomicdata.dev/properties/name")
             .is_some());
@@ -433,12 +471,8 @@ mod test {
         text_b.insert(11, "!").unwrap();
         // "Hello World!"
 
-        let update_a = doc_a
-            .export(ExportMode::updates(&v_a))
-            .unwrap();
-        let update_b = doc_b
-            .export(ExportMode::updates(&v_b))
-            .unwrap();
+        let update_a = doc_a.export(ExportMode::updates(&v_a)).unwrap();
+        let update_b = doc_b.export(ExportMode::updates(&v_b)).unwrap();
 
         doc_a.import(&update_b).unwrap();
         doc_b.import(&update_a).unwrap();
@@ -461,10 +495,16 @@ mod test {
         // === Client side ===
         let client_doc = AtomicLoroDoc::new();
         client_doc
-            .set_property("https://atomicdata.dev/properties/name", &Value::String("New Resource".into()))
+            .set_property(
+                "https://atomicdata.dev/properties/name",
+                &Value::String("New Resource".into()),
+            )
             .unwrap();
         client_doc
-            .set_property("https://atomicdata.dev/properties/description", &Value::Markdown("# Hello".into()))
+            .set_property(
+                "https://atomicdata.dev/properties/description",
+                &Value::Markdown("# Hello".into()),
+            )
             .unwrap();
 
         // Client exports update bytes
@@ -560,7 +600,10 @@ mod test {
         // Client-side: create a LoroDoc with properties
         let client_doc = AtomicLoroDoc::new();
         client_doc
-            .set_property(crate::urls::DESCRIPTION, &Value::String("Hello from Loro".into()))
+            .set_property(
+                crate::urls::DESCRIPTION,
+                &Value::String("Hello from Loro".into()),
+            )
             .unwrap();
         client_doc
             .set_property(crate::urls::SHORTNAME, &Value::String("loro-test".into()))
@@ -596,11 +639,17 @@ mod test {
         // Verify the resource now has the materialized properties from Loro
         let new_resource = response.resource_new.unwrap();
         assert_eq!(
-            new_resource.get(crate::urls::DESCRIPTION).unwrap().to_string(),
+            new_resource
+                .get(crate::urls::DESCRIPTION)
+                .unwrap()
+                .to_string(),
             "Hello from Loro"
         );
         assert_eq!(
-            new_resource.get(crate::urls::SHORTNAME).unwrap().to_string(),
+            new_resource
+                .get(crate::urls::SHORTNAME)
+                .unwrap()
+                .to_string(),
             "loro-test"
         );
 
@@ -701,7 +750,8 @@ mod test {
         assert_eq!(diff.remove_atoms[0].value.to_string(), "Alice");
 
         assert_eq!(diff.add_atoms.len(), 2);
-        let added_values: Vec<String> = diff.add_atoms.iter().map(|a| a.value.to_string()).collect();
+        let added_values: Vec<String> =
+            diff.add_atoms.iter().map(|a| a.value.to_string()).collect();
         assert!(added_values.contains(&"Bob".to_string()));
         assert!(added_values.contains(&"30".to_string()));
     }
@@ -732,11 +782,327 @@ mod test {
             .build()
             .unwrap();
         let store = rt.block_on(async { crate::Store::init().await.unwrap() });
-        let s1 = rt.block_on(commit.serialize_deterministically_json_ad(&store)).unwrap();
-        let s2 = rt.block_on(commit.serialize_deterministically_json_ad(&store)).unwrap();
+        let s1 = rt
+            .block_on(commit.serialize_deterministically_json_ad(&store))
+            .unwrap();
+        let s2 = rt
+            .block_on(commit.serialize_deterministically_json_ad(&store))
+            .unwrap();
         assert_eq!(s1, s2);
 
         // Must contain the loroUpdate key
         assert!(s1.contains("loroUpdate"));
+    }
+
+    // --- Sync protocol tests ---
+
+    /// Simulate two peers (client and server) with the same drive.
+    /// Both start with the same state, then each makes independent edits.
+    /// After exchanging VVs and deltas, both should converge to the same state.
+    #[test]
+    fn sync_two_peers_converge() {
+        // Peer A: "client"
+        let doc_a = AtomicLoroDoc::new();
+        doc_a
+            .set_property(
+                "https://atomicdata.dev/properties/name",
+                &Value::String("Original Name".into()),
+            )
+            .unwrap();
+        doc_a
+            .set_property(
+                "https://atomicdata.dev/properties/description",
+                &Value::String("Shared doc".into()),
+            )
+            .unwrap();
+
+        // Peer B: "server" — starts with same state via snapshot
+        let snapshot = doc_a.export_snapshot();
+        let doc_b = AtomicLoroDoc::from_snapshot(&snapshot).unwrap();
+
+        // Both should have identical VVs
+        let vv_a_initial = doc_a.oplog_vv_map();
+        let vv_b_initial = doc_b.oplog_vv_map();
+        assert_eq!(vv_a_initial, vv_b_initial);
+
+        // Peer A edits name (offline)
+        doc_a
+            .set_property(
+                "https://atomicdata.dev/properties/name",
+                &Value::String("Name from Client".into()),
+            )
+            .unwrap();
+
+        // Peer B edits description (independently)
+        doc_b
+            .set_property(
+                "https://atomicdata.dev/properties/description",
+                &Value::String("Description from Server".into()),
+            )
+            .unwrap();
+
+        // VVs should now differ
+        let vv_a = doc_a.oplog_vv_map();
+        let vv_b = doc_b.oplog_vv_map();
+        assert_ne!(vv_a, vv_b);
+
+        // Sync: A sends delta to B (from B's version)
+        let vv_b_loro = AtomicLoroDoc::vv_from_map(&vv_b);
+        let delta_a_to_b = doc_a.export_updates_since(&vv_b_loro);
+        assert!(!delta_a_to_b.is_empty());
+
+        // Sync: B sends delta to A (from A's version)
+        let vv_a_loro = AtomicLoroDoc::vv_from_map(&vv_a);
+        let delta_b_to_a = doc_b.export_updates_since(&vv_a_loro);
+        assert!(!delta_b_to_a.is_empty());
+
+        // Both import the other's delta
+        doc_a.import_update(&delta_b_to_a).unwrap();
+        doc_b.import_update(&delta_a_to_b).unwrap();
+
+        // Both should now have the same state
+        assert_eq!(
+            doc_a.get_string_property("https://atomicdata.dev/properties/name"),
+            Some("Name from Client".into())
+        );
+        assert_eq!(
+            doc_a.get_string_property("https://atomicdata.dev/properties/description"),
+            Some("Description from Server".into())
+        );
+        assert_eq!(
+            doc_b.get_string_property("https://atomicdata.dev/properties/name"),
+            Some("Name from Client".into())
+        );
+        assert_eq!(
+            doc_b.get_string_property("https://atomicdata.dev/properties/description"),
+            Some("Description from Server".into())
+        );
+
+        // VVs should match after sync
+        assert_eq!(doc_a.oplog_vv_map(), doc_b.oplog_vv_map());
+    }
+
+    /// Test VV comparison: detect which peer is ahead for a resource.
+    #[test]
+    fn vv_comparison_detects_ahead_behind() {
+        let doc_a = AtomicLoroDoc::new();
+        doc_a
+            .set_property(
+                "https://atomicdata.dev/properties/name",
+                &Value::String("V1".into()),
+            )
+            .unwrap();
+
+        // B starts from A's state
+        let snapshot = doc_a.export_snapshot();
+        let doc_b = AtomicLoroDoc::from_snapshot(&snapshot).unwrap();
+
+        // A makes more edits — A is now ahead
+        doc_a
+            .set_property(
+                "https://atomicdata.dev/properties/name",
+                &Value::String("V2 from A".into()),
+            )
+            .unwrap();
+
+        let vv_a = doc_a.oplog_vv_map();
+        let vv_b = doc_b.oplog_vv_map();
+
+        // A should be ahead: for at least one peer, A's counter > B's counter
+        let a_ahead = vv_a
+            .iter()
+            .any(|(peer, &counter)| counter > *vv_b.get(peer).unwrap_or(&0));
+        let b_ahead = vv_b
+            .iter()
+            .any(|(peer, &counter)| counter > *vv_a.get(peer).unwrap_or(&0));
+
+        assert!(a_ahead, "A should be ahead of B");
+        assert!(!b_ahead, "B should not be ahead of A");
+    }
+
+    /// Simulate a full drive sync scenario with multiple resources:
+    /// - Client has 3 resources (drive, table, readme)
+    /// - Server has 2 resources (drive, table) with a different version of table
+    /// - After sync, both should have all 3 resources with merged state
+    #[test]
+    fn drive_sync_multiple_resources() {
+        // --- Setup: shared initial state ---
+        let drive_doc = AtomicLoroDoc::new();
+        drive_doc
+            .set_property(
+                "https://atomicdata.dev/properties/name",
+                &Value::String("My Drive".into()),
+            )
+            .unwrap();
+
+        let table_doc = AtomicLoroDoc::new();
+        table_doc
+            .set_property(
+                "https://atomicdata.dev/properties/name",
+                &Value::String("Tasks".into()),
+            )
+            .unwrap();
+
+        // Server gets initial snapshots
+        let server_drive = AtomicLoroDoc::from_snapshot(&drive_doc.export_snapshot()).unwrap();
+        let server_table = AtomicLoroDoc::from_snapshot(&table_doc.export_snapshot()).unwrap();
+
+        // --- Client creates a new resource (readme) that server doesn't have ---
+        let client_readme = AtomicLoroDoc::new();
+        client_readme
+            .set_property(
+                "https://atomicdata.dev/properties/name",
+                &Value::String("README".into()),
+            )
+            .unwrap();
+        client_readme
+            .set_property(
+                "https://atomicdata.dev/properties/description",
+                &Value::String("Read this first".into()),
+            )
+            .unwrap();
+
+        // --- Server edits table independently ---
+        server_table
+            .set_property(
+                "https://atomicdata.dev/properties/description",
+                &Value::String("Server-side task list".into()),
+            )
+            .unwrap();
+
+        // --- Client edits table independently ---
+        table_doc
+            .set_property(
+                "https://atomicdata.dev/properties/name",
+                &Value::String("My Tasks".into()),
+            )
+            .unwrap();
+
+        // --- Collect VVs (simulating the SYNC_VV exchange) ---
+        let client_vvs: std::collections::HashMap<String, std::collections::HashMap<String, i32>> = [
+            ("did:ad:drive".to_string(), drive_doc.oplog_vv_map()),
+            ("did:ad:table".to_string(), table_doc.oplog_vv_map()),
+            ("did:ad:readme".to_string(), client_readme.oplog_vv_map()),
+        ]
+        .into();
+
+        let server_vvs: std::collections::HashMap<String, std::collections::HashMap<String, i32>> = [
+            ("did:ad:drive".to_string(), server_drive.oplog_vv_map()),
+            ("did:ad:table".to_string(), server_table.oplog_vv_map()),
+        ]
+        .into();
+
+        // --- Compute diff ---
+        let mut client_ahead: Vec<String> = Vec::new();
+        let mut server_ahead: Vec<String> = Vec::new();
+        let mut client_only: Vec<String> = Vec::new();
+
+        for (subject, client_vv) in &client_vvs {
+            if let Some(server_vv) = server_vvs.get(subject) {
+                let c_ahead = client_vv
+                    .iter()
+                    .any(|(p, &c)| c > *server_vv.get(p).unwrap_or(&0));
+                let s_ahead = server_vv
+                    .iter()
+                    .any(|(p, &c)| c > *client_vv.get(p).unwrap_or(&0));
+                if c_ahead {
+                    client_ahead.push(subject.clone());
+                }
+                if s_ahead {
+                    server_ahead.push(subject.clone());
+                }
+            } else {
+                client_only.push(subject.clone());
+            }
+        }
+
+        // drive: identical (no edits on either side since initial sync)
+        assert!(!client_ahead.contains(&"did:ad:drive".to_string()));
+        assert!(!server_ahead.contains(&"did:ad:drive".to_string()));
+
+        // table: both edited → both ahead
+        assert!(client_ahead.contains(&"did:ad:table".to_string()));
+        assert!(server_ahead.contains(&"did:ad:table".to_string()));
+
+        // readme: client only
+        assert!(client_only.contains(&"did:ad:readme".to_string()));
+
+        // --- Exchange deltas ---
+
+        // Server sends table delta to client
+        let client_table_vv = AtomicLoroDoc::vv_from_map(client_vvs.get("did:ad:table").unwrap());
+        let server_table_delta = server_table.export_updates_since(&client_table_vv);
+
+        // Client sends table delta + readme snapshot to server
+        let server_table_vv = AtomicLoroDoc::vv_from_map(server_vvs.get("did:ad:table").unwrap());
+        let client_table_delta = table_doc.export_updates_since(&server_table_vv);
+        let readme_snapshot = client_readme.export_snapshot();
+
+        // Apply deltas
+        table_doc.import_update(&server_table_delta).unwrap();
+        server_table.import_update(&client_table_delta).unwrap();
+        let server_readme = AtomicLoroDoc::from_snapshot(&readme_snapshot).unwrap();
+
+        // --- Verify convergence ---
+
+        // Table: both should have merged state
+        assert_eq!(
+            table_doc.get_string_property("https://atomicdata.dev/properties/name"),
+            Some("My Tasks".into()) // client's edit
+        );
+        assert_eq!(
+            table_doc.get_string_property("https://atomicdata.dev/properties/description"),
+            Some("Server-side task list".into()) // server's edit
+        );
+        assert_eq!(
+            server_table.get_string_property("https://atomicdata.dev/properties/name"),
+            Some("My Tasks".into())
+        );
+        assert_eq!(
+            server_table.get_string_property("https://atomicdata.dev/properties/description"),
+            Some("Server-side task list".into())
+        );
+
+        // VVs should match for table
+        assert_eq!(table_doc.oplog_vv_map(), server_table.oplog_vv_map());
+
+        // Server should now have readme
+        assert_eq!(
+            server_readme.get_string_property("https://atomicdata.dev/properties/name"),
+            Some("README".into())
+        );
+        assert_eq!(
+            server_readme.get_string_property("https://atomicdata.dev/properties/description"),
+            Some("Read this first".into())
+        );
+    }
+
+    /// Test vv_from_map helper: roundtrip from map to VV and back.
+    #[test]
+    fn vv_map_roundtrip() {
+        let doc = AtomicLoroDoc::new();
+        doc.set_property(
+            "https://atomicdata.dev/properties/name",
+            &Value::String("test".into()),
+        )
+        .unwrap();
+
+        let map = doc.oplog_vv_map();
+        assert!(!map.is_empty());
+
+        // Reconstruct VV from map
+        let reconstructed = AtomicLoroDoc::vv_from_map(&map);
+
+        // The reconstructed VV should produce a very small delta (just Loro overhead, no ops)
+        let delta = doc.export_updates_since(&reconstructed);
+        // Loro includes some header bytes even for empty updates.
+        // A delta with actual content would be much larger than the snapshot.
+        let snapshot = doc.export_snapshot();
+        assert!(
+            delta.len() < snapshot.len(),
+            "Delta ({} bytes) should be smaller than snapshot ({} bytes)",
+            delta.len(),
+            snapshot.len()
+        );
     }
 }

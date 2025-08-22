@@ -161,16 +161,10 @@ impl InviteToken {
         // 2. Verify signature
         // We construct a temporary resource to use atomic_lib's validation logic
         let mut resource = Resource::new("local:invite".into());
-        resource.set_unsafe(
-            urls::TARGET.into(),
-            Value::AtomicUrl(self.target.clone()),
-        );
+        resource.set_unsafe(urls::TARGET.into(), Value::AtomicUrl(self.target.clone()));
         resource.set_unsafe(urls::WRITE_BOOL.into(), Value::Boolean(self.write));
         resource.set_unsafe(urls::EXPIRES_AT.into(), Value::Timestamp(self.expires_at));
-        resource.set_unsafe(
-            urls::SIGNER.into(),
-            Value::AtomicUrl(self.signer.clone()),
-        );
+        resource.set_unsafe(urls::SIGNER.into(), Value::AtomicUrl(self.signer.clone()));
         resource.set_unsafe(
             urls::SIGNATURE.into(),
             Value::String(self.signature.clone()),
@@ -246,8 +240,18 @@ impl InviteToken {
             .await
             .map_err(|_| format!("Target resource not found: {}", self.target))?;
 
-        atomic_lib::hierarchy::check_write(store, &target_resource, &atomic_lib::agents::ForAgent::AgentSubject(self.signer.clone())).await
-            .map_err(|_| format!("Invite issuer ( { } ) no longer has write rights to the target resource ( { } )", self.signer, self.target))?;
+        atomic_lib::hierarchy::check_write(
+            store,
+            &target_resource,
+            &atomic_lib::agents::ForAgent::AgentSubject(self.signer.clone()),
+        )
+        .await
+        .map_err(|_| {
+            format!(
+                "Invite issuer ( { } ) no longer has write rights to the target resource ( { } )",
+                self.signer, self.target
+            )
+        })?;
 
         Ok(())
     }
@@ -263,7 +267,9 @@ mod test {
         let store = atomic_lib::Db::init_temp("test_invite_token_cycle")
             .await
             .expect("Could not init db");
-        atomic_lib::test_utils::setup_test_env(&store).await.expect("Could not setup test env");
+        atomic_lib::test_utils::setup_test_env(&store)
+            .await
+            .expect("Could not setup test env");
         let agent = store.get_default_agent().expect("Could not get agent");
 
         let target = urls::PROPERTIES.to_string();
@@ -317,7 +323,9 @@ mod test {
         let store = atomic_lib::Db::init_temp("test_invite_token_new_roundtrip")
             .await
             .expect("Could not init db");
-        atomic_lib::test_utils::setup_test_env(&store).await.expect("Could not setup test env");
+        atomic_lib::test_utils::setup_test_env(&store)
+            .await
+            .expect("Could not setup test env");
         let agent = store.get_default_agent().expect("Could not get agent");
 
         let target = urls::PROPERTIES.to_string();
@@ -350,7 +358,9 @@ mod test {
         let store = atomic_lib::Db::init_temp("test_invite_token_root_url")
             .await
             .expect("Could not init db");
-        atomic_lib::test_utils::setup_test_env(&store).await.expect("Could not setup test env");
+        atomic_lib::test_utils::setup_test_env(&store)
+            .await
+            .expect("Could not setup test env");
         let agent = store.get_default_agent().expect("Could not get agent");
 
         // Use a root URL without trailing slash, like get_origin() produces
@@ -377,7 +387,9 @@ mod test {
         let store = atomic_lib::Db::init_temp("test_invite_token_expired")
             .await
             .expect("Could not init db");
-        atomic_lib::test_utils::setup_test_env(&store).await.expect("Could not setup test env");
+        atomic_lib::test_utils::setup_test_env(&store)
+            .await
+            .expect("Could not setup test env");
         let agent = store.get_default_agent().expect("Could not get agent");
 
         let target = urls::PROPERTIES.to_string();

@@ -4,15 +4,15 @@
 pub mod btreemap_store;
 mod encoding;
 pub mod kv_store;
-#[cfg(feature = "db-redb")]
-pub mod redb_store;
-#[cfg(all(feature = "db-redb", target_arch = "wasm32"))]
-pub mod opfs_backend;
 #[cfg(feature = "db-sled")]
 mod migrations;
+#[cfg(all(feature = "db-redb", target_arch = "wasm32"))]
+pub mod opfs_backend;
 pub mod plugin_meta;
 mod prop_val_sub_index;
 mod query_index;
+#[cfg(feature = "db-redb")]
+pub mod redb_store;
 pub use query_index::drive_prefix_from_subject;
 #[cfg(feature = "db-sled")]
 pub mod sled_store;
@@ -193,10 +193,7 @@ impl Db {
     /// Creates a Db backed by redb with OPFS persistent storage.
     /// Only available in WASM Workers. Data survives page reloads.
     #[cfg(all(feature = "db-redb", target_arch = "wasm32"))]
-    pub async fn init_redb_opfs(
-        base_domain: Option<String>,
-        filename: &str,
-    ) -> AtomicResult<Db> {
+    pub async fn init_redb_opfs(base_domain: Option<String>, filename: &str) -> AtomicResult<Db> {
         let redb_store = redb_store::RedbStore::new_opfs(filename).await?;
 
         let store = Db {
@@ -822,8 +819,7 @@ impl Db {
             self.apply_transaction(&mut transaction)?;
 
             // Query through the new indexes.
-            (subjects, resources, total_count) =
-                query_sorted_indexed(self, q, &q_filter).await?;
+            (subjects, resources, total_count) = query_sorted_indexed(self, q, &q_filter).await?;
         }
 
         Ok(QueryResult {

@@ -11,15 +11,15 @@ mod context;
 mod errors;
 mod handlers;
 mod helpers;
-mod metrics;
 #[cfg(feature = "https")]
 mod https;
 mod invite_token;
 mod jsonerrors;
+mod loro_sync_broadcaster;
+mod metrics;
 pub mod plugins;
 mod routes;
 pub mod serve;
-mod loro_sync_broadcaster;
 // #[cfg(feature = "search")]
 mod search;
 #[cfg(test)]

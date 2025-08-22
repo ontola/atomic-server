@@ -241,7 +241,10 @@ mod test {
 
         let subject = "https://localhost/test-did-agent";
         let mut commitbuilder = crate::commit::CommitBuilder::new(subject.into());
-        commitbuilder.set(crate::urls::DESCRIPTION.into(), Value::new("Some value", &DataType::Markdown).unwrap());
+        commitbuilder.set(
+            crate::urls::DESCRIPTION.into(),
+            Value::new("Some value", &DataType::Markdown).unwrap(),
+        );
         commitbuilder.set(crate::urls::PARENT.into(), Value::AtomicUrl(drive_did));
         let resource = crate::Resource::new(subject.into());
         let commit = commitbuilder.sign(&agent, &store, &resource).await.unwrap();

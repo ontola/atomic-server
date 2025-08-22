@@ -40,7 +40,10 @@ pub fn init_tracing(config: &crate::config::Config) -> Option<tracing_chrome::Fl
                 use opentelemetry::trace::TracerProvider;
                 use opentelemetry::KeyValue;
                 use opentelemetry_otlp::WithTonicConfig;
-                use opentelemetry_sdk::{logs::SdkLoggerProvider, metrics::SdkMeterProvider, trace::SdkTracerProvider, Resource};
+                use opentelemetry_sdk::{
+                    logs::SdkLoggerProvider, metrics::SdkMeterProvider, trace::SdkTracerProvider,
+                    Resource,
+                };
 
                 // Install ring as the rustls 0.23 crypto provider (required by tonic TLS).
                 // Ignore the error — it just means another provider was already installed.
@@ -95,7 +98,10 @@ pub fn init_tracing(config: &crate::config::Config) -> Option<tracing_chrome::Fl
 
                 let tracer = tracer_provider.tracer("atomic-server");
                 let otel_trace_layer = tracing_opentelemetry::layer().with_tracer(tracer);
-                let otel_log_layer = opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge::new(&logger_provider);
+                let otel_log_layer =
+                    opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge::new(
+                        &logger_provider,
+                    );
                 let terminal_layer = tracing_subscriber::fmt::Layer::default();
                 tracing_registry
                     .with(terminal_layer)

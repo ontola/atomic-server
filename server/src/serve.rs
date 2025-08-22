@@ -1,5 +1,9 @@
 use actix_cors::Cors;
-use actix_web::{body::MessageBody, dev::{ServiceRequest, ServiceResponse}, middleware, web, Error, HttpServer};
+use actix_web::{
+    body::MessageBody,
+    dev::{ServiceRequest, ServiceResponse},
+    middleware, web, Error, HttpServer,
+};
 use atomic_lib::{urls, Storelike};
 use tracing_actix_web::{DefaultRootSpanBuilder, RootSpanBuilder};
 
@@ -16,7 +20,10 @@ impl RootSpanBuilder for AtomicRootSpanBuilder {
         DefaultRootSpanBuilder::on_request_start(request)
     }
 
-    fn on_request_end<B: MessageBody>(span: tracing::Span, outcome: &Result<ServiceResponse<B>, Error>) {
+    fn on_request_end<B: MessageBody>(
+        span: tracing::Span,
+        outcome: &Result<ServiceResponse<B>, Error>,
+    ) {
         DefaultRootSpanBuilder::on_request_end(span, outcome);
     }
 }
@@ -117,11 +124,7 @@ fn spawn_dht_announcer(appstate: crate::appstate::AppState) {
                         let drive_did = resource.get_subject().as_str();
                         if let Err(e) = dht.announce_drive(drive_did, port as u16) {
                             let e: atomic_lib::errors::AtomicError = e;
-                            tracing::error!(
-                                "DHT: Failed to announce drive {}: {}",
-                                drive_did,
-                                e
-                            );
+                            tracing::error!("DHT: Failed to announce drive {}: {}", drive_did, e);
                         } else {
                             announced_count += 1;
                         }
@@ -164,10 +167,7 @@ pub async fn serve(config: crate::config::Config) -> AtomicServerResult<()> {
             .app_data(web::PayloadConfig::new(PAYLOAD_MAX))
             .app_data(web::Data::new(appstate.clone()))
             .wrap(cors)
-            .wrap(
-                middleware::DefaultHeaders::new()
-                    .add((SERVER_VERSION_HEADER, SERVER_VERSION)),
-            )
+            .wrap(middleware::DefaultHeaders::new().add((SERVER_VERSION_HEADER, SERVER_VERSION)))
             .wrap(tracing_actix_web::TracingLogger::<AtomicRootSpanBuilder>::new())
             .wrap(middleware::Compress::default())
             // Here are the actual handlers / endpoints

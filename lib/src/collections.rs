@@ -379,12 +379,10 @@ impl Collection {
             .await?;
 
         match &self.referenced_resources {
-            Some(referenced_resources) => {
-                Ok(ResourceResponse::ResourceWithReferenced(
-                    resource.clone(),
-                    referenced_resources.clone(),
-                ))
-            }
+            Some(referenced_resources) => Ok(ResourceResponse::ResourceWithReferenced(
+                resource.clone(),
+                referenced_resources.clone(),
+            )),
             None => Ok(ResourceResponse::Resource(resource.clone())),
         }
     }
@@ -1079,9 +1077,15 @@ mod test {
         store.populate().await.unwrap();
 
         // Create a chatroom-like resource (normal internal subject)
-        let mut chatroom = Resource::new_instance(urls::CHATROOM, &store).await.unwrap();
+        let mut chatroom = Resource::new_instance(urls::CHATROOM, &store)
+            .await
+            .unwrap();
         chatroom
-            .set(urls::NAME.into(), crate::Value::String("Test Chat".into()), &store)
+            .set(
+                urls::NAME.into(),
+                crate::Value::String("Test Chat".into()),
+                &store,
+            )
             .await
             .unwrap();
         store
@@ -1108,15 +1112,11 @@ mod test {
         // Create a message with a DID subject (simulating genesis commit result)
         let did_subject = crate::Subject::from("did:ad:TestSignatureHere123");
         let mut message = Resource::new(did_subject.to_string());
-        message
-            .set_unsafe(
-                urls::PARENT.into(),
-                crate::Value::AtomicUrl(chatroom_subject.clone()),
-            );
         message.set_unsafe(
-            urls::CREATED_AT.into(),
-            crate::Value::Timestamp(1000000),
+            urls::PARENT.into(),
+            crate::Value::AtomicUrl(chatroom_subject.clone()),
         );
+        message.set_unsafe(urls::CREATED_AT.into(), crate::Value::Timestamp(1000000));
         message.set_unsafe(
             urls::IS_A.into(),
             crate::Value::ResourceArray(vec![crate::values::SubResource::Subject(

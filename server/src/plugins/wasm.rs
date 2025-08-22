@@ -774,17 +774,12 @@ impl bindings::atomic::class_extender::host::Host for PluginHostState {
         let commit_builder_json: CommitBuilderJSON =
             serde_json::from_str(&commit).map_err(|e| e.to_string())?;
 
-        let commit_builder =
-            CommitBuilder::from_commit_builder_json(commit_builder_json)
-                .map_err(|e| format!("Failed to deserialize commit: {}", e))?;
+        let commit_builder = CommitBuilder::from_commit_builder_json(commit_builder_json)
+            .map_err(|e| format!("Failed to deserialize commit: {}", e))?;
 
         let resource = self
             .db
-            .get_resource_extended(
-                &commit_builder.subject,
-                false,
-                &agent.into(),
-            )
+            .get_resource_extended(&commit_builder.subject, false, &agent.into())
             .await
             .map_err(|e| e.to_string())?
             .to_single();

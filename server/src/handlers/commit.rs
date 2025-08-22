@@ -39,9 +39,10 @@ pub async fn post_commit(
         let doc = atomic_lib::loro::AtomicLoroDoc::new();
         if doc.import_update(loro_bytes).is_ok() {
             let props = doc.get_all_properties();
-            let prop_summary: Vec<String> = props.keys().map(|k| {
-                k.rsplit('/').next().unwrap_or(k).to_string()
-            }).collect();
+            let prop_summary: Vec<String> = props
+                .keys()
+                .map(|k| k.rsplit('/').next().unwrap_or(k).to_string())
+                .collect();
             tracing::info!(
                 subject = %incoming_commit.subject,
                 signer = %incoming_commit.signer,
@@ -94,7 +95,13 @@ pub async fn post_commit(
 
     // Ensure the agent exists before applying the commit.
     // This is important because the commit might be editing the agent itself.
-    if signer.is_agent_did() && store.get_resource(signer).await.is_err() {
+    let is_self_creating_agent =
+        incoming_commit.subject.is_agent_did() && incoming_commit.subject == *signer;
+
+    if signer.is_agent_did()
+        && !is_self_creating_agent
+        && store.get_resource(signer).await.is_err()
+    {
         let mut new_agent =
             atomic_lib::Resource::new_instance(atomic_lib::urls::AGENT, store).await?;
         new_agent.set_subject(signer_pure.clone());

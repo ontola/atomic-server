@@ -3,9 +3,9 @@ use crate::{
     commit_monitor::CommitMonitor,
     config::Config,
     errors::AtomicServerResult,
+    loro_sync_broadcaster::{self, LoroSyncBroadcaster},
     plugins,
     search::SearchState,
-    loro_sync_broadcaster::{self, LoroSyncBroadcaster},
 };
 use atomic_lib::{agents::Agent, commit::CommitResponse, config::SharedConfig, Storelike};
 

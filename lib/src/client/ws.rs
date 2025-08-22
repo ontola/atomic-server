@@ -165,11 +165,7 @@ impl WsClient {
     }
 
     /// Send a Loro CRDT document update for a resource.
-    pub async fn send_loro_sync_update(
-        &self,
-        subject: &str,
-        update: &[u8],
-    ) -> AtomicResult<()> {
+    pub async fn send_loro_sync_update(&self, subject: &str, update: &[u8]) -> AtomicResult<()> {
         let b64 = crate::agents::encode_base64(update);
         self.send_raw(&format!(
             "LORO_SYNC_UPDATE {}",
@@ -214,7 +210,9 @@ impl WsClient {
                     _ => continue,
                 }
             }
-            Err(AtomicError::from("WebSocket closed while waiting for resource"))
+            Err(AtomicError::from(
+                "WebSocket closed while waiting for resource",
+            ))
         });
 
         timeout
@@ -264,13 +262,26 @@ fn parse_server_message(text: &str) -> WsMessage {
                 let value = v["value"].as_str().map(|s| s.to_string());
                 let added = v["added"]
                     .as_array()
-                    .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                    .map(|a| {
+                        a.iter()
+                            .filter_map(|v| v.as_str().map(String::from))
+                            .collect()
+                    })
                     .unwrap_or_default();
                 let removed = v["removed"]
                     .as_array()
-                    .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                    .map(|a| {
+                        a.iter()
+                            .filter_map(|v| v.as_str().map(String::from))
+                            .collect()
+                    })
                     .unwrap_or_default();
-                WsMessage::QueryUpdate { property, value, added, removed }
+                WsMessage::QueryUpdate {
+                    property,
+                    value,
+                    added,
+                    removed,
+                }
             }
             Err(_) => WsMessage::Error(format!("Invalid QUERY_UPDATE: {}", text)),
         }

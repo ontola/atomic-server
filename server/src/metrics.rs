@@ -44,8 +44,4 @@ counter!(
     "search.queries",
     "Full-text search queries performed"
 );
-counter!(
-    drive_created,
-    "drives.created",
-    "Drive resources created"
-);
+counter!(drive_created, "drives.created", "Drive resources created");

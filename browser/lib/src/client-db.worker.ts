@@ -35,7 +35,8 @@ export type WorkerRequest =
   | { id: number; type: 'exportAllResources' }
   | { id: number; type: 'importAllResources'; jsonArray: string }
   | { id: number; type: 'putLoroSnapshot'; subject: string; data: Uint8Array }
-  | { id: number; type: 'getLoroSnapshot'; subject: string };
+  | { id: number; type: 'getLoroSnapshot'; subject: string }
+  | { id: number; type: 'getAllVersionVectors' };
 
 /** Message types sent from worker back to main thread */
 export type WorkerResponse =
@@ -135,6 +136,12 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
       await ensureInit();
 
       return db!.getLoroSnapshot(msg.subject);
+    }
+
+    case 'getAllVersionVectors': {
+      await ensureInit();
+
+      return db!.getAllVersionVectors();
     }
 
     default:

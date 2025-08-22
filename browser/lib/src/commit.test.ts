@@ -2,6 +2,7 @@ import { describe, it, vi } from 'vitest';
 import {
   Commit,
   CommitBuilder,
+  commitToJsonADObject,
   parseAndApplyCommit,
   serializeDeterministically,
 } from './commit.js';
@@ -9,6 +10,7 @@ import { Store } from './store.js';
 import { JSCryptoProvider } from './CryptoProvider.js';
 import { Agent } from './agent.js';
 import { Resource } from './resource.js';
+import { core } from './index.js';
 
 describe('Commit signing and keys', () => {
   const privateKey = 'CapMWIhFUT+w7ANv9oCPqrHrwZpkP2JhzF9JnyT6WcI=';
@@ -71,6 +73,7 @@ describe('Commit signing and keys', () => {
     expect,
   }) => {
     const store = new Store({ serverUrl: 'https://example.com' });
+    store.setServerConnected(true);
     const agentKeys = await Agent.generateKeyPair();
     const agentDID = `did:ad:agent:${agentKeys.publicKey}`;
     const agentProvider = new JSCryptoProvider(agentKeys.privateKey);
@@ -113,11 +116,9 @@ describe('Commit signing and keys', () => {
       `https://example.com/commits/${resource.appliedCommitSignatures.values().next().value}`,
     );
 
-    // Simulate clobbering: remove lastCommit property from propvals
+    // Simulate clobbering: remove lastCommit from the cached resource state.
     // (This simulates an old remote state being merged)
-    resource
-      .getPropVals()
-      .delete('https://atomicdata.dev/properties/lastCommit');
+    resource.removeUnsafe('https://atomicdata.dev/properties/lastCommit');
     expect(
       resource.get('https://atomicdata.dev/properties/lastCommit'),
     ).toBeUndefined();
@@ -139,6 +140,104 @@ describe('Commit signing and keys', () => {
     const secondCommitCall = postCommitSpy.mock.calls[1][0];
     expect(secondCommitCall.previousCommit).toBe(firstCommitId);
     expect(secondCommitCall.subject).toBe(genesisSubject);
+  });
+
+  it('exports a full genesis loroUpdate even if Loro was initialized before first save', async ({
+    expect,
+  }) => {
+    const store = new Store({ serverUrl: 'https://example.com' });
+    store.setServerConnected(true);
+    const agentKeys = await Agent.generateKeyPair();
+    const agentDID = `did:ad:agent:${agentKeys.publicKey}`;
+    const signingAgent = new Agent(
+      new JSCryptoProvider(agentKeys.privateKey),
+      agentDID,
+    );
+    store.setAgent(signingAgent);
+
+    const postCommitSpy = vi
+      .spyOn(store, 'postCommit')
+      .mockImplementation(async commit => {
+        return {
+          ...commit,
+          id: `https://example.com/commits/${commit.signature}`,
+        } as Commit;
+      });
+
+    const resource = new Resource('did:ad:genesis');
+    resource.setStore(store);
+    resource.new = true;
+    await resource.set('https://atomicdata.dev/properties/name', 'First Save', false);
+
+    // Simulate UI code touching the Loro doc before the first save.
+    resource.getLoroDoc();
+
+    resource.markNextCommitAsGenesis();
+    await resource.save();
+
+    const firstCommitCall = postCommitSpy.mock.calls[0][0];
+    expect(firstCommitCall.loroUpdate).toBeDefined();
+
+    const materialized = new Resource(firstCommitCall.subject);
+    materialized.importLoroUpdate(firstCommitCall.loroUpdate!);
+    expect(materialized.get('https://atomicdata.dev/properties/name')).toBe(
+      'First Save',
+    );
+  });
+
+  it('newResource DID genesis includes parent and class metadata for folder resources', async ({
+    expect,
+  }) => {
+    const store = new Store({ serverUrl: 'https://example.com' });
+    store.setServerConnected(true);
+    const agentKeys = await Agent.generateKeyPair();
+    const agentDID = `did:ad:agent:${agentKeys.publicKey}`;
+    const signingAgent = new Agent(
+      new JSCryptoProvider(agentKeys.privateKey),
+      agentDID,
+    );
+    store.setAgent(signingAgent);
+
+    const postCommitSpy = vi
+      .spyOn(store, 'postCommit')
+      .mockImplementation(async commit => {
+        return {
+          ...commit,
+          id: `https://example.com/commits/${commit.signature}`,
+        } as Commit;
+      });
+
+    const parent = 'did:ad:drive-parent';
+    const folder = await store.newResource({
+      isA: core.classes.property,
+      parent,
+      propVals: {
+        'https://atomicdata.dev/properties/name': 'Folder',
+        'https://atomicdata.dev/property/display-style':
+          'https://atomicdata.dev/display-styles/list',
+      },
+    });
+
+    await folder.save();
+
+    const genesisCommit = postCommitSpy.mock.calls[0][0];
+    expect(genesisCommit.loroUpdate).toBeDefined();
+
+    const materialized = new Resource(genesisCommit.subject);
+    materialized.importLoroUpdate(genesisCommit.loroUpdate!);
+
+    expect(materialized.get('https://atomicdata.dev/properties/parent')).toBe(
+      parent,
+    );
+    expect(materialized.get('https://atomicdata.dev/properties/isA')).toEqual([
+      core.classes.property,
+    ]);
+    expect(materialized.get('https://atomicdata.dev/properties/name')).toBe(
+      'Folder',
+    );
+    expect(
+      materialized.get('https://atomicdata.dev/property/display-style'),
+    ).toBe('https://atomicdata.dev/display-styles/list');
   });
 
   it('derives did:ad subject from temporary _new subject', async ({
@@ -217,21 +316,25 @@ describe('Commit signing and keys', () => {
 
 describe('Commit parse and apply', () => {
   const store = new Store();
-  const exampleCommit = `
-  {
-    "@id": "https://atomicdata.dev/commits/VCHGWxax6j4pPMJWelwpSHVOL+W2R2A0vjFdSpH/HhIZxE6hyaUTtPfKjgWGNhsUsQske4yHIdqc/QsQhV03DA==",
-    "https://atomicdata.dev/properties/createdAt": 1627561366516,
-    "https://atomicdata.dev/properties/isA": [
-      "https://atomicdata.dev/classes/Commit"
-    ],
-    "https://atomicdata.dev/properties/set": {
-      "https://atomicdata.dev/properties/description": "My new string"
-    },
-    "https://atomicdata.dev/properties/signature": "VCHGWxax6j4pPMJWelwpSHVOL+W2R2A0vjFdSpH/HhIZxE6hyaUTtPfKjgWGNhsUsQske4yHIdqc/QsQhV03DA==",
-    "https://atomicdata.dev/properties/signer": "https://atomicdata.dev/agents/8S2U/viqkaAQVzUisaolrpX6hx/G/L3e2MTjWA83Rxk=",
-    "https://atomicdata.dev/properties/subject": "https://atomicdata.dev/element/cn6ymb8s8mc"
-  }`;
-  it('parses and applies a Commit correctly', async ({ expect }) => {
+  it('parses and applies a loroUpdate Commit correctly', async ({ expect }) => {
+    const source = new Resource('https://atomicdata.dev/element/cn6ymb8s8mc');
+    await source.set(
+      'https://atomicdata.dev/properties/description',
+      'My new string',
+      false,
+    );
+    const loroUpdate = (source as any)._loroDoc.export({ mode: 'snapshot' }) as Uint8Array;
+    const exampleCommit = JSON.stringify(
+      commitToJsonADObject({
+        subject: source.subject,
+        loroUpdate,
+        signer: 'https://atomicdata.dev/agents/8S2U/viqkaAQVzUisaolrpX6hx/G/L3e2MTjWA83Rxk=',
+        createdAt: 1627561366516,
+        signature:
+          'VCHGWxax6j4pPMJWelwpSHVOL+W2R2A0vjFdSpH/HhIZxE6hyaUTtPfKjgWGNhsUsQske4yHIdqc/QsQhV03DA==',
+      }),
+    );
+
     parseAndApplyCommit(exampleCommit, store);
     const resource = await store.getResource(
       'https://atomicdata.dev/element/cn6ymb8s8mc',

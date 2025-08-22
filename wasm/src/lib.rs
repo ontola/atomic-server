@@ -101,7 +101,10 @@ impl ClientDb {
             validate_for_agent: None,
             update_index: true,
         };
-        self.db.apply_commit(commit, &opts).await.map_err(to_js_err)?;
+        self.db
+            .apply_commit(commit, &opts)
+            .await
+            .map_err(to_js_err)?;
         Ok(())
     }
 
@@ -168,6 +171,36 @@ impl ClientDb {
         }
     }
 
+    /// Get version vectors for all Loro snapshots in the database.
+    /// Returns a JSON object: `{ [subject]: { [peer_id]: counter } }`
+    #[wasm_bindgen(js_name = "getAllVersionVectors")]
+    pub fn get_all_version_vectors(&self) -> Result<JsValue, JsError> {
+        use atomic_lib::db::trees::Tree;
+        use atomic_lib::loro::AtomicLoroDoc;
+        use std::collections::HashMap;
+
+        let mut result: HashMap<String, HashMap<String, i32>> = HashMap::new();
+
+        for item in self.db.kv.iter_tree(Tree::LoroSnapshots) {
+            let (key_bytes, snapshot_bytes) = item.map_err(to_js_err)?;
+            let subject =
+                String::from_utf8(key_bytes).map_err(|e| JsError::new(&e.to_string()))?;
+
+            match AtomicLoroDoc::from_snapshot(&snapshot_bytes) {
+                Ok(doc) => {
+                    result.insert(subject, doc.oplog_vv_map());
+                }
+                Err(e) => {
+                    web_sys::console::warn_1(
+                        &format!("[ClientDb] Failed to read VV for {}: {e}", &subject).into(),
+                    );
+                }
+            }
+        }
+
+        serde_wasm_bindgen::to_value(&result).map_err(|e| JsError::new(&e.to_string()))
+    }
+
     /// Get all subjects in the database.
     #[wasm_bindgen(js_name = "allSubjects")]
     pub fn all_subjects(&self) -> Result<JsValue, JsError> {
@@ -205,8 +238,7 @@ impl ClientDb {
     /// Skips indexing during import and builds the index once at the end.
     #[wasm_bindgen(js_name = "importAllResources")]
     pub async fn import_all_resources(&self, json_array: &str) -> Result<u32, JsError> {
-        let items: Vec<serde_json::Value> =
-            serde_json::from_str(json_array).map_err(to_js_err)?;
+        let items: Vec<serde_json::Value> = serde_json::from_str(json_array).map_err(to_js_err)?;
 
         let mut count: u32 = 0;
 

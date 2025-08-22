@@ -1,6 +1,6 @@
 import type { LoroDoc, VersionVector } from 'loro-crdt';
 import { LoroLoader } from './loro-loader.js';
-import { decodeB64, encodeB64 } from './base64.js';
+import { decodeB64 } from './base64.js';
 import { EventManager } from './EventManager.js';
 import type { Agent } from './agent.js';
 import { Client } from './client.js';
@@ -9,9 +9,7 @@ import { CollectionBuilder } from './collectionBuilder.js';
 import {
   CommitBuilder,
   Commit,
-  applyCommitToResource,
   commitToJsonADObject,
-  parseCommitResource,
 } from './commit.js';
 import { validateDatatype } from './datatypes.js';
 import { isUnauthorized } from './error.js';
@@ -39,6 +37,17 @@ import {
 
 /** Contains the PropertyURL / Value combinations */
 export type PropVals = Map<string, AtomicValue>;
+
+/** Debug info: where a resource was loaded from */
+export type ResourceSource =
+  | 'created'
+  | 'server-http'
+  | 'server-ws'
+  | 'ws-commit'
+  | 'ws-sync'
+  | 'client-db'
+  | 'local-cache'
+  | 'merge';
 
 /**
  * If a resource has no subject, it will have this subject. This means that the
@@ -72,6 +81,10 @@ export class Resource<C extends OptionalClass = any> {
   public commitError?: Error;
   /** Is true for locally created, unsaved resources */
   public new: boolean;
+  /** Debug: where this resource was last loaded/updated from */
+  public source?: ResourceSource;
+  /** Debug: timestamp of last source update */
+  public sourceTimestamp?: number;
   /**
    * Every commit that has been applied should be stored here, which prevents
    * applying the same commit twice
@@ -83,7 +96,10 @@ export class Resource<C extends OptionalClass = any> {
 
   private commitBuilder: CommitBuilder;
   private _subject: string;
-  private propvals: PropVals = new Map();
+  private _cache: Record<string, JSONValue> = Object.create(null);
+  private _auxValues: Map<string, AtomicValue> = new Map();
+  /** Raw Loro snapshot bytes, kept separate from properties. Not a propval. */
+  private _loroSnapshotBytes?: Uint8Array | string;
 
   /** Loro CRDT document backing this resource. Lazily initialized. */
   private _loroDoc?: LoroDoc;
@@ -208,8 +224,8 @@ export class Resource<C extends OptionalClass = any> {
         }
       }
 
-      // Check if any of its propvals have the name
-      for (const key of this.propvals.keys()) {
+      // Check if any known property on the resource matches the requested name.
+      for (const [key] of this.getPropValsArray()) {
         const propName = getKnownNameBySubject(key);
 
         if (propName === name) {
@@ -290,25 +306,37 @@ export class Resource<C extends OptionalClass = any> {
     if (!this._loroDoc) {
       const { LoroDoc: LoroDocClass } = LoroLoader.Loro;
       this._loroDoc = new LoroDocClass();
+      this._loroMap = this._loroDoc.getMap('properties');
 
       // If the resource has a persisted Loro snapshot, import it.
-      const existingSnapshot = this.propvals.get(commits.properties.loroUpdate);
+      const existingSnapshot = this._loroSnapshotBytes;
+      let initializedFromSnapshot = false;
 
       if (
         existingSnapshot instanceof Uint8Array &&
         existingSnapshot.length > 0
       ) {
         this._loroDoc.import(existingSnapshot);
+        initializedFromSnapshot = true;
       } else if (
         typeof existingSnapshot === 'string' &&
         existingSnapshot.length > 0
       ) {
         // May arrive as a base64 string from JSON-AD parsing
         this._loroDoc.import(decodeB64(existingSnapshot));
+        initializedFromSnapshot = true;
+      } else {
+        for (const [key, value] of Object.entries(this._cache)) {
+          this.loroSetProperty(key, value);
+        }
       }
 
-      this._loroMap = this._loroDoc.getMap('properties');
-      this._loroVersionAtLastSave = this._loroDoc.oplogVersion();
+      this.healMissingLoroPropsFromCache();
+      this.rebuildCacheFromLoro();
+      this._loroVersionAtLastSave =
+        initializedFromSnapshot || (!this.new && !this._dirty)
+          ? this._loroDoc.oplogVersion()
+          : undefined;
     }
 
     return this._loroDoc;
@@ -322,6 +350,102 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     return this._loroMap;
+  }
+
+  private setCachedValue(prop: string, value: AtomicValue): void {
+    if (value === undefined) {
+      delete this._cache[prop];
+      this._auxValues.delete(prop);
+
+      return;
+    }
+
+    if (value instanceof Uint8Array) {
+      this._auxValues.set(prop, value);
+      delete this._cache[prop];
+
+      return;
+    }
+
+    this._auxValues.delete(prop);
+    this._cache[prop] = value as JSONValue;
+  }
+
+  private applyRawValue(prop: string, val: AtomicValue): void {
+    if (prop === commits.properties.loroUpdate) {
+      if (val === undefined) {
+        this._loroSnapshotBytes = undefined;
+        this.resetLoroState();
+        return;
+      }
+
+      if (!(val instanceof Uint8Array) && typeof val !== 'string') {
+        throw new Error('loroUpdate must be a Uint8Array or base64 string');
+      }
+
+      // Store in dedicated field, NOT as a property of the resource.
+      this._loroSnapshotBytes = val;
+      this.resetLoroState();
+
+      return;
+    }
+
+    this.setCachedValue(prop, val);
+  }
+
+  private getPropValsArray(): [string, AtomicValue][] {
+    return [
+      ...Object.entries(this._cache),
+      ...Array.from(this._auxValues.entries()),
+    ];
+  }
+
+  private rebuildCacheFromLoro(): void {
+    const propsMap = this.getLoroMap();
+    const json = propsMap?.toJSON();
+    const nextCache: Record<string, JSONValue> = Object.create(null);
+
+    if (json && typeof json === 'object') {
+      for (const [key, value] of Object.entries(json)) {
+        nextCache[key] = normalizeLoroValue(value);
+      }
+    }
+
+    this._cache = nextCache;
+  }
+
+  /**
+   * Some migration-era resources have a materialized JSON view with more
+   * properties than the stored Loro snapshot. Heal only missing properties
+   * back into Loro so the next signed edit does not drop metadata like parent
+   * or isA.
+   */
+  private healMissingLoroPropsFromCache(): void {
+    const propsMap = this.getLoroMap();
+    const json = propsMap?.toJSON();
+    const current =
+      json && typeof json === 'object'
+        ? (json as Record<string, unknown>)
+        : Object.create(null);
+
+    for (const [key, value] of Object.entries(this._cache)) {
+      if (
+        key === commits.properties.loroUpdate ||
+        key === properties.commit.lastCommit
+      ) {
+        continue;
+      }
+
+      if (!(key in current)) {
+        this.loroSetProperty(key, value);
+      }
+    }
+  }
+
+  private resetLoroState(): void {
+    this._loroDoc = undefined;
+    this._loroMap = undefined;
+    this._loroVersionAtLastSave = undefined;
   }
 
   /**
@@ -369,8 +493,18 @@ export class Resource<C extends OptionalClass = any> {
    * Returns undefined if there are no Loro changes or Loro isn't loaded.
    */
   private exportLoroDelta(): Uint8Array | undefined {
-    if (!this._loroDoc || !this._loroVersionAtLastSave) {
+    if (!this._loroDoc) {
       return undefined;
+    }
+
+    if (!this._loroVersionAtLastSave) {
+      const snapshot = this._loroDoc.export({ mode: 'snapshot' });
+
+      if (snapshot.length <= 4) {
+        return undefined;
+      }
+
+      return snapshot;
     }
 
     const updates = this._loroDoc.export({
@@ -396,6 +530,44 @@ export class Resource<C extends OptionalClass = any> {
     }
   }
 
+  private cloneLoroStateFrom(resource: Resource): void {
+    this.resetLoroState();
+
+    if (!LoroLoader.isLoaded()) {
+      return;
+    }
+
+    // Get snapshot bytes from the source: either from its live doc or stored bytes
+    let snapshot: Uint8Array | undefined;
+
+    if (resource._loroDoc) {
+      snapshot = resource._loroDoc.export({ mode: 'snapshot' });
+    } else if (resource._loroSnapshotBytes instanceof Uint8Array) {
+      snapshot = resource._loroSnapshotBytes;
+    } else if (typeof resource._loroSnapshotBytes === 'string' && resource._loroSnapshotBytes.length > 0) {
+      snapshot = decodeB64(resource._loroSnapshotBytes);
+    }
+
+    if (!snapshot || snapshot.length === 0) {
+      return;
+    }
+
+    const { LoroDoc: LoroDocClass } = LoroLoader.Loro;
+    this._loroDoc = new LoroDocClass();
+    this._loroDoc.import(snapshot);
+    this._loroMap = this._loroDoc.getMap('properties');
+
+    const vv = this._loroDoc.oplogVersion();
+    const vvJson = vv?.toJSON?.();
+    console.debug(
+      `[Resource] cloneLoroState for ${this.subject.slice(0, 40)}: snapshot ${snapshot.length}B, VV size: ${vvJson?.size ?? 'N/A'}`,
+    );
+
+    this._loroVersionAtLastSave = resource._loroVersionAtLastSave
+      ? vv
+      : undefined;
+  }
+
   /** Checks if the content of two Resource instances is equal */
   public equals(resourceB: Resource): boolean {
     if (this === resourceB.__internalObject) {
@@ -418,17 +590,7 @@ export class Resource<C extends OptionalClass = any> {
       return false;
     }
 
-    if (
-      JSON.stringify(Array.from(this.propvals.entries())) !==
-      JSON.stringify(Array.from(resourceB.propvals.entries()))
-    ) {
-      return false;
-    }
-
-    if (
-      JSON.stringify(Array.from(this.commitBuilder.set.entries())) !==
-      JSON.stringify(Array.from(resourceB.commitBuilder.set.entries()))
-    ) {
+    if (JSON.stringify(this.getPropValsArray()) !== JSON.stringify(resourceB.getPropValsArray())) {
       return false;
     }
 
@@ -490,9 +652,9 @@ export class Resource<C extends OptionalClass = any> {
   public clone(): Resource<C> {
     const res = new Resource(this.subject);
 
-    // Clone propvals — Uint8Array values (Loro snapshots) need special handling
-    // since structuredClone handles them correctly.
-    res.propvals = structuredClone(this.propvals);
+    res._cache = structuredClone(this._cache);
+    res._auxValues = new Map(structuredClone(Array.from(this._auxValues.entries())));
+    res._loroSnapshotBytes = this._loroSnapshotBytes;
 
     res.loading = this.loading;
     res.new = this.new;
@@ -504,17 +666,7 @@ export class Resource<C extends OptionalClass = any> {
     res._pendingCommits = [...this._pendingCommits];
     res._lastLocalSignature = this._lastLocalSignature;
 
-    // Clone the Loro document if present
-    if (this._loroDoc && LoroLoader.isLoaded()) {
-      const { LoroDoc: LoroDocClass } = LoroLoader.Loro;
-      const snapshot = this._loroDoc.export({ mode: 'snapshot' });
-      res._loroDoc = new LoroDocClass();
-      res._loroDoc.import(snapshot);
-      res._loroMap = res._loroDoc.getMap('properties');
-      res._loroVersionAtLastSave = this._loroVersionAtLastSave
-        ? res._loroDoc.oplogVersion()
-        : undefined;
-    }
+    res.cloneLoroStateFrom(this);
 
     return res as Resource<C>;
   }
@@ -527,23 +679,29 @@ export class Resource<C extends OptionalClass = any> {
       throw new Error('Cannot merge resources with different subjects');
     }
 
-    const remoteProps = resourceB.getPropVals();
+    const preserveLocalChanges = this._dirty && this._loroDoc && LoroLoader.isLoaded();
+    const localSnapshot = preserveLocalChanges
+      ? this._loroDoc!.export({ mode: 'snapshot' })
+      : undefined;
 
-    // Remove any propvals that are not present in the remote resource.
-    for (const [key] of this.propvals.entries()) {
-      if (!remoteProps.has(key)) {
-        this.propvals.delete(key);
-      }
-    }
+    this._cache = structuredClone(resourceB._cache);
+    this._auxValues = new Map(structuredClone(Array.from(resourceB._auxValues.entries())));
+    this._loroSnapshotBytes = resourceB._loroSnapshotBytes;
+    this.cloneLoroStateFrom(resourceB);
 
-    // Merge the remote propvals into this resource.
-    for (const [key, value] of remoteProps.entries()) {
-      this.propvals.set(key, value);
+    if (localSnapshot && this._loroDoc) {
+      this._loroDoc.import(localSnapshot);
+      this.rebuildCacheFromLoro();
     }
 
     this.new = resourceB.new;
     this.error = resourceB.error;
     this.commitError = resourceB.commitError;
+
+    if (resourceB.source) {
+      this.source = resourceB.source;
+      this.sourceTimestamp = resourceB.sourceTimestamp;
+    }
 
     // Only update _lastCommit if the remote version has one and we don't have one,
     // or if they are different (assuming the remote one is newer if it comes from the store).
@@ -553,18 +711,6 @@ export class Resource<C extends OptionalClass = any> {
 
     if (remoteLastCommit && remoteLastCommit !== this._lastCommit) {
       this._lastCommit = remoteLastCommit;
-    }
-
-    if (this.commitBuilder.hasUnsavedChanges()) {
-      // We have changes so we want to apply those on top of the propvals we just got.
-      const changes: Commit = {
-        ...this.commitBuilder.toPlainObject(),
-        signature: '',
-        signer: '',
-        createdAt: 0,
-      };
-
-      applyCommitToResource(this, changes);
     }
 
     // We set this last because it will trigger a loading change event.
@@ -596,7 +742,7 @@ export class Resource<C extends OptionalClass = any> {
   public get<Prop extends string, Returns = InferTypeOfValueInTriple<C, Prop>>(
     propUrl: Prop,
   ): Returns {
-    return this.propvals.get(propUrl) as Returns;
+    return (this._auxValues.get(propUrl) ?? this._cache[propUrl]) as Returns;
   }
 
   /**
@@ -616,7 +762,7 @@ export class Resource<C extends OptionalClass = any> {
    * empty array if there is no value
    */
   public getArray(propUrl: string): JSONArray {
-    const result = this.propvals.get(propUrl) ?? [];
+    const result = this.get(propUrl) ?? [];
 
     return valToArray(result);
   }
@@ -676,7 +822,7 @@ export class Resource<C extends OptionalClass = any> {
 
   /** Returns true if the resource has unsaved local changes. */
   public hasUnsavedChanges(): boolean {
-    return this._dirty || this.commitBuilder.hasUnsavedChanges();
+    return this.commitBuilder.hasUnsavedChanges() || this._dirty;
   }
 
   /** Mark the resource as having unsaved local changes.
@@ -684,7 +830,7 @@ export class Resource<C extends OptionalClass = any> {
    *  resource's LoroDoc directly without going through `set()`. */
   public markDirty(): void {
     this._dirty = true;
-    this.eventManager.emit(ResourceEvents.LocalChange, undefined, undefined);
+    this.eventManager.emit(ResourceEvents.LocalChange, '', undefined);
   }
 
   public getCommitsCollectionSubject(): string {
@@ -806,7 +952,7 @@ export class Resource<C extends OptionalClass = any> {
    */
   public async setVersion(version: Version): Promise<void> {
     // Remove any prop that doesn't exist in this version
-    for (const prop of this.propvals.keys()) {
+    for (const [prop] of this.getPropValsArray()) {
       if (!version.propvals.has(prop)) {
         this.remove(prop);
       }
@@ -841,9 +987,51 @@ export class Resource<C extends OptionalClass = any> {
     return url.origin + url.pathname;
   }
 
-  /** Returns the internal Map of Property-Values */
+  /** Returns the internal property values as a compatibility Map view. */
   public getPropVals(): PropVals {
-    return this.propvals;
+    return new Map(this.getPropValsArray());
+  }
+
+  /** Applies a batch of non-validating values during hydration or derived updates. */
+  public applyHydratedValues(values: Iterable<[string, AtomicValue]>): void {
+    for (const [key, value] of values) {
+      this.applyRawValue(key, value);
+    }
+  }
+
+  /** Returns a JSON-safe object view for storage and diagnostics. */
+  public toObject(opts: { includeBinary?: boolean } = {}): Record<string, unknown> | null {
+    const { includeBinary = false } = opts;
+    const obj: Record<string, unknown> = { '@id': this.subject };
+    let count = 0;
+
+    for (const [key, value] of this.getPropValsArray()) {
+      if (!includeBinary && value instanceof Uint8Array) {
+        continue;
+      }
+
+      obj[key] = value;
+      count++;
+    }
+
+    return count === 0 ? null : obj;
+  }
+
+  /** Compact debug representation for error messages. */
+  public debugValueSummary(): string {
+    const objectView = this.toObject({ includeBinary: false });
+
+    return objectView ? JSON.stringify(objectView) : '{}';
+  }
+
+  /** Updates the cached lastCommit metadata without treating it as a user edit. */
+  public setLastCommitValue(lastCommit: string): void {
+    this._lastCommit = lastCommit;
+    this.applyRawValue(properties.commit.lastCommit, lastCommit);
+  }
+
+  public setCreatedAtValue(createdAt: number): void {
+    this.applyRawValue(commits.properties.createdAt, createdAt);
   }
 
   /**
@@ -941,13 +1129,12 @@ export class Resource<C extends OptionalClass = any> {
     if (unique) {
       values = values
         .filter(value => !propVal.includes(value))
-        .filter(value => !this.commitBuilder.push.get(propUrl)?.has(value))
         .filter((value, index, self) => self.indexOf(value) === index);
     }
 
     // Build a new array so that the reference changes. This is needed in most UI frameworks.
     const newArray = [...propVal, ...values];
-    this.propvals.set(propUrl, newArray);
+    this.setCachedValue(propUrl, newArray);
     this.loroSetProperty(propUrl, newArray);
     this._dirty = true;
   }
@@ -959,17 +1146,9 @@ export class Resource<C extends OptionalClass = any> {
 
   /** Removes a property value combination from the resource */
   public remove(propertyUrl: string): void {
-    this.propvals.delete(propertyUrl);
+    this.removeUnsafe(propertyUrl);
     this.loroDeleteProperty(propertyUrl);
     this._dirty = true;
-  }
-
-  /**
-   * Removes a property value combination from this resource, does not store the
-   * remove action in Commit
-   */
-  public removePropValLocally(propertyUrl: string): void {
-    this.propvals.delete(propertyUrl);
   }
 
   /**
@@ -991,9 +1170,12 @@ export class Resource<C extends OptionalClass = any> {
       throw new Error('No agent has been set or passed, you cannot sign.');
     }
 
-    if (!this.hasUnsavedChanges()) {
-      console.error('[signChanges] No changes to sign');
-      throw new Error(`No changes to sign for ${this.subject}`);
+    // Migration safety: make sure cached metadata such as parent / isA is
+    // present in the Loro doc before exporting the signed update.
+    if (LoroLoader.isLoaded()) {
+      this.getLoroDoc();
+      this.healMissingLoroPropsFromCache();
+      this.rebuildCacheFromLoro();
     }
 
     // Chain: use last locally-signed commit, or the server-known lastCommit.
@@ -1015,6 +1197,13 @@ export class Resource<C extends OptionalClass = any> {
 
     // Export Loro delta — this is the sole carrier of property changes.
     const loroDelta = this.exportLoroDelta();
+
+    if (!this.commitBuilder.hasUnsavedChanges() && !loroDelta) {
+      this._dirty = false;
+      this.markLoroSaved();
+      console.error('[signChanges] No changes to sign');
+      throw new Error(`No changes to sign for ${this.subject}`);
+    }
 
     if (loroDelta) {
       this.commitBuilder.setLoroUpdate(loroDelta);
@@ -1108,8 +1297,7 @@ export class Resource<C extends OptionalClass = any> {
       this._lastLocalSignature = undefined;
 
       if (lastCommitId) {
-        this._lastCommit = lastCommitId;
-        this.setUnsafe(properties.commit.lastCommit, lastCommitId);
+        this.setLastCommitValue(lastCommitId);
       }
 
       this.store.notifyResourceSaved(this);
@@ -1215,7 +1403,17 @@ export class Resource<C extends OptionalClass = any> {
     try {
       // Sign any unsaved changes into the local queue.
       if (hasChanges) {
-        await this.signChanges(agent);
+        try {
+          await this.signChanges(agent);
+        } catch (e) {
+          if (e instanceof Error && e.message.startsWith('No changes to sign')) {
+            reportDone();
+
+            return undefined;
+          }
+
+          throw e;
+        }
       }
 
       // If the server is not connected, save locally and queue for sync.
@@ -1276,7 +1474,7 @@ export class Resource<C extends OptionalClass = any> {
           ?.toString();
 
         if (fixedLastCommit) {
-          this.setUnsafe(properties.commit.lastCommit, fixedLastCommit);
+          this.setLastCommitValue(fixedLastCommit);
         }
 
         reportDone();
@@ -1306,8 +1504,8 @@ export class Resource<C extends OptionalClass = any> {
   private async applyPendingCommitsLocally(): Promise<void> {
     // Ensure createdAt is set — the server normally sets this when applying
     // a commit, but offline we need to do it ourselves for sorting to work.
-    if (!this.propvals.has(commits.properties.createdAt)) {
-      this.propvals.set(commits.properties.createdAt, Date.now());
+    if (this.get(commits.properties.createdAt) === undefined) {
+      this.setCreatedAtValue(Date.now());
     }
 
     // Store each pending commit as a Resource in the Store so that
@@ -1320,10 +1518,9 @@ export class Resource<C extends OptionalClass = any> {
 
       const jsonAd = commitToJsonADObject(commit);
       const commitResource = new Resource(commitSubject);
-
-      for (const [key, value] of Object.entries(jsonAd)) {
-        commitResource.setUnsafe(key, value);
-      }
+      commitResource.applyHydratedValues(
+        Object.entries(jsonAd) as [string, AtomicValue][],
+      );
 
       commitResource.loading = false;
       commitResource.new = false;
@@ -1333,8 +1530,7 @@ export class Resource<C extends OptionalClass = any> {
 
     // Set lastCommit on the resource so the UI can find the latest commit.
     if (lastCommitSubject) {
-      this.propvals.set(properties.commit.lastCommit, lastCommitSubject);
-      this._lastCommit = lastCommitSubject;
+      this.setLastCommitValue(lastCommitSubject);
     }
 
     const clientDb = this.store.getClientDb();
@@ -1352,7 +1548,7 @@ export class Resource<C extends OptionalClass = any> {
     if (clientDb) {
       const obj: Record<string, unknown> = { '@id': this.subject };
 
-      for (const [key, value] of this.propvals) {
+      for (const [key, value] of this.getPropValsArray()) {
         if (value instanceof Uint8Array) continue;
         obj[key] = value;
       }
@@ -1370,7 +1566,7 @@ export class Resource<C extends OptionalClass = any> {
   /**
    * Set a Property, Value combination and perform a validation. Will throw if
    * property is not valid for the datatype. Will fetch the datatype if it's not
-   * available. Adds the property to the commitbuilder.
+   * available. Updates the cache and Loro doc.
    *
    * When undefined is passed as value, the property is removed from the resource.
    */
@@ -1419,7 +1615,7 @@ export class Resource<C extends OptionalClass = any> {
       return;
     }
 
-    this.propvals.set(prop, value);
+    this.setCachedValue(prop, value as JSONValue);
     this.loroSetProperty(prop, value as JSONValue);
     this._dirty = true;
     this.eventManager.emit(
@@ -1434,7 +1630,44 @@ export class Resource<C extends OptionalClass = any> {
    * it to the CommitBuilder.
    */
   public setUnsafe(prop: string, val: AtomicValue): void {
-    this.propvals.set(prop, val);
+    this.applyRawValue(prop, val);
+  }
+
+  public removeUnsafe(prop: string): void {
+    if (prop === commits.properties.loroUpdate) {
+      this._loroSnapshotBytes = undefined;
+      this.resetLoroState();
+
+      return;
+    }
+
+    delete this._cache[prop];
+    this._auxValues.delete(prop);
+  }
+
+  public clearUnsafe(): void {
+    this._cache = Object.create(null);
+    this._auxValues.clear();
+    this._loroSnapshotBytes = undefined;
+    this.resetLoroState();
+  }
+
+  public importLoroUpdate(loroUpdate: Uint8Array): void {
+    this.applyRawValue(commits.properties.loroUpdate, loroUpdate);
+
+    const doc = this.getLoroDoc();
+
+    if (!doc) {
+      return;
+    }
+
+    try {
+      doc.import(loroUpdate);
+      this.rebuildCacheFromLoro();
+      this.markLoroSaved();
+    } catch (e) {
+      console.warn('Failed to import Loro update:', e);
+    }
   }
 
   /** Sets the error on the Resource. Does not Throw. */
@@ -1491,7 +1724,7 @@ export class Resource<C extends OptionalClass = any> {
   }
 
   private isParentNew() {
-    const parentSubject = this.propvals.get(core.properties.parent) as string;
+    const parentSubject = this.get(core.properties.parent) as string;
 
     if (!parentSubject) {
       return false;
@@ -1501,6 +1734,18 @@ export class Resource<C extends OptionalClass = any> {
 
     return parent.new;
   }
+}
+
+function normalizeLoroValue(value: unknown): JSONValue {
+  if (typeof value === 'string' && (value.startsWith('[') || value.startsWith('{'))) {
+    try {
+      return JSON.parse(value) as JSONValue;
+    } catch {
+      return value;
+    }
+  }
+
+  return value as JSONValue;
 }
 
 /** Type of Rights (e.g. read or write) */

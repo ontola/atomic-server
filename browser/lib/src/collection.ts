@@ -155,7 +155,11 @@ export class Collection {
       await this.fetchPage(page);
     }
 
-    const resource = this.pages.get(page)!;
+    const resource = this.pages.get(page);
+
+    if (!resource) {
+      return [];
+    }
 
     return (resource.props.members ?? []).filter(m => m !== undefined);
   }
@@ -255,8 +259,10 @@ export class Collection {
     const resource = new Resource<Collections.Collection>(
       this.buildSubject(page),
     );
-    resource.setUnsafe(collections.properties.members, pageSubjects);
-    resource.setUnsafe(collections.properties.totalMembers, result.count);
+    resource.applyHydratedValues([
+      [collections.properties.members, pageSubjects],
+      [collections.properties.totalMembers, result.count],
+    ]);
 
     this.pages.set(page, resource);
     this._totalMembers = result.count;

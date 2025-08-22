@@ -130,10 +130,9 @@ pub async fn query_sorted_indexed(
 
             let subject = Subject::from_raw(subject_str, base_domain.as_deref());
 
-            if !q.include_external
-                && !subject.is_local() {
-                    continue;
-                }
+            if !q.include_external && !subject.is_local() {
+                continue;
+            }
 
             if should_include_resource(q) {
                 if let Ok(resource) = store
@@ -287,8 +286,7 @@ pub fn check_if_atom_matches_watched_query_filters(
             // Skip this filter if it's scoped to a different drive than the resource.
             // DID subjects are drive-agnostic (not URL-prefix scoped), so always include them.
             let subject_str = index_atom.subject.as_str();
-            if !subject_str.starts_with("did:")
-                && !subject_str.starts_with(q_filter.drive.as_str())
+            if !subject_str.starts_with("did:") && !subject_str.starts_with(q_filter.drive.as_str())
             {
                 continue;
             }

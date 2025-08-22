@@ -3,7 +3,10 @@
 
 use std::sync::Arc;
 
-use redb::{backends::InMemoryBackend, Database, ReadableDatabase, ReadableTable, ReadableTableMetadata, TableDefinition};
+use redb::{
+    backends::InMemoryBackend, Database, ReadableDatabase, ReadableTable, ReadableTableMetadata,
+    TableDefinition,
+};
 
 use crate::errors::AtomicResult;
 
@@ -14,11 +17,11 @@ use super::{
 
 /// redb table definition: all our trees are `&[u8] -> &[u8]`.
 const TABLE_RESOURCES: TableDefinition<&[u8], &[u8]> = TableDefinition::new("resources_v3");
-const TABLE_PROP_VAL_SUB: TableDefinition<&[u8], &[u8]> = TableDefinition::new("prop_val_sub_index");
+const TABLE_PROP_VAL_SUB: TableDefinition<&[u8], &[u8]> =
+    TableDefinition::new("prop_val_sub_index");
 const TABLE_VAL_PROP_SUB: TableDefinition<&[u8], &[u8]> =
     TableDefinition::new("reference_index_v1");
-const TABLE_QUERY_MEMBERS: TableDefinition<&[u8], &[u8]> =
-    TableDefinition::new("members_index_v2");
+const TABLE_QUERY_MEMBERS: TableDefinition<&[u8], &[u8]> = TableDefinition::new("members_index_v2");
 const TABLE_WATCHED_QUERIES: TableDefinition<&[u8], &[u8]> =
     TableDefinition::new("watched_queries_v2");
 const TABLE_PLUGIN_META: TableDefinition<&[u8], &[u8]> = TableDefinition::new("plugin_meta");
@@ -156,8 +159,7 @@ impl KvStore for RedbStore {
                 .insert(key, val)
                 .map_err(|e| format!("redb insert: {e}"))?;
         }
-        tx.commit()
-            .map_err(|e| format!("redb commit: {e}"))?;
+        tx.commit().map_err(|e| format!("redb commit: {e}"))?;
         Ok(())
     }
 
@@ -170,12 +172,9 @@ impl KvStore for RedbStore {
             let mut table = tx
                 .open_table(table_def(tree))
                 .map_err(|e| format!("redb open table: {e}"))?;
-            table
-                .remove(key)
-                .map_err(|e| format!("redb remove: {e}"))?;
+            table.remove(key).map_err(|e| format!("redb remove: {e}"))?;
         }
-        tx.commit()
-            .map_err(|e| format!("redb commit: {e}"))?;
+        tx.commit().map_err(|e| format!("redb commit: {e}"))?;
         Ok(())
     }
 
@@ -188,7 +187,9 @@ impl KvStore for RedbStore {
             .open_table(table_def(tree))
             .map_err(|e| format!("redb open table: {e}"))?;
 
-        let result = table.get(key).map_err(|e| format!("redb contains_key: {e}"))?;
+        let result = table
+            .get(key)
+            .map_err(|e| format!("redb contains_key: {e}"))?;
 
         Ok(result.is_some())
     }
@@ -201,9 +202,7 @@ impl KvStore for RedbStore {
         let table = match tx.open_table(table_def(tree)) {
             Ok(t) => t,
             Err(e) => {
-                return Box::new(std::iter::once(Err(
-                    format!("redb open table: {e}").into()
-                )))
+                return Box::new(std::iter::once(Err(format!("redb open table: {e}").into())))
             }
         };
 
@@ -239,9 +238,7 @@ impl KvStore for RedbStore {
         let table = match tx.open_table(table_def(tree)) {
             Ok(t) => t,
             Err(e) => {
-                return Box::new(std::iter::once(Err(
-                    format!("redb open table: {e}").into()
-                )))
+                return Box::new(std::iter::once(Err(format!("redb open table: {e}").into())))
             }
         };
 
@@ -271,9 +268,7 @@ impl KvStore for RedbStore {
         let table = match tx.open_table(table_def(tree)) {
             Ok(t) => t,
             Err(e) => {
-                return Box::new(std::iter::once(Err(
-                    format!("redb open table: {e}").into()
-                )))
+                return Box::new(std::iter::once(Err(format!("redb open table: {e}").into())))
             }
         };
 
@@ -315,8 +310,7 @@ impl KvStore for RedbStore {
                     .map_err(|e| format!("redb remove in clear: {e}"))?;
             }
         }
-        tx.commit()
-            .map_err(|e| format!("redb commit clear: {e}"))?;
+        tx.commit().map_err(|e| format!("redb commit clear: {e}"))?;
         Ok(())
     }
 
@@ -350,8 +344,7 @@ impl KvStore for RedbStore {
                 }
             }
         }
-        tx.commit()
-            .map_err(|e| format!("redb commit batch: {e}"))?;
+        tx.commit().map_err(|e| format!("redb commit batch: {e}"))?;
         Ok(())
     }
 

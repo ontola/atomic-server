@@ -250,7 +250,9 @@ async fn queries() {
     // Re-using the same instance can cause issues with testing concurrently.
     // let store = &DB.lock().unwrap().clone();
     let store_owned = Db::init_temp("queries").await.unwrap();
-    crate::test_utils::setup_test_env(&store_owned).await.unwrap();
+    crate::test_utils::setup_test_env(&store_owned)
+        .await
+        .unwrap();
     let store = &store_owned;
 
     let demo_val = Value::Slug("myval".to_string());
@@ -428,7 +430,9 @@ async fn queries() {
 #[tokio::test]
 async fn query_include_external() {
     let store_owned = Db::init_temp("query_include_external").await.unwrap();
-    crate::test_utils::setup_test_env(&store_owned).await.unwrap();
+    crate::test_utils::setup_test_env(&store_owned)
+        .await
+        .unwrap();
     let store = &store_owned;
 
     let mut q = Query {
@@ -459,7 +463,9 @@ async fn query_include_external() {
 #[tokio::test]
 async fn resources_all() {
     let store_owned = Db::init_temp("resources_all").await.unwrap();
-    crate::test_utils::setup_test_env(&store_owned).await.unwrap();
+    crate::test_utils::setup_test_env(&store_owned)
+        .await
+        .unwrap();
     let store = &store_owned;
     let res_no_include = store.all_resources(false).count();
     let res_include = store.all_resources(true).count();
@@ -473,7 +479,9 @@ async fn resources_all() {
 /// Changing these values actually correctly updates the index.
 async fn invalidate_cache() {
     let store_owned = Db::init_temp("invalidate_cache").await.unwrap();
-    crate::test_utils::setup_test_env(&store_owned).await.unwrap();
+    crate::test_utils::setup_test_env(&store_owned)
+        .await
+        .unwrap();
     let store = &store_owned;
 
     // Make sure to use Properties that are not in the default store
@@ -658,7 +666,8 @@ async fn test_migration_v2_to_v3() {
     // Manually insert into resources_v2 using raw sled access
     // Drop the Db first so we can open the sled database directly
     drop(store);
-    let sled_store = super::sled_store::SledStore::open(std::path::Path::new(tmp_dir_path)).unwrap();
+    let sled_store =
+        super::sled_store::SledStore::open(std::path::Path::new(tmp_dir_path)).unwrap();
     {
         let v2_tree = sled_store.raw_db().open_tree("resources_v2").unwrap();
         v2_tree
@@ -709,7 +718,8 @@ async fn test_migration_v2_to_v3() {
 
     // Verify it is NOT in resources_v2 anymore (it should have been dropped)
     drop(store);
-    let sled_store2 = super::sled_store::SledStore::open(std::path::Path::new(tmp_dir_path)).unwrap();
+    let sled_store2 =
+        super::sled_store::SledStore::open(std::path::Path::new(tmp_dir_path)).unwrap();
     assert!(!sled_store2
         .raw_db()
         .tree_names()
@@ -730,18 +740,27 @@ async fn query_by_parent_after_add_resource() {
     // Create parent
     let mut parent = crate::Resource::new(parent_subject.into());
     parent.set_unsafe(urls::NAME.into(), Value::String("Parent Folder".into()));
-    store.add_resource_opts(&parent, false, true, true).await.unwrap();
+    store
+        .add_resource_opts(&parent, false, true, true)
+        .await
+        .unwrap();
 
     // Create children with parent property
     let mut child1 = crate::Resource::new(child1_subject.into());
     child1.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(parent_subject.into()));
     child1.set_unsafe(urls::NAME.into(), Value::String("Child 1".into()));
-    store.add_resource_opts(&child1, false, true, true).await.unwrap();
+    store
+        .add_resource_opts(&child1, false, true, true)
+        .await
+        .unwrap();
 
     let mut child2 = crate::Resource::new(child2_subject.into());
     child2.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(parent_subject.into()));
     child2.set_unsafe(urls::NAME.into(), Value::String("Child 2".into()));
-    store.add_resource_opts(&child2, false, true, true).await.unwrap();
+    store
+        .add_resource_opts(&child2, false, true, true)
+        .await
+        .unwrap();
 
     // Query: find children of parent (this is what the table UI does)
     let query = crate::storelike::Query::new_prop_val(urls::PARENT, parent_subject);
@@ -759,20 +778,29 @@ async fn query_by_parent_after_add_resource() {
 async fn query_by_parent_did_subjects() {
     let store = Db::init_temp("query_parent_did").await.unwrap();
 
-    let parent_did = "did:ad:parentABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvwxyz012345678==";
-    let child1_did = "did:ad:child1ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz01234567890123456789==";
-    let child2_did = "did:ad:child2ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz01234567890123456789==";
+    let parent_did =
+        "did:ad:parentABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvwxyz012345678==";
+    let child1_did =
+        "did:ad:child1ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz01234567890123456789==";
+    let child2_did =
+        "did:ad:child2ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz01234567890123456789==";
 
     // Create children with DID parent
     let mut child1 = crate::Resource::new(child1_did.into());
     child1.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(parent_did.into()));
     child1.set_unsafe(urls::NAME.into(), Value::String("DID Child 1".into()));
-    store.add_resource_opts(&child1, false, true, true).await.unwrap();
+    store
+        .add_resource_opts(&child1, false, true, true)
+        .await
+        .unwrap();
 
     let mut child2 = crate::Resource::new(child2_did.into());
     child2.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(parent_did.into()));
     child2.set_unsafe(urls::NAME.into(), Value::String("DID Child 2".into()));
-    store.add_resource_opts(&child2, false, true, true).await.unwrap();
+    store
+        .add_resource_opts(&child2, false, true, true)
+        .await
+        .unwrap();
 
     // Query: find children of DID parent
     let query = crate::storelike::Query::new_prop_val(urls::PARENT, parent_did);
@@ -791,21 +819,22 @@ async fn query_by_parent_did_subjects() {
 async fn query_after_json_ad_import() {
     let store = Db::init_temp("query_json_import").await.unwrap();
 
-    let parent = "did:ad:parentXYZ0123456789abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRST==";
+    let parent =
+        "did:ad:parentXYZ0123456789abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRST==";
     let json = format!(
         r#"{{"@id": "did:ad:childXYZ0123456789abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUV==", "https://atomicdata.dev/properties/parent": "{}", "https://atomicdata.dev/properties/name": "JSON Child"}}"#,
         parent
     );
 
-    let resource = crate::parse::parse_json_ad_resource(
-        &json,
-        &store,
-        &crate::parse::ParseOpts::default(),
-    )
-    .await
-    .unwrap();
+    let resource =
+        crate::parse::parse_json_ad_resource(&json, &store, &crate::parse::ParseOpts::default())
+            .await
+            .unwrap();
 
-    store.add_resource_opts(&resource, false, true, true).await.unwrap();
+    store
+        .add_resource_opts(&resource, false, true, true)
+        .await
+        .unwrap();
 
     let query = crate::storelike::Query::new_prop_val(urls::PARENT, parent);
     let result = store.query(&query).await.unwrap();
@@ -821,8 +850,8 @@ async fn query_after_json_ad_import() {
 /// stores and indexes the resource correctly in a sled-backed Db.
 #[tokio::test]
 async fn did_loro_only_commit_sled() {
-    use crate::commit::{Commit, CommitBuilder, CommitOpts};
     use crate::agents::Agent;
+    use crate::commit::{Commit, CommitBuilder, CommitOpts};
 
     let store = Db::init_temp("did_loro_commit").await.unwrap();
     store.populate().await.unwrap();
@@ -830,13 +859,22 @@ async fn did_loro_only_commit_sled() {
     // Create an agent
     let private_key = "CapMWIhFUT+w7ANv9oCPqrHrwZpkP2JhzF9JnyT6WcI=";
     let agent = Agent::new_from_private_key(None, private_key).unwrap();
-    store.add_resource(&agent.to_resource().unwrap()).await.unwrap();
+    store
+        .add_resource(&agent.to_resource().unwrap())
+        .await
+        .unwrap();
 
     // Build a Loro doc with properties (mimics browser-side)
     let loro_doc = crate::loro::AtomicLoroDoc::new();
-    loro_doc.set_property(urls::NAME, &Value::String("My Property".into())).unwrap();
-    loro_doc.set_property(urls::DESCRIPTION, &Value::String("A test property".into())).unwrap();
-    loro_doc.set_property(urls::PUBLIC_KEY, &Value::String(agent.public_key.clone())).unwrap();
+    loro_doc
+        .set_property(urls::NAME, &Value::String("My Property".into()))
+        .unwrap();
+    loro_doc
+        .set_property(urls::DESCRIPTION, &Value::String("A test property".into()))
+        .unwrap();
+    loro_doc
+        .set_property(urls::PUBLIC_KEY, &Value::String(agent.public_key.clone()))
+        .unwrap();
 
     let snapshot = loro_doc.export_snapshot();
 
@@ -861,7 +899,9 @@ async fn did_loro_only_commit_sled() {
     assert!(result.resource_new.is_some(), "should have resource_new");
 
     // Verify the resource is retrievable from the sled-backed store
-    let stored = store.get_resource(&did_subject.as_str().into()).await
+    let stored = store
+        .get_resource(&did_subject.as_str().into())
+        .await
         .expect("Loro-only DID resource should be retrievable from sled store");
 
     assert_eq!(

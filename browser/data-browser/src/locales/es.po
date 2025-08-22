@@ -2867,12 +2867,10 @@ msgstr "Añadir otra propiedad..."
 msgid "Empty"
 msgstr "Vacío"
 
-#: src/components/LoroDocValue.tsx
 #: src/components/YDocValue.tsx
 msgid "Show encoded state"
 msgstr "Mostrar estado codificado"
 
-#: src/components/LoroDocValue.tsx
 #: src/components/YDocValue.tsx
 msgid "Hide encoded state"
 msgstr "Ocultar estado codificado"
@@ -4688,10 +4686,8 @@ msgid ""
 "built in."
 msgstr ""
 
-#. placeholder {0}: value.byteLength
-#: src/components/LoroDocValue.tsx
-msgid "Loro document ({0} bytes)"
-msgstr ""
+#~ msgid "Loro document ({0} bytes)"
+#~ msgstr ""
 
 #: src/routes/History/HistoryDesktopView.tsx
 #: src/routes/History/HistoryMobileView.tsx
@@ -4732,4 +4728,219 @@ msgstr ""
 
 #: src/views/ChatRoomPage.tsx
 msgid "Loading messages..."
+msgstr ""
+
+#: src/components/LoroDocValue.tsx
+msgid "Hide"
+msgstr ""
+
+#: src/components/LoroDocValue.tsx
+msgid "Inspect"
+msgstr ""
+
+#. placeholder {0}: showState ? <FaEyeSlash /> : <FaEye />
+#. placeholder {1}: showState ? 'Hide' : 'Inspect'
+#. placeholder {2}: sizeStr
+#. placeholder {3}: inspection ? `, ${inspection.peers} peer(s)` : ''
+#: src/components/LoroDocValue.tsx
+msgid "{0} {1} Loro snapshot ({2} {3})"
+msgstr ""
+
+#: src/components/LoroDocValue.tsx
+msgid "Failed to decode Loro snapshot"
+msgstr ""
+
+#: src/components/SideBar/SyncMenuItem.tsx
+msgid "Connected to server over WebSocket"
+msgstr ""
+
+#: src/components/SideBar/SyncMenuItem.tsx
+msgid "Offline / server connection unavailable"
+msgstr ""
+
+#: src/components/SideBar/SyncMenuItem.tsx
+#: src/routes/SyncRoute.tsx
+msgid "Sync"
+msgstr ""
+
+#~ msgid "Show current connection and sync state"
+#~ msgstr ""
+
+#~ msgid "connection"
+#~ msgstr ""
+
+#~ msgid "syncing"
+#~ msgstr ""
+
+#~ msgid "drive sync"
+#~ msgstr ""
+
+#~ msgid "dirty sync"
+#~ msgstr ""
+
+#~ msgid "pending dirty"
+#~ msgstr ""
+
+#~ msgid "ws state"
+#~ msgstr ""
+
+#~ msgid "ws protocol"
+#~ msgstr ""
+
+#~ msgid "client db"
+#~ msgstr ""
+
+#~ msgid "server"
+#~ msgstr ""
+
+#~ msgid "drive"
+#~ msgstr ""
+
+#~ msgid "last drive sync"
+#~ msgstr ""
+
+#: src/components/SideBar/SyncMenuItem.tsx
+msgid "Inspect sync and connection state"
+msgstr ""
+
+#~ msgid ""
+#~ "Inspect the current connection state, background sync activity, and\n"
+#~ "websocket details for this client."
+#~ msgstr ""
+
+#~ msgid "Status"
+#~ msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Connection"
+msgstr ""
+
+#~ msgid "Last Drive Sync"
+#~ msgstr ""
+
+#~ msgid "resources"
+#~ msgstr ""
+
+#~ msgid "timestamp"
+#~ msgstr ""
+
+#~ msgid "No completed drive sync recorded yet."
+#~ msgstr ""
+
+#~ msgid "Commit Log"
+#~ msgstr ""
+
+#~ msgid "commit"
+#~ msgstr ""
+
+#~ msgid "previous"
+#~ msgstr ""
+
+#~ msgid "signer"
+#~ msgstr ""
+
+#~ msgid "No commits recorded in this session yet."
+#~ msgstr ""
+
+#~ msgid "by"
+#~ msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "destroy"
+msgstr ""
+
+#: src/routes/DataRoute.tsx
+msgid "source:"
+msgstr ""
+
+#: src/routes/DataRoute.tsx
+msgid "Where this resource was last loaded from"
+msgstr ""
+
+#: src/components/NetworkIndicator.tsx
+msgid "Running in offline mode"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "In sync"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Syncing..."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Changes pending"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+msgid "Offline"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Unknown"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid ""
+"Your data is stored locally on this device. When connected to a\n"
+"server, changes sync automatically."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "This device"
+msgstr ""
+
+#. placeholder {0}: status.pendingDirtyCount
+#: src/routes/SyncRoute.tsx
+msgid "{0} pending"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+msgid "Server"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Details"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Drive"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Connected"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Local storage"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Ready"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Initializing..."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Last sync"
+msgstr ""
+
+#. placeholder {0}: status.lastDriveSync.count
+#. placeholder {1}: ' '
+#. placeholder {2}: formatTimeAgo( new Date(status.lastDriveSync.timestamp), ) ?? 'just now'
+#: src/routes/SyncRoute.tsx
+msgid "{0} resources,{1} {2}"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Activity"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "No activity recorded in this session yet."
 msgstr ""

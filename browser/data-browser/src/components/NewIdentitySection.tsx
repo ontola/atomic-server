@@ -129,10 +129,19 @@ export function NewIdentitySection({
       }
 
       // Set the display name on the agent resource
+      const agentResource = store.getResourceLoading(identity.agentSubject, {
+        newResource: true,
+      });
+      const publicKey = identity.agentSubject.replace('did:ad:agent:', '');
+
+      await agentResource.set(core.properties.publicKey, publicKey);
+      await agentResource.set(core.properties.isA, [core.classes.agent]);
+
       if (username) {
-        const agentResource = await store.getResource(identity.agentSubject);
         await agentResource.set(core.properties.name, username);
       }
+
+      await agentResource.save();
 
       const driveName = username ? `${username}'s Drive` : 'Personal';
 

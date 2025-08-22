@@ -34,8 +34,9 @@ impl OpfsBackend {
         let global: web_sys::WorkerGlobalScope = js_sys::global().unchecked_into();
         let navigator = global.navigator();
         let storage = navigator.storage();
-        let root_dir: web_sys::FileSystemDirectoryHandle =
-            JsFuture::from(storage.get_directory()).await?.unchecked_into();
+        let root_dir: web_sys::FileSystemDirectoryHandle = JsFuture::from(storage.get_directory())
+            .await?
+            .unchecked_into();
 
         let opts = web_sys::FileSystemGetFileOptions::new();
         opts.set_create(true);
@@ -78,10 +79,7 @@ impl OpfsBackend {
 }
 
 fn js_err(msg: &str, e: JsValue) -> io::Error {
-    io::Error::new(
-        io::ErrorKind::Other,
-        format!("{}: {:?}", msg, e),
-    )
+    io::Error::new(io::ErrorKind::Other, format!("{}: {:?}", msg, e))
 }
 
 impl redb::StorageBackend for OpfsBackend {
@@ -135,9 +133,7 @@ impl redb::StorageBackend for OpfsBackend {
     }
 
     fn sync_data(&self) -> io::Result<()> {
-        self.handle
-            .flush()
-            .map_err(|e| js_err("OPFS flush", e))
+        self.handle.flush().map_err(|e| js_err("OPFS flush", e))
     }
 
     fn close(&self) -> io::Result<()> {

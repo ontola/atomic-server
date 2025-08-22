@@ -121,25 +121,43 @@ async fn test_dht_resolve() {
 
     // Perform manual onboarding for Server A
     let agent_a = Agent::new(None).expect("failed to create agent a");
-    
+
     // 1. Create a genesis Drive commit
     let mut drive_claim = atomic_lib::commit::CommitBuilder::new("did:ad:placeholder".into());
-    drive_claim.set(atomic_lib::urls::IS_A.into(), atomic_lib::Value::ResourceArray(vec![atomic_lib::urls::DRIVE.into()]));
-    drive_claim.set(atomic_lib::urls::NAME.into(), atomic_lib::Value::String("Test Drive A".into()));
-    let drive_genesis_commit = drive_claim.sign(&agent_a, &atomic_lib::Store::init().await.unwrap(), &atomic_lib::Resource::new("did:ad:placeholder".into())).await.expect("failed to sign drive genesis");
+    drive_claim.set(
+        atomic_lib::urls::IS_A.into(),
+        atomic_lib::Value::ResourceArray(vec![atomic_lib::urls::DRIVE.into()]),
+    );
+    drive_claim.set(
+        atomic_lib::urls::NAME.into(),
+        atomic_lib::Value::String("Test Drive A".into()),
+    );
+    let drive_genesis_commit = drive_claim
+        .sign(
+            &agent_a,
+            &atomic_lib::Store::init().await.unwrap(),
+            &atomic_lib::Resource::new("did:ad:placeholder".into()),
+        )
+        .await
+        .expect("failed to sign drive genesis");
     let drive_did = drive_genesis_commit.subject.clone();
 
     // 2. Claim Server A via /setup
     let setup_body = serde_json::json!({
         "https://atomicdata.dev/properties/initialDrive": drive_did
     });
-    let resp = client.post("http://localhost:9011/setup")
+    let resp = client
+        .post("http://localhost:9011/setup")
         .header("Content-Type", "application/json")
         .body(setup_body.to_string())
         .send()
         .await
         .expect("failed to send setup request a");
-    assert!(resp.status().is_success(), "Failed to claim Server A: {}", resp.text().await.unwrap());
+    assert!(
+        resp.status().is_success(),
+        "Failed to claim Server A: {}",
+        resp.text().await.unwrap()
+    );
 
     // Wait for Server B to start
     let start = Instant::now();
@@ -162,24 +180,42 @@ async fn test_dht_resolve() {
 
     // Perform manual onboarding for Server B
     let agent_b = Agent::new(None).expect("failed to create agent b");
-    
+
     let mut drive_claim_b = atomic_lib::commit::CommitBuilder::new("did:ad:placeholder".into());
-    drive_claim_b.set(atomic_lib::urls::IS_A.into(), atomic_lib::Value::ResourceArray(vec![atomic_lib::urls::DRIVE.into()]));
-    drive_claim_b.set(atomic_lib::urls::NAME.into(), atomic_lib::Value::String("Test Drive B".into()));
-    let drive_genesis_commit_b = drive_claim_b.sign(&agent_b, &atomic_lib::Store::init().await.unwrap(), &atomic_lib::Resource::new("did:ad:placeholder".into())).await.expect("failed to sign drive genesis b");
+    drive_claim_b.set(
+        atomic_lib::urls::IS_A.into(),
+        atomic_lib::Value::ResourceArray(vec![atomic_lib::urls::DRIVE.into()]),
+    );
+    drive_claim_b.set(
+        atomic_lib::urls::NAME.into(),
+        atomic_lib::Value::String("Test Drive B".into()),
+    );
+    let drive_genesis_commit_b = drive_claim_b
+        .sign(
+            &agent_b,
+            &atomic_lib::Store::init().await.unwrap(),
+            &atomic_lib::Resource::new("did:ad:placeholder".into()),
+        )
+        .await
+        .expect("failed to sign drive genesis b");
     let drive_did_b = drive_genesis_commit_b.subject.clone();
 
     // Claim Server B via /setup
     let setup_body_b = serde_json::json!({
         "https://atomicdata.dev/properties/initialDrive": drive_did_b
     });
-    let resp_b = client.post("http://localhost:9012/setup")
+    let resp_b = client
+        .post("http://localhost:9012/setup")
         .header("Content-Type", "application/json")
         .body(setup_body_b.to_string())
         .send()
         .await
         .expect("failed to send setup request b");
-    assert!(resp_b.status().is_success(), "Failed to claim Server B: {}", resp_b.text().await.unwrap());
+    assert!(
+        resp_b.status().is_success(),
+        "Failed to claim Server B: {}",
+        resp_b.text().await.unwrap()
+    );
 
     // Resolve Server A's agent DID from Server B via DHT.
     // The ?drive= hint tells the DHT which drive to look up peers for.
