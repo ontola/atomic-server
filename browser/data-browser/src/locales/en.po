@@ -2473,21 +2473,17 @@ msgstr "All versions <0/>"
 #~ msgid "Editted <0/> by{0} <1/>"
 #~ msgstr "Editted <0/> by{0} <1/>"
 
-#: src/components/NetworkIndicator.tsx
-msgid "No internet connection"
-msgstr "No internet connection"
+#~ msgid "No internet connection"
+#~ msgstr "No internet connection"
 
-#: src/components/NetworkIndicator.tsx
-msgid "Server connection lost — reconnecting…"
-msgstr "Server connection lost — reconnecting…"
+#~ msgid "Server connection lost — reconnecting…"
+#~ msgstr "Server connection lost — reconnecting…"
 
-#: src/components/NetworkIndicator.tsx
-msgid "You are offline, changes might not be persisted."
-msgstr "You are offline, changes might not be persisted."
+#~ msgid "You are offline, changes might not be persisted."
+#~ msgstr "You are offline, changes might not be persisted."
 
-#: src/components/NetworkIndicator.tsx
-msgid "Connection to server lost, reconnecting..."
-msgstr "Connection to server lost, reconnecting..."
+#~ msgid "Connection to server lost, reconnecting..."
+#~ msgstr "Connection to server lost, reconnecting..."
 
 #: src/components/SkipNav.tsx
 msgid "Skip Navigation?"
@@ -4724,13 +4720,11 @@ msgstr "{0} {1} Loro snapshot ({2} {3})"
 msgid "Failed to decode Loro snapshot"
 msgstr "Failed to decode Loro snapshot"
 
-#: src/components/SideBar/SyncMenuItem.tsx
-msgid "Connected to server over WebSocket"
-msgstr "Connected to server over WebSocket"
+#~ msgid "Connected to server over WebSocket"
+#~ msgstr "Connected to server over WebSocket"
 
-#: src/components/SideBar/SyncMenuItem.tsx
-msgid "Offline / server connection unavailable"
-msgstr "Offline / server connection unavailable"
+#~ msgid "Offline / server connection unavailable"
+#~ msgstr "Offline / server connection unavailable"
 
 #: src/components/SideBar/SyncMenuItem.tsx
 #: src/routes/SyncRoute.tsx
@@ -4773,9 +4767,8 @@ msgstr "Sync"
 #~ msgid "last drive sync"
 #~ msgstr "last drive sync"
 
-#: src/components/SideBar/SyncMenuItem.tsx
-msgid "Inspect sync and connection state"
-msgstr "Inspect sync and connection state"
+#~ msgid "Inspect sync and connection state"
+#~ msgstr "Inspect sync and connection state"
 
 #~ msgid ""
 #~ "Inspect the current connection state, background sync activity, and\n"
@@ -4833,22 +4826,25 @@ msgstr "source:"
 msgid "Where this resource was last loaded from"
 msgstr "Where this resource was last loaded from"
 
-#: src/components/NetworkIndicator.tsx
-msgid "Running in offline mode"
-msgstr "Running in offline mode"
+#~ msgid "Running in offline mode"
+#~ msgstr "Running in offline mode"
 
 #: src/routes/SyncRoute.tsx
 msgid "In sync"
 msgstr "In sync"
 
+#: src/components/SideBar/SyncMenuItem.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Syncing..."
 msgstr "Syncing..."
 
+#: src/components/SideBar/SyncMenuItem.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Changes pending"
 msgstr "Changes pending"
 
+#: src/components/SideBar/SyncMenuItem.tsx
+#: src/components/SideBar/SyncMenuItem.tsx
 #: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Offline"
@@ -4870,10 +4866,8 @@ msgstr ""
 msgid "This device"
 msgstr "This device"
 
-#. placeholder {0}: status.pendingDirtyCount
-#: src/routes/SyncRoute.tsx
-msgid "{0} pending"
-msgstr "{0} pending"
+#~ msgid "{0} pending"
+#~ msgstr "{0} pending"
 
 #: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
@@ -4888,6 +4882,8 @@ msgstr "Details"
 msgid "Drive"
 msgstr "Drive"
 
+#: src/components/SideBar/SyncMenuItem.tsx
+#: src/components/SideBar/SyncMenuItem.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Connected"
 msgstr "Connected"
@@ -4915,10 +4911,35 @@ msgstr "Last sync"
 msgid "{0} resources,{1} {2}"
 msgstr "{0} resources,{1} {2}"
 
-#: src/routes/SyncRoute.tsx
-msgid "Activity"
-msgstr "Activity"
+#~ msgid "Activity"
+#~ msgstr "Activity"
 
 #: src/routes/SyncRoute.tsx
 msgid "No activity recorded in this session yet."
 msgstr "No activity recorded in this session yet."
+
+#: src/components/NetworkIndicator.tsx
+msgid "Connected to server"
+msgstr "Connected to server"
+
+#: src/components/NetworkIndicator.tsx
+msgid "Working offline — your changes are saved locally"
+msgstr "Working offline — your changes are saved locally"
+
+#: src/components/NetworkIndicator.tsx
+msgid "No internet — your changes are saved locally"
+msgstr "No internet — your changes are saved locally"
+
+#: src/routes/SyncRoute.tsx
+msgid "Reconnect"
+msgstr "Reconnect"
+
+#. placeholder {0}: status.pendingDirtyCount
+#: src/routes/SyncRoute.tsx
+msgid "{0} unsynced"
+msgstr "{0} unsynced"
+
+#. placeholder {0}: status.pendingDirtyCount > 0 && ( <PendingCount> {status.pendingDirtyCount} unsynced </PendingCount> )
+#: src/routes/SyncRoute.tsx
+msgid "Commit Log {0}"
+msgstr "Commit Log {0}"

@@ -78,6 +78,7 @@ export interface StoreSyncStatus {
   dirtySyncInProgress: boolean;
   syncInProgress: boolean;
   pendingDirtyCount: number;
+  pendingDirtySubjects: string[];
   serverUrl: string;
   drive: string;
   websocketReadyState?: number;
@@ -1545,6 +1546,7 @@ export class Store {
       dirtySyncInProgress: this._dirtySyncInProgress,
       syncInProgress: this._driveSyncInProgress || this._dirtySyncInProgress,
       pendingDirtyCount: this.dirtyForSync.size,
+      pendingDirtySubjects: [...this.dirtyForSync],
       serverUrl: this.serverUrl,
       drive: this.drive,
       websocketReadyState: ws?.readyState,
@@ -1753,6 +1755,24 @@ export class Store {
     } else {
       console.warn('WebSockets not supported, no window available');
     }
+  }
+
+  /** Force-reconnect to the server by dropping and recreating the WebSocket. */
+  public reconnect(): void {
+    const url = this.serverUrl;
+
+    if (!url) return;
+
+    // Close existing WebSocket
+    const existing = this.webSockets.get(url);
+
+    if (existing) {
+      existing.close();
+      this.webSockets.delete(url);
+    }
+
+    // Open a fresh one
+    this.openWebSocket(url);
   }
 
   /**

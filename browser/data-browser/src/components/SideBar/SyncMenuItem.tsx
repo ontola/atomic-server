@@ -1,6 +1,11 @@
 import { useEffect, useState, type JSX } from 'react';
 import { StoreEvents, type StoreSyncStatus, useStore } from '@tomic/react';
-import { FaGlobe } from 'react-icons/fa6';
+import {
+  FaWifi,
+  FaArrowsRotate,
+  FaCircleExclamation,
+} from 'react-icons/fa6';
+import { MdSignalWifiOff } from 'react-icons/md';
 import { styled, keyframes } from 'styled-components';
 import { paths } from '../../routes/paths';
 import { SideBarMenuItem } from './SideBarMenuItem';
@@ -32,59 +37,55 @@ export function SyncMenuItem({
     };
   }, [store]);
 
+  const icon = getSyncIcon(status);
+  const label = getSyncLabel(status);
+
   return (
     <SideBarMenuItem
-      icon={
-        status.syncInProgress ? (
-          <Spinner aria-hidden />
-        ) : status.serverConnected ? (
-          <FaGlobe title='Connected to server over WebSocket' />
-        ) : (
-          <OfflineIcon title='Offline / server connection unavailable'>
-            <FaGlobe />
-          </OfflineIcon>
-        )
-      }
+      icon={icon}
       label='Sync'
-      helper='Inspect sync and connection state'
+      helper={label}
       path={paths.sync}
       onClick={onClick}
     />
   );
 }
 
+function getSyncIcon(status: StoreSyncStatus): JSX.Element {
+  if (status.syncInProgress) {
+    return <SpinningIcon aria-hidden><FaArrowsRotate /></SpinningIcon>;
+  }
+
+  if (!status.serverConnected) {
+    return <MdSignalWifiOff title='Offline' />;
+  }
+
+  if (status.pendingDirtyCount > 0) {
+    return <WarningIcon><FaCircleExclamation title='Changes pending' /></WarningIcon>;
+  }
+
+  return <FaWifi title='Connected' />;
+}
+
+function getSyncLabel(status: StoreSyncStatus): string {
+  if (status.syncInProgress) return 'Syncing...';
+  if (!status.serverConnected) return 'Offline';
+  if (status.pendingDirtyCount > 0) return `${status.pendingDirtyCount} changes pending`;
+
+  return 'Connected';
+}
+
 const spin = keyframes`
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 `;
 
-const Spinner = styled.span`
-  width: 0.9rem;
-  height: 0.9rem;
-  border: 2px solid currentColor;
-  border-right-color: transparent;
-  border-radius: 50%;
-  animation: ${spin} 0.8s linear infinite;
-`;
-
-const OfflineIcon = styled.span`
-  position: relative;
+const SpinningIcon = styled.span`
   display: inline-flex;
+  animation: ${spin} 1s linear infinite;
+`;
 
-  &::after {
-    content: '';
-    position: absolute;
-    left: 50%;
-    top: -2px;
-    width: 2px;
-    height: calc(100% + 4px);
-    background: currentColor;
-    transform: translateX(-50%) rotate(35deg);
-    transform-origin: center;
-    border-radius: 999px;
-  }
+const WarningIcon = styled.span`
+  color: ${p => p.theme.colors.warning};
+  display: inline-flex;
 `;
