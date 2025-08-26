@@ -5,7 +5,7 @@ import {
   useCanWrite,
   unknownSubject,
 } from '@tomic/react';
-import { useChildren } from '../useChildren';
+import { useChildren } from '@tomic/react';
 import { useCurrentSubject } from '../../../helpers/useCurrentSubject';
 import { SideBarItem } from '../SideBarItem';
 import { AtomicLink } from '../../AtomicLink';
