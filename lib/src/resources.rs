@@ -213,6 +213,19 @@ impl Resource {
         Ok(())
     }
 
+    /// Export the Loro snapshot, checking the live doc first, then propvals.
+    pub fn get_loro_snapshot(&self) -> Option<Vec<u8>> {
+        if let Some(doc) = &self.loro {
+            return Some(doc.export_snapshot());
+        }
+
+        if let Some(Value::LoroDoc(snapshot)) = self.propvals.get(urls::LORO_UPDATE) {
+            return Some(snapshot.clone());
+        }
+
+        None
+    }
+
     /// Export the Loro delta since this resource was loaded/last saved.
     pub fn export_loro_snapshot(&self) -> Option<Vec<u8>> {
         self.loro.as_ref().map(|doc| doc.export_snapshot())

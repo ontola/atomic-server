@@ -478,9 +478,6 @@ export class Store {
 
     // Also collect from in-memory resources that belong to this drive.
     // Covers freshly created resources not yet persisted to the WASM DB.
-    let matchedDrive = 0;
-    let hadDoc = 0;
-
     for (const [subject, resource] of this.resources) {
       if (allVVs[subject]) continue;
 
@@ -490,12 +487,10 @@ export class Store {
         | undefined;
 
       if (subject !== drive && parent !== drive) continue;
-      matchedDrive++;
 
       const doc = resource.getLoroDoc?.();
 
       if (!doc) continue;
-      hadDoc++;
 
       // Debug: inspect the VV
       try {
@@ -525,12 +520,6 @@ export class Store {
       if (!allVVs[subject] && !resource.new) {
         allVVs[subject] = {};
       }
-    }
-
-    if (Object.keys(allVVs).length === 0) {
-      console.warn(
-        `[Sync] No VVs found for drive ${drive.slice(0, 40)}... (${matchedDrive} matched, ${hadDoc} had LoroDoc)`,
-      );
     }
 
     // Collect unique peer IDs across all resources
@@ -761,7 +750,11 @@ export class Store {
       }
     }
 
-    // If the resource is already in the store, we merge it so code that depends on the resource will get the new values.
+    // If the resource is already in the store, we merge it so code that
+    // depends on the resource will get the new values.
+    // EXCEPT: if the existing resource has unsaved local changes (dirty),
+    // don't overwrite it with the server's version. The local changes
+    // need to be synced first.
     if (storeResource) {
       storeResource.merge(resource.__internalObject);
       this.notify(storeResource);
@@ -1730,17 +1723,6 @@ export class Store {
     }
 
     this.eventManager.emit(StoreEvents.DriveChanged, drive);
-  }
-
-  /** Waits for all open WebSocket connections to finish authenticating. */
-  public async waitForWebSocketAuth(): Promise<void> {
-    const promises: Promise<void>[] = [];
-
-    this.webSockets.forEach(ws => {
-      promises.push(ws.authenticate());
-    });
-
-    await Promise.all(promises);
   }
 
   /** Opens a WebSocket for this Atomic Server URL */

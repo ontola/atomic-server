@@ -96,7 +96,10 @@ export class Resource<C extends OptionalClass = any> {
 
   private commitBuilder: CommitBuilder;
   private _subject: string;
+  /** Memoized read cache derived from Loro. Rebuilt lazily when _cacheDirty. */
   private _cache: Record<string, JSONValue> = Object.create(null);
+  /** True when Loro has been modified but _cache hasn't been rebuilt yet. */
+  private _cacheDirty = false;
   private _auxValues: Map<string, AtomicValue> = new Map();
   /** Raw Loro snapshot bytes, kept separate from properties. Not a propval. */
   private _loroSnapshotBytes?: Uint8Array | string;
@@ -331,8 +334,8 @@ export class Resource<C extends OptionalClass = any> {
         }
       }
 
-      this.healMissingLoroPropsFromCache();
       this.rebuildCacheFromLoro();
+      this._cacheDirty = false;
       this._loroVersionAtLastSave =
         initializedFromSnapshot || (!this.new && !this._dirty)
           ? this._loroDoc.oplogVersion()
@@ -352,25 +355,6 @@ export class Resource<C extends OptionalClass = any> {
     return this._loroMap;
   }
 
-  private setCachedValue(prop: string, value: AtomicValue): void {
-    if (value === undefined) {
-      delete this._cache[prop];
-      this._auxValues.delete(prop);
-
-      return;
-    }
-
-    if (value instanceof Uint8Array) {
-      this._auxValues.set(prop, value);
-      delete this._cache[prop];
-
-      return;
-    }
-
-    this._auxValues.delete(prop);
-    this._cache[prop] = value as JSONValue;
-  }
-
   private applyRawValue(prop: string, val: AtomicValue): void {
     if (prop === commits.properties.loroUpdate) {
       if (val === undefined) {
@@ -383,17 +367,46 @@ export class Resource<C extends OptionalClass = any> {
         throw new Error('loroUpdate must be a Uint8Array or base64 string');
       }
 
-      // Store in dedicated field, NOT as a property of the resource.
       this._loroSnapshotBytes = val;
       this.resetLoroState();
 
       return;
     }
 
-    this.setCachedValue(prop, val);
+    // Binary values go to auxValues (Loro can't store raw Uint8Array)
+    if (val instanceof Uint8Array) {
+      this._auxValues.set(prop, val);
+      return;
+    }
+
+    // If Loro doc exists, write through it (canonical path)
+    if (this._loroDoc) {
+      if (val === undefined) {
+        this.loroDeleteProperty(prop);
+      } else {
+        this.loroSetProperty(prop, val as JSONValue);
+      }
+
+      this._cacheDirty = true;
+
+      return;
+    }
+
+    // No Loro doc yet (hydration) — write to cache as temporary buffer.
+    // getLoroDoc() will seed Loro from cache when it's first called.
+    if (val === undefined) {
+      delete this._cache[prop];
+    } else {
+      this._cache[prop] = val as JSONValue;
+    }
   }
 
   private getPropValsArray(): [string, AtomicValue][] {
+    if (this._cacheDirty && this._loroDoc) {
+      this.rebuildCacheFromLoro();
+      this._cacheDirty = false;
+    }
+
     return [
       ...Object.entries(this._cache),
       ...Array.from(this._auxValues.entries()),
@@ -414,34 +427,6 @@ export class Resource<C extends OptionalClass = any> {
     this._cache = nextCache;
   }
 
-  /**
-   * Some migration-era resources have a materialized JSON view with more
-   * properties than the stored Loro snapshot. Heal only missing properties
-   * back into Loro so the next signed edit does not drop metadata like parent
-   * or isA.
-   */
-  private healMissingLoroPropsFromCache(): void {
-    const propsMap = this.getLoroMap();
-    const json = propsMap?.toJSON();
-    const current =
-      json && typeof json === 'object'
-        ? (json as Record<string, unknown>)
-        : Object.create(null);
-
-    for (const [key, value] of Object.entries(this._cache)) {
-      if (
-        key === commits.properties.loroUpdate ||
-        key === properties.commit.lastCommit
-      ) {
-        continue;
-      }
-
-      if (!(key in current)) {
-        this.loroSetProperty(key, value);
-      }
-    }
-  }
-
   private resetLoroState(): void {
     this._loroDoc = undefined;
     this._loroMap = undefined;
@@ -455,7 +440,17 @@ export class Resource<C extends OptionalClass = any> {
   private loroSetProperty(prop: string, value: JSONValue): void {
     const map = this.getLoroMap();
 
-    if (!map) return;
+    if (!map) {
+      // Loro not loaded yet — write to cache as fallback.
+      // getLoroDoc() will seed Loro from cache when it initializes.
+      if (value === undefined || value === null) {
+        delete this._cache[prop];
+      } else {
+        this._cache[prop] = value;
+      }
+
+      return;
+    }
 
     if (value === undefined || value === null) {
       map.delete(prop);
@@ -483,7 +478,11 @@ export class Resource<C extends OptionalClass = any> {
   private loroDeleteProperty(prop: string): void {
     const map = this.getLoroMap();
 
-    if (!map) return;
+    if (!map) {
+      delete this._cache[prop];
+
+      return;
+    }
 
     map.delete(prop);
   }
@@ -557,14 +556,8 @@ export class Resource<C extends OptionalClass = any> {
     this._loroDoc.import(snapshot);
     this._loroMap = this._loroDoc.getMap('properties');
 
-    const vv = this._loroDoc.oplogVersion();
-    const vvJson = vv?.toJSON?.();
-    console.debug(
-      `[Resource] cloneLoroState for ${this.subject.slice(0, 40)}: snapshot ${snapshot.length}B, VV size: ${vvJson?.size ?? 'N/A'}`,
-    );
-
     this._loroVersionAtLastSave = resource._loroVersionAtLastSave
-      ? vv
+      ? this._loroDoc.oplogVersion()
       : undefined;
   }
 
@@ -671,27 +664,73 @@ export class Resource<C extends OptionalClass = any> {
     return res as Resource<C>;
   }
 
-  /** Merges a resource into this resource. If this resource has uncommited changes those changes will be applied on top of the new propvals.
-   * Any unsaved changes on the incoming resource will not be merged.
+  /**
+   * Merges a resource into this resource using Loro CRDT merge.
+   *
+   * Both sides' Loro state is imported into a single doc. Loro handles
+   * conflict resolution automatically — both local offline edits and
+   * remote server edits survive. The cache is then rebuilt from the
+   * merged Loro state.
    */
   public merge(resourceB: Resource): void {
     if (this.subject !== resourceB.subject) {
       throw new Error('Cannot merge resources with different subjects');
     }
 
-    const preserveLocalChanges = this._dirty && this._loroDoc && LoroLoader.isLoaded();
-    const localSnapshot = preserveLocalChanges
-      ? this._loroDoc!.export({ mode: 'snapshot' })
-      : undefined;
+    // Get the incoming Loro bytes (from live doc or stored snapshot)
+    let incomingSnapshot: Uint8Array | undefined;
 
-    this._cache = structuredClone(resourceB._cache);
-    this._auxValues = new Map(structuredClone(Array.from(resourceB._auxValues.entries())));
-    this._loroSnapshotBytes = resourceB._loroSnapshotBytes;
-    this.cloneLoroStateFrom(resourceB);
+    if (resourceB._loroDoc) {
+      incomingSnapshot = resourceB._loroDoc.export({ mode: 'snapshot' });
+    } else if (resourceB._loroSnapshotBytes instanceof Uint8Array) {
+      incomingSnapshot = resourceB._loroSnapshotBytes;
+    } else if (
+      typeof resourceB._loroSnapshotBytes === 'string' &&
+      resourceB._loroSnapshotBytes.length > 0
+    ) {
+      incomingSnapshot = decodeB64(resourceB._loroSnapshotBytes);
+    }
 
-    if (localSnapshot && this._loroDoc) {
-      this._loroDoc.import(localSnapshot);
-      this.rebuildCacheFromLoro();
+    if (incomingSnapshot && incomingSnapshot.length > 0 && LoroLoader.isLoaded()) {
+      // Ensure we have a local Loro doc
+      const localDoc = this.getLoroDoc();
+
+      if (localDoc) {
+        // Import the incoming state — Loro merges via CRDT
+        try {
+          localDoc.import(incomingSnapshot);
+        } catch (e) {
+          // Import can fail if the snapshot is from an incompatible version.
+          // Fall back to replacing state entirely.
+          console.warn(`[Resource] Loro merge failed for ${this.subject}, replacing:`, e);
+          this.resetLoroState();
+          this._loroSnapshotBytes = resourceB._loroSnapshotBytes;
+          this._cache = structuredClone(resourceB._cache);
+          this._auxValues = new Map(
+            structuredClone(Array.from(resourceB._auxValues.entries())),
+          );
+        }
+
+        // Rebuild the read cache from the merged Loro doc
+        this.rebuildCacheFromLoro();
+        this._cacheDirty = false;
+        this.markLoroSaved();
+      } else {
+        // No local Loro doc — just take the incoming state
+        this._cache = structuredClone(resourceB._cache);
+        this._auxValues = new Map(
+          structuredClone(Array.from(resourceB._auxValues.entries())),
+        );
+        this._loroSnapshotBytes = resourceB._loroSnapshotBytes;
+      }
+    } else {
+      // No Loro state on the incoming resource — use plain cache replacement.
+      // Don't touch the local Loro doc (if any) — incoming has no Loro data
+      // to contribute, so local Loro state should be preserved.
+      this._cache = structuredClone(resourceB._cache);
+      this._auxValues = new Map(
+        structuredClone(Array.from(resourceB._auxValues.entries())),
+      );
     }
 
     this.new = resourceB.new;
@@ -742,6 +781,11 @@ export class Resource<C extends OptionalClass = any> {
   public get<Prop extends string, Returns = InferTypeOfValueInTriple<C, Prop>>(
     propUrl: Prop,
   ): Returns {
+    if (this._cacheDirty && this._loroDoc) {
+      this.rebuildCacheFromLoro();
+      this._cacheDirty = false;
+    }
+
     return (this._auxValues.get(propUrl) ?? this._cache[propUrl]) as Returns;
   }
 
@@ -1134,8 +1178,8 @@ export class Resource<C extends OptionalClass = any> {
 
     // Build a new array so that the reference changes. This is needed in most UI frameworks.
     const newArray = [...propVal, ...values];
-    this.setCachedValue(propUrl, newArray);
     this.loroSetProperty(propUrl, newArray);
+    this._cacheDirty = true;
     this._dirty = true;
   }
 
@@ -1147,7 +1191,6 @@ export class Resource<C extends OptionalClass = any> {
   /** Removes a property value combination from the resource */
   public remove(propertyUrl: string): void {
     this.removeUnsafe(propertyUrl);
-    this.loroDeleteProperty(propertyUrl);
     this._dirty = true;
   }
 
@@ -1170,12 +1213,13 @@ export class Resource<C extends OptionalClass = any> {
       throw new Error('No agent has been set or passed, you cannot sign.');
     }
 
-    // Migration safety: make sure cached metadata such as parent / isA is
-    // present in the Loro doc before exporting the signed update.
+    // Ensure all cached properties are in the Loro doc before signing.
+    // This catches properties set via cache hydration that haven't been
+    // written to Loro yet (e.g. write/read permissions during creation).
     if (LoroLoader.isLoaded()) {
       this.getLoroDoc();
-      this.healMissingLoroPropsFromCache();
       this.rebuildCacheFromLoro();
+      this._cacheDirty = false;
     }
 
     // Chain: use last locally-signed commit, or the server-known lastCommit.
@@ -1615,8 +1659,10 @@ export class Resource<C extends OptionalClass = any> {
       return;
     }
 
-    this.setCachedValue(prop, value as JSONValue);
+    // Write to Loro only — cache is rebuilt lazily on next get()
     this.loroSetProperty(prop, value as JSONValue);
+    this._cacheDirty = true;
+
     this._dirty = true;
     this.eventManager.emit(
       ResourceEvents.LocalChange,
@@ -1641,12 +1687,14 @@ export class Resource<C extends OptionalClass = any> {
       return;
     }
 
-    delete this._cache[prop];
+    this.loroDeleteProperty(prop);
     this._auxValues.delete(prop);
+    this._cacheDirty = true;
   }
 
   public clearUnsafe(): void {
     this._cache = Object.create(null);
+    this._cacheDirty = false;
     this._auxValues.clear();
     this._loroSnapshotBytes = undefined;
     this.resetLoroState();
@@ -1664,6 +1712,7 @@ export class Resource<C extends OptionalClass = any> {
     try {
       doc.import(loroUpdate);
       this.rebuildCacheFromLoro();
+      this._cacheDirty = false;
       this.markLoroSaved();
     } catch (e) {
       console.warn('Failed to import Loro update:', e);

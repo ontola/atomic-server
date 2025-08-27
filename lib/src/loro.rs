@@ -794,6 +794,70 @@ mod test {
         assert!(s1.contains("loroUpdate"));
     }
 
+    /// Simulate a client storing arrays as JSON strings (like the JS client does)
+    /// and verify the server materializes them back to ResourceArray.
+    #[test]
+    fn client_json_stringified_arrays_materialize_as_resource_array() {
+        // Client side: stores write/read as JSON.stringify(["did:ad:agent:abc"])
+        let client_doc = AtomicLoroDoc::new();
+        let root = client_doc.doc().get_map("properties");
+
+        // This is what the JS client does:
+        // map.set(prop, JSON.stringify(value))
+        root.insert(
+            "https://atomicdata.dev/properties/write",
+            r#"["did:ad:agent:abc"]"#,
+        )
+        .unwrap();
+        root.insert(
+            "https://atomicdata.dev/properties/read",
+            r#"["did:ad:agent:abc"]"#,
+        )
+        .unwrap();
+        root.insert("https://atomicdata.dev/properties/name", "Test Drive")
+            .unwrap();
+
+        // Export as snapshot (simulates the loroUpdate in a commit)
+        let snapshot = client_doc.export_snapshot();
+
+        // Server side: import the snapshot and materialize
+        let server_doc = AtomicLoroDoc::from_snapshot(&snapshot).unwrap();
+        let props = server_doc.get_all_properties();
+
+        // Materialize using the same function the server uses
+        let write_val = loro_value_to_atomic_value(
+            props.get("https://atomicdata.dev/properties/write").unwrap(),
+        );
+        let read_val = loro_value_to_atomic_value(
+            props.get("https://atomicdata.dev/properties/read").unwrap(),
+        );
+        let name_val = loro_value_to_atomic_value(
+            props.get("https://atomicdata.dev/properties/name").unwrap(),
+        );
+
+        // write/read must be ResourceArray, not String
+        match write_val.unwrap() {
+            Value::ResourceArray(arr) => {
+                assert_eq!(arr.len(), 1);
+                assert_eq!(arr[0].to_string(), "did:ad:agent:abc");
+            }
+            other => panic!("Expected ResourceArray for write, got {:?}", other),
+        }
+
+        match read_val.unwrap() {
+            Value::ResourceArray(arr) => {
+                assert_eq!(arr.len(), 1);
+                assert_eq!(arr[0].to_string(), "did:ad:agent:abc");
+            }
+            other => panic!("Expected ResourceArray for read, got {:?}", other),
+        }
+
+        match name_val.unwrap() {
+            Value::String(s) => assert_eq!(s, "Test Drive"),
+            other => panic!("Expected String for name, got {:?}", other),
+        }
+    }
+
     // --- Sync protocol tests ---
 
     /// Simulate two peers (client and server) with the same drive.

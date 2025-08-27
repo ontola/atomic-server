@@ -75,6 +75,9 @@ export class WSClient {
   private isAuthenticating = false;
 
   private retryingOldVersion = false;
+  private _closed = false;
+  private _retryDelay = 1000;
+  private _retryTimer?: ReturnType<typeof setTimeout>;
 
   constructor(url: string, store: Store) {
     this.store = store;
@@ -116,10 +119,21 @@ export class WSClient {
       });
       ws.addEventListener('close', () => {
         this.store.setServerConnected(false);
+
+        // Auto-reconnect with exponential backoff unless explicitly closed
+        if (!this._closed) {
+          this._retryTimer = setTimeout(() => {
+            console.info(`[WS] Reconnecting (delay: ${this._retryDelay}ms)...`);
+            this.authenticatedWith = undefined;
+            createSocket([WS_Version.V1]);
+          }, this._retryDelay);
+          this._retryDelay = Math.min(this._retryDelay * 2, 30000);
+        }
       });
       this.openPromise = new Promise(resolve => {
         ws.addEventListener('open', () => {
           opened = true;
+          this._retryDelay = 1000; // Reset backoff on successful connect
           resolve();
           this.store.setServerConnected(true);
           this.handleOpen();
@@ -136,8 +150,14 @@ export class WSClient {
     return this.ws.readyState;
   }
 
-  /** Close the WebSocket connection. */
+  /** Close the WebSocket connection permanently (no auto-reconnect). */
   public close(): void {
+    this._closed = true;
+
+    if (this._retryTimer) {
+      clearTimeout(this._retryTimer);
+    }
+
     this.ws.close();
   }
 
@@ -267,40 +287,6 @@ export class WSClient {
     this.ws.send('UNSUBSCRIBE ' + subject);
   }
 
-  /**
-   * Subscribe to a drive and trigger a sync. Called when the drive changes
-   * after the initial connection.
-   */
-  public subscribeDrive(drive: string): void {
-    if (this.readyState !== WebSocket.OPEN) {
-      return;
-    }
-
-    // Ensure we're authenticated before subscribing
-    this.authenticate()
-      .then(() => {
-        const query = JSON.stringify({ drive });
-        this.ws.send('SUBSCRIBE_QUERY ' + query);
-
-        const clientDb = this.store.getClientDb();
-
-        if (clientDb) {
-          const syncKey = `sync_timestamp_${drive}`;
-          const since =
-            typeof localStorage !== 'undefined'
-              ? localStorage.getItem(syncKey)
-              : null;
-          this.store.startDriveSync(drive);
-          const syncRequest = since
-            ? JSON.stringify({ drive, since: Number(since) })
-            : JSON.stringify({ drive });
-          this.ws.send('SYNC_DRIVE ' + syncRequest);
-        }
-      })
-      .catch(e => {
-        console.warn('[WS] Failed to subscribe to drive:', e);
-      });
-  }
 
   /** Start a VV-based sync for a drive. Falls back to legacy SYNC_DRIVE on error. */
   private async startVVSync(drive: string): Promise<void> {
@@ -430,11 +416,27 @@ export class WSClient {
           const query = JSON.stringify({ drive });
           this.ws.send('SUBSCRIBE_QUERY ' + query);
 
-          // Defer VV sync slightly to allow initial resource fetches
-          // to complete (WS GETs populate Loro state via merge).
-          setTimeout(() => {
-            this.startVVSync(drive);
-          }, 500);
+          // Wait for dirty sync to complete before VV sync.
+          // Dirty resources are pushed via HTTP commits first — VV sync
+          // should only run after those are accepted by the server.
+          const clientDb = this.store.getClientDb();
+
+          if (clientDb?.isReady) {
+            this.store
+              .syncDirtyResources()
+              .then(() => this.startVVSync(drive))
+              .catch(() => this.startVVSync(drive));
+          } else if (clientDb) {
+            // Wait for DB to be ready before syncing
+            clientDb.waitForReady().then(() => {
+              this.store
+                .syncDirtyResources()
+                .then(() => this.startVVSync(drive))
+                .catch(() => this.startVVSync(drive));
+            });
+          }
+          // If no clientDb at all, skip VV sync — we can't track versions
+          // without persistent storage. HTTP commits handle sync instead.
         }
       })
       .catch(e => {
