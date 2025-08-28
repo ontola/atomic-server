@@ -295,6 +295,81 @@ describe('Commit signing and keys', () => {
     );
   });
 
+  it('saves Loro doc changes made outside set() (e.g. rich text editor)', async ({
+    expect,
+  }) => {
+    const store = new Store({ serverUrl: 'https://example.com' });
+    store.setServerConnected(true);
+    const agentKeys = await Agent.generateKeyPair();
+    const agentDID = `did:ad:agent:${agentKeys.publicKey}`;
+    const signingAgent = new Agent(
+      new JSCryptoProvider(agentKeys.privateKey),
+      agentDID,
+    );
+    store.setAgent(signingAgent);
+
+    const postCommitSpy = vi
+      .spyOn(store, 'postCommit')
+      .mockImplementation(async commit => {
+        return {
+          ...commit,
+          id: `https://example.com/commits/${commit.signature}`,
+        } as Commit;
+      });
+
+    // Create resource with a title
+    const resource = new Resource('_new:test-doc');
+    resource.setStore(store);
+    resource.new = true;
+    await resource.set(core.properties.isA, ['https://atomicdata.dev/classes/DocumentV2'], false);
+    await resource.set('https://atomicdata.dev/properties/name', 'My Doc', false);
+
+    // Genesis save
+    resource.markNextCommitAsGenesis();
+    await resource.save();
+    expect(postCommitSpy).toHaveBeenCalledTimes(1);
+
+    const firstCommit = postCommitSpy.mock.calls[0][0];
+    expect(firstCommit.loroUpdate).toBeDefined();
+
+    // Now simulate what loro-prosemirror does: modify the LoroDoc directly
+    const doc = resource.getLoroDoc();
+    expect(doc).toBeDefined();
+
+    // Create a "doc" root map (like loro-prosemirror does for rich text)
+    const docMap = doc!.getMap('doc');
+    docMap.set('content', 'Hello world');
+
+    // Mark dirty (this is what useLoroSync does after local updates)
+    resource.markDirty();
+
+
+
+    // The resource should now have unsaved changes
+    expect(resource.hasUnsavedChanges()).toBe(true);
+
+    // Save should succeed and produce a commit with loroUpdate
+    await resource.save();
+    expect(postCommitSpy).toHaveBeenCalledTimes(2);
+
+    const secondCommit = postCommitSpy.mock.calls[1][0];
+    // THIS IS THE KEY ASSERTION: the second commit must have a loroUpdate
+    // containing the doc map changes
+    expect(secondCommit.loroUpdate).toBeDefined();
+    expect(secondCommit.loroUpdate!.length).toBeGreaterThan(4);
+
+    // Verify the content roundtrips: import the delta into a fresh doc
+    // that already has the genesis state (simulating the server's flow)
+    const materialized = new Resource(secondCommit.subject);
+    // First import the genesis snapshot
+    materialized.importLoroUpdate(firstCommit.loroUpdate!);
+    // Then import the delta
+    materialized.importLoroUpdate(secondCommit.loroUpdate!);
+    const importedDoc = materialized.getLoroDoc();
+    const importedDocMap = importedDoc!.getMap('doc');
+    expect(importedDocMap.toJSON()).toHaveProperty('content', 'Hello world');
+  });
+
   it('derives did:ad subject from temporary _new subject', async ({
     expect,
   }) => {
