@@ -34,13 +34,41 @@ pub fn init_tracing(config: &crate::config::Config) -> Option<tracing_chrome::Fl
         crate::config::Tracing::Opentelemetry => {
             #[cfg(feature = "telemetry")]
             {
-                println!("Enabling tracing for OpenTelemetry and Jaeger");
-                let tracer = opentelemetry_jaeger::new_agent_pipeline()
-                    .with_service_name("atomic-server")
-                    .install_simple()
-                    .expect("Error initializing Jaeger exporter");
+                use opentelemetry::trace::TracerProvider;
+                use opentelemetry::KeyValue;
+                use opentelemetry_otlp::{Protocol, WithExportConfig};
+                use opentelemetry_sdk::{trace as sdktrace, Resource};
+                use tracing_subscriber::layer::SubscriberExt;
+
+                let endpoint = std::env::var("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")
+                    .unwrap_or_else(|_| "http://localhost:4318/v1/traces".into());
+
+                let exporter = opentelemetry_otlp::SpanExporter::builder()
+                    .with_http()
+                    .with_protocol(Protocol::HttpBinary) // or HttpJson
+                    .with_endpoint(endpoint)
+                    .build()
+                    .expect("build OTLP HTTP exporter");
+
+                let resource = Resource::builder_empty()
+                    .with_attributes([
+                        KeyValue::new("service.name", "atomic-server"),
+                        KeyValue::new("service.version", env!("CARGO_PKG_VERSION")),
+                    ])
+                    .build();
+
+                let provider = sdktrace::SdkTracerProvider::builder()
+                    .with_resource(resource)
+                    .with_batch_exporter(exporter)
+                    .build();
+
+                let tracer = provider.tracer("atomic-server");
+
                 let layer = tracing_opentelemetry::layer().with_tracer(tracer);
                 tracing_registry.with(layer).init();
+
+                // Optional: make it global so libs using global::tracer() still work.
+                opentelemetry::global::set_tracer_provider(provider);
             }
             #[cfg(not(feature = "telemetry"))]
             {
