@@ -48,7 +48,6 @@ simple-server-timing-header = "0.1.0"
 static-files = "0.2"
 tantivy = "0.22"
 tracing = "0.1"
-tracing-actix-web = "0.7"
 tracing-chrome = "0.7"
 tracing-log = "0.2"
 ureq = "2"
@@ -68,19 +67,23 @@ version = "0.12"
 
 [dependencies.tracing-opentelemetry]
 optional = true
-version = "0.30.0"
+version = "0.29.0"
 
 [dependencies.opentelemetry]
 optional = true
-version = "0.29.0"
+version = "0.28.0"
 
 [dependencies.opentelemetry-otlp]
 optional = true
-version = "0.29.0"
+version = "0.28.0"
 
 [dependencies.opentelemetry_sdk]
 optional = true
-version = "0.29.0"
+version = "0.28.0"
+
+[dependencies.tracing-actix-web]
+version = "0.7"
+features = ["opentelemetry_0_29"]
 
 [dependencies.actix-web]
 features = ["rustls"]
@@ -133,10 +136,10 @@ assert_cmd = "2"
 telemetry = [
     "tracing-opentelemetry",
     "opentelemetry",
-    "opentelemetry-otlp",
     "opentelemetry-otlp/trace",
-    "opentelemetry-otlp/http-proto",
+    "opentelemetry-otlp/grpc-tonic",
     "opentelemetry_sdk",
+    "opentelemetry_sdk/rt-tokio",    # 👈 important for batching
 ]
 img = ["webp", "image"]
 default = ["https", "telemetry", "img"]
