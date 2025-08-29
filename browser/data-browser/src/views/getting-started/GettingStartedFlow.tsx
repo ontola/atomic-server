@@ -260,7 +260,7 @@ export function GettingStartedFlow({
   );
 }
 
-const Shell = styled.div`
+export const Shell = styled.div`
   min-height: ${p => p.theme.heights.fullPage};
   display: flex;
   align-items: center;
@@ -394,7 +394,7 @@ const CardColumn = styled.div`
   }
 `;
 
-const Card = styled.div`
+export const Card = styled.div`
   box-sizing: border-box;
   width: 100%;
   max-width: 26.5rem;
@@ -413,7 +413,7 @@ const BackLabel = styled.span`
   gap: 0.4em;
 `;
 
-const CardTitle = styled.h2`
+export const CardTitle = styled.h2`
   margin: 0 0 ${p => p.theme.size(6)} 0;
   font-size: 1.4rem;
   font-weight: 700;
@@ -421,7 +421,7 @@ const CardTitle = styled.h2`
   text-align: center;
 `;
 
-const CtaButton = styled(Button)`
+export const CtaButton = styled(Button)`
   width: fit-content;
   min-width: 12.5rem;
   align-self: center;

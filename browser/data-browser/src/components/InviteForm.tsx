@@ -12,7 +12,6 @@ import { useCallback, useState } from 'react';
 import toast from 'react-hot-toast';
 import { ErrorLook } from './ErrorLook';
 import { Button } from './Button';
-import { Card } from './Card';
 import { CodeBlock } from './CodeBlock';
 import ResourceField from './forms/ResourceField';
 
@@ -71,7 +70,7 @@ export function InviteForm({ target }: InviteFormProps) {
 
   if (!saved) {
     return (
-      <Card>
+      <>
         <ResourceField
           label={'Allow edits'}
           propertyURL={server.properties.write}
@@ -93,13 +92,13 @@ export function InviteForm({ target }: InviteFormProps) {
             <ErrorLook>{err.message}</ErrorLook>
           </p>
         )}
-      </Card>
+      </>
     );
   } else
     return (
-      <Card>
+      <>
         <p>Invite created and copied to clipboard! 🚀</p>
         <CodeBlock content={inviteUrl!} data-test='invite-code' />
-      </Card>
+      </>
     );
 }
