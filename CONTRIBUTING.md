@@ -165,6 +165,7 @@ docker run -d --platform linux/amd64 --name jaeger \
   -p 6831:6831/udp \
   -p 6832:6832/udp \
   -p 5778:5778 \
+  -p 4317:4317 \
   -p 16686:16686 \
   -p 14268:14268 \
   -p 9411:9411 \
