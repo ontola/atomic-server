@@ -1,4 +1,4 @@
-import type { LoroDoc, VersionVector } from 'loro-crdt';
+import type { LoroDoc, LoroList, VersionVector } from 'loro-crdt';
 import { LoroLoader } from './loro-loader.js';
 import { decodeB64 } from './base64.js';
 import { EventManager } from './EventManager.js';
@@ -461,9 +461,16 @@ export class Resource<C extends OptionalClass = any> {
       typeof value === 'boolean'
     ) {
       map.set(prop, value);
+    } else if (Array.isArray(value)) {
+      // Use native LoroList for arrays — enables per-element CRDT merge.
+      const { LoroList: LoroListClass } = LoroLoader.Loro;
+      const list: LoroList = map.setContainer(prop, new LoroListClass());
+
+      for (const item of value) {
+        list.push(item);
+      }
     } else {
-      // Arrays and objects: serialize to JSON string for now.
-      // We'll optimize with native Loro List/Map containers later.
+      // Objects: serialize to JSON string.
       map.set(prop, JSON.stringify(value));
     }
   }
@@ -1647,10 +1654,9 @@ export class Resource<C extends OptionalClass = any> {
     //   validate = false;
     // }
 
-    // Binary values (e.g. Loro updates) must go through setUnsafe, not set.
     if (value instanceof Uint8Array) {
       throw new Error(
-        'Binary values (Uint8Array) cannot be set via set(). Use setUnsafe() instead.',
+        'Binary values (Uint8Array) cannot be set via set().',
       );
     }
 
@@ -1685,14 +1691,6 @@ export class Resource<C extends OptionalClass = any> {
       prop,
       value as JSONValue,
     );
-  }
-
-  /**
-   * Set a Property, Value combination without performing validations or adding
-   * it to the CommitBuilder.
-   */
-  public setUnsafe(prop: string, val: AtomicValue): void {
-    this.applyRawValue(prop, val);
   }
 
   public removeUnsafe(prop: string): void {
@@ -1804,6 +1802,12 @@ export class Resource<C extends OptionalClass = any> {
 }
 
 function normalizeLoroValue(value: unknown): JSONValue {
+  // LoroList.toJSON() returns a native JS array — pass through directly.
+  if (Array.isArray(value)) {
+    return value as JSONValue;
+  }
+
+  // Legacy: JSON-stringified arrays/objects from older Loro docs.
   if (
     typeof value === 'string' &&
     (value.startsWith('[') || value.startsWith('{'))

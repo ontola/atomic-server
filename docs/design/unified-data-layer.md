@@ -423,8 +423,8 @@ The mapping between commits and Loro versions:
 - `resource.get()` reads from Loro map
 - `resource.set()` writes to Loro map only
 - Every resource gets a Loro doc on hydration (not lazy)
-- Use native `LoroList` for arrays
-- Remove `setUnsafe()`, `execSetCommit`, `execRemoveCommit`, `execPushCommit`
+- ~~Use native `LoroList` for arrays~~ (done — browser + Rust)
+- ~~Remove `setUnsafe()`, `execSetCommit`, `execRemoveCommit`, `execPushCommit`~~ (done — all removed)
 - JSON-AD from server/WASM DB is imported into a Loro doc on arrival
 
 **Status**
@@ -432,6 +432,7 @@ The mapping between commits and Loro versions:
 - `Resource` no longer uses `propvals` as the primary browser-side read path. It now reads from a derived cache object plus a small aux map for binary values.
 - Hydration paths (`parse.ts`, `store.ts`) now initialize the Loro doc when available, so fetched resources are no longer "Loro-less until first edit".
 - The browser runtime no longer applies legacy `set` / `push` / `remove` commit payloads when ingesting commits. The hot path is now `loroUpdate` plus destroy.
+- Native `LoroList` is now used for arrays on both browser and Rust sides, enabling per-element CRDT merge.
 - `setUnsafe()` still exists as a migration helper for binary values and some compatibility paths, so the client is not yet fully "Loro only".
 - `propvals` is still the canonical Rust-side resource store. The full "drop propvals" milestone has only been reached partially in the browser client.
 
@@ -493,6 +494,8 @@ This section started as a description of the pre-migration system. It is now par
 - **Server Loro materialization**: commit application now needs to seed from existing materialized state when no snapshot exists and rebuild the full materialized state after import, so deletes and older no-snapshot resources do not drift.
 - **Server unsafe replacement paths**: direct full-propval replacement now needs to invalidate stale Loro state so parser/import paths do not keep an old CRDT snapshot alive behind newer materialized data.
 - **Rust local resource state after remote save**: when a snapshot is rebuilt for signing/posting, the in-memory Loro doc and materialized props should both retain that snapshot so follow-up reads and edits stay on the same base state.
+- **Sync protocol**: VV-based drive sync (SYNC_VV → SYNC_DIFF → SYNC_DELTAS) is implemented end-to-end over WebSocket. Dirty resources are synced in dependency order on reconnect.
+- **Agent persistence**: fixed — the server's agent DID fallback no longer blocks genesis commits, so agent properties (personalDrive, sharedWithMe, drives) persist across page refreshes.
 - **Dead code cleanup**: started, but incomplete. The design should now be read as "target + progress log", not as a fully current description of the implementation.
 
 ### The dual-store architecture
@@ -530,17 +533,15 @@ The important remaining problem is on the Rust side: reads still fundamentally c
 
 ### Array serialization problem
 
-`loroSetProperty()` (line 331) serializes arrays as JSON strings:
-```typescript
-// Arrays and objects: serialize to JSON string
-map.set(prop, JSON.stringify(value));
-```
+~~`loroSetProperty()` serialized arrays as JSON strings, preventing per-element CRDT merging.~~
 
-This means `isA: ["https://atomicdata.dev/classes/Folder"]` becomes the string `"[\"https://atomicdata.dev/classes/Folder\"]"` in the Loro map. Reading it back requires JSON.parse. This prevents per-element CRDT merging and makes the Loro state subtly different from propvals.
-
-**Status**
-- Still true.
-- This is the next major structural cleanup. We have not yet switched browser or Rust Loro storage to native list / map containers for Atomic arrays and nested resources.
+**Status: Done.**
+- Browser `loroSetProperty()` now uses native `LoroList` via `map.setContainer(prop, new LoroList())`.
+- Rust `set_property()` now uses `root.insert_container(property, LoroList::new())`.
+- Both sides handle legacy JSON-stringified arrays on read for compatibility.
+- `rebuildCacheFromLoro()` / `normalizeLoroValue()` passes native arrays through directly.
+- `loro_value_to_atomic_value()` handles `LoroValue::List` → `ResourceArray` natively.
+- `get_all_properties()` uses `container.get_deep_value()` for container types (LoroList, etc.).
 
 ### Server already requires Loro-only commits
 
@@ -619,7 +620,7 @@ This means the server is already Loro-primary for writes. The client is the one 
 | `browser/lib/src/store.ts` | Partially done. Hydration now initializes the Loro doc after JSON-AD import, and storage / diagnostics use narrower `Resource` helpers instead of `getPropVals()` directly. |
 | `browser/lib/src/collection.ts` | Partially done. Synthetic collection resources now hydrate through `Resource` helpers instead of raw `setUnsafe()` calls. |
 | `browser/lib/src/parse.ts` | Partially done. JSON-AD parsing now initializes the Loro doc after hydration and uses the same narrowed hydration helper path as the store. |
-| `lib/src/loro.rs` | Still needed. Handle `LoroList` / `LoroMap` ↔ Atomic arrays / nested values natively. |
+| `lib/src/loro.rs` | Done for arrays. `set_property()` uses native `LoroList`, `loro_value_to_atomic_value()` handles `LoroValue::List`, `get_all_properties()` resolves containers via `get_deep_value()`. Nested `LoroMap` for objects not yet done. |
 | `lib/src/resources.rs` | Partially done. Serialization now includes the freshest in-memory `loroUpdate` snapshot, and Loro state can now be rebuilt from existing materialized props when no stored snapshot exists. Rust still keeps `propvals` as the canonical field store. |
 | `server/src/handlers/commit.rs` | Already Loro-primary for writes, no structural change needed. |
 | `server/src/handlers/get_resource.rs` | No direct handler change was needed, but the read path now benefits from fresher `Resource` serialization. |
@@ -881,10 +882,11 @@ This adds round trips (O(log n)) but avoids sending the full list. For most driv
 
 ### Current implementation status
 
-- **`syncDirtyResources()`** (store.ts): exists but has no ordering, no dependency tracking, no version vector comparison. Just retries dirty resources on reconnect.
-- **`SYNC_DRIVE`** (websockets.ts → server): exists but uses timestamp-based delta, not version vectors. Sends full JSON-AD resources, not Loro deltas.
-- **Genesis commits**: supported in the commit handler. Agent auto-creation works. Drive genesis works if the agent exists.
-- **Drive hash / version vector exchange**: not implemented.
+- **`syncDirtyResources()`** (store.ts): implemented with dependency-ordered sync via `sortDirtyForSync()` — agents first, then drives, then children sorted by parent depth. Pushes pending commits to the server in correct order on reconnect.
+- **VV-based sync** (websockets.ts → server): implemented as SYNC_VV → SYNC_DIFF → SYNC_DELTAS. Client sends per-resource version vectors for the current drive. Server compares, returns a diff (resources to push/pull) and Loro deltas for resources it's ahead on. Client responds with Loro deltas for resources it's ahead on.
+- **Genesis commits**: supported. Agent DIDs use the public key as identity (no genesis commit needed for the agent itself, but the server now correctly handles agent genesis commits that set initial properties). Drive and resource genesis commits work.
+- **Agent persistence**: fixed — the server's "just-in-time" agent fallback in `get_resource()` no longer interferes with genesis commit processing. Agent properties (personalDrive, sharedWithMe, drives, name) now survive server restart.
+- **Drive hash comparison**: not implemented. Currently skips straight to VV exchange.
 - **Merkle tree**: not implemented.
 
 ## Open Questions

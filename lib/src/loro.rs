@@ -128,12 +128,15 @@ impl AtomicLoroDoc {
                     .map_err(|e| format!("Loro set error: {e}"))?;
             }
             Value::ResourceArray(arr) => {
-                // Serialize as a plain JSON array of strings
-                let subjects: Vec<String> = arr.iter().map(|s| s.to_string()).collect();
-                let json = serde_json::to_string(&subjects)
-                    .map_err(|e| format!("Failed to serialize ResourceArray: {e}"))?;
-                root.insert(property, json.as_str())
-                    .map_err(|e| format!("Loro set error: {e}"))?;
+                // Use native LoroList for arrays — enables per-element CRDT merge.
+                let list = root
+                    .insert_container(property, loro::LoroList::new())
+                    .map_err(|e| format!("Loro insert_container error: {e}"))?;
+
+                for item in arr {
+                    list.push(item.to_string())
+                        .map_err(|e| format!("Loro list push error: {e}"))?;
+                }
             }
             _ => {
                 // For other complex types, serialize the display string.
@@ -179,8 +182,14 @@ impl AtomicLoroDoc {
         let root = self.doc.get_map("properties");
         let mut result = std::collections::HashMap::new();
         root.for_each(|key, value| {
-            if let Ok(v) = value.into_value() {
-                result.insert(key.to_string(), v);
+            match value.into_value() {
+                Ok(v) => {
+                    result.insert(key.to_string(), v);
+                }
+                Err(container) => {
+                    // Container types (LoroList, LoroMap, etc.) — get their deep value.
+                    result.insert(key.to_string(), container.get_deep_value());
+                }
             }
         });
         result
@@ -245,7 +254,7 @@ pub fn loro_value_to_atomic_value(lv: &loro::LoroValue) -> Option<Value> {
         loro::LoroValue::String(s) => {
             let s = s.to_string();
 
-            // Try to detect JSON-encoded arrays (e.g. ResourceArray values)
+            // Legacy: try to detect JSON-encoded arrays from older Loro docs
             if s.starts_with('[') {
                 if let Ok(arr) = serde_json::from_str::<Vec<String>>(&s) {
                     let subjects: Vec<crate::values::SubResource> =
@@ -254,7 +263,7 @@ pub fn loro_value_to_atomic_value(lv: &loro::LoroValue) -> Option<Value> {
                 }
             }
 
-            // Try to detect JSON-encoded objects (e.g. NestedResource values)
+            // Legacy: try to detect JSON-encoded objects from older Loro docs
             if s.starts_with('{') {
                 if let Ok(obj) =
                     serde_json::from_str::<std::collections::HashMap<String, Value>>(&s)
@@ -271,7 +280,23 @@ pub fn loro_value_to_atomic_value(lv: &loro::LoroValue) -> Option<Value> {
         loro::LoroValue::Double(f) => Some(Value::Float(*f)),
         loro::LoroValue::Bool(b) => Some(Value::Boolean(*b)),
         loro::LoroValue::Null => None,
-        // Container types (List, Map, Text, etc.) don't produce simple atoms
+        loro::LoroValue::List(items) => {
+            // Native LoroList — convert to ResourceArray
+            let subjects: Vec<crate::values::SubResource> = items
+                .iter()
+                .filter_map(|item| match item {
+                    loro::LoroValue::String(s) => Some(s.to_string().into()),
+                    _ => None,
+                })
+                .collect();
+
+            if subjects.is_empty() {
+                None
+            } else {
+                Some(Value::ResourceArray(subjects))
+            }
+        }
+        // Container types (Map, Text, etc.) — not yet handled
         _ => None,
     }
 }
@@ -856,6 +881,46 @@ mod test {
             Value::String(s) => assert_eq!(s, "Test Drive"),
             other => panic!("Expected String for name, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn native_loro_list_arrays_round_trip() {
+        let doc = AtomicLoroDoc::new();
+        doc.set_property(
+            "https://atomicdata.dev/properties/write",
+            &Value::ResourceArray(vec![
+                "did:ad:agent:alice".into(),
+                "did:ad:agent:bob".into(),
+            ]),
+        )
+        .unwrap();
+        doc.set_property(
+            "https://atomicdata.dev/properties/name",
+            &Value::String("Test".into()),
+        )
+        .unwrap();
+
+        // Export and reimport (simulates network round-trip)
+        let snapshot = doc.export_snapshot();
+        let doc2 = AtomicLoroDoc::from_snapshot(&snapshot).unwrap();
+        let props = doc2.get_all_properties();
+
+        // write should materialize as ResourceArray from LoroList
+        let write_val =
+            loro_value_to_atomic_value(props.get("https://atomicdata.dev/properties/write").unwrap());
+        match write_val.unwrap() {
+            Value::ResourceArray(arr) => {
+                assert_eq!(arr.len(), 2);
+                assert_eq!(arr[0].to_string(), "did:ad:agent:alice");
+                assert_eq!(arr[1].to_string(), "did:ad:agent:bob");
+            }
+            other => panic!("Expected ResourceArray, got {:?}", other),
+        }
+
+        // name should still be a plain string
+        let name_val =
+            loro_value_to_atomic_value(props.get("https://atomicdata.dev/properties/name").unwrap());
+        assert_eq!(name_val.unwrap().to_string(), "Test");
     }
 
     // --- Sync protocol tests ---
