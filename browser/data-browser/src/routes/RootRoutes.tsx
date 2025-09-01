@@ -33,8 +33,6 @@ const TopRouteComponent: React.FC = () => {
   const origin =
     isDev() && baseURL ? new URL(baseURL).origin : window.location.origin;
 
-  // Use window.location.search to preserve the full query string.
-  // Tanstack router's searchStr may strip unknown params (like invite tokens).
   const subject = `${origin}${pathname}${window.location.search}`;
 
   return <ResourcePage subject={subject} key={subject} />;

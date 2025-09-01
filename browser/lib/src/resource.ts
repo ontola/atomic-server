@@ -6,11 +6,7 @@ import type { Agent } from './agent.js';
 import { Client } from './client.js';
 import type { Collection } from './collection.js';
 import { CollectionBuilder } from './collectionBuilder.js';
-import {
-  CommitBuilder,
-  Commit,
-  commitToJsonADObject,
-} from './commit.js';
+import { CommitBuilder, Commit, commitToJsonADObject } from './commit.js';
 import { validateDatatype } from './datatypes.js';
 import { isUnauthorized } from './error.js';
 import { collections } from './ontologies/collections.js';
@@ -543,7 +539,10 @@ export class Resource<C extends OptionalClass = any> {
       snapshot = resource._loroDoc.export({ mode: 'snapshot' });
     } else if (resource._loroSnapshotBytes instanceof Uint8Array) {
       snapshot = resource._loroSnapshotBytes;
-    } else if (typeof resource._loroSnapshotBytes === 'string' && resource._loroSnapshotBytes.length > 0) {
+    } else if (
+      typeof resource._loroSnapshotBytes === 'string' &&
+      resource._loroSnapshotBytes.length > 0
+    ) {
       snapshot = decodeB64(resource._loroSnapshotBytes);
     }
 
@@ -583,7 +582,10 @@ export class Resource<C extends OptionalClass = any> {
       return false;
     }
 
-    if (JSON.stringify(this.getPropValsArray()) !== JSON.stringify(resourceB.getPropValsArray())) {
+    if (
+      JSON.stringify(this.getPropValsArray()) !==
+      JSON.stringify(resourceB.getPropValsArray())
+    ) {
       return false;
     }
 
@@ -646,7 +648,9 @@ export class Resource<C extends OptionalClass = any> {
     const res = new Resource(this.subject);
 
     res._cache = structuredClone(this._cache);
-    res._auxValues = new Map(structuredClone(Array.from(this._auxValues.entries())));
+    res._auxValues = new Map(
+      structuredClone(Array.from(this._auxValues.entries())),
+    );
     res._loroSnapshotBytes = this._loroSnapshotBytes;
 
     res.loading = this.loading;
@@ -691,7 +695,11 @@ export class Resource<C extends OptionalClass = any> {
       incomingSnapshot = decodeB64(resourceB._loroSnapshotBytes);
     }
 
-    if (incomingSnapshot && incomingSnapshot.length > 0 && LoroLoader.isLoaded()) {
+    if (
+      incomingSnapshot &&
+      incomingSnapshot.length > 0 &&
+      LoroLoader.isLoaded()
+    ) {
       // Ensure we have a local Loro doc
       const localDoc = this.getLoroDoc();
 
@@ -702,7 +710,10 @@ export class Resource<C extends OptionalClass = any> {
         } catch (e) {
           // Import can fail if the snapshot is from an incompatible version.
           // Fall back to replacing state entirely.
-          console.warn(`[Resource] Loro merge failed for ${this.subject}, replacing:`, e);
+          console.warn(
+            `[Resource] Loro merge failed for ${this.subject}, replacing:`,
+            e,
+          );
           this.resetLoroState();
           this._loroSnapshotBytes = resourceB._loroSnapshotBytes;
           this._cache = structuredClone(resourceB._cache);
@@ -1044,7 +1055,9 @@ export class Resource<C extends OptionalClass = any> {
   }
 
   /** Returns a JSON-safe object view for storage and diagnostics. */
-  public toObject(opts: { includeBinary?: boolean } = {}): Record<string, unknown> | null {
+  public toObject(
+    opts: { includeBinary?: boolean } = {},
+  ): Record<string, unknown> | null {
     const { includeBinary = false } = opts;
     const obj: Record<string, unknown> = { '@id': this.subject };
     let count = 0;
@@ -1450,7 +1463,10 @@ export class Resource<C extends OptionalClass = any> {
         try {
           await this.signChanges(agent);
         } catch (e) {
-          if (e instanceof Error && e.message.startsWith('No changes to sign')) {
+          if (
+            e instanceof Error &&
+            e.message.startsWith('No changes to sign')
+          ) {
             reportDone();
 
             return undefined;
@@ -1788,7 +1804,10 @@ export class Resource<C extends OptionalClass = any> {
 }
 
 function normalizeLoroValue(value: unknown): JSONValue {
-  if (typeof value === 'string' && (value.startsWith('[') || value.startsWith('{'))) {
+  if (
+    typeof value === 'string' &&
+    (value.startsWith('[') || value.startsWith('{'))
+  ) {
     try {
       return JSON.parse(value) as JSONValue;
     } catch {

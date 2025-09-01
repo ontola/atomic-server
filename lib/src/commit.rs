@@ -401,10 +401,30 @@ impl Commit {
 
         commit.check_for_circular_parents()?;
 
-        // Create a new resource if it doesn't exist yet
+        // Create a new resource if it doesn't exist yet.
+        // For agent DIDs, get_resource() returns a synthetic "just-in-time" agent
+        // even when no data is stored. Detect this by checking for a lastCommit —
+        // a real stored resource always has one after its genesis commit.
         let (resource_old, is_new) = match store.get_resource(&commit.subject.clone().into()).await
         {
-            Ok(rs) => (rs, false),
+            Ok(rs) => {
+                let is_synthetic_agent = commit.subject.is_agent_did()
+                    && rs.get(urls::LAST_COMMIT).is_err();
+                if is_synthetic_agent {
+                    // Treat synthetic fallback agents as non-existent so genesis
+                    // commits work and the Loro doc is built from scratch.
+                    (
+                        Resource::new(
+                            store
+                                .normalize_subject(&commit.subject.clone().into())
+                                .to_string(),
+                        ),
+                        true,
+                    )
+                } else {
+                    (rs, false)
+                }
+            }
             Err(_) => (
                 Resource::new(
                     store
@@ -1231,8 +1251,7 @@ mod test {
             )
             .unwrap();
 
-        // Export as update from empty (this is what the browser sends)
-        let empty_version = crate::loro::AtomicLoroDoc::new();
+        // Export as snapshot (this is what the browser sends for genesis)
         let snapshot = loro_doc.export_snapshot();
 
         // Create a CommitBuilder with ONLY loroUpdate (no set map)
@@ -1289,7 +1308,7 @@ mod test {
         );
         let genesis = Commit::create_did(builder, &agent, &store).await.unwrap();
         let did_subject = genesis.subject.clone();
-        let genesis_url = genesis.url.clone();
+        let _genesis_url = genesis.url.clone();
         let opts_no_rights = CommitOpts {
             validate_signature: true,
             validate_timestamp: false,
@@ -1323,6 +1342,101 @@ mod test {
         assert_eq!(
             updated.get(crate::urls::DESCRIPTION).unwrap().to_string(),
             "v2"
+        );
+    }
+
+    /// Agent DID genesis commit should succeed even though get_resource()
+    /// returns a synthetic "just-in-time" agent. The Loro snapshot must be
+    /// persisted so follow-up commits can merge deltas correctly.
+    #[tokio::test]
+    async fn agent_did_genesis_and_followup_persists_loro() {
+        let (store, agent) = store_with_known_agent().await;
+
+        let agent_subject: Subject = format!("did:ad:agent:{}", agent.public_key).into();
+
+        // Build a genesis Loro doc (mimics browser's handleNew)
+        let loro_doc = crate::loro::AtomicLoroDoc::new();
+        loro_doc
+            .set_property(urls::PUBLIC_KEY, &Value::String(agent.public_key.clone()))
+            .unwrap();
+        loro_doc
+            .set_property(
+                urls::IS_A,
+                &Value::ResourceArray(vec![urls::AGENT.into()]),
+            )
+            .unwrap();
+        let genesis_snapshot = loro_doc.export_snapshot();
+        let genesis_version = loro_doc.oplog_vv();
+
+        // Create the genesis commit via CommitBuilder (agent DIDs have a known subject)
+        let mut builder = CommitBuilder::new(agent_subject.clone());
+        builder.set_loro_update(genesis_snapshot);
+        builder.is_genesis = true;
+        let empty_resource = Resource::new(agent_subject.to_string());
+        let genesis = builder.sign(&agent, &store, &empty_resource).await.unwrap();
+
+        let opts = CommitOpts {
+            validate_signature: true,
+            validate_timestamp: false,
+            validate_previous_commit: false,
+            validate_rights: false,
+            update_index: true,
+            ..CommitOpts::no_validations_no_index()
+        };
+
+        let result = store.apply_commit(genesis, &opts).await.unwrap();
+        let genesis_commit_url = result.commit_resource.get_subject().to_string();
+        assert!(result.resource_new.is_some(), "genesis should produce resource_new");
+
+        // Verify the stored resource has a loroUpdate
+        let stored = store.get_resource(&agent_subject).await.unwrap();
+        assert!(
+            stored.get(urls::LORO_UPDATE).is_ok(),
+            "Agent resource should have loroUpdate after genesis"
+        );
+        assert_eq!(
+            stored.get(urls::PUBLIC_KEY).unwrap().to_string(),
+            agent.public_key,
+        );
+
+        // Now create a follow-up commit that adds properties (mimics persistAgentAfterInvite)
+        let loro_doc2 = crate::loro::AtomicLoroDoc::new();
+        loro_doc2.import_update(&loro_doc.export_snapshot()).unwrap();
+        loro_doc2
+            .set_property(urls::NAME, &Value::String("Test Agent".into()))
+            .unwrap();
+        loro_doc2
+            .set_property(
+                urls::DESCRIPTION,
+                &Value::String("My personal drive".into()),
+            )
+            .unwrap();
+        let delta = loro_doc2.export_updates_since(&genesis_version);
+
+        let mut builder2 = CommitBuilder::new(agent_subject.clone());
+        builder2.set_loro_update(delta);
+        builder2.previous_commit = Some(genesis_commit_url);
+        let followup = builder2.sign(&agent, &store, &stored).await.unwrap();
+
+        let result2 = store.apply_commit(followup, &opts).await.unwrap();
+        assert!(result2.resource_new.is_some());
+
+        // THE KEY ASSERTION: the follow-up properties must be materialized
+        let stored2 = store.get_resource(&agent_subject).await.unwrap();
+        assert_eq!(
+            stored2.get(urls::NAME).unwrap().to_string(),
+            "Test Agent",
+            "Name from follow-up commit should be persisted"
+        );
+        assert_eq!(
+            stored2.get(urls::DESCRIPTION).unwrap().to_string(),
+            "My personal drive",
+            "Description from follow-up commit should be persisted"
+        );
+        assert_eq!(
+            stored2.get(urls::PUBLIC_KEY).unwrap().to_string(),
+            agent.public_key,
+            "publicKey from genesis should still be present"
         );
     }
 
