@@ -46,10 +46,10 @@ export function ClassSelectorDialog({
   };
 
   useEffect(() => {
-    if (show) {
+    if (show && !isOpen) {
       showDialog();
     }
-  }, [show]);
+  }, [show, showDialog, isOpen]);
 
   return (
     <Dialog {...dialogProps} width='45rem'>

@@ -38,7 +38,7 @@ module.exports = {
       'create-template/tsconfig.json',
     ],
   },
-  plugins: ['react', '@typescript-eslint', 'prettier', 'react-hooks', 'jsx-a11y', 'eslint-plugin-react-compiler'],
+  plugins: ['react', '@typescript-eslint', 'prettier', 'react-hooks', 'jsx-a11y'],
   settings: {
     react: {
       version: 'detect', // Tells eslint-plugin-react to automatically detect the version of React to use
@@ -64,7 +64,7 @@ module.exports = {
     'class-methods-use-this': 'off',
     //Allow underscores https://stackoverflow.com/questions/57802057/eslint-configuring-no-unused-vars-for-typescript
     '@typescript-eslint/no-unused-vars': ['error', { 'varsIgnorePattern': '^_', 'argsIgnorePattern': '^_' }],
-    'react-hooks/exhaustive-deps': 'off',
+    'react-hooks/exhaustive-deps': 'warn',
     // 'no-unused-vars': ["error", { "ie": "^_" }],
     'import/prefer-default-export': 'off',
     '@typescript-eslint/explicit-function-return-type': 'off',
@@ -114,6 +114,6 @@ module.exports = {
     "@typescript-eslint/no-shadow": ["error"],
     "@typescript-eslint/member-ordering": "error",
     "react/no-unknown-property": ["error", { "ignore": ["about"] }],
-    'react-compiler/react-compiler': 'error',
+    'react-hooks/react-compiler': 'error',
   },
 };

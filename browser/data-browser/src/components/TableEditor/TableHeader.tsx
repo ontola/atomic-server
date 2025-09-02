@@ -56,7 +56,7 @@ export function TableHeader<T>({
       setActiveIndex(key);
 
       // Bug in react-compiler linter
-      // eslint-disable-next-line react-compiler/react-compiler
+      // eslint-disable-next-line react-hooks/react-compiler
       document.body.style.cursor = 'grabbing';
     },
     [columns, columnToKey],

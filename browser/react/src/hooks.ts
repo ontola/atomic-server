@@ -44,21 +44,24 @@ export function useResource<C extends OptionalClass = never>(
     store.getResourceLoading(subject, opts),
   );
 
+  const memoizedOpts = useMemoizedOpts(opts);
   // If the subject changes, make sure to change the resource!
   // When a component mounts, it needs to let the store know that it will subscribe to changes to that resource.
   useEffect(() => {
-    setResource(proxyResource(store.getResourceLoading(subject, opts)));
+    setResource(proxyResource(store.getResourceLoading(subject, memoizedOpts)));
 
     return store.subscribe(subject, (updated: Resource<C>) => {
       setResource(proxyResource(updated));
     });
-  }, [store, subject]);
+
+    // Adding opts to the array causes infinite loops, probably because it is not memoized anywhere in data-browser.
+  }, [store, subject, memoizedOpts]);
 
   useEffect(() => {
-    return resource.on(ResourceEvents.LocalChange, () => {
+    return resource.__internalObject.on(ResourceEvents.LocalChange, () => {
       setResource(proxyResource(resource.__internalObject));
     });
-  }, [store]);
+  }, [store, resource.__internalObject]);
 
   return resource;
 }
@@ -76,6 +79,8 @@ export function useResources(
   const [resources, setResources] = useState(new Map<string, Resource>());
   const store = useStore();
 
+  const memoizedOpts = useMemoizedOpts(opts);
+
   useEffect(() => {
     // When a change happens, set the new Resource.
     function handleNotify(updated: Resource) {
@@ -89,7 +94,7 @@ export function useResources(
 
     setResources(prev => {
       for (const subject of subjects) {
-        const resource = store.getResourceLoading(subject, opts);
+        const resource = store.getResourceLoading(subject, memoizedOpts);
         prev.set(subject, proxyResource(resource));
 
         // Let the store know to call handleNotify when a resource is updated.
@@ -105,8 +110,7 @@ export function useResources(
         store.unsubscribe(subject, handleNotify);
       }
     };
-    // maybe add resources here
-  }, [subjects, store]);
+  }, [subjects, store, memoizedOpts]);
 
   return resources;
 }
@@ -148,7 +152,7 @@ export function useProperty(subject: string): Property {
       isDynamic: !!resource.props.isDynamic,
       allowsOnly: resource.props.allowsOnly,
     };
-  }, [resource]);
+  }, [resource, subject]);
 
   return property;
 }
@@ -278,7 +282,15 @@ export function useValue(
         }
       }
     },
-    [resource, handleValidationError, store, validate, saveResource],
+
+    [
+      resource,
+      handleValidationError,
+      store,
+      validate,
+      saveResource,
+      propertyURL,
+    ],
   );
 
   useEffect(() => {
@@ -444,7 +456,7 @@ export function useArray(
       // https://github.com/atomicdata-dev/atomic-data-browser/issues/85
       return stableEmptyResourceArray;
     }
-  }, [value, resource, propertyURL]);
+  }, [value, resource, propertyURL, stableEmptyResourceArray]);
 
   const push = useCallback(
     (val: string[]) => {
@@ -454,7 +466,8 @@ export function useArray(
         resource.save();
       }
     },
-    [resource, propertyURL],
+
+    [resource, propertyURL, opts?.commit],
   );
 
   return [values as string[], set, push];
@@ -544,7 +557,7 @@ export function useCanWrite(resource: Resource): boolean {
 
   // If the subject changes, make sure to change the resource!
   useEffect(() => {
-    if (!agent) {
+    if (agent?.subject === undefined) {
       setCanWrite(false);
 
       return;
@@ -569,3 +582,20 @@ export function useCanWrite(resource: Resource): boolean {
  * `<StoreContext.Provider value={new Store}>My App</StoreContext.Provider>`
  */
 export const StoreContext = createContext<Store>(new Store());
+
+function useMemoizedOpts(
+  opts: FetchOpts | undefined = {
+    allowIncomplete: false,
+    noWebSocket: false,
+    newResource: false,
+  },
+): FetchOpts {
+  return useMemo(
+    () => ({
+      allowIncomplete: opts.allowIncomplete,
+      noWebSocket: opts.noWebSocket,
+      newResource: opts.newResource,
+    }),
+    [opts.allowIncomplete, opts.noWebSocket, opts.newResource],
+  );
+}
