@@ -32,11 +32,14 @@ export default function EmojiInputASYNC({
   const [showPicker, setShowPicker] = useState(false);
   const [emoji, setEmoji] = useState<string | undefined>(initialValue);
 
-  const handleEmojiSelect = useCallback((e: { native: string }) => {
-    setEmoji(e.native);
-    setShowPicker(false);
-    onChange(e.native);
-  }, []);
+  const handleEmojiSelect = useCallback(
+    (e: { native: string }) => {
+      setEmoji(e.native);
+      setShowPicker(false);
+      onChange(e.native);
+    },
+    [onChange],
+  );
 
   return (
     <PickerPopover

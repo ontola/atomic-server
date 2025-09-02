@@ -82,10 +82,10 @@ const AsyncJSONEditor: React.FC<JSONEditorProps> = ({
 
       return diagnostics;
     };
-  }, [onValidationChange]);
+  }, [onValidationChange, required]);
 
   const extensions = useMemo(
-    // eslint-disable-next-line react-compiler/react-compiler
+    // eslint-disable-next-line react-hooks/react-compiler
     () => [json(), linter(validationLinter())],
     [validationLinter],
   );

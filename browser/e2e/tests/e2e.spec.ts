@@ -29,8 +29,10 @@ import {
   openAgentPage,
   fillSearchBox,
   waitForCommitOnCurrentResource,
-  currentDialog,
   clickSidebarItem,
+  inDialog,
+  PROPERTIES,
+  anyValue,
 } from './test-utils';
 
 test.describe('data-browser', async () => {
@@ -506,23 +508,23 @@ test.describe('data-browser', async () => {
 
     await clickOption('Create test-prop');
 
-    await expect(
-      page.getByRole('heading', { name: 'New Property' }),
-    ).toBeVisible();
+    await inDialog(page, async (dialog, closeDialogWith) => {
+      await expect(
+        dialog.getByRole('heading', { name: 'new property' }),
+      ).toBeVisible();
 
+      const selectDatatypeOption = await fillSearchBox(
+        dialog,
+        'Datatype',
+        'boolean',
+      );
+      await selectDatatypeOption('booleanEither `true` or `false`');
+
+      await dialog.getByLabel('Description').fill('This is a test prop');
+
+      await closeDialogWith('Save');
+    });
     // Set datatype of new property to boolean
-    const selectDatatypeOption = await fillSearchBox(
-      page,
-      'Datatype',
-      'boolean',
-    );
-    await selectDatatypeOption('booleanEither `true` or `false`');
-
-    await currentDialog(page)
-      .getByLabel('Description')
-      .fill('This is a test prop');
-
-    await currentDialog(page).getByRole('button', { name: 'Save' }).click();
 
     await expect(
       page.getByRole('button', { name: 'test-prop', exact: true }),
@@ -532,29 +534,46 @@ test.describe('data-browser', async () => {
   test('history page', async ({ page }) => {
     await signIn(page);
     await newDrive(page);
+
+    // // commit for saving initial document
+    // const newDocCommit = waitForCommit(page, {
+    //   set: {
+    //     [PROPERTIES.isA]: ['https://atomicdata.dev/classes/Document'],
+    //   },
+    // });
+
+    // commit for initializing the first element (paragraph)
+    const addParagraphCommit = waitForCommit(page, {
+      set: {
+        ['https://atomicdata.dev/properties/documents/elements']: anyValue,
+      },
+    });
     // Create new class from new resource menu
     await newResource('document', page);
 
-    // commit for saving initial document
-    await waitForCommit(page);
-    // commit for initializing the first element (paragraph)
-    await waitForCommit(page);
+    await addParagraphCommit;
+
+    const firstTitleCommit = waitForCommit(page, {
+      set: {
+        ['https://atomicdata.dev/properties/name']: 'First Title',
+      },
+    });
 
     await editTitle('First Title', page);
+
+    await firstTitleCommit;
 
     await expect(
       page.getByRole('heading', { name: 'First Title', level: 1 }),
     ).toBeVisible();
-    // Wait for commit debounce
-    await page.waitForTimeout(500);
 
-    const waiter = waitForCommitOnCurrentResource(page, {
+    const secondTitleCommit = waitForCommit(page, {
       set: {
         ['https://atomicdata.dev/properties/name']: 'Second Title',
       },
     });
     await editTitle('Second Title', page);
-    await waiter;
+    await secondTitleCommit;
 
     await expect(
       page.getByRole('heading', { name: 'Second Title', level: 1 }),

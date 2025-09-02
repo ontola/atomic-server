@@ -6,6 +6,7 @@ import {
   useEffect,
   useImperativeHandle,
   useId,
+  useCallback,
 } from 'react';
 import type { IconType } from 'react-icons';
 import { styled } from 'styled-components';
@@ -40,13 +41,16 @@ export const CommandList = forwardRef<CommandListRefType, CommandListProps>(
 
     const [selectedIndex, setSelectedIndex] = useState(0);
 
-    const selectItem = (index: number) => {
-      const item = items[index];
+    const selectItem = useCallback(
+      (index: number) => {
+        const item = items[index];
 
-      if (item) {
-        command(item);
-      }
-    };
+        if (item) {
+          command(item);
+        }
+      },
+      [command, items],
+    );
 
     useEffect(() => setSelectedIndex(0), [items]);
 
@@ -81,7 +85,7 @@ export const CommandList = forwardRef<CommandListRefType, CommandListProps>(
           return false;
         },
       }),
-      [selectedIndex, items],
+      [selectedIndex, items, compId, selectItem],
     );
 
     return (

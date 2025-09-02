@@ -1,11 +1,12 @@
 import { test, expect, Page } from '@playwright/test';
 
 import {
+  DIALOG_CLOSE_BUTTON,
   FRONTEND_URL,
   REBUILD_INDEX_TIME,
   before,
-  currentDialog,
   fillSearchBox,
+  inDialog,
   newDrive,
   newResource,
   sideBarNewResourceTestId,
@@ -37,14 +38,19 @@ const uploadFile = async (page: Page, fileName: string) => {
 const createModel = async (page: Page) => {
   await newResource('ontology', page);
 
-  await page.getByPlaceholder('my-ontology').fill(ONTOLOGY_NAME);
-  await currentDialog(page).getByRole('button', { name: 'Create' }).click();
+  await inDialog(page, async (dialog, closeDialogWith) => {
+    await dialog.getByPlaceholder('my-ontology').fill(ONTOLOGY_NAME);
+    await closeDialogWith('Create');
+  });
 
   await expect(page.locator(`h1:has-text("${ONTOLOGY_NAME}")`)).toBeVisible();
 
   await page.getByRole('button', { name: 'Add class', exact: true }).click();
-  await page.getByPlaceholder('shortname').fill('robot');
-  await page.getByRole('button', { name: 'Save' }).click();
+
+  await inDialog(page, async (dialog, closeDialogWith) => {
+    await dialog.getByPlaceholder('shortname').fill('robot');
+    await closeDialogWith('Save');
+  });
 
   await expect(page.locator('input[value="robot"]')).toBeVisible();
 
@@ -58,25 +64,27 @@ const createModel = async (page: Page) => {
 
   await page.getByRole('button', { name: 'Configure programming' }).click();
 
-  await currentDialog(page)
-    .getByLabel('Datatype')
-    .selectOption('https://atomicdata.dev/datatypes/atomicURL');
+  await inDialog(page, async (dialog, closeDialogWith) => {
+    await dialog
+      .getByLabel('Datatype')
+      .selectOption('https://atomicdata.dev/datatypes/atomicURL');
 
-  await expect(currentDialog(page).getByLabel('Classtype')).not.toBeDisabled();
+    await expect(dialog.getByLabel('Classtype')).not.toBeDisabled();
 
-  await fillSearchBox(
-    currentDialog(page),
-    'Search for a class',
-    'https://atomicdata.dev/classes/File',
-    { label: 'Classtype' },
-  );
+    await fillSearchBox(
+      dialog,
+      'Search for a class',
+      'https://atomicdata.dev/classes/File',
+      { label: 'Classtype' },
+    );
 
-  const commitPromise = waitForCommit(page);
-  await page.keyboard.press('Enter');
-  await commitPromise;
-  await expect(currentDialog(page).getByLabel('Classtype')).toHaveText('file');
+    const commitPromise = waitForCommit(page);
+    await page.keyboard.press('Enter');
+    await commitPromise;
+    await expect(dialog.getByLabel('Classtype')).toHaveText('file');
 
-  await currentDialog(page).getByRole('button', { name: 'close' }).click();
+    await closeDialogWith(DIALOG_CLOSE_BUTTON);
+  });
 };
 
 test.describe('File Picker', () => {
@@ -110,29 +118,28 @@ test.describe('File Picker', () => {
 
       await page.getByRole('button', { name: 'Select File' }).click();
 
-      const filepicker = currentDialog(page);
-      await expect(
-        filepicker.getByPlaceholder(SEARCH_BAR_PLACEHOLDER),
-      ).toBeVisible();
-      await expect(
-        filepicker.getByText('Contents of test file 1'),
-      ).toBeVisible();
-      await expect(filepicker.getByText('testFile2.md')).toBeVisible();
+      await inDialog(page, async dialog => {
+        await expect(
+          dialog.getByPlaceholder(SEARCH_BAR_PLACEHOLDER),
+        ).toBeVisible();
+        await expect(dialog.getByText('Contents of test file 1')).toBeVisible();
+        await expect(dialog.getByText('testFile2.md')).toBeVisible();
 
-      await filepicker.getByPlaceholder(SEARCH_BAR_PLACEHOLDER).fill('.md');
+        await dialog.getByPlaceholder(SEARCH_BAR_PLACEHOLDER).fill('.md');
 
-      await expect(
-        filepicker.getByText('Contents of test file 1'),
-      ).not.toBeVisible();
+        await expect(
+          dialog.getByText('Contents of test file 1'),
+        ).not.toBeVisible();
 
-      await filepicker.getByRole('button', { name: 'testFile2.md' }).click();
+        await dialog.getByRole('button', { name: 'testFile2.md' }).click();
 
-      await expect(
-        filepicker.getByRole('heading', {
-          name: 'first step in understanding recursion?',
-        }),
-      ).not.toBeVisible();
-      await expect(filepicker).not.toBeVisible();
+        await expect(
+          dialog.getByRole('heading', {
+            name: 'first step in understanding recursion?',
+          }),
+        ).not.toBeVisible();
+      });
+
       await expect(
         page
           .getByRole('region', { name: 'testFile2.md preview' })
@@ -155,16 +162,16 @@ test.describe('File Picker', () => {
 
       await page.getByRole('button', { name: 'Select File' }).click();
 
-      const filepicker = currentDialog(page);
-      await expect(
-        filepicker.getByPlaceholder(SEARCH_BAR_PLACEHOLDER),
-      ).toBeVisible();
+      await inDialog(page, async dialog => {
+        await expect(
+          dialog.getByPlaceholder(SEARCH_BAR_PLACEHOLDER),
+        ).toBeVisible();
 
-      await filepicker
-        .getByLabel('Upload')
-        .setInputFiles(testFilePath('testFile3.txt'));
+        await dialog
+          .getByLabel('Upload')
+          .setInputFiles(testFilePath('testFile3.txt'));
+      });
 
-      await expect(filepicker).not.toBeVisible();
       await expect(
         page
           .getByRole('region', { name: 'testFile3.txt preview' })

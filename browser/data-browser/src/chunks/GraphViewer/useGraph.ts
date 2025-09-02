@@ -116,7 +116,7 @@ export function useGraph(ontology: Resource): UseNodeReturn {
 
       setNodes(positionedNodes);
     },
-    [customPositioning, nodes, edges],
+    [customPositioning, nodes, edges, setCustomPositioningSTR],
   );
 
   const handleNodeChange = useCallback(
@@ -141,7 +141,7 @@ export function useGraph(ontology: Resource): UseNodeReturn {
 
       setNodes(prev => applyNodeChanges(changes, prev));
     },
-    [customPositioning, lastPositionChange],
+    [customPositioning, lastPositionChange, setCustomPositioningSTR],
   );
 
   return {
