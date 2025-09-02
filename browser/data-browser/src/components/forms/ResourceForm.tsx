@@ -108,7 +108,7 @@ export function ResourceForm({
   const canWrite = useCanWrite(resource);
 
   const otherProps = useMemo(() => {
-    const allProps = Array.from(resource.getPropVals().keys());
+    const allProps = resource.getEntries().map(([k]) => k);
 
     const prps = allProps.filter(prop => {
       // If a property does not exist in other rendered lists, add it to otherprops

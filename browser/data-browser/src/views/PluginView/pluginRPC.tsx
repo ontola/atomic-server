@@ -9,7 +9,6 @@ import {
   useStore,
   type JSONArray,
   type JSONValue,
-  type PropVals,
   type Resource,
   type Store,
 } from '@tomic/react';
@@ -513,14 +512,15 @@ function resourceToUIPluginResource(resource: Resource): UIPluginResource {
     subject: resource.subject,
     title: resource.title,
     loading: false,
-    props: propvalsToJSONRecord(resource.getPropVals()),
+    props: entriesToJSONRecord(resource.getEntries()),
   };
 }
 
-function propvalsToJSONRecord(propvals: PropVals): Record<string, JSONValue> {
+function entriesToJSONRecord(
+  entries: [string, unknown][],
+): Record<string, JSONValue> {
   return Object.fromEntries(
-    propvals.entries().map(([key, value]) => {
-      // Skip binary values (Loro docs) in JSON serialization for plugins
+    entries.map(([key, value]) => {
       if (value instanceof Uint8Array) {
         return [key, undefined];
       }

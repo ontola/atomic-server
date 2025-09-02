@@ -117,7 +117,7 @@ export function TableCell({
     [onChange, dataType],
   );
 
-  const propValCount = resource.getPropVals().size;
+  const propValCount = resource.getEntries().length;
 
   const handleEditNextRow = useCallback(() => {
     onEditNextRow?.();

@@ -27,8 +27,7 @@ export const TOOL_NAMES = {
 const toResultObject = (resource: Resource, includeCommitData: boolean) => {
   const props = Object.fromEntries(
     resource
-      .getPropVals()
-      .entries()
+      .getEntries()
       .filter(
         ([key]) => includeCommitData || key !== commits.properties.lastCommit,
       ),
@@ -40,8 +39,7 @@ const toResultObject = (resource: Resource, includeCommitData: boolean) => {
 const toSmallResultObject = (resource: Resource) => {
   return Object.fromEntries(
     resource
-      .getPropVals()
-      .entries()
+      .getEntries()
       .filter(([key]) =>
         (
           [
