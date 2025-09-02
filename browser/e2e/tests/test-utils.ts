@@ -10,10 +10,8 @@ export const PROPERTIES = {
 export const DELETE_PREVIOUS_TEST_DRIVES =
   process.env.DELETE_PREVIOUS_TEST_DRIVES === 'false' ? false : true;
 
-export const SERVER_URL =
-  process.env.SERVER_URL || 'http://localhost-atomic:9883';
-export const FRONTEND_URL =
-  process.env.FRONTEND_URL || 'http://localhost-atomic:9883';
+export const SERVER_URL = process.env.SERVER_URL || 'http://localhost:9883';
+export const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 const startDriveName = new URL(FRONTEND_URL).hostname;
 
 // TODO: Should use an env var so the CI can test the setup test.
