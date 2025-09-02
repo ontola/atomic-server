@@ -7,7 +7,7 @@ import ResourceCard from '../Card/ResourceCard';
 type TargetableCardProps = {
   subject: string;
   className?: string;
-  testId: string;
+  testId?: string;
 };
 
 export const TargetableCard = ({

@@ -1,7 +1,4 @@
 //! Index sorted by {Property}-{Value}-{Subject}.
-
-use tracing::instrument;
-
 use crate::{atoms::IndexAtom, errors::AtomicResult, Db, Value};
 
 use super::{
@@ -32,12 +29,6 @@ pub fn add_atom_to_prop_val_sub_index(
         tree: Tree::PropValSub,
         method: Method::Insert,
     });
-    Ok(())
-}
-
-#[instrument(skip(store))]
-pub fn remove_atom_from_prop_val_sub_index(index_atom: &IndexAtom, store: &Db) -> AtomicResult<()> {
-    let _existing = store.prop_val_sub_index.remove(propvalsub_key(index_atom));
     Ok(())
 }
 
