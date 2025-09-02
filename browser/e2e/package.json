@@ -25,7 +25,7 @@
     "test-update": "playwright test --update-snapshots",
     "test-new": "playwright codegen http://localhost:5173",
     "test-query": "DELETE_PREVIOUS_TEST_DRIVES=false playwright test -g",
-    "test-ui": "DELETE_PREVIOUS_TEST_DRIVES=false playwright test --ui"
+    "test-ui": "playwright test --ui"
   },
   "dependencies": {}
 }
