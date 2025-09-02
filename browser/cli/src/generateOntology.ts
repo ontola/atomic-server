@@ -15,6 +15,7 @@ enum Inserts {
   BASE_OBJECT = '{{2}}',
   CLASS_EXPORTS = '{{3}}',
   CLASSES = '{{4}}',
+  WEB_COMPONENTS = '{{5}}',
   PROP_TYPE_MAPPING = '{{7}}',
   PROP_SUBJECT_TO_NAME_MAPPING = '{{8}}',
 }
@@ -30,6 +31,8 @@ import type { OntologyBaseObject, BaseProps } from '${Inserts.MODULE_ALIAS}'
 ${Inserts.BASE_OBJECT}
 
 ${Inserts.CLASS_EXPORTS}
+
+${Inserts.WEB_COMPONENTS}
 
 declare module '${Inserts.MODULE_ALIAS}' {
   ${Inserts.CLASSES}
@@ -56,7 +59,11 @@ export const generateOntology = async (
   }
 
   const [baseObjStr, reverseMapping] = await generateBaseObject(ontology);
-  const classesStr = generateClasses(ontology, reverseMapping, propertyRecord);
+  const classesOutput = generateClasses(
+    ontology,
+    reverseMapping,
+    propertyRecord,
+  );
   const propertiesStr = generatePropTypeMapping(ontology, reverseMapping);
   const subToNameStr = generateSubjectToNameMapping(ontology, reverseMapping);
   const classExportsStr = generateClassExports(ontology, reverseMapping);
@@ -67,7 +74,8 @@ export const generateOntology = async (
   )
     .replace(Inserts.BASE_OBJECT, baseObjStr)
     .replace(Inserts.CLASS_EXPORTS, classExportsStr)
-    .replace(Inserts.CLASSES, classesStr)
+    .replace(Inserts.CLASSES, classesOutput.interfaces)
+    .replace(Inserts.WEB_COMPONENTS, classesOutput.webComponents)
     .replace(Inserts.PROP_TYPE_MAPPING, propertiesStr)
     .replace(Inserts.PROP_SUBJECT_TO_NAME_MAPPING, subToNameStr);
 

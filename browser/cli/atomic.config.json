@@ -1,0 +1,7 @@
+{
+  "outputFolder": "./src/ontologies",
+  "moduleAlias": "@tomic/lib",
+  "ontologies": [
+    "https://atomicdata.dev/ontology/data-browser"
+  ]
+}
