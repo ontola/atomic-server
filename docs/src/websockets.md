@@ -45,15 +45,35 @@ Fetches a single resource by its subject URL or DID. The response is a JSON-AD o
 
 ## Subscriptions
 
-### Resource subscriptions (legacy)
+### Resource subscriptions
 
 ```
 -> SUBSCRIBE <subject>
 -> UNSUBSCRIBE <subject>
+```
+
+Subscribe to changes on a specific resource. When the resource is modified, the server pushes the update using one of two formats:
+
+**Compact Loro update** (preferred — used when the commit has a Loro delta):
+
+```
+<- COMMIT_LORO {
+     "subject": "<resource-subject>",
+     "commitId": "<commit-did>",
+     "loroUpdate": "<base64-encoded-loro-bytes>",
+     "destroy": false
+   }
+```
+
+The client imports the binary Loro delta directly into the resource's LoroDoc and rebuilds the read cache. No JSON-AD parsing needed. Typically 60–80% smaller than the legacy format.
+
+**Legacy JSON-AD commit** (fallback — used for destroy-only or non-Loro commits):
+
+```
 <- COMMIT <commit-json-ad>
 ```
 
-Subscribe to changes on a specific resource. The server sends `COMMIT` messages whenever the resource is modified.
+The full commit resource as JSON-AD. Used when the commit doesn't carry a Loro update (e.g. resource deletion).
 
 ### Query subscriptions
 
@@ -84,15 +104,17 @@ Drive sync ensures a client and server (or two peers) have the same set of resou
 
 The client sends its version vector list for all resources in the drive. Each resource's Loro `oplogVersion()` is represented as an array of counters indexed by the `peers` array (deduplicated peer IDs across all resources).
 
-The server compares with its own version vectors and responds with one of:
+The `driveHash` is a SHA-256 hex string computed from the sorted version vector entries: `SHA256("subject1:c0,c1|subject2:c0,c1|...")`. The server computes the same hash from its own state and compares.
 
-**Fast path** — everything is in sync:
+The server responds with one of:
+
+**Fast path** — drive hashes match, everything is in sync (1 round trip, ~50 bytes):
 
 ```
 <- SYNC_OK {"drive":"<drive-subject>"}
 ```
 
-**Slow path** — differences found:
+**Slow path** — hashes differ, VV comparison needed:
 
 ```
 <- SYNC_DIFF {
@@ -142,6 +164,16 @@ For backward compatibility, the older timestamp-based sync is still supported:
 <- SYNC_DONE {"drive":"<drive-subject>", "timestamp": <unix-millis>, "count": <n>}
 ```
 
+### Dirty resource sync (client → server)
+
+When a client reconnects after being offline, it pushes locally-signed commits to the server in dependency order (agents first, then drives, then children by parent depth):
+
+```
+-> POST /commit  (HTTP, not WS — each pending commit is posted individually)
+```
+
+After all dirty resources are pushed, the client starts the VV sync handshake above.
+
 ## Real-time collaborative editing (Loro sync)
 
 For live collaboration on a single resource (e.g. a document being edited by multiple users), the protocol supports streaming Loro updates:
@@ -182,12 +214,15 @@ Client                              Server
   |                                    |
   |-- SUBSCRIBE_QUERY {drive} -------->|
   |                                    |
-  |-- SYNC_VV {drive, peers, vvs} ---->|
+  |-- SYNC_VV {drive, hash, vvs} ----->|
+  |<------------- SYNC_OK -------------|  (fast path: hashes match)
+  |                                    |
+  |  OR if hashes differ:              |
   |<----------- SYNC_DIFF {pull,push} -|
   |<----------- SYNC_DELTAS {deltas} --|
   |-- SYNC_DELTAS {deltas} ----------->|
   |                                    |
-  |<----------- COMMIT {commit} -------|  (subscription update)
+  |<----- COMMIT_LORO {subject,delta} -|  (subscription update)
   |<----------- QUERY_UPDATE {added} --|  (drive change)
   |                                    |
   |-- GET <subject> ------------------>|

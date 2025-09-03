@@ -410,14 +410,36 @@ impl Handler<CommitMessage> for WebSocketConnection {
 
     #[tracing::instrument(name = "handle_commit", skip_all)]
     fn handle(&mut self, msg: CommitMessage, ctx: &mut ws::WebsocketContext<Self>) {
-        let resource = msg.commit_response.commit_resource;
-        let formatted_commit = format!(
-            "COMMIT {}",
-            resource
-                .to_json_ad(self.store.get_base_domain().as_deref())
-                .unwrap()
-        );
-        ctx.text(formatted_commit);
+        let commit = &msg.commit_response.commit;
+
+        // If the commit has a Loro update, send it as a compact COMMIT_LORO message
+        // instead of the full JSON-AD commit resource. This is much smaller:
+        // ~200 bytes vs ~2KB for a typical resource update.
+        if let Some(loro_update) = &commit.loro_update {
+            let commit_id = commit
+                .url
+                .as_deref()
+                .or(commit.signature.as_deref())
+                .unwrap_or("");
+            let b64 = base64::engine::general_purpose::STANDARD.encode(loro_update);
+            let json = serde_json::json!({
+                "subject": commit.subject.to_string(),
+                "commitId": commit_id,
+                "loroUpdate": b64,
+                "destroy": commit.destroy.unwrap_or(false),
+            });
+            ctx.text(format!("COMMIT_LORO {json}"));
+        } else {
+            // Fallback for non-Loro commits (destroy-only, legacy)
+            let resource = &msg.commit_response.commit_resource;
+            let formatted_commit = format!(
+                "COMMIT {}",
+                resource
+                    .to_json_ad(self.store.get_base_domain().as_deref())
+                    .unwrap()
+            );
+            ctx.text(formatted_commit);
+        }
     }
 }
 
@@ -573,9 +595,8 @@ async fn handle_sync_drive(
 #[derive(serde::Deserialize)]
 struct SyncVVRequest {
     drive: String,
-    /// TODO: implement fast-path hash comparison (skip VV diff when hashes match)
     #[serde(rename = "driveHash")]
-    _drive_hash: String,
+    drive_hash: String,
     peers: Vec<String>,
     resources: std::collections::HashMap<String, Vec<i32>>,
 }
@@ -629,6 +650,27 @@ async fn handle_sync_vv(
             if let Ok(doc) = AtomicLoroDoc::from_snapshot(&snapshot_bytes) {
                 server_vvs.insert(subject_str.clone(), doc.oplog_vv_map());
             }
+        }
+    }
+
+    // Fast path: drive hash comparison. If hashes match, everything is in sync.
+    if !request.drive_hash.is_empty() {
+        let server_hash = compute_drive_hash(&server_vvs);
+
+        if server_hash == request.drive_hash {
+            tracing::info!(
+                "SYNC_VV: drive {} hashes match — already in sync",
+                request.drive
+            );
+            messages.push(format!(
+                "SYNC_OK {}",
+                serde_json::to_string(&serde_json::json!({
+                    "drive": request.drive
+                }))
+                .unwrap()
+            ));
+
+            return messages;
         }
     }
 
@@ -888,4 +930,58 @@ fn collect_drive_subjects(
     }
 
     drive_subjects
+}
+
+/// Compute a drive hash from server-side VVs. Must match the client's algorithm:
+/// SHA-256 of sorted entries: "subject1:counter1,counter2|subject2:counter1,counter2|..."
+/// where counters are indexed by a sorted global peer list.
+fn compute_drive_hash(
+    vvs: &std::collections::HashMap<String, std::collections::HashMap<String, i32>>,
+) -> String {
+    // Collect unique peer IDs
+    let mut peer_set = std::collections::BTreeSet::new();
+
+    for vv in vvs.values() {
+        for peer_id in vv.keys() {
+            peer_set.insert(peer_id.clone());
+        }
+    }
+
+    let peers: Vec<String> = peer_set.into_iter().collect();
+    let peer_index: std::collections::HashMap<&str, usize> =
+        peers.iter().enumerate().map(|(i, p)| (p.as_str(), i)).collect();
+
+    // Build sorted entries with compact counter arrays
+    let mut entries: Vec<(String, Vec<i32>)> = Vec::new();
+
+    for (subject, vv) in vvs {
+        let mut counters = vec![0i32; peers.len()];
+
+        for (peer_id, &counter) in vv {
+            if let Some(&idx) = peer_index.get(peer_id.as_str()) {
+                counters[idx] = counter;
+            }
+        }
+
+        entries.push((subject.clone(), counters));
+    }
+
+    entries.sort_by(|(a, _), (b, _)| a.cmp(b));
+
+    // Hash input must match client: "subject:c0,c1|subject2:c0,c1"
+    let hash_input: String = entries
+        .iter()
+        .map(|(s, c)| {
+            let counters = c
+                .iter()
+                .map(|n| n.to_string())
+                .collect::<Vec<_>>()
+                .join(",");
+            format!("{s}:{counters}")
+        })
+        .collect::<Vec<_>>()
+        .join("|");
+
+    let digest = ring::digest::digest(&ring::digest::SHA256, hash_input.as_bytes());
+    hex::encode(digest.as_ref())
 }

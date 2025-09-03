@@ -11,6 +11,7 @@ import {
 import type { Store } from './store.js';
 import { AtomicError, ErrorType } from './error.js';
 import { classes } from './urls.js';
+import { decodeB64 } from './base64.js';
 
 const REQUEST_TIMEOUT = 5000;
 
@@ -445,7 +446,59 @@ export class WSClient {
   }
 
   private handleMessage(ev: MessageEvent) {
-    if (ev.data.startsWith('COMMIT ')) {
+    if (ev.data.startsWith('COMMIT_LORO ')) {
+      // Compact Loro-native commit: just the delta bytes + metadata.
+      // Much smaller than full JSON-AD commit resource.
+      try {
+        const json = JSON.parse(ev.data.slice(12));
+        const { subject, commitId, loroUpdate, destroy } = json as {
+          subject: string;
+          commitId: string;
+          loroUpdate: string;
+          destroy: boolean;
+        };
+
+        if (destroy) {
+          this.store.removeResource(subject);
+        } else if (loroUpdate) {
+          const bytes = decodeB64(loroUpdate);
+          let resource = this.store.resources.get(subject);
+
+          if (resource) {
+            resource.importLoroUpdate(bytes);
+          } else {
+            resource = this.store.getResourceLoading(subject);
+            resource.importLoroUpdate(bytes);
+            resource.loading = false;
+          }
+
+          if (commitId) {
+            resource.setLastCommitValue(commitId);
+          }
+
+          resource.source = 'ws-commit';
+          resource.sourceTimestamp = Date.now();
+          this.store.addResources(resource, { skipCommitCompare: true });
+
+          // Persist to WASM DB
+          const clientDb = this.store.getClientDb();
+
+          if (clientDb) {
+            const doc = resource.getLoroDoc?.();
+
+            if (doc) {
+              const snapshot = doc.export({ mode: 'snapshot' });
+              clientDb
+                .putLoroSnapshot(subject, snapshot)
+                .catch(() => {});
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Invalid COMMIT_LORO:', e);
+      }
+    } else if (ev.data.startsWith('COMMIT ')) {
+      // Legacy full JSON-AD commit (fallback for non-Loro commits)
       const commit = ev.data.slice(7);
       try {
         this.store.logIncomingCommit(parseCommitJSON(commit));
@@ -454,13 +507,10 @@ export class WSClient {
       }
       parseAndApplyCommit(commit, this.store);
 
-      // Forward to WASM DB for efficient incremental index update (Loro diff path)
       const clientDb = this.store.getClientDb();
 
       if (clientDb) {
-        clientDb.applyCommit(commit).catch(() => {
-          // Non-critical — in-memory store is the source of truth
-        });
+        clientDb.applyCommit(commit).catch(() => {});
       }
     } else if (ev.data.startsWith('ERROR ')) {
       this.store.notifyError(ev.data.slice(6));
