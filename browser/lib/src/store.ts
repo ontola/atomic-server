@@ -1230,6 +1230,21 @@ export class Store {
     return this.webSockets.get(this.getServerUrl());
   }
 
+  /** Toggle WebSocket debug logging. Persisted in localStorage. */
+  public setWebSocketDebug(enabled: boolean): void {
+    for (const ws of this.webSockets.values()) {
+      ws.debug = enabled;
+    }
+
+    if (typeof localStorage !== 'undefined') {
+      if (enabled) {
+        localStorage.setItem('ws-debug', '1');
+      } else {
+        localStorage.removeItem('ws-debug');
+      }
+    }
+  }
+
   /** Opens a Websocket for some subject URL, or returns the existing one. */
   public getWebSocketForSubject(subject: string): WSClient | undefined {
     try {
@@ -1548,7 +1563,7 @@ export class Store {
       serverUrl: this.serverUrl,
       drive: this.drive,
       websocketReadyState: ws?.readyState,
-      websocketProtocol: ws?.protocolVersion,
+      websocketProtocol: 'v2',
       clientDbReady: this.clientDb?.isReady ?? false,
       lastDriveSync: this._lastDriveSync,
     };

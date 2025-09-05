@@ -17,3 +17,4 @@ pub mod search;
 pub mod single_page_app;
 pub mod upload;
 pub mod web_sockets;
+pub mod ws_v2;

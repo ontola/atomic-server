@@ -166,8 +166,9 @@ pub async fn populate_base_models(store: &impl Storelike) -> AtomicResult<()> {
             subject: urls::DATATYPE_CLASS.into(),
         },
         Class {
-            requires: vec![urls::PUBLIC_KEY.into()],
+            requires: vec![],
             recommends: vec![
+                urls::PUBLIC_KEY.into(),
                 urls::NAME.into(),
                 urls::DESCRIPTION.into(),
                 urls::PERSONAL_DRIVE.into(),
@@ -176,7 +177,7 @@ pub async fn populate_base_models(store: &impl Storelike) -> AtomicResult<()> {
             ],
             shortname: "agent".into(),
             description:
-                "An Agent is a user that can create or modify data. It has two keys: a private and a public one. The private key should be kept secret. The public key is used to verify signatures (on [Commits](https://atomicdata.dev/classes/Commit)) set by the of the Agent.".into(),
+                "An Agent is a user that can create or modify data. For DID-based agents (did:ad:agent:{publicKey}), the public key is derived from the subject.".into(),
             subject: urls::AGENT.into(),
         }
     ];

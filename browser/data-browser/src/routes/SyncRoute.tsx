@@ -105,6 +105,9 @@ function SyncPage() {
   const [commitLog, setCommitLog] = useState<CommitLogEntry[]>(() =>
     store.getCommitLog(),
   );
+  const [wsDebug, setWsDebug] = useState(
+    () => localStorage.getItem('ws-debug') === '1',
+  );
 
   useEffect(() => {
     const refresh = () => setStatus(store.getSyncStatus());
@@ -220,6 +223,20 @@ function SyncPage() {
                 </DetailValue>
               </DetailItem>
             )}
+            <DetailItem>
+              <DetailLabel>WS debug</DetailLabel>
+              <DetailValue>
+                <DebugToggle
+                  type='checkbox'
+                  checked={wsDebug}
+                  onChange={e => {
+                    setWsDebug(e.target.checked);
+                    store.setWebSocketDebug(e.target.checked);
+                  }}
+                />
+                {wsDebug ? 'Logging to console' : 'Off'}
+              </DetailValue>
+            </DetailItem>
           </DetailsGrid>
         </Section>
 
@@ -659,4 +676,9 @@ const ErrorText = styled.div`
   color: ${p => p.theme.colors.warning};
   white-space: pre-wrap;
   font-size: 0.9rem;
+`;
+
+const DebugToggle = styled.input`
+  margin-right: 0.5rem;
+  cursor: pointer;
 `;

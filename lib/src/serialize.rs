@@ -328,20 +328,18 @@ mod test {
         println!("json-ad: {}", json);
         let correct_json = r#"{
   "@id": "https://atomicdata.dev/classes/Agent",
-  "https://atomicdata.dev/properties/description": "An Agent is a user that can create or modify data. It has two keys: a private and a public one. The private key should be kept secret. The public key is used to verify signatures (on [Commits](https://atomicdata.dev/classes/Commit)) set by the of the Agent.",
+  "https://atomicdata.dev/properties/description": "An Agent is a user that can create or modify data. For DID-based agents (did:ad:agent:{publicKey}), the public key is derived from the subject.",
   "https://atomicdata.dev/properties/isA": [
      "https://atomicdata.dev/classes/Class"
   ],
   "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
   "https://atomicdata.dev/properties/recommends": [
+    "https://atomicdata.dev/properties/publicKey",
     "https://atomicdata.dev/properties/name",
     "https://atomicdata.dev/properties/description",
     "https://atomicdata.dev/properties/personalDrive",
     "https://atomicdata.dev/properties/sharedWithMe",
     "https://atomicdata.dev/properties/drives"
-  ],
-    "https://atomicdata.dev/properties/requires": [
-    "https://atomicdata.dev/properties/publicKey"
   ],
   "https://atomicdata.dev/properties/shortname": "agent"
 }"#;
@@ -373,20 +371,18 @@ mod test {
         println!("json: {}", json);
         let correct_json = r#"{
             "@id": "https://atomicdata.dev/classes/Agent",
-            "description": "An Agent is a user that can create or modify data. It has two keys: a private and a public one. The private key should be kept secret. The public key is used to verify signatures (on [Commits](https://atomicdata.dev/classes/Commit)) set by the of the Agent.",
+            "description": "An Agent is a user that can create or modify data. For DID-based agents (did:ad:agent:{publicKey}), the public key is derived from the subject.",
             "is-a": [
               "https://atomicdata.dev/classes/Class"
             ],
             "parent": "https://atomicdata.dev/classes",
             "recommends": [
+              "https://atomicdata.dev/properties/publicKey",
               "https://atomicdata.dev/properties/name",
               "https://atomicdata.dev/properties/description",
               "https://atomicdata.dev/properties/personalDrive",
               "https://atomicdata.dev/properties/sharedWithMe",
               "https://atomicdata.dev/properties/drives"
-            ],
-            "requires": [
-              "https://atomicdata.dev/properties/publicKey"
             ],
             "shortname": "agent"
           }"#;
@@ -423,27 +419,21 @@ mod test {
                 "@container": "@list",
                 "@id": "https://atomicdata.dev/properties/recommends"
               },
-              "requires": {
-                "@container": "@list",
-                "@id": "https://atomicdata.dev/properties/requires"
-              },
               "shortname": "https://atomicdata.dev/properties/shortname"
             },
             "@id": "https://atomicdata.dev/classes/Agent",
-            "description": "An Agent is a user that can create or modify data. It has two keys: a private and a public one. The private key should be kept secret. The public key is used to verify signatures (on [Commits](https://atomicdata.dev/classes/Commit)) set by the of the Agent.",
+            "description": "An Agent is a user that can create or modify data. For DID-based agents (did:ad:agent:{publicKey}), the public key is derived from the subject.",
             "is-a": [
               "https://atomicdata.dev/classes/Class"
             ],
             "parent": "https://atomicdata.dev/classes",
             "recommends": [
+              "https://atomicdata.dev/properties/publicKey",
               "https://atomicdata.dev/properties/name",
               "https://atomicdata.dev/properties/description",
               "https://atomicdata.dev/properties/personalDrive",
               "https://atomicdata.dev/properties/sharedWithMe",
               "https://atomicdata.dev/properties/drives"
-            ],
-            "requires": [
-              "https://atomicdata.dev/properties/publicKey"
             ],
             "shortname": "agent"
           }"#;
