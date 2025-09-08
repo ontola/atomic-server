@@ -1019,22 +1019,17 @@ msgstr "New Drive"
 msgid "Create a new drive"
 msgstr "Create a new drive"
 
-#: src/components/SideBar/DriveSwitcher.tsx
-msgid "Gateway (Locked to Drive)"
-msgstr "Gateway (Locked to Drive)"
+#~ msgid "Gateway (Locked to Drive)"
+#~ msgstr "Gateway (Locked to Drive)"
 
-#: src/components/SideBar/DriveSwitcher.tsx
-msgid "Active Gateway"
-msgstr "Active Gateway"
+#~ msgid "Active Gateway"
+#~ msgstr "Active Gateway"
 
-#: src/components/SideBar/DriveSwitcher.tsx
-msgid "Cannot change gateway for HTTP drives"
-msgstr "Cannot change gateway for HTTP drives"
+#~ msgid "Cannot change gateway for HTTP drives"
+#~ msgstr "Cannot change gateway for HTTP drives"
 
-#. placeholder {0}: s
-#: src/components/SideBar/DriveSwitcher.tsx
-msgid "Connect via {0}"
-msgstr "Connect via {0}"
+#~ msgid "Connect via {0}"
+#~ msgstr "Connect via {0}"
 
 #: src/components/SideBar/DriveSwitcher.tsx
 msgid "Configure"
@@ -1327,38 +1322,31 @@ msgstr "Enter a Drive DID or URL"
 msgid "Set"
 msgstr "Set"
 
-#: src/routes/SettingsServer/index.tsx
-msgid "Gateway Server"
-msgstr "Gateway Server"
+#~ msgid "Gateway Server"
+#~ msgstr "Gateway Server"
 
-#. placeholder {0}: ' '
-#: src/routes/SettingsServer/index.tsx
-msgid ""
-"The gateway is currently locked to{0} <0/> because you are using an\n"
-"HTTP-based drive."
-msgstr ""
-"The gateway is currently locked to{0} <0/> because you are using an\n"
-"HTTP-based drive."
+#~ msgid ""
+#~ "The gateway is currently locked to{0} <0/> because you are using an\n"
+#~ "HTTP-based drive."
+#~ msgstr ""
+#~ "The gateway is currently locked to{0} <0/> because you are using an\n"
+#~ "HTTP-based drive."
 
-#: src/routes/SettingsServer/index.tsx
-msgid ""
-"The gateway server is used to resolve DIDs and fetch data from the\n"
-"network."
-msgstr ""
-"The gateway server is used to resolve DIDs and fetch data from the\n"
-"network."
+#~ msgid ""
+#~ "The gateway server is used to resolve DIDs and fetch data from the\n"
+#~ "network."
+#~ msgstr ""
+#~ "The gateway server is used to resolve DIDs and fetch data from the\n"
+#~ "network."
 
-#: src/routes/SettingsServer/index.tsx
-msgid "Add Gateway by URL"
-msgstr "Add Gateway by URL"
+#~ msgid "Add Gateway by URL"
+#~ msgstr "Add Gateway by URL"
 
-#: src/routes/SettingsServer/index.tsx
-msgid "Locked"
-msgstr "Locked"
+#~ msgid "Locked"
+#~ msgstr "Locked"
 
-#: src/routes/SettingsServer/index.tsx
-msgid "Set Active"
-msgstr "Set Active"
+#~ msgid "Set Active"
+#~ msgstr "Set Active"
 
 #. placeholder {0}: name
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
@@ -1524,6 +1512,7 @@ msgid "Add external property"
 msgstr "Add external property"
 
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
+#: src/routes/SyncRoute.tsx
 msgid "Add"
 msgstr "Add"
 
@@ -4771,9 +4760,8 @@ msgstr "Sync"
 #~ msgid "Status"
 #~ msgstr "Status"
 
-#: src/routes/SyncRoute.tsx
-msgid "Connection"
-msgstr "Connection"
+#~ msgid "Connection"
+#~ msgstr "Connection"
 
 #~ msgid "Last Drive Sync"
 #~ msgstr "Last Drive Sync"
@@ -4837,7 +4825,6 @@ msgstr "Changes pending"
 #: src/components/SideBar/SyncMenuItem.tsx
 #: src/components/SideBar/SyncMenuItem.tsx
 #: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
 msgid "Offline"
 msgstr "Offline"
 
@@ -4875,7 +4862,6 @@ msgstr "Drive"
 
 #: src/components/SideBar/SyncMenuItem.tsx
 #: src/components/SideBar/SyncMenuItem.tsx
-#: src/routes/SyncRoute.tsx
 msgid "Connected"
 msgstr "Connected"
 
@@ -4909,9 +4895,8 @@ msgstr "{0} resources,{1} {2}"
 msgid "No activity recorded in this session yet."
 msgstr "No activity recorded in this session yet."
 
-#: src/components/NetworkIndicator.tsx
-msgid "Connected to server"
-msgstr "Connected to server"
+#~ msgid "Connected to server"
+#~ msgstr "Connected to server"
 
 #: src/components/NetworkIndicator.tsx
 msgid "Working offline — your changes are saved locally"
@@ -5004,3 +4989,33 @@ msgstr "Logging to console"
 #: src/routes/SyncRoute.tsx
 msgid "Off"
 msgstr "Off"
+
+#: src/routes/SyncRoute.tsx
+msgid "Disconnect"
+msgstr "Disconnect"
+
+#: src/components/NetworkIndicator.tsx
+msgid "Running in offline mode. Reconnect in the sync menu."
+msgstr "Running in offline mode. Reconnect in the sync menu."
+
+#. placeholder {0}: host
+#: src/components/NetworkIndicator.tsx
+msgid "Connected to {0}"
+msgstr "Connected to {0}"
+
+#: src/routes/SyncRoute.tsx
+msgid "+ Add"
+msgstr "+ Add"
+
+#: src/routes/SettingsServer/index.tsx
+msgid "/app/sync"
+msgstr "/app/sync"
+
+#. placeholder {0}: ' '
+#: src/routes/SettingsServer/index.tsx
+msgid "Server settings have moved to the{0} <0>Sync page</0>."
+msgstr "Server settings have moved to the{0} <0>Sync page</0>."
+
+#: src/routes/SyncRoute.tsx
+msgid "How to run your own server"
+msgstr "How to run your own server"

@@ -6,7 +6,6 @@ import {
   FaPlus,
   FaSquareCheck,
   FaRegCircle,
-  FaServer,
 } from 'react-icons/fa6';
 import { useSettings } from '../../helpers/AppSettings';
 import { constructOpenURL } from '../../helpers/navigation';
@@ -17,9 +16,6 @@ import { type DropdownItem, DIVIDER, DropdownMenu } from '../Dropdown';
 import { buildDefaultTrigger } from '../Dropdown/DefaultTrigger';
 import { useNewResourceUI } from '../forms/NewForm/useNewResourceUI';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
-import { serverURLStorage } from '../../helpers/serverURLStorage';
-
-import { isURL } from '../../helpers/isURL';
 
 const Trigger = buildDefaultTrigger(<FaHardDrive />, 'Open Drive Settings');
 
@@ -35,7 +31,7 @@ function dedupeAFromB<K, V>(a: Map<K, V>, b: Map<K, V>): Map<K, V> {
 
 export function DriveSwitcher() {
   const navigate = useNavigateWithTransition();
-  const { drive, setDrive, agent, baseURL, setServer } = useSettings();
+  const { drive, setDrive, agent } = useSettings();
   const [savedDrives] = useSavedDrives();
   const [history, addToHistory] = useDriveHistory(savedDrives, 5);
 
@@ -49,9 +45,6 @@ export function DriveSwitcher() {
   };
 
   const createNewResource = useNewResourceUI();
-
-  const knownServers = serverURLStorage.getKnownServers();
-  const isHttpDrive = isURL(drive);
 
   const items = useMemo<DropdownItem[]>(
     () => [
@@ -78,7 +71,6 @@ export function DriveSwitcher() {
         disabled: !agent,
       },
       DIVIDER,
-      // Dedupe history from savedDrives bause not all savedDrives might be loaded yet.
       ...Array.from(dedupeAFromB(historyMap, savedDrivesMap))
         .map(([subject, resource]) => ({
           label: getTitle(resource),
@@ -89,24 +81,6 @@ export function DriveSwitcher() {
           disabled: false,
         }))
         .slice(0, 5),
-      DIVIDER,
-      {
-        id: 'active-server-header',
-        label: isHttpDrive ? 'Gateway (Locked to Drive)' : 'Active Gateway',
-        icon: <FaServer />,
-        header: true,
-        onClick: () => undefined,
-      },
-      ...knownServers.map(s => ({
-        id: `server-${s}`,
-        label: s,
-        helper: isHttpDrive
-          ? 'Cannot change gateway for HTTP drives'
-          : `Connect via ${s}`,
-        disabled: isHttpDrive || s === baseURL,
-        icon: s === baseURL ? <FaSquareCheck /> : <FaRegCircle />,
-        onClick: (): void => setServer(s),
-      })),
       DIVIDER,
       {
         id: 'configure-drives',
@@ -120,16 +94,12 @@ export function DriveSwitcher() {
     ],
     [
       agent,
-      baseURL,
       createNewResource,
       drive,
       historyMap,
-      isHttpDrive,
-      knownServers,
       navigate,
       savedDrivesMap,
       setDrive,
-      setServer,
     ],
   );
 

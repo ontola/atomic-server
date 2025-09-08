@@ -2633,6 +2633,7 @@ msgid "Add external property"
 msgstr "Ajouter une propriété externe"
 
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
+#: src/routes/SyncRoute.tsx
 msgid "Add"
 msgstr "Ajouter"
 
@@ -3504,25 +3505,21 @@ msgstr "Génération en cours..."
 #~ msgid "Active Server"
 #~ msgstr ""
 
-#. placeholder {0}: s
-#: src/components/SideBar/DriveSwitcher.tsx
-msgid "Connect via {0}"
-msgstr "Se connecter via {0}"
+#~ msgid "Connect via {0}"
+#~ msgstr "Se connecter via {0}"
 
 #: src/routes/SettingsServer/ServersCard.tsx
 msgid "No known servers"
 msgstr "Aucun serveur connu"
 
-#: src/routes/SettingsServer/index.tsx
-msgid "Gateway Server"
-msgstr "Serveur passerelle"
+#~ msgid "Gateway Server"
+#~ msgstr "Serveur passerelle"
 
 #~ msgid "The gateway server is used to resolve DIDs and fetch data from the network."
 #~ msgstr ""
 
-#: src/components/SideBar/DriveSwitcher.tsx
-msgid "Active Gateway"
-msgstr "Passerelle active"
+#~ msgid "Active Gateway"
+#~ msgstr "Passerelle active"
 
 #: src/routes/SettingsServer/index.tsx
 msgid "Saved Drives"
@@ -3536,46 +3533,38 @@ msgstr "URL de lecteur personnalisée"
 msgid "Enter a Drive DID or URL"
 msgstr "Saisissez un DID ou une URL de lecteur"
 
-#: src/routes/SettingsServer/index.tsx
-msgid "Add Gateway by URL"
-msgstr "Ajouter une passerelle par URL"
+#~ msgid "Add Gateway by URL"
+#~ msgstr "Ajouter une passerelle par URL"
 
-#: src/routes/SettingsServer/index.tsx
-msgid "Set Active"
-msgstr "Définir comme actif"
+#~ msgid "Set Active"
+#~ msgstr "Définir comme actif"
 
 #: src/components/SideBar/DriveSwitcher.tsx
 msgid "Configure"
 msgstr "Configurer"
 
-#: src/components/SideBar/DriveSwitcher.tsx
-msgid "Gateway (Locked to Drive)"
-msgstr "Passerelle (verrouillée sur le lecteur)"
+#~ msgid "Gateway (Locked to Drive)"
+#~ msgstr "Passerelle (verrouillée sur le lecteur)"
 
-#: src/components/SideBar/DriveSwitcher.tsx
-msgid "Cannot change gateway for HTTP drives"
-msgstr "Impossible de changer de passerelle pour les lecteurs HTTP"
+#~ msgid "Cannot change gateway for HTTP drives"
+#~ msgstr "Impossible de changer de passerelle pour les lecteurs HTTP"
 
-#. placeholder {0}: ' '
-#: src/routes/SettingsServer/index.tsx
-msgid ""
-"The gateway is currently locked to{0} <0/> because you are using an\n"
-"HTTP-based drive."
-msgstr ""
-"La passerelle est actuellement verrouillée sur{0} <0/> car vous utilisez un lecteur\n"
-"basé sur HTTP."
+#~ msgid ""
+#~ "The gateway is currently locked to{0} <0/> because you are using an\n"
+#~ "HTTP-based drive."
+#~ msgstr ""
+#~ "La passerelle est actuellement verrouillée sur{0} <0/> car vous utilisez un lecteur\n"
+#~ "basé sur HTTP."
 
-#: src/routes/SettingsServer/index.tsx
-msgid ""
-"The gateway server is used to resolve DIDs and fetch data from the\n"
-"network."
-msgstr ""
-"Le serveur passerelle est utilisé pour résoudre les DID et récupérer les données du\n"
-"réseau."
+#~ msgid ""
+#~ "The gateway server is used to resolve DIDs and fetch data from the\n"
+#~ "network."
+#~ msgstr ""
+#~ "Le serveur passerelle est utilisé pour résoudre les DID et récupérer les données du\n"
+#~ "réseau."
 
-#: src/routes/SettingsServer/index.tsx
-msgid "Locked"
-msgstr "Verrouillé"
+#~ msgid "Locked"
+#~ msgstr "Verrouillé"
 
 #~ msgid "This secret does not contain an initial drive, and no drives were found on this server. Please create a new account."
 #~ msgstr ""
@@ -4805,9 +4794,8 @@ msgstr ""
 #~ msgid "Status"
 #~ msgstr ""
 
-#: src/routes/SyncRoute.tsx
-msgid "Connection"
-msgstr ""
+#~ msgid "Connection"
+#~ msgstr ""
 
 #~ msgid "Last Drive Sync"
 #~ msgstr ""
@@ -4871,7 +4859,6 @@ msgstr ""
 #: src/components/SideBar/SyncMenuItem.tsx
 #: src/components/SideBar/SyncMenuItem.tsx
 #: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
 msgid "Offline"
 msgstr ""
 
@@ -4907,7 +4894,6 @@ msgstr ""
 
 #: src/components/SideBar/SyncMenuItem.tsx
 #: src/components/SideBar/SyncMenuItem.tsx
-#: src/routes/SyncRoute.tsx
 msgid "Connected"
 msgstr ""
 
@@ -4941,9 +4927,8 @@ msgstr ""
 msgid "No activity recorded in this session yet."
 msgstr ""
 
-#: src/components/NetworkIndicator.tsx
-msgid "Connected to server"
-msgstr ""
+#~ msgid "Connected to server"
+#~ msgstr ""
 
 #: src/components/NetworkIndicator.tsx
 msgid "Working offline — your changes are saved locally"
@@ -5035,4 +5020,34 @@ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Off"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Disconnect"
+msgstr ""
+
+#: src/components/NetworkIndicator.tsx
+msgid "Running in offline mode. Reconnect in the sync menu."
+msgstr ""
+
+#. placeholder {0}: host
+#: src/components/NetworkIndicator.tsx
+msgid "Connected to {0}"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "+ Add"
+msgstr ""
+
+#: src/routes/SettingsServer/index.tsx
+msgid "/app/sync"
+msgstr ""
+
+#. placeholder {0}: ' '
+#: src/routes/SettingsServer/index.tsx
+msgid "Server settings have moved to the{0} <0>Sync page</0>."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "How to run your own server"
 msgstr ""

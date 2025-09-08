@@ -118,50 +118,10 @@ function SettingsServer(): JSX.Element {
             onDriveRemove={subject => removeFromHistory(subject)}
           />
 
-          <Heading as='h2'>Gateway Server</Heading>
-          {isHttpDrive ? (
-            <p>
-              The gateway is currently locked to{' '}
-              <strong>{new URL(drive).origin}</strong> because you are using an
-              HTTP-based drive.
-            </p>
-          ) : (
-            <p>
-              The gateway server is used to resolve DIDs and fetch data from the
-              network.
-            </p>
-          )}
-
-          <ServersCard
-            servers={knownServers}
-            onServerSelect={handleSetServer}
-            onServerRemove={handleRemoveServer}
-            disabled={isHttpDrive}
-          />
-
-          <LabelStyled htmlFor={currentServerId}>
-            Add Gateway by URL
-          </LabelStyled>
-          <Row>
-            <InputWrapper>
-              <InputStyled
-                id={currentServerId}
-                data-testid='server-url-input'
-                value={isHttpDrive ? new URL(drive).origin : serverInput}
-                disabled={isHttpDrive}
-                onChange={e => setServerInput(e.target.value)}
-                placeholder='https://example.com'
-              />
-            </InputWrapper>
-            <Button
-              onClick={() => handleSetServer(serverInput)}
-              disabled={isHttpDrive || baseURL === serverInput}
-              data-test='server-url-save'
-            >
-              {isHttpDrive ? 'Locked' : 'Set Active'}
-            </Button>
-          </Row>
-          {serverErr && <ErrorLook>{serverErr?.message}</ErrorLook>}
+          <p>
+            Server settings have moved to the{' '}
+            <a href='/app/sync'>Sync page</a>.
+          </p>
         </Column>
       </ContainerWide>
     </Main>
