@@ -115,6 +115,16 @@ function SyncPage() {
   const knownServers = serverURLStorage.getKnownServers();
   const [serverInput, setServerInput] = useState('');
   const [showAddServer, setShowAddServer] = useState(false);
+  const [irohNodeId, setIrohNodeId] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch('/iroh-node-id')
+      .then(r => r.json())
+      .then(data => {
+        if (data.nodeId) setIrohNodeId(data.nodeId);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const refresh = () => setStatus(store.getSyncStatus());
@@ -214,7 +224,9 @@ function SyncPage() {
                 >
                   {knownServers.map(s => (
                     <option key={s} value={s}>
-                      {new URL(s).hostname}
+                      {s.startsWith('iroh:')
+                        ? `iroh:${s.slice(5, 13)}...`
+                        : new URL(s).hostname}
                     </option>
                   ))}
                 </ServerSelect>
@@ -242,7 +254,7 @@ function SyncPage() {
                   >
                     <ServerInput
                       autoFocus
-                      placeholder='https://my-server.com'
+                      placeholder='https://... or iroh:...'
                       value={serverInput}
                       onChange={e => setServerInput(e.target.value)}
                     />
@@ -257,6 +269,25 @@ function SyncPage() {
                   >
                     How to run your own server
                   </DocsLink>
+                </DetailValue>
+              </DetailItem>
+            )}
+            {irohNodeId && (
+              <DetailItem>
+                <DetailLabel>Peer ID</DetailLabel>
+                <DetailValue>
+                  <PeerIdRow>
+                    <PeerIdText title={irohNodeId}>
+                      {irohNodeId.slice(0, 20)}...
+                    </PeerIdText>
+                    <NodeAction
+                      onClick={() => {
+                        navigator.clipboard.writeText(irohNodeId);
+                      }}
+                    >
+                      Copy
+                    </NodeAction>
+                  </PeerIdRow>
                 </DetailValue>
               </DetailItem>
             )}
@@ -777,6 +808,17 @@ const AddServerRow = styled.form`
   display: flex;
   gap: 0.5rem;
   align-items: center;
+`;
+
+const PeerIdRow = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
+const PeerIdText = styled.code`
+  font-size: 0.8rem;
+  color: ${p => p.theme.colors.textLight};
 `;
 
 const DocsLink = styled.a`

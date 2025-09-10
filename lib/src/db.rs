@@ -103,6 +103,7 @@ pub struct Db {
     /// Function called whenever a Commit is applied.
     on_commit: Option<Arc<HandleCommit>>,
     /// Where the DB is stored on disk.
+    #[allow(dead_code)]
     path: std::path::PathBuf,
     /// The base domain of the store.
     pub base_domain: Option<String>,
@@ -190,6 +191,40 @@ impl Db {
         Ok(store)
     }
 
+    /// Creates a Db backed by redb with file-based persistent storage.
+    /// Works on all native targets (not WASM — use init_redb_opfs for that).
+    #[cfg(all(feature = "db-redb", not(target_arch = "wasm32")))]
+    pub async fn init_redb_file(
+        path: &std::path::Path,
+        base_domain: Option<String>,
+    ) -> AtomicResult<Db> {
+        tracing::info!("Opening ReDB database at {:?}", path);
+
+        std::fs::create_dir_all(path)
+            .map_err(|e| format!("Failed to create database directory {}: {e}", path.display()))?;
+
+        let redb_path = path.join("atomic.redb");
+        let redb_store = redb_store::RedbStore::new_file(&redb_path)?;
+
+        let store = Db {
+            path: path.to_path_buf(),
+            kv: Arc::new(redb_store),
+            default_agent: Arc::new(Mutex::new(None)),
+            endpoints: vec![],
+            class_extenders: Arc::new(RwLock::new(vec![])),
+            dht: Arc::new(None),
+            on_commit: None,
+            base_domain,
+        };
+
+        store.add_class_extender(crate::collections::get_collection_class_extender())?;
+
+        crate::populate::bootstrap(&store)
+            .await
+            .map_err(|e| format!("Failed to populate base models. {}", e))?;
+        Ok(store)
+    }
+
     /// Creates a Db backed by redb with OPFS persistent storage.
     /// Only available in WASM Workers. Data survives page reloads.
     #[cfg(all(feature = "db-redb", target_arch = "wasm32"))]
@@ -241,9 +276,135 @@ impl Db {
         Ok(store)
     }
 
+    /// Create a temporary Db backed by ReDB. Useful for testing.
+    #[cfg(all(feature = "db-redb", not(feature = "db-sled"), not(target_arch = "wasm32")))]
+    pub async fn init_temp(id: &str) -> AtomicResult<Db> {
+        let tmp_dir_path = format!(".temp/db/{}", id);
+        let _try_remove_existing = std::fs::remove_dir_all(&tmp_dir_path);
+        std::fs::create_dir_all(&tmp_dir_path)
+            .map_err(|e| format!("Failed to create temp dir: {e}"))?;
+        let store = Db::init_redb_file(
+            std::path::Path::new(&tmp_dir_path),
+            Some("https://localhost".into()),
+        )
+        .await?;
+        let agent = store.create_agent(None).await?;
+        store.set_default_agent(agent);
+        store.populate().await?;
+        Ok(store)
+    }
+
     /// Sets the DHT service for decentralized discovery.
     pub fn set_dht(&mut self, dht: DhtService) {
         self.dht = Arc::new(Some(dht));
+    }
+
+    // ── High-level SDK helpers ─────────────────────────────────────────
+
+    /// Create a new drive owned by the current agent.
+    /// Sets read=public, write=agent. Returns the drive subject.
+    pub async fn create_drive(&self, name: &str) -> AtomicResult<String> {
+        let agent = self.get_default_agent()?;
+
+        let mut drive = Resource::new(
+            self.normalize_subject(&format!("_new:{}", crate::utils::random_string(10)).into())
+                .to_string(),
+        );
+        drive.set_unsafe(
+            urls::IS_A.into(),
+            Value::ResourceArray(vec![urls::DRIVE.into()]),
+        );
+        drive.set_unsafe(urls::NAME.into(), Value::String(name.into()));
+        drive.set_unsafe(
+            urls::WRITE.into(),
+            Value::ResourceArray(vec![agent.subject.to_string().into()]),
+        );
+        drive.set_unsafe(
+            urls::READ.into(),
+            Value::ResourceArray(vec![urls::PUBLIC_AGENT.into()]),
+        );
+
+        let subject = drive.get_subject().to_string();
+        self.add_resource(&drive).await?;
+        Ok(subject)
+    }
+
+    /// Create a new resource with a class, parent, name and optional properties.
+    pub async fn create_resource(
+        &self,
+        class: &str,
+        parent: &str,
+        name: &str,
+        props: Option<Vec<(&str, Value)>>,
+    ) -> AtomicResult<String> {
+        let mut resource = Resource::new(
+            self.normalize_subject(&format!("_new:{}", crate::utils::random_string(10)).into())
+                .to_string(),
+        );
+        resource.set_unsafe(
+            urls::IS_A.into(),
+            Value::ResourceArray(vec![class.into()]),
+        );
+        resource.set_unsafe(urls::NAME.into(), Value::String(name.into()));
+        resource.set_unsafe(
+            urls::PARENT.into(),
+            Value::AtomicUrl(parent.into()),
+        );
+
+        if let Some(extra) = props {
+            for (prop, val) in extra {
+                resource.set_unsafe(prop.into(), val);
+            }
+        }
+
+        let subject = resource.get_subject().to_string();
+        self.add_resource(&resource).await?;
+        Ok(subject)
+    }
+
+    /// Get children of a resource, optionally filtered by class.
+    pub async fn get_children(
+        &self,
+        parent: &str,
+        class_filter: Option<&str>,
+    ) -> AtomicResult<Vec<Resource>> {
+        let mut result = Vec::new();
+
+        for resource in self.all_resources(false) {
+            if let Ok(p) = resource.get(urls::PARENT) {
+                if p.to_string() != parent {
+                    continue;
+                }
+            } else {
+                continue;
+            }
+
+            if let Some(class) = class_filter {
+                if let Ok(is_a) = resource.get(urls::IS_A) {
+                    if !is_a.to_string().contains(class) {
+                        continue;
+                    }
+                } else {
+                    continue;
+                }
+            }
+
+            result.push(resource);
+        }
+
+        Ok(result)
+    }
+
+    /// Full onboarding: create an agent and a personal drive in one call.
+    /// Returns (agent, drive_subject).
+    pub async fn setup(
+        &self,
+        agent_name: &str,
+    ) -> AtomicResult<(crate::agents::Agent, String)> {
+        let agent = self.create_agent(Some(agent_name)).await?;
+        self.set_default_agent(agent.clone());
+        let drive = self.create_drive(&format!("{}'s Drive", agent_name)).await?;
+        Ok((agent, drive))
     }
 
     pub async fn resolve_request_target(

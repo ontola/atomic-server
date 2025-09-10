@@ -61,7 +61,7 @@ pub async fn create_test_drive(store: &impl Storelike) -> crate::errors::AtomicR
 }
 
 /// Sets up a full environment for testing, including a drive and collections.
-#[cfg(feature = "db-sled")]
+#[cfg(feature = "db")]
 pub async fn setup_test_env(store: &Db) -> crate::errors::AtomicResult<()> {
     store.populate().await?;
     let drive_did = create_test_drive(store).await?;

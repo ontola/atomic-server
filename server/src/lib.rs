@@ -26,3 +26,4 @@ mod search;
 #[cfg(test)]
 mod tests;
 mod trace;
+pub mod iroh_transport;

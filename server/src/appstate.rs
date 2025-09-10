@@ -46,7 +46,8 @@ impl AppState {
             tracing::warn!("Development mode is enabled. This will use staging environments for services like LetsEncrypt.");
         }
 
-        let mut store = atomic_lib::Db::init(&config.store_path, Some(config.get_origin())).await?;
+        let mut store =
+            atomic_lib::Db::init_redb_file(&config.store_path, Some(config.get_origin())).await?;
 
         // Register all built-in class extenders
         store.add_class_extender(plugins::chatroom::build_chatroom_extender())?;

@@ -207,6 +207,9 @@ impl Resource {
         self.get_loro_doc();
         if let Some(doc) = &self.loro {
             doc.set_property(property, value)?;
+            // Persist the snapshot so it round-trips through the DB
+            self.propvals
+                .insert(urls::LORO_UPDATE.into(), Value::LoroDoc(doc.export_snapshot()));
         }
         // Also update propvals cache for immediate reads
         self.propvals.insert(property.into(), value.clone());

@@ -20,9 +20,13 @@ tauri-plugin-shell = "2"
 tauri-plugin-process = "2"
 
 [dependencies.atomic-server]
-# We don't need HTTPS for desktop usage
+# No HTTPS for desktop, but include Iroh for p2p sync
 default-features = false
 path = "../server"
+
+[dependencies.atomic_lib]
+path = "../lib"
+features = ["db-redb", "iroh"]
 
 [dependencies.serde]
 features = ["derive"]
