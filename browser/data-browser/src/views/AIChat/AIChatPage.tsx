@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { SimpleAIChat } from '../../components/AI/SimpleAIChat';
 import {
   Ai,
   ai,
@@ -12,24 +11,26 @@ import {
 import type { ResourcePageProps } from '../ResourcePage';
 import toast from 'react-hot-toast';
 import {
-  type AIChatDisplayMessage,
   type AIMessageContext,
+  type AtomicUIMessage,
 } from '../../components/AI/types';
 import { Column, Row } from '../../components/Row';
 import { EditableTitle } from '../../components/EditableTitle';
 import { DEFAULT_AICHAT_NAME } from '../../components/AI/aiContstants';
 import { useGenerativeData } from '../../components/AI/useGenerativeData';
 import {
-  displayMessageToResource,
+  uiMessageToResource,
   messageResourcesToDisplayMessages,
 } from '../../components/AI/chatConversionUtils';
 import { TagBar } from '../../components/Tag/TagBar';
+import { RealAIChat } from '../../components/AI/RealAIChat';
 
 export const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({
   resource,
 }) => {
   const store = useStore();
-  const [messages, setMessages] = useState<AIChatDisplayMessage[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [messages, setMessages] = useState<AtomicUIMessage[]>([]);
   const [contextItems, setContextItems] = useState<AIMessageContext[]>([]);
   const [messageSubjects, setMessageSubjects] = useArray(
     resource,
@@ -39,18 +40,18 @@ export const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({
     },
   );
   const [messageToResourceMap, setMessageToResourceMap] = useState(
-    new Map<AIChatDisplayMessage, Resource>(),
+    new Map<AtomicUIMessage, Resource>(),
   );
   const [title, setTitle] = useTitle(resource);
 
   const canWrite = useCanWrite(resource);
   const { generateTitleFromConversation } = useGenerativeData();
 
-  const addNewMessage = async (message: AIChatDisplayMessage) => {
+  const addNewMessage = async (message: AtomicUIMessage) => {
     setMessages(prev => [...prev, message]);
 
     try {
-      const messageResource = await displayMessageToResource(
+      const messageResource = await uiMessageToResource(
         message,
         resource,
         store,
@@ -71,7 +72,7 @@ export const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({
     }
   };
 
-  const handleDeleteMessage = (message: AIChatDisplayMessage) => {
+  const handleDeleteMessage = (message: AtomicUIMessage) => {
     const messageResource = messageToResourceMap.get(message);
 
     if (messageResource) {
@@ -90,8 +91,10 @@ export const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({
     });
   };
 
-  const removeFollowingMessages = async (message: AIChatDisplayMessage) => {
-    const nextMessages = messages.slice(messages.indexOf(message) + 1);
+  const removeFollowingMessages = async (message: AtomicUIMessage) => {
+    const nextMessages = messages.slice(
+      messages.findIndex(x => x.id === message.id) + 1,
+    );
 
     // We need to destroy the resources server side as well as in the internal state.
     // We also need to update the `messages` prop in the chat resource.
@@ -109,7 +112,7 @@ export const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({
           console.error('Error removing message:', error);
         }
       } else {
-        throw new Error('Resource not found for message:', m);
+        throw new Error(`Resource not found for message: ${m.id}`);
       }
     }
 
@@ -122,13 +125,9 @@ export const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({
       await resource.save();
       // Set internal message state
       setMessages(prev => {
-        const newMessages = prev.slice(0, prev.indexOf(message) + 1);
-
-        console.log(
-          'setting messages',
-          newMessages,
-          'last message',
-          newMessages.at(-1).content[0].text,
+        const newMessages = prev.slice(
+          0,
+          prev.findIndex(x => x.id === message.id) + 1,
         );
 
         return newMessages;
@@ -143,23 +142,30 @@ export const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({
     messageResourcesToDisplayMessages(messageSubjects, store).then(map => {
       setMessages(Array.from(map.keys()));
       setMessageToResourceMap(map);
+      setLoading(false);
     });
   }, []);
 
+  // When there are only two messages and the title is still the default name, generate a title from the conversation.
   useEffect(() => {
     if (messages.length === 2 && title === DEFAULT_AICHAT_NAME) {
       generateTitleFromConversation(messages).then(setTitle);
     }
   }, [messages, title]);
 
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+
   return (
-    <SimpleAIChat
+    <RealAIChat
       fullView
-      messages={messages}
-      onNewMessage={addNewMessage}
+      initialMessages={messages}
       readonly={!canWrite}
       externalContextItems={contextItems}
       setExternalContextItems={setContextItems}
+      chatSubject={resource.subject}
+      onNewMessage={addNewMessage}
       onDeleteMessage={handleDeleteMessage}
       onRegenerateMessage={removeFollowingMessages}
     >
@@ -169,6 +175,6 @@ export const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({
         </Row>
         <TagBar resource={resource} />
       </Column>
-    </SimpleAIChat>
+    </RealAIChat>
   );
 };

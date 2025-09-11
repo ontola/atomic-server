@@ -23,27 +23,17 @@ interface ProviderProps {
 export const AppSettingsContextProvider = (
   props: ProviderProps,
 ): JSX.Element => {
+  // == SYSTEM ==
+  const [agent, setAgent] = useCurrentAgent();
+  const [baseURL, setBaseURL] = useServerURL();
+  const [drive, innerSetDrive] = useLocalStorage('drive', baseURL);
+
+  // == APPEARANCE ==
   const [darkMode, setDarkMode, darkModeSetting] = useDarkMode();
   const [mainColor, setMainColor] = useLocalStorage('mainColor', '#1b50d8');
   const [navbarTop, setNavbarTop] = useLocalStorage('navbarTop', false);
   const [hideTemplates, setHideTemplates] = useLocalStorage(
     'hideTemplates',
-    false,
-  );
-  const [openRouterApiKey, setOpenRouterApiKey] = useLocalStorage<
-    string | undefined
-  >('atomic.ai.openrouter-api-key', undefined);
-  const [mcpServers, setMcpServers] = useLocalStorage<MCPServer[]>(
-    'atomic.ai.mcpServers',
-    [],
-  );
-  const [ollamaUrl, setOllamaUrl] = useLocalStorage<string | undefined>(
-    'atomic.ai.ollama-url',
-    undefined,
-  );
-
-  const [viewTransitionsDisabled, setViewTransitionsDisabled] = useLocalStorage(
-    'viewTransitionsDisabled',
     false,
   );
   const [navbarFloating, setNavbarFloating] = useLocalStorage(
@@ -55,18 +45,35 @@ export const AppSettingsContextProvider = (
     window.innerWidth > SIDEBAR_TOGGLE_WIDTH,
   );
 
-  const [sidebarKeyboardDndEnabled, setSidebarKeyboardDndEnabled] =
-    useLocalStorage('sidebarKeyboardDndEnabled', false);
-
-  const [agent, setAgent] = useCurrentAgent();
-  const [baseURL, setBaseURL] = useServerURL();
-  const [drive, innerSetDrive] = useLocalStorage('drive', baseURL);
-
+  // == AI ==
   const [enableAI, setEnableAI] = useLocalStorage('atomic.ai.enabled', true);
+  const [openRouterApiKey, setOpenRouterApiKey] = useLocalStorage<
+    string | undefined
+  >('atomic.ai.openrouter-api-key', undefined);
+  const [mcpServers, setMcpServers] = useLocalStorage<MCPServer[]>(
+    'atomic.ai.mcpServers',
+    [],
+  );
+  const [ollamaUrl, setOllamaUrl] = useLocalStorage<string | undefined>(
+    'atomic.ai.ollama-url',
+    undefined,
+  );
   const [showTokenUsage, setShowTokenUsage] = useLocalStorage(
     'atomic.ai.showTokenUsage',
     true,
   );
+  const [showFollowUpPrompts, setShowFollowUpPrompts] = useLocalStorage(
+    'atomic.ai.showFollowUpPrompts',
+    true,
+  );
+
+  // == ACCESSIBILITY ==
+  const [viewTransitionsDisabled, setViewTransitionsDisabled] = useLocalStorage(
+    'viewTransitionsDisabled',
+    false,
+  );
+  const [sidebarKeyboardDndEnabled, setSidebarKeyboardDndEnabled] =
+    useLocalStorage('sidebarKeyboardDndEnabled', false);
 
   const setDrive = useCallback(
     (newDrive: string) => {
@@ -124,6 +131,8 @@ export const AppSettingsContextProvider = (
       setShowTokenUsage,
       ollamaUrl,
       setOllamaUrl,
+      showFollowUpPrompts,
+      setShowFollowUpPrompts,
     }),
     [
       drive,
@@ -157,6 +166,8 @@ export const AppSettingsContextProvider = (
       setShowTokenUsage,
       ollamaUrl,
       setOllamaUrl,
+      showFollowUpPrompts,
+      setShowFollowUpPrompts,
     ],
   );
 
@@ -217,6 +228,9 @@ export interface AppSettings {
   /** The URL of the Ollama server */
   ollamaUrl: string | undefined;
   setOllamaUrl: (url: string | undefined) => void;
+  /** Whether to show the follow up prompts in AI chats */
+  showFollowUpPrompts: boolean;
+  setShowFollowUpPrompts: (b: boolean) => void;
 }
 
 const initialState: AppSettings = {
@@ -251,6 +265,8 @@ const initialState: AppSettings = {
   setShowTokenUsage: () => undefined,
   ollamaUrl: undefined,
   setOllamaUrl: () => undefined,
+  showFollowUpPrompts: true,
+  setShowFollowUpPrompts: () => undefined,
 };
 
 /** Hook for using App Settings, such as theme and darkmode */

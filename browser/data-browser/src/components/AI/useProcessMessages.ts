@@ -1,76 +1,40 @@
 import { commits, useStore, type Resource, type Store } from '@tomic/react';
-import {
-  type AIChatDisplayMessage,
-  isMessageWithContext,
-  isAIErrorMessage,
-  type AIMessageContext,
-  isUserMessage,
-} from './types';
+import { type AIMessageContext, type AtomicUIMessage } from './types';
 import { toClassString } from './atomicSchemaHelpers';
 import { useMcpServers, type ReadMCPResource } from './MCP/useMcpServers';
-import type { CoreMessage } from 'ai';
 
 /**
- * A hook that processes AI chat messages by normalizing them and applying context.
- * @returns A function that normalizes messages and applies context to them
+ * A hook that processes AI chat messages by applying context.
  */
 export function useProcessMessages() {
   const store = useStore();
   const { readMCPResource } = useMcpServers();
 
-  const normalizeAndApplyContext = async (
-    messages: AIChatDisplayMessage[],
-  ): Promise<CoreMessage[]> => {
-    /**
-     * Normalizes a single message by processing its context and content
-     * @param m - The message to normalize
-     * @returns A promise that resolves to a normalized CoreMessage or undefined if the message should be filtered out
-     * @throws Error if a non-user message contains context
-     */
-    const normalizeMessage = async (
-      m: AIChatDisplayMessage,
-    ): Promise<CoreMessage | undefined> => {
-      if (isMessageWithContext(m)) {
-        if (!isUserMessage(m.message))
-          throw new Error('Only user messages can have context');
-
-        const contextString = await addContextToMessage(
-          '',
-          m.context,
-          store,
-          readMCPResource,
-        );
-
-        const newContent =
-          typeof m.message.content === 'string'
-            ? `${m.message.content}\n${contextString}`
-            : [
-                ...m.message.content,
-                {
-                  type: 'text',
-                  text: contextString,
-                } as const,
-              ];
-
+  return async (messages: AtomicUIMessage[]): Promise<AtomicUIMessage[]> => {
+    const map = async (message: AtomicUIMessage) => {
+      if (message.metadata?.context) {
         return {
-          ...m.message,
-          content: newContent,
+          ...message,
+          parts: [
+            ...message.parts,
+            {
+              type: 'text',
+              text: await addContextToMessage(
+                '',
+                message.metadata.context,
+                store,
+                readMCPResource,
+              ),
+            },
+          ],
         };
       }
 
-      if (isAIErrorMessage(m)) return undefined;
-
-      return m;
+      return message;
     };
 
-    const normalizedMessages = await Promise.all(
-      messages.map(normalizeMessage),
-    );
-
-    return normalizedMessages.filter(m => m !== undefined);
+    return Promise.all(messages.map(map)) as Promise<AtomicUIMessage[]>;
   };
-
-  return normalizeAndApplyContext;
 }
 
 /**

@@ -17,9 +17,46 @@ type MCPTool = Awaited<
   ReturnType<(typeof Client)['prototype']['listTools']>
 >['tools'][number];
 
+const convertTool = (t: MCPTool, client: Client): Tool => {
+  return tool({
+    description: t.description,
+    inputSchema: jsonSchema({
+      ...t.inputSchema,
+      properties:
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (t.inputSchema.properties as Record<string, any>) ?? {},
+      additionalProperties: false,
+    }),
+    execute: async (args: Record<string, unknown>) => {
+      const result = await client.callTool({
+        name: t.name,
+        arguments: args,
+      });
+
+      if (result.isError) {
+        return result.content;
+      }
+
+      return result.content;
+    },
+  });
+};
+
 export function useTools() {
   const { clients } = useMcpServers();
   const [toolSets, setToolSets] = useState<Record<string, ToolSet>>({});
+
+  const getToolsForAgent = (agent: AIAgent): ToolSet => {
+    const agentTools = agent.availableTools.reduce(
+      (acc, id) => ({
+        ...acc,
+        ...(toolSets[id] || {}),
+      }),
+      {},
+    );
+
+    return agentTools;
+  };
 
   useEffect(() => {
     for (const [name, client] of Object.entries(clients)) {
@@ -35,44 +72,6 @@ export function useTools() {
       });
     }
   }, [clients]);
-
-  const convertTool = (t: MCPTool, client: Client): Tool => {
-    return tool({
-      description: t.description,
-      parameters: jsonSchema({
-        ...t.inputSchema,
-        properties:
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (t.inputSchema.properties as Record<string, any>) ?? {},
-        additionalProperties: false,
-      }),
-      // @ts-expect-error - AI-SDK is expecting to be able to infer the type but it can't in our case.
-      execute: async (args: Record<string, unknown>) => {
-        const result = await client.callTool({
-          name: t.name,
-          arguments: args,
-        });
-
-        if (result.isError) {
-          return result.content;
-        }
-
-        return result.content;
-      },
-    });
-  };
-
-  const getToolsForAgent = (agent: AIAgent) => {
-    const agentTools = agent.availableTools.reduce(
-      (acc, id) => ({
-        ...acc,
-        ...(toolSets[id] || {}),
-      }),
-      {},
-    );
-
-    return agentTools;
-  };
 
   return getToolsForAgent;
 }
