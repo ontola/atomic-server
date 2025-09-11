@@ -1,11 +1,8 @@
-import { generateText, type CoreMessage } from 'ai';
-import {
-  type AIChatDisplayMessage,
-  isAIErrorMessage,
-  isMessageWithContext,
-} from './types';
+import { generateObject, generateText } from 'ai';
+import { type AtomicUIMessage } from './types';
 import { useSettings } from '../../helpers/AppSettings';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
+import z from 'zod';
 
 const generateTitleSystemPrompt = (
   conversation: string,
@@ -15,6 +12,25 @@ The user will provide a JSON object containing the conversation.
 
 ALWAYS USE THE SAME LANGUAGE AS THE USER!
 ONLY RESPOND WITH JUST THE TITLE, NOTHING ELSE! NO FORMATTING OR EXTRA TEXT!
+
+Here follows the conversation as a JSON object:
+\`\`\`json
+${conversation}
+\`\`\`
+`;
+
+const generateFollowUpQuestionsSystemPrompt = (
+  conversation: string,
+) => `You are part of a larger AI chat application.
+It is your job to look at a conversation and generate a follow up prompt for the user to use.
+The prompt MUST be written from the perspective of the user, not the AI!
+The prompt can be a follow up question or response to a question from the assistant.
+DO NOT ask for clarification or information from the user, just generate the follow up prompt.
+Be concise and to the point. DO NOT INCLUDE ANY TEXT FORMATTING.
+
+If the assistant asks the user a question, generate follow up prompt that answer the question.
+If the assistant makes a suggestion, generate follow up prompt that follow up on the suggestion.
+If the assistant does neigther, generate a follow up question the user could ask about the topic that are related to the last assistant response.
 
 Here follows the conversation as a JSON object:
 \`\`\`json
@@ -33,7 +49,7 @@ export const useGenerativeData = () => {
   });
 
   const generateTitleFromConversation = async (
-    conversation: AIChatDisplayMessage[],
+    conversation: AtomicUIMessage[],
   ) => {
     const filteredConversation = removeFilesAndImages(
       conversation.slice(0, 2).filter(m => m.role !== 'system'),
@@ -41,7 +57,7 @@ export const useGenerativeData = () => {
     const convoString = JSON.stringify(filteredConversation);
 
     const { text } = await generateText({
-      model: openrouter('google/gemma-3-4b-it:free'),
+      model: openrouter('google/gemma-3-4b-it'),
       // Google/gemma-3-4b-it:free doesn't support system prompts so we have to do it this way
       prompt: generateTitleSystemPrompt(convoString),
     });
@@ -55,34 +71,33 @@ export const useGenerativeData = () => {
     return undefined;
   };
 
-  return { generateTitleFromConversation };
+  const generateFollowUpQuestions = async (conversation: AtomicUIMessage[]) => {
+    const filteredConversation = removeFilesAndImages(
+      conversation.slice(-2).filter(m => m.role !== 'system'),
+    );
+    const convoString = JSON.stringify(filteredConversation);
+
+    const { object } = await generateObject({
+      model: openrouter('google/gemma-3-4b-it'),
+      prompt: generateFollowUpQuestionsSystemPrompt(convoString),
+      schema: z.object({
+        prompt: z.string(),
+      }),
+    });
+
+    return object.prompt && object.prompt.trim() !== '' ? [object.prompt] : [];
+  };
+
+  return { generateTitleFromConversation, generateFollowUpQuestions };
 };
 
 function removeFilesAndImages(
-  conversation: AIChatDisplayMessage[],
-): AIChatDisplayMessage[] {
-  return conversation.map(displayMessage => {
-    // If it's a MessageWithContext, check the nested message
-    const message = isMessageWithContext(displayMessage)
-      ? displayMessage.message
-      : displayMessage;
-
-    // We are only interested in CoreMessages that are not error messages
-    if (isAIErrorMessage(message) || !('content' in message)) {
-      return displayMessage;
-    }
-
-    const coreMessage = message as CoreMessage;
-
-    if (Array.isArray(coreMessage.content)) {
-      return {
-        ...coreMessage,
-        content: coreMessage.content.filter(
-          part => part.type !== 'file' && part.type !== 'image',
-        ),
-      };
-    }
-
-    return displayMessage;
-  }) as AIChatDisplayMessage[];
+  conversation: AtomicUIMessage[],
+): AtomicUIMessage[] {
+  return conversation.map(message => {
+    return {
+      ...message,
+      parts: message.parts.filter(part => part.type !== 'file'),
+    };
+  });
 }

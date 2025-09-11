@@ -108,9 +108,21 @@ export const useAIAgentConfig = () => {
     agents[0]?.id || '',
   );
 
+  const [agentChatIndex, setAgentChatIndex] = useLocalStorage<
+    Record<string, string>
+  >('atomic.ai.lastUsedAgentInChat', {});
+
   // Save agents to settings
   const saveAgents = (newAgents: AIAgent[]) => {
     setAgents(newAgents);
+  };
+
+  const getLastUsedAgentForChat = (chatSubject: string) => {
+    return agentChatIndex[chatSubject];
+  };
+
+  const setLastUsedAgentForChat = (chatSubject: string, agentId: string) => {
+    setAgentChatIndex({ ...agentChatIndex, [chatSubject]: agentId });
   };
 
   return {
@@ -120,6 +132,8 @@ export const useAIAgentConfig = () => {
     saveAgents,
     defaultAgentId,
     setDefaultAgentId,
+    setLastUsedAgentForChat,
+    getLastUsedAgentForChat,
   };
 };
 

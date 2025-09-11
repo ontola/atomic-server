@@ -96,6 +96,8 @@ export default defineConfig({
       workbox: {
         // See https://github.com/atomicdata-dev/atomic-data-browser/issues/294
         globIgnores: ['**/index.html'],
+        // TODO: Remove this and split up the AI part into a chunk.
+        maximumFileSizeToCacheInBytes: 3000000,
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,

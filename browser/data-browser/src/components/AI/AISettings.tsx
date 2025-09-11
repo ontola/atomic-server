@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react';
 import { OpenRouterLoginButton } from './OpenRouterLoginButton';
 import { TabPanel, Tabs } from '../Tabs';
 import { effectFetch } from '../../helpers/effectFetch';
+import { CheckboxDescriptor } from '../forms/CheckboxDescriptor';
 
 const intl = new Intl.NumberFormat('default', {
   style: 'currency',
@@ -48,6 +49,8 @@ const AISettings: React.FC = () => {
     setShowTokenUsage,
     ollamaUrl,
     setOllamaUrl,
+    showFollowUpPrompts,
+    setShowFollowUpPrompts,
   } = useSettings();
 
   const [creditUsage, setCreditUsage] = useState<CreditUsage | undefined>();
@@ -79,6 +82,18 @@ const AISettings: React.FC = () => {
         Features
       </CheckboxLabel>
       <ConditionalSettings enabled={enableAI} inert={!enableAI}>
+        <CheckboxDescriptor
+          label='Show follow up prompts in chats'
+          description='Uses a small model to generate a follow up prompt based on the last message in the chat.'
+        >
+          {id => (
+            <Checkbox
+              id={id}
+              checked={showFollowUpPrompts}
+              onChange={setShowFollowUpPrompts}
+            />
+          )}
+        </CheckboxDescriptor>
         <Heading>AI Provider</Heading>
         <TabWrapper>
           <Tabs tabs={PROVIDER_TABS} label='AI Provider' rounded>
