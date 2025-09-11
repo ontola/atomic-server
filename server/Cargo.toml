@@ -52,6 +52,7 @@ tracing-chrome = "0.7"
 tracing-log = "0.2"
 ureq = "2"
 urlencoding = "2"
+ring = "0.17.14"
 
 [dependencies.instant-acme]
 optional = true
