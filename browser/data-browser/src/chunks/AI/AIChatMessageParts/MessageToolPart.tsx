@@ -1,6 +1,6 @@
 import { getToolName, type ToolUIPart } from 'ai';
 import { styled } from 'styled-components';
-import { Row } from '../../Row';
+import { Row } from '@components/Row';
 import {
   FaAtom,
   FaBook,
@@ -8,9 +8,9 @@ import {
   FaPencil,
   FaWrench,
 } from 'react-icons/fa6';
-import { Details } from '../../Details';
+import { Details } from '@components/Details';
 import { TOOL_NAMES } from '../useAtomicTools';
-import { InlineFormattedResourceList } from '../../InlineFormattedResourceList';
+import { InlineFormattedResourceList } from '@components/InlineFormattedResourceList';
 import { useResource } from '@tomic/react';
 
 interface ToolMessageProps {

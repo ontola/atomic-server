@@ -1,14 +1,14 @@
 import styled from 'styled-components';
-import { ComboBox } from '../../ComboBox';
-import { Column } from '../../Row';
+import { ComboBox } from '@components/ComboBox';
+import { Column } from '@components/Row';
 import { useEffect, useState } from 'react';
 import { AIProvider, type AIModelIdentifier } from '../types';
 import { ModelInfoLayout } from './ModelInfoLayout';
-import { useSettings } from '../../../helpers/AppSettings';
-import { ErrorLook } from '../../ErrorLook';
-import { TAB_PANEL_HAS_ERROR_CLASS } from '../../Tabs';
-import { LoaderBlock } from '../../Loader';
-import { effectFetch } from '../../../helpers/effectFetch';
+import { useSettings } from '@helpers/AppSettings';
+import { ErrorLook } from '@components/ErrorLook';
+import { TAB_PANEL_HAS_ERROR_CLASS } from '@components/Tabs';
+import { LoaderBlock } from '@components/Loader';
+import { effectFetch } from '@helpers/effectFetch';
 
 type OllamaModel = {
   name: string;

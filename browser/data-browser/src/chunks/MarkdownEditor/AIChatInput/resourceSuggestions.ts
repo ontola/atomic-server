@@ -7,8 +7,8 @@ import {
 } from './MentionList';
 import type { Store } from '@tomic/react';
 import type { SuggestionOptions, SuggestionProps } from '@tiptap/suggestion';
-import type { SearchResourcesOfServer } from '../../../components/AI/MCP/useMcpServers';
-import type { MCPServer } from '../../../components/AI/types';
+import type { SearchResourcesOfServer } from '@components/AI/MCP/useMcpServers';
+import type { MCPServer } from '@chunks/AI/types';
 import type { CategorySuggestion, SearchSuggestion } from './types';
 
 enum SuggestionState {

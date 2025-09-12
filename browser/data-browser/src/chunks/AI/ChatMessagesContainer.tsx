@@ -1,7 +1,7 @@
-import styled from 'styled-components';
+import { styled } from 'styled-components';
 import { useEffect, useRef } from 'react';
-import { ScrollArea } from '../ScrollArea';
-import { Column } from '../Row';
+import { ScrollArea } from '@components/ScrollArea';
+import { Column } from '@components/Row';
 
 interface ChatMessagesContainerProps {
   enableAutoScroll?: boolean;

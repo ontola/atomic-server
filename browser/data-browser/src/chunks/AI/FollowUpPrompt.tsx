@@ -1,7 +1,7 @@
 import { styled } from 'styled-components';
-import { Row } from '../Row';
+import { Row } from '@components/Row';
 import { FaArrowRight } from 'react-icons/fa6';
-import { fadeIn } from '../../helpers/commonAnimations';
+import { fadeIn } from '@helpers/commonAnimations';
 
 interface FollowUpPromptProps {
   text: string;

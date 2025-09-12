@@ -17,7 +17,7 @@ import {
   type TextUIPart,
   type ToolUIPart,
 } from 'ai';
-import { newContextItem } from './AISidebarContext';
+import { newContextItem } from '@components/AI/AISidebarContext';
 import {
   type AIAtomicResourceMessageContext,
   type AIMCPResourceMessageContext,
@@ -25,7 +25,7 @@ import {
   type AtomicUIMessage,
   isAtomicResourceContext,
 } from './types';
-import { addFieldsIf } from '../../helpers/addIf';
+import { addFieldsIf } from '@helpers/addIf';
 
 const TAG_TO_ROLE_MAPPING = {
   'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/tag/user': 'user',

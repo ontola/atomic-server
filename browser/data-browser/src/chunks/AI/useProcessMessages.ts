@@ -1,7 +1,10 @@
 import { commits, useStore, type Resource, type Store } from '@tomic/react';
 import { type AIMessageContext, type AtomicUIMessage } from './types';
 import { toClassString } from './atomicSchemaHelpers';
-import { useMcpServers, type ReadMCPResource } from './MCP/useMcpServers';
+import {
+  useMcpServers,
+  type ReadMCPResource,
+} from '@components/AI/MCP/useMcpServers';
 
 /**
  * A hook that processes AI chat messages by applying context.

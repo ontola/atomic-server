@@ -1,10 +1,10 @@
 import styled from 'styled-components';
 import { AIProvider, type AIModelIdentifier } from '../types';
 import { OpenRouterModelSelector } from './OpenRouterModelSelector';
-import { TAB_PANEL_HAS_ERROR_CLASS, TabPanel, Tabs } from '../../Tabs';
+import { TAB_PANEL_HAS_ERROR_CLASS, TabPanel, Tabs } from '@components/Tabs';
 import { OllamaModelSelector } from './OllamaModelSelector';
-import { transition } from '../../../helpers/transition';
-import { useSettings } from '../../../helpers/AppSettings';
+import { transition } from '@helpers/transition';
+import { useSettings } from '@helpers/AppSettings';
 import { Link } from '@tanstack/react-router';
 
 interface ModelSelectProps {

@@ -32,7 +32,7 @@ import { TablePage } from './TablePage';
 import { Main } from '../components/Main';
 import { OntologyPage } from './OntologyPage';
 import { TagPage } from './TagPage/TagPage';
-import { AIChatPage } from './AIChat/AIChatPage';
+import { AIChatPage } from '@views/AIChat/AIChatPage';
 
 /** These properties are passed to every View at Page level */
 export type ResourcePageProps<Subject extends OptionalClass = never> = {
