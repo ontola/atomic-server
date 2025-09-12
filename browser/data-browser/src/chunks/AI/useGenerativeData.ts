@@ -1,6 +1,6 @@
 import { generateObject, generateText } from 'ai';
 import { type AtomicUIMessage } from './types';
-import { useSettings } from '../../helpers/AppSettings';
+import { useSettings } from '@helpers/AppSettings';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import z from 'zod';
 

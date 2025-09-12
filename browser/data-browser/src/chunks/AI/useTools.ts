@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { AIAgent } from './types';
 import { jsonSchema, tool, type Tool, type ToolSet } from 'ai';
-import { useMcpServers } from './MCP/useMcpServers';
+import { useMcpServers } from '@components/AI/MCP/useMcpServers';
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 
 export type MCPToolCallResult = {

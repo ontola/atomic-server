@@ -36,7 +36,6 @@ export const ComboBox: React.FC<ComboBoxProps> = ({
   onSelect,
 }) => {
   // Use Combobox does not work with the compiler.
-  // eslint-disable-next-line react-compiler/react-compiler
   'use no memo';
   const id = useId();
   const anchorName = `--combo-box-${id.trim().replaceAll(':', '-')}`;

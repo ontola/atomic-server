@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useSettings } from '../../helpers/AppSettings';
-import { Column, Row } from '../Row';
+import { Column, Row } from '@components/Row';
 import toast from 'react-hot-toast';
 import { useAtomicMCPTools } from './useAtomicTools';
 import { AIChatMessage } from './AIChatMessage';
@@ -8,7 +8,10 @@ import { type FileUIPart } from 'ai';
 import { useTools } from './useTools';
 import { styled } from 'styled-components';
 import { GeneratingIndicator } from './GeneratingIndicator';
-import { IconButton, IconButtonVariant } from '../IconButton/IconButton';
+import {
+  IconButton,
+  IconButtonVariant,
+} from '@components/IconButton/IconButton';
 import {
   FaXmark,
   FaPaperclip,
@@ -28,19 +31,19 @@ import {
   type AtomicUIMessage,
 } from './types';
 import { AgentConfig, useAIAgentConfig } from './AgentConfig';
-import { Button } from '../Button';
+import { Button } from '@components/Button';
 import { MessageContextItem } from './MessageContextItem';
 import { useProcessMessages } from './useProcessMessages';
 import { NoKeyOverlay } from './NoKeyOverlay';
 import { useOpenRouterModels } from './useOpenRouterModels';
-import type { MentionItem } from '../../chunks/MarkdownEditor/AIChatInput/types';
+import type { MentionItem } from '@chunks/MarkdownEditor/AIChatInput/types';
 import { useChat } from '@ai-sdk/react';
 import { useClientOnlyTransport } from './ClientOnlyTransport';
 import { useGenerativeData } from './useGenerativeData';
 import { FollowUpPrompt } from './FollowUpPrompt';
 
 const AIChatInput = React.lazy(
-  () => import('../../chunks/MarkdownEditor/AIChatInput/AsyncAIChatInput'),
+  () => import('@chunks/MarkdownEditor/AIChatInput/AsyncAIChatInput'),
 );
 
 interface RealAIChatProps {

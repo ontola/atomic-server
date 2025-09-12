@@ -13,7 +13,7 @@ import { SIDEBAR_TOGGLE_WIDTH } from '../components/SideBar';
 import { serverURLStorage } from './serverURLStorage';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { errorHandler } from '../handlers/errorHandler';
-import type { MCPServer } from '../components/AI/types';
+import type { MCPServer } from '@chunks/AI/types';
 
 interface ProviderProps {
   children: ReactNode;

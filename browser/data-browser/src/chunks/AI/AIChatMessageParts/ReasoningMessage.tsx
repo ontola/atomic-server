@@ -1,6 +1,6 @@
-import Markdown from '../../datatypes/Markdown';
+import Markdown from '@components/datatypes/Markdown';
 import styled from 'styled-components';
-import { Details } from '../../Details';
+import { Details } from '@components/Details';
 
 const ReasoningMessageWrapper = styled.div`
   padding: ${p => p.theme.size()};
