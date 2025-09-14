@@ -26,6 +26,38 @@ async fn iroh_node_id_handler() -> actix_web::HttpResponse {
         .body(r#"{"nodeId":null}"#)
 }
 
+/// POST /iroh-sync { "nodeId": "...", "drive": "..." }
+/// Triggers an Iroh peer sync from the server to the given NodeID.
+async fn iroh_sync_handler(
+    body: web::Json<serde_json::Value>,
+    appstate: web::Data<crate::appstate::AppState>,
+) -> actix_web::HttpResponse {
+    let node_id = match body.get("nodeId").and_then(|v| v.as_str()) {
+        Some(id) => id
+                .strip_prefix("did:ad:node:")
+                .or_else(|| id.strip_prefix("iroh:"))
+                .unwrap_or(id),
+        None => {
+            return actix_web::HttpResponse::BadRequest()
+                .json(serde_json::json!({"error": "Missing nodeId"}));
+        }
+    };
+    let drive = match body.get("drive").and_then(|v| v.as_str()) {
+        Some(d) => d,
+        None => {
+            return actix_web::HttpResponse::BadRequest()
+                .json(serde_json::json!({"error": "Missing drive"}));
+        }
+    };
+
+    match atomic_lib::sync::peer::sync_drive_with_peer(node_id, drive, &appstate.store).await {
+        Ok(count) => actix_web::HttpResponse::Ok()
+            .json(serde_json::json!({"count": count, "status": "ok"})),
+        Err(e) => actix_web::HttpResponse::InternalServerError()
+            .json(serde_json::json!({"error": e.to_string()})),
+    }
+}
+
 /// Set up the Actix server routes. This defines which paths are used.
 // Keep in mind that the order of these matters. An early, greedy route will take
 // precedence over a later route.
@@ -37,6 +69,7 @@ pub fn config_routes(app: &mut actix_web::web::ServiceConfig) {
     )
     .service(web::resource("/ws").to(handlers::web_sockets::web_socket_handler))
     .service(web::resource("/iroh-node-id").to(iroh_node_id_handler))
+    .service(web::resource("/iroh-sync").to(iroh_sync_handler))
     .service(web::resource("/download/{path:[^{}]+}").to(handlers::download::handle_download))
     .service(web::resource("/export").to(handlers::export::handle_export))
     .service(web::resource("/plugin-ui").to(handlers::plugin_ui::handle_plugin_ui))

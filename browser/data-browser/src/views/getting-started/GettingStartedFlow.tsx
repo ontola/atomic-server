@@ -183,7 +183,7 @@ export function GettingStartedFlow({
                       <FaKey />
                       <InputStyled
                         value={secretValue}
-                        onChange={e => setSecret(e.target.value)}
+                        onChange={e => setSecretValue(e.target.value)}
                         type='password'
                         name='secret'
                         autoComplete='current-password'

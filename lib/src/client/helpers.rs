@@ -12,7 +12,7 @@ use crate::{
 /// Checks the datatypes for the Values.
 /// Ignores all atoms where the subject is different.
 /// WARNING: Calls store methods, and is called by store methods, might get stuck in a loop!
-#[tracing::instrument(skip(store), level = "info")]
+#[tracing::instrument(skip_all)]
 pub async fn fetch_resource(
     subject: &str,
     store: &impl Storelike,
@@ -105,7 +105,7 @@ pub fn get_authentication_headers(url: &str, agent: &Agent) -> AtomicResult<Vec<
 
 /// Fetches a URL, returns its body.
 /// Uses the store's Agent agent (if set) to sign the request.
-#[tracing::instrument(level = "info")]
+#[tracing::instrument(skip_all)]
 pub async fn fetch_body(
     url: &str,
     content_type: &str,

@@ -88,6 +88,31 @@ pub async fn handle_frame(
             }
         }
 
+        protocol::tag::SYNC => {
+            if let Some(sync) = protocol::decode_sync(payload) {
+                handle_sync_vv(
+                    &sync.drive,
+                    &sync.drive_hash,
+                    &sync.peers,
+                    &sync.resources,
+                    store,
+                    agent,
+                )
+                .await
+            } else {
+                vec![protocol::encode_error(0, "Invalid SYNC frame")]
+            }
+        }
+
+        protocol::tag::SYNC_PUSH => {
+            if let Some(push) = protocol::decode_sync_push(payload) {
+                import_sync_push(&push, store, agent).await;
+                vec![protocol::encode_sync_ok(&push.drive)]
+            } else {
+                vec![protocol::encode_error(0, "Invalid SYNC_PUSH frame")]
+            }
+        }
+
         _ => {
             tracing::debug!("Unhandled frame tag: 0x{:02x}", tag);
             vec![]
@@ -96,11 +121,13 @@ pub async fn handle_frame(
 }
 
 /// Collects all resource subjects belonging to a drive via BFS on parent relationships.
+/// Collects all resource subjects belonging to a drive via BFS on parent relationships.
+/// Returns pure_id() strings (no query params/drive hints) to match LoroSnapshot keys.
 pub fn collect_drive_subjects(
     store: &Db,
     drive_subject: &crate::Subject,
 ) -> std::collections::HashSet<String> {
-    let drive_str = drive_subject.as_str().to_string();
+    let drive_str = drive_subject.pure_id();
     let mut result = std::collections::HashSet::new();
     result.insert(drive_str.clone());
 
@@ -110,10 +137,14 @@ pub fn collect_drive_subjects(
 
         for resource in store.all_resources(false) {
             if let Ok(parent_val) = resource.get(crate::urls::PARENT) {
+                let parent_pure = crate::Subject::from_raw(
+                    &parent_val.to_string(),
+                    store.get_base_domain().as_deref(),
+                ).pure_id();
                 parent_to_children
-                    .entry(parent_val.to_string())
+                    .entry(parent_pure)
                     .or_default()
-                    .push(resource.get_subject().as_str().to_string());
+                    .push(resource.get_subject().pure_id());
             }
         }
 
@@ -129,11 +160,11 @@ pub fn collect_drive_subjects(
             }
         }
     } else {
+        let drive_pure = drive_subject.pure_id();
         for resource in store.all_resources(false) {
             let subject = resource.get_subject();
-
-            if subject.as_str().starts_with(drive_subject.as_str()) {
-                result.insert(subject.as_str().to_string());
+            if subject.pure_id().starts_with(&drive_pure) {
+                result.insert(subject.pure_id());
             }
         }
     }
@@ -354,6 +385,107 @@ pub async fn handle_sync_vv(
     }
 
     frames
+}
+
+/// Import resources from a SYNC_PUSH message into the local store.
+/// When called from handle_frame (server receiving from a peer), `for_agent` is checked
+/// for write access to the drive. When called locally (e.g. client importing), pass `Sudo`.
+pub async fn import_sync_push(
+    push: &protocol::DecodedSyncPush,
+    store: &Db,
+    for_agent: &crate::agents::ForAgent,
+) -> usize {
+    // Check write access to the drive
+    if !matches!(for_agent, crate::agents::ForAgent::Sudo) {
+        let drive_subject =
+            crate::Subject::from_raw(&push.drive, store.get_base_domain().as_deref());
+        if let Ok(drive_resource) = store.get_resource(&drive_subject).await {
+            if crate::hierarchy::check_write(store, &drive_resource, for_agent)
+                .await
+                .is_err()
+            {
+                tracing::warn!(
+                    "import_sync_push: agent {:?} has no write access to drive {}",
+                    for_agent,
+                    push.drive
+                );
+                return 0;
+            }
+        }
+        // If drive doesn't exist yet, allow import (bootstrap case — new drive arriving)
+    }
+
+    let mut count = 0;
+
+    for entry in &push.entries {
+        // Load existing doc or create new
+        let doc = if let Ok(Some(existing)) =
+            store.kv.get(Tree::LoroSnapshots, entry.subject.as_bytes())
+        {
+            match AtomicLoroDoc::from_snapshot(&existing) {
+                Ok(d) => {
+                    // Import as delta
+                    if d.import_update(&entry.loro_bytes).is_err() {
+                        tracing::warn!("import_sync_push: delta import failed for {}", entry.subject);
+                        continue;
+                    }
+                    d
+                }
+                Err(_) => {
+                    // Existing snapshot corrupt, treat incoming as fresh
+                    match AtomicLoroDoc::from_snapshot(&entry.loro_bytes) {
+                        Ok(d) => d,
+                        Err(_) => continue,
+                    }
+                }
+            }
+        } else {
+            // New resource — import as snapshot
+            let doc = AtomicLoroDoc::new();
+            if doc.import_update(&entry.loro_bytes).is_err() {
+                // Try as snapshot
+                match AtomicLoroDoc::from_snapshot(&entry.loro_bytes) {
+                    Ok(d) => d,
+                    Err(_) => {
+                        tracing::warn!("import_sync_push: import failed for {}", entry.subject);
+                        continue;
+                    }
+                }
+            } else {
+                doc
+            }
+        };
+
+        let snapshot = doc.export_snapshot();
+        if store
+            .kv
+            .insert(Tree::LoroSnapshots, entry.subject.as_bytes(), &snapshot)
+            .is_err()
+        {
+            continue;
+        }
+
+        let subject =
+            crate::Subject::from_raw(&entry.subject, store.get_base_domain().as_deref());
+        let mut resource = store
+            .get_resource(&subject)
+            .await
+            .unwrap_or_else(|_| crate::Resource::new(subject.to_string()));
+
+        if resource.replace_state_from_loro_doc(doc).is_err() {
+            continue;
+        }
+
+        let _ = store.add_resource_opts(&resource, false, true, true).await;
+        count += 1;
+    }
+
+    tracing::info!(
+        "import_sync_push: imported {} resources for drive {}",
+        count,
+        push.drive
+    );
+    count
 }
 
 /// Import Loro deltas from a peer into server resources.

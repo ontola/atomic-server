@@ -4,7 +4,7 @@ use actix_web::{
     dev::{ServiceRequest, ServiceResponse},
     middleware, web, Error, HttpServer,
 };
-use atomic_lib::{urls, Storelike};
+use atomic_lib::Storelike;
 use tracing_actix_web::{DefaultRootSpanBuilder, RootSpanBuilder};
 
 /// Custom span builder: uses "{method} {path}" when no route pattern is matched
@@ -83,57 +83,33 @@ async fn clear_remote_cache(appstate: &crate::appstate::AppState) -> AtomicServe
     Ok(())
 }
 
-/// Spawns a background task that periodically announces local drives to the DHT.
-fn spawn_dht_announcer(appstate: crate::appstate::AppState) {
-    if let Some(dht) = appstate.dht.clone() {
-        let port = if appstate.config.opts.https {
-            appstate.config.opts.port_https
-        } else {
-            appstate.config.opts.port
-        };
+/// Announce all local drives via pkarr relay so other devices can discover this server.
+async fn announce_drives_pkarr(
+    appstate: &crate::appstate::AppState,
+    node_id: &str,
+) -> Result<(), String> {
+    use atomic_lib::Storelike;
+    let agent = appstate.store.get_default_agent().map_err(|e| e.to_string())?;
 
-        tracing::info!("DHT: Spawning drive announcer on port {}", port);
-
-        actix_web::rt::spawn(async move {
-            let interval_secs = if std::env::var("ATOMIC_DHT_BOOTSTRAP").is_ok() {
-                15
-            } else {
-                20 * 60
-            };
-            let mut interval =
-                actix_web::rt::time::interval(std::time::Duration::from_secs(interval_secs));
-            loop {
-                interval.tick().await;
-                tracing::info!("DHT: Starting periodic drive announcement...");
-
-                // Find all local drives
-                let all_resources = appstate.store.all_resources(false);
-                let mut announced_count = 0;
-
-                for resource in all_resources {
-                    let mut is_drive = false;
-                    if let Ok(classes_val) = resource.get(urls::IS_A) {
-                        if let Ok(classes) = classes_val.to_subjects(None) {
-                            if classes.contains(&urls::DRIVE.to_string()) {
-                                is_drive = true;
-                            }
+    let mut count = 0;
+    for resource in appstate.store.all_resources(false) {
+        if let Ok(classes_val) = resource.get(atomic_lib::urls::IS_A) {
+            if let Ok(classes) = classes_val.to_subjects(None) {
+                if classes.contains(&atomic_lib::urls::DRIVE.to_string()) {
+                    let drive_did = resource.get_subject().as_str();
+                    match atomic_lib::discovery::publish_node_id(&agent, drive_did, node_id).await {
+                        Ok(_) => {
+                            tracing::info!("Pkarr: published NodeID for drive {drive_did}");
+                            count += 1;
                         }
-                    }
-
-                    if is_drive {
-                        let drive_did = resource.get_subject().as_str();
-                        if let Err(e) = dht.announce_drive(drive_did, port as u16) {
-                            let e: atomic_lib::errors::AtomicError = e;
-                            tracing::error!("DHT: Failed to announce drive {}: {}", drive_did, e);
-                        } else {
-                            announced_count += 1;
-                        }
+                        Err(e) => tracing::warn!("Pkarr: failed for drive {drive_did}: {e}"),
                     }
                 }
-                tracing::info!("DHT: Finished announcing {} drives.", announced_count);
             }
-        });
+        }
     }
+    tracing::info!("Pkarr: announced {count} drives");
+    Ok(())
 }
 
 // Increase the maximum payload size (for POSTing a body, for example) to 50MB
@@ -157,15 +133,21 @@ pub async fn serve(config: crate::config::Config) -> AtomicServerResult<()> {
         clear_remote_cache(&appstate).await?;
     }
 
-    // Start discovery / announcement services
-    spawn_dht_announcer(appstate.clone());
-
     // Start Iroh peer-to-peer transport
     let _iroh_router = {
         let store = appstate.store.clone();
         match crate::iroh_transport::start(store).await {
             Ok((node_id, router)) => {
                 tracing::info!("Iroh transport ready. Connect with: iroh:{node_id}");
+
+                // Announce drives via pkarr relay
+                let appstate_clone = appstate.clone();
+                actix_web::rt::spawn(async move {
+                    if let Err(e) = announce_drives_pkarr(&appstate_clone, &node_id.to_string()).await {
+                        tracing::warn!("Pkarr announcement failed: {e}");
+                    }
+                });
+
                 Some(router)
             }
             Err(e) => {

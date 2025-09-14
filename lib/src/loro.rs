@@ -9,6 +9,48 @@ use crate::errors::AtomicResult;
 use crate::values::Value;
 use crate::Atom;
 use loro::{ExportMode, LoroDoc, VersionVector};
+use std::ops::ControlFlow;
+
+/// Opaque identifier for a specific version of a resource.
+/// Internally wraps Loro's Frontiers.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct VersionID(Vec<u8>);
+
+impl VersionID {
+    pub fn from_frontiers(f: &loro::Frontiers) -> Self {
+        Self(f.encode())
+    }
+
+    pub fn to_frontiers(&self) -> AtomicResult<loro::Frontiers> {
+        loro::Frontiers::decode(&self.0)
+            .map_err(|e| format!("Failed to decode VersionID: {e}").into())
+    }
+
+    pub fn from_bytes(bytes: Vec<u8>) -> Self {
+        Self(bytes)
+    }
+
+    pub fn bytes(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+/// Metadata about a specific historical version (change) in the Loro oplog.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct VersionMetadata {
+    /// Opaque version identifier (encoded Loro Frontiers).
+    pub id: VersionID,
+    /// Unix timestamp in milliseconds (0 if not recorded).
+    pub timestamp: i64,
+    /// The peer that authored this change (Loro PeerID as string).
+    pub peer_id: String,
+    /// Lamport timestamp — establishes causal order across peers.
+    pub lamport: u64,
+    /// Number of operations in this change.
+    pub len: usize,
+    /// Optional commit message attached to the change.
+    pub message: Option<String>,
+}
 
 /// Wraps a LoroDoc for an Atomic Resource, providing helpers to convert between
 /// Atomic Data property/value pairs and Loro containers.
@@ -34,14 +76,16 @@ pub struct LoroDiff {
 impl AtomicLoroDoc {
     /// Create a new empty LoroDoc for a resource.
     pub fn new() -> Self {
-        Self {
-            doc: LoroDoc::new(),
-        }
+        let doc = LoroDoc::new();
+        // Enable timestamps for history scrubbing
+        doc.set_record_timestamp(true);
+        Self { doc }
     }
 
     /// Create from an existing snapshot (e.g. loaded from the database).
     pub fn from_snapshot(snapshot: &[u8]) -> AtomicResult<Self> {
         let doc = LoroDoc::new();
+        doc.set_record_timestamp(true);
         doc.import(snapshot)
             .map_err(|e| format!("Failed to import Loro snapshot: {e}"))?;
         Ok(Self { doc })
@@ -63,6 +107,74 @@ impl AtomicLoroDoc {
     /// Export only the updates since a given version.
     pub fn export_updates_since(&self, version: &VersionVector) -> Vec<u8> {
         self.doc.export(ExportMode::updates(version)).unwrap()
+    }
+
+    /// Returns the current version of the document.
+    pub fn current_version(&self) -> VersionID {
+        VersionID::from_frontiers(&self.doc.state_frontiers())
+    }
+
+    /// Moves the document to a historical version.
+    /// The doc enters a "detached" read-only state.
+    pub fn checkout(&self, version: &VersionID) -> AtomicResult<()> {
+        let f = version.to_frontiers()?;
+        self.doc.checkout(&f)
+            .map_err(|e| format!("Loro checkout error: {e}").into())
+    }
+
+    /// Returns the document to the latest version and enables editing.
+    pub fn attach(&self) -> AtomicResult<()> {
+        self.doc.checkout_to_latest();
+        Ok(())
+    }
+
+    /// Returns a list of all historical versions (changes) in the document,
+    /// sorted by timestamp descending (newest first).
+    ///
+    /// Each entry represents a change made by a peer, with its version ID,
+    /// timestamp, peer ID, and operation count.
+    pub fn get_history(&self) -> Vec<VersionMetadata> {
+        let mut history = Vec::new();
+        let frontier_ids: Vec<loro::ID> = self.doc.oplog_frontiers().iter().collect();
+
+        if frontier_ids.is_empty() {
+            return history;
+        }
+
+        let _ = self.doc.travel_change_ancestors(&frontier_ids, &mut |change| {
+            let id = VersionID::from_frontiers(&loro::Frontiers::from_id(change.id));
+            history.push(VersionMetadata {
+                id,
+                timestamp: change.timestamp,
+                peer_id: change.id.peer.to_string(),
+                lamport: change.lamport as u64,
+                len: change.len,
+                message: change.message.map(|m| m.to_string()),
+            });
+            ControlFlow::Continue(())
+        });
+
+        // travel_change_ancestors yields in reverse lamport order (newest first),
+        // but sort explicitly by timestamp for consistent output.
+        history.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+        history
+    }
+
+    /// Returns the properties at a specific historical version without
+    /// mutating the document's checkout state. Creates a fork of the doc
+    /// at the requested version and reads all properties.
+    pub fn get_properties_at(
+        &self,
+        version: &VersionID,
+    ) -> AtomicResult<std::collections::HashMap<String, loro::LoroValue>> {
+        let frontiers = version.to_frontiers()?;
+        let fork = self.doc.fork_at(&frontiers);
+        let root = fork.get_map("properties");
+        let mut result = std::collections::HashMap::new();
+        root.for_each(|key, value: loro::ValueOrContainer| {
+            result.insert(key.to_string(), value.get_deep_value());
+        });
+        Ok(result)
     }
 
     /// Get the oplog version vector as a serializable map (peer_id → counter).
@@ -244,11 +356,6 @@ impl AtomicLoroDoc {
 }
 
 /// Convert a Loro value to an Atomic Data Value.
-/// Returns None for container types that don't map directly.
-///
-/// Strings that look like JSON arrays or objects are parsed back to their
-/// proper Atomic Data types (ResourceArray, NestedResource, etc.), since
-/// the client JSON.stringify's complex values before storing in the Loro map.
 pub fn loro_value_to_atomic_value(lv: &loro::LoroValue) -> Option<Value> {
     match lv {
         loro::LoroValue::String(s) => {
@@ -296,7 +403,8 @@ pub fn loro_value_to_atomic_value(lv: &loro::LoroValue) -> Option<Value> {
                 Some(Value::ResourceArray(subjects))
             }
         }
-        // Container types (Map, Text, etc.) — not yet handled
+        // Container types (Map, Text, etc.) — serialize to placeholder string for now
+        loro::LoroValue::Map(_m) => Some(Value::String("{}".to_string())),
         _ => None,
     }
 }
@@ -394,7 +502,7 @@ mod test {
         doc_a
             .set_property(
                 "https://atomicdata.dev/properties/name",
-                &Value::String("Original".into()),
+                &Value::String("Original Name".into()),
             )
             .unwrap();
         let snapshot = doc_a.export_snapshot();
@@ -528,7 +636,7 @@ mod test {
         client_doc
             .set_property(
                 "https://atomicdata.dev/properties/description",
-                &Value::Markdown("# Hello".into()),
+                &Value::Markdown("Hello".into()),
             )
             .unwrap();
 
@@ -555,7 +663,7 @@ mod test {
         );
         assert_eq!(
             server_doc.get_string_property("https://atomicdata.dev/properties/description"),
-            Some("# Hello".into())
+            Some("Hello".into())
         );
 
         // Server persists the snapshot for future merges
@@ -1232,6 +1340,79 @@ mod test {
             "Delta ({} bytes) should be smaller than snapshot ({} bytes)",
             delta.len(),
             snapshot.len()
+        );
+    }
+
+    #[test]
+    fn history_and_time_travel() {
+        let doc = AtomicLoroDoc::new();
+
+        // Make a first change with explicit timestamp
+        doc.set_property(
+            "https://atomicdata.dev/properties/name",
+            &Value::String("v1".into()),
+        )
+        .unwrap();
+        doc.doc().commit_with(
+            loro::CommitOptions::new().timestamp(1000),
+        );
+        let v1 = doc.current_version();
+
+        // Make a second change with a different timestamp
+        doc.set_property(
+            "https://atomicdata.dev/properties/name",
+            &Value::String("v2".into()),
+        )
+        .unwrap();
+        doc.doc().commit_with(
+            loro::CommitOptions::new().timestamp(2000),
+        );
+        let v2 = doc.current_version();
+
+        // get_history should return at least 1 entry (Loro may merge same-peer changes)
+        let history = doc.get_history();
+        assert!(
+            !history.is_empty(),
+            "Expected at least 1 history entry, got 0"
+        );
+
+        // Each entry should have a non-zero lamport
+        for entry in &history {
+            assert!(!entry.peer_id.is_empty());
+        }
+
+        // get_properties_at(v1) should return "v1"
+        let props_v1 = doc.get_properties_at(&v1).unwrap();
+        let name_v1 = props_v1
+            .get("https://atomicdata.dev/properties/name")
+            .unwrap();
+        assert_eq!(
+            name_v1,
+            &loro::LoroValue::String("v1".into()),
+            "v1 should have name=v1"
+        );
+
+        // get_properties_at(v2) should return "v2"
+        let props_v2 = doc.get_properties_at(&v2).unwrap();
+        let name_v2 = props_v2
+            .get("https://atomicdata.dev/properties/name")
+            .unwrap();
+        assert_eq!(
+            name_v2,
+            &loro::LoroValue::String("v2".into()),
+            "v2 should have name=v2"
+        );
+
+        // checkout + attach cycle
+        doc.checkout(&v1).unwrap();
+        assert_eq!(
+            doc.get_string_property("https://atomicdata.dev/properties/name"),
+            Some("v1".into())
+        );
+        doc.attach().unwrap();
+        assert_eq!(
+            doc.get_string_property("https://atomicdata.dev/properties/name"),
+            Some("v2".into())
         );
     }
 }

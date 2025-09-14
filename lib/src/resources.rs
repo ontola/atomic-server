@@ -234,6 +234,43 @@ impl Resource {
         self.loro.as_ref().map(|doc| doc.export_snapshot())
     }
 
+    /// Ensure the Loro doc is loaded ("warmed") for history operations.
+    /// Call this before `get_history()` or `view_at()` to avoid lazy-init overhead.
+    pub fn warm_history(&mut self) -> AtomicResult<()> {
+        self.get_loro_doc();
+        Ok(())
+    }
+
+    /// Returns the edit history of this resource from the Loro oplog.
+    pub fn get_history(&self) -> Vec<crate::loro::VersionMetadata> {
+        match &self.loro {
+            Some(doc) => doc.get_history(),
+            None => Vec::new(),
+        }
+    }
+
+    /// Returns a read-only snapshot of this resource at a historical version.
+    /// The returned Resource has propvals materialized from the Loro state at that version.
+    pub fn view_at(&self, version: &crate::loro::VersionID) -> AtomicResult<Resource> {
+        let doc = self
+            .loro
+            .as_ref()
+            .ok_or_else(|| "No Loro doc loaded — call warm_history() first")?;
+        let props = doc.get_properties_at(version)?;
+        let mut propvals = PropVals::new();
+        for (key, loro_val) in &props {
+            if let Some(atomic_val) = crate::loro::loro_value_to_atomic_value(loro_val) {
+                propvals.insert(key.clone(), atomic_val);
+            }
+        }
+        Ok(Resource {
+            propvals,
+            subject: self.subject.clone(),
+            commit: CommitBuilder::new(self.subject.clone()),
+            loro: None,
+        })
+    }
+
     /// Returns the subject of the resource as a Subject enum.
     pub fn get_subject_enum(&self) -> &Subject {
         &self.subject

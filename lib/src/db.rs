@@ -44,7 +44,6 @@ use crate::{
         query_index::{requires_query_index, NO_VALUE},
         val_prop_sub_index::find_in_val_prop_sub_index,
     },
-    dht::DhtService,
     endpoints::{Endpoint, HandleGetContext},
     errors::{AtomicError, AtomicResult},
     resources::PropVals,
@@ -69,6 +68,21 @@ use self::{
 
 // A function called by the Store when a Commit is accepted
 type HandleCommit = Box<dyn Fn(&CommitResponse) + Send + Sync>;
+
+/// A drive with its subject and display name.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct DriveInfo {
+    pub subject: String,
+    pub name: String,
+}
+
+/// Result of loading an agent from a secret.
+pub struct AgentLoadResult {
+    pub agent: crate::agents::Agent,
+    /// If true, the drive DID from the secret doesn't exist locally.
+    /// The caller must sync with another device to obtain the genesis commit.
+    pub drive_needs_sync: bool,
+}
 
 /// Result of mapping an incoming request target to a canonical subject.
 pub struct ResolvedTarget {
@@ -98,8 +112,6 @@ pub struct Db {
     endpoints: Vec<Endpoint>,
     /// List of class extenders.
     class_extenders: Arc<RwLock<Vec<ClassExtender>>>,
-    /// DHT service for decentralized discovery.
-    dht: Arc<Option<DhtService>>,
     /// Function called whenever a Commit is applied.
     on_commit: Option<Arc<HandleCommit>>,
     /// Where the DB is stored on disk.
@@ -128,7 +140,7 @@ impl Db {
             default_agent: Arc::new(Mutex::new(None)),
             endpoints: vec![],
             class_extenders: Arc::new(RwLock::new(vec![])),
-            dht: Arc::new(None),
+
             on_commit: None,
             base_domain,
         };
@@ -152,7 +164,7 @@ impl Db {
             default_agent: Arc::new(Mutex::new(None)),
             endpoints: vec![],
             class_extenders: Arc::new(RwLock::new(vec![])),
-            dht: Arc::new(None),
+
             on_commit: None,
             base_domain,
         };
@@ -178,7 +190,7 @@ impl Db {
             default_agent: Arc::new(Mutex::new(None)),
             endpoints: vec![],
             class_extenders: Arc::new(RwLock::new(vec![])),
-            dht: Arc::new(None),
+
             on_commit: None,
             base_domain,
         };
@@ -212,7 +224,7 @@ impl Db {
             default_agent: Arc::new(Mutex::new(None)),
             endpoints: vec![],
             class_extenders: Arc::new(RwLock::new(vec![])),
-            dht: Arc::new(None),
+
             on_commit: None,
             base_domain,
         };
@@ -237,7 +249,7 @@ impl Db {
             default_agent: Arc::new(Mutex::new(None)),
             endpoints: vec![],
             class_extenders: Arc::new(RwLock::new(vec![])),
-            dht: Arc::new(None),
+
             on_commit: None,
             base_domain,
         };
@@ -294,42 +306,84 @@ impl Db {
         Ok(store)
     }
 
-    /// Sets the DHT service for decentralized discovery.
-    pub fn set_dht(&mut self, dht: DhtService) {
-        self.dht = Arc::new(Some(dht));
+
+
+    // ── High-level SDK helpers ──────────────────────────────────────────────────
+
+    /// Get the active drive subject, if one is set.
+    pub fn get_active_drive(&self) -> Option<String> {
+        self.kv
+            .get(trees::Tree::PluginMeta, b"active_drive")
+            .ok()
+            .flatten()
+            .and_then(|v| String::from_utf8(v).ok())
     }
 
-    // ── High-level SDK helpers ─────────────────────────────────────────
+    /// Set the active drive subject. Persisted in the database.
+    pub fn set_active_drive(&self, drive: &str) -> AtomicResult<()> {
+        self.kv
+            .insert(trees::Tree::PluginMeta, b"active_drive", drive.as_bytes())
+    }
+
+    /// Clear the default agent.
+    pub fn clear_default_agent(&self) {
+        self.default_agent.lock().unwrap().take();
+    }
 
     /// Create a new drive owned by the current agent.
-    /// Sets read=public, write=agent. Returns the drive subject.
+    /// Signs a genesis commit to produce a `did:ad:` subject.
+    /// Sets it as the active drive. Returns the drive DID.
     pub async fn create_drive(&self, name: &str) -> AtomicResult<String> {
         let agent = self.get_default_agent()?;
 
-        let mut drive = Resource::new(
-            self.normalize_subject(&format!("_new:{}", crate::utils::random_string(10)).into())
-                .to_string(),
-        );
-        drive.set_unsafe(
-            urls::IS_A.into(),
-            Value::ResourceArray(vec![urls::DRIVE.into()]),
-        );
-        drive.set_unsafe(urls::NAME.into(), Value::String(name.into()));
-        drive.set_unsafe(
+        let mut builder = crate::commit::CommitBuilder::new("placeholder".into());
+        builder.set(urls::IS_A.into(), Value::ResourceArray(vec![urls::DRIVE.into()]));
+        builder.set(urls::NAME.into(), Value::String(name.into()));
+        builder.set(
             urls::WRITE.into(),
             Value::ResourceArray(vec![agent.subject.to_string().into()]),
         );
-        drive.set_unsafe(
+        builder.set(
             urls::READ.into(),
             Value::ResourceArray(vec![urls::PUBLIC_AGENT.into()]),
         );
 
-        let subject = drive.get_subject().to_string();
-        self.add_resource(&drive).await?;
-        Ok(subject)
+        let commit = crate::commit::Commit::create_did(builder, &agent, self).await?;
+        let did = commit.subject.to_string();
+
+        let opts = crate::commit::CommitOpts {
+            validate_signature: true,
+            validate_timestamp: false,
+            validate_previous_commit: false,
+            validate_rights: false,
+            update_index: true,
+            ..crate::commit::CommitOpts::no_validations_no_index()
+        };
+        self.apply_commit(commit, &opts).await?;
+        self.set_active_drive(&did)?;
+
+        // Add the new drive to the agent's `drives` array and persist.
+        let agent = self.get_default_agent()?;
+        let mut agent_resource = self.get_resource(&agent.subject).await?;
+        let mut drives: Vec<crate::values::SubResource> = agent_resource
+            .get(urls::DRIVES)
+            .ok()
+            .and_then(|v| match v {
+                Value::ResourceArray(arr) => Some(arr.clone()),
+                _ => None,
+            })
+            .unwrap_or_default();
+        if !drives.iter().any(|d| d.to_string() == did) {
+            drives.push(did.clone().into());
+            agent_resource.set_unsafe(urls::DRIVES.into(), Value::ResourceArray(drives));
+            self.add_resource_opts(&agent_resource, false, true, true)
+                .await?;
+        }
+
+        Ok(did)
     }
 
-    /// Create a new resource with a class, parent, name and optional properties.
+    /// Create a new resource with a `did:ad:` subject via genesis commit.
     pub async fn create_resource(
         &self,
         class: &str,
@@ -337,29 +391,109 @@ impl Db {
         name: &str,
         props: Option<Vec<(&str, Value)>>,
     ) -> AtomicResult<String> {
-        let mut resource = Resource::new(
-            self.normalize_subject(&format!("_new:{}", crate::utils::random_string(10)).into())
-                .to_string(),
-        );
-        resource.set_unsafe(
-            urls::IS_A.into(),
-            Value::ResourceArray(vec![class.into()]),
-        );
-        resource.set_unsafe(urls::NAME.into(), Value::String(name.into()));
-        resource.set_unsafe(
-            urls::PARENT.into(),
-            Value::AtomicUrl(parent.into()),
-        );
+        let agent = self.get_default_agent()?;
+
+        let mut builder = crate::commit::CommitBuilder::new("placeholder".into());
+        builder.set(urls::IS_A.into(), Value::ResourceArray(vec![class.into()]));
+        builder.set(urls::NAME.into(), Value::String(name.into()));
+        builder.set(urls::PARENT.into(), Value::AtomicUrl(parent.into()));
 
         if let Some(extra) = props {
             for (prop, val) in extra {
-                resource.set_unsafe(prop.into(), val);
+                builder.set(prop.into(), val);
             }
         }
 
-        let subject = resource.get_subject().to_string();
-        self.add_resource(&resource).await?;
-        Ok(subject)
+        let commit = crate::commit::Commit::create_did(builder, &agent, self).await?;
+        let did = commit.subject.to_string();
+
+        let opts = crate::commit::CommitOpts {
+            validate_signature: true,
+            validate_timestamp: false,
+            validate_previous_commit: false,
+            validate_rights: false,
+            update_index: true,
+            ..crate::commit::CommitOpts::no_validations_no_index()
+        };
+        self.apply_commit(commit, &opts).await?;
+        Ok(did)
+    }
+
+    /// Load an agent from a secret and set it as the default agent.
+    /// Persists the agent resource so its `drives` property is queryable.
+    /// If the secret contains a drive DID, sets it as the active drive.
+    ///
+    /// Returns `AgentLoadResult` which indicates whether the drive exists locally.
+    /// If `drive_needs_sync` is true, the caller must sync with another device
+    /// before the user can create resources — the drive's genesis commit is missing.
+    pub async fn load_agent_from_secret(&self, secret: &str) -> AtomicResult<AgentLoadResult> {
+        let agent = crate::agents::Agent::from_secret(secret)?;
+        self.set_default_agent(agent.clone());
+
+        // Persist so list_drives() can read the agent's `drives` property
+        let agent_resource = agent.to_resource()?;
+        self.add_resource_opts(&agent_resource, false, false, true)
+            .await?;
+
+        let mut drive_needs_sync = false;
+
+        if let Some(drive) = &agent.initial_drive {
+            let drive_str = drive.to_string();
+            let _ = self.set_active_drive(&drive_str);
+
+            // Check if the drive resource actually exists locally.
+            // Without the genesis commit, the DID is just a string — the device
+            // can't create resources under it.
+            let drive_subject = Subject::from_raw(&drive_str, self.get_base_domain().as_deref());
+            if self.get_resource(&drive_subject).await.is_err() {
+                tracing::warn!(
+                    "Drive {} from secret does not exist locally — needs sync from another device",
+                    &drive_str[..drive_str.len().min(30)]
+                );
+                drive_needs_sync = true;
+            }
+        }
+
+        Ok(AgentLoadResult {
+            agent,
+            drive_needs_sync,
+        })
+    }
+
+    /// List drives belonging to the current agent.
+    /// Falls back to the active drive if the agent resource has no `drives` property.
+    pub async fn list_drives(&self) -> AtomicResult<Vec<DriveInfo>> {
+        let agent = self.get_default_agent()?;
+        let agent_resource = self.get_resource(&agent.subject).await?;
+
+        let subjects = match agent_resource.get(urls::DRIVES) {
+            Ok(Value::ResourceArray(arr)) => arr.iter().map(|s| s.to_string()).collect::<Vec<_>>(),
+            _ => vec![],
+        };
+
+        // Fallback: active drive not in agent resource
+        let subjects = if subjects.is_empty() {
+            match self.get_active_drive() {
+                Some(active) => vec![active],
+                None => vec![],
+            }
+        } else {
+            subjects
+        };
+
+        let mut drives = Vec::with_capacity(subjects.len());
+        for subject in subjects {
+            let name = match self.get_resource(&subject.as_str().into()).await {
+                Ok(r) => r
+                    .get(urls::NAME)
+                    .map(|v| v.to_string())
+                    .unwrap_or_default(),
+                Err(_) => String::new(),
+            };
+            drives.push(DriveInfo { subject, name });
+        }
+
+        Ok(drives)
     }
 
     /// Get children of a resource, optionally filtered by class.
@@ -396,16 +530,27 @@ impl Db {
     }
 
     /// Full onboarding: create an agent and a personal drive in one call.
+    /// The agent's secret will contain the drive DID for DHT discovery.
     /// Returns (agent, drive_subject).
     pub async fn setup(
         &self,
         agent_name: &str,
     ) -> AtomicResult<(crate::agents::Agent, String)> {
-        let agent = self.create_agent(Some(agent_name)).await?;
+        let mut agent = self.create_agent(Some(agent_name)).await?;
         self.set_default_agent(agent.clone());
         let drive = self.create_drive(&format!("{}'s Drive", agent_name)).await?;
+
+        // Set initial_drive so the secret contains the drive DID.
+        // This lets other devices find this drive via DHT when restoring from secret.
+        agent.initial_drive = Some(drive.as_str().into());
+        self.set_default_agent(agent.clone());
+        // Re-save the agent resource so `drives` and `personalDrive` are persisted.
+        self.add_resource_opts(&agent.to_resource()?, false, true, true)
+            .await?;
+
         Ok((agent, drive))
     }
+    // ── High-level SDK helpers ─────────────────────────────────────────
 
     pub async fn resolve_request_target(
         &self,
@@ -503,27 +648,7 @@ impl Db {
     ) -> AtomicResult<ResourceResponse> {
         let store = self.clone_with_url(origin.to_string());
 
-        match store.get_resource_extended(subject, false, for_agent).await {
-            Ok(resource) => Ok(resource),
-            Err(error) => {
-                if let Subject::Did { .. } = subject {
-                    if let Some(dht) = self.dht.as_ref() {
-                        if let Ok(resource) = dht.resolve(subject, &store).await {
-                            if let Err(cache_error) = store.add_resource(&resource).await {
-                                tracing::warn!(
-                                    "DHT: Resolved {} but failed to cache locally: {}",
-                                    subject,
-                                    cache_error
-                                );
-                            }
-                            return Ok(resource.into());
-                        }
-                    }
-                }
-
-                Err(error)
-            }
-        }
+        store.get_resource_extended(subject, false, for_agent).await
     }
 
     pub fn add_class_extender(&self, class_extender: ClassExtender) -> AtomicResult<()> {
@@ -672,7 +797,7 @@ impl Db {
 
         Ok(current_subject)
     }
-    #[instrument(skip(self))]
+    #[instrument(level = "trace", skip_all)]
     fn add_atom_to_index(
         &self,
         atom: &Atom,
@@ -730,7 +855,7 @@ impl Db {
         Ok(())
     }
 
-    #[instrument(skip(self))]
+    #[instrument(skip_all)]
     fn all_index_atoms(&self, include_external: bool) -> IndexIterator {
         Box::new(
             self.all_resources(include_external)
@@ -773,7 +898,7 @@ impl Db {
     }
 
     /// Internal method for fetching Resource data.
-    #[instrument(skip(self))]
+    #[instrument(skip_all)]
     fn set_propvals(&self, subject: &str, propvals: &PropVals) -> AtomicResult<()> {
         let resource_bin = encode_propvals(propvals)?;
 
@@ -789,7 +914,7 @@ impl Db {
     }
 
     /// Finds resource by Subject, return PropVals HashMap
-    #[instrument(skip(self), fields(subject))]
+    #[instrument(skip_all)]
     fn get_propvals(&self, subject: &str) -> AtomicResult<PropVals> {
         match self.kv.get(Tree::Resources, subject.as_bytes())? {
             Some(binpropval) => {
@@ -913,7 +1038,7 @@ impl Db {
     }
 
     /// Apply made changes to the store.
-    #[instrument(skip(self))]
+    #[instrument(level = "trace", skip_all)]
     fn apply_transaction(&self, transaction: &mut Transaction) -> AtomicResult<()> {
         self.kv.apply_batch(transaction)
     }
@@ -990,7 +1115,7 @@ impl Db {
         })
     }
 
-    #[instrument(skip(self))]
+    #[instrument(skip_all)]
     fn remove_atom_from_index(
         &self,
         atom: &Atom,
@@ -1047,7 +1172,7 @@ impl Db {
         self.endpoints.iter().any(|e| e.path == url.path())
     }
 
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip_all)]
     async fn call_endpoint(
         &self,
         subject: &str,
@@ -1182,10 +1307,23 @@ impl Storelike for Db {
         Subject::from_raw(subject.as_str(), self.get_base_domain().as_deref())
     }
 
+    fn get_active_drive(&self) -> Option<String> {
+        self.get_active_drive()
+    }
+
+    fn set_active_drive(&self, drive: &str) -> AtomicResult<()> {
+        self.set_active_drive(drive)
+    }
+
+    fn clear_default_agent(&self) {
+        self.clear_default_agent()
+    }
+
+
     /// Adds Atoms to the store.
     /// Will replace existing Atoms that share Subject / Property combination.
     /// Validates datatypes and required props presence.
-    #[instrument(skip(self))]
+    #[instrument(skip_all)]
     async fn add_atoms(&self, atoms: Vec<Atom>) -> AtomicResult<()> {
         // Start with a nested HashMap, containing only strings.
         let mut map: HashMap<Subject, Resource> = HashMap::new();
@@ -1241,7 +1379,7 @@ impl Storelike for Db {
         tracing::warn!("set_base_url called on Db, but it is not supported to change it after initialization. Use clone_with_url instead.");
     }
 
-    #[instrument(skip(self, resource), fields(sub = %resource.get_subject()))]
+    #[instrument(skip_all)]
     async fn add_resource_opts(
         &self,
         resource: &Resource,
@@ -1305,7 +1443,7 @@ impl Storelike for Db {
     /// Creates, edits or destroys a resource.
     /// Allows for control over which validations should be performed.
     /// Returns the generated Commit, the old Resource and the new Resource.
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip_all)]
     async fn apply_commit(
         &self,
         commit: Commit,
@@ -1396,6 +1534,7 @@ impl Storelike for Db {
             self.add_resource_tx(new, &mut transaction)?;
 
             // Persist the Loro snapshot so VV-based sync can find it.
+            // Use pure_id() (strips query params/drive hints) for a canonical key.
             if let Some(snapshot) = new.get_loro_snapshot() {
                 transaction.push(trees::Operation {
                     tree: trees::Tree::LoroSnapshots,
@@ -1479,18 +1618,18 @@ impl Storelike for Db {
     fn get_default_agent(&self) -> AtomicResult<crate::agents::Agent> {
         match self.default_agent.lock().unwrap().to_owned() {
             Some(agent) => Ok(agent),
-            None => Err("No default agent has been set.".into()),
+            None => Err("No agent set. Call db.setup() or db.load_agent_from_secret() first.".into()),
         }
     }
 
-    #[instrument(skip(self))]
+    #[instrument(skip_all)]
     async fn get_value(&self, subject: &str, property: &str) -> AtomicResult<Value> {
         self.get_resource(&subject.into())
             .await
             .and_then(|r| r.get(property).cloned())
     }
 
-    #[instrument(skip(self))]
+    #[instrument(skip_all)]
     async fn get_resource(&self, subject: &Subject) -> AtomicResult<Resource> {
         let normalized = self.normalize_subject(subject);
         let subject_str = normalized.pure_id();
@@ -1610,7 +1749,7 @@ impl Storelike for Db {
         }
     }
 
-    #[instrument(skip(self))]
+    #[instrument(skip_all)]
     async fn get_resource_extended(
         &self,
         subject: &Subject,
@@ -1717,7 +1856,7 @@ impl Storelike for Db {
     /// Search the Store, returns the matching subjects.
     /// The second returned vector should be filled if query.include_resources is true.
     /// Tries `query_cache`, which you should implement yourself.
-    #[instrument(skip(self))]
+    #[instrument(skip_all)]
     async fn query(&self, q: &Query) -> AtomicResult<QueryResult> {
         if requires_query_index(q) {
             return self.query_complex(q).await;
@@ -1726,7 +1865,7 @@ impl Storelike for Db {
         self.query_basic(q).await
     }
 
-    #[instrument(skip(self))]
+    #[instrument(skip_all)]
     fn all_resources(
         &self,
         include_external: bool,
@@ -1796,7 +1935,7 @@ impl Storelike for Db {
         crate::populate::bootstrap(self).await
     }
 
-    #[instrument(skip(self))]
+    #[instrument(skip_all)]
     async fn remove_resource(&self, subject: &Subject) -> AtomicResult<()> {
         let mut transaction = Transaction::new();
         self.recursive_remove(subject, &mut transaction).await?;

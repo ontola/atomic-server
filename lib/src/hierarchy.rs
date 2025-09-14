@@ -60,7 +60,7 @@ pub fn check_read<'a>(
 /// This checks the `append` rights, and if that fails, checks the `write` right.
 /// Throws if not allowed.
 /// Returns string with explanation if allowed.
-#[tracing::instrument(skip(store), level = "debug")]
+#[tracing::instrument(skip_all)]
 pub async fn check_append(
     store: &(impl Storelike + Sync),
     resource: &Resource,
@@ -94,7 +94,7 @@ pub async fn check_append(
 /// Recursively checks a Resource and its Parents for rights.
 /// Throws if not allowed.
 /// Returns string with explanation if allowed.
-#[tracing::instrument(skip(store, resource))]
+#[tracing::instrument(skip_all)]
 pub fn check_rights<'a>(
     store: &'a (impl Storelike + Sync),
     resource: &'a Resource,

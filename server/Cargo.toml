@@ -124,7 +124,7 @@ version = "4.4"
 version = ">= 4.0.1"
 
 [dependencies.atomic_lib]
-features = ["config", "db-redb", "rdf", "dht", "iroh", "ring"]
+features = ["config", "db-redb", "rdf", "discovery", "iroh", "ring"]
 path = "../lib"
 version = "0.40.0"
 

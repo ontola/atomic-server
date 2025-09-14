@@ -494,6 +494,7 @@ msgstr "Aucun vérificateur de code trouvé"
 
 #: src/components/forms/SearchBox/SearchBox.tsx
 #: src/routes/LinkOpenRouter.tsx
+#: src/routes/SyncRoute.tsx
 msgid "Error"
 msgstr "Erreur"
 
@@ -704,10 +705,14 @@ msgstr "Ontologie par défaut"
 
 #. placeholder {0}: JSON.stringify(error)
 #. placeholder {0}: searchError.message
+#. placeholder {0}: data.error
+#. placeholder {0}: e
 #. placeholder {0}: resource.error.message
 #. placeholder {0}: resource.error.message
 #: src/components/forms/Field.tsx
 #: src/components/forms/SearchBox/SearchBoxWindow.tsx
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
 #: src/views/ResourceLine.tsx
 #: src/views/ResourceRow.tsx
 msgid "Error: {0}"
@@ -4745,6 +4750,8 @@ msgstr ""
 
 #: src/components/SideBar/SyncMenuItem.tsx
 #: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
 msgid "Sync"
 msgstr ""
 
@@ -4848,6 +4855,7 @@ msgid "In sync"
 msgstr ""
 
 #: src/components/SideBar/SyncMenuItem.tsx
+#: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Syncing..."
 msgstr ""
@@ -5037,6 +5045,7 @@ msgid "Connected to {0}"
 msgstr ""
 
 #: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
 msgid "+ Add"
 msgstr ""
 
@@ -5053,6 +5062,41 @@ msgstr ""
 msgid "How to run your own server"
 msgstr ""
 
+#~ msgid "Peer ID"
+#~ msgstr ""
+
+#. placeholder {0}: data.count
+#. placeholder {1}: data.count !== 1 ? 's' : ''
 #: src/routes/SyncRoute.tsx
-msgid "Peer ID"
+msgid "Synced {0} resource{1}"
+msgstr ""
+
+#~ msgid "Peer sync"
+#~ msgstr ""
+
+#~ msgid "Paste device ID to sync with"
+#~ msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Peers"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "No peers connected"
+msgstr ""
+
+#~ msgid "Paste device ID"
+#~ msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Node DID"
+msgstr ""
+
+#. placeholder {0}: irohNodeId.slice(0, 12)
+#: src/routes/SyncRoute.tsx
+msgid "did:ad:node:{0}..."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Paste did:ad:node:..."
 msgstr ""

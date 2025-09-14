@@ -78,7 +78,16 @@
       "Read(//opt/flutter/bin/**)",
       "Read(//Users/joep/**)",
       "Bash(mise which:*)",
-      "Bash(mise ls:*)"
+      "Bash(mise ls:*)",
+      "Bash(export PATH=\"/Users/joep/.local/share/mise/installs/flutter/3.22.1-stable/bin:$PATH\")",
+      "Bash(flutter build:*)",
+      "Bash(cargo doc:*)",
+      "Bash(grep -rn \"pub fn.*change\\\\|pub fn.*history\\\\|pub fn.*oplog\\\\|get_all_change\" /Users/joep/.cargo/registry/src/*/loro-1.10.8/src/)",
+      "WebSearch",
+      "Bash(find /Users/joep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/simple-dns-0.9.3/ -name \"*.rs\" -exec grep -l \"enum RData\" {} \\\\;)",
+      "Bash(cargo test *)",
+      "WebFetch(domain:docs.iroh.computer)",
+      "Bash(grep -v \"^W/atomic\\\\|^$\")"
     ]
   }
 }

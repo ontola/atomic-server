@@ -26,6 +26,7 @@ pub const ENDPOINT_RESPONSE: &str =
 pub const TABLE: &str = "https://atomicdata.dev/classes/Table";
 pub const PLUGIN: &str = "https://atomicdata.dev/classes/Plugin";
 pub const TAG: &str = "https://atomicdata.dev/classes/Tag";
+pub const PEER: &str = "https://atomicdata.dev/classes/Peer";
 
 // Properties
 pub const SHORTNAME: &str = "https://atomicdata.dev/properties/shortname";
@@ -67,6 +68,11 @@ pub const PERSONAL_DRIVE: &str = "https://atomicdata.dev/properties/personalDriv
 /// Resources shared with this agent (e.g. accepted invites); clients show as "Shared with me".
 pub const SHARED_WITH_ME: &str = "https://atomicdata.dev/properties/sharedWithMe";
 pub const AVAILABLE_DOMAINS: &str = "https://atomicdata.dev/properties/availableDomains";
+// ... for Peers
+pub const PEER_NODE_ID: &str = "https://atomicdata.dev/properties/peer/nodeId";
+pub const PEER_DEVICE_NAME: &str = "https://atomicdata.dev/properties/peer/deviceName";
+pub const PEER_AGENT: &str = "https://atomicdata.dev/properties/peer/agent";
+pub const PEER_LAST_SEEN: &str = "https://atomicdata.dev/properties/peer/lastSeen";
 // ... for Collections
 pub const COLLECTION_PROPERTY: &str = "https://atomicdata.dev/properties/collection/property";
 pub const COLLECTION_VALUE: &str = "https://atomicdata.dev/properties/collection/value";

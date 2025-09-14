@@ -28,7 +28,6 @@ pub struct AppState {
     pub commit_monitor: actix::Addr<CommitMonitor>,
     pub loro_sync_broadcaster: actix::Addr<LoroSyncBroadcaster>,
     pub search_state: SearchState,
-    pub dht: Option<atomic_lib::dht::DhtService>,
 }
 
 impl AppState {
@@ -114,18 +113,6 @@ impl AppState {
             search_state.add_all_resources(&store).await?;
         }
 
-        let dht = if config.opts.mainline_dht {
-            tracing::info!("Starting Mainline DHT service");
-            let dht_service = atomic_lib::dht::DhtService::new()?;
-            Some(dht_service)
-        } else {
-            None
-        };
-
-        if let Some(dht_service) = dht.clone() {
-            store.set_dht(dht_service);
-        }
-
         // Initialize commit monitor, which watches commits and sends these to the commit_monitor actor
         let commit_monitor =
             crate::commit_monitor::create_commit_monitor(store.clone(), search_state.clone());
@@ -149,7 +136,6 @@ impl AppState {
             commit_monitor,
             loro_sync_broadcaster,
             search_state,
-            dht,
         })
     }
 

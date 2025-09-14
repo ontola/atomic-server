@@ -1153,3 +1153,33 @@ No server required for two devices on the same network to sync.
 - **Loro version compatibility**: What happens when peers run different Loro versions? Snapshots and deltas need to be compatible across versions. This may require versioning the wire format.
 - **Large resources**: Loro snapshots grow with edit history. For long-lived documents, snapshots could be megabytes. Should we use shallow snapshots (trim old history) and archive the rest? How does this interact with mesh peers that might need the full history?
 - **Query indexing from Loro**: Currently the JSON-AD index is built by the Rust parser which understands property datatypes. If Loro becomes primary, the index must be derived from Loro doc state. The Loro map stores values as primitives/strings — is that sufficient for type-aware indexing?
+
+# Temporal Data Architecture Implementation
+
+## The Two-Tree Persistence Model
+To balance the requirements of high-speed queries and collaborative CRDT power, the database maintains two distinct representations of every resource:
+
+1. **`Tree::Resources` (Materialized View / Read Cache)**
+   - **Data:** Flat Property-Value pairs (no history).
+   - **Format:** MessagePack.
+   - **Path:** Standard reads, search indexing, TPF queries.
+   - **Performance:** Instant lookup; no Loro VM initialization required.
+
+2. **`Tree::LoroSnapshots` (Canonical Store / History)**
+   - **Data:** Full Loro binary snapshot (Operation DAG).
+   - **Format:** Loro Binary.
+   - **Path:** Background sync (Iroh/WebSockets), History Scrubbing, Undo/Redo.
+   - **Performance:** Loaded lazily into memory only when a temporal operation is requested.
+
+## Temporal Resource API (Rust/Dart)
+The SDK exposes a "temporal-ready" Resource object.
+
+- **Lazy Loading ("Warming"):** A Resource instance initializes its internal Loro document from bytes only when history or editing is needed.
+- **In-Memory Scrubbing:** Jumps between historical versions are pure CPU pointer moves in the Loro DAG, requiring zero database I/O once the doc is warmed.
+- **Detached Views:** `resource.view_at(version)` returns a new, read-only Resource instance representing the state at that moment.
+
+## Synchronization Protocol
+Sync is primarily Loro-native. 
+1. Peers exchange **Version Vectors (VV)**.
+2. The sender calculates the binary delta from its `LoroSnapshots` tree.
+3. The receiver imports the delta, merges it locally, and then **re-materializes** the result into its `Resources` tree to update the UI and indexes.

@@ -33,7 +33,7 @@ pub struct QueryFilter {
 }
 
 impl QueryFilter {
-    #[tracing::instrument(skip(store))]
+    #[tracing::instrument(skip_all)]
     /// Adds the QueryFilter to the `watched_queries` of the store.
     /// This means that whenever the store is updated (when a [Commit](crate::Commit) is added), the QueryFilter is checked.
     pub fn watch(&self, store: &Db) -> AtomicResult<()> {
@@ -85,7 +85,7 @@ pub const SEPARATION_BIT: u8 = 0xff;
 /// If we want to sort by a value that is no longer there, we use this special value.
 pub const NO_VALUE: &str = "";
 
-#[tracing::instrument(skip(store))]
+#[tracing::instrument(skip_all)]
 /// Performs a query on the `query_index` Tree, which is a lexicographic sorted list of all hits for QueryFilters.
 pub async fn query_sorted_indexed(
     store: &Db,
@@ -269,7 +269,7 @@ pub fn should_update_property<'a>(
 /// Check whether the [Atom] will be hit by a [Query] matching the [QueryFilter].
 /// Updates the index accordingly.
 /// We need both the `index_atom` and the full `atom`.
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(level = "trace", skip_all)]
 pub fn check_if_atom_matches_watched_query_filters(
     store: &Db,
     index_atom: &IndexAtom,
@@ -313,7 +313,7 @@ pub fn check_if_atom_matches_watched_query_filters(
 }
 
 /// Adds or removes a single item (IndexAtom) to the [Tree::QueryMembers] cache.
-#[tracing::instrument(skip())]
+#[tracing::instrument(skip_all)]
 pub fn update_indexed_member(
     collection: &QueryFilter,
     subject: &str,
@@ -346,7 +346,7 @@ pub const MAX_LEN: usize = 120;
 
 /// Creates a key for a collection + value combination.
 /// These are designed to be lexicographically sortable.
-#[tracing::instrument()]
+#[tracing::instrument(skip_all)]
 pub fn create_query_index_key(
     query_filter: &QueryFilter,
     value: Option<&SortableValue>,
@@ -377,7 +377,7 @@ pub fn create_query_index_key(
 }
 
 /// Parses a key that is meant for collections to a tuble of QueryFilter, value, and subject.
-#[tracing::instrument()]
+#[tracing::instrument(skip_all)]
 pub fn parse_collection_members_key(bytes: &[u8]) -> AtomicResult<(QueryFilter, &str, &str)> {
     let mut iter = bytes.split(|b| b == &SEPARATION_BIT);
     let q_filter_bytes = iter.next().ok_or("No q_filter_bytes")?;
