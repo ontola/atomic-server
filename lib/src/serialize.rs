@@ -103,6 +103,7 @@ pub fn val_to_serde(
             obj.into()
         }
         Value::LoroDoc(val) => SerdeValue::String(general_purpose::STANDARD.encode(val)),
+        Value::JsonArray(arr) => SerdeValue::Array(arr),
     };
     Ok(json_val)
 }

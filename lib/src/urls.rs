@@ -177,6 +177,7 @@ pub const DATE: &str = "https://atomicdata.dev/datatypes/date";
 pub const TIMESTAMP: &str = "https://atomicdata.dev/datatypes/timestamp";
 pub const URI: &str = "https://atomicdata.dev/datatypes/uri";
 pub const JSON: &str = "https://atomicdata.dev/datatypes/json";
+pub const JSON_ARRAY: &str = "https://atomicdata.dev/datatypes/jsonarray";
 pub const YDOC: &str = "https://atomicdata.dev/datatypes/ydoc";
 pub const LORO_DOC: &str = "https://atomicdata.dev/datatypes/lorodoc";
 

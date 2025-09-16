@@ -114,6 +114,8 @@ pub struct Db {
     class_extenders: Arc<RwLock<Vec<ClassExtender>>>,
     /// Function called whenever a Commit is applied.
     on_commit: Option<Arc<HandleCommit>>,
+    /// Broadcast channel: fires the subject string when a resource is written.
+    resource_changed: tokio::sync::broadcast::Sender<String>,
     /// Where the DB is stored on disk.
     #[allow(dead_code)]
     path: std::path::PathBuf,
@@ -142,6 +144,7 @@ impl Db {
             class_extenders: Arc::new(RwLock::new(vec![])),
 
             on_commit: None,
+            resource_changed: tokio::sync::broadcast::channel(64).0,
             base_domain,
         };
 
@@ -166,6 +169,7 @@ impl Db {
             class_extenders: Arc::new(RwLock::new(vec![])),
 
             on_commit: None,
+            resource_changed: tokio::sync::broadcast::channel(64).0,
             base_domain,
         };
 
@@ -192,6 +196,7 @@ impl Db {
             class_extenders: Arc::new(RwLock::new(vec![])),
 
             on_commit: None,
+            resource_changed: tokio::sync::broadcast::channel(64).0,
             base_domain,
         };
 
@@ -226,6 +231,7 @@ impl Db {
             class_extenders: Arc::new(RwLock::new(vec![])),
 
             on_commit: None,
+            resource_changed: tokio::sync::broadcast::channel(64).0,
             base_domain,
         };
 
@@ -251,6 +257,7 @@ impl Db {
             class_extenders: Arc::new(RwLock::new(vec![])),
 
             on_commit: None,
+            resource_changed: tokio::sync::broadcast::channel(64).0,
             base_domain,
         };
 
@@ -913,6 +920,12 @@ impl Db {
         self.on_commit = Some(Arc::new(on_commit));
     }
 
+    /// Subscribe to resource change notifications.
+    /// Returns a receiver that yields the subject string of each changed resource.
+    pub fn subscribe_changes(&self) -> tokio::sync::broadcast::Receiver<String> {
+        self.resource_changed.subscribe()
+    }
+
     /// Finds resource by Subject, return PropVals HashMap
     #[instrument(skip_all)]
     fn get_propvals(&self, subject: &str) -> AtomicResult<PropVals> {
@@ -1436,7 +1449,10 @@ impl Storelike for Db {
             }
             self.apply_transaction(&mut transaction)?;
         }
-        self.set_propvals(&subject_str, resource.get_propvals())
+        self.set_propvals(&subject_str, resource.get_propvals())?;
+        // Notify subscribers that this resource changed
+        let _ = self.resource_changed.send(subject_str);
+        Ok(())
     }
 
     /// Apply a single signed Commit to the Db.
@@ -1563,6 +1579,11 @@ impl Storelike for Db {
         }
 
         store.apply_transaction(&mut transaction)?;
+
+        // Notify subscribers
+        let _ = store.resource_changed.send(
+            commit_response.commit.subject.to_string()
+        );
 
         store.handle_commit(&commit_response);
 

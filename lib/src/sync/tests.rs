@@ -2,7 +2,7 @@
 
 #[cfg(all(test, feature = "db-redb"))]
 mod peer_sync_tests {
-    use crate::{agents::ForAgent, Db, Storelike};
+    use crate::{agents::ForAgent, storelike::Query, Db, Storelike};
 
     /// Test sync engine: Device A creates resources, Device B syncs via the protocol.
     /// This tests the same code path that Iroh/WS would use, without needing network.
@@ -683,5 +683,207 @@ mod peer_sync_tests {
         );
 
         println!("TEST PASSED: QR pairing sync — both devices have each other's data");
+    }
+
+    /// Live query test: Device A creates a resource, syncs to Device B.
+    /// Device B's query (children of drive where class=Canvas) should include
+    /// the synced resource without manually re-running the query.
+    #[tokio::test]
+    async fn synced_resource_appears_in_query() {
+        use crate::sync::peer;
+
+        // === Device A: create agent, drive, canvas ===
+        let db_a = Db::init_temp("query_sync_a").await.unwrap();
+        let (agent_a, drive_a) = db_a.setup("Alice").await.unwrap();
+        let secret = agent_a.build_secret().unwrap();
+
+        let canvas_subject = db_a
+            .create_resource(
+                "https://atomicdata.dev/ontology/canvas/Canvas",
+                &drive_a,
+                "Synced Canvas",
+                None,
+            )
+            .await
+            .unwrap();
+        println!("Device A created canvas: {canvas_subject}");
+
+        // === Device B: restore agent, run a query BEFORE sync ===
+        let db_b = Db::init_temp("query_sync_b").await.unwrap();
+        db_b.load_agent_from_secret(&secret).await.unwrap();
+        let drive_b = db_b.get_active_drive().expect("Should have drive from secret");
+        assert_eq!(drive_a, drive_b);
+
+        // Query children of the drive — should be empty
+        let query = Query::new_prop_val(
+            crate::urls::PARENT,
+            &drive_b,
+        );
+        let before = db_b.query(&query).await.unwrap();
+        println!("Device B query before sync: {} results", before.subjects.len());
+        assert_eq!(before.subjects.len(), 0, "No resources before sync");
+
+        // === Start Iroh, sync ===
+        let (node_id_a, router_a) = peer::start(db_a.clone()).await.unwrap();
+        let ep_b = iroh::Endpoint::builder()
+            .discovery_n0()
+            .discovery_local_network()
+            .bind()
+            .await
+            .unwrap();
+
+        let node_addr_a = router_a.endpoint().node_addr().await.unwrap();
+        ep_b.add_node_addr(node_addr_a).unwrap();
+
+        let count = peer::sync_drive_with_peer_using(
+            &ep_b,
+            &node_id_a.to_string(),
+            &drive_a,
+            &db_b,
+        )
+        .await
+        .expect("Sync should succeed");
+        println!("Device B synced {count} resources");
+
+        // Wait for server-side to process
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+        // === Query again — should now include the synced canvas ===
+        let after = db_b.query(&query).await.unwrap();
+        println!("Device B query after sync: {} results", after.subjects.len());
+        assert!(
+            after.subjects.iter().any(|s| s == &canvas_subject),
+            "Query should find the synced canvas. Got: {:?}",
+            after.subjects,
+        );
+
+        // Verify the resource is complete
+        let canvas = db_b
+            .get_resource(&canvas_subject.as_str().into())
+            .await
+            .expect("Canvas should exist");
+        assert_eq!(
+            canvas.get(crate::urls::NAME).unwrap().to_string(),
+            "Synced Canvas"
+        );
+
+        println!("TEST PASSED: synced resource appears in query results");
+    }
+
+    /// Test the resource change broadcast: subscribing to changes and receiving
+    /// notifications when resources are written (locally or via sync).
+    #[tokio::test]
+    async fn resource_change_broadcast() {
+        let db = Db::init_temp("change_broadcast").await.unwrap();
+        let (_agent, drive) = db.setup("Alice").await.unwrap();
+
+        // Subscribe before creating a resource
+        let mut rx = db.subscribe_changes();
+
+        // Create a canvas
+        let canvas = db
+            .create_resource(
+                "https://atomicdata.dev/ontology/canvas/Canvas",
+                &drive,
+                "Broadcast Test",
+                None,
+            )
+            .await
+            .unwrap();
+
+        // Should receive the notification
+        let received = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            rx.recv(),
+        )
+        .await
+        .expect("Should receive within 2s")
+        .expect("Channel should not be closed");
+
+        assert_eq!(received, canvas, "Should receive the created resource's subject");
+        println!("TEST PASSED: resource change broadcast works");
+    }
+
+    /// Test that JsonArray (stroke data) round-trips through Loro and syncs correctly.
+    #[tokio::test]
+    async fn json_array_syncs_via_loro() {
+        use crate::sync::peer;
+
+        let db_a = Db::init_temp("jsonarray_a").await.unwrap();
+        let (agent_a, drive_a) = db_a.setup("Alice").await.unwrap();
+        let secret = agent_a.build_secret().unwrap();
+
+        // Create a canvas with JsonArray stroke data
+        let strokes = vec![
+            serde_json::json!({"color": 255, "width": 2.0, "path": [[1.0, 2.0], [3.0, 4.0]]}),
+            serde_json::json!({"color": 16711680, "width": 5.0, "path": [[10.0, 20.0], [30.0, 40.0]]}),
+        ];
+
+        let canvas = db_a
+            .create_resource(
+                "https://atomicdata.dev/ontology/canvas/Canvas",
+                &drive_a,
+                "Stroke Test",
+                Some(vec![(
+                    "https://atomicdata.dev/ontology/canvas/strokeData",
+                    crate::Value::JsonArray(strokes.clone()),
+                )]),
+            )
+            .await
+            .unwrap();
+        println!("Canvas with strokes: {canvas}");
+
+        // Verify strokes are in the Loro snapshot
+        let resource_a = db_a.get_resource(&canvas.as_str().into()).await.unwrap();
+        match resource_a.get("https://atomicdata.dev/ontology/canvas/strokeData") {
+            Ok(crate::Value::JsonArray(arr)) => {
+                println!("Device A has {} strokes", arr.len());
+                assert_eq!(arr.len(), 2);
+                assert_eq!(arr[0]["color"], 255);
+                assert_eq!(arr[1]["path"][0][0], 10.0);
+            }
+            other => panic!("Expected JsonArray, got: {:?}", other),
+        }
+
+        // Sync to device B
+        let db_b = Db::init_temp("jsonarray_b").await.unwrap();
+        db_b.load_agent_from_secret(&secret).await.unwrap();
+
+        let (node_id_a, router_a) = peer::start(db_a.clone()).await.unwrap();
+        let ep_b = iroh::Endpoint::builder()
+            .discovery_n0()
+            .discovery_local_network()
+            .bind()
+            .await
+            .unwrap();
+        let node_addr_a = router_a.endpoint().node_addr().await.unwrap();
+        ep_b.add_node_addr(node_addr_a).unwrap();
+
+        let count = peer::sync_drive_with_peer_using(
+            &ep_b,
+            &node_id_a.to_string(),
+            &drive_a,
+            &db_b,
+        )
+        .await
+        .expect("Sync should succeed");
+        println!("Device B synced {count} resources");
+
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+        // Verify strokes arrived on device B
+        let resource_b = db_b.get_resource(&canvas.as_str().into()).await.unwrap();
+        match resource_b.get("https://atomicdata.dev/ontology/canvas/strokeData") {
+            Ok(crate::Value::JsonArray(arr)) => {
+                println!("Device B has {} strokes", arr.len());
+                assert_eq!(arr.len(), 2, "Should have 2 strokes");
+                assert_eq!(arr[0]["color"], 255);
+                assert_eq!(arr[1]["color"], 16711680);
+                assert_eq!(arr[1]["path"][0][0], 10.0);
+            }
+            other => panic!("Expected JsonArray on device B, got: {:?}", other),
+        }
+
+        println!("TEST PASSED: JsonArray stroke data syncs via Loro");
     }
 }

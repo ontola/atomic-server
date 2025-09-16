@@ -505,6 +505,16 @@ pub fn parse_propval<'a>(
 
                 Value::new(data.as_str(), &DataType::LoroDoc)?
             }
+            DataType::JsonArray => {
+                match val {
+                    serde_json::Value::Array(arr) => Value::JsonArray(arr.clone()),
+                    _ => return Err(AtomicError::parse_error(
+                        "Invalid value for JsonArray, must be a JSON array",
+                        subject,
+                        Some(&prop),
+                    )),
+                }
+            }
         };
 
         Ok((prop, atomic_val))

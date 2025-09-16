@@ -330,8 +330,8 @@ async fn prompt_field(
                 None => return Ok(None),
             }
         }
-        DataType::LoroDoc => {
-            // Loro documents cannot be created via CLI prompt
+        DataType::LoroDoc | DataType::JsonArray => {
+            // Binary/complex types cannot be created via CLI prompt
             return Ok(None);
         }
     };
