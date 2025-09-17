@@ -3,10 +3,12 @@ import { ComboBox } from '@components/ComboBox';
 import { Column, Row } from '@components/Row';
 import { useState } from 'react';
 import { useOpenRouterModels } from '../useOpenRouterModels';
-import { AIProvider, type AIModelIdentifier } from '../types';
+import { AIProvider } from '@components/AI/aiContstants';
+import { type AIModelIdentifier } from '../types';
 import { FaTriangleExclamation } from 'react-icons/fa6';
 import { ModelInfoLayout } from './ModelInfoLayout';
 import Markdown from '@components/datatypes/Markdown';
+import { useAISettings } from '@components/AI/AISettingsContext';
 
 interface OpenRouterModelSelectorProps {
   onSelect: (model: AIModelIdentifier) => void;
@@ -24,7 +26,7 @@ export const OpenRouterModelSelector: React.FC<
   OpenRouterModelSelectorProps
 > = ({ onSelect, defaultModel, enforceToolSupport = false }) => {
   const { models } = useOpenRouterModels();
-
+  const { isProviderEnabled } = useAISettings();
   const [selectedId, setSelectedId] = useState<string>(defaultModel);
   const selectedModel = models.find(m => m.id === selectedId);
 
@@ -40,6 +42,12 @@ export const OpenRouterModelSelector: React.FC<
     searchLabel: model.name.toLowerCase(),
     value: model.id,
   }));
+
+  if (!isProviderEnabled(AIProvider.OpenRouter)) {
+    return (
+      <ModelInfoLayout.Empty>OpenRouter is not enabled</ModelInfoLayout.Empty>
+    );
+  }
 
   return (
     <Column>

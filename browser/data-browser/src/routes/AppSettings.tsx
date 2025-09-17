@@ -70,13 +70,13 @@ const AppSettings: React.FunctionComponent = () => {
               🌕 Light
             </Button>
           </Row>
-          <Heading>Navigation bar position</Heading>
+          <Heading as='h3'>Navigation bar position</Heading>
           <Row>
             <NavStyleButton floating={true} top={false} title='Floating' />
             <NavStyleButton floating={false} top={false} title='Bottom' />
             <NavStyleButton floating={false} top={true} title='Top' />
           </Row>
-          <Heading>Main color</Heading>
+          <Heading as='h3'>Main color</Heading>
           <MainColorPicker />
           <Heading>Templates</Heading>
           <CheckboxLabel>

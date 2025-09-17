@@ -45,7 +45,7 @@ const OntologySection: FC<OntologySectionProps> = ({ subject, parent }) => {
   }
 
   return (
-    <OutlinedSection title={ontology.title}>
+    <OutlinedSection extraPadding title={ontology.title}>
       {classes.map(classType => (
         <ClassButton key={classType} classType={classType} parent={parent} />
       ))}

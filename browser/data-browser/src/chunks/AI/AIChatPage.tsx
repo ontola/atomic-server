@@ -21,9 +21,11 @@ import {
 } from './chatConversionUtils';
 import { TagBar } from '@components/Tag/TagBar';
 import { RealAIChat } from './RealAIChat';
+import { useAISettings } from '@components/AI/AISettingsContext';
 
 const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
   const store = useStore();
+  const { shouldGenerateTitles } = useAISettings();
   const [loading, setLoading] = useState(true);
   const [messages, setMessages] = useState<AtomicUIMessage[]>([]);
   const [contextItems, setContextItems] = useState<AIMessageContext[]>([]);
@@ -143,7 +145,11 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
 
   // When there are only two messages and the title is still the default name, generate a title from the conversation.
   useEffect(() => {
-    if (messages.length === 2 && title === DEFAULT_AICHAT_NAME) {
+    if (
+      messages.length === 2 &&
+      title === DEFAULT_AICHAT_NAME &&
+      shouldGenerateTitles
+    ) {
       generateTitleFromConversation(messages).then(setTitle);
     }
   }, [messages, title]);

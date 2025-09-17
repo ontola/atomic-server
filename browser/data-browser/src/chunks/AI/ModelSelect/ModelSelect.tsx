@@ -1,11 +1,12 @@
 import styled from 'styled-components';
-import { AIProvider, type AIModelIdentifier } from '../types';
+import { AIProvider } from '@components/AI/aiContstants';
+import { type AIModelIdentifier } from '../types';
 import { OpenRouterModelSelector } from './OpenRouterModelSelector';
 import { TAB_PANEL_HAS_ERROR_CLASS, TabPanel, Tabs } from '@components/Tabs';
 import { OllamaModelSelector } from './OllamaModelSelector';
 import { transition } from '@helpers/transition';
-import { useSettings } from '@helpers/AppSettings';
 import { Link } from '@tanstack/react-router';
+import { useAISettings } from '@components/AI/AISettingsContext';
 
 interface ModelSelectProps {
   onSelect?: (model: AIModelIdentifier) => void;
@@ -29,7 +30,7 @@ export const ModelSelect = ({
   defaultModel,
   enforceToolSupport = false,
 }: ModelSelectProps) => {
-  const { openRouterApiKey, ollamaUrl } = useSettings();
+  const { openRouterApiKey, ollamaUrl } = useAISettings();
 
   return (
     <Wrapper>
@@ -104,3 +105,5 @@ const NotConfiguredMessage = styled.div`
   border-radius: ${p => p.theme.radius};
   color: ${p => p.theme.colors.textLight};
 `;
+
+export default ModelSelect;
