@@ -1,10 +1,10 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { useSettings } from '../../../helpers/AppSettings';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { QuickScore } from 'quick-score';
 import type { MCPServer } from '../../../chunks/AI/types';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { useAISettings } from '../AISettingsContext';
 
 export type MCPResourceMeta = {
   name: string;
@@ -67,7 +67,7 @@ const connectToServer = async (server: MCPServer) => {
 export const McpServersProvider: React.FC<React.PropsWithChildren> = ({
   children,
 }) => {
-  const { mcpServers } = useSettings();
+  const { mcpServers } = useAISettings();
   const [clients, setClients] = useState<Record<string, Client>>({});
   const [serversWithResources, setServersWithResources] = useState<string[]>(
     [],

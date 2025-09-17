@@ -3,7 +3,7 @@ import { OutlinedSection } from '../../components/OutlinedSection';
 import { ClassButton } from './ClassButton';
 
 import type { JSX } from 'react';
-import { useSettings } from '../../helpers/AppSettings';
+import { useAISettings } from '@components/AI/AISettingsContext';
 
 interface BaseButtonsProps {
   parent: string;
@@ -19,11 +19,11 @@ const buttons = [
 ];
 
 export function BaseButtons({ parent }: BaseButtonsProps): JSX.Element {
-  const { enableAI } = useSettings();
+  const { enableAI } = useAISettings();
   const filteredButtons = enableAI ? [...buttons, ai.classes.aiChat] : buttons;
 
   return (
-    <OutlinedSection title='Base classes'>
+    <OutlinedSection extraPadding title='Base classes'>
       {filteredButtons.map(classType => (
         <ClassButton key={classType} classType={classType} parent={parent} />
       ))}

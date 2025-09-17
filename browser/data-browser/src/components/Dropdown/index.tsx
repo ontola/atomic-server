@@ -22,6 +22,7 @@ import { createPortal } from 'react-dom';
 import { DropdownPortalContext } from './dropdownContext';
 import { loopingIndex } from '../../helpers/loopingIndex';
 import { useControlLock } from '../../hooks/useControlLock';
+import { useDialogTreeInfo } from '../Dialog/dialogContext';
 
 export const DIVIDER = 'divider' as const;
 
@@ -118,6 +119,7 @@ export function DropdownMenu({
   const triggerRef = useRef<HTMLButtonElement>(null);
 
   const [isActive, _setIsActive] = useState(false);
+  const { inDialog } = useDialogTreeInfo();
 
   useControlLock(isActive);
 
@@ -161,22 +163,53 @@ export function DropdownMenu({
 
       const triggerRect = triggerRef.current.getBoundingClientRect();
       const menuRect = dropdownRef.current.getBoundingClientRect();
-      const topPos = triggerRect.y - menuRect.height;
 
-      // If the top is outside of the screen, render it below
-      if (topPos < 0) {
-        dropdownRef.current.style.top = `${triggerRect.y + triggerRect.height / 2}px`;
+      // Check if we're inside a dialog
+      const dialog = dropdownRef.current.closest('dialog');
+
+      // TODO: Use CSS anchor positioning instead.
+      if (dialog) {
+        // For dialogs, use absolute positioning relative to the dialog
+        const dialogRect = dialog.getBoundingClientRect();
+        const relativeTop = triggerRect.y - dialogRect.y;
+        const relativeLeft = triggerRect.x - dialogRect.x;
+
+        const topPos = relativeTop - menuRect.height;
+
+        // If the top is outside of the dialog, render it below
+        if (topPos < 0) {
+          dropdownRef.current.style.top = `${relativeTop + triggerRect.height}px`;
+        } else {
+          dropdownRef.current.style.top = `${topPos}px`;
+        }
+
+        const leftPos = relativeLeft - menuRect.width;
+
+        // If the left is outside of the dialog, render it to the right
+        if (leftPos < 0) {
+          dropdownRef.current.style.left = `${relativeLeft}px`;
+        } else {
+          dropdownRef.current.style.left = `${relativeLeft - menuRect.width + triggerRect.width}px`;
+        }
       } else {
-        dropdownRef.current.style.top = `${topPos + triggerRect.height / 2}px`;
-      }
+        // Original logic for non-dialog contexts
+        const topPos = triggerRect.y - menuRect.height;
 
-      const leftPos = triggerRect.x - menuRect.width;
+        // If the top is outside of the screen, render it below
+        if (topPos < 0) {
+          dropdownRef.current.style.top = `${triggerRect.y + triggerRect.height / 2}px`;
+        } else {
+          dropdownRef.current.style.top = `${topPos + triggerRect.height / 2}px`;
+        }
 
-      // If the left is outside of the screen, render it to the right
-      if (leftPos < 0) {
-        dropdownRef.current.style.left = `${triggerRect.x}px`;
-      } else {
-        dropdownRef.current.style.left = `${triggerRect.x - menuRect.width + triggerRect.width}px`;
+        const leftPos = triggerRect.x - menuRect.width;
+
+        // If the left is outside of the screen, render it to the right
+        if (leftPos < 0) {
+          dropdownRef.current.style.left = `${triggerRect.x}px`;
+        } else {
+          dropdownRef.current.style.left = `${triggerRect.x - menuRect.width + triggerRect.width}px`;
+        }
       }
 
       dropdownRef.current.style.visibility = 'visible';
@@ -278,6 +311,7 @@ export function DropdownMenu({
           <Menu
             ref={dropdownRef}
             isActive={isActive}
+            position={inDialog ? 'absolute' : 'fixed'}
             id={menuId}
             onMouseOver={handleMouseOverMenu}
             onBlur={handleBlur}
@@ -326,10 +360,6 @@ const DropdownPortal = ({ children }: PropsWithChildren) => {
 
   return createPortal(children, portalRef.current);
 };
-
-interface MenuProps {
-  isActive: boolean;
-}
 
 export interface MenuItemSidebarProps extends MenuItemMinimial {
   handleClickItem?: () => unknown;
@@ -437,7 +467,10 @@ const ItemDivider = styled.div`
   border-bottom: 1px solid ${p => p.theme.colors.bg2};
 `;
 
-const Menu = styled.div<MenuProps>`
+const Menu = styled.div<{
+  isActive: boolean;
+  position?: 'fixed' | 'absolute';
+}>`
   visibility: hidden;
   font-size: 0.9rem;
   overflow: auto;
@@ -448,7 +481,7 @@ const Menu = styled.div<MenuProps>`
   padding-top: 0.4rem;
   padding-bottom: 0.4rem;
   border-radius: 8px;
-  position: fixed;
+  position: ${p => p.position || 'fixed'};
   z-index: ${p => p.theme.zIndex.dropdown};
   width: auto;
   box-shadow: ${p => p.theme.boxShadowSoft};

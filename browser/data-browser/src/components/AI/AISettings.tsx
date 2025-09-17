@@ -3,14 +3,22 @@ import { Column, Row } from '@components/Row';
 import { Checkbox, CheckboxLabel } from '@components/forms/Checkbox';
 import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
 import { MCPServersManager } from './MCP/MCPServersManager';
-import styled from 'styled-components';
+import styled, { useTheme } from 'styled-components';
 import { transition } from '@helpers/transition';
-import { useSettings } from '@helpers/AppSettings';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { OpenRouterLoginButton } from './OpenRouterLoginButton';
-import { TabPanel, Tabs } from '@components/Tabs';
 import { effectFetch } from '@helpers/effectFetch';
 import { CheckboxDescriptor } from '@components/forms/CheckboxDescriptor';
+import { OutlinedSection } from '@components/OutlinedSection';
+import { useAISettings } from './AISettingsContext';
+import { AIProvider } from './aiContstants';
+import { useIsOllamaUrlValid } from './useIsOllamaUrlValid';
+import { FaCheck, FaTriangleExclamation } from 'react-icons/fa6';
+import { Details } from '@components/Details';
+
+const ModelSelect = React.lazy(
+  () => import('@chunks/AI/ModelSelect/ModelSelect'),
+);
 
 const intl = new Intl.NumberFormat('default', {
   style: 'currency',
@@ -26,18 +34,8 @@ interface CreditUsage {
 
 const CREDITS_ENDPOINT = 'https://openrouter.ai/api/v1/credits';
 
-const PROVIDER_TABS = [
-  {
-    label: 'OpenRouter',
-    value: 'openrouter',
-  },
-  {
-    label: 'Ollama',
-    value: 'ollama',
-  },
-];
-
 const AISettings: React.FC = () => {
+  const theme = useTheme();
   const {
     enableAI,
     setEnableAI,
@@ -51,9 +49,20 @@ const AISettings: React.FC = () => {
     setOllamaUrl,
     showFollowUpPrompts,
     setShowFollowUpPrompts,
-  } = useSettings();
+    isProviderEnabled,
+    setIsProviderEnabled,
+    shouldGenerateTitles,
+    setShouldGenerateTitles,
+    genFeaturesModel,
+    setGenFeaturesModel,
+  } = useAISettings();
 
   const [creditUsage, setCreditUsage] = useState<CreditUsage | undefined>();
+
+  const isOllamaUrlValid = useIsOllamaUrlValid(
+    isProviderEnabled(AIProvider.Ollama),
+    ollamaUrl,
+  );
 
   useEffect(() => {
     if (!openRouterApiKey) {
@@ -82,6 +91,121 @@ const AISettings: React.FC = () => {
         Features
       </CheckboxLabel>
       <ConditionalSettings enabled={enableAI} inert={!enableAI}>
+        <CheckboxLabel>
+          <Checkbox checked={showTokenUsage} onChange={setShowTokenUsage} />
+          Show token usage in chats
+        </CheckboxLabel>
+        <Heading as='h3'>AI Providers</Heading>
+        <OutlinedSection title='OpenRouter'>
+          <CheckboxLabel>
+            <Checkbox
+              checked={isProviderEnabled(AIProvider.OpenRouter)}
+              onChange={checked => {
+                setIsProviderEnabled(AIProvider.OpenRouter, checked);
+              }}
+            />
+            Enable OpenRouter
+          </CheckboxLabel>
+          <ConditionalSettings
+            fullWidth
+            gap='0.5rem'
+            enabled={isProviderEnabled(AIProvider.OpenRouter)}
+          >
+            <label htmlFor='openrouter-api-key'>OpenRouter API Key</label>
+            <Row center>
+              {!openRouterApiKey && (
+                <>
+                  <OpenRouterLoginButton />
+                  or
+                </>
+              )}
+              <InputWrapper>
+                <InputStyled
+                  id='openrouter-api-key'
+                  type='password'
+                  value={openRouterApiKey || ''}
+                  onChange={e =>
+                    setOpenRouterApiKey(e.target.value || undefined)
+                  }
+                  placeholder='Enter your OpenRouter API key'
+                />
+              </InputWrapper>
+            </Row>
+            {creditUsage && (
+              <Subtle as='p'>
+                Credits used: {intl.format(creditUsage.used)} /{' '}
+                {intl.format(creditUsage.total)}
+              </Subtle>
+            )}
+            {!openRouterApiKey && (
+              <Subtle as='p'>
+                OpenRouter provides a unified API that gives you access to
+                hundreds of AI models from all major vendors, while
+                automatically handling fallbacks and selecting the most
+                cost-effective options.
+              </Subtle>
+            )}
+          </ConditionalSettings>
+        </OutlinedSection>
+        <OutlinedSection title='Ollama'>
+          <CheckboxDescriptor
+            label='Enable Ollama'
+            description={
+              <>
+                Host your own AI models locally using{' '}
+                <a href='https://ollama.com/' target='_blank' rel='noreferrer'>
+                  Ollama
+                </a>
+              </>
+            }
+          >
+            {id => (
+              <Checkbox
+                id={id}
+                checked={isProviderEnabled(AIProvider.Ollama)}
+                onChange={checked =>
+                  setIsProviderEnabled(AIProvider.Ollama, checked)
+                }
+              />
+            )}
+          </CheckboxDescriptor>
+          <ConditionalSettings
+            fullWidth
+            gap='1rem'
+            enabled={isProviderEnabled(AIProvider.Ollama)}
+          >
+            <Column gap='0.5rem'>
+              <Row center gap='1ch'>
+                {isOllamaUrlValid ? (
+                  <FaCheck title='Server found' color={theme.colors.main} />
+                ) : (
+                  <FaTriangleExclamation
+                    title='Server not responding'
+                    color={theme.colors.warning}
+                  />
+                )}
+                <label htmlFor='ollama-url'>Ollama API Url</label>
+              </Row>
+              <InputWrapper>
+                <InputStyled
+                  id='ollama-url'
+                  value={ollamaUrl || ''}
+                  onChange={e => setOllamaUrl(e.target.value || undefined)}
+                  type='url'
+                  placeholder='http://localhost:11434'
+                />
+              </InputWrapper>
+            </Column>
+          </ConditionalSettings>
+        </OutlinedSection>
+        <Heading as='h3'>Generative Features</Heading>
+        <CheckboxLabel>
+          <Checkbox
+            checked={shouldGenerateTitles}
+            onChange={setShouldGenerateTitles}
+          />
+          Generate AI Chat titles
+        </CheckboxLabel>
         <CheckboxDescriptor
           label='Show follow up prompts in chats'
           description='Uses a small model to generate a follow up prompt based on the last message in the chat.'
@@ -94,86 +218,23 @@ const AISettings: React.FC = () => {
             />
           )}
         </CheckboxDescriptor>
-        <Heading>AI Provider</Heading>
-        <TabWrapper>
-          <Tabs tabs={PROVIDER_TABS} label='AI Provider' rounded>
-            <StyledTabPanel value='openrouter'>
-              <Column gap='0.5rem'>
-                <label htmlFor='openrouter-api-key'>OpenRouter API Key</label>
-                <Row center>
-                  {!openRouterApiKey && (
-                    <>
-                      <OpenRouterLoginButton />
-                      or
-                    </>
-                  )}
-                  <InputWrapper>
-                    <InputStyled
-                      id='openrouter-api-key'
-                      type='password'
-                      value={openRouterApiKey || ''}
-                      onChange={e =>
-                        setOpenRouterApiKey(e.target.value || undefined)
-                      }
-                      placeholder='Enter your OpenRouter API key'
-                    />
-                  </InputWrapper>
-                </Row>
-                {creditUsage && (
-                  <Subtle as='p'>
-                    Credits used: {intl.format(creditUsage.used)} /{' '}
-                    {intl.format(creditUsage.total)}
-                  </Subtle>
-                )}
-                {!openRouterApiKey && (
-                  <Subtle as='p'>
-                    OpenRouter provides a unified API that gives you access to
-                    hundreds of AI models from all major vendors, while
-                    automatically handling fallbacks and selecting the most
-                    cost-effective options.
-                  </Subtle>
-                )}
-              </Column>
-            </StyledTabPanel>
-            <StyledTabPanel value='ollama'>
-              <Column gap='0.5rem'>
-                <label htmlFor='ollama-url'>Ollama API Url</label>
-                <InputWrapper>
-                  <InputStyled
-                    id='ollama-url'
-                    value={ollamaUrl || ''}
-                    onChange={e => setOllamaUrl(e.target.value || undefined)}
-                    type='url'
-                    placeholder='http://localhost:11434/api'
-                  />
-                </InputWrapper>
-                <Subtle as='p'>
-                  Host your own AI models locally using{' '}
-                  <a
-                    href='https://ollama.com/'
-                    target='_blank'
-                    rel='noreferrer'
-                  >
-                    Ollama
-                  </a>
-                  .
-                </Subtle>
-              </Column>
-            </StyledTabPanel>
-          </Tabs>
-        </TabWrapper>
-        <CheckboxLabel>
-          <Checkbox checked={showTokenUsage} onChange={setShowTokenUsage} />
-          Show token usage in chats
-        </CheckboxLabel>
-        <Heading>MCP Servers</Heading>
+        <Details title='Change what model is used for generative features'>
+          <Suspense>
+            <p>(Tip) Choose a cheap and fast model</p>
+            <ModelSelect
+              defaultModel={genFeaturesModel}
+              onSelect={setGenFeaturesModel}
+            />
+          </Suspense>
+        </Details>
+        <Heading as='h3'>MCP Servers</Heading>
         <MCPServersManager servers={mcpServers} setServers={setMcpServers} />
       </ConditionalSettings>
     </>
   );
 };
 
-const Heading = styled.h3`
+const Heading = styled.h2`
   font-size: 1em;
   margin: 0;
   margin-top: 1rem;
@@ -189,20 +250,6 @@ const ConditionalSettings = styled(Column)<{ enabled: boolean }>`
 const Subtle = styled.div`
   font-size: 0.8rem;
   color: ${p => p.theme.colors.textLight};
-`;
-
-const TabWrapper = styled.div`
-  border: 1px solid ${p => p.theme.colors.bg2};
-  border-radius: ${p => p.theme.radius};
-`;
-
-const StyledTabPanel = styled(TabPanel)`
-  padding: ${p => p.theme.size()};
-  padding-top: 0;
-
-  ${InputWrapper}:has(input:user-invalid) {
-    border-color: ${p => p.theme.colors.alert};
-  }
 `;
 
 export default AISettings;

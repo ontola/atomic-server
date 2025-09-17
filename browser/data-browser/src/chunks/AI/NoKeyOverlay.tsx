@@ -1,27 +1,40 @@
 import styled from 'styled-components';
-import { useSettings } from '../../helpers/AppSettings';
 import { paths } from '../../routes/paths';
 import { AtomicLink } from '@components/AtomicLink';
 import { Column } from '@components/Row';
 import { FaGear } from 'react-icons/fa6';
+import { useAISettings } from '@components/AI/AISettingsContext';
 
 export const NoKeyOverlay: React.FC = () => {
-  const { openRouterApiKey, ollamaUrl } = useSettings();
+  const { openRouterApiKey, ollamaUrl, enabledProviders } = useAISettings();
 
-  if (openRouterApiKey || ollamaUrl) {
-    return null;
+  if (enabledProviders.length === 0) {
+    return (
+      <Overlay>
+        <Column gap='0.5rem' center>
+          <p>No AI providers enabled.</p>
+          <ButtonLink clean path={paths.appSettings}>
+            <FaGear /> Settings
+          </ButtonLink>
+        </Column>
+      </Overlay>
+    );
   }
 
-  return (
-    <Overlay>
-      <Column gap='0.5rem' center>
-        <p>No AI provider configured.</p>
-        <ButtonLink clean path={paths.appSettings}>
-          <FaGear /> Settings
-        </ButtonLink>
-      </Column>
-    </Overlay>
-  );
+  if (!openRouterApiKey && !ollamaUrl) {
+    return (
+      <Overlay>
+        <Column gap='0.5rem' center>
+          <p>No AI provider configured.</p>
+          <ButtonLink clean path={paths.appSettings}>
+            <FaGear /> Settings
+          </ButtonLink>
+        </Column>
+      </Overlay>
+    );
+  }
+
+  return null;
 };
 
 const Overlay = styled.div`

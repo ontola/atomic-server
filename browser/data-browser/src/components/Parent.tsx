@@ -20,6 +20,7 @@ import { IconButton, IconButtonVariant } from './IconButton/IconButton';
 import type { JSX } from 'react';
 import { useAISidebar } from './AI/AISidebarContext';
 import { AIIcon } from './AI/AIIcon';
+import { useAISettings } from './AI/AISettingsContext';
 
 type ParentProps = {
   resource: Resource;
@@ -28,7 +29,7 @@ type ParentProps = {
 /** Breadcrumb list. Recursively renders parents. */
 function Parent({ resource }: ParentProps): JSX.Element {
   const [parent] = useString(resource, core.properties.parent);
-  const { enableAI } = useSettings();
+  const { enableAI } = useAISettings();
   const { setIsOpen } = useAISidebar();
 
   return (

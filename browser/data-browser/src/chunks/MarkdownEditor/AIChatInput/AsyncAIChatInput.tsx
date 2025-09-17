@@ -6,7 +6,7 @@ import FileHandler from '@tiptap/extension-file-handler';
 import { TiptapContextProvider } from '../TiptapContext';
 import { EditorWrapperBase } from '../EditorWrapperBase';
 import { searchSuggestionBuilder } from './resourceSuggestions';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { EditorEvents } from '../EditorEvents';
 import { Markdown } from 'tiptap-markdown';
 import { useStore } from '@tomic/react';
@@ -26,6 +26,7 @@ import {
 } from '../../../components/IconButton/IconButton';
 import { FaArrowRight } from 'react-icons/fa6';
 import { addIf } from '../../../helpers/addIf';
+import { useAISettings } from '@components/AI/AISettingsContext';
 
 const createAttribute = (propName: string, dataName: string) => {
   return {
@@ -72,28 +73,35 @@ const SerializableMention = Mention.extend({
 });
 
 interface AsyncAIChatInputProps {
+  hasFiles: boolean;
+  disabled?: boolean;
   onMentionUpdate: (mentions: MentionItem[]) => void;
   onChange: (markdown: string) => void;
   onSubmit: () => void;
   onFileAdded?: (files: File[]) => void;
-  hasFiles: boolean;
 }
 
 const AsyncAIChatInput: React.FC<
   React.PropsWithChildren<AsyncAIChatInputProps>
 > = ({
+  children,
+  hasFiles,
+  disabled,
   onMentionUpdate,
   onChange,
   onSubmit,
-  children,
-  hasFiles,
   onFileAdded,
 }) => {
   const store = useStore();
-  const { drive, mcpServers } = useSettings();
+  const { drive } = useSettings();
+  const { mcpServers } = useAISettings();
   const [markdown, setMarkdown] = useState('');
+
   const markdownRef = useRef(markdown);
   const onSubmitRef = useRef(onSubmit);
+  markdownRef.current = markdown;
+  onSubmitRef.current = onSubmit;
+
   const { serversWithResources, searchResourcesOfServer } = useMcpServers();
 
   const editor = useEditor(
@@ -166,8 +174,9 @@ const AsyncAIChatInput: React.FC<
         ),
       ],
       autofocus: true,
+      editable: !disabled,
     },
-    [serversWithResources, searchResourcesOfServer],
+    [serversWithResources, searchResourcesOfServer, disabled],
   );
 
   const handleChange = (value: string) => {
@@ -183,11 +192,6 @@ const AsyncAIChatInput: React.FC<
     onMentionUpdate(mentions);
   };
 
-  useEffect(() => {
-    markdownRef.current = markdown;
-    onSubmitRef.current = onSubmit;
-  }, [markdown, onSubmit]);
-
   return (
     <>
       <EditorWrapper hideEditor={false}>
@@ -199,7 +203,7 @@ const AsyncAIChatInput: React.FC<
       <Row justify='space-between'>
         {children}
         <IconButton
-          disabled={markdown.length === 0 && !hasFiles}
+          disabled={disabled || (markdown.length === 0 && !hasFiles)}
           onClick={() => {
             onSubmit();
             setMarkdown('');

@@ -1,4 +1,5 @@
 import type { UIMessage } from 'ai';
+import { AIProvider } from '@components/AI/aiContstants';
 
 export interface MCPServer {
   name: string;
@@ -64,11 +65,6 @@ export function isAtomicResourceContext(
   context: AIMessageContext,
 ): context is AIAtomicResourceMessageContext {
   return context.type === 'atomic-resource';
-}
-
-export enum AIProvider {
-  OpenRouter = 'openrouter',
-  Ollama = 'ollama',
 }
 
 export type AIModelIdentifier = {
