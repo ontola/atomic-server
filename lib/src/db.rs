@@ -1580,9 +1580,9 @@ impl Storelike for Db {
 
         store.apply_transaction(&mut transaction)?;
 
-        // Notify subscribers
+        // Notify subscribers (use pure_id to match LoroSnapshot keys)
         let _ = store.resource_changed.send(
-            commit_response.commit.subject.to_string()
+            commit_response.commit.subject.pure_id()
         );
 
         store.handle_commit(&commit_response);
