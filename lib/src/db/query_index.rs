@@ -1,11 +1,12 @@
 //! The QueryIndex is used to speed up queries by persisting filtered, sorted collections.
-//! It relies on lexicographic ordering of keys, which Sled utilizes using `scan_prefix` queries.
+//! It relies on lexicographic ordering of keys, which SQLite supports natively with BLOB comparisons.
 
 use crate::{
     agents::ForAgent, atoms::IndexAtom, errors::AtomicResult, storelike::Query,
     values::SortableValue, Atom, Db, Resource, Storelike, Value,
 };
 use serde::{Deserialize, Serialize};
+use rusqlite::params;
 
 use super::trees::{self, Operation, Transaction, Tree};
 
@@ -37,19 +38,43 @@ impl QueryFilter {
         };
 
         let query_filter_bin = self.encode()?;
+        
+        let mut transaction = Transaction::new();
+        transaction.push(Operation {
+            tree: Tree::WatchedQueries,
+            method: trees::Method::Insert,
+            key: query_filter_bin,
+            val: Some(b"".to_vec()),
+        });
+        
+        store.apply_transaction(&mut transaction)?;
 
-        store.watched_queries.insert(query_filter_bin, b"")?;
         Ok(())
     }
 
     /// Check if this [QueryFilter] is being indexed
     pub fn is_watched(&self, store: &Db) -> bool {
-        let query_filter_bin = self.encode().expect("Failed to encode QueryFilter");
-
-        store
-            .watched_queries
-            .contains_key(&query_filter_bin)
-            .unwrap_or(false)
+        let query_filter_bin = match self.encode() {
+            Ok(bin) => bin,
+            Err(_) => {
+                tracing::error!("Failed to encode QueryFilter for watching check");
+                return false;
+            }
+        };
+        
+        let conn = match store.pool.get() {
+            Ok(conn) => conn,
+            Err(_) => {
+                tracing::error!("Failed to get connection from pool for watching check");
+                return false;
+            }
+        };
+        
+        conn.query_row(
+            "SELECT 1 FROM watched_queries WHERE key = ?1",
+            params![query_filter_bin],
+            |_row| Ok(()),
+        ).is_ok()
     }
 }
 
@@ -66,7 +91,7 @@ impl From<&Query> for QueryFilter {
 /// Last character in lexicographic ordering
 pub const FIRST_CHAR: &str = "\u{0000}";
 pub const END_CHAR: &str = "\u{ffff}";
-/// We can only store one bytearray as a key in Sled.
+/// We can only store one bytearray as a key in SQLite.
 /// We separate the various items in it using this bit that's illegal in UTF-8.
 pub const SEPARATION_BIT: u8 = 0xff;
 /// If we want to sort by a value that is no longer there, we use this special value.
@@ -91,14 +116,29 @@ pub fn query_sorted_indexed(
         Value::String(END_CHAR.into())
     };
     let start_key = create_query_index_key(&q.into(), Some(&start.to_sortable_string()), None)?;
-    let end_key = create_query_index_key(&q.into(), Some(&end.to_sortable_string()), None)?;
+    let mut end_key = create_query_index_key(&q.into(), Some(&end.to_sortable_string()), None)?;
+    // Make the range exclusive by appending 0xFF to make it match sled's behavior
+    end_key.push(0xFF);
 
-    let iter: Box<dyn Iterator<Item = std::result::Result<(sled::IVec, sled::IVec), sled::Error>>> =
-        if q.sort_desc {
-            Box::new(store.query_index.range(start_key..end_key).rev())
-        } else {
-            Box::new(store.query_index.range(start_key..end_key))
-        };
+    let conn = store.pool.get()
+        .map_err(|e| format!("Failed to get connection from pool: {}", e))?;
+    
+    // Use exclusive upper bound to match sled's range behavior
+    let query = if q.sort_desc {
+        "SELECT key, value FROM query_members WHERE key >= ?1 AND key < ?2 ORDER BY key DESC"
+    } else {
+        "SELECT key, value FROM query_members WHERE key >= ?1 AND key < ?2 ORDER BY key ASC"
+    };
+    
+    let mut stmt = conn.prepare_cached(query)
+        .map_err(|e| format!("Failed to prepare query: {}", e))?;
+    
+    let iter = stmt.query_map(params![start_key, end_key], |row| {
+        let key: Vec<u8> = row.get(0)?;
+        let value: Vec<u8> = row.get(1)?;
+        Ok((key, value))
+    })
+    .map_err(|e| format!("Failed to query members: {}", e))?;
 
     let mut subjects: Vec<String> = vec![];
     let mut resources: Vec<Resource> = vec![];
@@ -110,13 +150,13 @@ pub fn query_sorted_indexed(
 
     let limit = q.limit.unwrap_or(usize::MAX);
 
-    for (i, kv) in iter.enumerate() {
+    for (i, kv_result) in iter.enumerate() {
         // The user's maximum amount of results has not yet been reached
         // and
         // The users minimum starting distance (offset) has been reached
         let in_selection = subjects.len() < limit && i >= q.offset;
         if in_selection {
-            let (k, _v) = kv.map_err(|_e| "Unable to parse query_cached")?;
+            let (k, _v) = kv_result.map_err(|e| format!("Unable to parse query_cached: {}", e))?;
             let (_q_filter, _val, subject) = parse_collection_members_key(&k)?;
 
             // If no external resources should be included, skip this one if it's an external resource
@@ -265,21 +305,34 @@ pub fn check_if_atom_matches_watched_query_filters(
     resource: &Resource,
     transaction: &mut Transaction,
 ) -> AtomicResult<()> {
-    for query in store.watched_queries.iter() {
-        // The keys store all the data
-        if let Ok((k, _v)) = query {
-            let q_filter: QueryFilter = QueryFilter::from_bytes(&k)?;
+    let conn = store.pool.get()
+        .map_err(|e| format!("Failed to get connection from pool: {}", e))?;
+    let mut stmt = conn.prepare_cached("SELECT key FROM watched_queries")
+        .map_err(|e| format!("Failed to prepare watched_queries query: {}", e))?;
+    
+    let query_iter = stmt.query_map([], |row| {
+        let key: Vec<u8> = row.get(0)?;
+        Ok(key)
+    })
+    .map_err(|e| format!("Failed to query watched_queries: {}", e))?;
+    
+    for query_result in query_iter {
+        match query_result {
+            Ok(k) => {
+                let q_filter: QueryFilter = QueryFilter::from_bytes(&k)?;
 
-            if let Some(prop) = should_update_property(&q_filter, index_atom, resource) {
-                let update_val = match resource.get(prop) {
-                    Ok(val) => val.to_sortable_string(),
-                    Err(_e) => NO_VALUE.to_string(),
-                };
-                update_indexed_member(&q_filter, &atom.subject, &update_val, delete, transaction)?;
+                if let Some(prop) = should_update_property(&q_filter, index_atom, resource) {
+                    let update_val = match resource.get(prop) {
+                        Ok(val) => val.to_sortable_string(),
+                        Err(_e) => NO_VALUE.to_string(),
+                    };
+                    update_indexed_member(&q_filter, &atom.subject, &update_val, delete, transaction)?;
+                }
             }
-        } else {
-            tracing::error!("Can't query collection index: {:?}", query);
-            break;
+            Err(e) => {
+                tracing::error!("Can't query collection index: {}", e);
+                break;
+            }
         }
     }
     Ok(())

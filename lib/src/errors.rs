@@ -263,3 +263,25 @@ impl From<sled::Error> for AtomicError {
         }
     }
 }
+
+#[cfg(feature = "db")]
+impl From<rusqlite::Error> for AtomicError {
+    fn from(error: rusqlite::Error) -> Self {
+        AtomicError {
+            message: error.to_string(),
+            error_type: AtomicErrorType::OtherError,
+            subject: None,
+        }
+    }
+}
+
+#[cfg(feature = "db")]
+impl From<r2d2::Error> for AtomicError {
+    fn from(error: r2d2::Error) -> Self {
+        AtomicError {
+            message: error.to_string(),
+            error_type: AtomicErrorType::OtherError,
+            subject: None,
+        }
+    }
+}
