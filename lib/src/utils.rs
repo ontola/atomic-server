@@ -67,5 +67,5 @@ pub fn check_timestamp_in_past(timestamp: i64, difference: i64) -> AtomicResult<
             )
             .into());
     }
-    return Ok(());
+    Ok(())
 }

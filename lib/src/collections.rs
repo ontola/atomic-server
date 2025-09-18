@@ -307,10 +307,10 @@ impl Collection {
 
         match &self.referenced_resources {
             Some(referenced_resources) => {
-                return Ok(ResourceResponse::ResourceWithReferenced(
+                Ok(ResourceResponse::ResourceWithReferenced(
                     resource.clone(),
                     referenced_resources.clone(),
-                ));
+                ))
             }
             None => Ok(ResourceResponse::Resource(resource.clone())),
         }

@@ -72,7 +72,7 @@ fn write_config(path: &Path, config: Config) -> AtomicResult<String> {
 
 impl Config {
     pub fn save(&self, path: &Path) -> AtomicResult<()> {
-        write_config(&path, self.clone())?;
+        write_config(path, self.clone())?;
         Ok(())
     }
 
@@ -101,7 +101,7 @@ fn parse_and_migrate_if_needed(config_str: &str) -> AtomicResult<Config> {
         return config_v0_to_v1(&config);
     }
 
-    return Err("Could not parse config".into());
+    Err("Could not parse config".into())
 }
 
 fn config_v0_to_v1(config_v0: &ConfigV0) -> AtomicResult<Config> {

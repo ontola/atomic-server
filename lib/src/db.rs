@@ -92,15 +92,23 @@ impl Db {
     /// The server_url is the domain where the db will be hosted, e.g. http://localhost/
     /// It is used for distinguishing locally defined items from externally defined ones.
     pub fn init(path: &std::path::Path, server_url: String) -> AtomicResult<Db> {
-        tracing::info!("Opening SQLite database at {:?}", path);
+        // For SQLite, we need a file path, not a directory path
+        // If the path doesn't have an extension, add .db
+        let db_path = if path.extension().is_none() {
+            path.with_extension("db")
+        } else {
+            path.to_path_buf()
+        };
+        
+        tracing::info!("Opening SQLite database at {:?}", db_path);
 
         // Ensure the directory exists
-        if let Some(parent) = path.parent() {
+        if let Some(parent) = db_path.parent() {
             fs::create_dir_all(parent)?;
         }
 
         // Create connection manager and pool
-        let manager = SqliteConnectionManager::file(path)
+        let manager = SqliteConnectionManager::file(&db_path)
             .with_init(|conn: &mut rusqlite::Connection| -> Result<(), rusqlite::Error> {
                 configure_sqlite_for_r2d2(conn)?;
                 initialize_tables_for_r2d2(conn)?;
@@ -116,7 +124,7 @@ impl Db {
 
         let store = Db {
             pool,
-            path: path.into(),
+            path: db_path,
             default_agent: Arc::new(std::sync::Mutex::new(None)),
             server_url,
             endpoints: plugins::default_endpoints(),
@@ -210,9 +218,7 @@ impl Db {
     /// Constructs the value index from all resources in the store. Could take a while.
     pub fn build_index(&self, include_external: bool) -> AtomicResult<()> {
         tracing::info!("Building index (this could take a few minutes for larger databases)");
-        let mut count = 0;
-
-        for r in self.all_resources(include_external) {
+        for (count, r) in self.all_resources(include_external).enumerate() {
             let mut transaction = Transaction::new();
             for atom in r.to_atoms_iter() {
                 self.add_atom_to_index(&atom, &r, &mut transaction)
@@ -221,16 +227,14 @@ impl Db {
             self.apply_transaction(&mut transaction)
                 .map_err(|e| format!("Failed to commit transaction. {}", e))?;
 
-            if count % 1000 == 0 {
-                tracing::info!("Building index, applied transaction: {}", count);
+            if (count + 1) % 1000 == 0 {
+                tracing::info!("Building index, applied transaction: {}", count + 1);
             }
 
-            if count % 10000 == 0 {
+            if (count + 1) % 10000 == 0 {
                 tracing::info!("Building index, checkpoint");
                 // SQLite handles checkpointing automatically with WAL mode
             }
-
-            count += 1;
         }
 
         tracing::info!("Building index finished!");
@@ -328,6 +332,7 @@ impl Db {
     }
 
     /// Helper to get a value from a table by key (restored for compatibility)
+    #[allow(dead_code)]
     fn get_table_value(&self, table: &str, key: &[u8]) -> AtomicResult<Option<Vec<u8>>> {
         let conn = self.pool.get()
             .map_err(|e| format!("Failed to get connection from pool: {}", e))?;
@@ -339,6 +344,7 @@ impl Db {
     }
 
     /// Helper to set a value in a table (restored for compatibility)
+    #[allow(dead_code)]
     fn set_table_value(&self, table: &str, key: &[u8], value: &[u8]) -> AtomicResult<()> {
         let conn = self.pool.get()
             .map_err(|e| format!("Failed to get connection from pool: {}", e))?;
@@ -1094,6 +1100,7 @@ fn initialize_tables_for_r2d2(conn: &mut rusqlite::Connection) -> Result<(), rus
 }
 
 /// Configure SQLite for optimal performance
+#[allow(dead_code)]
 fn configure_sqlite(conn: &rusqlite::Connection) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Enable WAL mode for concurrent readers
     conn.pragma_update(None, "journal_mode", "WAL")?;
@@ -1123,6 +1130,7 @@ fn configure_sqlite(conn: &rusqlite::Connection) -> Result<(), Box<dyn std::erro
 }
 
 /// Initialize SQLite tables for each tree structure
+#[allow(dead_code)]
 fn initialize_tables(conn: &rusqlite::Connection) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     conn.execute_batch("
         -- Main resources table
@@ -1166,5 +1174,25 @@ impl std::fmt::Debug for Db {
             .field("path", &self.path)
             .field("pool_state", &self.pool.state())
             .finish()
+    }
+}
+
+#[cfg(test)]
+mod tests_sqlite_config;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[test]
+    fn test_db_debug_format() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("debug_test.db");
+        let store = Db::init(&db_path, "http://localhost".to_string()).unwrap();
+        
+        let debug_str = format!("{:?}", store);
+        assert!(debug_str.contains("Db"));
+        assert!(debug_str.contains("server_url"));
+        assert!(debug_str.contains("http://localhost"));
     }
 }

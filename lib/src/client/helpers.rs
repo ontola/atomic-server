@@ -168,7 +168,6 @@ mod test {
     use super::*;
 
     #[test]
-    #[ignore]
     fn fetch_resource_basic() {
         let store = crate::Store::init().unwrap();
         let resource = fetch_resource(crate::urls::SHORTNAME, &store, None)

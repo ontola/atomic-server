@@ -90,7 +90,7 @@ impl ResourceResponse {
     /// Takes a vector of resources and returns a ResourceResponse::ResourceWithReferenced
     /// If the main subject is not found it will Error
     pub fn from_vec(main_subject: &str, vec: Vec<Resource>) -> AtomicResult<Self> {
-        if vec.len() == 0 {
+        if vec.is_empty() {
             return Err("No resources found".into());
         }
         if vec.len() == 1 {
