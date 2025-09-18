@@ -504,4 +504,150 @@ mod test {
             ]
         );
     }
+
+    #[test]
+    fn test_all_datatypes_comprehensive() {
+        // Test Boolean datatype
+        let bool_true = Value::new("true", &DataType::Boolean).unwrap();
+        assert_eq!(bool_true.to_string(), "true");
+        let bool_false = Value::new("false", &DataType::Boolean).unwrap();
+        assert_eq!(bool_false.to_string(), "false");
+        
+        // Boolean should fail with invalid values
+        Value::new("maybe", &DataType::Boolean).unwrap_err();
+        Value::new("1", &DataType::Boolean).unwrap_err();
+
+        // Test Date datatype (ISO 8601 format)
+        let date = Value::new("2023-12-25", &DataType::Date).unwrap();
+        assert_eq!(date.to_string(), "2023-12-25");
+        
+        // Date should fail with invalid formats
+        Value::new("25-12-2023", &DataType::Date).unwrap_err();
+        Value::new("2023/12/25", &DataType::Date).unwrap_err();
+        Value::new("invalid-date", &DataType::Date).unwrap_err();
+
+        // Test Timestamp datatype (Unix timestamp in milliseconds)
+        let timestamp = Value::new("1703462400000", &DataType::Timestamp).unwrap();
+        assert_eq!(timestamp.to_string(), "1703462400000");
+        
+        // Timestamp should fail with invalid formats
+        Value::new("not-a-number", &DataType::Timestamp).unwrap_err();
+        Value::new("1703462400.5", &DataType::Timestamp).unwrap_err();
+
+        // Test Slug datatype (lowercase, dashes only)
+        let slug = Value::new("my-test-slug", &DataType::Slug).unwrap();
+        assert_eq!(slug.to_string(), "my-test-slug");
+        let slug_with_numbers = Value::new("test-123-slug", &DataType::Slug).unwrap();
+        assert_eq!(slug_with_numbers.to_string(), "test-123-slug");
+        
+        // Slug should fail with invalid characters
+        Value::new("My Slug", &DataType::Slug).unwrap_err(); // spaces
+        Value::new("my_slug", &DataType::Slug).unwrap_err(); // underscores
+        Value::new("my.slug", &DataType::Slug).unwrap_err(); // dots
+        Value::new("MySlug", &DataType::Slug).unwrap_err(); // uppercase
+
+        // Test AtomicUrl datatype
+        let atomic_url = Value::new("https://atomicdata.dev/test", &DataType::AtomicUrl).unwrap();
+        assert_eq!(atomic_url.to_string(), "https://atomicdata.dev/test");
+        
+        // AtomicUrl should fail with invalid URLs
+        Value::new("not-a-url", &DataType::AtomicUrl).unwrap_err();
+        Value::new("invalid://not-a-url", &DataType::AtomicUrl).unwrap_err();
+
+        // Test Markdown datatype
+        let markdown = Value::new("# Hello\n\nThis is **bold** text.", &DataType::Markdown).unwrap();
+        assert_eq!(markdown.to_string(), "# Hello\n\nThis is **bold** text.");
+
+        // Test ResourceArray with multiple types
+        let resource_array_json = r#"["https://example.com/first", "https://example.com/second"]"#;
+        let resource_array = Value::new(resource_array_json, &DataType::ResourceArray).unwrap();
+        match resource_array {
+            Value::ResourceArray(resources) => {
+                assert_eq!(resources.len(), 2);
+            }
+            _ => panic!("Expected ResourceArray value"),
+        }
+
+        // Test complex JSON
+        let complex_json = r#"{"nested": {"array": [1, 2, 3]}, "string": "value", "number": 42.5}"#;
+        let json_value = Value::new(complex_json, &DataType::JSON).unwrap();
+        // JSON parsing should succeed, order may vary
+        assert!(json_value.to_string().contains("nested"));
+        assert!(json_value.to_string().contains("array"));
+
+        // Test edge cases for numeric types
+        let max_int = Value::new("9223372036854775807", &DataType::Integer).unwrap(); // i64::MAX
+        assert_eq!(max_int.to_string(), "9223372036854775807");
+        
+        let min_int = Value::new("-9223372036854775808", &DataType::Integer).unwrap(); // i64::MIN
+        assert_eq!(min_int.to_string(), "-9223372036854775808");
+
+        let scientific_float = Value::new("1.23e-4", &DataType::Float).unwrap();
+        assert_eq!(scientific_float.to_string(), "0.000123"); // Scientific notation gets converted to decimal
+        
+        let negative_float = Value::new("-123.456", &DataType::Float).unwrap();
+        assert_eq!(negative_float.to_string(), "-123.456");
+    }
+
+    #[test]
+    fn test_datatype_conversions() {
+        // Test From trait implementations
+        let from_bool = Value::from(true);
+        assert_eq!(from_bool.datatype(), DataType::Boolean);
+        assert_eq!(from_bool.to_string(), "true");
+
+        let from_i32 = Value::from(42i32);
+        assert_eq!(from_i32.datatype(), DataType::Integer);
+        assert_eq!(from_i32.to_string(), "42");
+
+        // Note: i64 doesn't have From implementation, only i32 does
+        let large_int = Value::Integer(1234567890123456789i64);
+        assert_eq!(large_int.datatype(), DataType::Integer);
+        assert_eq!(large_int.to_string(), "1234567890123456789");
+
+        let from_f64 = Value::from(3.14159);
+        assert_eq!(from_f64.datatype(), DataType::Float);
+        assert_eq!(from_f64.to_string(), "3.14159");
+
+        let from_string = Value::from("test string".to_string());
+        assert_eq!(from_string.datatype(), DataType::String);
+        assert_eq!(from_string.to_string(), "test string");
+
+        // Test URL vector conversion
+        let urls = vec!["https://example.com/1", "https://example.com/2"];
+        let from_urls = Value::from(urls);
+        assert_eq!(from_urls.datatype(), DataType::ResourceArray);
+    }
+
+    #[test]
+    fn test_value_serialization_edge_cases() {
+        // Test empty values
+        let empty_string = Value::new("", &DataType::String).unwrap();
+        assert_eq!(empty_string.to_string(), "");
+
+        let empty_json = Value::new("{}", &DataType::JSON).unwrap();
+        assert_eq!(empty_json.to_string(), "{}");
+
+        let empty_array = Value::new("[]", &DataType::ResourceArray).unwrap();
+        match empty_array {
+            Value::ResourceArray(resources) => {
+                assert_eq!(resources.len(), 0);
+            }
+            _ => panic!("Expected ResourceArray value"),
+        }
+
+        // Test whitespace handling
+        let string_with_whitespace = Value::new("  spaced  ", &DataType::String).unwrap();
+        assert_eq!(string_with_whitespace.to_string(), "  spaced  ");
+
+        let markdown_with_whitespace = Value::new("\n\n  # Title  \n\n", &DataType::Markdown).unwrap();
+        assert_eq!(markdown_with_whitespace.to_string(), "\n\n  # Title  \n\n");
+
+        // Test unicode handling
+        let unicode_string = Value::new("🚀 Hello 世界! émojis", &DataType::String).unwrap();
+        assert_eq!(unicode_string.to_string(), "🚀 Hello 世界! émojis");
+
+        let unicode_markdown = Value::new("# 标题\n\n**粗体** _斜体_", &DataType::Markdown).unwrap();
+        assert_eq!(unicode_markdown.to_string(), "# 标题\n\n**粗体** _斜体_");
+    }
 }

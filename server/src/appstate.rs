@@ -26,6 +26,15 @@ pub struct AppState {
     pub search_state: SearchState,
 }
 
+/// Minimal AppState for CLI operations that don't need search or commit monitoring
+#[derive(Clone)]
+pub struct MinimalAppState {
+    /// Contains all the data
+    pub store: atomic_lib::Db,
+    /// App Configuration
+    pub config: Config,
+}
+
 impl AppState {
     /// Creates the AppState (the server's context available in Handlers).
     /// Initializes or opens a store on disk.
@@ -99,6 +108,48 @@ impl AppState {
             config,
             commit_monitor,
             search_state,
+        })
+    }
+    
+    /// Creates a minimal AppState for CLI operations (export, import) that don't need search.
+    /// This avoids the Tantivy file locking issues by not initializing search components.
+    pub fn init_minimal(config: Config) -> AtomicServerResult<MinimalAppState> {
+        tracing::info!("Initializing minimal AppState for CLI operations");
+
+        let mut store = atomic_lib::Db::init(&config.store_path, config.server_url.clone())?;
+        let no_server_resource = store.get_resource(&config.server_url).is_err();
+        if no_server_resource {
+            tracing::warn!("Server URL resource not found. This is likely because the server URL has changed. Initializing a new database...");
+        }
+        let should_init = !&config.store_path.exists() || config.initialize || no_server_resource;
+        if should_init {
+            tracing::info!("Initialize: creating and populating new Database...");
+            atomic_lib::populate::populate_default_store(&store)
+                .map_err(|e| format!("Failed to populate default store. {}", e))?;
+        }
+
+        set_default_agent(&config, &store)?;
+
+        // If the user changes their server_url, the drive will not exist.
+        // In this situation, we should re-build a new drive from scratch.
+        if should_init {
+            atomic_lib::populate::populate_all(&store)?;
+            // Building the index here is needed to perform Queries on imported resources
+            let store_clone = store.clone();
+            std::thread::spawn(move || {
+                let res = store_clone.build_index(true);
+                if let Err(e) = res {
+                    tracing::error!("Failed to build index: {}", e);
+                }
+            });
+
+            set_up_initial_invite(&store)
+                .map_err(|e| format!("Error while setting up initial invite: {}", e))?;
+        }
+
+        Ok(MinimalAppState {
+            store,
+            config,
         })
     }
 

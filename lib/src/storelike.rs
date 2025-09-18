@@ -76,6 +76,7 @@ impl ResourceResponse {
         }
     }
 
+    #[cfg(feature = "rdf")]
     pub fn to_n_triples(&self, store: &impl Storelike) -> AtomicResult<String> {
         match self {
             ResourceResponse::Resource(resource) => Ok(resource.to_n_triples(store)?),
@@ -85,6 +86,28 @@ impl ResourceResponse {
                 Ok(Resource::vec_to_n_triples(&list, store)?)
             }
         }
+    }
+
+    #[cfg(feature = "rdf")]
+    pub fn to_turtle(&self, store: &impl Storelike) -> AtomicResult<String> {
+        match self {
+            ResourceResponse::Resource(resource) => Ok(resource.to_turtle(store)?),
+            ResourceResponse::ResourceWithReferenced(resource, references) => {
+                let mut list = references.clone();
+                list.push(resource.clone());
+                Ok(Resource::vec_to_turtle(&list, store)?)
+            }
+        }
+    }
+
+    #[cfg(not(feature = "rdf"))]
+    pub fn to_n_triples(&self, _store: &impl Storelike) -> AtomicResult<String> {
+        Err("RDF serialization is not enabled. Enable the 'rdf' feature flag to use N-Triples format.".into())
+    }
+
+    #[cfg(not(feature = "rdf"))]
+    pub fn to_turtle(&self, _store: &impl Storelike) -> AtomicResult<String> {
+        Err("RDF serialization is not enabled. Enable the 'rdf' feature flag to use Turtle format.".into())
     }
 
     /// Takes a vector of resources and returns a ResourceResponse::ResourceWithReferenced

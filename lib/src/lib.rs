@@ -28,6 +28,8 @@ See the [Atomic Data Docs](https://docs.atomicdata.dev) for more information.
 use atomic_lib::Storelike;
 // Start with initializing the in-memory store
 let store = atomic_lib::Store::init().unwrap();
+// Set a server URL for this store
+store.set_server_url("http://localhost");
 // Pre-load the default Atomic Data Atoms (from atomicdata.dev),
 // this is not necessary, but will probably make your project a bit faster
 store.populate().unwrap();
@@ -82,6 +84,7 @@ pub mod plugins;
 pub mod populate;
 pub mod resources;
 pub mod schema;
+pub mod search_sqlite;
 pub mod serialize;
 pub mod store;
 pub mod storelike;

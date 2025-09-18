@@ -214,6 +214,11 @@ impl Db {
                 .map(Ok),
         )
     }
+    
+    /// Get a database connection from the pool (for internal use by search implementations)
+    pub fn get_connection(&self) -> Result<r2d2::PooledConnection<r2d2_sqlite::SqliteConnectionManager>, String> {
+        self.pool.get().map_err(|e| format!("Failed to get connection: {}", e))
+    }
 
     /// Constructs the value index from all resources in the store. Could take a while.
     pub fn build_index(&self, include_external: bool) -> AtomicResult<()> {
@@ -1094,6 +1099,28 @@ fn initialize_tables_for_r2d2(conn: &mut rusqlite::Connection) -> Result<(), rus
             key BLOB PRIMARY KEY,
             value BLOB NOT NULL
         ) WITHOUT ROWID;
+        
+        -- FTS5 search index table for full-text search
+        CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(
+            subject UNINDEXED,
+            title,
+            description,
+            propvals_json,
+            hierarchy,
+            tokenize='porter unicode61'
+        );
+        
+        -- FST index table for fuzzy search
+        CREATE TABLE IF NOT EXISTS fst_index (
+            term TEXT PRIMARY KEY,
+            fst_data BLOB
+        );
+        
+        -- Search metadata table
+        CREATE TABLE IF NOT EXISTS search_metadata (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        );
     ")?;
     
     Ok(())

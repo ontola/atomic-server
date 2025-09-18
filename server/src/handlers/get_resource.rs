@@ -75,10 +75,8 @@ pub async fn handle_get_resource(
         ContentType::JsonLd => resource.to_json_ld(store)?,
         ContentType::JsonAd => resource.to_json_ad()?,
         ContentType::Html => resource.to_json_ad()?,
-        ContentType::Turtle | ContentType::NTriples => {
-            let atoms = resource.to_atoms();
-            atomic_lib::serialize::atoms_to_ntriples(atoms, store)?
-        }
+        ContentType::NTriples => resource.to_n_triples(store)?,
+        ContentType::Turtle => resource.to_turtle(store)?,
     };
     timer.add("serialize");
     Ok(builder.body(response_body))
