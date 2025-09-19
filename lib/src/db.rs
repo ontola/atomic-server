@@ -1961,6 +1961,8 @@ impl Storelike for Db {
         let mut transaction = Transaction::new();
         self.recursive_remove(subject, &mut transaction).await?;
         self.apply_transaction(&mut transaction)?;
+        // TODO: deletion sync — should create a signed destroy commit
+        // and push it through the normal commit pipeline, not a raw DESTROY frame.
         Ok(())
     }
 

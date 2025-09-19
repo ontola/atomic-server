@@ -91,39 +91,58 @@ pub async fn start(store: Db) -> anyhow::Result<(NodeId, Router)> {
     // Start live sync — watches for local changes, pushes to connected peers
     start_live_sync(bg_store.clone());
 
-    // Auto-connect to known peers in background
+    // Auto-connect to known peers in background, retry until connected
     let auto_store = bg_store;
     tokio::spawn(async move {
-        let drive = match auto_store.get_active_drive() {
-            Some(d) => d,
-            None => return,
-        };
-        let peers = get_known_peers(&auto_store);
         let my_id = get_node_id().unwrap_or_default().to_string();
 
-        if peers.is_empty() { return; }
+        // Initial delay to let relay establish
+        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
 
-        // Stagger: device with smaller NodeID connects after 2s, other after 5s.
-        // This prevents both devices connecting simultaneously and conflicting.
-        let smallest_peer = peers.iter().map(|p| p.node_id.as_str()).min().unwrap_or("");
-        let delay = if my_id.as_str() < smallest_peer { 2 } else { 5 };
-        tokio::time::sleep(std::time::Duration::from_secs(delay)).await;
-
-        for peer in &peers {
-            if peer.node_id == my_id { continue; }
-            // Skip if already live-connected (other side may have connected to us first)
-            if live_peer_ids().contains(&peer.node_id) {
-                tracing::info!("[auto_connect] already connected to {}", &peer.node_id[..peer.node_id.len().min(12)]);
+        loop {
+            let drive = match auto_store.get_active_drive() {
+                Some(d) => d,
+                None => {
+                    tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+                    continue;
+                }
+            };
+            let peers = get_known_peers(&auto_store);
+            if peers.is_empty() {
+                tokio::time::sleep(std::time::Duration::from_secs(10)).await;
                 continue;
             }
-            tracing::info!("[auto_connect] connecting to {}", &peer.node_id[..peer.node_id.len().min(12)]);
-            match sync_drive_with_peer(&peer.node_id, &drive, &auto_store).await {
-                Ok(count) => {
-                    tracing::info!("[auto_connect] synced {count} resources, live connection established");
+
+            let mut all_connected = true;
+            for peer in &peers {
+                if peer.node_id == my_id { continue; }
+                if live_peer_ids().contains(&peer.node_id) { continue; }
+
+                // Only the device with the smaller NodeID initiates.
+                // The other device waits for the incoming connection.
+                if my_id.as_str() > peer.node_id.as_str() {
+                    all_connected = false; // still not connected, but we wait
+                    continue;
                 }
-                Err(e) => {
-                    tracing::debug!("[auto_connect] failed: {e}");
+
+                all_connected = false;
+                tracing::info!("[auto_connect] connecting to {}", &peer.node_id[..peer.node_id.len().min(12)]);
+                match sync_drive_with_peer(&peer.node_id, &drive, &auto_store).await {
+                    Ok(count) => {
+                        tracing::info!("[auto_connect] synced {count} resources, live connection established");
+                    }
+                    Err(e) => {
+                        tracing::debug!("[auto_connect] failed: {e}");
+                    }
                 }
+            }
+
+            if all_connected {
+                // All peers connected — wait and check periodically for disconnects or new peers
+                tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+            } else {
+                // Some peers failed — retry sooner
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
             }
         }
     });
@@ -169,36 +188,24 @@ impl iroh::protocol::ProtocolHandler for AtomicHandler {
             // Auto-add to known peers
             add_known_peer(&store, &remote_str, "");
 
-            let mut initial_done = false;
-            loop {
-                let (send, recv) = match connection.accept_bi().await {
-                    Ok(pair) => pair,
-                    Err(e) => {
-                        tracing::info!("[accept] connection closed from {remote}: {e}");
-                        break;
-                    }
-                };
+            // Accept the first (and only) bi stream for sync + live
+            let (send, recv) = match connection.accept_bi().await {
+                Ok(pair) => pair,
+                Err(e) => {
+                    tracing::info!("[accept] connection closed from {remote}: {e}");
+                    return Ok(());
+                }
+            };
 
-                if !initial_done {
-                    // First stream: handle initial sync
-                    initial_done = true;
-                    let store = store.clone();
-                    let remote_id = remote_str.clone();
-                    tokio::spawn(async move {
-                        match handle_stream(send, recv, store).await {
-                            Ok(imported) => {
-                                push_sync_event(&remote_id, imported);
-                            }
-                            Err(e) => {
-                                tracing::warn!("[accept] stream error: {e}");
-                            }
-                        }
-                    });
-                } else {
-                    // Subsequent streams: live update channel
-                    tracing::info!("[accept] live stream from {remote}");
-                    register_live_peer(remote_str.clone(), send, recv, store.clone());
-                    // Keep accepting — don't break or the connection closes
+            // Handle initial sync, then transition to live mode on the same stream
+            let store_clone = store.clone();
+            let remote_id = remote_str.clone();
+            match handle_stream_then_live(send, recv, store_clone, remote_id).await {
+                Ok(imported) => {
+                    push_sync_event(&remote_str, imported);
+                }
+                Err(e) => {
+                    tracing::warn!("[accept] stream error: {e}");
                 }
             }
 
@@ -277,7 +284,6 @@ fn start_live_sync(store: Db) {
 
             // Don't echo back changes we just imported from a peer
             if IMPORTING.load(std::sync::atomic::Ordering::Relaxed) {
-                tracing::debug!("[live_sync] skipping echo for {}", &subject[..subject.len().min(20)]);
                 continue;
             }
 
@@ -308,11 +314,6 @@ fn start_live_sync(store: Db) {
             // Push to all connected peers
             let peers = LIVE_PEERS.lock().unwrap();
             if let Some(map) = peers.as_ref() {
-                if map.is_empty() {
-                    tracing::debug!("[live_sync] no live peers to push to");
-                } else {
-                    tracing::info!("[live_sync] pushing {} to {} peers ({} bytes)", &subject[..subject.len().min(20)], map.len(), msg.len());
-                }
                 for (peer_id, tx) in map {
                     match tx.try_send(msg.clone()) {
                         Ok(_) => {}
@@ -338,13 +339,12 @@ fn register_live_peer(
 ) {
     let (tx, mut rx) = tokio::sync::mpsc::channel::<Vec<u8>>(64);
 
-    // Add to peer map — skip if already connected
+    // Add to peer map — replace if already connected (incoming may supersede outgoing)
     {
         let mut map = LIVE_PEERS.lock().unwrap();
         if let Some(m) = map.as_mut() {
             if m.contains_key(&peer_id) {
-                tracing::info!("[live] already connected to {}, skipping", &peer_id[..peer_id.len().min(12)]);
-                return;
+                tracing::info!("[live] replacing existing connection to {}", &peer_id[..peer_id.len().min(12)]);
             }
             m.insert(peer_id.clone(), tx);
         }
@@ -357,13 +357,19 @@ fn register_live_peer(
     // Write loop: sends queued UPDATE frames to the peer
     let write_peer_id = peer_id.clone();
     tokio::spawn(async move {
+        tracing::info!("[live] write loop started for {}", &write_peer_id[..write_peer_id.len().min(12)]);
         while let Some(msg) = rx.recv().await {
-            if send.write_all(&msg).await.is_err() {
-                tracing::info!("[live] write failed to {}", &write_peer_id[..write_peer_id.len().min(12)]);
-                break;
+            match send.write_all(&msg).await {
+                Ok(_) => {
+                    tracing::trace!("[live] wrote {} bytes to {}", msg.len(), &write_peer_id[..write_peer_id.len().min(12)]);
+                }
+                Err(e) => {
+                    tracing::warn!("[live] write failed to {}: {e}", &write_peer_id[..write_peer_id.len().min(12)]);
+                    break;
+                }
             }
         }
-        // Don't remove here — the read loop handles cleanup
+        tracing::info!("[live] write loop ended for {}", &write_peer_id[..write_peer_id.len().min(12)]);
     });
 
     // Read loop: receives UPDATE frames from the peer, imports them
@@ -373,7 +379,7 @@ fn register_live_peer(
         loop {
             let len = match recv.read_u32().await {
                 Ok(n) => {
-                    tracing::info!("[live] received frame {} bytes from {}", n, &read_peer_id[..read_peer_id.len().min(12)]);
+                    tracing::trace!("[live] received frame {} bytes from {}", n, &read_peer_id[..read_peer_id.len().min(12)]);
                     n as usize
                 }
                 Err(e) => {
@@ -463,7 +469,7 @@ fn register_live_peer(
                     }
 
                     IMPORTING.store(false, std::sync::atomic::Ordering::Relaxed);
-                    tracing::debug!("[live] imported update for {} from {}", &subject[..subject.len().min(20)], &read_peer_id[..read_peer_id.len().min(12)]);
+                    tracing::trace!("[live] imported update for {} from {}", &subject[..subject.len().min(20)], &read_peer_id[..read_peer_id.len().min(12)]);
                 }
             }
         }
@@ -782,27 +788,17 @@ pub async fn sync_drive_with_peer_using(
         }
     }
 
-    // Gracefully close the initial sync stream
-    let _ = send.finish();
-    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
-
     tracing::info!("sync_drive_with_peer: imported {total_imported} resources from {remote_node_id}");
 
-    // Transition to live mode: open a new bi stream for real-time updates
-    match conn.open_bi().await {
-        Ok((live_send, live_recv)) => {
-            tracing::info!("[live] transitioning to live mode with {}", &remote_node_id[..remote_node_id.len().min(12)]);
-            // Keep connection alive — dropping it kills the streams
-            {
-                let mut conns = LIVE_CONNECTIONS.lock().unwrap();
-                if let Some(v) = conns.as_mut() { v.push(conn); }
-            }
-            register_live_peer(remote_node_id.to_string(), live_send, live_recv, store.clone());
-        }
-        Err(e) => {
-            tracing::debug!("[live] failed to open live stream: {e}");
-        }
+    // Transition to live mode: reuse the same bi stream for real-time updates.
+    // Don't close it — the server's handle_stream will also transition after
+    // the sync exchange completes.
+    tracing::info!("[live] transitioning to live mode with {}", &remote_node_id[..remote_node_id.len().min(12)]);
+    {
+        let mut conns = LIVE_CONNECTIONS.lock().unwrap();
+        if let Some(v) = conns.as_mut() { v.push(conn); }
     }
+    register_live_peer(remote_node_id.to_string(), send, recv, store.clone());
 
     Ok(total_imported)
 }
@@ -861,10 +857,24 @@ pub fn remove_known_peer(store: &Db, node_id: &str) {
 /// Handle a single bidirectional QUIC stream.
 /// Reads length-prefixed v2 binary frames and dispatches them via the sync engine.
 /// Returns the number of resources imported from the remote peer.
+/// Handle initial sync frames, then transition to live mode on the same stream.
+async fn handle_stream_then_live(
+    send: iroh::endpoint::SendStream,
+    recv: iroh::endpoint::RecvStream,
+    store: Db,
+    remote_id: String,
+) -> anyhow::Result<usize> {
+    let total_imported = handle_stream(send, recv, store, remote_id).await?;
+    Ok(total_imported)
+}
+
+/// Handle sync frames. After SYNC_OK or SYNC_PUSH response, transitions to
+/// live mode by registering the stream for real-time updates.
 async fn handle_stream(
     mut send: iroh::endpoint::SendStream,
     mut recv: iroh::endpoint::RecvStream,
     store: Db,
+    remote_id: String,
 ) -> anyhow::Result<usize> {
     let mut agent = ForAgent::Public;
     let mut total_imported = 0;
@@ -891,9 +901,23 @@ async fn handle_stream(
 
         let responses = super::engine::handle_frame(&buf, &store, &mut agent).await;
 
+        // Check if the client sent us a SYNC_PUSH (bidirectional data exchange complete)
+        let client_pushed = !buf.is_empty() && buf[0] == super::protocol::tag::SYNC_PUSH;
+        // Check if we responded with SYNC_OK (fast path — already in sync)
+        let sync_ok = responses.iter().any(|r| !r.is_empty() && r[0] == super::protocol::tag::SYNC_OK);
+
         for response in responses {
             send.write_u32(response.len() as u32).await?;
             send.write_all(&response).await?;
+        }
+
+        // Transition to live mode after the sync exchange is fully complete:
+        // - SYNC_OK: no data to exchange, we're done
+        // - Client's SYNC_PUSH: bidirectional exchange complete
+        if sync_ok || client_pushed {
+            tracing::info!("[accept] sync complete, transitioning to live mode with {}", &remote_id[..remote_id.len().min(12)]);
+            register_live_peer(remote_id, send, recv, store);
+            return Ok(total_imported);
         }
     }
 
