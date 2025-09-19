@@ -56,8 +56,15 @@ pub fn download_file_handler_partial(
         .get(urls::INTERNAL_ID)
         .map_err(|e| format!("Internal ID of file could not be resolved. {}", e))?
         .to_string();
+    
+    // Validate filename to prevent path traversal attacks
+    validate_filename(&filename)?;
+    
     let mut file_path = appstate.config.uploads_path.clone();
     file_path.push(&filename);
+    
+    // Ensure the final path is still within the uploads directory
+    validate_file_path(&file_path, &appstate.config.uploads_path)?;
 
     // No params were given, so we just return the file.
     if params.q.is_none() && params.w.is_none() && params.f.is_none() {
@@ -94,6 +101,9 @@ pub fn build_prossesed_file_path(
     params: &DownloadParams,
     base_path: PathBuf,
 ) -> AtomicServerResult<PathBuf> {
+    // Validate filename first
+    validate_filename(filename)?;
+    
     let format = get_format(params)?;
 
     let Some((timestamp, rest)) = filename.split_once('-') else {
@@ -135,4 +145,63 @@ fn get_format(params: &DownloadParams) -> AtomicServerResult<String> {
     }
 
     Ok(format)
+}
+
+/// Validate filename to prevent path traversal attacks
+fn validate_filename(filename: &str) -> AtomicServerResult<()> {
+    // Check for empty filename
+    if filename.is_empty() {
+        return Err("Filename cannot be empty".into());
+    }
+    
+    // Check for path traversal attempts
+    if filename.contains("..") || filename.contains('/') || filename.contains('\\') {
+        return Err("Invalid filename: path traversal detected".into());
+    }
+    
+    // Check for null bytes
+    if filename.contains('\0') {
+        return Err("Invalid filename: null byte detected".into());
+    }
+    
+    // Check for control characters
+    if filename.chars().any(|c| c.is_control()) {
+        return Err("Invalid filename: control characters not allowed".into());
+    }
+    
+    // Check length
+    if filename.len() > 255 {
+        return Err("Filename too long (max 255 characters)".into());
+    }
+    
+    // Check for reserved names on Windows (even on Linux for consistency)
+    let forbidden_names = [
+        "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5",
+        "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4",
+        "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"
+    ];
+    
+    let name_without_ext = filename.split('.').next().unwrap_or(filename).to_uppercase();
+    if forbidden_names.contains(&name_without_ext.as_str()) {
+        return Err("Invalid filename: reserved name".into());
+    }
+    
+    Ok(())
+}
+
+/// Validate that the file path is within the allowed directory
+fn validate_file_path(file_path: &Path, base_path: &Path) -> AtomicServerResult<()> {
+    // Canonicalize both paths to resolve any symlinks or relative components
+    let canonical_file_path = file_path.canonicalize()
+        .map_err(|_| "File path could not be resolved")?;
+    
+    let canonical_base_path = base_path.canonicalize()
+        .map_err(|_| "Base path could not be resolved")?;
+    
+    // Check if the file path starts with the base path
+    if !canonical_file_path.starts_with(&canonical_base_path) {
+        return Err("Access denied: file is outside allowed directory".into());
+    }
+    
+    Ok(())
 }

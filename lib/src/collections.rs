@@ -521,7 +521,7 @@ mod test {
     #[cfg(feature = "db")]
     #[test]
     fn get_collection() {
-        let store = crate::db::test::DB.lock().unwrap().clone();
+        let store = crate::db::test::DB.lock().clone();
         let subjects: Vec<String> = store
             .all_resources(false)
             .map(|r| r.get_subject().into())

@@ -7,7 +7,7 @@ use ntest::timeout;
 /// Note that not all behavior can be properly tested with a shared database.
 /// If you need a clean one, juts call init("someId").
 use lazy_static::lazy_static; // 1.4.0
-use std::sync::Mutex;
+use parking_lot::Mutex;
 lazy_static! {
     pub static ref DB: Mutex<Db> = Mutex::new(Db::init_temp("shared").unwrap());
 }
@@ -15,7 +15,7 @@ lazy_static! {
 #[test]
 #[timeout(30000)]
 fn basic() {
-    let store = DB.lock().unwrap().clone();
+    let store = DB.lock().clone();
     // We can create a new Resource, linked to the store.
     // Note that since this store only exists in memory, it's data cannot be accessed from the internet.
     // Let's make a new Property instance!

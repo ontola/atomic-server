@@ -18,7 +18,6 @@ pub fn new(context: &mut Context, class_input: &str) -> AtomicResult<()> {
     let class_url = context
         .mapping
         .lock()
-        .unwrap()
         .try_mapping_or_url(class_input)
         .unwrap();
     let class = context.store.get_class(&class_url)?;
@@ -107,12 +106,11 @@ fn prompt_instance(
 
     println!("{} created with URL: {}", &class.shortname, &subject);
 
-    let map = prompt_bookmark(&mut context.mapping.lock().unwrap(), &subject);
+    let map = prompt_bookmark(&mut context.mapping.lock(), &subject);
 
     context
         .mapping
         .lock()
-        .unwrap()
         .write_mapping_to_disk(&context.user_mapping_path);
     Ok((new_resource, map))
 }
@@ -219,7 +217,7 @@ fn prompt_field(
             // If a classtype is present, the given URL must be an instance of that Class
             if let Some(u) = url {
                 // TODO: Check if string or if map
-                match context.mapping.lock().unwrap().try_mapping_or_url(&u) {
+                match context.mapping.lock().try_mapping_or_url(&u) {
                     Some(url) => return Ok(Some(url)),
                     None => {
                         println!("Shortname not found, try again.");
@@ -243,7 +241,6 @@ fn prompt_field(
                         let mapping_match = context
                             .mapping
                             .lock()
-                            .unwrap()
                             .try_mapping_or_url(item)
                             .clone();
                         match mapping_match {

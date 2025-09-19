@@ -19,6 +19,7 @@ use std::{
     time::Duration,
     vec,
 };
+use parking_lot::Mutex;
 
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
@@ -74,7 +75,7 @@ pub type PropSubjectMap = HashMap<String, HashSet<String>>;
 pub struct Db {
     /// Connection pool to SQLite database
     pool: Pool<SqliteConnectionManager>,
-    default_agent: Arc<std::sync::Mutex<Option<crate::agents::Agent>>>,
+    default_agent: Arc<Mutex<Option<crate::agents::Agent>>>,
     /// The address where the db will be hosted, e.g. http://localhost/
     server_url: String,
     /// Endpoints are checked whenever a resource is requested. They calculate (some properties of) the resource and return it.
@@ -126,7 +127,7 @@ impl Db {
         let store = Db {
             pool,
             path: db_path,
-            default_agent: Arc::new(std::sync::Mutex::new(None)),
+            default_agent: Arc::new(Mutex::new(None)),
             server_url,
             endpoints: plugins::defaults::default_endpoints(),
             class_extenders: plugins::defaults::default_class_extenders(),
@@ -805,7 +806,7 @@ impl Storelike for Db {
     }
 
     fn get_default_agent(&self) -> AtomicResult<crate::agents::Agent> {
-        match self.default_agent.lock().unwrap().to_owned() {
+        match self.default_agent.lock().to_owned() {
             Some(agent) => Ok(agent),
             None => Err("No default agent has been set.".into()),
         }
@@ -1021,7 +1022,7 @@ impl Storelike for Db {
     }
 
     fn set_default_agent(&self, agent: crate::agents::Agent) {
-        self.default_agent.lock().unwrap().replace(agent);
+        *self.default_agent.lock() = Some(agent);
     }
 }
 
@@ -1092,6 +1093,16 @@ fn configure_sqlite_for_r2d2(conn: &mut rusqlite::Connection) -> Result<(), rusq
 
     // Enable query planner optimizations (best effort, ignore failures)
     let _ = conn.execute_batch("PRAGMA optimize;");
+
+    // Additional performance optimizations
+    // Increase lookaside memory for better allocation performance
+    let _ = conn.execute("PRAGMA lookaside=1024,128", []);
+    
+    // Optimize busy timeout for concurrent access
+    conn.pragma_update(None, "busy_timeout", 30000)?; // 30 seconds
+    
+    // Collect optimizer statistics for better query planning
+    let _ = conn.execute("ANALYZE", []);
 
     Ok(())
 }
@@ -1185,6 +1196,16 @@ fn configure_sqlite(
 
     // Enable query planner optimizations (best effort, ignore failures)
     let _ = conn.execute_batch("PRAGMA optimize;");
+
+    // Additional performance optimizations
+    // Increase lookaside memory for better allocation performance
+    let _ = conn.execute("PRAGMA lookaside=1024,128", []);
+    
+    // Optimize busy timeout for concurrent access
+    conn.pragma_update(None, "busy_timeout", 30000)?; // 30 seconds
+    
+    // Collect optimizer statistics for better query planning
+    let _ = conn.execute("ANALYZE", []);
 
     Ok(())
 }

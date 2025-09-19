@@ -6,7 +6,8 @@ use crate::storelike::QueryResult;
 use crate::Value;
 use crate::{atoms::Atom, storelike::Storelike};
 use crate::{errors::AtomicResult, Resource};
-use std::{collections::HashMap, sync::Arc, sync::Mutex};
+use std::{collections::HashMap, sync::Arc};
+use parking_lot::Mutex;
 
 /// The in-memory store of data, containing the Resources, Properties and Classes
 /// It uses the `default_agent` as the default client.
@@ -34,7 +35,7 @@ impl Store {
     /// Set the URL of the server which endpoint we are using.
     /// This is needed for generating correct URLs for Commits, Search, etc.
     pub fn set_server_url(&self, server_url: &str) {
-        self.server_url.lock().unwrap().replace(server_url.into());
+        *self.server_url.lock() = Some(server_url.into());
     }
 
     /// Triple Pattern Fragments interface.
@@ -148,7 +149,7 @@ impl Storelike for Store {
         }
         if !overwrite_existing {
             let subject = resource.get_subject();
-            if let Some(_r) = self.hashmap.lock().unwrap().get(subject) {
+            if let Some(_r) = self.hashmap.lock().get(subject) {
                 return Err(format!("{} already present, will not overwrite.", subject).into());
             }
         }
@@ -156,20 +157,18 @@ impl Storelike for Store {
         // This store has no index, so we don't need to update it.
         self.hashmap
             .lock()
-            .unwrap()
             .insert(resource.get_subject().into(), resource.clone());
         Ok(())
     }
 
     // TODO: Fix this for local stores, include external does not make sense here
     fn all_resources(&self, _include_external: bool) -> Box<dyn Iterator<Item = Resource>> {
-        Box::new(self.hashmap.lock().unwrap().clone().into_values())
+        Box::new(self.hashmap.lock().clone().into_values())
     }
 
     fn get_server_url(&self) -> AtomicResult<String> {
         self.server_url
             .lock()
-            .unwrap()
             .clone()
             .ok_or("No server URL found. Set it using `store.set_server_url`.".into())
     }
@@ -179,14 +178,14 @@ impl Storelike for Store {
     }
 
     fn get_default_agent(&self) -> AtomicResult<Agent> {
-        match self.default_agent.lock().unwrap().to_owned() {
+        match self.default_agent.lock().to_owned() {
             Some(agent) => Ok(agent),
             None => Err("No default agent has been set.".into()),
         }
     }
 
     fn get_resource(&self, subject: &str) -> AtomicResult<Resource> {
-        if let Some(resource) = self.hashmap.lock().unwrap().get(subject) {
+        if let Some(resource) = self.hashmap.lock().get(subject) {
             return Ok(resource.clone());
         }
 
@@ -208,7 +207,6 @@ impl Storelike for Store {
         }
         self.hashmap
             .lock()
-            .unwrap()
             .remove_entry(subject)
             .ok_or(format!(
                 "Resource {} could not be deleted, because it is not found",
@@ -218,7 +216,7 @@ impl Storelike for Store {
     }
 
     fn set_default_agent(&self, agent: Agent) {
-        self.default_agent.lock().unwrap().replace(agent);
+        *self.default_agent.lock() = Some(agent);
     }
 
     fn query(&self, q: &crate::storelike::Query) -> AtomicResult<crate::storelike::QueryResult> {

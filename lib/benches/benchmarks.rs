@@ -6,6 +6,9 @@ use atomic_lib::utils::random_string;
 use atomic_lib::*;
 use criterion::{criterion_group, criterion_main, Criterion};
 
+#[cfg(feature = "db")]
+use atomic_lib::similarity::SimilarityAlgorithm;
+
 fn random_atom_string() -> Atom {
     Atom::new(
         format!("https://localhost/{}", random_string(10)),
@@ -103,5 +106,88 @@ fn criterion_benchmark(c: &mut Criterion) {
     store.clear_all_danger().unwrap();
 }
 
+#[cfg(feature = "db")]
+fn search_benchmarks(c: &mut Criterion) {
+    use atomic_lib::search_sqlite::SqliteSearchState;
+    
+    let store = Db::init_temp("search_bench").unwrap();
+    
+    // Populate the store with test data for search benchmarks
+    let test_resources = [
+        ("https://localhost/atomic-data-model", "Atomic Data Model", "A semantic data model for graph data"),
+        ("https://localhost/atomic-server", "Atomic Server", "A fast and secure graph database"),
+        ("https://localhost/json-ld", "JSON-LD", "A JSON-based serialization for Linked Data"),
+        ("https://localhost/rdf-turtle", "RDF Turtle", "A human-readable RDF serialization"),
+        ("https://localhost/semantic-web", "Semantic Web", "A web of linked data using standards"),
+        ("https://localhost/knowledge-graph", "Knowledge Graph", "A graph-based representation of knowledge"),
+        ("https://localhost/triple-store", "Triple Store", "A database for storing RDF triples"),
+        ("https://localhost/sparql-query", "SPARQL Query", "A query language for RDF data"),
+        ("https://localhost/data-model", "Data Model", "A structure for organizing data"),
+        ("https://localhost/graph-database", "Graph Database", "A database using graph structures"),
+    ];
+
+    for (subject, title, description) in test_resources {
+        let mut resource = Resource::new(subject.to_string());
+        resource.set_unsafe(urls::NAME.into(), Value::String(title.to_string()));
+        resource.set_unsafe(urls::DESCRIPTION.into(), Value::String(description.to_string()));
+        store.add_resource_opts(&resource, true, true, false).unwrap();
+    }
+
+    // Initialize search state
+    let search_state = SqliteSearchState::new(store.clone()).unwrap();
+    search_state.add_all_resources(&store).unwrap();
+
+    // Benchmark traditional text search
+    c.bench_function("search/text_search", |b| {
+        b.iter(|| {
+            search_state.text_search("atomic", 10).unwrap()
+        })
+    });
+
+    // Benchmark fuzzy search
+    c.bench_function("search/fuzzy_search", |b| {
+        b.iter(|| {
+            search_state.fuzzy_search("atomik", 2, 10).unwrap()
+        })
+    });
+
+    // Benchmark new similarity-based search
+    c.bench_function("search/similarity_search_jaro_winkler", |b| {
+        b.iter(|| {
+            search_state.similarity_search("atomic", 10, SimilarityAlgorithm::JaroWinkler).unwrap()
+        })
+    });
+
+    c.bench_function("search/similarity_search_levenshtein", |b| {
+        b.iter(|| {
+            search_state.similarity_search("atomic", 10, SimilarityAlgorithm::Levenshtein).unwrap()
+        })
+    });
+
+    // Benchmark fuzzy similarity search
+    c.bench_function("search/fuzzy_similarity_search", |b| {
+        b.iter(|| {
+            search_state.fuzzy_similarity_search("atomik", 2, 10, SimilarityAlgorithm::JaroWinkler).unwrap()
+        })
+    });
+
+    // Benchmark hierarchy search
+    c.bench_function("search/hierarchy_search", |b| {
+        b.iter(|| {
+            search_state.hierarchy_search("localhost", 10).unwrap()
+        })
+    });
+
+    store.clear_all_danger().unwrap();
+}
+
+#[cfg(feature = "db")]
+criterion_group!(search_benches, search_benchmarks);
+
+#[cfg(feature = "db")]
+criterion_group!(benches, criterion_benchmark, search_benchmarks);
+
+#[cfg(not(feature = "db"))]
 criterion_group!(benches, criterion_benchmark);
+
 criterion_main!(benches);

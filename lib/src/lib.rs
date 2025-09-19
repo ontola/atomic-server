@@ -85,6 +85,7 @@ pub mod populate;
 pub mod resources;
 pub mod schema;
 pub mod search_sqlite;
+pub mod similarity;
 pub mod serialize;
 pub mod store;
 pub mod storelike;

@@ -550,6 +550,7 @@ dependencies = [
  "colored",
  "dirs",
  "edit",
+ "parking_lot 0.12.3",
  "promptly",
  "regex",
 ]
@@ -623,6 +624,7 @@ dependencies = [
  "lazy_static",
  "lol_html",
  "ntest",
+ "parking_lot 0.12.3",
  "r2d2",
  "r2d2_sqlite",
  "rand 0.8.5",
@@ -636,6 +638,7 @@ dependencies = [
  "serde_jcs",
  "serde_json",
  "sled",
+ "strsim",
  "tempfile",
  "toml",
  "tracing",

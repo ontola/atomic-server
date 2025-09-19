@@ -7,7 +7,8 @@ use atomic_lib::{errors::AtomicResult, Storelike};
 use clap::{crate_version, Parser, Subcommand, ValueEnum};
 use colored::*;
 use dirs::home_dir;
-use std::{cell::RefCell, path::PathBuf, sync::Mutex};
+use std::{cell::RefCell, path::PathBuf};
+use parking_lot::Mutex;
 
 mod commit;
 mod get;
@@ -313,7 +314,7 @@ fn exec_command(context: &mut Context) -> AtomicResult<()> {
 /// List all bookmarks
 fn list(context: &mut Context) {
     let mut string = String::new();
-    for (shortname, url) in context.mapping.lock().unwrap().clone().into_iter() {
+    for (shortname, url) in context.mapping.lock().clone().into_iter() {
         string.push_str(&format!(
             "{0: <15}{1: <10} \n",
             shortname.blue().bold(),

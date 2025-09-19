@@ -24,6 +24,14 @@ pub enum ResourceResponse {
 }
 
 impl ResourceResponse {
+    /// Get a reference to the main resource, discard any referenced resources.
+    pub fn as_single(&self) -> &Resource {
+        match self {
+            ResourceResponse::Resource(resource) => resource,
+            ResourceResponse::ResourceWithReferenced(resource, _) => resource,
+        }
+    }
+
     /// Only take the main resource, discard any referenced resources.
     pub fn to_single(&self) -> Resource {
         match self {
@@ -32,11 +40,21 @@ impl ResourceResponse {
         }
     }
 
+    /// Get the main resource using Cow for efficiency
+    pub fn into_single(self) -> Resource {
+        match self {
+            ResourceResponse::Resource(resource) => resource,
+            ResourceResponse::ResourceWithReferenced(resource, _) => resource,
+        }
+    }
+
     pub fn to_json_ad(&self) -> AtomicResult<String> {
         match self {
             ResourceResponse::Resource(resource) => Ok(resource.to_json_ad()?),
             ResourceResponse::ResourceWithReferenced(resource, references) => {
-                let mut list = references.clone();
+                // More efficient: reserve capacity and avoid multiple allocations
+                let mut list = Vec::with_capacity(references.len() + 1);
+                list.extend_from_slice(references);
                 list.push(resource.clone());
                 Ok(Resource::vec_to_json_ad(&list)?)
             }
@@ -47,7 +65,8 @@ impl ResourceResponse {
         match self {
             ResourceResponse::Resource(resource) => Ok(resource.to_json(store)?),
             ResourceResponse::ResourceWithReferenced(resource, references) => {
-                let mut list = references.clone();
+                let mut list = Vec::with_capacity(references.len() + 1);
+                list.extend_from_slice(references);
                 list.push(resource.clone());
                 Ok(Resource::vec_to_json(&list, store)?)
             }
@@ -58,7 +77,8 @@ impl ResourceResponse {
         match self {
             ResourceResponse::Resource(resource) => Ok(resource.to_json_ld(store)?),
             ResourceResponse::ResourceWithReferenced(resource, references) => {
-                let mut list = references.clone();
+                let mut list = Vec::with_capacity(references.len() + 1);
+                list.extend_from_slice(references);
                 list.push(resource.clone());
                 Ok(Resource::vec_to_json_ld(&list, store)?)
             }
@@ -69,7 +89,8 @@ impl ResourceResponse {
         match self {
             ResourceResponse::Resource(resource) => resource.to_atoms(),
             ResourceResponse::ResourceWithReferenced(resource, references) => {
-                let mut list = references.clone();
+                let mut list = Vec::with_capacity(references.len() + 1);
+                list.extend_from_slice(references);
                 list.push(resource.clone());
                 Resource::vec_to_atoms(&list)
             }

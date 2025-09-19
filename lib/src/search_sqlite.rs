@@ -2,7 +2,7 @@
 //! This replaces the Tantivy-based search to eliminate file locking issues
 
 #[cfg(feature = "db")]
-use crate::{errors::AtomicResult, Db, Resource, Storelike};
+use crate::{errors::AtomicResult, similarity::{SimilarityAlgorithm, calculate_enhanced_similarity, ScoredResult, sort_results_by_score}, Db, Resource, Storelike};
 
 #[cfg(feature = "db")]
 use fst::{automaton, IntoStreamer, Map, MapBuilder, Streamer};
@@ -171,8 +171,11 @@ impl SqliteSearchState {
     pub fn text_search(&self, query: &str, limit: usize) -> AtomicResult<Vec<String>> {
         let conn = self.db.get_connection()?;
 
-        // Use FTS5 MATCH syntax for full-text search
-        let fts_query = format!("title:{} OR description:{}", query, query);
+        // Sanitize the query by escaping FTS5 special characters
+        let sanitized_query = sanitize_fts5_query(query);
+        
+        // Use parameterized query with sanitized input
+        let fts_query = format!("title:\"{}\" OR description:\"{}\"", sanitized_query, sanitized_query);
 
         let mut stmt = conn
             .prepare(
@@ -247,7 +250,10 @@ impl SqliteSearchState {
 
         let fts_query = fuzzy_terms
             .iter()
-            .map(|term| format!("title:{} OR description:{}", term, term))
+            .map(|term| {
+                let sanitized_term = sanitize_fts5_query(term);
+                format!("title:\"{}\" OR description:\"{}\"", sanitized_term, sanitized_term)
+            })
             .collect::<Vec<_>>()
             .join(" OR ");
 
@@ -281,11 +287,18 @@ impl SqliteSearchState {
     ) -> AtomicResult<Vec<String>> {
         let conn = self.db.get_connection()?;
 
+        // Validate parent_subject to prevent SQL injection
+        if !is_valid_subject(parent_subject) {
+            return Err("Invalid parent subject format".into());
+        }
+
         let mut stmt = conn.prepare(
             "SELECT subject FROM search_index WHERE hierarchy LIKE ?1 ORDER BY subject LIMIT ?2"
         ).map_err(|e| format!("Failed to prepare hierarchy search statement: {}", e))?;
 
-        let hierarchy_pattern = format!("%{}%", parent_subject);
+        // Escape LIKE wildcards in parent_subject to prevent SQL injection
+        let escaped_parent = escape_like_pattern(parent_subject);
+        let hierarchy_pattern = format!("%{}%", escaped_parent);
         let rows = stmt
             .query_map(params![hierarchy_pattern, limit], |row| {
                 row.get::<_, String>(0)
@@ -298,6 +311,154 @@ impl SqliteSearchState {
         }
 
         Ok(results)
+    }
+
+    /// Enhanced search with Terraphim-style similarity scoring
+    /// Combines FTS5 results with similarity scoring for better relevance
+    pub fn similarity_search(
+        &self,
+        query: &str,
+        limit: usize,
+        algorithm: SimilarityAlgorithm,
+    ) -> AtomicResult<Vec<String>> {
+        if query.trim().is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let conn = self.db.get_connection()?;
+
+        // Sanitize the query
+        let sanitized_query = sanitize_fts5_query(query);
+        let fts_query = format!("title:\"{}\" OR description:\"{}\"", sanitized_query, sanitized_query);
+
+        // Get initial FTS5 results with titles
+        let mut stmt = conn.prepare(
+            "SELECT subject, title, description FROM search_index WHERE search_index MATCH ?1 
+             ORDER BY rank LIMIT ?2"
+        ).map_err(|e| format!("Failed to prepare similarity search statement: {}", e))?;
+
+        let rows = stmt.query_map(
+            params![fts_query, limit * 2], // Get more results for similarity filtering
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?, // subject
+                    row.get::<_, String>(1)?, // title
+                    row.get::<_, Option<String>>(2)?, // description
+                ))
+            }
+        ).map_err(|e| format!("Failed to execute similarity search: {}", e))?;
+
+        let mut scored_results = Vec::new();
+        for (index, row) in rows.enumerate() {
+            let (subject, title, description) = row.map_err(|e| format!("Failed to get similarity search result: {}", e))?;
+            
+            // Create searchable text (title + description)
+            let searchable_text = match description {
+                Some(desc) => format!("{} {}", title, desc),
+                None => title,
+            };
+
+            // Calculate similarity score using enhanced method
+            let similarity_score = calculate_enhanced_similarity(query, &searchable_text, algorithm);
+            
+            // Original score based on FTS5 rank (higher for earlier results)
+            let original_score = 1.0 - (index as f64 / (limit as f64 * 2.0));
+            
+            // Create scored result manually to use our calculated similarity score
+            let combined_score = crate::similarity::combine_scores(original_score, similarity_score, false);
+            let scored_result = ScoredResult {
+                subject,
+                original_score,
+                similarity_score,
+                combined_score,
+                is_fuzzy: false,
+            };
+
+            // Only include results with reasonable similarity
+            if scored_result.similarity_score > 0.3 {
+                scored_results.push(scored_result);
+            }
+        }
+
+        // Sort by combined score using Terraphim's approach
+        sort_results_by_score(&mut scored_results);
+
+        // Return top results as subjects
+        Ok(scored_results
+            .into_iter()
+            .take(limit)
+            .map(|result| result.subject)
+            .collect())
+    }
+
+    /// Fuzzy search with similarity scoring - combines FST fuzzy matching with similarity
+    pub fn fuzzy_similarity_search(
+        &self,
+        query: &str,
+        max_distance: u32,
+        limit: usize,
+        algorithm: SimilarityAlgorithm,
+    ) -> AtomicResult<Vec<String>> {
+        // First get fuzzy matches using existing FST method
+        let fuzzy_results = self.fuzzy_search(query, max_distance, limit * 2)?;
+        
+        if fuzzy_results.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let conn = self.db.get_connection()?;
+        let mut scored_results = Vec::new();
+
+        // Get titles for each fuzzy result and score them
+        for (index, subject) in fuzzy_results.iter().enumerate() {
+            // Get the resource title/description for similarity scoring
+            if let Ok(mut stmt) = conn.prepare("SELECT title, description FROM search_index WHERE subject = ?1") {
+                if let Ok(mut rows) = stmt.query_map(params![subject], |row| {
+                    Ok((
+                        row.get::<_, String>(0)?, // title
+                        row.get::<_, Option<String>>(1)?, // description
+                    ))
+                }) {
+                    if let Some(Ok((title, description))) = rows.next() {
+                        let searchable_text = match description {
+                            Some(desc) => format!("{} {}", title, desc),
+                            None => title,
+                        };
+
+                        // Calculate enhanced similarity
+                        let similarity_score = calculate_enhanced_similarity(query, &searchable_text, algorithm);
+                        
+                        // Original score based on FST rank
+                        let original_score = 1.0 - (index as f64 / (limit as f64 * 2.0));
+                        
+                        // Create scored result manually for fuzzy search
+                        let combined_score = crate::similarity::combine_scores(original_score, similarity_score, true);
+                        let scored_result = ScoredResult {
+                            subject: subject.clone(),
+                            original_score,
+                            similarity_score,
+                            combined_score,
+                            is_fuzzy: true,
+                        };
+
+                        // Include all fuzzy results but with lower threshold
+                        if scored_result.similarity_score > 0.2 {
+                            scored_results.push(scored_result);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Sort by combined score
+        sort_results_by_score(&mut scored_results);
+
+        // Return top results
+        Ok(scored_results
+            .into_iter()
+            .take(limit)
+            .map(|result| result.subject)
+            .collect())
     }
 }
 
@@ -397,6 +558,46 @@ fn calculate_edit_distance(s1: &str, s2: &str) -> u32 {
     }
 
     matrix[len1][len2] as u32
+}
+
+/// Sanitize FTS5 query by escaping special characters
+#[cfg(feature = "db")]
+fn sanitize_fts5_query(query: &str) -> String {
+    // Escape FTS5 special characters: " \ [ ] { } ( ) * ^ - + |
+    query
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('[', "\\[")
+        .replace(']', "\\]")
+        .replace('{', "\\{")
+        .replace('}', "\\}")
+        .replace('(', "\\(")
+        .replace(')', "\\)")
+        .replace('*', "\\*")
+        .replace('^', "\\^")
+        .replace('-', "\\-")
+        .replace('+', "\\+")
+        .replace('|', "\\|")
+}
+
+/// Escape LIKE pattern characters
+#[cfg(feature = "db")]
+fn escape_like_pattern(pattern: &str) -> String {
+    pattern
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
+}
+
+/// Validate subject format to prevent injection
+#[cfg(feature = "db")]
+fn is_valid_subject(subject: &str) -> bool {
+    // Basic validation: subjects should be URLs or valid identifiers
+    // Allow alphanumeric, :, /, -, _, ., #, ?
+    subject.chars().all(|c| {
+        c.is_alphanumeric() 
+            || matches!(c, ':' | '/' | '-' | '_' | '.' | '#' | '?' | '=' | '&')
+    }) && !subject.is_empty() && subject.len() <= 2048
 }
 
 #[cfg(not(feature = "db"))]

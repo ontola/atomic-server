@@ -52,8 +52,11 @@ pub async fn search_query(
     let store = &appstate.store;
     let _fields = appstate.search_state.get_schema_fields()?;
     
+    // Validate search parameters
+    validate_search_params(&params)?;
+    
     let limit = if let Some(l) = params.limit {
-        if l > 0 {
+        if l > 0 && l <= 1000 { // Cap at 1000 results max
             l
         } else {
             DEFAULT_RETURN_LIMIT
@@ -235,6 +238,76 @@ fn get_resources(
         }
     }
     Ok(resources)
+}
+
+/// Validate search parameters to prevent injection and abuse
+fn validate_search_params(params: &SearchQuery) -> AtomicServerResult<()> {
+    // Validate query string
+    if let Some(query) = &params.q {
+        if query.len() > 1000 {
+            return Err("Search query too long (max 1000 characters)".into());
+        }
+        if query.trim().is_empty() {
+            return Err("Search query cannot be empty".into());
+        }
+    }
+    
+    // Validate limit
+    if let Some(limit) = params.limit {
+        if limit > 1000 {
+            return Err("Search limit too high (max 1000)".into());
+        }
+    }
+    
+    // Validate parent subjects
+    if let Some(parents) = &params.parents {
+        if parents.len() > 50 {
+            return Err("Too many parent filters (max 50)".into());
+        }
+        for parent in parents {
+            if !is_valid_subject_url(parent) {
+                return Err(format!("Invalid parent subject format: {}", parent).into());
+            }
+        }
+    }
+    
+    // Validate filters
+    if let Some(filter) = &params.filters {
+        if filter.len() > 2000 {
+            return Err("Filter string too long (max 2000 characters)".into());
+        }
+    }
+    
+    // Validate fuzzy search parameters
+    if let Some(max_distance) = params.max_distance {
+        if max_distance > 10 {
+            return Err("Maximum edit distance too high (max 10)".into());
+        }
+    }
+    
+    Ok(())
+}
+
+/// Validate if a string is a valid subject URL
+fn is_valid_subject_url(subject: &str) -> bool {
+    // Basic validation for subject URLs
+    if subject.is_empty() || subject.len() > 2048 {
+        return false;
+    }
+    
+    // Check for valid URL characters and common schemes
+    if !(subject.starts_with("http://") || 
+         subject.starts_with("https://") || 
+         subject.starts_with("atomic://") ||
+         subject.starts_with("/")) {
+        return false;
+    }
+    
+    // Ensure no control characters or dangerous sequences
+    subject.chars().all(|c| {
+        c.is_ascii_alphanumeric() || 
+        matches!(c, ':' | '/' | '-' | '_' | '.' | '#' | '?' | '=' | '&' | '%' | '@' | '+')
+    })
 }
 
 // Tests for search handlers are in the main search.rs module
