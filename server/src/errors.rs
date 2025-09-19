@@ -151,25 +151,6 @@ impl From<std::io::Error> for AtomicServerError {
     }
 }
 
-impl From<tantivy::directory::error::OpenDirectoryError> for AtomicServerError {
-    fn from(error: tantivy::directory::error::OpenDirectoryError) -> Self {
-        AtomicServerError {
-            message: error.to_string(),
-            error_type: AppErrorType::Other,
-            error_resource: None,
-        }
-    }
-}
-
-impl From<tantivy::TantivyError> for AtomicServerError {
-    fn from(error: tantivy::TantivyError) -> Self {
-        AtomicServerError {
-            message: error.to_string(),
-            error_type: AppErrorType::Other,
-            error_resource: None,
-        }
-    }
-}
 
 impl From<actix_web::Error> for AtomicServerError {
     fn from(error: actix_web::Error) -> Self {

@@ -18,13 +18,8 @@ fn rebuild_indexes(appstate: &crate::appstate::AppState) -> AtomicServerResult<(
             .expect("Failed to build value index");
     });
 
-    tracing::info!("Removing existing search index...");
-    appstate
-        .search_state
-        .writer
-        .write()
-        .expect("Could not get a lock on search writer")
-        .delete_all_documents()?;
+    tracing::info!("Rebuilding SQLite search index...");
+    // SQLite search doesn't need explicit deletion - add_all_resources handles it
     appstate.search_state.add_all_resources(&appstate.store)?;
     Ok(())
 }

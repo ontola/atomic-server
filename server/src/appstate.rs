@@ -28,6 +28,19 @@ pub struct AppState {
 
 /// Minimal AppState for CLI operations that don't need search or commit monitoring
 impl AppState {
+    /// Creates a new AppState with the given components (primarily for testing)
+    #[allow(dead_code)]
+    pub async fn new(config: Config, store: atomic_lib::Db, search_state: SearchState) -> AtomicServerResult<AppState> {
+        let commit_monitor = crate::commit_monitor::create_commit_monitor(store.clone(), search_state.clone());
+        
+        Ok(AppState {
+            store,
+            config,
+            commit_monitor,
+            search_state,
+        })
+    }
+
     /// Creates the AppState (the server's context available in Handlers).
     /// Initializes or opens a store on disk.
     /// Creates a new agent, if necessary.
@@ -106,7 +119,8 @@ impl AppState {
     /// Is called when AppState goes out of scope (e.g. when the application closes)
     /// Cleanup code, writing buffers, committing changes, etc.
     fn exit(&self) -> AtomicServerResult<()> {
-        self.search_state.writer.write()?.commit()?;
+        // SQLite handles commits automatically, no explicit cleanup needed for search
+        // Any SQLite connections will be closed when the database goes out of scope
         Ok(())
     }
 }

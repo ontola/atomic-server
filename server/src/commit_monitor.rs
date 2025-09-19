@@ -27,7 +27,7 @@ pub struct CommitMonitor {
     run_expensive_next_tick: bool,
 }
 
-// Only runs expensive index operation (tantivy) once every x seconds
+// Only runs expensive index operation (SQLite maintenance) once every x seconds
 const REBUILD_INDEX_TIME: std::time::Duration = std::time::Duration::from_secs(5);
 
 // Since his Actor only starts once, there is no need to handle its lifecycle
@@ -101,8 +101,8 @@ impl Handler<Subscribe> for CommitMonitor {
 
 impl CommitMonitor {
     /// When a commit comes in, send it to any listening subscribers,
-    /// and update the value index.
-    /// The search index is only updated if the last search commit is 15 seconds or older.
+    /// and update the search index.
+    /// SQLite search updates are immediate since they don't require batching.
     fn handle_internal(&mut self, msg: CommitMessage) -> AtomicServerResult<()> {
         let target = msg.commit_response.commit.subject.clone();
 
@@ -120,7 +120,7 @@ impl CommitMonitor {
             tracing::debug!("No subscribers for {}", target);
         }
 
-        // Update the search index
+        // Update the SQLite search index - SQLite handles transactions automatically
         self.search_state.remove_resource(&target)?;
         if let Some(resource) = &msg.commit_response.resource_new {
             // We could one day re-(allow) to keep old resources,
@@ -129,6 +129,8 @@ impl CommitMonitor {
             self.search_state.add_resource(resource, &self.store)?;
         }
 
+        // With SQLite, we don't need expensive batch operations like Tantivy
+        // But we can still use this for other maintenance tasks if needed
         self.run_expensive_next_tick = true;
         Ok(())
     }
@@ -146,9 +148,14 @@ impl CommitMonitor {
     }
 
     /// Run expensive updates that should not be run after every single Commit
+    /// With SQLite, there's no need for explicit commits, but we can use this
+    /// for other maintenance tasks like rebuilding FST indices
     fn update_expensive(&mut self) -> AtomicServerResult<()> {
-        tracing::debug!("Update expensive");
-        self.search_state.writer.write()?.commit()?;
+        tracing::debug!("Update expensive (SQLite maintenance)");
+        
+        // SQLite doesn't need explicit commits like Tantivy did
+        // We could add FST index rebuilding or other maintenance tasks here if needed
+        
         self.last_search_commit = chrono::Local::now();
         self.run_expensive_next_tick = false;
         Ok(())
