@@ -5,9 +5,95 @@
 use crate::{errors::AtomicResult, similarity::{SimilarityAlgorithm, calculate_enhanced_similarity, ScoredResult, sort_results_by_score}, Db, Resource, Storelike};
 
 #[cfg(feature = "db")]
-use fst::{automaton, IntoStreamer, Map, MapBuilder, Streamer};
+use fst::{automaton, Automaton, IntoStreamer, Map, MapBuilder, Streamer};
 #[cfg(feature = "db")]
 use rusqlite::{params, Connection, Row};
+#[cfg(feature = "db")]
+use lru::LruCache;
+#[cfg(feature = "db")]
+use parking_lot::RwLock;
+#[cfg(feature = "db")]
+use std::{sync::Arc, num::NonZeroUsize, path::PathBuf};
+#[cfg(feature = "db")]
+use memmap2::{Mmap, MmapOptions};
+#[cfg(all(feature = "db", feature = "terraphim-search"))]
+use terraphim_automata::{
+    fuzzy_autocomplete_search, build_autocomplete_index, AutocompleteIndex, 
+    AutocompleteConfig,
+};
+#[cfg(all(feature = "db", feature = "terraphim-search"))]
+use terraphim_types::{NormalizedTerm, NormalizedTermValue, Thesaurus};
+
+/// FST storage mode for performance optimization
+#[cfg(feature = "db")]
+#[derive(Clone)]
+pub enum FstStorage {
+    /// FST loaded in memory from database
+    Memory(Arc<Map<Vec<u8>>>),
+    /// Memory-mapped FST for zero-copy access
+    MappedFile { 
+        _mmap: Arc<Mmap>,
+        fst: Arc<Map<&'static [u8]>>,
+    },
+}
+
+impl FstStorage {
+    /// Search FST regardless of storage type
+    pub fn search<A: Automaton>(&self, automaton: A) -> fst::map::StreamBuilder<'_, A> {
+        match self {
+            FstStorage::Memory(fst) => fst.search(automaton),
+            FstStorage::MappedFile { fst, .. } => fst.search(automaton),
+        }
+    }
+}
+
+/// Cached FST data structure for performance optimization
+#[cfg(feature = "db")]
+#[derive(Clone)]
+struct CachedFst {
+    /// Cached FST map - either memory or memory-mapped
+    fst: Option<Arc<FstStorage>>,
+    /// Hot cache for frequently accessed fuzzy search terms
+    hot_cache: Arc<RwLock<LruCache<String, Vec<String>>>>,
+    /// Cache for exact prefix searches  
+    prefix_cache: Arc<RwLock<LruCache<String, Vec<String>>>>,
+    /// Cache version to invalidate when FST is rebuilt
+    version: Arc<RwLock<u64>>,
+    /// Path to FST file for memory mapping
+    fst_file_path: Option<PathBuf>,
+}
+
+impl CachedFst {
+    fn new() -> Self {
+        Self {
+            fst: None,
+            hot_cache: Arc::new(RwLock::new(LruCache::new(NonZeroUsize::new(1000).unwrap()))),
+            prefix_cache: Arc::new(RwLock::new(LruCache::new(NonZeroUsize::new(500).unwrap()))),
+            version: Arc::new(RwLock::new(0)),
+            fst_file_path: None,
+        }
+    }
+    
+    fn invalidate(&mut self) {
+        let mut version = self.version.write();
+        *version += 1;
+        self.hot_cache.write().clear();
+        self.prefix_cache.write().clear();
+        self.fst = None;
+        
+        // Clean up memory-mapped file if it exists
+        if let Some(path) = &self.fst_file_path {
+            if path.exists() {
+                let _ = std::fs::remove_file(path);
+            }
+        }
+        self.fst_file_path = None;
+    }
+    
+    fn set_fst_file_path(&mut self, path: PathBuf) {
+        self.fst_file_path = Some(path);
+    }
+}
 
 /// SQLite-based search state that uses FTS5 for full-text search and FST for fuzzy matching
 #[cfg(feature = "db")]
@@ -15,13 +101,23 @@ use rusqlite::{params, Connection, Row};
 pub struct SqliteSearchState {
     /// Reference to the main database
     pub db: Db,
+    /// Cached FST for performance optimization
+    cached_fst: Arc<RwLock<CachedFst>>,
+    /// Terraphim automata index for advanced fuzzy search
+    #[cfg(feature = "terraphim-search")]
+    terraphim_index: Arc<RwLock<Option<AutocompleteIndex>>>,
 }
 
 #[cfg(feature = "db")]
 impl SqliteSearchState {
-    /// Create a new SqliteSearchState
+    /// Create a new SqliteSearchState with caching
     pub fn new(db: Db) -> AtomicResult<Self> {
-        let search_state = SqliteSearchState { db };
+        let search_state = SqliteSearchState { 
+            db,
+            cached_fst: Arc::new(RwLock::new(CachedFst::new())),
+            #[cfg(feature = "terraphim-search")]
+            terraphim_index: Arc::new(RwLock::new(None)),
+        };
 
         // Initialize search metadata if needed
         search_state.initialize_search_metadata()?;
@@ -45,6 +141,12 @@ impl SqliteSearchState {
     /// Index all resources from the store into the FTS5 search index
     pub fn add_all_resources(&self, store: &Db) -> AtomicResult<()> {
         tracing::info!("Building SQLite FTS5 search index...");
+
+        // Invalidate caches since we're rebuilding
+        {
+            let mut cached = self.cached_fst.write();
+            cached.invalidate();
+        }
 
         let conn = self.db.get_connection()?;
 
@@ -74,12 +176,20 @@ impl SqliteSearchState {
         // Build FST index for fuzzy search
         self.build_fst_index(&conn)?;
 
+        // Build Terraphim index if feature is enabled
+        #[cfg(feature = "terraphim-search")]
+        self.build_terraphim_index(store)?;
+
         Ok(())
     }
 
     /// Add a single resource to the FTS5 search index
     pub fn add_resource(&self, resource: &Resource, conn: &Connection) -> AtomicResult<()> {
         let subject = resource.get_subject().to_string();
+        
+        // Invalidate cache entries for this resource before updating
+        self.invalidate_resource_caches(&subject);
+        
         let title = get_resource_title(resource);
 
         let description =
@@ -105,6 +215,9 @@ impl SqliteSearchState {
 
     /// Remove a resource from the search index
     pub fn remove_resource(&self, subject: &str) -> AtomicResult<()> {
+        // Invalidate cache entries for this resource before removing
+        self.invalidate_resource_caches(subject);
+        
         let conn = self.db.get_connection()?;
 
         conn.execute(
@@ -114,6 +227,37 @@ impl SqliteSearchState {
         .map_err(|e| format!("Failed to remove resource from search index: {}", e))?;
 
         Ok(())
+    }
+
+    /// Invalidate cache entries that contain results for a specific resource subject
+    fn invalidate_resource_caches(&self, subject: &str) {
+        let cached = self.cached_fst.read();
+        
+        // Invalidate hot cache entries containing this resource
+        {
+            let mut hot_cache = cached.hot_cache.write();
+            let keys_to_remove: Vec<String> = hot_cache
+                .iter()
+                .filter(|(_, results)| results.contains(&subject.to_string()))
+                .map(|(k, _)| k.clone())
+                .collect();
+            for key in keys_to_remove {
+                hot_cache.pop(&key);
+            }
+        }
+        
+        // Invalidate prefix cache entries containing this resource
+        {
+            let mut prefix_cache = cached.prefix_cache.write();
+            let keys_to_remove: Vec<String> = prefix_cache
+                .iter()
+                .filter(|(_, results)| results.contains(&subject.to_string()))
+                .map(|(k, _)| k.clone())
+                .collect();
+            for key in keys_to_remove {
+                prefix_cache.pop(&key);
+            }
+        }
     }
 
     /// Build FST index for fuzzy search from all indexed terms
@@ -167,8 +311,21 @@ impl SqliteSearchState {
         Ok(())
     }
 
-    /// Perform a text search using FTS5
+    /// Perform a cached text search using FTS5
     pub fn text_search(&self, query: &str, limit: usize) -> AtomicResult<Vec<String>> {
+        // Create cache key for this specific query
+        let cache_key = format!("text:{}:{}", query, limit);
+        
+        // Check prefix cache first
+        {
+            let cache = self.cached_fst.read();
+            let mut prefix_cache = cache.prefix_cache.write();
+            if let Some(cached_result) = prefix_cache.get(&cache_key) {
+                tracing::trace!("Cache hit for text search: {}", query);
+                return Ok(cached_result.clone());
+            }
+        }
+
         let conn = self.db.get_connection()?;
 
         // Sanitize the query by escaping FTS5 special characters
@@ -177,8 +334,9 @@ impl SqliteSearchState {
         // Use parameterized query with sanitized input
         let fts_query = format!("title:\"{}\" OR description:\"{}\"", sanitized_query, sanitized_query);
 
+        // Use prepare_cached for better performance on repeated queries
         let mut stmt = conn
-            .prepare(
+            .prepare_cached(
                 "SELECT subject FROM search_index WHERE search_index MATCH ?1 
              ORDER BY rank LIMIT ?2",
             )
@@ -196,35 +354,234 @@ impl SqliteSearchState {
             results.push(row.map_err(|e| format!("Failed to get search result: {}", e))?);
         }
 
+        // Cache the results
+        {
+            let cache = self.cached_fst.read();
+            let mut prefix_cache = cache.prefix_cache.write();
+            prefix_cache.put(cache_key, results.clone());
+        }
+
+        tracing::trace!("Text search for '{}' found {} results", query, results.len());
         Ok(results)
     }
 
-    /// Perform fuzzy search using FST
+    /// Get or load FST map with memory mapping for optimal performance
+    pub fn get_or_load_fst(&self) -> AtomicResult<Arc<FstStorage>> {
+        // Check if FST is already cached
+        {
+            let cached = self.cached_fst.read();
+            if let Some(ref fst_storage) = cached.fst {
+                return Ok(Arc::clone(fst_storage));
+            }
+        }
+
+        // Try memory-mapped approach first, fall back to memory if it fails
+        match self.try_create_mapped_fst() {
+            Ok(fst) => {
+                let fst_arc = Arc::new(fst);
+                {
+                    let mut cached = self.cached_fst.write();
+                    cached.fst = Some(Arc::clone(&fst_arc));
+                }
+                tracing::info!("Using memory-mapped FST for zero-copy access");
+                Ok(fst_arc)
+            }
+            Err(e) => {
+                tracing::warn!("Memory mapping failed ({}), falling back to memory loading", e);
+                self.load_fst_memory()
+            }
+        }
+    }
+
+    /// Try to create a memory-mapped FST file
+    fn try_create_mapped_fst(&self) -> AtomicResult<FstStorage> {
+        // Create temporary file path for FST
+        let temp_dir = std::env::temp_dir();
+        let fst_file_path = temp_dir.join(format!("atomic_search_fst_{}.bin", std::process::id()));
+
+        // Load FST data from database
+        let conn = self.db.get_connection()?;
+        let fst_data: Vec<u8> = conn
+            .prepare_cached("SELECT fst_data FROM fst_index WHERE term = 'main'")
+            .and_then(|mut stmt| stmt.query_row([], |row| row.get(0)))
+            .map_err(|e| format!("Failed to get FST data: {}", e))?;
+
+        // Write FST data to temporary file
+        std::fs::write(&fst_file_path, &fst_data)
+            .map_err(|e| format!("Failed to write FST to file: {}", e))?;
+
+        // Memory-map the file
+        let file = std::fs::File::open(&fst_file_path)
+            .map_err(|e| format!("Failed to open FST file: {}", e))?;
+        
+        let mmap = unsafe {
+            MmapOptions::new()
+                .map(&file)
+                .map_err(|e| format!("Failed to memory-map FST file: {}", e))?
+        };
+        
+        let mmap_arc = Arc::new(mmap);
+        
+        // Create FST from memory-mapped data
+        // SAFETY: We keep the mmap alive in the Arc, so the data remains valid
+        let fst_data_static: &'static [u8] = unsafe {
+            std::slice::from_raw_parts(
+                mmap_arc.as_ptr(),
+                mmap_arc.len(),
+            )
+        };
+        
+        let fst = Map::new(fst_data_static)
+            .map_err(|e| format!("Failed to create FST from mapped data: {}", e))?;
+        let fst_arc = Arc::new(fst);
+
+        // Update cached FST path
+        {
+            let mut cached = self.cached_fst.write();
+            cached.set_fst_file_path(fst_file_path);
+        }
+
+        Ok(FstStorage::MappedFile { 
+            _mmap: mmap_arc, 
+            fst: fst_arc,
+        })
+    }
+
+    /// Fallback method to load FST into memory
+    fn load_fst_memory(&self) -> AtomicResult<Arc<FstStorage>> {
+        // Load FST from database using cached prepared statement
+        let conn = self.db.get_connection()?;
+        let fst_data: Vec<u8> = conn
+            .prepare_cached("SELECT fst_data FROM fst_index WHERE term = 'main'")
+            .and_then(|mut stmt| stmt.query_row([], |row| row.get(0)))
+            .map_err(|e| format!("Failed to get FST data: {}", e))?;
+
+        let fst_map = Map::new(fst_data).map_err(|e| format!("Failed to load FST: {}", e))?;
+        let fst_storage = Arc::new(FstStorage::Memory(Arc::new(fst_map)));
+
+        // Cache the loaded FST
+        {
+            let mut cached = self.cached_fst.write();
+            cached.fst = Some(Arc::clone(&fst_storage));
+        }
+
+        tracing::debug!("Loaded FST into memory");
+        Ok(fst_storage)
+    }
+
+    /// Build Terraphim autocomplete index for enhanced fuzzy search
+    #[cfg(feature = "terraphim-search")]
+    pub fn build_terraphim_index(&self, store: &Db) -> AtomicResult<()> {
+        tracing::info!("Building Terraphim autocomplete index...");
+
+        // Create thesaurus from store resources
+        let mut thesaurus = Thesaurus::new("Atomic Server Resources".to_string());
+        let mut id_counter = 1u64;
+
+        let resources = store
+            .all_resources(true)
+            .filter(|resource| !resource.get_subject().contains("/commits/"));
+
+        for resource in resources {
+            // Extract title for the term
+            let title = if let Ok(name) = resource.get(crate::urls::NAME) {
+                match name {
+                    crate::Value::String(s) => s,
+                    crate::Value::Slug(s) => s,
+                    _ => continue,
+                }
+            } else if let Ok(shortname) = resource.get(crate::urls::SHORTNAME) {
+                match shortname {
+                    crate::Value::String(s) => s,
+                    crate::Value::Slug(s) => s,
+                    _ => continue,
+                }
+            } else {
+                continue;
+            };
+
+            // Create normalized term
+            let normalized_term = NormalizedTerm {
+                id: id_counter,
+                value: NormalizedTermValue::from(title.clone()),
+                url: Some(resource.get_subject().to_string()),
+            };
+
+            thesaurus.insert(NormalizedTermValue::from(title.clone()), normalized_term);
+            id_counter += 1;
+        }
+
+        // Build autocomplete index
+        let config = AutocompleteConfig {
+            max_results: 50,
+            min_prefix_length: 1,
+            case_sensitive: false,
+        };
+
+        let index = build_autocomplete_index(thesaurus, Some(config))
+            .map_err(|e| format!("Failed to build Terraphim index: {}", e))?;
+
+        // Store the index
+        {
+            let mut terraphim_idx = self.terraphim_index.write();
+            *terraphim_idx = Some(index);
+        }
+
+        tracing::info!("Terraphim autocomplete index built successfully");
+        Ok(())
+    }
+
+    /// Perform fuzzy search using Terraphim automata (faster Jaro-Winkler algorithm)
+    #[cfg(feature = "terraphim-search")]
+    pub fn terraphim_fuzzy_search(
+        &self,
+        query: &str,
+        min_similarity: f64,
+        limit: usize,
+    ) -> AtomicResult<Vec<String>> {
+        let terraphim_idx = self.terraphim_index.read();
+        let index = terraphim_idx.as_ref().ok_or("Terraphim index not built")?;
+
+        let results = fuzzy_autocomplete_search(
+            index,
+            query,
+            min_similarity,
+            Some(limit),
+        ).map_err(|e| format!("Terraphim fuzzy search failed: {}", e))?;
+
+        // Extract subjects from results
+        Ok(results.into_iter()
+            .filter_map(|result| result.url)
+            .collect())
+    }
+
+    /// Perform cached fuzzy search using FST
     pub fn fuzzy_search(
         &self,
         query: &str,
         max_distance: u32,
         limit: usize,
     ) -> AtomicResult<Vec<String>> {
-        let conn = self.db.get_connection()?;
+        // Create cache key for this specific query
+        let cache_key = format!("fuzzy:{}:{}:{}", query, max_distance, limit);
+        
+        // Check hot cache first
+        {
+            let cache = self.cached_fst.read();
+            let mut hot_cache = cache.hot_cache.write();
+            if let Some(cached_result) = hot_cache.get(&cache_key) {
+                tracing::trace!("Cache hit for fuzzy search: {}", query);
+                return Ok(cached_result.clone());
+            }
+        }
 
-        // Get FST data
-        let fst_data: Vec<u8> = conn
-            .query_row(
-                "SELECT fst_data FROM fst_index WHERE term = 'main'",
-                [],
-                |row| row.get(0),
-            )
-            .map_err(|e| format!("Failed to get FST data: {}", e))?;
-
-        // Load FST from bytes
-        let fst_map = Map::new(fst_data).map_err(|e| format!("Failed to load FST: {}", e))?;
+        // Get or load FST
+        let fst_map = self.get_or_load_fst()?;
 
         // Perform fuzzy search using FST automaton
         let mut fuzzy_terms = Vec::new();
 
         // Use subsequence automaton which provides fuzzy matching capabilities
-        // The max_distance parameter is used to limit results later
         let automaton = automaton::Subsequence::new(query);
         let mut stream = fst_map.search(automaton).into_stream();
         let mut term_count = 0;
@@ -235,8 +592,8 @@ impl SqliteSearchState {
             }
             let term_str = String::from_utf8_lossy(term);
 
-            // Simple edit distance check (Levenshtein distance approximation)
-            let edit_distance = calculate_edit_distance(query, &term_str);
+            // Use strsim for better edit distance calculation
+            let edit_distance = strsim::levenshtein(query, &term_str) as u32;
             if edit_distance <= max_distance {
                 fuzzy_terms.push(term_str.to_string());
                 term_count += 1;
@@ -245,9 +602,16 @@ impl SqliteSearchState {
 
         // Use fuzzy terms to search in FTS5
         if fuzzy_terms.is_empty() {
+            // Cache empty result
+            {
+                let cache = self.cached_fst.read();
+                let mut hot_cache = cache.hot_cache.write();
+                hot_cache.put(cache_key, Vec::new());
+            }
             return Ok(Vec::new());
         }
 
+        let conn = self.db.get_connection()?;
         let fts_query = fuzzy_terms
             .iter()
             .map(|term| {
@@ -257,8 +621,9 @@ impl SqliteSearchState {
             .collect::<Vec<_>>()
             .join(" OR ");
 
+        // Use prepare_cached for better performance on repeated queries
         let mut stmt = conn
-            .prepare(
+            .prepare_cached(
                 "SELECT DISTINCT subject FROM search_index WHERE search_index MATCH ?1 
              ORDER BY rank LIMIT ?2",
             )
@@ -276,6 +641,14 @@ impl SqliteSearchState {
             results.push(row.map_err(|e| format!("Failed to get fuzzy search result: {}", e))?);
         }
 
+        // Cache the results
+        {
+            let cache = self.cached_fst.read();
+            let mut hot_cache = cache.hot_cache.write();
+            hot_cache.put(cache_key, results.clone());
+        }
+
+        tracing::trace!("Fuzzy search for '{}' found {} results", query, results.len());
         Ok(results)
     }
 
@@ -511,53 +884,6 @@ fn extract_terms(text: &str, terms: &mut std::collections::HashMap<String, u32>)
             *terms.entry(cleaned).or_insert(0) += 1;
         }
     }
-}
-
-/// Calculate edit distance (Levenshtein distance) between two strings
-#[cfg(feature = "db")]
-fn calculate_edit_distance(s1: &str, s2: &str) -> u32 {
-    let len1 = s1.chars().count();
-    let len2 = s2.chars().count();
-
-    if len1 == 0 {
-        return len2 as u32;
-    }
-    if len2 == 0 {
-        return len1 as u32;
-    }
-
-    let s1_chars: Vec<char> = s1.chars().collect();
-    let s2_chars: Vec<char> = s2.chars().collect();
-
-    let mut matrix = vec![vec![0; len2 + 1]; len1 + 1];
-
-    // Initialize first row and column
-    for (i, row) in matrix.iter_mut().enumerate().take(len1 + 1) {
-        row[0] = i;
-    }
-    for j in 0..=len2 {
-        matrix[0][j] = j;
-    }
-
-    // Fill the matrix
-    for i in 1..=len1 {
-        for j in 1..=len2 {
-            let cost = if s1_chars[i - 1] == s2_chars[j - 1] {
-                0
-            } else {
-                1
-            };
-            matrix[i][j] = std::cmp::min(
-                std::cmp::min(
-                    matrix[i - 1][j] + 1, // deletion
-                    matrix[i][j - 1] + 1, // insertion
-                ),
-                matrix[i - 1][j - 1] + cost, // substitution
-            );
-        }
-    }
-
-    matrix[len1][len2] as u32
 }
 
 /// Sanitize FTS5 query by escaping special characters

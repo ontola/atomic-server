@@ -178,6 +178,46 @@ fn search_benchmarks(c: &mut Criterion) {
         })
     });
 
+    // Benchmark terraphim fuzzy search if feature is enabled
+    #[cfg(feature = "terraphim-search")]
+    c.bench_function("search/terraphim_fuzzy_search", |b| {
+        b.iter(|| {
+            search_state.terraphim_fuzzy_search("atomic", 0.6, 10).unwrap()
+        })
+    });
+
+    // Benchmark cache performance by running searches again (should hit cache)
+    c.bench_function("search/text_search_cached", |b| {
+        // Prime the cache first
+        let _ = search_state.text_search("atomic", 10);
+        b.iter(|| {
+            search_state.text_search("atomic", 10).unwrap()
+        })
+    });
+
+    c.bench_function("search/fuzzy_search_cached", |b| {
+        // Prime the cache first
+        let _ = search_state.fuzzy_search("atomic", 2, 10);
+        b.iter(|| {
+            search_state.fuzzy_search("atomic", 2, 10).unwrap()
+        })
+    });
+
+    // Benchmark memory-mapped FST access performance
+    c.bench_function("search/fst_memory_mapped_access", |b| {
+        b.iter(|| {
+            search_state.get_or_load_fst().unwrap()
+        })
+    });
+
+    // Benchmark different similarity algorithms head-to-head
+    c.bench_function("search/similarity_jaro_vs_levenshtein", |b| {
+        b.iter(|| {
+            let _jaro_results = search_state.similarity_search("atomic", 10, SimilarityAlgorithm::JaroWinkler).unwrap();
+            let _levenshtein_results = search_state.similarity_search("atomic", 10, SimilarityAlgorithm::Levenshtein).unwrap();
+        })
+    });
+
     store.clear_all_danger().unwrap();
 }
 
