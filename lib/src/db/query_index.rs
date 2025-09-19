@@ -5,8 +5,8 @@ use crate::{
     agents::ForAgent, atoms::IndexAtom, errors::AtomicResult, storelike::Query,
     values::SortableValue, Atom, Db, Resource, Storelike, Value,
 };
-use serde::{Deserialize, Serialize};
 use rusqlite::params;
+use serde::{Deserialize, Serialize};
 
 use super::trees::{self, Operation, Transaction, Tree};
 
@@ -38,7 +38,7 @@ impl QueryFilter {
         };
 
         let query_filter_bin = self.encode()?;
-        
+
         let mut transaction = Transaction::new();
         transaction.push(Operation {
             tree: Tree::WatchedQueries,
@@ -46,7 +46,7 @@ impl QueryFilter {
             key: query_filter_bin,
             val: Some(b"".to_vec()),
         });
-        
+
         store.apply_transaction(&mut transaction)?;
 
         Ok(())
@@ -61,7 +61,7 @@ impl QueryFilter {
                 return false;
             }
         };
-        
+
         let conn = match store.pool.get() {
             Ok(conn) => conn,
             Err(_) => {
@@ -69,12 +69,13 @@ impl QueryFilter {
                 return false;
             }
         };
-        
+
         conn.query_row(
             "SELECT 1 FROM watched_queries WHERE key = ?1",
             params![query_filter_bin],
             |_row| Ok(()),
-        ).is_ok()
+        )
+        .is_ok()
     }
 }
 
@@ -120,25 +121,29 @@ pub fn query_sorted_indexed(
     // Make the range exclusive by appending 0xFF to make it match sled's behavior
     end_key.push(0xFF);
 
-    let conn = store.pool.get()
+    let conn = store
+        .pool
+        .get()
         .map_err(|e| format!("Failed to get connection from pool: {}", e))?;
-    
+
     // Use exclusive upper bound to match sled's range behavior
     let query = if q.sort_desc {
         "SELECT key, value FROM query_members WHERE key >= ?1 AND key < ?2 ORDER BY key DESC"
     } else {
         "SELECT key, value FROM query_members WHERE key >= ?1 AND key < ?2 ORDER BY key ASC"
     };
-    
-    let mut stmt = conn.prepare_cached(query)
+
+    let mut stmt = conn
+        .prepare_cached(query)
         .map_err(|e| format!("Failed to prepare query: {}", e))?;
-    
-    let iter = stmt.query_map(params![start_key, end_key], |row| {
-        let key: Vec<u8> = row.get(0)?;
-        let value: Vec<u8> = row.get(1)?;
-        Ok((key, value))
-    })
-    .map_err(|e| format!("Failed to query members: {}", e))?;
+
+    let iter = stmt
+        .query_map(params![start_key, end_key], |row| {
+            let key: Vec<u8> = row.get(0)?;
+            let value: Vec<u8> = row.get(1)?;
+            Ok((key, value))
+        })
+        .map_err(|e| format!("Failed to query members: {}", e))?;
 
     let mut subjects: Vec<String> = vec![];
     let mut resources: Vec<Resource> = vec![];
@@ -230,11 +235,7 @@ pub fn should_update_property<'a>(
     // So here we not only make sure that the QueryFilter actually matches the resource,
     // But we also return which prop & val we matched on, so we can update the index with the correct value.
     // See https://github.com/atomicdata-dev/atomic-server/issues/395
-    let matching_prop = match find_matching_propval(resource, q_filter) {
-        Some(a) => a,
-        // if the resource doesn't match the filter, we don't need to update the index
-        None => return None,
-    };
+    let matching_prop = find_matching_propval(resource, q_filter)?;
 
     // Now we know that our new Resource is a member for this QueryFilter.
     // But we don't know whether this specific IndexAtom is relevant for the index of this QueryFilter.
@@ -305,17 +306,21 @@ pub fn check_if_atom_matches_watched_query_filters(
     resource: &Resource,
     transaction: &mut Transaction,
 ) -> AtomicResult<()> {
-    let conn = store.pool.get()
+    let conn = store
+        .pool
+        .get()
         .map_err(|e| format!("Failed to get connection from pool: {}", e))?;
-    let mut stmt = conn.prepare_cached("SELECT key FROM watched_queries")
+    let mut stmt = conn
+        .prepare_cached("SELECT key FROM watched_queries")
         .map_err(|e| format!("Failed to prepare watched_queries query: {}", e))?;
-    
-    let query_iter = stmt.query_map([], |row| {
-        let key: Vec<u8> = row.get(0)?;
-        Ok(key)
-    })
-    .map_err(|e| format!("Failed to query watched_queries: {}", e))?;
-    
+
+    let query_iter = stmt
+        .query_map([], |row| {
+            let key: Vec<u8> = row.get(0)?;
+            Ok(key)
+        })
+        .map_err(|e| format!("Failed to query watched_queries: {}", e))?;
+
     for query_result in query_iter {
         match query_result {
             Ok(k) => {
@@ -326,7 +331,13 @@ pub fn check_if_atom_matches_watched_query_filters(
                         Ok(val) => val.to_sortable_string(),
                         Err(_e) => NO_VALUE.to_string(),
                     };
-                    update_indexed_member(&q_filter, &atom.subject, &update_val, delete, transaction)?;
+                    update_indexed_member(
+                        &q_filter,
+                        &atom.subject,
+                        &update_val,
+                        delete,
+                        transaction,
+                    )?;
                 }
             }
             Err(e) => {

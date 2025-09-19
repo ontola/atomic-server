@@ -131,7 +131,7 @@ fn prompt_field(
     match &property.data_type {
         DataType::String | DataType::Markdown => {
             let msg = format!("string{}", msg_appendix);
-            return Ok(prompt_opt(msg)?);
+            Ok(prompt_opt(msg)?)
         }
         DataType::Slug => {
             let msg = format!("slug{}", msg_appendix);
@@ -143,9 +143,9 @@ fn prompt_field(
                         return Ok(Some(slug));
                     }
                     println!("Only letters, numbers and dashes - no spaces or special characters.");
-                    return Ok(None);
+                    Ok(None)
                 }
-                None => return Ok(None),
+                None => Ok(None),
             }
         }
         DataType::Uri => {
@@ -157,7 +157,7 @@ fn prompt_field(
             };
 
             check_valid_uri(&uri).unwrap();
-            return Ok(Some(uri));
+            Ok(Some(uri))
         }
         DataType::JSON => {
             let msg = format!("JSON{}", msg_appendix);
@@ -166,16 +166,16 @@ fn prompt_field(
             };
 
             check_valid_json(&json).unwrap();
-            return Ok(Some(json));
+            Ok(Some(json))
         }
         DataType::Integer => {
             let msg = format!("integer{}", msg_appendix);
             let number: Option<u32> = prompt_opt(msg)?;
             match number {
                 Some(nr) => {
-                    return Ok(Some(nr.to_string()));
+                    Ok(Some(nr.to_string()))
                 }
-                None => return Ok(None),
+                None => Ok(None),
             }
         }
         DataType::Float => {
@@ -183,9 +183,9 @@ fn prompt_field(
             let number: Option<f64> = prompt_opt(msg)?;
             match number {
                 Some(nr) => {
-                    return Ok(Some(nr.to_string()));
+                    Ok(Some(nr.to_string()))
                 }
-                None => return Ok(None),
+                None => Ok(None),
             }
         }
         DataType::Date => {
@@ -198,9 +198,9 @@ fn prompt_field(
                         return Ok(Some(date_val));
                     }
                     println!("Not a valid date.");
-                    return Ok(None);
+                    Ok(None)
                 }
-                None => return Ok(None),
+                None => Ok(None),
             }
         }
         DataType::AtomicUrl => loop {
@@ -223,7 +223,7 @@ fn prompt_field(
                     Some(url) => return Ok(Some(url)),
                     None => {
                         println!("Shortname not found, try again.");
-                        return Ok(None);
+                        return Ok(None)
                     }
                 }
             }
@@ -278,9 +278,9 @@ fn prompt_field(
             let number: Option<u64> = prompt_opt(msg)?;
             match number {
                 Some(nr) => {
-                    return Ok(Some(nr.to_string()));
+                    Ok(Some(nr.to_string()))
                 }
-                None => return Ok(None),
+                None => Ok(None),
             }
         }
         DataType::Unsupported(unsup) => {
@@ -291,9 +291,9 @@ fn prompt_field(
             let string: Option<String> = prompt_opt(msg)?;
             match string {
                 Some(nr) => {
-                    return Ok(Some(nr.to_string()));
+                    Ok(Some(nr.to_string()))
                 }
-                None => return Ok(None),
+                None => Ok(None),
             }
         }
         DataType::Boolean => {
@@ -304,12 +304,12 @@ fn prompt_field(
                     if nr {
                         return Ok(Some("true".to_string()));
                     }
-                    return Ok(Some("false".to_string()));
+                    Ok(Some("false".to_string()))
                 }
-                None => return Ok(None),
+                None => Ok(None),
             }
         }
-    };
+    }
 }
 
 // Asks for and saves the bookmark. Returns the shortname.

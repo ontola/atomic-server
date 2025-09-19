@@ -244,7 +244,7 @@ fn parse_anonymous_resource(
         if prop == "@id" || prop == urls::LOCAL_ID {
             return Err(AtomicError::parse_error(
                 "`@id` and `localId` are not allowed in anonymous resources",
-                subject.as_deref(),
+                subject,
                 Some(prop),
             ));
         }
@@ -263,7 +263,7 @@ fn parse_propval(
     store: &impl crate::Storelike,
     parse_opts: &ParseOpts,
 ) -> AtomicResult<(String, Value)> {
-    let prop = try_to_subject(&key, &key, parse_opts)?;
+    let prop = try_to_subject(key, key, parse_opts)?;
     let property = store.get_property(&prop)?;
 
     let atomic_val: Value = match property.data_type {
@@ -271,17 +271,17 @@ fn parse_propval(
             match val {
                 serde_json::Value::String(str) => {
                     // If the value is not a valid URL, and we have an importer, we can generate_id_from_local_id
-                    let url = try_to_subject(&str, &prop, parse_opts)?;
+                    let url = try_to_subject(str, &prop, parse_opts)?;
                     Value::new(&url, &property.data_type)?
                 }
                 serde_json::Value::Object(map) => {
-                    let propvals = parse_anonymous_resource(&map, subject, store, parse_opts)?;
+                    let propvals = parse_anonymous_resource(map, subject, store, parse_opts)?;
                     Value::NestedResource(SubResource::Nested(propvals))
                 }
                 _ => {
                     return Err(AtomicError::parse_error(
                         "Invalid value for AtomicUrl, not a string or object",
-                        subject.as_deref(),
+                        subject,
                         Some(&prop),
                     ));
                 }
@@ -291,7 +291,7 @@ fn parse_propval(
             let serde_json::Value::Array(array) = val else {
                 return Err(AtomicError::parse_error(
                     "Invalid value for ResourceArray, not an array",
-                    subject.as_deref(),
+                    subject,
                     Some(&prop),
                 ));
             };
@@ -300,18 +300,18 @@ fn parse_propval(
             for item in array {
                 match item {
                     serde_json::Value::String(str) => {
-                        let url = try_to_subject(&str, &prop, parse_opts)?;
+                        let url = try_to_subject(str, &prop, parse_opts)?;
                         newvec.push(SubResource::Subject(url))
                     }
                     // If it's an Object, it can be either an anonymous or a full resource.
                     serde_json::Value::Object(map) => {
-                        let propvals = parse_anonymous_resource(&map, subject, store, parse_opts)?;
+                        let propvals = parse_anonymous_resource(map, subject, store, parse_opts)?;
                         newvec.push(SubResource::Nested(propvals))
                     }
                     err => {
                         return Err(AtomicError::parse_error(
                             &format!("Found non-string item in resource array: {err}."),
-                            subject.as_deref(),
+                            subject,
                             Some(&prop),
                         ))
                     }
@@ -323,7 +323,7 @@ fn parse_propval(
             let serde_json::Value::String(str) = val else {
                 return Err(AtomicError::parse_error(
                     "Invalid value for String, not a string",
-                    subject.as_deref(),
+                    subject,
                     Some(&prop),
                 ));
             };
@@ -334,51 +334,51 @@ fn parse_propval(
             let serde_json::Value::String(str) = val else {
                 return Err(AtomicError::parse_error(
                     "Invalid value for Slug, not a string",
-                    subject.as_deref(),
+                    subject,
                     Some(&prop),
                 ));
             };
 
-            Value::new(&str, &DataType::Slug)?
+            Value::new(str, &DataType::Slug)?
         }
         DataType::Markdown => {
             let serde_json::Value::String(str) = val else {
                 return Err(AtomicError::parse_error(
                     "Invalid value for Markdown, not a string",
-                    subject.as_deref(),
+                    subject,
                     Some(&prop),
                 ));
             };
 
-            Value::new(&str, &DataType::Markdown)?
+            Value::new(str, &DataType::Markdown)?
         }
         DataType::Uri => {
             let serde_json::Value::String(str) = val else {
                 return Err(AtomicError::parse_error(
                     "Invalid value for URI, not a string",
-                    subject.as_deref(),
+                    subject,
                     Some(&prop),
                 ));
             };
 
-            Value::new(&str, &DataType::Uri)?
+            Value::new(str, &DataType::Uri)?
         }
         DataType::Date => {
             let serde_json::Value::String(str) = val else {
                 return Err(AtomicError::parse_error(
                     "Invalid value for Date, not a string",
-                    subject.as_deref(),
+                    subject,
                     Some(&prop),
                 ));
             };
 
-            Value::new(&str, &DataType::Date)?
+            Value::new(str, &DataType::Date)?
         }
         DataType::Boolean => {
             let serde_json::Value::Bool(bool) = val else {
                 return Err(AtomicError::parse_error(
                     "Invalid value for Boolean, not a boolean",
-                    subject.as_deref(),
+                    subject,
                     Some(&prop),
                 ));
             };
@@ -389,7 +389,7 @@ fn parse_propval(
             let serde_json::Value::Number(num) = val else {
                 return Err(AtomicError::parse_error(
                     "Invalid value for Integer, not a number",
-                    subject.as_deref(),
+                    subject,
                     Some(&prop),
                 ));
             };
@@ -400,7 +400,7 @@ fn parse_propval(
             let serde_json::Value::Number(num) = val else {
                 return Err(AtomicError::parse_error(
                     "Invalid value for Float, not a number",
-                    subject.as_deref(),
+                    subject,
                     Some(&prop),
                 ));
             };
@@ -411,7 +411,7 @@ fn parse_propval(
             let serde_json::Value::Number(num) = val else {
                 return Err(AtomicError::parse_error(
                     "Invalid value for Timestamp, not a string",
-                    subject.as_deref(),
+                    subject,
                     Some(&prop),
                 ));
             };
@@ -422,7 +422,7 @@ fn parse_propval(
         DataType::Unsupported(s) => {
             return Err(AtomicError::parse_error(
                 &format!("Unsupported datatype: {s}"),
-                subject.as_deref(),
+                subject,
                 Some(&prop),
             ));
         }
@@ -578,7 +578,7 @@ fn parse_json_ad_map_to_resource(
                 .unwrap()
         }
     };
-    Ok(r.into())
+    Ok(r)
 }
 
 fn generate_id_from_local_id(importer_subject: &str, local_id: &str) -> String {
@@ -742,7 +742,7 @@ mod test {
         assert_eq!(found.get(urls::NAME).unwrap().to_string(), "My resource");
 
         // LocalId should be removed from the imported resource
-        assert_eq!(found.get(urls::LOCAL_ID).is_err(), true);
+        assert!(found.get(urls::LOCAL_ID).is_err());
     }
     #[test]
     fn import_resource_with_json() {
@@ -785,7 +785,7 @@ mod test {
         assert_eq!(found.get(urls::NAME).unwrap().to_string(), "My resource");
 
         // LocalId should be removed from the imported resource
-        assert_eq!(found.get(urls::LOCAL_ID).is_err(), true);
+        assert!(found.get(urls::LOCAL_ID).is_err());
     }
 
     #[test]

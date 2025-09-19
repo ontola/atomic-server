@@ -36,7 +36,7 @@ use crate::{
     },
     endpoints::{Endpoint, HandleGetContext},
     errors::{AtomicError, AtomicResult},
-    plugins::plugins,
+    plugins,
     resources::PropVals,
     storelike::{Query, QueryResult, ResourceResponse, Storelike},
     values::SortableValue,
@@ -99,7 +99,7 @@ impl Db {
         } else {
             path.to_path_buf()
         };
-        
+
         tracing::info!("Opening SQLite database at {:?}", db_path);
 
         // Ensure the directory exists
@@ -108,13 +108,14 @@ impl Db {
         }
 
         // Create connection manager and pool
-        let manager = SqliteConnectionManager::file(&db_path)
-            .with_init(|conn: &mut rusqlite::Connection| -> Result<(), rusqlite::Error> {
+        let manager = SqliteConnectionManager::file(&db_path).with_init(
+            |conn: &mut rusqlite::Connection| -> Result<(), rusqlite::Error> {
                 configure_sqlite_for_r2d2(conn)?;
                 initialize_tables_for_r2d2(conn)?;
                 Ok(())
-            });
-        
+            },
+        );
+
         let pool = Pool::builder()
             .min_idle(Some(1))
             .max_size(10)
@@ -127,18 +128,18 @@ impl Db {
             path: db_path,
             default_agent: Arc::new(std::sync::Mutex::new(None)),
             server_url,
-            endpoints: plugins::default_endpoints(),
-            class_extenders: plugins::default_class_extenders(),
+            endpoints: plugins::defaults::default_endpoints(),
+            class_extenders: plugins::defaults::default_class_extenders(),
             on_commit: None,
         };
-        
+
         // Run any necessary migrations
         migrate_maybe(&store).map_err(|e| format!("Error during migration: {:?}", e))?;
-        
+
         // Populate base models
         crate::populate::populate_base_models(&store)
             .map_err(|e| format!("Failed to populate base models: {}", e))?;
-        
+
         Ok(store)
     }
 
@@ -188,7 +189,7 @@ impl Db {
         let subject = resource.get_subject();
         let propvals = resource.get_propvals();
 
-        let resource_bin = encode_propvals(&propvals)?;
+        let resource_bin = encode_propvals(propvals)?;
 
         transaction.push(Operation {
             tree: Tree::Resources,
@@ -214,10 +215,14 @@ impl Db {
                 .map(Ok),
         )
     }
-    
+
     /// Get a database connection from the pool (for internal use by search implementations)
-    pub fn get_connection(&self) -> Result<r2d2::PooledConnection<r2d2_sqlite::SqliteConnectionManager>, String> {
-        self.pool.get().map_err(|e| format!("Failed to get connection: {}", e))
+    pub fn get_connection(
+        &self,
+    ) -> Result<r2d2::PooledConnection<r2d2_sqlite::SqliteConnectionManager>, String> {
+        self.pool
+            .get()
+            .map_err(|e| format!("Failed to get connection: {}", e))
     }
 
     /// Constructs the value index from all resources in the store. Could take a while.
@@ -250,17 +255,18 @@ impl Db {
     /// Optimized version with connection pooling
     #[instrument(skip(self))]
     fn set_propvals(&self, subject: &str, propvals: &PropVals) -> AtomicResult<()> {
-        let resource_bin = encode_propvals(&propvals)?;
+        let resource_bin = encode_propvals(propvals)?;
 
-        let conn = self.pool.get()
+        let conn = self
+            .pool
+            .get()
             .map_err(|e| format!("Failed to get connection from pool: {}", e))?;
-        
+
         // Use prepared statement for better performance
-        let mut stmt = conn.prepare_cached(
-            "INSERT OR REPLACE INTO resources (key, value) VALUES (?1, ?2)"
-        )
-        .map_err(|e| format!("Failed to prepare statement: {}", e))?;
-        
+        let mut stmt = conn
+            .prepare_cached("INSERT OR REPLACE INTO resources (key, value) VALUES (?1, ?2)")
+            .map_err(|e| format!("Failed to prepare statement: {}", e))?;
+
         stmt.execute(params![subject.as_bytes(), resource_bin])
             .map_err(|e| format!("Failed to set propvals: {}", e))?;
 
@@ -277,16 +283,20 @@ impl Db {
     /// Optimized version with connection pooling
     #[instrument(skip(self), fields(subject))]
     fn get_propvals(&self, subject: &str) -> AtomicResult<PropVals> {
-        let conn = self.pool.get()
+        let conn = self
+            .pool
+            .get()
             .map_err(|e| format!("Failed to get connection from pool: {}", e))?;
-        
+
         // Use prepared statement for better performance
-        let result = conn.prepare_cached("SELECT value FROM resources WHERE key = ?1")
+        let result = conn
+            .prepare_cached("SELECT value FROM resources WHERE key = ?1")
             .and_then(|mut stmt| {
                 stmt.query_row(params![subject.as_bytes()], |row| {
                     let value: Vec<u8> = row.get(0)?;
                     Ok(value)
-                }).optional()
+                })
+                .optional()
             })
             .map_err(|e| format!("Database query error: {}", e))?;
 
@@ -295,28 +305,30 @@ impl Db {
                 let propval: PropVals = decode_propvals(&binpropval)?;
                 Ok(propval)
             }
-            None => {
-                Err(AtomicError::not_found(format!(
-                    "Resource {} not found",
-                    subject
-                )))
-            }
+            None => Err(AtomicError::not_found(format!(
+                "Resource {} not found",
+                subject
+            ))),
         }
     }
 
     /// Removes all values from the indexes.
     pub fn clear_index(&self) -> AtomicResult<()> {
-        let conn = self.pool.get()
+        let conn = self
+            .pool
+            .get()
             .map_err(|e| format!("Failed to get connection from pool: {}", e))?;
-        
-        conn.execute_batch("
+
+        conn.execute_batch(
+            "
             DELETE FROM prop_val_sub;
             DELETE FROM val_prop_sub;
             DELETE FROM query_members;
             DELETE FROM watched_queries;
-        ")
+        ",
+        )
         .map_err(|e| format!("Failed to clear index: {}", e))?;
-        
+
         Ok(())
     }
 
@@ -339,10 +351,12 @@ impl Db {
     /// Helper to get a value from a table by key (restored for compatibility)
     #[allow(dead_code)]
     fn get_table_value(&self, table: &str, key: &[u8]) -> AtomicResult<Option<Vec<u8>>> {
-        let conn = self.pool.get()
+        let conn = self
+            .pool
+            .get()
             .map_err(|e| format!("Failed to get connection from pool: {}", e))?;
         let query = format!("SELECT value FROM {} WHERE key = ?1", table);
-        
+
         conn.query_row(&query, params![key], |row| row.get(0))
             .optional()
             .map_err(|e| format!("Failed to get value from {}: {}", table, e).into())
@@ -351,13 +365,18 @@ impl Db {
     /// Helper to set a value in a table (restored for compatibility)
     #[allow(dead_code)]
     fn set_table_value(&self, table: &str, key: &[u8], value: &[u8]) -> AtomicResult<()> {
-        let conn = self.pool.get()
+        let conn = self
+            .pool
+            .get()
             .map_err(|e| format!("Failed to get connection from pool: {}", e))?;
-        let query = format!("INSERT OR REPLACE INTO {} (key, value) VALUES (?1, ?2)", table);
-        
+        let query = format!(
+            "INSERT OR REPLACE INTO {} (key, value) VALUES (?1, ?2)",
+            table
+        );
+
         conn.execute(&query, params![key, value])
             .map_err(|e| format!("Failed to set value in {}: {}", table, e))?;
-        
+
         Ok(())
     }
 
@@ -405,10 +424,13 @@ impl Db {
             return Ok(());
         }
 
-        let mut conn = self.pool.get()
+        let mut conn = self
+            .pool
+            .get()
             .map_err(|e| format!("Failed to get connection from pool: {}", e))?;
-        
-        let tx = conn.transaction()
+
+        let tx = conn
+            .transaction()
             .map_err(|e| format!("Failed to start transaction: {}", e))?;
 
         // Group operations by table for batch processing
@@ -735,15 +757,13 @@ impl Storelike for Db {
         if opts.update_index {
             if let Some(old) = &commit_response.resource_old {
                 for atom in &commit_response.remove_atoms {
-                    self
-                        .remove_atom_from_index(atom, old, &mut transaction)
+                    self.remove_atom_from_index(atom, old, &mut transaction)
                         .map_err(|e| format!("Error removing atom from index: {e}  Atom: {e}"))?
                 }
             }
             if let Some(new) = &commit_response.resource_new {
                 for atom in &commit_response.add_atoms {
-                    self
-                        .add_atom_to_index(atom, new, &mut transaction)
+                    self.add_atom_to_index(atom, new, &mut transaction)
                         .map_err(|e| format!("Error adding atom to index: {e}  Atom: {e}"))?
                 }
             }
@@ -925,12 +945,12 @@ impl Storelike for Db {
                 return Box::new(std::iter::empty());
             }
         };
-        
+
         // Query all resources from the database with prepared statement caching
         let mut stmt = conn
             .prepare("SELECT key, value FROM resources")
             .expect("Failed to prepare statement");
-        
+
         let resource_iter = stmt
             .query_map([], |row| {
                 let key: Vec<u8> = row.get(0)?;
@@ -938,22 +958,22 @@ impl Storelike for Db {
                 Ok((key, value))
             })
             .expect("Failed to query resources");
-        
+
         // Convert the result into a vec to avoid lifetime issues
         let resources: Vec<Resource> = resource_iter
             .filter_map(|item| {
                 let (key, value) = item.ok()?;
                 let subject = String::from_utf8(key).ok()?;
-                
+
                 if !include_external && !subject.starts_with(&self_url) {
                     return None;
                 }
-                
+
                 let propvals: PropVals = decode_propvals(&value).ok()?;
                 Some(Resource::from_propvals(propvals, subject))
             })
             .collect();
-        
+
         Box::new(resources.into_iter())
     }
 
@@ -1006,18 +1026,27 @@ impl Storelike for Db {
 }
 
 /// Process operations for a specific table in batches for better performance
-fn process_table_operations(tx: &rusqlite::Transaction, table_name: &str, operations: &[&Operation]) -> AtomicResult<()> {
+fn process_table_operations(
+    tx: &rusqlite::Transaction,
+    table_name: &str,
+    operations: &[&Operation],
+) -> AtomicResult<()> {
     if operations.is_empty() {
         return Ok(());
     }
 
     // Prepare statements once per batch
-    let insert_sql = format!("INSERT OR REPLACE INTO {} (key, value) VALUES (?1, ?2)", table_name);
+    let insert_sql = format!(
+        "INSERT OR REPLACE INTO {} (key, value) VALUES (?1, ?2)",
+        table_name
+    );
     let delete_sql = format!("DELETE FROM {} WHERE key = ?1", table_name);
-    
-    let mut insert_stmt = tx.prepare_cached(&insert_sql)
+
+    let mut insert_stmt = tx
+        .prepare_cached(&insert_sql)
         .map_err(|e| format!("Failed to prepare insert for {}: {}", table_name, e))?;
-    let mut delete_stmt = tx.prepare_cached(&delete_sql)
+    let mut delete_stmt = tx
+        .prepare_cached(&delete_sql)
         .map_err(|e| format!("Failed to prepare delete for {}: {}", table_name, e))?;
 
     for op in operations {
@@ -1042,34 +1071,35 @@ fn process_table_operations(tx: &rusqlite::Transaction, table_name: &str, operat
 fn configure_sqlite_for_r2d2(conn: &mut rusqlite::Connection) -> Result<(), rusqlite::Error> {
     // Enable WAL mode for concurrent readers
     conn.pragma_update(None, "journal_mode", "WAL")?;
-    
+
     // Memory-mapped I/O for faster reads (512MB)
     conn.pragma_update(None, "mmap_size", 536870912)?;
-    
+
     // Larger page size for blob storage (8KB for better blob performance)
     conn.pragma_update(None, "page_size", 8192)?;
-    
+
     // Aggressive caching (128MB)
     conn.pragma_update(None, "cache_size", -131072)?;
-    
-    // Reduce sync overhead while maintaining durability  
+
+    // Reduce sync overhead while maintaining durability
     conn.pragma_update(None, "synchronous", "NORMAL")?;
-    
+
     // Keep temporary indices in memory
     conn.pragma_update(None, "temp_store", "MEMORY")?;
-    
+
     // Optimize WAL checkpointing for performance (less frequent but more efficient)
     conn.pragma_update(None, "wal_autocheckpoint", 2000)?;
-    
+
     // Enable query planner optimizations (best effort, ignore failures)
     let _ = conn.execute_batch("PRAGMA optimize;");
-    
+
     Ok(())
 }
 
 /// Initialize SQLite tables for each tree structure (for r2d2 init)
 fn initialize_tables_for_r2d2(conn: &mut rusqlite::Connection) -> Result<(), rusqlite::Error> {
-    conn.execute_batch("
+    conn.execute_batch(
+        "
         -- Main resources table
         CREATE TABLE IF NOT EXISTS resources (
             key BLOB PRIMARY KEY,
@@ -1121,45 +1151,51 @@ fn initialize_tables_for_r2d2(conn: &mut rusqlite::Connection) -> Result<(), rus
             key TEXT PRIMARY KEY,
             value TEXT
         );
-    ")?;
-    
+    ",
+    )?;
+
     Ok(())
 }
 
 /// Configure SQLite for optimal performance
 #[allow(dead_code)]
-fn configure_sqlite(conn: &rusqlite::Connection) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+fn configure_sqlite(
+    conn: &rusqlite::Connection,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Enable WAL mode for concurrent readers
     conn.pragma_update(None, "journal_mode", "WAL")?;
-    
+
     // Memory-mapped I/O for faster reads (512MB)
     conn.pragma_update(None, "mmap_size", 536870912)?;
-    
+
     // Larger page size for blob storage (8KB for better blob performance)
     conn.pragma_update(None, "page_size", 8192)?;
-    
+
     // Aggressive caching (128MB)
     conn.pragma_update(None, "cache_size", -131072)?;
-    
-    // Reduce sync overhead while maintaining durability  
+
+    // Reduce sync overhead while maintaining durability
     conn.pragma_update(None, "synchronous", "NORMAL")?;
-    
+
     // Keep temporary indices in memory
     conn.pragma_update(None, "temp_store", "MEMORY")?;
-    
+
     // Optimize WAL checkpointing for performance (less frequent but more efficient)
     conn.pragma_update(None, "wal_autocheckpoint", 2000)?;
-    
+
     // Enable query planner optimizations (best effort, ignore failures)
     let _ = conn.execute_batch("PRAGMA optimize;");
-    
+
     Ok(())
 }
 
 /// Initialize SQLite tables for each tree structure
 #[allow(dead_code)]
-fn initialize_tables(conn: &rusqlite::Connection) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    conn.execute_batch("
+fn initialize_tables(
+    conn: &rusqlite::Connection,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    conn.execute_batch(
+        "
         -- Main resources table
         CREATE TABLE IF NOT EXISTS resources (
             key BLOB PRIMARY KEY,
@@ -1189,8 +1225,9 @@ fn initialize_tables(conn: &rusqlite::Connection) -> Result<(), Box<dyn std::err
             key BLOB PRIMARY KEY,
             value BLOB NOT NULL
         ) WITHOUT ROWID;
-    ")?;
-    
+    ",
+    )?;
+
     Ok(())
 }
 
@@ -1210,13 +1247,13 @@ mod tests_sqlite_config;
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_db_debug_format() {
         let temp_dir = tempfile::TempDir::new().unwrap();
         let db_path = temp_dir.path().join("debug_test.db");
         let store = Db::init(&db_path, "http://localhost".to_string()).unwrap();
-        
+
         let debug_str = format!("{:?}", store);
         assert!(debug_str.contains("Db"));
         assert!(debug_str.contains("server_url"));

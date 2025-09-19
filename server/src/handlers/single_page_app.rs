@@ -61,12 +61,7 @@ impl From<ResourceResponse> for MetaTags {
             ResourceResponse::ResourceWithReferenced(ref resource, _) => {
                 let mut tags: MetaTags = resource.clone().into();
 
-                let json = if let Ok(serialized) = rr.to_json_ad() {
-                    // TODO: also fetch the parents for extra fast first renders.
-                    Some(serialized)
-                } else {
-                    None
-                };
+                let json = rr.to_json_ad().ok();
 
                 tags.json = json;
 
@@ -94,12 +89,7 @@ impl From<Resource> for MetaTags {
         } else {
             "/default_social_preview.jpg".to_string()
         };
-        let json = if let Ok(serialized) = r.to_json_ad() {
-            // TODO: also fetch the parents for extra fast first renders.
-            Some(serialized)
-        } else {
-            None
-        };
+        let json = r.to_json_ad().ok();
         Self {
             description,
             title,

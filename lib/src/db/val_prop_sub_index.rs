@@ -52,36 +52,45 @@ pub fn find_in_val_prop_sub_index(store: &Db, val: &Value, prop: Option<&str>) -
         prefix.extend(prop.as_bytes());
         prefix.extend([SEPARATION_BIT]);
     }
-    
+
     // Create an exclusive upper bound by appending 0xFF
     let mut prefix_end = prefix.clone();
     prefix_end.push(0xFF);
-    
+
     let conn_result = store.pool.get();
     if conn_result.is_err() {
-        return Box::new(std::iter::once(Err("Failed to get connection from pool".into())));
+        return Box::new(std::iter::once(Err(
+            "Failed to get connection from pool".into()
+        )));
     }
     let conn = conn_result.unwrap();
-    
+
     let stmt_result = conn
         .prepare_cached("SELECT key FROM val_prop_sub WHERE key >= ?1 AND key < ?2 ORDER BY key");
-    
+
     if let Err(e) = stmt_result {
-        return Box::new(std::iter::once(Err(format!("Failed to prepare statement: {}", e).into())));
+        return Box::new(std::iter::once(Err(format!(
+            "Failed to prepare statement: {}",
+            e
+        )
+        .into())));
     }
     let mut stmt = stmt_result.unwrap();
-    
-    let results: Vec<Vec<u8>> = match stmt
-        .query_map(params![prefix, prefix_end], |row| {
-            let key: Vec<u8> = row.get(0)?;
-            Ok(key)
-        }) {
+
+    let results: Vec<Vec<u8>> = match stmt.query_map(params![prefix, prefix_end], |row| {
+        let key: Vec<u8> = row.get(0)?;
+        Ok(key)
+    }) {
         Ok(iter) => iter.filter_map(Result::ok).collect(),
         Err(e) => {
-            return Box::new(std::iter::once(Err(format!("Failed to query val_prop_sub: {}", e).into())));
+            return Box::new(std::iter::once(Err(format!(
+                "Failed to query val_prop_sub: {}",
+                e
+            )
+            .into())));
         }
     };
-    
+
     Box::new(results.into_iter().map(|key| key_to_index_atom(&key)))
 }
 
@@ -129,19 +138,28 @@ mod test {
 
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("test.db");
-        
+
         let store = Db::init(&db_path, "http://localhost".to_string()).unwrap();
-        
+
         // Test finding atoms by value
         let test_value = Value::String("test_value".to_string());
         let iterator = find_in_val_prop_sub_index(&store, &test_value, None);
         let results: Vec<_> = iterator.collect();
-        assert_eq!(results.len(), 0, "Should return empty results for new database");
-        
+        assert_eq!(
+            results.len(),
+            0,
+            "Should return empty results for new database"
+        );
+
         // Test finding atoms by value and property
-        let iterator = find_in_val_prop_sub_index(&store, &test_value, Some("http://example.com/prop"));
+        let iterator =
+            find_in_val_prop_sub_index(&store, &test_value, Some("http://example.com/prop"));
         let results: Vec<_> = iterator.collect();
-        assert_eq!(results.len(), 0, "Should return empty results for new database");
+        assert_eq!(
+            results.len(),
+            0,
+            "Should return empty results for new database"
+        );
     }
 
     #[test]
@@ -152,15 +170,19 @@ mod test {
             sort_value: "sort_value".into(),
             subject: "http://example.com/subj".into(),
         };
-        
+
         let key = valpropsub_key(&atom);
-        
+
         // Verify the key structure - should start with ref_value
         assert!(key.starts_with(b"http://example.com/val"));
-        assert!(key.windows(b"http://example.com/prop".len()).any(|w| w == b"http://example.com/prop"));
+        assert!(key
+            .windows(b"http://example.com/prop".len())
+            .any(|w| w == b"http://example.com/prop"));
         assert!(key.windows(b"sort_value".len()).any(|w| w == b"sort_value"));
-        assert!(key.windows(b"http://example.com/subj".len()).any(|w| w == b"http://example.com/subj"));
-        
+        assert!(key
+            .windows(b"http://example.com/subj".len())
+            .any(|w| w == b"http://example.com/subj"));
+
         // Verify separation bits are present
         let separation_count = key.iter().filter(|&&b| b == SEPARATION_BIT).count();
         assert_eq!(separation_count, 3, "Should have exactly 3 separation bits");
@@ -174,10 +196,10 @@ mod test {
             sort_value: "sort_value".into(),
             subject: "http://example.com/subj".into(),
         };
-        
+
         let key = valpropsub_key(&atom);
         let parsed_atom = key_to_index_atom(&key).unwrap();
-        
+
         assert_eq!(parsed_atom.property, atom.property);
         assert_eq!(parsed_atom.ref_value, atom.ref_value);
         assert_eq!(parsed_atom.sort_value, atom.sort_value);
@@ -190,12 +212,15 @@ mod test {
         let invalid_key = b"invalid_key_without_separation_bits";
         let result = key_to_index_atom(invalid_key);
         assert!(result.is_err(), "Should fail to parse invalid key");
-        
+
         // Test with key that has wrong number of parts
         let mut key_with_wrong_parts = b"part1".to_vec();
         key_with_wrong_parts.push(SEPARATION_BIT);
         key_with_wrong_parts.extend(b"part2");
         let result = key_to_index_atom(&key_with_wrong_parts);
-        assert!(result.is_err(), "Should fail to parse key with wrong number of parts");
+        assert!(
+            result.is_err(),
+            "Should fail to parse key with wrong number of parts"
+        );
     }
 }

@@ -67,6 +67,7 @@ impl Handler<Subscribe> for CommitMonitor {
                     &ForAgent::AgentSubject(msg.agent.clone()),
                 ) {
                     Ok(_explanation) => {
+                        #[allow(clippy::mutable_key_type)]
                         let mut set = if let Some(set) = self.subscriptions.get(&msg.subject) {
                             set.clone()
                         } else {

@@ -48,7 +48,7 @@ async fn main_wrapped() -> errors::AtomicServerResult<()> {
                     pt
                 }
             };
-            let minimal_appstate = appstate::AppState::init_minimal(config.clone())?;
+            let minimal_appstate = appstate::AppState::init(config.clone())?;
             let outstr = minimal_appstate.store.export(!e.only_internal)?;
             std::fs::create_dir_all(path.parent().unwrap())
                 .map_err(|e| format!("Failed to create directory {:?}. {}", path, e))?;
@@ -64,11 +64,13 @@ async fn main_wrapped() -> errors::AtomicServerResult<()> {
                 std::fs::read_to_string(path)?
             };
 
-            let minimal_appstate = appstate::AppState::init_minimal(config.clone())?;
+            let minimal_appstate = appstate::AppState::init(config.clone())?;
             let importer_subject = if let Some(i) = &import_opts.parent {
                 i.into()
             } else {
-                urls::construct_path_import(&minimal_appstate.store.get_self_url().expect("No self url"))
+                urls::construct_path_import(
+                    &minimal_appstate.store.get_self_url().expect("No self url"),
+                )
             };
             let parse_opts = atomic_lib::parse::ParseOpts {
                 importer: Some(importer_subject),

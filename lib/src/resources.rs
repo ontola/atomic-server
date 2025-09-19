@@ -579,10 +579,13 @@ impl Resource {
     #[cfg(not(feature = "rdf"))]
     /// Serializes the Resource to the RDF Turtle format.
     pub fn to_turtle(&self, _store: &impl Storelike) -> AtomicResult<String> {
-        Err("RDF serialization is not enabled. Enable the 'rdf' feature flag to use Turtle format.".into())
+        Err(
+            "RDF serialization is not enabled. Enable the 'rdf' feature flag to use Turtle format."
+                .into(),
+        )
     }
 
-    pub fn vec_to_json_ad(resources: &Vec<Resource>) -> AtomicResult<String> {
+    pub fn vec_to_json_ad(resources: &[Resource]) -> AtomicResult<String> {
         let str = resources
             .iter()
             .map(|r| r.to_json_ad())
@@ -592,7 +595,7 @@ impl Resource {
         Ok(format!("[{}]", str))
     }
 
-    pub fn vec_to_json(resources: &Vec<Resource>, store: &impl Storelike) -> AtomicResult<String> {
+    pub fn vec_to_json(resources: &[Resource], store: &impl Storelike) -> AtomicResult<String> {
         let str = resources
             .iter()
             .map(|r| r.to_json(store))
@@ -603,7 +606,7 @@ impl Resource {
     }
 
     pub fn vec_to_json_ld(
-        resources: &Vec<Resource>,
+        resources: &[Resource],
         store: &impl Storelike,
     ) -> AtomicResult<String> {
         let str = resources
@@ -615,7 +618,7 @@ impl Resource {
         Ok(format!("[{}]", str))
     }
 
-    pub fn vec_to_atoms(resources: &Vec<Resource>) -> Vec<Atom> {
+    pub fn vec_to_atoms(resources: &[Resource]) -> Vec<Atom> {
         let mut atoms = Vec::new();
 
         for resource in resources {
@@ -627,7 +630,7 @@ impl Resource {
 
     #[cfg(feature = "rdf")]
     pub fn vec_to_n_triples(
-        resources: &Vec<Resource>,
+        resources: &[Resource],
         store: &impl Storelike,
     ) -> AtomicResult<String> {
         let atoms = Self::vec_to_atoms(resources);
@@ -636,7 +639,7 @@ impl Resource {
 
     #[cfg(feature = "rdf")]
     pub fn vec_to_turtle(
-        resources: &Vec<Resource>,
+        resources: &[Resource],
         store: &impl Storelike,
     ) -> AtomicResult<String> {
         let atoms = Self::vec_to_atoms(resources);
@@ -645,7 +648,7 @@ impl Resource {
 
     #[cfg(not(feature = "rdf"))]
     pub fn vec_to_n_triples(
-        _resources: &Vec<Resource>,
+        _resources: &[Resource],
         _store: &impl Storelike,
     ) -> AtomicResult<String> {
         Err("RDF serialization is not enabled. Enable the 'rdf' feature flag to use N-Triples format.".into())
@@ -653,10 +656,13 @@ impl Resource {
 
     #[cfg(not(feature = "rdf"))]
     pub fn vec_to_turtle(
-        _resources: &Vec<Resource>,
+        _resources: &[Resource],
         _store: &impl Storelike,
     ) -> AtomicResult<String> {
-        Err("RDF serialization is not enabled. Enable the 'rdf' feature flag to use Turtle format.".into())
+        Err(
+            "RDF serialization is not enabled. Enable the 'rdf' feature flag to use Turtle format."
+                .into(),
+        )
     }
 }
 
@@ -929,17 +935,21 @@ mod test {
         let store = init_store();
         let resource = store.get_resource(urls::DESCRIPTION).unwrap();
         let serialized = resource.to_n_triples(&store).unwrap();
-        
+
         // Should contain the resource subject and basic properties
         assert!(serialized.contains("description"));
         assert!(serialized.contains("atomicdata.dev"));
         assert!(!serialized.is_empty());
-        
+
         // N-Triples format should end lines with periods
         let lines: Vec<&str> = serialized.lines().collect();
         for line in lines {
             if !line.trim().is_empty() {
-                assert!(line.trim().ends_with('.'), "Line should end with period: {}", line);
+                assert!(
+                    line.trim().ends_with('.'),
+                    "Line should end with period: {}",
+                    line
+                );
             }
         }
     }
@@ -950,12 +960,12 @@ mod test {
         let store = init_store();
         let resource = store.get_resource(urls::DESCRIPTION).unwrap();
         let serialized = resource.to_turtle(&store).unwrap();
-        
+
         // Should contain the resource data
         assert!(serialized.contains("description"));
         assert!(serialized.contains("atomicdata.dev"));
         assert!(!serialized.is_empty());
-        
+
         // Turtle format is more compact and readable than N-Triples
         // It may contain prefixes or shorter representations
     }
@@ -967,13 +977,13 @@ mod test {
         let resource1 = store.get_resource(urls::DESCRIPTION).unwrap();
         let resource2 = store.get_resource(urls::CLASS).unwrap();
         let resources = vec![resource1, resource2];
-        
+
         // Test N-Triples
         let ntriples = Resource::vec_to_n_triples(&resources, &store).unwrap();
         assert!(ntriples.contains("description"));
         assert!(ntriples.contains("class"));
         assert!(!ntriples.is_empty());
-        
+
         // Test Turtle
         let turtle = Resource::vec_to_turtle(&resources, &store).unwrap();
         assert!(turtle.contains("description") || turtle.contains("class"));
@@ -985,12 +995,12 @@ mod test {
     fn rdf_methods_fail_without_feature() {
         let store = init_store();
         let resource = store.get_resource(urls::DESCRIPTION).unwrap();
-        
+
         // Should return appropriate error messages when RDF feature is not enabled
         let ntriples_result = resource.to_n_triples(&store);
         assert!(ntriples_result.is_err());
         assert!(ntriples_result.unwrap_err().to_string().contains("rdf"));
-        
+
         let turtle_result = resource.to_turtle(&store);
         assert!(turtle_result.is_err());
         assert!(turtle_result.unwrap_err().to_string().contains("rdf"));

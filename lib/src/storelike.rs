@@ -107,7 +107,10 @@ impl ResourceResponse {
 
     #[cfg(not(feature = "rdf"))]
     pub fn to_turtle(&self, _store: &impl Storelike) -> AtomicResult<String> {
-        Err("RDF serialization is not enabled. Enable the 'rdf' feature flag to use Turtle format.".into())
+        Err(
+            "RDF serialization is not enabled. Enable the 'rdf' feature flag to use Turtle format."
+                .into(),
+        )
     }
 
     /// Takes a vector of resources and returns a ResourceResponse::ResourceWithReferenced

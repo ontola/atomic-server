@@ -10,7 +10,6 @@ version = "0.40.0"
 
 # Enables benchmarks to use the features, such as Db
 [[bench]]
-all-features = true
 harness = false
 name = "benchmarks"
 # path = "benches/benchmarks.rs"
