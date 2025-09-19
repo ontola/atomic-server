@@ -48,8 +48,8 @@ async fn main_wrapped() -> errors::AtomicServerResult<()> {
                     pt
                 }
             };
-            let appstate = appstate::AppState::init(config.clone())?;
-            let outstr = appstate.store.export(!e.only_internal)?;
+            let minimal_appstate = appstate::AppState::init(config.clone())?;
+            let outstr = minimal_appstate.store.export(!e.only_internal)?;
             std::fs::create_dir_all(path.parent().unwrap())
                 .map_err(|e| format!("Failed to create directory {:?}. {}", path, e))?;
             let mut file = File::create(&path)
@@ -64,11 +64,13 @@ async fn main_wrapped() -> errors::AtomicServerResult<()> {
                 std::fs::read_to_string(path)?
             };
 
-            let appstate = appstate::AppState::init(config.clone())?;
+            let minimal_appstate = appstate::AppState::init(config.clone())?;
             let importer_subject = if let Some(i) = &import_opts.parent {
                 i.into()
             } else {
-                urls::construct_path_import(&appstate.store.get_self_url().expect("No self url"))
+                urls::construct_path_import(
+                    &minimal_appstate.store.get_self_url().expect("No self url"),
+                )
             };
             let parse_opts = atomic_lib::parse::ParseOpts {
                 importer: Some(importer_subject),
@@ -79,11 +81,12 @@ async fn main_wrapped() -> errors::AtomicServerResult<()> {
                 } else {
                     atomic_lib::parse::SaveOpts::Commit
                 },
-                signer: Some(appstate.store.get_default_agent()?),
+                signer: Some(minimal_appstate.store.get_default_agent()?),
             };
             println!("Importing...");
-            appstate.store.import(&readstring, &parse_opts)?;
-            appstate.search_state.add_all_resources(&appstate.store)?;
+            minimal_appstate.store.import(&readstring, &parse_opts)?;
+            // Note: Search index update is no longer done here to avoid Tantivy lock issues
+            // The search index can be rebuilt later with --rebuild-index if needed
             println!("Successfully imported {:?} to store.", import_opts.file);
             println!("WARNING: Your search index is not yet updated with these imported items. Run `--rebuild-index` to fix that.");
             Ok(())

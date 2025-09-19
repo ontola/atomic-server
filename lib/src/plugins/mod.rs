@@ -45,7 +45,7 @@ pub mod collections;
 pub mod export;
 pub mod files;
 pub mod path;
-pub mod plugins;
+pub mod defaults;
 pub mod prunetests;
 pub mod query;
 pub mod search;

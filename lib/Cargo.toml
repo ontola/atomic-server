@@ -10,7 +10,6 @@ version = "0.40.0"
 
 # Enables benchmarks to use the features, such as Db
 [[bench]]
-all-features = true
 harness = false
 name = "benchmarks"
 # path = "benches/benchmarks.rs"
@@ -30,8 +29,16 @@ ring = "0.17.6"
 rio_api = { version = "0.8", optional = true }
 rio_turtle = { version = "0.8", optional = true }
 serde = { version = "1", features = ["derive"] }
+fst = { version = "0.4", optional = true }
 serde_jcs = "0.1.0"
 serde_json = "1"
+rusqlite = { version = "0.37", optional = true, features = [
+    "bundled",
+    "backup",
+    "modern_sqlite",
+] }
+r2d2 = { version = "0.8", optional = true }
+r2d2_sqlite = { version = "0.31", optional = true }
 sled = { version = "0.34", optional = true, features = ["no_logs"] }
 toml = { version = "0.8", optional = true }
 tracing = "0.1"
@@ -45,9 +52,10 @@ criterion = "0.5"
 iai = "0.1"
 lazy_static = "1"
 ntest = "0.9"
+tempfile = "3"
 
 [features]
 config = ["directories", "toml"]
-db = ["sled", "rmp-serde", "bincode1"]
+db = ["rusqlite", "r2d2", "r2d2_sqlite", "sled", "rmp-serde", "bincode1", "fst"]
 html = ["kuchikiki", "lol_html", "html2md"]
 rdf = ["rio_api", "rio_turtle"]

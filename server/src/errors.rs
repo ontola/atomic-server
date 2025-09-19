@@ -32,6 +32,7 @@ impl std::fmt::Debug for AtomicServerError {
 }
 
 #[derive(Serialize)]
+#[allow(dead_code)]
 pub struct AppErrorResponse {
     pub error: String,
 }

@@ -4,7 +4,7 @@ use actix_web::{web, HttpRequest, HttpResponse};
 use atomic_lib::{urls, Resource, Storelike};
 
 use serde::Deserialize;
-use std::{collections::HashSet, path::PathBuf};
+use std::{collections::HashSet, path::{Path, PathBuf}};
 
 #[serde_with::serde_as]
 #[serde_with::skip_serializing_none]
@@ -118,8 +118,8 @@ pub fn build_prossesed_file_path(
     Ok(processed_file_path)
 }
 
-fn create_processed_folder_if_not_exists(base_path: &PathBuf) -> AtomicServerResult<()> {
-    let mut processed_folder = base_path.clone();
+fn create_processed_folder_if_not_exists(base_path: &Path) -> AtomicServerResult<()> {
+    let mut processed_folder = base_path.to_path_buf();
     processed_folder.push("processed");
     std::fs::create_dir_all(processed_folder)?;
     Ok(())

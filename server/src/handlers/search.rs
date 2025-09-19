@@ -122,6 +122,7 @@ pub async fn search_query(
 }
 
 #[derive(Debug, std::hash::Hash, Eq, PartialEq)]
+#[allow(dead_code)]
 pub struct StringAtom {
     pub subject: String,
     pub property: String,

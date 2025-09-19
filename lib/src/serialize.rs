@@ -404,4 +404,22 @@ mod test {
         // This could fail when the `description` resource changes
         assert!(serialized.lines().count() == 5);
     }
+
+    #[test]
+    #[cfg(feature = "rdf")]
+    fn serialize_turtle() {
+        use crate::Storelike;
+        let store = crate::Store::init().unwrap();
+        store.populate().unwrap();
+        let subject = crate::urls::DESCRIPTION;
+        let resource = store.get_resource(subject).unwrap();
+        let atoms = resource.to_atoms();
+        let serialized = atoms_to_turtle(atoms, &store).unwrap();
+        // Turtle format should be more compact than N-Triples and may contain prefixes
+        assert!(serialized.contains("description"));
+        // Should contain at least some triples
+        assert!(!serialized.is_empty());
+        // Turtle format should contain colons and semicolons
+        assert!(serialized.contains(":") || serialized.contains("@prefix"));
+    }
 }

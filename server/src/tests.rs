@@ -155,6 +155,117 @@ async fn server_tests() {
         body.as_str().contains("/results"),
         "response should be a search resource"
     );
+
+    // Test collection API endpoints with various query parameters
+
+    // Test basic collection with pagination
+    let req = build_request_authenticated("/properties?page_size=5&current_page=0", &appstate);
+    let resp = test::call_service(&app, req.to_request()).await;
+    assert!(
+        resp.status().is_success(),
+        "Collection pagination should work"
+    );
+    let body = get_body(resp);
+    assert!(
+        body.as_str().contains("page_size"),
+        "Should include page_size"
+    );
+    assert!(
+        body.as_str().contains("current_page"),
+        "Should include current_page"
+    );
+
+    // Test collection sorting
+    let req = build_request_authenticated(
+        "/properties?sort_by=https://atomicdata.dev/properties/name&sort_desc=true",
+        &appstate,
+    );
+    let resp = test::call_service(&app, req.to_request()).await;
+    assert!(resp.status().is_success(), "Collection sorting should work");
+    let body = get_body(resp);
+    assert!(
+        body.as_str().contains("sort_by"),
+        "Should include sort_by parameter"
+    );
+
+    // Test collection filtering by property and value
+    let req = build_request_authenticated("/properties?property=https://atomicdata.dev/properties/isA&value=https://atomicdata.dev/classes/Property", &appstate);
+    let resp = test::call_service(&app, req.to_request()).await;
+    assert!(
+        resp.status().is_success(),
+        "Collection filtering should work"
+    );
+
+    // Test nested resource inclusion
+    let req = build_request_authenticated("/properties?include_nested=true", &appstate);
+    let resp = test::call_service(&app, req.to_request()).await;
+    assert!(
+        resp.status().is_success(),
+        "Collection with nested resources should work"
+    );
+
+    // Test large page size (boundary testing)
+    let req = build_request_authenticated("/properties?page_size=1000", &appstate);
+    let resp = test::call_service(&app, req.to_request()).await;
+    assert!(
+        resp.status().is_success(),
+        "Collection with large page size should work"
+    );
+
+    // Test that members array is present in collection response
+    let req = build_request_authenticated("/properties", &appstate);
+    let resp = test::call_service(&app, req.to_request()).await;
+    assert!(resp.status().is_success());
+    let body = get_body(resp);
+
+    // Check that collection response has proper structure
+    assert!(body.as_str().contains("@id"), "Collection should have @id");
+
+    // Critical test: Collections must contain members
+    assert!(
+        body.as_str().contains("members") || body.as_str().contains("@members"),
+        "Collection must contain members field. Response body: {}",
+        &body.as_str()[..std::cmp::min(1000, body.len())]
+    );
+
+    // Test collection with pagination includes members
+    let req = build_request_authenticated("/properties?page_size=5&current_page=0", &appstate);
+    let resp = test::call_service(&app, req.to_request()).await;
+    assert!(
+        resp.status().is_success(),
+        "Collection pagination should work"
+    );
+    let body = get_body(resp);
+    assert!(
+        body.as_str().contains("page_size"),
+        "Should include page_size"
+    );
+    assert!(
+        body.as_str().contains("current_page"),
+        "Should include current_page"
+    );
+    assert!(
+        body.as_str().contains("members") || body.as_str().contains("@members"),
+        "Paginated collection must contain members field"
+    );
+
+    // Test collection with JSON-LD accept header includes members
+    let req = build_request_authenticated("/properties?page_size=5", &appstate)
+        .insert_header(("Accept", "application/ld+json"));
+    let resp = test::call_service(&app, req.to_request()).await;
+    assert!(
+        resp.status().is_success(),
+        "Collection should work with JSON-LD accept header"
+    );
+    let body = get_body(resp);
+    assert!(
+        body.as_str().contains("@context"),
+        "Should return JSON-LD format"
+    );
+    assert!(
+        body.as_str().contains("members") || body.as_str().contains("@members"),
+        "JSON-LD collection must contain members field"
+    );
 }
 
 /// Gets the body from the response as a String. Why doen't actix provide this?

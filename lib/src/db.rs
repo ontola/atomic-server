@@ -1,5 +1,5 @@
 //! Persistent, ACID compliant, threadsafe to-disk store.
-//! Powered by Sled - an embedded database.
+//! Powered by SQLite with connection pooling - an embedded relational database used as a key-value store.
 
 mod encoding;
 mod migrations;
@@ -14,9 +14,15 @@ mod val_prop_sub_index;
 use std::{
     collections::{HashMap, HashSet},
     fs,
-    sync::{Arc, Mutex},
+    path::PathBuf,
+    sync::Arc,
+    time::Duration,
     vec,
 };
+
+use r2d2::Pool;
+use r2d2_sqlite::SqliteConnectionManager;
+use rusqlite::{params, OptionalExtension};
 
 use crate::{
     agents::ForAgent,
@@ -30,7 +36,7 @@ use crate::{
     },
     endpoints::{Endpoint, HandleGetContext},
     errors::{AtomicError, AtomicResult},
-    plugins::plugins,
+    plugins,
     resources::PropVals,
     storelike::{Query, QueryResult, ResourceResponse, Storelike},
     values::SortableValue,
@@ -49,8 +55,6 @@ use self::{
     val_prop_sub_index::add_atom_to_valpropsub_index,
 };
 
-use sled::{transaction::TransactionError, Transactional};
-
 // A function called by the Store when a Commit is accepted
 type HandleCommit = Box<dyn Fn(&CommitResponse) + Send + Sync>;
 
@@ -60,7 +64,7 @@ pub type PropSubjectMap = HashMap<String, HashSet<String>>;
 
 /// The Db is a persistent on-disk Atomic Data store.
 /// It's an implementation of [Storelike].
-/// It uses [sled::Tree]s as Key Value stores.
+/// It uses SQLite tables as Key Value stores with connection pooling.
 /// It stores [Resource]s as [PropVals]s by their subject as key.
 /// It builds a value index for performant [Query]s.
 /// It keeps track of Queries and updates their index when [crate::Commit]s are applied.
@@ -68,21 +72,9 @@ pub type PropSubjectMap = HashMap<String, HashSet<String>>;
 /// `Db` should be easily, cheaply clone-able, as users of this library could have one `Db` per connection.
 #[derive(Clone)]
 pub struct Db {
-    /// The Key-Value store that contains all data.
-    /// Resources can be found using their Subject.
-    /// Try not to use this directly, but use the Trees.
-    db: sled::Db,
-    default_agent: Arc<Mutex<Option<crate::agents::Agent>>>,
-    /// Stores all resources. The Key is the Subject as a `string.as_bytes()`, the value a [PropVals]. Propvals must be serialized using [bincode].
-    resources: sled::Tree,
-    /// [Tree::ValPropSub]
-    reference_index: sled::Tree,
-    /// [Tree::PropValSub]
-    prop_val_sub_index: sled::Tree,
-    /// [Tree::QueryMembers]
-    query_index: sled::Tree,
-    /// [Tree::WatchedQueries]
-    watched_queries: sled::Tree,
+    /// Connection pool to SQLite database
+    pool: Pool<SqliteConnectionManager>,
+    default_agent: Arc<std::sync::Mutex<Option<crate::agents::Agent>>>,
     /// The address where the db will be hosted, e.g. http://localhost/
     server_url: String,
     /// Endpoints are checked whenever a resource is requested. They calculate (some properties of) the resource and return it.
@@ -100,31 +92,54 @@ impl Db {
     /// The server_url is the domain where the db will be hosted, e.g. http://localhost/
     /// It is used for distinguishing locally defined items from externally defined ones.
     pub fn init(path: &std::path::Path, server_url: String) -> AtomicResult<Db> {
-        tracing::info!("Opening database at {:?}", path);
+        // For SQLite, we need a file path, not a directory path
+        // If the path doesn't have an extension, add .db
+        let db_path = if path.extension().is_none() {
+            path.with_extension("db")
+        } else {
+            path.to_path_buf()
+        };
 
-        let db = sled::open(path).map_err(|e|format!("Failed opening DB at this location: {:?} . Is another instance of Atomic Server running? {}", path, e))?;
-        let resources = db.open_tree(Tree::Resources).map_err(|e| format!("Failed building resources. Your DB might be corrupt. Go back to a previous version and export your data. {}", e))?;
-        let reference_index = db.open_tree(Tree::ValPropSub)?;
-        let query_index = db.open_tree(Tree::QueryMembers)?;
-        let prop_val_sub_index = db.open_tree(Tree::PropValSub)?;
-        let watched_queries = db.open_tree(Tree::WatchedQueries)?;
+        tracing::info!("Opening SQLite database at {:?}", db_path);
+
+        // Ensure the directory exists
+        if let Some(parent) = db_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+
+        // Create connection manager and pool
+        let manager = SqliteConnectionManager::file(&db_path).with_init(
+            |conn: &mut rusqlite::Connection| -> Result<(), rusqlite::Error> {
+                configure_sqlite_for_r2d2(conn)?;
+                initialize_tables_for_r2d2(conn)?;
+                Ok(())
+            },
+        );
+
+        let pool = Pool::builder()
+            .min_idle(Some(1))
+            .max_size(10)
+            .connection_timeout(Duration::from_secs(5))
+            .build(manager)
+            .map_err(|e| format!("Failed to create connection pool: {}", e))?;
+
         let store = Db {
-            path: path.into(),
-            db,
-            default_agent: Arc::new(Mutex::new(None)),
-            resources,
-            reference_index,
-            query_index,
-            prop_val_sub_index,
+            pool,
+            path: db_path,
+            default_agent: Arc::new(std::sync::Mutex::new(None)),
             server_url,
-            watched_queries,
-            endpoints: plugins::default_endpoints(),
-            class_extenders: plugins::default_class_extenders(),
+            endpoints: plugins::defaults::default_endpoints(),
+            class_extenders: plugins::defaults::default_class_extenders(),
             on_commit: None,
         };
-        migrate_maybe(&store).map(|e| format!("Error during migration of database: {:?}", e))?;
+
+        // Run any necessary migrations
+        migrate_maybe(&store).map_err(|e| format!("Error during migration: {:?}", e))?;
+
+        // Populate base models
         crate::populate::populate_base_models(&store)
-            .map_err(|e| format!("Failed to populate base models. {}", e))?;
+            .map_err(|e| format!("Failed to populate base models: {}", e))?;
+
         Ok(store)
     }
 
@@ -133,10 +148,9 @@ impl Db {
     pub fn init_temp(id: &str) -> AtomicResult<Db> {
         let tmp_dir_path = format!(".temp/db/{}", id);
         let _try_remove_existing = std::fs::remove_dir_all(&tmp_dir_path);
-        let store = Db::init(
-            std::path::Path::new(&tmp_dir_path),
-            "https://localhost".into(),
-        )?;
+        fs::create_dir_all(&tmp_dir_path)?;
+        let db_path = PathBuf::from(&tmp_dir_path).join("atomic.db");
+        let store = Db::init(&db_path, "https://localhost".into())?;
         let agent = store.create_agent(None)?;
         store.set_default_agent(agent);
         store.populate()?;
@@ -175,7 +189,7 @@ impl Db {
         let subject = resource.get_subject();
         let propvals = resource.get_propvals();
 
-        let resource_bin = encode_propvals(&propvals)?;
+        let resource_bin = encode_propvals(propvals)?;
 
         transaction.push(Operation {
             tree: Tree::Resources,
@@ -202,12 +216,19 @@ impl Db {
         )
     }
 
+    /// Get a database connection from the pool (for internal use by search implementations)
+    pub fn get_connection(
+        &self,
+    ) -> Result<r2d2::PooledConnection<r2d2_sqlite::SqliteConnectionManager>, String> {
+        self.pool
+            .get()
+            .map_err(|e| format!("Failed to get connection: {}", e))
+    }
+
     /// Constructs the value index from all resources in the store. Could take a while.
     pub fn build_index(&self, include_external: bool) -> AtomicResult<()> {
         tracing::info!("Building index (this could take a few minutes for larger databases)");
-        let mut count = 0;
-
-        for r in self.all_resources(include_external) {
+        for (count, r) in self.all_resources(include_external).enumerate() {
             let mut transaction = Transaction::new();
             for atom in r.to_atoms_iter() {
                 self.add_atom_to_index(&atom, &r, &mut transaction)
@@ -216,16 +237,14 @@ impl Db {
             self.apply_transaction(&mut transaction)
                 .map_err(|e| format!("Failed to commit transaction. {}", e))?;
 
-            if count % 1000 == 0 {
-                tracing::info!("Building index, applied transaction: {}", count);
+            if (count + 1) % 1000 == 0 {
+                tracing::info!("Building index, applied transaction: {}", count + 1);
             }
 
-            if count % 10000 == 0 {
-                tracing::info!("Building index, flushing to disk");
-                self.db.flush()?;
+            if (count + 1) % 10000 == 0 {
+                tracing::info!("Building index, checkpoint");
+                // SQLite handles checkpointing automatically with WAL mode
             }
-
-            count += 1;
         }
 
         tracing::info!("Building index finished!");
@@ -233,11 +252,24 @@ impl Db {
     }
 
     /// Internal method for fetching Resource data.
+    /// Optimized version with connection pooling
     #[instrument(skip(self))]
     fn set_propvals(&self, subject: &str, propvals: &PropVals) -> AtomicResult<()> {
-        let resource_bin = encode_propvals(&propvals)?;
+        let resource_bin = encode_propvals(propvals)?;
 
-        self.resources.insert(subject.as_bytes(), resource_bin)?;
+        let conn = self
+            .pool
+            .get()
+            .map_err(|e| format!("Failed to get connection from pool: {}", e))?;
+
+        // Use prepared statement for better performance
+        let mut stmt = conn
+            .prepare_cached("INSERT OR REPLACE INTO resources (key, value) VALUES (?1, ?2)")
+            .map_err(|e| format!("Failed to prepare statement: {}", e))?;
+
+        stmt.execute(params![subject.as_bytes(), resource_bin])
+            .map_err(|e| format!("Failed to set propvals: {}", e))?;
+
         Ok(())
     }
 
@@ -248,33 +280,55 @@ impl Db {
     }
 
     /// Finds resource by Subject, return PropVals HashMap
-    /// Deals with the binary API of Sled
+    /// Optimized version with connection pooling
     #[instrument(skip(self), fields(subject))]
     fn get_propvals(&self, subject: &str) -> AtomicResult<PropVals> {
-        let propval_maybe = self
-            .resources
-            .get(subject.as_bytes())
-            .map_err(|e| format!("Can't open {} from store: {}", subject, e))?;
-        match propval_maybe.as_ref() {
+        let conn = self
+            .pool
+            .get()
+            .map_err(|e| format!("Failed to get connection from pool: {}", e))?;
+
+        // Use prepared statement for better performance
+        let result = conn
+            .prepare_cached("SELECT value FROM resources WHERE key = ?1")
+            .and_then(|mut stmt| {
+                stmt.query_row(params![subject.as_bytes()], |row| {
+                    let value: Vec<u8> = row.get(0)?;
+                    Ok(value)
+                })
+                .optional()
+            })
+            .map_err(|e| format!("Database query error: {}", e))?;
+
+        match result {
             Some(binpropval) => {
-                let propval: PropVals = decode_propvals(binpropval)?;
+                let propval: PropVals = decode_propvals(&binpropval)?;
                 Ok(propval)
             }
-            None => {
-                return Err(AtomicError::not_found(format!(
-                    "Resource {} not found",
-                    subject
-                )))
-            }
+            None => Err(AtomicError::not_found(format!(
+                "Resource {} not found",
+                subject
+            ))),
         }
     }
 
     /// Removes all values from the indexes.
     pub fn clear_index(&self) -> AtomicResult<()> {
-        self.reference_index.clear()?;
-        self.prop_val_sub_index.clear()?;
-        self.query_index.clear()?;
-        self.watched_queries.clear()?;
+        let conn = self
+            .pool
+            .get()
+            .map_err(|e| format!("Failed to get connection from pool: {}", e))?;
+
+        conn.execute_batch(
+            "
+            DELETE FROM prop_val_sub;
+            DELETE FROM val_prop_sub;
+            DELETE FROM query_members;
+            DELETE FROM watched_queries;
+        ",
+        )
+        .map_err(|e| format!("Failed to clear index: {}", e))?;
+
         Ok(())
     }
 
@@ -284,26 +338,46 @@ impl Db {
         self.clear_index()?;
         let path = self.path.clone();
         drop(self);
-        fs::remove_dir_all(path)?;
+        fs::remove_file(&path)?;
+        // Remove SQLite WAL and SHM files if they exist
+        let _ = fs::remove_file(path.with_extension("db-wal"));
+        let _ = fs::remove_file(path.with_extension("db-shm"));
+        if let Some(parent) = path.parent() {
+            let _ = fs::remove_dir(parent);
+        }
         Ok(())
     }
 
-    fn map_sled_item_to_resource(
-        item: Result<(sled::IVec, sled::IVec), sled::Error>,
-        self_url: String,
-        include_external: bool,
-    ) -> Option<Resource> {
-        let (subject, resource_bin) = item.expect(DB_CORRUPT_MSG);
-        let subject: String = String::from_utf8_lossy(&subject).to_string();
+    /// Helper to get a value from a table by key (restored for compatibility)
+    #[allow(dead_code)]
+    fn get_table_value(&self, table: &str, key: &[u8]) -> AtomicResult<Option<Vec<u8>>> {
+        let conn = self
+            .pool
+            .get()
+            .map_err(|e| format!("Failed to get connection from pool: {}", e))?;
+        let query = format!("SELECT value FROM {} WHERE key = ?1", table);
 
-        if !include_external && !subject.starts_with(&self_url) {
-            return None;
-        }
+        conn.query_row(&query, params![key], |row| row.get(0))
+            .optional()
+            .map_err(|e| format!("Failed to get value from {}: {}", table, e).into())
+    }
 
-        let propvals: PropVals = decode_propvals(&resource_bin)
-            .unwrap_or_else(|e| panic!("{}. {}", corrupt_db_message(&subject), e));
+    /// Helper to set a value in a table (restored for compatibility)
+    #[allow(dead_code)]
+    fn set_table_value(&self, table: &str, key: &[u8], value: &[u8]) -> AtomicResult<()> {
+        let conn = self
+            .pool
+            .get()
+            .map_err(|e| format!("Failed to get connection from pool: {}", e))?;
+        let query = format!(
+            "INSERT OR REPLACE INTO {} (key, value) VALUES (?1, ?2)",
+            table
+        );
 
-        Some(Resource::from_propvals(propvals, subject))
+        conn.execute(&query, params![key, value])
+            .map_err(|e| format!("Failed to set value in {}: {}", table, e))?;
+
+        Ok(())
     }
 
     fn build_index_for_atom(
@@ -342,85 +416,49 @@ impl Db {
     }
 
     /// Apply made changes to the store.
+    /// Optimized version with connection pooling and batch operations
     #[instrument(skip(self))]
     fn apply_transaction(&self, transaction: &mut Transaction) -> AtomicResult<()> {
-        let mut batch_resources = sled::Batch::default();
-        let mut batch_propvalsub = sled::Batch::default();
-        let mut batch_valpropsub = sled::Batch::default();
-        let mut batch_watched_queries = sled::Batch::default();
-        let mut batch_query_members = sled::Batch::default();
+        // Check if transaction is empty using safe iterator check
+        if transaction.iter().next().is_none() {
+            return Ok(());
+        }
+
+        let mut conn = self
+            .pool
+            .get()
+            .map_err(|e| format!("Failed to get connection from pool: {}", e))?;
+
+        let tx = conn
+            .transaction()
+            .map_err(|e| format!("Failed to start transaction: {}", e))?;
+
+        // Group operations by table for batch processing
+        let mut resources_ops = Vec::new();
+        let mut propvalsub_ops = Vec::new();
+        let mut valpropsub_ops = Vec::new();
+        let mut watched_queries_ops = Vec::new();
+        let mut query_members_ops = Vec::new();
 
         for op in transaction.iter() {
             match op.tree {
-                trees::Tree::Resources => match op.method {
-                    trees::Method::Insert => {
-                        batch_resources.insert::<&[u8], &[u8]>(&op.key, op.val.as_ref().unwrap());
-                    }
-                    trees::Method::Delete => {
-                        batch_resources.remove(op.key.clone());
-                    }
-                },
-                trees::Tree::PropValSub => match op.method {
-                    trees::Method::Insert => {
-                        batch_propvalsub.insert::<&[u8], &[u8]>(&op.key, op.val.as_ref().unwrap());
-                    }
-                    trees::Method::Delete => {
-                        batch_propvalsub.remove(op.key.clone());
-                    }
-                },
-                trees::Tree::ValPropSub => match op.method {
-                    trees::Method::Insert => {
-                        batch_valpropsub.insert::<&[u8], &[u8]>(&op.key, op.val.as_ref().unwrap());
-                    }
-                    trees::Method::Delete => {
-                        batch_valpropsub.remove(op.key.clone());
-                    }
-                },
-                trees::Tree::WatchedQueries => match op.method {
-                    trees::Method::Insert => {
-                        batch_watched_queries
-                            .insert::<&[u8], &[u8]>(&op.key, op.val.as_ref().unwrap());
-                    }
-                    trees::Method::Delete => {
-                        batch_watched_queries.remove(op.key.clone());
-                    }
-                },
-                trees::Tree::QueryMembers => match op.method {
-                    trees::Method::Insert => {
-                        batch_query_members
-                            .insert::<&[u8], &[u8]>(&op.key, op.val.as_ref().unwrap());
-                    }
-                    trees::Method::Delete => {
-                        batch_query_members.remove(op.key.clone());
-                    }
-                },
+                Tree::Resources => resources_ops.push(op),
+                Tree::PropValSub => propvalsub_ops.push(op),
+                Tree::ValPropSub => valpropsub_ops.push(op),
+                Tree::WatchedQueries => watched_queries_ops.push(op),
+                Tree::QueryMembers => query_members_ops.push(op),
             }
         }
 
-        (
-            &self.resources,
-            &self.prop_val_sub_index,
-            &self.reference_index,
-            &self.watched_queries,
-            &self.query_index,
-        )
-            .transaction(
-                |(
-                    tx_resources,
-                    tx_prop_val_sub_index,
-                    tx_reference_index,
-                    tx_watched_queries,
-                    tx_query_index,
-                )| {
-                    tx_resources.apply_batch(&batch_resources)?;
-                    tx_prop_val_sub_index.apply_batch(&batch_propvalsub)?;
-                    tx_reference_index.apply_batch(&batch_valpropsub)?;
-                    tx_watched_queries.apply_batch(&batch_watched_queries)?;
-                    tx_query_index.apply_batch(&batch_query_members)?;
-                    Ok::<(), sled::transaction::ConflictableTransactionError<sled::Error>>(())
-                },
-            )
-            .map_err(|e: TransactionError<_>| format!("Failed to apply transaction: {}", e))?;
+        // Process each table's operations in batches
+        process_table_operations(&tx, "resources", &resources_ops)?;
+        process_table_operations(&tx, "prop_val_sub", &propvalsub_ops)?;
+        process_table_operations(&tx, "val_prop_sub", &valpropsub_ops)?;
+        process_table_operations(&tx, "watched_queries", &watched_queries_ops)?;
+        process_table_operations(&tx, "query_members", &query_members_ops)?;
+
+        tx.commit()
+            .map_err(|e| format!("Failed to commit transaction: {}", e))?;
 
         Ok(())
     }
@@ -592,10 +630,7 @@ impl Db {
 
 impl Drop for Db {
     fn drop(&mut self) {
-        match self.db.flush() {
-            Ok(..) => (),
-            Err(e) => eprintln!("Failed to flush the database: {}", e),
-        };
+        // Connection pool handles cleanup automatically
     }
 }
 
@@ -625,7 +660,6 @@ impl Storelike for Db {
         for (_subject, resource) in map.iter() {
             self.add_resource(resource)?
         }
-        self.db.flush()?;
         Ok(())
     }
 
@@ -637,8 +671,6 @@ impl Storelike for Db {
         update_index: bool,
         overwrite_existing: bool,
     ) -> AtomicResult<()> {
-        // This only works if no external functions rely on using add_resource for atom-like operations!
-        // However, add_atom uses set_propvals, which skips the validation.
         let existing = self.get_propvals(resource.get_subject()).ok();
         if !overwrite_existing && existing.is_some() {
             return Err(format!(
@@ -678,9 +710,7 @@ impl Storelike for Db {
     /// Returns the generated Commit, the old Resource and the new Resource.
     #[tracing::instrument(skip(self))]
     fn apply_commit(&self, commit: Commit, opts: &CommitOpts) -> AtomicResult<CommitResponse> {
-        let store = self;
-
-        let commit_response = commit.validate_and_build_response(opts, store)?;
+        let commit_response = commit.validate_and_build_response(opts, self)?;
 
         let mut transaction = Transaction::new();
 
@@ -693,7 +723,7 @@ impl Storelike for Db {
                     };
 
                     (handler)(CommitExtenderContext {
-                        store,
+                        store: self,
                         commit: &commit_response.commit,
                         resource: resource_new,
                     })?;
@@ -702,10 +732,10 @@ impl Storelike for Db {
         }
 
         // Save the Commit to the Store. We can skip the required props checking, but we need to make sure the commit hasn't been applied before.
-        store.add_resource_tx(&commit_response.commit_resource, &mut transaction)?;
+        self.add_resource_tx(&commit_response.commit_resource, &mut transaction)?;
         // We still need to index the Commit!
         for atom in commit_response.commit_resource.to_atoms() {
-            store.add_atom_to_index(&atom, &commit_response.commit_resource, &mut transaction)?;
+            self.add_atom_to_index(&atom, &commit_response.commit_resource, &mut transaction)?;
         }
 
         match (&commit_response.resource_old, &commit_response.resource_new) {
@@ -727,27 +757,23 @@ impl Storelike for Db {
         if opts.update_index {
             if let Some(old) = &commit_response.resource_old {
                 for atom in &commit_response.remove_atoms {
-                    store
-                        .remove_atom_from_index(atom, old, &mut transaction)
+                    self.remove_atom_from_index(atom, old, &mut transaction)
                         .map_err(|e| format!("Error removing atom from index: {e}  Atom: {e}"))?
                 }
             }
             if let Some(new) = &commit_response.resource_new {
                 for atom in &commit_response.add_atoms {
-                    store
-                        .add_atom_to_index(atom, new, &mut transaction)
+                    self.add_atom_to_index(atom, new, &mut transaction)
                         .map_err(|e| format!("Error adding atom to index: {e}  Atom: {e}"))?
                 }
             }
         }
 
-        store.apply_transaction(&mut transaction)?;
+        self.apply_transaction(&mut transaction)?;
 
-        store.handle_commit(&commit_response);
+        self.handle_commit(&commit_response);
 
         // AFTER APPLY COMMIT HANDLERS
-        // Commit has been checked and saved.
-        // Here you can add side-effects, such as creating new Commits.
         if let Some(resource_new) = &commit_response.resource_new {
             for extender in self.class_extenders.iter() {
                 if extender.resource_has_extender(resource_new)? {
@@ -758,7 +784,7 @@ impl Storelike for Db {
                     };
 
                     (handler)(CommitExtenderContext {
-                        store,
+                        store: self,
                         commit: &commit_response.commit,
                         resource: resource_new,
                     })?;
@@ -863,8 +889,6 @@ impl Storelike for Db {
 
                     dynamic_span.exit();
 
-                    // TODO: Check if we actually need this
-                    // make sure the actual subject matches the one requested - It should not be changed in the logic above
                     match resource_response {
                         ResourceResponse::Resource(mut resource) => {
                             resource.set_subject(subject.into());
@@ -914,11 +938,43 @@ impl Storelike for Db {
             .get_self_url()
             .expect("No self URL set, is required in DB");
 
-        let result = self.resources.into_iter().filter_map(move |item| {
-            Db::map_sled_item_to_resource(item, self_url.clone(), include_external)
-        });
+        let conn = match self.pool.get() {
+            Ok(conn) => conn,
+            Err(e) => {
+                tracing::error!("Failed to get connection for all_resources: {}", e);
+                return Box::new(std::iter::empty());
+            }
+        };
 
-        Box::new(result)
+        // Query all resources from the database with prepared statement caching
+        let mut stmt = conn
+            .prepare("SELECT key, value FROM resources")
+            .expect("Failed to prepare statement");
+
+        let resource_iter = stmt
+            .query_map([], |row| {
+                let key: Vec<u8> = row.get(0)?;
+                let value: Vec<u8> = row.get(1)?;
+                Ok((key, value))
+            })
+            .expect("Failed to query resources");
+
+        // Convert the result into a vec to avoid lifetime issues
+        let resources: Vec<Resource> = resource_iter
+            .filter_map(|item| {
+                let (key, value) = item.ok()?;
+                let subject = String::from_utf8(key).ok()?;
+
+                if !include_external && !subject.starts_with(&self_url) {
+                    return None;
+                }
+
+                let propvals: PropVals = decode_propvals(&value).ok()?;
+                Some(Resource::from_propvals(propvals, subject))
+            })
+            .collect();
+
+        Box::new(resources.into_iter())
     }
 
     fn post_resource(
@@ -945,23 +1001,6 @@ impl Storelike for Db {
                 }
             }
         }
-        // If we get Class Handlers with POST, this is where the code goes
-        // let mut r = self.get_resource(subject)?;
-        // for class in r.get_classes(self)? {
-        //     match class.subject.as_str() {
-        //         urls::IMPORTER => {
-        //             let query_params = url::Url::try_from(subject)?;
-        //             return crate::plugins::importer::construct_importer(
-        //                 self,
-        //                 query_params.query_pairs(),
-        //                 &mut r,
-        //                 for_agent,
-        //                 Some(body),
-        //             );
-        //         }
-        //         _ => {}
-        //     }
-        // }
         Err(
             AtomicError::method_not_allowed("Cannot post here - no Endpoint Post handler found")
                 .set_subject(subject),
@@ -986,16 +1025,238 @@ impl Storelike for Db {
     }
 }
 
-fn corrupt_db_message(subject: &str) -> String {
-    format!("Could not deserialize item {} from database. DB is possibly corrupt, could be due to an update or a lack of migrations. Restore to a previous version, export your data and import your data again.", subject)
+/// Process operations for a specific table in batches for better performance
+fn process_table_operations(
+    tx: &rusqlite::Transaction,
+    table_name: &str,
+    operations: &[&Operation],
+) -> AtomicResult<()> {
+    if operations.is_empty() {
+        return Ok(());
+    }
+
+    // Prepare statements once per batch
+    let insert_sql = format!(
+        "INSERT OR REPLACE INTO {} (key, value) VALUES (?1, ?2)",
+        table_name
+    );
+    let delete_sql = format!("DELETE FROM {} WHERE key = ?1", table_name);
+
+    let mut insert_stmt = tx
+        .prepare_cached(&insert_sql)
+        .map_err(|e| format!("Failed to prepare insert for {}: {}", table_name, e))?;
+    let mut delete_stmt = tx
+        .prepare_cached(&delete_sql)
+        .map_err(|e| format!("Failed to prepare delete for {}: {}", table_name, e))?;
+
+    for op in operations {
+        match op.method {
+            Method::Insert => {
+                insert_stmt
+                    .execute(params![&op.key, op.val.as_ref().unwrap()])
+                    .map_err(|e| format!("Failed to insert into {}: {}", table_name, e))?;
+            }
+            Method::Delete => {
+                delete_stmt
+                    .execute(params![&op.key])
+                    .map_err(|e| format!("Failed to delete from {}: {}", table_name, e))?;
+            }
+        }
+    }
+
+    Ok(())
 }
 
-const DB_CORRUPT_MSG: &str = "Could not deserialize item from database. DB is possibly corrupt, could be due to an update or a lack of migrations. Restore to a previous version, export your data and import your data again.";
+/// Configure SQLite for optimal performance (for r2d2 init)
+fn configure_sqlite_for_r2d2(conn: &mut rusqlite::Connection) -> Result<(), rusqlite::Error> {
+    // Enable WAL mode for concurrent readers
+    conn.pragma_update(None, "journal_mode", "WAL")?;
+
+    // Memory-mapped I/O for faster reads (512MB)
+    conn.pragma_update(None, "mmap_size", 536870912)?;
+
+    // Larger page size for blob storage (8KB for better blob performance)
+    conn.pragma_update(None, "page_size", 8192)?;
+
+    // Aggressive caching (128MB)
+    conn.pragma_update(None, "cache_size", -131072)?;
+
+    // Reduce sync overhead while maintaining durability
+    conn.pragma_update(None, "synchronous", "NORMAL")?;
+
+    // Keep temporary indices in memory
+    conn.pragma_update(None, "temp_store", "MEMORY")?;
+
+    // Optimize WAL checkpointing for performance (less frequent but more efficient)
+    conn.pragma_update(None, "wal_autocheckpoint", 2000)?;
+
+    // Enable query planner optimizations (best effort, ignore failures)
+    let _ = conn.execute_batch("PRAGMA optimize;");
+
+    Ok(())
+}
+
+/// Initialize SQLite tables for each tree structure (for r2d2 init)
+fn initialize_tables_for_r2d2(conn: &mut rusqlite::Connection) -> Result<(), rusqlite::Error> {
+    conn.execute_batch(
+        "
+        -- Main resources table
+        CREATE TABLE IF NOT EXISTS resources (
+            key BLOB PRIMARY KEY,
+            value BLOB NOT NULL
+        ) WITHOUT ROWID;
+        
+        -- Property-Value-Subject index
+        CREATE TABLE IF NOT EXISTS prop_val_sub (
+            key BLOB PRIMARY KEY,
+            value BLOB NOT NULL
+        ) WITHOUT ROWID;
+        
+        -- Value-Property-Subject index (reference index)
+        CREATE TABLE IF NOT EXISTS val_prop_sub (
+            key BLOB PRIMARY KEY,
+            value BLOB NOT NULL
+        ) WITHOUT ROWID;
+        
+        -- Query members index
+        CREATE TABLE IF NOT EXISTS query_members (
+            key BLOB PRIMARY KEY,
+            value BLOB NOT NULL
+        ) WITHOUT ROWID;
+        
+        -- Watched queries
+        CREATE TABLE IF NOT EXISTS watched_queries (
+            key BLOB PRIMARY KEY,
+            value BLOB NOT NULL
+        ) WITHOUT ROWID;
+        
+        -- FTS5 search index table for full-text search
+        CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(
+            subject UNINDEXED,
+            title,
+            description,
+            propvals_json,
+            hierarchy,
+            tokenize='porter unicode61'
+        );
+        
+        -- FST index table for fuzzy search
+        CREATE TABLE IF NOT EXISTS fst_index (
+            term TEXT PRIMARY KEY,
+            fst_data BLOB
+        );
+        
+        -- Search metadata table
+        CREATE TABLE IF NOT EXISTS search_metadata (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        );
+    ",
+    )?;
+
+    Ok(())
+}
+
+/// Configure SQLite for optimal performance
+#[allow(dead_code)]
+fn configure_sqlite(
+    conn: &rusqlite::Connection,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    // Enable WAL mode for concurrent readers
+    conn.pragma_update(None, "journal_mode", "WAL")?;
+
+    // Memory-mapped I/O for faster reads (512MB)
+    conn.pragma_update(None, "mmap_size", 536870912)?;
+
+    // Larger page size for blob storage (8KB for better blob performance)
+    conn.pragma_update(None, "page_size", 8192)?;
+
+    // Aggressive caching (128MB)
+    conn.pragma_update(None, "cache_size", -131072)?;
+
+    // Reduce sync overhead while maintaining durability
+    conn.pragma_update(None, "synchronous", "NORMAL")?;
+
+    // Keep temporary indices in memory
+    conn.pragma_update(None, "temp_store", "MEMORY")?;
+
+    // Optimize WAL checkpointing for performance (less frequent but more efficient)
+    conn.pragma_update(None, "wal_autocheckpoint", 2000)?;
+
+    // Enable query planner optimizations (best effort, ignore failures)
+    let _ = conn.execute_batch("PRAGMA optimize;");
+
+    Ok(())
+}
+
+/// Initialize SQLite tables for each tree structure
+#[allow(dead_code)]
+fn initialize_tables(
+    conn: &rusqlite::Connection,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    conn.execute_batch(
+        "
+        -- Main resources table
+        CREATE TABLE IF NOT EXISTS resources (
+            key BLOB PRIMARY KEY,
+            value BLOB NOT NULL
+        ) WITHOUT ROWID;
+        
+        -- Property-Value-Subject index
+        CREATE TABLE IF NOT EXISTS prop_val_sub (
+            key BLOB PRIMARY KEY,
+            value BLOB NOT NULL
+        ) WITHOUT ROWID;
+        
+        -- Value-Property-Subject index (reference index)
+        CREATE TABLE IF NOT EXISTS val_prop_sub (
+            key BLOB PRIMARY KEY,
+            value BLOB NOT NULL
+        ) WITHOUT ROWID;
+        
+        -- Query members index
+        CREATE TABLE IF NOT EXISTS query_members (
+            key BLOB PRIMARY KEY,
+            value BLOB NOT NULL
+        ) WITHOUT ROWID;
+        
+        -- Watched queries
+        CREATE TABLE IF NOT EXISTS watched_queries (
+            key BLOB PRIMARY KEY,
+            value BLOB NOT NULL
+        ) WITHOUT ROWID;
+    ",
+    )?;
+
+    Ok(())
+}
 
 impl std::fmt::Debug for Db {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Db")
             .field("server_url", &self.server_url)
+            .field("path", &self.path)
+            .field("pool_state", &self.pool.state())
             .finish()
+    }
+}
+
+#[cfg(test)]
+mod tests_sqlite_config;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_db_debug_format() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("debug_test.db");
+        let store = Db::init(&db_path, "http://localhost".to_string()).unwrap();
+
+        let debug_str = format!("{:?}", store);
+        assert!(debug_str.contains("Db"));
+        assert!(debug_str.contains("server_url"));
+        assert!(debug_str.contains("http://localhost"));
     }
 }
