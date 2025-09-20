@@ -29,6 +29,25 @@ pub fn get_node_id() -> Option<&'static str> {
 
 /// Key used to persist the Iroh secret key in the DB.
 const IROH_SECRET_KEY: &[u8] = b"_iroh_secret_key";
+const DEVICE_NAME_KEY: &[u8] = b"_device_name";
+
+/// Get the persisted device name.
+pub fn get_device_name(store: &Db) -> String {
+    store.kv.get(crate::db::trees::Tree::PluginMeta, DEVICE_NAME_KEY)
+        .ok()
+        .flatten()
+        .and_then(|b| String::from_utf8(b).ok())
+        .unwrap_or_default()
+}
+
+/// Set the device name (persisted in DB).
+pub fn set_device_name(store: &Db, name: &str) {
+    let _ = store.kv.insert(
+        crate::db::trees::Tree::PluginMeta,
+        DEVICE_NAME_KEY,
+        name.as_bytes(),
+    );
+}
 
 /// Load or generate a persistent Iroh secret key.
 /// Stored in the DB so the NodeID survives app restarts.
@@ -266,62 +285,54 @@ fn start_live_sync(store: Db) {
         if conns.is_none() { *conns = Some(Vec::new()); }
     }
 
-    // Spawn the push loop: watches resource_changed, pushes to all live peers
+    // Spawn the push loop: watches db_events, pushes deltas/destroys to live peers
     tokio::spawn(async move {
-        let mut rx = store.subscribe_changes();
+        let mut rx = store.subscribe_events();
         tracing::info!("[live_sync] push loop started");
 
         loop {
-            let subject = match rx.recv().await {
-                Ok(s) => s,
+            let event = match rx.recv().await {
+                Ok(e) => e,
                 Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
                 Err(_) => {
                     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                    rx = store.subscribe_changes();
+                    rx = store.subscribe_events();
                     continue;
                 }
             };
 
-            // Don't echo back changes we just imported from a peer
-            if IMPORTING.load(std::sync::atomic::Ordering::Relaxed) {
-                continue;
-            }
+            if IMPORTING.load(std::sync::atomic::Ordering::Relaxed) { continue; }
 
-            // Get the Loro snapshot for this resource
-            let snapshot = match store.kv.get(
-                crate::db::trees::Tree::LoroSnapshots,
-                subject.as_bytes(),
-            ) {
-                Ok(Some(bytes)) => bytes,
-                _ => continue,
+            let msg = match &event {
+                crate::DbEvent::Changed { subject, delta: Some(delta) } if !delta.is_empty() => {
+                    let frame = super::protocol::encode_update(0, 0, subject.as_str(), None, delta);
+                    let len = frame.len() as u32;
+                    let mut msg = Vec::with_capacity(4 + frame.len());
+                    msg.extend_from_slice(&len.to_be_bytes());
+                    msg.extend_from_slice(&frame);
+                    msg
+                }
+                crate::DbEvent::Destroyed { subject } => {
+                    let frame = super::protocol::encode_destroy(0, subject.as_str());
+                    let len = frame.len() as u32;
+                    let mut msg = Vec::with_capacity(4 + frame.len());
+                    msg.extend_from_slice(&len.to_be_bytes());
+                    msg.extend_from_slice(&frame);
+                    msg
+                }
+                _ => continue, // Changed without delta — nothing to push
             };
 
-            // Build UPDATE frame
-            let frame = super::protocol::encode_update(
-                super::protocol::flags::SNAPSHOT,
-                0,
-                &subject,
-                None,
-                &snapshot,
-            );
-
-            // Length-prefix it
-            let len = frame.len() as u32;
-            let mut msg = Vec::with_capacity(4 + frame.len());
-            msg.extend_from_slice(&len.to_be_bytes());
-            msg.extend_from_slice(&frame);
-
-            // Push to all connected peers
             let peers = LIVE_PEERS.lock().unwrap();
             if let Some(map) = peers.as_ref() {
                 for (peer_id, tx) in map {
                     match tx.try_send(msg.clone()) {
                         Ok(_) => {}
                         Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
-                            tracing::warn!("[live_sync] send buffer full for {}", &peer_id[..peer_id.len().min(12)]);
+                            tracing::warn!("[live_sync] buffer full for {}", &peer_id[..peer_id.len().min(12)]);
                         }
                         Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
-                            tracing::warn!("[live_sync] channel closed for {} — peer write loop dead", &peer_id[..peer_id.len().min(12)]);
+                            tracing::warn!("[live_sync] closed for {}", &peer_id[..peer_id.len().min(12)]);
                         }
                     }
                 }
@@ -397,6 +408,22 @@ fn register_live_peer(
             }
 
             if buf.is_empty() {
+                continue;
+            }
+
+            // Handle DESTROY frames
+            if buf[0] == super::protocol::tag::DESTROY {
+                if buf.len() > 3 {
+                    let subject = std::str::from_utf8(&buf[3..]).unwrap_or_default().to_string();
+                    if !subject.is_empty() {
+                        IMPORTING.store(true, std::sync::atomic::Ordering::Relaxed);
+                        let subj = crate::Subject::from_raw(&subject, store.get_base_domain().as_deref());
+                        let _ = store.remove_resource(&subj).await;
+                        let _ = store.kv.remove(crate::db::trees::Tree::LoroSnapshots, subject.as_bytes());
+                        IMPORTING.store(false, std::sync::atomic::Ordering::Relaxed);
+                        tracing::info!("[live] deleted {}", &subject[..subject.len().min(20)]);
+                    }
+                }
                 continue;
             }
 

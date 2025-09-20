@@ -187,31 +187,42 @@ impl Resource {
         }
     }
 
-    /// Get or create the Loro CRDT document for this resource.
-    /// If one exists (e.g. loaded from a snapshot), returns it.
-    /// Otherwise creates a new empty one.
-    pub fn get_loro_doc(&mut self) -> &crate::loro::AtomicLoroDoc {
+    /// Ensure the Loro CRDT document is initialized.
+    /// Lazily builds from the current state (snapshot or propvals).
+    /// After this call, `self.loro` is guaranteed to be `Some`.
+    pub fn init_loro(&mut self) -> AtomicResult<()> {
         if self.loro.is_none() {
-            let doc = self
-                .build_loro_doc_from_state()
-                .unwrap_or_else(|_| crate::loro::AtomicLoroDoc::new());
-            self.loro = Some(doc);
+            self.loro = Some(self.build_loro_doc_from_state()?);
         }
-        self.loro.as_ref().unwrap()
+        Ok(())
+    }
+
+    /// Initialize the Loro UndoManager so that subsequent mutations are tracked.
+    /// Must be called after `init_loro()` and before the operations you want to undo.
+    pub fn init_undo(&mut self) {
+        if let Some(doc) = &self.loro {
+            doc.ensure_undo_manager();
+        }
+    }
+
+    /// Get a reference to the Loro doc. Panics if `init_loro()` hasn't been called.
+    fn loro(&self) -> &crate::loro::AtomicLoroDoc {
+        self.loro.as_ref().expect("loro not initialized — call init_loro() first")
+    }
+
+    /// Rebuild propvals + commit from the current Loro doc state.
+    /// Used after undo/redo to keep everything in sync.
+    /// Rebuild propvals from the live Loro doc state.
+    /// Does NOT export a snapshot — that happens once at save time.
+    fn sync_propvals_from_loro(&mut self) {
+        self.propvals = Self::materialize_propvals_from_loro_doc(self.loro());
     }
 
     /// Set a property on the resource through the Loro doc.
     /// Updates both the Loro doc and the propvals cache.
     pub fn set_loro(&mut self, property: &str, value: &Value) -> AtomicResult<()> {
-        // Ensure Loro doc exists
-        self.get_loro_doc();
-        if let Some(doc) = &self.loro {
-            doc.set_property(property, value)?;
-            // Persist the snapshot so it round-trips through the DB
-            self.propvals
-                .insert(urls::LORO_UPDATE.into(), Value::LoroDoc(doc.export_snapshot()));
-        }
-        // Also update propvals cache for immediate reads
+        self.init_loro()?;
+        self.loro().set_property(property, value)?;
         self.propvals.insert(property.into(), value.clone());
         Ok(())
     }
@@ -237,8 +248,7 @@ impl Resource {
     /// Ensure the Loro doc is loaded ("warmed") for history operations.
     /// Call this before `get_history()` or `view_at()` to avoid lazy-init overhead.
     pub fn warm_history(&mut self) -> AtomicResult<()> {
-        self.get_loro_doc();
-        Ok(())
+        self.init_loro()
     }
 
     /// Returns the edit history of this resource from the Loro oplog.
@@ -247,6 +257,31 @@ impl Resource {
             Some(doc) => doc.get_history(),
             None => Vec::new(),
         }
+    }
+
+    /// Returns the current Loro version (frontiers) for this resource.
+    /// Useful for branching: save the version, checkout a previous one, then
+    /// compare or restore later.
+    pub fn get_current_version(&mut self) -> AtomicResult<crate::loro::VersionID> {
+        self.init_loro()?;
+        Ok(self.loro().current_version())
+    }
+
+    /// Checkout a specific historical version. The resource enters a detached
+    /// read-only state — call `attach()` to return to the latest version.
+    pub fn checkout(&mut self, version: &crate::loro::VersionID) -> AtomicResult<()> {
+        self.init_loro()?;
+        self.loro().checkout(version)?;
+        self.sync_propvals_from_loro();
+        Ok(())
+    }
+
+    /// Return to the latest version after a `checkout()`.
+    pub fn attach(&mut self) -> AtomicResult<()> {
+        self.init_loro()?;
+        self.loro().attach()?;
+        self.sync_propvals_from_loro();
+        Ok(())
     }
 
     /// Returns a read-only snapshot of this resource at a historical version.
@@ -490,64 +525,137 @@ impl Resource {
         Ok(self)
     }
 
-    /// Push a JSON item to a JsonArray property. CRDT-friendly — appends to the
-    /// existing LoroList instead of replacing it. Use this instead of `set_unsafe`
-    /// for list properties that need to merge across devices.
-    /// Push a JSON item to a JsonArray property. CRDT-friendly — appends to the
-    /// existing LoroList instead of replacing it. Use this instead of `set_unsafe`
-    /// for list properties that need to merge across devices.
+    /// Append a JSON item to a JsonArray property. CRDT-friendly — appends to the
+    /// LoroList instead of replacing it. Items from different devices merge cleanly.
+    pub fn push_list_item(
+        &mut self,
+        property: &str,
+        item: serde_json::Value,
+    ) -> crate::errors::AtomicResult<()> {
+        match self.propvals.get_mut(property) {
+            Some(Value::JsonArray(arr)) => arr.push(item.clone()),
+            _ => { self.propvals.insert(property.into(), Value::JsonArray(vec![item.clone()])); }
+        };
+        self.init_loro()?;
+        self.loro().push_to_json_array(property, &item)?;
+        Ok(())
+    }
+
+    /// Alias for `push_list_item` (legacy name).
     pub fn push_json_item(
         &mut self,
         property: &str,
         item: serde_json::Value,
     ) -> crate::errors::AtomicResult<()> {
-        // Update propvals cache
+        self.push_list_item(property, item)
+    }
+
+    /// Insert a JSON item at a specific index in a JsonArray property.
+    /// CRDT-friendly — records a Loro list insert that merges across devices.
+    pub fn insert_list_item(
+        &mut self,
+        property: &str,
+        index: usize,
+        item: serde_json::Value,
+    ) -> crate::errors::AtomicResult<()> {
         match self.propvals.get_mut(property) {
             Some(Value::JsonArray(arr)) => {
-                arr.push(item.clone());
+                if index > arr.len() {
+                    return Err(format!(
+                        "Index {index} out of bounds for {property} (len {})",
+                        arr.len()
+                    ).into());
+                }
+                arr.insert(index, item.clone());
             }
             _ => {
+                if index != 0 {
+                    return Err(format!("{property} is not a JsonArray").into());
+                }
                 self.propvals.insert(property.into(), Value::JsonArray(vec![item.clone()]));
             }
         };
-
-        // Ensure Loro doc is initialized
-        if self.loro.is_none() {
-            let doc = self.build_loro_doc_from_state()?;
-            self.loro = Some(doc);
-        }
-
-        // Push to live Loro doc (incremental, not replace)
-        let doc = self.loro.as_ref().unwrap();
-        doc.push_to_json_array(property, &item)?;
-
-        // Set the Loro snapshot directly on the commit builder so sign_at
-        // uses the live doc's state (with incremental pushes) instead of
-        // rebuilding from set operations (which would replace the list).
-        self.commit.set_loro_update(doc.export_snapshot());
-
+        self.init_loro()?;
+        self.loro().insert_into_json_array(property, index, &item)?;
         Ok(())
     }
 
     /// Clear all items from a JsonArray property. Clears the LoroList too.
     pub fn clear_json_array(&mut self, property: &str) -> crate::errors::AtomicResult<()> {
         self.propvals.insert(property.into(), Value::JsonArray(vec![]));
-
-        if self.loro.is_none() {
-            let doc = self.build_loro_doc_from_state()?;
-            self.loro = Some(doc);
-        }
-        let doc = self.loro.as_ref().unwrap();
-        doc.clear_json_array(property)?;
-        self.commit.set_loro_update(doc.export_snapshot());
-
+        self.init_loro()?;
+        self.loro().clear_json_array(property)?;
         Ok(())
+    }
+
+    /// Delete a single item from a JsonArray property by index. CRDT-friendly —
+    /// records a Loro list delete operation that merges across devices.
+    pub fn delete_list_item(
+        &mut self,
+        property: &str,
+        index: usize,
+    ) -> crate::errors::AtomicResult<()> {
+        // Update propvals cache
+        match self.propvals.get_mut(property) {
+            Some(Value::JsonArray(arr)) => {
+                if index >= arr.len() {
+                    return Err(format!(
+                        "Index {index} out of bounds for {property} (len {})",
+                        arr.len()
+                    )
+                    .into());
+                }
+                arr.remove(index);
+            }
+            _ => {
+                return Err(format!("{property} is not a JsonArray").into());
+            }
+        }
+
+        self.init_loro()?;
+        self.loro().delete_from_json_array(property, index)?;
+        Ok(())
+    }
+
+    /// Undo the last local Loro operation on this resource.
+    /// Returns true if something was undone.
+    /// After undo, call `save_locally()` to persist and sync the change.
+    pub fn undo(&mut self) -> crate::errors::AtomicResult<bool> {
+        self.init_loro()?;
+        if !self.loro().undo()? {
+            return Ok(false);
+        }
+        self.sync_propvals_from_loro();
+        Ok(true)
+    }
+
+    /// Redo the last undone Loro operation on this resource.
+    /// Returns true if something was redone.
+    /// After redo, call `save_locally()` to persist and sync the change.
+    pub fn redo(&mut self) -> crate::errors::AtomicResult<bool> {
+        self.init_loro()?;
+        if !self.loro().redo()? {
+            return Ok(false);
+        }
+        self.sync_propvals_from_loro();
+        Ok(true)
+    }
+
+    pub fn can_undo(&self) -> bool {
+        self.loro.as_ref().is_some_and(|d| d.can_undo())
+    }
+
+    pub fn can_redo(&self) -> bool {
+        self.loro.as_ref().is_some_and(|d| d.can_redo())
     }
 
     /// Remove a propval from a resource by property URL.
     pub fn remove_propval(&mut self, property_url: &str) {
         self.propvals.remove_entry(property_url);
-        self.commit.remove(property_url.into())
+        self.commit.remove(property_url.into());
+        if let Some(doc) = &self.loro {
+            let _ = doc.remove_property(property_url);
+        }
     }
 
     /// Remove a propval from a resource by property URL or shortname.
@@ -857,14 +965,16 @@ impl Resource {
     /// Does not validate property / datatype combination.
     /// Inserts a Property/Value combination.
     /// Overwrites existing.
-    /// Adds it to the CommitBuilder and Loro doc.
+    /// Writes to Loro (single source of truth) and propvals (read cache).
     pub fn set_unsafe(&mut self, property: String, value: Value) -> &mut Self {
-        self.propvals.insert(property.clone(), value.clone());
-        self.commit.set(property.clone(), value.clone());
-        // Also write to Loro doc if it's been initialized
+        // Loro is the source of truth — always write there
+        let _ = self.init_loro();
         if let Some(doc) = &self.loro {
             let _ = doc.set_property(&property, &value);
         }
+        // Propvals is the typed read cache
+        self.propvals.insert(property.clone(), value.clone());
+        self.commit.set(property, value);
         self
     }
 
@@ -1360,7 +1470,8 @@ mod test {
         propvals.insert(urls::NAME.into(), Value::String("Fresh propvals".into()));
         resource.set_propvals_unsafe(propvals);
 
-        let doc = resource.get_loro_doc();
+        resource.init_loro().unwrap();
+        let doc = resource.loro.as_ref().unwrap();
         let properties = doc.get_all_properties();
 
         assert!(

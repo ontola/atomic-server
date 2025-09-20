@@ -90,3 +90,11 @@ rdf = ["rio_api", "rio_turtle"]
 telemetry = ["opentelemetry"]
 ## Enable JS-backed randomness, time, and OPFS for WASM targets.
 wasm = ["getrandom/js", "getrandom03/wasm_js", "getrandom", "getrandom03", "js-sys", "wasm-bindgen", "wasm-bindgen-futures", "web-sys"]
+
+[[bench]]
+name = "benchmarks"
+harness = false
+
+[[bench]]
+name = "loro_bench"
+harness = false

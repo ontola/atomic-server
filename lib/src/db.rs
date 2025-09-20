@@ -69,6 +69,21 @@ use self::{
 // A function called by the Store when a Commit is accepted
 type HandleCommit = Box<dyn Fn(&CommitResponse) + Send + Sync>;
 
+/// Event emitted when a resource is created, updated, or deleted.
+#[derive(Debug, Clone)]
+pub enum DbEvent {
+    /// Resource changed. Carries the subject (pure_id) and the Loro delta if available.
+    Changed {
+        subject: Subject,
+        /// The Loro delta (from the commit's loro_update). None for non-Loro changes.
+        delta: Option<Vec<u8>>,
+    },
+    /// Resource destroyed.
+    Destroyed {
+        subject: Subject,
+    },
+}
+
 /// A drive with its subject and display name.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct DriveInfo {
@@ -114,8 +129,8 @@ pub struct Db {
     class_extenders: Arc<RwLock<Vec<ClassExtender>>>,
     /// Function called whenever a Commit is applied.
     on_commit: Option<Arc<HandleCommit>>,
-    /// Broadcast channel: fires the subject string when a resource is written.
-    resource_changed: tokio::sync::broadcast::Sender<String>,
+    /// Broadcast channel for all resource mutations.
+    db_events: tokio::sync::broadcast::Sender<DbEvent>,
     /// Where the DB is stored on disk.
     #[allow(dead_code)]
     path: std::path::PathBuf,
@@ -144,7 +159,7 @@ impl Db {
             class_extenders: Arc::new(RwLock::new(vec![])),
 
             on_commit: None,
-            resource_changed: tokio::sync::broadcast::channel(64).0,
+            db_events: tokio::sync::broadcast::channel(64).0,
             base_domain,
         };
 
@@ -169,7 +184,7 @@ impl Db {
             class_extenders: Arc::new(RwLock::new(vec![])),
 
             on_commit: None,
-            resource_changed: tokio::sync::broadcast::channel(64).0,
+            db_events: tokio::sync::broadcast::channel(64).0,
             base_domain,
         };
 
@@ -196,7 +211,7 @@ impl Db {
             class_extenders: Arc::new(RwLock::new(vec![])),
 
             on_commit: None,
-            resource_changed: tokio::sync::broadcast::channel(64).0,
+            db_events: tokio::sync::broadcast::channel(64).0,
             base_domain,
         };
 
@@ -231,7 +246,7 @@ impl Db {
             class_extenders: Arc::new(RwLock::new(vec![])),
 
             on_commit: None,
-            resource_changed: tokio::sync::broadcast::channel(64).0,
+            db_events: tokio::sync::broadcast::channel(64).0,
             base_domain,
         };
 
@@ -257,7 +272,7 @@ impl Db {
             class_extenders: Arc::new(RwLock::new(vec![])),
 
             on_commit: None,
-            resource_changed: tokio::sync::broadcast::channel(64).0,
+            db_events: tokio::sync::broadcast::channel(64).0,
             base_domain,
         };
 
@@ -920,10 +935,9 @@ impl Db {
         self.on_commit = Some(Arc::new(on_commit));
     }
 
-    /// Subscribe to resource change notifications.
-    /// Returns a receiver that yields the subject string of each changed resource.
-    pub fn subscribe_changes(&self) -> tokio::sync::broadcast::Receiver<String> {
-        self.resource_changed.subscribe()
+    /// Subscribe to all DB events (changes, deletions).
+    pub fn subscribe_events(&self) -> tokio::sync::broadcast::Receiver<DbEvent> {
+        self.db_events.subscribe()
     }
 
     /// Finds resource by Subject, return PropVals HashMap
@@ -1450,8 +1464,10 @@ impl Storelike for Db {
             self.apply_transaction(&mut transaction)?;
         }
         self.set_propvals(&subject_str, resource.get_propvals())?;
-        // Notify subscribers that this resource changed
-        let _ = self.resource_changed.send(subject_str);
+        let _ = self.db_events.send(DbEvent::Changed {
+            subject: resource.get_subject().without_params(),
+            delta: None,
+        });
         Ok(())
     }
 
@@ -1580,10 +1596,18 @@ impl Storelike for Db {
 
         store.apply_transaction(&mut transaction)?;
 
-        // Notify subscribers (use pure_id to match LoroSnapshot keys)
-        let _ = store.resource_changed.send(
-            commit_response.commit.subject.pure_id()
-        );
+        // Notify subscribers
+        let subject = commit_response.commit.subject.without_params();
+        let is_destroy = commit_response.commit.destroy.unwrap_or(false);
+        let event = if is_destroy {
+            DbEvent::Destroyed { subject }
+        } else {
+            DbEvent::Changed {
+                subject,
+                delta: commit_response.commit.loro_update.clone(),
+            }
+        };
+        let _ = store.db_events.send(event);
 
         store.handle_commit(&commit_response);
 

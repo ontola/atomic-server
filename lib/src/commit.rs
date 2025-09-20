@@ -796,6 +796,14 @@ impl CommitBuilder {
             self.previous_commit = Some(last.to_string());
         }
 
+        // If the resource has a live Loro doc but no snapshot was eagerly
+        // exported to the commit builder, export it now (single export).
+        if self.loro_update.is_none() {
+            if let Some(snapshot) = resource.export_loro_snapshot() {
+                self.loro_update = Some(snapshot);
+            }
+        }
+
         // Pass the resource's existing Loro snapshot so sign_at can build
         // incremental updates on top of it instead of creating a detached doc.
         let existing_snapshot = match resource.get(urls::LORO_UPDATE) {
