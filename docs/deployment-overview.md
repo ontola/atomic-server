@@ -23,7 +23,8 @@ Choose the right deployment platform for Atomic Server.
 | **Auto SSL** | ✅ | Manual | ✅ | ✅ | ✅ |
 | **Free Tier** | ✅ | N/A | ✅ | ✅ | ✅ |
 | **CI/CD** | Excellent | Manual | Good | Excellent | Manual |
-| **Response Time** | <50ms | <10ms | <100ms | <200ms | <50ms |
+| **Response Time** | <20ms | <10ms | <100ms | <200ms | <50ms |
+| **Performance Features** | ✅ Advanced | ❌ Basic | ❌ Basic | ❌ Basic | ❌ Basic |
 | **Monthly Cost** | $0-87 | $5-10 | $5-15 | $5-25 | $0-5 |
 | **Scaling** | Automatic | Manual | Manual | Manual | Manual |
 
@@ -101,7 +102,10 @@ atomic-server import --file backup.json
 
 ```
 Need global deployment?
-├── Yes → Fly.io (production) or Railway (prototyping)
+├── Yes
+│   ├── High-performance requirements?
+│   │   └── Yes → Turso (best performance + global reach)
+│   └── No → Fly.io (production) or Railway (prototyping)
 └── No
     ├── Self-hosting at home?
     │   └── Yes → Cloudflare Tunnel
@@ -111,7 +115,8 @@ Need global deployment?
 
 ## Recommendations
 
-- **🚀 Global Production**: Turso (best performance + scaling)
+- **🚀 Global Production**: Turso (best performance + scaling + caching)
+- **High-Performance Apps**: Turso (connection pooling + query caching)
 - **Regional Production**: Fly.io 
 - **Rapid Prototyping**: Railway
 - **Self-hosting**: Docker Compose + Cloudflare Tunnel

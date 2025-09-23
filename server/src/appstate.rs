@@ -57,6 +57,14 @@ impl Storelike for StoreWrapper {
         ))
     }
 
+    fn populate(&self) -> AtomicResult<()> {
+        match self {
+            StoreWrapper::Db(db) => db.populate(),
+            #[cfg(feature = "turso")]
+            StoreWrapper::Turso(turso) => turso.populate(),
+        }
+    }
+
     fn add_resource_opts(
         &self,
         resource: &atomic_lib::Resource,
@@ -132,6 +140,64 @@ impl Storelike for StoreWrapper {
             StoreWrapper::Db(db) => db.set_default_agent(agent),
             #[cfg(feature = "turso")]
             StoreWrapper::Turso(turso) => turso.set_default_agent(agent),
+        }
+    }
+
+    fn get_resource_extended(
+        &self,
+        subject: &str,
+        skip_dynamic: bool,
+        for_agent: &atomic_lib::agents::ForAgent,
+    ) -> AtomicResult<atomic_lib::storelike::ResourceResponse> {
+        match self {
+            StoreWrapper::Db(db) => db.get_resource_extended(subject, skip_dynamic, for_agent),
+            #[cfg(feature = "turso")]
+            StoreWrapper::Turso(turso) => turso.get_resource_extended(subject, skip_dynamic, for_agent),
+        }
+    }
+
+    fn handle_commit(&self, commit_response: &atomic_lib::commit::CommitResponse) {
+        match self {
+            StoreWrapper::Db(db) => db.handle_commit(commit_response),
+            #[cfg(feature = "turso")]
+            StoreWrapper::Turso(turso) => turso.handle_commit(commit_response),
+        }
+    }
+
+    fn handle_not_found(
+        &self,
+        subject: &str,
+        error: AtomicError,
+        for_agent: Option<&Agent>,
+    ) -> AtomicResult<atomic_lib::Resource> {
+        match self {
+            StoreWrapper::Db(db) => db.handle_not_found(subject, error, for_agent),
+            #[cfg(feature = "turso")]
+            StoreWrapper::Turso(turso) => turso.handle_not_found(subject, error, for_agent),
+        }
+    }
+
+    fn create_agent(&self, name: Option<&str>) -> AtomicResult<Agent> {
+        match self {
+            StoreWrapper::Db(db) => db.create_agent(name),
+            #[cfg(feature = "turso")]
+            StoreWrapper::Turso(turso) => turso.create_agent(name),
+        }
+    }
+
+    fn add_resource(&self, resource: &atomic_lib::Resource) -> AtomicResult<()> {
+        match self {
+            StoreWrapper::Db(db) => db.add_resource(resource),
+            #[cfg(feature = "turso")]
+            StoreWrapper::Turso(turso) => turso.add_resource(resource),
+        }
+    }
+
+    fn get_resource_new(&self, subject: &str) -> atomic_lib::Resource {
+        match self {
+            StoreWrapper::Db(db) => db.get_resource_new(subject),
+            #[cfg(feature = "turso")]
+            StoreWrapper::Turso(turso) => turso.get_resource_new(subject),
         }
     }
 }
@@ -286,15 +352,27 @@ impl AppState {
         if let Some(turso_config) = &config.turso_config {
             tracing::info!("Initializing Turso store backend");
             
-            // Use tokio runtime to handle async initialization
-            let runtime = tokio::runtime::Handle::current();
-            let store = runtime.block_on(async {
-                if turso_config.embedded_replica_path.is_some() {
-                    TursoStore::new_embedded_replica(turso_config.clone()).await
-                } else {
-                    TursoStore::new_remote(turso_config.clone()).await
-                }
-            })?;
+            // Create a new runtime if one doesn't exist, or use the current one
+            let store = if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                handle.block_on(async {
+                    if turso_config.embedded_replica_path.is_some() {
+                        TursoStore::new_embedded_replica(turso_config.clone()).await
+                    } else {
+                        TursoStore::new_remote(turso_config.clone()).await
+                    }
+                })?
+            } else {
+                // Create a new runtime for initialization
+                let rt = tokio::runtime::Runtime::new()
+                    .map_err(|e| format!("Failed to create runtime for Turso initialization: {}", e))?;
+                rt.block_on(async {
+                    if turso_config.embedded_replica_path.is_some() {
+                        TursoStore::new_embedded_replica(turso_config.clone()).await
+                    } else {
+                        TursoStore::new_remote(turso_config.clone()).await
+                    }
+                })?
+            };
 
             store.set_server_url(&config.server_url);
             return Ok(StoreWrapper::Turso(store));

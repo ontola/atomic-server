@@ -110,6 +110,11 @@ docker run -d \
 | `ATOMIC_TURSO_AUTH_TOKEN` | Turso auth token | - | Yes |
 | `ATOMIC_TURSO_REPLICA_PATH` | Local replica path | `./atomic_data.db` | No |
 | `ATOMIC_TURSO_SYNC_INTERVAL` | Sync interval (seconds) | `60` | No |
+| `ATOMIC_TURSO_MAX_CONNECTIONS` | Connection pool size | `10` | No |
+| `ATOMIC_TURSO_CONNECTION_TIMEOUT` | Connection timeout (seconds) | `30` | No |
+| `ATOMIC_TURSO_CACHE_SIZE` | Prepared statement cache size | `100` | No |
+| `ATOMIC_TURSO_QUERY_CACHE_TTL` | Query cache TTL (seconds) | `300` | No |
+| `ATOMIC_TURSO_QUERY_CACHE_SIZE` | Query result cache size | `500` | No |
 
 ### Command Line Flags
 ```bash
@@ -139,6 +144,54 @@ ATOMIC_TURSO_SYNC_INTERVAL=60
 
 # Slow sync for read-heavy workloads
 ATOMIC_TURSO_SYNC_INTERVAL=300
+```
+
+### Performance Features
+
+Atomic Server includes advanced performance optimizations for Turso:
+
+#### Connection Pooling
+- **Async Connection Pool**: Manages multiple concurrent connections efficiently
+- **Configurable Limits**: Control pool size and connection timeouts
+- **Automatic Scaling**: Connections created on-demand up to pool limit
+
+#### Intelligent Caching
+- **Prepared Statement Cache**: LRU cache for SQL statements (reduces parsing overhead)
+- **Query Result Cache**: TTL-based cache for frequently accessed data
+- **Automatic Invalidation**: Cache entries expire based on TTL configuration
+
+#### Optimized Data Access
+- **Streaming Resource Iterator**: Memory-efficient batch processing for large datasets
+- **Strategic Database Indexes**: JSON property indexes for fast queries
+- **Batch Operations**: Optimized bulk insert/update operations
+
+### Performance Tuning
+
+#### High-Throughput Configuration
+```bash
+# Optimize for high-concurrency workloads
+export ATOMIC_TURSO_MAX_CONNECTIONS=20
+export ATOMIC_TURSO_CONNECTION_TIMEOUT=15
+export ATOMIC_TURSO_CACHE_SIZE=200
+export ATOMIC_TURSO_QUERY_CACHE_SIZE=1000
+export ATOMIC_TURSO_QUERY_CACHE_TTL=60
+```
+
+#### Memory-Optimized Configuration
+```bash
+# Optimize for low-memory environments
+export ATOMIC_TURSO_MAX_CONNECTIONS=5
+export ATOMIC_TURSO_CACHE_SIZE=50
+export ATOMIC_TURSO_QUERY_CACHE_SIZE=100
+export ATOMIC_TURSO_QUERY_CACHE_TTL=600
+```
+
+#### Read-Heavy Workload Optimization
+```bash
+# Optimize for read-heavy applications
+export ATOMIC_TURSO_QUERY_CACHE_SIZE=2000
+export ATOMIC_TURSO_QUERY_CACHE_TTL=900
+export ATOMIC_TURSO_SYNC_INTERVAL=300
 ```
 
 ## Monitoring & Observability
@@ -272,6 +325,30 @@ ATOMIC_TURSO_MAX_CONNECTIONS=20
 ATOMIC_TURSO_CONNECTION_TIMEOUT=30
 ```
 
+### Performance Monitoring
+```bash
+# Monitor connection pool usage
+grep "connection_pool" /var/log/atomic-server.log
+
+# Check cache hit rates
+grep "cache_hit" /var/log/atomic-server.log
+
+# Monitor query performance
+grep "query_duration" /var/log/atomic-server.log
+```
+
+### Cache Management
+```bash
+# Clear prepared statement cache
+curl -X POST http://localhost:9883/admin/cache/clear/statements
+
+# Clear query result cache
+curl -X POST http://localhost:9883/admin/cache/clear/queries
+
+# Get cache statistics
+curl http://localhost:9883/admin/cache/stats
+```
+
 ### Database Branching
 ```bash
 # Create development branch
@@ -283,3 +360,7 @@ ATOMIC_TURSO_URL_PROD="libsql://atomic-server-db.turso.io"
 ```
 
 This deployment option combines the reliability of SQLite with the global reach of Turso's edge network, providing excellent performance and scalability for Atomic Server deployments.
+
+## Performance Optimization
+
+For advanced performance tuning, configuration patterns, and benchmarking guidance, see the comprehensive [Turso Performance Guide](deployment-turso-performance.md).
