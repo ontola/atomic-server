@@ -965,14 +965,13 @@ impl Resource {
     /// Does not validate property / datatype combination.
     /// Inserts a Property/Value combination.
     /// Overwrites existing.
-    /// Writes to Loro (single source of truth) and propvals (read cache).
+    /// Writes to Loro if initialized, and always to propvals + commit builder.
+    /// Loro is initialized lazily on first save, not here — avoids overhead
+    /// during bulk resource construction (e.g. populate).
     pub fn set_unsafe(&mut self, property: String, value: Value) -> &mut Self {
-        // Loro is the source of truth — always write there
-        let _ = self.init_loro();
         if let Some(doc) = &self.loro {
             let _ = doc.set_property(&property, &value);
         }
-        // Propvals is the typed read cache
         self.propvals.insert(property.clone(), value.clone());
         self.commit.set(property, value);
         self

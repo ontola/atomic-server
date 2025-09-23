@@ -252,8 +252,11 @@ pub async fn populate_default_store(store: &impl Storelike) -> AtomicResult<()> 
 }
 
 /// Bootstraps the store with core models and default ontologies.
+/// Uses `begin_batch`/`commit_batch` to fold all writes into a single DB transaction.
 pub async fn bootstrap(store: &impl Storelike) -> AtomicResult<()> {
+    store.begin_batch();
     populate_base_models(store).await?;
     populate_default_store(store).await?;
+    store.commit_batch()?;
     Ok(())
 }

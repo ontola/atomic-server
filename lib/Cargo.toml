@@ -68,6 +68,9 @@ criterion = { version = "0.5", features = ["async_tokio"] }
 iai = "0.1"
 lazy_static = "1"
 ntest = "0.9"
+tracing-chrome = "0.7"
+tracing-subscriber = { version = "0.3", features = ["registry"] }
+tokio = { version = "1", features = ["rt", "macros"] }
 
 [dependencies.opentelemetry]
 optional = true
@@ -98,3 +101,8 @@ harness = false
 [[bench]]
 name = "loro_bench"
 harness = false
+
+[[bench]]
+name = "populate_bench"
+harness = false
+required-features = ["db-redb"]

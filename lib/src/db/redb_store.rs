@@ -48,6 +48,36 @@ fn table_def(tree: Tree) -> TableDefinition<'static, &'static [u8], &'static [u8
 /// Thread-safe via redb's internal locking (MVCC).
 pub struct RedbStore {
     db: Arc<Database>,
+    /// When Some, operations are buffered instead of committed immediately.
+    /// Reads consult the buffer first (read-your-writes within a batch).
+    /// Call `commit_batch()` to flush all buffered ops in a single transaction.
+    batch_buffer: std::sync::Mutex<Option<BatchBuffer>>,
+}
+
+/// Per-tree map of pending operations. Used for fast read-your-writes lookups.
+#[derive(Default)]
+struct BatchBuffer {
+    /// Insertion-ordered list of all operations (for the final transaction).
+    ops: Vec<Operation>,
+    /// Per-tree most-recent value for each key. None means deleted.
+    /// Keyed by (tree_name, key_bytes).
+    latest: std::collections::HashMap<(String, Vec<u8>), Option<Vec<u8>>>,
+}
+
+impl BatchBuffer {
+    fn push(&mut self, op: Operation) {
+        let key = (op.tree.to_string(), op.key.clone());
+        let val = match op.method {
+            Method::Insert => op.val.clone(),
+            Method::Delete => None,
+        };
+        self.latest.insert(key, val);
+        self.ops.push(op);
+    }
+
+    fn get(&self, tree: &Tree, key: &[u8]) -> Option<Option<Vec<u8>>> {
+        self.latest.get(&(tree.to_string(), key.to_vec())).cloned()
+    }
 }
 
 impl RedbStore {
@@ -75,7 +105,10 @@ impl RedbStore {
                 .map_err(|e| format!("Failed to commit initial tables: {e}"))?;
         }
 
-        Ok(RedbStore { db: Arc::new(db) })
+        Ok(RedbStore {
+            db: Arc::new(db),
+            batch_buffer: std::sync::Mutex::new(None),
+        })
     }
 
     /// Create a new in-memory RedbStore.
@@ -104,7 +137,10 @@ impl RedbStore {
                 .map_err(|e| format!("Failed to commit initial tables: {e}"))?;
         }
 
-        Ok(RedbStore { db: Arc::new(db) })
+        Ok(RedbStore {
+            db: Arc::new(db),
+            batch_buffer: std::sync::Mutex::new(None),
+        })
     }
 
     /// Create a RedbStore backed by OPFS for persistent storage in WASM Workers.
@@ -137,7 +173,10 @@ impl RedbStore {
                 .map_err(|e| format!("Failed to commit initial tables: {e}"))?;
         }
 
-        Ok(RedbStore { db: Arc::new(db) })
+        Ok(RedbStore {
+            db: Arc::new(db),
+            batch_buffer: std::sync::Mutex::new(None),
+        })
     }
 }
 
@@ -160,6 +199,15 @@ fn prefix_upper_bound(prefix: &[u8]) -> Option<Vec<u8>> {
 
 impl KvStore for RedbStore {
     fn get(&self, tree: Tree, key: &[u8]) -> AtomicResult<Option<Vec<u8>>> {
+        // Read-your-writes: check the batch buffer first
+        {
+            let buf = self.batch_buffer.lock().unwrap();
+            if let Some(buffer) = buf.as_ref() {
+                if let Some(val) = buffer.get(&tree, key) {
+                    return Ok(val);
+                }
+            }
+        }
         let tx = self
             .db
             .begin_read()
@@ -174,35 +222,21 @@ impl KvStore for RedbStore {
     }
 
     fn insert(&self, tree: Tree, key: &[u8], val: &[u8]) -> AtomicResult<()> {
-        let tx = self
-            .db
-            .begin_write()
-            .map_err(|e| format!("redb write tx: {e}"))?;
-        {
-            let mut table = tx
-                .open_table(table_def(tree))
-                .map_err(|e| format!("redb open table: {e}"))?;
-            table
-                .insert(key, val)
-                .map_err(|e| format!("redb insert: {e}"))?;
-        }
-        tx.commit().map_err(|e| format!("redb commit: {e}"))?;
-        Ok(())
+        self.apply_batch(&[Operation {
+            tree,
+            method: Method::Insert,
+            key: key.to_vec(),
+            val: Some(val.to_vec()),
+        }])
     }
 
     fn remove(&self, tree: Tree, key: &[u8]) -> AtomicResult<()> {
-        let tx = self
-            .db
-            .begin_write()
-            .map_err(|e| format!("redb write tx: {e}"))?;
-        {
-            let mut table = tx
-                .open_table(table_def(tree))
-                .map_err(|e| format!("redb open table: {e}"))?;
-            table.remove(key).map_err(|e| format!("redb remove: {e}"))?;
-        }
-        tx.commit().map_err(|e| format!("redb commit: {e}"))?;
-        Ok(())
+        self.apply_batch(&[Operation {
+            tree,
+            method: Method::Delete,
+            key: key.to_vec(),
+            val: None,
+        }])
     }
 
     fn contains_key(&self, tree: Tree, key: &[u8]) -> AtomicResult<bool> {
@@ -346,6 +380,17 @@ impl KvStore for RedbStore {
             return Ok(());
         }
 
+        // If in batch mode, buffer the operations instead of committing
+        {
+            let mut buf = self.batch_buffer.lock().unwrap();
+            if let Some(buffer) = buf.as_mut() {
+                for op in operations {
+                    buffer.push(op.clone());
+                }
+                return Ok(());
+            }
+        }
+
         let tx = self
             .db
             .begin_write()
@@ -389,5 +434,50 @@ impl KvStore for RedbStore {
             .open_table(table_def(tree))
             .map_err(|e| format!("redb open table: {e}"))?;
         Ok(table.len().map_err(|e| format!("redb len: {e}"))? as usize)
+    }
+
+    fn begin_batch(&self) {
+        let mut buf = self.batch_buffer.lock().unwrap();
+        if buf.is_none() {
+            *buf = Some(BatchBuffer::default());
+        }
+    }
+
+    fn commit_batch(&self) -> AtomicResult<()> {
+        let ops = {
+            let mut buf = self.batch_buffer.lock().unwrap();
+            buf.take().map(|b| b.ops).unwrap_or_default()
+        };
+        if ops.is_empty() {
+            return Ok(());
+        }
+        // Apply all buffered operations in a single transaction
+        let tx = self
+            .db
+            .begin_write()
+            .map_err(|e| format!("redb write tx: {e}"))?;
+        {
+            for op in &ops {
+                let mut table = tx
+                    .open_table(table_def(op.tree.clone()))
+                    .map_err(|e| format!("redb open table: {e}"))?;
+
+                match op.method {
+                    Method::Insert => {
+                        let val = op.val.as_deref().unwrap_or(b"");
+                        table
+                            .insert(op.key.as_slice(), val)
+                            .map_err(|e| format!("redb batch insert: {e}"))?;
+                    }
+                    Method::Delete => {
+                        table
+                            .remove(op.key.as_slice())
+                            .map_err(|e| format!("redb batch remove: {e}"))?;
+                    }
+                }
+            }
+        }
+        tx.commit().map_err(|e| format!("redb commit batch: {e}"))?;
+        Ok(())
     }
 }

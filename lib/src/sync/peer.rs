@@ -273,6 +273,11 @@ pub fn live_peer_ids() -> Vec<String> {
 /// Flag: true while importing from a peer (prevents echo back).
 static IMPORTING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
+/// Returns true if we're currently importing data from a remote peer.
+pub fn is_importing() -> bool {
+    IMPORTING.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 /// Start the live sync system. Watches for local changes and pushes to all connected peers.
 fn start_live_sync(store: Db) {
     // Initialize globals
@@ -526,6 +531,7 @@ pub struct SyncEvent {
     pub kind: String,
 }
 
+#[allow(dead_code)] // Used via #[serde(default = "...")] attribute above
 fn default_event_kind() -> String { "sync".into() }
 
 static SYNC_EVENT_TX: OnceLock<tokio::sync::broadcast::Sender<SyncEvent>> = OnceLock::new();
