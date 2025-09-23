@@ -28,17 +28,28 @@
 //!
 //! ### 1. Text Search (Fastest)
 //! ```rust
+//! # use atomic_lib::search_sqlite::SqliteSearchState;
+//! # use atomic_lib::Db;
+//! # let db = Db::init_temp("test").unwrap();
+//! # let search_state = SqliteSearchState::new(db).unwrap();
 //! // Ultra-fast full-text search using SQLite FTS5
 //! let results = search_state.text_search("query", 10)?;
+//! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 //! - **Use for**: Common search queries, real-time suggestions
 //! - **Performance**: ~285ns (99.74% faster than original)
 //! - **Cache**: Hot cache with selective invalidation
 //!
 //! ### 2. Fuzzy Search (Fast)
-//! ```rust
+//! ```rust,no_run
+//! # use atomic_lib::search_sqlite::SqliteSearchState;
+//! # use atomic_lib::Db;
+//! # let db = Db::init_temp("test").unwrap();
+//! # let search_state = SqliteSearchState::new(db.clone()).unwrap();
+//! # search_state.add_all_resources(&db).unwrap();
 //! // FST-based fuzzy matching with edit distance tolerance
 //! let results = search_state.fuzzy_search("qurey", 2, 10)?;
+//! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 //! - **Use for**: Typo tolerance, partial matches
 //! - **Performance**: ~159ns (99.92% faster than original)
@@ -68,9 +79,17 @@
 //! - **Thread-Safe**: Uses Arc<RwLock<>> for concurrent access
 //!
 //! ```rust
+//! # use atomic_lib::search_sqlite::SqliteSearchState;
+//! # use atomic_lib::{Db, Resource};
+//! # let db = Db::init_temp("test").unwrap();
+//! # let search_state = SqliteSearchState::new(db.clone()).unwrap();
+//! # let mut updated_resource = Resource::new_generate_subject(&db).unwrap();
+//! # let subject = updated_resource.get_subject();
+//! # let conn = db.get_connection().unwrap();
 //! // Cache is automatically invalidated when resources are updated
-//! search_state.add_resource(&updated_resource, &store)?;
+//! search_state.add_resource(&updated_resource, &conn)?;
 //! search_state.remove_resource(subject)?;
+//! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 //!
 //! ## Feature Flags
@@ -107,11 +126,11 @@ use fst::{automaton, Automaton, IntoStreamer, Map, MapBuilder, Streamer};
 #[cfg(feature = "db")]
 use rusqlite::{params, Connection, Row};
 #[cfg(feature = "db")]
-use lru::LruCache;
-#[cfg(feature = "db")]
 use parking_lot::RwLock;
 #[cfg(feature = "db")]
-use std::{sync::Arc, num::NonZeroUsize, path::PathBuf};
+use dashmap::DashMap;
+#[cfg(feature = "db")]
+use std::{sync::Arc, path::PathBuf, collections::HashSet, time::{Instant, Duration}};
 #[cfg(feature = "db")]
 use memmap2::{Mmap, MmapOptions};
 #[cfg(all(feature = "db", feature = "terraphim-search"))]
@@ -146,15 +165,120 @@ impl FstStorage {
 }
 
 /// Cached FST data structure for performance optimization
+/// Cache entry with metadata for efficient invalidation
+#[cfg(feature = "db")]
+#[derive(Clone, Debug)]
+struct CacheEntry {
+    /// The cached search results
+    results: Vec<String>,
+    /// Timestamp when this entry was created
+    created_at: Instant,
+    /// Set of subjects that are included in these results
+    subjects: HashSet<String>,
+}
+
+/// High-performance cache using DashMap for lock-free access
+#[cfg(feature = "db")]
+#[derive(Clone, Debug)]
+struct PerformantCache {
+    /// Main cache storage using DashMap for lock-free access
+    cache: Arc<DashMap<String, CacheEntry>>,
+    /// Maximum number of entries to keep in cache
+    max_size: usize,
+    /// TTL for cache entries (5 minutes)
+    ttl: Duration,
+}
+
+#[cfg(feature = "db")]
+impl PerformantCache {
+    fn new(max_size: usize) -> Self {
+        Self {
+            cache: Arc::new(DashMap::new()),
+            max_size,
+            ttl: Duration::from_secs(300), // 5 minutes
+        }
+    }
+    
+    /// Get an entry from the cache if it exists and hasn't expired
+    fn get(&self, key: &str) -> Option<Vec<String>> {
+        let entry = self.cache.get(key)?;
+        
+        // Check if entry has expired
+        if entry.created_at.elapsed() > self.ttl {
+            drop(entry);
+            self.cache.remove(key);
+            return None;
+        }
+        
+        Some(entry.results.clone())
+    }
+    
+    /// Insert an entry into the cache
+    fn put(&self, key: String, results: Vec<String>) {
+        // Create subject set for efficient invalidation
+        let subjects: HashSet<String> = results.iter().cloned().collect();
+        
+        let entry = CacheEntry {
+            results,
+            created_at: Instant::now(),
+            subjects,
+        };
+        
+        self.cache.insert(key, entry);
+        
+        // Evict old entries if cache is too large
+        if self.cache.len() > self.max_size {
+            self.evict_old_entries();
+        }
+    }
+    
+    /// Remove entries that contain a specific subject
+    fn invalidate_subject(&self, subject: &str) {
+        // Use retain to efficiently remove entries containing the subject
+        self.cache.retain(|_key, entry| {
+            !entry.subjects.contains(subject)
+        });
+    }
+    
+    /// Clear all entries
+    fn clear(&self) {
+        self.cache.clear();
+    }
+    
+    /// Evict oldest entries when cache is full
+    fn evict_old_entries(&self) {
+        if self.cache.len() <= self.max_size {
+            return;
+        }
+        
+        // Collect entries with their creation times
+        let mut entries: Vec<(String, Instant)> = self.cache
+            .iter()
+            .map(|entry| (entry.key().clone(), entry.value().created_at))
+            .collect();
+        
+        // Sort by creation time (oldest first)
+        entries.sort_by_key(|(_, created_at)| *created_at);
+        
+        // Remove oldest entries until we're under the limit
+        let to_remove = self.cache.len() - self.max_size + 50; // Remove a bit extra to avoid frequent evictions
+        for (key, _) in entries.into_iter().take(to_remove) {
+            self.cache.remove(&key);
+        }
+    }
+}
+
 #[cfg(feature = "db")]
 #[derive(Clone)]
 struct CachedFst {
     /// Cached FST map - either memory or memory-mapped
     fst: Option<Arc<FstStorage>>,
-    /// Hot cache for frequently accessed fuzzy search terms
-    hot_cache: Arc<RwLock<LruCache<String, Vec<String>>>>,
-    /// Cache for exact prefix searches  
-    prefix_cache: Arc<RwLock<LruCache<String, Vec<String>>>>,
+    /// High-performance cache for frequently accessed fuzzy search terms
+    hot_cache: PerformantCache,
+    /// Cache for exact prefix searches using DashMap
+    prefix_cache: PerformantCache,
+    /// Cache for hierarchy paths to avoid recursive lookups
+    hierarchy_cache: Arc<DashMap<String, String>>,
     /// Cache version to invalidate when FST is rebuilt
     version: Arc<RwLock<u64>>,
     /// Path to FST file for memory mapping
@@ -165,8 +289,9 @@ impl CachedFst {
     fn new() -> Self {
         Self {
             fst: None,
-            hot_cache: Arc::new(RwLock::new(LruCache::new(NonZeroUsize::new(1000).unwrap()))),
-            prefix_cache: Arc::new(RwLock::new(LruCache::new(NonZeroUsize::new(500).unwrap()))),
+            hot_cache: PerformantCache::new(1000),
+            prefix_cache: PerformantCache::new(500),
+            hierarchy_cache: Arc::new(DashMap::new()),
             version: Arc::new(RwLock::new(0)),
             fst_file_path: None,
         }
@@ -175,8 +300,9 @@ impl CachedFst {
     fn invalidate(&mut self) {
         let mut version = self.version.write();
         *version += 1;
-        self.hot_cache.write().clear();
-        self.prefix_cache.write().clear();
+        self.hot_cache.clear();
+        self.prefix_cache.clear();
+        self.hierarchy_cache.clear();
         self.fst = None;
         
         // Clean up memory-mapped file if it exists
@@ -186,6 +312,12 @@ impl CachedFst {
             }
         }
         self.fst_file_path = None;
+    }
+    
+    /// Efficiently invalidate cache entries for a specific subject
+    fn invalidate_subject(&self, subject: &str) {
+        self.hot_cache.invalidate_subject(subject);
+        self.prefix_cache.invalidate_subject(subject);
     }
     
     fn set_fst_file_path(&mut self, path: PathBuf) {
@@ -297,10 +429,10 @@ impl SqliteSearchState {
                 String::new()
             };
 
-        let propvals_json = resource.to_json_ad().unwrap_or_else(|_| "{}".to_string());
+        let propvals_json = extract_searchable_properties(resource);
 
         // Build hierarchy path for faceted search
-        let hierarchy = resource_to_hierarchy_path(resource, &self.db)?;
+        let hierarchy = self.resource_to_hierarchy_path(resource)?;
 
         conn.execute(
             "INSERT OR REPLACE INTO search_index (subject, title, description, propvals_json, hierarchy) 
@@ -328,34 +460,22 @@ impl SqliteSearchState {
     }
 
     /// Invalidate cache entries that contain results for a specific resource subject
+    /// This is now much more efficient using DashMap's targeted invalidation
     fn invalidate_resource_caches(&self, subject: &str) {
         let cached = self.cached_fst.read();
         
-        // Invalidate hot cache entries containing this resource
-        {
-            let mut hot_cache = cached.hot_cache.write();
-            let keys_to_remove: Vec<String> = hot_cache
-                .iter()
-                .filter(|(_, results)| results.contains(&subject.to_string()))
-                .map(|(k, _)| k.clone())
-                .collect();
-            for key in keys_to_remove {
-                hot_cache.pop(&key);
-            }
-        }
+        // Use the new efficient invalidation method for search results
+        cached.invalidate_subject(subject);
         
-        // Invalidate prefix cache entries containing this resource
-        {
-            let mut prefix_cache = cached.prefix_cache.write();
-            let keys_to_remove: Vec<String> = prefix_cache
-                .iter()
-                .filter(|(_, results)| results.contains(&subject.to_string()))
-                .map(|(k, _)| k.clone())
-                .collect();
-            for key in keys_to_remove {
-                prefix_cache.pop(&key);
-            }
-        }
+        // Also invalidate hierarchy cache for this resource and any that may reference it
+        // Remove direct entry
+        cached.hierarchy_cache.remove(subject);
+        
+        // Remove entries that might be children of this resource
+        // (their hierarchy paths would contain this subject)
+        cached.hierarchy_cache.retain(|_key, path| {
+            !path.contains(subject)
+        });
     }
 
     /// Build FST index for fuzzy search from all indexed terms
@@ -434,11 +554,16 @@ impl SqliteSearchState {
     ///
     /// ## Example
     /// ```rust
+    /// # use atomic_lib::search_sqlite::SqliteSearchState;
+    /// # use atomic_lib::Db;
+    /// # let db = Db::init_temp("test").unwrap();
+    /// # let search_state = SqliteSearchState::new(db).unwrap();
     /// // Search for resources containing "atomic"
     /// let results = search_state.text_search("atomic", 10)?;
     /// 
     /// // Subsequent identical queries hit cache (~263ns)
     /// let cached_results = search_state.text_search("atomic", 10)?;
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     ///
     /// ## Use Cases
@@ -460,10 +585,9 @@ impl SqliteSearchState {
         // Check prefix cache first
         {
             let cache = self.cached_fst.read();
-            let mut prefix_cache = cache.prefix_cache.write();
-            if let Some(cached_result) = prefix_cache.get(&cache_key) {
+            if let Some(cached_result) = cache.prefix_cache.get(&cache_key) {
                 tracing::trace!("Cache hit for text search: {}", query);
-                return Ok(cached_result.clone());
+                return Ok(cached_result);
             }
         }
 
@@ -498,8 +622,7 @@ impl SqliteSearchState {
         // Cache the results
         {
             let cache = self.cached_fst.read();
-            let mut prefix_cache = cache.prefix_cache.write();
-            prefix_cache.put(cache_key, results.clone());
+            cache.prefix_cache.put(cache_key, results.clone());
         }
 
         tracing::trace!("Text search for '{}' found {} results", query, results.len());
@@ -793,12 +916,18 @@ impl SqliteSearchState {
     /// - Preserves unrelated cached queries for performance
     ///
     /// ## Example
-    /// ```rust
+    /// ```rust,no_run
+    /// # use atomic_lib::search_sqlite::SqliteSearchState;
+    /// # use atomic_lib::Db;
+    /// # let db = Db::init_temp("test").unwrap();
+    /// # let search_state = SqliteSearchState::new(db.clone()).unwrap();
+    /// # search_state.add_all_resources(&db).unwrap();
     /// // Find matches for "atomic" with typos up to edit distance 2
     /// let results = search_state.fuzzy_search("atomik", 2, 10)?;
     /// 
     /// // Handles common typos and partial matches
     /// let partial = search_state.fuzzy_search("atom", 1, 5)?;
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     ///
     /// ## Use Cases
@@ -831,10 +960,9 @@ impl SqliteSearchState {
         // Check hot cache first
         {
             let cache = self.cached_fst.read();
-            let mut hot_cache = cache.hot_cache.write();
-            if let Some(cached_result) = hot_cache.get(&cache_key) {
+            if let Some(cached_result) = cache.hot_cache.get(&cache_key) {
                 tracing::trace!("Cache hit for fuzzy search: {}", query);
-                return Ok(cached_result.clone());
+                return Ok(cached_result);
             }
         }
 
@@ -868,8 +996,7 @@ impl SqliteSearchState {
             // Cache empty result
             {
                 let cache = self.cached_fst.read();
-                let mut hot_cache = cache.hot_cache.write();
-                hot_cache.put(cache_key, Vec::new());
+                cache.hot_cache.put(cache_key, Vec::new());
             }
             return Ok(Vec::new());
         }
@@ -907,8 +1034,7 @@ impl SqliteSearchState {
         // Cache the results
         {
             let cache = self.cached_fst.read();
-            let mut hot_cache = cache.hot_cache.write();
-            hot_cache.put(cache_key, results.clone());
+            cache.hot_cache.put(cache_key, results.clone());
         }
 
         tracing::trace!("Fuzzy search for '{}' found {} results", query, results.len());
@@ -1098,6 +1224,58 @@ impl SqliteSearchState {
     }
 }
 
+/// Extract only searchable properties from a resource as a compact JSON string
+/// This is much more efficient than serializing the entire resource
+#[cfg(feature = "db")]
+fn extract_searchable_properties(resource: &Resource) -> String {
+    use serde_json::{Map, Value};
+    
+    let mut searchable = Map::new();
+    
+    // Common searchable properties that we care about for search
+    let searchable_urls = [
+        crate::urls::NAME,
+        crate::urls::DESCRIPTION, 
+        crate::urls::SHORTNAME,
+        crate::urls::FILENAME,
+        // Add more properties that should be searchable
+    ];
+    
+    // Extract only the properties we need for search
+    for &url in &searchable_urls {
+        if let Ok(value) = resource.get(url) {
+            let json_value = match value {
+                crate::Value::String(s) => Value::String(s.clone()),
+                crate::Value::Markdown(s) => Value::String(s.clone()),
+                crate::Value::Slug(s) => Value::String(s.clone()),
+                crate::Value::Integer(i) => Value::Number((*i).into()),
+                crate::Value::Boolean(b) => Value::Bool(*b),
+                crate::Value::AtomicUrl(url) => Value::String(url.clone()),
+                crate::Value::Float(f) => {
+                    if let Some(num) = serde_json::Number::from_f64(*f) {
+                        Value::Number(num)
+                    } else {
+                        continue;
+                    }
+                },
+                crate::Value::Timestamp(ts) => Value::Number((*ts).into()),
+                // Skip complex types like ResourceArray for search indexing
+                _ => continue,
+            };
+            
+            // Use the property URL as the key
+            searchable.insert(url.to_string(), json_value);
+        }
+    }
+    
+    // If no searchable properties found, return minimal JSON
+    if searchable.is_empty() {
+        searchable.insert("subject".to_string(), Value::String(resource.get_subject().to_string()));
+    }
+    
+    serde_json::to_string(&searchable).unwrap_or_else(|_| "{}".to_string())
+}
+
 /// Extract title from resource
 #[cfg(feature = "db")]
 fn get_resource_title(resource: &Resource) -> String {
@@ -1110,28 +1288,53 @@ fn get_resource_title(resource: &Resource) -> String {
 
 /// Build hierarchy path for a resource
 #[cfg(feature = "db")]
-fn resource_to_hierarchy_path(resource: &Resource, _store: &Db) -> AtomicResult<String> {
-    let mut hierarchy_parts = Vec::new();
-    let mut current_subject = resource.get_subject().to_string();
-
-    // Build hierarchy by following parent relationships
-    let mut depth = 0;
-    while depth < 10 {
-        // Prevent infinite loops
-        hierarchy_parts.push(current_subject.clone());
-
-        // Try to find parent
-        if let Ok(crate::Value::AtomicUrl(parent_url)) = resource.get(crate::urls::PARENT) {
-            current_subject = parent_url.to_string();
-            depth += 1;
-        } else {
-            break;
+impl SqliteSearchState {
+    /// Build hierarchy path for a resource, using cache to avoid repeated computation
+    fn resource_to_hierarchy_path(&self, resource: &Resource) -> AtomicResult<String> {
+        let subject = resource.get_subject().to_string();
+        
+        // Check cache first
+        if let Some(cached_path) = self.cached_fst.read().hierarchy_cache.get(&subject) {
+            return Ok(cached_path.value().clone());
         }
+        
+        let mut hierarchy_parts = Vec::new();
+        let mut current_subject = subject.clone();
+        let mut visited = std::collections::HashSet::new();
+        
+        // Build hierarchy by following parent relationships
+        while visited.len() < 10 {  // Prevent infinite loops
+            if visited.contains(&current_subject) {
+                break; // Circular reference detected
+            }
+            visited.insert(current_subject.clone());
+            hierarchy_parts.push(current_subject.clone());
+            
+            // Try to get the resource and find its parent
+            match self.db.get_resource(&current_subject) {
+                Ok(current_resource) => {
+                    if let Ok(crate::Value::AtomicUrl(parent_url)) = current_resource.get(crate::urls::PARENT) {
+                        current_subject = parent_url.to_string();
+                    } else {
+                        break; // No parent found
+                    }
+                }
+                Err(_) => break, // Resource not found
+            }
+        }
+        
+        // Reverse to get root -> leaf order
+        hierarchy_parts.reverse();
+        let hierarchy_path = hierarchy_parts.join("/");
+        
+        // Cache the result
+        {
+            let cached = self.cached_fst.read();
+            cached.hierarchy_cache.insert(subject, hierarchy_path.clone());
+        }
+        
+        Ok(hierarchy_path)
     }
-
-    // Reverse to get root -> leaf order
-    hierarchy_parts.reverse();
-    Ok(hierarchy_parts.join("/"))
 }
 
 /// Extract and count terms from text

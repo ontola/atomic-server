@@ -50,6 +50,7 @@ tracing-chrome = "0.7"
 tracing-log = "0.2"
 ureq = "2"
 urlencoding = "2"
+rusqlite = { version = "0.37", features = ["bundled", "backup", "modern_sqlite"] }
 
 [dependencies.instant-acme]
 optional = true

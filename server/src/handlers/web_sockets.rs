@@ -14,7 +14,6 @@ use atomic_lib::{
     errors::AtomicResult,
     Storelike,
 };
-use crate::appstate::StoreWrapper;
 use std::time::{Duration, Instant};
 use std::collections::HashMap;
 
@@ -66,7 +65,7 @@ pub struct WebSocketConnection {
     /// If it's not specified, it's the Public Agent.
     /// This cannot be changed after initial authentication for security
     agent: ForAgent,
-    store: StoreWrapper,
+    store: atomic_lib::Db,
     /// Rate limiting for authentication attempts
     auth_attempts: HashMap<String, (Instant, u32)>,
 }
@@ -212,15 +211,7 @@ fn handle_ws_message(
 }
 
 impl WebSocketConnection {
-    fn new(commit_monitor_addr: Addr<CommitMonitor>, agent: ForAgent, store: StoreWrapper) -> Self {
-        let size = std::mem::size_of::<StoreWrapper>();
-        if size > 10000 {
-            tracing::warn!(
-                "Cloned Store is over 10kB, this will hurt performance: {:?} bytes",
-                size
-            );
-        }
-
+    fn new(commit_monitor_addr: Addr<CommitMonitor>, agent: ForAgent, store: atomic_lib::Db) -> Self {
         Self {
             hb: Instant::now(),
             // Maybe this should be stored only in the CommitMonitor, and not here.

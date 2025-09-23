@@ -20,17 +20,7 @@ fn rebuild_indexes(appstate: &crate::appstate::AppState) -> AtomicServerResult<(
 
     tracing::info!("Rebuilding SQLite search index...");
     // SQLite search doesn't need explicit deletion - add_all_resources handles it
-    // Handle different store types
-    match &appstate.store {
-        crate::appstate::StoreWrapper::Db(db) => {
-            appstate.search_state.add_all_resources(db)?;
-        }
-        #[cfg(feature = "turso")]
-        crate::appstate::StoreWrapper::Turso(_) => {
-            // Turso uses built-in FTS, no need for separate indexing
-            tracing::info!("Turso uses built-in FTS, skipping separate search indexing");
-        }
-    }
+    appstate.search_state.add_all_resources(&appstate.store)?;
     Ok(())
 }
 

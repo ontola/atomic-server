@@ -4,203 +4,10 @@ use crate::{
 };
 use atomic_lib::{
     agents::Agent,
+    commit::CommitResponse,
     config::{ClientConfig, SharedConfig},
-    errors::{AtomicError, AtomicResult},
     Storelike,
 };
-
-#[cfg(feature = "turso")]
-use atomic_lib::TursoStore;
-
-/// Enum to support different store backends
-#[derive(Clone)]
-pub enum StoreWrapper {
-    /// Default SQLite/Sled database
-    Db(atomic_lib::Db),
-    /// Turso (libSQL) database backend
-    #[cfg(feature = "turso")]
-    Turso(TursoStore),
-}
-
-impl StoreWrapper {
-    /// Build index for search functionality (Db-specific)
-    pub fn build_index(&self, include_external: bool) -> AtomicResult<()> {
-        match self {
-            StoreWrapper::Db(db) => db.build_index(include_external),
-            #[cfg(feature = "turso")]
-            StoreWrapper::Turso(_) => {
-                // Turso uses built-in FTS, no separate indexing needed
-                Ok(())
-            }
-        }
-    }
-
-    /// Clear search index (Db-specific)
-    pub fn clear_index(&self) -> AtomicResult<()> {
-        match self {
-            StoreWrapper::Db(db) => db.clear_index(),
-            #[cfg(feature = "turso")]
-            StoreWrapper::Turso(_) => {
-                // Turso uses built-in FTS, no separate indexing needed
-                Ok(())
-            }
-        }
-    }
-
-}
-
-// Implement Storelike for StoreWrapper by delegating to the underlying store
-impl Storelike for StoreWrapper {
-    fn add_atoms(&self, _atoms: Vec<atomic_lib::Atom>) -> AtomicResult<()> {
-        Err(AtomicError::not_found(
-            "add_atoms is deprecated. Use add_resource_opts instead.".to_string()
-        ))
-    }
-
-    fn populate(&self) -> AtomicResult<()> {
-        match self {
-            StoreWrapper::Db(db) => db.populate(),
-            #[cfg(feature = "turso")]
-            StoreWrapper::Turso(turso) => turso.populate(),
-        }
-    }
-
-    fn add_resource_opts(
-        &self,
-        resource: &atomic_lib::Resource,
-        check_required_props: bool,
-        update_index: bool,
-        overwrite_existing: bool,
-    ) -> AtomicResult<()> {
-        match self {
-            StoreWrapper::Db(db) => db.add_resource_opts(resource, check_required_props, update_index, overwrite_existing),
-            #[cfg(feature = "turso")]
-            StoreWrapper::Turso(turso) => turso.add_resource_opts(resource, check_required_props, update_index, overwrite_existing),
-        }
-    }
-
-    fn all_resources(&self, include_external: bool) -> Box<dyn Iterator<Item = atomic_lib::Resource>> {
-        match self {
-            StoreWrapper::Db(db) => db.all_resources(include_external),
-            #[cfg(feature = "turso")]
-            StoreWrapper::Turso(turso) => turso.all_resources(include_external),
-        }
-    }
-
-    fn get_resource(&self, subject: &str) -> AtomicResult<atomic_lib::Resource> {
-        match self {
-            StoreWrapper::Db(db) => db.get_resource(subject),
-            #[cfg(feature = "turso")]
-            StoreWrapper::Turso(turso) => turso.get_resource(subject),
-        }
-    }
-
-    fn remove_resource(&self, subject: &str) -> AtomicResult<()> {
-        match self {
-            StoreWrapper::Db(db) => db.remove_resource(subject),
-            #[cfg(feature = "turso")]
-            StoreWrapper::Turso(turso) => turso.remove_resource(subject),
-        }
-    }
-
-    fn query(&self, q: &atomic_lib::storelike::Query) -> AtomicResult<atomic_lib::storelike::QueryResult> {
-        match self {
-            StoreWrapper::Db(db) => db.query(q),
-            #[cfg(feature = "turso")]
-            StoreWrapper::Turso(turso) => turso.query(q),
-        }
-    }
-
-    fn get_server_url(&self) -> AtomicResult<String> {
-        match self {
-            StoreWrapper::Db(db) => db.get_server_url(),
-            #[cfg(feature = "turso")]
-            StoreWrapper::Turso(turso) => turso.get_server_url(),
-        }
-    }
-
-    fn get_self_url(&self) -> Option<String> {
-        match self {
-            StoreWrapper::Db(db) => db.get_self_url(),
-            #[cfg(feature = "turso")]
-            StoreWrapper::Turso(turso) => turso.get_self_url(),
-        }
-    }
-
-    fn get_default_agent(&self) -> AtomicResult<Agent> {
-        match self {
-            StoreWrapper::Db(db) => db.get_default_agent(),
-            #[cfg(feature = "turso")]
-            StoreWrapper::Turso(turso) => turso.get_default_agent(),
-        }
-    }
-
-    fn set_default_agent(&self, agent: Agent) {
-        match self {
-            StoreWrapper::Db(db) => db.set_default_agent(agent),
-            #[cfg(feature = "turso")]
-            StoreWrapper::Turso(turso) => turso.set_default_agent(agent),
-        }
-    }
-
-    fn get_resource_extended(
-        &self,
-        subject: &str,
-        skip_dynamic: bool,
-        for_agent: &atomic_lib::agents::ForAgent,
-    ) -> AtomicResult<atomic_lib::storelike::ResourceResponse> {
-        match self {
-            StoreWrapper::Db(db) => db.get_resource_extended(subject, skip_dynamic, for_agent),
-            #[cfg(feature = "turso")]
-            StoreWrapper::Turso(turso) => turso.get_resource_extended(subject, skip_dynamic, for_agent),
-        }
-    }
-
-    fn handle_commit(&self, commit_response: &atomic_lib::commit::CommitResponse) {
-        match self {
-            StoreWrapper::Db(db) => db.handle_commit(commit_response),
-            #[cfg(feature = "turso")]
-            StoreWrapper::Turso(turso) => turso.handle_commit(commit_response),
-        }
-    }
-
-    fn handle_not_found(
-        &self,
-        subject: &str,
-        error: AtomicError,
-        for_agent: Option<&Agent>,
-    ) -> AtomicResult<atomic_lib::Resource> {
-        match self {
-            StoreWrapper::Db(db) => db.handle_not_found(subject, error, for_agent),
-            #[cfg(feature = "turso")]
-            StoreWrapper::Turso(turso) => turso.handle_not_found(subject, error, for_agent),
-        }
-    }
-
-    fn create_agent(&self, name: Option<&str>) -> AtomicResult<Agent> {
-        match self {
-            StoreWrapper::Db(db) => db.create_agent(name),
-            #[cfg(feature = "turso")]
-            StoreWrapper::Turso(turso) => turso.create_agent(name),
-        }
-    }
-
-    fn add_resource(&self, resource: &atomic_lib::Resource) -> AtomicResult<()> {
-        match self {
-            StoreWrapper::Db(db) => db.add_resource(resource),
-            #[cfg(feature = "turso")]
-            StoreWrapper::Turso(turso) => turso.add_resource(resource),
-        }
-    }
-
-    fn get_resource_new(&self, subject: &str) -> atomic_lib::Resource {
-        match self {
-            StoreWrapper::Db(db) => db.get_resource_new(subject),
-            #[cfg(feature = "turso")]
-            StoreWrapper::Turso(turso) => turso.get_resource_new(subject),
-        }
-    }
-}
 
 /// The AppState contains all the relevant Context for the server.
 /// This data object is available to all handlers and actors.
@@ -211,7 +18,7 @@ impl Storelike for StoreWrapper {
 #[derive(Clone)]
 pub struct AppState {
     /// Contains all the data
-    pub store: StoreWrapper,
+    pub store: atomic_lib::Db,
     /// App Configuration
     pub config: Config,
     /// The Actix Address of the CommitMonitor, which should receive updates when a commit is applied
@@ -219,21 +26,7 @@ pub struct AppState {
     pub search_state: SearchState,
 }
 
-/// Minimal AppState for CLI operations that don't need search or commit monitoring
 impl AppState {
-    /// Creates a new AppState with the given components (primarily for testing)
-    #[allow(dead_code)]
-    pub async fn new(config: Config, store: StoreWrapper, search_state: SearchState) -> AtomicServerResult<AppState> {
-        let commit_monitor = crate::commit_monitor::create_commit_monitor(store.clone(), search_state.clone());
-        
-        Ok(AppState {
-            store,
-            config,
-            commit_monitor,
-            search_state,
-        })
-    }
-
     /// Creates the AppState (the server's context available in Handlers).
     /// Initializes or opens a store on disk.
     /// Creates a new agent, if necessary.
@@ -248,8 +41,7 @@ impl AppState {
             tracing::warn!("Development mode is enabled. This will use staging environments for services like LetsEncrypt.");
         }
 
-        // Initialize the appropriate store backend
-        let store = Self::init_store(&config)?;
+        let mut store = atomic_lib::Db::init(&config.store_path, config.server_url.clone())?;
         let no_server_resource = store.get_resource(&config.server_url).is_err();
         if no_server_resource {
             tracing::warn!("Server URL resource not found. This is likely because the server URL has changed. Initializing a new database...");
@@ -264,78 +56,42 @@ impl AppState {
         set_default_agent(&config, &store)?;
 
         // Initialize search constructs
-        let search_state = match &store {
-            StoreWrapper::Db(_db) => {
-                // Use the existing SearchState::new for Db backend
-                let temp_config = config.clone();
-                SearchState::new(&temp_config)
-                    .map_err(|e| format!("Failed to start search service: {}", e))?
-            }
-            #[cfg(feature = "turso")]
-            StoreWrapper::Turso(_) => {
-                // For Turso, create a minimal search state since Turso has built-in FTS
-                SearchState::new(&config)
-                    .map_err(|e| format!("Failed to start search service: {}", e))?
-            }
-        };
+        let search_state = SearchState::new(&config)
+            .map_err(|e| format!("Failed to start search service: {}", e))?;
 
         // Initialize commit monitor, which watches commits and sends these to the commit_monitor actor
         let commit_monitor =
             crate::commit_monitor::create_commit_monitor(store.clone(), search_state.clone());
 
-        // Note: set_handle_commit is only available on Db backend, not on StoreWrapper
-        // We need to do this differently since we can't get mutable access through the wrapper
-        // For now, we'll skip this for Turso and implement hooks differently later
+        let commit_monitor_clone = commit_monitor.clone();
+
+        // This closure is called every time a Commit is created
+        let send_commit = move |commit_response: &CommitResponse| {
+            commit_monitor_clone.do_send(crate::actor_messages::CommitMessage {
+                commit_response: commit_response.clone(),
+            });
+        };
+        store.set_handle_commit(Box::new(send_commit));
 
         // If the user changes their server_url, the drive will not exist.
         // In this situation, we should re-build a new drive from scratch.
         if should_init {
-            // populate_all currently requires Db specifically
-            match &store {
-                StoreWrapper::Db(db) => {
-                    atomic_lib::populate::populate_all(db)?;
-                }
-                #[cfg(feature = "turso")]
-                StoreWrapper::Turso(_) => {
-                    // For Turso, we can use the generic populate methods
-                    store.populate()?;
-                }
-            }
+            atomic_lib::populate::populate_all(&store)?;
             // Building the index here is needed to perform Queries on imported resources
-            // Note: Only Db backend supports build_index, so we need to handle this differently for Turso
-            match &store {
-                StoreWrapper::Db(db) => {
-                    let store_clone = db.clone();
-                    std::thread::spawn(move || {
-                        let res = store_clone.build_index(true);
-                        if let Err(e) = res {
-                            tracing::error!("Failed to build index: {}", e);
-                        }
-                    });
+            let store_clone = store.clone();
+            std::thread::spawn(move || {
+                let res = store_clone.build_index(true);
+                if let Err(e) = res {
+                    tracing::error!("Failed to build index: {}", e);
                 }
-                #[cfg(feature = "turso")]
-                StoreWrapper::Turso(_) => {
-                    // Turso uses SQLite FTS which doesn't require separate indexing
-                    tracing::info!("Turso backend uses built-in FTS, skipping separate index building");
-                }
-            }
+            });
 
             set_up_initial_invite(&store)
                 .map_err(|e| format!("Error while setting up initial invite: {}", e))?;
             // This means that editing the .env does _not_ grant you the rights to edit the Drive.
 
             tracing::info!("Adding all resources to search index");
-            // add_all_resources currently requires Db specifically
-            match &store {
-                StoreWrapper::Db(db) => {
-                    search_state.add_all_resources(db)?;
-                }
-                #[cfg(feature = "turso")]
-                StoreWrapper::Turso(_) => {
-                    // For Turso, search indexing is handled by built-in FTS
-                    tracing::info!("Turso uses built-in FTS, skipping separate search indexing");
-                }
-            }
+            search_state.add_all_resources(&store)?;
         }
 
         Ok(AppState {
@@ -346,49 +102,10 @@ impl AppState {
         })
     }
 
-    /// Initialize the appropriate store backend based on configuration
-    fn init_store(config: &Config) -> AtomicServerResult<StoreWrapper> {
-        #[cfg(feature = "turso")]
-        if let Some(turso_config) = &config.turso_config {
-            tracing::info!("Initializing Turso store backend");
-            
-            // Create a new runtime if one doesn't exist, or use the current one
-            let store = if let Ok(handle) = tokio::runtime::Handle::try_current() {
-                handle.block_on(async {
-                    if turso_config.embedded_replica_path.is_some() {
-                        TursoStore::new_embedded_replica(turso_config.clone()).await
-                    } else {
-                        TursoStore::new_remote(turso_config.clone()).await
-                    }
-                })?
-            } else {
-                // Create a new runtime for initialization
-                let rt = tokio::runtime::Runtime::new()
-                    .map_err(|e| format!("Failed to create runtime for Turso initialization: {}", e))?;
-                rt.block_on(async {
-                    if turso_config.embedded_replica_path.is_some() {
-                        TursoStore::new_embedded_replica(turso_config.clone()).await
-                    } else {
-                        TursoStore::new_remote(turso_config.clone()).await
-                    }
-                })?
-            };
-
-            store.set_server_url(&config.server_url);
-            return Ok(StoreWrapper::Turso(store));
-        }
-
-        // Default to regular Db backend
-        tracing::info!("Initializing default Db store backend");
-        let db = atomic_lib::Db::init(&config.store_path, config.server_url.clone())?;
-        Ok(StoreWrapper::Db(db))
-    }
-
     /// Is called when AppState goes out of scope (e.g. when the application closes)
     /// Cleanup code, writing buffers, committing changes, etc.
     fn exit(&self) -> AtomicServerResult<()> {
-        // SQLite handles commits automatically, no explicit cleanup needed for search
-        // Any SQLite connections will be closed when the database goes out of scope
+        // Cleanup can be added here if needed in the future
         Ok(())
     }
 }

@@ -2,6 +2,7 @@
 //! Search functionality is now integrated with the main SQLite database.
 //! You can see the Endpoint on `http://localhost/search`
 use atomic_lib::{search_sqlite::SqliteSearchState, Db, Resource};
+use rusqlite::Connection;
 
 use crate::config::Config;
 use crate::errors::AtomicServerResult;
@@ -67,18 +68,35 @@ impl SearchState {
     }
 
     /// Indexes all resources from the store to search.
-    pub fn add_all_resources(&self, store: &Db) -> AtomicServerResult<()> {
-        self.sqlite_search.add_all_resources(store)
+    /// The store parameter is accepted for API compatibility but the internal db is used.
+    pub fn add_all_resources(&self, _store: &Db) -> AtomicServerResult<()> {
+        // Use our internal db reference to maintain consistency
+        self.sqlite_search.add_all_resources(&self.db)
             .map_err(|e| format!("Failed to add all resources to search index: {}", e).into())
+    }
+    
+    /// Get a reference to the internal database (primarily for testing)
+    #[cfg(test)]
+    pub fn get_store(&self) -> &atomic_lib::Db {
+        &self.db
     }
 
     /// Adds a single resource to the search index.
     #[tracing::instrument(skip(self))]
-    pub fn add_resource(&self, resource: &Resource, _store: &Db) -> AtomicServerResult<()> {
-        let conn = self.db.get_connection()
+    pub fn add_resource(&self, resource: &Resource, store: &Db) -> AtomicServerResult<()> {
+        // Use the store's connection to avoid double acquisition
+        let conn = store.get_connection()
             .map_err(|e| format!("Failed to get database connection: {}", e))?;
             
-        self.sqlite_search.add_resource(resource, &conn)
+        // Use the more efficient batch method with existing connection
+        self.add_resource_with_connection(resource, &conn)
+    }
+    
+    /// Adds a single resource to the search index with an existing connection.
+    /// This is more efficient for batch operations as it reuses the connection.
+    #[tracing::instrument(skip(self, conn))]
+    pub fn add_resource_with_connection(&self, resource: &Resource, conn: &Connection) -> AtomicServerResult<()> {
+        self.sqlite_search.add_resource(resource, conn)
             .map_err(|e| format!("Failed to add resource to search index: {}", e).into())
     }
 
@@ -132,6 +150,16 @@ pub fn get_resource_title(resource: &Resource) -> String {
 mod tests {
     use super::*;
     use atomic_lib::{urls, Resource, Storelike};
+    
+    /// Helper function to create a SearchState and return both it and a reference to its store
+    fn create_test_search_state() -> SearchState {
+        let unique_string = atomic_lib::utils::random_string(10);
+        let config = crate::config::build_temp_config(&unique_string)
+            .expect("Failed to create test config");
+        
+        SearchState::new(&config)
+            .expect("Failed to create search state")
+    }
 
     #[test]
     fn test_search_state_initialization() {
@@ -152,28 +180,21 @@ mod tests {
 
     #[test]
     fn test_add_and_search_resource() {
-        let unique_string = atomic_lib::utils::random_string(10);
-        let config = crate::config::build_temp_config(&unique_string)
-            .expect("Failed to create test config");
-        
-        let store = atomic_lib::Db::init_temp(&unique_string)
-            .expect("Failed to create temp store");
-        
-        let search_state = SearchState::new(&config)
-            .expect("Failed to create search state");
+        let search_state = create_test_search_state();
+        let store = search_state.get_store();
 
         // Create a test resource
-        let mut resource = Resource::new_generate_subject(&store)
+        let mut resource = Resource::new_generate_subject(store)
             .expect("Failed to generate subject");
-        resource.set_string(urls::NAME.into(), "Test Resource Title", &store)
+        resource.set_string(urls::NAME.into(), "Test Resource Title", store)
             .expect("Failed to set name");
-        resource.set_string(urls::DESCRIPTION.into(), "This is a test description for searching", &store)
+        resource.set_string(urls::DESCRIPTION.into(), "This is a test description for searching", store)
             .expect("Failed to set description");
         store.add_resource(&resource)
             .expect("Failed to add resource to store");
 
         // Add to search index
-        search_state.add_resource(&resource, &store)
+        search_state.add_resource(&resource, store)
             .expect("Failed to add resource to search index");
 
         // Test text search
@@ -315,5 +336,150 @@ mod tests {
         let _results = search_state.hierarchy_search(parent.get_subject(), 10)
             .expect("Failed to perform hierarchy search");
         // Note: This test depends on the hierarchy implementation in the SQLite search
+    }
+    
+    #[test]
+    fn test_concurrent_search_operations() {
+        let unique_string = atomic_lib::utils::random_string(10);
+        let config = crate::config::build_temp_config(&unique_string)
+            .expect("Failed to create test config");
+        
+        let store = atomic_lib::Db::init_temp(&unique_string)
+            .expect("Failed to create temp store");
+        
+        let search_state = SearchState::new(&config)
+            .expect("Failed to create search state");
+
+        // Create multiple test resources
+        for i in 0..10 {
+            let mut resource = Resource::new_generate_subject(&store)
+                .expect("Failed to generate subject");
+            resource.set_string(urls::NAME.into(), &format!("Test Resource {}", i), &store)
+                .expect("Failed to set name");
+            resource.set_string(urls::DESCRIPTION.into(), &format!("Description for test resource number {}", i), &store)
+                .expect("Failed to set description");
+            store.add_resource(&resource)
+                .expect("Failed to add resource to store");
+
+            // Add to search index
+            search_state.add_resource(&resource, &store)
+                .expect("Failed to add resource to search index");
+        }
+
+        // Test concurrent search operations
+        let search_state_clone = search_state.clone();
+        let handle1 = std::thread::spawn(move || {
+            for _ in 0..5 {
+                let results = search_state_clone.text_search("Test", 10)
+                    .expect("Failed to perform text search");
+                assert!(!results.is_empty(), "Should find test resources");
+            }
+        });
+
+        let search_state_clone2 = search_state.clone();
+        let handle2 = std::thread::spawn(move || {
+            for _ in 0..5 {
+                let results = search_state_clone2.text_search("Resource", 10)
+                    .expect("Failed to perform text search");
+                assert!(!results.is_empty(), "Should find test resources");
+            }
+        });
+
+        handle1.join().expect("Thread 1 should complete successfully");
+        handle2.join().expect("Thread 2 should complete successfully");
+    }
+    
+    #[test]
+    fn test_search_performance_and_caching() {
+        let unique_string = atomic_lib::utils::random_string(10);
+        let config = crate::config::build_temp_config(&unique_string)
+            .expect("Failed to create test config");
+        
+        let store = atomic_lib::Db::init_temp(&unique_string)
+            .expect("Failed to create temp store");
+        
+        let search_state = SearchState::new(&config)
+            .expect("Failed to create search state");
+
+        // Create test resources
+        let mut resource = Resource::new_generate_subject(&store)
+            .expect("Failed to generate subject");
+        resource.set_string(urls::NAME.into(), "Performance Test Resource", &store)
+            .expect("Failed to set name");
+        resource.set_string(urls::DESCRIPTION.into(), "This resource is for testing search performance", &store)
+            .expect("Failed to set description");
+        store.add_resource(&resource)
+            .expect("Failed to add resource to store");
+        search_state.add_resource(&resource, &store)
+            .expect("Failed to add resource to search index");
+
+        // Measure first search (cache miss)
+        let start = std::time::Instant::now();
+        let results1 = search_state.text_search("Performance", 10)
+            .expect("Failed to perform first search");
+        let first_duration = start.elapsed();
+
+        // Measure second search (cache hit)
+        let start = std::time::Instant::now();
+        let results2 = search_state.text_search("Performance", 10)
+            .expect("Failed to perform second search");
+        let second_duration = start.elapsed();
+
+        // Verify results are consistent
+        assert_eq!(results1, results2, "Search results should be consistent");
+        assert!(!results1.is_empty(), "Should find the performance test resource");
+        
+        // Note: We don't assert timing because test environments can be unpredictable
+        // But we log the timings for visibility
+        println!("First search (cache miss): {:?}", first_duration);
+        println!("Second search (cache hit): {:?}", second_duration);
+    }
+    
+    #[test]
+    fn test_search_with_special_characters() {
+        let unique_string = atomic_lib::utils::random_string(10);
+        let config = crate::config::build_temp_config(&unique_string)
+            .expect("Failed to create test config");
+        
+        let store = atomic_lib::Db::init_temp(&unique_string)
+            .expect("Failed to create temp store");
+        
+        let search_state = SearchState::new(&config)
+            .expect("Failed to create search state");
+
+        // Create resources with special characters
+        let test_cases = vec![
+            ("Special-Resource", "Resource with hyphen"),
+            ("Resource_with_underscores", "Testing underscores"),
+            ("Resource@domain.com", "Email-like resource"),
+            ("Resource#123", "Resource with hash"),
+            ("Résource", "Resource with accents"),
+        ];
+
+        for (name, description) in test_cases {
+            let mut resource = Resource::new_generate_subject(&store)
+                .expect("Failed to generate subject");
+            resource.set_string(urls::NAME.into(), name, &store)
+                .expect("Failed to set name");
+            resource.set_string(urls::DESCRIPTION.into(), description, &store)
+                .expect("Failed to set description");
+            store.add_resource(&resource)
+                .expect("Failed to add resource to store");
+            search_state.add_resource(&resource, &store)
+                .expect("Failed to add resource to search index");
+        }
+
+        // Test searching for resources with special characters
+        let results = search_state.text_search("Special", 10)
+            .expect("Failed to search for special characters");
+        assert!(!results.is_empty(), "Should find resources with special characters");
+
+        let results = search_state.text_search("underscores", 10)
+            .expect("Failed to search for underscores");
+        assert!(!results.is_empty(), "Should find resources with underscores");
+
+        let results = search_state.text_search("domain", 10)
+            .expect("Failed to search for domain");
+        assert!(!results.is_empty(), "Should find resources with email-like names");
     }
 }

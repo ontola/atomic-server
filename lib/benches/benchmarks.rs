@@ -135,7 +135,7 @@ fn search_benchmarks(c: &mut Criterion) {
 
     // Initialize search state
     let search_state = SqliteSearchState::new(store.clone()).unwrap();
-    search_state.add_all_resources(&store).unwrap();
+    search_state.add_all_resources(&store).unwrap();  // This is the lib API, not server
 
     // Benchmark traditional text search
     c.bench_function("search/text_search", |b| {
@@ -215,6 +215,56 @@ fn search_benchmarks(c: &mut Criterion) {
         b.iter(|| {
             let _jaro_results = search_state.similarity_search("atomic", 10, SimilarityAlgorithm::JaroWinkler).unwrap();
             let _levenshtein_results = search_state.similarity_search("atomic", 10, SimilarityAlgorithm::Levenshtein).unwrap();
+        })
+    });
+
+    // Benchmark add_resource to search index performance
+    c.bench_function("search/add_resource", |b| {
+        b.iter(|| {
+            let resource = random_resource(&random_atom_string());
+            let conn = store.get_connection().unwrap();
+            search_state.add_resource(&resource, &conn).unwrap();
+        })
+    });
+
+    // Benchmark add_resource with hierarchy caching
+    c.bench_function("search/add_resource_with_hierarchy", |b| {
+        b.iter(|| {
+            let mut resource = random_resource(&random_atom_string());
+            // Add a parent relationship to test hierarchy caching
+            resource.set_unsafe(
+                urls::PARENT.into(), 
+                Value::AtomicUrl("https://localhost/parent".into())
+            );
+            let conn = store.get_connection().unwrap();
+            search_state.add_resource(&resource, &conn).unwrap();
+        })
+    });
+
+    // Benchmark concurrent add_resource operations
+    c.bench_function("search/add_resource_concurrent", |b| {
+        use std::sync::Arc;
+        use std::thread;
+        
+        b.iter(|| {
+            let search_state = Arc::new(search_state.clone());
+            let store = Arc::new(store.clone());
+            
+            let handles: Vec<_> = (0..4)
+                .map(|_| {
+                    let search_state = search_state.clone();
+                    let store = store.clone();
+                    thread::spawn(move || {
+                        let resource = random_resource(&random_atom_string());
+                        let conn = store.get_connection().unwrap();
+                        search_state.add_resource(&resource, &conn).unwrap();
+                    })
+                })
+                .collect();
+                
+            for handle in handles {
+                handle.join().unwrap();
+            }
         })
     });
 
