@@ -12,8 +12,9 @@ use actix_web_actors::ws;
 use atomic_lib::{
     agents::ForAgent,
     errors::AtomicResult,
-    Db, Storelike,
+    Storelike,
 };
+use crate::appstate::StoreWrapper;
 use std::time::{Duration, Instant};
 use std::collections::HashMap;
 
@@ -65,7 +66,7 @@ pub struct WebSocketConnection {
     /// If it's not specified, it's the Public Agent.
     /// This cannot be changed after initial authentication for security
     agent: ForAgent,
-    store: Db,
+    store: StoreWrapper,
     /// Rate limiting for authentication attempts
     auth_attempts: HashMap<String, (Instant, u32)>,
 }
@@ -211,8 +212,8 @@ fn handle_ws_message(
 }
 
 impl WebSocketConnection {
-    fn new(commit_monitor_addr: Addr<CommitMonitor>, agent: ForAgent, store: Db) -> Self {
-        let size = std::mem::size_of::<Db>();
+    fn new(commit_monitor_addr: Addr<CommitMonitor>, agent: ForAgent, store: StoreWrapper) -> Self {
+        let size = std::mem::size_of::<StoreWrapper>();
         if size > 10000 {
             tracing::warn!(
                 "Cloned Store is over 10kB, this will hurt performance: {:?} bytes",

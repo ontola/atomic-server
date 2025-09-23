@@ -6,8 +6,9 @@ Choose the right deployment platform for Atomic Server.
 
 | Use Case | Platform | Setup Time | Monthly Cost |
 |----------|----------|------------|--------------|
+| **Global Production** ⭐ | [Turso](deployment-turso.md) | 20 min | $0-87 |
 | **Local Development** | [Docker Compose](deployment-docker-compose.md) | 5 min | $0 |
-| **Production** | [Fly.io](deployment-fly-io.md) | 30 min | $5-15 |
+| **Regional Production** | [Fly.io](deployment-fly-io.md) | 30 min | $5-15 |
 | **Rapid Prototyping** | [Railway](deployment-railway.md) | 10 min | $5-25 |
 | **Home/Self-hosted** | [Cloudflare Tunnel](deployment-cloudflare-tunnel.md) | 15 min | $0-5 |
 | **Custom Build** | [Custom Docker](deployment-custom-docker.md) | 1-2 hours | Variable |
@@ -15,17 +16,33 @@ Choose the right deployment platform for Atomic Server.
 
 ## Platform Comparison
 
-| Feature | Docker Compose | Fly.io | Railway | Cloudflare Tunnel |
-|---------|----------------|--------|---------|-------------------|
-| **Setup** | Low | Low | Very Low | Medium |
-| **Global** | ❌ | ✅ | ❌ | ✅ |
-| **Auto SSL** | Manual | ✅ | ✅ | ✅ |
-| **Free Tier** | N/A | ✅ | ✅ | ✅ |
-| **CI/CD** | Manual | Good | Excellent | Manual |
-| **Response Time** | <10ms | <100ms | <200ms | <50ms |
-| **Monthly Cost** | $5-10 | $5-15 | $5-25 | $0-5 |
+| Feature | Turso ⭐ | Docker Compose | Fly.io | Railway | Cloudflare Tunnel |
+|---------|----------|----------------|--------|---------|-------------------|
+| **Setup** | Low | Low | Low | Very Low | Medium |
+| **Global** | ✅ | ❌ | ✅ | ❌ | ✅ |
+| **Auto SSL** | ✅ | Manual | ✅ | ✅ | ✅ |
+| **Free Tier** | ✅ | N/A | ✅ | ✅ | ✅ |
+| **CI/CD** | Excellent | Manual | Good | Excellent | Manual |
+| **Response Time** | <50ms | <10ms | <100ms | <200ms | <50ms |
+| **Monthly Cost** | $0-87 | $5-10 | $5-15 | $5-25 | $0-5 |
+| **Scaling** | Automatic | Manual | Manual | Manual | Manual |
 
 ## Quick Start Commands
+
+### Turso ⭐ **Recommended**
+```bash
+# Install Turso CLI
+curl -sSfL https://get.tur.so/install.sh | bash
+turso auth login
+turso db create atomic-server-db
+turso db tokens create atomic-server-db
+
+# Configure and run
+export ATOMIC_TURSO_ENABLE=true
+export ATOMIC_TURSO_URL="$(turso db show atomic-server-db --url)"
+export ATOMIC_TURSO_AUTH_TOKEN="your-token-here"
+cargo run --features turso --bin atomic-server
+```
 
 ### Docker Compose
 ```bash
@@ -94,7 +111,9 @@ Need global deployment?
 
 ## Recommendations
 
-- **Start here**: Fly.io for production, Railway for prototyping
+- **🚀 Global Production**: Turso (best performance + scaling)
+- **Regional Production**: Fly.io 
+- **Rapid Prototyping**: Railway
 - **Self-hosting**: Docker Compose + Cloudflare Tunnel
 - **Learning**: Docker Compose locally
 - **Enterprise**: Custom Docker with your infrastructure

@@ -89,6 +89,7 @@ pub mod similarity;
 pub mod serialize;
 pub mod store;
 pub mod storelike;
+pub mod stores;
 #[cfg(test)]
 mod test_utils;
 pub mod urls;
@@ -105,4 +106,6 @@ pub use errors::AtomicErrorType;
 pub use resources::Resource;
 pub use store::Store;
 pub use storelike::Storelike;
+#[cfg(feature = "turso")]
+pub use stores::turso::{TursoStore, TursoConfig};
 pub use values::Value;

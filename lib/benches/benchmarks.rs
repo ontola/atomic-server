@@ -221,6 +221,7 @@ fn search_benchmarks(c: &mut Criterion) {
     store.clear_all_danger().unwrap();
 }
 
+
 #[cfg(feature = "db")]
 criterion_group!(search_benches, search_benchmarks);
 

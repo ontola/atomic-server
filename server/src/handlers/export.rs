@@ -7,7 +7,7 @@ use atomic_lib::agents::ForAgent;
 use atomic_lib::errors::AtomicResult;
 use atomic_lib::storelike::Query;
 use atomic_lib::values::SubResource;
-use atomic_lib::{urls, Db, Resource, Storelike, Value};
+use atomic_lib::{urls, Resource, Storelike, Value};
 use chrono::DateTime;
 use serde::Deserialize;
 
@@ -66,13 +66,13 @@ pub async fn handle_export(
     }
 }
 
-struct CSVExporter<'a> {
-    store: &'a Db,
+struct CSVExporter<'a, S: Storelike> {
+    store: &'a S,
     agent: &'a ForAgent,
     display_refs_as_name: bool,
 }
 
-impl<'a> CSVExporter<'a> {
+impl<'a, S: Storelike> CSVExporter<'a, S> {
     pub fn resource_to_csv(&self, subject: &str) -> AtomicResult<(String, String)> {
         println!("Exporting resource to CSV: {}", subject);
         let resource = self
@@ -185,7 +185,7 @@ impl<'a> CSVExporter<'a> {
                     continue;
                 }
 
-                let fixed_value = CSVExporter::escape_csv_value(self.value_to_string(value));
+                let fixed_value = Self::escape_csv_value(self.value_to_string(value));
 
                 if let Some(index) = encountered_properties.iter().position(|p| p == prop) {
                     line_vec[index + 1] = fixed_value;

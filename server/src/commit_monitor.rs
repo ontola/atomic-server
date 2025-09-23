@@ -12,7 +12,8 @@ use actix::{
     prelude::{Actor, Context, Handler},
     ActorStreamExt, Addr, ContextFutureSpawner,
 };
-use atomic_lib::{agents::ForAgent, Db, Storelike};
+use atomic_lib::{agents::ForAgent, Storelike};
+use crate::appstate::StoreWrapper;
 use chrono::Local;
 use std::collections::{HashMap, HashSet};
 
@@ -21,7 +22,7 @@ use std::collections::{HashMap, HashSet};
 pub struct CommitMonitor {
     /// Maintains a list of all the resources that are being subscribed to, and maps these to websocket connections.
     subscriptions: HashMap<String, HashSet<Addr<WebSocketConnection>>>,
-    store: Db,
+    store: StoreWrapper,
     search_state: SearchState,
     last_search_commit: chrono::DateTime<Local>,
     run_expensive_next_tick: bool,
@@ -126,7 +127,16 @@ impl CommitMonitor {
             // We could one day re-(allow) to keep old resources,
             // but then we also should index the older versions when re-indexing.
             // Add new resource to search index
-            self.search_state.add_resource(resource, &self.store)?;
+            match &self.store {
+                StoreWrapper::Db(db) => {
+                    self.search_state.add_resource(resource, db)?;
+                }
+                #[cfg(feature = "turso")]
+                StoreWrapper::Turso(_) => {
+                    // For Turso, search indexing is handled automatically by built-in FTS
+                    // No additional indexing needed
+                }
+            }
         }
 
         // With SQLite, we don't need expensive batch operations like Tantivy
@@ -181,7 +191,7 @@ impl Handler<CommitMessage> for CommitMonitor {
 }
 
 /// Spawns a commit monitor actor
-pub fn create_commit_monitor(store: Db, search_state: SearchState) -> Addr<CommitMonitor> {
+pub fn create_commit_monitor(store: StoreWrapper, search_state: SearchState) -> Addr<CommitMonitor> {
     tracing::info!("spawning commit monitor");
     crate::commit_monitor::CommitMonitor::create(|_ctx: &mut Context<CommitMonitor>| {
         CommitMonitor {

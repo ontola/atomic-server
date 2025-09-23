@@ -103,7 +103,7 @@ features = ["derive"]
 version = "1"
 
 [dependencies.tokio]
-features = ["time"]
+features = ["time", "rt-multi-thread", "macros"]
 version = "1"
 
 [dependencies.image]
@@ -127,6 +127,7 @@ default = ["https", "telemetry", "img"]
 https = ["rustls", "instant-acme", "rcgen", "rustls-pemfile"]
 telemetry = ["tracing-opentelemetry", "opentelemetry", "opentelemetry-jaeger"]
 img = ["webp", "image"]
+turso = ["atomic_lib/turso"]
 
 [lib]
 name = "atomic_server_lib"
