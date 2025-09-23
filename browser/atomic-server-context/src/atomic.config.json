@@ -1,0 +1,7 @@
+{
+    "outputFolder": "./ontologies",
+    "moduleAlias": "@tomic/lib",
+    "ontologies": [
+      "https://common.terraphim.io/drive/h6grD0ID/ontology/learning-rust"
+    ]
+  }

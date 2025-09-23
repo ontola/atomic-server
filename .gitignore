@@ -8,3 +8,7 @@ trace-*.json
 artifact
 server/assets_tmp
 .netlify
+@lessons-learned.md
+@memory.md
+@scratchpad.md
+CLAUDE.md
