@@ -44,6 +44,7 @@ export interface KeyboardHandler {
   keys: Set<string>;
   cursorMode: Set<CursorMode>;
   preventDefault?: boolean;
+  disabledInReadOnly?: boolean;
   shift?: boolean;
   mod?: boolean;
   condition?: (context: HandlerContext) => boolean;
@@ -119,6 +120,7 @@ const editNextRow: KeyboardHandler = {
   keys: new Set(['Enter']),
   shift: false,
   cursorMode: new Set([CursorMode.Edit]),
+  disabledInReadOnly: true,
   preventDefault: true,
   handler: ({ translateCursor }) => {
     translateCursor(1, 0);
@@ -130,6 +132,7 @@ const editNextCell: KeyboardHandler = {
   keys: new Set(['Tab']),
   shift: false,
   cursorMode: new Set([CursorMode.Edit]),
+  disabledInReadOnly: true,
   preventDefault: true,
   handler: ({ translateCursor }) => {
     translateCursor(0, 1);
@@ -141,6 +144,7 @@ const editPreviousCell: KeyboardHandler = {
   keys: new Set(['Tab']),
   shift: true,
   cursorMode: new Set([CursorMode.Edit]),
+  disabledInReadOnly: true,
   preventDefault: true,
   handler: ({ translateCursor }) => {
     translateCursor(0, -1);
@@ -167,6 +171,7 @@ const undoCommand: KeyboardHandler = {
   keys: new Set(['z']),
   mod: true,
   cursorMode: new Set([CursorMode.Visual, CursorMode.MultiSelect]),
+  disabledInReadOnly: true,
   condition: () => document.activeElement?.tagName !== 'INPUT',
   handler: ({ undo }) => {
     undo?.();
@@ -177,6 +182,7 @@ const deleteCell: KeyboardHandler = {
   id: KeyboardInteraction.DeleteCell,
   keys: new Set(['Delete', 'Backspace']),
   cursorMode: new Set([CursorMode.Visual, CursorMode.MultiSelect]),
+  disabledInReadOnly: true,
   condition: ({ tableContext }) =>
     tableContext.selectedColumn !== 0 &&
     tableContext.selectedColumn !== undefined &&
@@ -191,6 +197,7 @@ const deleteRow: KeyboardHandler = {
   id: KeyboardInteraction.DeleteRow,
   keys: new Set(['Delete', 'Backspace']),
   cursorMode: new Set([CursorMode.Visual]),
+  disabledInReadOnly: true,
   condition: ({ tableContext }) =>
     tableContext.selectedColumn === 0 &&
     tableContext.selectedColumn !== undefined &&
@@ -245,6 +252,7 @@ const enterEditModeWithEnter: KeyboardHandler = {
   id: KeyboardInteraction.EnterEditModeWithEnter,
   keys: new Set(['Enter']),
   cursorMode: new Set([CursorMode.Visual]),
+  disabledInReadOnly: true,
   condition: ({ tableContext }) =>
     tableContext.selectedColumn !== undefined &&
     tableContext.selectedColumn !== 0 &&
@@ -269,6 +277,7 @@ const enterEditModeByTyping: KeyboardHandler = {
   id: KeyboardInteraction.EnterEditModeByTyping,
   keys: new Set(triggerCharacters.split('')),
   cursorMode: new Set([CursorMode.Visual]),
+  disabledInReadOnly: true,
   mod: false,
   condition: ({ tableContext }) =>
     tableContext.selectedColumn !== undefined &&

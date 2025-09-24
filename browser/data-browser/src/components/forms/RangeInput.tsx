@@ -60,7 +60,7 @@ export function RangeInput({
       const num = toOptionalNum(e.target.value, round);
       onChange(num, maxValue);
     },
-    [onChange, maxValue],
+    [onChange, maxValue, round],
   );
 
   const handleMaxChange = useCallback(
@@ -68,7 +68,7 @@ export function RangeInput({
       const num = toOptionalNum(e.target.value, round);
       onChange(minValue, num);
     },
-    [onChange, minValue],
+    [onChange, minValue, round],
   );
 
   return (

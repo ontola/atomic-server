@@ -53,6 +53,9 @@ function useMarkings(row: Resource, index: number) {
         return newMap;
       });
     };
+
+    // Markings don't need to be updated when the function address changes...
+    // eslint-disable-next-line react-hooks/react-compiler, react-hooks/exhaustive-deps
   }, [row, index]);
 }
 
@@ -118,7 +121,7 @@ export function TableNewRow({
   useMarkings(resource, index);
 
   useEffect(() => {
-    if (resource.subject === unknownSubject) {
+    if (resource.subject === unknownSubject || resource.commitError) {
       return;
     }
 
@@ -128,7 +131,10 @@ export function TableNewRow({
       .then(() => {
         setLoading(false);
       });
-  }, [resource.subject]);
+
+    // We can't add resource to the list because we modify the resource in the effect so it would cause a loop.
+    // eslint-disable-next-line react-hooks/react-compiler, react-hooks/exhaustive-deps
+  }, [resource.subject, parent.subject, parent.props.classtype]);
 
   if (loading) {
     return (

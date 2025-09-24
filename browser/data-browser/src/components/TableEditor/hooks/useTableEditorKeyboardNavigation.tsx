@@ -37,11 +37,10 @@ export function useTableEditorKeyboardNavigation(
 ) {
   const tableContext = useTableEditorContext();
   const {
+    readOnly,
     disabledKeyboardInteractions,
     selectedRow,
     selectedColumn,
-    multiSelectCornerRow,
-    multiSelectCornerColumn,
     setActiveCell,
     listRef,
     emitInteractionsFired,
@@ -90,6 +89,7 @@ export function useTableEditorKeyboardNavigation(
           !disabledKeyboardInteractions.has(h.id) &&
           h.keys.has(e.key) &&
           h.cursorMode.has(tableContext.cursorMode) &&
+          (readOnly ? !h.disabledInReadOnly : true) &&
           matchShift(h, e) &&
           matchModifier(h, e) &&
           matchCondition(h, context),
@@ -106,15 +106,18 @@ export function useTableEditorKeyboardNavigation(
       emitInteractionsFired(handlers.map(h => h.id));
     },
     [
+      commands,
+      listRef,
+      setActiveCell,
+      columnCount,
+      rowCount,
+      tableRef,
+      headerRef,
+      readOnly,
       disabledKeyboardInteractions,
       selectedRow,
       selectedColumn,
-      multiSelectCornerRow,
-      multiSelectCornerColumn,
       tableContext,
-      commands.copy,
-      commands.undo,
-      commands.expand,
       hasControlLock,
       emitInteractionsFired,
     ],
