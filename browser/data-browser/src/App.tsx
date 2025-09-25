@@ -6,6 +6,7 @@ import { getAgentFromIDB } from './helpers/agentStorage';
 import { registerCustomCreateActions } from './components/forms/NewForm/CustomCreateActions';
 import { serverURLStorage } from './helpers/serverURLStorage';
 import { driveStorage } from './helpers/driveStorage';
+import { isRunningInTauri } from './helpers/tauri';
 
 import { useEffect, type JSX } from 'react';
 import { RouterProvider } from '@tanstack/react-router';
@@ -22,10 +23,23 @@ function fixDevUrl(url: string) {
 }
 
 /**
- * Defaulting to the current URL's origin will make sense in most non-dev environments.
- * In dev envs, we want to default to port 9883
+ * In Tauri, window.location.origin is a custom-protocol URL (e.g. `tauri://localhost`),
+ * not the embedded atomic-server. Point the Store at the local server instead.
+ * In dev: Vite serves at 5173; the Store talks to atomic-server at 9883.
+ * In prod (browser): default to the current origin.
  */
-const serverUrl = fixDevUrl(serverURLStorage.get() ?? window.location.origin);
+const defaultServerUrl = isRunningInTauri()
+  ? 'http://localhost:9883'
+  : fixDevUrl(window.location.origin);
+const storedServerUrl = serverURLStorage.get();
+// Reject obviously-invalid stored URLs (e.g. `tauri://localhost` left behind
+// by an earlier buggy release). The Store requires http(s) or iroh: URLs.
+const storedIsValid =
+  !!storedServerUrl &&
+  (storedServerUrl.startsWith('http://') ||
+    storedServerUrl.startsWith('https://') ||
+    storedServerUrl.startsWith('iroh:'));
+const serverUrl = storedIsValid ? storedServerUrl! : defaultServerUrl;
 const initalAgent = await getAgentFromIDB();
 
 // Initialize the store
@@ -44,8 +58,12 @@ bootstrap(store);
 
 // Initialize the WASM ClientDb in a background worker.
 // Non-blocking — the app works without it.
+// Skipped under Tauri: the embedded server is already local, so an
+// OPFS cache adds no value and wastes writes.
 import { initClientDb } from './helpers/initClientDb';
-initClientDb(store);
+if (!isRunningInTauri()) {
+  initClientDb(store);
+}
 
 await enableLoro();
 

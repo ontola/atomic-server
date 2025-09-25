@@ -3,10 +3,11 @@ import { useCallback, useMemo } from 'react';
 import { isDev } from '../config';
 import { useSettings } from '../helpers/AppSettings';
 import { serverURLStorage } from '../helpers/serverURLStorage';
+import { getLocalServerOrigin } from '../helpers/tauri';
 
 const getRootDrives = () => {
   const known = serverURLStorage.getKnownServers();
-  const current = isDev() ? 'http://localhost:9883' : window.location.origin;
+  const current = isDev() ? 'http://localhost:9883' : getLocalServerOrigin();
 
   const roots = new Set([current, ...known]);
 

@@ -9,6 +9,7 @@ publish
 .tsup
 */lib
 */dist
+*/dist-tauri
 */dev-dist
 */yarn-error.log
 test-results
@@ -37,4 +38,3 @@ data-browser/coverage
 
 data-browser/src/locales/.wuchale
 data-browser/src/locales/data.js
-

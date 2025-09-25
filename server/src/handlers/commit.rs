@@ -86,6 +86,11 @@ pub async fn post_commit(
         validate_rights: true,
         // https://github.com/atomicdata-dev/atomic-server/issues/412
         validate_previous_commit: false,
+        // Reject commits whose Loro ops are concurrent with stored state
+        // (i.e. the client's doc wasn't seeded from the server). Without this,
+        // LWW silently drops the client's write. For P2P sync use a path that
+        // leaves this off — concurrent writes are expected there.
+        validate_loro_causality: true,
         validate_for_agent: Some(signer.to_string()),
         update_index: true,
     };

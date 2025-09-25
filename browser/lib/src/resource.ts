@@ -361,7 +361,27 @@ export class Resource<C extends OptionalClass = any> {
       }
 
       this._loroSnapshotBytes = val;
-      this.resetLoroState();
+
+      // If a Loro doc already exists, merge the incoming snapshot INTO it.
+      // Tearing the doc down and rebuilding would allocate a fresh peer on
+      // the next getLoroDoc(), making subsequent local ops concurrent with
+      // stored state (silent LWW drop). If no doc exists yet, do nothing —
+      // getLoroDoc() will build one from _loroSnapshotBytes on first access.
+      if (this._loroDoc) {
+        const bytes =
+          val instanceof Uint8Array ? val : decodeB64(val as string);
+        try {
+          this._loroDoc.import(bytes);
+          this.rebuildCacheFromLoro();
+          this._cacheDirty = false;
+          this.markLoroSaved();
+        } catch (e) {
+          console.warn(
+            `[Resource] Loro import on hydration failed for ${this.subject}:`,
+            e,
+          );
+        }
+      }
 
       return;
     }
@@ -489,7 +509,18 @@ export class Resource<C extends OptionalClass = any> {
   }
 
   /**
-   * Export the Loro delta since the last save.
+   * Export the Loro state to attach to the next outgoing commit.
+   *
+   * We export a full snapshot rather than a delta. Snapshots are
+   * self-contained and their LWW merge semantics are robust: the server
+   * applies the incoming snapshot on top of stored state and LWW picks the
+   * locally-latest value. Deltas depend on the client's Lamport clock being
+   * correctly advanced past stored state — and any edge case that leaves the
+   * client's delta ops at a lower Lamport than stored (e.g. a stale
+   * `_loroVersionAtLastSave`) silently loses the write. The size cost of
+   * sending a full snapshot per commit is trivial for a single resource,
+   * and the correctness is worth far more.
+   *
    * Returns undefined if there are no Loro changes or Loro isn't loaded.
    */
   private exportLoroDelta(): Uint8Array | undefined {
@@ -497,27 +528,26 @@ export class Resource<C extends OptionalClass = any> {
       return undefined;
     }
 
-    if (!this._loroVersionAtLastSave) {
-      const snapshot = this._loroDoc.export({ mode: 'snapshot' });
+    const snapshot = this._loroDoc.export({ mode: 'snapshot' });
 
-      if (snapshot.length <= 4) {
-        return undefined;
-      }
-
-      return snapshot;
-    }
-
-    const updates = this._loroDoc.export({
-      mode: 'update',
-      from: this._loroVersionAtLastSave,
-    });
-
-    // Check if the update is empty (no real changes)
-    if (updates.length <= 4) {
+    // A header-only snapshot (no ops) means "no changes worth sending".
+    if (snapshot.length <= 4) {
       return undefined;
     }
 
-    return updates;
+    // If we have a baseline, check there were actual new ops since.
+    if (this._loroVersionAtLastSave) {
+      const deltaProbe = this._loroDoc.export({
+        mode: 'update',
+        from: this._loroVersionAtLastSave,
+      });
+
+      if (deltaProbe.length <= 4) {
+        return undefined;
+      }
+    }
+
+    return snapshot;
   }
 
   /**

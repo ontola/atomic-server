@@ -1080,6 +1080,7 @@ mod test {
             validate_timestamp: true,
             validate_rights: false,
             validate_previous_commit: false,
+            validate_loro_causality: false,
             update_index: false,
             validate_for_agent: None,
         };
@@ -1123,6 +1124,7 @@ mod test {
             validate_timestamp: true,
             validate_rights: false,
             validate_previous_commit: false,
+            validate_loro_causality: false,
             update_index: false,
             validate_for_agent: None,
         };

@@ -890,6 +890,7 @@ async fn did_loro_only_commit_sled() {
         validate_signature: true,
         validate_timestamp: false,
         validate_previous_commit: false,
+        validate_loro_causality: false,
         validate_rights: true,
         validate_schema: true,
         update_index: true,

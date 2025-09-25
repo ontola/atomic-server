@@ -8,6 +8,12 @@ import { wuchale } from '@wuchale/vite-plugin';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
+// TAURI=1 produces a Tauri-compatible bundle: no CSP nonces (Tauri serves
+// HTML verbatim, so the server's runtime ATOMICSERVER_NONCE substitution
+// doesn't happen), no PWA service worker (tauri:// isn't HTTP), separate
+// outDir so the server build keeps its own nonce'd dist.
+const isTauri = process.env.TAURI === '1';
+
 const repoLibDefaults = path.resolve(__dirname, '../../lib/defaults');
 const ciLibDefaults = path.resolve(__dirname, '../lib-defaults');
 const libDefaultsDir = fs.existsSync(
@@ -41,7 +47,7 @@ export default defineConfig({
         ],
       },
     }),
-    VitePWA({
+    !isTauri && VitePWA({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
       manifest: {
@@ -198,6 +204,7 @@ export default defineConfig({
   },
   build: {
     target: 'baseline-widely-available',
+    outDir: isTauri ? 'dist-tauri' : 'dist',
     sourcemap: true,
     rollupOptions: {
       output: {
@@ -208,7 +215,7 @@ export default defineConfig({
     },
   },
   html: {
-    cspNonce: 'ATOMICSERVER_NONCE',
+    cspNonce: isTauri ? undefined : 'ATOMICSERVER_NONCE',
   },
   server: {
     strictPort: true,

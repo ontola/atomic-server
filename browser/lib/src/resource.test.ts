@@ -66,4 +66,33 @@ describe('resource.ts', () => {
     expect(local.get(description)).toBe('Local unsaved edit');
     expect(local.hasUnsavedChanges()).toBe(true);
   });
+
+  /**
+   * Regression: when JSON-AD arrives carrying a `loroUpdate` property after a
+   * resource has a live Loro doc (e.g. after an unsaved local edit, or after
+   * the user's own commit returns and a subsequent re-fetch happens), the
+   * raw-value apply path used to tear the doc down. The next getLoroDoc()
+   * would allocate a FRESH random peer whose ops were concurrent with
+   * stored ops — Loro LWW silently dropped them. Now it must keep the
+   * existing doc and merge the snapshot in.
+   */
+  it('keeps the same Loro peer across a loroUpdate hydration', async ({
+    expect,
+  }) => {
+    const subject = 'https://example.com/peer-stability';
+    const name = 'https://atomicdata.dev/properties/name';
+    const loroUpdate = 'https://atomicdata.dev/properties/loroUpdate';
+
+    const resource = new Resource(subject);
+    await resource.set(name, '1', false);
+    const peerBefore = (resource as any)._loroDoc.peerIdStr as string;
+    const serverSnapshot = (resource as any)._loroDoc.export({
+      mode: 'snapshot',
+    }) as Uint8Array;
+
+    (resource as any).applyRawValue(loroUpdate, serverSnapshot);
+
+    const peerAfter = (resource as any)._loroDoc.peerIdStr as string;
+    expect(peerAfter).toBe(peerBefore);
+  });
 });
