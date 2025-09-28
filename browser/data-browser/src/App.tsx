@@ -58,10 +58,11 @@ bootstrap(store);
 
 // Initialize the WASM ClientDb in a background worker.
 // Non-blocking — the app works without it.
-// Skipped under Tauri: the embedded server is already local, so an
-// OPFS cache adds no value and wastes writes.
+// Skipped under Tauri (embedded server makes OPFS redundant) or when the
+// user explicitly opted out via the Sync page toggle.
 import { initClientDb } from './helpers/initClientDb';
-if (!isRunningInTauri()) {
+import { isClientDbEnabled } from './helpers/clientDbMode';
+if (isClientDbEnabled()) {
   initClientDb(store);
 }
 
@@ -85,6 +86,8 @@ registerHandlers(store);
 if (isDev()) {
   // You can access the Store from your console in dev mode!
   window.store = store;
+  const { attachDevtools } = await import('./helpers/devtools');
+  attachDevtools(store);
 }
 
 /** Entrypoint of the application. This is where providers go. */

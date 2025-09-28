@@ -5124,3 +5124,15 @@ msgstr ""
 #: src/routes/SyncRoute.tsx
 msgid "Embedded (local)"
 msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Local DB"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "WASM + OPFS enabled"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Disabled (server-only, reload to apply)"
+msgstr ""

@@ -1389,6 +1389,14 @@ export class Resource<C extends OptionalClass = any> {
 
       this.store.notifyResourceSaved(this);
 
+      // Re-add to the store now that `this.new` has flipped to false. The
+      // earlier add (during `signChanges`) happened while `new === true`,
+      // and `store.addResource` skips OPFS persistence for new/loading/
+      // incomplete resources. Without this re-add, a freshly-created DID
+      // resource is on the server but never lands in OPFS — so the user
+      // sees "Offline: resource not available locally" on reload.
+      this.store.addResources(this, { skipCommitCompare: true });
+
       if (wasNew) {
         // The first `SUBSCRIBE` message will not have worked, because the resource didn't exist yet.
         // https://github.com/atomicdata-dev/atomic-data-rust/issues/486

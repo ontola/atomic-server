@@ -5088,3 +5088,15 @@ msgstr "Remote server"
 #: src/routes/SyncRoute.tsx
 msgid "Embedded (local)"
 msgstr "Embedded (local)"
+
+#: src/routes/SyncRoute.tsx
+msgid "Local DB"
+msgstr "Local DB"
+
+#: src/routes/SyncRoute.tsx
+msgid "WASM + OPFS enabled"
+msgstr "WASM + OPFS enabled"
+
+#: src/routes/SyncRoute.tsx
+msgid "Disabled (server-only, reload to apply)"
+msgstr "Disabled (server-only, reload to apply)"

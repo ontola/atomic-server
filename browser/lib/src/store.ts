@@ -769,34 +769,66 @@ export class Store {
     }
 
     // Forward to WASM DB in the background (non-blocking).
-    // Don't forward loading/new/incomplete resources.
+    // We persist anything complete enough to round-trip: must have a subject
+    // and not be in loading or incomplete state. A `new` resource (locally
+    // signed but not yet acknowledged by the server) is ALSO worth
+    // persisting — otherwise a fresh drive/folder/document created in a
+    // session isn't in OPFS if the user reloads quickly or goes offline
+    // before the post-push re-add fires.
     if (
       this.clientDb &&
       !resource.loading &&
-      !resource.new &&
       !resource.get(core.properties.incomplete)
     ) {
       try {
         const jsonAd = resourceToJsonAd(resource);
+        const short = resource.subject.slice(0, 60);
 
         if (jsonAd) {
-          this.clientDb.putResource(jsonAd).then(() => {
-            // Verify it was actually stored (debug)
-            if (resource.get(core.properties.parent)) {
-              this.clientDb!.getResource(resource.subject).then(stored => {
-                if (!stored) {
-                  console.error(`[ClientDb] PUT succeeded but resource NOT found: ${resource.subject.slice(0, 50)}`);
-                  console.error(`[ClientDb] JSON was: ${jsonAd.slice(0, 200)}`);
-                }
-              });
-            }
-          }).catch(e => {
-            console.warn(`[ClientDb] putResource failed for ${resource.subject.slice(0, 50)}:`, e);
-          });
+          const isDid = resource.subject.startsWith('did:ad:');
+          if (isDid) {
+            console.info(`[ClientDb] PUT start: ${short} (${jsonAd.length} chars)`);
+          }
+          this.clientDb
+            .putResource(jsonAd)
+            .then(async () => {
+              // Verify every put round-trips. Previously only parent-having
+              // resources were checked, which hid silent drops for top-level
+              // DID resources (drives have no parent).
+              const stored = await this.clientDb!.getResource(resource.subject).catch(
+                () => null,
+              );
+              if (!stored) {
+                console.error(
+                  `[ClientDb] PUT succeeded but resource NOT found: ${short}`,
+                );
+                console.error(`[ClientDb] JSON was: ${jsonAd.slice(0, 300)}`);
+              } else if (isDid) {
+                console.info(`[ClientDb] PUT verified: ${short}`);
+              }
+            })
+            .catch(e => {
+              console.error(
+                `[ClientDb] putResource THREW for ${short}:`,
+                e,
+                `\n  JSON was: ${jsonAd.slice(0, 300)}`,
+              );
+            });
+        } else {
+          console.warn(
+            `[ClientDb] PUT skipped (empty JSON-AD) for ${short} — resource has no serializable props yet`,
+          );
         }
-      } catch {
-        // Serialization errors are not critical
+      } catch (e) {
+        console.error(
+          `[ClientDb] PUT serialization threw for ${resource.subject.slice(0, 60)}:`,
+          e,
+        );
       }
+    } else if (this.clientDb && resource.subject.startsWith('did:ad:')) {
+      console.info(
+        `[ClientDb] PUT skipped for ${resource.subject.slice(0, 60)} (loading=${resource.loading}, incomplete=${!!resource.get(core.properties.incomplete)})`,
+      );
     }
   }
 
@@ -1022,11 +1054,17 @@ export class Store {
     if (this.clientDb?.isReady) {
       try {
         const jsonAd = await this.clientDb.getResource(subject);
+        console.warn(
+          `[offline-trace] getResource("${subject}") → ${jsonAd ? `JSON-AD (${jsonAd.length} chars)` : 'null/undefined'}`,
+        );
 
         if (jsonAd) {
           hasLocalData = this.hydrateResourceFromJson(
             subject,
             JSON.parse(jsonAd),
+          );
+          console.warn(
+            `[offline-trace] hydrateResourceFromJson("${subject}") → ${hasLocalData}`,
           );
         }
 
@@ -1042,16 +1080,40 @@ export class Store {
             }
           }
         }
-      } catch {
-        // WASM DB failed — continue to server
+      } catch (e) {
+        console.warn(
+          `[offline-trace] OPFS lookup/hydrate threw for "${subject}":`,
+          e,
+        );
       }
+    } else {
+      console.warn(
+        `[offline-trace] clientDb not ready: clientDb=${!!this.clientDb}, isReady=${this.clientDb?.isReady}`,
+      );
     }
 
     // Try the server if connected. Skip if we have local data and are offline
     // to avoid overwriting good data with error responses.
     try {
       if (!this._serverConnected) {
-        // Offline — use whatever local data we found, don't hit the server.
+        // Offline — use whatever local data we found. If there IS no local
+        // data, surface the offline state to the caller rather than leaving
+        // the resource stuck in `loading`.
+        if (!hasLocalData) {
+          const resource = this.resources.get(
+            this.aliases.get(subject) ?? subject,
+          );
+
+          if (resource) {
+            resource.loading = false;
+            resource.setError(
+              new Error(
+                'Offline: resource not available locally. Reconnect to fetch.',
+              ),
+            );
+            this.notify(resource);
+          }
+        }
       } else if (hasLocalData) {
         // Online with local data — background refresh will come via WS COMMIT.
       } else {
@@ -1513,6 +1575,47 @@ export class Store {
       this.syncDirtyResources().catch(e => {
         console.warn('[Sync] Failed to sync dirty resources on reconnect:', e);
       });
+      this.refetchOfflineErroredResources();
+    }
+  }
+
+  /**
+   * When coming back online, re-fetch resources whose state was affected by
+   * being offline:
+   *   - errored with our `Offline:` marker (surfaced by the fallback path), or
+   *   - still stuck in `loading=true` (fetch started but never completed,
+   *     e.g. because the server went down mid-flight).
+   */
+  private refetchOfflineErroredResources(): void {
+    const subjectsToRetry: string[] = [];
+
+    for (const [subject, resource] of this.resources.entries()) {
+      const erroredOffline =
+        resource.error && resource.error.message.startsWith('Offline:');
+      const stuckLoading = resource.loading && !resource.new;
+
+      if (erroredOffline || stuckLoading) {
+        subjectsToRetry.push(subject);
+      }
+    }
+
+    for (const subject of subjectsToRetry) {
+      const resource = this.resources.get(subject);
+
+      if (!resource) continue;
+
+      resource.error = undefined;
+      resource.loading = true;
+      this.notify(resource);
+      this.fetchResourceFromServer(subject).catch(() => {
+        // fetchResourceFromServer already handles its own errors.
+      });
+    }
+
+    if (subjectsToRetry.length > 0) {
+      console.info(
+        `[Store] Reconnected — refetching ${subjectsToRetry.length} resource(s) that errored or were stuck loading`,
+      );
     }
   }
 

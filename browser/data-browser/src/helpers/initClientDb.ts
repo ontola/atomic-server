@@ -95,7 +95,36 @@ export function initClientDb(store: Store): void {
   store.setClientDb(clientDb);
 
   initPromise
-    .then(() => {
+    .then(async () => {
+      // Safety net: once the worker is truly ready, re-put every resource
+      // currently in memory. This captures resources that were added to the
+      // store during the init window, when calls to `clientDb.putResource`
+      // could race with the worker's async WASM init.
+      const reseedAll = async () => {
+        for (const resource of store.resources.values()) {
+          if (
+            resource.loading ||
+            !resource.subject ||
+            resource.subject.startsWith('_new:')
+          ) {
+            continue;
+          }
+          const obj: Record<string, unknown> = { '@id': resource.subject };
+          let hasProps = false;
+          for (const [key, value] of resource.getEntries()) {
+            if (value instanceof Uint8Array) continue;
+            obj[key] = value;
+            hasProps = true;
+          }
+          if (!hasProps) continue;
+          try {
+            await clientDb.putResource(JSON.stringify(obj));
+          } catch {
+            // individual put failure is non-fatal; continue
+          }
+        }
+      };
+      await reseedAll();
       // Re-emit so the sync page picks up clientDbReady: true.
       store.setClientDb(clientDb);
     })

@@ -26,6 +26,10 @@ import { ResourceInline } from '../views/ResourceInline';
 import { AtomicLink } from '../components/AtomicLink';
 import { formatTimeAgo } from '../helpers/formatTimeAgo';
 import { isRunningInTauri } from '../helpers/tauri';
+import {
+  isClientDbEnabled,
+  setClientDbEnabled,
+} from '../helpers/clientDbMode';
 import { appRoute } from './RootRoutes';
 import { pathNames } from './paths';
 import { useSettings } from '../helpers/AppSettings';
@@ -112,6 +116,7 @@ function SyncPage() {
   const [wsDebug, setWsDebug] = useState(
     () => localStorage.getItem('ws-debug') === '1',
   );
+  const [clientDbOn, setClientDbOn] = useState(() => isClientDbEnabled());
   const { setServer, baseURL } = useSettings();
   const knownServers = serverURLStorage.getKnownServers();
   const [serverInput, setServerInput] = useState('');
@@ -494,6 +499,24 @@ function SyncPage() {
                 {wsDebug ? 'Logging to console' : 'Off'}
               </DetailValue>
             </DetailItem>
+            {!isRunningInTauri() && (
+              <DetailItem>
+                <DetailLabel>Local DB</DetailLabel>
+                <DetailValue>
+                  <DebugToggle
+                    type='checkbox'
+                    checked={clientDbOn}
+                    onChange={e => {
+                      setClientDbEnabled(e.target.checked);
+                      setClientDbOn(e.target.checked);
+                    }}
+                  />
+                  {clientDbOn
+                    ? 'WASM + OPFS enabled'
+                    : 'Disabled (server-only, reload to apply)'}
+                </DetailValue>
+              </DetailItem>
+            )}
           </DetailsGrid>
         </Section>
 
