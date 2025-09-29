@@ -7,12 +7,13 @@ Same goes for feature requests.
 PR's are welcome, too!
 Note that opening a PR means agreeing that your code becomes distributed under the MIT license.
 
-If you want to share some thoughts on the Atomic Data _specification_, please [drop an issue in the Atomic Data docs repo](https://github.com/ontola/atomic-data/issues).
+If you want to share some thoughts on the Atomic Data _specification_, please [drop an issue in the Atomic Data repo](https://github.com/atomicdata-dev/atomic-server/issues).
 Check out the [Roadmap](https://docs.atomicdata.dev/roadmap.html) if you want to learn more about our plans and the history of the project.
 
 ## Table of contents
 
 - [Table of contents](#table-of-contents)
+- [Translation \& Internationalization](#translation--internationalization)
 - [Running \& compiling](#running--compiling)
   - [Running locally (with local development browser)](#running-locally-with-local-development-browser)
   - [IDE setup (VSCode)](#ide-setup-vscode)
@@ -38,6 +39,11 @@ Check out the [Roadmap](https://docs.atomicdata.dev/roadmap.html) if you want to
     - [Publishing server to Docker](#publishing-server-to-docker)
     - [Deploying to atomicdata.dev](#deploying-to-atomicdatadev)
     - [Publishing atomic-cli to WAPM](#publishing-atomic-cli-to-wapm)
+
+## Translation & Internationalization
+
+AtomicServer supports a small number of languages.
+Most of these translations are done by AI and might contain mistakes, if you notice any feel free to [open an issue](https://github.com/atomicdata-dev/atomic-server/issues).
 
 ## Running & compiling
 
@@ -124,7 +130,7 @@ cargo nextest run test_name_substring
 # First, run the server
 cargo run
 # now, open new terminal window
-cd server/e2e_tests/ && npm i && npm run test
+cd browser && pnpm i && pnpm test-e2e
 # if things go wrong, debug!
 pnpm run test-query {testname}
 ```

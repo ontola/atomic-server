@@ -251,7 +251,7 @@ export function ResourceForm({
           <StyledCollapse open={showAdvanced}>
             <Column>
               <Field
-                label='add another property...'
+                label='Add another property...'
                 helper='In Atomic Data, any Resource could have any single Property. Use this field to add new property-value combinations to your resource.'
               >
                 <div>

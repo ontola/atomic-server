@@ -26,10 +26,6 @@ const WarningIcon = styled(FaTriangleExclamation)`
   color: ${p => p.theme.colors.warning};
 `;
 
-const saveWarning = (
-  <WarningIcon title='Row is incomplete or has invalid data' />
-);
-
 const TableCellMemo = memo(TableCell);
 
 function useMarkings(row: Resource, index: number) {
@@ -39,7 +35,10 @@ function useMarkings(row: Resource, index: number) {
     if (row.commitError) {
       setMarkings(markings => {
         const newMap = new Map(markings);
-        newMap.set(index, saveWarning);
+        newMap.set(
+          index,
+          <WarningIcon title='Row is incomplete or has invalid data' />,
+        );
 
         return newMap;
       });

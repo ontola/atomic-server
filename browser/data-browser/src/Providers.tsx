@@ -20,6 +20,7 @@ import { NavStateProvider } from './components/NavState';
 import { Toaster } from './components/Toaster';
 import { McpServersProvider } from './components/AI/MCP/useMcpServers';
 import { AISettingsContextProvider } from '@components/AI/AISettingsContext';
+import { LocaleProvider } from '@components/LocaleContext';
 
 // Setup bugsnag for error handling, but only if there's an API key
 const ErrBoundary = window.bugsnagApiKey
@@ -45,43 +46,45 @@ const shouldForwardProp: ShouldForwardProp<'web'> = (propName, target) => {
 export const Providers: React.FC<React.PropsWithChildren> = ({ children }) => {
   return (
     <NavStateProvider>
-      <AppSettingsContextProvider>
-        <AISettingsContextProvider>
-          <McpServersProvider>
-            <ControlLockProvider>
-              <HotKeysWrapper>
-                <StyleSheetManager shouldForwardProp={shouldForwardProp}>
-                  <ThemeWrapper>
-                    <GlobalStyle />
-                    <ErrBoundary FallbackComponent={CrashPage}>
-                      {/* Default form validation provider. Does not do anything on its own but will make sure useValidation works without context*/}
-                      <FormValidationContextProvider
-                        onValidationChange={() => undefined}
-                      >
-                        <Toaster />
-                        <MetaSetter />
-                        <DropdownContainer>
-                          <DialogGlobalContextProvider>
-                            <PopoverContainer>
-                              <DropdownContainer>
-                                <NewResourceUIProvider>
-                                  <SkipNav />
-                                  <NavWrapper>{children}</NavWrapper>
-                                </NewResourceUIProvider>
-                              </DropdownContainer>
-                            </PopoverContainer>
-                            <NetworkIndicator />
-                          </DialogGlobalContextProvider>
-                        </DropdownContainer>
-                      </FormValidationContextProvider>
-                    </ErrBoundary>
-                  </ThemeWrapper>
-                </StyleSheetManager>
-              </HotKeysWrapper>
-            </ControlLockProvider>
-          </McpServersProvider>
-        </AISettingsContextProvider>
-      </AppSettingsContextProvider>
+      <LocaleProvider>
+        <AppSettingsContextProvider>
+          <AISettingsContextProvider>
+            <McpServersProvider>
+              <ControlLockProvider>
+                <HotKeysWrapper>
+                  <StyleSheetManager shouldForwardProp={shouldForwardProp}>
+                    <ThemeWrapper>
+                      <GlobalStyle />
+                      <ErrBoundary FallbackComponent={CrashPage}>
+                        {/* Default form validation provider. Does not do anything on its own but will make sure useValidation works without context*/}
+                        <FormValidationContextProvider
+                          onValidationChange={() => undefined}
+                        >
+                          <Toaster />
+                          <MetaSetter />
+                          <DropdownContainer>
+                            <DialogGlobalContextProvider>
+                              <PopoverContainer>
+                                <DropdownContainer>
+                                  <NewResourceUIProvider>
+                                    <SkipNav />
+                                    <NavWrapper>{children}</NavWrapper>
+                                  </NewResourceUIProvider>
+                                </DropdownContainer>
+                              </PopoverContainer>
+                              <NetworkIndicator />
+                            </DialogGlobalContextProvider>
+                          </DropdownContainer>
+                        </FormValidationContextProvider>
+                      </ErrBoundary>
+                    </ThemeWrapper>
+                  </StyleSheetManager>
+                </HotKeysWrapper>
+              </ControlLockProvider>
+            </McpServersProvider>
+          </AISettingsContextProvider>
+        </AppSettingsContextProvider>
+      </LocaleProvider>
     </NavStateProvider>
   );
 };

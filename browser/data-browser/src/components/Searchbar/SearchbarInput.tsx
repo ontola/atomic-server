@@ -40,7 +40,7 @@ function useTagList(): TagWithTitle[] {
 
 // Gracefully fall back to a no-op implementation if the browser doesn't support the Highlight API.
 const newHighlight = () => {
-  if ('Highlight' in window) {
+  if (/* @wc-ignore */ 'Highlight' in window) {
     return new window.Highlight();
   }
 

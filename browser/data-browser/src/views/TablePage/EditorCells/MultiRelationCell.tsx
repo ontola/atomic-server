@@ -126,7 +126,7 @@ function MultiRelationCellEdit({
   const Trigger = useMemo(() => {
     return (
       <PopoverTrigger>
-        <IconButton title={'Add resource'}>
+        <IconButton title='Add resource'>
           <FaPlus />
         </IconButton>
       </PopoverTrigger>

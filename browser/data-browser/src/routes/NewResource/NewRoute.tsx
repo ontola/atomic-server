@@ -101,7 +101,7 @@ function NewResourceSelector() {
           Create new resource{' '}
           {calculatedParent && (
             <>
-              {`under `}
+              under
               <ResourceInline subject={calculatedParent} />
             </>
           )}

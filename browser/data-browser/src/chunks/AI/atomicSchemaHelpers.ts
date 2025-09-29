@@ -1,3 +1,4 @@
+// @wc-ignore-file
 import { type Core, type Store } from '@tomic/react';
 
 export const toClassString = async (subject: string, store: Store) => {

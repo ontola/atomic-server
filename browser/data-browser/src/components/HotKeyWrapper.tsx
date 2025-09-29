@@ -1,3 +1,4 @@
+// @wc-ignore-file
 import * as React from 'react';
 import { dataURL, editURL } from '../helpers/navigation';
 import { useHotkeys } from 'react-hotkeys-hook';
