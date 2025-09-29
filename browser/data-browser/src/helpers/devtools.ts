@@ -65,6 +65,11 @@ async function fetchFromServer(
 ): Promise<InspectResult['server']> {
   const connected = store.getSyncStatus().serverConnected;
   if (!connected) return { connected: false };
+  // Only HTTP(S) subjects can be hit with fetch. did:/internal: live on the
+  // server by logical subject lookup, not URL fetch — skip them.
+  if (!/^https?:/.test(subject)) {
+    return { connected: true, error: `not fetchable (scheme in ${subject.slice(0, 20)}…)` };
+  }
   try {
     const res = await fetch(subject, {
       headers: { Accept: 'application/ad+json' },

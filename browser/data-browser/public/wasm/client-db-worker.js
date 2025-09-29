@@ -1,15 +1,30 @@
 /**
- * Standalone Web Worker that hosts the WASM ClientDb.
- * This file is served from /wasm/ and loaded as a module worker.
+ * Dedicated Worker that hosts the WASM ClientDb.
+ *
+ * Must be a dedicated Worker (not SharedWorker) because
+ * FileSystemFileHandle.createSyncAccessHandle() — which redb uses for OPFS
+ * random I/O — is only available in DedicatedWorkerGlobalScope per spec.
+ *
+ * Consequence: OPFS is exclusive across tabs of the same origin. A second tab
+ * will hard-fail on WASM init with a clear error (see wasm/src/lib.rs
+ * ClientDb::new). We tried a SharedWorker→nested-dedicated-Worker pattern to
+ * work around this, but Chrome blocked `new Worker(...)` inside the
+ * SharedWorker with ReferenceError. Reverted to per-tab dedicated Worker.
  */
+
+console.log('[client-db-worker] module loading');
 
 let db = null;
 let initPromise = null;
 
 async function doInit(wasmUrl, baseUrl) {
+  console.log('[client-db-worker] doInit: importing', wasmUrl);
   const wasm = await import(wasmUrl);
+  console.log('[client-db-worker] doInit: wasm module loaded, calling default()');
   await wasm.default();
+  console.log('[client-db-worker] doInit: wasm.default() done, creating ClientDb');
   db = await new wasm.ClientDb(baseUrl ?? null);
+  console.log('[client-db-worker] doInit: ClientDb ready');
 }
 
 async function ensureInit() {
@@ -24,6 +39,11 @@ async function handleMessage(msg) {
         initPromise = doInit(msg.wasmUrl, msg.baseUrl);
       }
       await initPromise;
+      return;
+
+    case 'shutdown':
+      console.log('[client-db-worker] shutdown requested');
+      setTimeout(() => self.close(), 0);
       return;
 
     case 'getResource':
