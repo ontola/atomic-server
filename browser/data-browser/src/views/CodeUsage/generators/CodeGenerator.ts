@@ -1,3 +1,4 @@
+// @wc-ignore-file
 import {
   CollectionBuilder,
   Datatype,

@@ -1,3 +1,4 @@
+// @wc-ignore-file
 import { core, dataBrowser } from '@tomic/react';
 import type { TemplateFn, TemplateContext } from '../template';
 

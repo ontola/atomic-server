@@ -1,3 +1,4 @@
+// @wc-ignore-file
 import { createLazyRoute } from '@tanstack/react-router';
 import { ContainerFull } from '../components/Containers';
 

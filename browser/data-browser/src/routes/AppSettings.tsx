@@ -14,12 +14,21 @@ import { Panel, usePanelList } from '../components/SideBar/usePanelList';
 import { pathNames } from './paths';
 import { appRoute } from './RootRoutes';
 import AISettings from '@components/AI/AISettings';
+import { SUPPORTED_LOCALES, useLocale } from '@components/LocaleContext';
+import { FaGlobe } from 'react-icons/fa6';
+import { BasicSelect } from '@components/forms/BasicSelect';
 
 export const AppSettingsRoute = createRoute({
   path: pathNames.appSettings,
   component: () => <AppSettings />,
   getParentRoute: () => appRoute,
 });
+
+const getLocaleName = (locale: string) => {
+  const names = new Intl.DisplayNames([locale], { type: 'language' });
+
+  return names.of(locale);
+};
 
 const AppSettings: React.FunctionComponent = () => {
   const {
@@ -32,6 +41,8 @@ const AppSettings: React.FunctionComponent = () => {
     hideTemplates,
     setHideTemplates,
   } = useSettings();
+
+  const { locale, setLocale } = useLocale();
 
   const { enabledPanels, enablePanel, disablePanel } = usePanelList();
 
@@ -48,6 +59,17 @@ const AppSettings: React.FunctionComponent = () => {
       <ContainerNarrow>
         <h1>Settings</h1>
         <Column>
+          <Heading>
+            <FaGlobe />
+            Language
+          </Heading>
+          <BasicSelect value={locale} onChange={e => setLocale(e.target.value)}>
+            {SUPPORTED_LOCALES.map(locale_code => (
+              <option key={locale_code} value={locale_code}>
+                {getLocaleName(locale_code)}
+              </option>
+            ))}
+          </BasicSelect>
           <Heading>Theme</Heading>
           <Row>
             <Button
@@ -122,6 +144,9 @@ const MainColorPicker = () => {
 };
 
 const Heading = styled.h2`
+  display: flex;
+  align-items: center;
+  gap: 1ch;
   font-size: 1em;
   margin: 0;
   margin-top: 1rem;

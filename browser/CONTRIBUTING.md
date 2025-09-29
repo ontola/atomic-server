@@ -38,9 +38,12 @@ Vite hosts the data-browser and targets `.ts` files which enables hot reload / h
 If you're editing `@tomic/lib` or `@tomic/react`, you need to re-build the library, as `atomic-data-browser` imports the `.js` files.
 You can auto re-build using the `watch` commands in `@tomic/lib` and `@tomic/react`.
 If you run `pnpm start` from the root, these will be run automatically.
-Note that you may need to refresh your screen manually to show updates from these libraries.
 
-There are two possible solutions for improving this workflow:
+## Localization
 
-- In `package.json` of the libraries, set the `main` to `src/index.ts` (the typescript file). However, make sure to _not_ publish this to npm, as many clients will fail.
-- Properly set up aliases with vite. I've tried this before, but failed.
+Atomic Data Browser uses [Wuchale](https://wuchale.dev/) for localization.
+When adding new text to the app wuchale will automatically extract it and add it to the locale files (When running the vite dev server).
+Make sure you provide translations for the any new text you add.
+To help with this you can provide a Google Gemini API key, Wuchale will then use this to generate translations for you automatically.
+To do so export the key in your terminal or use something like direnv to set the key: `export GEMINI_API_KEY=your_api_key`
+More info: [How to use Gemini live translation](https://wuchale.dev/guides/gemini/)

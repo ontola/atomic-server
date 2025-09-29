@@ -19,6 +19,7 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 - [#1008](https://github.com/atomicdata-dev/atomic-server/issues/1008) Add info dropdowns to different sections of the ontology editor for more information about the section.
 - [#459](https://github.com/atomicdata-dev/atomic-server/issues/459) New feature: Add tags to your resources to better organize your data. Search for resources with specific tags in the search bar with `tag:[name]`.
 - [#951](https://github.com/atomicdata-dev/atomic-server/issues/951) New feature: Atomic Assistant, AI chat interface with support for custom agents, MCP servers and more. Bring your own OpenRouter key or use Ollama to host your own models.
+- [#1118](https://github.com/atomicdata-dev/atomic-server/issues/1118) New feature: AtomicServer is now also available in German, Spanish and French. Change your language on the settings page.
 
 ### @tomic/lib
 
