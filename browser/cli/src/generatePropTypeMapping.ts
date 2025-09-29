@@ -7,16 +7,20 @@ import { dedupe } from './utils.js';
 export const generatePropTypeMapping = (
   ontology: Resource<Core.Ontology>,
   reverseMapping: ReverseMapping,
-): string => {
+): [mappingString: string, usedImports: string[]] => {
   const properties = dedupe(ontology.props.properties ?? []);
 
   const lines = properties
     .map(subject => generateLine(subject, reverseMapping))
     .join('\n');
 
-  return `interface PropTypeMapping {
+  const mappingString = `interface PropTypeMapping {
     ${lines}
   }`;
+
+  const imports = mappingString.includes('JSONValue') ? ['JSONValue'] : [];
+
+  return [mappingString, imports];
 };
 
 const generateLine = (subject: string, reverseMapping: ReverseMapping) => {
