@@ -131,6 +131,9 @@ export function initClientDb(store: Store): void {
     })
     .catch(err => {
       console.warn('[ClientDb] Failed to initialize:', err);
+      // Re-emit so the Sync page can show the error (clientDbError).
+      // clientDb.initError was populated in the send() catch inside doInit.
+      store.setClientDb(clientDb);
     });
 
   // Vite HMR: accept updates and re-initialize cleanly.

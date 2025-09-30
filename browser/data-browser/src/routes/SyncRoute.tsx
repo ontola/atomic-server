@@ -468,9 +468,18 @@ function SyncPage() {
             </DetailItem>
             {!isRunningInTauri() && (
               <DetailItem>
-                <DetailLabel>Local storage</DetailLabel>
+                <DetailLabel>Local DB</DetailLabel>
                 <DetailValue>
-                  {status.clientDbReady ? 'Ready' : 'Initializing...'}
+                  <LocalDbControl
+                    enabled={clientDbOn}
+                    attached={status.clientDbAttached}
+                    ready={status.clientDbReady}
+                    error={status.clientDbError}
+                    onToggle={next => {
+                      setClientDbEnabled(next);
+                      setClientDbOn(next);
+                    }}
+                  />
                 </DetailValue>
               </DetailItem>
             )}
@@ -499,24 +508,6 @@ function SyncPage() {
                 {wsDebug ? 'Logging to console' : 'Off'}
               </DetailValue>
             </DetailItem>
-            {!isRunningInTauri() && (
-              <DetailItem>
-                <DetailLabel>Local DB</DetailLabel>
-                <DetailValue>
-                  <DebugToggle
-                    type='checkbox'
-                    checked={clientDbOn}
-                    onChange={e => {
-                      setClientDbEnabled(e.target.checked);
-                      setClientDbOn(e.target.checked);
-                    }}
-                  />
-                  {clientDbOn
-                    ? 'WASM + OPFS enabled'
-                    : 'Disabled (server-only, reload to apply)'}
-                </DetailValue>
-              </DetailItem>
-            )}
           </DetailsGrid>
         </Section>
 
@@ -610,6 +601,61 @@ function SyncPage() {
         </Section>
       </ContainerNarrow>
     </Main>
+  );
+}
+
+type LocalDbStatus = 'disabled' | 'initializing' | 'ready' | 'error';
+
+function localDbStatus(args: {
+  enabled: boolean;
+  attached: boolean;
+  ready: boolean;
+  error?: string;
+}): LocalDbStatus {
+  if (!args.enabled) return 'disabled';
+  if (args.error) return 'error';
+  if (!args.attached || !args.ready) return 'initializing';
+  return 'ready';
+}
+
+function LocalDbControl({
+  enabled,
+  attached,
+  ready,
+  error,
+  onToggle,
+}: {
+  enabled: boolean;
+  attached: boolean;
+  ready: boolean;
+  error?: string;
+  onToggle: (next: boolean) => void;
+}) {
+  const state = localDbStatus({ enabled, attached, ready, error });
+  const label: Record<LocalDbStatus, string> = {
+    disabled: 'Disabled (server-only)',
+    initializing: 'Initializing...',
+    ready: 'Ready — WASM + OPFS',
+    error: 'Error',
+  };
+  const noteIfToggled = enabled !== attached ? ' (reload to apply)' : '';
+  return (
+    <LocalDbStack>
+      <LocalDbRow>
+        <DebugToggle
+          type='checkbox'
+          checked={enabled}
+          onChange={e => onToggle(e.target.checked)}
+          aria-label='Enable local WASM DB'
+        />
+        <StatusDot $state={state} aria-hidden />
+        <LocalDbLabel>
+          {label[state]}
+          {noteIfToggled}
+        </LocalDbLabel>
+      </LocalDbRow>
+      {state === 'error' && error && <LocalDbError>{error}</LocalDbError>}
+    </LocalDbStack>
   );
 }
 
@@ -1001,6 +1047,56 @@ const ErrorText = styled.div`
 const DebugToggle = styled.input`
   margin-right: 0.5rem;
   cursor: pointer;
+`;
+
+// These are spans (not divs) so they render legally inside <DetailValue>,
+// which is itself a <span>. Using flex on a span still works fine.
+const LocalDbStack = styled.span`
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+`;
+
+const LocalDbRow = styled.span`
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+`;
+
+const LocalDbLabel = styled.span`
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`;
+
+const LocalDbError = styled.span`
+  color: ${p => p.theme.colors.warning};
+  white-space: pre-wrap;
+  font-size: 0.85rem;
+  display: block;
+`;
+
+const StatusDot = styled.span<{ $state: LocalDbStatus }>`
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  margin-right: 0.4rem;
+  border-radius: 50%;
+  background: ${p => {
+    switch (p.$state) {
+      case 'ready':
+        return p.theme.colors.main;
+      case 'error':
+        return p.theme.colors.warning;
+      case 'initializing':
+        return p.theme.colors.textLight;
+      case 'disabled':
+      default:
+        return p.theme.colors.bg2;
+    }
+  }};
+  flex-shrink: 0;
 `;
 
 const ServerSelect = styled.select`

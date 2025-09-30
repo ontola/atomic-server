@@ -1900,6 +1900,7 @@ msgstr "No code verifier found"
 #: src/components/forms/SearchBox/SearchBox.tsx
 #: src/routes/LinkOpenRouter.tsx
 #: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
 msgid "Error"
 msgstr "Error"
 
@@ -4874,13 +4875,11 @@ msgstr "Drive"
 msgid "Connected"
 msgstr "Connected"
 
-#: src/routes/SyncRoute.tsx
-msgid "Local storage"
-msgstr "Local storage"
+#~ msgid "Local storage"
+#~ msgstr "Local storage"
 
-#: src/routes/SyncRoute.tsx
-msgid "Ready"
-msgstr "Ready"
+#~ msgid "Ready"
+#~ msgstr "Ready"
 
 #: src/routes/SyncRoute.tsx
 msgid "Initializing..."
@@ -5093,10 +5092,20 @@ msgstr "Embedded (local)"
 msgid "Local DB"
 msgstr "Local DB"
 
-#: src/routes/SyncRoute.tsx
-msgid "WASM + OPFS enabled"
-msgstr "WASM + OPFS enabled"
+#~ msgid "WASM + OPFS enabled"
+#~ msgstr "WASM + OPFS enabled"
+
+#~ msgid "Disabled (server-only, reload to apply)"
+#~ msgstr "Disabled (server-only, reload to apply)"
 
 #: src/routes/SyncRoute.tsx
-msgid "Disabled (server-only, reload to apply)"
-msgstr "Disabled (server-only, reload to apply)"
+msgid "Disabled (server-only)"
+msgstr "Disabled (server-only)"
+
+#: src/routes/SyncRoute.tsx
+msgid "Ready — WASM + OPFS"
+msgstr "Ready — WASM + OPFS"
+
+#: src/routes/SyncRoute.tsx
+msgid "Enable local WASM DB"
+msgstr "Enable local WASM DB"

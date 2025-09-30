@@ -84,6 +84,10 @@ export interface StoreSyncStatus {
   websocketReadyState?: number;
   websocketProtocol?: string;
   clientDbReady: boolean;
+  /** True if a ClientDb was attached to the store (regardless of readiness). */
+  clientDbAttached: boolean;
+  /** Message of the error that prevented ClientDb init, if init has failed. */
+  clientDbError?: string;
   lastDriveSync?: {
     drive: string;
     count: number;
@@ -1657,6 +1661,8 @@ export class Store {
       websocketReadyState: ws?.readyState,
       websocketProtocol: 'v2',
       clientDbReady: this.clientDb?.isReady ?? false,
+      clientDbAttached: !!this.clientDb,
+      clientDbError: this.clientDb?.initError?.message,
       lastDriveSync: this._lastDriveSync,
     };
   }
