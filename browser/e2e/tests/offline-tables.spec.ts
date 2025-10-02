@@ -7,7 +7,15 @@ import { FRONTEND_URL, editableTitle } from './test-utils';
  * Tests that a drive, table, and rows can be created and survive a page reload
  * entirely from the client-side WASM DB + OPFS.
  */
+// The docstring above requires atomic-server on 9883 to be STOPPED. The
+// default test environment has it running, so skip unless the caller
+// explicitly asks for it (ATOMIC_TEST_OFFLINE=1 ... pnpm test-e2e).
 test.describe('offline tables', () => {
+  test.skip(
+    process.env.ATOMIC_TEST_OFFLINE !== '1',
+    'Requires atomic-server stopped; set ATOMIC_TEST_OFFLINE=1 to run.',
+  );
+
   test('create drive, table, row, and persist across reload', async ({
     page,
   }) => {

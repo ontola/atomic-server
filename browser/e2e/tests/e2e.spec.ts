@@ -258,23 +258,35 @@ test.describe('data-browser', async () => {
 
   test('folder', async ({ page }) => {
     await newResource('folder', page);
+    const folderTitle = 'TestFolder-uniqueName';
+    await setTitle(page, folderTitle);
+    // The sidebar no longer lists drive children — capture the folder URL
+    // so we can navigate back after creating the child document.
+    const folderUrl = page.url();
 
-    // Create a sub-resource in the folder
+    // Create a child document via the empty-folder quick-create.
     await page
       .getByRole('main')
-      .getByRole('button', { name: 'New Resource', exact: true })
+      .getByRole('button', { name: 'New Document' })
+      .first()
       .click();
-    await page.click('button:has-text("Document")');
-    await editableTitle(page).click();
-    await page.keyboard.type('RAM Downloading Strategies');
-    await page.keyboard.press('Enter');
-    await clickSidebarItem('Folder', page);
+    const docTitle = 'RAM Downloading Strategies';
+    await editTitle(docTitle, page);
+
+    // Wait for the doc's save to flush before navigating away.
+    await page.waitForFunction(
+      () =>
+        (window as any).store?.getSyncStatus?.().pendingDirtyCount === 0,
+      undefined,
+      { timeout: 10000 },
+    );
+
+    // Back to the folder — assert the child appears in the main page.
+    await page.goto(folderUrl);
     await expect(
-      page.locator(
-        '[data-test="folder-list"] >> text=RAM Downloading Strategies',
-      ),
-      'Created document not visible',
-    ).toBeVisible();
+      page.getByRole('main').getByText(docTitle).first(),
+      'Created document not visible in folder',
+    ).toBeVisible({ timeout: 10000 });
   });
 
   test('folder title auto-edits on creation', async ({ page }) => {

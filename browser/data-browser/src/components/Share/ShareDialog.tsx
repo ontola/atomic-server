@@ -1,5 +1,6 @@
-import React, { cloneElement, isValidElement, useState, type JSX } from 'react';
-import { useCanWrite, useResource, useStore } from '@tomic/react';
+import React, { cloneElement, isValidElement, useEffect, useState, type JSX } from 'react';
+import { core, useCanWrite, useResource, useStore } from '@tomic/react';
+
 import { Dialog, useDialog } from '../Dialog';
 import { Button } from '../Button';
 import { InviteForm } from '../InviteForm';
@@ -36,12 +37,30 @@ export function ShareDialog({
   const [err, setErr] = useState<Error | undefined>(undefined);
   const inheritedRights = useInheritedRights(resource);
   const [resourceRights, updateResourceRights] = useRights(resource, setErr);
+
+  // Track `hasUnsavedChanges` locally. `useResource`'s `track` option also
+  // triggers re-renders on LocalChange, but every render creates a fresh
+  // proxy that tears down the listener and the subscriber-store can trample
+  // the dirty state. Keeping a dedicated flag here is simpler and resilient.
+  const [hasLocalChanges, setHasLocalChanges] = useState(false);
+
+  useEffect(() => {
+    setHasLocalChanges(resource.hasUnsavedChanges());
+    const stable = resource.stable;
+
+    return stable.on('local-change', prop => {
+      if (prop === core.properties.read || prop === core.properties.write) {
+        setHasLocalChanges(stable.hasUnsavedChanges());
+      }
+    });
+  }, [resource.stable]);
   const [showInherited, setShowInherited] = useState(false);
   const [view, setView] = useState<'share' | 'invite'>('share');
 
   const handleSave = async () => {
     try {
       await resource.save();
+      setHasLocalChanges(false);
       toast.success('Share settings saved');
     } catch (e) {
       toast.error((e as Error).message);
@@ -104,10 +123,7 @@ export function ShareDialog({
                   </Column>
                 </RightsCard>
                 {canWrite && (
-                  <Button
-                    disabled={!resource.hasUnsavedChanges()}
-                    onClick={handleSave}
-                  >
+                  <Button disabled={!hasLocalChanges} onClick={handleSave}>
                     Save
                   </Button>
                 )}

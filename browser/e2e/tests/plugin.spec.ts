@@ -29,6 +29,10 @@ test.describe('Plugins', () => {
 
     await page.getByTestId(sidebarDriveButtonId).click();
 
+    // Drive page now renders Tags / Default Ontology / Plugins as collapsible
+    // sections. Expand the Plugins section so the Upload button is in the DOM.
+    await page.getByRole('main').getByText('Plugins', { exact: true }).click();
+
     // Upload a plugin
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.getByRole('main').getByText('Upload Plugin').click();

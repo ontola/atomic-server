@@ -518,7 +518,7 @@ mod peer_sync_tests {
         println!("Device A NodeID: {node_id_a}");
 
         // Publish Device A's NodeID via pkarr relay
-        crate::discovery::publish_node_id(&agent, &drive_a, &node_id_a.to_string())
+        crate::discovery::publish_node_id(&drive_a, &node_id_a.to_string())
             .await
             .expect("pkarr publish should succeed");
         println!("Device A: published NodeID to pkarr relay");
@@ -539,7 +539,7 @@ mod peer_sync_tests {
         // Filter out Device B's own NodeID (in tests, the global ENDPOINT is Device A's)
         let my_node_id_b = ep_b.node_id().to_string();
         let discovered_node_id = crate::discovery::resolve_node_id_filtered(
-            &agent_b, &drive_a, Some(&my_node_id_b),
+            &drive_a, Some(my_node_id_b.as_str()),
         )
             .await
             .expect("pkarr resolve should find Device A");

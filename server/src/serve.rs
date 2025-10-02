@@ -83,32 +83,70 @@ async fn clear_remote_cache(appstate: &crate::appstate::AppState) -> AtomicServe
     Ok(())
 }
 
-/// Announce all local drives via pkarr relay so other devices can discover this server.
+/// Marker in the description of dev-drives (see
+/// `browser/data-browser/src/hooks/useDevDrive.ts` /
+/// `server/src/plugins/prunetests.rs`). Skipped during Pkarr announcement to
+/// avoid broadcasting throwaway test drives to the DHT.
+const DEV_DRIVE_MARKER: &str = "[atomic-data:dev-drive]";
+
+/// Publish this server's Iroh NodeID to the pkarr DHT, one record per drive
+/// it hosts. Pkarr keys the record by a keypair derived from the drive's DID
+/// (see `atomic_lib::discovery::publish_node_id`), so clients resolving a
+/// `?drive=did:ad:...` hint can find the node(s) hosting that specific drive.
+///
+/// Dev-drives are skipped (they accumulate by the hundreds during
+/// development and publishing each is pure noise).
 async fn announce_drives_pkarr(
     appstate: &crate::appstate::AppState,
     node_id: &str,
 ) -> Result<(), String> {
     use atomic_lib::Storelike;
-    let agent = appstate.store.get_default_agent().map_err(|e| e.to_string())?;
 
-    let mut count = 0;
+    let mut published = 0;
+    let mut skipped_dev = 0;
     for resource in appstate.store.all_resources(false) {
         if let Ok(classes_val) = resource.get(atomic_lib::urls::IS_A) {
             if let Ok(classes) = classes_val.to_subjects(None) {
-                if classes.contains(&atomic_lib::urls::DRIVE.to_string()) {
-                    let drive_did = resource.get_subject().as_str();
-                    match atomic_lib::discovery::publish_node_id(&agent, drive_did, node_id).await {
-                        Ok(_) => {
-                            tracing::info!("Pkarr: published NodeID for drive {drive_did}");
-                            count += 1;
-                        }
-                        Err(e) => tracing::warn!("Pkarr: failed for drive {drive_did}: {e}"),
-                    }
+                if !classes.contains(&atomic_lib::urls::DRIVE.to_string()) {
+                    continue;
                 }
+            } else {
+                continue;
             }
+        } else {
+            continue;
+        }
+
+        let is_dev = match resource.get(atomic_lib::urls::DESCRIPTION) {
+            Ok(v) => v.to_string().contains(DEV_DRIVE_MARKER),
+            Err(_) => false,
+        };
+        if is_dev {
+            skipped_dev += 1;
+            continue;
+        }
+
+        let drive_did = resource.get_subject().as_str();
+        // Drives have did:ad:{genesis} subjects. The publish_node_id derivation
+        // assumes exactly that shape — bail early for any other kind of drive
+        // resource rather than producing a bad pkarr keypair.
+        if !drive_did.starts_with("did:ad:")
+            || drive_did.starts_with("did:ad:agent:")
+            || drive_did.starts_with("did:ad:commit:")
+        {
+            continue;
+        }
+
+        match atomic_lib::discovery::publish_node_id(drive_did, node_id).await {
+            Ok(_) => published += 1,
+            Err(e) => tracing::warn!("Pkarr: failed for drive {drive_did}: {e}"),
         }
     }
-    tracing::info!("Pkarr: announced {count} drives");
+    tracing::info!(
+        "Pkarr: announced {} drives ({} dev-drives skipped)",
+        published,
+        skipped_dev
+    );
     Ok(())
 }
 
@@ -140,7 +178,8 @@ pub async fn serve(config: crate::config::Config) -> AtomicServerResult<()> {
             Ok((node_id, router)) => {
                 tracing::info!("Iroh transport ready. Connect with: iroh:{node_id}");
 
-                // Announce drives via pkarr relay
+                // Announce this server's NodeID via pkarr relay, one record per
+                // drive (see `announce_drives_pkarr`).
                 let appstate_clone = appstate.clone();
                 actix_web::rt::spawn(async move {
                     if let Err(e) = announce_drives_pkarr(&appstate_clone, &node_id.to_string()).await {

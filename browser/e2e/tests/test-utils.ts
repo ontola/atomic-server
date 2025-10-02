@@ -46,7 +46,77 @@ export const publicReadRightLocator = (page: Page) =>
     )
     .first();
 export const contextMenu = '[data-test="context-menu"]';
-export const addressBar = (page: Page) => page.getByTestId('adress-bar');
+/**
+ * The search input inside the search overlay (modal). Only visible after the
+ * overlay is opened via the Search button or cmd/ctrl+K. Replaces the old
+ * inline contentEditable that had data-testid="adress-bar".
+ */
+export const searchInput = (page: Page) =>
+  page.getByPlaceholder('Search for resources...');
+
+/**
+ * Opens the search overlay if not already open. Idempotent — returns the
+ * focused input locator.
+ */
+export async function openSearchOverlay(page: Page) {
+  const input = searchInput(page);
+  if (!(await input.isVisible().catch(() => false))) {
+    await page.locator('nav button[title^="Search ("]').first().click();
+    await input.waitFor({ state: 'visible', timeout: 3000 });
+  }
+  return input;
+}
+
+/**
+ * Type a search query into the overlay. Opens the overlay first if needed.
+ * Clears any existing query, which is important since the input persists
+ * across re-opens in the same page session.
+ */
+export async function typeInSearch(page: Page, text: string) {
+  const input = await openSearchOverlay(page);
+  await input.fill(text);
+}
+
+/**
+ * Search-and-navigate: open overlay, type query, wait for a result matching
+ * `resultText` to appear in the overlay, click it, and wait for navigation
+ * to the result's show page. Returns after the overlay closes.
+ *
+ * Use this instead of the old pattern of typing and pressing Enter — the new
+ * overlay requires an explicit result click (or ArrowDown → Enter) and only
+ * navigates when a real result is selected, not on raw Enter.
+ *
+ * Result rows carry a `data-index` attribute
+ * (see OverlayContainer.tsx → ResultRowWrapper).
+ */
+export async function searchAndOpen(
+  page: Page,
+  query: string,
+  resultText: string,
+) {
+  await typeInSearch(page, query);
+  await page
+    .locator('[data-index]')
+    .filter({ hasText: resultText })
+    .first()
+    .click();
+}
+
+/**
+ * Deprecated alias — old tests called this. Forwards to the new `typeInSearch`
+ * which opens the overlay. Kept so we can migrate tests incrementally.
+ * @deprecated use `typeInSearch` or `searchAndOpen`
+ */
+export async function typeInAddressBar(page: Page, text: string) {
+  await typeInSearch(page, text);
+}
+
+/**
+ * Deprecated alias — old tests used `addressBar(page).fill(...)`. Returns the
+ * new search input after opening the overlay. Prefer `typeInSearch`.
+ * @deprecated use `searchInput` (and open the overlay first)
+ */
+export const addressBar = (page: Page) => searchInput(page);
 export const newDriveMenuItem = '[data-test="menu-item-new-drive"]';
 export const sidebarDriveButtonId = 'sidebar-drive-open';
 export const defaultDevServer = 'http://localhost:9883';
@@ -95,26 +165,46 @@ export async function setTitle(page: Page, title: string) {
 }
 
 /**
- * Signs in with the shared test secret. Works from the drive (sidebar → Login)
- * or from `/app/agent` / welcome gate (card: Sign in → secret → Continue).
+ * Signs in with the shared test secret if not already signed in.
+ *
+ * Handles three entry states:
+ *   1. Already signed in (e.g. post-`before()`/`devDrive()`): no-op.
+ *   2. Welcome gate visible: click its "Sign in" button → paste secret → Continue.
+ *   3. On a drive page with a "Login / New User" sidebar link: click it, then
+ *      follow the welcome-gate flow, then navigate back.
+ *
+ * Idempotence is important because `before()` already signs in with a
+ * fresh dev-drive agent; tests that also call `signIn(page)` used to pre-empt
+ * that by looking for a "Sign in" button that wasn't there.
  */
 export async function signIn(page: Page, secret: string = SECRET) {
+  // State 2: welcome gate. The "Sign in" button (exact match, not "Sign in with Google" etc.)
+  // is the fast check — if it's there, we're on the gate and need to sign in.
+  const signInButton = page.getByRole('button', {
+    name: 'Sign in',
+    exact: true,
+  });
+  if (await signInButton.isVisible({ timeout: 1500 }).catch(() => false)) {
+    await signInButton.click();
+    await page.getByLabel('Agent secret').fill(secret);
+    await page.getByRole('button', { name: 'Continue' }).click();
+    return;
+  }
+
+  // State 3: sidebar login link (rare — shown when on a drive but not signed in).
   const loginLink = page.getByRole('link', { name: 'Login / New User' });
-  const usedSidebarNav = await loginLink
-    .isVisible({ timeout: 3000 })
-    .catch(() => false);
-
-  if (usedSidebarNav) {
+  if (await loginLink.isVisible({ timeout: 1500 }).catch(() => false)) {
     await loginLink.click();
-  }
-
-  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await page.getByLabel('Agent secret').fill(secret);
-  await page.getByRole('button', { name: 'Continue' }).click();
-
-  if (usedSidebarNav) {
+    await page
+      .getByRole('button', { name: 'Sign in', exact: true })
+      .click();
+    await page.getByLabel('Agent secret').fill(secret);
+    await page.getByRole('button', { name: 'Continue' }).click();
     await page.goBack();
+    return;
   }
+
+  // State 1: already signed in. Nothing to do.
 }
 
 /**
@@ -182,12 +272,20 @@ export async function makeDrivePublic(page: Page) {
     'The drive was public from the start',
   ).not.toBeChecked();
   await publicReadRightLocator(page).click();
-  await page.locator('text=Save').click();
+  // The permission toggle dirties the resource asynchronously (validation
+  // fetch + LocalChange event), so wait for Save to enable instead of
+  // racing the default 5s click timeout.
+  const saveBtn = page.locator('main').getByRole('button', { name: 'Save', exact: true });
+  await expect(saveBtn).toBeEnabled({ timeout: 15000 });
+  await saveBtn.click();
   await expect(page.locator('text="Share settings saved"')).toBeVisible();
 }
 
 export async function openSubject(page: Page, subject: string) {
-  await addressBar(page).fill(subject);
+  // Navigate via the SPA's /app/show route instead of typing into the old
+  // address bar (which no longer exists — replaced by the search overlay,
+  // and the overlay only resolves indexed resources, not arbitrary URLs).
+  await page.goto(`${FRONTEND_URL}/app/show?subject=${encodeURIComponent(subject)}`);
   await expect(page.locator(`main[about="${subject}"]`).first()).toBeVisible();
 }
 

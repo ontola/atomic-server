@@ -105,7 +105,10 @@ impl SearchState {
     /// Adds a single resource to the search index, but does _not_ commit!
     /// Does not index outgoing links, or resourcesArrays
     /// `appstate.search_index_writer.write()?.commit()?;`
-    #[tracing::instrument(skip(self, store))]
+    #[tracing::instrument(
+        skip(self, store, resource),
+        fields(subject = %resource.get_subject())
+    )]
     pub async fn add_resource(&self, resource: &Resource, store: &Db) -> AtomicServerResult<()> {
         let fields = self.get_schema_fields()?;
         // Store the canonical subject (e.g. "internal:/files/xxx") as the index key.
@@ -113,6 +116,15 @@ impl SearchState {
         // output layer (search handler), not here. This keeps add/remove symmetric — both
         // just use subject.as_str().
         let subject = resource.get_subject().as_str();
+        let title = get_resource_title(resource);
+        let has_name = resource.get(atomic_lib::urls::NAME).is_ok();
+        let title_is_subject = title == subject;
+        tracing::info!(
+            "INDEXING title={:?} has_name={} title_is_fallback={}",
+            if title_is_subject { "<subject>" } else { &title },
+            has_name,
+            title_is_subject
+        );
         let origin = store
             .get_base_domain()
             .unwrap_or_else(|| "http://localhost".to_string());
@@ -334,6 +346,63 @@ mod tests {
 
         assert!(query_facet_direct_parent.is_prefix_of(&index_facet));
         assert!(query_facet_root.is_prefix_of(&index_facet));
+    }
+
+    /// Regression test for the DID search-index bug: resources with `did:ad:...`
+    /// subjects were not findable via /search?q=... after being added to the
+    /// tantivy index. Repro: create a drive (DID), create a folder under it
+    /// (DID), index the folder, commit, query for its name. Expected: found.
+    #[actix_rt::test]
+    async fn did_subject_is_indexed_and_searchable() {
+        let unique = atomic_lib::utils::random_string(10);
+        let config = crate::config::build_temp_config(&unique).unwrap();
+        let store = atomic_lib::Db::init_temp(&unique).await.unwrap();
+        atomic_lib::test_utils::setup_test_env(&store).await.unwrap();
+
+        let search_state = SearchState::new(&config).unwrap();
+        let fields = search_state.get_schema_fields().unwrap();
+
+        // A drive with a DID subject — matches how dev-drive / user flows work.
+        let drive_subject = "did:ad:test-drive-subject";
+        let mut drive = Resource::new(drive_subject.to_string());
+        drive
+            .set_string(urls::NAME.into(), "Drive", &store)
+            .await
+            .unwrap();
+        store.add_resource(&drive).await.unwrap();
+
+        // A folder under that drive, also DID-subject.
+        let folder_subject = "did:ad:test-folder-subject";
+        let mut folder = Resource::new(folder_subject.to_string());
+        folder
+            .set_string(urls::NAME.into(), "MyUniqueFolder", &store)
+            .await
+            .unwrap();
+        folder
+            .set_string(urls::PARENT.into(), drive_subject, &store)
+            .await
+            .unwrap();
+        // Avoid class-membership — Folder requires display-style, etc. We
+        // just want to test the search-index path for DID subjects.
+        store.add_resource(&folder).await.unwrap();
+
+        // Index it the way CommitMonitor does.
+        search_state.add_resource(&folder, &store).await.unwrap();
+        search_state.writer.write().unwrap().commit().unwrap();
+        search_state.reader.reload().unwrap();
+
+        let searcher = search_state.reader.searcher();
+        let parser =
+            tantivy::query::QueryParser::for_index(&search_state.index, vec![fields.title]);
+        let query = parser.parse_query("MyUniqueFolder").unwrap();
+        let top_docs = searcher
+            .search(&query, &tantivy::collector::TopDocs::with_limit(10))
+            .unwrap();
+
+        assert!(
+            !top_docs.is_empty(),
+            "DID-subject folder should be findable by name",
+        );
     }
 
     #[actix_rt::test]
