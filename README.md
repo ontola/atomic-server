@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/atomicdata-dev-atomic-server-badge.png)](https://mseep.ai/app/atomicdata-dev-atomic-server)
+
 ![AtomicServer](./logo.svg)
 
 [![crates.io](https://img.shields.io/crates/v/atomic-server)](https://crates.io/crates/atomic-server)
