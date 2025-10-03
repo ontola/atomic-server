@@ -148,7 +148,7 @@ fn pull_parents_of_props_to_front(array: &Vec<serde_json::Value>) -> Vec<serde_j
 
 /// Parses JSON-AD string.
 /// Accepts an array containing multiple objects, or one single object.
-#[tracing::instrument(skip(store))]
+#[tracing::instrument(skip(store, string))]
 pub fn parse_json_ad_string(
     string: &str,
     store: &impl Storelike,

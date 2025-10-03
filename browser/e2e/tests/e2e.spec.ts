@@ -162,6 +162,7 @@ test.describe('data-browser', async () => {
   }) => {
     // Remove public read rights for Drive
     await signIn(page);
+    
     const { driveURL, driveTitle } = await newDrive(page);
     await currentDriveTitle(page).click();
     await contextMenuClick('share', page);

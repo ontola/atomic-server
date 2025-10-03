@@ -182,7 +182,8 @@ test.describe('tables', async () => {
       page.getByRole('button', { name: selectColumnName }),
     ).toBeVisible();
 
-    await page.waitForLoadState('networkidle');
+    await waitForCommit(page);
+    await page.waitForTimeout(100); // Small buffer for WAL flush
     await page.reload();
     await expect(
       page.getByRole('button', { name: selectColumnName }),

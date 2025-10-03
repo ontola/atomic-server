@@ -1,10 +1,9 @@
 //! App state, which is accessible from handlers
 use crate::{
-    commit_monitor::CommitMonitor, config::Config, errors::AtomicServerResult, search::SearchState,
+    commit_monitor::CommitMonitor, config::Config, db_writer::DbWriter, errors::AtomicServerResult, search::SearchState,
 };
 use atomic_lib::{
     agents::Agent,
-    commit::CommitResponse,
     config::{ClientConfig, SharedConfig},
     Storelike,
 };
@@ -23,6 +22,8 @@ pub struct AppState {
     pub config: Config,
     /// The Actix Address of the CommitMonitor, which should receive updates when a commit is applied
     pub commit_monitor: actix::Addr<CommitMonitor>,
+    /// The Actix Address of the DbWriter, which handles all database write operations sequentially
+    pub db_writer: actix::Addr<DbWriter>,
     pub search_state: SearchState,
 }
 
@@ -41,7 +42,7 @@ impl AppState {
             tracing::warn!("Development mode is enabled. This will use staging environments for services like LetsEncrypt.");
         }
 
-        let mut store = atomic_lib::Db::init(&config.store_path, config.server_url.clone())?;
+        let store = atomic_lib::Db::init(&config.store_path, config.server_url.clone())?;
         let no_server_resource = store.get_resource(&config.server_url).is_err();
         if no_server_resource {
             tracing::warn!("Server URL resource not found. This is likely because the server URL has changed. Initializing a new database...");
@@ -62,16 +63,12 @@ impl AppState {
         // Initialize commit monitor, which watches commits and sends these to the commit_monitor actor
         let commit_monitor =
             crate::commit_monitor::create_commit_monitor(store.clone(), search_state.clone());
+        
+        // Initialize db writer actor for single-threaded writes, passing commit_monitor for notifications
+        let db_writer = crate::db_writer::create_db_writer(store.clone(), commit_monitor.clone());
 
-        let commit_monitor_clone = commit_monitor.clone();
-
-        // This closure is called every time a Commit is created
-        let send_commit = move |commit_response: &CommitResponse| {
-            commit_monitor_clone.do_send(crate::actor_messages::CommitMessage {
-                commit_response: commit_response.clone(),
-            });
-        };
-        store.set_handle_commit(Box::new(send_commit));
+        // Note: Commit notifications are now handled directly by the DbWriter actor
+        // The DbWriter sends CommitMessage to the commit_monitor after successful commits
 
         // If the user changes their server_url, the drive will not exist.
         // In this situation, we should re-build a new drive from scratch.
@@ -98,6 +95,7 @@ impl AppState {
             store,
             config,
             commit_monitor,
+            db_writer,
             search_state,
         })
     }

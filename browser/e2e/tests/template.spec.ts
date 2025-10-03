@@ -76,7 +76,7 @@ async function setupTemplateSite(serverUrl: string, siteType: string) {
     await execAsync(`pnpm link ${pathToPackage('svelte')}`, siteType);
   }
 
-  await execAsync('pnpm update-ontologies', siteType);
+  await execAsync('pnpm run update-ontologies', siteType);
 }
 
 function startServer(siteType: string) {

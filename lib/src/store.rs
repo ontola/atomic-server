@@ -8,13 +8,14 @@ use crate::{atoms::Atom, storelike::Storelike};
 use crate::{errors::AtomicResult, Resource};
 use std::{collections::HashMap, sync::Arc};
 use parking_lot::Mutex;
+use dashmap::DashMap;
 
 /// The in-memory store of data, containing the Resources, Properties and Classes
 /// It uses the `default_agent` as the default client.
 #[derive(Clone)]
 pub struct Store {
     // The store currently holds two stores - that is not ideal
-    hashmap: Arc<Mutex<HashMap<String, Resource>>>,
+    hashmap: Arc<DashMap<String, Resource>>,
     default_agent: Arc<Mutex<Option<crate::agents::Agent>>>,
     server_url: Arc<Mutex<Option<String>>>,
 }
@@ -24,7 +25,7 @@ impl Store {
     /// Run `.populate()` to get useful standard models loaded into your store.
     pub fn init() -> AtomicResult<Store> {
         let store = Store {
-            hashmap: Arc::new(Mutex::new(HashMap::new())),
+            hashmap: Arc::new(DashMap::new()),
             default_agent: Arc::new(Mutex::new(None)),
             server_url: Arc::new(Mutex::new(None)),
         };
@@ -149,21 +150,20 @@ impl Storelike for Store {
         }
         if !overwrite_existing {
             let subject = resource.get_subject();
-            if let Some(_r) = self.hashmap.lock().get(subject) {
+            if self.hashmap.contains_key(subject) {
                 return Err(format!("{} already present, will not overwrite.", subject).into());
             }
         }
         let _ = update_index;
         // This store has no index, so we don't need to update it.
-        self.hashmap
-            .lock()
-            .insert(resource.get_subject().into(), resource.clone());
+        self.hashmap.insert(resource.get_subject().into(), resource.clone());
         Ok(())
     }
 
     // TODO: Fix this for local stores, include external does not make sense here
     fn all_resources(&self, _include_external: bool) -> Box<dyn Iterator<Item = Resource>> {
-        Box::new(self.hashmap.lock().clone().into_values())
+        let resources: Vec<Resource> = self.hashmap.iter().map(|entry| entry.value().clone()).collect();
+        Box::new(resources.into_iter())
     }
 
     fn get_server_url(&self) -> AtomicResult<String> {
@@ -185,8 +185,8 @@ impl Storelike for Store {
     }
 
     fn get_resource(&self, subject: &str) -> AtomicResult<Resource> {
-        if let Some(resource) = self.hashmap.lock().get(subject) {
-            return Ok(resource.clone());
+        if let Some(resource) = self.hashmap.get(subject) {
+            return Ok(resource.value().clone());
         }
 
         if let Ok(resource) = self.fetch_resource(subject, self.get_default_agent().ok().as_ref()) {
@@ -206,8 +206,7 @@ impl Storelike for Store {
             self.remove_resource(child.get_subject())?;
         }
         self.hashmap
-            .lock()
-            .remove_entry(subject)
+            .remove(subject)
             .ok_or(format!(
                 "Resource {} could not be deleted, because it is not found",
                 subject

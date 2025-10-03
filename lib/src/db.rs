@@ -46,6 +46,7 @@ use crate::{
 use tracing::{info, instrument};
 use trees::{Method, Operation, Transaction, Tree};
 
+
 use self::{
     migrations::migrate_maybe,
     prop_val_sub_index::{add_atom_to_prop_val_sub_index, find_in_prop_val_sub_index},
@@ -118,8 +119,8 @@ impl Db {
         );
 
         let pool = Pool::builder()
-            .min_idle(Some(1))
-            .max_size(10)
+            .min_idle(Some(5))
+            .max_size(50)
             .connection_timeout(Duration::from_secs(5))
             .build(manager)
             .map_err(|e| format!("Failed to create connection pool: {}", e))?;
@@ -431,7 +432,7 @@ impl Db {
             .map_err(|e| format!("Failed to get connection from pool: {}", e))?;
 
         let tx = conn
-            .transaction()
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
             .map_err(|e| format!("Failed to start transaction: {}", e))?;
 
         // Group operations by table for batch processing
@@ -460,6 +461,10 @@ impl Db {
 
         tx.commit()
             .map_err(|e| format!("Failed to commit transaction: {}", e))?;
+
+        // Force WAL checkpoint for durability after critical operations
+        conn.pragma_update(None, "wal_checkpoint", "TRUNCATE")
+            .map_err(|e| format!("Failed to checkpoint WAL: {}", e))?;
 
         Ok(())
     }
@@ -746,7 +751,7 @@ impl Storelike for Db {
             (Some(_old), None) => {
                 assert_eq!(_old.get_subject(), &commit_response.commit.subject);
                 assert!(&commit_response.commit.destroy.expect("Resource was removed but `commit.destroy` was not set!"));
-                self.remove_resource(&commit_response.commit.subject)?;
+                self.recursive_remove(&commit_response.commit.subject, &mut transaction)?;
             },
             _ => {}
         };
@@ -1072,9 +1077,12 @@ fn process_table_operations(
 fn configure_sqlite_for_r2d2(conn: &mut rusqlite::Connection) -> Result<(), rusqlite::Error> {
     // Enable WAL mode for concurrent readers
     conn.pragma_update(None, "journal_mode", "WAL")?;
+    
+    // Set synchronous=NORMAL for much faster writes (safe with WAL mode)
+    conn.pragma_update(None, "synchronous", "NORMAL")?;
 
-    // Memory-mapped I/O for faster reads (512MB)
-    conn.pragma_update(None, "mmap_size", 536870912)?;
+    // Memory-mapped I/O for faster reads (2GB for reduced syscalls)
+    conn.pragma_update(None, "mmap_size", 2147483647)?;
 
     // Larger page size for blob storage (8KB for better blob performance)
     conn.pragma_update(None, "page_size", 8192)?;
@@ -1082,14 +1090,14 @@ fn configure_sqlite_for_r2d2(conn: &mut rusqlite::Connection) -> Result<(), rusq
     // Aggressive caching (128MB)
     conn.pragma_update(None, "cache_size", -131072)?;
 
-    // Reduce sync overhead while maintaining durability
-    conn.pragma_update(None, "synchronous", "NORMAL")?;
-
     // Keep temporary indices in memory
     conn.pragma_update(None, "temp_store", "MEMORY")?;
 
-    // Optimize WAL checkpointing for performance (less frequent but more efficient)
-    conn.pragma_update(None, "wal_autocheckpoint", 2000)?;
+    // Optimize WAL checkpointing for performance (much less frequent to avoid lock contention)
+    conn.pragma_update(None, "wal_autocheckpoint", 10000)?;
+    
+    // Limit WAL file size to prevent bloat (6MB)
+    conn.pragma_update(None, "journal_size_limit", 6144000)?;
 
     // Enable query planner optimizations (best effort, ignore failures)
     let _ = conn.execute_batch("PRAGMA optimize;");
@@ -1098,8 +1106,8 @@ fn configure_sqlite_for_r2d2(conn: &mut rusqlite::Connection) -> Result<(), rusq
     // Increase lookaside memory for better allocation performance
     let _ = conn.execute("PRAGMA lookaside=1024,128", []);
     
-    // Optimize busy timeout for concurrent access
-    conn.pragma_update(None, "busy_timeout", 30000)?; // 30 seconds
+    // Optimize busy timeout for concurrent access (fail faster for better debugging)
+    conn.pragma_update(None, "busy_timeout", 10000)?; // 10 seconds
     
     // Collect optimizer statistics for better query planning
     let _ = conn.execute("ANALYZE", []);
@@ -1175,9 +1183,12 @@ fn configure_sqlite(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Enable WAL mode for concurrent readers
     conn.pragma_update(None, "journal_mode", "WAL")?;
+    
+    // Set synchronous=NORMAL for much faster writes (safe with WAL mode)
+    conn.pragma_update(None, "synchronous", "NORMAL")?;
 
-    // Memory-mapped I/O for faster reads (512MB)
-    conn.pragma_update(None, "mmap_size", 536870912)?;
+    // Memory-mapped I/O for faster reads (2GB for reduced syscalls)
+    conn.pragma_update(None, "mmap_size", 2147483647)?;
 
     // Larger page size for blob storage (8KB for better blob performance)
     conn.pragma_update(None, "page_size", 8192)?;
@@ -1185,14 +1196,14 @@ fn configure_sqlite(
     // Aggressive caching (128MB)
     conn.pragma_update(None, "cache_size", -131072)?;
 
-    // Reduce sync overhead while maintaining durability
-    conn.pragma_update(None, "synchronous", "NORMAL")?;
-
     // Keep temporary indices in memory
     conn.pragma_update(None, "temp_store", "MEMORY")?;
 
-    // Optimize WAL checkpointing for performance (less frequent but more efficient)
-    conn.pragma_update(None, "wal_autocheckpoint", 2000)?;
+    // Optimize WAL checkpointing for performance (much less frequent to avoid lock contention)
+    conn.pragma_update(None, "wal_autocheckpoint", 10000)?;
+    
+    // Limit WAL file size to prevent bloat (6MB)
+    conn.pragma_update(None, "journal_size_limit", 6144000)?;
 
     // Enable query planner optimizations (best effort, ignore failures)
     let _ = conn.execute_batch("PRAGMA optimize;");
@@ -1201,8 +1212,8 @@ fn configure_sqlite(
     // Increase lookaside memory for better allocation performance
     let _ = conn.execute("PRAGMA lookaside=1024,128", []);
     
-    // Optimize busy timeout for concurrent access
-    conn.pragma_update(None, "busy_timeout", 30000)?; // 30 seconds
+    // Optimize busy timeout for concurrent access (fail faster for better debugging)
+    conn.pragma_update(None, "busy_timeout", 10000)?; // 10 seconds
     
     // Collect optimizer statistics for better query planning
     let _ = conn.execute("ANALYZE", []);

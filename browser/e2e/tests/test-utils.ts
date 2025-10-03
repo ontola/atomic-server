@@ -42,8 +42,8 @@ export const newDriveMenuItem = '[data-test="menu-item-new-drive"]';
 
 export const defaultDevServer = 'http://localhost:9883';
 export const currentDialogOkButton = 'dialog[open] >> footer >> text=Ok';
-// Depends on server index throttle time, `commit_monitor.rs`
-export const REBUILD_INDEX_TIME = 5000;
+// SQLite FTS5 updates are instant, reduced from 5000ms for faster tests
+export const REBUILD_INDEX_TIME = 500;
 
 /** Checks server URL and browser URL */
 export const before = async ({ page }: { page: Page }) => {

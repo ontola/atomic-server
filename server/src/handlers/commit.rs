@@ -1,6 +1,7 @@
-use crate::{appstate::AppState, errors::AtomicServerResult};
+use crate::{appstate::AppState, db_writer::ApplyCommitMessage, errors::AtomicServerResult};
 use actix_web::{web, HttpResponse};
 use atomic_lib::{commit::CommitOpts, parse::parse_json_ad_commit_resource, Commit, Storelike};
+use tokio::sync::oneshot;
 
 /// Send and process a Commit.
 /// Currently only accepts JSON-AD
@@ -36,9 +37,24 @@ pub async fn post_commit(
         validate_for_agent: Some(incoming_commit.signer.to_string()),
         update_index: true,
     };
-    let commit_response = store.apply_commit(incoming_commit, &opts)?;
+    // Send commit to the single-writer actor and wait for response
+    let (tx, rx) = oneshot::channel();
+    let actor_message = ApplyCommitMessage {
+        commit: incoming_commit,
+        opts,
+        respond_to: tx,
+    };
+    
+    // Send message to actor and await completion
+    appstate.db_writer.send(actor_message).await
+        .map_err(|_| "DbWriter actor mailbox is full or closed")?;
+    
+    // Wait for response from actor
+    let commit_response = rx.await
+        .map_err(|_| "DbWriter actor dropped response channel")?
+        .map_err(|e| format!("Commit failed: {}", e))?;
 
-    let message = commit_response.commit_resource.to_json_ad()?;
+    let response_body = commit_response.commit_resource.to_json_ad()?;
 
-    Ok(builder.body(message))
+    Ok(builder.body(response_body))
 }

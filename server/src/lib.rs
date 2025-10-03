@@ -6,6 +6,7 @@ See https://github.com/atomicdata-dev/atomic-server/tree/master/src-tauri
 mod actor_messages;
 mod appstate;
 mod commit_monitor;
+pub mod db_writer;
 pub mod config;
 mod content_types;
 mod errors;

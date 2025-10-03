@@ -104,7 +104,7 @@ features = ["derive"]
 version = "1"
 
 [dependencies.tokio]
-features = ["time", "rt-multi-thread", "macros"]
+features = ["time", "rt-multi-thread", "macros", "sync"]
 version = "1"
 
 [dependencies.image]

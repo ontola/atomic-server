@@ -224,10 +224,28 @@ impl PerformantCache {
             subjects,
         };
         
+        // Check cache size before consuming key
+        let cache_len = self.cache.len();
+        let should_evict_emergency = cache_len > self.max_size * 2;
+        let should_evict_probabilistic = if cache_len > self.max_size {
+            // Probabilistic eviction: 5% chance to trigger cleanup
+            use std::collections::hash_map::RandomState;
+            use std::hash::{BuildHasher, Hasher};
+            let mut hasher = RandomState::new().build_hasher();
+            hasher.write(key.as_bytes());
+            hasher.finish() % 20 == 0
+        } else {
+            false
+        };
+        
         self.cache.insert(key, entry);
         
-        // Evict old entries if cache is too large
-        if self.cache.len() > self.max_size {
+        // Probabilistic eviction: only evict 5% of the time to avoid O(n) overhead on every insert
+        // This amortizes eviction cost while keeping cache size reasonable
+        if should_evict_emergency {
+            // Emergency eviction if cache gets too large (2x max_size)
+            self.evict_old_entries();
+        } else if should_evict_probabilistic {
             self.evict_old_entries();
         }
     }
@@ -247,23 +265,30 @@ impl PerformantCache {
     
     /// Evict oldest entries when cache is full
     fn evict_old_entries(&self) {
-        if self.cache.len() <= self.max_size {
+        let current_len = self.cache.len();
+        if current_len <= self.max_size {
             return;
         }
         
-        // Collect entries with their creation times
-        let mut entries: Vec<(String, Instant)> = self.cache
-            .iter()
-            .map(|entry| (entry.key().clone(), entry.value().created_at))
-            .collect();
+        // Batch removal: collect keys of oldest entries
+        // Use partial_cmp for faster comparison (Instant implements Ord)
+        let mut entries: Vec<(String, Instant)> = Vec::with_capacity(current_len);
         
-        // Sort by creation time (oldest first)
-        entries.sort_by_key(|(_, created_at)| *created_at);
+        for entry in self.cache.iter() {
+            entries.push((entry.key().clone(), entry.value().created_at));
+        }
         
-        // Remove oldest entries until we're under the limit
-        let to_remove = self.cache.len() - self.max_size + 50; // Remove a bit extra to avoid frequent evictions
-        for (key, _) in entries.into_iter().take(to_remove) {
-            self.cache.remove(&key);
+        // Only remove what's necessary (25% of excess + buffer)
+        let to_remove = ((current_len - self.max_size) * 5 / 4).min(current_len / 2);
+        
+        // Use select_nth_unstable for O(n) instead of full O(n log n) sort
+        if to_remove > 0 && to_remove < entries.len() {
+            entries.select_nth_unstable_by_key(to_remove, |(_key, created_at)| *created_at);
+            
+            // Remove only the oldest entries (first `to_remove` items)
+            for (key, _) in entries.iter().take(to_remove) {
+                self.cache.remove(key);
+            }
         }
     }
 }

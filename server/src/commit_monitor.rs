@@ -27,8 +27,8 @@ pub struct CommitMonitor {
     run_expensive_next_tick: bool,
 }
 
-// Only runs expensive index operation (SQLite maintenance) once every x seconds
-const REBUILD_INDEX_TIME: std::time::Duration = std::time::Duration::from_secs(5);
+// SQLite FTS5 updates are instant, so we can use a much shorter interval for maintenance
+const REBUILD_INDEX_TIME: std::time::Duration = std::time::Duration::from_millis(500);
 
 // Since his Actor only starts once, there is no need to handle its lifecycle
 impl Actor for CommitMonitor {
@@ -129,9 +129,8 @@ impl CommitMonitor {
             self.search_state.add_resource(resource, &self.store)?;
         }
 
-        // With SQLite, we don't need expensive batch operations like Tantivy
-        // But we can still use this for other maintenance tasks if needed
-        self.run_expensive_next_tick = true;
+        // SQLite FTS5 updates are immediate, no need for expensive batch operations
+        // self.run_expensive_next_tick = true;
         Ok(())
     }
 

@@ -257,7 +257,7 @@ impl WebSocketConnection {
         
         if now.duration_since(*last_time) < Duration::from_secs(1) {
             *count += 1;
-            if *count > 10 { // Max 10 messages per second
+            if *count > 100 { // Max 100 messages per second (was 10)
                 return false;
             }
         } else {
