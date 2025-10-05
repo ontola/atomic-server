@@ -29,9 +29,14 @@ pub enum Tree {
 
 const RESOURCES: &str = "resources_v3";
 const VALPROPSUB: &str = "reference_index_v1";
-const QUERY_MEMBERS: &str = "members_index_v2";
+// v3: QueryFilter key encoding changed to [drive_len][drive_bytes][msgpack rest]
+// so the per-atom matching loop can scan_prefix to just the relevant drive's
+// watched queries instead of decoding every entry. Old v2 entries are
+// unreadable with the new decoder — leaving them stranded under their old tree
+// name is fine; they're pure caches and rebuild on next query.
+const QUERY_MEMBERS: &str = "members_index_v3";
 const PROPVALSUB: &str = "prop_val_sub_index";
-const QUERIES_WATCHED: &str = "watched_queries_v2";
+const QUERIES_WATCHED: &str = "watched_queries_v3";
 const PLUGIN_META: &str = "plugin_meta";
 const DRIVE_MAPPING: &str = "drive_mapping";
 const DID_MAPPING: &str = "did_mapping";

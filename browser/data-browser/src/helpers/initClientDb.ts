@@ -4,15 +4,15 @@ import { ClientDbWorker, type Store } from '@tomic/lib';
 let currentWorker: ClientDbWorker | undefined;
 
 /**
- * Initialize the WASM ClientDb in a dedicated Worker and attach it to the Store.
- * Uses OPFS for persistent storage — data survives page reloads.
- * Hard-fails on OPFS unavailable (e.g. second tab of the origin) — see
- * wasm/src/lib.rs::ClientDb::new for the error message.
+ * Initialize the WASM ClientDb in a SharedWorker and attach it to the Store.
+ * Uses OPFS for persistent storage — data survives page reloads. Singleton
+ * per origin, so all tabs talk to one DB instance automatically.
  */
 export function initClientDb(store: Store): void {
-  if (typeof Worker === 'undefined') return;
+  if (typeof SharedWorker === 'undefined') return;
 
-  // Terminate previous worker (important for Vite HMR — releases OPFS handle).
+  // Disconnect the previous port on HMR. Another tab (or the post-HMR tab
+  // itself) will keep the SharedWorker alive; we just reattach a fresh port.
   if (currentWorker) {
     currentWorker.destroy();
     currentWorker = undefined;
@@ -57,6 +57,18 @@ export function initClientDb(store: Store): void {
       const resource = store.resources.get(subject);
 
       if (!resource) return undefined;
+
+      // Skip resources whose commits haven't reached the server. Two cases:
+      //   1. Unsaved placeholders (e.g. `TableNewRow`'s pre-created empty
+      //      row): `signChanges` was called — flipping `new=false` and
+      //      queueing a commit — but `pushCommits` never ran. Seeding these
+      //      turns them into phantom children that accumulate every reload.
+      //   2. Offline-applied resources: `applyPendingCommitsLocally` already
+      //      persists them directly via `clientDb.putResource`. Seeding
+      //      again here is redundant.
+      // Genuinely-saved resources have an empty pending queue by the time
+      // this seeder runs, so they are the ones that actually land in OPFS.
+      if (resource.hasPendingCommits || resource.new) return undefined;
 
       const obj: Record<string, unknown> = { '@id': resource.subject };
       let hasProps = false;
@@ -106,7 +118,9 @@ export function initClientDb(store: Store): void {
           if (
             resource.loading ||
             !resource.subject ||
-            resource.subject.startsWith('_new:')
+            resource.subject.startsWith('_new:') ||
+            resource.hasPendingCommits ||
+            resource.new
           ) {
             continue;
           }

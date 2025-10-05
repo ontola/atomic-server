@@ -2,6 +2,17 @@ import { flushSync } from 'react-dom';
 import { useSettings } from '../helpers/AppSettings';
 import { useNavigate, useRouter } from '@tanstack/react-router';
 
+/**
+ * Serializes concurrent view transitions. Without this, back-to-back navigate
+ * calls fire `document.startViewTransition()` while the previous transition
+ * is still animating — Chrome cancels the older one and logs
+ * "Skipped ViewTransition due to another transition starting" to the console.
+ * We wait for the prior transition's `finished` promise before starting the
+ * next one; failures still unblock the queue so a botched transition can't
+ * wedge the UI.
+ */
+let activeTransition: Promise<void> = Promise.resolve();
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function wrapWithTransition<F extends (...args: any[]) => Promise<void>>(
   disabled: boolean,
@@ -11,14 +22,35 @@ function wrapWithTransition<F extends (...args: any[]) => Promise<void>>(
     return cb;
   }
 
-  return (...args: Parameters<F>) =>
-    document.startViewTransition(() => {
-      return new Promise<void>(resolve => {
-        flushSync(() => {
-          cb(...args).then(() => resolve());
-        });
-      });
-    }).updateCallbackDone as Promise<void>;
+  return async (...args: Parameters<F>) => {
+    const previous = activeTransition;
+    const gate = previous.then(
+      () => undefined,
+      () => undefined,
+    );
+    const next = gate.then(
+      () =>
+        new Promise<void>(resolve => {
+          const transition = document.startViewTransition!(
+            () =>
+              new Promise<void>(innerResolve => {
+                flushSync(() => {
+                  cb(...args).then(() => innerResolve());
+                });
+              }),
+          );
+          // `finished` resolves/rejects when the animation ends (or is
+          // skipped/cancelled). Either way we unblock the queue.
+          transition.finished.then(
+            () => resolve(),
+            () => resolve(),
+          );
+        }),
+    );
+    activeTransition = next;
+
+    return next;
+  };
 }
 
 /**

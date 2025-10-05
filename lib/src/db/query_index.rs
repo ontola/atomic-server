@@ -269,6 +269,14 @@ pub fn should_update_property<'a>(
 /// Check whether the [Atom] will be hit by a [Query] matching the [QueryFilter].
 /// Updates the index accordingly.
 /// We need both the `index_atom` and the full `atom`.
+///
+/// Performance: for URL subjects we `scan_prefix` the WatchedQueries tree by
+/// the atom's drive prefix, so we only read and decode watched queries for
+/// that specific drive. On a long-lived server with many accumulated watched
+/// queries across drives (the old behaviour decoded every watched query on
+/// every atom), this turns a per-atom O(total_watched) into O(watched_for_this_drive).
+/// DID subjects are drive-agnostic and still fall back to iterating the whole
+/// tree.
 #[tracing::instrument(level = "trace", skip_all)]
 pub fn check_if_atom_matches_watched_query_filters(
     store: &Db,
@@ -278,35 +286,59 @@ pub fn check_if_atom_matches_watched_query_filters(
     resource: &Resource,
     transaction: &mut Transaction,
 ) -> AtomicResult<()> {
-    for query in store.kv.iter_tree(Tree::WatchedQueries) {
-        // The keys store all the data
-        if let Ok((k, _v)) = query {
-            let q_filter: QueryFilter = QueryFilter::from_bytes(&k)?;
+    let subject_str = index_atom.subject.as_str();
 
-            // Skip this filter if it's scoped to a different drive than the resource.
-            // DID subjects are drive-agnostic (not URL-prefix scoped), so always include them.
-            let subject_str = index_atom.subject.as_str();
-            if !subject_str.starts_with("did:") && !subject_str.starts_with(q_filter.drive.as_str())
-            {
+    let iter: Box<dyn Iterator<Item = AtomicResult<(Vec<u8>, Vec<u8>)>> + Send> =
+        if subject_str.starts_with("did:") {
+            // DID subjects aren't scoped to a URL drive — any watched filter
+            // might match, so iterate the whole tree.
+            store.kv.iter_tree(Tree::WatchedQueries)
+        } else {
+            let drive_prefix = drive_prefix_from_subject(&index_atom.subject);
+            let scan_prefix = QueryFilter::drive_scan_prefix(drive_prefix.as_str());
+            store
+                .kv
+                .scan_prefix(Tree::WatchedQueries, &scan_prefix)
+        };
+
+    for item in iter {
+        let (k, _v) = match item {
+            Ok(pair) => pair,
+            Err(e) => {
+                tracing::error!("Can't read watched_queries entry: {:?}", e);
+                break;
+            }
+        };
+        // Stale / malformed entries must not abort the whole index update.
+        // WatchedQueries is a pure cache (rebuilds on next query), so a bad
+        // key is an inconvenience, not a correctness threat. Old-encoding
+        // entries lingering from before the drive-prefix migration fall here
+        // too. Log with the key bytes so we can trace the source, then skip.
+        let q_filter: QueryFilter = match QueryFilter::from_bytes(&k) {
+            Ok(qf) => qf,
+            Err(e) => {
+                tracing::warn!(
+                    "Skipping undecodable watched_queries entry ({} bytes, first 32 = {:?}): {}",
+                    k.len(),
+                    &k[..k.len().min(32)],
+                    e
+                );
                 continue;
             }
+        };
 
-            if let Some(prop) = should_update_property(&q_filter, index_atom, resource) {
-                let update_val = match resource.get(prop) {
-                    Ok(val) => val.to_sortable_string(),
-                    Err(_e) => NO_VALUE.to_string(),
-                };
-                update_indexed_member(
-                    &q_filter,
-                    index_atom.subject.as_str(),
-                    &update_val,
-                    delete,
-                    transaction,
-                )?;
-            }
-        } else {
-            tracing::error!("Can't query collection index: {:?}", query);
-            break;
+        if let Some(prop) = should_update_property(&q_filter, index_atom, resource) {
+            let update_val = match resource.get(prop) {
+                Ok(val) => val.to_sortable_string(),
+                Err(_e) => NO_VALUE.to_string(),
+            };
+            update_indexed_member(
+                &q_filter,
+                index_atom.subject.as_str(),
+                &update_val,
+                delete,
+                transaction,
+            )?;
         }
     }
     Ok(())
@@ -440,6 +472,52 @@ pub fn should_include_resource(query: &Query) -> bool {
 pub mod test {
     use super::*;
     use crate::{urls, values::SubResource};
+
+    /// Regression: real-world folder-table filters (where value is a DID
+    /// Subject and property+sort_by are atomicdata.dev URLs) must round-trip
+    /// through encode/from_bytes. If the msgpack tail contains an 0xff byte
+    /// it collides with the outer SEPARATION_BIT splitter in
+    /// `parse_collection_members_key`, silently cutting the q_filter prefix
+    /// short — which shows up in the UI as duplicate/unordered rows.
+    #[test]
+    fn encode_decode_folder_table_filter() {
+        use crate::Value;
+        let filter = QueryFilter {
+            property: Some("https://atomicdata.dev/properties/parent".to_string()),
+            value: Some(Value::AtomicUrl(Subject::from(
+                "did:ad:C1PsEdNI7K1D4N2dMVaaHwxwevsl/6pL8rSdejvD+ori3rZb6eafyTgeEVKCHPG0Po3SBQyT7Ea/7pB/Fl8PCg==",
+            ))),
+            sort_by: Some("https://atomicdata.dev/properties/createdAt".to_string()),
+            drive: Subject::from("http://localhost:9883"),
+        };
+
+        let bytes = filter.encode().expect("encode");
+        let contains_ff = bytes.contains(&0xff);
+        assert!(
+            !contains_ff,
+            "QueryFilter encode must not contain 0xff (collides with SEPARATION_BIT used in QueryMembers keys). First ff at index {:?}",
+            bytes.iter().position(|b| *b == 0xff)
+        );
+
+        let decoded = QueryFilter::from_bytes(&bytes).expect("decode");
+        assert_eq!(decoded.property, filter.property);
+        assert_eq!(decoded.sort_by, filter.sort_by);
+        assert_eq!(decoded.drive.as_str(), filter.drive.as_str());
+
+        // Round-trip through create_query_index_key + parse_collection_members_key
+        // — this is the path queries actually take.
+        let key = create_query_index_key(
+            &filter,
+            Some(&"2026-04-21".to_string()),
+            Some("https://localhost/members/foo"),
+        )
+        .expect("create_query_index_key");
+        let (parsed_filter, val, sub) =
+            parse_collection_members_key(&key).expect("parse_collection_members_key");
+        assert_eq!(parsed_filter.drive.as_str(), filter.drive.as_str());
+        assert_eq!(val, "2026-04-21");
+        assert_eq!(sub, "https://localhost/members/foo");
+    }
 
     #[tokio::test]
     async fn create_and_parse_key() {

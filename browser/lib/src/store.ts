@@ -773,15 +773,24 @@ export class Store {
     }
 
     // Forward to WASM DB in the background (non-blocking).
-    // We persist anything complete enough to round-trip: must have a subject
-    // and not be in loading or incomplete state. A `new` resource (locally
-    // signed but not yet acknowledged by the server) is ALSO worth
-    // persisting — otherwise a fresh drive/folder/document created in a
-    // session isn't in OPFS if the user reloads quickly or goes offline
-    // before the post-push re-add fires.
+    //
+    // Persist only resources whose commits have reached the server. After
+    // `signChanges`, `resource.new` is false but `hasPendingCommits` is still
+    // true — indicating a locally-signed commit that hasn't been pushed.
+    // Those include unsaved placeholders like `TableNewRow`'s pre-created
+    // empty row: seeding them would drop a phantom child into OPFS that the
+    // children query then picks up on every reload.
+    // Offline-applied resources persist themselves via
+    // `applyPendingCommitsLocally`, so `addResource` doesn't need to handle
+    // them here either.
+    // The intended persist site is the post-push `addResources` call in
+    // `resource.pushCommits` — by then the pending queue is drained and both
+    // checks pass.
     if (
       this.clientDb &&
       !resource.loading &&
+      !resource.new &&
+      !resource.hasPendingCommits &&
       !resource.get(core.properties.incomplete)
     ) {
       try {
@@ -1027,8 +1036,24 @@ export class Store {
     return this.findAvailableSubject(path, parentUrl);
   }
 
-  /** Creates a random HTTP subject, optionally nested under a parent URL. */
+  /**
+   * Creates a placeholder subject for a brand-new resource. When the current
+   * agent is DID-based, returns a temporary `_new:{random}` key that gets
+   * replaced with the real `did:ad:...` on first commit (matching
+   * `newResource()`'s shouldUseDid path). Otherwise builds a random HTTP
+   * subject under `parent` or the server root.
+   *
+   * Without this branch, callers like `useNewForm` would mint an HTTP
+   * subject such as `http://localhost:9883/01k…` that a DID-agent has no
+   * edit rights on — saves fail with "Agent does not have edit rights".
+   */
   public createSubject(parent?: string): string {
+    const agentSubject = this.getAgent()?.subject;
+
+    if (agentSubject?.startsWith('did:ad:agent:')) {
+      return `_new:${this.randomPart()}`;
+    }
+
     return this.createHTTPSubject(parent ?? this.serverUrl);
   }
 

@@ -1264,11 +1264,11 @@
         ],
         "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
         "https://atomicdata.dev/properties/recommends": [
-            "https://atomicdata.dev/properties/subresources"
+            "https://atomicdata.dev/properties/subresources",
+            "https://atomicdata.dev/property/display-style"
         ],
         "https://atomicdata.dev/properties/requires": [
-            "https://atomicdata.dev/properties/name",
-            "https://atomicdata.dev/property/display-style"
+            "https://atomicdata.dev/properties/name"
         ],
         "https://atomicdata.dev/properties/shortname": "folder"
     },
@@ -1418,5 +1418,48 @@
         ],
         "https://atomicdata.dev/properties/requires": [],
         "https://atomicdata.dev/properties/shortname": "canvas"
+    },
+    {
+        "@id": "https://atomicdata.dev/property/display-style",
+        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+        "https://atomicdata.dev/properties/description": "How a folder (or similar container) should visually display its contents. Points to a DisplayStyle.",
+        "https://atomicdata.dev/properties/isA": [
+            "https://atomicdata.dev/classes/Property"
+        ],
+        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev",
+        "https://atomicdata.dev/properties/shortname": "display-style"
+    },
+    {
+        "@id": "https://atomicdata.dev/property/preview",
+        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/markdown",
+        "https://atomicdata.dev/properties/description": "A rendered preview (markdown) of a linked resource, e.g. the body of a Bookmark's target URL.",
+        "https://atomicdata.dev/properties/isA": [
+            "https://atomicdata.dev/classes/Property"
+        ],
+        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev",
+        "https://atomicdata.dev/properties/shortname": "preview"
+    },
+    {
+        "@id": "https://atomicdata.dev/property/url",
+        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+        "https://atomicdata.dev/properties/description": "An absolute URL pointing to an external web resource.",
+        "https://atomicdata.dev/properties/isA": [
+            "https://atomicdata.dev/classes/Property"
+        ],
+        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev",
+        "https://atomicdata.dev/properties/shortname": "url"
+    },
+    {
+        "@id": "https://atomicdata.dev/class/DisplayStyle",
+        "https://atomicdata.dev/properties/description": "One of the display modes a Folder (or similar container) can render its children in — e.g. list, grid, card.",
+        "https://atomicdata.dev/properties/isA": [
+            "https://atomicdata.dev/classes/Class"
+        ],
+        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev",
+        "https://atomicdata.dev/properties/recommends": [],
+        "https://atomicdata.dev/properties/requires": [
+            "https://atomicdata.dev/properties/name"
+        ],
+        "https://atomicdata.dev/properties/shortname": "display-style"
     }
 ]

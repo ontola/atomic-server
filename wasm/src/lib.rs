@@ -24,22 +24,16 @@ impl ClientDb {
     /// Create a new ClientDb with OPFS persistence.
     /// `base_url` is the server URL, e.g. "https://myserver.com".
     ///
-    /// Hard-fails if OPFS is unavailable. A silent in-memory fallback was
-    /// masking real bugs — resources appeared to persist (PUTs succeeded
-    /// against RAM) but vanished on reload, producing "Offline: resource
-    /// not available locally" with no indication why. The most common cause
-    /// is another tab holding the exclusive OPFS sync access handle; the
-    /// thrown error should say so.
+    /// Expected runtime: a DedicatedWorker nested inside a per-origin
+    /// SharedWorker. The SharedWorker fans tab ports into this single inner
+    /// worker so exactly one OPFS sync access handle exists. If this fails,
+    /// OPFS is genuinely broken (corrupt, quota, unsupported browser) — the
+    /// error surfaces verbatim.
     #[wasm_bindgen(constructor)]
     pub async fn new(base_url: Option<String>) -> Result<ClientDb, JsError> {
         let db = Db::init_redb_opfs(base_url, "atomic_data.redb")
             .await
-            .map_err(|e| to_js_err(format!(
-                "OPFS unavailable ({e}). Another tab may be holding the \
-                 exclusive sync access handle on atomic_data.redb. Close \
-                 other tabs of this origin, or clear site data (DevTools → \
-                 Application → Storage), then reload.",
-            )))?;
+            .map_err(|e| to_js_err(format!("OPFS unavailable: {e}")))?;
         web_sys::console::log_1(&"[ClientDb] Using OPFS persistent storage".into());
         Ok(ClientDb { db })
     }

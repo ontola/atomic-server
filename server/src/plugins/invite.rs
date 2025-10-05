@@ -56,6 +56,13 @@ pub fn handle_invite_request<'a>(
         // GET is preview mode only: return a virtual Invite resource so users can review before accepting
         let mut invite = Resource::new_instance(urls::INVITE, store).await?;
         invite.set_subject(subject.to_string());
+        // `invite/target` is required on class Invite (`lib/defaults/default_store.json`).
+        // If we skip it, the client-side WASM validator rejects the PUT into
+        // OPFS, the resource never lands in the store, and the invite page
+        // spins on "loading…" forever.
+        invite
+            .set(urls::TARGET.into(), Value::AtomicUrl(token.target.clone()), store)
+            .await?;
         invite
             .set(urls::WRITE_BOOL.into(), Value::Boolean(token.write), store)
             .await?;

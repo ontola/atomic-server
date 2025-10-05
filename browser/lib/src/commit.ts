@@ -225,7 +225,6 @@ export class CommitBuilder {
       signer: agent.subject,
     };
 
-    const isAgentSubject = commitPreSigned.subject.startsWith('did:ad:agent:');
     // Genesis must be set explicitly via CommitBuilder.setIsGenesis(true).
     // We never infer genesis from the subject pattern — that was the source of
     // accidental genesis commits when a stale `_new:` subject ended up on an
@@ -241,10 +240,18 @@ export class CommitBuilder {
 
     let subject = commitPreSigned.subject;
 
-    // Special logic for DID genesis commits: the subject must be the signature.
-    // Only applies when the caller explicitly requested a genesis commit.
-    // `did:ad:agent:` subjects are stable identifiers and must never be replaced.
-    if (!isAgentSubject && isExplicitGenesis) {
+    // DID-genesis substitution: only needed for placeholder subjects where
+    // the real DID isn't known until after signing. Two accepted forms:
+    //   - `_new:…`         — the client's random placeholder (store.newResource)
+    //   - `did:ad:genesis` — the server's and legacy-client convention
+    // Any OTHER `did:ad:…` subject (agent, or a pre-derived drive/resource
+    // DID) already has its canonical identity — substituting it would rename
+    // the resource mid-flight and break downstream references (signer,
+    // personalDrive, invite target, …).
+    const subjectIsPlaceholder =
+      commitPreSigned.subject.startsWith('_new:') ||
+      commitPreSigned.subject === 'did:ad:genesis';
+    if (isExplicitGenesis && subjectIsPlaceholder) {
       subject = `did:ad:${signature}`;
     }
 

@@ -5,6 +5,7 @@ export const PROPERTIES = {
   set: 'https://atomicdata.dev/properties/set',
   delete: 'https://atomicdata.dev/properties/delete',
   push: 'https://atomicdata.dev/properties/push',
+  loroUpdate: 'https://atomicdata.dev/properties/loroUpdate',
 } as const;
 
 export const SECRET =
@@ -159,6 +160,12 @@ export async function setTitle(page: Page, title: string) {
   const waiter = waitForCommitOnCurrentResource(page);
   await editableTitle(page).click();
   await expect(editableTitle(page)).toHaveRole('textbox');
+  // New resources pre-fill the title input with the class name (e.g. "Folder"),
+  // so typing would concatenate ("FolderTestFolder-…"). Select-all + type
+  // replaces the existing value.
+  await page.keyboard.press(
+    process.platform === 'darwin' ? 'Meta+a' : 'Control+a',
+  );
   await editableTitle(page).type(title);
   await page.keyboard.press('Escape');
   await waiter;
@@ -323,11 +330,19 @@ export async function waitForCommitOnCurrentResource(
       }
 
       if (match) {
-        const set = result['https://atomicdata.dev/properties/set'];
+        // Same caveat as waitForCommit: modern Loro-based commits don't
+        // populate `set` on the wire. If a loroUpdate is present we accept
+        // the commit instead of trying to decode individual props.
+        const hasLoroUpdate =
+          'https://atomicdata.dev/properties/loroUpdate' in result;
 
-        for (const key in match.set) {
-          if (set[key] !== match.set[key]) {
-            return false;
+        if (!hasLoroUpdate) {
+          const set = result['https://atomicdata.dev/properties/set'];
+
+          for (const key in match.set) {
+            if (set[key] !== match.set[key]) {
+              return false;
+            }
           }
         }
       }
@@ -386,16 +401,29 @@ export async function fillSearchBox(
   const { nth, container, label } = options;
   const selector = container ?? page;
 
-  if (nth !== undefined) {
-    await selector
-      .getByRole('button', { name: label ?? placeholder })
-      .nth(nth)
-      .click();
-  } else {
-    await selector.getByRole('button', { name: label ?? placeholder }).click();
+  // Many search inputs are directly visible; others are hidden behind a
+  // button that must be clicked first (legacy pattern). Only click the
+  // button if the input isn't already in view.
+  const inputLocator = selector.getByPlaceholder(placeholder);
+  const inputVisible = await inputLocator
+    .first()
+    .isVisible({ timeout: 500 })
+    .catch(() => false);
+
+  if (!inputVisible) {
+    if (nth !== undefined) {
+      await selector
+        .getByRole('button', { name: label ?? placeholder })
+        .nth(nth)
+        .click();
+    } else {
+      await selector
+        .getByRole('button', { name: label ?? placeholder })
+        .click();
+    }
   }
 
-  await selector.getByPlaceholder(placeholder).fill(fillText);
+  await inputLocator.fill(fillText);
 
   return async (name: string) => {
     await selector.getByTestId('searchbox-results').getByText(name).click();
@@ -559,11 +587,24 @@ export const waitForCommit = async (page: Page, filter?: CommitFilter) =>
       return false;
     }
 
+    // Modern commits carry all property changes inside `loroUpdate` — the
+    // `set` map on the wire is empty. `filter.set` used to match by property
+    // URL; with Loro we can't decode those bytes here, so if the commit has a
+    // `loroUpdate` we accept it. Callers that care about exact property
+    // values should assert on the rendered UI instead.
     if (!filter) {
       return true;
     }
 
+    const hasLoroUpdate = PROPERTIES.loroUpdate in commit;
+
     if (filter.set) {
+      if (hasLoroUpdate) {
+        // Can't read individual props from the binary update — treat any
+        // Loro-bearing commit as a match when a `set` filter was requested.
+        return true;
+      }
+
       if (!(PROPERTIES.set in commit)) {
         return false;
       }
@@ -625,13 +666,17 @@ export async function inDialog(
 }
 
 export async function acceptInvite(page: Page) {
-  await page.getByRole('button', { name: 'Accept as new user' }).click();
+  // InvitePage CTA now reads "Create account and accept" (it generates a new
+  // DID agent on the fly); the old "Accept as new user" button is gone.
+  await page
+    .getByRole('button', { name: 'Create account and accept' })
+    .click();
 
   await inDialog(page, async (dialog, closeDialog) => {
     await expect(
       dialog.getByRole('heading', { name: 'Agent created!' }),
     ).toBeVisible();
-    await dialog.getByLabel('Name').fill(`Test User ${timestamp()}`);
+    await dialog.getByLabel('Agent Name').fill(`Test User ${timestamp()}`);
     await dialog.getByRole('button', { name: 'Copy to clipboard' }).click();
     await closeDialog('Continue');
   });
