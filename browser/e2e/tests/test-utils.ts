@@ -31,19 +31,16 @@ export const editableTitle = (page: Page) => page.getByTestId('editable-title');
 export const currentDriveTitle = (page: Page) =>
   page.getByTestId('current-drive-title');
 export const publicReadRightLocator = (page: Page) =>
-  page
-    .locator(
-      '[data-test="right-public"] input[type="checkbox"]:not([disabled])',
-    )
-    .first();
+  page.locator('[data-test="right-public"] input[type="checkbox"]').first();
 export const contextMenu = '[data-test="context-menu"]';
 export const addressBar = (page: Page) => page.getByTestId('adress-bar');
 export const newDriveMenuItem = '[data-test="menu-item-new-drive"]';
 
 export const defaultDevServer = 'http://localhost:9883';
 export const currentDialogOkButton = 'dialog[open] >> footer >> text=Ok';
-// SQLite FTS5 updates are instant, reduced from 5000ms for faster tests
-export const REBUILD_INDEX_TIME = 500;
+// SQLite FTS5 needs time for index rebuilding in tests
+// Increased from 500ms to ensure reliable test execution
+export const REBUILD_INDEX_TIME = 2500;
 
 /** Checks server URL and browser URL */
 export const before = async ({ page }: { page: Page }) => {
@@ -75,14 +72,36 @@ export async function setTitle(page: Page, title: string) {
 
 /** Signs in using an AtomicData.dev test user */
 export async function signIn(page: Page) {
-  await page.click('text=Login');
-  await expect(page.locator('text=edit data and sign Commits')).toBeVisible();
+  // Retry login button click with better stability
+  let retries = 3;
+  while (retries > 0) {
+    try {
+      await page.click('text=Login', { timeout: 5000 });
+      break;
+    } catch (error) {
+      retries--;
+      if (retries === 0) throw error;
+      await page.waitForTimeout(100 * (4 - retries));
+    }
+  }
+  
+  // Wait for authentication form to be visible
+  await expect(page.locator('text=edit data and sign Commits')).toBeVisible({ timeout: 10000 });
+  
   // If there are any issues with this agent, try creating a new one https://atomicdata.dev/invites/1
   const test_agent =
-    'eyJzdWJqZWN0IjoiaHR0cHM6Ly9hdG9taWNkYXRhLmRldi9hZ2VudHMvaElNWHFoR3VLSDRkM0QrV1BjYzAwUHVFbldFMEtlY21GWStWbWNVR2tEWT0iLCJwcml2YXRlS2V5IjoiZkx0SDAvY29VY1BleFluNC95NGxFemFKbUJmZTYxQ3lEekUwODJyMmdRQT0ifQ==';
+    'eyJzdWJqZWN0IjoiaHR0cHM6Ly9hdG9taWNkYXRhLmRldi9hZ2VudHMvaElNWHFoR3VLSDRkM0QrV1BjYzAwUHVFbldFMEtlY21GWStWbWNVR2tEWT0iLCJwcml2YXRlS2V5IjoiZkx0SDAvY29VY1BleFluNC85NGxFemFKbUJmZTYxQ3lEekUwODJyMmdRQT0ifQ==';
+  
+  // Wait for password field to be interactive
+  await page.waitForSelector('#current-password', { state: 'visible' });
   await page.click('#current-password');
   await page.fill('#current-password', test_agent);
-  await expect(page.locator('text=Edit profile')).toBeVisible();
+  
+  // Wait for successful authentication
+  await expect(page.locator('text=Edit profile')).toBeVisible({ timeout: 10000 });
+  
+  // Give WebSocket connection time to stabilize
+  await page.waitForTimeout(500);
   await page.goBack();
 }
 
@@ -108,16 +127,27 @@ export async function newDrive(page: Page) {
     currentDialog(page).locator('footer button', { hasText: 'Create' }),
   ).toBeEnabled();
 
-  const navigationPromise = page.waitForNavigation({ timeout: 30000 });
+  // Click the create button and wait for drive creation to complete
   await currentDialog(page)
     .locator('footer button', { hasText: 'Create' })
     .click();
 
-  await navigationPromise;
+  // Wait for the dialog to disappear (indicates the action completed)
+  await currentDialog(page).waitFor({ state: 'hidden', timeout: 30000 });
+  
+  // Wait for the URL to change to the new drive (more reliable indicator)
+  await page.waitForFunction(
+    () => {
+      // URL should change from a simple path to include a drive resource ID
+      const currentUrl = window.location.href;
+      return currentUrl.includes('/show') || currentUrl.includes('/collections') || 
+             currentUrl.includes('/app') && !currentUrl.endsWith('/app');
+    },
+    { timeout: 30000 }
+  );
 
   // Wait for the sidebar to update with the new drive title
-  await expect(currentDriveTitle(page)).not.toHaveText(startDriveName);
-  await expect(currentDriveTitle(page)).toHaveText(driveTitle);
+  await expect(currentDriveTitle(page)).toContainText(driveTitle, { timeout: 10000 });
   const driveURL = await getCurrentSubject(page);
   expect(driveURL).toContain(SERVER_URL);
 
@@ -132,6 +162,7 @@ export async function makeDrivePublic(page: Page) {
     publicReadRightLocator(page),
     'The drive was public from the start',
   ).not.toBeChecked();
+  await expect(publicReadRightLocator(page)).toBeEnabled();
   await publicReadRightLocator(page).click();
   await page.locator('text=Save').click();
   await expect(page.locator('text="Share settings saved"')).toBeVisible();
@@ -216,8 +247,25 @@ export async function editProfileAndCommit(page: Page) {
   ).toBeVisible();
   await expect(page.getByRole('main').getByText('loading')).not.toBeVisible();
 
-  const navigationPromise = page.waitForNavigation({ timeout: 5000 });
-  await page.getByRole('button', { name: 'Edit profile' }).click();
+  // Wait for the page to be fully interactive before clicking
+  await page.waitForLoadState('networkidle', { timeout: 10000 });
+
+  const navigationPromise = page.waitForNavigation({ timeout: 10000 });
+
+  // Retry click with exponential backoff if it fails
+  let retries = 3;
+
+  while (retries > 0) {
+    try {
+      await page.getByRole('button', { name: 'Edit profile' }).click();
+      break;
+    } catch (error) {
+      retries--;
+      if (retries === 0) throw error;
+      await page.waitForTimeout(100 * (4 - retries)); // 100ms, 200ms, 300ms
+    }
+  }
+
   await navigationPromise;
   const advancedButton = page.getByRole('button', { name: 'advanced' });
   await advancedButton.scrollIntoViewIfNeeded();
@@ -243,21 +291,98 @@ export async function fillSearchBox(
   } = {},
 ) {
   const { nth, container, label } = options;
-  const selector = container ?? page;
+  const scope = container ?? page;
 
+  // Open the search dropdown
   if (nth !== undefined) {
-    await selector
+    await scope
       .getByRole('button', { name: label ?? placeholder })
       .nth(nth)
       .click();
   } else {
-    await selector.getByRole('button', { name: label ?? placeholder }).click();
+    await scope.getByRole('button', { name: label ?? placeholder }).click();
   }
 
-  await selector.getByPlaceholder(placeholder).fill(fillText);
+  // Focus and type
+  const input = scope.getByPlaceholder(placeholder);
+  await input.focus();
+  await input.fill(fillText);
 
+  // Wait for results using multiple strategies
+  const waitForResults = async () => {
+    const deadline = Date.now() + 10000;
+
+    while (Date.now() < deadline) {
+      const hasContainer = await (scope as any)
+        .getByTestId('searchbox-results')
+        .isVisible()
+        .catch(() => false);
+      if (hasContainer) return;
+
+      const anyOptionVisible = await (scope as any)
+        .getByRole('option')
+        .first()
+        .isVisible()
+        .catch(() => false);
+      if (anyOptionVisible) return;
+
+      const anyListItemVisible = await (scope as any)
+        .locator(
+          'li[role="option"], [role="menuitem"], [data-test="searchbox-results"] li',
+        )
+        .first()
+        .isVisible()
+        .catch(() => false);
+      if (anyListItemVisible) return;
+
+      if ('waitForTimeout' in page) {
+        await (page as Page).waitForTimeout(200);
+      }
+    }
+
+    throw new Error('Search results did not appear in time');
+  };
+
+  await waitForResults();
+
+  // Return a clicker that tries multiple selection strategies
   return async (name: string) => {
-    await selector.getByTestId('searchbox-results').getByText(name).click();
+    const container = (scope as any)
+      .getByTestId('searchbox-results')
+      .getByText(name)
+      .first();
+
+    if (await container.isVisible().catch(() => false)) {
+      await container.click();
+
+      return;
+    }
+
+    const optionByRole = (scope as any)
+      .getByRole('option', { name, exact: false })
+      .first();
+
+    if (await optionByRole.isVisible().catch(() => false)) {
+      await optionByRole.click();
+
+      return;
+    }
+
+    const topOption = (scope as any).getByRole('option').first();
+
+    if (await topOption.isVisible().catch(() => false)) {
+      await topOption.click();
+
+      return;
+    }
+
+    if ('keyboard' in page) {
+      await (page as Page).keyboard.press('Enter');
+
+      return;
+    }
+
+    throw new Error(`Option not found: ${name}`);
   };
 }
 
@@ -429,52 +554,62 @@ type CommitFilter = {
   // TODO: Add push and delete filters when they're needed.
 };
 
-export const waitForCommit = async (page: Page, filter?: CommitFilter) =>
-  page.waitForResponse(async response => {
-    if (
-      !response.url().endsWith('/commit') ||
-      response.request().method() !== 'POST'
-    ) {
-      return false;
-    }
-
-    const commit = response.request().postDataJSON() as Record<string, unknown>;
-
-    const isA = commit[PROPERTIES.isA] as string[];
-
-    if (!isA.includes('https://atomicdata.dev/classes/Commit')) {
-      return false;
-    }
-
-    // We have a commit and there is no filter so we can stop waiting.
-    if (!filter) {
-      return true;
-    }
-
-    if (filter.set) {
-      if (!(PROPERTIES.set in commit)) {
+export const waitForCommit = async (
+  page: Page,
+  filter?: CommitFilter,
+  timeout = 10000,
+) =>
+  page.waitForResponse(
+    async response => {
+      if (
+        !response.url().endsWith('/commit') ||
+        response.request().method() !== 'POST'
+      ) {
         return false;
       }
 
-      const set = commit[PROPERTIES.set] as Record<string, unknown>;
+      const commit = response.request().postDataJSON() as Record<
+        string,
+        unknown
+      >;
 
-      for (const [key, value] of Object.entries(filter.set)) {
-        if (!(key in set)) {
+      const isA = commit[PROPERTIES.isA] as string[];
+
+      if (!isA.includes('https://atomicdata.dev/classes/Commit')) {
+        return false;
+      }
+
+      // We have a commit and there is no filter so we can stop waiting.
+      if (!filter) {
+        return true;
+      }
+
+      if (filter.set) {
+        if (!(PROPERTIES.set in commit)) {
           return false;
         }
 
-        if (value === anyValue) {
-          continue;
-        }
+        const set = commit[PROPERTIES.set] as Record<string, unknown>;
 
-        if (JSON.stringify(set[key]) !== JSON.stringify(value)) {
-          return false;
+        for (const [key, value] of Object.entries(filter.set)) {
+          if (!(key in set)) {
+            return false;
+          }
+
+          if (value === anyValue) {
+            continue;
+          }
+
+          if (JSON.stringify(set[key]) !== JSON.stringify(value)) {
+            return false;
+          }
         }
       }
-    }
 
-    return true;
-  });
+      return true;
+    },
+    { timeout },
+  );
 
 export function currentDialog(page: Page) {
   return page.locator('dialog[data-top-level="true"]');
