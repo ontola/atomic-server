@@ -2,10 +2,7 @@
 //! The index is built whenever --rebuild-index is passed,
 //! or after a commit is processed by the CommitMonitor.
 
-use crate::{
-    appstate::AppState,
-    errors::AtomicServerResult,
-};
+use crate::{appstate::AppState, errors::AtomicServerResult};
 use actix_web::{web, HttpResponse};
 use atomic_lib::{urls, Resource, Storelike};
 use serde::Deserialize;
@@ -51,12 +48,13 @@ pub async fn search_query(
     let mut timer = Timer::new();
     let store = &appstate.store;
     let _fields = appstate.search_state.get_schema_fields()?;
-    
+
     // Validate search parameters
     validate_search_params(&params)?;
-    
+
     let limit = if let Some(l) = params.limit {
-        if l > 0 && l <= 1000 { // Cap at 1000 results max
+        if l > 0 && l <= 1000 {
+            // Cap at 1000 results max
             l
         } else {
             DEFAULT_RETURN_LIMIT
@@ -116,10 +114,10 @@ fn perform_search(
     limit: usize,
 ) -> AtomicServerResult<Vec<String>> {
     let search_state = &appstate.search_state;
-    
+
     // Start with all subjects that might match
     let mut all_subjects = Vec::new();
-    
+
     // Handle text search
     if let Some(query) = &params.q {
         if params.fuzzy.unwrap_or(false) {
@@ -133,7 +131,7 @@ fn perform_search(
             all_subjects.extend(text_results);
         }
     }
-    
+
     // Handle parent/hierarchy filtering
     if let Some(parents) = &params.parents {
         let mut hierarchy_results = Vec::new();
@@ -141,7 +139,7 @@ fn perform_search(
             let parent_results = search_state.hierarchy_search(parent, limit)?;
             hierarchy_results.extend(parent_results);
         }
-        
+
         if all_subjects.is_empty() {
             all_subjects = hierarchy_results;
         } else {
@@ -149,22 +147,22 @@ fn perform_search(
             all_subjects.retain(|subject| hierarchy_results.contains(subject));
         }
     }
-    
+
     // Handle JSON property filters (simplified approach)
     if let Some(filter) = &params.filters {
         all_subjects = filter_by_properties(search_state, &all_subjects, filter, limit)?;
     }
-    
+
     // If no search was performed, return empty results
     if params.q.is_none() && params.parents.is_none() && params.filters.is_none() {
         return Ok(Vec::new());
     }
-    
+
     // Remove duplicates and limit results
     all_subjects.sort_unstable();
     all_subjects.dedup();
     all_subjects.truncate(limit);
-    
+
     Ok(all_subjects)
 }
 
@@ -178,7 +176,7 @@ fn filter_by_properties(
     // For now, we'll do a simple text search in the JSON propvals field
     // This is a simplified implementation - a more sophisticated approach would
     // parse the filter and create proper SQL queries
-    
+
     if subjects.is_empty() {
         // If no subjects to filter, search globally in propvals
         search_state.text_search(filter, limit)
@@ -251,14 +249,14 @@ fn validate_search_params(params: &SearchQuery) -> AtomicServerResult<()> {
             return Err("Search query cannot be empty".into());
         }
     }
-    
+
     // Validate limit
     if let Some(limit) = params.limit {
         if limit > 1000 {
             return Err("Search limit too high (max 1000)".into());
         }
     }
-    
+
     // Validate parent subjects
     if let Some(parents) = &params.parents {
         if parents.len() > 50 {
@@ -270,21 +268,21 @@ fn validate_search_params(params: &SearchQuery) -> AtomicServerResult<()> {
             }
         }
     }
-    
+
     // Validate filters
     if let Some(filter) = &params.filters {
         if filter.len() > 2000 {
             return Err("Filter string too long (max 2000 characters)".into());
         }
     }
-    
+
     // Validate fuzzy search parameters
     if let Some(max_distance) = params.max_distance {
         if max_distance > 10 {
             return Err("Maximum edit distance too high (max 10)".into());
         }
     }
-    
+
     Ok(())
 }
 
@@ -294,19 +292,23 @@ fn is_valid_subject_url(subject: &str) -> bool {
     if subject.is_empty() || subject.len() > 2048 {
         return false;
     }
-    
+
     // Check for valid URL characters and common schemes
-    if !(subject.starts_with("http://") || 
-         subject.starts_with("https://") || 
-         subject.starts_with("atomic://") ||
-         subject.starts_with("/")) {
+    if !(subject.starts_with("http://")
+        || subject.starts_with("https://")
+        || subject.starts_with("atomic://")
+        || subject.starts_with("/"))
+    {
         return false;
     }
-    
+
     // Ensure no control characters or dangerous sequences
     subject.chars().all(|c| {
-        c.is_ascii_alphanumeric() || 
-        matches!(c, ':' | '/' | '-' | '_' | '.' | '#' | '?' | '=' | '&' | '%' | '@' | '+')
+        c.is_ascii_alphanumeric()
+            || matches!(
+                c,
+                ':' | '/' | '-' | '_' | '.' | '#' | '?' | '=' | '&' | '%' | '@' | '+'
+            )
     })
 }
 

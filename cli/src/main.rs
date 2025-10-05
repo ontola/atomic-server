@@ -7,8 +7,8 @@ use atomic_lib::{errors::AtomicResult, Storelike};
 use clap::{crate_version, Parser, Subcommand, ValueEnum};
 use colored::*;
 use dirs::home_dir;
-use std::{cell::RefCell, path::PathBuf};
 use parking_lot::Mutex;
+use std::{cell::RefCell, path::PathBuf};
 
 mod commit;
 mod get;

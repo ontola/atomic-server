@@ -11,6 +11,7 @@ mod trees;
 mod v1_types;
 mod val_prop_sub_index;
 
+use parking_lot::Mutex;
 use std::{
     collections::{HashMap, HashSet},
     fs,
@@ -19,7 +20,6 @@ use std::{
     time::Duration,
     vec,
 };
-use parking_lot::Mutex;
 
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
@@ -45,7 +45,6 @@ use crate::{
 };
 use tracing::{info, instrument};
 use trees::{Method, Operation, Transaction, Tree};
-
 
 use self::{
     migrations::migrate_maybe,
@@ -1077,7 +1076,7 @@ fn process_table_operations(
 fn configure_sqlite_for_r2d2(conn: &mut rusqlite::Connection) -> Result<(), rusqlite::Error> {
     // Enable WAL mode for concurrent readers
     conn.pragma_update(None, "journal_mode", "WAL")?;
-    
+
     // Set synchronous=NORMAL for much faster writes (safe with WAL mode)
     conn.pragma_update(None, "synchronous", "NORMAL")?;
 
@@ -1095,7 +1094,7 @@ fn configure_sqlite_for_r2d2(conn: &mut rusqlite::Connection) -> Result<(), rusq
 
     // Optimize WAL checkpointing for performance (much less frequent to avoid lock contention)
     conn.pragma_update(None, "wal_autocheckpoint", 10000)?;
-    
+
     // Limit WAL file size to prevent bloat (6MB)
     conn.pragma_update(None, "journal_size_limit", 6144000)?;
 
@@ -1105,10 +1104,10 @@ fn configure_sqlite_for_r2d2(conn: &mut rusqlite::Connection) -> Result<(), rusq
     // Additional performance optimizations
     // Increase lookaside memory for better allocation performance
     let _ = conn.execute("PRAGMA lookaside=1024,128", []);
-    
+
     // Optimize busy timeout for concurrent access (fail faster for better debugging)
     conn.pragma_update(None, "busy_timeout", 10000)?; // 10 seconds
-    
+
     // Collect optimizer statistics for better query planning
     let _ = conn.execute("ANALYZE", []);
 
@@ -1183,7 +1182,7 @@ fn configure_sqlite(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Enable WAL mode for concurrent readers
     conn.pragma_update(None, "journal_mode", "WAL")?;
-    
+
     // Set synchronous=NORMAL for much faster writes (safe with WAL mode)
     conn.pragma_update(None, "synchronous", "NORMAL")?;
 
@@ -1201,7 +1200,7 @@ fn configure_sqlite(
 
     // Optimize WAL checkpointing for performance (much less frequent to avoid lock contention)
     conn.pragma_update(None, "wal_autocheckpoint", 10000)?;
-    
+
     // Limit WAL file size to prevent bloat (6MB)
     conn.pragma_update(None, "journal_size_limit", 6144000)?;
 
@@ -1211,10 +1210,10 @@ fn configure_sqlite(
     // Additional performance optimizations
     // Increase lookaside memory for better allocation performance
     let _ = conn.execute("PRAGMA lookaside=1024,128", []);
-    
+
     // Optimize busy timeout for concurrent access (fail faster for better debugging)
     conn.pragma_update(None, "busy_timeout", 10000)?; // 10 seconds
-    
+
     // Collect optimizer statistics for better query planning
     let _ = conn.execute("ANALYZE", []);
 

@@ -42,10 +42,10 @@ pub mod invite;
 #[cfg(feature = "html")]
 pub mod bookmark;
 pub mod collections;
+pub mod defaults;
 pub mod export;
 pub mod files;
 pub mod path;
-pub mod defaults;
 pub mod prunetests;
 pub mod query;
 pub mod search;

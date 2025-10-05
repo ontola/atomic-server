@@ -44,13 +44,17 @@ pub async fn post_commit(
         opts,
         respond_to: tx,
     };
-    
+
     // Send message to actor and await completion
-    appstate.db_writer.send(actor_message).await
+    appstate
+        .db_writer
+        .send(actor_message)
+        .await
         .map_err(|_| "DbWriter actor mailbox is full or closed")?;
-    
+
     // Wait for response from actor
-    let commit_response = rx.await
+    let commit_response = rx
+        .await
         .map_err(|_| "DbWriter actor dropped response channel")?
         .map_err(|e| format!("Commit failed: {}", e))?;
 

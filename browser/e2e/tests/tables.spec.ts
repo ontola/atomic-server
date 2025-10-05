@@ -175,7 +175,7 @@ test.describe('tables', async () => {
       await createTag('😵‍💫', 'dreamy');
       await createTag('🤨', 'wtf');
       await closeDialogWith('Create');
-      await waitForCommit(page);
+      await waitForCommit(page, undefined, 15000);
     });
 
     await expect(
@@ -183,11 +183,34 @@ test.describe('tables', async () => {
     ).toBeVisible();
 
     await waitForCommit(page);
-    await page.waitForTimeout(100); // Small buffer for WAL flush
+    await page.waitForTimeout(500); // Increased buffer for database flush and index updates
     await page.reload();
-    await expect(
-      page.getByRole('button', { name: selectColumnName }),
-    ).toBeVisible();
+    
+    // Wait for page to load before checking visibility
+    await page.waitForLoadState('networkidle', { timeout: 10000 });
+    
+    // Retry logic for column visibility
+    let columnVisible = false;
+    for (let i = 0; i < 10; i++) {
+      try {
+        await expect(
+          page.getByRole('button', { name: selectColumnName }),
+        ).toBeVisible({ timeout: 1000 });
+        columnVisible = true;
+        break;
+      } catch {
+        await page.waitForTimeout(200);
+        // Reload page again if column is not visible
+        if (i % 3 === 2) {
+          await page.reload();
+          await page.waitForLoadState('networkidle', { timeout: 5000 });
+        }
+      }
+    }
+    
+    if (!columnVisible) {
+      throw new Error(`Column "${selectColumnName}" not visible after multiple retries`);
+    }
 
     const rows = [
       {

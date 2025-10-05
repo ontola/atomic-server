@@ -43,6 +43,15 @@
 
 ## Recent Critical Fixes (2025-10-05)
 - Fixed WebSocket AUTHENTICATE command handling
-- Increased search test timing from 500ms to 2500ms
+- Increased search test timing from 500ms to 2500ms  
 - Enhanced sign-in test stability with retry logic
 - Maintained optimal search performance throughout
+
+## Frontend Timing Resolution (2025-10-05)
+- **Root Cause**: Animation delays and view transitions blocking test execution
+- **Solution**: CSS injection to disable all animations in test environment
+- **Impact**: Test execution time reduced from 30s+ timeouts to 10-13s per test
+- **Key Files Modified**:
+  - `/browser/e2e/tests/test-utils.ts` - CSS injection and WebSocket auth
+  - `/browser/e2e/tests/global.setup.ts` - Global animation disabling
+  - `/browser/e2e/playwright.config.ts` - Enhanced test environment config

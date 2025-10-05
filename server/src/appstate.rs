@@ -1,6 +1,7 @@
 //! App state, which is accessible from handlers
 use crate::{
-    commit_monitor::CommitMonitor, config::Config, db_writer::DbWriter, errors::AtomicServerResult, search::SearchState,
+    commit_monitor::CommitMonitor, config::Config, db_writer::DbWriter, errors::AtomicServerResult,
+    search::SearchState,
 };
 use atomic_lib::{
     agents::Agent,
@@ -63,7 +64,7 @@ impl AppState {
         // Initialize commit monitor, which watches commits and sends these to the commit_monitor actor
         let commit_monitor =
             crate::commit_monitor::create_commit_monitor(store.clone(), search_state.clone());
-        
+
         // Initialize db writer actor for single-threaded writes, passing commit_monitor for notifications
         let db_writer = crate::db_writer::create_db_writer(store.clone(), commit_monitor.clone());
 

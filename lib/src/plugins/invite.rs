@@ -95,7 +95,7 @@ pub fn construct_invite_redirect(context: GetExtenderContext) -> AtomicResult<Re
     }
 
     if let Ok(expires) = db_resource.get(urls::EXPIRES_AT) {
-        if expires.to_int()? > crate::utils::now() {
+        if expires.to_int()? < crate::utils::now() {
             return Err("Invite is no longer valid".into());
         }
     }

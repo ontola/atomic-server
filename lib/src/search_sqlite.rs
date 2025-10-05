@@ -119,24 +119,34 @@
 //! - Memory-mapped files are safe for concurrent reads
 
 #[cfg(feature = "db")]
-use crate::{errors::AtomicResult, similarity::{SimilarityAlgorithm, calculate_enhanced_similarity, ScoredResult, sort_results_by_score}, Db, Resource, Storelike};
+use crate::{
+    errors::AtomicResult,
+    similarity::{
+        calculate_enhanced_similarity, sort_results_by_score, ScoredResult, SimilarityAlgorithm,
+    },
+    Db, Resource, Storelike,
+};
 
-#[cfg(feature = "db")]
-use fst::{automaton, Automaton, IntoStreamer, Map, MapBuilder, Streamer};
-#[cfg(feature = "db")]
-use rusqlite::{params, Connection, Row};
-#[cfg(feature = "db")]
-use parking_lot::RwLock;
 #[cfg(feature = "db")]
 use dashmap::DashMap;
 #[cfg(feature = "db")]
-use std::{sync::Arc, path::PathBuf, collections::HashSet, time::{Instant, Duration}};
+use fst::{automaton, Automaton, IntoStreamer, Map, MapBuilder, Streamer};
 #[cfg(feature = "db")]
 use memmap2::{Mmap, MmapOptions};
+#[cfg(feature = "db")]
+use parking_lot::RwLock;
+#[cfg(feature = "db")]
+use rusqlite::{params, Connection, Row};
+#[cfg(feature = "db")]
+use std::{
+    collections::HashSet,
+    path::PathBuf,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 #[cfg(all(feature = "db", feature = "terraphim-search"))]
 use terraphim_automata::{
-    fuzzy_autocomplete_search, build_autocomplete_index, AutocompleteIndex, 
-    AutocompleteConfig,
+    build_autocomplete_index, fuzzy_autocomplete_search, AutocompleteConfig, AutocompleteIndex,
 };
 #[cfg(all(feature = "db", feature = "terraphim-search"))]
 use terraphim_types::{NormalizedTerm, NormalizedTermValue, Thesaurus};
@@ -148,7 +158,7 @@ pub enum FstStorage {
     /// FST loaded in memory from database
     Memory(Arc<Map<Vec<u8>>>),
     /// Memory-mapped FST for zero-copy access
-    MappedFile { 
+    MappedFile {
         _mmap: Arc<Mmap>,
         fst: Arc<Map<&'static [u8]>>,
     },
@@ -198,32 +208,32 @@ impl PerformantCache {
             ttl: Duration::from_secs(300), // 5 minutes
         }
     }
-    
+
     /// Get an entry from the cache if it exists and hasn't expired
     fn get(&self, key: &str) -> Option<Vec<String>> {
         let entry = self.cache.get(key)?;
-        
+
         // Check if entry has expired
         if entry.created_at.elapsed() > self.ttl {
             drop(entry);
             self.cache.remove(key);
             return None;
         }
-        
+
         Some(entry.results.clone())
     }
-    
+
     /// Insert an entry into the cache
     fn put(&self, key: String, results: Vec<String>) {
         // Create subject set for efficient invalidation
         let subjects: HashSet<String> = results.iter().cloned().collect();
-        
+
         let entry = CacheEntry {
             results,
             created_at: Instant::now(),
             subjects,
         };
-        
+
         // Check cache size before consuming key
         let cache_len = self.cache.len();
         let should_evict_emergency = cache_len > self.max_size * 2;
@@ -237,9 +247,9 @@ impl PerformantCache {
         } else {
             false
         };
-        
+
         self.cache.insert(key, entry);
-        
+
         // Probabilistic eviction: only evict 5% of the time to avoid O(n) overhead on every insert
         // This amortizes eviction cost while keeping cache size reasonable
         if should_evict_emergency {
@@ -249,42 +259,41 @@ impl PerformantCache {
             self.evict_old_entries();
         }
     }
-    
+
     /// Remove entries that contain a specific subject
     fn invalidate_subject(&self, subject: &str) {
         // Use retain to efficiently remove entries containing the subject
-        self.cache.retain(|_key, entry| {
-            !entry.subjects.contains(subject)
-        });
+        self.cache
+            .retain(|_key, entry| !entry.subjects.contains(subject));
     }
-    
+
     /// Clear all entries
     fn clear(&self) {
         self.cache.clear();
     }
-    
+
     /// Evict oldest entries when cache is full
     fn evict_old_entries(&self) {
         let current_len = self.cache.len();
         if current_len <= self.max_size {
             return;
         }
-        
+
         // Batch removal: collect keys of oldest entries
         // Use partial_cmp for faster comparison (Instant implements Ord)
         let mut entries: Vec<(String, Instant)> = Vec::with_capacity(current_len);
-        
+
         for entry in self.cache.iter() {
             entries.push((entry.key().clone(), entry.value().created_at));
         }
-        
+
         // Only remove what's necessary (25% of excess + buffer)
         let to_remove = ((current_len - self.max_size) * 5 / 4).min(current_len / 2);
-        
+
         // Use select_nth_unstable for O(n) instead of full O(n log n) sort
         if to_remove > 0 && to_remove < entries.len() {
             entries.select_nth_unstable_by_key(to_remove, |(_key, created_at)| *created_at);
-            
+
             // Remove only the oldest entries (first `to_remove` items)
             for (key, _) in entries.iter().take(to_remove) {
                 self.cache.remove(key);
@@ -321,7 +330,7 @@ impl CachedFst {
             fst_file_path: None,
         }
     }
-    
+
     fn invalidate(&mut self) {
         let mut version = self.version.write();
         *version += 1;
@@ -329,7 +338,7 @@ impl CachedFst {
         self.prefix_cache.clear();
         self.hierarchy_cache.clear();
         self.fst = None;
-        
+
         // Clean up memory-mapped file if it exists
         if let Some(path) = &self.fst_file_path {
             if path.exists() {
@@ -338,13 +347,13 @@ impl CachedFst {
         }
         self.fst_file_path = None;
     }
-    
+
     /// Efficiently invalidate cache entries for a specific subject
     fn invalidate_subject(&self, subject: &str) {
         self.hot_cache.invalidate_subject(subject);
         self.prefix_cache.invalidate_subject(subject);
     }
-    
+
     fn set_fst_file_path(&mut self, path: PathBuf) {
         self.fst_file_path = Some(path);
     }
@@ -367,7 +376,7 @@ pub struct SqliteSearchState {
 impl SqliteSearchState {
     /// Create a new SqliteSearchState with caching
     pub fn new(db: Db) -> AtomicResult<Self> {
-        let search_state = SqliteSearchState { 
+        let search_state = SqliteSearchState {
             db,
             cached_fst: Arc::new(RwLock::new(CachedFst::new())),
             #[cfg(feature = "terraphim-search")]
@@ -441,10 +450,10 @@ impl SqliteSearchState {
     /// Add a single resource to the FTS5 search index
     pub fn add_resource(&self, resource: &Resource, conn: &Connection) -> AtomicResult<()> {
         let subject = resource.get_subject().to_string();
-        
+
         // Invalidate cache entries for this resource before updating
         self.invalidate_resource_caches(&subject);
-        
+
         let title = get_resource_title(resource);
 
         let description =
@@ -472,7 +481,7 @@ impl SqliteSearchState {
     pub fn remove_resource(&self, subject: &str) -> AtomicResult<()> {
         // Invalidate cache entries for this resource before removing
         self.invalidate_resource_caches(subject);
-        
+
         let conn = self.db.get_connection()?;
 
         conn.execute(
@@ -488,19 +497,19 @@ impl SqliteSearchState {
     /// This is now much more efficient using DashMap's targeted invalidation
     fn invalidate_resource_caches(&self, subject: &str) {
         let cached = self.cached_fst.read();
-        
+
         // Use the new efficient invalidation method for search results
         cached.invalidate_subject(subject);
-        
+
         // Also invalidate hierarchy cache for this resource and any that may reference it
         // Remove direct entry
         cached.hierarchy_cache.remove(subject);
-        
+
         // Remove entries that might be children of this resource
         // (their hierarchy paths would contain this subject)
-        cached.hierarchy_cache.retain(|_key, path| {
-            !path.contains(subject)
-        });
+        cached
+            .hierarchy_cache
+            .retain(|_key, path| !path.contains(subject));
     }
 
     /// Build FST index for fuzzy search from all indexed terms
@@ -585,7 +594,7 @@ impl SqliteSearchState {
     /// # let search_state = SqliteSearchState::new(db).unwrap();
     /// // Search for resources containing "atomic"
     /// let results = search_state.text_search("atomic", 10)?;
-    /// 
+    ///
     /// // Subsequent identical queries hit cache (~263ns)
     /// let cached_results = search_state.text_search("atomic", 10)?;
     /// # Ok::<(), Box<dyn std::error::Error>>(())
@@ -606,7 +615,7 @@ impl SqliteSearchState {
     pub fn text_search(&self, query: &str, limit: usize) -> AtomicResult<Vec<String>> {
         // Create cache key for this specific query
         let cache_key = format!("text:{}:{}", query, limit);
-        
+
         // Check prefix cache first
         {
             let cache = self.cached_fst.read();
@@ -620,9 +629,12 @@ impl SqliteSearchState {
 
         // Sanitize the query by escaping FTS5 special characters
         let sanitized_query = sanitize_fts5_query(query);
-        
+
         // Use parameterized query with sanitized input
-        let fts_query = format!("title:\"{}\" OR description:\"{}\"", sanitized_query, sanitized_query);
+        let fts_query = format!(
+            "title:\"{}\" OR description:\"{}\"",
+            sanitized_query, sanitized_query
+        );
 
         // Use prepare_cached for better performance on repeated queries
         let mut stmt = conn
@@ -633,10 +645,7 @@ impl SqliteSearchState {
             .map_err(|e| format!("Failed to prepare search statement: {}", e))?;
 
         let rows = stmt
-            .query_map(
-                params![fts_query, limit],
-                |row| row.get::<_, String>(0),
-            )
+            .query_map(params![fts_query, limit], |row| row.get::<_, String>(0))
             .map_err(|e| format!("Failed to execute search: {}", e))?;
 
         let mut results = Vec::new();
@@ -650,7 +659,11 @@ impl SqliteSearchState {
             cache.prefix_cache.put(cache_key, results.clone());
         }
 
-        tracing::trace!("Text search for '{}' found {} results", query, results.len());
+        tracing::trace!(
+            "Text search for '{}' found {} results",
+            query,
+            results.len()
+        );
         Ok(results)
     }
 
@@ -676,7 +689,10 @@ impl SqliteSearchState {
                 Ok(fst_arc)
             }
             Err(e) => {
-                tracing::warn!("Memory mapping failed ({}), falling back to memory loading", e);
+                tracing::warn!(
+                    "Memory mapping failed ({}), falling back to memory loading",
+                    e
+                );
                 self.load_fst_memory()
             }
         }
@@ -702,24 +718,20 @@ impl SqliteSearchState {
         // Memory-map the file
         let file = std::fs::File::open(&fst_file_path)
             .map_err(|e| format!("Failed to open FST file: {}", e))?;
-        
+
         let mmap = unsafe {
             MmapOptions::new()
                 .map(&file)
                 .map_err(|e| format!("Failed to memory-map FST file: {}", e))?
         };
-        
+
         let mmap_arc = Arc::new(mmap);
-        
+
         // Create FST from memory-mapped data
         // SAFETY: We keep the mmap alive in the Arc, so the data remains valid
-        let fst_data_static: &'static [u8] = unsafe {
-            std::slice::from_raw_parts(
-                mmap_arc.as_ptr(),
-                mmap_arc.len(),
-            )
-        };
-        
+        let fst_data_static: &'static [u8] =
+            unsafe { std::slice::from_raw_parts(mmap_arc.as_ptr(), mmap_arc.len()) };
+
         let fst = Map::new(fst_data_static)
             .map_err(|e| format!("Failed to create FST from mapped data: {}", e))?;
         let fst_arc = Arc::new(fst);
@@ -730,8 +742,8 @@ impl SqliteSearchState {
             cached.set_fst_file_path(fst_file_path);
         }
 
-        Ok(FstStorage::MappedFile { 
-            _mmap: mmap_arc, 
+        Ok(FstStorage::MappedFile {
+            _mmap: mmap_arc,
             fst: fst_arc,
         })
     }
@@ -897,15 +909,12 @@ impl SqliteSearchState {
         let terraphim_idx = self.terraphim_index.read();
         let index = terraphim_idx.as_ref().ok_or("Terraphim index not built")?;
 
-        let results = fuzzy_autocomplete_search(
-            index,
-            query,
-            min_similarity,
-            Some(limit),
-        ).map_err(|e| format!("Terraphim fuzzy search failed: {}", e))?;
+        let results = fuzzy_autocomplete_search(index, query, min_similarity, Some(limit))
+            .map_err(|e| format!("Terraphim fuzzy search failed: {}", e))?;
 
         // Extract subjects from results
-        Ok(results.into_iter()
+        Ok(results
+            .into_iter()
             .filter_map(|result| result.url)
             .collect())
     }
@@ -949,7 +958,7 @@ impl SqliteSearchState {
     /// # search_state.add_all_resources(&db).unwrap();
     /// // Find matches for "atomic" with typos up to edit distance 2
     /// let results = search_state.fuzzy_search("atomik", 2, 10)?;
-    /// 
+    ///
     /// // Handles common typos and partial matches
     /// let partial = search_state.fuzzy_search("atom", 1, 5)?;
     /// # Ok::<(), Box<dyn std::error::Error>>(())
@@ -981,7 +990,7 @@ impl SqliteSearchState {
     ) -> AtomicResult<Vec<String>> {
         // Create cache key for this specific query
         let cache_key = format!("fuzzy:{}:{}:{}", query, max_distance, limit);
-        
+
         // Check hot cache first
         {
             let cache = self.cached_fst.read();
@@ -1031,7 +1040,10 @@ impl SqliteSearchState {
             .iter()
             .map(|term| {
                 let sanitized_term = sanitize_fts5_query(term);
-                format!("title:\"{}\" OR description:\"{}\"", sanitized_term, sanitized_term)
+                format!(
+                    "title:\"{}\" OR description:\"{}\"",
+                    sanitized_term, sanitized_term
+                )
             })
             .collect::<Vec<_>>()
             .join(" OR ");
@@ -1045,10 +1057,7 @@ impl SqliteSearchState {
             .map_err(|e| format!("Failed to prepare fuzzy search statement: {}", e))?;
 
         let rows = stmt
-            .query_map(
-                params![fts_query, limit],
-                |row| row.get::<_, String>(0),
-            )
+            .query_map(params![fts_query, limit], |row| row.get::<_, String>(0))
             .map_err(|e| format!("Failed to execute fuzzy search: {}", e))?;
 
         let mut results = Vec::new();
@@ -1062,7 +1071,11 @@ impl SqliteSearchState {
             cache.hot_cache.put(cache_key, results.clone());
         }
 
-        tracing::trace!("Fuzzy search for '{}' found {} results", query, results.len());
+        tracing::trace!(
+            "Fuzzy search for '{}' found {} results",
+            query,
+            results.len()
+        );
         Ok(results)
     }
 
@@ -1116,29 +1129,37 @@ impl SqliteSearchState {
 
         // Sanitize the query
         let sanitized_query = sanitize_fts5_query(query);
-        let fts_query = format!("title:\"{}\" OR description:\"{}\"", sanitized_query, sanitized_query);
+        let fts_query = format!(
+            "title:\"{}\" OR description:\"{}\"",
+            sanitized_query, sanitized_query
+        );
 
         // Get initial FTS5 results with titles
-        let mut stmt = conn.prepare(
-            "SELECT subject, title, description FROM search_index WHERE search_index MATCH ?1 
-             ORDER BY rank LIMIT ?2"
-        ).map_err(|e| format!("Failed to prepare similarity search statement: {}", e))?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT subject, title, description FROM search_index WHERE search_index MATCH ?1 
+             ORDER BY rank LIMIT ?2",
+            )
+            .map_err(|e| format!("Failed to prepare similarity search statement: {}", e))?;
 
-        let rows = stmt.query_map(
-            params![fts_query, limit * 2], // Get more results for similarity filtering
-            |row| {
-                Ok((
-                    row.get::<_, String>(0)?, // subject
-                    row.get::<_, String>(1)?, // title
-                    row.get::<_, Option<String>>(2)?, // description
-                ))
-            }
-        ).map_err(|e| format!("Failed to execute similarity search: {}", e))?;
+        let rows = stmt
+            .query_map(
+                params![fts_query, limit * 2], // Get more results for similarity filtering
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,         // subject
+                        row.get::<_, String>(1)?,         // title
+                        row.get::<_, Option<String>>(2)?, // description
+                    ))
+                },
+            )
+            .map_err(|e| format!("Failed to execute similarity search: {}", e))?;
 
         let mut scored_results = Vec::new();
         for (index, row) in rows.enumerate() {
-            let (subject, title, description) = row.map_err(|e| format!("Failed to get similarity search result: {}", e))?;
-            
+            let (subject, title, description) =
+                row.map_err(|e| format!("Failed to get similarity search result: {}", e))?;
+
             // Create searchable text (title + description)
             let searchable_text = match description {
                 Some(desc) => format!("{} {}", title, desc),
@@ -1146,13 +1167,15 @@ impl SqliteSearchState {
             };
 
             // Calculate similarity score using enhanced method
-            let similarity_score = calculate_enhanced_similarity(query, &searchable_text, algorithm);
-            
+            let similarity_score =
+                calculate_enhanced_similarity(query, &searchable_text, algorithm);
+
             // Original score based on FTS5 rank (higher for earlier results)
             let original_score = 1.0 - (index as f64 / (limit as f64 * 2.0));
-            
+
             // Create scored result manually to use our calculated similarity score
-            let combined_score = crate::similarity::combine_scores(original_score, similarity_score, false);
+            let combined_score =
+                crate::similarity::combine_scores(original_score, similarity_score, false);
             let scored_result = ScoredResult {
                 subject,
                 original_score,
@@ -1188,7 +1211,7 @@ impl SqliteSearchState {
     ) -> AtomicResult<Vec<String>> {
         // First get fuzzy matches using existing FST method
         let fuzzy_results = self.fuzzy_search(query, max_distance, limit * 2)?;
-        
+
         if fuzzy_results.is_empty() {
             return Ok(Vec::new());
         }
@@ -1199,10 +1222,12 @@ impl SqliteSearchState {
         // Get titles for each fuzzy result and score them
         for (index, subject) in fuzzy_results.iter().enumerate() {
             // Get the resource title/description for similarity scoring
-            if let Ok(mut stmt) = conn.prepare("SELECT title, description FROM search_index WHERE subject = ?1") {
+            if let Ok(mut stmt) =
+                conn.prepare("SELECT title, description FROM search_index WHERE subject = ?1")
+            {
                 if let Ok(mut rows) = stmt.query_map(params![subject], |row| {
                     Ok((
-                        row.get::<_, String>(0)?, // title
+                        row.get::<_, String>(0)?,         // title
                         row.get::<_, Option<String>>(1)?, // description
                     ))
                 }) {
@@ -1213,13 +1238,18 @@ impl SqliteSearchState {
                         };
 
                         // Calculate enhanced similarity
-                        let similarity_score = calculate_enhanced_similarity(query, &searchable_text, algorithm);
-                        
+                        let similarity_score =
+                            calculate_enhanced_similarity(query, &searchable_text, algorithm);
+
                         // Original score based on FST rank
                         let original_score = 1.0 - (index as f64 / (limit as f64 * 2.0));
-                        
+
                         // Create scored result manually for fuzzy search
-                        let combined_score = crate::similarity::combine_scores(original_score, similarity_score, true);
+                        let combined_score = crate::similarity::combine_scores(
+                            original_score,
+                            similarity_score,
+                            true,
+                        );
                         let scored_result = ScoredResult {
                             subject: subject.clone(),
                             original_score,
@@ -1254,18 +1284,18 @@ impl SqliteSearchState {
 #[cfg(feature = "db")]
 fn extract_searchable_properties(resource: &Resource) -> String {
     use serde_json::{Map, Value};
-    
+
     let mut searchable = Map::new();
-    
+
     // Common searchable properties that we care about for search
     let searchable_urls = [
         crate::urls::NAME,
-        crate::urls::DESCRIPTION, 
+        crate::urls::DESCRIPTION,
         crate::urls::SHORTNAME,
         crate::urls::FILENAME,
         // Add more properties that should be searchable
     ];
-    
+
     // Extract only the properties we need for search
     for &url in &searchable_urls {
         if let Ok(value) = resource.get(url) {
@@ -1282,22 +1312,25 @@ fn extract_searchable_properties(resource: &Resource) -> String {
                     } else {
                         continue;
                     }
-                },
+                }
                 crate::Value::Timestamp(ts) => Value::Number((*ts).into()),
                 // Skip complex types like ResourceArray for search indexing
                 _ => continue,
             };
-            
+
             // Use the property URL as the key
             searchable.insert(url.to_string(), json_value);
         }
     }
-    
+
     // If no searchable properties found, return minimal JSON
     if searchable.is_empty() {
-        searchable.insert("subject".to_string(), Value::String(resource.get_subject().to_string()));
+        searchable.insert(
+            "subject".to_string(),
+            Value::String(resource.get_subject().to_string()),
+        );
     }
-    
+
     serde_json::to_string(&searchable).unwrap_or_else(|_| "{}".to_string())
 }
 
@@ -1317,28 +1350,31 @@ impl SqliteSearchState {
     /// Build hierarchy path for a resource, using cache to avoid repeated computation
     fn resource_to_hierarchy_path(&self, resource: &Resource) -> AtomicResult<String> {
         let subject = resource.get_subject().to_string();
-        
+
         // Check cache first
         if let Some(cached_path) = self.cached_fst.read().hierarchy_cache.get(&subject) {
             return Ok(cached_path.value().clone());
         }
-        
+
         let mut hierarchy_parts = Vec::new();
         let mut current_subject = subject.clone();
         let mut visited = std::collections::HashSet::new();
-        
+
         // Build hierarchy by following parent relationships
-        while visited.len() < 10 {  // Prevent infinite loops
+        while visited.len() < 10 {
+            // Prevent infinite loops
             if visited.contains(&current_subject) {
                 break; // Circular reference detected
             }
             visited.insert(current_subject.clone());
             hierarchy_parts.push(current_subject.clone());
-            
+
             // Try to get the resource and find its parent
             match self.db.get_resource(&current_subject) {
                 Ok(current_resource) => {
-                    if let Ok(crate::Value::AtomicUrl(parent_url)) = current_resource.get(crate::urls::PARENT) {
+                    if let Ok(crate::Value::AtomicUrl(parent_url)) =
+                        current_resource.get(crate::urls::PARENT)
+                    {
                         current_subject = parent_url.to_string();
                     } else {
                         break; // No parent found
@@ -1347,17 +1383,19 @@ impl SqliteSearchState {
                 Err(_) => break, // Resource not found
             }
         }
-        
+
         // Reverse to get root -> leaf order
         hierarchy_parts.reverse();
         let hierarchy_path = hierarchy_parts.join("/");
-        
+
         // Cache the result
         {
             let cached = self.cached_fst.read();
-            cached.hierarchy_cache.insert(subject, hierarchy_path.clone());
+            cached
+                .hierarchy_cache
+                .insert(subject, hierarchy_path.clone());
         }
-        
+
         Ok(hierarchy_path)
     }
 }
@@ -1412,9 +1450,9 @@ fn is_valid_subject(subject: &str) -> bool {
     // Basic validation: subjects should be URLs or valid identifiers
     // Allow alphanumeric, :, /, -, _, ., #, ?
     subject.chars().all(|c| {
-        c.is_alphanumeric() 
-            || matches!(c, ':' | '/' | '-' | '_' | '.' | '#' | '?' | '=' | '&')
-    }) && !subject.is_empty() && subject.len() <= 2048
+        c.is_alphanumeric() || matches!(c, ':' | '/' | '-' | '_' | '.' | '#' | '?' | '=' | '&')
+    }) && !subject.is_empty()
+        && subject.len() <= 2048
 }
 
 #[cfg(not(feature = "db"))]

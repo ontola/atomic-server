@@ -42,6 +42,7 @@ export const currentDialogOkButton = 'dialog[open] >> footer >> text=Ok';
 // Increased from 500ms to ensure reliable test execution
 export const REBUILD_INDEX_TIME = 2500;
 
+
 /** Checks server URL and browser URL */
 export const before = async ({ page }: { page: Page }) => {
   if (!SERVER_URL) {
@@ -50,6 +51,24 @@ export const before = async ({ page }: { page: Page }) => {
 
   // Open the server
   await page.goto(FRONTEND_URL);
+  
+  // Inject CSS to disable all animations for stable tests
+  await page.addStyleTag({
+    content: `
+      *, *::before, *::after {
+        animation-duration: 0s !important;
+        animation-delay: 0s !important;
+        transition-duration: 0s !important;
+        transition-delay: 0s !important;
+      }
+      @media (prefers-reduced-motion: no-preference) {
+        * {
+          animation-duration: 0s !important;
+          transition-duration: 0s !important;
+        }
+      }
+    `
+  });
 
   // Sometimes we run the test server on a different port, but we should
   // only change the drive if it is non-default.
@@ -102,6 +121,7 @@ export async function signIn(page: Page) {
   
   // Give WebSocket connection time to stabilize
   await page.waitForTimeout(500);
+  
   await page.goBack();
 }
 
@@ -127,27 +147,17 @@ export async function newDrive(page: Page) {
     currentDialog(page).locator('footer button', { hasText: 'Create' }),
   ).toBeEnabled();
 
-  // Click the create button and wait for drive creation to complete
+  // Click the create button and wait for dialog to close
   await currentDialog(page)
     .locator('footer button', { hasText: 'Create' })
     .click();
 
   // Wait for the dialog to disappear (indicates the action completed)
   await currentDialog(page).waitFor({ state: 'hidden', timeout: 30000 });
-  
-  // Wait for the URL to change to the new drive (more reliable indicator)
-  await page.waitForFunction(
-    () => {
-      // URL should change from a simple path to include a drive resource ID
-      const currentUrl = window.location.href;
-      return currentUrl.includes('/show') || currentUrl.includes('/collections') || 
-             currentUrl.includes('/app') && !currentUrl.endsWith('/app');
-    },
-    { timeout: 30000 }
-  );
 
   // Wait for the sidebar to update with the new drive title
-  await expect(currentDriveTitle(page)).toContainText(driveTitle, { timeout: 10000 });
+  await expect(currentDriveTitle(page)).not.toContainText(startDriveName);
+  await expect(currentDriveTitle(page)).toContainText(driveTitle);
   const driveURL = await getCurrentSubject(page);
   expect(driveURL).toContain(SERVER_URL);
 
@@ -267,6 +277,8 @@ export async function editProfileAndCommit(page: Page) {
   }
 
   await navigationPromise;
+  
+  // Find and click the advanced button
   const advancedButton = page.getByRole('button', { name: 'advanced' });
   await advancedButton.scrollIntoViewIfNeeded();
   await advancedButton.click();

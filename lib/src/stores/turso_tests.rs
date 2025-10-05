@@ -1,16 +1,12 @@
 //! Integration tests for TursoStore
-//! 
+//!
 //! These tests require the 'turso' feature to be enabled.
 //! Note: Some tests may require actual Turso database credentials for full integration testing.
 
 #[cfg(all(test, feature = "turso"))]
 mod turso_integration_tests {
     use super::super::turso::{TursoConfig, TursoStore};
-    use crate::{
-        agents::ForAgent,
-        storelike::Query,
-        Atom, Resource, Value, datatype::DataType,
-    };
+    use crate::{agents::ForAgent, datatype::DataType, storelike::Query, Atom, Resource, Value};
     use tempfile::TempDir;
 
     /// Mock Turso configuration for testing
@@ -18,7 +14,7 @@ mod turso_integration_tests {
     fn create_mock_config_embedded() -> TursoConfig {
         let temp_dir = TempDir::new().unwrap();
         let replica_path = temp_dir.path().join("test_replica.db");
-        
+
         TursoConfig::new(
             "libsql://mock-test-db.turso.io".to_string(),
             "mock-test-token-not-real".to_string(),
@@ -71,10 +67,10 @@ mod turso_integration_tests {
     #[ignore = "Requires actual Turso database setup"]
     async fn test_turso_store_embedded_initialization() {
         let config = create_mock_config_embedded();
-        
+
         // This would fail with mock credentials, but tests the initialization path
         let result = TursoStore::new_embedded_replica(config).await;
-        
+
         // With mock credentials, this should fail
         assert!(result.is_err());
         let error_msg = result.err().unwrap().to_string();
@@ -85,10 +81,10 @@ mod turso_integration_tests {
     #[ignore = "Requires actual Turso database setup"]
     async fn test_turso_store_remote_initialization() {
         let config = create_mock_config_remote();
-        
+
         // This would fail with mock credentials, but tests the initialization path
         let result = TursoStore::new_remote(config).await;
-        
+
         // With mock credentials, this should fail
         assert!(result.is_err());
         let error_msg = result.err().unwrap().to_string();
@@ -100,16 +96,16 @@ mod turso_integration_tests {
         // Test embedded replica requires path
         let mut config = create_mock_config_embedded();
         assert!(config.embedded_replica_path.is_some());
-        
+
         // Test remote config doesn't require path
         let remote_config = create_mock_config_remote();
         assert!(remote_config.embedded_replica_path.is_none());
-        
+
         // Test invalid config scenarios
         config.url = "".to_string();
         // URL validation would happen during connection, not config creation
         assert!(config.url.is_empty());
-        
+
         // Test empty auth token - create a new config with empty token
         let empty_token_config = TursoConfig::new(
             "libsql://test.turso.io".to_string(),
@@ -133,7 +129,7 @@ mod turso_integration_tests {
         assert!(!embedded_config.url.is_empty());
         assert!(!embedded_config.get_auth_token_for_test().is_empty());
 
-        // Test remote-only config  
+        // Test remote-only config
         assert!(remote_config.embedded_replica_path.is_none());
         assert!(remote_config.sync_interval_seconds.is_none());
         assert!(!remote_config.url.is_empty());
@@ -163,20 +159,20 @@ mod turso_integration_tests {
         //     embedded_replica_path: Some("./test_replica.db".to_string()),
         //     sync_interval_seconds: Some(5),
         // };
-        // 
+        //
         // let store = TursoStore::new_embedded_replica(config).await.unwrap();
-        // 
+        //
         // // Test add_resource
         // let resource = create_test_resource("https://example.com/test/1", "Test resource");
         // store.add_resource(&resource).unwrap();
-        // 
+        //
         // // Test get_resource
         // let retrieved = store.get_resource("https://example.com/test/1").unwrap();
         // assert_eq!(retrieved.get_subject(), "https://example.com/test/1");
-        // 
+        //
         // // Test remove_resource
         // store.remove_resource("https://example.com/test/1").unwrap();
-        // 
+        //
         // // Should be gone
         // assert!(store.get_resource("https://example.com/test/1").is_err());
 
@@ -238,7 +234,7 @@ mod turso_integration_tests {
     fn test_server_url_management() {
         // Test server URL setter/getter interface
         // This doesn't require actual Turso connection
-        
+
         // With real store:
         // store.set_server_url("https://example.com");
         // let url = store.get_server_url().unwrap();
@@ -256,11 +252,11 @@ mod turso_integration_tests {
         // let store = create_test_store();
         // let agent = Agent::new(Some("Test Agent"), &store).unwrap();
         // assert_eq!(agent.get_name(), Some("Test Agent"));
-        
+
         // For now, just test that we can create the test config
         let config = create_mock_config_embedded();
         assert!(!config.url.is_empty());
-        
+
         // With real store:
         // store.set_default_agent(agent.clone());
         // let retrieved_agent = store.get_default_agent().unwrap();
@@ -270,13 +266,13 @@ mod turso_integration_tests {
     #[test]
     fn test_error_handling_scenarios() {
         // Test various error conditions that don't require network
-        
+
         // Invalid URL formats
         let mut config = create_mock_config_embedded();
         config.url = "not-a-valid-url".to_string();
         // URL validation happens during connection, not config creation
         assert_eq!(config.url, "not-a-valid-url");
-        
+
         // Test empty credentials with new config
         let empty_cred_config = TursoConfig::new(
             "libsql://test.turso.io".to_string(),
@@ -285,7 +281,7 @@ mod turso_integration_tests {
             None,
         );
         assert!(empty_cred_config.get_auth_token_for_test().is_empty());
-        
+
         // Invalid replica path
         config.embedded_replica_path = Some("/invalid/path/that/does/not/exist".to_string());
         assert!(config.embedded_replica_path.is_some());
@@ -302,7 +298,7 @@ mod turso_integration_tests {
         // For now, just verify we can create test resources
         let resource1 = create_test_resource("https://example.com/1", "First resource");
         let resource2 = create_test_resource("https://example.com/2", "Second resource");
-        
+
         assert_ne!(resource1.get_subject(), resource2.get_subject());
     }
 
@@ -332,7 +328,7 @@ pub mod test_utils {
     pub fn create_temp_turso_config() -> TursoConfig {
         let temp_dir = TempDir::new().unwrap();
         let replica_path = temp_dir.path().join("test_turso_replica.db");
-        
+
         TursoConfig::new(
             "libsql://test-atomic-server.turso.io".to_string(),
             "test-token-for-atomic-server".to_string(),
@@ -344,21 +340,21 @@ pub mod test_utils {
     /// Environment variable names for integration testing
     pub const TEST_TURSO_URL_ENV: &str = "ATOMIC_TEST_TURSO_URL";
     pub const TEST_TURSO_TOKEN_ENV: &str = "ATOMIC_TEST_TURSO_TOKEN";
-    
+
     /// Checks if integration test environment is available
     pub fn has_turso_test_env() -> bool {
         std::env::var(TEST_TURSO_URL_ENV).is_ok() && std::env::var(TEST_TURSO_TOKEN_ENV).is_ok()
     }
-    
+
     /// Creates a config from environment variables for real integration testing
     pub fn create_integration_config() -> Option<TursoConfig> {
         if !has_turso_test_env() {
             return None;
         }
-        
+
         let temp_dir = TempDir::new().ok()?;
         let replica_path = temp_dir.path().join("integration_test_replica.db");
-        
+
         Some(TursoConfig::new(
             std::env::var(TEST_TURSO_URL_ENV).ok()?,
             std::env::var(TEST_TURSO_TOKEN_ENV).ok()?,

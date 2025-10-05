@@ -54,8 +54,8 @@ mod tests {
             .pragma_query_value(None, "wal_autocheckpoint", |row| row.get(0))
             .unwrap();
         assert_eq!(
-            wal_autocheckpoint, 2000,
-            "WAL autocheckpoint should be 2000"
+            wal_autocheckpoint, 10000,
+            "WAL autocheckpoint should be 10000"
         );
 
         println!("✅ WAL configuration test passed!");

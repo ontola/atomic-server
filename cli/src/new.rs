@@ -170,9 +170,7 @@ fn prompt_field(
             let msg = format!("integer{}", msg_appendix);
             let number: Option<u32> = prompt_opt(msg)?;
             match number {
-                Some(nr) => {
-                    Ok(Some(nr.to_string()))
-                }
+                Some(nr) => Ok(Some(nr.to_string())),
                 None => Ok(None),
             }
         }
@@ -180,9 +178,7 @@ fn prompt_field(
             let msg = format!("float{}", msg_appendix);
             let number: Option<f64> = prompt_opt(msg)?;
             match number {
-                Some(nr) => {
-                    Ok(Some(nr.to_string()))
-                }
+                Some(nr) => Ok(Some(nr.to_string())),
                 None => Ok(None),
             }
         }
@@ -221,7 +217,7 @@ fn prompt_field(
                     Some(url) => return Ok(Some(url)),
                     None => {
                         println!("Shortname not found, try again.");
-                        return Ok(None)
+                        return Ok(None);
                     }
                 }
             }
@@ -238,11 +234,7 @@ fn prompt_field(
                     let mut urls: Vec<String> = Vec::new();
                     let length = string_items.clone().count();
                     for item in string_items {
-                        let mapping_match = context
-                            .mapping
-                            .lock()
-                            .try_mapping_or_url(item)
-                            .clone();
+                        let mapping_match = context.mapping.lock().try_mapping_or_url(item).clone();
                         match mapping_match {
                             Some(url) => {
                                 urls.push(url);
@@ -274,9 +266,7 @@ fn prompt_field(
             let msg = format!("timestamp{}", msg_appendix);
             let number: Option<u64> = prompt_opt(msg)?;
             match number {
-                Some(nr) => {
-                    Ok(Some(nr.to_string()))
-                }
+                Some(nr) => Ok(Some(nr.to_string())),
                 None => Ok(None),
             }
         }
@@ -287,9 +277,7 @@ fn prompt_field(
             );
             let string: Option<String> = prompt_opt(msg)?;
             match string {
-                Some(nr) => {
-                    Ok(Some(nr.to_string()))
-                }
+                Some(nr) => Ok(Some(nr.to_string())),
                 None => Ok(None),
             }
         }

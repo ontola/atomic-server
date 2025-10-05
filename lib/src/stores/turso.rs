@@ -1,5 +1,5 @@
 //! Turso (libSQL) implementation of Storelike trait
-//! 
+//!
 //! Provides both embedded replica mode (recommended) and remote-only mode.
 //! Embedded replica mode offers local SQLite performance with automatic sync to Turso.
 
@@ -14,11 +14,16 @@ use {
     libsql::{params, Builder, Connection, Database},
     lru::LruCache,
     parking_lot::RwLock,
+    secrecy::{ExposeSecret, Secret},
+    std::{
+        collections::VecDeque,
+        num::NonZeroUsize,
+        sync::Arc,
+        time::{Duration, Instant},
+    },
     tokio::sync::Mutex,
-    std::{collections::VecDeque, num::NonZeroUsize, sync::Arc, time::{Duration, Instant}},
     tokio::time,
     tracing::{debug, info},
-    secrecy::{Secret, ExposeSecret},
     zeroize::Zeroize,
 };
 
@@ -26,103 +31,136 @@ use {
 pub mod security {
     use crate::errors::{AtomicError, AtomicResult};
     use tracing::warn;
-    
+
     /// Security validator for Turso operations
     pub struct SecurityValidator;
-    
+
     impl SecurityValidator {
         /// Validate subject URL format and length
         pub fn validate_subject(subject: &str) -> AtomicResult<()> {
             if subject.is_empty() {
-                return Err(AtomicError::other_error("Subject cannot be empty".to_string()));
+                return Err(AtomicError::other_error(
+                    "Subject cannot be empty".to_string(),
+                ));
             }
             if subject.len() > 2048 {
-                return Err(AtomicError::other_error("Subject too long (max 2048 chars)".to_string()));
+                return Err(AtomicError::other_error(
+                    "Subject too long (max 2048 chars)".to_string(),
+                ));
             }
             if !subject.starts_with("http://") && !subject.starts_with("https://") {
-                return Err(AtomicError::other_error("Subject must be a valid HTTP(S) URL".to_string()));
+                return Err(AtomicError::other_error(
+                    "Subject must be a valid HTTP(S) URL".to_string(),
+                ));
             }
             Ok(())
         }
-        
+
         /// Validate and sanitize server URL
         pub fn validate_server_url(url: &str) -> AtomicResult<String> {
             if url.is_empty() {
-                return Err(AtomicError::other_error("Server URL cannot be empty".to_string()));
+                return Err(AtomicError::other_error(
+                    "Server URL cannot be empty".to_string(),
+                ));
             }
-            
+
             // Basic URL validation - must start with http/https
             if !url.starts_with("http://") && !url.starts_with("https://") {
-                return Err(AtomicError::other_error("Server URL must be HTTP(S)".to_string()));
+                return Err(AtomicError::other_error(
+                    "Server URL must be HTTP(S)".to_string(),
+                ));
             }
-            
+
             // Check for suspicious patterns
             if url.contains("'") || url.contains("\"") || url.contains(";") || url.contains("--") {
-                return Err(AtomicError::other_error("Server URL contains invalid characters".to_string()));
+                return Err(AtomicError::other_error(
+                    "Server URL contains invalid characters".to_string(),
+                ));
             }
-            
+
             Ok(url.to_string())
         }
-        
+
         /// Validate property name for JSON extraction
         pub fn validate_property_name(property: &str) -> AtomicResult<()> {
             if property.is_empty() {
-                return Err(AtomicError::other_error("Property name cannot be empty".to_string()));
+                return Err(AtomicError::other_error(
+                    "Property name cannot be empty".to_string(),
+                ));
             }
             if property.len() > 512 {
-                return Err(AtomicError::other_error("Property name too long (max 512 chars)".to_string()));
+                return Err(AtomicError::other_error(
+                    "Property name too long (max 512 chars)".to_string(),
+                ));
             }
-            
+
             // Must be a valid URL (property names are URLs in atomic data)
             if !property.starts_with("http://") && !property.starts_with("https://") {
-                return Err(AtomicError::other_error("Property must be a valid HTTP(S) URL".to_string()));
+                return Err(AtomicError::other_error(
+                    "Property must be a valid HTTP(S) URL".to_string(),
+                ));
             }
-            
+
             // Check for JSON injection patterns
-            if property.contains("'") || property.contains("\"") || property.contains("$") 
-               || property.contains("..") || property.contains("*") {
-                return Err(AtomicError::other_error("Property name contains invalid characters".to_string()));
+            if property.contains("'")
+                || property.contains("\"")
+                || property.contains("$")
+                || property.contains("..")
+                || property.contains("*")
+            {
+                return Err(AtomicError::other_error(
+                    "Property name contains invalid characters".to_string(),
+                ));
             }
-            
+
             Ok(())
         }
-        
+
         /// Validate sort column against allow-list
         pub fn validate_sort_column(column: &str) -> AtomicResult<String> {
             // Only allow specific, safe property URLs for sorting
             const ALLOWED_SORT_PROPERTIES: &[&str] = &[
                 "https://atomicdata.dev/properties/created-at",
-                "https://atomicdata.dev/properties/updated-at", 
+                "https://atomicdata.dev/properties/updated-at",
                 "https://atomicdata.dev/properties/shortname",
                 "https://atomicdata.dev/properties/description",
             ];
-            
+
             if ALLOWED_SORT_PROPERTIES.contains(&column) {
                 Ok(column.to_string())
             } else {
-                Err(AtomicError::other_error(format!("Sort column not allowed: {}", column)))
+                Err(AtomicError::other_error(format!(
+                    "Sort column not allowed: {}",
+                    column
+                )))
             }
         }
-        
+
         /// Validate numeric limit parameter
         pub fn validate_limit(limit: usize) -> AtomicResult<usize> {
             if limit == 0 {
-                return Err(AtomicError::other_error("Limit must be greater than 0".to_string()));
+                return Err(AtomicError::other_error(
+                    "Limit must be greater than 0".to_string(),
+                ));
             }
             if limit > 1000 {
-                return Err(AtomicError::other_error("Limit too large (max 1000)".to_string()));
+                return Err(AtomicError::other_error(
+                    "Limit too large (max 1000)".to_string(),
+                ));
             }
             Ok(limit)
         }
-        
+
         /// Validate numeric offset parameter
         pub fn validate_offset(offset: usize) -> AtomicResult<usize> {
             if offset > 1_000_000 {
-                return Err(AtomicError::other_error("Offset too large (max 1,000,000)".to_string()));
+                return Err(AtomicError::other_error(
+                    "Offset too large (max 1,000,000)".to_string(),
+                ));
             }
             Ok(offset)
         }
-        
+
         /// Log security event
         pub fn log_security_event(event_type: &str, details: &str, risk_level: &str) {
             warn!(
@@ -151,7 +189,12 @@ pub struct TursoConfig {
 #[cfg(feature = "turso")]
 impl TursoConfig {
     /// Create a new TursoConfig with secure token storage
-    pub fn new(url: String, auth_token: String, embedded_replica_path: Option<String>, sync_interval_seconds: Option<u64>) -> Self {
+    pub fn new(
+        url: String,
+        auth_token: String,
+        embedded_replica_path: Option<String>,
+        sync_interval_seconds: Option<u64>,
+    ) -> Self {
         Self {
             url,
             auth_token: Secret::new(auth_token),
@@ -159,18 +202,18 @@ impl TursoConfig {
             sync_interval_seconds,
         }
     }
-    
+
     /// Get the auth token (only when needed for connection)
     pub(crate) fn get_auth_token(&self) -> &str {
         self.auth_token.expose_secret()
     }
-    
+
     /// Get the auth token for testing purposes
     #[cfg(test)]
     pub fn get_auth_token_for_test(&self) -> &str {
         self.auth_token.expose_secret()
     }
-    
+
     /// Set a new auth token
     pub fn set_auth_token(&mut self, token: String) {
         self.auth_token = Secret::new(token);
@@ -237,7 +280,7 @@ impl ConnectionPool {
             let mut available = self.available_connections.lock().await;
             available.pop_front()
         };
-        
+
         if let Some(conn) = conn_to_test {
             // Test connection before returning (lock is dropped)
             match self.test_connection(&conn).await {
@@ -260,7 +303,12 @@ impl ConnectionPool {
                         debug!("Created new database connection (total: {})", *current);
                         return Ok(conn);
                     }
-                    Err(e) => return Err(AtomicError::other_error(format!("Failed to create database connection: {}", e))),
+                    Err(e) => {
+                        return Err(AtomicError::other_error(format!(
+                            "Failed to create database connection: {}",
+                            e
+                        )))
+                    }
                 }
             }
         }
@@ -274,7 +322,7 @@ impl ConnectionPool {
                 let mut available = self.available_connections.lock().await;
                 available.pop_front()
             };
-            
+
             if let Some(conn) = conn_to_test {
                 match self.test_connection(&conn).await {
                     Ok(()) => return Ok(conn),
@@ -285,12 +333,14 @@ impl ConnectionPool {
                     }
                 }
             }
-            
+
             // Wait a bit before retrying
             time::sleep(Duration::from_millis(50)).await;
         }
 
-        Err(AtomicError::other_error("Connection pool timeout - no connections available".to_string()))
+        Err(AtomicError::other_error(
+            "Connection pool timeout - no connections available".to_string(),
+        ))
     }
 
     async fn release(&self, conn: Connection) {
@@ -301,7 +351,10 @@ impl ConnectionPool {
     async fn test_connection(&self, conn: &Connection) -> AtomicResult<()> {
         match conn.execute("SELECT 1", ()).await {
             Ok(_) => Ok(()),
-            Err(e) => Err(AtomicError::other_error(format!("Connection test failed: {}", e))),
+            Err(e) => Err(AtomicError::other_error(format!(
+                "Connection test failed: {}",
+                e
+            ))),
         }
     }
 }
@@ -327,10 +380,12 @@ struct PreparedStatementCache {
 impl PreparedStatementCache {
     fn new(capacity: usize) -> Self {
         Self {
-            cache: Arc::new(RwLock::new(LruCache::new(NonZeroUsize::new(capacity).unwrap()))),
+            cache: Arc::new(RwLock::new(LruCache::new(
+                NonZeroUsize::new(capacity).unwrap(),
+            ))),
         }
     }
-    
+
     /// Get a cached statement or insert a new one
     fn get_or_insert(&self, query_key: String, sql: String) -> String {
         let mut cache = self.cache.write();
@@ -358,7 +413,7 @@ impl CachedResult {
             ttl,
         }
     }
-    
+
     fn is_expired(&self) -> bool {
         self.created_at.elapsed() > self.ttl
     }
@@ -376,11 +431,13 @@ struct QueryResultCache {
 impl QueryResultCache {
     fn new(capacity: usize, default_ttl: Duration) -> Self {
         Self {
-            cache: Arc::new(RwLock::new(LruCache::new(NonZeroUsize::new(capacity).unwrap()))),
+            cache: Arc::new(RwLock::new(LruCache::new(
+                NonZeroUsize::new(capacity).unwrap(),
+            ))),
             default_ttl,
         }
     }
-    
+
     /// Get a cached result if it exists and is not expired
     fn get(&self, key: &str) -> Option<Resource> {
         let mut cache = self.cache.write();
@@ -394,20 +451,20 @@ impl QueryResultCache {
         }
         None
     }
-    
+
     /// Insert a result into the cache
     fn insert(&self, key: String, resource: Resource) {
         let mut cache = self.cache.write();
         let cached_result = CachedResult::new(resource, self.default_ttl);
         cache.put(key, cached_result);
     }
-    
+
     /// Invalidate a specific key or all keys matching a pattern
     fn invalidate(&self, key: &str) {
         let mut cache = self.cache.write();
         cache.pop(key);
     }
-    
+
     /// Clear all cached results (used on writes to ensure consistency)
     fn clear_all(&self) {
         let mut cache = self.cache.write();
@@ -442,10 +499,11 @@ impl TursoStore {
     pub fn get_config(&self) -> &TursoConfig {
         &self.config
     }
-    
+
     /// Get a cached SQL statement or cache a new one
     fn get_cached_sql(&self, key: &str, sql: &str) -> String {
-        self.stmt_cache.get_or_insert(key.to_string(), sql.to_string())
+        self.stmt_cache
+            .get_or_insert(key.to_string(), sql.to_string())
     }
 
     /// Check if this is an embedded replica store
@@ -470,20 +528,29 @@ impl TursoStore {
 
     /// Create a new TursoStore with embedded replica (recommended)
     pub async fn new_embedded_replica(config: TursoConfig) -> AtomicResult<Self> {
-        let replica_path = config.embedded_replica_path
+        let replica_path = config
+            .embedded_replica_path
             .as_ref()
             .ok_or("Embedded replica path required")?;
 
-        info!("Initializing Turso store with embedded replica at: {}", replica_path);
-        
-        let mut builder = Builder::new_remote_replica(replica_path, config.url.clone(), config.get_auth_token().to_string());
+        info!(
+            "Initializing Turso store with embedded replica at: {}",
+            replica_path
+        );
+
+        let mut builder = Builder::new_remote_replica(
+            replica_path,
+            config.url.clone(),
+            config.get_auth_token().to_string(),
+        );
 
         if let Some(interval) = config.sync_interval_seconds {
             builder = builder.sync_interval(std::time::Duration::from_secs(interval));
         }
 
-        let db = builder.build().await
-            .map_err(|e| AtomicError::other_error(format!("Failed to create Turso embedded replica: {}", e)))?;
+        let db = builder.build().await.map_err(|e| {
+            AtomicError::other_error(format!("Failed to create Turso embedded replica: {}", e))
+        })?;
 
         let db_arc = Arc::new(db);
         let store = Self {
@@ -503,12 +570,17 @@ impl TursoStore {
 
     /// Create a new TursoStore with remote-only connection
     pub async fn new_remote(config: TursoConfig) -> AtomicResult<Self> {
-        info!("Initializing Turso store with remote connection to: {}", config.url);
-        
+        info!(
+            "Initializing Turso store with remote connection to: {}",
+            config.url
+        );
+
         let db = Builder::new_remote(config.url.clone(), config.get_auth_token().to_string())
             .build()
             .await
-            .map_err(|e| AtomicError::other_error(format!("Failed to create Turso remote connection: {}", e)))?;
+            .map_err(|e| {
+                AtomicError::other_error(format!("Failed to create Turso remote connection: {}", e))
+            })?;
 
         let db_arc = Arc::new(db);
         let store = Self {
@@ -530,12 +602,11 @@ impl TursoStore {
     async fn get_connection(&self) -> AtomicResult<Connection> {
         self.connection_pool.acquire().await
     }
-    
 
     /// Initialize database schema for atomic data
     async fn init_schema(&self) -> AtomicResult<()> {
         let conn = self.get_connection().await?;
-        
+
         // Create resources table - stores the main atomic data
         conn.execute(
             r#"
@@ -547,8 +618,11 @@ impl TursoStore {
             )
             "#,
             (),
-        ).await
-        .map_err(|e| AtomicError::other_error(format!("Failed to create resources table: {}", e)))?;
+        )
+        .await
+        .map_err(|e| {
+            AtomicError::other_error(format!("Failed to create resources table: {}", e))
+        })?;
 
         // Create search index table for FTS
         conn.execute(
@@ -561,7 +635,8 @@ impl TursoStore {
             )
             "#,
             (),
-        ).await
+        )
+        .await
         .map_err(|e| AtomicError::other_error(format!("Failed to create FTS table: {}", e)))?;
 
         // Create trigger to keep FTS in sync
@@ -573,7 +648,8 @@ impl TursoStore {
             END
             "#,
             (),
-        ).await
+        )
+        .await
         .map_err(|e| AtomicError::other_error(format!("Failed to create insert trigger: {}", e)))?;
 
         conn.execute(
@@ -584,7 +660,8 @@ impl TursoStore {
             END
             "#,
             (),
-        ).await
+        )
+        .await
         .map_err(|e| AtomicError::other_error(format!("Failed to create update trigger: {}", e)))?;
 
         conn.execute(
@@ -594,25 +671,29 @@ impl TursoStore {
             END
             "#,
             (),
-        ).await
+        )
+        .await
         .map_err(|e| AtomicError::other_error(format!("Failed to create delete trigger: {}", e)))?;
 
         // Create indexes for performance
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_resources_updated_at ON resources(updated_at)",
             (),
-        ).await
-        .map_err(|e| AtomicError::other_error(format!("Failed to create updated_at index: {}", e)))?;
+        )
+        .await
+        .map_err(|e| {
+            AtomicError::other_error(format!("Failed to create updated_at index: {}", e))
+        })?;
 
         // Strategic performance indexes
-        
+
         // Index for subject prefix queries (common for URL-based lookups)
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_resources_subject_prefix ON resources(subject COLLATE NOCASE)",
             (),
         ).await
         .map_err(|e| AtomicError::other_error(format!("Failed to create subject prefix index: {}", e)))?;
-        
+
         // JSON indexes for frequently accessed properties
         conn.execute(
             r#"CREATE INDEX IF NOT EXISTS idx_resources_shortname 
@@ -620,21 +701,21 @@ impl TursoStore {
             (),
         ).await
         .map_err(|e| AtomicError::other_error(format!("Failed to create shortname index: {}", e)))?;
-        
+
         conn.execute(
             r#"CREATE INDEX IF NOT EXISTS idx_resources_is_a 
                ON resources(json_extract(resource_json, '$.["https://atomicdata.dev/properties/is-a"]'))"#,
             (),
         ).await
         .map_err(|e| AtomicError::other_error(format!("Failed to create is-a index: {}", e)))?;
-        
+
         conn.execute(
             r#"CREATE INDEX IF NOT EXISTS idx_resources_name
                ON resources(json_extract(resource_json, '$.["https://atomicdata.dev/properties/name"]'))"#,
             (),
         ).await
         .map_err(|e| AtomicError::other_error(format!("Failed to create name index: {}", e)))?;
-        
+
         // Partial index for local resources (hot path optimization)
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_resources_local ON resources(subject) WHERE subject LIKE 'https://localhost%'",
@@ -652,9 +733,10 @@ impl TursoStore {
             return Ok(()); // No-op for remote-only connections
         }
 
-        self.db.sync().await
-            .map_err(|e| AtomicError::other_error(format!("Failed to sync Turso replica: {}", e)))?;
-        
+        self.db.sync().await.map_err(|e| {
+            AtomicError::other_error(format!("Failed to sync Turso replica: {}", e))
+        })?;
+
         debug!("Turso replica sync completed successfully");
         Ok(())
     }
@@ -769,7 +851,7 @@ impl StreamingResourceIterator {
         } else {
             // Update offset for next batch
             self.offset += batch_result.len();
-            
+
             // If we got fewer results than requested, we've reached the end
             if batch_result.len() < self.batch_size {
                 self.exhausted = true;
@@ -811,9 +893,10 @@ impl Storelike for TursoStore {
 
         // Convert atoms to resources
         let mut resources = std::collections::HashMap::new();
-        
+
         for atom in atoms {
-            let resource = resources.entry(atom.subject.clone())
+            let resource = resources
+                .entry(atom.subject.clone())
                 .or_insert_with(|| Resource::new(atom.subject.clone()));
             resource.set_unsafe(atom.property, atom.value);
         }
@@ -852,11 +935,11 @@ impl Storelike for TursoStore {
             debug!("Successfully batch inserted {} resources", resource_count);
             Ok::<(), AtomicError>(())
         })?;
-        
+
         // Clear cache after batch operations to ensure consistency
         self.query_cache.clear_all();
         debug!("Cleared query cache after batch operation");
-        
+
         Ok(())
     }
 
@@ -869,11 +952,11 @@ impl Storelike for TursoStore {
     ) -> AtomicResult<()> {
         // Validate subject to prevent SQL injection
         security::SecurityValidator::validate_subject(resource.get_subject())?;
-        
+
         // Run in async context
         let runtime = tokio::runtime::Handle::current();
         let conn = runtime.block_on(self.get_connection())?;
-        
+
         if check_required_props {
             resource.check_required_props(self)?;
         }
@@ -882,15 +965,17 @@ impl Storelike for TursoStore {
             // Check if resource exists
             let resource_exists_sql = self.get_cached_sql(
                 "resource_exists",
-                "SELECT 1 FROM resources WHERE subject = ? LIMIT 1"
+                "SELECT 1 FROM resources WHERE subject = ? LIMIT 1",
             );
-            
+
             let exists = runtime.block_on(async {
-                let result = conn.query(
-                    &resource_exists_sql,
-                    params![resource.get_subject().clone()],
-                ).await;
-                
+                let result = conn
+                    .query(
+                        &resource_exists_sql,
+                        params![resource.get_subject().clone()],
+                    )
+                    .await;
+
                 match result {
                     Ok(mut rows) => rows.next().await.unwrap_or(None).is_some(),
                     Err(_) => false,
@@ -912,13 +997,13 @@ impl Storelike for TursoStore {
             "insert_resource",
             "INSERT OR REPLACE INTO resources (subject, resource_json, updated_at) VALUES (?, ?, unixepoch())"
         );
-        
-        runtime.block_on(async {
-            conn.execute(
-                &insert_resource_sql,
-                params![subject.clone(), json],
-            ).await
-        }).map_err(|e| AtomicError::other_error(format!("Failed to store resource: {}", e)))?;
+
+        runtime
+            .block_on(async {
+                conn.execute(&insert_resource_sql, params![subject.clone(), json])
+                    .await
+            })
+            .map_err(|e| AtomicError::other_error(format!("Failed to store resource: {}", e)))?;
 
         // Invalidate cache for this resource
         self.query_cache.invalidate(subject);
@@ -929,42 +1014,46 @@ impl Storelike for TursoStore {
     }
 
     fn all_resources(&self, include_external: bool) -> Box<dyn Iterator<Item = Resource>> {
-        Box::new(StreamingResourceIterator::new(self.clone(), include_external))
+        Box::new(StreamingResourceIterator::new(
+            self.clone(),
+            include_external,
+        ))
     }
 
     fn get_resource(&self, subject: &str) -> AtomicResult<Resource> {
         // Validate subject to prevent SQL injection
         security::SecurityValidator::validate_subject(subject)?;
-        
+
         // Check cache first
         if let Some(cached_resource) = self.query_cache.get(subject) {
             debug!("Cache hit for resource: {}", subject);
             return Ok(cached_resource);
         }
-        
+
         let runtime = tokio::runtime::Handle::current();
         let conn = runtime.block_on(self.get_connection())?;
 
         let get_resource_sql = self.get_cached_sql(
             "get_resource",
-            "SELECT resource_json FROM resources WHERE subject = ? LIMIT 1"
+            "SELECT resource_json FROM resources WHERE subject = ? LIMIT 1",
         );
-        
-        let result = runtime.block_on(async {
-            conn.query(&get_resource_sql, params![subject]).await
-        });
+
+        let result =
+            runtime.block_on(async { conn.query(&get_resource_sql, params![subject]).await });
 
         match result {
             Ok(mut rows) => {
                 if let Ok(Some(row)) = runtime.block_on(rows.next()) {
-                    let json = row.get::<String>(0)
-                        .map_err(|e| AtomicError::other_error(format!("Failed to get JSON from row: {}", e)))?;
+                    let json = row.get::<String>(0).map_err(|e| {
+                        AtomicError::other_error(format!("Failed to get JSON from row: {}", e))
+                    })?;
                     let resource = self.json_to_resource(&json)?;
-                    
+
                     // Cache the successful result
-                    self.query_cache.insert(subject.to_string(), resource.clone());
+                    self.query_cache
+                        .insert(subject.to_string(), resource.clone());
                     debug!("Cached resource: {}", subject);
-                    
+
                     Ok(resource)
                 } else {
                     self.handle_not_found(
@@ -974,22 +1063,23 @@ impl Storelike for TursoStore {
                     )
                 }
             }
-            Err(e) => Err(AtomicError::other_error(format!("Database query failed: {}", e))),
+            Err(e) => Err(AtomicError::other_error(format!(
+                "Database query failed: {}",
+                e
+            ))),
         }
     }
 
     fn remove_resource(&self, subject: &str) -> AtomicResult<()> {
         // Validate subject to prevent SQL injection
         security::SecurityValidator::validate_subject(subject)?;
-        
+
         let runtime = tokio::runtime::Handle::current();
         let conn = runtime.block_on(self.get_connection())?;
 
         let result = runtime.block_on(async {
-            conn.execute(
-                "DELETE FROM resources WHERE subject = ?",
-                params![subject],
-            ).await
+            conn.execute("DELETE FROM resources WHERE subject = ?", params![subject])
+                .await
         });
 
         match result {
@@ -997,10 +1087,16 @@ impl Storelike for TursoStore {
                 if rows_affected > 0 {
                     Ok(())
                 } else {
-                    Err(AtomicError::not_found(format!("Resource not found for deletion: {}", subject)))
+                    Err(AtomicError::not_found(format!(
+                        "Resource not found for deletion: {}",
+                        subject
+                    )))
                 }
             }
-            Err(e) => Err(AtomicError::other_error(format!("Failed to delete resource: {}", e))),
+            Err(e) => Err(AtomicError::other_error(format!(
+                "Failed to delete resource: {}",
+                e
+            ))),
         }
     }
 
@@ -1016,7 +1112,7 @@ impl Storelike for TursoStore {
         if let (Some(property), Some(value)) = (&q.property, &q.value) {
             // Validate property name to prevent JSON injection
             security::SecurityValidator::validate_property_name(property)?;
-            
+
             where_clauses.push("json_extract(resource_json, ?) = ?".to_string());
             params.push(format!("$.{}", property));
             params.push(value.to_string());
@@ -1039,7 +1135,7 @@ impl Storelike for TursoStore {
         // Add sorting with validation - only allow safe, predefined columns
         if let Some(sort_by) = &q.sort_by {
             let safe_sort_column = security::SecurityValidator::validate_sort_column(sort_by)?;
-            
+
             // Use parameterized query for sort column too
             query_sql.push_str(" ORDER BY json_extract(resource_json, ?)");
             if q.sort_desc {
@@ -1056,33 +1152,37 @@ impl Storelike for TursoStore {
             query_sql.push_str(" LIMIT ?");
             params.push(safe_limit.to_string());
         }
-        
+
         if q.offset > 0 {
             let safe_offset = security::SecurityValidator::validate_offset(q.offset)?;
             query_sql.push_str(" OFFSET ?");
             params.push(safe_offset.to_string());
         }
 
-        let result = runtime.block_on(async {
-            let mut rows = conn.query(&query_sql, libsql::params_from_iter(params)).await?;
-            let mut subjects = Vec::new();
-            let mut resources = Vec::new();
+        let result = runtime
+            .block_on(async {
+                let mut rows = conn
+                    .query(&query_sql, libsql::params_from_iter(params))
+                    .await?;
+                let mut subjects = Vec::new();
+                let mut resources = Vec::new();
 
-            while let Ok(Some(row)) = rows.next().await {
-                let subject: String = row.get(0)?;
-                let json: String = row.get(1)?;
-                
-                subjects.push(subject);
-                
-                if q.include_nested {
-                    if let Ok(resource) = self.json_to_resource(&json) {
-                        resources.push(resource);
+                while let Ok(Some(row)) = rows.next().await {
+                    let subject: String = row.get(0)?;
+                    let json: String = row.get(1)?;
+
+                    subjects.push(subject);
+
+                    if q.include_nested {
+                        if let Ok(resource) = self.json_to_resource(&json) {
+                            resources.push(resource);
+                        }
                     }
                 }
-            }
 
-            Ok((subjects, resources))
-        }).map_err(|e: libsql::Error| AtomicError::other_error(format!("Query failed: {}", e)))?;
+                Ok((subjects, resources))
+            })
+            .map_err(|e: libsql::Error| AtomicError::other_error(format!("Query failed: {}", e)))?;
 
         let (subjects, resources) = result;
         let count = subjects.len();
@@ -1095,7 +1195,8 @@ impl Storelike for TursoStore {
     }
 
     fn get_server_url(&self) -> AtomicResult<String> {
-        self.server_url.read()
+        self.server_url
+            .read()
             .clone()
             .ok_or_else(|| "No server URL set. Use set_server_url() to configure.".into())
     }
@@ -1105,7 +1206,8 @@ impl Storelike for TursoStore {
     }
 
     fn get_default_agent(&self) -> AtomicResult<Agent> {
-        self.default_agent.read()
+        self.default_agent
+            .read()
             .clone()
             .ok_or_else(|| "No default agent set. Use set_default_agent() to configure.".into())
     }
@@ -1132,8 +1234,8 @@ impl TursoStore {
 #[cfg(all(test, feature = "turso"))]
 mod tests {
     use super::*;
+    use crate::{datatype::DataType, Resource, Value};
     use tempfile::TempDir;
-    use crate::{Value, Resource, datatype::DataType};
 
     /// Creates a test TursoConfig with mock values
     fn create_test_config() -> TursoConfig {
@@ -1174,7 +1276,10 @@ mod tests {
         let config = TursoConfig::default();
         assert_eq!(config.url, "");
         assert_eq!(config.get_auth_token_for_test(), "");
-        assert_eq!(config.embedded_replica_path, Some("atomic_data.db".to_string()));
+        assert_eq!(
+            config.embedded_replica_path,
+            Some("atomic_data.db".to_string())
+        );
         assert_eq!(config.sync_interval_seconds, Some(60));
     }
 
@@ -1183,7 +1288,10 @@ mod tests {
         let config = create_test_config();
         assert_eq!(config.url, "libsql://test-db.turso.io");
         assert_eq!(config.get_auth_token_for_test(), "test-token");
-        assert_eq!(config.embedded_replica_path, Some("test_replica.db".to_string()));
+        assert_eq!(
+            config.embedded_replica_path,
+            Some("test_replica.db".to_string())
+        );
         assert_eq!(config.sync_interval_seconds, Some(30));
     }
 
@@ -1201,7 +1309,7 @@ mod tests {
         // Test that config is properly accessible and all methods work
         let temp_dir = TempDir::new().unwrap();
         let replica_path = temp_dir.path().join("test.db");
-        
+
         let config = TursoConfig::new(
             "libsql://test-db.turso.io".to_string(),
             "test-token".to_string(),
@@ -1214,11 +1322,13 @@ mod tests {
         assert_eq!(config.get_auth_token_for_test(), "test-token");
         assert_eq!(config.sync_interval_seconds, Some(60));
         assert!(config.embedded_replica_path.is_some());
-        
+
         // Test resource creation for JSON conversion
         let resource = create_test_resource("https://example.com/resource/1");
         assert!(resource.get_subject() == "https://example.com/resource/1");
-        assert!(resource.get("https://atomicdata.dev/properties/description").is_ok());
+        assert!(resource
+            .get("https://atomicdata.dev/properties/description")
+            .is_ok());
     }
 
     #[test]
@@ -1278,11 +1388,20 @@ mod tests {
     fn test_clone_functionality() {
         let config = create_test_config();
         let cloned_config = config.clone();
-        
+
         assert_eq!(config.url, cloned_config.url);
-        assert_eq!(config.get_auth_token_for_test(), cloned_config.get_auth_token_for_test());
-        assert_eq!(config.embedded_replica_path, cloned_config.embedded_replica_path);
-        assert_eq!(config.sync_interval_seconds, cloned_config.sync_interval_seconds);
+        assert_eq!(
+            config.get_auth_token_for_test(),
+            cloned_config.get_auth_token_for_test()
+        );
+        assert_eq!(
+            config.embedded_replica_path,
+            cloned_config.embedded_replica_path
+        );
+        assert_eq!(
+            config.sync_interval_seconds,
+            cloned_config.sync_interval_seconds
+        );
     }
 
     // Note: Integration tests that require actual Turso connections are in separate test files

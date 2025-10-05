@@ -4,14 +4,14 @@
 //! by a single thread, eliminating lock contention while allowing unlimited
 //! concurrent reads through the r2d2 connection pool.
 
-use actix::{prelude::*, Actor, Context, Handler, Addr};
+use crate::{actor_messages::CommitMessage, commit_monitor::CommitMonitor};
+use actix::{prelude::*, Actor, Addr, Context, Handler};
 use atomic_lib::{
     commit::{Commit, CommitOpts, CommitResponse},
     errors::AtomicResult,
     Resource, Storelike,
 };
 use tokio::sync::oneshot;
-use crate::{actor_messages::CommitMessage, commit_monitor::CommitMonitor};
 
 /// Message to add a resource to the database
 #[derive(Message)]
@@ -50,7 +50,7 @@ pub struct UpdateResourceMessage {
 }
 
 /// Single-threaded database writer actor
-/// 
+///
 /// This actor processes all write operations sequentially, ensuring no lock
 /// contention while maintaining ACID properties. All reads continue to use
 /// the r2d2 pool for maximum concurrency.
@@ -138,7 +138,7 @@ impl Handler<ApplyCommitMessage> for DbWriter {
                     commit_response: commit_response.clone(),
                 };
                 self.commit_monitor.do_send(commit_message);
-                
+
                 if let Err(_) = msg.respond_to.send(result) {
                     tracing::warn!("Failed to send ApplyCommit response - receiver dropped");
                 }
@@ -164,9 +164,9 @@ impl Handler<UpdateResourceMessage> for DbWriter {
         // Update is equivalent to add with overwrite=true
         let result = self.db.add_resource_opts(
             &msg.resource,
-            true,   // check_required_props
-            true,   // update_index
-            true,   // overwrite_existing
+            true, // check_required_props
+            true, // update_index
+            true, // overwrite_existing
         );
 
         if let Err(_) = msg.respond_to.send(result) {

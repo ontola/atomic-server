@@ -127,9 +127,27 @@ test.describe('File Picker', () => {
 
         await dialog.getByPlaceholder(SEARCH_BAR_PLACEHOLDER).fill('.md');
 
-        await expect(
-          dialog.getByText('Contents of test file 1'),
-        ).not.toBeVisible();
+        // Wait for search to process and update results
+        await page.waitForTimeout(500);
+        await page.waitForLoadState('networkidle', { timeout: 5000 });
+        
+        // Retry logic for search filtering
+        let filteredCorrectly = false;
+        for (let i = 0; i < 5; i++) {
+          try {
+            await expect(
+              dialog.getByText('Contents of test file 1'),
+            ).not.toBeVisible({ timeout: 1000 });
+            filteredCorrectly = true;
+            break;
+          } catch {
+            await page.waitForTimeout(200);
+          }
+        }
+        
+        if (!filteredCorrectly) {
+          throw new Error('Search filtering not working correctly');
+        }
 
         await dialog.getByRole('button', { name: 'testFile2.md' }).click();
 

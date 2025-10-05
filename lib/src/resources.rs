@@ -605,10 +605,7 @@ impl Resource {
         Ok(format!("[{}]", str))
     }
 
-    pub fn vec_to_json_ld(
-        resources: &[Resource],
-        store: &impl Storelike,
-    ) -> AtomicResult<String> {
+    pub fn vec_to_json_ld(resources: &[Resource], store: &impl Storelike) -> AtomicResult<String> {
         let str = resources
             .iter()
             .map(|r| r.to_json_ld(store))
@@ -638,10 +635,7 @@ impl Resource {
     }
 
     #[cfg(feature = "rdf")]
-    pub fn vec_to_turtle(
-        resources: &[Resource],
-        store: &impl Storelike,
-    ) -> AtomicResult<String> {
+    pub fn vec_to_turtle(resources: &[Resource], store: &impl Storelike) -> AtomicResult<String> {
         let atoms = Self::vec_to_atoms(resources);
         crate::serialize::atoms_to_turtle(atoms, store)
     }
@@ -655,10 +649,7 @@ impl Resource {
     }
 
     #[cfg(not(feature = "rdf"))]
-    pub fn vec_to_turtle(
-        _resources: &[Resource],
-        _store: &impl Storelike,
-    ) -> AtomicResult<String> {
+    pub fn vec_to_turtle(_resources: &[Resource], _store: &impl Storelike) -> AtomicResult<String> {
         Err(
             "RDF serialization is not enabled. Enable the 'rdf' feature flag to use Turtle format."
                 .into(),

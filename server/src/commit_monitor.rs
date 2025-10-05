@@ -151,10 +151,10 @@ impl CommitMonitor {
     /// for other maintenance tasks like rebuilding FST indices
     fn update_expensive(&mut self) -> AtomicServerResult<()> {
         tracing::debug!("Update expensive (SQLite maintenance)");
-        
+
         // SQLite doesn't need explicit commits like Tantivy did
         // We could add FST index rebuilding or other maintenance tasks here if needed
-        
+
         self.last_search_commit = chrono::Local::now();
         self.run_expensive_next_tick = false;
         Ok(())
@@ -180,7 +180,10 @@ impl Handler<CommitMessage> for CommitMonitor {
 }
 
 /// Spawns a commit monitor actor
-pub fn create_commit_monitor(store: atomic_lib::Db, search_state: SearchState) -> Addr<CommitMonitor> {
+pub fn create_commit_monitor(
+    store: atomic_lib::Db,
+    search_state: SearchState,
+) -> Addr<CommitMonitor> {
     tracing::info!("spawning commit monitor");
     crate::commit_monitor::CommitMonitor::create(|_ctx: &mut Context<CommitMonitor>| {
         CommitMonitor {

@@ -151,7 +151,6 @@ impl From<std::io::Error> for AtomicServerError {
     }
 }
 
-
 impl From<actix_web::Error> for AtomicServerError {
     fn from(error: actix_web::Error) -> Self {
         AtomicServerError {

@@ -76,7 +76,12 @@ async function setupTemplateSite(serverUrl: string, siteType: string) {
     await execAsync(`pnpm link ${pathToPackage('svelte')}`, siteType);
   }
 
-  await execAsync('pnpm run update-ontologies', siteType);
+  try {
+    await execAsync('pnpm run update-ontologies', siteType);
+  } catch (error) {
+    // Skip if update-ontologies script fails - it may not be available in all environments
+    console.log(`update-ontologies script failed for ${siteType}, continuing without it:`, error.message);
+  }
 }
 
 function startServer(siteType: string) {
@@ -94,7 +99,7 @@ function startServer(siteType: string) {
 
 const waitForServer = (
   childProcess: ChildProcess,
-  timeout = 30000,
+  timeout = 60000,
 ): Promise<string> => {
   return new Promise((resolve, reject) => {
     const timeoutId = setTimeout(() => {

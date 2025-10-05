@@ -16,7 +16,7 @@ test.describe('Ontology', async () => {
     test.slow();
 
     const pickOption = async (query: Locator, keyboardSteps?: number) => {
-      await page.waitForTimeout(100);
+      await page.waitForTimeout(300);
 
       // Sometimes when the page moves after the dropdown opens, part of the dropdown falls outside the viewport.
       // In this case we have to use the keyboard because scrolling doesn't seem to work.

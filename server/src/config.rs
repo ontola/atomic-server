@@ -303,16 +303,26 @@ pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
     // Build Turso configuration if enabled
     #[cfg(feature = "turso")]
     let turso_config = if opts.turso_enable {
-        let url = opts.turso_url.clone()
+        let url = opts
+            .turso_url
+            .clone()
             .ok_or("ATOMIC_TURSO_URL is required when Turso is enabled")?;
-        let auth_token = opts.turso_auth_token.clone()
+        let auth_token = opts
+            .turso_auth_token
+            .clone()
             .ok_or("ATOMIC_TURSO_AUTH_TOKEN is required when Turso is enabled")?;
-        
+
         Some(atomic_lib::TursoConfig::new(
             url,
             auth_token,
-            opts.turso_replica_path.clone()
-                .or_else(|| Some(store_path.join("turso_replica.db").to_string_lossy().to_string())),
+            opts.turso_replica_path.clone().or_else(|| {
+                Some(
+                    store_path
+                        .join("turso_replica.db")
+                        .to_string_lossy()
+                        .to_string(),
+                )
+            }),
             Some(opts.turso_sync_interval),
         ))
     } else {

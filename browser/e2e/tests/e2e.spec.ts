@@ -162,10 +162,14 @@ test.describe('data-browser', async () => {
   }) => {
     // Remove public read rights for Drive
     await signIn(page);
-    
+
     const { driveURL, driveTitle } = await newDrive(page);
+    await page.waitForLoadState('networkidle', { timeout: 10000 });
     await currentDriveTitle(page).click();
     await contextMenuClick('share', page);
+    // Wait for Share UI to render instead of fixed timeout
+    await expect(page.getByText('Permissions set here:')).toBeVisible();
+    await expect(publicReadRightLocator(page)).toBeVisible();
     expect(publicReadRightLocator(page)).not.toBeChecked();
 
     // Initialize unauthorized page for reader
@@ -181,15 +185,18 @@ test.describe('data-browser', async () => {
     await page.click('button:has-text("Create Invite")');
     context.grantPermissions(['clipboard-read', 'clipboard-write']);
     await page.click('button:has-text("Create")');
-    await expect(page.locator('text=Invite created and copied ')).toBeVisible();
+    // Wait for invite creation UI signal instead of fixed timeout
+    await expect(page.locator('text=Invite created and copied')).toBeVisible();
+    await expect(page.locator('[data-code-content]')).toHaveAttribute(
+      'data-code-content',
+      /https?:\/\//,
+    );
     const inviteUrl = await page.evaluate(() =>
       document
         ?.querySelector('[data-code-content]')
         ?.getAttribute('data-code-content'),
     );
     expect(inviteUrl).not.toBeFalsy();
-
-    await page.waitForTimeout(200);
 
     // Open invite
     const page3 = await openNewSubjectWindow(browser, inviteUrl as string);
@@ -214,16 +221,38 @@ test.describe('data-browser', async () => {
     ).toBeVisible();
     const teststring = `My test: ${timestamp()}`;
     await inputLocator(page).fill(teststring);
+
+    // Wait for WebSocket connection to be established
+    await page.waitForTimeout(500);
+
     await page.keyboard.press('Enter');
+
+    // Wait for commit to complete
+    await waitForCommit(page, undefined, 10000);
     const chatRoomUrl = (await getCurrentSubject(page)) as string;
     await expect(
       inputLocator(page),
       'Text input not cleared on enter',
     ).toHaveText('');
-    await expect(
-      page.locator(`text=${teststring}`),
-      'Chat message not appearing directly after sending',
-    ).toBeVisible();
+
+    // Wait for WebSocket message propagation with retry logic
+    let messageVisible = false;
+
+    for (let i = 0; i < 15; i++) {
+      try {
+        await expect(page.locator(`text=${teststring}`)).toBeVisible({
+          timeout: 1000,
+        });
+        messageVisible = true;
+        break;
+      } catch {
+        await page.waitForTimeout(300);
+      }
+    }
+
+    if (!messageVisible) {
+      throw new Error('Chat message not appearing after sending');
+    }
 
     const page2 = await openNewSubjectWindow(browser, chatRoomUrl);
     // Second user
@@ -491,6 +520,8 @@ test.describe('data-browser', async () => {
     await page.getByLabel('Shortname').fill('test-shortname');
     await page.getByLabel('Description').fill('test-description');
     await page.getByRole('button', { name: 'Save' }).click();
+    await waitForCommit(page);
+    await page.waitForLoadState('networkidle', { timeout: 10000 });
     await contextMenuClick('edit', page);
 
     await page

@@ -1,11 +1,11 @@
 //! Security tests for TursoStore
-//! 
+//!
 //! This module contains comprehensive security tests to validate that the TursoStore
 //! implementation is resilient against various attack vectors and follows security best practices.
 
 #[cfg(all(test, feature = "turso"))]
 mod security_tests {
-    use super::super::turso::{TursoConfig, security::SecurityValidator};
+    use super::super::turso::{security::SecurityValidator, TursoConfig};
 
     /// Test SQL injection prevention in subject validation
     #[test]
@@ -23,12 +23,22 @@ mod security_tests {
 
         for subject in malicious_subjects {
             let result = SecurityValidator::validate_subject(subject);
-            assert!(result.is_err(), "Should reject malicious subject: {}", subject);
-            
+            assert!(
+                result.is_err(),
+                "Should reject malicious subject: {}",
+                subject
+            );
+
             // Verify error message doesn't expose the malicious input
             let error_msg = result.err().unwrap().to_string();
-            assert!(error_msg.contains("Subject must be a valid HTTP(S) URL"), "Error message should be about URL format");
-            assert!(!error_msg.contains(subject), "Error message should not expose malicious input");
+            assert!(
+                error_msg.contains("Subject must be a valid HTTP(S) URL"),
+                "Error message should be about URL format"
+            );
+            assert!(
+                !error_msg.contains(subject),
+                "Error message should not expose malicious input"
+            );
         }
     }
 
@@ -44,12 +54,16 @@ mod security_tests {
 
         for property in malicious_properties {
             let result = SecurityValidator::validate_property_name(property);
-            assert!(result.is_err(), "Should reject malicious property: {}", property);
+            assert!(
+                result.is_err(),
+                "Should reject malicious property: {}",
+                property
+            );
         }
     }
 
     /// Test SQL injection prevention in server URL validation
-    #[test] 
+    #[test]
     fn test_sql_injection_prevention_server_url() {
         let malicious_urls = vec![
             "https://example.com'; DROP TABLE atoms; --",
@@ -104,19 +118,27 @@ mod security_tests {
 
         for column in malicious_columns {
             let result = SecurityValidator::validate_sort_column(column);
-            assert!(result.is_err(), "Should reject malicious sort column: {}", column);
+            assert!(
+                result.is_err(),
+                "Should reject malicious sort column: {}",
+                column
+            );
         }
 
         // Test valid sort columns (only specific properties are allowed)
         let valid_columns = vec![
             "https://atomicdata.dev/properties/created-at",
-            "https://atomicdata.dev/properties/updated-at", 
+            "https://atomicdata.dev/properties/updated-at",
             "https://atomicdata.dev/properties/shortname",
             "https://atomicdata.dev/properties/description",
         ];
         for column in valid_columns {
             let result = SecurityValidator::validate_sort_column(column);
-            assert!(result.is_ok(), "Should accept valid sort column: {}", column);
+            assert!(
+                result.is_ok(),
+                "Should accept valid sort column: {}",
+                column
+            );
         }
     }
 
@@ -133,8 +155,14 @@ mod security_tests {
 
         // Test that credentials are not exposed in debug output
         let debug_output = format!("{:?}", config);
-        assert!(!debug_output.contains(sensitive_token), "Debug output should not contain raw token");
-        assert!(debug_output.contains("[REDACTED]"), "Debug output should show [REDACTED]");
+        assert!(
+            !debug_output.contains(sensitive_token),
+            "Debug output should not contain raw token"
+        );
+        assert!(
+            debug_output.contains("[REDACTED]"),
+            "Debug output should show [REDACTED]"
+        );
 
         // Test that credentials are accessible when needed
         assert_eq!(config.get_auth_token_for_test(), sensitive_token);
@@ -144,7 +172,7 @@ mod security_tests {
     #[test]
     fn test_credential_zeroization() {
         let original_token = "secret-token-to-be-zeroized".to_string();
-        
+
         // Create and drop config to trigger zeroization
         {
             let config = TursoConfig::new(
@@ -153,11 +181,11 @@ mod security_tests {
                 None,
                 None,
             );
-            
+
             // Verify token is accessible while config exists
             assert_eq!(config.get_auth_token_for_test(), original_token);
         } // Config is dropped here, triggering zeroization
-        
+
         // Note: We can't directly test that memory is zeroed since that would require
         // accessing deallocated memory, but the Zeroize trait ensures it happens
     }
@@ -167,23 +195,23 @@ mod security_tests {
     fn test_security_event_logging() {
         // This test verifies that security events can be logged without panicking
         // In production, these would be sent to a SIEM or monitoring system
-        
+
         SecurityValidator::log_security_event(
             "sql_injection_attempt",
             "Malicious subject rejected",
-            "high"
+            "high",
         );
 
         SecurityValidator::log_security_event(
-            "input_validation_failure", 
+            "input_validation_failure",
             "Invalid property name format",
-            "medium"
+            "medium",
         );
 
         SecurityValidator::log_security_event(
             "boundary_violation",
             "Input exceeds maximum length",
-            "low"
+            "low",
         );
     }
 
@@ -192,17 +220,17 @@ mod security_tests {
     fn test_error_handling_security() {
         // Test that error messages don't contain sensitive information
         let sensitive_subject = "https://admin.secret.com/passwords/'; DROP TABLE users; --";
-        
+
         let _result = SecurityValidator::validate_subject(sensitive_subject);
         // This will succeed since it's a valid HTTPS URL, so test with invalid URL format
-        
+
         let invalid_subject = "'; DROP TABLE users; --";
         let result = SecurityValidator::validate_subject(invalid_subject);
         assert!(result.is_err());
-        
+
         let error = result.err().unwrap();
         let error_msg = error.to_string();
-        
+
         // Error message should be generic and not expose the malicious input
         assert!(error_msg.contains("Subject must be a valid HTTP(S) URL"));
         assert!(!error_msg.contains("DROP TABLE"));
@@ -219,7 +247,7 @@ mod security_tests {
             Some("/tmp/very/deep/nested/path/to/replica.db".to_string()),
             Some(1), // Very fast sync
         );
-        
+
         assert!(!config.url.is_empty());
         assert!(!config.get_auth_token_for_test().is_empty());
         assert!(config.embedded_replica_path.is_some());
@@ -256,13 +284,17 @@ mod security_tests {
         let malicious_properties = vec![
             "property\u{0000}; DROP TABLE atoms; --", // Null byte injection
             "property\x00'; DELETE FROM resources; --", // Null byte injection
-            "property%27%20OR%201%3D1%20--", // URL encoded SQL injection
+            "property%27%20OR%201%3D1%20--",          // URL encoded SQL injection
             "property\u{202E}'; DROP TABLE atoms; --", // Right-to-left override
         ];
 
         for property in malicious_properties {
             let result = SecurityValidator::validate_property_name(property);
-            assert!(result.is_err(), "Should reject malicious property with encoding: {:?}", property);
+            assert!(
+                result.is_err(),
+                "Should reject malicious property with encoding: {:?}",
+                property
+            );
         }
     }
 
@@ -272,17 +304,21 @@ mod security_tests {
         // Test that validation functions consistently handle similar inputs
         let test_inputs = vec![
             "https://example.com/resource/1",
-            "https://example.com/resource/2", 
+            "https://example.com/resource/2",
             "https://example.com/resource/3",
         ];
 
         for input in test_inputs {
             let subject_result = SecurityValidator::validate_subject(input);
             let url_result = SecurityValidator::validate_server_url(input);
-            
+
             // Both should either succeed or fail consistently
-            assert_eq!(subject_result.is_ok(), url_result.is_ok(), 
-                      "Validation should be consistent for input: {}", input);
+            assert_eq!(
+                subject_result.is_ok(),
+                url_result.is_ok(),
+                "Validation should be consistent for input: {}",
+                input
+            );
         }
     }
 
@@ -293,16 +329,22 @@ mod security_tests {
 
         // Test that validation completes quickly even with complex inputs
         let start = Instant::now();
-        
+
         for i in 0..1000 {
             let subject = format!("https://example.com/resource/{}", i);
             let _ = SecurityValidator::validate_subject(&subject);
-            let _ = SecurityValidator::validate_property_name("https://atomicdata.dev/properties/description");
+            let _ = SecurityValidator::validate_property_name(
+                "https://atomicdata.dev/properties/description",
+            );
             let _ = SecurityValidator::validate_server_url(&subject);
         }
-        
+
         let duration = start.elapsed();
-        assert!(duration.as_millis() < 1000, "Validation should complete quickly (took {}ms)", duration.as_millis());
+        assert!(
+            duration.as_millis() < 1000,
+            "Validation should complete quickly (took {}ms)",
+            duration.as_millis()
+        );
     }
 
     /// Test regex patterns don't cause catastrophic backtracking
@@ -319,9 +361,13 @@ mod security_tests {
             let start = std::time::Instant::now();
             let _ = SecurityValidator::validate_subject(&input);
             let duration = start.elapsed();
-            
+
             // Should complete quickly even with pathological inputs
-            assert!(duration.as_millis() < 100, "Regex validation should not cause DoS (took {}ms)", duration.as_millis());
+            assert!(
+                duration.as_millis() < 100,
+                "Regex validation should not cause DoS (took {}ms)",
+                duration.as_millis()
+            );
         }
     }
 }
@@ -336,7 +382,7 @@ mod integration_security_tests {
     fn test_config_no_data_leakage() {
         let temp_dir = TempDir::new().unwrap();
         let replica_path = temp_dir.path().join("security_test.db");
-        
+
         let sensitive_token = "ultra-secret-production-token-do-not-leak";
         let config = TursoConfig::new(
             "libsql://production.turso.io".to_string(),
@@ -348,7 +394,7 @@ mod integration_security_tests {
         // Test serialization doesn't leak credentials (if implemented)
         let debug_str = format!("{:?}", config);
         assert!(!debug_str.contains(sensitive_token));
-        
+
         // Test cloning preserves security
         let cloned_config = config.clone();
         let cloned_debug = format!("{:?}", cloned_config);
@@ -361,21 +407,16 @@ mod integration_security_tests {
     fn test_env_var_security() {
         // Test that we don't accidentally log or expose environment variables
         std::env::set_var("TEST_TURSO_TOKEN_SECURITY", "secret-env-token");
-        
+
         // Simulate reading from environment (as might happen in real usage)
         let token = std::env::var("TEST_TURSO_TOKEN_SECURITY").unwrap_or_default();
-        let config = TursoConfig::new(
-            "libsql://test.turso.io".to_string(),
-            token,
-            None,
-            None,
-        );
-        
+        let config = TursoConfig::new("libsql://test.turso.io".to_string(), token, None, None);
+
         // Ensure the environment token is not exposed in debug output
         let debug_output = format!("{:?}", config);
         assert!(!debug_output.contains("secret-env-token"));
         assert!(debug_output.contains("[REDACTED]"));
-        
+
         // Clean up
         std::env::remove_var("TEST_TURSO_TOKEN_SECURITY");
     }

@@ -596,10 +596,10 @@ mod turso_integration {
     fn test_store_wrapper_with_turso() {
         // Test that we can create a StoreWrapper::Turso variant
         // This tests the enum structure without requiring actual Turso connection
-        
+
         let temp_dir = TempDir::new().unwrap();
         let replica_path = temp_dir.path().join("wrapper_test.db");
-        
+
         let config = TursoConfig::new(
             "libsql://test-wrapper.turso.io".to_string(),
             "test-wrapper-token".to_string(),
@@ -611,7 +611,7 @@ mod turso_integration {
         assert!(!config.url.is_empty());
         assert!(!config.get_auth_token_for_test().is_empty());
         assert!(config.embedded_replica_path.is_some());
-        
+
         // Note: Actual TursoStore creation would be tested with real credentials
         // For now, verify the configuration can be created properly
     }
@@ -621,7 +621,7 @@ mod turso_integration {
     async fn test_turso_store_storelike_compatibility() {
         // This test would verify that TursoStore implements all Storelike methods
         // and can be used as a drop-in replacement for Db
-        
+
         // With real credentials:
         // let config = TursoConfig {
         //     url: std::env::var("TEST_TURSO_URL").unwrap(),
@@ -629,13 +629,13 @@ mod turso_integration {
         //     embedded_replica_path: Some("./test_compatibility.db".to_string()),
         //     sync_interval_seconds: Some(10),
         // };
-        // 
+        //
         // let turso_store = TursoStore::new_embedded_replica(config).await.unwrap();
-        // 
+        //
         // // Test basic operations that regular Db supports
         // let resource = Resource::new("https://example.com/turso-test".to_string());
         // turso_store.add_resource(&resource).unwrap();
-        // 
+        //
         // let retrieved = turso_store.get_resource("https://example.com/turso-test").unwrap();
         // assert_eq!(retrieved.get_subject(), "https://example.com/turso-test");
 
@@ -643,8 +643,10 @@ mod turso_integration {
         let regular_store = Db::init_temp("turso_compatibility").unwrap();
         let resource = Resource::new("https://example.com/test".to_string());
         regular_store.add_resource(&resource).unwrap();
-        
-        let retrieved = regular_store.get_resource("https://example.com/test").unwrap();
+
+        let retrieved = regular_store
+            .get_resource("https://example.com/test")
+            .unwrap();
         assert_eq!(retrieved.get_subject(), "https://example.com/test");
     }
 
@@ -667,10 +669,10 @@ mod turso_integration {
 
         // Test with regular store
         let regular_store = Db::init_temp("query_compatibility").unwrap();
-        
+
         // This should work without errors (even if no results)
         let _result = regular_store.query(&query);
-        
+
         // The same query structure should work with TursoStore
         // (tested with real credentials in ignore tests)
         assert!(query.property.is_some());
@@ -681,23 +683,23 @@ mod turso_integration {
     #[ignore = "Requires actual Turso database for real sync testing"]
     async fn test_turso_sync_operations() {
         // This would test the sync functionality unique to TursoStore
-        // 
+        //
         // let config = TursoConfig {
         //     url: std::env::var("TEST_TURSO_URL").unwrap(),
         //     auth_token: std::env::var("TEST_TURSO_TOKEN").unwrap(),
         //     embedded_replica_path: Some("./test_sync.db".to_string()),
         //     sync_interval_seconds: Some(5),
         // };
-        // 
+        //
         // let store = TursoStore::new_embedded_replica(config).await.unwrap();
-        // 
+        //
         // // Add some data
         // let resource = Resource::new("https://example.com/sync-test".to_string());
         // store.add_resource(&resource).unwrap();
-        // 
+        //
         // // Force sync
         // store.sync().await.unwrap();
-        // 
+        //
         // // Verify data persisted after sync
         // let retrieved = store.get_resource("https://example.com/sync-test").unwrap();
         // assert_eq!(retrieved.get_subject(), "https://example.com/sync-test");
@@ -709,7 +711,7 @@ mod turso_integration {
             Some("./sync_test.db".to_string()),
             Some(5),
         );
-        
+
         assert_eq!(config.sync_interval_seconds, Some(5));
         assert!(config.embedded_replica_path.is_some());
     }
@@ -718,33 +720,35 @@ mod turso_integration {
     fn test_turso_vs_db_feature_parity() {
         // Test that TursoStore supports the same operations as Db
         // This is a documentation test showing what should be equivalent
-        
+
         let regular_store = Db::init_temp("feature_parity").unwrap();
-        
+
         // These operations should work the same on TursoStore:
         // 1. add_resource / add_resource_opts
-        // 2. get_resource  
+        // 2. get_resource
         // 3. remove_resource
         // 4. all_resources
         // 5. query
         // 6. set_server_url / get_server_url
         // 7. set_default_agent / get_default_agent
-        
+
         // Test with regular store to document expected behavior
         let mut resource = Resource::new("https://example.com/parity-test".to_string());
         resource.set_unsafe(
             urls::DESCRIPTION.to_string(),
             Value::new("Parity test resource", &crate::datatype::DataType::String).unwrap(),
         );
-        
+
         regular_store.add_resource(&resource).unwrap();
-        let retrieved = regular_store.get_resource("https://example.com/parity-test").unwrap();
+        let retrieved = regular_store
+            .get_resource("https://example.com/parity-test")
+            .unwrap();
         assert_eq!(retrieved.get_subject(), "https://example.com/parity-test");
-        
+
         // Count resources
         let count = regular_store.all_resources(false).count();
         assert!(count > 0);
-        
+
         // Test query
         let query = Query {
             property: Some(urls::DESCRIPTION.into()),
@@ -759,9 +763,9 @@ mod turso_integration {
             include_nested: false,
             for_agent: ForAgent::Public,
         };
-        
+
         let _result = regular_store.query(&query).unwrap();
-        
+
         // All of these operations should work identically with TursoStore
         // when using real credentials
     }
@@ -769,17 +773,17 @@ mod turso_integration {
     #[test]
     fn test_error_handling_consistency() {
         // Test that TursoStore error handling is consistent with Db
-        
+
         let regular_store = Db::init_temp("error_consistency").unwrap();
-        
+
         // Test getting non-existent resource
         let result = regular_store.get_resource("https://example.com/does-not-exist");
         assert!(result.is_err());
-        
-        // Test removing non-existent resource  
+
+        // Test removing non-existent resource
         let result = regular_store.remove_resource("https://example.com/does-not-exist");
         assert!(result.is_err());
-        
+
         // TursoStore should handle these errors the same way
         // (verified in integration tests with real connections)
     }

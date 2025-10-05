@@ -6,9 +6,9 @@ use crate::storelike::QueryResult;
 use crate::Value;
 use crate::{atoms::Atom, storelike::Storelike};
 use crate::{errors::AtomicResult, Resource};
-use std::{collections::HashMap, sync::Arc};
-use parking_lot::Mutex;
 use dashmap::DashMap;
+use parking_lot::Mutex;
+use std::{collections::HashMap, sync::Arc};
 
 /// The in-memory store of data, containing the Resources, Properties and Classes
 /// It uses the `default_agent` as the default client.
@@ -156,13 +156,18 @@ impl Storelike for Store {
         }
         let _ = update_index;
         // This store has no index, so we don't need to update it.
-        self.hashmap.insert(resource.get_subject().into(), resource.clone());
+        self.hashmap
+            .insert(resource.get_subject().into(), resource.clone());
         Ok(())
     }
 
     // TODO: Fix this for local stores, include external does not make sense here
     fn all_resources(&self, _include_external: bool) -> Box<dyn Iterator<Item = Resource>> {
-        let resources: Vec<Resource> = self.hashmap.iter().map(|entry| entry.value().clone()).collect();
+        let resources: Vec<Resource> = self
+            .hashmap
+            .iter()
+            .map(|entry| entry.value().clone())
+            .collect();
         Box::new(resources.into_iter())
     }
 
@@ -205,12 +210,10 @@ impl Storelike for Store {
         for child in resource.get_children(self)? {
             self.remove_resource(child.get_subject())?;
         }
-        self.hashmap
-            .remove(subject)
-            .ok_or(format!(
-                "Resource {} could not be deleted, because it is not found",
-                subject
-            ))?;
+        self.hashmap.remove(subject).ok_or(format!(
+            "Resource {} could not be deleted, because it is not found",
+            subject
+        ))?;
         Ok(())
     }
 

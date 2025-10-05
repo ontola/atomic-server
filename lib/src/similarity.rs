@@ -82,19 +82,23 @@ pub fn calculate_similarity(s1: &str, s2: &str, algorithm: SimilarityAlgorithm) 
 
 /// Enhanced similarity scoring that checks both full terms and individual words
 /// This is based on Terraphim's approach for better fuzzy matching
-pub fn calculate_enhanced_similarity(query: &str, target: &str, algorithm: SimilarityAlgorithm) -> f64 {
+pub fn calculate_enhanced_similarity(
+    query: &str,
+    target: &str,
+    algorithm: SimilarityAlgorithm,
+) -> f64 {
     // First check full term similarity
     let full_score = calculate_similarity(query, target, algorithm);
-    
+
     // Also check word-by-word similarity for better results
     let query_words: Vec<&str> = query.split_whitespace().collect();
     let target_words: Vec<&str> = target.split_whitespace().collect();
-    
+
     // If no words, return full score
     if query_words.is_empty() || target_words.is_empty() {
         return full_score;
     }
-    
+
     // Calculate maximum word-to-word similarity
     let mut max_word_score: f64 = 0.0;
     for query_word in &query_words {
@@ -103,7 +107,7 @@ pub fn calculate_enhanced_similarity(query: &str, target: &str, algorithm: Simil
             max_word_score = max_word_score.max(word_score);
         }
     }
-    
+
     // Return the higher of full term or word similarity
     full_score.max(max_word_score)
 }
@@ -131,10 +135,17 @@ pub struct ScoredResult {
 }
 
 impl ScoredResult {
-    pub fn new(subject: String, original_score: f64, query: &str, title: &str, algorithm: SimilarityAlgorithm, is_fuzzy: bool) -> Self {
+    pub fn new(
+        subject: String,
+        original_score: f64,
+        query: &str,
+        title: &str,
+        algorithm: SimilarityAlgorithm,
+        is_fuzzy: bool,
+    ) -> Self {
         let similarity_score = calculate_enhanced_similarity(query, title, algorithm);
         let combined_score = combine_scores(original_score, similarity_score, is_fuzzy);
-        
+
         Self {
             subject,
             original_score,
@@ -150,8 +161,11 @@ impl ScoredResult {
 pub fn sort_results_by_score(results: &mut [ScoredResult]) {
     results.sort_by(|a, b| {
         // First sort by combined score (descending)
-        let score_cmp = b.combined_score.partial_cmp(&a.combined_score).unwrap_or(std::cmp::Ordering::Equal);
-        
+        let score_cmp = b
+            .combined_score
+            .partial_cmp(&a.combined_score)
+            .unwrap_or(std::cmp::Ordering::Equal);
+
         if score_cmp == std::cmp::Ordering::Equal {
             // Then by subject length (ascending - shorter terms first)
             a.subject.len().cmp(&b.subject.len())
@@ -169,7 +183,7 @@ mod tests {
     fn test_jaro_winkler_similarity() {
         let score = calculate_similarity("atomic", "atomic", SimilarityAlgorithm::JaroWinkler);
         assert_eq!(score, 1.0);
-        
+
         let score = calculate_similarity("atomic", "atom", SimilarityAlgorithm::JaroWinkler);
         assert!(score > 0.8); // Should be high similarity
     }
@@ -177,7 +191,11 @@ mod tests {
     #[test]
     fn test_enhanced_similarity() {
         // Test word-splitting advantage
-        let score = calculate_enhanced_similarity("data model", "atomic data models", SimilarityAlgorithm::JaroWinkler);
+        let score = calculate_enhanced_similarity(
+            "data model",
+            "atomic data models",
+            SimilarityAlgorithm::JaroWinkler,
+        );
         assert!(score > 0.5); // Should find word matches
     }
 
@@ -185,7 +203,7 @@ mod tests {
     fn test_score_combination() {
         let fuzzy_score = combine_scores(1.0, 0.9, true);
         let exact_score = combine_scores(1.0, 0.9, false);
-        
+
         assert!(exact_score > fuzzy_score); // Exact should score higher
     }
 
@@ -197,9 +215,9 @@ mod tests {
             "atomic",
             "atomic data",
             SimilarityAlgorithm::JaroWinkler,
-            false
+            false,
         );
-        
+
         assert!(result.combined_score >= result.original_score);
     }
 }
