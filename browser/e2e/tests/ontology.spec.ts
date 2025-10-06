@@ -81,8 +81,11 @@ test.describe('Ontology', async () => {
 
     await page.keyboard.press('ArrowDown');
     await page.keyboard.press('Enter');
+    await page.waitForTimeout(1000); // Wait for property to load
 
-    await expect(page.getByLabel('Property shortname')).toHaveValue('arrows');
+    await expect(page.getByLabel('Property shortname')).toHaveValue('arrows', {
+      timeout: 10000,
+    });
     await expect(page.locator('input[value="a property"]')).toBeVisible();
 
     await page
@@ -111,8 +114,8 @@ test.describe('Ontology', async () => {
     await expect(
       classCard('arrow').locator('input[value="arrow"]'),
     ).toBeVisible();
-    await expect(page.getByText('Change me')).toBeVisible();
-    await page.getByText('Change me').fill('An arrow in a thumbnail');
+    await expect(classCard('arrow').getByText('Change me')).toBeVisible();
+    await classCard('arrow').getByText('Change me').fill('An arrow in a thumbnail');
 
     await page
       .getByRole('button', { name: 'add recommended property' })

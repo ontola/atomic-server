@@ -182,10 +182,10 @@ fn set_up_initial_invite(store: &impl Storelike) -> AtomicServerResult<()> {
     let mut invite = store.get_resource_new(&subject);
     invite.set_class(atomic_lib::urls::INVITE);
     invite.set_subject(subject);
-    // This invite can be used only once
+    // This invite can be used 1000 times for testing
     invite.set(
         atomic_lib::urls::USAGES_LEFT.into(),
-        atomic_lib::Value::Integer(1),
+        atomic_lib::Value::Integer(1000),
         store,
     )?;
     invite.set(

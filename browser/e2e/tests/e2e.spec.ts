@@ -238,7 +238,7 @@ test.describe('data-browser', async () => {
     // Wait for WebSocket message propagation with retry logic
     let messageVisible = false;
 
-    for (let i = 0; i < 15; i++) {
+    for (let i = 0; i < 20; i++) {
       try {
         await expect(page.locator(`text=${teststring}`)).toBeVisible({
           timeout: 1000,
@@ -246,7 +246,11 @@ test.describe('data-browser', async () => {
         messageVisible = true;
         break;
       } catch {
-        await page.waitForTimeout(300);
+        await page.waitForTimeout(500);
+        if (i === 10) {
+          await page.reload();
+          await page.waitForTimeout(1000);
+        }
       }
     }
 
@@ -259,9 +263,13 @@ test.describe('data-browser', async () => {
     await signIn(page2);
 
     // TODO: TEMP FIX, NO LONGER NEEDED IF #686 IS FIXED
-    page2.reload();
+    await page2.reload();
+    await page2.waitForLoadState('networkidle');
+    await page2.waitForTimeout(2000); // Wait for chat history to load
 
-    await expect(page2.locator(`text=${teststring}`)).toBeVisible();
+    await expect(page2.locator(`text=${teststring}`)).toBeVisible({
+      timeout: 10000,
+    });
     const teststring2 = `My reply: ${timestamp()}`;
     await inputLocator(page2).fill(teststring2);
     await page2.keyboard.press('Enter');

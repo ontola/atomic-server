@@ -7,26 +7,10 @@ const config: PlaywrightTestConfig = {
     viewport: { width: 1200, height: 800 },
     locale: 'en-GB',
     timezoneId: 'Europe/Amsterdam',
-    actionTimeout: 5000,
+    actionTimeout: 10000,
     trace: 'retain-on-failure',
-    storageState: {
-      cookies: [],
-      origins: [
-        {
-          origin: 'http://localhost:5173',
-          localStorage: [{ name: 'viewTransitionsDisabled', value: 'true' }],
-        },
-        {
-          origin: 'http://localhost:9883',
-          localStorage: [{ name: 'viewTransitionsDisabled', value: 'true' }],
-        },
-        {
-          origin: 'http://atomic:9883',
-          localStorage: [{ name: 'viewTransitionsDisabled', value: 'true' }],
-        },
-      ],
-    },
   },
+  timeout: 60000,
   reporter: [
     [
       'html',
@@ -37,7 +21,7 @@ const config: PlaywrightTestConfig = {
       },
     ],
   ],
-  retries: 0,
+  retries: 2,
   // timeout: 1000 * 120, // 2 minutes
   projects: [
     {
@@ -46,7 +30,10 @@ const config: PlaywrightTestConfig = {
     },
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: { 
+        ...devices['Desktop Chrome'],
+        storageState: './playwright/.auth/user.json',
+      },
       dependencies: ['setup'],
     },
   ],

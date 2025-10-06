@@ -19,7 +19,7 @@ const ONTOLOGY_NAME = 'filepicker-test';
 
 const uploadFile = async (page: Page, fileName: string) => {
   await page.getByTestId(sideBarNewResourceTestId).click();
-  await expect(page).toHaveURL(`${FRONTEND_URL}/app/new`);
+  await expect(page).toHaveURL(/\/app\/new$/);
 
   const fileChooserPromise = page.waitForEvent('filechooser');
 

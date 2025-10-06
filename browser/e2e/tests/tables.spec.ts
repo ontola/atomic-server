@@ -182,8 +182,7 @@ test.describe('tables', async () => {
       page.getByRole('button', { name: selectColumnName }),
     ).toBeVisible();
 
-    await waitForCommit(page);
-    await page.waitForTimeout(500); // Increased buffer for database flush and index updates
+    await page.waitForTimeout(1000);
     await page.reload();
     
     // Wait for page to load before checking visibility

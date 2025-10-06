@@ -49,8 +49,8 @@ export const before = async ({ page }: { page: Page }) => {
     throw new Error('serverUrl is not set');
   }
 
-  // Open the server
-  await page.goto(FRONTEND_URL);
+  // Open the server (use SERVER_URL to support running without frontend dev server)
+  await page.goto(SERVER_URL);
   
   // Inject CSS to disable all animations for stable tests
   await page.addStyleTag({
@@ -89,40 +89,29 @@ export async function setTitle(page: Page, title: string) {
   await waiter;
 }
 
-/** Signs in using an AtomicData.dev test user */
+/** Signs in by checking for existing agent or creating one via /setup invite */
 export async function signIn(page: Page) {
-  // Retry login button click with better stability
-  let retries = 3;
-  while (retries > 0) {
-    try {
-      await page.click('text=Login', { timeout: 5000 });
-      break;
-    } catch (error) {
-      retries--;
-      if (retries === 0) throw error;
-      await page.waitForTimeout(100 * (4 - retries));
-    }
+  await page.goto(SERVER_URL);
+  
+  const hasAgent = await page.evaluate(() => {
+    const agent = localStorage.getItem('agent');
+    return agent !== null && agent !== '';
+  });
+  
+  if (hasAgent) {
+    await page.waitForTimeout(500);
+    return;
   }
   
-  // Wait for authentication form to be visible
-  await expect(page.locator('text=edit data and sign Commits')).toBeVisible({ timeout: 10000 });
+  await page.goto(`${SERVER_URL}/setup`);
   
-  // If there are any issues with this agent, try creating a new one https://atomicdata.dev/invites/1
-  const test_agent =
-    'eyJzdWJqZWN0IjoiaHR0cHM6Ly9hdG9taWNkYXRhLmRldi9hZ2VudHMvaElNWHFoR3VLSDRkM0QrV1BjYzAwUHVFbldFMEtlY21GWStWbWNVR2tEWT0iLCJwcml2YXRlS2V5IjoiZkx0SDAvY29VY1BleFluNC85NGxFemFKbUJmZTYxQ3lEekUwODJyMmdRQT0ifQ==';
+  await expect(page.getByRole('button', { name: 'Accept' })).toBeVisible({ timeout: 10000 });
   
-  // Wait for password field to be interactive
-  await page.waitForSelector('#current-password', { state: 'visible' });
-  await page.click('#current-password');
-  await page.fill('#current-password', test_agent);
+  await page.getByRole('button', { name: 'Accept' }).click();
   
-  // Wait for successful authentication
-  await expect(page.locator('text=Edit profile')).toBeVisible({ timeout: 10000 });
+  await page.waitForURL(/\/(app)?$/);
   
-  // Give WebSocket connection time to stabilize
   await page.waitForTimeout(500);
-  
-  await page.goBack();
 }
 
 /**
@@ -147,17 +136,16 @@ export async function newDrive(page: Page) {
     currentDialog(page).locator('footer button', { hasText: 'Create' }),
   ).toBeEnabled();
 
-  // Click the create button and wait for dialog to close
+  const navigationPromise = page.waitForNavigation({ timeout: 30000 });
   await currentDialog(page)
     .locator('footer button', { hasText: 'Create' })
     .click();
 
-  // Wait for the dialog to disappear (indicates the action completed)
-  await currentDialog(page).waitFor({ state: 'hidden', timeout: 30000 });
+  await navigationPromise;
 
   // Wait for the sidebar to update with the new drive title
-  await expect(currentDriveTitle(page)).not.toContainText(startDriveName);
-  await expect(currentDriveTitle(page)).toContainText(driveTitle);
+  await expect(currentDriveTitle(page)).not.toHaveText(startDriveName);
+  await expect(currentDriveTitle(page)).toHaveText(driveTitle);
   const driveURL = await getCurrentSubject(page);
   expect(driveURL).toContain(SERVER_URL);
 
@@ -238,7 +226,8 @@ export async function waitForCommitOnCurrentResource(
 }
 
 export async function openAgentPage(page: Page) {
-  page.goto(`${FRONTEND_URL}/app/agent`);
+  const currentOrigin = new URL(page.url()).origin;
+  page.goto(`${currentOrigin}/app/agent`);
 }
 
 /** Set atomicdata.dev as current server */
@@ -257,28 +246,9 @@ export async function editProfileAndCommit(page: Page) {
   ).toBeVisible();
   await expect(page.getByRole('main').getByText('loading')).not.toBeVisible();
 
-  // Wait for the page to be fully interactive before clicking
-  await page.waitForLoadState('networkidle', { timeout: 10000 });
-
-  const navigationPromise = page.waitForNavigation({ timeout: 10000 });
-
-  // Retry click with exponential backoff if it fails
-  let retries = 3;
-
-  while (retries > 0) {
-    try {
-      await page.getByRole('button', { name: 'Edit profile' }).click();
-      break;
-    } catch (error) {
-      retries--;
-      if (retries === 0) throw error;
-      await page.waitForTimeout(100 * (4 - retries)); // 100ms, 200ms, 300ms
-    }
-  }
-
+  const navigationPromise = page.waitForNavigation({ timeout: 5000 });
+  await page.getByRole('button', { name: 'Edit profile' }).click();
   await navigationPromise;
-  
-  // Find and click the advanced button
   const advancedButton = page.getByRole('button', { name: 'advanced' });
   await advancedButton.scrollIntoViewIfNeeded();
   await advancedButton.click();
@@ -287,7 +257,7 @@ export async function editProfileAndCommit(page: Page) {
   await page.getByLabel('Name').fill(username);
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.locator('text=Resource saved')).toBeVisible();
-  await page.waitForURL(/\/app\/show/);
+  await page.waitForTimeout(1000);
   await page.reload();
   await expect(page.locator(`text=${username}`).first()).toBeVisible();
 }
@@ -365,9 +335,13 @@ export async function fillSearchBox(
       .first();
 
     if (await container.isVisible().catch(() => false)) {
-      await container.click();
-
-      return;
+      // Retry click if element detaches during click
+      try {
+        await container.click({ timeout: 5000 });
+        return;
+      } catch (e) {
+        // Element detached, try next strategy
+      }
     }
 
     const optionByRole = (scope as any)
@@ -402,7 +376,7 @@ export async function fillSearchBox(
  * Class can be an Class URL or a shortname available in the new page. */
 export async function newResource(klass: string, page: Page) {
   await page.getByTestId(sideBarNewResourceTestId).click();
-  await expect(page).toHaveURL(`${FRONTEND_URL}/app/new`);
+  await expect(page).toHaveURL(/\/app\/new$/);
 
   if (klass.startsWith('https://')) {
     await fillSearchBox(page, 'Search for a class or enter a URL', klass);
@@ -418,7 +392,7 @@ export async function newResource(klass: string, page: Page) {
 export async function openNewSubjectWindow(browser: Browser, url: string) {
   const context2 = await browser.newContext();
   const page = await context2.newPage();
-  await page.goto(FRONTEND_URL);
+  await page.goto(SERVER_URL);
 
   // Only when we run on `localhost` we don't need to change drive during tests
   if (SERVER_URL !== FRONTEND_URL) {

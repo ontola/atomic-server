@@ -1418,7 +1418,9 @@ fn extract_terms(text: &str, terms: &mut std::collections::HashMap<String, u32>)
 /// Sanitize FTS5 query by escaping special characters
 #[cfg(feature = "db")]
 fn sanitize_fts5_query(query: &str) -> String {
-    // Escape FTS5 special characters: " \ [ ] { } ( ) * ^ - + |
+    // Escape FTS5 special characters: " \ [ ] { } ( ) * ^ - + | :
+    // The colon (:) is especially important as it's used for column specifiers in FTS5
+    // Without escaping, "https://example.com" would be interpreted as column "https"
     query
         .replace('\\', "\\\\")
         .replace('"', "\\\"")
@@ -1433,6 +1435,7 @@ fn sanitize_fts5_query(query: &str) -> String {
         .replace('-', "\\-")
         .replace('+', "\\+")
         .replace('|', "\\|")
+        .replace(':', "\\:")
 }
 
 /// Escape LIKE pattern characters
