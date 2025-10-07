@@ -49,6 +49,15 @@ export function EditableTitle({
   const canEdit = useCanWrite(resource);
 
   useEffect(() => {
+    // Two ways to learn this resource was just manually created:
+    //   1. The flag set synchronously by notifyResourceManuallyCreated, in
+    //      case the event already fired before this component subscribed
+    //      (the navigate-then-emit race).
+    //   2. The event itself, for the live case where creation happens while
+    //      this component is already mounted.
+    if (store.consumeRecentlyCreated(resource.subject)) {
+      setIsEditing(true);
+    }
     return store.on(StoreEvents.ResourceManuallyCreated, created => {
       if (created.subject === resource.subject) {
         setIsEditing(true);

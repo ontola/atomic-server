@@ -1,16 +1,14 @@
 //! WebSocket client for real-time communication with an Atomic Server.
 //!
-//! Supports the AtomicServer WebSocket protocol:
-//! - `AUTHENTICATE` / `AUTHENTICATED` — agent auth
-//! - `SUBSCRIBE` / `COMMIT` — resource change notifications
-//! - `LORO_SYNC_SUBSCRIBE` / `LORO_SYNC_UPDATE` — real-time Loro CRDT sync
-//! - `LORO_EPHEMERAL_UPDATE` — cursor/presence sync
-//! - `GET` / `RESOURCE` — fetch resources over WebSocket
+//! Hybrid v2 protocol: auth and resource UPDATEs are binary frames
+//! (`sync::protocol`); legacy collaboration and query messages are still
+//! text frames (`LORO_SYNC_*`, `LORO_EPHEMERAL_UPDATE`, `SUBSCRIBE_QUERY`,
+//! `QUERY_UPDATE`, `SYNC_VV` / `SYNC_DELTAS`).
 
 use crate::{
     agents::Agent,
-    commit::sign_message,
     errors::{AtomicError, AtomicResult},
+    sync::protocol,
 };
 use futures::{SinkExt, StreamExt};
 use tokio::sync::{broadcast, mpsc};
@@ -36,6 +34,21 @@ pub enum WsMessage {
     },
     /// Server confirmed authentication.
     Authenticated,
+    /// A `BLOB_RESPONSE` (0x35) frame: server returned the bytes for a
+    /// previously-requested BLAKE3 hash.
+    BlobResponse { hash: [u8; 32], bytes: Vec<u8> },
+    /// A binary v2 `UPDATE` (0x11) frame: a resource changed (subscription
+    /// push, or response to a `GET`). Carries the Loro bytes and, when the
+    /// server sets `HAS_COMMIT_ID`, the commit id that produced them.
+    Update {
+        subject: String,
+        loro_bytes: Vec<u8>,
+        commit_id: Option<String>,
+        is_snapshot: bool,
+        is_push: bool,
+    },
+    /// A binary v2 `DESTROY` (0x12) frame: a subscribed resource was deleted.
+    Destroy { subject: String },
     /// Server sent an error.
     Error(String),
 }
@@ -61,8 +74,8 @@ pub enum WsMessage {
 /// # }
 /// ```
 pub struct WsClient {
-    /// Send commands to the writer task
-    tx: mpsc::Sender<String>,
+    /// Send frames (text or binary) to the writer task
+    tx: mpsc::Sender<Message>,
     /// Broadcast channel for incoming messages
     broadcast_tx: broadcast::Sender<WsMessage>,
 }
@@ -76,25 +89,28 @@ impl WsClient {
             .map_err(|e| format!("WebSocket connection failed to {}: {}", url, e))?;
 
         let (mut write, mut read) = ws_stream.split();
-        let (tx, mut rx) = mpsc::channel::<String>(64);
+        let (tx, mut rx) = mpsc::channel::<Message>(64);
         let (broadcast_tx, _) = broadcast::channel::<WsMessage>(256);
         let broadcast_tx_clone = broadcast_tx.clone();
 
-        // Writer task: sends messages from the mpsc channel to the WebSocket
+        // Writer task: forwards frames verbatim to the WebSocket
         tokio::spawn(async move {
             while let Some(msg) = rx.recv().await {
-                if write.send(Message::Text(msg.into())).await.is_err() {
+                if write.send(msg).await.is_err() {
                     break;
                 }
             }
         });
 
-        // Reader task: receives messages from WebSocket, parses and broadcasts them
+        // Reader task: parses incoming frames into WsMessages
         tokio::spawn(async move {
             while let Some(Ok(msg)) = read.next().await {
-                if let Message::Text(text) = msg {
-                    let text = text.to_string();
-                    let parsed = parse_server_message(&text);
+                let parsed = match msg {
+                    Message::Text(text) => Some(parse_server_message(&text)),
+                    Message::Binary(bin) => parse_binary_message(&bin),
+                    _ => None,
+                };
+                if let Some(parsed) = parsed {
                     let _ = broadcast_tx_clone.send(parsed);
                 }
             }
@@ -110,28 +126,14 @@ impl WsClient {
     }
 
     /// Authenticate with the server using an Agent's credentials.
+    /// Sends a binary v2 AUTH (0x01) frame and waits for AUTH_OK (0x02).
     pub async fn authenticate(&self, agent: &Agent) -> AtomicResult<()> {
-        let timestamp = crate::utils::now();
-        let subject = &agent.subject.to_string();
-        let private_key = agent
-            .private_key
-            .as_ref()
-            .ok_or("Agent has no private key")?;
-        let message = format!("{} {}", subject, timestamp);
-        let signature = sign_message(&message, private_key, &agent.public_key)?;
-
-        let auth = serde_json::json!({
-            "https://atomicdata.dev/properties/auth/agent": subject,
-            "https://atomicdata.dev/properties/auth/requestedSubject": subject,
-            "https://atomicdata.dev/properties/auth/publicKey": agent.public_key,
-            "https://atomicdata.dev/properties/auth/timestamp": timestamp,
-            "https://atomicdata.dev/properties/auth/signature": signature,
-        });
+        let frame = protocol::encode_auth(agent, &agent.subject.to_string())?;
 
         // Subscribe BEFORE sending so we don't miss the response
         let mut rx = self.subscribe();
 
-        self.send_raw(&format!("AUTHENTICATE {}", auth)).await?;
+        self.send_binary(frame).await?;
         let timeout = tokio::time::timeout(std::time::Duration::from_secs(5), async {
             while let Ok(msg) = rx.recv().await {
                 match msg {
@@ -220,12 +222,48 @@ impl WsClient {
             .map_err(|_| AtomicError::from(format!("Timeout fetching resource {}", subject)))?
     }
 
-    /// Send a raw string message over the WebSocket.
+    /// Fetch a content-addressed blob by its 32-byte BLAKE3 hash.
+    /// Sends a binary `BLOB_REQUEST` (0x34) and waits for a matching
+    /// `BLOB_RESPONSE` (0x35).
+    pub async fn fetch_blob(&self, hash: &[u8; 32]) -> AtomicResult<Vec<u8>> {
+        let mut rx = self.subscribe();
+        self.send_binary(protocol::encode_blob_request(hash))
+            .await?;
+        let timeout = tokio::time::timeout(std::time::Duration::from_secs(10), async {
+            while let Ok(msg) = rx.recv().await {
+                match msg {
+                    WsMessage::BlobResponse {
+                        hash: rcv_hash,
+                        bytes,
+                    } if rcv_hash == *hash => return Ok(bytes),
+                    WsMessage::Error(e) => {
+                        return Err(AtomicError::from(format!("Blob fetch error: {}", e)))
+                    }
+                    _ => continue,
+                }
+            }
+            Err(AtomicError::from("WebSocket closed during blob fetch"))
+        });
+        timeout
+            .await
+            .map_err(|_| AtomicError::from("Timeout fetching blob"))?
+    }
+
+    /// Send a raw text frame over the WebSocket. Used for legacy text-protocol
+    /// commands (LORO_*, SUBSCRIBE_QUERY, SYNC_VV, SYNC_DELTAS).
     pub async fn send_raw(&self, msg: &str) -> AtomicResult<()> {
         self.tx
-            .send(msg.to_string())
+            .send(Message::Text(msg.to_string().into()))
             .await
             .map_err(|e| format!("Failed to send WebSocket message: {}", e).into())
+    }
+
+    /// Send a raw binary frame over the WebSocket (v2 protocol).
+    async fn send_binary(&self, bytes: Vec<u8>) -> AtomicResult<()> {
+        self.tx
+            .send(Message::Binary(bytes.into()))
+            .await
+            .map_err(|e| format!("Failed to send WebSocket binary: {}", e).into())
     }
 }
 
@@ -292,4 +330,99 @@ fn parse_server_message(text: &str) -> WsMessage {
     } else {
         WsMessage::Error(format!("Unknown message: {}", text))
     }
+}
+
+/// Parse a binary v2 frame. Returns `None` for frames the client doesn't
+/// translate into `WsMessage` (UPDATE, SYNC_*, etc.).
+fn parse_binary_message(bin: &[u8]) -> Option<WsMessage> {
+    use protocol::tag;
+    let tag = *bin.first()?;
+    match tag {
+        tag::AUTH_OK => Some(WsMessage::Authenticated),
+        tag::ERROR => {
+            // [tag: u8] [request_id: u16] [message: utf8]
+            if bin.len() < 3 {
+                return Some(WsMessage::Error("Malformed ERROR frame".into()));
+            }
+            let msg = std::str::from_utf8(&bin[3..])
+                .unwrap_or("(non-utf8 error message)")
+                .to_string();
+            Some(WsMessage::Error(msg))
+        }
+        tag::BLOB_RESPONSE => {
+            let resp = protocol::decode_blob_response(&bin[1..])?;
+            Some(WsMessage::BlobResponse {
+                hash: resp.hash,
+                bytes: resp.bytes,
+            })
+        }
+        tag::UPDATE => decode_update_frame(&bin[1..]),
+        tag::QUERY_UPDATE => {
+            let q = protocol::decode_query_update(&bin[1..])?;
+            Some(WsMessage::QueryUpdate {
+                property: q.property,
+                value: q.value,
+                added: q.added,
+                removed: q.removed,
+            })
+        }
+        tag::DESTROY => {
+            // [tag] [request_id: u16] [subject: utf8]
+            if bin.len() < 3 {
+                return None;
+            }
+            let subject = std::str::from_utf8(&bin[3..]).ok()?.to_string();
+            Some(WsMessage::Destroy { subject })
+        }
+        _ => None,
+    }
+}
+
+/// Decode an UPDATE frame payload (everything after the tag byte). Layout:
+/// `[flags: u8] [request_id: u16] [subject_len: u16] [subject] [optional
+/// commit_id_len: u16 + commit_id] [loro_bytes...]`.
+fn decode_update_frame(payload: &[u8]) -> Option<WsMessage> {
+    use protocol::flags;
+    if payload.len() < 5 {
+        return None;
+    }
+    let flag_bits = payload[0];
+    let _request_id = u16::from_be_bytes([payload[1], payload[2]]);
+    let subject_len = u16::from_be_bytes([payload[3], payload[4]]) as usize;
+    let mut cursor = 5;
+    if payload.len() < cursor + subject_len {
+        return None;
+    }
+    let subject = std::str::from_utf8(&payload[cursor..cursor + subject_len])
+        .ok()?
+        .to_string();
+    cursor += subject_len;
+
+    let mut commit_id = None;
+    if flag_bits & flags::HAS_COMMIT_ID != 0 {
+        if payload.len() < cursor + 2 {
+            return None;
+        }
+        let cid_len = u16::from_be_bytes([payload[cursor], payload[cursor + 1]]) as usize;
+        cursor += 2;
+        if payload.len() < cursor + cid_len {
+            return None;
+        }
+        commit_id = Some(
+            std::str::from_utf8(&payload[cursor..cursor + cid_len])
+                .ok()?
+                .to_string(),
+        );
+        cursor += cid_len;
+    }
+
+    let loro_bytes = payload[cursor..].to_vec();
+
+    Some(WsMessage::Update {
+        subject,
+        loro_bytes,
+        commit_id,
+        is_snapshot: flag_bits & flags::SNAPSHOT != 0,
+        is_push: flag_bits & flags::PUSH != 0,
+    })
 }

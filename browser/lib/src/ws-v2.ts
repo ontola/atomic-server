@@ -20,6 +20,8 @@ export const Tag = {
   SYNC_OK: 0x31,
   SYNC_DIFF: 0x32,
   SYNC_PUSH: 0x33,
+  BLOB_REQUEST: 0x34,
+  BLOB_RESPONSE: 0x35,
   EPHEMERAL: 0x40,
 } as const;
 
@@ -32,6 +34,13 @@ export const Flags = {
   HAS_COMMIT_ID: 0b0010,
   /** Subscription push (not a GET response) */
   PUSH: 0b0100,
+} as const;
+
+/** SYNC_PUSH flags. A SYNC_PUSH run is one or more chunks; only the
+ *  final chunk has LAST set. Receivers must keep reading SYNC_PUSH
+ *  frames until they see this bit. */
+export const SyncPushFlags = {
+  LAST: 0b0001,
 } as const;
 
 // ---- Low-level read/write helpers ----
@@ -69,10 +78,7 @@ function readU32(buf: Uint8Array, offset: number): [number, number] {
   ];
 }
 
-function readStr16(
-  buf: Uint8Array,
-  offset: number,
-): [string, number] {
+function readStr16(buf: Uint8Array, offset: number): [string, number] {
   const [len, off] = readU16(buf, offset);
   const str = decoder.decode(buf.subarray(off, off + len));
 
@@ -158,9 +164,7 @@ export function encodeSync(
 ): Uint8Array {
   const driveBytes = encoder.encode(driveSubject);
   const vvBytes = encoder.encode(vvJson);
-  const buf = new Uint8Array(
-    1 + 2 + driveBytes.length + 32 + vvBytes.length,
-  );
+  const buf = new Uint8Array(1 + 2 + driveBytes.length + 32 + vvBytes.length);
   let off = 0;
   buf[off++] = Tag.SYNC;
   off = writeU16(buf, off, driveBytes.length);
@@ -176,6 +180,7 @@ export function encodeSync(
 export function encodeSyncPush(
   driveSubject: string,
   entries: Array<{ subject: string; loroBytes: Uint8Array }>,
+  last = true,
 ): Uint8Array {
   const driveBytes = encoder.encode(driveSubject);
   const encodedEntries = entries.map(e => ({
@@ -187,14 +192,13 @@ export function encodeSyncPush(
     0,
   );
 
-  const buf = new Uint8Array(
-    1 + 2 + driveBytes.length + 2 + entrySize,
-  );
+  const buf = new Uint8Array(1 + 2 + driveBytes.length + 1 + 2 + entrySize);
   let off = 0;
   buf[off++] = Tag.SYNC_PUSH;
   off = writeU16(buf, off, driveBytes.length);
   buf.set(driveBytes, off);
   off += driveBytes.length;
+  buf[off++] = last ? SyncPushFlags.LAST : 0;
   off = writeU16(buf, off, entries.length);
 
   for (const e of encodedEntries) {
@@ -205,6 +209,26 @@ export function encodeSyncPush(
     buf.set(e.loroBytes, off);
     off += e.loroBytes.length;
   }
+
+  return buf;
+}
+
+export function encodeBlobRequest(hash: Uint8Array): Uint8Array {
+  const buf = new Uint8Array(1 + 32);
+  buf[0] = Tag.BLOB_REQUEST;
+  buf.set(hash, 1);
+
+  return buf;
+}
+
+export function encodeBlobResponse(
+  hash: Uint8Array,
+  bytes: Uint8Array,
+): Uint8Array {
+  const buf = new Uint8Array(1 + 32 + bytes.length);
+  buf[0] = Tag.BLOB_RESPONSE;
+  buf.set(hash, 1);
+  buf.set(bytes, 1 + 32);
 
   return buf;
 }
@@ -247,6 +271,14 @@ export interface DecodedSyncPushEntry {
 export interface DecodedSyncPush {
   drive: string;
   entries: DecodedSyncPushEntry[];
+  /** True iff this is the final chunk of a SYNC_PUSH run. Receivers
+   *  loop reading SYNC_PUSH frames until they see `last === true`. */
+  last: boolean;
+}
+
+export interface DecodedBlobResponse {
+  hash: Uint8Array;
+  bytes: Uint8Array;
 }
 
 export function decodeUpdate(data: Uint8Array): DecodedUpdate | undefined {
@@ -290,9 +322,7 @@ export function decodeSyncOk(data: Uint8Array): DecodedSyncOk | undefined {
   return drive ? { drive } : undefined;
 }
 
-export function decodeSyncDiff(
-  data: Uint8Array,
-): DecodedSyncDiff | undefined {
+export function decodeSyncDiff(data: Uint8Array): DecodedSyncDiff | undefined {
   const [drive, off] = readStr16(data, 0);
   const json = decoder.decode(data.subarray(off));
 
@@ -305,11 +335,12 @@ export function decodeSyncDiff(
   }
 }
 
-export function decodeSyncPush(
-  data: Uint8Array,
-): DecodedSyncPush | undefined {
+export function decodeSyncPush(data: Uint8Array): DecodedSyncPush | undefined {
   const [drive, off1] = readStr16(data, 0);
-  const [count, off2] = readU16(data, off1);
+  if (off1 >= data.length) return undefined;
+  const flags = data[off1];
+  const last = (flags & SyncPushFlags.LAST) !== 0;
+  const [count, off2] = readU16(data, off1 + 1);
   const entries: DecodedSyncPushEntry[] = [];
   let off = off2;
 
@@ -321,7 +352,23 @@ export function decodeSyncPush(
     off = bOff + bytesLen;
   }
 
-  return { drive, entries };
+  return { drive, entries, last };
+}
+
+export function decodeBlobRequest(data: Uint8Array): Uint8Array | undefined {
+  if (data.length < 32) return undefined;
+
+  return data.slice(0, 32);
+}
+
+export function decodeBlobResponse(
+  data: Uint8Array,
+): DecodedBlobResponse | undefined {
+  if (data.length < 32) return undefined;
+  const hash = data.slice(0, 32);
+  const bytes = data.slice(32);
+
+  return { hash, bytes };
 }
 
 export function decodeSubject(data: Uint8Array): string {
@@ -343,14 +390,13 @@ const TAG_NAMES: Record<number, string> = {
   [Tag.SYNC_OK]: 'SYNC_OK',
   [Tag.SYNC_DIFF]: 'SYNC_DIFF',
   [Tag.SYNC_PUSH]: 'SYNC_PUSH',
+  [Tag.BLOB_REQUEST]: 'BLOB_REQUEST',
+  [Tag.BLOB_RESPONSE]: 'BLOB_RESPONSE',
   [Tag.EPHEMERAL]: 'EPHEMERAL',
 };
 
 /** Produce a human-readable summary of a binary frame for debugging. */
-export function debugFrame(
-  data: Uint8Array,
-  direction: '→' | '←',
-): string {
+export function debugFrame(data: Uint8Array, direction: '→' | '←'): string {
   if (data.length === 0) return `${direction} (empty)`;
 
   const tag = data[0];
@@ -419,9 +465,15 @@ export function debugFrame(
       const msg = decodeSyncPush(payload);
 
       return msg
-        ? `${direction} SYNC_PUSH ${msg.drive} (${msg.entries.length} resources, ${payload.length}B)`
+        ? `${direction} SYNC_PUSH ${msg.drive} (${msg.entries.length} resources${msg.last ? ', last' : ''}, ${payload.length}B)`
         : `${direction} SYNC_PUSH (${payload.length}B)`;
     }
+
+    case Tag.BLOB_REQUEST:
+      return `${direction} BLOB_REQUEST (${payload.length}B)`;
+
+    case Tag.BLOB_RESPONSE:
+      return `${direction} BLOB_RESPONSE (${payload.length}B)`;
 
     default:
       return `${direction} ${name} (${payload.length}B)`;

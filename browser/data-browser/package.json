@@ -122,7 +122,7 @@
   "scripts": {
     "build": "pnpm build:wasm && vite build",
     "build:tauri": "pnpm build:wasm && TAURI=1 vite build",
-    "build:wasm": "cd ../../wasm && CARGO_ENCODED_RUSTFLAGS=$'--cfg\\x1fgetrandom_backend=\"wasm_js\"' wasm-pack build --target web --out-dir pkg && cp pkg/atomic_wasm.js pkg/atomic_wasm_bg.wasm ../browser/data-browser/public/wasm/",
+    "build:wasm": "if [ \"$SKIP_WASM_BUILD\" = \"1\" ]; then echo 'SKIP_WASM_BUILD=1, skipping wasm-pack'; else cd ../../wasm && CARGO_ENCODED_RUSTFLAGS=$'--cfg\\x1fgetrandom_backend=\"wasm_js\"' wasm-pack build --target web --out-dir pkg && cp pkg/atomic_wasm.js pkg/atomic_wasm_bg.wasm ../browser/data-browser/public/wasm/; fi",
     "dev": "vite",
     "format-check": "oxfmt -c ../.oxfmtrc.json --check ./src",
     "format": "oxfmt -c ../.oxfmtrc.json ./src",

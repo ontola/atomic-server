@@ -3479,7 +3479,7 @@ msgstr "Subdomain"
 
 #: src/components/LoggedOutAgentPanel.tsx
 msgid "Back"
-msgstr ""
+msgstr "Zurück"
 
 #: src/views/OnboardingPage.tsx
 msgid "Import & Connect"
@@ -3709,18 +3709,18 @@ msgstr "Anmelden / Neuer Benutzer"
 
 #: src/components/SideBar/AppMenu.tsx
 msgid "Dev Drive"
-msgstr ""
+msgstr "Entwickler-Laufwerk"
 
 #~ msgid "Create a new agent + drive on localhost:9883 and switch to it"
 #~ msgstr ""
 
 #: src/routes/DevDriveRoute.tsx
 msgid "Setting up dev drive..."
-msgstr ""
+msgstr "Dev-Laufwerk wird eingerichtet..."
 
 #: src/components/SideBar/AppMenu.tsx
 msgid "Create a fresh agent + drive on localhost:9883"
-msgstr ""
+msgstr "Erstellen Sie einen neuen Agenten + Laufwerk auf localhost:9883"
 
 #~ msgid "New {0} Column"
 #~ msgstr ""
@@ -3748,42 +3748,44 @@ msgstr ""
 
 #: src/components/Searchbar/Searchbar.tsx
 msgid "Search (Cmd+K)"
-msgstr ""
+msgstr "Suchen (Cmd+K)"
 
 #: src/routes/Search/SearchOverlay.tsx
 msgid "Searching..."
-msgstr ""
+msgstr "Suche läuft..."
 
 #: src/components/OverlayContainer.tsx
 #: src/routes/Search/SearchOverlay.tsx
 msgid "Search for resources..."
-msgstr ""
+msgstr "Ressourcen suchen..."
 
 #: src/components/OverlayContainer.tsx
 #: src/components/OverlayContainer.tsx
 #: src/routes/Search/SearchOverlay.tsx
 msgid "esc"
-msgstr ""
+msgstr "esc"
 
 #: src/routes/Search/SearchOverlay.tsx
 msgid ""
 "Search matches on the names and descriptions of resources.\n"
 "Additionally you can filter by tag using <0/>"
 msgstr ""
+"Die Suche passt zu den Namen und Beschreibungen von Ressourcen.\n"
+"Zusätzlich können Sie nach Tags filtern mit <0/>"
 
 #: src/components/OverlayContainer.tsx
 #: src/routes/Search/SearchOverlay.tsx
 msgid "<0/> <1/> navigate"
-msgstr ""
+msgstr "<0/> <1/> navigieren"
 
 #: src/routes/Search/SearchOverlay.tsx
 msgid "<0/> open"
-msgstr ""
+msgstr "<0/> öffnen"
 
 #: src/components/OverlayContainer.tsx
 #: src/routes/Search/SearchOverlay.tsx
 msgid "<0>esc</0> close"
-msgstr ""
+msgstr "<0>esc</0> schließen"
 
 #. placeholder {0}: results.length
 #. placeholder {1}: results.length !== 1 ? 's' : ''
@@ -3792,38 +3794,38 @@ msgstr ""
 #: src/components/OverlayContainer.tsx
 #: src/routes/Search/SearchOverlay.tsx
 msgid "{0} result{1}"
-msgstr ""
+msgstr "{0} Ergebnis{1}"
 
 #: src/components/OverlayContainer.tsx
 msgid "Open search"
-msgstr ""
+msgstr "Suche öffnen"
 
 #~ msgid "Toggle sidebar"
 #~ msgstr ""
 
 #: src/components/OverlayContainer.tsx
 msgid "Show data view"
-msgstr ""
+msgstr "Datenansicht anzeigen"
 
 #: src/components/OverlayContainer.tsx
 msgid "Open menu"
-msgstr ""
+msgstr "Menü öffnen"
 
 #: src/components/OverlayContainer.tsx
 msgid "User settings"
-msgstr ""
+msgstr "Benutzereinstellungen"
 
 #: src/components/OverlayContainer.tsx
 msgid "Theme settings"
-msgstr ""
+msgstr "Themaeinstellungen"
 
 #: src/components/OverlayContainer.tsx
 msgid "This page"
-msgstr ""
+msgstr "Diese Seite"
 
 #: src/components/OverlayContainer.tsx
 msgid "Press esc to close..."
-msgstr ""
+msgstr "Esc drücken zum Schließen..."
 
 #: src/components/OverlayContainer.tsx
 #: src/components/OverlayContainer.tsx
@@ -3834,72 +3836,72 @@ msgstr ""
 #: src/components/OverlayContainer.tsx
 #: src/components/OverlayContainer.tsx
 msgid "Mac"
-msgstr ""
+msgstr "Mac"
 
 #: src/components/OverlayContainer.tsx
 msgid "Ctrl+K"
-msgstr ""
+msgstr "Strg+K"
 
 #: src/components/OverlayContainer.tsx
 msgid "Ctrl+E"
-msgstr ""
+msgstr "Strg+E"
 
 #: src/components/OverlayContainer.tsx
 msgid "Ctrl+D"
-msgstr ""
+msgstr "Strg+D"
 
 #: src/components/OverlayContainer.tsx
 msgid "Ctrl+H"
-msgstr ""
+msgstr "Strg+H"
 
 #: src/components/OverlayContainer.tsx
 msgid "Ctrl+N"
-msgstr ""
+msgstr "Strg+N"
 
 #: src/components/OverlayContainer.tsx
 msgid "Ctrl+M"
-msgstr ""
+msgstr "Strg+M"
 
 #: src/components/OverlayContainer.tsx
 msgid "Ctrl+U"
-msgstr ""
+msgstr "Strg+U"
 
 #: src/components/OverlayContainer.tsx
 msgid "Ctrl+T"
-msgstr ""
+msgstr "Strg+T"
 
 #: src/components/OverlayContainer.tsx
 #: src/components/OverlayContainer.tsx
 msgid "Shift+/"
-msgstr ""
+msgstr "Umschalt+/"
 
 #: src/components/OverlayContainer.tsx
 msgid "Show keyboard shortcuts"
-msgstr ""
+msgstr "Tastenkombinationen anzeigen"
 
 #. placeholder {0}: ' '
 #. placeholder {1}: selectedCategory ? selectedCategory[0].toUpperCase() + selectedCategory.slice(1) : ''
 #. placeholder {2}: ' '
 #: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
 msgid "New{0} {1}{2} Column"
-msgstr ""
+msgstr "Neue{0} {1}{2} Spalte"
 
 #. placeholder {0}: query
 #: src/components/OverlayContainer.tsx
 msgid "Start AI Chat with \"{0}\""
-msgstr ""
+msgstr "KI-Chat mit „{0}“ starten"
 
 #: src/components/OverlayContainer.tsx
 msgid "<0/> open / chat"
-msgstr ""
+msgstr "<0/> öffnen / chatten"
 
 #: src/components/OverlayContainer.tsx
 msgid "<0/> chat"
-msgstr ""
+msgstr "<0/> chatten"
 
 #: src/routes/SettingsAgent.tsx
 msgid "Drives"
-msgstr ""
+msgstr "Laufwerke"
 
 #~ msgid "That secret does not match. Please try again or start over."
 #~ msgstr ""
@@ -3909,7 +3911,7 @@ msgstr ""
 
 #: src/components/NewIdentitySection.tsx
 msgid "Verify your secret"
-msgstr ""
+msgstr "Überprüfen Sie Ihr Geheimnis"
 
 #~ msgid ""
 #~ "You have been signed out to verify that you saved your secret. Enter it\n"
@@ -3918,7 +3920,7 @@ msgstr ""
 
 #: src/components/NewIdentitySection.tsx
 msgid "Paste your secret here"
-msgstr ""
+msgstr "Fügen Sie Ihr Geheimnis hier ein"
 
 #~ msgid "Signing in..."
 #~ msgstr ""
@@ -3936,11 +3938,11 @@ msgstr ""
 
 #: src/components/NewIdentitySection.tsx
 msgid "Enter your name"
-msgstr ""
+msgstr "Geben Sie Ihren Namen ein"
 
 #: src/components/NewIdentitySection.tsx
 msgid "Profile Name"
-msgstr ""
+msgstr "Profilname"
 
 #~ msgid "Saving..."
 #~ msgstr ""
@@ -3975,7 +3977,7 @@ msgstr ""
 
 #: src/components/NewIdentitySection.tsx
 msgid "Generating your identity..."
-msgstr ""
+msgstr "Ihre Identität wird generiert..."
 
 #~ msgid ""
 #~ "<0>IMPORTANT:</0> Save this secret key. It is the only way to\n"
@@ -3988,10 +3990,12 @@ msgid ""
 "Are you sure you've stored this secret somewhere safe? You\n"
 "cannot recover it if you lose it."
 msgstr ""
+"Sind Sie sicher, dass Sie dieses Geheimnis an einem sicheren Ort gespeichert haben? Sie\n"
+"können es nicht wiederherstellen, wenn Sie es verlieren."
 
 #: src/components/NewIdentitySection.tsx
 msgid "Yes, I've stored it — sign me out to verify"
-msgstr ""
+msgstr "Ja, ich habe es gespeichert – melden Sie mich ab, um es zu überprüfen"
 
 #~ msgid "The secret is invalid or this session has expired. You can start over."
 #~ msgstr ""
@@ -4001,17 +4005,17 @@ msgstr ""
 
 #: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
 msgid "Folder"
-msgstr ""
+msgstr "Ordner"
 
 #: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
 msgid "ChatRoom"
-msgstr ""
+msgstr "Chat-Raum"
 
 #: src/components/NavBar.tsx
 #: src/components/Parent.tsx
 #: src/components/Share/ShareDialog.tsx
 msgid "Share"
-msgstr ""
+msgstr "Teilen"
 
 #: src/components/NavBar.tsx
 #: src/components/NavBar.tsx
@@ -4019,11 +4023,11 @@ msgstr ""
 #: src/components/Parent.tsx
 #: src/views/Drive/DrivePage.tsx
 msgid "Tags"
-msgstr ""
+msgstr "Tags"
 
 #: src/components/ResourceContextMenu/ParentContextMenuTrigger.tsx
 msgid "More"
-msgstr ""
+msgstr "Mehr"
 
 #. placeholder {0}: tags.length
 #: src/components/Tag/TagCountPopover.tsx
@@ -4032,19 +4036,19 @@ msgstr ""
 
 #: src/views/Drive/DrivePage.tsx
 msgid "Remove tag"
-msgstr ""
+msgstr "Tag entfernen"
 
 #: src/components/Tag/TagSelectPopover.tsx
 msgid "Open tag page"
-msgstr ""
+msgstr "Tag-Seite öffnen"
 
 #: src/views/ChatRoomPage.tsx
 msgid "No messages yet"
-msgstr ""
+msgstr "Noch keine Nachrichten"
 
 #: src/views/ChatRoomPage.tsx
 msgid "Be the first to say something"
-msgstr ""
+msgstr "Sei der Erste, der etwas sagt"
 
 #~ msgid "The Ontology that"
 #~ msgstr ""
@@ -4052,11 +4056,11 @@ msgstr ""
 #. placeholder {0}: shortcuts.search
 #: src/components/NavBar.tsx
 msgid "Search ({0})"
-msgstr ""
+msgstr "Suchen ({0})"
 
 #: src/routes/AppSettings.tsx
 msgid "NavBar position"
-msgstr ""
+msgstr "Navigationsleisten-Position"
 
 #~ msgid "Replying to"
 #~ msgstr ""
@@ -4069,32 +4073,32 @@ msgstr ""
 
 #: src/routes/AppSettings.tsx
 msgid "Language"
-msgstr ""
+msgstr "Sprache"
 
 #: src/routes/AppSettings.tsx
 msgid "Auto"
-msgstr ""
+msgstr "Auto"
 
 #: src/routes/AppSettings.tsx
 msgid "Dark"
-msgstr ""
+msgstr "Dunkel"
 
 #: src/routes/AppSettings.tsx
 msgid "Light"
-msgstr ""
+msgstr "Hell"
 
 #: src/routes/AppSettings.tsx
 msgid "Appearance"
-msgstr ""
+msgstr "Erscheinungsbild"
 
 #. placeholder {0}: ' '
 #: src/routes/AppSettings.tsx
 msgid "<0/>{0} Hide templates on new resource page"
-msgstr ""
+msgstr "<0/>{0} Vorlagen auf der Seite „Neue Ressource“ ausblenden"
 
 #: src/routes/AppSettings.tsx
 msgid "Panels & Templates"
-msgstr ""
+msgstr "Panels & Vorlagen"
 
 #~ msgid ""
 #~ "OpenRouter provides a unified API that gives you access\n"
@@ -4105,23 +4109,23 @@ msgstr ""
 
 #: src/routes/AppSettings.tsx
 msgid "Search settings..."
-msgstr ""
+msgstr "Einstellungen durchsuchen..."
 
 #: src/routes/AppSettings.tsx
 msgid "Clear search"
-msgstr ""
+msgstr "Suche löschen"
 
 #: src/components/NewInstanceButton/QuickCreateRow.tsx
 msgid "New Document"
-msgstr ""
+msgstr "Neues Dokument"
 
 #: src/components/NewInstanceButton/QuickCreateRow.tsx
 msgid "New Folder"
-msgstr ""
+msgstr "Neuer Ordner"
 
 #: src/components/NewInstanceButton/QuickCreateRow.tsx
 msgid "New ChatRoom"
-msgstr ""
+msgstr "Neuer Chatraum"
 
 #~ msgid "<0/> New"
 #~ msgstr ""
@@ -4135,11 +4139,11 @@ msgstr ""
 #. placeholder {0}: ' '
 #: src/views/ErrorPage.tsx
 msgid "If you have not set up an identity on this server yet,{0} <0>create one here</0>."
-msgstr ""
+msgstr "Wenn Sie auf diesem Server noch keine Identität eingerichtet haben,{0} <0>erstellen Sie hier eine</0>."
 
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Could not parse that secret."
-msgstr ""
+msgstr "Dieses Geheimnis konnte nicht geparst werden."
 
 #~ msgid "Welcome"
 #~ msgstr ""
@@ -4170,7 +4174,7 @@ msgstr ""
 #: src/views/getting-started/GettingStartedFlow.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Agent secret"
-msgstr ""
+msgstr "Agenten-Geheimnis"
 
 #~ msgid "Paste the full secret (the long base64 string from when you created or exported your identity)."
 #~ msgstr ""
@@ -4178,14 +4182,14 @@ msgstr ""
 #: src/components/LoggedOutAgentPanel.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Signing in…"
-msgstr ""
+msgstr "Anmeldung läuft…"
 
 #~ msgid "<0>Open User Settings</0>{0} for more options (e.g. switching drives)."
 #~ msgstr ""
 
 #: src/components/NewIdentitySection.tsx
 msgid "Set your profile name!"
-msgstr ""
+msgstr "Legen Sie Ihren Profilnamen fest!"
 
 #~ msgid ""
 #~ "Note that this is only set for this specific\n"
@@ -4230,6 +4234,10 @@ msgid ""
 "vendors, while automatically handling fallbacks and\n"
 "selecting the most cost-effective options."
 msgstr ""
+"OpenRouter bietet eine einheitliche API, die Ihnen\n"
+"Zugriff auf Hunderte von KI-Modellen aller großen\n"
+"Anbieter ermöglicht, während sie automatisch Fallbacks handhabt und\n"
+"die kostengünstigsten Optionen auswählt."
 
 #~ msgid ""
 #~ "Note that this is only set for this specific server, but you can use\n"
@@ -4243,26 +4251,28 @@ msgid ""
 "This removes drives created for automated tests or local dev: names\n"
 "containing <0/> (E2E), or descriptions containing{0} <1/> (from{1} <2/>)."
 msgstr ""
+"Dies entfernt Laufwerke, die für automatisierte Tests oder die lokale Entwicklung erstellt wurden: Namen\n"
+"mit <0/> (E2E) oder Beschreibungen mit{0} <1/> (von{1} <2/>)."
 
 #: src/components/NewIdentitySection.tsx
 #: src/views/InvitePage.tsx
 msgid "Personal"
-msgstr ""
+msgstr "Persönlich"
 
 #: src/components/NewIdentitySection.tsx
 #: src/views/InvitePage.tsx
 msgid "Your private space on this server. Only you can read and write here."
-msgstr ""
+msgstr "Ihr privater Bereich auf diesem Server. Nur Sie können hier lesen und schreiben."
 
 #: src/components/NewIdentitySection.tsx
 msgid ""
 "Create a new Agent on this server. We will set your username and\n"
 "create a private drive as your home."
-msgstr ""
+msgstr "Erstellen Sie einen neuen Agenten auf diesem Server. Wir werden Ihren Benutzernamen festlegen und ein privates Laufwerk als Ihr Zuhause erstellen."
 
 #: src/components/NewIdentitySection.tsx
 msgid "Creating your personal drive…"
-msgstr ""
+msgstr "Ihr persönliches Laufwerk wird erstellt..."
 
 #~ msgid ""
 #~ "This name is shown on this server. We also create a private drive named\n"
@@ -4274,11 +4284,11 @@ msgstr ""
 
 #: src/components/NewIdentitySection.tsx
 msgid "Creating drive…"
-msgstr ""
+msgstr "Laufwerk wird erstellt..."
 
 #: src/components/NewIdentitySection.tsx
 msgid "Save & continue"
-msgstr ""
+msgstr "Speichern & fortfahren"
 
 #~ msgid "Skip (drive will be named \"Personal\")"
 #~ msgstr ""
@@ -4291,15 +4301,15 @@ msgstr ""
 
 #: src/components/SideBar/SideBarDrive.tsx
 msgid "Shared with me"
-msgstr ""
+msgstr "Mit mir geteilt"
 
 #: src/components/SideBar/SideBarPanel.tsx
 msgid "Collapse"
-msgstr ""
+msgstr "Einklappen"
 
 #: src/components/SideBar/SideBarPanel.tsx
 msgid "Expand"
-msgstr ""
+msgstr "Erweitern"
 
 #~ msgid ""
 #~ "Created via `/app/dev-drive` for local development and E2E. You can remove these with Prune test data on `/app/prunetests`.\n"
@@ -4313,23 +4323,26 @@ msgid ""
 "\n"
 "{0}"
 msgstr ""
+"Erstellt über `/app/dev-drive` für lokale Entwicklung und E2E. Sie können diese mit „Testdaten löschen“ unter `/app/prunetests` entfernen.\n"
+"\n"
+"{0}"
 
 #: src/components/SideBar/ResourceSideBar/SidebarItemTitle.tsx
 msgid "Collapse folder"
-msgstr ""
+msgstr "Ordner einklappen"
 
 #: src/components/SideBar/ResourceSideBar/SidebarItemTitle.tsx
 msgid "Expand folder"
-msgstr ""
+msgstr "Ordner ausklappen"
 
 #. placeholder {0}: resource.title
 #: src/components/SideBar/ResourceSideBar/SidebarItemTitle.tsx
 msgid "Rearrange {0}"
-msgstr ""
+msgstr "{0} neu anordnen"
 
 #: src/components/NewInstanceButton/QuickCreateRow.tsx
 msgid "New"
-msgstr ""
+msgstr "Neu"
 
 #~ msgid "Sign Up"
 #~ msgstr ""
@@ -4344,7 +4357,7 @@ msgstr ""
 #: src/routes/SettingsAgent.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Create account"
-msgstr ""
+msgstr "Konto erstellen"
 
 #~ msgid "Welcome{0}"
 #~ msgstr ""
@@ -4352,7 +4365,7 @@ msgstr ""
 #: src/views/InvitePage.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "AtomicServer"
-msgstr ""
+msgstr "AtomicServer"
 
 #~ msgid ""
 #~ "A production-grade data workspace — graph-native, permission-aware,\n"
@@ -4383,7 +4396,7 @@ msgstr ""
 
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Get started"
-msgstr ""
+msgstr "Los geht's"
 
 #~ msgid ""
 #~ "A production-grade data workspace. Graph-native, permission-aware, and ready\n"
@@ -4518,7 +4531,7 @@ msgstr ""
 
 #: src/components/NewIdentitySection.tsx
 msgid "Others can read this. You can change this later."
-msgstr ""
+msgstr "Andere können dies lesen. Sie können dies später ändern."
 
 #~ msgid "Your Integrated Knowledge Environment"
 #~ msgstr ""
@@ -4540,15 +4553,15 @@ msgstr ""
 
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Make your knowledge work for you."
-msgstr ""
+msgstr "Lassen Sie Ihr Wissen für sich arbeiten."
 
 #: src/components/AI/AISettings.tsx
 msgid "Generative features"
-msgstr ""
+msgstr "Generative Funktionen"
 
 #: src/components/AI/AISettings.tsx
 msgid "MCP servers"
-msgstr ""
+msgstr "MCP-Server"
 
 #~ msgid ""
 #~ "<0>All-in-one workspace</0>: documents, tables, files, and APIs\n"
@@ -4578,7 +4591,7 @@ msgstr ""
 #: src/views/getting-started/GettingStartedFlow.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "<0/> Back"
-msgstr ""
+msgstr "<0/> Zurück"
 
 #~ msgid "The secret is invalid."
 #~ msgstr ""
@@ -4587,32 +4600,32 @@ msgstr ""
 msgid ""
 "You have been signed out to verify that you saved your secret. Enter it\n"
 "below to sign in."
-msgstr ""
+msgstr "Sie wurden abgemeldet, um zu überprüfen, ob Sie Ihr Geheimnis gespeichert haben. Geben Sie es unten ein, um sich anzumelden."
 
 #: src/components/NewIdentitySection.tsx
 msgid "Atomic Server — agent secret backup"
-msgstr ""
+msgstr "Atomic Server – Sicherung des Agenten-Geheimnisses"
 
 #: src/components/NewIdentitySection.tsx
 msgid "IMPORTANT: Store this file (or the secret line) somewhere only you can access."
-msgstr ""
+msgstr "WICHTIG: Speichern Sie diese Datei (oder die Geheimniszeile) an einem Ort, auf den nur Sie zugreifen können."
 
 #: src/components/NewIdentitySection.tsx
 msgid "Without it you cannot sign in after clearing the browser or on another device."
-msgstr ""
+msgstr "Ohne diese Datei können Sie sich nach dem Löschen des Browsers oder auf einem anderen Gerät nicht anmelden."
 
 #: src/components/NewIdentitySection.tsx
 msgid "Anyone who gets this secret can access your account on this server."
-msgstr ""
+msgstr "Jeder, der dieses Geheimnis erhält, kann auf Ihr Konto auf diesem Server zugreifen."
 
 #. placeholder {0}: when
 #: src/components/NewIdentitySection.tsx
 msgid "Created: {0}"
-msgstr ""
+msgstr "Erstellt: {0}"
 
 #: src/components/NewIdentitySection.tsx
 msgid "Backup file downloaded — move it out of Downloads if you share this computer"
-msgstr ""
+msgstr "Sicherungsdatei heruntergeladen – verschieben Sie sie aus den Downloads, wenn Sie diesen Computer teilen"
 
 #~ msgid ""
 #~ "<0>IMPORTANT:</0> You need this secret to sign in again. We\n"
@@ -4626,28 +4639,31 @@ msgid ""
 "copy into a <2>locked note</2> (Apple Notes, Google Keep,\n"
 "etc.)—not email or chat."
 msgstr ""
+"<0>Möglichkeiten, es aufzubewahren:</0> einen Passwort-Manager (am besten),{0} <1>Als Datei speichern</1> unten und in einen privaten Ordner verschieben oder\n"
+"in eine <2>gesperrte Notiz</2> kopieren (Apple Notes, Google Keep,\n"
+"etc.) – nicht E-Mail oder Chat."
 
 #: src/components/NewIdentitySection.tsx
 msgid "<0/> Save backup file…"
-msgstr ""
+msgstr "<0/> Sicherungsdatei speichern..."
 
 #: src/components/NewIdentitySection.tsx
 msgid "Copy the secret or save the backup file to continue"
-msgstr ""
+msgstr "Kopieren Sie das Geheimnis oder speichern Sie die Sicherungsdatei, um fortzufahren"
 
 #: src/components/NewIdentitySection.tsx
 msgid ""
 "<0>IMPORTANT:</0> You need this secret to sign in again. We do\n"
 "not store a copy you can reset like a normal password."
-msgstr ""
+msgstr "<0>WICHTIG:</0> Sie benötigen dieses Geheimnis, um sich erneut anzumelden. Wir speichern keine Kopie, die Sie wie ein normales Passwort zurücksetzen können."
 
 #: src/components/NewIdentitySection.tsx
 msgid "The secret is invalid. Make sure you copied it correctly."
-msgstr ""
+msgstr "Das Geheimnis ist ungültig. Stellen Sie sicher, dass Sie es richtig kopiert haben."
 
 #: src/components/NewIdentitySection.tsx
 msgid "Safely store your secret"
-msgstr ""
+msgstr "Bewahren Sie Ihr Geheimnis sicher auf"
 
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid ""
@@ -4655,18 +4671,25 @@ msgid ""
 "files, and APIs in one place, designed to stay coherent as it\n"
 "grows."
 msgstr ""
+"<0>Alles in einem Arbeitsbereich</0>: Dokumente, Tabellen,\n"
+"Dateien und APIs an einem Ort, so konzipiert, dass sie\n"
+"konsistent bleiben, während sie wachsen."
 
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid ""
 "<0>Fast and lightweight</0>: a snappy workspace and\n"
 "API, small download, minimal dependencies, runs anywhere."
 msgstr ""
+"<0>Schnell und leichtgewichtig</0>: ein schneller Arbeitsbereich und\n"
+"API, kleiner Download, minimale Abhängigkeiten, läuft überall."
 
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid ""
 "<0>Open source</0>: inspect, fork, and self-host.\n"
 "Keep control of your data and avoid lock-in."
 msgstr ""
+"<0>Open Source</0>: inspizieren, forken und selbst hosten.\n"
+"Behalten Sie die Kontrolle über Ihre Daten und vermeiden Sie Vendor-Lock-in."
 
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid ""
@@ -4674,6 +4697,9 @@ msgid ""
 "built for interoperability so your data and tools can work\n"
 "together."
 msgstr ""
+"<0>Zukunft des Webs</0>: dezentralisiert konzipiert,\n"
+"für Interoperabilität gebaut, damit Ihre Daten und Tools\n"
+"zusammenarbeiten können."
 
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid ""
@@ -4681,6 +4707,9 @@ msgid ""
 "search, invites, realtime sync, collaboration, and AI chat\n"
 "built in."
 msgstr ""
+"<0>Standardmäßig funktionskomplett</0>: Rechte, Verlauf,\n"
+"Suche, Einladungen, Echtzeit-Synchronisierung, Zusammenarbeit und AI-Chat\n"
+"eingebaut."
 
 #~ msgid "Loro document ({0} bytes)"
 #~ msgstr ""
@@ -4688,51 +4717,51 @@ msgstr ""
 #: src/routes/History/HistoryDesktopView.tsx
 #: src/routes/History/HistoryMobileView.tsx
 msgid "Restore this version"
-msgstr ""
+msgstr "Diese Version wiederherstellen"
 
 #: src/routes/History/HistoryRoute.tsx
 msgid "Version restore not yet implemented for Loro"
-msgstr ""
+msgstr "Wiederherstellung der Version für Loro noch nicht implementiert"
 
 #. placeholder {0}: resource.title
 #: src/routes/History/HistoryRoute.tsx
 msgid "Loading history of {0}..."
-msgstr ""
+msgstr "Lade Verlauf von {0}..."
 
 #: src/routes/History/HistoryRoute.tsx
 msgid "No history available for this resource."
-msgstr ""
+msgstr "Kein Verlauf für diese Ressource verfügbar."
 
 #. placeholder {0}: version.peer.slice(0, 8)
 #: src/routes/History/VersionTitle.tsx
 msgid "by peer {0}..."
-msgstr ""
+msgstr "von Peer {0}..."
 
 #. placeholder {0}: version.peer && <> by peer {version.peer.slice(0, 8)}...</>
 #. placeholder {1}: version.message && <> — {version.message}</>
 #: src/routes/History/VersionTitle.tsx
 msgid "Edited <0/> {0} {1}"
-msgstr ""
+msgstr "Bearbeitet <0/> {0} {1}"
 
 #: src/components/Share/ShareDialog.tsx
 msgid "Link copied to clipboard"
-msgstr ""
+msgstr "Link in die Zwischenablage kopiert"
 
 #: src/components/Share/ShareDialog.tsx
 msgid "<0/> Copy link"
-msgstr ""
+msgstr "<0/> Link kopieren"
 
 #: src/views/ChatRoomPage.tsx
 msgid "Loading messages..."
-msgstr ""
+msgstr "Nachrichten werden geladen..."
 
 #: src/components/LoroDocValue.tsx
 msgid "Hide"
-msgstr ""
+msgstr "Ausblenden"
 
 #: src/components/LoroDocValue.tsx
 msgid "Inspect"
-msgstr ""
+msgstr "Überprüfen"
 
 #. placeholder {0}: showState ? <FaEyeSlash /> : <FaEye />
 #. placeholder {1}: showState ? 'Hide' : 'Inspect'
@@ -4740,11 +4769,11 @@ msgstr ""
 #. placeholder {3}: inspection ? `, ${inspection.peers} peer(s)` : ''
 #: src/components/LoroDocValue.tsx
 msgid "{0} {1} Loro snapshot ({2} {3})"
-msgstr ""
+msgstr "{0} {1} Loro-Snapshot ({2} {3})"
 
 #: src/components/LoroDocValue.tsx
 msgid "Failed to decode Loro snapshot"
-msgstr ""
+msgstr "Fehler beim Dekodieren des Loro-Snapshots"
 
 #~ msgid "Connected to server over WebSocket"
 #~ msgstr ""
@@ -4757,7 +4786,7 @@ msgstr ""
 #: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Sync"
-msgstr ""
+msgstr "Synchronisieren"
 
 #~ msgid "Show current connection and sync state"
 #~ msgstr ""
@@ -4841,43 +4870,43 @@ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "destroy"
-msgstr ""
+msgstr "Zerstören"
 
 #: src/routes/DataRoute.tsx
 msgid "source:"
-msgstr ""
+msgstr "Quelle:"
 
 #: src/routes/DataRoute.tsx
 msgid "Where this resource was last loaded from"
-msgstr ""
+msgstr "Wo diese Ressource zuletzt geladen wurde"
 
 #~ msgid "Running in offline mode"
 #~ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "In sync"
-msgstr ""
+msgstr "Synchronisiert"
 
 #: src/components/SideBar/SyncMenuItem.tsx
 #: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Syncing..."
-msgstr ""
+msgstr "Synchronisiere..."
 
 #: src/components/SideBar/SyncMenuItem.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Changes pending"
-msgstr ""
+msgstr "Änderungen ausstehend"
 
 #: src/components/SideBar/SyncMenuItem.tsx
 #: src/components/SideBar/SyncMenuItem.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Offline"
-msgstr ""
+msgstr "Offline"
 
 #: src/routes/SyncRoute.tsx
 msgid "Unknown"
-msgstr ""
+msgstr "Unbekannt"
 
 #~ msgid ""
 #~ "Your data is stored locally on this device. When connected to a\n"
@@ -4887,7 +4916,7 @@ msgstr ""
 #: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "This device"
-msgstr ""
+msgstr "Dieses Gerät"
 
 #~ msgid "{0} pending"
 #~ msgstr ""
@@ -4895,20 +4924,20 @@ msgstr ""
 #: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Server"
-msgstr ""
+msgstr "Server"
 
 #: src/routes/SyncRoute.tsx
 msgid "Details"
-msgstr ""
+msgstr "Details"
 
 #: src/routes/SyncRoute.tsx
 msgid "Drive"
-msgstr ""
+msgstr "Laufwerk"
 
 #: src/components/SideBar/SyncMenuItem.tsx
 #: src/components/SideBar/SyncMenuItem.tsx
 msgid "Connected"
-msgstr ""
+msgstr "Verbunden"
 
 #~ msgid "Local storage"
 #~ msgstr ""
@@ -4918,54 +4947,54 @@ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Initializing..."
-msgstr ""
+msgstr "Initialisiere..."
 
 #: src/routes/SyncRoute.tsx
 msgid "Last sync"
-msgstr ""
+msgstr "Letzte Synchronisation"
 
 #. placeholder {0}: status.lastDriveSync.count
 #. placeholder {1}: ' '
 #. placeholder {2}: formatTimeAgo( new Date(status.lastDriveSync.timestamp), ) ?? 'just now'
 #: src/routes/SyncRoute.tsx
 msgid "{0} resources,{1} {2}"
-msgstr ""
+msgstr "{0} Ressourcen,{1} {2}"
 
 #~ msgid "Activity"
 #~ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "No activity recorded in this session yet."
-msgstr ""
+msgstr "In dieser Sitzung wurde noch keine Aktivität aufgezeichnet."
 
 #~ msgid "Connected to server"
 #~ msgstr ""
 
 #: src/components/NetworkIndicator.tsx
 msgid "Working offline — your changes are saved locally"
-msgstr ""
+msgstr "Offline-Arbeit – Ihre Änderungen werden lokal gespeichert"
 
 #: src/components/NetworkIndicator.tsx
 msgid "No internet — your changes are saved locally"
-msgstr ""
+msgstr "Kein Internet – Ihre Änderungen werden lokal gespeichert"
 
 #: src/routes/SyncRoute.tsx
 msgid "Reconnect"
-msgstr ""
+msgstr "Wieder verbinden"
 
 #. placeholder {0}: status.pendingDirtyCount
 #: src/routes/SyncRoute.tsx
 msgid "{0} unsynced"
-msgstr ""
+msgstr "{0} nicht synchronisiert"
 
 #. placeholder {0}: status.pendingDirtyCount > 0 && ( <PendingCount> {status.pendingDirtyCount} unsynced </PendingCount> )
 #: src/routes/SyncRoute.tsx
 msgid "Commit Log {0}"
-msgstr ""
+msgstr "Commit-Protokoll {0}"
 
 #: src/views/InvitePage.tsx
 msgid "Sorry, this invite has no usages left. Ask for a new one."
-msgstr ""
+msgstr "Entschuldigung, diese Einladung hat keine Verwendungen mehr. Fragen Sie nach einer neuen."
 
 #~ msgid "{0} usages left"
 #~ msgstr ""
@@ -4973,18 +5002,18 @@ msgstr ""
 #. placeholder {0}: showInherited ? <FaChevronDown /> : <FaChevronRight />
 #: src/components/Share/ShareDialog.tsx
 msgid "{0} Inherited permissions"
-msgstr ""
+msgstr "{0} Geerbte Berechtigungen"
 
 #~ msgid "Create Invite"
 #~ msgstr ""
 
 #: src/components/Share/ShareDialog.tsx
 msgid "<0><0/> Back</0> Create Invite"
-msgstr ""
+msgstr "<0><0/> Zurück</0> Einladung erstellen"
 
 #: src/routes/InviteRoute.tsx
 msgid "No invite token provided."
-msgstr ""
+msgstr "Kein Einladungstoken angegeben."
 
 #~ msgid "You've been invited"
 #~ msgstr ""
@@ -4997,11 +5026,11 @@ msgstr ""
 
 #: src/views/InvitePage.tsx
 msgid "Create account and accept"
-msgstr ""
+msgstr "Konto erstellen und akzeptieren"
 
 #: src/views/InvitePage.tsx
 msgid "I already have an account"
-msgstr ""
+msgstr "Ich habe bereits ein Konto"
 
 #~ msgid "What is AtomicServer?"
 #~ msgstr ""
@@ -5019,50 +5048,50 @@ msgstr ""
 #. placeholder {1}: resourceName ? ` "${resourceName}"` : ''
 #: src/views/InvitePage.tsx
 msgid "You've been invited to {0} {1}"
-msgstr ""
+msgstr "Sie wurden eingeladen, {0} {1}"
 
 #: src/routes/SyncRoute.tsx
 msgid "WS debug"
-msgstr ""
+msgstr "WS-Debug"
 
 #: src/routes/SyncRoute.tsx
 msgid "Logging to console"
-msgstr ""
+msgstr "Protokollierung in der Konsole"
 
 #: src/routes/SyncRoute.tsx
 msgid "Off"
-msgstr ""
+msgstr "Aus"
 
 #: src/routes/SyncRoute.tsx
 msgid "Disconnect"
-msgstr ""
+msgstr "Trennen"
 
 #: src/components/NetworkIndicator.tsx
 msgid "Running in offline mode. Reconnect in the sync menu."
-msgstr ""
+msgstr "Im Offline-Modus ausgeführt. Im Synchronisierungsmenü erneut verbinden."
 
 #. placeholder {0}: host
 #: src/components/NetworkIndicator.tsx
 msgid "Connected to {0}"
-msgstr ""
+msgstr "Verbunden mit {0}"
 
 #: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "+ Add"
-msgstr ""
+msgstr "+ Hinzufügen"
 
 #: src/routes/SettingsServer/index.tsx
 msgid "/app/sync"
-msgstr ""
+msgstr "/app/sync"
 
 #. placeholder {0}: ' '
 #: src/routes/SettingsServer/index.tsx
 msgid "Server settings have moved to the{0} <0>Sync page</0>."
-msgstr ""
+msgstr "Die Servereinstellungen wurden auf die{0} <0>Synchronisationsseite</0> verschoben."
 
 #: src/routes/SyncRoute.tsx
 msgid "How to run your own server"
-msgstr ""
+msgstr "Wie Sie Ihren eigenen Server betreiben"
 
 #~ msgid "Peer ID"
 #~ msgstr ""
@@ -5071,7 +5100,7 @@ msgstr ""
 #. placeholder {1}: data.count !== 1 ? 's' : ''
 #: src/routes/SyncRoute.tsx
 msgid "Synced {0} resource{1}"
-msgstr ""
+msgstr "{0} Ressource{1} synchronisiert"
 
 #~ msgid "Peer sync"
 #~ msgstr ""
@@ -5081,51 +5110,51 @@ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Peers"
-msgstr ""
+msgstr "Peers"
 
 #: src/routes/SyncRoute.tsx
 msgid "No peers connected"
-msgstr ""
+msgstr "Keine Peers verbunden"
 
 #~ msgid "Paste device ID"
 #~ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Node DID"
-msgstr ""
+msgstr "Node DID"
 
 #. placeholder {0}: irohNodeId.slice(0, 12)
 #: src/routes/SyncRoute.tsx
 msgid "did:ad:node:{0}..."
-msgstr ""
+msgstr "did:ad:node:{0}..."
 
 #: src/routes/SyncRoute.tsx
 msgid "Paste did:ad:node:..."
-msgstr ""
+msgstr "did:ad:node: einfügen..."
 
 #: src/routes/SyncRoute.tsx
 msgid "Your data lives on this device. Add peers or a remote server to sync."
-msgstr ""
+msgstr "Ihre Daten befinden sich auf diesem Gerät. Fügen Sie Peers oder einen Remote-Server hinzu, um sie zu synchronisieren."
 
 #: src/routes/SyncRoute.tsx
 msgid "Your data is stored locally on this device. When connected to a server, changes sync automatically."
-msgstr ""
+msgstr "Ihre Daten werden lokal auf diesem Gerät gespeichert. Wenn eine Verbindung zu einem Server besteht, werden Änderungen automatisch synchronisiert."
 
 #: src/routes/SyncRoute.tsx
 msgid "Local storage ready"
-msgstr ""
+msgstr "Lokaler Speicher bereit"
 
 #: src/routes/SyncRoute.tsx
 msgid "Remote server"
-msgstr ""
+msgstr "Remote-Server"
 
 #: src/routes/SyncRoute.tsx
 msgid "Embedded (local)"
-msgstr ""
+msgstr "Eingebettet (lokal)"
 
 #: src/routes/SyncRoute.tsx
 msgid "Local DB"
-msgstr ""
+msgstr "Lokale DB"
 
 #~ msgid "WASM + OPFS enabled"
 #~ msgstr ""
@@ -5135,29 +5164,31 @@ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Disabled (server-only)"
-msgstr ""
+msgstr "Deaktiviert (nur Server)"
 
 #: src/routes/SyncRoute.tsx
 msgid "Ready — WASM + OPFS"
-msgstr ""
+msgstr "Bereit — WASM + OPFS"
 
 #: src/routes/SyncRoute.tsx
 msgid "Enable local WASM DB"
-msgstr ""
+msgstr "Lokale WASM DB aktivieren"
 
 #: src/views/ResourcePage.tsx
 msgid "Still loading…"
-msgstr ""
+msgstr "Wird noch geladen…"
 
 #: src/views/ResourcePage.tsx
 msgid ""
 "The resource at <0/> hasn't loaded after 15\n"
 "seconds. It may not exist, or the server may be unreachable."
 msgstr ""
+"Die Ressource unter <0/> wurde nach 15 Sekunden nicht geladen.\n"
+"Sie existiert möglicherweise nicht oder der Server ist nicht erreichbar."
 
 #: src/views/ResourcePage.tsx
 msgid "Check the browser console for details, or try navigating back."
-msgstr ""
+msgstr "Überprüfen Sie die Browserkonsole für Details, oder versuchen Sie, zurück zu navigieren."
 
 #~ msgid "Failed to set agent identity after invite"
 #~ msgstr ""

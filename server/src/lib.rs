@@ -27,3 +27,4 @@ mod search;
 mod tests;
 mod trace;
 pub mod iroh_transport;
+// Force rebuild for blake3

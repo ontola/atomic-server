@@ -16,7 +16,7 @@ This makes resources portable, self-authenticating, and resolvable over both the
 
 ## The `did:ad` method
 
-Atomic Data defines the `did:ad` method with three forms, distinguished by an explicit type prefix:
+Atomic Data defines the `did:ad` method with four forms, distinguished by an explicit type prefix (or its absence, for Resources):
 
 ### Agent identifiers
 
@@ -60,6 +60,40 @@ Like resources, commits can include a routing hint to help discover them over de
 ```text
 did:ad:commit:{signature}?drive=did:ad:{drive_genesis}
 ```
+
+### Blob identifiers
+
+Binary file contents (the bytes behind a [File](files.md) resource) are identified by the `blob` prefix followed by the BLAKE3 hash of the bytes:
+
+```text
+did:ad:blob:{blake3}
+```
+
+The `blake3` is a 32-byte BLAKE3 hash, hex-encoded (64 characters). Hex rather than base64 because BLAKE3 tooling consumes and produces hex by convention, and because a content hash is conceptually a different thing from a key or signature.
+
+Blobs are **not Resources**. They have no parent, no class, no ACL, no commit history — they are raw, content-addressed bytes. The File resource that *describes* a blob is a normal Resource and carries all the metadata (filename, mimetype, parent for permissions); it points at its blob via a `blob` property whose value is a `did:ad:blob:` reference.
+
+#### Capability semantics
+
+Knowing a `did:ad:blob:` identifier is, by itself, the capability to retrieve the bytes — there is no second authorization check inside the blob store. This works because:
+
+- A 256-bit BLAKE3 hash is unforgeable: you cannot guess one.
+- The only ways to obtain it are to already have the bytes (and compute it yourself), or to read a Resource that references it.
+- Reading that Resource passes through the normal [hierarchy](hierarchy.md) authorization. That is where access control lives — the bytes simply follow.
+
+So the auth boundary is the **File resource**, not the blob. This is the same model used by Git objects, IPFS CIDs, S3 presigned URLs, and Iroh tickets. Treat a leaked blob DID the same as a leaked file.
+
+#### Resolution and routing
+
+Like resources and commits, blob DIDs accept a routing hint pointing at a Drive that is expected to hold the bytes:
+
+```text
+did:ad:blob:{blake3}?drive=did:ad:{drive_genesis}
+```
+
+A client looks up peers for the Drive via Mainline DHT or Reticulum, then asks any of them for the blob. Over the v2 sync protocol, blobs travel as raw 32-byte hashes inside `BLOB_REQUEST`/`BLOB_RESPONSE` frames — the DID is for *identity*, the bytes on the wire are the underlying hash. (This parallels commits: the DID is `did:ad:commit:{sig}`, but the wire never re-prepends the prefix.)
+
+The HTTP form `<origin>/download/files/{blake3}` is a deployment-specific alias for `did:ad:blob:{blake3}` and remains supported for browsers and existing tooling.
 
 ### Resource identifiers
 
@@ -181,7 +215,7 @@ The three variants map to different resolution strategies:
 | `Subject` variant | Format | Use case |
 |---|---|---|
 | `Internal` | `internal:/path` | Local resources on this server. Resolved to an absolute URL using the server's origin for serialization. |
-| `Did` | `did:ad:...` | Agents (by public key), Commits (by signature), and resources in Drives (by genesis commit signature). Routing hints (`?drive=did:ad:...`) are used for peer discovery via Reticulum or Mainline DHT. |
+| `Did` | `did:ad:...` | Agents (by public key), Commits (by signature), Blobs (by BLAKE3 hash), and Resources in Drives (by genesis commit signature). Routing hints (`?drive=did:ad:...`) are used for peer discovery via Reticulum or Mainline DHT. |
 | `External` | `https://...` | Resources on other servers. Resolved via HTTP. Used for backward compatibility and external linked data. |
 
 When serializing to [JSON-AD](core/json-ad.md), `Internal` subjects are resolved to absolute URLs using the server's configured origin.

@@ -121,13 +121,20 @@ async fn two_clients_sync() -> AtomicResult<()> {
     resource.save_remote(client_a.store()).await?;
     tracing::info!("Agent A saved edit");
 
-    // --- Client B: should receive a COMMIT ---
+    // --- Client B: should receive a binary UPDATE frame for the edited resource ---
     let received = tokio::time::timeout(Duration::from_secs(5), async {
         loop {
             match rx.recv().await {
-                Ok(WsMessage::Commit(json)) => {
-                    if json.contains(&subject) {
-                        return Ok::<String, atomic_lib::errors::AtomicError>(json);
+                Ok(WsMessage::Update {
+                    subject: s,
+                    loro_bytes,
+                    commit_id,
+                    ..
+                }) => {
+                    if s == subject {
+                        return Ok::<(Vec<u8>, Option<String>), atomic_lib::errors::AtomicError>(
+                            (loro_bytes, commit_id),
+                        );
                     }
                 }
                 Ok(WsMessage::Error(e)) => {
@@ -143,10 +150,15 @@ async fn two_clients_sync() -> AtomicResult<()> {
     .await
     .map_err(|_| "Timeout: Agent B did not receive the commit within 5 seconds")??;
 
-    tracing::info!("Agent B received commit!");
+    let (loro_bytes, commit_id) = received;
+    tracing::info!(
+        "Agent B received UPDATE: {} loro bytes, commit_id={:?}",
+        loro_bytes.len(),
+        commit_id
+    );
     assert!(
-        received.contains("loroUpdate"),
-        "Commit should contain a loroUpdate"
+        !loro_bytes.is_empty(),
+        "UPDATE frame should carry non-empty Loro bytes"
     );
 
     // --- Verify: fetch the resource as Client B, check the name ---

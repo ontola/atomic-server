@@ -94,7 +94,7 @@ mod peer_sync_tests {
                         push.entries.len(),
                         push.drive
                     );
-                    let count = crate::sync::engine::import_sync_push(&push, &db_b, &ForAgent::Sudo).await;
+                    let (count, _blob_requests) = crate::sync::engine::import_sync_push(&push, &db_b, &ForAgent::Sudo).await;
                     total_imported += count;
                 }
             } else if tag == crate::sync::protocol::tag::SYNC_DIFF {
@@ -126,6 +126,186 @@ mod peer_sync_tests {
         );
 
         println!("SUCCESS: Device B has '{}' with strokes!", name);
+    }
+
+    #[tokio::test]
+    async fn sync_blobs_via_engine() {
+        // === Device A: create agent, drive, resource with blob ===
+        let db_a = Db::init_temp("sync_blobs_a").await.unwrap();
+        let (_agent_a, drive_a) = db_a.setup("Alice").await.unwrap();
+
+        let test_content = b"sync me daddy";
+        let hash = blake3::hash(test_content);
+        let hash_hex = hash.to_hex().to_string();
+
+        // Store blob on A
+        db_a.kv
+            .insert(crate::db::trees::Tree::Blobs, hash.as_bytes(), test_content)
+            .unwrap();
+
+        // Create file resource on A
+        let _file_subject = db_a
+            .create_resource(
+                crate::urls::FILE,
+                &drive_a,
+                "test.txt",
+                Some(vec![
+                    (crate::urls::BLOB, crate::Value::AtomicUrl(format!("did:ad:blob:{}", hash_hex.clone()).into())),
+                    (
+                        crate::urls::INTERNAL_ID,
+                        crate::Value::String(hash_hex.clone()),
+                    ),
+                ]),
+            )
+            .await
+            .unwrap();
+
+        // === Device B: empty ===
+        let db_b = Db::init_temp("sync_blobs_b").await.unwrap();
+
+        // === Sync Sync Sync ===
+
+        // 1. Device B sends SYNC to A
+        let response_frames = crate::sync::engine::handle_sync_vv(
+            &drive_a,
+            "", // empty hash
+            &vec![],
+            &std::collections::HashMap::new(),
+            &db_a,
+            &ForAgent::Sudo,
+        )
+        .await;
+
+        // 2. Device B processes SYNC_PUSH from A
+        let mut blob_requests = vec![];
+        for frame in response_frames {
+            if frame[0] == crate::sync::protocol::tag::SYNC_PUSH {
+                let push = crate::sync::protocol::decode_sync_push(&frame[1..]).unwrap();
+                let (_count, reqs) =
+                    crate::sync::engine::import_sync_push(&push, &db_b, &ForAgent::Sudo).await;
+                blob_requests.extend(reqs);
+            }
+        }
+
+        // Verify B realized it's missing the blob
+        assert_eq!(blob_requests.len(), 1);
+        assert_eq!(blob_requests[0][0], crate::sync::protocol::tag::BLOB_REQUEST);
+
+        // 3. Device B sends BLOB_REQUEST to A (simulated)
+        let mut agent_a = ForAgent::Sudo;
+        let blob_responses =
+            crate::sync::engine::handle_frame(&blob_requests[0], &db_a, &mut agent_a).await;
+
+        assert_eq!(blob_responses.len(), 1);
+        assert_eq!(
+            blob_responses[0][0],
+            crate::sync::protocol::tag::BLOB_RESPONSE
+        );
+
+        // 4. Device B processes BLOB_RESPONSE from A
+        let mut agent_b = ForAgent::Sudo;
+        crate::sync::engine::handle_frame(&blob_responses[0], &db_b, &mut agent_b).await;
+
+        // 5. Verify B has the blob!
+        let blob_b = db_b
+            .kv
+            .get(crate::db::trees::Tree::Blobs, hash.as_bytes())
+            .unwrap()
+            .unwrap();
+        assert_eq!(blob_b, test_content);
+    }
+
+    /// Two-peer Iroh roundtrip: Device A holds a File resource and its blob;
+    /// Device B has nothing. After `sync_drive_with_peer_using`, B should
+    /// have both the resource AND the bytes in `Tree::Blobs`. Exercises the
+    /// real Iroh transport (`peer::start` + `Endpoint::connect`), the
+    /// handshake `SYNC` → `SYNC_PUSH` exchange, and the `BLOB_REQUEST` /
+    /// `BLOB_RESPONSE` frames running over QUIC streams.
+    ///
+    /// Uses `discovery_n0()` so the test depends on iroh.network relays;
+    /// other tests in this module already do the same.
+    #[cfg(feature = "iroh")]
+    #[tokio::test]
+    async fn iroh_blob_roundtrip() {
+        use crate::sync::peer;
+
+        let db_a = Db::init_temp("iroh_blob_a").await.unwrap();
+        let (agent_a, drive_a) = db_a.setup("Alice").await.unwrap();
+        let secret = agent_a.build_secret().unwrap();
+
+        // Stage the blob on A.
+        let test_content = b"iroh blob roundtrip payload";
+        let hash = blake3::hash(test_content);
+        db_a.kv
+            .insert(crate::db::trees::Tree::Blobs, hash.as_bytes(), test_content)
+            .unwrap();
+
+        // Create the File resource referencing the hash. (Until the ontology
+        // rename to `blob: did:ad:blob:<hash>` lands, sync-engine matching
+        // still uses BLAKE3/INTERNAL_ID.)
+        let _file = db_a
+            .create_resource(
+                crate::urls::FILE,
+                &drive_a,
+                "iroh-test.bin",
+                Some(vec![
+                    (
+                        crate::urls::BLOB,
+                        crate::Value::AtomicUrl(format!("did:ad:blob:{}", hash.to_hex()).into()),
+                    ),
+                    (
+                        crate::urls::INTERNAL_ID,
+                        crate::Value::String(hash.to_hex().to_string()),
+                    ),
+                ]),
+            )
+            .await
+            .unwrap();
+
+        // Device B must trust A's drive subject — load A's agent so commit
+        // signatures verify on B during import.
+        let db_b = Db::init_temp("iroh_blob_b").await.unwrap();
+        db_b.load_agent_from_secret(&secret).await.unwrap();
+
+        // Bring up A's Iroh listener and a client endpoint for B.
+        let (node_id_a, router_a) = peer::start(db_a.clone()).await.unwrap();
+        let ep_b = iroh::Endpoint::builder()
+            .discovery_n0()
+            .bind()
+            .await
+            .unwrap();
+        let node_addr_a = router_a.endpoint().node_addr().await.unwrap();
+        ep_b.add_node_addr(node_addr_a).unwrap();
+
+        let imported =
+            peer::sync_drive_with_peer_using(&ep_b, &node_id_a.to_string(), &drive_a, &db_b)
+                .await
+                .expect("sync should succeed");
+        assert!(
+            imported >= 1,
+            "B should import at least the File resource, got {imported}"
+        );
+
+        // The sync handshake fires BLOB_REQUEST asynchronously; give the
+        // BLOB_RESPONSE a chance to arrive and land in B's Tree::Blobs.
+        // 2s is generous for an in-process Iroh roundtrip.
+        for _ in 0..40 {
+            if db_b
+                .kv
+                .contains_key(crate::db::trees::Tree::Blobs, hash.as_bytes())
+                .unwrap_or(false)
+            {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+
+        let blob_b = db_b
+            .kv
+            .get(crate::db::trees::Tree::Blobs, hash.as_bytes())
+            .expect("kv get should not error")
+            .expect("B should have the blob after sync — BLOB_REQUEST/RESPONSE roundtrip");
+        assert_eq!(blob_b, test_content);
     }
 
     /// Test that sync respects authorization:

@@ -75,6 +75,7 @@ export class AtomicServer {
       this.endToEnd(netlifyAuthToken),
       this.jsLint(),
       this.jsTest(),
+      this.jsTestIntegration(),
       this.rustTest(),
       this.rustClippy(),
       this.rustFmt(),
@@ -98,6 +99,197 @@ export class AtomicServer {
     return depsContainer
       .withWorkdir('/app')
       .withExec(['pnpm', 'run', 'test'])
+      .stdout();
+  }
+
+  /** Builds the WASM bundle (wasm-pack) used by `NodeClientDb` in the
+   *  `@tomic/lib` integration tests. Returns a Directory containing the
+   *  emitted `pkg/` artifacts. */
+  @func()
+  wasmBuild(): Directory {
+    const cargoCache = dag.cacheVolume('cargo');
+    return dag
+      .container()
+      .from(RUST_IMAGE)
+      .withMountedCache('/usr/local/cargo/registry', cargoCache)
+      .withExec(['cargo', 'install', 'wasm-pack'])
+      .withFile('/code/Cargo.toml', this.source.file('Cargo.toml'))
+      .withFile('/code/Cargo.lock', this.source.file('Cargo.lock'))
+      // wasm-pack runs `cargo metadata` which validates every workspace
+      // member, so all members must be present even though we only build
+      // the wasm crate.
+      .withDirectory('/code/lib', this.source.directory('lib'))
+      .withDirectory('/code/wasm', this.source.directory('wasm'))
+      .withDirectory('/code/server', this.source.directory('server'))
+      .withDirectory('/code/cli', this.source.directory('cli'))
+      .withDirectory('/code/desktop', this.source.directory('desktop'))
+      .withDirectory(
+        '/code/plugin-examples',
+        this.source.directory('plugin-examples'),
+      )
+      .withDirectory(
+        '/code/atomic-plugin',
+        this.source.directory('atomic-plugin'),
+      )
+      .withMountedCache('/code/target', dag.cacheVolume('rust-wasm-target'))
+      .withWorkdir('/code/wasm')
+      // `getrandom_backend=wasm_js` matches data-browser's `build:wasm` script.
+      .withEnvVariable(
+        'CARGO_ENCODED_RUSTFLAGS',
+        '--cfggetrandom_backend="wasm_js"',
+      )
+      .withExec([
+        'wasm-pack',
+        'build',
+        '--target',
+        'web',
+        '--out-dir',
+        'pkg',
+      ])
+      .directory('/code/wasm/pkg');
+  }
+
+  /** Builds the `atomic-server` binary without depending on a built
+   *  data-browser bundle. `ATOMICSERVER_SKIP_JS_BUILD=true` short-circuits
+   *  `server/build.rs`'s JS bundling step. Sufficient for headless API
+   *  tests that don't render the front-end. */
+  @func()
+  rustBuildSlim(): File {
+    const cargoCache = dag.cacheVolume('cargo');
+    return dag
+      .container()
+      .from(RUST_IMAGE)
+      .withMountedCache('/usr/local/cargo/registry', cargoCache)
+      .withFile('/code/Cargo.toml', this.source.file('Cargo.toml'))
+      .withFile('/code/Cargo.lock', this.source.file('Cargo.lock'))
+      .withDirectory('/code/server', this.source.directory('server'))
+      .withDirectory('/code/lib', this.source.directory('lib'))
+      .withDirectory('/code/cli', this.source.directory('cli'))
+      .withDirectory('/code/desktop', this.source.directory('desktop'))
+      .withDirectory('/code/wasm', this.source.directory('wasm'))
+      .withDirectory(
+        '/code/plugin-examples',
+        this.source.directory('plugin-examples'),
+      )
+      .withDirectory(
+        '/code/atomic-plugin',
+        this.source.directory('atomic-plugin'),
+      )
+      .withMountedCache('/code/target', dag.cacheVolume('rust-slim-target'))
+      .withWorkdir('/code')
+      .withEnvVariable('ATOMICSERVER_SKIP_JS_BUILD', 'true')
+      // build.rs still wants to bundle the data-browser dist as embedded
+      // static files. Skipping the JS build is fine — but we still need
+      // *some* directory to satisfy `static_files::resource_dir`. Drop a
+      // placeholder index.html so the macro has something to embed.
+      .withExec(['mkdir', '-p', '/code/server/assets_tmp'])
+      .withExec([
+        'sh',
+        '-c',
+        'echo "<html><body>integration test stub</body></html>" > /code/server/assets_tmp/index.html',
+      ])
+      .withExec(['cargo', 'build', '-p', 'atomic-server'])
+      .withExec([
+        'cp',
+        '/code/target/debug/atomic-server',
+        '/atomic-server-binary',
+      ])
+      .file('/atomic-server-binary');
+  }
+
+  /** Runs the `@tomic/lib` integration tests, which spawn a real
+   *  `atomic-server` and use `NodeClientDb`. Both artefacts (binary + WASM)
+   *  come from the Rust workspace and are mounted at the paths the fixture
+   *  (`browser/lib/tests/server-fixture.ts`) resolves relative to the repo
+   *  root.
+   *
+   *  Builds a minimal JS environment from scratch instead of reusing
+   *  `jsBuild()` — the full workspace build runs data-browser's `build:wasm`
+   *  step which expects the wasm source mounted, while these tests only
+   *  need `@tomic/lib`'s source + node_modules. */
+  @func()
+  async jsTestIntegration(): Promise<string> {
+    const binary = this.rustBuildSlim();
+    const wasmPkg = this.wasmBuild();
+
+    const browser = this.source.directory('browser');
+    const pnpmContainer = dag
+      .container()
+      .from(NODE_IMAGE)
+      .withExec(['npm', 'install', '--global', 'corepack@latest'])
+      .withExec(['corepack', 'enable'])
+      .withExec(['corepack', 'prepare', 'pnpm@latest-10', '--activate'])
+      .withWorkdir('/repo/browser');
+
+    // Mount workspace package manifests for caching and `pnpm install`.
+    const installed = pnpmContainer
+      .withFile('/repo/browser/package.json', browser.file('package.json'))
+      .withFile('/repo/browser/pnpm-lock.yaml', browser.file('pnpm-lock.yaml'))
+      .withFile(
+        '/repo/browser/pnpm-workspace.yaml',
+        browser.file('pnpm-workspace.yaml'),
+      )
+      .withFile(
+        '/repo/browser/data-browser/package.json',
+        browser.file('data-browser/package.json'),
+      )
+      .withFile(
+        '/repo/browser/lib/package.json',
+        browser.file('lib/package.json'),
+      )
+      .withFile(
+        '/repo/browser/react/package.json',
+        browser.file('react/package.json'),
+      )
+      .withFile(
+        '/repo/browser/svelte/package.json',
+        browser.file('svelte/package.json'),
+      )
+      .withFile(
+        '/repo/browser/cli/package.json',
+        browser.file('cli/package.json'),
+      )
+      .withFile(
+        '/repo/browser/create-template/package.json',
+        browser.file('create-template/package.json'),
+      )
+      .withFile(
+        '/repo/browser/plugin/package.json',
+        browser.file('plugin/package.json'),
+      )
+      .withFile(
+        '/repo/browser/e2e/package.json',
+        browser.file('e2e/package.json'),
+      )
+      // The lib's tsconfig.json extends the workspace-level tsconfigs.
+      .withFile(
+        '/repo/browser/tsconfig.json',
+        browser.file('tsconfig.json'),
+      )
+      .withFile(
+        '/repo/browser/tsconfig.build.json',
+        browser.file('tsconfig.build.json'),
+      )
+      .withExec([
+        'sh',
+        '-c',
+        'yes | pnpm install --frozen-lockfile --shamefully-hoist',
+      ]);
+
+    // Drop in @tomic/lib source. Other packages are unused by the
+    // integration tests, so we don't bother mounting them.
+    const withSource = installed.withDirectory(
+      '/repo/browser/lib',
+      browser.directory('lib'),
+    );
+
+    return withSource
+      .withFile('/repo/target/debug/atomic-server', binary, {
+        permissions: 0o755,
+      })
+      .withDirectory('/repo/wasm/pkg', wasmPkg)
+      .withWorkdir('/repo/browser/lib')
+      .withExec(['pnpm', 'run', 'test:integration'])
       .stdout();
   }
 
@@ -208,10 +400,21 @@ export class AtomicServer {
       .withDirectory(
         '/app/lib-defaults',
         this.source.directory('lib/defaults'),
-      );
+      )
+      // Provide the prebuilt WASM artifacts so data-browser's `build:wasm`
+      // step can be skipped (`wasm-pack` isn't available in this Node-only
+      // container, and mounting the Rust toolchain just for this would
+      // bloat the JS image significantly).
+      .withDirectory('/app/data-browser/public/wasm', this.wasmBuild())
+      // data-browser imports the repo-root logo from `../../../../logo.svg`
+      // and `../../../../../logo.svg`. Browser mount sits at /app, so those
+      // resolve to /logo.svg. Place the asset there.
+      .withFile('/logo.svg', this.source.file('logo.svg'));
 
     // Build all packages since they may depend on each other's built artifacts
-    return sourceContainer.withExec(['pnpm', 'run', 'build']);
+    return sourceContainer
+      .withEnvVariable('SKIP_WASM_BUILD', '1')
+      .withExec(['pnpm', 'run', 'build']);
   }
 
   @func()
@@ -232,16 +435,29 @@ export class AtomicServer {
       .withExec(['apt', 'install', '-y', 'nasm'])
       .withMountedCache('/usr/local/cargo/registry', cargoCache)
       .withExec(['rustup', 'component', 'add', 'clippy'])
-      .withExec(['rustup', 'component', 'add', 'rustfmt'])
-      .withExec(['cargo', 'install', 'cargo-nextest']);
+      .withExec(['rustup', 'component', 'add', 'rustfmt']);
+    // cargo-nextest used to be installed here, but recent versions need
+    // a newer toolchain than the musl-cross image ships and a USDT crate
+    // refuses to compile on this target. Moved to `rustTest()` so the
+    // build / clippy / fmt / atomicService paths don't pay that cost.
 
     const sourceContainer = rustContainer
       .withFile('/code/Cargo.toml', source.file('Cargo.toml'))
       .withFile('/code/Cargo.lock', source.file('Cargo.lock'))
       .withFile('/code/Cross.toml', source.file('Cross.toml'))
+      // Cargo validates every workspace member listed in Cargo.toml, so
+      // mount all of them — not just the server/lib/cli we actually
+      // build.
       .withDirectory('/code/server', source.directory('server'))
       .withDirectory('/code/lib', source.directory('lib'))
       .withDirectory('/code/cli', source.directory('cli'))
+      .withDirectory('/code/desktop', source.directory('desktop'))
+      .withDirectory('/code/wasm', source.directory('wasm'))
+      .withDirectory(
+        '/code/plugin-examples',
+        source.directory('plugin-examples'),
+      )
+      .withDirectory('/code/atomic-plugin', source.directory('atomic-plugin'))
       .withMountedCache('/code/target', dag.cacheVolume('rust-target'))
       .withWorkdir('/code')
       .withExec(['cargo', 'fetch']);
@@ -252,9 +468,12 @@ export class AtomicServer {
       browserDir,
     );
 
+    // Scope the build to `atomic-server` so cargo doesn't try to build
+    // workspace siblings like the wasm cdylib plugin examples — which
+    // can't be compiled for the host musl target.
     const buildArgs = release
-      ? ['cargo', 'build', '--release']
-      : ['cargo', 'build'];
+      ? ['cargo', 'build', '--release', '-p', 'atomic-server']
+      : ['cargo', 'build', '-p', 'atomic-server'];
     const targetPath = release
       ? `/code/target/${target}/release/atomic-server`
       : `/code/target/${target}/debug/atomic-server`;
@@ -278,7 +497,20 @@ export class AtomicServer {
 
   @func()
   rustTest(): Promise<string> {
-    return this.rustBuild().withExec(['cargo', 'nextest', 'run']).stdout();
+    return (
+      this.rustBuild()
+        // Install nextest from a prebuilt tarball — the `cargo install`
+        // path fails on the musl-cross image (see the comment in
+        // rustBuild()). Pinning the URL guarantees the artefact is
+        // ABI-compatible with the host triple of the build container.
+        .withExec([
+          'sh',
+          '-c',
+          'curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C /usr/local/cargo/bin',
+        ])
+        .withExec(['cargo', 'nextest', 'run'])
+        .stdout()
+    );
   }
 
   @func()
@@ -372,6 +604,31 @@ export class AtomicServer {
   //     .withExec(["cp", binaryPath, "/atomic-server-binary"]);
   // }
 
+  /** Diagnostic: curl `/app/dev-drive` against the atomic service to see
+   *  what the e2e tests actually receive. */
+  @func()
+  async probeAtomicService(): Promise<string> {
+    return dag
+      .container()
+      .from('alpine:latest')
+      .withExec(['apk', 'add', '--no-cache', 'curl'])
+      .withServiceBinding('atomic', this.atomicService())
+      .withExec([
+        'sh',
+        '-c',
+        `for i in $(seq 1 20); do curl -fsS http://${ATOMIC_DOMAIN}:9883/setup -H 'Accept: application/ad+json' && break || sleep 1; done; ` +
+          `echo '== /app/dev-drive headers ==='; ` +
+          `curl -sS -D - -o /dev/null -H 'Accept: text/html' http://${ATOMIC_DOMAIN}:9883/app/dev-drive; ` +
+          `echo '== /assets/index js HEAD ==='; ` +
+          `JS=$(curl -sS -H 'Accept: text/html' http://${ATOMIC_DOMAIN}:9883/app/dev-drive | grep -oE 'src="/assets/index[^"]+"' | head -1 | sed 's/src="//;s/"//'); ` +
+          `echo "JS path: $JS"; ` +
+          `curl -sS -D - -o /dev/null http://${ATOMIC_DOMAIN}:9883$JS; ` +
+          `echo '== /app/welcome status ==='; ` +
+          `curl -sS -o /dev/null -w 'status=%{http_code}\\n' -H 'Accept: text/html' http://${ATOMIC_DOMAIN}:9883/app/welcome`,
+      ])
+      .stdout();
+  }
+
   @func()
   /** Returns a Service running atomic-server for use in tests */
   atomicService(): Service {
@@ -383,6 +640,10 @@ export class AtomicServer {
         permissions: 0o755,
       })
       .withEnvVariable('ATOMIC_DOMAIN', ATOMIC_DOMAIN)
+      // First-run flag — sets up the bootstrap agent + public drive +
+      // /app/dev-drive endpoint that the e2e tests' `beforeEach` relies on.
+      // Without this, every test's `before()` hook times out fetching it.
+      .withEnvVariable('ATOMIC_INITIALIZE', 'true')
       .withExposedPort(9883)
       .withEntrypoint(['/atomic-server-bin'])
       .asService()

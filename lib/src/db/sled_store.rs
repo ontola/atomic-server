@@ -23,6 +23,7 @@ pub struct SledStore {
     drive_mapping: sled::Tree,
     did_mapping: sled::Tree,
     loro_snapshots: sled::Tree,
+    blobs: sled::Tree,
 }
 
 impl SledStore {
@@ -45,6 +46,7 @@ impl SledStore {
         let drive_mapping = db.open_tree(Tree::DriveMapping)?;
         let did_mapping = db.open_tree(Tree::DidMapping)?;
         let loro_snapshots = db.open_tree(Tree::LoroSnapshots)?;
+        let blobs = db.open_tree(Tree::Blobs)?;
 
         Ok(SledStore {
             db,
@@ -57,6 +59,7 @@ impl SledStore {
             drive_mapping,
             did_mapping,
             loro_snapshots,
+            blobs,
         })
     }
 
@@ -76,6 +79,7 @@ impl SledStore {
             Tree::DriveMapping => &self.drive_mapping,
             Tree::DidMapping => &self.did_mapping,
             Tree::LoroSnapshots => &self.loro_snapshots,
+            Tree::Blobs => &self.blobs,
         }
     }
 }
@@ -154,6 +158,7 @@ impl KvStore for SledStore {
         let mut batch_drive_mapping = sled::Batch::default();
         let mut batch_did_mapping = sled::Batch::default();
         let mut batch_loro_snapshots = sled::Batch::default();
+        let mut batch_blobs = sled::Batch::default();
 
         for op in operations {
             let batch = match op.tree {
@@ -166,6 +171,7 @@ impl KvStore for SledStore {
                 Tree::DriveMapping => &mut batch_drive_mapping,
                 Tree::DidMapping => &mut batch_did_mapping,
                 Tree::LoroSnapshots => &mut batch_loro_snapshots,
+                Tree::Blobs => &mut batch_blobs,
             };
             match op.method {
                 Method::Insert => {
@@ -211,10 +217,14 @@ impl KvStore for SledStore {
             )
             .map_err(|e: TransactionError<_>| format!("Failed to apply transaction: {}", e))?;
 
-        // LoroSnapshots is applied outside the main transaction (sled limits tuple size to 9).
+        // LoroSnapshots and Blobs are applied outside the main transaction (sled limits tuple size to 9).
         self.loro_snapshots
             .apply_batch(batch_loro_snapshots)
             .map_err(|e| format!("Failed to apply loro_snapshots batch: {}", e))?;
+
+        self.blobs
+            .apply_batch(batch_blobs)
+            .map_err(|e| format!("Failed to apply blobs batch: {}", e))?;
 
         Ok(())
     }

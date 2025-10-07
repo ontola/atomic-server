@@ -7,6 +7,12 @@ export default defineConfig(options => ({
   minify: !options.watch,
   entry: {
     index: 'src/index.ts',
+    // The DedicatedWorker that hosts the WASM ClientDb. Bundled as its own
+    // entry so consumers can load it via `new Worker(new URL(...,
+    // import.meta.url))`. Without this, the previous setup relied on a
+    // hand-written `public/wasm/client-db-worker.js` that drifted out of
+    // sync with the TS source whenever message types changed.
+    'client-db.worker': 'src/client-db.worker.ts',
     'ontologies/core': 'src/ontologies/core.ts',
     'ontologies/server': 'src/ontologies/server.ts',
     'ontologies/dataBrowser': 'src/ontologies/dataBrowser.ts',

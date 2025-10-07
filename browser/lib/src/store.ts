@@ -18,9 +18,9 @@ import { JSONADParser } from './parse.js';
 import { Resource, unknownSubject } from './resource.js';
 import { type SearchOpts, buildSearchSubject } from './search.js';
 import { stringToSlug } from './stringToSlug.js';
-import type { JSONValue } from './value.js';
+import { bytesToHex, hexToBytes, type JSONValue } from './value.js';
 import { WSClient } from './websockets.js';
-import { endpoints } from './urls.js';
+import { BLOB, endpoints, INTERNAL_ID } from './urls.js';
 import { initOntologies } from './ontologies/index.js';
 import { decodeB64, encodeB64 } from './base64.js';
 import type {
@@ -45,6 +45,7 @@ type ErrorCallback = (e: Error) => void;
 type ConnectionStateCallback = (connected: boolean) => void;
 type SyncStatusCallback = (status: StoreSyncStatus) => void;
 type CommitLogCallback = (entries: CommitLogEntry[]) => void;
+type QueryMembershipChangedCallback = (change: QueryMembershipChange) => void;
 
 type ServerURLCallback = (serverURL: string) => void;
 type DriveCallback = (drive: string) => void;
@@ -114,7 +115,13 @@ export interface CommitLogEntry {
   id: string;
   timestamp: number;
   direction: 'outgoing' | 'incoming';
-  status: 'sent' | 'failed' | 'received';
+  /**
+   * - `pending`  — locally signed, queued, not yet posted to the server.
+   * - `sent`     — server accepted the commit.
+   * - `failed`   — server rejected, or the network call threw.
+   * - `received` — incoming commit pushed to us by the server.
+   */
+  status: 'pending' | 'sent' | 'failed' | 'received';
   subject: string;
   signer?: string;
   previousCommit?: string;
@@ -151,8 +158,28 @@ export enum StoreEvents {
   /** Event that gets called whenever sync/debug status changes */
   SyncStatusChanged = 'sync-status-changed',
   CommitLogChanged = 'commit-log-changed',
+  /**
+   * A drive-wide query subscription told us that some resources were added or
+   * removed from the drive. Fired AFTER the refetch of the affected subjects
+   * has been kicked off, so consumers (useCollection / useChildren) can call
+   * invalidate to recompute their member list against the now-fresh store.
+   */
+  QueryMembershipChanged = 'query-membership-changed',
   /** Event that gets called whenever the store encounters an error */
   Error = 'error',
+}
+
+export interface QueryMembershipChange {
+  /** Property the subscription was filtered on, if any. */
+  property?: string;
+  /** Value the subscription was filtered on, if any. */
+  value?: string;
+  /** Drive scope of the subscription. */
+  drive?: string;
+  /** Subjects that joined the result set. */
+  added: string[];
+  /** Subjects that left the result set. */
+  removed: string[];
 }
 
 export interface ImportJsonADOptions {
@@ -182,6 +209,7 @@ type StoreEventHandlers = {
   [StoreEvents.ConnectionChanged]: ConnectionStateCallback;
   [StoreEvents.SyncStatusChanged]: SyncStatusCallback;
   [StoreEvents.CommitLogChanged]: CommitLogCallback;
+  [StoreEvents.QueryMembershipChanged]: QueryMembershipChangedCallback;
   [StoreEvents.Error]: ErrorCallback;
 };
 
@@ -247,6 +275,15 @@ export class Store {
   private _commitLog: CommitLogEntry[] = [];
 
   private eventManager = new EventManager<StoreEvents, StoreEventHandlers>();
+
+  /**
+   * Subjects that were just manually created via {@link notifyResourceManuallyCreated},
+   * keyed to the timestamp of the notification. Late `useEffect` subscribers
+   * miss the fire-and-forget event when navigation completes faster than the
+   * new component mounts; they read this map via {@link consumeRecentlyCreated}
+   * to learn the resource is fresh.
+   */
+  private recentlyCreatedSubjects: Map<string, number> = new Map();
 
   private client: Client;
 
@@ -486,9 +523,7 @@ export class Store {
       if (allVVs[subject]) continue;
 
       // Only include resources belonging to this drive
-      const parent = resource.get(core.properties.parent) as
-        | string
-        | undefined;
+      const parent = resource.get(core.properties.parent) as string | undefined;
 
       if (subject !== drive && parent !== drive) continue;
 
@@ -622,7 +657,10 @@ export class Store {
       const resource = new Resource(subject);
 
       resource.applyHydratedValues(
-        Object.entries(parsed).filter(([key]) => key !== '@id') as [string, JSONValue][],
+        Object.entries(parsed).filter(([key]) => key !== '@id') as [
+          string,
+          JSONValue,
+        ][],
       );
 
       resource.getLoroDoc();
@@ -800,7 +838,9 @@ export class Store {
         if (jsonAd) {
           const isDid = resource.subject.startsWith('did:ad:');
           if (isDid) {
-            console.info(`[ClientDb] PUT start: ${short} (${jsonAd.length} chars)`);
+            console.info(
+              `[ClientDb] PUT start: ${short} (${jsonAd.length} chars)`,
+            );
           }
           this.clientDb
             .putResource(jsonAd)
@@ -808,9 +848,9 @@ export class Store {
               // Verify every put round-trips. Previously only parent-having
               // resources were checked, which hid silent drops for top-level
               // DID resources (drives have no parent).
-              const stored = await this.clientDb!.getResource(resource.subject).catch(
-                () => null,
-              );
+              const stored = await this.clientDb!.getResource(
+                resource.subject,
+              ).catch(() => null);
               if (!stored) {
                 console.error(
                   `[ClientDb] PUT succeeded but resource NOT found: ${short}`,
@@ -942,8 +982,7 @@ export class Store {
       noParent: true,
       propVals: {
         [core.properties.name]: name,
-        [core.properties.description]:
-          description ?? 'Your personal drive.',
+        [core.properties.description]: description ?? 'Your personal drive.',
         [core.properties.write]: [agent.subject],
         [core.properties.read]: [agent.subject],
       },
@@ -963,7 +1002,6 @@ export class Store {
 
     return drive;
   }
-
 
   public async search(query: string, opts: SearchOpts = {}): Promise<string[]> {
     // Try local search first if the index has content and no filters are set.
@@ -1187,7 +1225,10 @@ export class Store {
     const resource = new Resource(subject);
 
     resource.applyHydratedValues(
-      Object.entries(parsed).filter(([key]) => key !== '@id') as [string, JSONValue][],
+      Object.entries(parsed).filter(([key]) => key !== '@id') as [
+        string,
+        JSONValue,
+      ][],
     );
 
     resource.getLoroDoc();
@@ -1497,7 +1538,9 @@ export class Store {
         return fromDb;
       }
 
-      throw new Error(`Resource ${subjectRaw} not found locally and server is offline`);
+      throw new Error(
+        `Resource ${subjectRaw} not found locally and server is offline`,
+      );
     }
 
     const result = await this.fetchResourceFromServer(resolved);
@@ -1699,7 +1742,22 @@ export class Store {
   public async notifyResourceManuallyCreated(
     resource: Resource,
   ): Promise<void> {
+    this.recentlyCreatedSubjects.set(resource.subject, Date.now());
     await this.eventManager.emit(StoreEvents.ResourceManuallyCreated, resource);
+  }
+
+  /**
+   * Returns true and clears the flag if {@link notifyResourceManuallyCreated}
+   * fired for this subject within `windowMs`. Call from `useEffect` on mount
+   * (not `useState`) — this mutates store state and is not safe to run during
+   * render. The clear means only the first caller wins, which is fine for the
+   * one-of-many-mounts race this is meant to plug.
+   */
+  public consumeRecentlyCreated(subject: string, windowMs = 2000): boolean {
+    const ts = this.recentlyCreatedSubjects.get(subject);
+    if (ts === undefined) return false;
+    this.recentlyCreatedSubjects.delete(subject);
+    return Date.now() - ts <= windowMs;
   }
 
   /** Parses the HTML document for `JSON-AD` data in <meta> tags, adds it to the store */
@@ -2168,14 +2226,57 @@ export class Store {
   }
 
   private pushCommitLog(entry: Omit<CommitLogEntry, 'id'>): void {
-    this._commitLog = [
-      {
+    // Dedup by commitId so a `pending` entry transitions in place to `sent` /
+    // `failed` once the push resolves, rather than producing two rows for the
+    // same commit. Incoming commits without an outgoing pending counterpart
+    // simply prepend.
+    const existingIdx = entry.commitId
+      ? this._commitLog.findIndex(e => e.commitId === entry.commitId)
+      : -1;
+
+    if (existingIdx >= 0) {
+      const merged: CommitLogEntry = {
+        ...this._commitLog[existingIdx],
         ...entry,
-        id: ulid(),
-      },
-      ...this._commitLog,
-    ].slice(0, 50);
+      };
+      this._commitLog = [
+        merged,
+        ...this._commitLog.slice(0, existingIdx),
+        ...this._commitLog.slice(existingIdx + 1),
+      ];
+    } else {
+      this._commitLog = [
+        {
+          ...entry,
+          id: ulid(),
+        },
+        ...this._commitLog,
+      ].slice(0, 50);
+    }
     this.eventManager.emit(StoreEvents.CommitLogChanged, this.getCommitLog());
+  }
+
+  /**
+   * Records a locally-signed but not-yet-pushed commit as `pending` in the
+   * commit log. When the push resolves, {@link postCommit} reuses the same
+   * `commitId` so the entry transitions in place to `sent` or `failed`.
+   */
+  public logPendingCommit(commit: Commit): void {
+    this.pushCommitLog({
+      timestamp: Date.now(),
+      direction: 'outgoing',
+      status: 'pending',
+      subject: commit.subject,
+      signer: commit.signer,
+      previousCommit: commit.previousCommit,
+      commitId: commit.signature
+        ? `did:ad:commit:${commit.signature}`
+        : undefined,
+      hasLoroUpdate: !!commit.loroUpdate,
+      destroy: !!commit.destroy,
+      summary: this.summarizeCommit(commit),
+      propertySummaries: this.summarizeCommitProperties(commit),
+    });
   }
 
   private summarizeCommit(commit: Commit): string {
@@ -2207,7 +2308,8 @@ export class Store {
       const materialized = new Resource(commit.subject);
       materialized.importLoroUpdate(commit.loroUpdate);
 
-      const properties = materialized.getEntries()
+      const properties = materialized
+        .getEntries()
         .filter(
           ([prop]) =>
             prop !== commits.properties.loroUpdate &&
@@ -2224,6 +2326,55 @@ export class Store {
     }
   }
 
+  /**
+   * Notifies subscribers that a drive-wide query subscription reported a
+   * membership change. Called by {@link WSClient} after it parses a
+   * `QUERY_UPDATE` frame and kicks off refetches.
+   */
+  public notifyQueryMembershipChanged(change: QueryMembershipChange): void {
+    this.eventManager.emit(StoreEvents.QueryMembershipChanged, change);
+  }
+
+  /**
+   * If the resource carries a `blob` reference, push the locally-stored bytes
+   * to the server via a `BLOB_RESPONSE` frame. No-op if there's no clientDb
+   * (HTTP `/upload` already wrote the bytes server-side), no WS connection
+   * (we'll retry next time this is called), or no local copy of the bytes.
+   *
+   * Called from {@link Resource.pushCommits} on every successful commit push,
+   * so the bytes get sent both on initial save AND after `syncDirtyResources`
+   * flushes commits that were queued while offline.
+   */
+  public async maybePushBlobForResource(resource: Resource): Promise<void> {
+    if (!this.clientDb) return;
+    const ws = this.getDefaultWebSocket();
+    if (!ws) return;
+
+    const blobValue = resource.get(BLOB);
+    if (typeof blobValue !== 'string') return;
+    const prefix = 'did:ad:blob:';
+    if (!blobValue.startsWith(prefix)) return;
+    const hashHex = blobValue.slice(prefix.length);
+
+    let hashBytes: Uint8Array;
+    try {
+      hashBytes = hexToBytes(hashHex);
+    } catch {
+      return;
+    }
+    if (hashBytes.length !== 32) return;
+
+    let bytes: Uint8Array | null = null;
+    try {
+      bytes = await this.clientDb.getBlob(hashBytes);
+    } catch {
+      return;
+    }
+    if (!bytes) return;
+
+    ws.sendBlob(hashBytes, bytes);
+  }
+
   public logIncomingCommit(commit: Commit): void {
     this.pushCommitLog({
       timestamp: Date.now(),
@@ -2232,7 +2383,9 @@ export class Store {
       subject: commit.subject,
       signer: commit.signer,
       previousCommit: commit.previousCommit,
-      commitId: commit.signature ? `did:ad:commit:${commit.signature}` : undefined,
+      commitId: commit.signature
+        ? `did:ad:commit:${commit.signature}`
+        : undefined,
       hasLoroUpdate: !!commit.loroUpdate,
       destroy: !!commit.destroy,
       summary: this.summarizeCommit(commit),
@@ -2240,8 +2393,12 @@ export class Store {
     });
   }
 
-  /** Uploads files to atomic server and create resources for them, then returns the subjects.
-   * If using this in Node.js and it does not work, try injecting node-fetch using `Store.injectFetch()` Some versions of Node create mallformed FormData when using the build-in fetch.
+  /**
+   * Uploads files. The bytes are hashed (BLAKE3), stored in the local blob
+   * store, and a `File` resource is created and committed through the normal
+   * sync pipeline. The peer (server or another client) receives the resource
+   * via Loro sync, sees the BLAKE3 hash, and pulls the bytes via the
+   * BLOB_REQUEST/RESPONSE frames. Same path online or offline.
    */
   public async uploadFiles(
     files: FileOrFileLike[],
@@ -2253,16 +2410,84 @@ export class Store {
       throw Error('No agent set, cannot upload files');
     }
 
-    const resources = await this.client.uploadFiles(
-      files,
-      this.getServerUrl(),
-      agent,
-      parent,
-    );
+    // No local blob store — fall back to multipart POST `/upload`. The
+    // server hashes, stores in Tree::Blobs, and creates the File resource
+    // for us. Works in any browser (and Node) without WASM. The local-first
+    // path below is preferable for offline support, but it's a hard
+    // requirement only when ClientDb is attached.
+    if (!this.clientDb) {
+      const resources = await this.client.uploadFiles(
+        files,
+        this.getServerUrl(),
+        agent,
+        parent,
+      );
+      this.addResources(resources);
+      const subjects: string[] = [];
+      for (const r of resources) {
+        await this.notifyResourceManuallyCreated(r);
+        subjects.push(r.subject);
+      }
+      return subjects;
+    }
 
-    this.addResources(resources);
+    const createdSubjects: string[] = [];
+    const useDid =
+      this.getAgent()!.subject?.startsWith('did:ad:agent:') ?? false;
 
-    return resources.map(r => r.subject);
+    for (const file of files) {
+      const blob = 'blob' in file ? file.blob : file;
+      const name = file.name;
+      const data = new Uint8Array(await blob.arrayBuffer());
+      const hashBytes = await this.clientDb.blake3Hash(data);
+      const hash = bytesToHex(hashBytes);
+
+      await this.clientDb.putBlob(hashBytes, data);
+
+      const newSubject = useDid
+        ? `_new:${this.randomPart()}`
+        : this.createHTTPSubject(parent);
+
+      const resource = this.getResourceLoading(newSubject, {
+        newResource: true,
+      });
+
+      // All values are produced from trusted code (hashes, fixed property
+      // URLs). Skip validation — it would otherwise fetch each property's
+      // definition over HTTP, which fails for new properties not yet on
+      // atomicdata.dev (e.g. blob).
+      await resource.set(core.properties.isA, [server.classes.file], false);
+      await resource.set(core.properties.parent, parent, false);
+      await resource.set(server.properties.filename, name, false);
+      await resource.set(server.properties.filesize, blob.size, false);
+      await resource.set(server.properties.mimetype, blob.type, false);
+      await resource.set(INTERNAL_ID, hash, false);
+      await resource.set(BLOB, `did:ad:blob:${hash}`, false);
+      await resource.set(
+        server.properties.downloadUrl,
+        `${this.getServerUrl()}/download/files/${hash}`,
+        false,
+      );
+
+      // For DID resources, sign the genesis commit locally so the placeholder
+      // `_new:` subject is replaced with the real `did:ad:` subject derived
+      // from the signature. Mirrors `Store.newResource` behavior.
+      if (useDid) {
+        resource.markNextCommitAsGenesis();
+        await resource.signChanges(this.getAgent()!);
+      }
+
+      await resource.save();
+      // The blob bytes are pushed to the server from `Resource.pushCommits`
+      // (via `Store.maybePushBlobForResource`) — that path covers both the
+      // online-save case here AND the offline → reconnect retry path, where
+      // `syncDirtyResources` flushes the queued commits and the same hook
+      // fires after the deferred push lands.
+      await this.notifyResourceManuallyCreated(resource);
+      createdSubjects.push(resource.subject);
+    }
+
+    return createdSubjects;
   }
 
   /** Posts a Commit to some endpoint. Returns the Commit created by the server. */
@@ -2278,7 +2503,9 @@ export class Store {
         previousCommit: commit.previousCommit,
         commitId:
           (created.id as string | undefined) ??
-          (created.signature ? `did:ad:commit:${created.signature}` : undefined),
+          (created.signature
+            ? `did:ad:commit:${created.signature}`
+            : undefined),
         hasLoroUpdate: !!commit.loroUpdate,
         destroy: !!commit.destroy,
         summary: this.summarizeCommit(commit),
@@ -2294,6 +2521,11 @@ export class Store {
         subject: commit.subject,
         signer: commit.signer,
         previousCommit: commit.previousCommit,
+        // Include commitId so a prior `pending` entry transitions in place to
+        // `failed` rather than producing a second row.
+        commitId: commit.signature
+          ? `did:ad:commit:${commit.signature}`
+          : undefined,
         hasLoroUpdate: !!commit.loroUpdate,
         destroy: !!commit.destroy,
         summary: this.summarizeCommit(commit),

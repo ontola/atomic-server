@@ -2,7 +2,7 @@ use crate::atoms::IndexAtom;
 
 use super::{prop_val_sub_index::propvalsub_key, val_prop_sub_index::valpropsub_key};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Tree {
     /// Full resources, Key: Subject, Value: [Propvals](crate::resources::PropVals)
     Resources,
@@ -25,6 +25,8 @@ pub enum Tree {
     /// Stores Loro CRDT snapshots as raw bytes, keyed by resource subject.
     /// Kept separate from Resources because binary data doesn't round-trip through JSON-AD.
     LoroSnapshots,
+    /// Content-addressed storage for binary files, keyed by BLAKE3 hash.
+    Blobs,
 }
 
 const RESOURCES: &str = "resources_v3";
@@ -41,6 +43,7 @@ const PLUGIN_META: &str = "plugin_meta";
 const DRIVE_MAPPING: &str = "drive_mapping";
 const DID_MAPPING: &str = "did_mapping";
 const LORO_SNAPSHOTS: &str = "loro_snapshots";
+const BLOBS: &str = "blobs";
 
 impl std::fmt::Display for Tree {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -54,6 +57,7 @@ impl std::fmt::Display for Tree {
             Tree::DriveMapping => f.write_str(DRIVE_MAPPING),
             Tree::DidMapping => f.write_str(DID_MAPPING),
             Tree::LoroSnapshots => f.write_str(LORO_SNAPSHOTS),
+            Tree::Blobs => f.write_str(BLOBS),
         }
     }
 }
@@ -71,6 +75,7 @@ impl AsRef<[u8]> for Tree {
             Tree::DriveMapping => DRIVE_MAPPING.as_bytes(),
             Tree::DidMapping => DID_MAPPING.as_bytes(),
             Tree::LoroSnapshots => LORO_SNAPSHOTS.as_bytes(),
+            Tree::Blobs => BLOBS.as_bytes(),
         }
     }
 }

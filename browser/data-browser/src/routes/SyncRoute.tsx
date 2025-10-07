@@ -521,16 +521,6 @@ function SyncPage() {
               </PendingCount>
             )}
           </SectionTitle>
-          {status.pendingDirtySubjects.length > 0 && (
-            <PendingList>
-              {status.pendingDirtySubjects.map(subject => (
-                <PendingItem key={subject}>
-                  <PendingDot />
-                  <ResourceInline subject={subject} />
-                </PendingItem>
-              ))}
-            </PendingList>
-          )}
           {commitLog.length > 0 ? (
             <LogList>
               {commitLog.map(entry => (
@@ -855,31 +845,6 @@ const HeartbeatDot = styled.div<{ $status: NodeStatus }>`
   animation: ${heartbeat} 2s linear infinite alternate;
 `;
 
-const PendingList = styled.div`
-  display: grid;
-  gap: 0.3rem;
-  margin-bottom: 1rem;
-`;
-
-const PendingItem = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.4rem 0.6rem;
-  border-radius: ${p => p.theme.radius};
-  background: ${p => p.theme.colors.warning}10;
-  border: 1px solid ${p => p.theme.colors.warning}30;
-  font-size: 0.9rem;
-`;
-
-const PendingDot = styled.div`
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: ${p => p.theme.colors.warning};
-  flex-shrink: 0;
-`;
-
 const PendingCount = styled.span`
   font-size: 0.8rem;
   font-weight: 600;
@@ -951,18 +916,31 @@ const StatusBadge = styled.span<{ $status: CommitLogEntry['status'] }>`
   letter-spacing: 0.03em;
   padding: 0.15rem 0.4rem;
   border-radius: ${p => p.theme.radius};
-  background: ${p =>
-    p.$status === 'failed'
-      ? p.theme.colors.warning + '22'
-      : p.$status === 'sent'
-        ? p.theme.colors.main + '22'
-        : p.theme.colors.bg2};
-  color: ${p =>
-    p.$status === 'failed'
-      ? p.theme.colors.warning
-      : p.$status === 'sent'
-        ? p.theme.colors.main
-        : p.theme.colors.textLight};
+  background: ${p => {
+    switch (p.$status) {
+      case 'failed':
+        return p.theme.colors.warning + '22';
+      case 'sent':
+        return p.theme.colors.main + '22';
+      case 'pending':
+        // Same amber tone the previous PendingCount used.
+        return '#d4960044';
+      default:
+        return p.theme.colors.bg2;
+    }
+  }};
+  color: ${p => {
+    switch (p.$status) {
+      case 'failed':
+        return p.theme.colors.warning;
+      case 'sent':
+        return p.theme.colors.main;
+      case 'pending':
+        return '#d49600';
+      default:
+        return p.theme.colors.textLight;
+    }
+  }};
 `;
 
 const Direction = styled.span`

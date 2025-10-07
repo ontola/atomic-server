@@ -206,6 +206,12 @@ export default defineConfig({
     target: 'baseline-widely-available',
     outDir: isTauri ? 'dist-tauri' : 'dist',
     sourcemap: true,
+    // Don't inline worker scripts as `data:` URLs — the production CSP is
+    // `worker-src 'self'` and would block them, killing the ClientDb. Below
+    // the default 4096-byte limit, Vite would otherwise inline our 1.7KB
+    // ClientDb worker and break in prod (works in dev because dev has no CSP).
+    assetsInlineLimit: (filePath: string) =>
+      filePath.endsWith('.worker.js') ? 0 : undefined,
     rollupOptions: {
       output: {
         entryFileNames: `assets/[name]-[hash].js`,

@@ -520,3 +520,76 @@ fn get_body(resp: ServiceResponse) -> String {
     let bytes = boxbody.try_into_bytes().unwrap();
     String::from_utf8(bytes.as_ref().into()).unwrap()
 }
+
+#[actix_rt::test]
+async fn upload_download_test() {
+    let unique_string = atomic_lib::utils::random_string(10);
+    use clap::Parser;
+    let opts = Opts::parse_from([
+        "atomic-server",
+        "--initialize",
+        "--data-dir",
+        &format!("./.temp/{}/db", unique_string),
+        "--config-dir",
+        &format!("./.temp/{}/config", unique_string),
+    ]);
+
+    let config = config::build_config(opts).expect("failed init config");
+    let appstate = crate::appstate::AppState::init(config.clone())
+        .await
+        .expect("failed init appstate");
+
+    let data = Data::new(appstate.clone());
+    let app = test::init_service(
+        App::new()
+            .app_data(data)
+            .configure(crate::routes::config_routes),
+    )
+    .await;
+
+    // Create a valid parent drive
+    let drive_did = atomic_lib::test_utils::create_test_drive(&appstate.store).await.unwrap();
+
+    let test_content = b"hello blake3 world";
+    let expected_hash = blake3::hash(test_content).to_hex().to_string();
+
+    // 1. Upload
+    let multipart_boundary = "boundary";
+    let body = format!(
+        "--{multipart_boundary}\r\n\
+        Content-Disposition: form-data; name=\"file\"; filename=\"test.txt\"\r\n\
+        Content-Type: text/plain\r\n\r\n\
+        {}\r\n\
+        --{multipart_boundary}--\r\n",
+        String::from_utf8_lossy(test_content)
+    );
+
+    let req = build_request_authenticated(&format!("/upload?parent={}", urlencoding::encode(drive_did.as_str())), &appstate)
+        .method(actix_web::http::Method::POST)
+        .insert_header((
+            "Content-Type",
+            format!("multipart/form-data; boundary={multipart_boundary}"),
+        ))
+        .set_payload(body)
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "Upload failed: {:?}", resp.status());
+
+    let body_str = get_body(resp);
+    assert!(body_str.contains(&expected_hash));
+
+    // 2. Verify in DB
+    let hash_bytes = blake3::hash(test_content);
+    let blob = appstate.store.kv.get(atomic_lib::db::trees::Tree::Blobs, hash_bytes.as_bytes()).unwrap().unwrap();
+    assert_eq!(blob, test_content);
+
+    // 3. Download
+    let req = build_request_authenticated(&format!("/download/files/{}", expected_hash), &appstate)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+
+    let downloaded_bytes = test::read_body(resp).await;
+    assert_eq!(downloaded_bytes, test_content.as_slice());
+}

@@ -1,4 +1,7 @@
 import { ClientDbWorker, type Store } from '@tomic/lib';
+// Vite resolves the bundled worker from the lib's dist and gives us a URL
+// pointing at the asset it copies into the build output.
+import clientDbWorkerUrl from '@tomic/lib/client-db.worker.js?url';
 
 // Track the current worker so we can terminate it on HMR reload.
 let currentWorker: ClientDbWorker | undefined;
@@ -20,9 +23,8 @@ export function initClientDb(store: Store): void {
 
   const origin = window.location.origin;
   const wasmUrl = `${origin}/wasm/atomic_wasm.js`;
-  const workerUrl = `${origin}/wasm/client-db-worker.js`;
 
-  const clientDb = new ClientDbWorker(wasmUrl, workerUrl);
+  const clientDb = new ClientDbWorker(wasmUrl, clientDbWorkerUrl);
   currentWorker = clientDb;
 
   // Start init — this creates the Worker immediately (sync) and

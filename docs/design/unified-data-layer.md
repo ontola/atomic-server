@@ -27,6 +27,7 @@ The Store shouldn't know or care which backend it's talking to. It subscribes to
 **Reads** (GET resource, QUERY) can be served by any backend that has the data. The response format (JSON-AD) is identical regardless of source. The Store should try the fastest source first (WASM DB), then fall back to slower sources (server, mesh peers).
 
 **Writes** (Commits) are different per backend:
+
 - **Server**: POST commit → server validates signature, checks authorization, applies, returns commit ID
 - **WASM DB**: sign locally → apply locally → queue for sync
 - **Mesh**: broadcast signed commit → peers validate and apply independently (CRDT convergence)
@@ -40,6 +41,7 @@ The write path can't be fully unified because validation and authority differ. B
 **WASM DB**: everything stored locally was either created by or fetched for the current user. No authorization needed — it's your own data. The WASM DB uses `ForAgent::Sudo`.
 
 **Multi-user on shared computer**: if multiple users share a browser profile, they share the same OPFS. Options:
+
 1. **Don't support it** — each user should use their own browser profile. This is the simplest and most secure approach. OPFS is scoped to the origin, not the user.
 2. **Namespace by agent** — prefix OPFS filenames with the agent's public key. Each agent gets their own redb database. Switching agents means switching databases.
 3. **Encrypt at rest** — encrypt the OPFS data with a key derived from the agent's private key. Other users can't read it even if they access the same OPFS. This is more complex but provides real isolation.
@@ -51,6 +53,7 @@ Recommendation: start with (1), plan for (2) if needed. Multi-user on shared com
 ### Subscriptions and Live Queries
 
 **Current server WebSocket protocol:**
+
 - `SUBSCRIBE subject` — watch a resource, receive `COMMIT` messages when it changes
 - `QUERY property value sort_by ...` — subscribe to a query, receive updates when matching resources change
 
@@ -125,11 +128,13 @@ This is a future optimization — start with JSON-AD everywhere for simplicity.
 ```
 
 Each backend implements the same interface:
+
 - `subscribe(subject)` → stream of resource updates
-- `query(filter)` → stream of collection updates  
+- `query(filter)` → stream of collection updates
 - `commit(commit)` → success/error
 
 The Backend Manager:
+
 - Registers subscriptions on all backends
 - Returns the first response (usually local)
 - Merges later responses (server/mesh may have newer data)
@@ -141,6 +146,7 @@ The Backend Manager:
 ### The redundancy problem
 
 Currently, a resource's state is stored in multiple forms:
+
 1. **JSON-AD properties** in the `Resources` redb table (for indexing/queries)
 2. **Loro snapshot** in the `LoroSnapshots` redb table (for CRDT state)
 3. **In-memory propvals Map** on the Resource object (for rendering)
@@ -162,13 +168,16 @@ Inspecting a Folder resource's data view reveals the problem. The **Loro snapsho
 ```
 
 But the **resource propvals** (shown in the data view) contain additional properties that the Loro doc doesn't have:
+
 - `created-at` — set by `applyPendingCommitsLocally`, bypassing the Loro map
 - `last-commit` — set directly on propvals after commit signing
 
 And the Loro doc has its own issues:
+
 - `isA` is stored as a JSON string (`"[\"...\"]"`) rather than an actual array, because `loroSetProperty` serializes arrays with `JSON.stringify()`. This means reading `isA` from the Loro doc requires an extra parse step that reading from propvals doesn't.
 
 So the same resource has **three subtly different representations** of its state:
+
 1. The Loro map (missing `created-at`, `last-commit`; arrays are JSON strings)
 2. The propvals Map (has everything, but `Uint8Array` values like `loroUpdate` don't round-trip through JSON-AD)
 3. The WASM DB JSON-AD index (missing `Uint8Array` values, may be stale)
@@ -181,16 +190,16 @@ The Loro doc is the only store. But **direct Loro reads are too slow for the ren
 
 Benchmarks (Node.js, vitest bench, 10 properties per resource):
 
-| Operation | Speed | Absolute time |
-|-----------|-------|---------------|
-| `LoroMap.get()` x10 props | 155K ops/sec | 0.006ms |
-| `Map.get()` x10 props | 24M ops/sec | 0.00004ms |
-| **`cachedObject[key]` x10 props** | **18M ops/sec** | **0.00006ms** |
-| Direct Loro reads from 200 docs | 1.4K ops/sec | 0.7ms |
-| **Cached object reads from 200 docs** | **107K ops/sec** | **0.009ms** |
-| `loroMap.toJSON()` once | 315K ops/sec | 0.003ms |
-| `toJSON()` for 200 docs (bulk rebuild) | 1.3K ops/sec | 0.78ms |
-| Import 200 snapshots (page reload) | 128 ops/sec | 7.8ms |
+| Operation                              | Speed            | Absolute time |
+| -------------------------------------- | ---------------- | ------------- |
+| `LoroMap.get()` x10 props              | 155K ops/sec     | 0.006ms       |
+| `Map.get()` x10 props                  | 24M ops/sec      | 0.00004ms     |
+| **`cachedObject[key]` x10 props**      | **18M ops/sec**  | **0.00006ms** |
+| Direct Loro reads from 200 docs        | 1.4K ops/sec     | 0.7ms         |
+| **Cached object reads from 200 docs**  | **107K ops/sec** | **0.009ms**   |
+| `loroMap.toJSON()` once                | 315K ops/sec     | 0.003ms       |
+| `toJSON()` for 200 docs (bulk rebuild) | 1.3K ops/sec     | 0.78ms        |
+| Import 200 snapshots (page reload)     | 128 ops/sec      | 7.8ms         |
 
 **Key finding:** `loroMap.toJSON()` produces a plain JS object. Reading properties from that object is nearly as fast as `Map.get()` — only 6x slower, vs 560x for direct Loro reads. And `toJSON()` itself costs only 0.003ms per call.
 
@@ -206,11 +215,13 @@ resource.get("name")         →  this._cache["name"]             ← plain obje
 No propvals Map. No dual-write. No sync. The cache is rebuilt from `toJSON()` after each write — a single 0.003ms call. Reads are plain object property lookups.
 
 For 200 resources on screen, each reading 10 props:
+
 - **Direct Loro:** 0.7ms per render — too slow
 - **Cached objects:** 0.009ms per render — negligible
 - **Bulk cache rebuild (page load):** 0.78ms — acceptable
 
 This means:
+
 - Loro is the single source of truth for all property data
 - The cache is a plain object derived from `toJSON()` — can be rebuilt at any time
 - No divergence is possible because there's only one write path
@@ -218,25 +229,30 @@ This means:
 - `get()` is fast (plain object lookup, nearly as fast as Map)
 
 **What doesn't go in the Loro doc:**
+
 - The Loro snapshot binary itself (circular — can't store a doc inside itself). Stored separately in the `LoroSnapshots` redb table.
 - Internal commit chain state (`_lastLocalSignature`). Stays as a private field on Resource, not a property.
 - The `@id` subject. Stays as `resource.subject`.
 
 **Everything else is a Loro map entry:**
+
 - `isA`, `parent`, `name`, `description` — all properties
 - `createdAt`, `lastCommit` — written through the Loro map, not bypassing it
 - Arrays use native `LoroList` instead of `JSON.stringify`
 
 **Storage:**
+
 - The `LoroSnapshots` table stores the canonical resource state (binary)
 - The `Resources` table stores a derived JSON-AD index (for property-value queries). This is a read-only projection, rebuilt from the Loro doc when needed.
 
 **Transport:**
+
 - Server sends Loro snapshots (binary) instead of JSON-AD when the client supports it
 - Updates are Loro deltas — small binary diffs, not full resource snapshots
 - Same binary format for WASM DB, server WebSocket, and mesh transport
 
 **Sync protocol:**
+
 ```
 SUBSCRIBE resource <subject>
   → SNAPSHOT <subject> <loro-binary>           (full state)
@@ -248,6 +264,7 @@ LOCAL_EDIT <subject> <loro-delta-binary>
 ```
 
 No commits needed for the data sync path — Loro handles convergence. Commits become an audit/authorization mechanism:
+
 - Commits prove that a specific agent made a specific change at a specific time
 - The server validates commits for authorization (does this agent have write access?)
 - But the actual data merge is done by Loro, not by commit application
@@ -264,6 +281,7 @@ No commits needed for the data sync path — Loro handles convergence. Commits b
 ### JSON-AD's role changes
 
 JSON-AD doesn't go away — it remains the query index format and the human-readable representation. But it becomes a derived view:
+
 - When a Loro snapshot is imported, properties are extracted and written to the JSON-AD index
 - The index enables property-value queries (find all resources where `parent = X`)
 - External APIs can still serve JSON-AD for compatibility
@@ -284,6 +302,7 @@ Currently the Loro map stores full Atomic Data property URLs as keys:
 ```
 
 Issues:
+
 - **Bloated keys** — every key is 40+ bytes of URL. A resource with 10 properties wastes 400+ bytes on keys alone. These keys are repeated in every Loro operation in the history.
 - **Double-encoded arrays** — arrays are stored as `JSON.stringify(["..."])` strings because `loroSetProperty` doesn't use native Loro types. This prevents per-element CRDT merging and wastes bytes.
 - **Full history accumulates** — Loro snapshots grow with every edit. A document edited 1000 times carries all 1000 operations.
@@ -300,6 +319,7 @@ After:  map.set("isA", LoroList(["https://atomicdata.dev/classes/Folder"]))  // 
 ```
 
 Benefits:
+
 - **Per-element CRDT merging** — adding/removing array items merges without conflict
 - **No double-encoding** — the list is stored natively, no JSON parse/stringify overhead
 - **Smaller deltas** — changing one array element generates a tiny delta, not a full array replacement
@@ -347,6 +367,7 @@ Property URLs as Loro map keys (e.g. `"https://atomicdata.dev/properties/name"`)
 ### How Loro handles history
 
 Loro's oplog (operation log) records every operation with:
+
 - **Peer ID** — which peer made the change (maps to our Agent/signer)
 - **Counter** — monotonic per-peer, establishes causal order
 - **Timestamp** — when the operation was created (optional, set by the client)
@@ -404,6 +425,7 @@ Resolution: tiered storage with on-demand loading.
 ### Commits as history metadata
 
 Commits carry metadata that Loro operations don't:
+
 - **Signer** — the agent's DID (Loro only has a peer ID, which is opaque)
 - **Authorization proof** — the signature proves the agent had write access
 - **Semantic grouping** — a commit bundles related changes (e.g. "renamed and moved resource")
@@ -412,6 +434,7 @@ Commits carry metadata that Loro operations don't:
 So commits remain valuable for the history UI even when Loro handles the data merge. The history view shows commits (who, when, what) while Loro provides the "view at this point in time" capability.
 
 The mapping between commits and Loro versions:
+
 - Each commit corresponds to a Loro version range (the operations included in that commit)
 - The commit's signature can be stored as metadata on the Loro operations (via Loro's `PeerID` → Agent mapping)
 - Navigating to a commit means checking out the Loro doc at that version
@@ -419,6 +442,7 @@ The mapping between commits and Loro versions:
 ## Migration Path
 
 ### Phase 1: Drop propvals, Loro is the only store (client)
+
 - ~~Remove `propvals` Map from Resource~~ (done — `PropVals` type and `getPropVals()` removed, replaced by `getEntries()`)
 - ~~`resource.get()` reads from Loro map~~ (done — reads from `_cache` derived from Loro)
 - ~~`resource.set()` writes to Loro map only~~ (done)
@@ -430,12 +454,14 @@ The mapping between commits and Loro versions:
 **Status: Complete** (browser side). Rust `propvals` is still the server-side canonical store.
 
 ### Phase 2: Loro-native transport
+
 - Server sends Loro snapshots/deltas over WebSocket instead of JSON-AD
 - Client imports directly — no JSON-AD parsing on the hot path
 - Commits carry Loro deltas (already the case) but authorization is checked separately from data merge
 - JSON-AD remains available as an HTTP content type for external consumers
 
 **Status**
+
 - Partially complete.
 - Commits already carry `loroUpdate`, and the server already rejects legacy `set` / `push` / `remove` commit writes.
 - The server now serializes the freshest in-memory Loro snapshot into normal JSON-AD resource responses when Loro state is present, so clients can bootstrap from server-side Loro state more reliably.
@@ -460,6 +486,7 @@ This is intentional for the transition but is strictly redundant — the materia
 The redundancy is most visible in the debug data view (`data-browser/src/routes/DataRoute.tsx`), which fetches and displays the raw JSON-AD. It's not visible to most consumers since they read through `Resource` / `Store`, which just does the right thing.
 
 Target end state (Phase 2 complete):
+
 - HTTP JSON-AD responses drop `loroUpdate`. JSON-AD returns to being a pure materialized view, served to non-Loro-aware HTTP consumers (curl, external APIs).
 - Loro-aware clients receive snapshots / deltas as binary over WebSocket subscribe (and later Iroh QUIC / Tauri IPC for in-process bindings). No round-trip penalty because the snapshot arrives with the initial SUBSCRIBE response.
 - Commits still carry `loroUpdate` — that's the write path, separate from the serve/read path.
@@ -467,31 +494,37 @@ Target end state (Phase 2 complete):
 Migration order: (1) add a binary snapshot channel over WS, (2) flip clients to prefer it, (3) drop `loroUpdate` from JSON-AD responses. Reversed order breaks bootstrap for clients mid-upgrade.
 
 ### Phase 3: Unify WASM DB and server communication
+
 - WASM DB worker speaks the same SUBSCRIBE/QUERY protocol as the server WebSocket
 - Store registers subscriptions on both WASM worker and server WebSocket
 - Remove separate `queryLocalDb`, `fetchResourceFromClientDb` code paths
 - One fetch/subscribe path that tries local backend first, then server
 
 **Status**
+
 - Not started.
 - The browser store still has explicit local-db and server code paths.
 
 ### Phase 4: Backend abstraction
+
 - Extract a `Backend` interface
 - Server WebSocket becomes one Backend implementation
 - WASM worker becomes another
 - Store talks to Backend Manager, not individual backends
 
 **Status**
+
 - Not started.
 
 ### Phase 5: Iroh peer-to-peer transport
+
 - Add `iroh-net` as a transport backend — zero-config NAT traversal, no port forwarding
 - Same binary v2 protocol frames, running over QUIC streams instead of WebSocket
 - Server publishes a NodeID (public key) that clients connect to directly
 - Browser clients still use WebSocket; native/desktop clients can use Iroh directly
 
 **Status**
+
 - Not started. Design below.
 
 ## Implementation Analysis: Current Loro Integration
@@ -534,11 +567,11 @@ On the Rust side, `Resource.propvals` is still the canonical field store, with L
 
 ### Where they diverge (the problem)
 
-| Code path | propvals | Loro | Consequence |
-|-----------|----------|------|-------------|
-| Browser `setUnsafe()` | cache / aux updated | sometimes skipped | Remaining migration helper, still a source of bypasses |
-| Rust `Resource.propvals` | authoritative | derived / persisted separately | Rust still has a true dual-store architecture |
-| `applyPendingCommitsLocally()` | updates metadata locally | partially mirrored | Offline metadata is not yet modeled as purely Loro state |
+| Code path                               | propvals                        | Loro                           | Consequence                                                                             |
+| --------------------------------------- | ------------------------------- | ------------------------------ | --------------------------------------------------------------------------------------- |
+| Browser `setUnsafe()`                   | cache / aux updated             | sometimes skipped              | Remaining migration helper, still a source of bypasses                                  |
+| Rust `Resource.propvals`                | authoritative                   | derived / persisted separately | Rust still has a true dual-store architecture                                           |
+| `applyPendingCommitsLocally()`          | updates metadata locally        | partially mirrored             | Offline metadata is not yet modeled as purely Loro state                                |
 | Legacy commit schema in signing/parsing | still present for compatibility | not used by runtime apply path | The wire schema still accepts old fields, but live browser application is now Loro-only |
 
 ### Key insight: reads never consult Loro
@@ -554,6 +587,7 @@ The important remaining problem is on the Rust side: reads still fundamentally c
 ~~`loroSetProperty()` serialized arrays as JSON strings, preventing per-element CRDT merging.~~
 
 **Status: Done.**
+
 - Browser `loroSetProperty()` now uses native `LoroList` via `map.setContainer(prop, new LoroList())`.
 - Rust `set_property()` now uses `root.insert_container(property, LoroList::new())`.
 - Both sides handle legacy JSON-stringified arrays on read for compatibility.
@@ -564,6 +598,7 @@ The important remaining problem is on the Rust side: reads still fundamentally c
 ### Server already requires Loro-only commits
 
 The server (`server/src/handlers/commit.rs` lines 23-32) rejects old-style `set`, `push`, `remove` fields. Only `loroUpdate` is accepted. The commit handler:
+
 1. Loads the existing Loro snapshot from the resource
 2. Imports the incoming `loroUpdate` delta
 3. Materializes all properties from the merged Loro doc
@@ -572,6 +607,7 @@ The server (`server/src/handlers/commit.rs` lines 23-32) rejects old-style `set`
 This means the server is already Loro-primary for writes. The client is the one lagging behind.
 
 **Additional current status**
+
 - Server-side fetch serialization now includes the latest `loroUpdate` snapshot when a resource has in-memory Loro state.
 - Commit application now seeds from existing materialized state when no stored snapshot exists and rebuilds the full materialized state from the merged Loro doc, so deleted properties do not remain stale in `propvals`.
 - This does not yet make the transport Loro-native, but it does make server-side Loro state observable and syncable by clients.
@@ -579,6 +615,7 @@ This means the server is already Loro-primary for writes. The client is the one 
 ### What this requires
 
 **Step 1: Every resource gets a Loro doc**
+
 - Currently the Loro doc is lazy — only created when the resource is edited
 - After migration, every resource has a Loro doc from the moment it's hydrated
 - When loading from JSON-AD (server fetch, WASM DB), create a Loro doc and populate it
@@ -586,9 +623,11 @@ This means the server is already Loro-primary for writes. The client is the one 
 - After creating/importing, call `toJSON()` to populate the read cache
 
 **Progress**
+
 - Partially done in the browser client.
 
 **Step 2: Replace propvals with toJSON cache**
+
 - `resource.get(prop)` → `this._cache[prop]` (plain object lookup)
 - `resource.set(prop, value)` → `loroMap.set(prop, value)` then `this._cache = loroMap.toJSON()`
 - Remove `propvals` Map entirely
@@ -597,52 +636,59 @@ This means the server is already Loro-primary for writes. The client is the one 
 - Only non-property state stays outside Loro: `_lastLocalSignature`, `subject`, `loading`/`new`/`error`
 
 **Progress**
+
 - Partially done in the browser client.
 - Not started on the Rust side.
 
 **Step 3: Use native Loro types for arrays**
+
 - Replace `JSON.stringify(array)` with `LoroList`
 - Enables per-element CRDT merge for `isA`, `write`, `read`, tags, sub-resources
 - `toJSON()` automatically converts `LoroList` to JS arrays — no manual parsing
 
 **Progress**
+
 - Not started.
 
 **Step 4: Simplify commit application**
+
 - `applyCommitToResource()` imports the Loro update, then rebuilds cache with `toJSON()`
 - Remove `execSetCommit`, `execRemoveCommit`, `execPushCommit`
 - The Loro import + `toJSON()` replaces all of that
 
 **Progress**
+
 - Partially done.
 - The browser Loro update path already imports and rebuilds cache directly.
 - Browser runtime application no longer replays `set` / `push` / `remove`.
 - Legacy commit schema fields still exist in signing / parsing code and tests for compatibility, so this cleanup is not fully complete yet.
 
 **Step 5: `merge()` imports Loro snapshots**
+
 - When merging a remote resource, import its Loro snapshot
 - Loro handles conflict resolution automatically
 - Rebuild cache with `toJSON()` after import
 
 **Progress**
+
 - Partially done in the browser client.
 - `Resource.merge()` now preserves unsaved local Loro edits by merging Loro state instead of replaying a fake legacy commit shape.
 - The broader store-level merge strategy still needs cleanup, especially around Rust-side canonical state and backend abstraction.
 
 ### Files that need changes
 
-| File | Change |
-|------|--------|
-| `browser/lib/src/resource.ts` | Partially done. Now uses `_cache` + aux values, initializes Loro on hydration, and `merge()` preserves unsaved local Loro edits. It still has migration helpers like `setUnsafe()`. |
-| `browser/lib/src/commit.ts` | Partially done. Runtime commit application is now Loro-only (`loroUpdate` + destroy), and commit metadata updates are moving behind narrower `Resource` helpers. Legacy commit schema fields still remain in parsing / signing compatibility. |
-| `browser/lib/src/store.ts` | Partially done. Hydration now initializes the Loro doc after JSON-AD import, and storage / diagnostics use narrower `Resource` helpers instead of `getPropVals()` directly. |
-| `browser/lib/src/collection.ts` | Partially done. Synthetic collection resources now hydrate through `Resource` helpers instead of raw `setUnsafe()` calls. |
-| `browser/lib/src/parse.ts` | Partially done. JSON-AD parsing now initializes the Loro doc after hydration and uses the same narrowed hydration helper path as the store. |
-| `lib/src/loro.rs` | Done for arrays. `set_property()` uses native `LoroList`, `loro_value_to_atomic_value()` handles `LoroValue::List`, `get_all_properties()` resolves containers via `get_deep_value()`. Nested `LoroMap` for objects not yet done. |
-| `lib/src/resources.rs` | Partially done. Serialization now includes the freshest in-memory `loroUpdate` snapshot, and Loro state can now be rebuilt from existing materialized props when no stored snapshot exists. Rust still keeps `propvals` as the canonical field store. |
-| `server/src/handlers/commit.rs` | Already Loro-primary for writes, no structural change needed. |
-| `server/src/handlers/get_resource.rs` | No direct handler change was needed, but the read path now benefits from fresher `Resource` serialization. |
-| `browser/data-browser/src/helpers/initClientDb.ts` | Still needs cleanup so seeding and local persistence align with a Loro-primary model rather than propval-first JSON blobs. |
+| File                                               | Change                                                                                                                                                                                                                                                |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `browser/lib/src/resource.ts`                      | Partially done. Now uses `_cache` + aux values, initializes Loro on hydration, and `merge()` preserves unsaved local Loro edits. It still has migration helpers like `setUnsafe()`.                                                                   |
+| `browser/lib/src/commit.ts`                        | Partially done. Runtime commit application is now Loro-only (`loroUpdate` + destroy), and commit metadata updates are moving behind narrower `Resource` helpers. Legacy commit schema fields still remain in parsing / signing compatibility.         |
+| `browser/lib/src/store.ts`                         | Partially done. Hydration now initializes the Loro doc after JSON-AD import, and storage / diagnostics use narrower `Resource` helpers instead of `getPropVals()` directly.                                                                           |
+| `browser/lib/src/collection.ts`                    | Partially done. Synthetic collection resources now hydrate through `Resource` helpers instead of raw `setUnsafe()` calls.                                                                                                                             |
+| `browser/lib/src/parse.ts`                         | Partially done. JSON-AD parsing now initializes the Loro doc after hydration and uses the same narrowed hydration helper path as the store.                                                                                                           |
+| `lib/src/loro.rs`                                  | Done for arrays. `set_property()` uses native `LoroList`, `loro_value_to_atomic_value()` handles `LoroValue::List`, `get_all_properties()` resolves containers via `get_deep_value()`. Nested `LoroMap` for objects not yet done.                     |
+| `lib/src/resources.rs`                             | Partially done. Serialization now includes the freshest in-memory `loroUpdate` snapshot, and Loro state can now be rebuilt from existing materialized props when no stored snapshot exists. Rust still keeps `propvals` as the canonical field store. |
+| `server/src/handlers/commit.rs`                    | Already Loro-primary for writes, no structural change needed.                                                                                                                                                                                         |
+| `server/src/handlers/get_resource.rs`              | No direct handler change was needed, but the read path now benefits from fresher `Resource` serialization.                                                                                                                                            |
+| `browser/data-browser/src/helpers/initClientDb.ts` | Still needs cleanup so seeding and local persistence align with a Loro-primary model rather than propval-first JSON blobs.                                                                                                                            |
 
 ## One Rust Crate, Every Target
 
@@ -650,11 +696,11 @@ This means the server is already Loro-primary for writes. The client is the one 
 
 Today we have three separate Rust implementations of the same thing:
 
-| Crate | Compiles to | DB backend | Has validation? | Has auth? | Has queries? | Has sync? |
-|-------|-------------|------------|-----------------|-----------|--------------|-----------|
-| `atomic-lib` Db | native only | Sled | yes | yes | yes | no |
-| `wasm/` ClientDb | WASM only | ReDB | no | no | partial | no |
-| `atomic-server` | native only | (uses lib) | (uses lib) | (uses lib) | (uses lib) | yes (WS) |
+| Crate            | Compiles to | DB backend | Has validation? | Has auth?  | Has queries? | Has sync? |
+| ---------------- | ----------- | ---------- | --------------- | ---------- | ------------ | --------- |
+| `atomic-lib` Db  | native only | Sled       | yes             | yes        | yes          | no        |
+| `wasm/` ClientDb | WASM only   | ReDB       | no              | no         | partial      | no        |
+| `atomic-server`  | native only | (uses lib) | (uses lib)      | (uses lib) | (uses lib)   | yes (WS)  |
 
 The WASM client reimplements a subset of Db without validation, auth, or full queries. The sync protocol lives in the server, not the lib. Desktop/mobile apps embed the full HTTP server just to get a local database.
 
@@ -962,14 +1008,14 @@ If hashes differ, both sides exchange the full version vector list. Peer IDs are
   "drive": "did:ad:drive123",
   "peers": ["4a2F", "9bC1"],
   "resources": {
-    "did:ad:drive123":  [12, 0],
-    "did:ad:readme":    [91, 55],
-    "did:ad:table1":    [47, 12],
-    "did:ad:table2":    [3,  0],
-    "did:ad:chat":      [20, 84],
-    "did:ad:task1":     [5,  0],
-    "did:ad:task2":     [8,  3],
-    "did:ad:design":    [14, 22]
+    "did:ad:drive123": [12, 0],
+    "did:ad:readme": [91, 55],
+    "did:ad:table1": [47, 12],
+    "did:ad:table2": [3, 0],
+    "did:ad:chat": [20, 84],
+    "did:ad:task1": [5, 0],
+    "did:ad:task2": [8, 3],
+    "did:ad:design": [14, 22]
   }
 }
 ```
@@ -1046,13 +1092,13 @@ This adds round trips (O(log n)) but avoids sending the full list. For most driv
 
 ### What Loro handles vs what we build
 
-| Layer | Responsibility | Implementation |
-|-------|---------------|----------------|
+| Layer         | Responsibility                                                               | Implementation                                                  |
+| ------------- | ---------------------------------------------------------------------------- | --------------------------------------------------------------- |
 | Resource sync | Given two versions of the same resource, compute and apply the minimal delta | **Loro** — `doc.export()` / `doc.import()` with version vectors |
-| Drive sync | Given two peers, figure out which resources in a drive differ | **Ours** — drive hash + version vector list exchange |
-| Authorization | Verify that the signer of a commit has write access | **Server/peer** — check `write` array, verify signature |
-| Identity | Establish who an agent is | **DID** — public key embedded in `did:ad:agent:{pubkey}` |
-| Transport | Move bytes between peers | **Backend** — WebSocket, HTTP, Reticulum, WebRTC |
+| Drive sync    | Given two peers, figure out which resources in a drive differ                | **Ours** — drive hash + version vector list exchange            |
+| Authorization | Verify that the signer of a commit has write access                          | **Server/peer** — check `write` array, verify signature         |
+| Identity      | Establish who an agent is                                                    | **DID** — public key embedded in `did:ad:agent:{pubkey}`        |
+| Transport     | Move bytes between peers                                                     | **Backend** — WebSocket, HTTP, Reticulum, WebRTC                |
 
 ### Current implementation status
 
@@ -1070,6 +1116,7 @@ This adds round trips (O(log n)) but avoids sending the full list. For most driv
 Real-time P2P sync via Iroh QUIC. Two phases: initial sync (VV handshake) then live mode (persistent bi-directional stream).
 
 **Transport:**
+
 1. **Initial sync**: AUTH → SYNC → SYNC_DIFF → SYNC_PUSH establishes baseline state
 2. **Live mode**: same QUIC stream transitions to push-based channel. No reconnect needed per change.
 3. **Auto-connect**: on startup, device with smaller NodeID initiates. Retries every 5s. Checks every 30s for disconnects.
@@ -1160,6 +1207,45 @@ The current implementation sends full Loro snapshots on every change. This cause
 
 **Fix:** Send `doc.export_updates_since(peer_version_vector)` — a delta that includes the delete operation. B imports the delta, applies the delete, gets `[a, c]`. Correct.
 
+### Current state & priorities (2026-04-28)
+
+A snapshot of where the sync protocol stands after the v2 binary migration, the Iroh transport landing, the BLAKE3 blob work, and the WsClient binary-frame catch-up. Supersedes earlier "in progress" notes when they conflict.
+
+#### What's solid
+
+- **One protocol, multiple transports.** `engine::handle_frame` is the reducer; WebSocket, Iroh QUIC, and (eventually) the WASM-worker boundary all hand it framed bytes. The recent fix to the Iroh live-mode read loop — delegate any unhandled tag to `engine::handle_frame` rather than only matching `UPDATE`/`DESTROY` — crystallised this: the same dispatcher should handle every frame regardless of which phase the connection is in. `BLOB_REQUEST`/`BLOB_RESPONSE` round-trips end-to-end on both transports as a result.
+- **VV-based per-resource sync.** Carrying Loro version vectors per resource in `SYNC` is the right granularity. The drive-hash fast path on top is a cheap "are we in sync?" predicate that elides the diff exchange on the common case.
+- **Three-phase handshake → live.** `SYNC` (hash) → `SYNC_DIFF` (who-pulls / who-pushes) → `SYNC_PUSH` (bulk delta) → live `UPDATE`/`DESTROY` is a clean shape with explicit termination signals at each phase boundary.
+- **Capability model for blobs.** `did:ad:blob:{hash}` is a bearer capability; the engine doesn't consult `agent` for `BLOB_REQUEST`. This composes naturally with the mesh — any peer holding bytes can serve them — and the auth boundary lives one layer up on the File resource that references the hash. Documented in `docs/src/files.md` and `docs/src/did.md`.
+- **DID identifier family.** Agents (`did:ad:agent:`), commits (`did:ad:commit:`), blobs (`did:ad:blob:`), and resources (`did:ad:{genesis}`) all flow through the same `Subject::Did` variant and the same `did_endpoint` resolver path.
+
+#### Design debt
+
+- ~~**Two parallel watch systems.**~~ **Unified (2026-04-28).** Every query-subscription notification flows through a single `db_events` listener task spawned by `CommitMonitor::started()`. `apply_transaction` emits `DbEvent::QueryMembershipChanged` after writes to `Tree::QueryMembers`; `DbEvent::Changed` / `Destroyed` already fire on every commit. The listener forwards each as a typed actor message: `MembershipNotification` (filter subscriptions, keyed by encoded `QueryFilter` bytes) or `DriveNotification` (drive-wide subscriptions, keyed by drive subject). The CommitMessage handler no longer scans subscriptions — it just dispatches resource-level `Subscribe` and updates the search index. The auth gate now requires every subscription to name a drive, simplifying the boundary check.
+- ~~**Hybrid text + binary protocol.**~~ **`QUERY_UPDATE` migrated to binary (2026-04-28).** New tag `0x36` with payload `[property_len: u16] [property] [value_len: u16] [value] [added_count: u16] {[subject_len: u16] [subject]} [removed_count: u16] {[subject_len: u16] [subject]}`. Server emits binary; `WsClient::parse_binary_message` decodes into the existing `WsMessage::QueryUpdate` variant. Inline Loro snapshots for added subjects are deferred — the current frame still asks the client to fetch each added/removed subject, just over a typed binary channel. Remaining text frames: `LORO_SYNC_*`, `LORO_EPHEMERAL_UPDATE`, `SUBSCRIBE_QUERY` (subscription registration; client → server only), `SYNC_VV`, `SYNC_DELTAS`.
+- **No re-auth on the live channel.** Once a peer has authenticated, every subsequent server→client frame is trusted for the lifetime of the connection. This conflates *authentication* (who is this peer?) with *authorization* (can they read X?). Permission revocations don't take effect until the peer reconnects. Every subject-bearing emission should run `check_read(subject, current_agent)` at push time.
+- ~~**No auth check on `SubscribeQuery` registration.**~~ **Fixed (2026-04-28).** `commit_monitor.rs::SubscribeQuery` now runs `hierarchy::check_read` against the filter's auth boundary — explicit `drive` if set, otherwise `value` when it parses as a subject — and rejects subscriptions whose filter names neither. Regression test: `server/tests/query_subscribe.rs::query_subscribe_requires_read_permission`. Re-auth on every *subsequent* push is still pending and rolls in with the watch-system unification.
+- ~~**`SYNC_PUSH` is one-shot.**~~ **Chunked (2026-04-28).** Wire format gained a `flags: u8` byte after the drive bytes; bit 0 (`sync_push_flags::LAST`) marks the final chunk of a run. Senders use `protocol::encode_sync_push_chunks` which splits by `SYNC_PUSH_MAX_ENTRIES` (100) and `SYNC_PUSH_MAX_BYTES` (1 MiB), whichever fills first; receivers loop reading SYNC_PUSH frames until they see LAST. Empty pushes still emit a single LAST-flagged frame so receivers don't hang. Browser `ws-v2.ts` and `websockets.ts` updated to decode the new field; the drive-sync "done" UI signal now only fires on the LAST chunk.
+- **No partial / subtree sync.** Drive is the smallest unit. Mobile and constrained-connection clients want "sync everything under this folder, ignore the rest." The protocol has no primitive for it.
+- **Synchronous live broadcast.** `CommitMonitor` walks subscribers and pushes inline; one slow consumer stalls the rest. Wants per-subscriber bounded queues with backpressure or a separate broadcaster task per drive.
+- **Drive hash isn't a merkle tree.** It's a flat digest over all version vectors. Two peers that disagree on a single resource still walk the full diff to find the divergence. Replace with a merkle tree once any drive grows past a few thousand resources.
+
+#### Priority order
+
+1. ~~**Unify the watch systems.**~~ Done (2026-04-28). Single listener task; no more atom-matching in the actor.
+2. ~~**Promote `QUERY_UPDATE` to v2 binary.**~~ Landed (2026-04-28) as tag `0x36`. Inline Loro snapshots for added subjects deferred — the bytes now flow over a typed binary channel but each added subject still triggers a follow-up fetch. Concrete sketch when we get to it: extend the payload to `{[subject_len: u16] [subject] [snapshot_len: u32] [loro_snapshot]}` for added entries.
+3. **Per-push re-auth.** Run `check_read(subject, current_agent)` inside `Handler<MembershipNotification>` and the legacy `Handler<CommitMessage>` push loop, so revocations take effect without reconnecting. Registration-time auth is already in place.
+4. ~~**Chunk `SYNC_PUSH`.**~~ Done (2026-04-28). LAST flag bit + chunk caps in `protocol.rs`; senders use `encode_sync_push_chunks`, receivers loop until LAST.
+
+Items below this line are real but not blocking near-term work: subtree sync, broadcast backpressure, merkle drive hash, inline Loro snapshots in `QUERY_UPDATE`, per-push re-auth.
+
+#### Open questions
+
+- **Iroh reconnection semantics.** `register_live_peer` keeps a tx queue per peer; what happens during a relay flap? Does the read loop exit and wait for a new connection, or is there reconnection logic? If the latter, where?
+- **Loro merge across the SYNC boundary.** When B imports A's `SYNC_PUSH` for a resource B already has, the engine merges Loro docs. Is the resulting state guaranteed equivalent to A's when both sides have diverged commit chains with overlapping atoms?
+- **Request IDs in pushed frames.** Many frames carry a `request_id` field; the server emits `0` in subscription pushes. Is this for response-matching in async contexts (e.g. `GET` request_id matching its `UPDATE` response), or dead weight on push frames?
+- **`EPHEMERAL` (0x40) channel scope.** Documented for cursors/presence; current usage end-to-end isn't obvious from the code. What other ephemeral signals belong here?
+
 ## Iroh: Zero-Config Peer-to-Peer
 
 ### The problem with self-hosting
@@ -1243,6 +1329,7 @@ Two Atomic Servers can sync drives with each other over Iroh. This is the same V
 4. Both servers now have the same state
 
 This enables:
+
 - **Multi-server redundancy** — your data exists on multiple servers
 - **Geographic distribution** — a server in each region, syncing via Iroh
 - **Offline servers** — a home server syncs when it comes online, like a phone
@@ -1250,6 +1337,7 @@ This enables:
 ### Desktop app as a peer
 
 A desktop Atomic Data app is just another Iroh node. It can:
+
 - Sync directly with other desktop apps on the same LAN (Iroh discovers local peers)
 - Sync with a server for backup and sharing
 - Work fully offline and sync later
@@ -1298,14 +1386,15 @@ Tradeoff: you pay serialization you could skip by going through Tauri IPC direct
 
 ### Two frontend bundles — `dist/` vs `dist-tauri/`
 
-The server and the Tauri webview need *different* frontend bundles. They can't share one:
+The server and the Tauri webview need _different_ frontend bundles. They can't share one:
 
-| Bundle | Consumers | CSP model | Service worker | `ATOMICSERVER_NONCE` placeholders | Built by |
-|--------|-----------|-----------|-----------------|-----------------------------------|----------|
-| `browser/data-browser/dist/` | atomic-server (HTTP) | server replaces nonces per request | yes (PWA) | yes | `pnpm build` |
-| `browser/data-browser/dist-tauri/` | Tauri webview | static, no nonces | no | no | `TAURI=1 pnpm build:tauri` |
+| Bundle                             | Consumers            | CSP model                          | Service worker | `ATOMICSERVER_NONCE` placeholders | Built by                   |
+| ---------------------------------- | -------------------- | ---------------------------------- | -------------- | --------------------------------- | -------------------------- |
+| `browser/data-browser/dist/`       | atomic-server (HTTP) | server replaces nonces per request | yes (PWA)      | yes                               | `pnpm build`               |
+| `browser/data-browser/dist-tauri/` | Tauri webview        | static, no nonces                  | no             | no                                | `TAURI=1 pnpm build:tauri` |
 
 Why:
+
 - The server rewrites `ATOMICSERVER_NONCE` to a fresh random nonce on every HTTP response. Tauri serves the HTML verbatim via its custom protocol — no substitution happens, so the placeholder would remain and every `<style>` / `<script>` with `nonce="ATOMICSERVER_NONCE"` would be blocked by CSP.
 - Tauri 2 auto-injects its own nonces into `style-src` for IPC bootstrap. Per the CSP spec, a directive with any nonce source makes `'unsafe-inline'` inert — so styled-components' dynamic styles get blocked regardless of what we configure. The simplest fix is to disable Tauri's asset CSP modification entirely (`dangerousDisableAssetCspModification: true`) and set `csp: null`. Safe for a local desktop app where all JS is bundled and no third-party content is loaded.
 - `vite-plugin-pwa` registers a service worker, but `navigator.serviceWorker.register()` rejects the `tauri:` protocol — it requires HTTP(S).
@@ -1329,6 +1418,7 @@ Fix: `desktop/.cargo/config.toml` sets `ATOMICSERVER_SKIP_JS_BUILD=true` for any
 ### Migration status
 
 Shipped:
+
 - Skip WASM ClientDb under Tauri — one guard in `App.tsx`
 - Force serverUrl to `http://localhost:9883` under Tauri — overrides the `tauri://localhost` origin
 - Separate `dist-tauri/` Vite build — no nonces, no PWA
@@ -1338,6 +1428,7 @@ Shipped:
 - Vite HMR available via `cargo tauri dev` (devUrl → 5173)
 
 Not yet:
+
 - `Backend` abstraction (design doc Phase 4) — deferred until a second in-process binding (FFI, Tauri IPC) lands
 - Dropping the embedded HTTP server — real win is shedding Actix for mobile, not desktop
 - Replacing loopback WS with Tauri IPC for zero-copy in-process calls — premature until profiling shows WS overhead matters
@@ -1386,6 +1477,7 @@ Add `delete_list_item`, `undo`, `redo`, `checkout` to `Resource`. These delegate
 **3. Canvas: replace custom undo with Loro undo**
 
 Remove `_allActions`, `HistoryAction`, `_actionIndex`. Replace with:
+
 - `resource.undo()` / `resource.redo()` for undo/redo
 - `resource.get_current_version()` / `resource.checkout(version)` for branching
 - `resource.view_at(version)` for branch preview
@@ -1393,3 +1485,57 @@ Remove `_allActions`, `HistoryAction`, `_actionIndex`. Replace with:
 **4. Commits: drop `previous_commit` requirement for P2P**
 
 Commits become standalone signed attestations: `{ subject, signer, loro_update (delta), signature, timestamp }`. Loro version vectors handle causality. No chain ordering needed.
+
+## Content-Addressed File Storage (BLAKE3)
+
+To support offline-first file uploads and seamless syncing across the peer-to-peer network (Iroh), file storage uses a Content-Addressed Storage (CAS) architecture keyed by BLAKE3 hashes.
+
+### Identifier: `did:ad:blob:`
+
+A blob's canonical identifier is a [DID](../src/did.md#blob-identifiers):
+
+```text
+did:ad:blob:{blake3-hex}
+```
+
+Blobs are *not* Resources. They have no parent, no class, no ACL, no commit history — they are raw, content-addressed bytes. The capability to retrieve the bytes is the DID itself; the auth boundary lives on the File resource that *describes* the blob, not on the blob store. See the [Authorization model](../src/files.md#authorization-model-hashes-are-bearer-capabilities) section in the user-facing docs for the full rationale.
+
+The wire protocol carries the underlying 32-byte hash directly inside `BLOB_REQUEST`/`BLOB_RESPONSE` frames — the DID is for identity, not for transport. (Same pattern as commits: identifier is `did:ad:commit:{sig}`, but the wire ships the signature, not the prefix.)
+
+### The Storage Model: Separation of Metadata and Data
+
+We must not store the actual binary file bytes inside the Loro CRDT document, as this would permanently bloat the CRDT history and slow down sync.
+
+- **Metadata (The Resource):** The `File` resource (`filename`, `filesize`, `mimetype`, parent for ACL, and a `blob` property holding a `did:ad:blob:` reference) lives in Loro. This syncs instantly via the existing Loro delta sync.
+- **Data (The Blob):** The actual binary bytes live in a separate Blob Store, keyed by the BLAKE3 hash.
+
+### Universal Blob Store via KV Store
+
+To ensure files can be persisted locally in both the browser (offline uploads) and native environments without requiring platform-specific storage code (like OPFS file handles vs native Iroh blobs initially):
+
+- A `Tree::Blobs` is part of our `redb` KV store database.
+- It maps `[u8; 32]` (BLAKE3 hash) to `Vec<u8>` (the file bytes).
+- This provides a unified blob storage mechanism that works immediately in both native environments and the browser (via the existing OPFS-backed redb store).
+- _Note: If redb proves inefficient for very large files (>50MB) in the future, this backend can be migrated to a dedicated Blob Store (e.g., Iroh Blobs natively, raw OPFS files in WASM) while retaining the BLAKE3 hash as the universal identifier._
+
+### Syncing Blobs over the Protocol
+
+The v2 sync protocol syncs `Resource`s via Loro version vectors and blobs via dedicated frames. The end-to-end flow:
+
+1. **Offline Upload:** The browser hashes the file (BLAKE3), stores the bytes in its local `Tree::Blobs`, and creates a `File` resource in its local Loro doc with a `blob: did:ad:blob:{hash}` reference.
+2. **Reconnecting:** The browser connects to the server (or another peer). The sync engine exchanges Loro version vectors and syncs the `File` resource metadata.
+3. **Blob Request:** The receiving peer reads the `blob` property of the `File` resource, extracts the BLAKE3 hash, and checks its local `Tree::Blobs`. If the data is missing, it sends a binary frame: `BLOB_REQUEST { blake3_hash }`.
+4. **Blob Response:** The peer with the file receives the request, fetches the bytes from its local KV store, and sends back a `BLOB_RESPONSE { blake3_hash, bytes }`.
+
+### Status: In Progress
+
+- [x] Add `blake3` property to ontology (`urls.rs`, `default_store.json`).
+- [x] Add `Tree::Blobs` to KV store (`trees.rs`, `redb_store.rs`, `sled_store.rs`).
+- [x] Extend sync protocol with `BLOB_REQUEST` and `BLOB_RESPONSE` (`protocol.rs`).
+- [x] Update sync engine to handle blob requests and detect missing blobs during sync (`engine.rs`, `peer.rs`).
+- [x] Update server upload handler to use BLAKE3 and CAS (`upload.rs`).
+- [x] Update server download handler to serve from CAS (`download.rs`).
+- [x] Add BLAKE3 hashing and Blob storage to WASM `ClientDb` and Worker (`lib.rs`, `client-db.worker.ts`).
+- [x] Support offline-first file uploads in browser `Store` (`store.ts`).
+- [ ] Adopt `did:ad:blob:` as the canonical identifier in the ontology and rename the File property from `blake3` (raw hash) to `blob` (DID reference).
+- [ ] Resolve `did:ad:blob:` through the `did_endpoint` plugin so blob DIDs work over the generic DID resolver in addition to the `/download/files/{hash}` HTTP alias.

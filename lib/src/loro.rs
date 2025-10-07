@@ -99,6 +99,14 @@ impl AtomicLoroDoc {
         })
     }
 
+    /// Set the peer ID for subsequent operations. Mainly useful for tests that
+    /// need a deterministic LWW tiebreak between concurrent peers.
+    pub fn set_peer_id(&self, peer: u64) -> AtomicResult<()> {
+        self.doc
+            .set_peer_id(peer)
+            .map_err(|e| format!("Failed to set Loro peer ID: {e}").into())
+    }
+
     /// Import a binary update (from a commit's loroUpdate field).
     pub fn import_update(&self, update: &[u8]) -> AtomicResult<()> {
         self.doc
@@ -570,7 +578,12 @@ pub fn loro_value_to_atomic_value(lv: &loro::LoroValue) -> Option<Value> {
         loro::LoroValue::Null => None,
         loro::LoroValue::List(items) => {
             if items.is_empty() {
-                return None;
+                // Empty list: the property is set, just has no elements yet.
+                // Default to ResourceArray since that's by far the more common
+                // shape and required-but-empty array props (e.g.
+                // SelectProperty.allowsOnly during dialog creation) need to
+                // round-trip into propvals so check_required_props sees them.
+                return Some(Value::ResourceArray(vec![]));
             }
 
             // Check the first item to determine list type:
@@ -754,6 +767,31 @@ mod test {
             doc.get_integer_property("https://atomicdata.dev/properties/age"),
             Some(30)
         );
+    }
+
+    #[test]
+    fn empty_resource_array_round_trips_through_loro() {
+        // An empty ResourceArray must materialize back as an empty
+        // ResourceArray (not be dropped). Required-but-empty array properties
+        // — e.g. SelectProperty.allowsOnly while a creation dialog is open —
+        // depend on this so check_required_props sees the property as set.
+        let doc = AtomicLoroDoc::new();
+        doc.set_property(
+            "https://atomicdata.dev/properties/allowsOnly",
+            &Value::ResourceArray(vec![]),
+        )
+        .unwrap();
+
+        let props = doc.get_all_properties();
+        let lv = props
+            .get("https://atomicdata.dev/properties/allowsOnly")
+            .expect("empty array key must be present in the Loro doc");
+        let av = loro_value_to_atomic_value(lv)
+            .expect("empty list must materialize into a Value, not None");
+        match av {
+            Value::ResourceArray(arr) => assert!(arr.is_empty()),
+            other => panic!("expected empty ResourceArray, got {other:?}"),
+        }
     }
 
     #[test]

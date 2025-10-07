@@ -83,8 +83,7 @@ export class ClientDbWorker {
   private worker: Worker | null = null;
   private bc: BroadcastChannel | null = null;
   private role: Role = 'initializing';
-  private tabId = (crypto as Crypto & { randomUUID?: () => string })
-    .randomUUID
+  private tabId = (crypto as Crypto & { randomUUID?: () => string }).randomUUID
     ? crypto.randomUUID()
     : Math.random().toString(36).slice(2);
   private nextId = 1;
@@ -161,8 +160,7 @@ export class ClientDbWorker {
       })
       .catch(e => {
         // Typically only rejects if the callback throws.
-        this._initError =
-          e instanceof Error ? e : new Error(String(e));
+        this._initError = e instanceof Error ? e : new Error(String(e));
       });
 
     // Ping any existing leader so it can announce itself. The announce also
@@ -323,6 +321,22 @@ export class ClientDbWorker {
     const r = await this.send({ type: 'getLoroSnapshot', subject });
 
     return (r as Uint8Array | null) ?? null;
+  }
+
+  async putBlob(hash: Uint8Array, data: Uint8Array): Promise<void> {
+    await this.send({ type: 'putBlob', hash, data });
+  }
+
+  async getBlob(hash: Uint8Array): Promise<Uint8Array | null> {
+    const r = await this.send({ type: 'getBlob', hash });
+
+    return (r as Uint8Array | null) ?? null;
+  }
+
+  async blake3Hash(data: Uint8Array): Promise<Uint8Array> {
+    const r = await this.send({ type: 'blake3Hash', data });
+
+    return r as Uint8Array;
   }
 
   async getAllVersionVectors(): Promise<

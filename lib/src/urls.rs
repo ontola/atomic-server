@@ -127,6 +127,7 @@ pub const ATOM_PROPERTY: &str = "https://atomicdata.dev/properties/atom/property
 pub const ATOM_VALUE: &str = "https://atomicdata.dev/properties/atom/value";
 // ... for Files
 pub const CHECKSUM: &str = "https://atomicdata.dev/properties/checksum";
+pub const BLOB: &str = "https://atomicdata.dev/properties/blob";
 pub const FILENAME: &str = "https://atomicdata.dev/properties/filename";
 pub const FILESIZE: &str = "https://atomicdata.dev/properties/filesize";
 pub const MIMETYPE: &str = "https://atomicdata.dev/properties/mimetype";
