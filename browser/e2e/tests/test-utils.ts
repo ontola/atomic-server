@@ -543,12 +543,19 @@ export async function changeDrive(
 export async function editTitle(title: string, page: Page) {
   const titleEl = editableTitle(page);
   // After resource creation, EditableTitle auto-enters edit mode (textbox).
-  // If it's still a heading, click to activate edit mode first.
-  const isInput = await titleEl.evaluate(el => el.tagName === 'INPUT');
-  if (!isInput) {
-    await expect(titleEl).toHaveRole('heading');
-    await titleEl.click();
-    await expect(titleEl).toHaveRole('textbox');
+  // If we land on the heading variant (e.g. when reusing an existing resource),
+  // click to activate edit mode. Poll briefly because the heading→textbox
+  // transition is async on creation.
+  const deadline = Date.now() + 5000;
+  while (Date.now() < deadline) {
+    const tag = await titleEl.evaluate(el => el.tagName).catch(() => '');
+    if (tag === 'INPUT') break;
+    if (tag === 'H1') {
+      await titleEl.click();
+      await expect(titleEl).toHaveRole('textbox');
+      break;
+    }
+    await page.waitForTimeout(100);
   }
   await titleEl.fill(title);
   await page.keyboard.press('Enter');

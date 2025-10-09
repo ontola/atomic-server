@@ -14,7 +14,10 @@ import {
 const NODE_IMAGE = 'node:22';
 const RUST_IMAGE = 'rust:bookworm';
 
-const PLAYWRIGHT_VERSION = 'v1.49.1-noble';
+// Must match `@playwright/test` in `browser/e2e/package.json`. A mismatch
+// makes the chromium browser binary missing inside the container — every
+// test times out at `page.goto`.
+const PLAYWRIGHT_VERSION = 'v1.58.2-noble';
 // See https://github.com/rust-cross/rust-musl-cross?tab=readme-ov-file#prebuilt-images
 const TARGET_IMAGE_MAP = {
   'x86_64-unknown-linux-musl': 'ghcr.io/rust-cross/rust-musl-cross:x86_64-musl',
@@ -24,7 +27,15 @@ const TARGET_IMAGE_MAP = {
     'ghcr.io/rust-cross/rust-musl-cross:armv7-musleabihf',
 } as const;
 
-const ATOMIC_DOMAIN = 'localhost-atomic';
+// Service-binding alias the playwright container uses to reach
+// atomic-server. Chromium hardcodes `*.localhost` to 127.0.0.1 (bypassing
+// dagger's DNS injection) so we can't use a `.localhost` hostname here.
+// The non-localhost hostname means the browser would NOT consider the
+// origin a "secure context" by default — which is fatal because the SPA
+// uses `crypto.subtle` to initialize its WASM ClientDb. We pass
+// `--unsafely-treat-insecure-origin-as-secure=http://atomic:9883` to
+// chromium below so the test browser exposes the secure-context APIs.
+const ATOMIC_DOMAIN = 'atomic';
 
 @object()
 export class AtomicServer {
@@ -355,7 +366,7 @@ export class AtomicServer {
   }
 
   @func()
-  private jsBuild(): Container {
+  private jsBuild(e2e: boolean = false): Container {
     const browser = this.source.directory('browser');
     // Create a container with PNPM installed
     const pnpmContainer = dag
@@ -412,9 +423,16 @@ export class AtomicServer {
       .withFile('/logo.svg', this.source.file('logo.svg'));
 
     // Build all packages since they may depend on each other's built artifacts
-    return sourceContainer
-      .withEnvVariable('SKIP_WASM_BUILD', '1')
-      .withExec(['pnpm', 'run', 'build']);
+    let buildContainer = sourceContainer.withEnvVariable('SKIP_WASM_BUILD', '1');
+
+    if (e2e) {
+      // Surfaces /app/dev-drive and /app/prunetests in the production
+      // build the e2e tests run against. See `devRoutesEnabled()` in
+      // data-browser/src/config.ts.
+      buildContainer = buildContainer.withEnvVariable('VITE_E2E', 'true');
+    }
+
+    return buildContainer.withExec(['pnpm', 'run', 'build']);
   }
 
   @func()
@@ -422,6 +440,7 @@ export class AtomicServer {
   rustBuild(
     @argument() release: boolean = true,
     @argument() target: string = 'x86_64-unknown-linux-musl',
+    @argument() e2e: boolean = false,
   ): Container {
     const source = this.source;
     const cargoCache = dag.cacheVolume('cargo');
@@ -462,7 +481,7 @@ export class AtomicServer {
       .withWorkdir('/code')
       .withExec(['cargo', 'fetch']);
 
-    const browserDir = this.jsBuild().directory('/app/data-browser/dist');
+    const browserDir = this.jsBuild(e2e).directory('/app/data-browser/dist');
     const containerWithAssets = sourceContainer.withDirectory(
       '/code/server/assets_tmp',
       browserDir,
@@ -604,6 +623,54 @@ export class AtomicServer {
   //     .withExec(["cp", binaryPath, "/atomic-server-binary"]);
   // }
 
+  /** Diagnostic: navigate Playwright to /app/dev-drive against the atomic
+   *  service and dump console messages + network failures. */
+  @func()
+  async probeDevDrive(): Promise<string> {
+    return dag
+      .container()
+      .from(`mcr.microsoft.com/playwright:${PLAYWRIGHT_VERSION}`)
+      .withExec(['npm', 'install', '-g', 'playwright@1.58.2'])
+      .withExec(['npx', 'playwright', 'install', 'chromium'])
+      .withServiceBinding('atomic', this.atomicService(true))
+      .withNewFile(
+        '/probe.js',
+        `const { chromium } = require('/usr/lib/node_modules/playwright');
+(async () => {
+  const browser = await chromium.launch({
+    args: ['--host-resolver-rules=MAP atomic.localhost ${ATOMIC_DOMAIN}'],
+  });
+  const ctx = await browser.newContext();
+  const page = await ctx.newPage();
+  const logs = [];
+  page.on('console', m => logs.push('[console:' + m.type() + '] ' + m.text()));
+  page.on('pageerror', e => logs.push('[pageerror] ' + e.message));
+  page.on('requestfailed', r => logs.push('[reqfail] ' + r.url() + ' ' + r.failure()?.errorText));
+  try {
+    await page.goto('http://atomic.localhost:9883/app/dev-drive', { waitUntil: 'networkidle', timeout: 20000 });
+  } catch (e) {
+    logs.push('[goto error] ' + e.message);
+  }
+  await new Promise(r => setTimeout(r, 15000));
+  logs.push('[final url] ' + page.url());
+  const crypto = await page.evaluate(() => ({
+    isSecureContext: window.isSecureContext,
+    hasSubtle: !!(window.crypto && window.crypto.subtle),
+    hasDigest: !!(window.crypto && window.crypto.subtle && window.crypto.subtle.digest),
+  }));
+  logs.push('[crypto] ' + JSON.stringify(crypto));
+  console.log(logs.join('\\n'));
+  await browser.close();
+})();`,
+      )
+      .withExec([
+        'sh',
+        '-c',
+        `for i in $(seq 1 20); do curl -fsS http://${ATOMIC_DOMAIN}:9883/setup -H 'Accept: application/ad+json' && break || sleep 1; done; node /probe.js`,
+      ])
+      .stdout();
+  }
+
   /** Diagnostic: curl `/app/dev-drive` against the atomic service to see
    *  what the e2e tests actually receive. */
   @func()
@@ -631,8 +698,12 @@ export class AtomicServer {
 
   @func()
   /** Returns a Service running atomic-server for use in tests */
-  atomicService(): Service {
-    const atomicServerBinary = this.rustBuild().file('/atomic-server-binary');
+  atomicService(@argument() e2e: boolean = false): Service {
+    const atomicServerBinary = this.rustBuild(
+      true,
+      'x86_64-unknown-linux-musl',
+      e2e,
+    ).file('/atomic-server-binary');
     return dag
       .container()
       .from('alpine:latest')
@@ -698,9 +769,18 @@ export class AtomicServer {
         browserContainer.directory('/app/node_modules'),
       )
       .withEnvVariable('LANGUAGE', 'en_GB')
-      .withEnvVariable('FRONTEND_URL', `http://${ATOMIC_DOMAIN}:9883`)
-      .withEnvVariable('SERVER_URL', `http://${ATOMIC_DOMAIN}:9883`)
-      .withServiceBinding('atomic', this.atomicService())
+      // The browser hits a `*.localhost` URL so chromium considers it a
+      // secure context (required for `crypto.subtle` → WASM ClientDb init).
+      // The host-resolver rule below tells chromium to route that hostname
+      // to the dagger `atomic` service binding, since chromium otherwise
+      // hardcodes `*.localhost` to 127.0.0.1.
+      .withEnvVariable('FRONTEND_URL', `http://atomic.localhost:9883`)
+      .withEnvVariable('SERVER_URL', `http://atomic.localhost:9883`)
+      .withEnvVariable(
+        'ATOMIC_TEST_HOST_MAP',
+        `MAP atomic.localhost ${ATOMIC_DOMAIN}`,
+      )
+      .withServiceBinding('atomic', this.atomicService(true))
       .withDirectory(
         '/app/e2e/tests',
         this.source.directory('browser/e2e/tests'),
@@ -713,13 +793,14 @@ export class AtomicServer {
       ])
       // Test the server is running
       .withExec([
-        '/bin/sh',
+        '/bin/bash',
         '-c',
-        'pnpm run test-e2e; echo $? > /test-exit-code',
+        'set -o pipefail; pnpm run test-e2e 2>&1 | tee /test-output.log; echo ${PIPESTATUS[0]} > /test-exit-code; exit 0',
       ]);
 
     // Extract the test results directory and upload to Netlify
     const testReportDirectory = e2eContainer.directory('playwright-report');
+    const testOutput = await e2eContainer.file('/test-output.log').contents();
     const deployOutput = await this.netlifyDeploy(
       testReportDirectory,
       'atomic-tests',
@@ -733,7 +814,7 @@ export class AtomicServer {
     const exitCode = await e2eContainer.file('/test-exit-code').contents();
     if (exitCode.trim() !== '0') {
       throw new Error(
-        `E2E tests failed (exit code: ${exitCode.trim()}). Test report deployed to: \n${deployUrl}`,
+        `E2E tests failed (exit code: ${exitCode.trim()}). Test report deployed to: \n${deployUrl}\n\n===== TEST OUTPUT (tail) =====\n${testOutput.slice(-60000)}\n===== END TEST OUTPUT =====`,
       );
     }
 

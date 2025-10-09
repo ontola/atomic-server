@@ -13,7 +13,7 @@ import { ServerSettingsRoute } from './SettingsServer';
 import { pathNames } from './paths';
 import { ShareRoute } from './Share/ShareRoute';
 import { TokenRoute } from './TokenRoute';
-import { isDev } from '../config';
+import { devRoutesEnabled } from '../config';
 import { rootRoute, topRoute, appRoute } from './RootRoutes';
 import { unavailableLazyRoute } from './UnavailableLazyRoute';
 import { ImportRoute } from './ImportRoute';
@@ -28,7 +28,7 @@ const DevDriveRoute = createRoute({
   path: pathNames.devDrive,
   // @ts-expect-error - Mismatch between unavailable route name and dev-drive route name
 }).lazy(() => {
-  if (isDev()) {
+  if (devRoutesEnabled()) {
     return import('./DevDriveRoute').then(mod => mod.devDriveRouteLazy);
   } else {
     return Promise.resolve(unavailableLazyRoute);
@@ -40,7 +40,7 @@ const PruneTestsRoute = createRoute({
   path: pathNames.pruneTests,
   // @ts-expect-error - Mismatch between unavailable route name and prune route name, not sure how to fix this.
 }).lazy(() => {
-  if (isDev()) {
+  if (devRoutesEnabled()) {
     return import('./PruneTestsRoute').then(mod => mod.pruneTestRouteLazy);
   } else {
     return Promise.resolve(unavailableLazyRoute);
@@ -52,7 +52,7 @@ const SandboxRoute = createRoute({
   path: pathNames.sandbox,
   // @ts-expect-error - Mismatch between unavailable route name and sandbox route name, not sure how to fix this.
 }).lazy(() => {
-  if (isDev()) {
+  if (devRoutesEnabled()) {
     return import('./Sandbox').then(mod => mod.sandboxRouteLazy);
   } else {
     return Promise.resolve(unavailableLazyRoute);

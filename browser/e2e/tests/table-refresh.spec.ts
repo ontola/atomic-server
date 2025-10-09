@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { before, editableTitle, newResource } from './test-utils';
+import { before, editableTitle, FRONTEND_URL, newResource } from './test-utils';
 
 /**
  * Regression: refreshing a Table's page must not grow the child-row count.
@@ -55,7 +55,7 @@ test.describe('table refresh', () => {
 
     // Confirm the WASM ClientDb actually initialized in this browser — the
     // user's bug is WASM-side, so a silent fallback would mask the issue.
-    await page.goto(`http://localhost:5173/`, {
+    await page.goto(`${FRONTEND_URL}/`, {
       waitUntil: 'domcontentloaded',
     });
     const clientDbState = await page.evaluate(

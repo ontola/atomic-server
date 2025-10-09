@@ -18,7 +18,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { before } from './test-utils';
+import { before, FRONTEND_URL } from './test-utils';
 
 test.describe('offline create → online sync → disable localDB', () => {
   test.beforeEach(before);
@@ -124,7 +124,7 @@ test.describe('offline create → online sync → disable localDB', () => {
 
     // Navigate to the drive's page so the route's useResource(drive) fires.
     await page.goto(
-      `http://localhost:5173/app/show?subject=${encodeURIComponent(offlineDriveSubject)}`,
+      `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(offlineDriveSubject)}`,
     );
 
     // 8. Verify the drive auto-loads (the route's useResource, not an explicit
