@@ -1,0 +1,26 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "huggingface": {
+      "models": {
+        "zai-org/GLM-4.6": {
+          "options": {
+            "temperature": 0.7,
+            "max_tokens": 16384
+          }
+        },
+        "Qwen/Qwen3-Next-80B-A3B-Instruct": {
+          "options": {
+            "temperature": 0.3,
+            "max_tokens": 32768
+          }
+        }
+      }
+    }
+  },
+  "permission": {
+    "edit": "ask",
+    "bash": "ask",
+    "webfetch": "deny"
+  }
+}

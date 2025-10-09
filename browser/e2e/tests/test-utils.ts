@@ -38,9 +38,9 @@ export const newDriveMenuItem = '[data-test="menu-item-new-drive"]';
 
 export const defaultDevServer = 'http://localhost:9883';
 export const currentDialogOkButton = 'dialog[open] >> footer >> text=Ok';
-// SQLite FTS5 needs time for index rebuilding in tests
-// Increased from 500ms to ensure reliable test execution
-export const REBUILD_INDEX_TIME = 2500;
+// SQLite FTS5 index updates are INSTANT (INSERT OR REPLACE is immediate)
+// We only need a small delay for network/React state updates
+export const REBUILD_INDEX_TIME = 100; // 100ms for UI updates, not index rebuilding
 
 
 /** Checks server URL and browser URL */

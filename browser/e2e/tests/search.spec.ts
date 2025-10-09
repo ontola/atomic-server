@@ -78,8 +78,8 @@ test.describe('search', async () => {
     await clickSidebarItem('Cake Folder', page);
 
     // Set search scope to 'Cake folder'
-    await page.waitForTimeout(REBUILD_INDEX_TIME);
-    await page.reload();
+    // FTS5 index is instant, just wait for UI
+    await page.waitForTimeout(200);
     await contextMenuClick('scope', page);
     // Search for 'Avocado'
     await addressBar(page).type('Avocado');
@@ -129,8 +129,8 @@ test.describe('search', async () => {
     await expect(page.getByRole('link', { name: firstTagName })).toBeVisible();
     await expect(page.getByRole('link', { name: secondTagName })).toBeVisible();
 
-    // Wait for the index to be rebuilt
-    await page.waitForTimeout(REBUILD_INDEX_TIME);
+    // FTS5 index updates instantly, minimal wait for UI
+    await page.waitForTimeout(200);
 
     // Search for the folder by the first tag
     await addressBar(page).fill('tag:first');

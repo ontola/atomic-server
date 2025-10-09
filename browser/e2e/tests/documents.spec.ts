@@ -10,7 +10,7 @@ import {
   timestamp,
   before,
 } from './test-utils';
-test.describe('documents', async () => {
+test.describe('documents', () => {
   test.beforeEach(before);
 
   test('create document, edit, page title, websockets', async ({
