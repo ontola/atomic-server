@@ -1582,8 +1582,9 @@ msgstr "Aún no hay etiquetas."
 #~ msgid "Add tags"
 #~ msgstr "Añadir etiquetas"
 
-#~ msgid "Resource version updated"
-#~ msgstr "Versión del recurso actualizada"
+#: src/routes/History/HistoryRoute.tsx
+msgid "Resource version updated"
+msgstr "Versión del recurso actualizada"
 
 #~ msgid "Building history of {0}"
 #~ msgstr "Construyendo el historial de {0}"
@@ -4711,9 +4712,8 @@ msgstr ""
 msgid "Restore this version"
 msgstr "Restaurar esta versión"
 
-#: src/routes/History/HistoryRoute.tsx
-msgid "Version restore not yet implemented for Loro"
-msgstr "La restauración de versiones aún no está implementada para Loro"
+#~ msgid "Version restore not yet implemented for Loro"
+#~ msgstr "La restauración de versiones aún no está implementada para Loro"
 
 #. placeholder {0}: resource.title
 #: src/routes/History/HistoryRoute.tsx
@@ -5190,3 +5190,8 @@ msgstr "Revisa la consola del navegador para más detalles, o intenta navegar ha
 
 #~ msgid "Failed to link shared resource after invite"
 #~ msgstr ""
+
+#. placeholder {0}: e instanceof Error ? e.message : String(e)
+#: src/routes/History/HistoryRoute.tsx
+msgid "Could not restore version: {0}"
+msgstr ""

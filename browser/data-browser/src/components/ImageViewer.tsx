@@ -42,7 +42,6 @@ export function ImageViewer({
           alt={alt ?? ''}
           className={className}
           data-test={`image-viewer`}
-          loading='lazy'
           style={transitionStyles}
         />
       )}

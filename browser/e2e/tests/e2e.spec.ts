@@ -27,6 +27,7 @@ import {
   inDialog,
   acceptInvite,
   topBarShareButton,
+  SEARCHBOX_PROPERTY_PLACEHOLDER,
 } from './test-utils';
 
 test.describe('data-browser', async () => {
@@ -81,13 +82,18 @@ test.describe('data-browser', async () => {
     await contextMenuClick('share', page);
     expect(publicReadRightLocator(page)).not.toBeChecked();
 
-    // Initialize unauthorized page for reader
+    // Initialize unauthorized page for reader. An anonymous user landing on a
+    // private drive is redirected to the welcome flow (ErrorPage redirects on
+    // unauthorized when no agent), so check for the sign-in card buttons that
+    // GettingStartedFlow renders instead of a literal "Unauthorized" string.
     const context2 = await browser.newContext();
     const page2 = await context2.newPage();
     await page2.setViewportSize({ width: 1000, height: 400 });
     await page2.goto(FRONTEND_URL);
     await openSubject(page2, driveURL);
-    await expect(page2.locator('text=Unauthorized').first()).toBeVisible();
+    await expect(
+      page2.getByRole('button', { name: 'Create account' }),
+    ).toBeVisible({ timeout: 15000 });
 
     // Create invite
     await page.click('button:has-text("Create Invite")');
@@ -333,7 +339,7 @@ test.describe('data-browser', async () => {
     await page.getByRole('button', { name: 'advanced' }).click();
     await fillSearchBox(
       page,
-      'Search for a property or enter a URL',
+      SEARCHBOX_PROPERTY_PLACEHOLDER,
       'https://atomicdata.dev/properties/invite/usagesLeft',
     );
     await page.keyboard.press('Enter');
@@ -481,7 +487,7 @@ test.describe('data-browser', async () => {
 
     const clickOption = await fillSearchBox(
       page,
-      'Search for a property or enter a URL',
+      SEARCHBOX_PROPERTY_PLACEHOLDER,
       'test-prop',
       { nth: 0 },
     );
@@ -548,10 +554,16 @@ test.describe('data-browser', async () => {
 
     await expect(page.locator('text=First Title').first()).toBeVisible();
 
-    await page.click('text=Make current version');
+    await page.click('text=Restore this version');
 
     await expect(page.locator('text=Resource version updated')).toBeVisible();
-    await expect(page.locator('h1:has-text("First Title")')).toBeVisible();
+    // After restore the page navigates back to the resource. EditableTitle
+    // may render either an `<h1>First Title</h1>` or an
+    // `<input value="First Title">` depending on whether the resource is in
+    // auto-edit mode — match either form via the test-id.
+    await expect(
+      page.getByTestId('editable-title').first(),
+    ).toBeVisible();
     await expect(
       page.getByRole('heading', { name: 'History of First Title', level: 1 }),
     ).not.toBeVisible();

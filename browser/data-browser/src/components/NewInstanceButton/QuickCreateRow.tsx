@@ -11,8 +11,7 @@ import { Row } from '../Row';
 import { IconButton } from '../IconButton/IconButton';
 import { useNewResourceUI } from '../forms/NewForm/useNewResourceUI';
 import { dataBrowser } from '@tomic/react';
-import { paths } from '../../routes/paths';
-import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
+import { useNewRoute } from '../../helpers/useNewRoute';
 
 interface QuickCreateRowProps {
   parent: string;
@@ -34,7 +33,10 @@ export function QuickCreateRow({
   onItemClick,
 }: QuickCreateRowProps): JSX.Element {
   const createNewResource = useNewResourceUI();
-  const navigate = useNavigateWithTransition();
+  // The "New" button needs to land on /app/new with `parent` preserved as
+  // `parentSubject` — otherwise NewRoute falls back to drive and any upload
+  // there gets reparented to the drive instead of this row's container.
+  const navigateToNewRoute = useNewRoute(parent);
 
   return (
     <Row gap='0.15rem' center align='center' className={className}>
@@ -45,7 +47,7 @@ export function QuickCreateRow({
           data-testid={newResourceButtonTestId}
           onClick={() => {
             onItemClick?.();
-            navigate(paths.new);
+            navigateToNewRoute();
           }}
         >
           <PlusSlot>

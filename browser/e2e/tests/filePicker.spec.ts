@@ -3,6 +3,7 @@ import { test, expect, Page } from '@playwright/test';
 import {
   DIALOG_CLOSE_BUTTON,
   FRONTEND_URL,
+  SEARCHBOX_PROPERTY_PLACEHOLDER,
   before,
   fillSearchBox,
   inDialog,
@@ -19,7 +20,7 @@ const ONTOLOGY_NAME = 'filepicker-test';
 
 const uploadFile = async (page: Page, fileName: string) => {
   await sidebarNewResourceButton(page).click();
-  await expect(page).toHaveURL(`${FRONTEND_URL}/app/new`);
+  await expect(page).toHaveURL(/\/app\/new(\?|$)/);
 
   const fileChooserPromise = page.waitForEvent('filechooser');
 
@@ -31,7 +32,11 @@ const uploadFile = async (page: Page, fileName: string) => {
 
   await fileChooser.setFiles(testFilePath(fileName));
 
-  await expect(page.getByText(fileName)).toBeVisible();
+  // After upload, the file's name appears in the breadcrumbs and the sidebar
+  // tree at the same time. Pin to the breadcrumb so the assertion is unique.
+  await expect(
+    page.getByLabel('Breadcrumbs').getByText(fileName),
+  ).toBeVisible();
 };
 
 // Creates an ontology with a class we can use to test the file picker.
@@ -55,9 +60,7 @@ const createModel = async (page: Page) => {
   await expect(page.locator('input[value="robot"]')).toBeVisible();
 
   await page.getByRole('button', { name: 'add required property' }).click();
-  await page
-    .getByPlaceholder('Search for a property or enter a URL')
-    .fill('programming');
+  await page.getByPlaceholder(SEARCHBOX_PROPERTY_PLACEHOLDER).fill('programming');
 
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('Enter');

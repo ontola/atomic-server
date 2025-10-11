@@ -194,7 +194,16 @@ export async function signIn(page: Page, secret: string = SECRET) {
   if (await signInButton.isVisible({ timeout: 1500 }).catch(() => false)) {
     await signInButton.click();
     await page.getByLabel('Agent secret').fill(secret);
-    await page.getByRole('button', { name: 'Continue' }).click();
+    // The signin form auto-submits 150ms after the secret is filled
+    // (GettingStartedFlow useEffect). Clicking Continue races with that
+    // resubmit and can hit a detached element. Try the click but tolerate
+    // detach; either path completes the sign-in.
+    await page
+      .getByRole('button', { name: 'Continue' })
+      .click({ timeout: 2000 })
+      .catch(() => {
+        /* auto-submit raced us; keep going */
+      });
     return;
   }
 
@@ -390,12 +399,12 @@ export async function editProfileAndCommit(page: Page) {
 
 export async function fillSearchBox(
   page: Page | Locator,
-  placeholder: string,
+  placeholder: string | RegExp,
   fillText: string,
   options: {
     nth?: number;
     container?: Locator;
-    label?: string;
+    label?: string | RegExp;
   } = {},
 ) {
   const { nth, container, label } = options;
@@ -430,11 +439,21 @@ export async function fillSearchBox(
   };
 }
 
+/**
+ * SearchBox placeholder is templated as `Search for a ${typeResource.title} or
+ * enter a URL...`. The title can resolve to "property", but also to other
+ * resource titles depending on store state — match the stable prefix/suffix
+ * instead of pinning a specific title.
+ */
+export const SEARCHBOX_PROPERTY_PLACEHOLDER = /Search for a .+ or enter a URL/;
+
 /** Create a new Resource in the current Drive.
  * Class can be an Class URL or a shortname available in the new page. */
 export async function newResource(klass: string, page: Page) {
   await sidebarNewResourceButton(page).click();
-  await expect(page).toHaveURL(`${FRONTEND_URL}/app/new`);
+  // Sidebar "New" navigates to /app/new?parentSubject=<parent> to preserve
+  // the container context (see QuickCreateRow). Match pathname only.
+  await expect(page).toHaveURL(/\/app\/new(\?|$)/);
 
   const waitForResourcePage = async () => {
     await page.waitForURL(url => !url.pathname.endsWith('/app/new'), {

@@ -153,7 +153,7 @@ test.describe.skip('Test create-template package', () => {
 
     // Apply the template in data browser
     await sidebarNewResourceButton(page).click();
-    await expect(page).toHaveURL(`${FRONTEND_URL}/app/new`);
+    await expect(page).toHaveURL(/\/app\/new(\?|$)/);
 
     await page.getByTestId('template-button').click();
 
@@ -211,7 +211,7 @@ test.describe.skip('Test create-template package', () => {
 
     // Apply the template in data browser
     await sidebarNewResourceButton(page).click();
-    await expect(page).toHaveURL(`${FRONTEND_URL}/app/new`);
+    await expect(page).toHaveURL(/\/app\/new(\?|$)/);
 
     const button = page.getByTestId('template-button');
     await button.click();

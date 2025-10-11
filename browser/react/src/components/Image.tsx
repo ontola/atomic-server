@@ -1,6 +1,7 @@
 import { type Resource, type Server, unknownSubject, server } from '@tomic/lib';
 import React from 'react';
 import { useResource, useString } from '../index.js';
+import { useFileObjectUrl } from '../useFileObjectUrl.js';
 
 const imageFormatsWithBasicSupport = new Set([
   'image/svg+xml',
@@ -137,6 +138,23 @@ const ImageInner: React.FC<ImageInnerProps> = ({
   ...props
 }) => {
   const [downloadUrl] = useString(resource, server.properties.downloadUrl);
+  // Skip avif/webp re-encoding when the bytes are local — the server can't
+  // be asked for transformed renditions when the user is offline (or the
+  // blob hasn't been pushed yet), and a `blob:` URL has no query params for
+  // the image-processing endpoint anyway.
+  const localUrl = useFileObjectUrl(resource);
+  if (localUrl) {
+    return (
+      // eslint-disable-next-line jsx-a11y/alt-text
+      <img
+        src={localUrl}
+        {...props}
+        height={resource.props.imageHeight}
+        width={resource.props.imageWidth}
+      />
+    );
+  }
+
   const toSrcSet = buildSrcSet(downloadUrl ?? '');
 
   return (
@@ -173,9 +191,10 @@ const BasicImage: React.FC<ImageInnerProps> = ({
   ...props // html image atrributes only
 }) => {
   const [downloadUrl] = useString(resource, server.properties.downloadUrl);
+  const localUrl = useFileObjectUrl(resource);
 
   // eslint-disable-next-line jsx-a11y/alt-text
-  return <img src={downloadUrl} {...props} />;
+  return <img src={localUrl ?? downloadUrl} {...props} />;
 };
 
 const indicationToSizes = (indication: SizeIndication | undefined): string => {

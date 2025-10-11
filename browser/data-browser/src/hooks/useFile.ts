@@ -1,4 +1,10 @@
-import { Resource, server, useNumber, useString } from '@tomic/react';
+import {
+  Resource,
+  server,
+  useFileObjectUrl,
+  useNumber,
+  useString,
+} from '@tomic/react';
 import { useCallback } from 'react';
 
 type FileInfo =
@@ -18,9 +24,19 @@ type FileInfo =
     };
 
 export function useFileInfo(resource: Resource): FileInfo {
-  const [downloadUrl] = useString(resource, server.properties.downloadUrl);
+  const [serverDownloadUrl] = useString(
+    resource,
+    server.properties.downloadUrl,
+  );
   const [mimeType] = useString(resource, server.properties.mimetype);
   const [bytes] = useNumber(resource, server.properties.filesize);
+  // Local-first: when the browser already has the bytes (just-uploaded file,
+  // offline, or anything cached in the WASM clientDb) prefer the in-memory
+  // blob URL. The server `downloadURL` returns 404 immediately after upload
+  // until the BLOB_RESPONSE round-trip completes — without this, the preview
+  // would flash a broken image on its way to "loaded".
+  const localUrl = useFileObjectUrl(resource);
+  const downloadUrl = localUrl ?? serverDownloadUrl;
 
   const downloadFile = useCallback(() => {
     window.open(downloadUrl);

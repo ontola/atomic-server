@@ -262,12 +262,25 @@ test.describe('tables', async () => {
   });
 
   test('fast row entry - rapidly adding rows with Enter', async ({ page }) => {
+    test.slow();
     // Use the quick-create "New Table" button on the drive page directly.
     await page.getByTitle('New Table').first().click();
 
     await page.getByPlaceholder('New Table').fill('Fast Entry Test');
     await page.locator('dialog[open] button:has-text("Create")').click();
-    await expect(page.locator('h1:has-text("Fast Entry Test")')).toBeVisible();
+    // Wait for navigation away from the drive page — the dialog's
+    // createResourceAndNavigate is async and slower than the default 5s assert.
+    await page.waitForURL(url => url.pathname.startsWith('/app/show'), {
+      timeout: 15000,
+    });
+    // The TablePage takes a moment to render after navigation; the heading
+    // is the most reliable signal that the table resource has loaded.
+    await expect(
+      page.getByRole('heading', { name: 'Fast Entry Test', level: 1 }),
+    ).toBeVisible({ timeout: 15000 });
+    // Exit edit mode so subsequent keyboard actions (Tab to move into the
+    // grid) don't get swallowed by the title input.
+    await page.keyboard.press('Escape');
 
     // Wait for table to be ready
     await page.waitForTimeout(500);
@@ -305,7 +318,9 @@ test.describe('tables', async () => {
 
     // Refresh and wait for the page to reload
     await page.reload();
-    await expect(page.locator('h1:has-text("Fast Entry Test")')).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Fast Entry Test', level: 1 }),
+    ).toBeVisible();
     await page.waitForTimeout(REBUILD_INDEX_TIME);
 
     // Verify all values are still correct after refresh

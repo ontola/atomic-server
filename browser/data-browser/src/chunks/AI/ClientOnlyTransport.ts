@@ -160,7 +160,17 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
         .map(p => p.text)
         .join('');
 
-      return await this._autoSelectAgent(prompt);
+      try {
+        return await this._autoSelectAgent(prompt);
+      } catch (e) {
+        // Auto-select needs `genFeaturesModel` (default: OpenRouter). When the
+        // user only has Ollama configured, the call throws and the entire send
+        // is aborted before any fetch goes out — making the very first message
+        // appear to vanish until the user hits send again. Falling back to the
+        // explicitly-selected agent keeps the POST happening; the auto-pick is
+        // a nice-to-have, not a hard requirement.
+        console.warn('Auto agent select failed, using selected agent:', e);
+      }
     }
 
     return this.options.selectedAgent;

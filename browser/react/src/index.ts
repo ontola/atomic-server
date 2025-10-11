@@ -35,4 +35,5 @@ export * from './useMemberFromCollection.js';
 export * from './useCollectionPage.js';
 export * from './components/Image.js';
 export * from './components/VirtualizedCollectionList.js';
+export * from './useFileObjectUrl.js';
 export * from '@tomic/lib';

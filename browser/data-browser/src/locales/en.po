@@ -1265,8 +1265,9 @@ msgstr "Enter your Agent Secret"
 #~ msgid "The Agent Secret is a long string of characters that encodes both the Subject and the Private Key. You can think of it as a combined username + password. Store it safely, and don't share it with others."
 #~ msgstr "The Agent Secret is a long string of characters that encodes both the Subject and the Private Key. You can think of it as a combined username + password. Store it safely, and don't share it with others."
 
-#~ msgid "Resource version updated"
-#~ msgstr "Resource version updated"
+#: src/routes/History/HistoryRoute.tsx
+msgid "Resource version updated"
+msgstr "Resource version updated"
 
 #~ msgid "Building history of {0}"
 #~ msgstr "Building history of {0}"
@@ -4645,9 +4646,8 @@ msgstr ""
 #~ msgid "Loro document ({0} bytes)"
 #~ msgstr "Loro document ({0} bytes)"
 
-#: src/routes/History/HistoryRoute.tsx
-msgid "Version restore not yet implemented for Loro"
-msgstr "Version restore not yet implemented for Loro"
+#~ msgid "Version restore not yet implemented for Loro"
+#~ msgstr "Version restore not yet implemented for Loro"
 
 #. placeholder {0}: resource.title
 #: src/routes/History/HistoryRoute.tsx
@@ -5133,3 +5133,8 @@ msgstr "Check the browser console for details, or try navigating back."
 
 #~ msgid "Failed to link shared resource after invite"
 #~ msgstr "Failed to link shared resource after invite"
+
+#. placeholder {0}: e instanceof Error ? e.message : String(e)
+#: src/routes/History/HistoryRoute.tsx
+msgid "Could not restore version: {0}"
+msgstr "Could not restore version: {0}"

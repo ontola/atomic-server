@@ -66,11 +66,16 @@ impl ClientDb {
     /// touches changed properties via the Loro diff.
     #[wasm_bindgen(js_name = "putResource")]
     pub async fn put_resource(&self, json_ad: &str) -> Result<(), JsError> {
+        // `SaveOpts::DontSave` keeps `parse_json_ad_resource` from calling
+        // `store.add_resource()` (which validates required props) during
+        // parsing. The explicit `add_resource_opts(false, true, true)` below is
+        // the intended persistence step — it skips validation deliberately.
         let resource = atomic_lib::parse::parse_json_ad_resource(
             json_ad,
             &self.db,
             &ParseOpts {
                 skip_unknown_props: true,
+                save: atomic_lib::parse::SaveOpts::DontSave,
                 ..Default::default()
             },
         )
@@ -89,10 +94,17 @@ impl ClientDb {
     /// entries are updated. Use this for real-time updates (COMMIT messages).
     #[wasm_bindgen(js_name = "applyCommit")]
     pub async fn apply_commit(&self, commit_json_ad: &str) -> Result<(), JsError> {
+        // `DontSave` is required: the default would store the parsed Commit
+        // resource via `add_resource()` (which validates required props)
+        // before `apply_commit` runs. `apply_commit` is the proper persistence
+        // path here.
         let commit_resource = atomic_lib::parse::parse_json_ad_resource(
             commit_json_ad,
             &self.db,
-            &ParseOpts::default(),
+            &ParseOpts {
+                save: atomic_lib::parse::SaveOpts::DontSave,
+                ..Default::default()
+            },
         )
         .await
         .map_err(to_js_err)?;
@@ -286,6 +298,7 @@ impl ClientDb {
                 &self.db,
                 &ParseOpts {
                     skip_unknown_props: true,
+                    save: atomic_lib::parse::SaveOpts::DontSave,
                     ..Default::default()
                 },
             )

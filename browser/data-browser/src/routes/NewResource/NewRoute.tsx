@@ -87,6 +87,14 @@ function NewResourceSelector() {
     (files: string[]) => {
       toast.success(`Uploaded ${files.length} files.`);
 
+      // Single file → open it directly so the user can verify the preview
+      // and download work. Multi-upload → fall back to the parent listing
+      // since opening N tabs would be hostile.
+      if (files.length === 1) {
+        navigate(constructOpenURL(files[0]));
+        return;
+      }
+
       if (calculatedParent) {
         navigate(constructOpenURL(calculatedParent));
       }
