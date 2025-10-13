@@ -389,7 +389,15 @@ export class ClientDbWorker {
   /* ---------------------------- Internal send ----------------------------- */
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private send(msg: Record<string, any>): Promise<unknown> {
+  private async send(msg: Record<string, any>): Promise<unknown> {
+    // Websocket fanout can call into the DB before init() has resolved
+    // (leadership election + leader announce takes a few ticks). Wait for
+    // init rather than rejecting — the caller already started init, we just
+    // need to let it finish.
+    if (this.role === 'initializing' && this.initPromise) {
+      await this.initPromise;
+    }
+
     if (this.role === 'leader') {
       return this.sendToWorker(msg);
     }
@@ -398,9 +406,7 @@ export class ClientDbWorker {
       return this.sendToLeader(msg);
     }
 
-    return Promise.reject(
-      new Error('ClientDbWorker send() called before init() completed'),
-    );
+    throw new Error('ClientDbWorker send() called before init() completed');
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

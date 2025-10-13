@@ -371,7 +371,12 @@ test.describe('data-browser', async () => {
     const nestedResource = await getCurrentSubject(page);
     await openSubject(page, parentResource);
     await contextMenuClick('delete', page);
-    await page.click('button:has-text("Delete")');
+    // Confirm the destroy in the dialog. Scoping to `dialog[open]` is needed
+    // because the menu's "Delete" entry can still match `button:has-text` on
+    // some renders before it unmounts, leading to flaky no-ops.
+    await page
+      .locator('dialog[open] button:has-text("Delete")')
+      .click();
 
     await expect(page.locator('text=Resource deleted')).toBeVisible();
 

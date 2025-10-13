@@ -9,7 +9,6 @@ import { CollectionBuilder } from './collectionBuilder.js';
 import { CommitBuilder, Commit, commitToJsonADObject } from './commit.js';
 import { validateDatatype } from './datatypes.js';
 import { isUnauthorized } from './error.js';
-import { collections } from './ontologies/collections.js';
 import { commits } from './ontologies/commits.js';
 import { core } from './ontologies/core.js';
 import { server } from './ontologies/server.js';
@@ -1034,9 +1033,7 @@ export class Resource<C extends OptionalClass = any> {
     // Sort by timestamp (oldest first), then by counter. Loro often reports
     // timestamp=0 for offline edits, so the counter tiebreaker keeps things
     // monotonic per peer — but cross-peer order is best-effort.
-    steps.sort(
-      (a, b) => a.timestamp - b.timestamp || a.counter - b.counter,
-    );
+    steps.sort((a, b) => a.timestamp - b.timestamp || a.counter - b.counter);
 
     const lastCommitProp = 'https://atomicdata.dev/properties/lastCommit';
     type GroupedVersion = {
@@ -1278,7 +1275,12 @@ export class Resource<C extends OptionalClass = any> {
     const newCommitBuilder = new CommitBuilder(this.subject);
     newCommitBuilder.setDestroy(true);
 
-    // Include previousCommit so DID-based resources can be destroyed without a signature mismatch.
+    // The server rejects destroy commits without `previousCommit` for
+    // non-genesis resources. If a fetch is in flight, wait for it.
+    if (this.loading) {
+      await this.store.getResource(this.subject).catch(() => undefined);
+    }
+
     const lastCommit =
       this._lastCommit ?? this.get(properties.commit.lastCommit)?.toString();
 
@@ -1793,7 +1795,9 @@ export class Resource<C extends OptionalClass = any> {
       try {
         localStorage.setItem(
           `atomic.offline.${this.subject}`,
-          JSON.stringify(this._pendingCommits.map(c => commitToJsonADObject(c))),
+          JSON.stringify(
+            this._pendingCommits.map(c => commitToJsonADObject(c)),
+          ),
         );
       } catch (e) {
         console.warn('[Offline] failed to persist pending commits:', e);
@@ -1832,9 +1836,7 @@ export class Resource<C extends OptionalClass = any> {
     // }
 
     if (value instanceof Uint8Array) {
-      throw new Error(
-        'Binary values (Uint8Array) cannot be set via set().',
-      );
+      throw new Error('Binary values (Uint8Array) cannot be set via set().');
     }
 
     if (validate) {

@@ -12,7 +12,7 @@ import { AtomicError, ErrorType } from './error.js';
 // — under some bundlers the re-exported binding lands as `undefined` at runtime
 // (TypeError: serializeDeterministically is not a function), which surfaces in
 // the upload-roundtrip integration test.
-import type { Agent } from './agents.js';
+import type { Agent } from './agent.js';
 import {
   type Commit,
   serializeDeterministically,

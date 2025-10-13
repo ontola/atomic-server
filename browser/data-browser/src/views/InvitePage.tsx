@@ -23,7 +23,12 @@ import { ResourcePageProps } from './ResourcePage';
 import { paths } from '../routes/paths';
 import { Column } from '../components/Row';
 import { useWelcomeLayoutEffect } from '../hooks/useWelcomeLayoutEffect';
-import { Shell, Card, CardTitle, CtaButton } from './getting-started/GettingStartedFlow';
+import {
+  Shell,
+  Card,
+  CardTitle,
+  CtaButton,
+} from './getting-started/GettingStartedFlow';
 import atomicServerLogoUrl from '../../../../logo.svg?url';
 
 import { useId, useState, type JSX } from 'react';
@@ -127,9 +132,7 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
       if (existingPersonal) {
         personalDriveSubject = existingPersonal;
       } else {
-        const driveLabel = name?.trim()
-          ? `${name.trim()}'s Drive`
-          : 'Personal';
+        const driveLabel = name?.trim() ? `${name.trim()}'s Drive` : 'Personal';
         const pd = await store.newResource({
           isA: server.classes.drive,
           noParent: true,
@@ -149,15 +152,29 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
       }
 
       if (destination) {
-        await store.fetchResourceFromServer(destination);
-        const target = store.getResourceLoading(destination);
-        const hostDrive = await getResourcesDrive(target, store);
-
-        if (hostDrive && hostDrive !== personalDriveSubject) {
-          resourceToSave.push(server.properties.drives, [hostDrive], true);
-        }
-
+        // sharedWithMe is what the sidebar's "Shared with me" panel reads.
+        // Set it first so a failure in the drive-bookmark code below doesn't
+        // bubble to the outer catch and skip `resourceToSave.save()`.
         resourceToSave.push(core.properties.sharedWithMe, [destination], true);
+
+        // Drive bookmark (so the destination's drive shows in the switcher)
+        // is best-effort — walking the ancestry can fail transiently right
+        // after invite acceptance while the server propagates the rights
+        // grant. Log so we notice if it stops working entirely.
+        try {
+          await store.fetchResourceFromServer(destination);
+          const target = store.getResourceLoading(destination);
+          const hostDrive = await getResourcesDrive(target, store);
+
+          if (hostDrive && hostDrive !== personalDriveSubject) {
+            resourceToSave.push(server.properties.drives, [hostDrive], true);
+          }
+        } catch (e) {
+          console.warn(
+            '[invite] could not bookmark host drive (sharedWithMe still set):',
+            e,
+          );
+        }
       }
 
       await resourceToSave.save();
