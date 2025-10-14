@@ -34,7 +34,7 @@ function PropVal({
   const property = useProperty(propertyURL);
   const truncated = truncateUrl(propertyURL, 10, true);
 
-  if (property.loading) {
+  if (property.loading || resource.loading) {
     return (
       <PropValRow columns={columns}>
         <StyledLoader title={`Loading ${truncated}`} />

@@ -1,4 +1,4 @@
-import { BubbleMenu as TipTapBubbleMenu } from '@tiptap/react';
+import { BubbleMenu as TipTapBubbleMenu } from '@tiptap/react/menus';
 import {
   FaBold,
   FaCode,

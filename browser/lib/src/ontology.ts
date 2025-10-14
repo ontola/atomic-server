@@ -1,4 +1,4 @@
-import { JSONValue } from './value.js';
+import { type AtomicValue } from './value.js';
 
 export type OntologyBaseObject = {
   readonly classes: Record<string, string>;
@@ -49,7 +49,7 @@ export type InferTypeOfValueInTriple<
     ? Prop extends Requires<Class>
       ? PropTypeMapping[Prop]
       : PropTypeMapping[Prop] | undefined
-    : JSONValue,
+    : AtomicValue,
 > = Returns;
 
 type QuickAccessKnownPropType<Class extends OptionalClass> = {

@@ -22,11 +22,13 @@ import type { JSONValue } from './value.js';
 import { authenticate, fetchWebSocket, startWebsocket } from './websockets.js';
 import { endpoints } from './urls.js';
 import { initOntologies } from './ontologies/index.js';
+import { decodeB64, encodeB64 } from './base64.js';
 
 /** Function called when a resource is updated or removed */
 type ResourceCallback<C extends OptionalClass = UnknownClass> = (
   resource: Resource<C>,
 ) => void;
+type AwarenessCallback = (update: Uint8Array) => void;
 type SubjectCallback = (subject: string) => void;
 /** Callback called when the stores agent changes */
 type AgentCallback = (agent: Agent | undefined) => void;
@@ -115,7 +117,8 @@ const supportsWebSockets = () => typeof WebSocket !== 'undefined';
  */
 export class Store {
   /** A list of all functions that need to be called when a certain resource is updated */
-  public subscribers: Map<string, Array<ResourceCallback>>;
+  public subscribers: Map<string, ResourceCallback[]>;
+  private awarenessSubscribers: Map<string, AwarenessCallback[]> = new Map();
   private injectedFetch: Fetch;
   /**
    * The base URL of an Atomic Server. This is where to send commits, create new
@@ -812,6 +815,85 @@ export class Store {
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error(e);
+    }
+  }
+
+  /**
+   * Subscribe to Yjs Awareness updates for a resource.
+   * @param subject The subject of the resource that you want to subscribe to.
+   * @param callback The callback that will be called when the awareness state changes. You should apply the update to your awareness instance here.
+   * @returns A function that can be called to unsubscribe.
+   */
+  public subscribeAwareness(
+    subject: string,
+    callback: (update: Uint8Array) => void,
+  ): () => void {
+    const ws = this.getWebSocketForSubject(subject);
+
+    const unsub = () => {
+      const subscribers = this.awarenessSubscribers.get(subject);
+
+      if (subscribers) {
+        const afterUnsub = subscribers.filter(item => item !== callback);
+
+        if (afterUnsub.length === 0) {
+          this.awarenessSubscribers.delete(subject);
+
+          if (ws?.readyState === 1) {
+            ws?.send(`Y_AWARENESS_UNSUBSCRIBE ${subject}`);
+          }
+        } else {
+          this.awarenessSubscribers.set(subject, afterUnsub);
+        }
+      }
+    };
+
+    const subscribers = this.awarenessSubscribers.get(subject);
+
+    if (subscribers) {
+      subscribers.push(callback);
+
+      return unsub;
+    }
+
+    this.awarenessSubscribers.set(subject, [callback]);
+
+    if (ws?.readyState === 1) {
+      ws?.send(`Y_AWARENESS_SUBSCRIBE ${subject}`);
+    }
+
+    return unsub;
+  }
+
+  /**
+   * Notify the store that your awareness state changed, the store will send the update to the server.
+   * @param subject The subject of the resource that your awareness state changed for.
+   * @param update The binary encoded update to send to the server.
+   */
+  public notifyAwarenessUpdate(subject: string, update: Uint8Array): void {
+    const ws = this.getWebSocketForSubject(subject);
+
+    const messageBody = {
+      subject: subject,
+      update: encodeB64(update),
+    };
+
+    if (ws?.readyState === 1) {
+      ws?.send(`Y_AWARENESS_UPDATE ${JSON.stringify(messageBody)}`);
+    }
+  }
+
+  /**
+   * @Internal
+   */
+  public __handleAwarenessUpdateMessage(message: string): void {
+    const messageBody = JSON.parse(message);
+    const update = decodeB64(messageBody.update);
+
+    const subscribers = this.awarenessSubscribers.get(messageBody.subject);
+
+    if (subscribers) {
+      subscribers.forEach(callback => callback(update));
     }
   }
 

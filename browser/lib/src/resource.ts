@@ -1,3 +1,5 @@
+import type * as Y from 'yjs';
+import { YLoader } from './yjs.js';
 import { EventManager } from './EventManager.js';
 import type { Agent } from './agent.js';
 import { Client } from './client.js';
@@ -30,10 +32,12 @@ import {
   type JSONValue,
   type JSONArray,
   type JSONObject,
+  type AtomicValue,
+  isYDoc,
 } from './value.js';
 
 /** Contains the PropertyURL / Value combinations */
-export type PropVals = Map<string, JSONValue>;
+export type PropVals = Map<string, AtomicValue>;
 
 /**
  * If a resource has no subject, it will have this subject. This means that the
@@ -88,6 +92,8 @@ export class Resource<C extends OptionalClass = any> {
     ResourceEvents,
     ResourceEventHandlers
   >();
+
+  private errorRetries = 0;
 
   public constructor(subject: string, newResource?: boolean) {
     if (typeof subject !== 'string') {
@@ -302,7 +308,38 @@ export class Resource<C extends OptionalClass = any> {
    */
   public clone(): Resource<C> {
     const res = new Resource(this.subject);
-    res.propvals = structuredClone(this.propvals);
+
+    // Filter out YDoc instances before cloning
+    if (YLoader.isLoaded()) {
+      const Y = YLoader.Y;
+
+      const nonYdocPropvals = new Map<string, AtomicValue>();
+      const ydocPropvals = new Map<string, Y.Doc>();
+
+      for (const [key, value] of this.propvals.entries()) {
+        if (!isYDoc(value)) {
+          // Property is not a YDoc so we can just clone it.
+          nonYdocPropvals.set(key, value);
+          continue;
+        }
+
+        // Property is a YDoc so we need to make a new Y.Doc instance and apply the state of the existing YDoc.
+        const newDoc = new Y.Doc();
+        Y.applyUpdateV2(newDoc, Y.encodeStateAsUpdateV2(value));
+        ydocPropvals.set(key, newDoc);
+      }
+
+      res.propvals = structuredClone(nonYdocPropvals);
+
+      // Set the YDoc instances using setUnsafe to setup any event listeners.
+      for (const [key, value] of ydocPropvals.entries()) {
+        res.setUnsafe(key, value);
+      }
+    } else {
+      // Yjs is not loaded, so the propvals can't contain YDoc instances.
+      res.propvals = structuredClone(this.propvals);
+    }
+
     res.loading = this.loading;
     res.new = this.new;
     res.error = structuredClone(this.error);
@@ -434,6 +471,27 @@ export class Resource<C extends OptionalClass = any> {
       .buildAndFetch();
   }
 
+  /** Gets a YDoc from the resource, or creates a new one if it doesn't exist */
+  public getYDoc(property: string): Y.Doc {
+    YLoader.loadCheck();
+    const Y = YLoader.Y;
+
+    const value = this.get(property);
+
+    if (value instanceof Y.Doc) {
+      return value;
+    }
+
+    if (value !== undefined) {
+      throw new Error(`Value of property ${property} is not a YDoc`);
+    }
+
+    const doc = new Y.Doc();
+    this.setUnsafe(property, doc);
+
+    return doc;
+  }
+
   /** builds all versions using the Commits */
   public async getHistory(
     progressCallback?: (percentage: number) => void,
@@ -491,6 +549,19 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     for (const [key, value] of versionPropvals.entries()) {
+      if (YLoader.isLoaded() && isYDoc(value)) {
+        // YDocs can't just be set so we need to handle them separately.
+        const Y = YLoader.Y;
+
+        const undoUpdate = this.createUndoUpdateFromVersion(key, value);
+        const currentDoc = this.getYDoc(key);
+
+        Y.applyUpdateV2(currentDoc, undoUpdate);
+        this.commitBuilder.addYUpdateAction(key, undoUpdate);
+
+        continue;
+      }
+
       await this.set(key, value);
     }
 
@@ -732,11 +803,22 @@ export class Resource<C extends OptionalClass = any> {
       // Logic for handling error if the previousCommit is wrong.
       // Is not stable enough, and maybe not required at the time.
       if (e.message.includes('previousCommit')) {
+        if (this.errorRetries > 3) {
+          this.errorRetries = 0;
+          throw e;
+        }
+
+        this.errorRetries++;
+
         console.warn('previousCommit missing or mismatch, retrying...');
         // We try again, but first we fetch the latest version of the resource to get its `lastCommit`
         const resourceFetched = await this.store.fetchResourceFromServer(
           this.subject,
         );
+
+        if (resourceFetched.error) {
+          throw resourceFetched.error;
+        }
 
         const fixedLastCommit = resourceFetched!
           .get(properties.commit.lastCommit)
@@ -786,6 +868,13 @@ export class Resource<C extends OptionalClass = any> {
       validate = false;
     }
 
+    // YDocs can not be set, sadly we can't really remove them from the value type so we have to throw an error.
+    if (isYDoc(value)) {
+      throw new Error(
+        'YDoc values can not be set, you should edit the YDoc value directly.',
+      );
+    }
+
     if (validate) {
       const fullProp = await this.store.getProperty(prop);
 
@@ -817,8 +906,12 @@ export class Resource<C extends OptionalClass = any> {
    * Set a Property, Value combination without performing validations or adding
    * it to the CommitBuilder.
    */
-  public setUnsafe(prop: string, val: JSONValue): void {
+  public setUnsafe(prop: string, val: AtomicValue): void {
     this.propvals.set(prop, val);
+
+    if (isYDoc(val)) {
+      val.on('updateV2', this.buildYDocCallback(prop));
+    }
   }
 
   /** Sets the error on the Resource. Does not Throw. */
@@ -850,6 +943,46 @@ export class Resource<C extends OptionalClass = any> {
     const parent = this.store.getResourceLoading(parentSubject);
 
     return parent.new;
+  }
+
+  private createUndoUpdateFromVersion(key: string, oldDoc: Y.Doc): Uint8Array {
+    const Y = YLoader.Y;
+    YLoader.loadCheck();
+
+    const currentDoc = this.propvals.get(key) as Y.Doc | undefined;
+
+    // If the current value does not exist anymore we just return the old state as there is nothing to undo.
+    if (currentDoc === undefined) {
+      return Y.encodeStateAsUpdateV2(oldDoc);
+    }
+
+    const oldStateVector = Y.encodeStateVector(oldDoc);
+
+    // Get an update of all changes after the old document.
+    const diffUpdate = Y.encodeStateAsUpdateV2(currentDoc, oldStateVector);
+    const undoManager = new Y.UndoManager(oldDoc);
+
+    Y.applyUpdateV2(oldDoc, diffUpdate);
+    // The two docs are now in sync but the undo manager tracked the change to the old doc.
+    undoManager.undo();
+
+    // The undo manager created a new update that removes all the changes we just made effectively reverting all changes made since the old document.
+    return Y.encodeStateAsUpdateV2(oldDoc, Y.encodeStateVector(currentDoc));
+  }
+
+  private buildYDocCallback(
+    property: string,
+  ): (
+    update: Uint8Array,
+    _origin: unknown,
+    _doc: unknown,
+    transaction: Y.Transaction,
+  ) => void {
+    return (update, _origin, _doc, transaction) => {
+      if (transaction.local) {
+        this.commitBuilder.addYUpdateAction(property, update);
+      }
+    };
   }
 }
 

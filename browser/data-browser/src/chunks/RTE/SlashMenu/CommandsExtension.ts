@@ -1,6 +1,8 @@
 import { Extension, ReactRenderer } from '@tiptap/react';
 import { Suggestion, type SuggestionOptions } from '@tiptap/suggestion';
-import tippy, { type Instance } from 'tippy.js';
+import { computePosition } from '@floating-ui/dom';
+import styles from '../floatingMenu.module.css';
+
 import {
   CommandList,
   type CommandItem,
@@ -144,45 +146,35 @@ export const buildSuggestion = (
 
   render: () => {
     let component: ReactRenderer<CommandListRefType, CommandListProps>;
-    let popup: Instance[];
 
     return {
       onStart: props => {
         component = new ReactRenderer(CommandList, {
           props,
           editor: props.editor,
+          className: styles.renderer,
         });
 
-        if (!props.clientRect) {
+        if (!props.decorationNode) {
           return;
         }
 
-        popup = tippy('body', {
-          getReferenceClientRect: props.clientRect as () => DOMRect,
-          appendTo: () => container,
-          content: component.element,
-          showOnCreate: true,
-          interactive: true,
-          trigger: 'manual',
-          placement: 'bottom-start',
+        computePosition(props.decorationNode, component.element, {
+          placement: 'bottom',
+        }).then(({ x, y }) => {
+          component.element.style.setProperty('--left', `${x}px`);
+          component.element.style.setProperty('--top', `${y}px`);
+          container.appendChild(component.element);
         });
       },
 
       onUpdate(props) {
         component.updateProps(props);
-
-        if (!props.clientRect) {
-          return;
-        }
-
-        popup[0].setProps({
-          getReferenceClientRect: props.clientRect as () => DOMRect,
-        });
       },
 
       onKeyDown(props) {
         if (props.event.key === 'Escape') {
-          popup[0].hide();
+          component.destroy();
 
           return true;
         }
@@ -195,7 +187,6 @@ export const buildSuggestion = (
       },
 
       onExit() {
-        popup[0].destroy();
         component.destroy();
       },
     };

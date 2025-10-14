@@ -1,4 +1,10 @@
-import { JSONValue, Resource, Store, useStore } from '@tomic/react';
+import {
+  JSONValue,
+  Resource,
+  Store,
+  useStore,
+  type PropVals,
+} from '@tomic/react';
 import { useCallback, useState } from 'react';
 
 enum HistoryItemType {
@@ -22,7 +28,7 @@ interface ResourceCreatedItem {
 interface ResourceDeletedItem {
   type: HistoryItemType.ResourceDeleted;
   subject: string;
-  propVals: Map<string, JSONValue>;
+  propVals: PropVals;
 }
 
 type HistoryItem = ValueChangeItem | ResourceCreatedItem | ResourceDeletedItem;

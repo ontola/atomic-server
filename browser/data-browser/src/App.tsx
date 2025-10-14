@@ -1,4 +1,4 @@
-import { StoreContext, Store } from '@tomic/react';
+import { StoreContext, Store, enableYjs } from '@tomic/react';
 
 import { isDev } from './config';
 import { registerHandlers } from './handlers';
@@ -32,6 +32,8 @@ const store = new Store({
   agent: initalAgent,
   serverUrl,
 });
+
+await enableYjs();
 
 store.parseMetaTags();
 
