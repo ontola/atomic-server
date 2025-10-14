@@ -1,9 +1,5 @@
 //! Describe changes / mutations to data
 
-use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
-use urls::{SET, SIGNER};
-
 use crate::{
     agents::{decode_base64, encode_base64},
     datatype::DataType,
@@ -13,7 +9,10 @@ use crate::{
     values::SubResource,
     Atom, Resource, Storelike, Value,
 };
-
+use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
+use urls::{SET, SIGNER};
+use yrs::updates::decoder::Decode;
 /// The `resource_new`, `resource_old` and `commit_resource` fields are only created if the Commit is persisted.
 /// When the Db is only notifying other of changes (e.g. if a new Message was added to a ChatRoom), these fields are not created.
 /// When deleting a resource, the `resource_new` field is None.
@@ -90,8 +89,11 @@ pub struct Commit {
     /// Overwrites existing values
     #[serde(rename = "https://atomicdata.dev/properties/set")]
     pub set: Option<std::collections::HashMap<String, Value>>,
-    /// The set of property URLs that need to be removed
+    /// A map of properties and the Yjs updates to be applied to them (must be Value::YDoc)
+    #[serde(rename = "https://atomicdata.dev/properties/yUpdate")]
+    pub y_update: Option<std::collections::HashMap<String, Value>>,
     #[serde(rename = "https://atomicdata.dev/properties/remove")]
+    /// The set of property URLs that need to be removed
     pub remove: Option<Vec<String>>,
     /// If set to true, deletes the entire resource
     #[serde(rename = "https://atomicdata.dev/properties/destroy")]
@@ -352,6 +354,43 @@ impl Commit {
                 }
             }
         }
+        if let Some(y_update) = self.y_update.clone() {
+            for (prop, update) in y_update.iter() {
+                let update_bin = match update {
+                    Value::YDoc(bin) => bin,
+                    _ => {
+                        return Err(
+                            format!("Value in y_update is not of type YDoc: {}", prop).into()
+                        )
+                    }
+                };
+
+                let decode_update = yrs::Update::decode_v2(update_bin)
+                    .map_err(|e| format!("Error decoding Yjs update: {}", e))?;
+
+                match resource.get(prop) {
+                    Ok(val) => match val {
+                        Value::YDoc(bin) => {
+                            // Resource already has state so we will merge the update into it.
+                            // let decoded_state = yrs::Update::decode_v2(bin)
+                            //     .map_err(|e| format!("Error decoding Yjs state: {}", e))?;
+
+                            // We can merge the state (that is saved as an update) and the incoming update without having to create a Yjs doc.
+                            let merged_update = yrs::merge_updates_v2(vec![bin, update_bin])
+                                .map_err(|e| format!("Error merging Yjs updates: {}", e))?;
+
+                            resource.set(prop.into(), Value::YDoc(merged_update), store)?;
+                        }
+                        _ => return Err(format!("Property is not of type YDoc: {}", prop).into()),
+                    },
+                    _ => {
+                        // The property was not set yet so we initialize it with the update.
+                        resource.set(prop.into(), Value::YDoc(update_bin.clone()), store)?;
+                    }
+                };
+                // We don't create any atoms because indexing yjs updates doesn't make much sense.
+            }
+        }
         // Remove all atoms from index if destroy
         if let Some(destroy) = self.destroy {
             if destroy {
@@ -383,6 +422,10 @@ impl Commit {
             Ok(found) => Some(found.to_nested()?.to_owned()),
             Err(_) => None,
         };
+        let y_update = match resource.get(urls::Y_UPDATE) {
+            Ok(found) => Some(found.to_nested()?.to_owned()),
+            Err(_) => None,
+        };
         let remove = match resource.get(urls::REMOVE) {
             Ok(found) => Some(found.to_subjects(None)?),
             Err(_) => None,
@@ -404,6 +447,7 @@ impl Commit {
             signer,
             set,
             push,
+            y_update,
             remove,
             destroy,
             previous_commit,
@@ -463,6 +507,13 @@ impl Commit {
                 Value::AtomicUrl(previous_commit.into()),
             );
         }
+        if let Some(y_update) = &self.y_update {
+            let mut newy_update = PropVals::new();
+            for (prop, val) in y_update {
+                newy_update.insert(prop.into(), val.clone());
+            }
+            resource.set_unsafe(urls::Y_UPDATE.into(), newy_update.into());
+        }
         resource.set_unsafe(
             SIGNER.into(),
             Value::new(&self.signer, &DataType::AtomicUrl)?,
@@ -513,6 +564,8 @@ pub struct CommitBuilder {
     set: std::collections::HashMap<String, Value>,
     /// The set of PropVals that need to be appended to resource arrays.
     push: std::collections::HashMap<String, Value>,
+    /// A map of Propvals containing Yjs updates to be applied to the YDocs
+    y_update: std::collections::HashMap<String, Value>,
     /// The set of property URLs that need to be removed
     /// https://atomicdata.dev/properties/remove
     remove: HashSet<String>,
@@ -532,6 +585,7 @@ impl CommitBuilder {
             push: HashMap::new(),
             subject,
             set: HashMap::new(),
+            y_update: HashMap::new(),
             remove: HashSet::new(),
             destroy: false,
             previous_commit: None,
@@ -584,6 +638,16 @@ impl CommitBuilder {
         self.subject = subject;
     }
 
+    pub fn add_y_update(&mut self, prop: String, update: Value) -> AtomicResult<()> {
+        match update {
+            Value::YDoc(_) => {
+                self.y_update.insert(prop, update);
+                Ok(())
+            }
+            _ => Err(format!("Expected YDoc in add_y_update, got {}", update).into()),
+        }
+    }
+
     /// Set Property URLs which values to be removed
     pub fn remove(&mut self, prop: String) {
         self.remove.insert(prop);
@@ -607,6 +671,7 @@ fn sign_at(
         subject: commitbuilder.subject,
         signer: agent.subject.clone(),
         set: Some(commitbuilder.set),
+        y_update: Some(commitbuilder.y_update),
         remove: Some(commitbuilder.remove.into_iter().collect()),
         destroy: Some(commitbuilder.destroy),
         created_at: sign_date,
@@ -717,6 +782,7 @@ mod test {
             signer: String::from("https://localhost/author"),
             set: Some(set),
             push: None,
+            y_update: None,
             remove: Some(remove),
             previous_commit: None,
             destroy: Some(destroy),

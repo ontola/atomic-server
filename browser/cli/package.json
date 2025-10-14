@@ -13,7 +13,7 @@
     "@tomic/lib": "workspace:*",
     "chalk": "^5.3.0",
     "prettier": "3.0.3",
-    "typescript": "^5.6.3"
+    "typescript": "^5.9.3"
   },
   "description": "Generate types from Atomic Data ontologies",
   "license": "MIT",

@@ -426,6 +426,33 @@ fn parse_propval(
                 Some(&prop),
             ));
         }
+        DataType::YDoc => {
+            let serde_json::Value::Object(map) = val else {
+                return Err(AtomicError::parse_error(
+                    "Invalid value for YDoc, must be of shape { type: \"ydoc\", data: <base64 string> }",
+                    subject.as_deref(),
+                    Some(&prop),
+                ));
+            };
+
+            let Some(data) = map.get("data") else {
+                return Err(AtomicError::parse_error(
+                    "Invalid value for YDoc, no data field",
+                    subject.as_deref(),
+                    Some(&prop),
+                ));
+            };
+
+            let serde_json::Value::String(data) = data else {
+                return Err(AtomicError::parse_error(
+                    "Invalid value for YDoc, data field must be a string",
+                    subject.as_deref(),
+                    Some(&prop),
+                ));
+            };
+
+            Value::new(data.as_str(), &DataType::YDoc)?
+        }
     };
 
     Ok((prop, atomic_val))
@@ -544,8 +571,8 @@ fn parse_json_ad_map_to_resource(
                     let importer = parse_opts.importer.as_deref().unwrap();
                     if !orig.has_parent(store, importer) {
                         Err(
-                                format!("Cannot overwrite {subj} outside of importer! Enable `overwrite_outside`"),
-                            )?
+                            format!("Cannot overwrite {subj} outside of importer! Enable `overwrite_outside`"),
+                        )?
                     }
                 };
                 orig

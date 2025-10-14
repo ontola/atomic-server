@@ -1,6 +1,6 @@
 import {
   datatypes,
-  JSONValue,
+  AtomicValue,
   properties,
   Resource,
   useResource,
@@ -28,7 +28,7 @@ export function AllPropsSimple({ resource }: AllPropsSimpleProps): JSX.Element {
 
 interface RowProps {
   prop: string;
-  val: JSONValue;
+  val: AtomicValue;
 }
 
 function Row({ prop, val }: RowProps): JSX.Element {

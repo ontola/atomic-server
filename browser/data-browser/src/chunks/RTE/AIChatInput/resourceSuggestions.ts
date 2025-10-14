@@ -1,5 +1,4 @@
 import { ReactRenderer } from '@tiptap/react';
-import tippy, { type Instance } from 'tippy.js';
 import {
   MentionList,
   type MentionListProps,
@@ -10,6 +9,8 @@ import type { SuggestionOptions, SuggestionProps } from '@tiptap/suggestion';
 import type { SearchResourcesOfServer } from '@components/AI/MCP/useMcpServers';
 import type { MCPServer } from '@chunks/AI/types';
 import type { CategorySuggestion, SearchSuggestion } from './types';
+import styles from '../floatingMenu.module.css';
+import { computePosition, flip, inline, offset, shift } from '@floating-ui/dom';
 
 enum SuggestionState {
   PickingCategory,
@@ -95,7 +96,25 @@ export function searchSuggestionBuilder(
     items,
     render() {
       let component: ReactRenderer<MentionListRef, MentionListProps>;
-      let popup: Instance[];
+
+      const setPosition = (
+        props: SuggestionProps<SearchSuggestion, SearchSuggestion>,
+      ) => {
+        if (!props.decorationNode) {
+          console.error('No decoration node');
+
+          return;
+        }
+
+        computePosition(props.decorationNode, component.element, {
+          placement: 'top',
+          middleware: [flip(), shift(), inline(), offset(10)],
+        }).then(({ x, y }) => {
+          component.element.style.setProperty('--left', `${x}px`);
+          component.element.style.setProperty('--top', `${y}px`);
+          document.body.appendChild(component.element);
+        });
+      };
 
       const update = (
         newP: SuggestionProps<SearchSuggestion, SearchSuggestion>,
@@ -106,12 +125,9 @@ export function searchSuggestionBuilder(
           return;
         }
 
-        popup[0].setProps({
-          getReferenceClientRect: newP.clientRect as () => DOMRect,
-        });
+        setPosition(newP);
       };
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const editPropsForMenus = (
         props: SuggestionProps<SearchSuggestion, SearchSuggestion>,
       ): SuggestionProps<SearchSuggestion, SearchSuggestion> => {
@@ -154,21 +170,10 @@ export function searchSuggestionBuilder(
           component = new ReactRenderer(MentionList, {
             props: newProps,
             editor: props.editor,
+            className: styles.renderer,
           });
 
-          if (!props.clientRect) {
-            return;
-          }
-
-          popup = tippy('body', {
-            getReferenceClientRect: props.clientRect as () => DOMRect,
-            appendTo: () => document.body,
-            content: component.element,
-            showOnCreate: true,
-            interactive: true,
-            trigger: 'manual',
-            placement: 'top-start',
-          });
+          setPosition(props);
         },
 
         onUpdate(oldProps) {
@@ -178,7 +183,7 @@ export function searchSuggestionBuilder(
 
         onKeyDown(props) {
           if (props.event.key === 'Escape') {
-            popup[0].hide();
+            component.destroy();
 
             return true;
           }
@@ -193,7 +198,7 @@ export function searchSuggestionBuilder(
 
         onExit() {
           state = SuggestionState.PickingCategory;
-          popup[0].destroy();
+          // cleanup();
           component.destroy();
         },
       };

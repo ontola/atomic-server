@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2025-09-26T12:18:27.636Z\n"
-"PO-Revision-Date: 2025-09-29T10:57:19.353Z\n"
+"PO-Revision-Date: 2025-10-14T09:30:37.525Z\n"
 "Last-Translator: \n"
 "Language: en\n"
 "Language-Team: \n"
@@ -48,9 +48,9 @@ msgstr "Resource is loading..."
 
 #: src/components/HighlightedCodeBlock.tsx
 #: src/chunks/AI/AIChatPage.tsx
-#: src/views/ResourceLine.tsx
-#: src/views/ResourcePage.tsx
 #: src/components/Searchbar/TagSuggestionOverlay.tsx
+#: src/views/ResourcePage.tsx
+#: src/views/ResourceLine.tsx
 #: src/chunks/AI/ModelSelect/OllamaModelSelector.tsx
 #: src/views/Card/ResourceCard.tsx
 #: src/views/File/FilePreviewThumbnail.tsx
@@ -162,8 +162,8 @@ msgstr "Back to {0}"
 
 #: src/routes/EditRoute.tsx
 #: src/chunks/AI/AgentConfigItem.tsx
-#: src/views/ResourcePageDefault.tsx
 #: src/components/ResourceContextMenu/index.tsx
+#: src/views/ResourcePageDefault.tsx
 #: src/views/TablePage/TableHeadingMenu.tsx
 msgid "Edit"
 msgstr "Edit"
@@ -309,14 +309,14 @@ msgstr "Drive Configuration"
 msgid "Current Drive"
 msgstr "Current Drive"
 
-#: src/chunks/MarkdownEditor/ImagePicker.tsx
+#: src/chunks/RTE/ImagePicker.tsx
 #: src/components/forms/EditFormDialog.tsx
 #: src/components/forms/ResourceForm.tsx
 #: src/routes/SettingsServer/index.tsx
 #: src/routes/Share/ShareRoute.tsx
-#: src/views/Article/ArticleDescription.tsx
-#: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/OntologyPage/NewPropertyButton.tsx
+#: src/views/OntologyPage/NewClassButton.tsx
+#: src/views/Article/ArticleDescription.tsx
 #: src/components/forms/NewForm/NewFormDialog.tsx
 #: src/views/TablePage/PropertyForm/EditPropertyDialog.tsx
 msgid "Save"
@@ -364,8 +364,8 @@ msgid "If you sign out, your secret will be removed. If you haven't saved your s
 msgstr "If you sign out, your secret will be removed. If you haven't saved your secret somewhere, you will lose access to this User. Are you sure you want to sign out?"
 
 #: src/routes/SettingsAgent.tsx
-#: src/views/InvitePage.tsx
 #: src/components/SideBar/AppMenu.tsx
+#: src/views/InvitePage.tsx
 msgid "User Settings"
 msgstr "User Settings"
 
@@ -753,30 +753,30 @@ msgstr "Name"
 #: src/components/ConfirmationDialog.tsx
 #: src/chunks/AI/AgentConfig.tsx
 #: src/components/ParentPicker/ParentPickerDialog.tsx
+#: src/routes/History/HistoryMobileView.tsx
 #: src/components/forms/EditFormDialog.tsx
 #: src/components/forms/ResourceForm.tsx
-#: src/routes/History/HistoryMobileView.tsx
-#: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/OntologyPage/NewPropertyButton.tsx
+#: src/views/OntologyPage/NewClassButton.tsx
 #: src/components/forms/NewForm/NewFormDialog.tsx
 #: src/components/forms/ValueForm/ValueFormEdit.tsx
 #: src/views/TablePage/PropertyForm/ExternalPropertyDialog.tsx
 #: src/views/TablePage/PropertyForm/NewPropertyDialog.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
 msgid "Cancel"
 msgstr "Cancel"
 
 #: src/components/InviteForm.tsx
 #: src/views/TablePage/PropertyForm/NewPropertyDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 msgid "Create"
 msgstr "Create"
 
@@ -1119,8 +1119,8 @@ msgid "Drop files or click here to upload."
 msgstr "Drop files or click here to upload."
 
 #: src/components/forms/UploadForm.tsx
-#: src/components/forms/FileDropzone/FileDropzone.tsx
 #: src/components/forms/FileDropzone/FileDropzoneInput.tsx
+#: src/components/forms/FileDropzone/FileDropzone.tsx
 msgid "Uploading..."
 msgstr "Uploading..."
 
@@ -1303,7 +1303,7 @@ msgid "Chat input"
 msgstr "Chat input"
 
 #: src/views/ChatRoomPage.tsx
-#: src/chunks/MarkdownEditor/AIChatInput/AsyncAIChatInput.tsx
+#: src/chunks/RTE/AIChatInput/AsyncAIChatInput.tsx
 msgid "Send"
 msgstr "Send"
 
@@ -1365,7 +1365,7 @@ msgid "Edit tag"
 msgstr "Edit tag"
 
 #: src/components/MetaSetter.tsx
-#: src/chunks/MarkdownEditor/AIChatInput/resourceSuggestions.ts
+#: src/chunks/RTE/AIChatInput/resourceSuggestions.ts
 msgid "Atomic Data"
 msgstr "Atomic Data"
 
@@ -1467,8 +1467,8 @@ msgstr "Remove drive from list"
 msgid "Select"
 msgstr "Select"
 
-#: src/views/ResourceInline/ResourceInline.tsx
 #: src/components/SideBar/OntologySideBar/OntologiesPanel.tsx
+#: src/views/ResourceInline/ResourceInline.tsx
 #: src/components/forms/FilePicker/FilePickerItem.tsx
 #: src/components/forms/NewForm/NewFormDialog.tsx
 msgid "loading"
@@ -1540,22 +1540,22 @@ msgstr "Sandbox, test components in isolation"
 msgid "Invalid Resource"
 msgstr "Invalid Resource"
 
+#: src/components/forms/InputSlug.tsx
 #: src/components/forms/InputMarkdown.tsx
 #: src/components/forms/InputNumber.tsx
 #: src/components/forms/InputNumber.tsx
 #: src/components/forms/InputDate.tsx
-#: src/components/forms/InputResourceArray.tsx
-#: src/components/forms/InputResourceArray.tsx
-#: src/components/forms/InputResourceArray.tsx
-#: src/components/forms/InputSlug.tsx
 #: src/components/forms/InputString.tsx
-#: src/components/forms/InputURI.tsx
 #: src/components/forms/InputTimestamp.tsx
+#: src/components/forms/InputResourceArray.tsx
+#: src/components/forms/InputResourceArray.tsx
+#: src/components/forms/InputResourceArray.tsx
+#: src/components/forms/InputURI.tsx
 #: src/components/forms/FilePicker/FilePicker.tsx
-#: src/components/forms/formValidation/useValidation.ts
-#: src/components/forms/formValidation/useValidation.ts
-#: src/components/forms/formValidation/useValidation.ts
 #: src/components/forms/ResourceSelector/ResourceSelector.tsx
+#: src/components/forms/formValidation/useValidation.ts
+#: src/components/forms/formValidation/useValidation.ts
+#: src/components/forms/formValidation/useValidation.ts
 #: src/views/TablePage/PropertyForm/PropertyForm.tsx
 msgid "Required"
 msgstr "Required"
@@ -1565,7 +1565,7 @@ msgid "Edit resource"
 msgstr "Edit resource"
 
 #: src/chunks/AI/MessageContextItem.tsx
-#: src/chunks/MarkdownEditor/EditLinkForm.tsx
+#: src/chunks/RTE/EditLinkForm.tsx
 #: src/views/TablePage/TableHeadingMenu.tsx
 #: src/views/TablePage/TableHeadingMenu.tsx
 #: src/components/forms/ResourceSelector/ResourceSelector.tsx
@@ -2099,8 +2099,8 @@ msgstr "No parent set"
 #. placeholder {0}: prop.shortname
 #. placeholder {0}: prop.shortname
 #: src/components/forms/EditFormDialog.tsx
-#: src/views/TablePage/EditorCells/JSONCell.tsx
 #: src/views/TablePage/EditorCells/MarkdownCell.tsx
+#: src/views/TablePage/EditorCells/JSONCell.tsx
 msgid "Edit {0}"
 msgstr "Edit {0}"
 
@@ -2337,8 +2337,8 @@ msgstr "Datatype"
 msgid "Classtype"
 msgstr "Classtype"
 
-#: src/views/OntologyPage/Property/EnumFormPart.tsx
 #: src/views/OntologyPage/Property/PropertyFormCommon.tsx
+#: src/views/OntologyPage/Property/EnumFormPart.tsx
 msgid "Allows Only"
 msgstr "Allows Only"
 
@@ -2459,8 +2459,8 @@ msgstr "Search {0}"
 msgid "Search..."
 msgstr "Search..."
 
-#: src/views/TablePage/EditorCells/JSONCell.tsx
 #: src/views/TablePage/EditorCells/MarkdownCell.tsx
+#: src/views/TablePage/EditorCells/JSONCell.tsx
 msgid "Open edit dialog"
 msgstr "Open edit dialog"
 
@@ -2817,7 +2817,7 @@ msgstr "<0/> Settings"
 msgid "No AI provider configured."
 msgstr "No AI provider configured."
 
-#: src/chunks/MarkdownEditor/AIChatInput/AsyncAIChatInput.tsx
+#: src/chunks/RTE/AIChatInput/AsyncAIChatInput.tsx
 msgid "Ask me anything..."
 msgstr "Ask me anything..."
 
@@ -2897,16 +2897,18 @@ msgstr "Temperature"
 msgid "Temperature value"
 msgstr "Temperature value"
 
-#: src/chunks/MarkdownEditor/AsyncMarkdownEditor.tsx
-#: src/chunks/MarkdownEditor/AsyncMarkdownEditor.tsx
+#: src/chunks/RTE/AsyncMarkdownEditor.tsx
+#: src/chunks/RTE/AsyncMarkdownEditor.tsx
+#: src/chunks/RTE/CollaborativeEditor.tsx
 msgid "Start typing..."
 msgstr "Start typing..."
 
-#: src/chunks/MarkdownEditor/AsyncMarkdownEditor.tsx
+#: src/chunks/RTE/AsyncMarkdownEditor.tsx
+#: src/chunks/RTE/CollaborativeEditor.tsx
 msgid "Type '/' for options"
 msgstr "Type '/' for options"
 
-#: src/chunks/MarkdownEditor/AsyncMarkdownEditor.tsx
+#: src/chunks/RTE/AsyncMarkdownEditor.tsx
 msgid "Edit raw markdown"
 msgstr "Edit raw markdown"
 
@@ -2939,35 +2941,35 @@ msgstr "Set {0} as default"
 msgid "Provider not enabled"
 msgstr "Provider not enabled"
 
-#: src/chunks/MarkdownEditor/BubbleMenu.tsx
+#: src/chunks/RTE/BubbleMenu.tsx
 msgid "Toggle bold"
 msgstr "Toggle bold"
 
-#: src/chunks/MarkdownEditor/BubbleMenu.tsx
+#: src/chunks/RTE/BubbleMenu.tsx
 msgid "Toggle italic"
 msgstr "Toggle italic"
 
-#: src/chunks/MarkdownEditor/BubbleMenu.tsx
+#: src/chunks/RTE/BubbleMenu.tsx
 msgid "Toggle strikethrough"
 msgstr "Toggle strikethrough"
 
-#: src/chunks/MarkdownEditor/BubbleMenu.tsx
+#: src/chunks/RTE/BubbleMenu.tsx
 msgid "Toggle blockquote"
 msgstr "Toggle blockquote"
 
-#: src/chunks/MarkdownEditor/BubbleMenu.tsx
+#: src/chunks/RTE/BubbleMenu.tsx
 msgid "Toggle inline code"
 msgstr "Toggle inline code"
 
-#: src/chunks/MarkdownEditor/ImagePicker.tsx
+#: src/chunks/RTE/ImagePicker.tsx
 msgid "Enter a URL..."
 msgstr "Enter a URL..."
 
-#: src/chunks/MarkdownEditor/ImagePicker.tsx
+#: src/chunks/RTE/ImagePicker.tsx
 msgid "Or"
 msgstr "Or"
 
-#: src/chunks/MarkdownEditor/ImagePicker.tsx
+#: src/chunks/RTE/ImagePicker.tsx
 msgid "Alt text"
 msgstr "Alt text"
 
@@ -2994,43 +2996,43 @@ msgstr "Thinking..."
 msgid "Thinking"
 msgstr "Thinking"
 
-#: src/chunks/MarkdownEditor/AIChatInput/MentionList.tsx
+#: src/chunks/RTE/AIChatInput/MentionList.tsx
 msgid "No result"
 msgstr "No result"
 
-#: src/chunks/MarkdownEditor/EditLinkForm.tsx
+#: src/chunks/RTE/EditLinkForm.tsx
 msgid "Set"
 msgstr "Set"
 
-#: src/chunks/MarkdownEditor/NodeSelectMenu.tsx
+#: src/chunks/RTE/NodeSelectMenu.tsx
 msgid "Paragraph"
 msgstr "Paragraph"
 
-#: src/chunks/MarkdownEditor/NodeSelectMenu.tsx
+#: src/chunks/RTE/NodeSelectMenu.tsx
 msgid "Codeblock"
 msgstr "Codeblock"
 
-#: src/chunks/MarkdownEditor/NodeSelectMenu.tsx
+#: src/chunks/RTE/NodeSelectMenu.tsx
 msgid "Heading 1"
 msgstr "Heading 1"
 
-#: src/chunks/MarkdownEditor/NodeSelectMenu.tsx
+#: src/chunks/RTE/NodeSelectMenu.tsx
 msgid "Heading 2"
 msgstr "Heading 2"
 
-#: src/chunks/MarkdownEditor/NodeSelectMenu.tsx
+#: src/chunks/RTE/NodeSelectMenu.tsx
 msgid "Heading 3"
 msgstr "Heading 3"
 
-#: src/chunks/MarkdownEditor/NodeSelectMenu.tsx
+#: src/chunks/RTE/NodeSelectMenu.tsx
 msgid "Heading 4"
 msgstr "Heading 4"
 
-#: src/chunks/MarkdownEditor/NodeSelectMenu.tsx
+#: src/chunks/RTE/NodeSelectMenu.tsx
 msgid "Heading 5"
 msgstr "Heading 5"
 
-#: src/chunks/MarkdownEditor/NodeSelectMenu.tsx
+#: src/chunks/RTE/NodeSelectMenu.tsx
 msgid "Heading 6"
 msgstr "Heading 6"
 
@@ -3045,3 +3047,23 @@ msgstr "Row is incomplete or has invalid data"
 #: src/components/forms/ResourceForm.tsx
 msgid "Add another property..."
 msgstr "Add another property..."
+
+#: src/components/YDocValue.tsx
+msgid "Empty"
+msgstr "Empty"
+
+#: src/components/YDocValue.tsx
+msgid "Show encoded state"
+msgstr "Show encoded state"
+
+#: src/components/YDocValue.tsx
+msgid "Hide encoded state"
+msgstr "Hide encoded state"
+
+#: src/components/forms/InputYDoc.tsx
+msgid "Editing YDoc directly is not supported"
+msgstr "Editing YDoc directly is not supported"
+
+#: src/chunks/RTE/CollaborativeEditor.tsx
+msgid "Pieter Post"
+msgstr "Pieter Post"

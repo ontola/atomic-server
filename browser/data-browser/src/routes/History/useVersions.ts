@@ -34,6 +34,7 @@ export function useVersions(resource: Resource): UseVersionsResult {
           const dedupedVersions = dedupeVersions(history);
           setVersions(dedupedVersions);
         } catch (e) {
+          console.error(e);
           setError(e);
         } finally {
           setLoading(false);

@@ -30,6 +30,7 @@ import {
   core,
   server,
 } from '@tomic/lib';
+import type * as Y from 'yjs';
 
 /**
  * Hook for getting a Resource in a React component. Will try to fetch the
@@ -532,6 +533,36 @@ export function useDate(
 
     return;
   }
+}
+
+/**
+ * Gets or creates a Yjs document for the given property. returns undefined if the resource is still loading.
+ */
+export function useYDoc(
+  resource: Resource,
+  propertyURL: string,
+): Y.Doc | undefined {
+  const [doc, setDoc] = useState<Y.Doc | undefined>(() =>
+    resource.loading ? undefined : resource.getYDoc(propertyURL),
+  );
+
+  useEffect(() => {
+    if (resource.loading) {
+      return;
+    }
+
+    setDoc(resource.getYDoc(propertyURL));
+
+    return resource.on(ResourceEvents.LocalChange, prop => {
+      if (prop !== propertyURL) {
+        return;
+      }
+
+      setDoc(resource.getYDoc(propertyURL));
+    });
+  }, [resource]);
+
+  return doc;
 }
 
 /** Preferred way of using the store in a Component or Hook */
