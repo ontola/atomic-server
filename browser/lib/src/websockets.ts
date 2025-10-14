@@ -476,13 +476,16 @@ export class WSClient {
 
         if (!msg) break;
 
-        // Refetch the affected subjects FIRST, then notify. Consumers like
-        // useCollection re-query the local WASM DB on QueryMembershipChanged;
-        // if we notified before the fetches landed, the local DB wouldn't
-        // yet contain the new resource and the collection would silently
-        // refetch the stale state.
+        // For added subjects: refetch so the store has fresh data when
+        // consumers re-query in response to the membership change event.
+        // For removed subjects: evict from local store + ClientDb. Don't
+        // refetch — the server will 404, but more importantly the resource
+        // is GONE and we shouldn't keep showing it from cache.
+        for (const s of msg.removed) {
+          this.store.removeResource(s);
+        }
         Promise.all(
-          [...msg.added, ...msg.removed].map(s =>
+          msg.added.map(s =>
             this.store.fetchResourceFromServer(s).catch(() => undefined),
           ),
         ).then(() => {
