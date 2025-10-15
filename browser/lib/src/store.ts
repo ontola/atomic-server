@@ -1003,7 +1003,15 @@ export class Store {
     // and the agent's edit form errors with "<class> is not a Class"
     // because `isA` is missing. Forcing a fetch seeds the local resource
     // with the full server state before we layer the new properties on top.
-    const agentResource = await this.fetchResourceFromServer(agent.subject);
+    //
+    // Use HTTP (not WS): the WS may still be authenticated as a previous
+    // agent (e.g. onboarding switches from a dev-drive agent to a freshly-
+    // created one — the WS auth is fire-and-forget and races the GET).
+    // HTTP signs each request with the current agent and never has stale
+    // session state.
+    const agentResource = await this.fetchResourceFromServer(agent.subject, {
+      noWebSocket: true,
+    });
     await agentResource.set(
       core.properties.personalDrive,
       drive.subject,
