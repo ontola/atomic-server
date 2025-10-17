@@ -7,6 +7,7 @@ import {
   useStore,
   useProperty,
   truncateUrl,
+  Datatype,
 } from '@tomic/react';
 import { styled, keyframes, css } from 'styled-components';
 import {
@@ -571,11 +572,18 @@ function SyncPage() {
                     entry.propertySummaries.length > 0 && (
                       <PropertyList>
                         {entry.propertySummaries.map(ps => (
-                          <PropertyRow key={ps.property}>
+                          <PropertyRow
+                            key={ps.property}
+                            data-change-type={ps.changeType}
+                          >
+                            <span aria-hidden='true'>
+                              {ps.changeType === 'changed' ? '+' : '−'}
+                            </span>
                             <PropertyName propertyURL={ps.property} />
-                            <PropertyValue>
-                              {formatValue(ps.value)}
-                            </PropertyValue>
+                            <PropertyValueDisplay
+                              propertyURL={ps.property}
+                              value={ps.value}
+                            />
                           </PropertyRow>
                         ))}
                       </PropertyList>
@@ -664,7 +672,75 @@ function PropertyName({ propertyURL }: { propertyURL: string }) {
   );
 }
 
+/**
+ * Renders a commit-log property value with type-aware formatting:
+ *   - ResourceArray  → comma-separated <ResourceInline> links
+ *   - AtomicURL      → single <ResourceInline>
+ *   - everything else → text via {@link formatValue}
+ *
+ * Falls back to text rendering while the property's datatype is still
+ * loading or errors out, so a slow / missing property metadata fetch
+ * doesn't blank the row.
+ */
+function PropertyValueDisplay({
+  propertyURL,
+  value,
+}: {
+  propertyURL: string;
+  value: unknown;
+}) {
+  const property = useProperty(propertyURL);
+
+  if (value === null) {
+    return <PropertyValue>{formatValue(value)}</PropertyValue>;
+  }
+
+  if (
+    !property.loading &&
+    !property.error &&
+    property.datatype === Datatype.RESOURCEARRAY &&
+    Array.isArray(value)
+  ) {
+    return (
+      <PropertyValue>
+        {value.map((subject, i) => (
+          <span key={`${i}-${String(subject)}`}>
+            {i > 0 && ', '}
+            {typeof subject === 'string' ? (
+              <ResourceInline subject={subject} />
+            ) : (
+              String(subject)
+            )}
+          </span>
+        ))}
+      </PropertyValue>
+    );
+  }
+
+  if (
+    !property.loading &&
+    !property.error &&
+    property.datatype === Datatype.ATOMIC_URL &&
+    typeof value === 'string'
+  ) {
+    return (
+      <PropertyValue>
+        <ResourceInline subject={value} />
+      </PropertyValue>
+    );
+  }
+
+  return <PropertyValue>{formatValue(value)}</PropertyValue>;
+}
+
 function formatValue(value: unknown): string {
+  // The store flags removed properties by passing `null` through the
+  // commit-log diff; surface that explicitly so the user can tell a
+  // property-removal commit apart from one setting an empty string.
+  if (value === null) {
+    return '(removed)';
+  }
+
   if (typeof value === 'string') {
     return value.length > 200 ? value.slice(0, 200) + '...' : value;
   }
@@ -986,9 +1062,29 @@ const PropertyList = styled.div`
 
 const PropertyRow = styled.div`
   display: grid;
-  grid-template-columns: minmax(6rem, auto) minmax(0, 1fr);
+  grid-template-columns: 1ch minmax(6rem, auto) minmax(0, 1fr);
   gap: 0.6rem;
   align-items: baseline;
+
+  & > span[aria-hidden='true']:first-child {
+    font-weight: 700;
+    text-align: center;
+    font-size: 0.85rem;
+  }
+
+  &[data-change-type='unchanged'] {
+    opacity: 0.55;
+  }
+  &[data-change-type='removed'] {
+    text-decoration: line-through;
+    color: ${p => p.theme.colors.textLight};
+  }
+  &[data-change-type='changed'] > span[aria-hidden='true']:first-child {
+    color: ${p => p.theme.colors.main};
+  }
+  &[data-change-type='removed'] > span[aria-hidden='true']:first-child {
+    color: ${p => p.theme.colors.alert};
+  }
 `;
 
 const PropLabel = styled.span`

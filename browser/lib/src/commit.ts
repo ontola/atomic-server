@@ -4,10 +4,7 @@ import stringify from 'fast-json-stable-stringify';
 import { Client } from './client.js';
 import { Resource } from './resource.js';
 import type { Store } from './store.js';
-import {
-  type JSONValue,
-  type JSONArray,
-} from './value.js';
+import { type JSONValue, type JSONArray } from './value.js';
 import { decodeB64, encodeB64 } from './base64.js';
 import { commits } from './ontologies/commits.js';
 import { core } from './ontologies/core.js';
@@ -409,7 +406,9 @@ export function parseCommitResource(resource: Resource): Commit {
     subject: resource.get(commits.properties.subject),
     set: resource.get(commits.properties.set),
     push: resource.get(commits.properties.push),
-    loroUpdate: parseLoroUpdateValue(resource.get(commits.properties.loroUpdate)),
+    loroUpdate: parseLoroUpdateValue(
+      resource.get(commits.properties.loroUpdate),
+    ),
     signer: resource.get(commits.properties.signer),
     createdAt: resource.get(commits.properties.createdAt),
     remove: resource.get(commits.properties.remove),
@@ -434,7 +433,9 @@ export function parseCommitJSON(str: string): Commit {
     const subject = jsonAdObj[commits.properties.subject];
     const set = jsonAdObj[commits.properties.set];
     const push = jsonAdObj[commits.properties.push];
-    const loroUpdate = parseLoroUpdateValue(jsonAdObj[commits.properties.loroUpdate]);
+    const loroUpdate = parseLoroUpdateValue(
+      jsonAdObj[commits.properties.loroUpdate],
+    );
     const signer = jsonAdObj[commits.properties.signer];
     const createdAt = jsonAdObj[commits.properties.createdAt];
     const remove: string[] | undefined = jsonAdObj[commits.properties.remove];
@@ -524,9 +525,7 @@ export function parseAndApplyCommit(jsonAdObjStr: string, store: Store) {
   }
 }
 
-function parseLoroUpdateValue(
-  value: JSONValue,
-): Uint8Array | undefined {
+function parseLoroUpdateValue(value: JSONValue): Uint8Array | undefined {
   if (value === undefined) {
     return undefined;
   }
@@ -535,16 +534,15 @@ function parseLoroUpdateValue(
     return decodeB64(value);
   }
 
-  throw new Error(`Invalid loroUpdate value, expected base64 string: ${JSON.stringify(value)}`);
+  throw new Error(
+    `Invalid loroUpdate value, expected base64 string: ${JSON.stringify(value)}`,
+  );
 }
 
 /**
  * Imports a Loro CRDT update into the resource's LoroDoc and materializes
  * the changed properties into the resource's propvals so the UI updates.
  */
-function execLoroUpdateCommit(
-  loroUpdate: Uint8Array,
-  resource: Resource,
-) {
+function execLoroUpdateCommit(loroUpdate: Uint8Array, resource: Resource) {
   resource.importLoroUpdate(loroUpdate);
 }

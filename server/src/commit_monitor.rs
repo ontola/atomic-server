@@ -88,12 +88,30 @@ impl Actor for CommitMonitor {
                             });
                         }
                         DbEvent::Changed { subject, .. } => {
+                            // `did:ad:commit:<sig>` resources are write-time
+                            // metadata: each successful commit stores one,
+                            // which fires its own `DbEvent::Changed`. Clients
+                            // never need to fetch them through the
+                            // drive-wide subscription channel — the UI
+                            // doesn't render commits, and the per-resource
+                            // `lastCommit` reference reaches the client
+                            // alongside the resource the commit applies to.
+                            // Forwarding them was producing redundant
+                            // `QUERY_UPDATE` frames per row save (one for
+                            // the commit, one for the resource), each
+                            // triggering its own GET on the client.
+                            if subject.is_commit_did() {
+                                continue;
+                            }
                             addr.do_send(DriveNotification {
                                 subject: subject.to_string(),
                                 removed: false,
                             });
                         }
                         DbEvent::Destroyed { subject } => {
+                            if subject.is_commit_did() {
+                                continue;
+                            }
                             addr.do_send(DriveNotification {
                                 subject: subject.to_string(),
                                 removed: true,
@@ -264,10 +282,14 @@ impl Handler<UnsubscribeQuery> for CommitMonitor {
     }
 }
 
-/// `DbEvent::Changed` / `Destroyed` arriving via the listener task. Match
-/// the subject's drive prefix against drive-wide subscriptions and push.
-/// DID-form subjects can't be prefix-matched to a drive, so they fan out to
-/// every drive-wide subscription (matches the prior text-protocol behavior).
+/// `DbEvent::Changed` / `Destroyed` arriving via the listener task. Match the
+/// subject's drive prefix against drive-wide subscriptions and push a
+/// minimal `QueryUpdate` (subject only — empty filter). DID-form subjects
+/// can't be prefix-matched, so they fan out to every drive subscriber. The
+/// client uses this purely to learn that a subject exists and fetches it,
+/// at which point `Store.addResources` fires `ResourceUpdated` and each
+/// `useCollection` decides locally whether the change is relevant — no more
+/// drive-wide `/query` refetch storm.
 impl Handler<DriveNotification> for CommitMonitor {
     type Result = ();
 

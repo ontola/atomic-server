@@ -59,7 +59,9 @@ const config: PlaywrightTestConfig = {
               // secure context, exposing `crypto.subtle`) to the actual
               // dagger service. Without a secure origin the SPA's WASM
               // ClientDb fails to init and every test hangs.
-              args: [`--host-resolver-rules=${process.env.ATOMIC_TEST_HOST_MAP}`],
+              args: [
+                `--host-resolver-rules=${process.env.ATOMIC_TEST_HOST_MAP}`,
+              ],
             }
           : undefined,
       },

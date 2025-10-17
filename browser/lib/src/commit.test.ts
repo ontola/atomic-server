@@ -167,7 +167,11 @@ describe('Commit signing and keys', () => {
     const resource = new Resource('did:ad:genesis');
     resource.setStore(store);
     resource.new = true;
-    await resource.set('https://atomicdata.dev/properties/name', 'First Save', false);
+    await resource.set(
+      'https://atomicdata.dev/properties/name',
+      'First Save',
+      false,
+    );
 
     // Simulate UI code touching the Loro doc before the first save.
     resource.getLoroDoc();
@@ -266,10 +270,26 @@ describe('Commit signing and keys', () => {
     const resource = new Resource('_new:test-drive');
     resource.setStore(store);
     resource.new = true;
-    await resource.set(core.properties.isA, ['https://atomicdata.dev/classes/Drive'], false);
-    await resource.set('https://atomicdata.dev/properties/name', 'Test Drive', false);
-    await resource.set('https://atomicdata.dev/properties/write', [agentDID], false);
-    await resource.set('https://atomicdata.dev/properties/read', [agentDID], false);
+    await resource.set(
+      core.properties.isA,
+      ['https://atomicdata.dev/classes/Drive'],
+      false,
+    );
+    await resource.set(
+      'https://atomicdata.dev/properties/name',
+      'Test Drive',
+      false,
+    );
+    await resource.set(
+      'https://atomicdata.dev/properties/write',
+      [agentDID],
+      false,
+    );
+    await resource.set(
+      'https://atomicdata.dev/properties/read',
+      [agentDID],
+      false,
+    );
 
     resource.markNextCommitAsGenesis();
     const drive = resource;
@@ -284,9 +304,9 @@ describe('Commit signing and keys', () => {
     materialized.importLoroUpdate(genesisCommit.loroUpdate!);
 
     // The critical check: write and read arrays must be in the Loro delta
-    expect(materialized.get('https://atomicdata.dev/properties/write')).toEqual([
-      agentDID,
-    ]);
+    expect(materialized.get('https://atomicdata.dev/properties/write')).toEqual(
+      [agentDID],
+    );
     expect(materialized.get('https://atomicdata.dev/properties/read')).toEqual([
       agentDID,
     ]);
@@ -321,8 +341,16 @@ describe('Commit signing and keys', () => {
     const resource = new Resource('_new:test-doc');
     resource.setStore(store);
     resource.new = true;
-    await resource.set(core.properties.isA, ['https://atomicdata.dev/classes/DocumentV2'], false);
-    await resource.set('https://atomicdata.dev/properties/name', 'My Doc', false);
+    await resource.set(
+      core.properties.isA,
+      ['https://atomicdata.dev/classes/DocumentV2'],
+      false,
+    );
+    await resource.set(
+      'https://atomicdata.dev/properties/name',
+      'My Doc',
+      false,
+    );
 
     // Genesis save
     resource.markNextCommitAsGenesis();
@@ -342,8 +370,6 @@ describe('Commit signing and keys', () => {
 
     // Mark dirty (this is what useLoroSync does after local updates)
     resource.markDirty();
-
-
 
     // The resource should now have unsaved changes
     expect(resource.hasUnsavedChanges()).toBe(true);
@@ -453,12 +479,15 @@ describe('Commit parse and apply', () => {
       'My new string',
       false,
     );
-    const loroUpdate = (source as any)._loroDoc.export({ mode: 'snapshot' }) as Uint8Array;
+    const loroUpdate = (source as any)._loroDoc.export({
+      mode: 'snapshot',
+    }) as Uint8Array;
     const exampleCommit = JSON.stringify(
       commitToJsonADObject({
         subject: source.subject,
         loroUpdate,
-        signer: 'https://atomicdata.dev/agents/8S2U/viqkaAQVzUisaolrpX6hx/G/L3e2MTjWA83Rxk=',
+        signer:
+          'https://atomicdata.dev/agents/8S2U/viqkaAQVzUisaolrpX6hx/G/L3e2MTjWA83Rxk=',
         createdAt: 1627561366516,
         signature:
           'VCHGWxax6j4pPMJWelwpSHVOL+W2R2A0vjFdSpH/HhIZxE6hyaUTtPfKjgWGNhsUsQske4yHIdqc/QsQhV03DA==',

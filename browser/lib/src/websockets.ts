@@ -1,5 +1,5 @@
 import { createAuthentication } from './authentication.js';
-import type { Resource } from './resource.js';
+import { Resource } from './resource.js';
 import { recordServerVersionFromWsProtocol } from './serverCapabilities.js';
 import type { Store } from './store.js';
 import { AtomicError, ErrorType } from './error.js';
@@ -20,13 +20,102 @@ import {
   decodeQueryUpdate,
   encodeBlobResponse,
   encodeBlobRequest,
-  debugFrame,
+  debugFrameInfo,
 } from './ws-v2.js';
 import { BLOB } from './urls.js';
 import { hexToBytes, bytesToHex } from './value.js';
 
 const REQUEST_TIMEOUT = 5000;
 const WS_PROTOCOL = 'atomicdata-ws.v2';
+
+/**
+ * Render one WS frame to the console as a collapsible group:
+ *
+ *   ▸ → UPDATE did:ad:abc... [snapshot] (820B)        ← always visible
+ *       └─ { subject, flags, commitId, properties: { name: "...", ...} }
+ *                                                     ← console.debug,
+ *                                                       hidden unless the
+ *                                                       DevTools log level
+ *                                                       includes "Verbose".
+ *
+ * Modern browsers gate `console.debug` behind the verbose level by default,
+ * so users get the headline they want without their console drowning in
+ * snapshot blobs unless they ask for it. The group itself collapses by
+ * default so multiple frames stay one line each.
+ */
+function logFrame(
+  data: Uint8Array,
+  direction: '→' | '←',
+  color: string,
+): void {
+  const info = debugFrameInfo(data, direction);
+
+  if (info.details === undefined) {
+    console.log(`%c${info.headline}`, `color: ${color}`);
+
+    return;
+  }
+
+  console.groupCollapsed(`%c${info.headline}`, `color: ${color}`);
+  try {
+    const details = info.details() as Record<string, unknown>;
+    // For UPDATE frames the raw `loroSnapshot` Uint8Array isn't useful at a
+    // glance. Materialize it through a throwaway Resource and replace it
+    // with a `properties` object containing the snapshot's propvals — same
+    // shape the Sync page commit log uses, just inline in the console.
+    const enriched = decodeUpdateProperties(details);
+    console.debug(enriched);
+  } catch (e) {
+    console.debug('(failed to decode frame details)', e);
+  }
+  console.groupEnd();
+}
+
+/**
+ * If the details payload looks like an UPDATE frame (has `loroSnapshot`),
+ * decode the snapshot into propvals and swap it in. Falls back to the raw
+ * details on any decode failure so a malformed snapshot can't break the
+ * frame log.
+ */
+function decodeUpdateProperties(
+  details: Record<string, unknown>,
+): Record<string, unknown> {
+  const snapshot = details.loroSnapshot;
+  const subject = details.subject;
+
+  if (!(snapshot instanceof Uint8Array) || typeof subject !== 'string') {
+    return details;
+  }
+
+  try {
+    const tmp = new Resource(subject);
+    tmp.importLoroUpdate(snapshot);
+    const properties: Record<string, unknown> = {};
+
+    for (const [prop, value] of tmp.getEntries()) {
+      // Skip the loro snapshot field itself — it's the bytes we just decoded.
+      if (prop === 'https://atomicdata.dev/properties/loroUpdate') continue;
+      properties[shortPropName(prop)] = value;
+    }
+
+    // Mutating-ish: keep the order so loroSnapshot stays at the bottom for
+    // anyone who still wants to see the raw bytes.
+    const { loroSnapshot, ...rest } = details;
+
+    return { ...rest, properties, loroSnapshot };
+  } catch {
+    return details;
+  }
+}
+
+function shortPropName(url: string): string {
+  // `https://atomicdata.dev/properties/name` → `name`. For non-atomicdata.dev
+  // properties (custom ontologies) the fragment after the last `/` is still
+  // the most readable thing without a property cache.
+  const lastSlash = url.lastIndexOf('/');
+
+  return lastSlash >= 0 ? url.slice(lastSlash + 1) : url;
+}
 
 /**
  * A WebSocket client using the v2 binary protocol.
@@ -142,7 +231,9 @@ export class WSClient {
     // `ws.fetch(newAgent.subject)` returns 401 because the old agent has no
     // read rights on the new agent's resource.
     if (this.isAuthenticating) {
-      try { await this.authPromise; } catch {}
+      try {
+        await this.authPromise;
+      } catch {}
       if (this.authenticatedWith === agent.subject && !fetchAll) return;
     }
 
@@ -279,7 +370,7 @@ export class WSClient {
   /** Send a binary frame, logging it in debug mode. */
   private sendBinary(frame: Uint8Array) {
     if (this.debug) {
-      console.log(`%c${debugFrame(frame, '→')}`, 'color: #9bf');
+      logFrame(frame, '→', '#9bf');
     }
 
     this.ws.send(frame);
@@ -322,7 +413,7 @@ export class WSClient {
     if (data.length === 0) return;
 
     if (this.debug) {
-      console.log(`%c${debugFrame(data, '←')}`, 'color: #6b9');
+      logFrame(data, '←', '#6b9');
     }
 
     const tag = data[0];
@@ -482,27 +573,18 @@ export class WSClient {
 
         if (!msg) break;
 
-        // For added subjects: refetch so the store has fresh data when
-        // consumers re-query in response to the membership change event.
-        // For removed subjects: evict from local store + ClientDb. Don't
-        // refetch — the server will 404, but more importantly the resource
-        // is GONE and we shouldn't keep showing it from cache.
+        // Drive-wide subscription channel: server tells us a subject was
+        // added or removed somewhere on the drive. Translate that into
+        // store-level changes; `addResources` (called inside
+        // `fetchResourceFromServer`) will fire `StoreEvents.ResourceUpdated`,
+        // and each `useCollection` surgically applies the change against
+        // its filter — no `/query` refetch storm.
         for (const s of msg.removed) {
           this.store.removeResource(s);
         }
-        Promise.all(
-          msg.added.map(s =>
-            this.store.fetchResourceFromServer(s).catch(() => undefined),
-          ),
-        ).then(() => {
-          this.store.notifyQueryMembershipChanged({
-            property: msg.property,
-            value: msg.value,
-            added: msg.added,
-            removed: msg.removed,
-          });
-        });
-
+        for (const s of msg.added) {
+          this.store.fetchResourceFromServer(s).catch(() => undefined);
+        }
         break;
       }
 
@@ -563,23 +645,15 @@ export class WSClient {
         const added: string[] = update.added ?? [];
         const removed: string[] = update.removed ?? [];
 
-        // Refetch the affected subjects so the store has fresh data when
-        // consumers re-query in response to the membership change event.
-        for (const s of [...added, ...removed]) {
+        // Same shape as the binary handler: each fetched/removed subject
+        // flows through `addResources`/`removeResource`, which fires
+        // `ResourceUpdated`/`ResourceRemoved` for `useCollection` to react.
+        for (const s of removed) {
+          this.store.removeResource(s);
+        }
+        for (const s of added) {
           this.store.fetchResourceFromServer(s).catch(() => {});
         }
-
-        // Bridge to the in-process event bus so consumers (useCollection,
-        // useChildren, etc.) can react to remote changes — this is the
-        // "live query" path. Without it, drive-wide subscriptions land
-        // resources in the store but the UI never knows to recompute.
-        this.store.notifyQueryMembershipChanged({
-          property: update.property ?? undefined,
-          value: update.value ?? undefined,
-          drive: update.drive ?? undefined,
-          added,
-          removed,
-        });
       } catch {
         // ignore
       }
