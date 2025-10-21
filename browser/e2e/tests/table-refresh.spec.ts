@@ -176,31 +176,32 @@ test.describe('table refresh', () => {
     await nameInput.fill('NoClientDbRefresh');
     await page.locator('dialog[open] button:has-text("Create")').click();
     await expect(editableTitle(page)).toBeVisible({ timeout: 15000 });
-    await page.waitForTimeout(1500);
 
+    // Wait for the table to settle on its post-render baseline (header +
+    // placeholder = 2). With ClientDb disabled the collection's first
+    // `/query` GET takes longer than a fixed timeout, so a hard
+    // `waitForTimeout(1500)` flakes between 1 (just header) and 2 (header +
+    // placeholder rendered).
     const rows = page.locator('[aria-rowindex]');
+    await expect(rows).toHaveCount(2, { timeout: 15000 });
     const initialCount = await rows.count();
     console.log(`initial (no ClientDb): row count = ${initialCount}`);
 
-    const counts: number[] = [initialCount];
+    // Each reload: wait for the row count to settle at the baseline before
+    // sampling. The bug being regression-tested is monotonic GROWTH —
+    // exact-equality on a hard timeout would catch transient under-render
+    // (count=1 mid-mount), which isn't the bug and just reproduces flakes.
     for (let i = 0; i < 8; i++) {
       await page.reload({ waitUntil: 'domcontentloaded' });
       await expect(editableTitle(page)).toBeVisible({ timeout: 15000 });
-      await page.waitForTimeout(1500);
+      await expect(rows).toHaveCount(initialCount, { timeout: 15000 });
 
       const nowCount = await rows.count();
       console.log(`reload #${i + 1} (no ClientDb): row count = ${nowCount}`);
-      counts.push(nowCount);
-    }
-    console.log('no-ClientDb counts:', counts);
-
-    // Must not grow on each reload.
-    const stableCount = counts[1] ?? counts[0];
-    for (let i = 2; i < counts.length; i++) {
       expect(
-        counts[i],
-        `reload #${i} count (${counts[i]}) drifted from ${stableCount} — series: ${counts.join(', ')}`,
-      ).toBe(stableCount);
+        nowCount,
+        `reload #${i + 1} (no ClientDb) should still have ${initialCount} rows, got ${nowCount}`,
+      ).toBe(initialCount);
     }
   });
 });

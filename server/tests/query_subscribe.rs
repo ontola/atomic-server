@@ -425,3 +425,94 @@ async fn query_subscribe_requires_read_permission() -> AtomicResult<()> {
 
     Ok(())
 }
+
+/// Drive-wide subscribers should NEVER receive `did:ad:commit:<sig>`
+/// subjects in `QUERY_UPDATE.added`.
+///
+/// Each successful commit stores a `did:ad:commit:<sig>` resource as
+/// write-time metadata. Without filtering, every commit triggers two
+/// `DriveNotification`s (one for the commit resource, one for the resource
+/// the commit applies to), and a drive-wide subscriber would see the
+/// commit subject in `added`. Clients then GET it — server returns either
+/// "not found" (the commit-id strip-prefix fallback) or returns the
+/// commit metadata which the UI doesn't render. Either way it's wasted
+/// traffic. The `commit_monitor.rs` listener task filters
+/// `subject.is_commit_did()` before forwarding the event, so subscribers
+/// only see the affected resource subject.
+#[tokio::test]
+async fn drive_wide_subscription_excludes_commit_subjects() -> AtomicResult<()> {
+    let port = start_server();
+    wait_for_server(port).await;
+    let server_url = format!("http://localhost:{}", port);
+    let ws_url = format!("ws://localhost:{}/ws", port);
+
+    let client_a = Client::new(&server_url).await?;
+    let agent_a = client_a.new_agent("Alice").await?;
+    let drive = client_a
+        .new_public_drive(&agent_a, "Commit Filter Drive")
+        .await?;
+
+    let client_b = Client::new(&server_url).await?;
+    let agent_b = client_b.new_agent("Bob").await?;
+    let ws_b = WsClient::connect(&ws_url).await?;
+    ws_b.authenticate(&agent_b).await?;
+
+    let query_json = serde_json::json!({ "drive": drive });
+    ws_b.send_raw(&format!("SUBSCRIBE_QUERY {}", query_json))
+        .await?;
+    let mut rx = ws_b.subscribe();
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
+    // Trigger a commit with a side-effect: any resource save under the drive.
+    let mut resource = client_a.new_resource(&drive);
+    resource.set_name("Triggers a commit");
+    resource.set_unsafe(
+        atomic_lib::urls::IS_A.into(),
+        atomic_lib::Value::ResourceArray(vec![atomic_lib::urls::CLASS.into()]),
+    );
+    resource.set_unsafe(
+        atomic_lib::urls::SHORTNAME.into(),
+        atomic_lib::Value::Slug("triggers-a-commit".into()),
+    );
+    resource.set_unsafe(
+        atomic_lib::urls::DESCRIPTION.into(),
+        atomic_lib::Value::String("anything".into()),
+    );
+    let resource_subject = resource.save_remote(client_a.store()).await?;
+
+    // Collect every QUERY_UPDATE we see for ~2s after the commit. A correct
+    // server emits at least one with the resource subject in `added` and
+    // *no* `did:ad:commit:` subjects in any frame's `added`/`removed`.
+    let mut saw_resource = false;
+    let _ = tokio::time::timeout(Duration::from_secs(2), async {
+        loop {
+            match rx.recv().await {
+                Ok(WsMessage::QueryUpdate { added, removed, .. }) => {
+                    for subj in added.iter().chain(removed.iter()) {
+                        assert!(
+                            !subj.starts_with("did:ad:commit:"),
+                            "Drive-wide subscriber received a commit subject in QUERY_UPDATE: \
+                             '{}'. The commit_monitor listener should filter \
+                             `subject.is_commit_did()` before forwarding to drive subscribers.",
+                            subj
+                        );
+                    }
+                    if added.contains(&resource_subject) {
+                        saw_resource = true;
+                    }
+                }
+                Ok(_) => continue,
+                Err(_) => return,
+            }
+        }
+    })
+    .await;
+
+    assert!(
+        saw_resource,
+        "Drive-wide subscriber should still receive QUERY_UPDATE for the *resource* \
+         subject (just not the commit subject)"
+    );
+
+    Ok(())
+}

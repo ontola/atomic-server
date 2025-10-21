@@ -1,0 +1,462 @@
+{
+  "messages": [
+    {
+      "level": "log",
+      "text": "%c← AUTH_OK color: #6b9",
+      "timestamp": "2026-05-07T18:38:19.455Z"
+    },
+    {
+      "level": "log",
+      "text": "%c← AUTH_OK color: #6b9",
+      "timestamp": "2026-05-07T18:38:20.052Z"
+    },
+    {
+      "level": "log",
+      "text": "%c← AUTH_OK color: #6b9",
+      "timestamp": "2026-05-07T18:38:21.690Z"
+    },
+    {
+      "level": "log",
+      "text": "[ClientDb] Using OPFS persistent storage",
+      "timestamp": "2026-05-07T18:38:21.832Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] applyResourceChange new member did:ad:6fWS5NMtv name=FastDbg pages.has(0)=false inFlight=false new=false hasPending=false",
+      "timestamp": "2026-05-07T18:38:22.104Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll]  → unchanged (no page 0). pending=false",
+      "timestamp": "2026-05-07T18:38:22.104Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] applyResourceChange new member did:ad:2TC14FXX/ name=undefined pages.has(0)=false inFlight=false new=false hasPending=false",
+      "timestamp": "2026-05-07T18:38:22.122Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll]  → unchanged (no page 0). pending=false",
+      "timestamp": "2026-05-07T18:38:22.122Z"
+    },
+    {
+      "level": "log",
+      "text": "### START fast typing",
+      "timestamp": "2026-05-07T18:38:38.006Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] applyResourceChange new member did:ad:IAk+C8TQU name=alpha pages.has(0)=true inFlight=false new=false hasPending=true",
+      "timestamp": "2026-05-07T18:38:38.433Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll]  → membership-stale",
+      "timestamp": "2026-05-07T18:38:38.433Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] refresh() start",
+      "timestamp": "2026-05-07T18:38:38.433Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll]  iter 1 done. totalMembers=0 pending=false",
+      "timestamp": "2026-05-07T18:38:38.438Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] refresh() complete",
+      "timestamp": "2026-05-07T18:38:38.438Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] applyResourceChange new member did:ad:IAk+C8TQU name=alpha pages.has(0)=true inFlight=false new=false hasPending=true",
+      "timestamp": "2026-05-07T18:38:38.532Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll]  → membership-stale",
+      "timestamp": "2026-05-07T18:38:38.532Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] refresh() start",
+      "timestamp": "2026-05-07T18:38:38.532Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll]  iter 1 done. totalMembers=0 pending=false",
+      "timestamp": "2026-05-07T18:38:38.553Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] refresh() complete",
+      "timestamp": "2026-05-07T18:38:38.553Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] applyResourceChange new member did:ad:IAk+C8TQU name=alpha pages.has(0)=true inFlight=false new=false hasPending=true",
+      "timestamp": "2026-05-07T18:38:38.611Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll]  → membership-stale",
+      "timestamp": "2026-05-07T18:38:38.611Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] refresh() start",
+      "timestamp": "2026-05-07T18:38:38.611Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll]  iter 1 done. totalMembers=0 pending=false",
+      "timestamp": "2026-05-07T18:38:38.615Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] refresh() complete",
+      "timestamp": "2026-05-07T18:38:38.615Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] applyResourceChange new member did:ad:IAk+C8TQU name=alpha pages.has(0)=true inFlight=false new=false hasPending=false",
+      "timestamp": "2026-05-07T18:38:38.624Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll]  → membership-stale",
+      "timestamp": "2026-05-07T18:38:38.624Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] refresh() start",
+      "timestamp": "2026-05-07T18:38:38.624Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll]  iter 1 done. totalMembers=0 pending=false",
+      "timestamp": "2026-05-07T18:38:38.631Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] refresh() complete",
+      "timestamp": "2026-05-07T18:38:38.631Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] applyResourceChange new member did:ad:5VpBXI/QQ name=bravo pages.has(0)=true inFlight=false new=false hasPending=true",
+      "timestamp": "2026-05-07T18:38:38.772Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll]  → membership-stale",
+      "timestamp": "2026-05-07T18:38:38.772Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] refresh() start",
+      "timestamp": "2026-05-07T18:38:38.772Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll]  iter 1 done. totalMembers=1 pending=false",
+      "timestamp": "2026-05-07T18:38:38.773Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] refresh() complete",
+      "timestamp": "2026-05-07T18:38:38.773Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] applyResourceChange new member did:ad:5VpBXI/QQ name=bravo pages.has(0)=true inFlight=false new=false hasPending=true",
+      "timestamp": "2026-05-07T18:38:38.844Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll]  → membership-stale",
+      "timestamp": "2026-05-07T18:38:38.844Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] refresh() start",
+      "timestamp": "2026-05-07T18:38:38.844Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll]  iter 1 done. totalMembers=1 pending=false",
+      "timestamp": "2026-05-07T18:38:38.850Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] refresh() complete",
+      "timestamp": "2026-05-07T18:38:38.850Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] applyResourceChange new member did:ad:5VpBXI/QQ name=bravo pages.has(0)=true inFlight=false new=false hasPending=true",
+      "timestamp": "2026-05-07T18:38:38.906Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll]  → membership-stale",
+      "timestamp": "2026-05-07T18:38:38.906Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] refresh() start",
+      "timestamp": "2026-05-07T18:38:38.906Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll]  iter 1 done. totalMembers=1 pending=false",
+      "timestamp": "2026-05-07T18:38:38.909Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] refresh() complete",
+      "timestamp": "2026-05-07T18:38:38.909Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] applyResourceChange new member did:ad:5VpBXI/QQ name=bravo pages.has(0)=true inFlight=false new=false hasPending=false",
+      "timestamp": "2026-05-07T18:38:38.916Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll]  → membership-stale",
+      "timestamp": "2026-05-07T18:38:38.916Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] refresh() start",
+      "timestamp": "2026-05-07T18:38:38.916Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll]  iter 1 done. totalMembers=1 pending=false",
+      "timestamp": "2026-05-07T18:38:38.919Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] refresh() complete",
+      "timestamp": "2026-05-07T18:38:38.919Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] applyResourceChange new member did:ad:oc0wTA0yu name=delta pages.has(0)=true inFlight=false new=false hasPending=true",
+      "timestamp": "2026-05-07T18:38:39.490Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll]  → membership-stale",
+      "timestamp": "2026-05-07T18:38:39.490Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] refresh() start",
+      "timestamp": "2026-05-07T18:38:39.490Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll]  iter 1 done. totalMembers=2 pending=false",
+      "timestamp": "2026-05-07T18:38:39.491Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] refresh() complete",
+      "timestamp": "2026-05-07T18:38:39.491Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] applyResourceChange new member did:ad:oc0wTA0yu name=delta pages.has(0)=true inFlight=false new=false hasPending=true",
+      "timestamp": "2026-05-07T18:38:39.555Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll]  → membership-stale",
+      "timestamp": "2026-05-07T18:38:39.555Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] refresh() start",
+      "timestamp": "2026-05-07T18:38:39.555Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll]  iter 1 done. totalMembers=2 pending=false",
+      "timestamp": "2026-05-07T18:38:39.558Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] refresh() complete",
+      "timestamp": "2026-05-07T18:38:39.558Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] applyResourceChange new member did:ad:oc0wTA0yu name=delta pages.has(0)=true inFlight=false new=false hasPending=true",
+      "timestamp": "2026-05-07T18:38:39.621Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll]  → membership-stale",
+      "timestamp": "2026-05-07T18:38:39.621Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] refresh() start",
+      "timestamp": "2026-05-07T18:38:39.621Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll]  iter 1 done. totalMembers=2 pending=false",
+      "timestamp": "2026-05-07T18:38:39.624Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] refresh() complete",
+      "timestamp": "2026-05-07T18:38:39.624Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] applyResourceChange new member did:ad:oc0wTA0yu name=delta pages.has(0)=true inFlight=false new=false hasPending=false",
+      "timestamp": "2026-05-07T18:38:39.627Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll]  → membership-stale",
+      "timestamp": "2026-05-07T18:38:39.627Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] refresh() start",
+      "timestamp": "2026-05-07T18:38:39.627Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll]  iter 1 done. totalMembers=2 pending=false",
+      "timestamp": "2026-05-07T18:38:39.628Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] refresh() complete",
+      "timestamp": "2026-05-07T18:38:39.628Z"
+    },
+    {
+      "level": "log",
+      "text": "### DONE typing, escape now",
+      "timestamp": "2026-05-07T18:38:39.794Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] applyResourceChange new member did:ad:K/RSUNu62 name=echo pages.has(0)=true inFlight=false new=false hasPending=true",
+      "timestamp": "2026-05-07T18:38:39.845Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll]  → membership-stale",
+      "timestamp": "2026-05-07T18:38:39.845Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] refresh() start",
+      "timestamp": "2026-05-07T18:38:39.845Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll]  iter 1 done. totalMembers=3 pending=false",
+      "timestamp": "2026-05-07T18:38:39.845Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] refresh() complete",
+      "timestamp": "2026-05-07T18:38:39.845Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] applyResourceChange new member did:ad:K/RSUNu62 name=echo pages.has(0)=true inFlight=false new=false hasPending=true",
+      "timestamp": "2026-05-07T18:38:39.916Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll]  → membership-stale",
+      "timestamp": "2026-05-07T18:38:39.916Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] refresh() start",
+      "timestamp": "2026-05-07T18:38:39.916Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll]  iter 1 done. totalMembers=3 pending=false",
+      "timestamp": "2026-05-07T18:38:39.919Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] refresh() complete",
+      "timestamp": "2026-05-07T18:38:39.919Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] applyResourceChange new member did:ad:K/RSUNu62 name=echo pages.has(0)=true inFlight=false new=false hasPending=true",
+      "timestamp": "2026-05-07T18:38:39.982Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll]  → membership-stale",
+      "timestamp": "2026-05-07T18:38:39.982Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] refresh() start",
+      "timestamp": "2026-05-07T18:38:39.982Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll]  iter 1 done. totalMembers=3 pending=false",
+      "timestamp": "2026-05-07T18:38:39.987Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] refresh() complete",
+      "timestamp": "2026-05-07T18:38:39.987Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] applyResourceChange new member did:ad:K/RSUNu62 name=echo pages.has(0)=true inFlight=false new=false hasPending=false",
+      "timestamp": "2026-05-07T18:38:39.987Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll]  → membership-stale",
+      "timestamp": "2026-05-07T18:38:39.987Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] refresh() start",
+      "timestamp": "2026-05-07T18:38:39.987Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll]  iter 1 done. totalMembers=3 pending=false",
+      "timestamp": "2026-05-07T18:38:39.993Z"
+    },
+    {
+      "level": "log",
+      "text": "[Coll] refresh() complete",
+      "timestamp": "2026-05-07T18:38:39.993Z"
+    },
+    {
+      "level": "log",
+      "text": "### waiting 3s for refreshes",
+      "timestamp": "2026-05-07T18:38:40.297Z"
+    }
+  ],
+  "count": 91,
+  "level": "log",
+  "cleared": false
+}

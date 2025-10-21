@@ -242,7 +242,15 @@ pub async fn parse_json_ad_commit_resource(
         }
     };
 
-    // Incoming commits do not have an @id field, we generate that from the signature.
+    // The canonical commit subject is always derived from the signature.
+    // Drop any client-supplied `@id` / `localId` first — `to_json_ad`
+    // serialises commits with their `@id` filled in, but the inner parser
+    // rejects an `@id` whenever an overwrite subject is also passed (it
+    // would otherwise leave the on-disk subject ambiguous between the
+    // two). Removing them here keeps the contract: signature-derived
+    // subject wins, body's `@id` is informational only.
+    json.remove("@id");
+    json.remove(urls::LOCAL_ID);
     let commit_subject = format!("did:ad:commit:{}", signature);
 
     let resource =

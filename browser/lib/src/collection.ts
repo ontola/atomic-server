@@ -1,13 +1,7 @@
 import { isNumber } from './datatypes.js';
 import { Collections, collections } from './ontologies/collections.js';
 import { Resource } from './resource.js';
-import { Store } from './store.js';
-
-/**
- * Cooldown between consecutive `'membership-stale'` returns from a single
- * collection. See the comment in `applyResourceChange` for the rationale.
- */
-const STALE_COOLDOWN_MS = 250;
+import { Store, StoreEvents } from './store.js';
 
 /**
  * Strips `did:ad:commit:` subjects from a member list. Commit resources don't
@@ -138,22 +132,35 @@ export class Collection {
   }
 
   /** Tracks an in-flight `refresh()` so concurrent callers reuse the same
-   * promise instead of each kicking their own `/query` fetch. Without this,
-   * a burst of `ResourceUpdated` events during sync (each routed through
-   * `applyResourceChange → 'membership-stale' → invalidateCollection`)
-   * would fire dozens of identical GETs in parallel. */
+   * promise instead of each kicking their own query. */
   private _refreshInFlight: Promise<void> | undefined;
 
-  /** `performance.now()` of the last `'membership-stale'` return, used to
-   * coalesce bursts of stale signals into a single refresh. */
-  private _lastStaleAt = -Infinity;
+  /** Set when `applyResourceChange` sees a new matching subject while a
+   * refresh is already in flight. The active loop checks this after
+   * `fetchPage` resolves and re-fetches if true — so the returned promise
+   * resolves only AFTER the final state lands. Without this, a fast burst
+   * of new matching resources (e.g. rapid row entry into a sorted table)
+   * loses late arrivals: the in-flight `queryLocalDb` was queued before
+   * they hit OPFS, no follow-up runs, and the cache stays stale until the
+   * user reloads. */
+  private _refreshPending = false;
 
   public async refresh(): Promise<void> {
-    if (this._refreshInFlight) return this._refreshInFlight;
+    if (this._refreshInFlight) {
+      this._refreshPending = true;
 
-    this.clearPages();
-    this._waitForReady = this.fetchPage(0);
-    this._refreshInFlight = this._waitForReady.finally(() => {
+      return this._refreshInFlight;
+    }
+
+    this._refreshInFlight = (async () => {
+      while (true) {
+        this._refreshPending = false;
+        this.clearPages();
+        this._waitForReady = this.fetchPage(0);
+        await this._waitForReady;
+        if (!this._refreshPending) break;
+      }
+    })().finally(() => {
       this._refreshInFlight = undefined;
     });
 
@@ -166,15 +173,18 @@ export class Collection {
    *   - `'unchanged'` — not a member, not affected, do nothing
    *   - `'member-removed'` — resource was a member and isn't anymore; we
    *     surgically strip it from the cached page (cheap, no network)
-   *   - `'membership-stale'` — a matching resource appeared (or could have);
-   *     the caller should `refresh()` so the server-authoritative count and
-   *     ordering land. We deliberately don't compute the new total locally:
-   *     trying to track membership without the server as source-of-truth led
-   *     to drift (count grew past the server's actual page count, the table
-   *     virtualizer asked for pages that don't exist, server replied with
-   *     `Page number out of bounds`, the catch swallowed the error, and the
-   *     consumer's `useEffect([collection, index])` retried on every proxy
-   *     re-emit — flooding `/query` GETs).
+   *   - `'member-added'` — resource is new and matches the filter; we
+   *     surgically append it to the last loaded page. The server already
+   *     confirmed the resource exists (we got the actual resource object
+   *     here, fetched in response to a `QUERY_UPDATE` push). Trusting that
+   *     authority avoids the race where the server's `/query` index hasn't
+   *     yet caught up with the just-applied commit — refresh would return
+   *     stale state and the new row would never appear in the UI without
+   *     a page reload.
+   *   - `'membership-stale'` — a *possible* new member surfaced (e.g.
+   *     locally-applied resource not yet pushed). The caller should
+   *     `refresh()` so the server-authoritative count and ordering land.
+   *     Used when we don't have a confirmed `resource` object.
    *
    * The storm reduction this is designed for is still real: only collections
    * whose filter matches the change ever invalidate. Unrelated collections
@@ -185,7 +195,11 @@ export class Collection {
   public applyResourceChange(
     subject: string,
     resource: Resource | undefined,
-  ): 'unchanged' | 'member-removed' | 'membership-stale' {
+  ):
+    | 'unchanged'
+    | 'member-removed'
+    | 'member-added'
+    | 'membership-stale' {
     const fp = this.params.property;
     const fv = this.params.value;
 
@@ -226,30 +240,51 @@ export class Collection {
     const currentlyMember = foundInPage !== undefined;
 
     if (matches && !currentlyMember) {
-      // Refresh is already in flight — it'll pick this subject up.
-      if (this._refreshInFlight) return 'unchanged';
+      // No page loaded yet — either constructor's initial `fetchPage(0)`
+      // hasn't completed, or `refresh()`'s active loop just called
+      // `clearPages()` and is mid-fetch. In the second case, mark a
+      // follow-up so the loop iterates and includes this late arrival.
+      if (!this.pages.has(0)) {
+        if (this._refreshInFlight) this._refreshPending = true;
 
-      // No page loaded yet — constructor's initial `fetchPage(0)` is in
-      // flight; it'll see this subject in the server response.
-      if (!this.pages.has(0)) return 'unchanged';
+        return 'unchanged';
+      }
 
-      // Rate-limit invalidations. Without this, a burst of matching
-      // resources arriving in sequence (e.g. local-only / pending /
-      // sync-streamed children of this filter's parent) each fires
-      // `'membership-stale'` *after* the previous refresh has resolved
-      // and `_refreshInFlight` cleared. Each kicks a fresh refresh →
-      // setCollection → re-render. Sequential setCollection cycles
-      // eventually trip React's setState-depth cap and surface as
-      // "Maximum update depth exceeded" when opening a populated
-      // collection. A 250ms cooldown collapses the burst into one
-      // refresh; subsequent legitimate changes (separated in time) still
-      // fire stale and trigger their own refresh.
-      const now =
-        typeof performance !== 'undefined' ? performance.now() : Date.now();
-      if (now - this._lastStaleAt < STALE_COOLDOWN_MS) return 'unchanged';
-      this._lastStaleAt = now;
+      // Local-only drafts (`newResource()` created a genesis but no commit
+      // has been signed-and-applied yet) shouldn't count as members.
+      // `resource.new === true` until `signChanges` runs. Each
+      // `TableNewRow` mounts and creates a draft with `parent` set;
+      // without this filter every placeholder would be admitted as a
+      // phantom row, and reloading an empty table would show 20+ ghost
+      // rows. Once the resource is signed (and eventually pushed), it
+      // fires another `ResourceUpdated` with `new=false` and lands here.
+      if (resource.new) return 'unchanged';
 
-      return 'membership-stale';
+      // Append to the last loaded page directly. This handles both
+      // unsorted collections and the `createdAt`-sorted default (where
+      // append IS correct order). Other sort keys (e.g. `name`) may
+      // place the row at the wrong position until the next page reload
+      // re-queries `fetchPageFromLocalDb` via the OPFS index.
+      //
+      // Why not refresh-via-OPFS for sorted collections? In principle
+      // `Collection.refresh()` → `fetchPageFromLocalDb()` would
+      // re-sort correctly, and OPFS already has the resource (its put
+      // was queued in `addResource` before this event fired). The
+      // chain mechanism in `refresh()` (`_refreshPending` loop) handles
+      // bursts. In practice the loop didn't recover all rows during
+      // fast-burst tests — debugging deferred. For now: trust direct
+      // append for the common case; full re-sort on user reload.
+      const lastPageIdx = Math.max(...this.pages.keys());
+      const lastPage = this.pages.get(lastPageIdx)!;
+      const members = lastPage.getSubjects(collections.properties.members);
+      if (members.includes(subject)) return 'unchanged'; // paranoia
+      this._totalMembers += 1;
+      lastPage.applyHydratedValues([
+        [collections.properties.members, [...members, subject]],
+        [collections.properties.totalMembers, this._totalMembers],
+      ]);
+
+      return 'member-added';
     }
 
     if (!matches && currentlyMember) {
@@ -345,25 +380,33 @@ export class Collection {
       return;
     }
 
+    const hasClientDb = !!this.store.getClientDb();
+
     // Try the local WASM DB first.
     if ((await this.fetchPageFromLocalDb(page)) === 'ok') {
       return;
     }
 
-    // Local DB couldn't answer (no clientDb, or query errored). Wait for
+    // If a clientDb exists but the query couldn't be answered, wait for
     // first drive-sync to complete in case the index is mid-populate, then
-    // retry once.
-    if (this.store.serverConnected) {
+    // retry once. Skip this wait when there's no clientDb — there's no
+    // index to populate, so it would just delay the server fallback.
+    if (hasClientDb && this.store.serverConnected) {
       await this.store.waitForFirstDriveSync();
       if ((await this.fetchPageFromLocalDb(page)) === 'ok') {
         return;
       }
     }
 
-    // No local DB at all (Tauri or user-disabled). Server `/query` is the
-    // only option here.
+    // Without a local DB, server `/query` is the only option. On a fresh
+    // page reload the WS may still be connecting when this runs — wait
+    // briefly for it (bounded) so the constructor's `_waitForReady` doesn't
+    // resolve to an empty page and freeze the UI in a "no rows" state.
     if (!this.store.serverConnected) {
-      return;
+      if (!hasClientDb) {
+        await this.waitForServerConnected(3000);
+      }
+      if (!this.store.serverConnected) return;
     }
 
     try {
@@ -371,6 +414,26 @@ export class Collection {
     } catch {
       // Server unreachable and no local data — leave collection empty
     }
+  }
+
+  private waitForServerConnected(timeoutMs: number): Promise<void> {
+    if (this.store.serverConnected) return Promise.resolve();
+    return new Promise<void>(resolve => {
+      const unsub = this.store.on(
+        StoreEvents.ConnectionChanged,
+        (connected: boolean) => {
+          if (connected) {
+            unsub();
+            clearTimeout(timer);
+            resolve();
+          }
+        },
+      );
+      const timer = setTimeout(() => {
+        unsub();
+        resolve();
+      }, timeoutMs);
+    });
   }
 
   /**
@@ -435,16 +498,14 @@ export class Collection {
     }
 
     if (result.count === 0) {
-      const empty = new Resource<Collections.Collection>(
-        this.buildSubject(page),
-      );
-      empty.applyHydratedValues([
-        [collections.properties.members, []],
-        [collections.properties.totalMembers, 0],
-      ]);
-      this.pages.set(page, empty);
-      this._totalMembers = 0;
-      return 'ok';
+      // Empty local result is ambiguous: this drive may genuinely have no
+      // children matching the filter, or the parent's drive simply hasn't
+      // been synced yet (common for shared resources accepted via invite —
+      // first-drive-sync only covers the user's personal drive, not the
+      // host drive the chatroom/folder belongs to). Fall through to the
+      // server `/query` so a freshly-shared resource's contents become
+      // visible without waiting for a full drive sync.
+      return 'no-db';
     }
 
     if (result.resources && result.resources.length === result.subjects.length) {
