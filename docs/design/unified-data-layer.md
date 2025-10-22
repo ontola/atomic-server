@@ -1539,3 +1539,180 @@ The v2 sync protocol syncs `Resource`s via Loro version vectors and blobs via de
 - [x] Support offline-first file uploads in browser `Store` (`store.ts`).
 - [ ] Adopt `did:ad:blob:` as the canonical identifier in the ontology and rename the File property from `blake3` (raw hash) to `blob` (DID reference).
 - [ ] Resolve `did:ad:blob:` through the `did_endpoint` plugin so blob DIDs work over the generic DID resolver in addition to the `/download/files/{hash}` HTTP alias.
+
+## Plugins as Peer Code
+
+### The model
+
+The server is just a peer with high uptime — it provides durable storage, HTTP fetch-by-DID, and Iroh relay for NAT-bound peers. It is **not** authoritative over validation, plugin execution, or the consistency of drive state. Every peer that runs `atomic_lib` (server, browser, Tauri desktop, Android via FFI) is responsible for ensuring the drives it has copies of stay valid.
+
+This makes plugins a property of the *drive*, not of any one runtime. A drive declares which plugin versions are active via its commit history. Every peer that has a copy of the drive runs those plugins against the same data and produces the same outputs.
+
+### Two kinds of plugin hooks (one SDK)
+
+The current `class-extender.wit` already exports both hooks side-by-side on one `class-extender` world. No SDK split is needed; the runtime decides which exports to call depending on context:
+
+- **`on-resource-get` runs at render time on every peer that displays the resource.** Per-peer, no commits. Different peers can return different output (locale-aware formatting, time-of-day display, etc.) without affecting CRDT consistency.
+
+- **`before-commit` runs on any peer that holds the plugin Agent's keypair.** It can return an error (block the user commit) or use `host.commit` to issue a follow-up plugin commit signed by the plugin's Agent. The `commit` host import is already in the WIT today. Server, browser, desktop, Android — all are valid executors; the only requirement is the keypair plus the runtime.
+
+A plugin author implements whichever hooks they need; the others are no-ops. The runtime invokes the relevant exports based on what the executor is doing.
+
+### Plugins are Agents
+
+When a plugin is installed, an Agent is created for it. The user grants that Agent the rights it needs (typically write access on the drive, or scoped to specific classes/folders). The plugin commits with its own Agent's keypair, going through the same commit path as any user commit.
+
+That's the whole trust model:
+
+- **Authenticity** = the plugin Agent's signature on the commit. Same check every peer does for every commit.
+- **Authorization** = the plugin Agent's rights on the resource. Same check every peer does for every commit.
+- **Revocation** = strip rights from (or destroy) the plugin Agent. No plugin-specific machinery.
+- **Bad plugin** = bad Agent — bounded by what was granted, behaves like any compromised user.
+
+There is no "deterministic proof", no "designated runner mode", no special plugin signature scheme. A plugin commit is indistinguishable in form from a user commit; the only difference is the signer.
+
+> **Already implemented (server-side).** The mechanics in this section are live in the current code. `server/src/plugins/wasm.rs::create_plugin_meta` generates a fresh `Agent` at install (named `{namespace}/{name}`), stores the keypair in `PluginMeta`, and (when the manifest declares `FullDriveAccess`) grants write+read on the drive. The `host.commit` host import is fully wired (`wasm.rs:769`): the plugin produces a `CommitBuilderJSON`, the host signs with the plugin's Agent (`commit_builder.sign(agent, ...)`), and applies via `db.apply_commit` with full validation. There's also a guard preventing plugins from editing Plugin resources (so a plugin can't install or update its own code). The Plugin resource references its Agent via `signer`. None of the trust model needs to be built; it's already there.
+
+### Where does a plugin run?
+
+Any peer that holds the plugin Agent's keypair. Server, browser, desktop, Android — all symmetric. The plugin runtime is `atomic_lib`'s wasm runner, which exists in every environment that runs `atomic_lib` (wasmtime in native, the browser's `WebAssembly` engine via jco-transpiled output in browser).
+
+The user picks which peers hold the keypair at install. Multiple executors is allowed and behaves the same as a user logged in on multiple devices — concurrent plugin commits merge through the CRDT, same as concurrent user commits. The plugin author handles dedup the same way they would for any concurrent multi-device situation (idempotent operations, input-commit-hash as a key, etc.).
+
+What does differ between executors is *environmental capability*, not architectural role:
+
+- **Always-on**: server has uptime, browser tabs come and go. If only browser tabs hold a plugin's keypair and they're all closed, the plugin commit lands later — when a tab reopens. That's a freshness property, not a correctness one.
+- **Secret management**: a plugin that wraps a paid API with a secret key needs that key somewhere. Embedding in a browser bundle is unsafe; server or self-hosted box is appropriate. So *some* plugins constrain where they can run, but for plugin-specific reasons, not framework-level reasons.
+- **CORS / network reach**: browsers can't call arbitrary HTTP origins; server can. A plugin that hits a non-CORS endpoint runs on a peer that can reach it.
+
+These are all properties of where a *specific* plugin can usefully run. The framework doesn't enforce a default; it lets the user pick at install.
+
+This is the punchline: **the plugin runtime question collapses into the existing agent-key question.** No new policy machinery, no privileged executor.
+
+### What about external APIs and side effects?
+
+Plugins can do anything — call external APIs, read clocks, generate random numbers. The plugin's commit captures whatever the plugin decides to commit; other peers don't re-run the plugin, so non-determinism doesn't propagate.
+
+Side-effect idempotency is the plugin author's responsibility. If a plugin calls a paid API, the runtime may retry on transient failure; the plugin needs to dedupe (e.g., key external operations by input-commit-hash). This is the same constraint any system that bridges to external services has.
+
+### Two ways for plugins to store state
+
+A plugin has two state mechanisms with different semantics. Pick by use case:
+
+- **Commit a resource as the plugin Agent.** State lives in the data graph. Syncs to every peer that has the drive. Visible to the user. Survives moving the plugin's Agent key between devices. Use this for: imported data, durable configuration, long-term cursors that should follow the plugin (e.g. "last imported timestamp"), anything you'd want a multi-device executor to share.
+
+- **`storage` permission (per-peer kv).** Plugin-local key/value store, not synced, not visible to the user, scoped to the executing peer. Server-side: redb tree. Browser-side: OPFS/IndexedDB. Use this for: OAuth refresh tokens and other secrets, rate-limit cursors and retry queues, ephemeral session state, response caches, anything that's *intentionally* per-peer or shouldn't enter the CRDT.
+
+The two aren't redundant — they serve different categories. A plugin that imports data from an external service typically uses both: it commits the imported resources via its Agent (so they sync to the user's other devices and the data appears in the drive), and stores its OAuth token + last-cursor in `storage` (so the secret doesn't propagate and each peer's import state is independent if multiple peers run the plugin concurrently).
+
+The earlier "storage diverges between peers" concern was real but misplaced — divergence *is the point* for this category. What matters is that each peer's executing copy of the plugin has access to its own per-peer state.
+
+### Browser execution via jco transpilation
+
+Plugins are Component Model `.wasm` (already, via `wit-bindgen` 0.48 in `atomic-plugin`). Server runs them with wasmtime. The browser doesn't have wasmtime — it has the native `WebAssembly` engine. To bridge, the component is transpiled with `jco transpile` into an ES module + core `.wasm` that the browser's engine loads directly.
+
+**Distribution: transpiled output is a content-addressed blob.**
+
+When a plugin is installed on any peer:
+
+1. The peer (typically the server, but any peer with `jco` capability) transpiles the component once.
+2. Transpiled output is hashed (BLAKE3) and stored in `Tree::Blobs` keyed by that hash.
+3. The Plugin resource gains a `transpiledOutput: did:ad:blob:{hash}` reference alongside `pluginFile`.
+4. Any peer that needs the browser-loadable form fetches it via the existing `BLOB_REQUEST`/`BLOB_RESPONSE` frames — the same path used for file blobs.
+
+This collapses plugin distribution into the universal blob store. There is no separate "plugin asset endpoint", no Node dependency at server runtime, and the browser's plugin runtime does no transpilation itself — it just loads the cached ES module + core `.wasm`.
+
+### Browser-side host implementation
+
+The five `host.*` functions in `class-extender.wit` map directly onto the existing `ClientDb`:
+
+| WIT host import        | Browser implementation                                                  |
+| ---------------------- | ----------------------------------------------------------------------- |
+| `get-resource`         | `ClientDb::get_resource` (already async, OPFS)                          |
+| `query`                | `ClientDb::query`                                                       |
+| `get-plugin-agent`     | reads from the Plugin resource the runtime is bound to                  |
+| `get-config`           | reads `config` property of the bound Plugin resource                    |
+| `commit`               | the same commit path the UI uses (sign + apply locally + queue for sync) |
+
+The runtime sits in atomic-wasm (or a sibling crate compiled into the same OPFS context). Plugin lifecycle hooks into the existing `ResourceUpdated` events for the Plugin resource — when its `pluginFile` reference changes, the runtime re-fetches the transpiled blob and re-instantiates the component.
+
+### Browser as plugin runtime
+
+The browser is a peer like any other. It already runs `atomic_lib` via WASM, holds agent keys, and signs commits — all the existing pieces. Adding plugin execution is two things:
+
+1. **A WASM-in-WASM runtime**: load a transpiled plugin component into the browser's `WebAssembly` engine (jco transpile-on-install, output stored as content-addressed blob, fetched via `BLOB_REQUEST` like any other blob). Same atomic-wasm-side runtime serves both `on-resource-get` (always run on display) and `before-commit` (run when this peer holds the plugin Agent's keypair).
+2. **Browser-side host shim**: implements the `host.*` imports the plugin uses, mapping to existing `ClientDb` operations. `host.commit` goes through the same commit path the UI uses. `fetch` is available for plugins that call external APIs (subject to CORS).
+
+The runtime doesn't know or care whether it's "the executor" — it just invokes whichever exports the plugin implements when their respective triggers fire (resource render → `on-resource-get`; user commit on extended class with locally-held plugin Agent → `before-commit`). Symmetric with the server runtime in atomic-server.
+
+### What's already built vs what's missing
+
+The trust/agent/commit mechanics are already implemented server-side. What's missing is mostly browser-side runtime, distribution, and a couple of cleanup items.
+
+**Already in place:**
+
+- Plugin Agent generation at install (`create_plugin_meta` in `wasm.rs`).
+- Plugin Agent keypair stored in `PluginMeta`; rights granted via `urls::WRITE`/`urls::READ` on the drive when the manifest declares `FullDriveAccess`.
+- `host.commit` fully wired — plugin builds a `CommitBuilderJSON`, host signs with the plugin's Agent, applies via `db.apply_commit`.
+- Plugin resource carries a reference to its Agent (`signer`).
+- Guard preventing plugins from editing Plugin resources (so a plugin can't install or update its own code).
+- WIT exports `before-commit`, `on-resource-get`, `after-commit`, `class-url` (one component, both hooks).
+- `host.get-resource`, `host.query`, `host.get-config`, `host.get-plugin-agent` all wired to the server's Db.
+
+**Missing — the actual delta to ship the model in this section:**
+
+1. **Browser plugin runtime.** `atomic-wasm` has no module that loads and instantiates plugin components yet. Needs a `wasm-plugin-runtime` that dispatches to whichever exports the loaded component implements (typically `on-resource-get` on every render; `before-commit` only when this peer holds the plugin Agent's keypair and a user commit on an extended class arrives).
+2. **jco transpile-on-install + content-addressed-blob distribution.** Server transpiles the component once at install, stores the output (JS module + core .wasm) in `Tree::Blobs`, references it from the Plugin resource (`transpiledOutput: did:ad:blob:{hash}`). Browser fetches via the existing `BLOB_REQUEST` path.
+3. **Browser-side host shim.** Implement `host.get-resource`, `host.query`, `host.get-config`, `host.get-plugin-agent`, `host.commit` against `ClientDb`. `fetch` available natively for plugins that need external APIs.
+4. **Plugin Agent key portability.** Currently the keypair lives only on the server (in `PluginMeta`). To let a browser execute a plugin's `before-commit`, the keypair has to be available there. Use the existing agent-export mechanism, gated on user opt-in at install (or via a "let this device run plugin X" UI later).
+5. **`on-resource-get` becomes a per-peer render-time hook.** Currently it's invoked server-side inside `get_resource_extended` (the test plugin's name-prefix path). The new model has every peer running this on render. The server can keep invoking it for HTTP `/resource` GETs (curl-style API access still benefits), but the canonical path is per-peer client-side.
+6. **`storage` permission per-peer kv.** Already declared in plugin manifests but not yet implemented as a host import. Add `host.storage-get`/`host.storage-set` (or a small kv interface) for per-peer state — server-side backed by a redb tree, browser-side by OPFS/IndexedDB. See "Two ways for plugins to store state" above.
+7. **Sync engine bug becomes moot.** `handle_sync_vv` shipping raw Loro snapshots without invoking extenders is correct under this model: plugin commits live in the CRDT, sync delivers them; nothing transforms during sync push. `on-resource-get` runs per-peer at render. The current bug (plugins don't apply on synced resources) goes away as a side effect of moving `on-resource-get` to render-time.
+
+### Status
+
+Server-side (already done):
+
+- [x] Plugin Agent created on install; keypair in `PluginMeta`.
+- [x] `host.commit` wired; plugin commits signed by the plugin Agent and applied with full validation.
+- [x] Self-modify guard (plugins can't edit Plugin resources).
+- [x] `host.get-resource`, `host.query`, `host.get-config`, `host.get-plugin-agent`.
+
+To ship the full model:
+
+- [ ] `wasm-plugin-runtime` module in atomic-wasm.
+- [ ] jco transpile-on-install; transpiled output stored as content-addressed blob; Plugin resource references it.
+- [ ] Browser-side host shim for the full `host.*` surface (incl. `host.commit`).
+- [ ] Plugin Agent key portability — let a user opt to run a plugin on a non-server peer (browser, desktop, Android).
+- [ ] Move `on-resource-get` invocation from server-side `get_resource_extended` to per-peer render-time.
+- [ ] Implement `storage` permission as a per-peer kv host import (server: redb tree, browser: OPFS/IDB). Document it as the per-peer-state mechanism alongside Agent-committed resources.
+- [ ] UI for managing plugin executors (which devices hold a plugin's keypair) — same UX as managing user-agent keys across devices.
+
+### Fixed: WebSocket `commit_id` was sending raw signature
+
+Until this session, the WebSocket frame's `commit_id` was set as `commit.url.as_deref().or(commit.signature.as_deref())` in `server/src/handlers/web_sockets.rs::Handler<CommitMessage>`. For commits signed server-side via `apply_commit` → `sign_at` (every plugin `host.commit`, every server-applied commit), `commit.url` is `None`, so the raw base64 signature was sent. The browser stored that as `lastCommit` via `setLastCommitValue`, used it as `previousCommit` on its next commit, and the server's JSON-AD parser rejected it ("Unable to parse string as URL"). Fix: derive `did:ad:commit:{signature}` when `url` is None. `commit.url` is only ever populated by `Commit::from_resource` (line 708) — i.e. only when a commit is round-tripped through the JSON-AD parse path. The signing path (used by the server itself) leaves `url` None.
+
+This was the root cause of the plugin test's "Unable to parse string as URL" cascade. Before the fix, the failure was masked by a browser-side retry path (`resource.ts:1707-1735`) that hit the same bad value on each retry. With the fix, the next blocker is a separate genesis-commit serde issue (`missing field subject` on a follow-up commit whose subject should be derived from the signature) — that's an unrelated bug in the `parse_json_ad_commit_resource` chain, not yet investigated.
+
+### Sub-project: drop strict `previousCommit` chain enforcement
+
+The plugin test failure made a deeper issue visible. When a plugin's `after_commit` issues a follow-up commit via `host.commit`, that commit lands on the server between the user's commit reaching the server and the user's response coming back. The user's *next* commit then carries a `previousCommit` that's stale relative to the server's view, the server rejects it as a mismatch, and the browser enters a `previousCommit`-mismatch retry path. The retry currently produces a malformed value (raw signature without the `did:ad:commit:` prefix) and dies. Even fixing the prefix bug just turns the retry into a tight loop because new plugin commits keep arriving.
+
+The right architectural call: **`previousCommit` is a hint, not a gate.** Loro's update bytes already carry full causality (Lamport timestamps + peer IDs); the CRDT merges concurrent commits deterministically. Strict chain enforcement on the wire is fighting the CRDT and creates rejection-and-retry storms whenever any peer commits concurrently — which under our model includes every plugin commit, every multi-device user edit, and every reconnect-catchup.
+
+Three coupled invariants need to move together — the implementation tried changing them piecemeal and broke end-to-end commit application:
+
+1. **`Commit::validate_previous_commit`** in `lib/src/commit.rs` — currently errors on mismatch; should log and accept.
+2. **`Commit::serialize_deterministically_json_ad`** in `lib/src/commit.rs` — currently rejects DID-resource commits that have neither `previous_commit` nor `is_genesis=true`. Should allow follow-up commits with neither (Loro orders them).
+3. **`validate_loro_causality`** in the same file — currently rejects commits whose Loro update is concurrent with stored state. The original purpose was "don't silently lose writes via LWW," but in a CRDT model concurrent updates aren't lost, they're merged. This needs to relax (or be replaced with a different mechanism, e.g. a deterministic merge result the client can verify).
+
+On the browser side the retry path (`resource.ts:1707-1735`) and the `setPreviousCommit` calls in `signChanges` go away, with the genesis detection switching to a local-only signal (`_lastLocalSignature` plus the absence of a builder-set `previousCommit`).
+
+Status:
+
+- [ ] Server: relax `validate_previous_commit` to log-and-accept.
+- [ ] Server: drop the "DID resource needs `previous_commit` OR `is_genesis`" requirement in `serialize_deterministically_json_ad`. Genesis stays distinguished by the explicit `is_genesis=true` flag (the subject-from-signature logic still needs it).
+- [ ] Server: rethink `validate_loro_causality`. Either drop and trust Loro merge to be the source of truth, or replace with a content-addressed verification that the client's merged state matches what Loro produces from the server's current state + the new update.
+- [ ] Browser: stop sending `previousCommit` from `signChanges`. Switch genesis detection to local signals only.
+- [ ] Browser: remove the `previousCommit`-mismatch retry path in `resource.ts:1707`.
+- [ ] After all four land together, the `test-plugin` rewrite to `after_commit + host.commit` becomes clean (rewrite is preserved in the relevant PR conversation).
