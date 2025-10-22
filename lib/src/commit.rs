@@ -12,7 +12,6 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use urls::{SET, SIGNER};
-use yrs::updates::decoder::Decode;
 /// The `resource_new`, `resource_old` and `commit_resource` fields are only created if the Commit is persisted.
 /// When the Db is only notifying other of changes (e.g. if a new Message was added to a ChatRoom), these fields are not created.
 /// When deleting a resource, the `resource_new` field is None.
@@ -364,9 +363,6 @@ impl Commit {
                         )
                     }
                 };
-
-                let decode_update = yrs::Update::decode_v2(update_bin)
-                    .map_err(|e| format!("Error decoding Yjs update: {}", e))?;
 
                 match resource.get(prop) {
                     Ok(val) => match val {

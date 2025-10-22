@@ -6,6 +6,7 @@ import { ErrorLook } from '../components/ErrorLook';
 import { isRunningInTauri } from '../helpers/tauri';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import clsx from 'clsx';
+import { useIsInRTE } from '@hooks/useIsInRTE';
 
 export interface AtomicLinkProps
   extends React.AnchorHTMLAttributes<HTMLAnchorElement> {
@@ -33,6 +34,7 @@ export const AtomicLink = forwardRef<HTMLAnchorElement, AtomicLinkProps>(
     ref,
   ): JSX.Element => {
     const navigate = useNavigateWithTransition();
+    const isInRTE = useIsInRTE();
 
     if (subject === undefined && href === undefined && path === undefined) {
       return (
@@ -75,7 +77,13 @@ export const AtomicLink = forwardRef<HTMLAnchorElement, AtomicLinkProps>(
       }
     };
 
-    const hrefConstructed = href || subject || pathToURL(path!);
+    let hrefConstructed: string | undefined =
+      href || subject || pathToURL(path!);
+
+    if (isInRTE) {
+      // HACK: The Tiptap editor has an event handler that always opens links in new tabs. We can't disable it so we have to remove the href from links when inside the editor.
+      hrefConstructed = undefined;
+    }
 
     return (
       <LinkView

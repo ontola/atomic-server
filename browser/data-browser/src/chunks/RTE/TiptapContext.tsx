@@ -1,20 +1,26 @@
 import type { Editor } from '@tiptap/react';
 import { createContext, useContext } from 'react';
 
-type TiptapContextType = Editor | null;
+type TiptapContextType = Editor;
 
-export const TiptapContext = createContext<TiptapContextType>(null);
+export const TiptapContext = createContext<TiptapContextType>({} as Editor);
 
 export const useTipTapEditor = (): TiptapContextType =>
   useContext(TiptapContext);
 
 interface TipTapContextProviderProps {
-  editor: Editor | null;
+  editor: Editor;
 }
 
 export const TiptapContextProvider = ({
   editor,
   children,
-}: React.PropsWithChildren<TipTapContextProviderProps>) => (
-  <TiptapContext.Provider value={editor}>{children}</TiptapContext.Provider>
-);
+}: React.PropsWithChildren<TipTapContextProviderProps>) => {
+  if (!editor) {
+    return null;
+  }
+
+  return (
+    <TiptapContext.Provider value={editor}>{children}</TiptapContext.Provider>
+  );
+};

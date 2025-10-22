@@ -653,6 +653,7 @@ dependencies = [
  "urlencoding",
  "walkdir",
  "webp",
+ "yrs",
 ]
 
 [[package]]

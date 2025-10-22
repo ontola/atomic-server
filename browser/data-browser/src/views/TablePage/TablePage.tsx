@@ -1,178 +1,44 @@
-import { Property, unknownSubject, useCanWrite, useStore } from '@tomic/react';
-import { useCallback, useId, useMemo, useState, type JSX } from 'react';
+import { useId, useState, type JSX } from 'react';
 import { ContainerFull } from '../../components/Containers';
 import { EditableTitle } from '../../components/EditableTitle';
-import { FancyTable } from '../../components/TableEditor';
 import type { ResourcePageProps } from '../ResourcePage';
-import { TableHeading } from './TableHeading';
-import { useTableColumns } from './useTableColumns';
-import { TableNewRow, TableRow } from './TableRow';
-import { useTableData } from './useTableData';
-import { NewColumnButton } from './NewColumnButton';
-import { TablePageContext, TablePageContextType } from './tablePageContext';
-import { useHandlePaste } from './helpers/useHandlePaste';
-import { useHandleColumnResize } from './helpers/useHandleColumnResize';
-import {
-  createResourceDeletedHistoryItem,
-  useTableHistory,
-} from './helpers/useTableHistory';
 import { Row as FlexRow, Column } from '../../components/Row';
-import { useHandleClearCells } from './helpers/useHandleClearCells';
-import { useHandleCopyCommand } from './helpers/useHandleCopyCommand';
-import { ExpandedRowDialog } from './ExpandedRowDialog';
 import { IconButton } from '../../components/IconButton/IconButton';
 import { FaCode, FaFileCsv } from 'react-icons/fa6';
 import { ResourceCodeUsageDialog } from '../CodeUsage/ResourceCodeUsageDialog';
 import { TableExportDialog } from './TableExportDialog';
 import { TagBar } from '../../components/Tag/TagBar';
-
-const columnToKey = (column: Property) => column.subject;
+import { TableResource } from './TableResource';
 
 export function TablePage({ resource }: ResourcePageProps): JSX.Element {
-  const store = useStore();
   const titleId = useId();
-
-  const canWrite = useCanWrite(resource);
 
   const [showCodeUsageDialog, setShowCodeUsageDialog] = useState(false);
   const [showExportDialog, setShowExportDialog] = useState(false);
-  const { tableClass, sorting, setSortBy, collection, invalidateCollection } =
-    useTableData(resource);
-
-  const { columns, reorderColumns } = useTableColumns(tableClass);
-
-  const { undoLastItem, addItemsToHistoryStack } =
-    useTableHistory(invalidateCollection);
-
-  const handlePaste = useHandlePaste(
-    resource,
-    collection,
-    tableClass,
-    invalidateCollection,
-    addItemsToHistoryStack,
-  );
-
-  const [showExpandedRowDialog, setShowExpandedRowDialog] = useState(false);
-  const [expandedRowSubject, setExpandedRowSubject] = useState<string>();
-
-  const handleRowExpand = useCallback(
-    async (index: number) => {
-      const row = await collection.getMemberWithIndex(index);
-      setExpandedRowSubject(row);
-      setShowExpandedRowDialog(true);
-    },
-    [collection],
-  );
-
-  const tablePageContext: TablePageContextType = useMemo(
-    () => ({
-      tableClassSubject: tableClass.subject,
-      sorting,
-      setSortBy,
-      addItemsToHistoryStack,
-    }),
-    [tableClass, setSortBy, sorting, addItemsToHistoryStack],
-  );
-
-  const handleDeleteRow = useCallback(
-    async (index: number) => {
-      const row = await collection.getMemberWithIndex(index);
-
-      if (!row) {
-        return;
-      }
-
-      const rowResource = store.getResourceLoading(row);
-      addItemsToHistoryStack(createResourceDeletedHistoryItem(rowResource));
-
-      await rowResource.destroy();
-
-      invalidateCollection();
-    },
-    [collection, store, invalidateCollection, addItemsToHistoryStack],
-  );
-
-  const handleClearCells = useHandleClearCells(
-    collection,
-    addItemsToHistoryStack,
-  );
-
-  const handleCopyCommand = useHandleCopyCommand(collection);
-
-  const [columnSizes, handleColumnResize] = useHandleColumnResize(resource);
-
-  const Row = useCallback(
-    ({ index }: { index: number }) => {
-      if (index < collection.totalMembers) {
-        return (
-          <TableRow collection={collection} index={index} columns={columns} />
-        );
-      }
-
-      return (
-        <TableNewRow
-          parent={resource}
-          columns={columns}
-          index={index}
-          invalidateTable={invalidateCollection}
-        />
-      );
-    },
-
-    // Resource can update a lot but its internals are stable so removing it from the array saves a lot of rerenders and shouldn't cause issues.
-    // eslint-disable-next-line react-hooks/react-compiler, react-hooks/exhaustive-deps
-    [collection, columns, invalidateCollection, resource.subject],
-  );
 
   return (
     <ContainerFull>
-      <TablePageContext.Provider value={tablePageContext}>
-        <Column>
-          <FlexRow justify='space-between'>
-            <EditableTitle resource={resource} id={titleId} />
-            <FlexRow style={{ marginRight: '1rem' }}>
-              <IconButton
-                title='Use in code'
-                onClick={() => setShowCodeUsageDialog(true)}
-              >
-                <FaCode />
-              </IconButton>
-              <IconButton
-                title='Export to CSV'
-                onClick={() => setShowExportDialog(true)}
-              >
-                <FaFileCsv />
-              </IconButton>
-            </FlexRow>
+      <Column>
+        <FlexRow justify='space-between'>
+          <EditableTitle resource={resource} id={titleId} />
+          <FlexRow style={{ marginRight: '1rem' }}>
+            <IconButton
+              title='Use in code'
+              onClick={() => setShowCodeUsageDialog(true)}
+            >
+              <FaCode />
+            </IconButton>
+            <IconButton
+              title='Export to CSV'
+              onClick={() => setShowExportDialog(true)}
+            >
+              <FaFileCsv />
+            </IconButton>
           </FlexRow>
-          <TagBar resource={resource} />
-          <FancyTable
-            readOnly={!canWrite}
-            columns={columns}
-            columnSizes={columnSizes}
-            itemCount={collection.totalMembers + 1}
-            columnToKey={columnToKey}
-            labelledBy={titleId}
-            onClearRow={handleDeleteRow}
-            onCellResize={handleColumnResize}
-            onClearCells={handleClearCells}
-            onCopyCommand={handleCopyCommand}
-            onPasteCommand={handlePaste}
-            onUndoCommand={undoLastItem}
-            onColumnReorder={reorderColumns}
-            onRowExpand={handleRowExpand}
-            HeadingComponent={TableHeading}
-            NewColumnButtonComponent={NewColumnButton}
-          >
-            {Row}
-          </FancyTable>
-        </Column>
-        <ExpandedRowDialog
-          subject={expandedRowSubject ?? unknownSubject}
-          open={showExpandedRowDialog}
-          bindOpen={setShowExpandedRowDialog}
-        />
-      </TablePageContext.Provider>
+        </FlexRow>
+        <TagBar resource={resource} />
+        <TableResource resource={resource} />
+      </Column>
       <ResourceCodeUsageDialog
         subject={resource.subject}
         show={showCodeUsageDialog}

@@ -53,6 +53,7 @@ tracing-log = "0.2"
 ureq = "2"
 urlencoding = "2"
 ring = "0.17.14"
+yrs = "0.24.0"
 
 [dependencies.instant-acme]
 optional = true

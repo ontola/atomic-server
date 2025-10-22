@@ -6,26 +6,53 @@ import { Placeholder } from '@tiptap/extension-placeholder';
 import { Typography } from '@tiptap/extension-typography';
 import Collaboration from '@tiptap/extension-collaboration';
 import CollaborationCaret from '@tiptap/extension-collaboration-caret';
-import { useState } from 'react';
-import { BubbleMenu } from './BubbleMenu';
+import TextAlign from '@tiptap/extension-text-align';
+import { TaskList, TaskItem } from '@tiptap/extension-list';
+import DragHandle from '@tiptap/extension-drag-handle-react';
+import {
+  Color,
+  BackgroundColor,
+  TextStyle,
+} from '@tiptap/extension-text-style';
+import { useEffect, useState } from 'react';
 import { TiptapContextProvider } from './TiptapContext';
 import { SlashCommands, buildSuggestion } from './SlashMenu/CommandsExtension';
+import {
+  ResourceCommands,
+  buildResourceSuggestion,
+} from './ResourceExtension/ResourceExtention';
 import { ExtendedImage } from './ImagePicker';
 import { usePopoverContainer } from '../../components/Popover';
-import { StyledEditorWrapper, FloatingMenuText } from './sharedEditorStyles';
+import { FloatingMenuText } from './sharedEditorStyles';
 import * as Y from 'yjs';
-import { useDebouncedSave, type Resource } from '@tomic/react';
+import {
+  useDebouncedSave,
+  useResource,
+  useStore,
+  type Core,
+  type Resource,
+} from '@tomic/react';
 import { EditorEvents } from './EditorEvents';
-import { useAwareness } from './useAwareness';
+import { useYSync } from './useYSync';
 import { randomItem } from '@helpers/randomItem';
+import { EditorWrapperBase } from './EditorWrapperBase';
+import styled from 'styled-components';
+import { transition } from '@helpers/transition';
+import { useSettings } from '@helpers/AppSettings';
+import { FullBubbleMenu } from './FullBubbleMenu';
+import {
+  ResourceNode,
+  ResourceNodeInline,
+} from './ResourceExtension/ResourceNode';
+import { IsInRTEContex } from '@hooks/useIsInRTE';
+import { FaGripVertical } from 'react-icons/fa6';
 
 export type CollaborativeEditorProps = {
   placeholder?: string;
   doc: Y.Doc;
   autoFocus?: boolean;
-  // onChange?: (content: string) => void;
   resource: Resource;
-
+  property: string;
   id?: string;
   labelId?: string;
   onBlur?: () => void;
@@ -37,24 +64,31 @@ export default function CollaborativeEditor({
   placeholder,
   autoFocus,
   doc,
+  property,
   id,
   labelId,
   resource,
   onBlur,
 }: CollaborativeEditorProps): React.JSX.Element {
-  const [save] = useDebouncedSave(resource, 500);
+  const store = useStore();
+  const [save] = useDebouncedSave(resource, 2000);
+  const { agent, drive } = useSettings();
+  const agentResource = useResource<Core.Agent>(agent?.subject);
   const containerRef = usePopoverContainer();
-
+  const color = randomItem(COLORS);
   const container = containerRef.current ?? document.body;
 
-  const awareness = useAwareness(resource, doc);
+  const awareness = useYSync(resource, property, doc);
 
   const [extensions] = useState(() => [
     StarterKit.configure({
       undoRedo: false,
+      link: false,
     }),
     Typography,
     Link.configure({
+      autolink: true,
+      openOnClick: true,
       protocols: [
         'http',
         'https',
@@ -81,6 +115,11 @@ export default function CollaborativeEditor({
     SlashCommands.configure({
       suggestion: buildSuggestion(container),
     }),
+    ResourceCommands.configure({
+      suggestion: buildResourceSuggestion(container, store, drive),
+    }),
+    ResourceNode,
+    ResourceNodeInline,
     Collaboration.configure({
       document: doc,
       field: 'content',
@@ -90,36 +129,96 @@ export default function CollaborativeEditor({
         awareness,
       },
       user: {
-        name: 'Pieter Post',
-        color: randomItem(COLORS),
+        name: agentResource.title,
+        color,
       },
     }),
+    TextAlign.configure({
+      types: ['heading', 'paragraph'],
+    }),
+    TaskList,
+    TaskItem.configure({
+      nested: true,
+    }),
+    TextStyle,
+    Color,
+    BackgroundColor,
   ]);
 
   const editor = useEditor({
     extensions,
-    // content: markdown,
     onBlur,
     autofocus: !!autoFocus,
     editorProps: {
       attributes: {
         ...(id && { id }),
         ...(labelId && { 'aria-labelledby': labelId }),
+        spellcheck: 'true',
       },
     },
   });
 
+  useEffect(() => {
+    if (agentResource) {
+      editor.commands.updateUser({
+        name: agentResource.props.name ?? 'Untitled Agent',
+        color,
+      });
+    }
+  }, [agentResource]);
+
   return (
-    <TiptapContextProvider editor={editor}>
-      <StyledEditorWrapper hideEditor={false}>
-        <EditorContent key='rich-editor' editor={editor}>
-          <FloatingMenu editor={editor ?? null}>
-            <FloatingMenuText>Type &apos;/&apos; for options</FloatingMenuText>
-          </FloatingMenu>
-          <BubbleMenu />
-          <EditorEvents onChange={save} />
-        </EditorContent>
-      </StyledEditorWrapper>
-    </TiptapContextProvider>
+    <IsInRTEContex value={true}>
+      <TiptapContextProvider editor={editor}>
+        <StyledEditorWrapper hideEditor={false}>
+          <DragHandle editor={editor}>
+            <FaGripVertical />
+          </DragHandle>
+          <EditorContent key='rich-editor' editor={editor}>
+            <FloatingMenu editor={editor}>
+              <FloatingMenuText>
+                Type &apos;/&apos; for options or &apos;@&apos; for resources
+              </FloatingMenuText>
+            </FloatingMenu>
+            <FullBubbleMenu />
+            <EditorEvents onChange={save} />
+          </EditorContent>
+        </StyledEditorWrapper>
+      </TiptapContextProvider>
+    </IsInRTEContex>
   );
 }
+
+export const StyledEditorWrapper = styled(EditorWrapperBase)`
+  box-shadow: none;
+  min-height: 10rem;
+  border-radius: ${p => p.theme.radius};
+  min-height: 10rem;
+  padding: ${p => p.theme.size()};
+  width: 100%;
+  margin-bottom: 10rem;
+  ${transition('box-shadow')}
+
+  & .tiptap {
+    width: 100%;
+    min-height: 10rem;
+    ::spelling-error {
+      text-decoration: wavy red underline;
+    }
+  }
+  .drag-handle {
+    align-items: center;
+    border-radius: 0.25rem;
+    cursor: grab;
+    display: flex;
+    height: 1.5rem;
+    justify-content: center;
+    width: 1.5rem;
+    color: ${p => p.theme.colors.textLight2};
+
+    /* svg {
+      width: 1.25rem;
+      height: 1.25rem;
+    } */
+  }
+`;
