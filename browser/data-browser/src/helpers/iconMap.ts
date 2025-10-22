@@ -42,6 +42,7 @@ const iconMap = new Map<string, IconType>([
   [dataBrowser.classes.bookmark, FaBook],
   [dataBrowser.classes.chatroom, FaComment],
   [dataBrowser.classes.document, FaFileLines],
+  [dataBrowser.classes.documentV2, FaFileLines],
   [server.classes.file, FaFile],
   [server.classes.drive, FaHardDrive],
   [commits.classes.commit, FaClock],

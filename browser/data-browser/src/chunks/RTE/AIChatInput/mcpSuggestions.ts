@@ -198,7 +198,6 @@ export function searchSuggestionBuilder(
 
         onExit() {
           state = SuggestionState.PickingCategory;
-          // cleanup();
           component.destroy();
         },
       };

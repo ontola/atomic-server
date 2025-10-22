@@ -12,22 +12,25 @@ export interface ButtonGroupProps {
   options: ButtonGroupOption[];
   name: string;
   onChange: (value: string) => void;
+  /** Setting value will make the button group controlled */
+  value?: string;
 }
 
 export function ButtonGroup({
   options,
   name,
   onChange,
+  value,
 }: ButtonGroupProps): JSX.Element {
   const [selected, setSelected] = useState(
     () => options.find(o => o.checked)?.value,
   );
 
   const handleChange = useCallback(
-    (checked: boolean, value: string) => {
+    (checked: boolean, newVal: string) => {
       if (checked) {
-        onChange(value);
-        setSelected(value);
+        onChange(newVal);
+        setSelected(newVal);
       }
     },
     [onChange],
@@ -40,7 +43,7 @@ export function ButtonGroup({
           {...option}
           key={option.value}
           onChange={handleChange}
-          checked={selected === option.value}
+          checked={(value ?? selected) === option.value}
           name={name}
         />
       ))}
@@ -115,6 +118,7 @@ const Label = styled.label`
   input:checked + & {
     background-color: ${p => p.theme.colors.bg1};
     color: ${p => p.theme.colors.text};
+    border: 1px solid ${p => p.theme.colors.bg2};
   }
 
   :hover {

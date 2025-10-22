@@ -28,6 +28,7 @@ export const dataBrowser = {
     table: 'https://atomicdata.dev/classes/Table',
     tag: 'https://atomicdata.dev/classes/Tag',
     template: 'https://atomicdata.dev/ontology/data-browser/class/template',
+    documentV2: 'https://atomicdata.dev/classes/DocumentV2',
   },
   properties: {
     color: 'https://atomicdata.dev/properties/color',
@@ -58,6 +59,7 @@ export const dataBrowser = {
     tags: 'https://atomicdata.dev/properties/tags',
     tagList: 'https://atomicdata.dev/ontology/data-browser/property/tag-list',
     url: 'https://atomicdata.dev/property/url',
+    documentContent: 'https://atomicdata.dev/properties/documentContent',
   },
   __classDefs: {
     ['https://atomicdata.dev/classes/Article']: [
@@ -141,6 +143,10 @@ export const dataBrowser = {
       'https://atomicdata.dev/ontology/data-browser/property/image',
       'https://atomicdata.dev/ontology/data-browser/property/resources',
     ],
+    ['https://atomicdata.dev/classes/DocumentV2']: [
+      'https://atomicdata.dev/properties/name',
+      'https://atomicdata.dev/properties/documentContent',
+    ],
   },
 } as const satisfies OntologyBaseObject;
 
@@ -167,6 +173,7 @@ export namespace DataBrowser {
   export type Table = typeof dataBrowser.classes.table;
   export type Tag = typeof dataBrowser.classes.tag;
   export type Template = typeof dataBrowser.classes.template;
+  export type DocumentV2 = typeof dataBrowser.classes.documentV2;
 }
 
 declare module '../index.js' {
@@ -287,6 +294,10 @@ declare module '../index.js' {
         | typeof dataBrowser.properties.resources;
       recommends: never;
     };
+    [dataBrowser.classes.documentV2]: {
+      requires: BaseProps | 'https://atomicdata.dev/properties/name';
+      recommends: typeof dataBrowser.properties.documentContent;
+    };
   }
 
   interface PropTypeMapping {
@@ -316,6 +327,7 @@ declare module '../index.js' {
     [dataBrowser.properties.tags]: string[];
     [dataBrowser.properties.tagList]: string[];
     [dataBrowser.properties.url]: string;
+    [dataBrowser.properties.documentContent]: never;
   }
 
   interface PropSubjectToNameMapping {
@@ -345,5 +357,6 @@ declare module '../index.js' {
     [dataBrowser.properties.tags]: 'tags';
     [dataBrowser.properties.tagList]: 'tagList';
     [dataBrowser.properties.url]: 'url';
+    [dataBrowser.properties.documentContent]: 'documentContent';
   }
 }

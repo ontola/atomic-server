@@ -24,10 +24,7 @@ export const YDocValue: React.FC<YDocValueProps> = ({ value }) => {
         {showState ? 'Hide encoded state' : 'Show encoded state'}
       </SubtleButton>
       {showState && (
-        <CodeBlock
-          wordWrap
-          content={btoa(String.fromCharCode(...Y.encodeStateAsUpdateV2(value)))}
-        />
+        <CodeBlock wordWrap content={JSON.stringify(value.toJSON())} />
       )}
     </Column>
   );
