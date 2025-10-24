@@ -4,7 +4,13 @@ import { Link } from '@tiptap/extension-link';
 import { Placeholder } from '@tiptap/extension-placeholder';
 import { Typography } from '@tiptap/extension-typography';
 import { Extension } from '@tiptap/core';
-import { LoroSyncPlugin, LoroUndoPlugin, LoroEphemeralCursorPlugin, CursorEphemeralStore, type LoroDocType } from 'loro-prosemirror';
+import {
+  LoroSyncPlugin,
+  LoroUndoPlugin,
+  LoroEphemeralCursorPlugin,
+  CursorEphemeralStore,
+  type LoroDocType,
+} from 'loro-prosemirror';
 import { TaskList, TaskItem } from '@tiptap/extension-list';
 import DragHandle from '@tiptap/extension-drag-handle-react';
 import {

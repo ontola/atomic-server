@@ -19,7 +19,8 @@ export interface AllPropsSimpleProps {
 export function AllPropsSimple({ resource }: AllPropsSimpleProps): JSX.Element {
   return (
     <ul>
-      {resource.getEntries()
+      {resource
+        .getEntries()
         .filter(([_, val]) => !(val instanceof Uint8Array))
         .map(([prop, val]) => (
           <Row key={prop} prop={prop} val={val} />

@@ -70,9 +70,7 @@ function extractTextFromNode(node: unknown): string {
     // Add spacing between block-level nodes
     const nodeName = obj.nodeName as string | undefined;
     const isBlock =
-      nodeName === 'paragraph' ||
-      nodeName === 'heading' ||
-      nodeName === 'doc';
+      nodeName === 'paragraph' || nodeName === 'heading' || nodeName === 'doc';
 
     return parts.join(isBlock ? ' ' : '');
   }

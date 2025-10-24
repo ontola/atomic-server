@@ -43,11 +43,7 @@ const WS_PROTOCOL = 'atomicdata-ws.v2';
  * snapshot blobs unless they ask for it. The group itself collapses by
  * default so multiple frames stay one line each.
  */
-function logFrame(
-  data: Uint8Array,
-  direction: '→' | '←',
-  color: string,
-): void {
+function logFrame(data: Uint8Array, direction: '→' | '←', color: string): void {
   const info = debugFrameInfo(data, direction);
 
   if (info.details === undefined) {

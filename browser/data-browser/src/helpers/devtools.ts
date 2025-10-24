@@ -53,7 +53,8 @@ function summarizeResource(r: Resource | undefined): InspectResult['jsStore'] {
     new: r.new,
     error: r.error?.message,
     lastCommit:
-      (r.get('https://atomicdata.dev/properties/lastCommit') as string) ?? undefined,
+      (r.get('https://atomicdata.dev/properties/lastCommit') as string) ??
+      undefined,
     propCount: count,
     props,
   };
@@ -68,7 +69,10 @@ async function fetchFromServer(
   // Only HTTP(S) subjects can be hit with fetch. did:/internal: live on the
   // server by logical subject lookup, not URL fetch — skip them.
   if (!/^https?:/.test(subject)) {
-    return { connected: true, error: `not fetchable (scheme in ${subject.slice(0, 20)}…)` };
+    return {
+      connected: true,
+      error: `not fetchable (scheme in ${subject.slice(0, 20)}…)`,
+    };
   }
   try {
     const res = await fetch(subject, {
@@ -90,7 +94,10 @@ async function fetchFromServer(
   }
 }
 
-async function inspectWasm(store: Store, subject: string): Promise<InspectResult['wasm']> {
+async function inspectWasm(
+  store: Store,
+  subject: string,
+): Promise<InspectResult['wasm']> {
   const clientDb = store.getClientDb();
   if (!clientDb) return { hasClientDb: false };
   const out: InspectResult['wasm'] = {
@@ -218,12 +225,16 @@ export async function forcePut(store: Store, subject: string): Promise<void> {
     obj[k] = v;
   }
   const jsonAd = JSON.stringify(obj);
-  console.log(`[devtools.forcePut] putting ${subject.slice(0, 60)}`, { chars: jsonAd.length });
+  console.log(`[devtools.forcePut] putting ${subject.slice(0, 60)}`, {
+    chars: jsonAd.length,
+  });
   await clientDb.putResource(jsonAd);
   const back = await clientDb.getResource(subject);
   console.log(
     `[devtools.forcePut] verified:`,
-    back ? `YES (${back.length} chars)` : 'NO (put returned but getResource is null)',
+    back
+      ? `YES (${back.length} chars)`
+      : 'NO (put returned but getResource is null)',
   );
 }
 

@@ -1,4 +1,11 @@
-import { Fragment, memo, useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Fragment,
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import {
   dataBrowser,
   useResource,
@@ -31,164 +38,168 @@ interface ResourceSideBarProps {
 }
 
 /** Renders a Resource as a nav item for in the sidebar. */
-export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(({
-  subject,
-  renderedHierarchy,
-  ancestry,
-  onClick,
-}) => {
-  if (renderedHierarchy.length === 0) {
-    throw new Error('renderedHierarchy should not be empty');
-  }
+export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(
+  ({ subject, renderedHierarchy, ancestry, onClick }) => {
+    if (renderedHierarchy.length === 0) {
+      throw new Error('renderedHierarchy should not be empty');
+    }
 
-  // Prevent infinite recursion: stop if we've already rendered this subject
-  // in the hierarchy, or if we're too deep.
-  const MAX_DEPTH = 10;
+    // Prevent infinite recursion: stop if we've already rendered this subject
+    // in the hierarchy, or if we're too deep.
+    const MAX_DEPTH = 10;
 
-  if (renderedHierarchy.includes(subject) || renderedHierarchy.length > MAX_DEPTH) {
-    return null;
-  }
+    if (
+      renderedHierarchy.includes(subject) ||
+      renderedHierarchy.length > MAX_DEPTH
+    ) {
+      return null;
+    }
 
-  const resource = useResource(subject, { allowIncomplete: true });
-  const [currentUrl] = useCurrentSubject();
-  const canWrite = useCanWrite(resource);
-  const active = currentUrl === subject;
-  const [open, setOpen] = useState(active);
+    const resource = useResource(subject, { allowIncomplete: true });
+    const [currentUrl] = useCurrentSubject();
+    const canWrite = useCanWrite(resource);
+    const active = currentUrl === subject;
+    const [open, setOpen] = useState(active);
 
-  // Tables and chatrooms display children in their own UI — skip them entirely.
-  const classes = resource.getClasses();
-  const hideChildren =
-    classes.includes(dataBrowser.classes.table) ||
-    classes.includes(dataBrowser.classes.chatroom);
+    // Tables and chatrooms display children in their own UI — skip them entirely.
+    const classes = resource.getClasses();
+    const hideChildren =
+      classes.includes(dataBrowser.classes.table) ||
+      classes.includes(dataBrowser.classes.chatroom);
 
-  const { subjects: subResources } = useChildren(
-    hideChildren ? undefined : subject,
-  );
+    const { subjects: subResources } = useChildren(
+      hideChildren ? undefined : subject,
+    );
 
-  const dragData: SideBarDragData = {
-    renderedUnder: renderedHierarchy.at(-1)!,
-  };
+    const dragData: SideBarDragData = {
+      renderedUnder: renderedHierarchy.at(-1)!,
+    };
 
-  const {
-    setNodeRef,
-    listeners,
-    attributes,
-    over,
-    active: draggingNode,
-  } = useDraggable({
-    id: subject,
-    data: dragData,
-    disabled: !canWrite,
-  });
-
-  const hasSubResources = subResources.length > 0;
-
-  const toggleExpanded = useCallback(() => setOpen(prev => !prev), []);
-
-  const TitleComp = useMemo(
-    () => (
-      <SidebarItemTitle
-        subject={subject}
-        active={active}
-        onClick={onClick}
-        ref={setNodeRef}
-        listeners={canWrite ? listeners : undefined}
-        attributes={canWrite ? attributes : undefined}
-        expandable={hasSubResources}
-        expanded={open}
-        onToggleExpand={hasSubResources ? toggleExpanded : undefined}
-      />
-    ),
-    [
-      subject,
-      active,
-      onClick,
+    const {
+      setNodeRef,
       listeners,
       attributes,
-      canWrite,
-      setNodeRef,
-      hasSubResources,
-      open,
-      toggleExpanded,
-    ],
-  );
-  const isDragging = draggingNode?.id === subject;
-  const isHoveringOver = over?.data.current?.parent === subject;
-  const hierarchyWithItself = [...renderedHierarchy, subject];
+      over,
+      active: draggingNode,
+    } = useDraggable({
+      id: subject,
+      data: dragData,
+      disabled: !canWrite,
+    });
 
-  useEffect(() => {
-    if (isDragging) {
-      setOpen(false);
-    }
-  }, [isDragging]);
+    const hasSubResources = subResources.length > 0;
 
-  useEffect(() => {
-    if (ancestry.includes(subject) && ancestry[0] !== subject) {
-      setOpen(true);
-    }
-  }, [ancestry, subject]);
+    const toggleExpanded = useCallback(() => setOpen(prev => !prev), []);
 
-  if (!subject || subject === unknownSubject) {
-    return null;
-  }
-
-  if (resource.loading) {
-    return (
-      <TreeLoadingRow
-        onClick={onClick}
-        disabled={active}
-        resource={subject}
-        title={`${subject} is loading...`}
-      >
-        <LoaderInline />
-      </TreeLoadingRow>
+    const TitleComp = useMemo(
+      () => (
+        <SidebarItemTitle
+          subject={subject}
+          active={active}
+          onClick={onClick}
+          ref={setNodeRef}
+          listeners={canWrite ? listeners : undefined}
+          attributes={canWrite ? attributes : undefined}
+          expandable={hasSubResources}
+          expanded={open}
+          onToggleExpand={hasSubResources ? toggleExpanded : undefined}
+        />
+      ),
+      [
+        subject,
+        active,
+        onClick,
+        listeners,
+        attributes,
+        canWrite,
+        setNodeRef,
+        hasSubResources,
+        open,
+        toggleExpanded,
+      ],
     );
-  }
+    const isDragging = draggingNode?.id === subject;
+    const isHoveringOver = over?.data.current?.parent === subject;
+    const hierarchyWithItself = [...renderedHierarchy, subject];
 
-  if (resource.error) {
-    return (
-      <StyledLink subject={subject} clean>
-        <TreeLoadingRow onClick={onClick} disabled={active} resource={subject}>
-          <SideBarErrorWrapper>
-            <FaTriangleExclamation />
-            Resource with error
-          </SideBarErrorWrapper>
+    useEffect(() => {
+      if (isDragging) {
+        setOpen(false);
+      }
+    }, [isDragging]);
+
+    useEffect(() => {
+      if (ancestry.includes(subject) && ancestry[0] !== subject) {
+        setOpen(true);
+      }
+    }, [ancestry, subject]);
+
+    if (!subject || subject === unknownSubject) {
+      return null;
+    }
+
+    if (resource.loading) {
+      return (
+        <TreeLoadingRow
+          onClick={onClick}
+          disabled={active}
+          resource={subject}
+          title={`${subject} is loading...`}
+        >
+          <LoaderInline />
         </TreeLoadingRow>
-      </StyledLink>
-    );
-  }
+      );
+    }
 
-  return (
-    <Wrapper highlight={isHoveringOver}>
-      <Details
-        initialState={open}
-        open={open}
-        disabled={!hasSubResources}
-        onStateToggle={setOpen}
-        data-test='resource-sidebar'
-        summaryCaret={false}
-        title={TitleComp}
-      >
-        <DropEdge parentHierarchy={hierarchyWithItself} position={0} />
-        {hasSubResources &&
-          subResources.map((child, index) => (
-            <Fragment key={child}>
-              <ResourceSideBar
-                subject={child}
-                renderedHierarchy={hierarchyWithItself}
-                ancestry={ancestry}
-                onClick={onClick}
-              />
-              <DropEdge
-                parentHierarchy={hierarchyWithItself}
-                position={index + 1}
-              />
-            </Fragment>
-          ))}
-      </Details>
-    </Wrapper>
-  );
-});
+    if (resource.error) {
+      return (
+        <StyledLink subject={subject} clean>
+          <TreeLoadingRow
+            onClick={onClick}
+            disabled={active}
+            resource={subject}
+          >
+            <SideBarErrorWrapper>
+              <FaTriangleExclamation />
+              Resource with error
+            </SideBarErrorWrapper>
+          </TreeLoadingRow>
+        </StyledLink>
+      );
+    }
+
+    return (
+      <Wrapper highlight={isHoveringOver}>
+        <Details
+          initialState={open}
+          open={open}
+          disabled={!hasSubResources}
+          onStateToggle={setOpen}
+          data-test='resource-sidebar'
+          summaryCaret={false}
+          title={TitleComp}
+        >
+          <DropEdge parentHierarchy={hierarchyWithItself} position={0} />
+          {hasSubResources &&
+            subResources.map((child, index) => (
+              <Fragment key={child}>
+                <ResourceSideBar
+                  subject={child}
+                  renderedHierarchy={hierarchyWithItself}
+                  ancestry={ancestry}
+                  onClick={onClick}
+                />
+                <DropEdge
+                  parentHierarchy={hierarchyWithItself}
+                  position={index + 1}
+                />
+              </Fragment>
+            ))}
+        </Details>
+      </Wrapper>
+    );
+  },
+);
 
 const Wrapper = styled.div<{ highlight: boolean }>`
   background-color: ${p =>

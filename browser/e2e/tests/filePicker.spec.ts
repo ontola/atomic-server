@@ -185,8 +185,18 @@ test.describe('File Picker', () => {
 
       await page.getByRole('button', { name: 'Save' }).click();
       await expect(page.getByText('New robot')).not.toBeVisible();
-      await expect(page.getByText('testFile3.txt').nth(0)).toBeVisible();
-      await page.getByText('testFile3.txt').nth(0).click();
+      // Read the file resource's subject from the value link in main and
+      // navigate to it directly. Clicking the inline link doesn't reliably
+      // trigger SPA navigation under Playwright (the browser tries to handle
+      // the `did:ad:...` href as a real URL and lands on `about:blank#`).
+      const fileSubject = await page
+        .getByRole('main')
+        .getByRole('link', { name: 'testFile3.txt' })
+        .getAttribute('href');
+      expect(fileSubject).toBeTruthy();
+      await page.goto(
+        `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(fileSubject!)}`,
+      );
 
       // For some reason playwright will only find text with quotes in them when using a regex instead of string.
       await expect(page.getByText(/It's a secret to everybody/)).toBeVisible();
