@@ -24,10 +24,10 @@ use serde_json::Map;
 /// Many of these are related to rights, as parsing often implies overwriting / setting resources.
 #[derive(Debug, Clone)]
 pub struct ParseOpts {
-    /// URL of the parent / Importer. This is where all the imported data will be placed under, hierarchically.
+    /// Subject of the parent / Importer. This is where all the imported data will be placed under, hierarchically.
     /// If imported resources do not have an `@id`, we create new `@id` using the `localId` and the `parent`.
     /// If the importer resources already have a `parent` set, we'll use that one.
-    pub importer: Option<String>,
+    pub importer: Option<crate::Subject>,
     /// Who's rights will be checked when creating the imported resources.
     /// Is only used when `save` is set to [SaveOpts::Commit].
     /// If [None] is passed, all resources will be
@@ -260,12 +260,35 @@ pub async fn parse_json_ad_commit_resource(
     Ok(resource)
 }
 
-/// Converts a string to a URL (subject), check for localid
-fn try_to_subject(subject: &str, prop: &str, parse_opts: &ParseOpts) -> AtomicResult<String> {
+/// Converts a string to a URL (subject), check for localid.
+/// For DID parents the synthesised subject doesn't exist, so we look up
+/// an existing imported resource by (parent, localId).
+async fn try_to_subject(
+    subject: &str,
+    prop: &str,
+    store: &impl crate::Storelike,
+    parse_opts: &ParseOpts,
+) -> AtomicResult<String> {
     if check_valid_url(subject).is_ok() {
         Ok(subject.into())
     } else if let Some(importer) = &parse_opts.importer {
-        Ok(generate_id_from_local_id(importer, subject))
+        if let Some(synth) = generate_id_from_local_id(importer, subject) {
+            Ok(synth)
+        } else if let Some(found) =
+            find_existing_by_local_id(store, importer, subject).await?
+        {
+            Ok(found)
+        } else {
+            Err(AtomicError::parse_error(
+                &format!(
+                    "Cannot resolve `localId` cross-reference {subject:?} \
+                     under DID parent {importer}: target must be imported \
+                     first or referenced by full @id."
+                ),
+                None,
+                Some(prop),
+            ))
+        }
     } else {
         Err(AtomicError::parse_error(
             &format!("Unable to parse string as URL: {}", subject),
@@ -273,6 +296,31 @@ fn try_to_subject(subject: &str, prop: &str, parse_opts: &ParseOpts) -> AtomicRe
             Some(prop),
         ))
     }
+}
+
+/// Looks up the subject of an already-imported resource matching
+/// (parent, localId). Used for re-import idempotency under DID parents.
+async fn find_existing_by_local_id(
+    store: &impl crate::Storelike,
+    parent: &crate::Subject,
+    local_id: &str,
+) -> AtomicResult<Option<String>> {
+    let mut query = crate::storelike::Query::new_prop_val(urls::LOCAL_ID, local_id);
+    query.for_agent = crate::agents::ForAgent::Sudo;
+    let result = store.query(&query).await?;
+    let parent_str = parent.as_str();
+    for resource in result.resources {
+        match resource.get(urls::PARENT) {
+            Ok(crate::Value::AtomicUrl(p)) if p.as_str() == parent_str => {
+                return Ok(Some(resource.get_subject().to_string()));
+            }
+            Ok(crate::Value::String(p)) if p == parent_str => {
+                return Ok(Some(resource.get_subject().to_string()));
+            }
+            _ => {}
+        }
+    }
+    Ok(None)
 }
 
 fn parse_anonymous_resource<'a>(
@@ -310,7 +358,7 @@ pub fn parse_propval<'a>(
     parse_opts: &'a ParseOpts,
 ) -> AsyncResult<'a, AtomicResult<(String, Value)>> {
     Box::pin(async move {
-        let prop = try_to_subject(key, key, parse_opts)?;
+        let prop = try_to_subject(key, key, store, parse_opts).await?;
         let property = store.get_property(&prop).await?;
 
         let atomic_val: Value = match property.data_type {
@@ -318,7 +366,7 @@ pub fn parse_propval<'a>(
                 match val {
                     serde_json::Value::String(str) => {
                         // If the value is not a valid URL, and we have an importer, we can generate_id_from_local_id
-                        let url = try_to_subject(str, &prop, parse_opts)?;
+                        let url = try_to_subject(str, &prop, store, parse_opts).await?;
                         Value::new(&url, &property.data_type)?
                     }
                     serde_json::Value::Object(map) => {
@@ -348,7 +396,7 @@ pub fn parse_propval<'a>(
                 for item in array {
                     match item {
                         serde_json::Value::String(str) => {
-                            let url = try_to_subject(str, &prop, parse_opts)?;
+                            let url = try_to_subject(str, &prop, store, parse_opts).await?;
                             newvec.push(SubResource::Subject(url.into()))
                         }
                         // If it's an Object, it can be either an anonymous or a full resource.
@@ -594,7 +642,21 @@ async fn parse_json_ad_map_to_resource(
                 )
             })?;
 
-            subject = Some(generate_id_from_local_id(parent, &local_id));
+            // For HTTP parents the synthesised `<parent>/<localId>` URL is
+            // deterministic and idempotent. For DID parents we can't forge
+            // a DID (it must equal the genesis-commit signature), so we
+            // look up an existing resource matching (parent, localId) — if
+            // one is found we re-use its subject, otherwise we leave
+            // `subject = None` and the signing path generates a fresh DID.
+            // Either way the localId is preserved as a property below so
+            // future imports can re-find it.
+            subject = if let Some(synth) = generate_id_from_local_id(parent, &local_id) {
+                Some(synth)
+            } else {
+                find_existing_by_local_id(store, parent, &local_id).await?
+            };
+
+            propvals.insert(urls::LOCAL_ID.into(), Value::String(local_id.clone()));
 
             continue;
         }
@@ -616,43 +678,90 @@ async fn parse_json_ad_map_to_resource(
     // if there is no parent set, we set it to the Importer
     if let Some(importer) = &parse_opts.importer {
         if !propvals.contains_key(urls::PARENT) {
-            propvals.insert(
-                urls::PARENT.into(),
-                Value::AtomicUrl(importer.clone().into()),
-            );
+            propvals.insert(urls::PARENT.into(), Value::AtomicUrl(importer.clone()));
         }
     }
 
-    // If there is no subject, we return the propvals as a nested resource
-    let Some(subj) = subject else {
-        return Err(AtomicError::parse_error(
-            "No @id or localId found in resource",
-            None,
-            None,
-        ));
-    };
-
+    // For DID-parent imports with a localId we may have no subject yet —
+    // the import flow generates a fresh DID via genesis signing in the
+    // SaveOpts::Commit branch below. For DontSave / Save we still need a
+    // concrete subject, so error there.
     let r = match &parse_opts.save {
         SaveOpts::DontSave => {
+            let subj = subject.ok_or_else(|| {
+                AtomicError::parse_error(
+                    "No @id or localId found in resource",
+                    None,
+                    None,
+                )
+            })?;
             let mut r = Resource::new(subj);
             r.set_propvals_unsafe(propvals);
             r
         }
         SaveOpts::Save => {
+            let subj = subject.ok_or_else(|| {
+                AtomicError::parse_error(
+                    "No @id or localId found in resource",
+                    None,
+                    None,
+                )
+            })?;
             let mut r = Resource::new(subj);
             r.set_propvals_unsafe(propvals);
             store.add_resource(&r).await?;
             r
         }
         SaveOpts::Commit => {
+            let signer = parse_opts
+                .signer
+                .clone()
+                .ok_or("No agent to sign Commit with. Either pass a `for_agent` or ")?;
+
+            // Fresh-DID path: no subject (DID parent + localId, no existing
+            // match). Mint a DID by genesis-signing this resource.
+            let Some(subj) = subject else {
+                let mut r = Resource::new("did:ad:placeholder".to_string());
+                for (prop, val) in propvals {
+                    r.set(prop, val, store).await?;
+                }
+                let mut commit_builder = r.get_commit_builder().clone();
+                commit_builder.is_genesis = true;
+                let commit = commit_builder.sign(&signer, store, &r).await?;
+                let signature = commit
+                    .signature
+                    .as_ref()
+                    .ok_or("No signature generated for genesis commit")?;
+                let did_subject =
+                    crate::Subject::from_raw(&format!("did:ad:{}", signature), None);
+                r.set_subject(did_subject.to_string());
+                let mut final_commit = commit;
+                final_commit.subject = did_subject;
+                let opts = CommitOpts {
+                    validate_schema: true,
+                    validate_signature: true,
+                    validate_timestamp: false,
+                    validate_rights: parse_opts.for_agent != ForAgent::Sudo,
+                    validate_previous_commit: false,
+                    validate_loro_causality: false,
+                    validate_for_agent: Some(parse_opts.for_agent.to_string()),
+                    update_index: true,
+                };
+                let response = store
+                    .apply_commit(final_commit, &opts)
+                    .await
+                    .map_err(|e| format!("Failed to save {}: {}", r.get_subject(), e))?;
+                return Ok(response.resource_new.unwrap());
+            };
+
             let mut is_new = false;
             let mut r = if let Ok(orig) = store.get_resource(&subj.as_str().into()).await {
                 // If the resource already exists, and overwrites outside are not permitted, and it does not have the importer as parent...
                 // Then we throw!
                 // Because this would enable malicious users to overwrite resources that they shouldn't.
                 if !parse_opts.overwrite_outside {
-                    let importer = parse_opts.importer.as_deref().unwrap();
-                    if !orig.has_parent(store, importer).await {
+                    let importer = parse_opts.importer.as_ref().unwrap();
+                    if !orig.has_parent(store, importer.as_str()).await {
                         Err(
                             format!("Cannot overwrite {subj} outside of importer! Enable `overwrite_outside`"),
                         )?
@@ -666,10 +775,6 @@ async fn parse_json_ad_map_to_resource(
             for (prop, val) in propvals {
                 r.set(prop, val, store).await?;
             }
-            let signer = parse_opts
-                .signer
-                .clone()
-                .ok_or("No agent to sign Commit with. Either pass a `for_agent` or ")?;
             let mut commit_builder = r.get_commit_builder().clone();
             // For brand-new resources whose subject is a non-agent DID
             // (`did:ad:<folder>/<localId>` is the importer pattern when the
@@ -709,8 +814,20 @@ async fn parse_json_ad_map_to_resource(
     Ok(r)
 }
 
-fn generate_id_from_local_id(importer_subject: &str, local_id: &str) -> String {
-    format!("{}/{}", importer_subject, local_id)
+/// Builds a synthesised subject for an imported resource.
+/// HTTP parents get a deterministic `<parent>/<localId>` URL.
+/// For DID parents this returns `None`: the import flow generates a fresh
+/// DID via genesis commit signing instead, and idempotency is achieved by
+/// looking up existing resources by (parent, localId) before signing.
+fn generate_id_from_local_id(
+    importer: &crate::Subject,
+    local_id: &str,
+) -> Option<String> {
+    if importer.is_did() {
+        None
+    } else {
+        Some(format!("{}/{}", importer.as_str(), local_id))
+    }
 }
 
 #[cfg(test)]
@@ -846,7 +963,7 @@ mod test {
         );
     }
 
-    async fn create_store_and_importer() -> (crate::Store, String) {
+    async fn create_store_and_importer() -> (crate::Store, crate::Subject) {
         let store = crate::Store::init().await.unwrap();
         store.set_base_url("http://localhost:9883");
         store.populate().await.unwrap();
@@ -856,7 +973,7 @@ mod test {
             .await
             .unwrap();
         importer.save_locally(&store).await.unwrap();
-        (store, importer.get_subject().clone().into())
+        (store, importer.get_subject().clone())
     }
 
     #[tokio::test]
@@ -881,7 +998,11 @@ mod test {
 
         store.import(json, &parse_opts).await.unwrap();
 
-        let imported_subject = generate_id_from_local_id(&importer, local_id);
+        // For HTTP parents (this test creates an internal:/ importer) the
+        // synthesised subject is `<parent>/<localId>`. For DID parents we'd
+        // need to look up by (parent, localId) instead.
+        let imported_subject = generate_id_from_local_id(&importer, local_id)
+            .expect("HTTP-style importer should yield a synthesised subject");
 
         let found = store
             .get_resource(&imported_subject.as_str().into())
@@ -890,8 +1011,12 @@ mod test {
         println!("{:?}", found);
         assert_eq!(found.get(urls::NAME).unwrap().to_string(), "My resource");
 
-        // LocalId should be removed from the imported resource
-        assert!(found.get(urls::LOCAL_ID).is_err());
+        // localId is now preserved on the resource so re-imports under DID
+        // parents can dedupe via (parent, localId) lookup.
+        assert_eq!(
+            found.get(urls::LOCAL_ID).unwrap().to_string(),
+            local_id
+        );
     }
     #[tokio::test]
     async fn import_resource_with_json() {
@@ -929,7 +1054,8 @@ mod test {
 
         store.import(json, &parse_opts).await.unwrap();
 
-        let imported_subject = generate_id_from_local_id(&importer, local_id);
+        let imported_subject = generate_id_from_local_id(&importer, local_id)
+            .expect("HTTP-style importer should yield a synthesised subject");
 
         let found = store
             .get_resource(&imported_subject.as_str().into())
@@ -937,8 +1063,10 @@ mod test {
             .unwrap();
         assert_eq!(found.get(urls::NAME).unwrap().to_string(), "My resource");
 
-        // LocalId should be removed from the imported resource
-        assert!(found.get(urls::LOCAL_ID).is_err());
+        assert_eq!(
+            found.get(urls::LOCAL_ID).unwrap().to_string(),
+            local_id
+        );
     }
 
     #[tokio::test]
@@ -959,8 +1087,10 @@ mod test {
             .await
             .unwrap();
 
-        let reference_subject = generate_id_from_local_id(&importer, "reference");
-        let my_subject = generate_id_from_local_id(&importer, "my-local-id");
+        let reference_subject = generate_id_from_local_id(&importer, "reference")
+            .expect("HTTP-style importer should yield a synthesised subject");
+        let my_subject = generate_id_from_local_id(&importer, "my-local-id")
+            .expect("HTTP-style importer should yield a synthesised subject");
         let found = store
             .get_resource(&my_subject.as_str().into())
             .await
@@ -974,7 +1104,10 @@ mod test {
             found.get(urls::PARENT).unwrap().to_string(),
             reference_subject
         );
-        assert_eq!(&found_ref.get(urls::PARENT).unwrap().to_string(), &importer);
+        assert_eq!(
+            &found_ref.get(urls::PARENT).unwrap().to_string(),
+            importer.as_str()
+        );
         assert_eq!(
             found
                 .get(urls::WRITE)
@@ -1090,14 +1223,18 @@ mod test {
 
         store.import(json, &parse_opts).await.unwrap();
 
-        let parent_subject = generate_id_from_local_id(&importer, "test1");
+        let parent_subject = generate_id_from_local_id(&importer, "test1")
+            .expect("HTTP-style importer should yield a synthesised subject");
         let found = store
             .get_resource(&parent_subject.as_str().into())
             .await
             .unwrap();
-        assert_eq!(found.get(urls::PARENT).unwrap().to_string(), importer);
+        assert_eq!(
+            found.get(urls::PARENT).unwrap().to_string(),
+            importer.as_str()
+        );
 
-        let newprop_subject = format!("{importer}/newprop");
+        let newprop_subject = format!("{}/newprop", importer.as_str());
         let _prop = store
             .get_resource(&newprop_subject.as_str().into())
             .await

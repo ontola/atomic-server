@@ -72,9 +72,9 @@ async fn main_wrapped() -> errors::AtomicServerResult<()> {
 
             let appstate = appstate::AppState::init(config.clone()).await?;
             let importer_subject = if let Some(i) = &import_opts.parent {
-                i.into()
+                atomic_lib::Subject::from_raw(i, None)
             } else {
-                "internal:/import".into()
+                atomic_lib::Subject::from_raw("internal:/import", None)
             };
             let parse_opts = atomic_lib::parse::ParseOpts {
                 importer: Some(importer_subject),

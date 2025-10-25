@@ -84,7 +84,7 @@ pub fn handle_post<'a>(
 
         let parse_opts = parse::ParseOpts {
             for_agent: for_agent.clone(),
-            importer: Some(parent),
+            importer: Some(atomic_lib::Subject::from_raw(&parent, None)),
             overwrite_outside,
             // We sign the importer Commits with the default agent,
             // not the one performing the import, because we don't have their private key.
