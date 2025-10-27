@@ -8,7 +8,12 @@ export function useNewRoute(parent?: string) {
   const navigateToNewRoute = useCallback(() => {
     navigate({
       to: paths.new,
-      search: parent ? { parentSubject: parent } : {},
+      search: {
+        classSubject: undefined,
+        parent: undefined,
+        parentSubject: parent,
+        newSubject: undefined,
+      },
     });
   }, [navigate, parent]);
 

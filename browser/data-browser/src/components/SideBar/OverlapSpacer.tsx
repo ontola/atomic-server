@@ -7,8 +7,11 @@ import type { JSX } from 'react';
 
 export function OverlapSpacer(): JSX.Element {
   const narrow = useMediaQuery('(max-width: 950px)');
-  const { navbarFloating } = useSettings();
-  const elevate = narrow && navbarFloating;
+  const { navbarTop } = useSettings();
+  // The floating-navbar setting was folded into `navbarTop`. When the
+  // navbar sits at the bottom on narrow screens, the sidebar content
+  // gets covered, so we lift it with a spacer.
+  const elevate = narrow && !navbarTop;
 
   return <Elevator elevate={elevate} />;
 }

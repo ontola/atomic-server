@@ -160,10 +160,16 @@ fn criterion_benchmark(c: &mut Criterion) {
     });
 
     all_resources_group.finish();
-    println!("Clearing store");
-    // If this takes a long time, it probably means there is still a lot of data that needs to be flushed.
-    store.clear_all_danger().unwrap();
-    println!("Store cleared");
+    // `clear_all_danger` is only compiled with the `db-sled` feature; under
+    // the default redb backend the temp store is dropped at end-of-scope.
+    #[cfg(feature = "db-sled")]
+    {
+        println!("Clearing store");
+        // If this takes a long time, it probably means there is still a lot of data that needs to be flushed.
+        store.clear_all_danger().unwrap();
+        println!("Store cleared");
+    }
+    drop(store);
 }
 
 criterion_group!(benches, criterion_benchmark);

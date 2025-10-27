@@ -23,7 +23,7 @@ export function ArticlePage({ resource }: ResourcePageProps): JSX.Element {
   const [lastCommit] = useString(resource, commits.properties.lastCommit);
 
   const canEdit = useCanWrite(resource);
-  const children = useChildren(resource);
+  const { subjects: children } = useChildren(resource.subject);
 
   const showNewResourceUI = useNewResourceUI();
 
@@ -51,7 +51,7 @@ export function ArticlePage({ resource }: ResourcePageProps): JSX.Element {
           <ContainerWider>
             <h2>Children</h2>
             <Grid>
-              {children.map(child => (
+              {children.map((child: string) => (
                 <Height key={child}>
                   <ResourceCard subject={child} />
                 </Height>

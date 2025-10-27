@@ -83,7 +83,7 @@ const PropertyRow: React.FC<PropertyRowProps> = ({
       {definition.enum && (
         <EnumWrapper>
           <span>Possible values: </span>
-          {definition.enum.map((v, i) => (
+          {definition.enum.map((v: unknown, i: number) => (
             <code key={i}>{JSON.stringify(v)}</code>
           ))}
         </EnumWrapper>
