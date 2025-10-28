@@ -30,7 +30,7 @@
     "test-query-debug": "pnpm run --filter @tomic/e2e test-query-debug",
     "start": "pnpm run -r --parallel start",
     "typedoc": "typedoc --options ./typedoc.json",
-    "typedoc-publish": "pnpm run typedoc && netlify deploy --dir data-browser/publish/docs/ --prod --auth $NETLIFY_AUTH_TOKEN --site a628f703-2dc1-4305-93d2-4ddc16c13f75",
+    "typedoc-publish": "pnpm run typedoc && netlify link --id a628f703-2dc1-4305-93d2-4ddc16c13f75 --auth $NETLIFY_AUTH_TOKEN && netlify deploy --dir data-browser/publish/docs/ --prod --auth $NETLIFY_AUTH_TOKEN",
     "typecheck": "pnpm run -r --parallel typecheck"
   },
   "husky": {
