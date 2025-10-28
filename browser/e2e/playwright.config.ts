@@ -7,11 +7,7 @@ const config: PlaywrightTestConfig = {
     viewport: { width: 1200, height: 800 },
     locale: 'en-GB',
     timezoneId: 'Europe/Amsterdam',
-    // Default per-action budget. Bumped from 5s to 10s because the suite
-    // shares a single atomic-server: 2-worker contention pushes individual
-    // clicks/fills over 5s when commits, search-index rebuilds, or WS
-    // routes pile up. Tests can still tighten it locally where needed.
-    actionTimeout: 10000,
+    actionTimeout: 5000,
     trace: 'retain-on-failure',
     storageState: {
       cookies: [],
