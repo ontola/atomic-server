@@ -1673,7 +1673,7 @@ export class Store {
     /** Fix the case where a resource was previously requested but still not ready */
     if (found && !found.isReady()) {
       return new Promise((resolve, reject) => {
-        const defaultTimeout = 5000;
+        const defaultTimeout = 10000;
 
         const cb: ResourceCallback<C> = res => {
           this.unsubscribe(subjectRaw, cb);
