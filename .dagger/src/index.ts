@@ -326,9 +326,11 @@ export class AtomicServer {
       .withExec([
         'sh',
         '-c',
-        `for i in $(seq 1 5); do netlify link --name ${siteName} --auth $NETLIFY_AUTH_TOKEN && break || sleep 2; done`,
+        // Skip silently when no auth token is configured (PR builds from
+        // forks, branches without secret access). Netlify CLI 23+ rejects
+        // empty `--auth ""` instead of treating it as missing.
+        `if [ -z "$NETLIFY_AUTH_TOKEN" ]; then echo 'NETLIFY_AUTH_TOKEN not set — skipping ${siteName} deploy'; exit 0; fi; for i in $(seq 1 5); do netlify link --name ${siteName} --auth "$NETLIFY_AUTH_TOKEN" && break || sleep 2; done && netlify deploy --dir . --prod --auth "$NETLIFY_AUTH_TOKEN"`,
       ])
-      .withExec(['netlify', 'deploy', '--dir', '.', '--prod'])
       .stdout();
   }
 
