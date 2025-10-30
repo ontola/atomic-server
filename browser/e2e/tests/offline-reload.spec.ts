@@ -33,7 +33,20 @@ test.describe('offline reload', () => {
       undefined,
       { timeout: 30000 },
     );
-    await page.waitForTimeout(2000);
+    // Wait for the drive to actually land in OPFS — this is what we're
+    // about to assert on, so bind to it directly.
+    await page.waitForFunction(
+      async () => {
+        const store = (window as any).store;
+        const drive = store?.getSyncStatus?.().drive;
+        if (!drive) return false;
+        const clientDb = store?.getClientDb?.();
+        const jsonAd = await clientDb?.getResource?.(drive);
+        return !!jsonAd;
+      },
+      undefined,
+      { timeout: 15000 },
+    );
 
     // Capture the drive subject + confirm OPFS actually has it.
     const { subject, opfsHas } = await page.evaluate(async () => {
@@ -55,8 +68,19 @@ test.describe('offline reload', () => {
     // Reload.
     await page.reload();
 
-    // Wait a beat for the fetch attempt to resolve.
-    await page.waitForTimeout(3000);
+    // Wait for the drive resource lookup to settle (loaded or errored — we
+    // log finalState below either way). Without this we sample mid-flight.
+    await page.waitForFunction(
+      () => {
+        const store = (window as any).store;
+        const drive = store?.getSyncStatus?.().drive;
+        if (!drive) return false;
+        const r = store.resources.get(drive);
+        return !!r && !r.loading;
+      },
+      undefined,
+      { timeout: 15000 },
+    );
 
     const finalState = await page.evaluate(async () => {
       const store = (window as any).store;
