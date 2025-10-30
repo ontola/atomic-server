@@ -118,7 +118,11 @@ test.describe('documents', async () => {
     // Add a link to a folder via @ mention
     await page2.keyboard.press('Space');
     await page2.keyboard.type('@');
-    await page2.waitForTimeout(500);
+    // The RTE command list mounts asynchronously after `@` is typed.
+    // Wait for it instead of guessing a fixed delay.
+    await expect(page2.getByTestId('rte-command-list')).toBeVisible({
+      timeout: 10000,
+    });
     await page2.keyboard.type(folderTitle, { delay: 50 });
     await expect(
       page2.getByTestId('rte-command-list').getByText(folderTitle),

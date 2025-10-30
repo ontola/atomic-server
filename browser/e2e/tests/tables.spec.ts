@@ -187,9 +187,16 @@ test.describe('tables', async () => {
       page.getByRole('button', { name: selectColumnName }),
     ).toBeVisible();
 
-    // Wait for all pending commits to be flushed before reload.
-    // 'networkidle' is unreliable on SPAs with persistent WebSocket connections.
-    await page.waitForTimeout(2000);
+    // Wait for all pending commits to drain into the server before reload.
+    // 'networkidle' is unreliable on SPAs with persistent WebSocket
+    // connections (commit subscriptions, the open WS, etc.). The dirty
+    // queue is the actual saved-to-server signal.
+    await page.waitForFunction(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      () => (window as any).store?.getSyncStatus?.().pendingDirtyCount === 0,
+      undefined,
+      { timeout: 10000 },
+    );
     await page.reload();
     await expect(
       page.getByRole('button', { name: selectColumnName }),
@@ -308,8 +315,13 @@ test.describe('tables', async () => {
     // Exit edit mode
     await page.keyboard.press('Escape');
 
-    // Wait for all debounced saves to complete
-    await page.waitForTimeout(2000);
+    // Wait for all debounced saves to drain into the server.
+    await page.waitForFunction(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      () => (window as any).store?.getSyncStatus?.().pendingDirtyCount === 0,
+      undefined,
+      { timeout: 10000 },
+    );
 
     // Verify all values are displayed correctly before refresh
     for (const value of values) {

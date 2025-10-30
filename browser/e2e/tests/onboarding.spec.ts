@@ -63,10 +63,8 @@ test.describe('onboarding', () => {
     // Paste the secret we read earlier (clipboard may not work after signout)
     await page.getByLabel('Enter your Agent Secret').fill(secret!);
 
-    // Wait for auto-verify to trigger
-    await page.waitForTimeout(500);
-
-    // Should auto-verify and navigate to the drive
+    // The form auto-submits ~150ms after fill (GettingStartedFlow useEffect).
+    // The URL assertion below already polls — no separate sleep needed.
     await expect(page).toHaveURL(/did(?:%3A|:)ad(?:%3A|:)/, { timeout: 10000 });
 
     // Open a NEW BROWSER CONTEXT (fresh, as if on a completely different computer)

@@ -634,8 +634,10 @@ export async function clickSidebarItem(text: string, page: Page) {
 /** Click an item from the main, visible context menu */
 export async function contextMenuClick(text: string, page: Page) {
   await page.click(contextMenu);
-  await page.waitForTimeout(100);
-  await page.getByTestId(`menu-item-${text}`).click();
+  // Wait for the menu item to mount instead of guessing 100ms.
+  const item = page.getByTestId(`menu-item-${text}`);
+  await item.waitFor({ state: 'visible', timeout: 5000 });
+  await item.click();
 }
 
 export const anyValue = Symbol('any');
