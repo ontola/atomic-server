@@ -225,13 +225,14 @@ test.describe('tables', async () => {
         select: 'wtf',
       },
     ];
-    // Click + explicit focus: a `click({ force: true })` alone occasionally
-    // leaves the cell in 'inactive' state under suite load (probably the
-    // grid's onClick handler hasn't bound by the time the click lands).
-    // Calling `.focus()` directly bypasses that race.
+    // The cell click + focus combo races with TableEditor's React state
+    // initialization (handlers bound after first render). Click without
+    // `force` so playwright auto-waits for actionability — that ensures
+    // the React handlers are bound by the time mousedown fires, which is
+    // what sets `activeCell` and `CursorMode.Visual` (the precondition
+    // for Enter → Edit mode in fillRow).
     const firstCell = page.getByRole('gridcell').first();
-    await firstCell.click({ force: true });
-    await firstCell.focus();
+    await firstCell.click();
     await expect(firstCell).toBeFocused();
     await page.waitForTimeout(1000);
 
