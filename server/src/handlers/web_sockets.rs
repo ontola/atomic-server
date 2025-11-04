@@ -37,7 +37,8 @@ pub async fn web_socket_handler(
     context: crate::context::RequestContext,
 ) -> AtomicServerResult<HttpResponse> {
     let auth_header_values = get_auth_headers(req.headers(), "ws".into())?;
-    let for_agent = get_agent_from_auth_values_and_check(auth_header_values, &appstate.store).await?;
+    let for_agent =
+        get_agent_from_auth_values_and_check(auth_header_values, &appstate.store).await?;
 
     let result = WsResponseBuilder::new(
         WebSocketConnection {
@@ -162,7 +163,11 @@ impl WebSocketConnection {
                             &subject_str,
                             store.get_base_domain().as_deref(),
                         );
-                        (store.get_resource_extended(&subject, false, &agent).await, request_id, origin)
+                        (
+                            store.get_resource_extended(&subject, false, &agent).await,
+                            request_id,
+                            origin,
+                        )
                     }
                     .into_actor(self)
                     .map(|(res, rid, origin), _actor, ctx| match res {
@@ -249,7 +254,10 @@ impl WebSocketConnection {
                 }
             }
 
-            ws_v2::tag::SYNC | ws_v2::tag::SYNC_PUSH | ws_v2::tag::BLOB_REQUEST | ws_v2::tag::BLOB_RESPONSE => {
+            ws_v2::tag::SYNC
+            | ws_v2::tag::SYNC_PUSH
+            | ws_v2::tag::BLOB_REQUEST
+            | ws_v2::tag::BLOB_RESPONSE => {
                 let store = self.store.clone();
                 let mut agent = self.agent.clone();
                 let bin_vec = bin.to_vec();
@@ -275,7 +283,9 @@ impl WebSocketConnection {
     /// Handle remaining text messages (Loro sync, SYNC_VV/DELTAS, query subs).
     fn handle_text(&mut self, text: &str, ctx: &mut ws::WebsocketContext<Self>) {
         if let Some(json) = text.strip_prefix("LORO_SYNC_SUBSCRIBE ") {
-            if let Ok(msg) = serde_json::from_str::<crate::actor_messages::LoroSubscriptionJSON>(json) {
+            if let Ok(msg) =
+                serde_json::from_str::<crate::actor_messages::LoroSubscriptionJSON>(json)
+            {
                 self.loro_sync_broadcaster_addr
                     .do_send(crate::actor_messages::SubscribeLoroSync {
                         addr: ctx.address(),
@@ -284,25 +294,34 @@ impl WebSocketConnection {
                     });
             }
         } else if let Some(json) = text.strip_prefix("LORO_SYNC_UNSUBSCRIBE ") {
-            if let Ok(msg) = serde_json::from_str::<crate::actor_messages::LoroSubscriptionJSON>(json) {
-                self.loro_sync_broadcaster_addr
-                    .do_send(crate::actor_messages::UnsubscribeLoroSync {
+            if let Ok(msg) =
+                serde_json::from_str::<crate::actor_messages::LoroSubscriptionJSON>(json)
+            {
+                self.loro_sync_broadcaster_addr.do_send(
+                    crate::actor_messages::UnsubscribeLoroSync {
                         addr: ctx.address(),
                         subject: msg.subject,
-                    });
+                    },
+                );
             }
         } else if let Some(json) = text.strip_prefix("LORO_SYNC_UPDATE ") {
-            if let Ok(mut update) = serde_json::from_str::<crate::actor_messages::LoroSyncUpdate>(json) {
+            if let Ok(mut update) =
+                serde_json::from_str::<crate::actor_messages::LoroSyncUpdate>(json)
+            {
                 update.addr = Some(ctx.address());
                 self.loro_sync_broadcaster_addr.do_send(update);
             }
         } else if let Some(json) = text.strip_prefix("LORO_EPHEMERAL_UPDATE ") {
-            if let Ok(mut update) = serde_json::from_str::<crate::actor_messages::LoroEphemeralUpdate>(json) {
+            if let Ok(mut update) =
+                serde_json::from_str::<crate::actor_messages::LoroEphemeralUpdate>(json)
+            {
                 update.addr = Some(ctx.address());
                 self.loro_sync_broadcaster_addr.do_send(update);
             }
         } else if let Some(json) = text.strip_prefix("SUBSCRIBE_QUERY ") {
-            if let Ok(query) = serde_json::from_str::<crate::actor_messages::QuerySubscriptionJSON>(json) {
+            if let Ok(query) =
+                serde_json::from_str::<crate::actor_messages::QuerySubscriptionJSON>(json)
+            {
                 self.commit_monitor_addr
                     .do_send(crate::actor_messages::SubscribeQuery {
                         addr: ctx.address(),
@@ -311,7 +330,8 @@ impl WebSocketConnection {
                     });
             }
         } else if let Some(json) = text.strip_prefix("SUBSCRIBE ") {
-            let subject = atomic_lib::Subject::from_raw(json, self.store.get_base_domain().as_deref());
+            let subject =
+                atomic_lib::Subject::from_raw(json, self.store.get_base_domain().as_deref());
             self.commit_monitor_addr
                 .do_send(crate::actor_messages::Subscribe {
                     addr: ctx.address(),
@@ -366,7 +386,12 @@ impl Handler<CommitMessage> for WebSocketConnection {
         let commit_id_owned = commit
             .url
             .clone()
-            .or_else(|| commit.signature.as_ref().map(|s| format!("did:ad:commit:{}", s)))
+            .or_else(|| {
+                commit
+                    .signature
+                    .as_ref()
+                    .map(|s| format!("did:ad:commit:{}", s))
+            })
             .unwrap_or_default();
         let commit_id = commit_id_owned.as_str();
 
@@ -395,23 +420,41 @@ impl Handler<CommitMessage> for WebSocketConnection {
 impl Handler<crate::actor_messages::LoroSyncUpdate> for WebSocketConnection {
     type Result = ();
 
-    fn handle(&mut self, msg: crate::actor_messages::LoroSyncUpdate, ctx: &mut ws::WebsocketContext<Self>) {
-        ctx.text(format!("LORO_SYNC_UPDATE {}", serde_json::to_string(&msg).unwrap()));
+    fn handle(
+        &mut self,
+        msg: crate::actor_messages::LoroSyncUpdate,
+        ctx: &mut ws::WebsocketContext<Self>,
+    ) {
+        ctx.text(format!(
+            "LORO_SYNC_UPDATE {}",
+            serde_json::to_string(&msg).unwrap()
+        ));
     }
 }
 
 impl Handler<crate::actor_messages::LoroEphemeralUpdate> for WebSocketConnection {
     type Result = ();
 
-    fn handle(&mut self, msg: crate::actor_messages::LoroEphemeralUpdate, ctx: &mut ws::WebsocketContext<Self>) {
-        ctx.text(format!("LORO_EPHEMERAL_UPDATE {}", serde_json::to_string(&msg).unwrap()));
+    fn handle(
+        &mut self,
+        msg: crate::actor_messages::LoroEphemeralUpdate,
+        ctx: &mut ws::WebsocketContext<Self>,
+    ) {
+        ctx.text(format!(
+            "LORO_EPHEMERAL_UPDATE {}",
+            serde_json::to_string(&msg).unwrap()
+        ));
     }
 }
 
 impl Handler<crate::actor_messages::QueryUpdate> for WebSocketConnection {
     type Result = ();
 
-    fn handle(&mut self, msg: crate::actor_messages::QueryUpdate, ctx: &mut ws::WebsocketContext<Self>) {
+    fn handle(
+        &mut self,
+        msg: crate::actor_messages::QueryUpdate,
+        ctx: &mut ws::WebsocketContext<Self>,
+    ) {
         ctx.binary(ws_v2::encode_query_update(
             msg.property.as_deref(),
             msg.value.as_deref(),
@@ -439,11 +482,7 @@ struct SyncDeltasRequest {
 }
 
 /// Delegate to atomic_lib sync engine.
-async fn handle_sync_vv(
-    request: SyncVVRequest,
-    store: Db,
-    agent: ForAgent,
-) -> Vec<Vec<u8>> {
+async fn handle_sync_vv(request: SyncVVRequest, store: Db, agent: ForAgent) -> Vec<Vec<u8>> {
     atomic_lib::sync::engine::handle_sync_vv(
         &request.drive,
         &request.drive_hash,
@@ -457,10 +496,5 @@ async fn handle_sync_vv(
 
 /// Delegate to atomic_lib sync engine.
 async fn handle_sync_deltas(request: SyncDeltasRequest, store: Db, _agent: ForAgent) {
-    atomic_lib::sync::engine::handle_sync_deltas(
-        &request.drive,
-        &request.deltas,
-        &store,
-    )
-    .await;
+    atomic_lib::sync::engine::handle_sync_deltas(&request.drive, &request.deltas, &store).await;
 }

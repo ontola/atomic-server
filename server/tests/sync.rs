@@ -132,9 +132,9 @@ async fn two_clients_sync() -> AtomicResult<()> {
                     ..
                 }) => {
                     if s == subject {
-                        return Ok::<(Vec<u8>, Option<String>), atomic_lib::errors::AtomicError>(
-                            (loro_bytes, commit_id),
-                        );
+                        return Ok::<(Vec<u8>, Option<String>), atomic_lib::errors::AtomicError>((
+                            loro_bytes, commit_id,
+                        ));
                     }
                 }
                 Ok(WsMessage::Error(e)) => {

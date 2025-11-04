@@ -79,9 +79,7 @@ pub enum DbEvent {
         delta: Option<Vec<u8>>,
     },
     /// Resource destroyed.
-    Destroyed {
-        subject: Subject,
-    },
+    Destroyed { subject: Subject },
     /// A resource entered or left the result set of a watched query. Emitted
     /// from `apply_transaction` after a successful write that touches
     /// `Tree::QueryMembers`. `filter_bytes` is the encoded `QueryFilter`
@@ -153,8 +151,7 @@ pub struct Db {
     /// open, kept in sync by `Db::register_watched_query`. The hot path in
     /// `check_if_atom_matches_watched_query_filters` reads from here and
     /// never touches msgpack on a commit.
-    watched_queries_by_drive:
-        Arc<RwLock<HashMap<String, Vec<Arc<query_index::QueryFilter>>>>>,
+    watched_queries_by_drive: Arc<RwLock<HashMap<String, Vec<Arc<query_index::QueryFilter>>>>>,
     /// Where the DB is stored on disk.
     #[allow(dead_code)]
     path: std::path::PathBuf,
@@ -267,8 +264,12 @@ impl Db {
     ) -> AtomicResult<Db> {
         tracing::info!("Opening ReDB database at {:?}", path);
 
-        std::fs::create_dir_all(path)
-            .map_err(|e| format!("Failed to create database directory {}: {e}", path.display()))?;
+        std::fs::create_dir_all(path).map_err(|e| {
+            format!(
+                "Failed to create database directory {}: {e}",
+                path.display()
+            )
+        })?;
 
         let redb_path = path.join("atomic.redb");
 
@@ -277,8 +278,13 @@ impl Db {
         if !redb_path.exists() {
             let sled_path = path.join("sled");
             if sled_path.exists() {
-                Self::migrate_from_sled(&sled_path, &redb_path, uploads_path, base_domain.as_deref())
-                    .await?;
+                Self::migrate_from_sled(
+                    &sled_path,
+                    &redb_path,
+                    uploads_path,
+                    base_domain.as_deref(),
+                )
+                .await?;
             }
         } else {
             let _ = uploads_path;
@@ -360,7 +366,12 @@ impl Db {
                             let hash_bytes = hash.as_bytes();
 
                             redb_store.insert(Tree::Blobs, hash_bytes, &bytes)?;
-                            propvals.insert(urls::BLOB.to_string(), Value::AtomicUrl(format!("did:ad:blob:{}", hash_hex.clone()).into()));
+                            propvals.insert(
+                                urls::BLOB.to_string(),
+                                Value::AtomicUrl(
+                                    format!("did:ad:blob:{}", hash_hex.clone()).into(),
+                                ),
+                            );
                             propvals.insert(urls::INTERNAL_ID.to_string(), Value::String(hash_hex));
                             count_blobs += 1;
                         }
@@ -368,7 +379,11 @@ impl Db {
                 }
             }
 
-            redb_store.insert(Tree::Resources, &subject_bytes, &rmp_serde::to_vec(&propvals).unwrap())?;
+            redb_store.insert(
+                Tree::Resources,
+                &subject_bytes,
+                &rmp_serde::to_vec(&propvals).unwrap(),
+            )?;
             count_resources += 1;
         }
 
@@ -380,11 +395,7 @@ impl Db {
         }
 
         // Migrate other metadata trees
-        for tree in [
-            Tree::PluginMeta,
-            Tree::DriveMapping,
-            Tree::DidMapping,
-        ] {
+        for tree in [Tree::PluginMeta, Tree::DriveMapping, Tree::DidMapping] {
             for item in sled_store.iter_tree(tree.clone()) {
                 let (key, val) = item?;
                 redb_store.insert(tree.clone(), &key, &val)?;
@@ -480,8 +491,6 @@ impl Db {
         Ok(store)
     }
 
-
-
     // ── High-level SDK helpers ──────────────────────────────────────────────────
 
     /// Get the active drive subject, if one is set.
@@ -511,7 +520,10 @@ impl Db {
         let agent = self.get_default_agent()?;
 
         let mut builder = crate::commit::CommitBuilder::new("placeholder".into());
-        builder.set(urls::IS_A.into(), Value::ResourceArray(vec![urls::DRIVE.into()]));
+        builder.set(
+            urls::IS_A.into(),
+            Value::ResourceArray(vec![urls::DRIVE.into()]),
+        );
         builder.set(urls::NAME.into(), Value::String(name.into()));
         builder.set(
             urls::WRITE.into(),
@@ -658,10 +670,7 @@ impl Db {
         let mut drives = Vec::with_capacity(subjects.len());
         for subject in subjects {
             let name = match self.get_resource(&subject.as_str().into()).await {
-                Ok(r) => r
-                    .get(urls::NAME)
-                    .map(|v| v.to_string())
-                    .unwrap_or_default(),
+                Ok(r) => r.get(urls::NAME).map(|v| v.to_string()).unwrap_or_default(),
                 Err(_) => String::new(),
             };
             drives.push(DriveInfo { subject, name });
@@ -706,13 +715,12 @@ impl Db {
     /// Full onboarding: create an agent and a personal drive in one call.
     /// The agent's secret will contain the drive DID for DHT discovery.
     /// Returns (agent, drive_subject).
-    pub async fn setup(
-        &self,
-        agent_name: &str,
-    ) -> AtomicResult<(crate::agents::Agent, String)> {
+    pub async fn setup(&self, agent_name: &str) -> AtomicResult<(crate::agents::Agent, String)> {
         let mut agent = self.create_agent(Some(agent_name)).await?;
         self.set_default_agent(agent.clone());
-        let drive = self.create_drive(&format!("{}'s Drive", agent_name)).await?;
+        let drive = self
+            .create_drive(&format!("{}'s Drive", agent_name))
+            .await?;
 
         // Set initial_drive so the secret contains the drive DID.
         // This lets other devices find this drive via DHT when restoring from secret.
@@ -1238,7 +1246,9 @@ impl Db {
             .insert(crate::db::trees::Tree::WatchedQueries, &filter_bytes, b"")?;
         let drive_key = filter.drive.as_str().to_string();
         if let Ok(mut map) = self.watched_queries_by_drive.write() {
-            map.entry(drive_key).or_insert_with(Vec::new).push(Arc::new(filter));
+            map.entry(drive_key)
+                .or_insert_with(Vec::new)
+                .push(Arc::new(filter));
         }
         Ok(())
     }
@@ -1268,7 +1278,10 @@ impl Db {
                 }
             };
             let drive_key = qf.drive.as_str().to_string();
-            new_map.entry(drive_key).or_insert_with(Vec::new).push(Arc::new(qf));
+            new_map
+                .entry(drive_key)
+                .or_insert_with(Vec::new)
+                .push(Arc::new(qf));
         }
         if let Ok(mut map) = self.watched_queries_by_drive.write() {
             *map = new_map;
@@ -1635,7 +1648,6 @@ impl Storelike for Db {
         self.clear_default_agent()
     }
 
-
     /// Adds Atoms to the store.
     /// Will replace existing Atoms that share Subject / Property combination.
     /// Validates datatypes and required props presence.
@@ -1996,7 +2008,9 @@ impl Storelike for Db {
     fn get_default_agent(&self) -> AtomicResult<crate::agents::Agent> {
         match self.default_agent.lock().unwrap().to_owned() {
             Some(agent) => Ok(agent),
-            None => Err("No agent set. Call db.setup() or db.load_agent_from_secret() first.".into()),
+            None => {
+                Err("No agent set. Call db.setup() or db.load_agent_from_secret() first.".into())
+            }
         }
     }
 

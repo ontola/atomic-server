@@ -52,10 +52,19 @@ pub const SYNC_PUSH_MAX_BYTES: usize = 1_048_576; // 1 MB
 
 /// Encode an AUTH frame: [0x01] [json AuthValues]
 /// The agent signs `requested_subject timestamp` with its private key.
-pub fn encode_auth(agent: &crate::agents::Agent, requested_subject: &str) -> crate::errors::AtomicResult<Vec<u8>> {
+pub fn encode_auth(
+    agent: &crate::agents::Agent,
+    requested_subject: &str,
+) -> crate::errors::AtomicResult<Vec<u8>> {
     let timestamp = crate::utils::now();
     let message = format!("{} {}", requested_subject, timestamp);
-    let signature = crate::agents::sign_message(message.as_bytes(), agent.private_key.as_ref().ok_or("Agent has no private key")?)?;
+    let signature = crate::agents::sign_message(
+        message.as_bytes(),
+        agent
+            .private_key
+            .as_ref()
+            .ok_or("Agent has no private key")?,
+    )?;
 
     let auth = serde_json::json!({
         "https://atomicdata.dev/properties/auth/publicKey": agent.public_key,
@@ -65,7 +74,8 @@ pub fn encode_auth(agent: &crate::agents::Agent, requested_subject: &str) -> cra
         "https://atomicdata.dev/properties/auth/agent": agent.subject.to_string(),
     });
 
-    let json_bytes = serde_json::to_vec(&auth).map_err(|e| format!("Failed to encode auth: {e}"))?;
+    let json_bytes =
+        serde_json::to_vec(&auth).map_err(|e| format!("Failed to encode auth: {e}"))?;
     let mut buf = Vec::with_capacity(1 + json_bytes.len());
     buf.push(tag::AUTH);
     buf.extend_from_slice(&json_bytes);
@@ -84,9 +94,8 @@ pub fn encode_update(
     let commit_id_bytes = commit_id.map(|s| s.as_bytes());
     let commit_len = commit_id_bytes.map(|b| 2 + b.len()).unwrap_or(0);
 
-    let mut buf = Vec::with_capacity(
-        1 + 1 + 2 + 2 + subject_bytes.len() + commit_len + loro_bytes.len(),
-    );
+    let mut buf =
+        Vec::with_capacity(1 + 1 + 2 + 2 + subject_bytes.len() + commit_len + loro_bytes.len());
 
     buf.push(tag::UPDATE);
     buf.push(flag_bits);
@@ -160,10 +169,7 @@ pub fn encode_sync_diff(drive: &str, pull: &[String], push: &[String]) -> Vec<u8
 /// `entries` list and want it split + flagged automatically.
 pub fn encode_sync_push(drive: &str, entries: &[(&str, &[u8])], last: bool) -> Vec<u8> {
     let drive_bytes = drive.as_bytes();
-    let total_entry_size: usize = entries
-        .iter()
-        .map(|(s, b)| 2 + s.len() + 4 + b.len())
-        .sum();
+    let total_entry_size: usize = entries.iter().map(|(s, b)| 2 + s.len() + 4 + b.len()).sum();
 
     let mut buf = Vec::with_capacity(1 + 2 + drive_bytes.len() + 1 + 2 + total_entry_size);
     buf.push(tag::SYNC_PUSH);
@@ -300,7 +306,9 @@ pub fn decode_query_update(data: &[u8]) -> Option<DecodedQueryUpdate> {
         if buf.len() < *pos + len {
             return None;
         }
-        let s = std::str::from_utf8(&buf[*pos..*pos + len]).ok()?.to_string();
+        let s = std::str::from_utf8(&buf[*pos..*pos + len])
+            .ok()?
+            .to_string();
         *pos += len;
         Some(s)
     }
@@ -357,7 +365,10 @@ pub fn decode_get(data: &[u8]) -> Option<DecodedGet<'_>> {
 
     let request_id = u16::from_be_bytes([data[0], data[1]]);
     let subject = std::str::from_utf8(&data[2..]).ok()?;
-    Some(DecodedGet { request_id, subject })
+    Some(DecodedGet {
+        request_id,
+        subject,
+    })
 }
 
 /// Decode a BLOB_REQUEST message (after the type tag).
@@ -399,9 +410,8 @@ pub fn encode_sync(
     let json = serde_json::json!({ "peers": peers, "resources": resources });
     let json_bytes = serde_json::to_vec(&json).unwrap_or_default();
 
-    let mut buf = Vec::with_capacity(
-        1 + 2 + drive_bytes.len() + 2 + hash_bytes.len() + json_bytes.len(),
-    );
+    let mut buf =
+        Vec::with_capacity(1 + 2 + drive_bytes.len() + 2 + hash_bytes.len() + json_bytes.len());
     buf.push(tag::SYNC);
     buf.extend_from_slice(&(drive_bytes.len() as u16).to_be_bytes());
     buf.extend_from_slice(drive_bytes);
@@ -581,10 +591,8 @@ mod tests {
 
     #[test]
     fn sync_push_structure() {
-        let entries: Vec<(&str, &[u8])> = vec![
-            ("did:ad:r1", b"snapshot1"),
-            ("did:ad:r2", b"delta2"),
-        ];
+        let entries: Vec<(&str, &[u8])> =
+            vec![("did:ad:r1", b"snapshot1"), ("did:ad:r2", b"delta2")];
         let encoded = encode_sync_push("did:ad:drive", &entries, true);
         assert_eq!(encoded[0], tag::SYNC_PUSH);
         let decoded = decode_sync_push(&encoded[1..]).unwrap();
@@ -601,11 +609,17 @@ mod tests {
         let owned: Vec<(String, Vec<u8>)> = (0..250)
             .map(|i| (format!("did:ad:r{i}"), small_blob.clone()))
             .collect();
-        let entries: Vec<(&str, &[u8])> =
-            owned.iter().map(|(s, b)| (s.as_str(), b.as_slice())).collect();
+        let entries: Vec<(&str, &[u8])> = owned
+            .iter()
+            .map(|(s, b)| (s.as_str(), b.as_slice()))
+            .collect();
 
         let chunks = encode_sync_push_chunks("did:ad:drive", &entries);
-        assert!(chunks.len() >= 3, "expected ≥3 chunks, got {}", chunks.len());
+        assert!(
+            chunks.len() >= 3,
+            "expected ≥3 chunks, got {}",
+            chunks.len()
+        );
 
         let mut total_entries = 0;
         for (i, chunk) in chunks.iter().enumerate() {
@@ -614,7 +628,8 @@ mod tests {
             let is_last = i == chunks.len() - 1;
             assert_eq!(
                 decoded.last, is_last,
-                "chunk {} LAST flag wrong (is_last={})", i, is_last
+                "chunk {} LAST flag wrong (is_last={})",
+                i, is_last
             );
         }
         assert_eq!(total_entries, 250);

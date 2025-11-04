@@ -44,8 +44,7 @@ mod peer_sync_tests {
         // === Sync: simulate the SYNC_VV → SYNC_DIFF → SYNC_PUSH exchange ===
 
         // Device B computes its sync state (empty — it has nothing)
-        let drive_subject_b =
-            crate::Subject::from_raw(&drive_b, db_b.get_base_domain().as_deref());
+        let drive_subject_b = crate::Subject::from_raw(&drive_b, db_b.get_base_domain().as_deref());
         let drive_subjects_b = crate::sync::engine::collect_drive_subjects(&db_b, &drive_subject_b);
         let vvs_b = crate::sync::engine::build_drive_vvs(&db_b, &drive_subjects_b);
         let hash_b = crate::sync::engine::compute_drive_hash(&vvs_b);
@@ -70,7 +69,10 @@ mod peer_sync_tests {
         )
         .await;
 
-        println!("Device A returned {} response frames", response_frames.len());
+        println!(
+            "Device A returned {} response frames",
+            response_frames.len()
+        );
         assert!(
             !response_frames.is_empty(),
             "Should have at least SYNC_DIFF"
@@ -94,7 +96,8 @@ mod peer_sync_tests {
                         push.entries.len(),
                         push.drive
                     );
-                    let (count, _blob_requests) = crate::sync::engine::import_sync_push(&push, &db_b, &ForAgent::Sudo).await;
+                    let (count, _blob_requests) =
+                        crate::sync::engine::import_sync_push(&push, &db_b, &ForAgent::Sudo).await;
                     total_imported += count;
                 }
             } else if tag == crate::sync::protocol::tag::SYNC_DIFF {
@@ -150,7 +153,10 @@ mod peer_sync_tests {
                 &drive_a,
                 "test.txt",
                 Some(vec![
-                    (crate::urls::BLOB, crate::Value::AtomicUrl(format!("did:ad:blob:{}", hash_hex.clone()).into())),
+                    (
+                        crate::urls::BLOB,
+                        crate::Value::AtomicUrl(format!("did:ad:blob:{}", hash_hex.clone()).into()),
+                    ),
                     (
                         crate::urls::INTERNAL_ID,
                         crate::Value::String(hash_hex.clone()),
@@ -189,7 +195,10 @@ mod peer_sync_tests {
 
         // Verify B realized it's missing the blob
         assert_eq!(blob_requests.len(), 1);
-        assert_eq!(blob_requests[0][0], crate::sync::protocol::tag::BLOB_REQUEST);
+        assert_eq!(
+            blob_requests[0][0],
+            crate::sync::protocol::tag::BLOB_REQUEST
+        );
 
         // 3. Device B sends BLOB_REQUEST to A (simulated)
         let mut agent_a = ForAgent::Sudo;
@@ -337,10 +346,9 @@ mod peer_sync_tests {
             crate::Value::ResourceArray(vec![agent_a.subject.to_string().into()]),
         );
 
-        let commit =
-            crate::commit::Commit::create_did(builder, &agent_a, &db_a)
-                .await
-                .unwrap();
+        let commit = crate::commit::Commit::create_did(builder, &agent_a, &db_a)
+            .await
+            .unwrap();
         let drive_did = commit.subject.to_string();
         let opts = crate::commit::CommitOpts {
             validate_signature: true,
@@ -370,8 +378,7 @@ mod peer_sync_tests {
         println!("Secret doc: {child_subject}");
 
         // === Test 1: Sync as Public (unauthenticated) — should get NOTHING ===
-        let drive_subject =
-            crate::Subject::from_raw(&drive_did, db_a.get_base_domain().as_deref());
+        let drive_subject = crate::Subject::from_raw(&drive_did, db_a.get_base_domain().as_deref());
         let drive_subjects = crate::sync::engine::collect_drive_subjects(&db_a, &drive_subject);
         assert!(
             drive_subjects.len() >= 2,
@@ -480,7 +487,10 @@ mod peer_sync_tests {
             crate::urls::IS_A.into(),
             crate::Value::ResourceArray(vec![crate::urls::DRIVE.into()]),
         );
-        builder.set(crate::urls::NAME.into(), crate::Value::String("Private".into()));
+        builder.set(
+            crate::urls::NAME.into(),
+            crate::Value::String("Private".into()),
+        );
         builder.set(
             crate::urls::WRITE.into(),
             crate::Value::ResourceArray(vec![agent.subject.to_string().into()]),
@@ -519,8 +529,7 @@ mod peer_sync_tests {
             &std::collections::HashMap::new(),
         );
 
-        let responses =
-            crate::sync::engine::handle_frame(&sync_frame, &db, &mut for_agent).await;
+        let responses = crate::sync::engine::handle_frame(&sync_frame, &db, &mut for_agent).await;
 
         // Count pushed resources
         let mut unauthenticated_count = 0;
@@ -588,7 +597,10 @@ mod peer_sync_tests {
             crate::urls::IS_A.into(),
             crate::Value::ResourceArray(vec![crate::urls::DRIVE.into()]),
         );
-        builder.set(crate::urls::NAME.into(), crate::Value::String("Private".into()));
+        builder.set(
+            crate::urls::NAME.into(),
+            crate::Value::String("Private".into()),
+        );
         builder.set(
             crate::urls::WRITE.into(),
             crate::Value::ResourceArray(vec![agent.subject.to_string().into()]),
@@ -634,13 +646,9 @@ mod peer_sync_tests {
         ep_b.add_node_addr(node_addr_a).unwrap();
 
         // Sync using the explicit endpoint
-        let result = peer::sync_drive_with_peer_using(
-            &ep_b,
-            &node_id_a.to_string(),
-            &drive_did,
-            &db_b,
-        )
-        .await;
+        let result =
+            peer::sync_drive_with_peer_using(&ep_b, &node_id_a.to_string(), &drive_did, &db_b)
+                .await;
 
         // Device B has the same agent (restored from secret) so it SHOULD be able
         // to sync the private drive. If count == 0, auth is broken — the server
@@ -709,7 +717,11 @@ mod peer_sync_tests {
         db_b.set_default_agent(agent_b.clone());
 
         // Create a separate Iroh endpoint for Device B
-        let ep_b = iroh::Endpoint::builder().discovery_n0().bind().await.unwrap();
+        let ep_b = iroh::Endpoint::builder()
+            .discovery_n0()
+            .bind()
+            .await
+            .unwrap();
 
         // Tell Device B how to reach Device A
         let node_addr_a = _router_a.endpoint().node_addr().await.unwrap();
@@ -718,11 +730,10 @@ mod peer_sync_tests {
         // Discover Device A's NodeID via pkarr relay
         // Filter out Device B's own NodeID (in tests, the global ENDPOINT is Device A's)
         let my_node_id_b = ep_b.node_id().to_string();
-        let discovered_node_id = crate::discovery::resolve_node_id_filtered(
-            &drive_a, Some(my_node_id_b.as_str()),
-        )
-            .await
-            .expect("pkarr resolve should find Device A");
+        let discovered_node_id =
+            crate::discovery::resolve_node_id_filtered(&drive_a, Some(my_node_id_b.as_str()))
+                .await
+                .expect("pkarr resolve should find Device A");
         println!("Device B discovered: {discovered_node_id}");
         assert_eq!(
             discovered_node_id,
@@ -731,17 +742,15 @@ mod peer_sync_tests {
         );
 
         // Sync via Iroh using the discovered NodeID
-        let count = peer::sync_drive_with_peer_using(
-            &ep_b,
-            &discovered_node_id,
-            &drive_a,
-            &db_b,
-        )
-        .await
-        .expect("Iroh sync should succeed");
+        let count = peer::sync_drive_with_peer_using(&ep_b, &discovered_node_id, &drive_a, &db_b)
+            .await
+            .expect("Iroh sync should succeed");
 
         println!("Device B synced {count} resources");
-        assert!(count >= 2, "Should sync at least drive + child, got {count}");
+        assert!(
+            count >= 2,
+            "Should sync at least drive + child, got {count}"
+        );
 
         // Verify Device B has the document
         let doc = db_b
@@ -785,7 +794,9 @@ mod peer_sync_tests {
         // === Device B: restore same agent, create its own canvas ===
         let db_b = Db::init_temp("qr_pair_b").await.unwrap();
         db_b.load_agent_from_secret(&secret).await.unwrap().agent;
-        let drive_b = db_b.get_active_drive().expect("Should have drive from secret");
+        let drive_b = db_b
+            .get_active_drive()
+            .expect("Should have drive from secret");
 
         let canvas_b = db_b
             .create_resource(
@@ -826,14 +837,10 @@ mod peer_sync_tests {
         ep_b.add_node_addr(node_addr_a).unwrap();
 
         // === Device B syncs with Device A ===
-        let count_b = peer::sync_drive_with_peer_using(
-            &ep_b,
-            &node_id_a.to_string(),
-            &drive_a,
-            &db_b,
-        )
-        .await
-        .expect("Sync B→A should succeed");
+        let count_b =
+            peer::sync_drive_with_peer_using(&ep_b, &node_id_a.to_string(), &drive_a, &db_b)
+                .await
+                .expect("Sync B→A should succeed");
         println!("Device B synced {count_b} resources from A");
         assert!(count_b > 0, "B should get A's canvas");
 
@@ -891,16 +898,18 @@ mod peer_sync_tests {
         // === Device B: restore agent, run a query BEFORE sync ===
         let db_b = Db::init_temp("query_sync_b").await.unwrap();
         db_b.load_agent_from_secret(&secret).await.unwrap();
-        let drive_b = db_b.get_active_drive().expect("Should have drive from secret");
+        let drive_b = db_b
+            .get_active_drive()
+            .expect("Should have drive from secret");
         assert_eq!(drive_a, drive_b);
 
         // Query children of the drive — should be empty
-        let query = Query::new_prop_val(
-            crate::urls::PARENT,
-            &drive_b,
-        );
+        let query = Query::new_prop_val(crate::urls::PARENT, &drive_b);
         let before = db_b.query(&query).await.unwrap();
-        println!("Device B query before sync: {} results", before.subjects.len());
+        println!(
+            "Device B query before sync: {} results",
+            before.subjects.len()
+        );
         assert_eq!(before.subjects.len(), 0, "No resources before sync");
 
         // === Start Iroh, sync ===
@@ -915,14 +924,10 @@ mod peer_sync_tests {
         let node_addr_a = router_a.endpoint().node_addr().await.unwrap();
         ep_b.add_node_addr(node_addr_a).unwrap();
 
-        let count = peer::sync_drive_with_peer_using(
-            &ep_b,
-            &node_id_a.to_string(),
-            &drive_a,
-            &db_b,
-        )
-        .await
-        .expect("Sync should succeed");
+        let count =
+            peer::sync_drive_with_peer_using(&ep_b, &node_id_a.to_string(), &drive_a, &db_b)
+                .await
+                .expect("Sync should succeed");
         println!("Device B synced {count} resources");
 
         // Wait for server-side to process
@@ -930,7 +935,10 @@ mod peer_sync_tests {
 
         // === Query again — should now include the synced canvas ===
         let after = db_b.query(&query).await.unwrap();
-        println!("Device B query after sync: {} results", after.subjects.len());
+        println!(
+            "Device B query after sync: {} results",
+            after.subjects.len()
+        );
         assert!(
             after.subjects.iter().any(|s| s == &canvas_subject),
             "Query should find the synced canvas. Got: {:?}",
@@ -972,17 +980,18 @@ mod peer_sync_tests {
             .unwrap();
 
         // Should receive the notification
-        let received = tokio::time::timeout(
-            std::time::Duration::from_secs(2),
-            rx.recv(),
-        )
-        .await
-        .expect("Should receive within 2s")
-        .expect("Channel should not be closed");
+        let received = tokio::time::timeout(std::time::Duration::from_secs(2), rx.recv())
+            .await
+            .expect("Should receive within 2s")
+            .expect("Channel should not be closed");
 
         match received {
             crate::DbEvent::Changed { subject, .. } => {
-                assert_eq!(subject.to_string(), canvas, "Should receive the created resource's subject");
+                assert_eq!(
+                    subject.to_string(),
+                    canvas,
+                    "Should receive the created resource's subject"
+                );
             }
             _ => panic!("Expected Changed event"),
         }
@@ -1044,14 +1053,10 @@ mod peer_sync_tests {
         let node_addr_a = router_a.endpoint().node_addr().await.unwrap();
         ep_b.add_node_addr(node_addr_a).unwrap();
 
-        let count = peer::sync_drive_with_peer_using(
-            &ep_b,
-            &node_id_a.to_string(),
-            &drive_a,
-            &db_b,
-        )
-        .await
-        .expect("Sync should succeed");
+        let count =
+            peer::sync_drive_with_peer_using(&ep_b, &node_id_a.to_string(), &drive_a, &db_b)
+                .await
+                .expect("Sync should succeed");
         println!("Device B synced {count} resources");
 
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
@@ -1108,14 +1113,10 @@ mod peer_sync_tests {
         let node_addr_a = router_a.endpoint().node_addr().await.unwrap();
         ep_b.add_node_addr(node_addr_a).unwrap();
 
-        let count = peer::sync_drive_with_peer_using(
-            &ep_b,
-            &node_id_a.to_string(),
-            &drive_a,
-            &db_b,
-        )
-        .await
-        .expect("Initial sync should succeed");
+        let count =
+            peer::sync_drive_with_peer_using(&ep_b, &node_id_a.to_string(), &drive_a, &db_b)
+                .await
+                .expect("Initial sync should succeed");
         println!("Initial sync: {count} resources");
         assert!(count > 0);
 
@@ -1143,9 +1144,7 @@ mod peer_sync_tests {
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
         // === Device B should have the new canvas without manual sync ===
-        let result = db_b
-            .get_resource(&new_canvas.as_str().into())
-            .await;
+        let result = db_b.get_resource(&new_canvas.as_str().into()).await;
 
         match result {
             Ok(resource) => {
@@ -1210,14 +1209,9 @@ mod peer_sync_tests {
         ep_b.add_node_addr(node_addr_a).unwrap();
 
         // Initial sync
-        peer::sync_drive_with_peer_using(
-            &ep_b,
-            &node_id_a.to_string(),
-            &drive_a,
-            &db_b,
-        )
-        .await
-        .expect("Initial sync should succeed");
+        peer::sync_drive_with_peer_using(&ep_b, &node_id_a.to_string(), &drive_a, &db_b)
+            .await
+            .expect("Initial sync should succeed");
 
         // Verify B has 1 stroke
         let resource_b = db_b.get_resource(&canvas.as_str().into()).await.unwrap();
@@ -1247,19 +1241,17 @@ mod peer_sync_tests {
         // Check B
         let resource_b2 = db_b.get_resource(&canvas.as_str().into()).await;
         match resource_b2 {
-            Ok(r) => {
-                match r.get("https://atomicdata.dev/ontology/canvas/strokeData") {
-                    Ok(crate::Value::JsonArray(arr)) => {
-                        println!("Device B now has {} strokes", arr.len());
-                        if arr.len() == 3 {
-                            println!("TEST PASSED: live sync pushed edits!");
-                        } else {
-                            println!("Note: got {} strokes, expected 3 (live push may not work in single-process)", arr.len());
-                        }
+            Ok(r) => match r.get("https://atomicdata.dev/ontology/canvas/strokeData") {
+                Ok(crate::Value::JsonArray(arr)) => {
+                    println!("Device B now has {} strokes", arr.len());
+                    if arr.len() == 3 {
+                        println!("TEST PASSED: live sync pushed edits!");
+                    } else {
+                        println!("Note: got {} strokes, expected 3 (live push may not work in single-process)", arr.len());
                     }
-                    _ => println!("Note: strokes unchanged (expected in single-process test)"),
                 }
-            }
+                _ => println!("Note: strokes unchanged (expected in single-process test)"),
+            },
             Err(_) => println!("Note: resource fetch failed"),
         }
 
@@ -1301,18 +1293,17 @@ mod peer_sync_tests {
         let node_addr_a = router_a.endpoint().node_addr().await.unwrap();
         ep_b.add_node_addr(node_addr_a).unwrap();
 
-        let count = peer::sync_drive_with_peer_using(
-            &ep_b,
-            &node_id_a.to_string(),
-            &drive_a,
-            &db_b,
-        )
-        .await
-        .expect("Initial sync should succeed");
+        let count =
+            peer::sync_drive_with_peer_using(&ep_b, &node_id_a.to_string(), &drive_a, &db_b)
+                .await
+                .expect("Initial sync should succeed");
         println!("B synced {count} resources");
 
         // Verify B has the canvas
-        assert!(db_b.get_resource(&canvas.as_str().into()).await.is_ok(), "B should have canvas");
+        assert!(
+            db_b.get_resource(&canvas.as_str().into()).await.is_ok(),
+            "B should have canvas"
+        );
 
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
@@ -1333,7 +1324,10 @@ mod peer_sync_tests {
         println!("Deleted canvas on A");
 
         // Verify A no longer has it
-        assert!(db_a.get_resource(&canvas.as_str().into()).await.is_err(), "A should not have canvas");
+        assert!(
+            db_a.get_resource(&canvas.as_str().into()).await.is_err(),
+            "A should not have canvas"
+        );
 
         // Wait for live push
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;

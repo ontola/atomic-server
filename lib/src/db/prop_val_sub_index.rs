@@ -19,10 +19,15 @@ pub fn find_in_prop_val_sub_index(store: &Db, prop: &str, val: Option<&Value>) -
     // later `is_local()` filter in `query_basic` rejects `Subject::External`,
     // which would drop every hit from a query against a localhost server.
     let base_domain = store.get_base_domain();
-    Box::new(store.kv.scan_prefix(Tree::PropValSub, &prefix).map(move |kv| {
-        let (key, _value) = kv?;
-        key_to_index_atom(&key, base_domain.as_deref())
-    }))
+    Box::new(
+        store
+            .kv
+            .scan_prefix(Tree::PropValSub, &prefix)
+            .map(move |kv| {
+                let (key, _value) = kv?;
+                key_to_index_atom(&key, base_domain.as_deref())
+            }),
+    )
 }
 
 pub fn add_atom_to_prop_val_sub_index(

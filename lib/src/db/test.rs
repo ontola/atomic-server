@@ -167,7 +167,8 @@ async fn destroy_resource_and_check_collection_and_commits() {
     // Using the full to_json_ad here would compare the base64 of those snapshots
     // and flake even when the logical state is identical.
     fn json_ad_without_loro(r: &crate::Resource) -> String {
-        let mut json: serde_json::Value = serde_json::from_str(&r.to_json_ad(None).unwrap()).unwrap();
+        let mut json: serde_json::Value =
+            serde_json::from_str(&r.to_json_ad(None).unwrap()).unwrap();
         if let Some(obj) = json.as_object_mut() {
             obj.remove(crate::urls::LORO_UPDATE);
         }
@@ -819,7 +820,10 @@ async fn sorted_collection_after_apply_commit_is_stable() {
     };
     for name in &["alpha", "bravo", "charlie"] {
         let mut b = CommitBuilder::new("placeholder".into());
-        b.set(urls::PARENT.into(), Value::AtomicUrl(drive_did.clone().into()));
+        b.set(
+            urls::PARENT.into(),
+            Value::AtomicUrl(drive_did.clone().into()),
+        );
         b.set(urls::NAME.into(), Value::String((*name).to_string()));
         let commit = crate::commit::Commit::create_did(b, &agent, &store)
             .await
@@ -869,12 +873,12 @@ async fn query_by_parent_sorted_is_stable_across_calls() {
     for name in &["alpha", "bravo", "charlie"] {
         let subj = format!("https://localhost/sorted/{name}");
         let mut r = crate::Resource::new(subj.into());
-        r.set_unsafe(
-            urls::PARENT.into(),
-            Value::AtomicUrl(parent_subject.into()),
-        );
+        r.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(parent_subject.into()));
         r.set_unsafe(urls::NAME.into(), Value::String((*name).to_string()));
-        store.add_resource_opts(&r, false, true, true).await.unwrap();
+        store
+            .add_resource_opts(&r, false, true, true)
+            .await
+            .unwrap();
     }
 
     let mut query = crate::storelike::Query::new_prop_val(urls::PARENT, parent_subject);

@@ -102,7 +102,6 @@ pub struct Opts {
     /// If set, the server will allow serving subdomains of this domain (e.g. *.atomicserver.eu).
     #[clap(long, env = "ATOMIC_BASE_DOMAIN")]
     pub base_domain: Option<String>,
-
 }
 
 #[derive(clap::ValueEnum, Clone, Debug)]

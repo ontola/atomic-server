@@ -20,8 +20,7 @@ pub async fn put_blob(
     if hash_hex.len() != 64 {
         return Err("Hash must be 64 hex chars (BLAKE3)".into());
     }
-    let hash_bytes =
-        hex::decode(&hash_hex).map_err(|_| "Hash must be valid hex".to_string())?;
+    let hash_bytes = hex::decode(&hash_hex).map_err(|_| "Hash must be valid hex".to_string())?;
 
     let computed = blake3::hash(&body);
     if computed.as_bytes() != hash_bytes.as_slice() {

@@ -116,13 +116,9 @@ async fn test_ws_push_chatroom() {
 
     let test_dir = std::env::temp_dir().join("atomic-test-db-chat");
     let uploads_dir = test_dir.join("uploads");
-    let mut db = Db::init_redb_file(
-        &test_dir,
-        Some("http://localhost".into()),
-        &uploads_dir,
-    )
-    .await
-    .unwrap();
+    let mut db = Db::init_redb_file(&test_dir, Some("http://localhost".into()), &uploads_dir)
+        .await
+        .unwrap();
 
     db.add_class_extender(build_chatroom_extender()).unwrap();
     db.add_class_extender(build_message_extender()).unwrap();

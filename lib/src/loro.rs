@@ -134,7 +134,8 @@ impl AtomicLoroDoc {
     /// The doc enters a "detached" read-only state.
     pub fn checkout(&self, version: &VersionID) -> AtomicResult<()> {
         let f = version.to_frontiers()?;
-        self.doc.checkout(&f)
+        self.doc
+            .checkout(&f)
             .map_err(|e| format!("Loro checkout error: {e}").into())
     }
 
@@ -157,18 +158,20 @@ impl AtomicLoroDoc {
             return history;
         }
 
-        let _ = self.doc.travel_change_ancestors(&frontier_ids, &mut |change| {
-            let id = VersionID::from_frontiers(&loro::Frontiers::from_id(change.id));
-            history.push(VersionMetadata {
-                id,
-                timestamp: change.timestamp,
-                peer_id: change.id.peer.to_string(),
-                lamport: change.lamport as u64,
-                len: change.len,
-                message: change.message.map(|m| m.to_string()),
+        let _ = self
+            .doc
+            .travel_change_ancestors(&frontier_ids, &mut |change| {
+                let id = VersionID::from_frontiers(&loro::Frontiers::from_id(change.id));
+                history.push(VersionMetadata {
+                    id,
+                    timestamp: change.timestamp,
+                    peer_id: change.id.peer.to_string(),
+                    lamport: change.lamport as u64,
+                    len: change.len,
+                    message: change.message.map(|m| m.to_string()),
+                });
+                ControlFlow::Continue(())
             });
-            ControlFlow::Continue(())
-        });
 
         // travel_change_ancestors yields in reverse lamport order (newest first),
         // but sort explicitly by timestamp for consistent output.
@@ -298,13 +301,12 @@ impl AtomicLoroDoc {
 
         // Get or create the LoroList for this property
         let list = match root.get(property) {
-            Some(loro::ValueOrContainer::Container(c)) => {
-                c.into_list().map_err(|_| format!("{property} is not a list"))?
-            }
-            _ => {
-                root.insert_container(property, loro::LoroList::new())
-                    .map_err(|e| format!("Loro insert_container error: {e}"))?
-            }
+            Some(loro::ValueOrContainer::Container(c)) => c
+                .into_list()
+                .map_err(|_| format!("{property} is not a list"))?,
+            _ => root
+                .insert_container(property, loro::LoroList::new())
+                .map_err(|e| format!("Loro insert_container error: {e}"))?,
         };
 
         let map = list
@@ -321,7 +323,8 @@ impl AtomicLoroDoc {
             if let Ok(list) = c.into_list() {
                 let len = list.len();
                 if len > 0 {
-                    list.delete(0, len).map_err(|e| format!("Loro list delete error: {e}"))?;
+                    list.delete(0, len)
+                        .map_err(|e| format!("Loro list delete error: {e}"))?;
                 }
             }
         }
@@ -601,10 +604,8 @@ pub fn loro_value_to_atomic_value(lv: &loro::LoroValue) -> Option<Value> {
             match &items[0] {
                 loro::LoroValue::Map(_) => {
                     // Native LoroMaps → JsonArray
-                    let json_items: Vec<serde_json::Value> = items
-                        .iter()
-                        .map(|item| loro_value_to_json(item))
-                        .collect();
+                    let json_items: Vec<serde_json::Value> =
+                        items.iter().map(|item| loro_value_to_json(item)).collect();
                     Some(Value::JsonArray(json_items))
                 }
                 loro::LoroValue::String(first_s) => {
@@ -619,7 +620,11 @@ pub fn loro_value_to_atomic_value(lv: &loro::LoroValue) -> Option<Value> {
                                 _ => None,
                             })
                             .collect();
-                        if json_items.is_empty() { None } else { Some(Value::JsonArray(json_items)) }
+                        if json_items.is_empty() {
+                            None
+                        } else {
+                            Some(Value::JsonArray(json_items))
+                        }
                     } else {
                         // ResourceArray: plain URL strings
                         let subjects: Vec<crate::values::SubResource> = items
@@ -629,7 +634,11 @@ pub fn loro_value_to_atomic_value(lv: &loro::LoroValue) -> Option<Value> {
                                 _ => None,
                             })
                             .collect();
-                        if subjects.is_empty() { None } else { Some(Value::ResourceArray(subjects)) }
+                        if subjects.is_empty() {
+                            None
+                        } else {
+                            Some(Value::ResourceArray(subjects))
+                        }
                     }
                 }
                 _ => None,
@@ -637,17 +646,16 @@ pub fn loro_value_to_atomic_value(lv: &loro::LoroValue) -> Option<Value> {
         }
         loro::LoroValue::Map(m) => {
             // Single map → JSON object
-            Some(Value::Json(loro_value_to_json(&loro::LoroValue::Map(m.clone()))))
+            Some(Value::Json(loro_value_to_json(&loro::LoroValue::Map(
+                m.clone(),
+            ))))
         }
         _ => None,
     }
 }
 
 /// Write a serde_json::Value into a LoroMap. Handles nested objects and arrays.
-fn json_value_to_loro_map(
-    json: &serde_json::Value,
-    map: &loro::LoroMap,
-) -> AtomicResult<()> {
+fn json_value_to_loro_map(json: &serde_json::Value, map: &loro::LoroMap) -> AtomicResult<()> {
     if let serde_json::Value::Object(obj) = json {
         for (key, val) in obj {
             match val {
@@ -696,15 +704,18 @@ fn json_value_to_loro_list_item(
 ) -> AtomicResult<()> {
     match json {
         serde_json::Value::String(s) => {
-            list.push(s.as_str()).map_err(|e| format!("Loro list push error: {e}"))?;
+            list.push(s.as_str())
+                .map_err(|e| format!("Loro list push error: {e}"))?;
         }
         serde_json::Value::Number(n) => {
             if let Some(f) = n.as_f64() {
-                list.push(f).map_err(|e| format!("Loro list push error: {e}"))?;
+                list.push(f)
+                    .map_err(|e| format!("Loro list push error: {e}"))?;
             }
         }
         serde_json::Value::Bool(b) => {
-            list.push(*b).map_err(|e| format!("Loro list push error: {e}"))?;
+            list.push(*b)
+                .map_err(|e| format!("Loro list push error: {e}"))?;
         }
         serde_json::Value::Array(arr) => {
             let nested = list
@@ -1324,7 +1335,9 @@ mod test {
 
         // Materialize using the same function the server uses
         let write_val = loro_value_to_atomic_value(
-            props.get("https://atomicdata.dev/properties/write").unwrap(),
+            props
+                .get("https://atomicdata.dev/properties/write")
+                .unwrap(),
         );
         let read_val = loro_value_to_atomic_value(
             props.get("https://atomicdata.dev/properties/read").unwrap(),
@@ -1361,10 +1374,7 @@ mod test {
         let doc = AtomicLoroDoc::new();
         doc.set_property(
             "https://atomicdata.dev/properties/write",
-            &Value::ResourceArray(vec![
-                "did:ad:agent:alice".into(),
-                "did:ad:agent:bob".into(),
-            ]),
+            &Value::ResourceArray(vec!["did:ad:agent:alice".into(), "did:ad:agent:bob".into()]),
         )
         .unwrap();
         doc.set_property(
@@ -1379,8 +1389,11 @@ mod test {
         let props = doc2.get_all_properties();
 
         // write should materialize as ResourceArray from LoroList
-        let write_val =
-            loro_value_to_atomic_value(props.get("https://atomicdata.dev/properties/write").unwrap());
+        let write_val = loro_value_to_atomic_value(
+            props
+                .get("https://atomicdata.dev/properties/write")
+                .unwrap(),
+        );
         match write_val.unwrap() {
             Value::ResourceArray(arr) => {
                 assert_eq!(arr.len(), 2);
@@ -1391,8 +1404,9 @@ mod test {
         }
 
         // name should still be a plain string
-        let name_val =
-            loro_value_to_atomic_value(props.get("https://atomicdata.dev/properties/name").unwrap());
+        let name_val = loro_value_to_atomic_value(
+            props.get("https://atomicdata.dev/properties/name").unwrap(),
+        );
         assert_eq!(name_val.unwrap().to_string(), "Test");
     }
 
@@ -1581,18 +1595,20 @@ mod test {
             .unwrap();
 
         // --- Collect VVs (simulating the SYNC_VV exchange) ---
-        let client_vvs: std::collections::HashMap<String, std::collections::HashMap<String, i32>> = [
-            ("did:ad:drive".to_string(), drive_doc.oplog_vv_map()),
-            ("did:ad:table".to_string(), table_doc.oplog_vv_map()),
-            ("did:ad:readme".to_string(), client_readme.oplog_vv_map()),
-        ]
-        .into();
+        let client_vvs: std::collections::HashMap<String, std::collections::HashMap<String, i32>> =
+            [
+                ("did:ad:drive".to_string(), drive_doc.oplog_vv_map()),
+                ("did:ad:table".to_string(), table_doc.oplog_vv_map()),
+                ("did:ad:readme".to_string(), client_readme.oplog_vv_map()),
+            ]
+            .into();
 
-        let server_vvs: std::collections::HashMap<String, std::collections::HashMap<String, i32>> = [
-            ("did:ad:drive".to_string(), server_drive.oplog_vv_map()),
-            ("did:ad:table".to_string(), server_table.oplog_vv_map()),
-        ]
-        .into();
+        let server_vvs: std::collections::HashMap<String, std::collections::HashMap<String, i32>> =
+            [
+                ("did:ad:drive".to_string(), server_drive.oplog_vv_map()),
+                ("did:ad:table".to_string(), server_table.oplog_vv_map()),
+            ]
+            .into();
 
         // --- Compute diff ---
         let mut client_ahead: Vec<String> = Vec::new();
@@ -1718,9 +1734,8 @@ mod test {
             &Value::String("v1".into()),
         )
         .unwrap();
-        doc.doc().commit_with(
-            loro::CommitOptions::new().timestamp(1000),
-        );
+        doc.doc()
+            .commit_with(loro::CommitOptions::new().timestamp(1000));
         let v1 = doc.current_version();
 
         // Make a second change with a different timestamp
@@ -1729,9 +1744,8 @@ mod test {
             &Value::String("v2".into()),
         )
         .unwrap();
-        doc.doc().commit_with(
-            loro::CommitOptions::new().timestamp(2000),
-        );
+        doc.doc()
+            .commit_with(loro::CommitOptions::new().timestamp(2000));
         let v2 = doc.current_version();
 
         // get_history should return at least 1 entry (Loro may merge same-peer changes)
@@ -1789,22 +1803,35 @@ mod test {
 
         // Create base doc with initial state
         let base = AtomicLoroDoc::new();
-        base.set_property("name", &Value::String("Canvas".into())).unwrap();
-        base.set_property(stroke_prop, &Value::JsonArray(vec![
-            serde_json::json!({"color": 1, "path": [[0, 0]]}),
-        ])).unwrap();
+        base.set_property("name", &Value::String("Canvas".into()))
+            .unwrap();
+        base.set_property(
+            stroke_prop,
+            &Value::JsonArray(vec![serde_json::json!({"color": 1, "path": [[0, 0]]})]),
+        )
+        .unwrap();
         base.doc().commit();
         let base_snapshot = base.export_snapshot();
 
         // Device A: fork from base, push stroke A
         let doc_a = AtomicLoroDoc::from_snapshot(&base_snapshot).unwrap();
-        doc_a.push_to_json_array(stroke_prop, &serde_json::json!({"color": 2, "path": [[10, 10]]})).unwrap();
+        doc_a
+            .push_to_json_array(
+                stroke_prop,
+                &serde_json::json!({"color": 2, "path": [[10, 10]]}),
+            )
+            .unwrap();
         doc_a.doc().commit();
         let snapshot_a = doc_a.export_snapshot();
 
         // Device B: fork from same base, push stroke B
         let doc_b = AtomicLoroDoc::from_snapshot(&base_snapshot).unwrap();
-        doc_b.push_to_json_array(stroke_prop, &serde_json::json!({"color": 3, "path": [[20, 20]]})).unwrap();
+        doc_b
+            .push_to_json_array(
+                stroke_prop,
+                &serde_json::json!({"color": 3, "path": [[20, 20]]}),
+            )
+            .unwrap();
         doc_b.doc().commit();
         let snapshot_b = doc_b.export_snapshot();
 
@@ -1817,7 +1844,12 @@ mod test {
             Value::JsonArray(arr) => {
                 println!("Merged array has {} items: {:?}", arr.len(), arr);
                 // Should have 3 strokes: base + A + B
-                assert_eq!(arr.len(), 3, "Expected 3 strokes after merge, got {}", arr.len());
+                assert_eq!(
+                    arr.len(),
+                    3,
+                    "Expected 3 strokes after merge, got {}",
+                    arr.len()
+                );
                 // All colors should be present
                 let colors: Vec<i64> = arr.iter().map(|s| s["color"].as_i64().unwrap()).collect();
                 assert!(colors.contains(&1), "Missing base stroke");

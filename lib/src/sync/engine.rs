@@ -43,7 +43,10 @@ pub async fn handle_frame(
                             Err(e) => vec![protocol::encode_error(0, &format!("Auth failed: {e}"))],
                         }
                     }
-                    Err(e) => vec![protocol::encode_error(0, &format!("Invalid auth JSON: {e}"))],
+                    Err(e) => vec![protocol::encode_error(
+                        0,
+                        &format!("Invalid auth JSON: {e}"),
+                    )],
                 }
             } else {
                 vec![protocol::encode_error(0, "Invalid UTF-8 in auth")]
@@ -52,10 +55,8 @@ pub async fn handle_frame(
 
         protocol::tag::GET => {
             if let Some(decoded) = protocol::decode_get(payload) {
-                let subject = crate::Subject::from_raw(
-                    decoded.subject,
-                    store.get_base_domain().as_deref(),
-                );
+                let subject =
+                    crate::Subject::from_raw(decoded.subject, store.get_base_domain().as_deref());
 
                 match store.get_resource_extended(&subject, false, agent).await {
                     Ok(r) => {
@@ -162,7 +163,8 @@ pub fn collect_drive_subjects(
                 let parent_pure = crate::Subject::from_raw(
                     &parent_val.to_string(),
                     store.get_base_domain().as_deref(),
-                ).pure_id();
+                )
+                .pure_id();
                 parent_to_children
                     .entry(parent_pure)
                     .or_default()
@@ -288,8 +290,7 @@ pub async fn handle_sync_vv(
     store: &Db,
     agent: &crate::agents::ForAgent,
 ) -> Vec<Vec<u8>> {
-    let drive_subject =
-        crate::Subject::from_raw(drive, store.get_base_domain().as_deref());
+    let drive_subject = crate::Subject::from_raw(drive, store.get_base_domain().as_deref());
     let drive_subjects = collect_drive_subjects(store, &drive_subject);
     let server_vvs = build_drive_vvs(store, &drive_subjects);
 
@@ -305,10 +306,8 @@ pub async fn handle_sync_vv(
     }
 
     // Reconstruct client VVs from compact format
-    let mut client_vvs: std::collections::HashMap<
-        String,
-        std::collections::HashMap<String, i32>,
-    > = std::collections::HashMap::new();
+    let mut client_vvs: std::collections::HashMap<String, std::collections::HashMap<String, i32>> =
+        std::collections::HashMap::new();
 
     for (subject, counters) in client_resources {
         let mut vv = std::collections::HashMap::new();
@@ -395,8 +394,7 @@ pub async fn handle_sync_vv(
                 }
             }
         } else {
-            if let Ok(Some(snapshot_bytes)) =
-                store.kv.get(Tree::LoroSnapshots, subject.as_bytes())
+            if let Ok(Some(snapshot_bytes)) = store.kv.get(Tree::LoroSnapshots, subject.as_bytes())
             {
                 push_entries.push((subject.clone(), snapshot_bytes));
             }
@@ -447,8 +445,7 @@ pub async fn import_sync_push(
     for_agent: &crate::agents::ForAgent,
 ) -> (usize, Vec<Vec<u8>>) {
     // Check write access to the drive
-    let drive_subject =
-        crate::Subject::from_raw(&push.drive, store.get_base_domain().as_deref());
+    let drive_subject = crate::Subject::from_raw(&push.drive, store.get_base_domain().as_deref());
     if let Ok(drive_resource) = store.get_resource(&drive_subject).await {
         if crate::hierarchy::check_write(store, &drive_resource, for_agent)
             .await
@@ -476,7 +473,10 @@ pub async fn import_sync_push(
                 Ok(d) => {
                     // Import as delta
                     if d.import_update(&entry.loro_bytes).is_err() {
-                        tracing::warn!("import_sync_push: delta import failed for {}", entry.subject);
+                        tracing::warn!(
+                            "import_sync_push: delta import failed for {}",
+                            entry.subject
+                        );
                         continue;
                     }
                     d
@@ -515,8 +515,7 @@ pub async fn import_sync_push(
             continue;
         }
 
-        let subject =
-            crate::Subject::from_raw(&entry.subject, store.get_base_domain().as_deref());
+        let subject = crate::Subject::from_raw(&entry.subject, store.get_base_domain().as_deref());
         let mut resource = store
             .get_resource(&subject)
             .await
@@ -527,7 +526,9 @@ pub async fn import_sync_push(
         }
 
         // Log what properties arrived
-        let has_strokes = resource.get("https://atomicdata.dev/ontology/canvas/strokeData").is_ok();
+        let has_strokes = resource
+            .get("https://atomicdata.dev/ontology/canvas/strokeData")
+            .is_ok();
         tracing::info!(
             "  sync imported {}: {} props, has_strokes={}",
             &entry.subject[..entry.subject.len().min(30)],
@@ -581,23 +582,20 @@ pub async fn handle_sync_deltas(
     let mut count = 0;
 
     for (subject_str, delta_b64) in deltas {
-        let Ok(delta_bytes) =
-            base64::engine::general_purpose::STANDARD.decode(delta_b64)
-        else {
+        let Ok(delta_bytes) = base64::engine::general_purpose::STANDARD.decode(delta_b64) else {
             tracing::warn!("SYNC_DELTAS: bad base64 for {}", subject_str);
             continue;
         };
 
-        let doc = if let Ok(Some(snapshot)) =
-            store.kv.get(Tree::LoroSnapshots, subject_str.as_bytes())
-        {
-            match AtomicLoroDoc::from_snapshot(&snapshot) {
-                Ok(d) => d,
-                Err(_) => AtomicLoroDoc::new(),
-            }
-        } else {
-            AtomicLoroDoc::new()
-        };
+        let doc =
+            if let Ok(Some(snapshot)) = store.kv.get(Tree::LoroSnapshots, subject_str.as_bytes()) {
+                match AtomicLoroDoc::from_snapshot(&snapshot) {
+                    Ok(d) => d,
+                    Err(_) => AtomicLoroDoc::new(),
+                }
+            } else {
+                AtomicLoroDoc::new()
+            };
 
         if doc.import_update(&delta_bytes).is_err() {
             tracing::warn!("SYNC_DELTAS: import failed for {}", subject_str);
@@ -614,8 +612,7 @@ pub async fn handle_sync_deltas(
             continue;
         }
 
-        let subject =
-            crate::Subject::from_raw(subject_str, store.get_base_domain().as_deref());
+        let subject = crate::Subject::from_raw(subject_str, store.get_base_domain().as_deref());
         let mut resource = store
             .get_resource(&subject)
             .await
