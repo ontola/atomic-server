@@ -162,6 +162,8 @@ fn criterion_benchmark(c: &mut Criterion) {
     all_resources_group.finish();
     // `clear_all_danger` is only compiled with the `db-sled` feature; under
     // the default redb backend the temp store is dropped at end-of-scope.
+    // The explicit `drop(store)` would conflict with the move into
+    // `clear_all_danger`, so it's also gated to the redb path.
     #[cfg(feature = "db-sled")]
     {
         println!("Clearing store");
@@ -169,6 +171,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         store.clear_all_danger().unwrap();
         println!("Store cleared");
     }
+    #[cfg(not(feature = "db-sled"))]
     drop(store);
 }
 
