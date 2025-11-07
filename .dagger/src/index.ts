@@ -80,6 +80,12 @@ export class AtomicServer {
 
   @func()
   async ci(@argument() netlifyAuthToken: Secret): Promise<string> {
+    // Rust tasks (test/clippy/fmt) all extend `rustBuild()` and share the
+    // `rust-target` cache mount. Running them via `Promise.all` makes the
+    // parallel cargo processes fight for cargo's per-target file lock —
+    // we observed ~16-minute lock waits ending in `exit 101`. Serialize
+    // the rust pipeline (cheap: build is cached after the first run),
+    // and parallelize only the genuinely-independent JS + publish work.
     await Promise.all([
       this.docsPublish(netlifyAuthToken),
       this.typedocPublish(netlifyAuthToken),
@@ -87,9 +93,11 @@ export class AtomicServer {
       this.jsLint(),
       this.jsTest(),
       this.jsTestIntegration(),
-      this.rustTest(),
-      this.rustClippy(),
-      this.rustFmt(),
+      (async () => {
+        await this.rustFmt();
+        await this.rustClippy();
+        await this.rustTest();
+      })(),
     ]);
 
     return 'CI pipeline completed successfully';
