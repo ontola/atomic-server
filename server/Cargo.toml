@@ -180,7 +180,7 @@ tokio = { version = "1", features = ["full"] }
 portpicker = "0.1"
 atomic_lib = { path = "../lib", features = ["ws"] }
 blake3 = "1"
-tokio-tungstenite = { version = "0.26", features = ["native-tls"] }
+tokio-tungstenite = { version = "0.26", features = ["rustls-tls-native-roots"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 futures-util = "0.3"
 
