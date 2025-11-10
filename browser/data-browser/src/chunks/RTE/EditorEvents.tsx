@@ -15,9 +15,7 @@ export function EditorEvents({ onChange }: EditorEventsProps): null {
       onChange?.();
     };
 
-    if (editor) {
-      editor.on('update', callback);
-    }
+    editor.on('update', callback);
 
     return () => {
       if (editor) {

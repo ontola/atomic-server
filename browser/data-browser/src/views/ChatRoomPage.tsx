@@ -39,42 +39,22 @@ export function ChatRoomPage({ resource }: ResourcePageProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [textAreaHight, setTextAreaHight] = useState(1);
 
-  useHotkeys(
-    'enter',
-    e => {
-      e.preventDefault();
-      sendMessage();
-    },
-    { enableOnTags: ['TEXTAREA'] },
-    [],
-  );
-
-  useHotkeys(
-    'escape',
-    _e => {
-      inputRef?.current?.blur();
-    },
-    { enableOnTags: ['TEXTAREA'] },
-    [],
-  );
-  useEffect(scrollToBottom, [messages.length, resource]);
-
-  function scrollToBottom() {
+  const scrollToBottom = () => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }
+  };
 
   const disableSend = newMessageVal.length === 0;
 
   /** Creates a message using the internal state */
-  async function sendMessage(e?: React.SyntheticEvent) {
+  const sendMessage = async (e?: React.SyntheticEvent) => {
     const messageBackup = newMessageVal;
 
     try {
       scrollToBottom();
       setNewMessage('');
-      e && e.preventDefault();
+      e?.preventDefault();
 
       if (!disableSend) {
         const subject = store.createSubject(resource.subject);
@@ -99,7 +79,27 @@ export function ChatRoomPage({ resource }: ResourcePageProps) {
       setNewMessage(messageBackup);
       toast.error(err.message);
     }
-  }
+  };
+
+  useHotkeys(
+    'enter',
+    e => {
+      e.preventDefault();
+      sendMessage();
+    },
+    { enableOnTags: ['TEXTAREA'] },
+    [],
+  );
+
+  useHotkeys(
+    'escape',
+    _e => {
+      inputRef?.current?.blur();
+    },
+    { enableOnTags: ['TEXTAREA'] },
+    [],
+  );
+  useEffect(scrollToBottom, [messages.length, resource]);
 
   const handleReply = useCallback(
     (subject: string) => {

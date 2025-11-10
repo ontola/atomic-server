@@ -227,7 +227,8 @@ const MagicIconButton = styled(IconButtonBase)<ButtonStyleProps>`
     opacity: 0;
     z-index: -2;
     will-change: filter;
-    background: radial-gradient(ellipse at top right, #365ccd, transparent),
+    background:
+      radial-gradient(ellipse at top right, #365ccd, transparent),
       radial-gradient(
         ellipse at bottom left,
         ${adjustHue(-45, '#365ccd')},

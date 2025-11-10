@@ -1,4 +1,4 @@
-import { Store, useStore } from '@tomic/react';
+import { Store, useStore, type Resource } from '@tomic/react';
 import {
   FC,
   PropsWithChildren,
@@ -20,6 +20,8 @@ import { useNavigateWithTransition } from '../../../hooks/useNavigateWithTransit
 export interface CustomResourceDialogProps {
   parent: string;
   onClose: () => void;
+  skipNavigation?: boolean;
+  onCreated?: (resource: Resource) => void;
 }
 
 /**  When creating a new resource, the matched handler is called */
@@ -32,8 +34,15 @@ export type BasicInstanceHandler = (
   },
 ) => Promise<void>;
 
-interface NewResourceUIContext {
-  showNewResourceUI: (classType: string, parent: string) => void;
+interface NewResourceUIContextType {
+  showNewResourceUI: (
+    classType: string,
+    parent: string,
+    options?: {
+      skipNavigation?: boolean;
+      onCreated?: (resource: Resource) => void;
+    },
+  ) => void;
 }
 
 const dialogs = new Map<string, FC<CustomResourceDialogProps>>();
@@ -68,7 +77,7 @@ export const registerBasicInstanceHandler = (
   basicNewInstanceHandlers.set(classSubject, handler);
 };
 
-const NewResourceUIContext = createContext<NewResourceUIContext>({
+const NewResourceUIContext = createContext<NewResourceUIContextType>({
   showNewResourceUI: () => undefined,
 });
 
@@ -81,7 +90,14 @@ export function NewResourceUIProvider({ children }: PropsWithChildren) {
   const navigate = useNavigateWithTransition();
 
   const showNewResourceUI = useCallback(
-    async (isA: string, parent: string) => {
+    async (
+      isA: string,
+      parent: string,
+      options?: {
+        skipNavigation?: boolean;
+        onCreated?: (resource: Resource) => void;
+      },
+    ) => {
       // Show a dialog if one is registered for the given class
       if (dialogs.has(isA)) {
         const onClose = () => {
@@ -89,7 +105,14 @@ export function NewResourceUIProvider({ children }: PropsWithChildren) {
         };
 
         const Comp = dialogs.get(isA)!;
-        setDialog(<Comp parent={parent} onClose={onClose} />);
+        setDialog(
+          <Comp
+            parent={parent}
+            onClose={onClose}
+            skipNavigation={options?.skipNavigation}
+            onCreated={options?.onCreated}
+          />,
+        );
 
         return;
       }
@@ -109,7 +132,9 @@ export function NewResourceUIProvider({ children }: PropsWithChildren) {
       }
 
       // Default behaviour. Navigate to a new resource form for the given class.
-      navigate(newURL(isA, parent, store.createSubject()));
+      if (!options?.skipNavigation) {
+        navigate(newURL(isA, parent, store.createSubject()));
+      }
     },
     [store, settings, createAndNavigate, navigate],
   );
@@ -122,9 +147,9 @@ export function NewResourceUIProvider({ children }: PropsWithChildren) {
   );
 
   return (
-    <NewResourceUIContext.Provider value={context}>
+    <NewResourceUIContext value={context}>
       {children}
       {Dialog}
-    </NewResourceUIContext.Provider>
+    </NewResourceUIContext>
   );
 }

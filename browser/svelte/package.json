@@ -27,8 +27,8 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "test": "vitest run",
-    "lint": "prettier --check . && eslint .",
-    "format": "prettier --write ."
+    "lint": "prettier --check . && eslint . && pnpm prettier-check",
+    "prettier-check": "prettier --check ./src"
   },
   "exports": {
     ".": {

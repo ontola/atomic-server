@@ -167,6 +167,7 @@ export default defineConfig({
     // exclude: ['@tomic/lib', '@tomic/react'],
   },
   build: {
+    target: 'baseline-widely-available',
     sourcemap: true,
     rollupOptions: {
       output: {

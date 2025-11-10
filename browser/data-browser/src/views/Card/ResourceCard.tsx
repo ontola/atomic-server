@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useState, type JSX } from 'react';
+import { Suspense, useState, type JSX } from 'react';
 import { useInView } from 'react-intersection-observer';
 import {
   useString,
@@ -31,6 +31,8 @@ import { Tag } from '../../components/Tag';
 import { ResourceContextMenu } from '../../components/ResourceContextMenu';
 import { AIChatContentCard } from './AIChatContentCard';
 import { DocumentV2Card } from './DocumentV2Card';
+import { HideInPrint } from '@components/HideInPrint';
+import { useOnValueChange } from '@helpers/useOnValueChange';
 
 interface ResourceCardProps extends CardViewPropsBase {
   /** The subject URL - the identifier of the resource. */
@@ -46,14 +48,14 @@ function ResourceCard(
     JSX.IntrinsicElements['div'] & { className?: string },
 ): JSX.Element {
   const { initialInView, className, ...rest } = props;
-  const [isShown, setIsShown] = useState(false);
   // The (more expensive) ResourceCardInner is only rendered when the component has been in View
   const { ref, inView } = useInView({
     threshold: 0,
     initialInView,
   });
+  const [isShown, setIsShown] = useState(inView);
 
-  useEffect(() => {
+  useOnValueChange(() => {
     if (inView && !isShown) {
       setIsShown(true);
     }
@@ -138,7 +140,9 @@ export function ResourceCardDefault({
       <ResourceCardTitle resource={resource}>
         <Row center gap='1ch'>
           <span>{isAResource.title}</span>
-          <ResourceContextMenu simple subject={resource.subject} />
+          <HideInPrint>
+            <ResourceContextMenu simple subject={resource.subject} />
+          </HideInPrint>
         </Row>
       </ResourceCardTitle>
       <Row gap='1ch' style={{ fontSize: '0.8rem' }}>

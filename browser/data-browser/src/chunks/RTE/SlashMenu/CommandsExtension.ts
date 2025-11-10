@@ -17,7 +17,6 @@ import {
   FaCode,
   FaHeading,
   FaImage,
-  FaLink,
   FaListOl,
   FaListUl,
   FaParagraph,
@@ -111,6 +110,7 @@ export const createRenderFunction =
 
 export const buildSuggestion = (
   container: HTMLElement,
+  extraItems: SuggestionItem[] = [],
 ): Partial<SuggestionOptions<SuggestionItem>> => ({
   items: async ({ query }: { query: string }): Promise<SuggestionItem[]> =>
     [
@@ -156,13 +156,7 @@ export const buildSuggestion = (
         command: ({ editor, range }) =>
           editor.chain().focus().deleteRange(range).setImage({ src: '' }).run(),
       } as SuggestionItem,
-      {
-        title: 'Resource',
-        id: 'resource',
-        icon: FaLink,
-        command: ({ editor, range }) =>
-          editor.chain().focus().deleteRange(range).insertContent('@').run(),
-      } as SuggestionItem,
+      ...extraItems,
       {
         title: 'Heading 1',
         id: 'heading-1',

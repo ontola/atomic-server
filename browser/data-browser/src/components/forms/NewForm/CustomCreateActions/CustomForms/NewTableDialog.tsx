@@ -27,6 +27,8 @@ export const NewTableDialog: FC<NewTableDialogProps> = ({
   parent,
   initialExistingClass,
   onClose,
+  skipNavigation,
+  onCreated,
 }) => {
   const store = useStore();
   const [useExistingClass, setUseExistingClass] =
@@ -67,7 +69,7 @@ export const NewTableDialog: FC<NewTableDialogProps> = ({
       classSubject = existingClass;
     }
 
-    createResourceAndNavigate(
+    await createResourceAndNavigate(
       dataBrowser.classes.table,
       {
         [core.properties.name]: name,
@@ -75,6 +77,8 @@ export const NewTableDialog: FC<NewTableDialogProps> = ({
       },
       {
         parent,
+        skipNavigation,
+        onCreated,
       },
     );
 
@@ -87,6 +91,9 @@ export const NewTableDialog: FC<NewTableDialogProps> = ({
     existingClass,
     addToOntology,
     createResourceAndNavigate,
+    skipNavigation,
+    onCreated,
+    store,
   ]);
 
   const [dialogProps, show, hide, isOpen] = useDialog({ onCancel, onSuccess });

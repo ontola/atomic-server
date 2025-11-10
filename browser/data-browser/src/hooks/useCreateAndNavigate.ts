@@ -12,9 +12,11 @@ export type CreateAndNavigate = (
     noParent?: boolean;
     extraParams?: Record<string, string>;
     /** Query parameters for the resource / endpoint */
-    onCreated?: (resource: Resource) => Promise<void>;
+    onCreated?: (resource: Resource) => Promise<void> | void;
     /** Only pass subject if you really need a custom subject. Random ULID are prefered in most cases. */
     subject?: string;
+    /** If true, skip navigation after resource creation */
+    skipNavigation?: boolean;
   },
 ) => Promise<Resource>;
 
@@ -32,7 +34,7 @@ export function useCreateAndNavigate(): CreateAndNavigate {
     async (
       isA,
       propVals,
-      { parent, extraParams, onCreated, subject, noParent },
+      { parent, extraParams, onCreated, subject, noParent, skipNavigation },
     ): Promise<Resource> => {
       const classResource = await store.getResource<Core.Class>(isA);
 
@@ -48,10 +50,15 @@ export function useCreateAndNavigate(): CreateAndNavigate {
         await resource.save();
 
         if (onCreated) {
-          await onCreated(resource);
+          onCreated(resource);
         }
 
-        await navigate({ to: constructOpenURL(resource.subject, extraParams) });
+        if (!skipNavigation) {
+          await navigate({
+            to: constructOpenURL(resource.subject, extraParams),
+          });
+        }
+
         toast.success(`${classResource.title} created`);
         store.notifyResourceManuallyCreated(resource);
       } catch (e) {
@@ -61,7 +68,7 @@ export function useCreateAndNavigate(): CreateAndNavigate {
 
       return resource;
     },
-    [store, navigate, parent],
+    [store, navigate],
   );
 
   return createAndNavigate;

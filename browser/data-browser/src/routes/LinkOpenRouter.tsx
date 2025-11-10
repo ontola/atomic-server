@@ -1,7 +1,7 @@
 import { createRoute } from '@tanstack/react-router';
 import { pathNames, paths } from './paths';
 import { appRoute } from './RootRoutes';
-import { useEffect, useState } from 'react';
+import { useEffect, useEffectEvent, useState } from 'react';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import styled from 'styled-components';
 import { effectFetch } from '../helpers/effectFetch';
@@ -28,16 +28,20 @@ function LinkOpenRouterPage() {
   const { code } = LinkOpenRouter.useSearch();
   const navigate = useNavigateWithTransition();
 
+  const setCodeAndNavigate = useEffectEvent((key: string) => {
+    setOpenRouterApiKey(key);
+    sessionStorage.removeItem('atomic.ai.openrouter-code-verifier');
+    sessionStorage.removeItem('atomic.ai.openrouter-code-challenge');
+
+    navigate({ to: paths.appSettings });
+  });
+
+  const codeVerifier = sessionStorage.getItem(
+    'atomic.ai.openrouter-code-verifier',
+  );
+
   useEffect(() => {
-    const codeVerifier = sessionStorage.getItem(
-      'atomic.ai.openrouter-code-verifier',
-    );
-
-    if (!codeVerifier) {
-      setError('No code verifier found');
-
-      return;
-    }
+    if (!codeVerifier) return;
 
     return effectFetch(ENDPOINT, {
       method: 'POST',
@@ -51,24 +55,22 @@ function LinkOpenRouterPage() {
       }),
     })(
       ({ key }) => {
-        setOpenRouterApiKey(key);
-        sessionStorage.removeItem('atomic.ai.openrouter-code-verifier');
-        sessionStorage.removeItem('atomic.ai.openrouter-code-challenge');
-
-        navigate({ to: paths.appSettings });
+        setCodeAndNavigate(key);
       },
       err => {
         setError(err.message);
       },
     );
-  }, [code]);
+  }, [code, codeVerifier]);
 
-  if (error) {
+  const displayError = !codeVerifier ? 'No code verifier found' : error;
+
+  if (displayError) {
     return (
       <Center>
         <div>
           <h1>Error</h1>
-          <p>{error}</p>
+          <p>{displayError}</p>
         </div>
       </Center>
     );

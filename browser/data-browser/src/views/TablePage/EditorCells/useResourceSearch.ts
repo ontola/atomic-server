@@ -1,6 +1,7 @@
-import { SearchOpts, urls, useServerSearch } from '@tomic/react';
-import { useCallback, useMemo, useState } from 'react';
+import { core, SearchOpts, useServerSearch } from '@tomic/react';
+import { useCallback, useMemo } from 'react';
 import { useSettings } from '../../../helpers/AppSettings';
+import { useSelectedIndex } from '@hooks/useSelectedIndex';
 
 export function useResourceSearch(
   searchValue: string,
@@ -8,63 +9,48 @@ export function useResourceSearch(
   setOpen: (state: boolean) => void,
   onResultPick: (result: string) => void,
 ) {
-  const [selectedIndex, setSelectedIndex] = useState(0);
   const { drive } = useSettings();
 
   const searchOpts = useMemo(
     (): SearchOpts => ({
       parents: drive,
-      filters: classType ? { [urls.properties.isA]: classType } : undefined,
+      filters: classType ? { [core.properties.isA]: classType } : undefined,
+      include: false,
     }),
     [drive, classType],
   );
   const { results } = useServerSearch(searchValue, searchOpts);
 
+  const { selectedIndex, onKeyDown, onMouseOver, onClick } = useSelectedIndex(
+    results,
+    i => {
+      if (i === undefined) return;
+
+      onResultPick(results[i]);
+    },
+    { initialIndex: 0, key: searchValue },
+  );
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        setOpen(false);
-
-        return;
-      }
-
       if (e.key === 'Tab') {
-        return;
-      }
-
-      e.stopPropagation();
-
-      if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setSelectedIndex(i => Math.max(0, i - 1));
-
-        return;
-      }
-
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setSelectedIndex(i => Math.min(results.length - 1, i + 1));
-
         return;
       }
 
       if (e.key === 'Enter') {
         e.preventDefault();
         e.stopPropagation();
-        onResultPick(results[selectedIndex]);
-
-        return;
       }
 
-      setSelectedIndex(0);
+      onKeyDown(e);
     },
-    [results, onResultPick, selectedIndex],
+    [onKeyDown],
   );
 
   return {
     results,
     selectedIndex,
     handleKeyDown,
+    onMouseOver,
+    onClick,
   };
 }

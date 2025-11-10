@@ -17,6 +17,8 @@ import { useCreateAndNavigate } from '../../../../../hooks/useCreateAndNavigate'
 export const NewOntologyDialog: FC<CustomResourceDialogProps> = ({
   parent,
   onClose,
+  skipNavigation,
+  onCreated,
 }) => {
   const [shortname, setShortname] = useState('');
   const [valid, setValid] = useState(false);
@@ -35,11 +37,20 @@ export const NewOntologyDialog: FC<CustomResourceDialogProps> = ({
       },
       {
         parent,
+        skipNavigation,
+        onCreated,
       },
     );
 
     onClose();
-  }, [shortname, createResourceAndNavigate, onClose, parent]);
+  }, [
+    shortname,
+    createResourceAndNavigate,
+    onClose,
+    parent,
+    skipNavigation,
+    onCreated,
+  ]);
 
   const [dialogProps, show, hide] = useDialog({ onSuccess, onCancel: onClose });
 

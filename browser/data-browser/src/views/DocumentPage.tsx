@@ -88,6 +88,63 @@ function DocumentPageEdit({
     }),
   );
 
+  const focusElement = (goto: number) => {
+    if (goto > elements.length - 1) {
+      goto = elements.length - 1;
+    } else if (goto < 0) {
+      goto = 0;
+    }
+
+    setCurrent(goto);
+    let found: HTMLInputElement | undefined = ref?.current?.children[
+      goto
+    ]?.getElementsByClassName('element')[0] as HTMLInputElement;
+
+    if (!found) {
+      found = ref?.current?.children[goto] as HTMLInputElement;
+    }
+
+    if (found) {
+      found.focus();
+    } else {
+      ref.current?.focus();
+    }
+  };
+
+  const moveElement = (from: number, to: number) => {
+    const element = elements[from];
+    setElements(elements.toSpliced(from, 1).toSpliced(to, 0, element));
+    focusElement(to);
+    resource.save();
+  };
+
+  /** Creates a new Element at the given position, with the Document as its parent */
+  const addElement = async (position: number) => {
+    // When an element is created, it should be a Resource that has this document as its parent.
+    // or maybe a nested resource?
+    const elementSubject = store.createSubject(resource.subject);
+    const newElements = [...elements];
+    newElements.splice(position, 0, elementSubject);
+
+    try {
+      const newElement = await store.newResource({
+        subject: elementSubject,
+        isA: dataBrowser.classes.paragraph,
+        parent: resource.subject,
+        propVals: {
+          [core.properties.description]: '',
+        },
+      });
+
+      await setElements(newElements);
+      focusElement(position);
+      await newElement.save();
+      await resource.save();
+    } catch (e) {
+      setErr(e);
+    }
+  };
+
   // On init, focus on the last element
   useEffect(() => {
     setCurrent(elements.length - 1);
@@ -188,56 +245,6 @@ function DocumentPageEdit({
     { enableOnTags: ['TEXTAREA'] },
   );
 
-  /** Creates a new Element at the given position, with the Document as its parent */
-  async function addElement(position: number) {
-    // When an element is created, it should be a Resource that has this document as its parent.
-    // or maybe a nested resource?
-    const elementSubject = store.createSubject(resource.subject);
-    const newElements = [...elements];
-    newElements.splice(position, 0, elementSubject);
-
-    try {
-      const newElement = await store.newResource({
-        subject: elementSubject,
-        isA: dataBrowser.classes.paragraph,
-        parent: resource.subject,
-        propVals: {
-          [core.properties.description]: '',
-        },
-      });
-
-      await setElements(newElements);
-      focusElement(position);
-      await newElement.save();
-      await resource.save();
-    } catch (e) {
-      setErr(e);
-    }
-  }
-
-  function focusElement(goto: number) {
-    if (goto > elements.length - 1) {
-      goto = elements.length - 1;
-    } else if (goto < 0) {
-      goto = 0;
-    }
-
-    setCurrent(goto);
-    let found: HTMLInputElement | undefined = ref?.current?.children[
-      goto
-    ]?.getElementsByClassName('element')[0] as HTMLInputElement;
-
-    if (!found) {
-      found = ref?.current?.children[goto] as HTMLInputElement;
-    }
-
-    if (found) {
-      found.focus();
-    } else {
-      ref.current?.focus();
-    }
-  }
-
   async function deleteElement(number: number) {
     if (elements.length === 1) {
       setElements([]);
@@ -262,13 +269,6 @@ function DocumentPageEdit({
       focusElement(index + 1);
       resource.save();
     }
-  }
-
-  function moveElement(from: number, to: number) {
-    const element = elements[from];
-    setElements(elements.toSpliced(from, 1).toSpliced(to, 0, element));
-    focusElement(to);
-    resource.save();
   }
 
   function handleSortEnd(event: DragEndEvent): void {

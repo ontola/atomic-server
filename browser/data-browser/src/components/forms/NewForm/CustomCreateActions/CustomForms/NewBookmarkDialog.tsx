@@ -24,6 +24,8 @@ function normalizeWebAddress(url: string) {
 export const NewBookmarkDialog: FC<CustomResourceDialogProps> = ({
   parent,
   onClose,
+  skipNavigation,
+  onCreated,
 }) => {
   const [url, setUrl] = useState('');
 
@@ -45,12 +47,21 @@ export const NewBookmarkDialog: FC<CustomResourceDialogProps> = ({
         },
         {
           parent,
+          onCreated,
+          skipNavigation,
         },
       );
 
       onClose();
     },
-    [url, onClose],
+    [
+      url,
+      createResourceAndNavigate,
+      onClose,
+      parent,
+      skipNavigation,
+      onCreated,
+    ],
   );
 
   useEffect(() => {

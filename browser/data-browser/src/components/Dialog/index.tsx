@@ -113,7 +113,7 @@ const InnerDialog: React.FC<React.PropsWithChildren<InternalDialogProps>> = ({
         cancelDialog();
       }
     },
-    [innerDialogRef.current, cancelDialog, isTopLevel],
+    [cancelDialog, isTopLevel],
   );
 
   // Close the dialog when the escape key is pressed

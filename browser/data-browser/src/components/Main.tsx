@@ -50,4 +50,15 @@ const StyledMain = memo(styled.main<ViewTransitionProps>`
   @media (prefers-reduced-motion: no-preference) {
     scroll-behavior: smooth;
   }
+
+  @media print {
+    display: block;
+    position: static;
+    height: auto;
+    overflow-y: visible;
+    overflow: visible;
+    scroll-padding: 0;
+    page-break-after: auto;
+    page-break-inside: auto;
+  }
 `);
