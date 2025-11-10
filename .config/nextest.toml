@@ -14,7 +14,9 @@ retries = 2
 # making `Updated Title` appear missing despite the writer having
 # committed it.
 [[profile.default.overrides]]
-filter = 'binary(=atomic_server) and test(=search::tests::test_update_resource)'
+# Binary name is `atomic-server` (with dash) — `cargo nextest list`
+# shows the binaries. Underscore version doesn't match anything.
+filter = 'binary(=atomic-server) and test(=search::tests::test_update_resource)'
 test-group = 'serial'
 
 [test-groups]
