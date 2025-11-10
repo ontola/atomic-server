@@ -15,6 +15,9 @@ import {
 import { FaExpandAlt } from 'react-icons/fa';
 import { IconButton } from '../IconButton/IconButton';
 import { KeyboardInteraction } from './helpers/keyboardHandlers';
+import { CSSVar } from '@helpers/CSSVar';
+
+export const CELL_WIDTH = new CSSVar('table-cell-width');
 
 export enum CellAlign {
   Start = 'flex-start',
@@ -89,8 +92,9 @@ export function Cell({
 
   const shouldEnterEditMode = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
-      // @ts-ignore
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') {
+      const target = e.target as HTMLElement;
+
+      if (target.tagName === 'INPUT' || target.tagName === 'BUTTON') {
         // If the user clicked on an input don't enter edit mode. (Necessary for normal checkbox behavior)
         return false;
       }
@@ -103,6 +107,10 @@ export function Cell({
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
+      if ((e.target as HTMLElement).tagName === 'BUTTON') {
+        return;
+      }
+
       if (disabledKeyboardInteractions.has(KeyboardInteraction.ExitEditMode)) {
         return;
       }
@@ -226,6 +234,7 @@ export function Cell({
 
   return (
     <CellWrapper
+      index={columnIndex}
       aria-colindex={columnIndex + 1}
       ref={ref}
       disabled={disabled}
@@ -290,9 +299,14 @@ export interface CellWrapperProps {
   align?: CellAlign;
   allowUserSelect?: boolean;
   disabled?: boolean;
+  index: number;
 }
 
-export const CellWrapper = styled.div<CellWrapperProps>`
+export const CellWrapper = styled.div.attrs<CellWrapperProps>(p => ({
+  style: {
+    [CELL_WIDTH.raw]: `var(--cell-width-${p.index})`,
+  } as Record<string, string>,
+}))`
   background-color: ${p =>
     p.disabled ? p.theme.colors.bg1 : p.theme.colors.bg};
   cursor: ${p => (p.disabled ? 'not-allowed' : 'pointer')};

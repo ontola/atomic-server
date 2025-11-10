@@ -113,7 +113,7 @@ export const buildTheme = (darkMode: boolean, mainIn: string): DefaultTheme => {
     heights: {
       breadCrumbBar: breadCrumbBarHeight,
       floatingSearchBarPadding: floatingSearchBarPadding,
-      fullPage: `calc(100% - ${breadCrumbBarHeight})`,
+      fullPage: `100%`,
     },
     size,
     colors: {
@@ -250,11 +250,15 @@ export const GlobalStyle = createGlobalStyle`
   * {
     box-sizing: border-box;
     scrollbar-color: ${p => p.theme.colors.bg2} transparent;
+    @media print {
+      scrollbar-color: transparent transparent;
+    }
     &::-webkit-scrollbar {
       width: 10px;
       height: 10px;
       padding: 3px;
       background-color: transparent;/* color of the tracking area */
+
     }
     &::-webkit-scrollbar-thumb {
       width: 8px;

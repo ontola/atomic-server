@@ -74,6 +74,10 @@ const ParentWrapper = styled.nav`
   justify-content: flex-start;
 
   view-transition-name: ${BREADCRUMB_BAR_TRANSITION_TAG};
+
+  @media print {
+    display: none;
+  }
 `;
 
 type NestedParentProps = {
@@ -155,6 +159,7 @@ const BreadCrumbBase = css`
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: 50ch;
 `;
 
 const BreadCrumbCurrent = styled.span`

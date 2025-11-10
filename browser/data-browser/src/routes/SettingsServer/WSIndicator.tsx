@@ -65,28 +65,26 @@ export function WSIndicator({
   const { drive } = useSettings();
 
   const [websocketReadyState, setWebsocketReadyState] = useState<ReadyState>(
-    store.getWebSocketForSubject(subject)?.readyState ?? ReadyState.CONNECTING,
+    () => {
+      const ws = store.getWebSocketForSubject(subject);
+
+      return ws?.readyState ?? ReadyState.CONNECTING;
+    },
   );
 
   useEffect(() => {
     const ws = store.getWebSocketForSubject(subject);
 
-    if (!ws) {
-      return setWebsocketReadyState(ReadyState.CONNECTING);
-    }
-
-    setWebsocketReadyState(ws?.readyState);
+    if (!ws) return;
 
     const interval = setInterval(() => {
-      if (ws.readyState !== websocketReadyState) {
-        setWebsocketReadyState(ws.readyState);
-      }
+      setWebsocketReadyState(ws.readyState);
     }, 1000);
 
     return () => {
       clearInterval(interval);
     };
-  }, [drive, store]);
+  }, [drive, store, websocketReadyState, subject]);
 
   const [icon, color] = getIndicatorState(websocketReadyState);
 

@@ -2,7 +2,6 @@ import { transparentize } from 'polished';
 import {
   forwardRef,
   useState,
-  useEffect,
   useImperativeHandle,
   useId,
   useCallback,
@@ -10,6 +9,7 @@ import {
 import { styled } from 'styled-components';
 import { ScrollArea } from '../../../components/ScrollArea';
 import type { SuggestionItem } from '../types';
+import { useOnValueChange } from '@helpers/useOnValueChange';
 
 export type CommandListRefType = {
   onKeyDown: (event: KeyboardEvent) => boolean;
@@ -45,7 +45,7 @@ export const CommandList = forwardRef<CommandListRefType, CommandListProps>(
       [command, items],
     );
 
-    useEffect(() => setSelectedIndex(0), [items]);
+    useOnValueChange(() => setSelectedIndex(0), [items]);
 
     useImperativeHandle(
       ref,
@@ -83,6 +83,7 @@ export const CommandList = forwardRef<CommandListRefType, CommandListProps>(
 
     return (
       <ScrollingList type='hover'>
+        {items.length === 0 && <div>No results found</div>}
         {items.map((item, index) => {
           const Icon = item.icon;
 

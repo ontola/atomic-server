@@ -7,7 +7,7 @@ export type OntologyBaseObject = {
 };
 
 // Extended via module augmentation
-// eslint-disable-next-line @typescript-eslint/no-empty-interface
+
 export interface Classes {
   'unknown-subject': {
     requires: BaseProps;
@@ -22,11 +22,11 @@ export type BaseProps =
   | 'https://atomicdata.dev/properties/parent';
 
 // Extended via module augmentation
-// eslint-disable-next-line @typescript-eslint/no-empty-interface
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface PropTypeMapping {}
 
 // Extended via module augmentation
-// eslint-disable-next-line @typescript-eslint/no-empty-interface
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface PropSubjectToNameMapping {}
 
 export type Requires<C extends keyof Classes> = Classes[C]['requires'];
@@ -61,9 +61,9 @@ type QuickAccessKnownPropType<Class extends OptionalClass> = {
 
 declare global {
   // We need to use var for declaring types on globalThis
-  // eslint-disable-next-line no-var
+
   var ATOMIC_SUBJECT_TO_NAME_MAPPING: Map<string, string>;
-  // eslint-disable-next-line no-var
+
   var ATOMIC_CLASS_DEFS: Map<string, Record<string, string>>;
 }
 

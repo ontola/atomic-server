@@ -18,6 +18,7 @@ import { appRoute } from '../RootRoutes';
 import { base64StringToFilter } from './searchUtils';
 import { InlineFormattedResourceList } from '../../components/InlineFormattedResourceList';
 import { ErrorBoundary } from '../../views/ErrorPage';
+import { useOnValueChange } from '@helpers/useOnValueChange';
 
 type SearchRouteQueryParams = {
   query?: string;
@@ -74,7 +75,7 @@ export function Search(): JSX.Element {
       const selectedSubject = results[selectedIndex];
 
       if (selectedSubject) {
-        //@ts-ignore blur does exist though
+        //@ts-expect-error blur does exist though
         document?.activeElement?.blur();
         const openURL = constructOpenURL(selectedSubject);
         navigate(openURL);
@@ -123,9 +124,9 @@ export function Search(): JSX.Element {
 
   const showHelperMessage = !query && filterIsEmpty;
 
-  useEffect(() => {
+  useOnValueChange(() => {
     setSelected(0);
-  }, [results]);
+  }, [query]);
 
   return (
     <Main>

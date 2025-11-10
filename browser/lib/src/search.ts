@@ -90,10 +90,10 @@ export function buildSearchSubject(
       return v !== undefined;
     });
 
-  query && url.searchParams.set('q', query);
-  include && url.searchParams.set('include', include.toString());
-  limit && url.searchParams.set('limit', limit.toString());
-  hasFilters && url.searchParams.set('filters', buildFilterString(filters));
+  if (query) url.searchParams.set('q', query);
+  if (include) url.searchParams.set('include', include.toString());
+  if (limit) url.searchParams.set('limit', limit.toString());
+  if (hasFilters) url.searchParams.set('filters', buildFilterString(filters));
 
   if (parents) {
     if (Array.isArray(parents)) {

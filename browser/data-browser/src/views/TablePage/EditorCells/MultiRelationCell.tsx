@@ -1,4 +1,5 @@
 import {
+  core,
   Core,
   JSONValue,
   unknownSubject,
@@ -7,14 +8,7 @@ import {
   useResource,
   useTitle,
 } from '@tomic/react';
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type JSX,
-} from 'react';
+import { useEffect, useRef, useState, type JSX } from 'react';
 import { styled } from 'styled-components';
 import {
   InputStyled,
@@ -33,15 +27,15 @@ import { InlineFormattedResourceList } from '../../../components/InlineFormatted
 import { FaPlus, FaXmark } from 'react-icons/fa6';
 import {
   AbsoluteCell,
-  PopoverTrigger,
   SearchPopover,
   SearchResultWrapper,
 } from './CellComponents';
 import { Row } from '../../../components/Row';
-import { CellOptions } from '../../../components/TableEditor/hooks/useCellOptions';
 import { Checkbox } from '../../../components/forms/Checkbox';
 import { ResourceCell } from './ResourceCells/ResourceCell';
 import { AtomicLink } from '../../../components/AtomicLink';
+import type { TriggerProps } from '@components/CustomPopover';
+import { CELL_WIDTH } from '@components/TableEditor/Cell';
 
 const useClassType = (subject: string) => {
   const property = useResource<Core.Property>(subject);
@@ -64,80 +58,69 @@ function MultiRelationCellEdit({
 
   const { classType, hasClassType } = useClassType(property);
   const [open, setOpen] = useState(true);
-  const { setCursorMode, activeCellRef } = useTableEditorContext();
+  const { activeCellRef } = useTableEditorContext();
   const selectedElement = useRef<HTMLLIElement>(null);
 
   const [searchValue, setSearchValue] = useState('');
 
-  const cellOptions = useMemo((): CellOptions => {
-    const disabledKeyboardInteractions = new Set<KeyboardInteraction>([
-      KeyboardInteraction.EditNextRow,
-    ]);
+  const disabledKeyboardInteractions = new Set<KeyboardInteraction>([
+    KeyboardInteraction.EditNextRow,
+  ]);
 
-    if (open) {
-      disabledKeyboardInteractions.add(KeyboardInteraction.ExitEditMode);
-    }
+  if (open) {
+    disabledKeyboardInteractions.add(KeyboardInteraction.ExitEditMode);
+  }
 
-    return {
-      disabledKeyboardInteractions,
-      hideActiveIndicator: true,
-    };
-  }, [val, open]);
+  useCellOptions({
+    disabledKeyboardInteractions,
+    hideActiveIndicator: true,
+  });
 
-  useCellOptions(cellOptions);
-
-  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     e.preventDefault();
     e.stopPropagation();
     setSearchValue(e.target.value);
-  }, []);
+  };
 
-  const handleResultClick = useCallback(
-    (result: string) => {
-      if (!result) return;
+  const handleResultClick = (result: string) => {
+    if (!result) return;
 
-      if (val.includes(result)) {
-        onChange(val.filter(v => v !== result));
-      } else {
-        onChange([...val, result]);
-      }
-    },
-    [onChange, val],
-  );
+    if (val.includes(result)) {
+      onChange(val.filter(v => v !== result));
+    } else {
+      onChange([...val, result]);
+    }
+  };
 
   const handleRemoveItem = (subject: string) => {
     onChange(val.filter(v => v !== subject));
   };
 
-  const handleOpenChange = useCallback(
-    (state: boolean) => {
-      setOpen(state);
-    },
-    [setCursorMode],
-  );
+  const handleOpenChange = (state: boolean) => {
+    setOpen(state);
+  };
 
-  const { results, selectedIndex, handleKeyDown } = useResourceSearch(
-    searchValue,
-    hasClassType ? classType.subject : undefined,
-    setOpen,
-    handleResultClick,
-  );
-
-  const Trigger = useMemo(() => {
-    return (
-      <PopoverTrigger>
-        <IconButton title='Add resource'>
-          <FaPlus />
-        </IconButton>
-      </PopoverTrigger>
+  const { results, selectedIndex, handleKeyDown, onMouseOver, onClick } =
+    useResourceSearch(
+      searchValue,
+      hasClassType ? classType.subject : undefined,
+      setOpen,
+      handleResultClick,
     );
-  }, []);
+
+  const Trigger = (props: TriggerProps) => {
+    return (
+      <IconButton title='Add resource' {...props}>
+        <FaPlus />
+      </IconButton>
+    );
+  };
 
   useEffect(() => {
     if (!open) {
       activeCellRef.current?.focus();
     }
-  }, [open]);
+  }, [open, activeCellRef]);
 
   useEffect(() => {
     if (selectedElement.current) {
@@ -153,7 +136,7 @@ function MultiRelationCellEdit({
   return (
     <AbsoluteCell>
       <Row wrapItems gap='1ch'>
-        {(value as string[])?.map(subject => (
+        {(val as string[])?.map(subject => (
           <ResourceItemButton
             subject={subject}
             key={subject}
@@ -187,7 +170,8 @@ function MultiRelationCellEdit({
                   >
                     <Result
                       subject={result}
-                      onClick={handleResultClick}
+                      onClick={() => onClick(index)}
+                      onMouseOver={() => onMouseOver(index)}
                       selected={val.includes(result)}
                     />
                   </li>
@@ -215,9 +199,9 @@ function ResourceItemButton({
 
   return (
     <ResourceItemButtonWrapper>
-      <AtomicLink clean subject={resource.subject}>
+      <TruncatedAtomicLink clean subject={resource.subject}>
         {resource.title}
-      </AtomicLink>
+      </TruncatedAtomicLink>
       <IconButton
         title={`remove ${resource.title}`}
         onClick={() => onRemove(subject)}
@@ -247,19 +231,20 @@ function MultiRelationCellDisplay({
 
 interface ResultProps {
   subject: string;
-  onClick: (subject: string) => void;
+  onClick: () => void;
+  onMouseOver: () => void;
   selected: boolean;
 }
 
-function Result({ subject, onClick, selected }: ResultProps) {
+function Result({ subject, onClick, onMouseOver, selected }: ResultProps) {
   const resource = useResource(subject);
   const [title] = useTitle(resource);
-  const [[classType]] = useArray(resource, urls.properties.isA);
+  const [[classType]] = useArray(resource, core.properties.isA);
 
   const Icon = getIconForClass(classType);
 
   return (
-    <ResultButton onClick={() => onClick(subject)} tabIndex={-1}>
+    <ResultButton onClick={onClick} onMouseOver={onMouseOver} tabIndex={-1}>
       <Checkbox checked={selected} onChange={() => undefined}></Checkbox>
       <Icon />
       {title}
@@ -272,13 +257,19 @@ export const MultiRelationCell: CellContainer<JSONValue> = {
   Display: MultiRelationCellDisplay,
 };
 
+const TruncatedAtomicLink = styled(AtomicLink)`
+  max-width: calc(${CELL_WIDTH.var()} - 4.5rem);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`;
+
 const ResourceItemButtonWrapper = styled.span`
   display: inline-flex;
   padding-inline: 1ch;
   align-items: center;
   border: 1px solid ${p => p.theme.colors.main};
   color: ${p => p.theme.colors.mainDark};
-
   border-radius: ${p => p.theme.radius};
 `;
 
@@ -293,14 +284,6 @@ const ResultButton = styled.button`
   cursor: pointer;
   padding: 0.3rem;
   border-radius: ${p => p.theme.radius};
-  &:hover {
-    background: ${p => p.theme.colors.main};
-    color: white;
-
-    svg {
-      color: white;
-    }
-  }
 
   svg {
     color: ${p => p.theme.colors.textLight};

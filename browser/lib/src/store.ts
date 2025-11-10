@@ -156,8 +156,10 @@ export class Store {
     this._resources = new Map();
     this.webSockets = new Map();
     this.subscribers = new Map();
-    opts.serverUrl && this.setServerUrl(opts.serverUrl);
-    opts.agent && this.setAgent(opts.agent);
+
+    if (opts.serverUrl) this.setServerUrl(opts.serverUrl);
+    if (opts.agent) this.setAgent(opts.agent);
+
     this.client = new Client(this.injectedFetch);
 
     // We need to bind this method because it is passed down by other functions
@@ -208,10 +210,10 @@ export class Store {
       }
     }
 
+    const storeResource = this.resources.get(resource.subject);
+
     // Check if the resource has the same last commit as the one already in the store, if so, we don't want to notify so we don't trigger rerenders.
     if (!skipCommitCompare) {
-      const storeResource = this.resources.get(resource.subject);
-
       if (
         storeResource &&
         !storeResource.hasClasses(collections.classes.collection) &&
@@ -224,9 +226,14 @@ export class Store {
       }
     }
 
-    this.resources.set(resource.subject, resource.__internalObject);
-
-    this.notify(resource.__internalObject);
+    // If the resource is already in the store, we merge it so code that depends on the resource will get the new values.
+    if (storeResource) {
+      storeResource.merge(resource.__internalObject);
+      this.notify(storeResource);
+    } else {
+      this.resources.set(resource.subject, resource.__internalObject);
+      this.notify(resource.__internalObject);
+    }
   }
 
   /**
@@ -300,7 +307,7 @@ export class Store {
       if (createdResources.find(res => res.subject === subject)?.isReady()) {
         return true;
       }
-    } catch (e) {
+    } catch (_) {
       // If the resource doesn't exist, we can use it
     }
 
@@ -386,7 +393,7 @@ export class Store {
         },
       );
 
-      this.addResources(createdResources, { skipCommitCompare: true });
+      this.addResources(createdResources);
     }
 
     return this.resources.get(subject)!;
@@ -765,8 +772,11 @@ export class Store {
 
     this.serverUrl = url;
     this.eventManager.emit(StoreEvents.ServerURLChanged, url);
+
     // TODO This is not the right place
-    supportsWebSockets() && this.openWebSocket(url);
+    if (supportsWebSockets()) {
+      this.openWebSocket(url);
+    }
   }
 
   /** Opens a WebSocket for this Atomic Server URL */
@@ -824,7 +834,6 @@ export class Store {
         ws?.send(`SUBSCRIBE ${subject}`);
       }
     } catch (e) {
-      // eslint-disable-next-line no-console
       console.error(e);
     }
   }
@@ -945,7 +954,6 @@ export class Store {
     try {
       this.getDefaultWebSocket()?.send(`UNSUBSCRIBE ${subject}`);
     } catch (e) {
-      // eslint-disable-next-line no-console
       console.error(e);
     }
   }
@@ -1006,7 +1014,10 @@ export class Store {
     const ancestry: string[] = [resource.subject];
 
     let lastAncestor: string = resource.get(core.properties.parent) as string;
-    lastAncestor && ancestry.push(lastAncestor);
+
+    if (lastAncestor) {
+      ancestry.push(lastAncestor);
+    }
 
     while (lastAncestor) {
       const lastResource = await this.getResource(lastAncestor);

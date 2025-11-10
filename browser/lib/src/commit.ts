@@ -586,18 +586,10 @@ function parseYUpdateValue(
   );
 }
 
-function execSetCommit(
-  set: Record<string, JSONValue>,
-  resource: Resource,
-  store?: Store,
-) {
-  const parsedResources: Resource[] = [];
-
+function execSetCommit(set: Record<string, JSONValue>, resource: Resource) {
   for (const [key, value] of Object.entries(set)) {
     resource.setUnsafe(key, value);
   }
-
-  store && store.addResources(parsedResources);
 }
 
 function execRemoveCommit(remove: string[], resource: Resource) {

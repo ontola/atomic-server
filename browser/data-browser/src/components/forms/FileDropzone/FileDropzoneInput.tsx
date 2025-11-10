@@ -37,7 +37,7 @@ export function FileDropzoneInput({
         onFilesUploaded?.(uploaded);
       }
     },
-    [upload],
+    [upload, onFilesUploaded],
   );
 
   const { getRootProps, getInputProps } = useDropzone({
@@ -57,7 +57,7 @@ export function FileDropzoneInput({
         {error && <ErrMessage>{error.message}</ErrMessage>}
         <input {...getInputProps()} />
         <TextWrapper>
-          <FaUpload /> {isUploading ? 'Uploading...' : text ?? defaultText}
+          <FaUpload /> {isUploading ? 'Uploading...' : (text ?? defaultText)}
         </TextWrapper>
       </VisualDropZone>
     </>

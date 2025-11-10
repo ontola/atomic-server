@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2025-09-26T10:06:11.465Z\n"
-"PO-Revision-Date: 2025-10-22T08:13:10.871Z\n"
+"PO-Revision-Date: 2025-10-30T12:45:39.158Z\n"
 "Last-Translator: \n"
 "Language: fr\n"
 "Language-Team: \n"
@@ -109,7 +109,6 @@ msgstr "Invitation créée et copiée dans le presse-papier ! 🚀"
 #: src/components/Searchbar/TagSuggestionOverlay.tsx
 #: src/views/Document/DocumentV2FullPage.tsx
 #: src/views/Document/DocumentV2FullPage.tsx
-#: src/views/Card/DocumentV2Card.tsx
 #: src/views/Card/ResourceCard.tsx
 #: src/views/File/FilePreview.tsx
 #: src/views/File/FilePreviewThumbnail.tsx
@@ -1460,7 +1459,6 @@ msgid "Create a new resource under this resource."
 msgstr "Créer une nouvelle ressource sous cette ressource."
 
 #: src/components/ResourceContextMenu/index.tsx
-#: src/views/TablePage/TablePage.tsx
 msgid "Use in code"
 msgstr "Utiliser dans le code"
 
@@ -1728,6 +1726,7 @@ msgid "New tag"
 msgstr "Nouvelle étiquette"
 
 #: src/components/Tag/CreateTagRow.tsx
+#: src/views/TablePage/EditorCells/SelectCell.tsx
 #: src/views/TablePage/EditorCells/SelectCell.tsx
 msgid "Add tag"
 msgstr "Ajouter une étiquette"
@@ -3055,9 +3054,8 @@ msgstr "Masquer l'état encodé"
 msgid "Editing YDoc directly is not supported"
 msgstr "La modification directe de YDoc n'est pas prise en charge"
 
-#: src/chunks/RTE/CollaborativeEditor.tsx
-msgid "Untitled Agent"
-msgstr "Agent sans titre"
+#~ msgid "Untitled Agent"
+#~ msgstr "Agent sans titre"
 
 #: src/chunks/RTE/FullBubbleMenu.tsx
 msgid "Left"
@@ -3098,3 +3096,26 @@ msgstr "document"
 #: src/chunks/RTE/CollaborativeEditor.tsx
 msgid "Type '/' for options or '@' for resources"
 msgstr "Tapez « / » pour les options ou « @ » pour les ressources"
+
+#~ msgid "Get HTML"
+#~ msgstr "Obtenir le HTML"
+
+#~ msgid "Print"
+#~ msgstr "Imprimer"
+
+#~ msgid "Print this document"
+#~ msgstr "Imprimer ce document"
+
+#~ msgid "Export to PDF"
+#~ msgstr "Exporter en PDF"
+
+#~ msgid "Print this document to a PDF file"
+#~ msgstr "Imprimer ce document dans un fichier PDF"
+
+#: src/chunks/RTE/SlashMenu/CommandList.tsx
+msgid "No results found"
+msgstr "Aucun résultat trouvé"
+
+#: src/chunks/RTE/CollaborativeEditor.tsx
+msgid "Data Table"
+msgstr "Tableau de données"

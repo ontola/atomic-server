@@ -23,10 +23,11 @@
   },
   "scripts": {
     "build": "tsc",
-    "lint": "eslint ./src --ext .js,.ts",
+    "lint": "eslint ./src --ext .js,.ts && pnpm prettier-check",
     "lint-fix": "eslint ./src --ext .js,.ts --fix",
     "prepublishOnly": "pnpm run build && pnpm run lint && pnpm run lint-package",
     "lint-package": "pnpm dlx publint",
+    "prettier-check": "prettier --check ./src",
     "watch": "tsc --build --watch",
     "start": "pnpm watch",
     "tsc": "pnpm exec tsc --build",

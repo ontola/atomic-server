@@ -6,14 +6,7 @@ import {
   useString,
   core,
 } from '@tomic/react';
-import {
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-  type JSX,
-} from 'react';
+import { useCallback, useContext, useMemo, useState, type JSX } from 'react';
 import { DropdownMenu, DropdownItem } from '../../components/Dropdown';
 import { buildDefaultTrigger } from '../../components/Dropdown/DefaultTrigger';
 import { FaEdit, FaEllipsisV, FaEye, FaTimes } from 'react-icons/fa';
@@ -48,8 +41,16 @@ export function TableHeadingMenu({
   resource,
 }: TableHeadingMenuProps): JSX.Element {
   const [showEditDialog, setShowEditDialog] = useState(false);
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog_internal] = useState(false);
   const [fullDelete, setFullDelete] = useState(false);
+
+  const setShowDeleteDialog = useCallback((show: boolean) => {
+    setShowDeleteDialog_internal(show);
+
+    if (!show) {
+      setFullDelete(false);
+    }
+  }, []);
 
   const { tableClassSubject } = useContext(TablePageContext);
   const tableClassResource = useResource(tableClassSubject);
@@ -84,7 +85,7 @@ export function TableHeadingMenu({
     await removeProperty();
 
     resource.destroy();
-  }, [removeProperty]);
+  }, [removeProperty, resource]);
 
   const onConfirm = useCallback(() => {
     if (isExternalProperty) {
@@ -119,15 +120,14 @@ export function TableHeadingMenu({
         disabled: !canWriteClass,
       },
     ],
-    [canWriteClass, canWriteProperty, navigate, resource],
+    [
+      canWriteClass,
+      canWriteProperty,
+      navigate,
+      resource.subject,
+      setShowDeleteDialog,
+    ],
   );
-
-  // Reset fullDelete when dialog is closed
-  useEffect(() => {
-    if (!showDeleteDialog) {
-      setFullDelete(false);
-    }
-  }, [showDeleteDialog]);
 
   return (
     <Wrapper>

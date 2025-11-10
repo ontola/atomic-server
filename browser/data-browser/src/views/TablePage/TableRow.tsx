@@ -1,4 +1,11 @@
-import { memo, useEffect, useState, type JSX } from 'react';
+import {
+  memo,
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+  type JSX,
+} from 'react';
 import {
   Collection,
   DataBrowser,
@@ -31,31 +38,38 @@ const TableCellMemo = memo(TableCell);
 function useMarkings(row: Resource, index: number) {
   const { setMarkings } = useTableEditorContext();
 
+  const addMarkings = useEffectEvent(() => {
+    setMarkings(markings => {
+      const newMap = new Map(markings);
+      newMap.set(
+        index,
+        <WarningIcon title='Row is incomplete or has invalid data' />,
+      );
+
+      return newMap;
+    });
+  });
+
+  const removeMarkings = useEffectEvent(() => {
+    setMarkings(markings => {
+      const newMap = new Map(markings);
+      newMap.delete(index);
+
+      return newMap;
+    });
+  });
+
   useEffect(() => {
     if (row.commitError) {
-      setMarkings(markings => {
-        const newMap = new Map(markings);
-        newMap.set(
-          index,
-          <WarningIcon title='Row is incomplete or has invalid data' />,
-        );
-
-        return newMap;
-      });
+      addMarkings();
     }
 
     return () => {
-      setMarkings(markings => {
-        const newMap = new Map(markings);
-        newMap.delete(index);
-
-        return newMap;
-      });
+      removeMarkings();
     };
 
     // Markings don't need to be updated when the function address changes...
-    // eslint-disable-next-line react-hooks/react-compiler, react-hooks/exhaustive-deps
-  }, [row, index]);
+  }, [row.commitError, index]);
 }
 
 export function TableRow({
@@ -84,7 +98,7 @@ export function TableRow({
           key={column.subject}
           rowIndex={index}
           columnIndex={cIndex + 1}
-          resource={resource}
+          subject={resource.subject}
           property={column}
         />
       ))}
@@ -114,7 +128,7 @@ export function TableNewRow({
   const [loading, setLoading] = useState(true);
 
   const resource = useResource(subject, resourceOpts);
-
+  const resourceRef = useRef(resource);
   const onEditNextRow = useTableInvalidation(resource, invalidateTable);
 
   useMarkings(resource, index);
@@ -124,16 +138,23 @@ export function TableNewRow({
       return;
     }
 
-    resource
+    resourceRef.current
       .set(core.properties.parent, parent.subject)
-      .then(() => resource.set(core.properties.isA, [parent.props.classtype]))
+      .then(() =>
+        resourceRef.current.set(core.properties.isA, [parent.props.classtype]),
+      )
       .then(() => {
         setLoading(false);
       });
 
     // We can't add resource to the list because we modify the resource in the effect so it would cause a loop.
-    // eslint-disable-next-line react-hooks/react-compiler, react-hooks/exhaustive-deps
-  }, [resource.subject, parent.subject, parent.props.classtype]);
+    // We put resource in a ref so we don't need to add it to the list.
+  }, [
+    resource.subject,
+    parent.subject,
+    parent.props.classtype,
+    resource.commitError,
+  ]);
 
   if (loading) {
     return (
@@ -152,7 +173,7 @@ export function TableNewRow({
           key={column.subject}
           rowIndex={index}
           columnIndex={cIndex + 1}
-          resource={resource}
+          subject={resource.subject}
           property={column}
           onEditNextRow={onEditNextRow}
         />

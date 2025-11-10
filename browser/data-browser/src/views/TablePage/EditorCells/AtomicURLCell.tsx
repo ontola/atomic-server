@@ -45,6 +45,7 @@ import {
   SearchResultWrapper,
 } from './CellComponents';
 import { FaXmark } from 'react-icons/fa6';
+import type { TriggerProps } from '@components/CustomPopover';
 
 const useClassType = (subject: string) => {
   const property = useResource<Core.Property>(subject);
@@ -112,12 +113,13 @@ function AtomicURLCellEdit({
     [setCursorMode],
   );
 
-  const { results, selectedIndex, handleKeyDown } = useResourceSearch(
-    searchValue,
-    hasClassType ? classType.subject : undefined,
-    setOpen,
-    handleResultClick,
-  );
+  const { results, selectedIndex, handleKeyDown, onMouseOver, onClick } =
+    useResourceSearch(
+      searchValue,
+      hasClassType ? classType.subject : undefined,
+      setOpen,
+      handleResultClick,
+    );
 
   const handleFilesUploaded = useCallback(
     (files: string[]) => {
@@ -131,16 +133,19 @@ function AtomicURLCellEdit({
     [onChange, setOpen],
   );
 
-  const Trigger = useMemo(() => {
-    return (
-      <PopoverTrigger>
-        <FaEdit />{' '}
-        {cell.subject === unknownSubject
-          ? `select ${hasClassType ? classType.title : 'resource'}`
-          : title}
-      </PopoverTrigger>
-    );
-  }, [title, cell, classType, hasClassType]);
+  const Trigger = useCallback(
+    (props: TriggerProps) => {
+      return (
+        <PopoverTrigger {...props}>
+          <FaEdit />{' '}
+          {cell.subject === unknownSubject
+            ? `select ${hasClassType ? classType.title : 'resource'}`
+            : title}
+        </PopoverTrigger>
+      );
+    },
+    [title, cell, classType, hasClassType],
+  );
 
   useEffect(() => {
     if (selectedElement.current) {
@@ -181,7 +186,11 @@ function AtomicURLCellEdit({
                 data-selected={index === selectedIndex}
                 ref={index === selectedIndex ? selectedElement : null}
               >
-                <Result subject={result} onClick={handleResultClick} />
+                <Result
+                  subject={result}
+                  onClick={() => onClick(index)}
+                  onMouseOver={() => onMouseOver(index)}
+                />
               </li>
             ))}
           </ol>
@@ -212,22 +221,19 @@ function AtomicURLCellDisplay({
 
 interface ResultProps {
   subject: string;
-  onClick: (subject: string) => void;
+  onClick: () => void;
+  onMouseOver: () => void;
 }
 
-function Result({ subject, onClick }: ResultProps) {
+function Result({ subject, onClick, onMouseOver }: ResultProps) {
   const resource = useResource(subject);
   const [title] = useTitle(resource);
   const [[classType]] = useArray(resource, core.properties.isA);
 
   const Icon = getIconForClass(classType);
 
-  const handleClick = useCallback(() => {
-    onClick(subject);
-  }, [subject]);
-
   return (
-    <ResultButton onClick={handleClick} tabIndex={-1}>
+    <ResultButton onClick={onClick} onMouseOver={onMouseOver} tabIndex={-1}>
       <Icon />
       {title}
     </ResultButton>
@@ -292,16 +298,9 @@ const ResultButton = styled.button`
   border: none;
   color: currentColor;
   cursor: pointer;
+  color: ${p => p.theme.colors.text};
   padding: 0.3rem;
   border-radius: ${p => p.theme.radius};
-  &:hover {
-    background: ${p => p.theme.colors.main};
-    color: white;
-
-    svg {
-      color: white;
-    }
-  }
 
   svg {
     color: ${p => p.theme.colors.textLight};

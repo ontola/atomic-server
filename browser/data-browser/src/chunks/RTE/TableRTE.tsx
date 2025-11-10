@@ -1,4 +1,5 @@
 import { AtomicLink } from '@components/AtomicLink';
+import { HideInPrint } from '@components/HideInPrint';
 import { useResource, type DataBrowser } from '@tomic/react';
 import { TableResource } from '@views/TablePage/TableResource';
 import { FaArrowUpRightFromSquare } from 'react-icons/fa6';
@@ -12,19 +13,16 @@ export const TableRTE: React.FC<TableRTEProps> = ({ subject }) => {
   const resource = useResource<DataBrowser.Table>(subject);
 
   return (
-    <Wrapper>
-      <TableResource resource={resource} />
-      <TableTitle subject={resource.subject}>
-        {resource.title} <FaArrowUpRightFromSquare size={'0.9rem'} />
-      </TableTitle>
-    </Wrapper>
+    <HideInPrint>
+      <div>
+        <TableResource resource={resource} />
+        <TableTitle subject={resource.subject}>
+          {resource.title} <FaArrowUpRightFromSquare size={'0.9rem'} />
+        </TableTitle>
+      </div>
+    </HideInPrint>
   );
 };
-
-const Wrapper = styled.div`
-  width: 1100px;
-  margin-left: -150px;
-`;
 
 const TableTitle = styled(AtomicLink)`
   display: flex;

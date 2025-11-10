@@ -1,6 +1,5 @@
 import { styled } from 'styled-components';
-import * as RadixPopover from '@radix-ui/react-popover';
-import { Popover } from '../../../components/Popover';
+import { CustomPopover } from '@components/CustomPopover';
 
 export const AbsoluteCell = styled.div`
   position: absolute;
@@ -17,14 +16,18 @@ export const AbsoluteCell = styled.div`
   padding-inline: var(--table-inner-padding);
   padding-block: 3px;
   min-height: 40px;
+  overflow: hidden;
 `;
 
-export const SearchPopover = styled(Popover)`
-  padding: 1rem;
+export const SearchPopover = styled(CustomPopover)`
   border: 1px solid ${p => p.theme.colors.bg2};
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
+  background-color: ${p => p.theme.colors.bg};
+  ${CustomPopover.Content} {
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
 `;
 
 export const SearchResultWrapper = styled.div`
@@ -41,17 +44,17 @@ export const SearchResultWrapper = styled.div`
   li {
     list-style: none;
     &[data-selected='true'] button {
-      background: ${p => p.theme.colors.main};
-      color: white;
+      background: ${p => p.theme.colors.mainSelectedBg};
+      color: ${p => p.theme.colors.mainSelectedFg};
 
       svg {
-        color: white;
+        color: ${p => p.theme.colors.mainSelectedFg};
       }
     }
   }
 `;
 
-export const PopoverTrigger = styled(RadixPopover.Trigger)`
+export const PopoverTrigger = styled.button`
   border: none;
   background: none;
   color: ${p => p.theme.colors.main};

@@ -41,10 +41,14 @@ export default function AsyncMarkdownEditor({
 }: AsyncMarkdownEditorProps): React.JSX.Element {
   const containerRef = usePopoverContainer();
 
+  /* eslint-disable-next-line react-hooks/refs */
   const container = containerRef.current ?? document.body;
 
+  /* eslint-disable-next-line react-hooks/refs */
   const [extensions] = useState(() => [
-    StarterKit,
+    StarterKit.configure({
+      link: false,
+    }),
     Markdown,
     Typography,
     Link.configure({
