@@ -66,6 +66,10 @@ export function getResource<T extends OptionalClass = never>(
       resource = proxyResource(resource.__internalObject);
     });
 
+    const unsubLoading = resource.on(ResourceEvents.LoadingChange, () => {
+      resource = proxyResource(resource.__internalObject);
+    });
+
     const unsubRemote = store.subscribe(subject, r => {
       resource = proxyResource(r);
     });
@@ -73,6 +77,7 @@ export function getResource<T extends OptionalClass = never>(
     return () => {
       unsubLocal();
       unsubRemote();
+      unsubLoading();
     };
   });
 
