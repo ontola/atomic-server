@@ -31,6 +31,25 @@ import { hexToBytes, bytesToHex } from './value.js';
 const REQUEST_TIMEOUT = 10000;
 const WS_PROTOCOL = 'atomicdata-ws.v2';
 
+// Optional perf-profiler hook. The data-browser app installs an object
+// at `window.__atomicProfiler` that aggregates render + event counts;
+// when it's present we feed WS frame traffic through it. Reverse-lookup
+// of the Tag enum is cached so the hot path is just two property reads.
+const TAG_NAMES: Record<number, string> = (() => {
+  const out: Record<number, string> = {};
+  for (const [name, value] of Object.entries(Tag)) {
+    out[value as number] = name;
+  }
+  return out;
+})();
+function tagName(tag: number): string {
+  return TAG_NAMES[tag] ?? `0x${tag.toString(16)}`;
+}
+function profilerTick(name: string, payload?: unknown): void {
+  const w = (globalThis as { __atomicProfiler?: { tick: (n: string, p?: unknown) => void } });
+  w.__atomicProfiler?.tick(name, payload);
+}
+
 /**
  * Render one WS frame to the console as a collapsible group:
  *
@@ -372,6 +391,8 @@ export class WSClient {
       logFrame(frame, '→', '#9bf');
     }
 
+    if (frame.length > 0) profilerTick(`ws.out.${tagName(frame[0])}`, frame.length);
+
     this.ws.send(frame);
   }
 
@@ -417,6 +438,8 @@ export class WSClient {
 
     const tag = data[0];
     const payload = data.subarray(1);
+
+    profilerTick(`ws.in.${tagName(tag)}`, data.length);
 
     switch (tag) {
       case Tag.AUTH_OK:
