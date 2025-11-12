@@ -4,4 +4,5 @@ export interface ViewProps {
   subResources: Map<string, Resource>;
   onNewClick: () => void;
   showNewButton: boolean;
+  basic?: boolean;
 }

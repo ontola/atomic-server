@@ -34,3 +34,7 @@ data-browser/coverage
 **/tomic-svelte-**.tgz
 **/tomic-cli-**.tgz
 **/tomic-create-template-**.tgz
+
+data-browser/src/locales/.wuchale
+data-browser/src/locales/data.js
+
