@@ -819,21 +819,24 @@ export class Resource<C extends OptionalClass = any> {
         this._cacheDirty = false;
         this.markLoroSaved();
       } else {
-        // No local Loro doc — just take the incoming state
-        this._cache = structuredClone(resourceB._cache);
-        this._auxValues = new Map(
-          structuredClone(Array.from(resourceB._auxValues.entries())),
-        );
+        // No local Loro doc — just take the incoming state. `resourceB` is
+        // discarded after merge (the store keeps `this`), so we can take
+        // ownership of its cache and auxValues directly instead of paying
+        // a `structuredClone` deep copy on every WS UPDATE. The shallow
+        // Map copy keeps callers from accidentally mutating the source's
+        // entries, which is the only invariant `structuredClone` was
+        // protecting here.
+        this._cache = resourceB._cache;
+        this._auxValues = new Map(resourceB._auxValues);
         this._loroSnapshotBytes = resourceB._loroSnapshotBytes;
       }
     } else {
       // No Loro state on the incoming resource — use plain cache replacement.
       // Don't touch the local Loro doc (if any) — incoming has no Loro data
-      // to contribute, so local Loro state should be preserved.
-      this._cache = structuredClone(resourceB._cache);
-      this._auxValues = new Map(
-        structuredClone(Array.from(resourceB._auxValues.entries())),
-      );
+      // to contribute, so local Loro state should be preserved. Same
+      // ownership-transfer rationale as the branch above.
+      this._cache = resourceB._cache;
+      this._auxValues = new Map(resourceB._auxValues);
     }
 
     this.new = resourceB.new;
