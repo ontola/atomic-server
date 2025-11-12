@@ -1,5 +1,6 @@
 import {
   defineConfig,
+  globalIgnores,
 } from 'eslint/config';
 import tseslint from '@typescript-eslint/eslint-plugin';
 import tsparser from '@typescript-eslint/parser';
@@ -11,6 +12,10 @@ import js from "@eslint/js";
 import globals from 'globals';
 
 export default defineConfig([
+  globalIgnores([
+    // These files are generated so we can't fix the linting errors in them.
+    'data-browser/src/locales/**',
+  ]),
   {
     ...jsxA11Y.flatConfigs.recommended,
     rules: {
@@ -99,5 +104,5 @@ export default defineConfig([
       'react-hooks/exhaustive-deps': 'warn',
       'react-hooks/static-components': 'off',
     }
-  },
+  }
 ]);

@@ -56,7 +56,7 @@ export function useResource<C extends OptionalClass = never>(
   );
   const unsubLoadingChangeRef = useRef(
     resource.on(ResourceEvents.LoadingChange, () => {
-      setResource(proxyResource(resource.__internalObject));
+      setResource(proxyResource(resource.stable));
     }),
   );
 
@@ -78,12 +78,12 @@ export function useResource<C extends OptionalClass = never>(
   }, [store, subject, memoizedOpts]);
 
   useEffect(() => {
-    return resource.__internalObject.on(ResourceEvents.LocalChange, prop => {
+    return resource.stable.on(ResourceEvents.LocalChange, prop => {
       if (track === undefined || track.includes(prop)) {
-        setResource(proxyResource(resource.__internalObject));
+        setResource(proxyResource(resource.stable));
       }
     });
-  }, [resource.__internalObject, track]);
+  }, [resource.stable, track]);
 
   // Update the proxy when the resource is done loading.
   useEffect(() => {
@@ -91,10 +91,10 @@ export function useResource<C extends OptionalClass = never>(
       unsubLoadingChangeRef.current();
     }
 
-    return resource.__internalObject.on(ResourceEvents.LoadingChange, () => {
-      setResource(proxyResource(resource.__internalObject));
+    return resource.stable.on(ResourceEvents.LoadingChange, () => {
+      setResource(proxyResource(resource.stable));
     });
-  }, [resource.__internalObject]);
+  }, [resource.stable]);
 
   return resource;
 }

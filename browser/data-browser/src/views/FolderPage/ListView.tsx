@@ -1,5 +1,6 @@
 import {
-  properties,
+  commits,
+  core,
   Resource,
   useResource,
   useString,
@@ -20,6 +21,7 @@ export function ListView({
   subResources,
   onNewClick,
   showNewButton,
+  basic,
 }: ViewProps): JSX.Element {
   return (
     <Wrapper>
@@ -31,7 +33,7 @@ export function ListView({
                 <TitleHeaderWrapper>Title</TitleHeaderWrapper>
               </th>
               <ClassCell as='th'>Class</ClassCell>
-              <AlignRight as='th'>Last Modified</AlignRight>
+              {!basic && <AlignRight as='th'>Last Modified</AlignRight>}
             </tr>
           </thead>
           <tbody>
@@ -43,9 +45,11 @@ export function ListView({
                 <ClassCell>
                   <ClassType resource={resource} />
                 </ClassCell>
-                <AlignRight>
-                  <LastCommit resource={resource} />
-                </AlignRight>
+                {!basic && (
+                  <AlignRight>
+                    <LastCommit resource={resource} />
+                  </AlignRight>
+                )}
               </TableRow>
             ))}
           </tbody>
@@ -68,7 +72,7 @@ interface CellProps {
 
 function Title({ resource }: CellProps): JSX.Element {
   const [title] = useTitle(resource);
-  const [classType] = useString(resource, properties.isA);
+  const [classType] = useString(resource, core.properties.isA);
   const Icon = getIconForClass(classType ?? '');
 
   return (
@@ -82,7 +86,7 @@ function Title({ resource }: CellProps): JSX.Element {
 }
 
 function LastCommit({ resource }: CellProps): JSX.Element {
-  const [commit] = useString(resource, properties.commit.lastCommit);
+  const [commit] = useString(resource, commits.properties.lastCommit);
 
   return (
     <LinkWrapper>
@@ -92,7 +96,7 @@ function LastCommit({ resource }: CellProps): JSX.Element {
 }
 
 function ClassType({ resource }: CellProps): JSX.Element {
-  const [classType] = useString(resource, properties.isA);
+  const [classType] = useString(resource, core.properties.isA);
   const classTypeResource = useResource(classType);
   const [title] = useTitle(classTypeResource);
 
@@ -111,8 +115,8 @@ const Wrapper = styled.div`
   --icon-width: 1rem;
   --icon-title-spacing: 1rem;
   --cell-padding: 0.4rem;
-  width: var(--container-width);
-  margin-inline: auto;
+  /* width: var(--container-width); */
+  /* margin-inline: auto; */
 `;
 
 const StyledTable = styled.table`
