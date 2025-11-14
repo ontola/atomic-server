@@ -44,7 +44,9 @@ export default defineConfig([
     rules: {
       ...js.configs.recommended.rules,
       ...tseslint.configs.recommended.rules,
+      'no-undef': 'off',
       'no-unused-vars': 'off',
+      'no-redeclare': 'off',
       '@typescript-eslint/no-unused-vars': ['error', { 'varsIgnorePattern': '^_', 'argsIgnorePattern': '^_', "caughtErrorsIgnorePattern": "^_|^e$" }],
       '@typescript-eslint/no-explicit-any': 'error',
       'no-shadow': 'off',
@@ -102,7 +104,10 @@ export default defineConfig([
       ...reactHooks.configs.flat['recommended-latest'].rules,
       'react-hooks/preserve-manual-memoization': 'warn',
       'react-hooks/exhaustive-deps': 'warn',
+      'react-hooks/set-state-in-effect': 'warn',
       'react-hooks/static-components': 'off',
+      // This rule is way to aggressive and seems to be designed for people that don't understand refs.
+      'react-hooks/refs': 'off',
     }
   }
 ]);

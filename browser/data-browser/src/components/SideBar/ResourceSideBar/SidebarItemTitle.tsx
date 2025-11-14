@@ -123,8 +123,8 @@ const StyledIconButton = styled(IconButton)`
 
 const ActionWrapper = styled.div<{ isDragging?: boolean }>`
   --aw-box-shadow-start: 0 0 0 0px rgba(0, 0, 0, 0.1);
-  --aw-box-shadow-end: 0 0 0 1px ${p => p.theme.colors.main},
-    ${p => p.theme.boxShadowSoft};
+  --aw-box-shadow-end:
+    0 0 0 1px ${p => p.theme.colors.main}, ${p => p.theme.boxShadowSoft};
 
   display: flex;
   width: 100%;

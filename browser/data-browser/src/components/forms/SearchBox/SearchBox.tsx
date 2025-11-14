@@ -116,7 +116,7 @@ export function SearchBox({
       handleExit(false);
       removeCachedSearchResults(store);
     },
-    [inputValue, onChange, handleExit, store],
+    [onChange, handleExit, store],
   );
 
   const handleTriggerFocus = () => {

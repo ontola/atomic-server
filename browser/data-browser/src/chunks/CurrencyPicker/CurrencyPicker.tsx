@@ -35,7 +35,7 @@ const CurrencyPicker: FC<CurrencyPickerProps> = ({ resource }) => {
     }
 
     // We only want to run this effect once. Maybe we should find a better way to do this.
-    // eslint-disable-next-line react-hooks/react-compiler, react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (

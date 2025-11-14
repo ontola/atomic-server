@@ -208,9 +208,9 @@ const toUrl = (
 ) => {
   const url = new URL(base);
   const queryParams = new URLSearchParams();
-  format && queryParams.set('f', format);
-  width && queryParams.set('w', width.toString());
-  quality && queryParams.set('q', quality.toString());
+  if (format) queryParams.set('f', format);
+  if (width) queryParams.set('w', width.toString());
+  if (quality) queryParams.set('q', quality.toString());
   url.search = queryParams.toString();
 
   return url.toString();

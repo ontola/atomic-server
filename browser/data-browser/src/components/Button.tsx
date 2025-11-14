@@ -43,7 +43,6 @@ const getButtonComp = ({ clean, icon, subtle, alert }: ButtonProps) => {
   }
 
   if (clean) {
-    // @ts-ignore
     Comp = ButtonClean;
   }
 
@@ -131,7 +130,6 @@ interface ButtonBarProps {
 }
 
 /** Button inside the navigation bar */
-// eslint-disable-next-line prettier/prettier
 export const ButtonBar = styled(ButtonClean)<ButtonBarProps>`
   padding-right: 0.5rem;
   padding-left: 0.5rem;
@@ -157,7 +155,6 @@ export const ButtonBar = styled(ButtonClean)<ButtonBarProps>`
 `;
 
 /** Button with some optional margins around it */
-// eslint-disable-next-line prettier/prettier
 export const ButtonDefault = styled(ButtonBase)<ButtonPropsStyled>`
   --button-bg-color: ${p => p.theme.colors.main};
   --button-bg-color-hover: ${p => p.theme.colors.mainLight};

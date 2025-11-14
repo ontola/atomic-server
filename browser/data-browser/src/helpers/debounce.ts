@@ -1,4 +1,4 @@
-// eslint-disable-next-line @typescript-eslint/ban-types
+// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
 const debounceMap = new Map<Function, number>();
 
 /**
@@ -9,7 +9,7 @@ const debounceMap = new Map<Function, number>();
  * @param fn The function to debounce
  * @param delay The delay in milliseconds (defaults to 500)
  */
-// eslint-disable-next-line @typescript-eslint/ban-types
+// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
 export function debounce<T extends Function>(fn: T, delay = 500): T {
   const debouncedFn = (...args: unknown[]) => {
     const debounceId = debounceMap.get(fn);

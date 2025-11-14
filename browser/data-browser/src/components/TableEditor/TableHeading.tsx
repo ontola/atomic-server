@@ -51,11 +51,13 @@ export function TableHeading<T>({
     setIsDragging(isDragging);
   }, [isDragging]);
 
-  const setRef = useCallback((node: HTMLDivElement) => {
-    setNodeRef(node);
-    // @ts-ignore
-    targetRef.current = node;
-  }, []);
+  const setRef = useCallback(
+    (node: HTMLDivElement) => {
+      setNodeRef(node);
+      targetRef.current = node;
+    },
+    [setNodeRef],
+  );
 
   return (
     <TableHeadingWrapper
