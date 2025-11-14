@@ -139,15 +139,13 @@ const InnerDialog: React.FC<React.PropsWithChildren<InternalDialogProps>> = ({
 
     if (show) {
       if (!dialogRef.current.hasAttribute('open'))
-        // @ts-ignore
         dialogRef.current.showModal();
     }
 
     if (dialogRef.current.hasAttribute('data-closing')) {
       // TODO: Use getAnimations() api to wait for the animations to complete instead of a timeout.
       return timeoutEffect(() => {
-        // @ts-ignore
-        dialogRef.current.close();
+        dialogRef.current?.close();
         dialogRef.current?.removeAttribute('data-closing');
         onClosed();
       }, ANIM_MS);

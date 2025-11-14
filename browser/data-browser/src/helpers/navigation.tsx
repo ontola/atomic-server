@@ -58,8 +58,14 @@ export function newURL(
   const navTo = new URL(location.origin);
   navTo.pathname = paths.new;
   navTo.searchParams.append(newURLParams.classSubject, classUrl);
-  parentURL && navTo.searchParams.append(newURLParams.parent, parentURL);
-  subject && navTo.searchParams.append(newURLParams.newSubject, subject);
+
+  if (parentURL) {
+    navTo.searchParams.append(newURLParams.parent, parentURL);
+  }
+
+  if (subject) {
+    navTo.searchParams.append(newURLParams.newSubject, subject);
+  }
 
   return paths.new + navTo.search;
 }

@@ -36,7 +36,7 @@ export function ResourceInline({
   const resource = useResource(subject, { allowIncomplete: true });
   const [isA] = useArray(resource, core.properties.isA);
 
-  const Comp = basic ? DefaultInline : classMap.get(isA[0]) ?? DefaultInline;
+  const Comp = basic ? DefaultInline : (classMap.get(isA[0]) ?? DefaultInline);
 
   if (!subject) {
     return <ErrorLook>No subject passed</ErrorLook>;

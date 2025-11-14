@@ -39,7 +39,7 @@ export default function InputNumber({
         const newVal = +e.target.value;
         validateDatatype(newVal, property.datatype);
         setValue(newVal);
-      } catch (er) {
+      } catch (_err) {
         setError('Invalid Number');
       }
     }

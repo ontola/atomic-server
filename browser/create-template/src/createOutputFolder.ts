@@ -17,7 +17,7 @@ export async function createOutputFolder(outputDir: string): Promise<void> {
 
   try {
     fs.mkdirSync(outputDir);
-  } catch (error) {
+  } catch (e) {
     console.error(`Failed to create directory: ${outputDir}`);
     process.exit(1);
   }

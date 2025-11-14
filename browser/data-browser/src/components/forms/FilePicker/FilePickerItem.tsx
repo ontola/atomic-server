@@ -65,10 +65,10 @@ const ItemWrapper = styled.button`
   border: none;
   padding: 0;
   background-color: transparent;
-  --shadow: 0px 0.7px 1.3px rgba(0, 0, 0, 0.06),
-    0px 1.8px 3.2px rgba(0, 0, 0, 0.043), 0px 3.4px 6px rgba(0, 0, 0, 0.036),
-    0px 6px 10.7px rgba(0, 0, 0, 0.03), 0px 11.3px 20.1px rgba(0, 0, 0, 0.024),
-    0px 27px 48px rgba(0, 0, 0, 0.017);
+  --shadow:
+    0px 0.7px 1.3px rgba(0, 0, 0, 0.06), 0px 1.8px 3.2px rgba(0, 0, 0, 0.043),
+    0px 3.4px 6px rgba(0, 0, 0, 0.036), 0px 6px 10.7px rgba(0, 0, 0, 0.03),
+    0px 11.3px 20.1px rgba(0, 0, 0, 0.024), 0px 27px 48px rgba(0, 0, 0, 0.017);
   --interaction-shadow: 0px 0px 0px 0px ${p => p.theme.colors.main};
   --card-banner-height: 0px;
   display: flex;

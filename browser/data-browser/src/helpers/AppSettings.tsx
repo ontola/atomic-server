@@ -66,8 +66,14 @@ export const AppSettingsContextProvider = (
     (newAgent: Agent | undefined) => {
       try {
         setAgent(newAgent);
-        newAgent?.subject && toast.success('Signed in!');
-        newAgent === undefined && toast.success('Signed out.');
+
+        if (newAgent?.subject) {
+          toast.success('Signed in!');
+        }
+
+        if (newAgent === undefined) {
+          toast.success('Signed out.');
+        }
       } catch (e) {
         errorHandler(new Error('Agent setting failed: ' + e.message));
       }

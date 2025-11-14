@@ -95,7 +95,10 @@ export function ResourceForm({
   const onSaveSuccess = useCallback(() => {
     // We need to read the earlier .new state, because the resource is no
     // longer new after it was saved, during this callback
-    wasNew && store.notifyResourceManuallyCreated(resource);
+    if (wasNew) {
+      store.notifyResourceManuallyCreated(resource);
+    }
+
     onSave?.();
     navigate(constructOpenURL(resource.subject));
   }, [resource, store, wasNew, onSave, navigate]);

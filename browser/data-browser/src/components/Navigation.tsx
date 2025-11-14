@@ -87,7 +87,7 @@ function NavBar(): JSX.Element {
   const isInStandaloneMode = React.useMemo<boolean>(
     () =>
       machesStandalone ||
-      //@ts-ignore
+      // @ts-expect-error standalone is available on the navigator object.
       window.navigator.standalone ||
       document.referrer.includes('android-app://') ||
       isRunningInTauri(),

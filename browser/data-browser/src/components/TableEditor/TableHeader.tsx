@@ -54,9 +54,6 @@ export function TableHeader<T>({
     (event: DragStartEvent) => {
       const key = columns.map(columnToKey).indexOf(event.active.id as string);
       setActiveIndex(key);
-
-      // Bug in react-compiler linter
-      // eslint-disable-next-line react-hooks/react-compiler
       document.body.style.cursor = 'grabbing';
     },
     [columns, columnToKey],

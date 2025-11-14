@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type JSX } from 'react';
+import { useCallback, useMemo, useState, type JSX } from 'react';
 import { useResource, Version } from '@tomic/react';
 
 import { ContainerNarrow } from '../../components/Containers';
@@ -19,6 +19,7 @@ import { Main } from '../../components/Main';
 import { pathNames } from '../paths';
 import { appRoute } from '../RootRoutes';
 import { createRoute } from '@tanstack/react-router';
+import { useOnValueChange } from '@helpers/useOnValueChange';
 
 export const HistoryRoute = createRoute({
   path: pathNames.history,
@@ -39,7 +40,7 @@ function History(): JSX.Element {
     [key: string]: Version[];
   } = useMemo(() => groupVersionsByMonth(versions), [versions]);
 
-  useEffect(() => {
+  useOnValueChange(() => {
     if (versions.length > 0) {
       setSelectedVersion(versions[versions.length - 1]);
     }
