@@ -94,8 +94,16 @@ export function useResource<C extends OptionalClass = never>(
     });
   }, [resource.stable, track]);
 
-  // Update the proxy when the resource is done loading.
+  // Update the proxy when the resource is done loading. `loading` only
+  // ever transitions from true → false in the resource lifecycle, so we
+  // can skip attaching the listener once the resource is already
+  // loaded — which is the overwhelmingly common case (cache hit, OPFS
+  // hydration done before mount). This shaves one event-manager
+  // subscription per `useResource` call where we're not actually
+  // waiting on anything.
   useEffect(() => {
+    if (!resource.stable.loading) return;
+
     return resource.stable.on(ResourceEvents.LoadingChange, () => {
       setResource(proxyResource(resource.stable));
     });
