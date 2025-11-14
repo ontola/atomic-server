@@ -240,11 +240,13 @@ Useful patterns:
 | B5 | drop `structuredClone` in `merge` no-Loro path | ✅ `e89c9da3` |
 | B6 | `Promise.all` `getMemberWithIndex` | ✅ `e89c9da3` |
 | B7 | echo-detection on SUB pushes | ✅ `e89c9da3` |
-| B2 | Set-indexed members + early-bail in `applyResourceChange` | ⏳ next |
-| B8 | memoise `Resource.title` (or fold into B1) | ⏳ next |
-| B1 | replace `proxyResource` with `useSyncExternalStore` | ⏳ biggest |
-| B3 | incremental `rebuildCacheFromLoro` via Loro container events | ⏳ |
-| B4 | folds into B1 | ⏳ |
+| B2 | subject→page index + early-bail in `applyResourceChange` | ✅ `d8ca1f39` |
+| Bonus | drop OPFS `putResource` verification round-trip | ✅ `0fe9113a` |
+| Bonus | skip `LoadingChange` listener for already-loaded resources | ✅ `43704c6c` |
+| B8 | memoise `Resource.title` | ⏭ skipped — only 1 hashmap lookup in the common case (`name` set), not on the hot path |
+| B1 | replace `proxyResource` with `useSyncExternalStore` | ⏸ deferred — every component touching `useValue` depends on `resource !== prevResource` to detect updates; pulling the proxy out without refactoring `useValue`/`useTitle` to subscribe per-property would silently freeze them. The cheaper wins above remove most of the proxy's per-update cost. |
+| B3 | incremental `rebuildCacheFromLoro` via Loro container events | ⏸ deferred — Loro emits events on the next microtask, so the existing rebuild-after-import is needed for correctness; gain would be limited to the `merge`/`importLoroUpdate` hot path. Profile the suite once the round above lands and revisit. |
+| B4 | folds into B1 | partial — `LoadingChange` listener now skipped when not needed |
 
 Measure before/after each step with the profiler. The first three
 should already produce a visible improvement on commit-burst flows
