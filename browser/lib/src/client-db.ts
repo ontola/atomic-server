@@ -316,6 +316,24 @@ export class ClientDbWorker {
     return (r as string | null) ?? null;
   }
 
+  /**
+   * Combined cold-load fetch: returns both the resource's JSON-AD and
+   * its Loro snapshot in a single worker round-trip. Halves the
+   * postMessage traffic for the cold-load path (every mounted
+   * `useResource` calls `fetchResourceWithLocalFallback`, which used to
+   * do two sequential `await`s here).
+   */
+  async getResourceWithSnapshot(
+    subject: string,
+  ): Promise<{ jsonAd: string | null; snapshot: Uint8Array | null }> {
+    const r = (await this.send({
+      type: 'getResourceWithSnapshot',
+      subject,
+    })) as { jsonAd: string | null; snapshot: Uint8Array | null } | null;
+
+    return r ?? { jsonAd: null, snapshot: null };
+  }
+
   async putResource(jsonAd: string): Promise<void> {
     await this.send({ type: 'putResource', jsonAd });
   }
