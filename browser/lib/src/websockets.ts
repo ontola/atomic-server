@@ -46,7 +46,9 @@ function tagName(tag: number): string {
   return TAG_NAMES[tag] ?? `0x${tag.toString(16)}`;
 }
 function profilerTick(name: string, payload?: unknown): void {
-  const w = (globalThis as { __atomicProfiler?: { tick: (n: string, p?: unknown) => void } });
+  const w = globalThis as {
+    __atomicProfiler?: { tick: (n: string, p?: unknown) => void };
+  };
   w.__atomicProfiler?.tick(name, payload);
 }
 
@@ -391,7 +393,8 @@ export class WSClient {
       logFrame(frame, '→', '#9bf');
     }
 
-    if (frame.length > 0) profilerTick(`ws.out.${tagName(frame[0])}`, frame.length);
+    if (frame.length > 0)
+      profilerTick(`ws.out.${tagName(frame[0])}`, frame.length);
 
     this.ws.send(frame);
   }

@@ -17,6 +17,7 @@ export type WorkerRequest =
   | { id: number; type: 'getResource'; subject: string }
   | { id: number; type: 'getResourceWithSnapshot'; subject: string }
   | { id: number; type: 'putResource'; jsonAd: string }
+  | { id: number; type: 'putResources'; jsonAds: string[] }
   | { id: number; type: 'applyCommit'; commitJsonAd: string }
   | { id: number; type: 'removeResource'; subject: string }
   | {
@@ -87,6 +88,22 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
     case 'putResource': {
       await ensureInit();
       await db!.putResource(msg.jsonAd);
+
+      return;
+    }
+
+    case 'putResources': {
+      // Batch put: each individual `putResource` call costs one
+      // postMessage round-trip. The startup seed loop in the data-
+      // browser writes ~200 resources right after the WASM init —
+      // batching them into one message saves ~200 postMessages of
+      // overhead. The worker still processes them in order, so any
+      // ordering-sensitive caller (properties seeded before others)
+      // can keep its current sequencing.
+      await ensureInit();
+      for (const jsonAd of msg.jsonAds) {
+        await db!.putResource(jsonAd);
+      }
 
       return;
     }
