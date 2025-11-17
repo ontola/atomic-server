@@ -41,7 +41,6 @@ const storedIsValid =
     storedServerUrl.startsWith('https://') ||
     storedServerUrl.startsWith('iroh:'));
 const serverUrl = storedIsValid ? storedServerUrl! : defaultServerUrl;
-const initalAgent = await getAgentFromIDB();
 
 // Loro CRDT must be initialized BEFORE the Store opens its WebSocket. The
 // Store's constructor (`new Store(...)`) wires up `setServerUrl` →
@@ -57,7 +56,12 @@ const initalAgent = await getAgentFromIDB();
 // `useChildren` / `useCollection` query for a synced parent returns 0
 // hits in the local DB and falls through to a `/query` GET against the
 // server — even though the data was just pushed.
-await enableLoro();
+//
+// Run the IndexedDB agent read and the Loro module import in parallel.
+// The agent fetch and the Loro WASM/JS download don't depend on each
+// other, and on a cold load with a populated cache they can each take
+// ~50–100 ms — sequencing them paid for both in series.
+const [initalAgent] = await Promise.all([getAgentFromIDB(), enableLoro()]);
 
 // Initialize the store
 const store = new Store({
