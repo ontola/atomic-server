@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2025-09-26T12:18:27.636Z\n"
-"PO-Revision-Date: 2025-11-12T12:53:58.901Z\n"
+"PO-Revision-Date: 2025-11-18T09:35:24.168Z\n"
 "Last-Translator: \n"
 "Language: en\n"
 "Language-Team: \n"
@@ -684,10 +684,6 @@ msgstr "This URL will be used as the default Parent for imported resources."
 #: src/views/ImporterPage.tsx
 msgid "Importing..."
 msgstr "Importing..."
-
-#: src/views/ImporterPage.tsx
-msgid "Send JSON"
-msgstr "Send JSON"
 
 #. placeholder {0}: name
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
@@ -1644,6 +1640,7 @@ msgid "Show the history of this resource"
 msgstr "Show the history of this resource"
 
 #: src/components/ResourceContextMenu/index.tsx
+#: src/views/ImporterPage.tsx
 msgid "Import"
 msgstr "Import"
 
@@ -1833,6 +1830,7 @@ msgstr "Open menu ({0})"
 #: src/components/ComboBox.tsx
 #: src/views/TablePage/EditorCells/AtomicURLCell.tsx
 #: src/views/TablePage/EditorCells/MultiRelationCell.tsx
+#: src/views/TablePage/EditorCells/SelectCell.tsx
 msgid "No results"
 msgstr "No results"
 
@@ -2023,7 +2021,6 @@ msgid "New tag"
 msgstr "New tag"
 
 #: src/components/Tag/CreateTagRow.tsx
-#: src/views/TablePage/EditorCells/SelectCell.tsx
 #: src/views/TablePage/EditorCells/SelectCell.tsx
 msgid "Add tag"
 msgstr "Add tag"
@@ -3087,3 +3084,7 @@ msgstr ""
 #: src/chunks/RTE/CollaborativeEditor.tsx
 msgid "Untitled Agent"
 msgstr "Untitled Agent"
+
+#: src/chunks/RTE/CollaborativeEditor.tsx
+msgid "Rich Text Editor"
+msgstr "Rich Text Editor"

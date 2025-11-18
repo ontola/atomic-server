@@ -17,6 +17,7 @@ import {
   base64StringToFilter,
   filterToBase64String,
 } from '../../routes/Search/searchUtils';
+import { addFieldsIf } from '@helpers/addIf';
 
 function addTagsToFilter(
   base64Filter: string | undefined,
@@ -52,10 +53,10 @@ export function Searchbar(): JSX.Element {
         to: paths.search,
         search: prev => ({
           query: q,
-          ...(scope ? { queryscope: scope } : {}),
-          ...(tags.length > 0
-            ? { filters: addTagsToFilter(prev.filters, tags) }
-            : {}),
+          ...addFieldsIf(!!scope, { queryscope: scope }),
+          ...addFieldsIf(tags.length > 0, {
+            filters: addTagsToFilter(prev.filters, tags),
+          }),
         }),
         replace: true,
       });

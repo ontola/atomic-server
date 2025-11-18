@@ -278,10 +278,18 @@ export async function newResource(klass: string, page: Page) {
 }
 
 /** Opens a new browser page (for) */
-export async function openNewSubjectWindow(browser: Browser, url: string) {
+export async function openNewSubjectWindow(
+  browser: Browser,
+  url: string,
+  doSignIn: boolean = false,
+) {
   const context2 = await browser.newContext();
   const page = await context2.newPage();
   await page.goto(FRONTEND_URL);
+
+  if (doSignIn) {
+    await signIn(page);
+  }
 
   // Only when we run on `localhost` we don't need to change drive during tests
   if (SERVER_URL !== FRONTEND_URL) {

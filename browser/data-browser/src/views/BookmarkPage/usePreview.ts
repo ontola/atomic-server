@@ -124,11 +124,15 @@ export function usePreview(resource: Resource): UsePreviewReturnType {
     );
   };
 
-  useOnValueChange(() => {
-    if (resource.isReady() && preview === undefined && url) {
-      update(url);
-    }
-  }, [preview, resource.isReady(), url]);
+  useOnValueChange(
+    () => {
+      if (resource.isReady() && preview === undefined && url) {
+        update(url);
+      }
+    },
+    [preview, resource.isReady(), url],
+    true,
+  );
 
   return { preview, error, update, loading };
 }

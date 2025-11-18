@@ -31,8 +31,6 @@ import {
   waitForCommitOnCurrentResource,
   clickSidebarItem,
   inDialog,
-  PROPERTIES,
-  anyValue,
 } from './test-utils';
 
 test.describe('data-browser', async () => {
@@ -72,6 +70,11 @@ test.describe('data-browser', async () => {
   });
 
   test('sign up and edit document atomicdata.dev', async ({ page }) => {
+    test.fixme(
+      true,
+      'This test needs to be updated when atomicdata.dev has the new document editor.',
+    );
+
     await openAtomic(page);
     // Use invite
     await clickSidebarItem(DEMO_INVITE_NAME, page);
@@ -469,11 +472,11 @@ test.describe('data-browser', async () => {
       'https://atomicdata.dev/properties/localId': localID,
       'https://atomicdata.dev/properties/name': name,
     };
-    await page.fill(
-      '[placeholder="Paste your JSON-AD..."]',
-      JSON.stringify(importStr),
-    );
-    await page.click('[data-test="import-post"]');
+    await expect(page.getByRole('button', { name: 'Import' })).toBeDisabled();
+    await page
+      .getByPlaceholder('Paste your JSON-AD...')
+      .pressSequentially(JSON.stringify(importStr));
+    await page.getByRole('button', { name: 'Import' }).click();
     await expect(page.locator('text=Imported!')).toBeVisible();
 
     // get current url, append the localID
@@ -542,16 +545,8 @@ test.describe('data-browser', async () => {
     //   },
     // });
 
-    // commit for initializing the first element (paragraph)
-    const addParagraphCommit = waitForCommit(page, {
-      set: {
-        ['https://atomicdata.dev/properties/documents/elements']: anyValue,
-      },
-    });
     // Create new class from new resource menu
     await newResource('document', page);
-
-    await addParagraphCommit;
 
     const firstTitleCommit = waitForCommit(page, {
       set: {

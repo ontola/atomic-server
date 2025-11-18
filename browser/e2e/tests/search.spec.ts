@@ -2,7 +2,6 @@ import { test, expect } from '@playwright/test';
 import {
   signIn,
   newDrive,
-  waitForCommit,
   before,
   REBUILD_INDEX_TIME,
   addressBar,
@@ -13,7 +12,6 @@ import {
   contextMenuClick,
   timestamp,
   newResource,
-  anyValue,
 } from './test-utils';
 test.describe('search', async () => {
   test.beforeEach(before);
@@ -45,14 +43,8 @@ test.describe('search', async () => {
     await setTitle(page, 'Salad folder');
 
     // Create document called 'Avocado Salad'
-    const addParagraphCommit = waitForCommit(page, {
-      set: {
-        ['https://atomicdata.dev/properties/documents/elements']: anyValue,
-      },
-    });
     await page.locator('button:has-text("New Resource")').click();
     await page.locator('button:has-text("document")').click();
-    await addParagraphCommit;
 
     await editTitle('Avocado Salad', page);
 
@@ -63,15 +55,8 @@ test.describe('search', async () => {
     await setTitle(page, 'Cake Folder');
 
     // Create document called 'Avocado Cake'
-
-    const addParagraphCommit2 = waitForCommit(page, {
-      set: {
-        ['https://atomicdata.dev/properties/documents/elements']: anyValue,
-      },
-    });
     await page.locator('button:has-text("New Resource")').click();
     await page.locator('button:has-text("document")').click();
-    await addParagraphCommit2;
 
     await editTitle('Avocado Cake', page);
 
