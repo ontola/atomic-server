@@ -260,6 +260,43 @@ with deep folder trees.
 
 ---
 
+## Regression detection — benchmarks
+
+`browser/lib/src/perf-hot-paths.bench.ts` covers the hot paths
+documented above. Run with:
+
+```sh
+cd browser/lib
+pnpm bench
+```
+
+Each suite targets one bottleneck. Compare *factor* changes — runner
+variance makes single-percent drift meaningless. If a bench suddenly
+runs 2× slower, look at the row in the rollout table that mentions the
+same path and check it hasn't been undone.
+
+Approximate baselines on an M1 Mac laptop (Node 22, vitest 2.1, May 2026):
+
+| Bench | hz (ops/sec) | Bottleneck it tracks |
+|-------|--------------|----------------------|
+| `Resource.get(name)` cache hit | ~34M | B8 — per-render reads |
+| `Resource.title` falls through to `.name` | ~35M | B8 |
+| `Resource.loading` already-loaded | ~42M | B4 — per-render checks |
+| `Resource.merge` rebuild cache | ~12M | B3 — Loro cache rebuild |
+| `addResource` same lastCommit (gated) | ~1.9M | B7 — gate keeps notify off |
+| `addResource` skipCommitCompare:true (forced) | ~1.0M | base WS UPDATE cost |
+| `addResource → notify` with 50 subscribers | ~470K | B1 / fan-out |
+| `applyResourceChange` unrelated (fast bail) | ~31M | B2 — index lookup |
+| `applyResourceChange` member match | ~29M | B2 — Set bail vs page scan |
+| `proxyResource()` Proxy alloc | ~29M | B1 |
+
+The bench file is auto-excluded from `vitest run` (test files and
+bench files share the directory but vitest only runs benches in `bench`
+mode), so unit-test CI is unaffected. Benches aren't currently wired
+into CI — runner variance is too high for a hard gate — but the
+script is one command and worth running locally before merging perf-
+adjacent changes.
+
 ## Out of scope / not bottlenecks
 
 - **Loro WASM init cost** — happens once per session, irrelevant after.
