@@ -27,31 +27,54 @@ test.describe('documents', async () => {
 
     const teststring = `My test: ${timestamp()}`;
 
-    await page.locator('textarea').fill(teststring);
+    await expect(page.getByText('loading...')).not.toBeVisible();
 
-    await expect(page.locator(`text=${teststring}`)).toBeVisible();
+    const editor = page.getByLabel('Rich Text Editor');
+
+    await editor.fill('/heading');
+    await expect(page.getByText('Heading 1')).toBeVisible();
+    await page.keyboard.press('Enter');
+    await page.keyboard.type(teststring);
+
+    await expect(
+      page.getByRole('heading', { name: teststring, exact: true }),
+    ).toBeVisible();
 
     // multi-user
     const currentSubject = await getCurrentSubject(page);
-    const page2 = await openNewSubjectWindow(browser, currentSubject!);
+    const page2 = await openNewSubjectWindow(browser, currentSubject!, true);
+
+    await expect(page2.getByText('loading...')).not.toBeVisible();
     await expect(
-      page2.locator(`text=${teststring}`),
+      page2.getByRole('heading', { name: teststring, exact: true }),
       'First paragraph title not visible in second tab. Not a websocket issue',
     ).toBeVisible();
     expect(await page2.title()).toEqual(title);
 
+    await page2.getByLabel('Rich Text Editor').focus();
+    await page2.keyboard.press('ArrowDown');
     // Add a new line on first page, check if it appears on the second
-    await page.keyboard.press('Enter');
     const syncText = 'New paragraph';
-    await page.keyboard.type(syncText);
+    await page2.keyboard.type(syncText);
+
     await expect(
-      page2.locator(`text=${syncText}`),
-      'New paragraph not found in second window. Websockets may not be working.',
+      page.locator(`text=${syncText}`),
+      'New paragraph not found in first window. Websockets may not be working.',
     ).toBeVisible();
 
     // Delete a row, cmd + backspace
-    await page.keyboard.down('Alt');
-    await page.keyboard.press('Backspace');
+    await page2.getByText(syncText).selectText();
+
+    // Test if page1 can see the cursor of page2
+    await expect(
+      page.getByLabel('Rich Text Editor').getByText('Test user edited'),
+    ).toBeVisible();
+
+    // Delete the word paragraph.
+    await page2.keyboard.press('ArrowRight');
+    await page2.keyboard.down('Alt');
+    await page2.keyboard.press('Backspace');
+
     await expect(
       page.locator(`text=${syncText}`),
       'Paragraph not deleted in first window.',

@@ -34,7 +34,7 @@ import { Row } from '../../../components/Row';
 import { Checkbox } from '../../../components/forms/Checkbox';
 import { ResourceCell } from './ResourceCells/ResourceCell';
 import { AtomicLink } from '../../../components/AtomicLink';
-import type { TriggerProps } from '@components/CustomPopover';
+import { usePopover } from '@components/CustomPopover';
 import { CELL_WIDTH } from '@components/TableEditor/Cell';
 
 const useClassType = (subject: string) => {
@@ -54,10 +54,13 @@ function MultiRelationCellEdit({
   onChange,
   property,
 }: EditCellProps<JSONValue>): JSX.Element {
+  const inputRef = useRef<HTMLInputElement>(null);
   const val = Array.isArray(value) ? value : [];
-
   const { classType, hasClassType } = useClassType(property);
-  const [open, setOpen] = useState(true);
+  const { isOpen, triggerProps, popoverProps } = usePopover({
+    defaultOpen: true,
+    autoFocusElement: inputRef,
+  });
   const { activeCellRef } = useTableEditorContext();
   const selectedElement = useRef<HTMLLIElement>(null);
 
@@ -67,7 +70,7 @@ function MultiRelationCellEdit({
     KeyboardInteraction.EditNextRow,
   ]);
 
-  if (open) {
+  if (isOpen) {
     disabledKeyboardInteractions.add(KeyboardInteraction.ExitEditMode);
   }
 
@@ -96,37 +99,31 @@ function MultiRelationCellEdit({
     onChange(val.filter(v => v !== subject));
   };
 
-  const handleOpenChange = (state: boolean) => {
-    setOpen(state);
-  };
-
-  const { results, selectedIndex, handleKeyDown, onMouseOver, onClick } =
-    useResourceSearch(
-      searchValue,
-      hasClassType ? classType.subject : undefined,
-      setOpen,
-      handleResultClick,
-    );
-
-  const Trigger = (props: TriggerProps) => {
-    return (
-      <IconButton title='Add resource' {...props}>
-        <FaPlus />
-      </IconButton>
-    );
-  };
+  const {
+    results,
+    selectedIndex,
+    handleKeyDown,
+    onMouseOver,
+    onClick,
+    usingKeyboard,
+  } = useResourceSearch(
+    searchValue,
+    hasClassType ? classType.subject : undefined,
+    handleResultClick,
+    val as string[],
+  );
 
   useEffect(() => {
-    if (!open) {
+    if (!isOpen) {
       activeCellRef.current?.focus();
     }
-  }, [open, activeCellRef]);
+  }, [isOpen, activeCellRef]);
 
   useEffect(() => {
-    if (selectedElement.current) {
+    if (selectedElement.current && usingKeyboard) {
       selectedElement.current.scrollIntoView({ block: 'nearest' });
     }
-  }, [selectedIndex]);
+  }, [selectedIndex, usingKeyboard]);
 
   const placehoder = hasClassType ? `Search ${classType.title}` : 'Search...';
 
@@ -136,19 +133,14 @@ function MultiRelationCellEdit({
   return (
     <AbsoluteCell>
       <Row wrapItems gap='1ch'>
-        {(val as string[])?.map(subject => (
-          <ResourceItemButton
-            subject={subject}
-            key={subject}
-            onRemove={handleRemoveItem}
-          />
-        ))}
         <SearchPopover
-          modal
-          Trigger={Trigger}
-          open={open}
-          onOpenChange={handleOpenChange}
           noLock
+          Trigger={
+            <IconButton title='Add resource' {...triggerProps}>
+              <FaPlus />
+            </IconButton>
+          }
+          {...popoverProps}
         >
           <InputWrapper>
             <InputStyled
@@ -157,6 +149,7 @@ function MultiRelationCellEdit({
               placeholder={placehoder}
               onChange={handleChange}
               onKeyDown={handleKeyDown}
+              ref={inputRef}
             />
           </InputWrapper>
           <SearchResultWrapper>
@@ -181,6 +174,13 @@ function MultiRelationCellEdit({
             {showNoResults && 'No results'}
           </SearchResultWrapper>
         </SearchPopover>
+        {(val as string[])?.map(subject => (
+          <ResourceItemButton
+            subject={subject}
+            key={subject}
+            onRemove={handleRemoveItem}
+          />
+        ))}
       </Row>
     </AbsoluteCell>
   );

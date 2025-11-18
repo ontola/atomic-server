@@ -6,8 +6,8 @@ import { useSelectedIndex } from '@hooks/useSelectedIndex';
 export function useResourceSearch(
   searchValue: string,
   classType: string | undefined,
-  setOpen: (state: boolean) => void,
   onResultPick: (result: string) => void,
+  valuesWhenEmpty: string[] = [],
 ) {
   const { drive } = useSettings();
 
@@ -21,15 +21,18 @@ export function useResourceSearch(
   );
   const { results } = useServerSearch(searchValue, searchOpts);
 
-  const { selectedIndex, onKeyDown, onMouseOver, onClick } = useSelectedIndex(
-    results,
-    i => {
-      if (i === undefined) return;
+  const list =
+    !searchValue && valuesWhenEmpty !== undefined ? valuesWhenEmpty : results;
+  const { selectedIndex, onKeyDown, onMouseOver, onClick, usingKeyboard } =
+    useSelectedIndex(
+      list,
+      i => {
+        if (i === undefined) return;
 
-      onResultPick(results[i]);
-    },
-    { initialIndex: 0, key: searchValue },
-  );
+        onResultPick(list[i]);
+      },
+      { initialIndex: 0, key: searchValue },
+    );
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
       if (e.key === 'Tab') {
@@ -47,10 +50,11 @@ export function useResourceSearch(
   );
 
   return {
-    results,
+    results: list,
     selectedIndex,
     handleKeyDown,
     onMouseOver,
     onClick,
+    usingKeyboard,
   };
 }

@@ -1,5 +1,5 @@
 import { Resource, useResource, useStore } from '@tomic/react';
-import { useCallback, useId, useState } from 'react';
+import { useCallback, useId, useMemo, useState } from 'react';
 import { Button } from '../components/Button.jsx';
 import { ContainerNarrow } from '../components/Containers';
 import Field from '../components/forms/Field.jsx';
@@ -13,6 +13,7 @@ import { Column } from '../components/Row';
 import { useCurrentSubject } from '../helpers/useCurrentSubject';
 import { Title } from '../components/Title';
 import toast from 'react-hot-toast';
+import { Main } from '@components/Main';
 
 type ImporterPageProps = {
   resource?: Resource;
@@ -47,68 +48,72 @@ export function ImporterPage({ resource }: ImporterPageProps) {
     }
   }, [parent, jsonAd, overwriteOutside, store]);
 
+  const disableImportButton = useMemo(
+    () => !parent || !jsonAd,
+    [parent, jsonAd],
+  );
+
   return (
-    <ContainerNarrow>
-      <Title resource={resource} prefix='Import to' link />
-      <p>
-        Read more about how importing Atomic Data works{' '}
-        <a href='https://docs.atomicdata.dev/create-json-ad.html'>
-          in the docs
-        </a>
-        .
-      </p>
-      <Column>
-        <Field label='JSON-AD'>
-          <InputWrapper>
-            <TextAreaStyled
-              // disabled={!!url}
-              rows={15}
-              placeholder='Paste your JSON-AD...'
-              value={jsonAd}
-              onChange={e => setJsonAd(e.target.value)}
-            >
-              {jsonAd}
-            </TextAreaStyled>
-          </InputWrapper>
-        </Field>
-        <Header>Options</Header>
-        <Group>
-          <Label>
-            <input
-              type='checkbox'
-              checked={overwriteOutside}
-              onChange={e => setOverwriteOutside(e.target.checked)}
-            />
-            {`Overwrite resources that are outside the scope of the parent. Do this only if you trust the imported data.`}
-          </Label>
-          <Field
-            label='Target parent'
-            helper='This URL will be used as the default Parent for imported resources.'
-            required
-            fieldId={parentFieldId}
-          >
+    <Main>
+      <ContainerNarrow>
+        <Title resource={resource} prefix='Import to' link />
+        <p>
+          Read more about how importing Atomic Data works{' '}
+          <a href='https://docs.atomicdata.dev/create-json-ad.html'>
+            in the docs
+          </a>
+          .
+        </p>
+        <Column>
+          <Field label='JSON-AD'>
             <InputWrapper>
-              <InputStyled
-                id={parentFieldId}
-                required
-                placeholder='Enter subject'
-                value={parent}
-                onChange={e => setParent(e.target.value)}
-              />
+              <TextAreaStyled
+                rows={15}
+                placeholder='Paste your JSON-AD...'
+                value={jsonAd}
+                onChange={e => setJsonAd(e.target.value)}
+              >
+                {jsonAd}
+              </TextAreaStyled>
             </InputWrapper>
           </Field>
-        </Group>
-        {jsonAd !== '' && (
+          <Header>Options</Header>
+          <Group>
+            <Label>
+              <input
+                type='checkbox'
+                checked={overwriteOutside}
+                onChange={e => setOverwriteOutside(e.target.checked)}
+              />
+              {`Overwrite resources that are outside the scope of the parent. Do this only if you trust the imported data.`}
+            </Label>
+            <Field
+              label='Target parent'
+              helper='This URL will be used as the default Parent for imported resources.'
+              required
+              fieldId={parentFieldId}
+            >
+              <InputWrapper>
+                <InputStyled
+                  id={parentFieldId}
+                  required
+                  placeholder='Enter subject'
+                  value={parent}
+                  onChange={e => setParent(e.target.value)}
+                />
+              </InputWrapper>
+            </Field>
+          </Group>
           <Button
             data-test='import-post'
-            disabled={!parent}
+            disabled={disableImportButton}
             onClick={handleImport}
           >
-            {isImporting ? 'Importing...' : 'Send JSON'}
+            {isImporting ? 'Importing...' : 'Import'}
           </Button>
-        )}
-      </Column>
-    </ContainerNarrow>
+        </Column>
+      </ContainerNarrow>
+    </Main>
   );
 }
 

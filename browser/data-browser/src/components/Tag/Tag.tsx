@@ -104,7 +104,7 @@ export function TagButton({
       e.stopPropagation();
       onClick(subject);
     },
-    [onClick],
+    [onClick, subject],
   );
 
   const className = selected ? 'selected-tag' : '';
@@ -171,7 +171,7 @@ const TagWrapperButton = styled(TagWrapper)`
   cursor: pointer;
   user-select: none;
 
-  transition: ${transition('filter', 'box-shadow')};
+  transition: ${transition('filter', 'box-shadow', 'transform')};
   animation: ${fadeIn} 0.2s ease-in-out;
   &:hover,
   &:focus,
@@ -179,6 +179,7 @@ const TagWrapperButton = styled(TagWrapper)`
     --shadow-color: ${({ theme }) =>
       theme.darkMode ? 'var(--dark-color)' : 'var(--light-color)'};
     filter: brightness(1.05);
+    transform: scale(1.1);
     box-shadow: 0 1px 20px 0px var(--shadow-color);
   }
 `;

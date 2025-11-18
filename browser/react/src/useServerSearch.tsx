@@ -1,7 +1,8 @@
 import { removeCachedSearchResults, SearchOpts } from '@tomic/lib';
-import { useEffect, useState } from 'react';
+import { useEffect, useEffectEvent, useState } from 'react';
 import { useStore } from './index.js';
 import { useDebounce } from './useDebounce.js';
+import { useOnValueChange } from './helpers/useOnValueChange.js';
 
 interface SearchResults {
   /** Subject URLs for resources that match the query */
@@ -34,16 +35,28 @@ export function useServerSearch(
   const [error, setError] = useState<Error | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const debouncedQuery = useDebounce(query, debounce) ?? '';
-  const [prevDebounedQuery, setPrevDebounedQuery] = useState(debouncedQuery);
 
-  if (prevDebounedQuery !== debouncedQuery) {
-    setPrevDebounedQuery(debouncedQuery);
-    setLoading(true);
+  useOnValueChange(() => {
+    if (debouncedQuery) {
+      setLoading(true);
+    }
 
     if (!debouncedQuery && !allowEmptyQuery) {
       setResults([]);
+      setLoading(false);
     }
-  }
+  }, [debouncedQuery, allowEmptyQuery]);
+
+  const updateResults = useEffectEvent(
+    (r: string[], relevantQuery: string, relevantOpts: SearchOpts) => {
+      // If the query became empty since the last fetch, don't update the results
+      if (relevantQuery !== debouncedQuery || relevantOpts !== searchOpts) {
+        return;
+      }
+
+      setResults(r);
+    },
+  );
 
   useEffect(() => {
     if (!debouncedQuery && !allowEmptyQuery) {
@@ -53,7 +66,7 @@ export function useServerSearch(
     store
       .search(debouncedQuery, searchOpts)
       .then(r => {
-        setResults(r);
+        updateResults(r, debouncedQuery, searchOpts);
         setError(undefined);
       })
       .catch(e => {

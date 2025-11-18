@@ -46,7 +46,6 @@ export const DocumentV2FullPage: React.FC<ResourcePageProps> = ({
         </HideInPrint>
         <Suspense fallback={<div>Loading...</div>}>
           <CollaborativeEditor
-            autoFocus
             resource={resource}
             doc={doc}
             property={dataBrowser.properties.documentContent}

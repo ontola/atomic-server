@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2025-09-26T10:06:11.465Z\n"
-"PO-Revision-Date: 2025-11-12T12:53:58.907Z\n"
+"PO-Revision-Date: 2025-11-18T09:35:24.191Z\n"
 "Last-Translator: \n"
 "Language: fr\n"
 "Language-Team: \n"
@@ -49,6 +49,7 @@ msgstr "Annuler"
 #: src/components/ComboBox.tsx
 #: src/views/TablePage/EditorCells/AtomicURLCell.tsx
 #: src/views/TablePage/EditorCells/MultiRelationCell.tsx
+#: src/views/TablePage/EditorCells/SelectCell.tsx
 msgid "No results"
 msgstr "Aucun résultat"
 
@@ -1101,10 +1102,6 @@ msgstr "Cette URL sera utilisée comme parent par défaut pour les ressources im
 msgid "Importing..."
 msgstr "Importation..."
 
-#: src/views/ImporterPage.tsx
-msgid "Send JSON"
-msgstr "Envoyer JSON"
-
 #: src/chunks/EmojiInput/EmojiInput.tsx
 msgid "Pick an emoji"
 msgstr "Choisissez un emoji"
@@ -1417,6 +1414,7 @@ msgid "Show the history of this resource"
 msgstr "Afficher l'historique de cette ressource"
 
 #: src/components/ResourceContextMenu/index.tsx
+#: src/views/ImporterPage.tsx
 msgid "Import"
 msgstr "Importer"
 
@@ -1644,7 +1642,6 @@ msgid "New tag"
 msgstr "Nouvelle étiquette"
 
 #: src/components/Tag/CreateTagRow.tsx
-#: src/views/TablePage/EditorCells/SelectCell.tsx
 #: src/views/TablePage/EditorCells/SelectCell.tsx
 msgid "Add tag"
 msgstr "Ajouter une étiquette"
@@ -3076,3 +3073,7 @@ msgstr ""
 #: src/chunks/RTE/CollaborativeEditor.tsx
 msgid "Untitled Agent"
 msgstr "Agent sans titre"
+
+#: src/chunks/RTE/CollaborativeEditor.tsx
+msgid "Rich Text Editor"
+msgstr "Éditeur de texte enrichi"

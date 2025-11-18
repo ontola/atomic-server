@@ -6,6 +6,7 @@ import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import styled from 'styled-components';
 import { effectFetch } from '../helpers/effectFetch';
 import { useAISettings } from '@components/AI/AISettingsContext';
+import { Main } from '@components/Main';
 
 export type LinkOpenRouterSearch = {
   code: string;
@@ -77,12 +78,14 @@ function LinkOpenRouterPage() {
   }
 
   return (
-    <Center>
-      <div>
-        <h1>Linking OpenRouter</h1>
-        <p>Please wait while we link your OpenRouter account...</p>
-      </div>
-    </Center>
+    <Main>
+      <Center>
+        <div>
+          <h1>Linking OpenRouter</h1>
+          <p>Please wait while we link your OpenRouter account...</p>
+        </div>
+      </Center>
+    </Main>
   );
 }
 
