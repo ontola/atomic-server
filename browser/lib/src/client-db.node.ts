@@ -91,6 +91,25 @@ export class NodeClientDb {
     }
   }
 
+  /** Mirror of {@link ClientDbWorker.isInitialized}. */
+  get isInitialized(): boolean {
+    return this.ready;
+  }
+
+  /** Mirror of {@link ClientDbWorker.waitForInit}. The store uses this on
+   *  the cold-load path so it doesn't block on the bootstrap seed. */
+  async waitForInit(): Promise<boolean> {
+    if (this.ready) return true;
+    if (!this.initPromise) return false;
+    try {
+      await this.initPromise;
+
+      return this.ready;
+    } catch {
+      return false;
+    }
+  }
+
   destroy(): void {
     this.db?.free?.();
     this.db = null;
