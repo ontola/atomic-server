@@ -3,7 +3,6 @@ import { test, expect, Page } from '@playwright/test';
 import {
   DIALOG_CLOSE_BUTTON,
   FRONTEND_URL,
-  REBUILD_INDEX_TIME,
   before,
   fillSearchBox,
   inDialog,
@@ -13,6 +12,7 @@ import {
   signIn,
   testFilePath,
   waitForCommit,
+  waitForSearchIndex,
 } from './test-utils';
 
 const ONTOLOGY_NAME = 'filepicker-test';
@@ -102,7 +102,7 @@ test.describe('File Picker', () => {
     await createModel(page);
 
     // The new resource page relies on the search API to show ontology class buttons. If the prossess of creating the ontology took less than 5 seconds it will not appear on the new resource page.
-    await page.waitForTimeout(REBUILD_INDEX_TIME);
+    await waitForSearchIndex(page);
 
     {
       // Test selecting an existing file.

@@ -6,7 +6,6 @@ import {
   transitionName,
 } from '../helpers/transitionName';
 import { ViewTransitionProps } from '../helpers/ViewTransitionProps';
-import { MAIN_CONTAINER } from '../helpers/containers';
 import Parent from './Parent';
 import { useResource } from '@tomic/react';
 import { CalculatedPageHeight } from '../globalCssVars';
@@ -35,7 +34,6 @@ export function Main({
 }
 
 const StyledMain = memo(styled.main<ViewTransitionProps>`
-  container: ${MAIN_CONTAINER} / inline-size;
   ${p => transitionName(RESOURCE_PAGE_TRANSITION_TAG, p.subject)};
   height: calc(
     ${CalculatedPageHeight.var()} - ${p => p.theme.heights.breadCrumbBar}
@@ -45,7 +43,7 @@ const StyledMain = memo(styled.main<ViewTransitionProps>`
     ${p => p.theme.heights.breadCrumbBar} + ${p => p.theme.size(2)}
   );
 
-  width: 100%;
+  width: 100cqw;
 
   @media (prefers-reduced-motion: no-preference) {
     scroll-behavior: smooth;

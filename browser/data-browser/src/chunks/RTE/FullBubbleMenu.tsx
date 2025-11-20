@@ -12,7 +12,6 @@ import { useEditorState } from '@tiptap/react';
 import { ToggleButton } from './ToggleButton';
 import { useState } from 'react';
 import { ColorMenu } from './ColorMenu';
-import { flushSync } from 'react-dom';
 
 export const FullBubbleMenu: React.FC = () => {
   const editor = useTipTapEditor();
@@ -55,12 +54,8 @@ export const FullBubbleMenu: React.FC = () => {
     <BubbleMenu
       extraItems={<>{colorMenuOpen && <ColorMenu />}</>}
       onShow={() => {
-        flushSync(() => {
-          const style = editor.getAttributes('textStyle');
-          setColorMenuOpen(!!style.color || !!style.backgroundColor);
-
-          editor.commands.setMeta('bubbleMenu', 'updatePosition');
-        });
+        const style = editor.getAttributes('textStyle');
+        setColorMenuOpen(!!style.color || !!style.backgroundColor);
       }}
     >
       <Separator />

@@ -115,8 +115,6 @@ const Wrapper = styled.div`
   --icon-width: 1rem;
   --icon-title-spacing: 1rem;
   --cell-padding: 0.4rem;
-  /* width: var(--container-width); */
-  /* margin-inline: auto; */
 `;
 
 const StyledTable = styled.table`
