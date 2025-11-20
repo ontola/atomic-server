@@ -34,31 +34,28 @@ function Parent({ resource }: ParentProps): JSX.Element {
 
   return (
     <ParentWrapper aria-label='Breadcrumbs'>
-      <Row fullWidth center gap='initial'>
-        {parent ? (
-          <NestedParent subject={parent} depth={0} />
-        ) : (
-          <DriveMismatch subject={resource.subject} />
-        )}
+      {!parent && <DriveMismatch subject={resource.subject} />}
+      <BreadcrumbRow center gap='initial'>
+        {parent && <NestedParent subject={parent} depth={0} />}
         <BreadCrumbCurrent>{resource.title}</BreadCrumbCurrent>
-        <Spacer />
-        <ButtonArea>
-          {enableAI && (
-            <IconButton
-              title='Toggle AI panel'
-              variant={IconButtonVariant.Magic}
-              onClick={() => setIsOpen(prev => !prev)}
-            >
-              <AIIcon />
-            </IconButton>
-          )}
-          <ResourceContextMenu
-            isMainMenu
-            subject={resource.subject}
-            trigger={MenuBarDropdownTrigger}
-          />
-        </ButtonArea>
-      </Row>
+      </BreadcrumbRow>
+      <Spacer />
+      <ButtonArea>
+        {enableAI && (
+          <IconButton
+            title='Toggle AI panel'
+            variant={IconButtonVariant.Magic}
+            onClick={() => setIsOpen(prev => !prev)}
+          >
+            <AIIcon />
+          </IconButton>
+        )}
+        <ResourceContextMenu
+          isMainMenu
+          subject={resource.subject}
+          trigger={MenuBarDropdownTrigger}
+        />
+      </ButtonArea>
     </ParentWrapper>
   );
 }
@@ -159,7 +156,7 @@ const BreadCrumbBase = css`
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 50ch;
+  min-width: 0;
 `;
 
 const BreadCrumbCurrent = styled.span`
@@ -169,7 +166,7 @@ const BreadCrumbCurrent = styled.span`
 const Breadcrumb = styled.a`
   ${BreadCrumbBase}
   align-self: center;
-  cursor: 'pointer';
+  cursor: pointer;
   text-decoration: none;
   border-radius: ${p => p.theme.radius};
 
@@ -180,6 +177,16 @@ const Breadcrumb = styled.a`
 
   &:active {
     background: ${p => p.theme.colors.bg2};
+  }
+`;
+
+const BreadcrumbRow = styled(Row)`
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  max-width: 80vw;
+  & > * {
+    min-width: 0;
   }
 `;
 

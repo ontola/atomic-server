@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2025-09-26T10:06:11.465Z\n"
-"PO-Revision-Date: 2025-11-18T09:35:24.191Z\n"
+"PO-Revision-Date: 2025-11-20T14:47:31.121Z\n"
 "Last-Translator: \n"
 "Language: fr\n"
 "Language-Team: \n"
@@ -3077,3 +3077,7 @@ msgstr "Agent sans titre"
 #: src/chunks/RTE/CollaborativeEditor.tsx
 msgid "Rich Text Editor"
 msgstr "Éditeur de texte enrichi"
+
+#: src/views/BookmarkPage/BookmarkPage.tsx
+msgid "Bookmark URL"
+msgstr "URL du signet"

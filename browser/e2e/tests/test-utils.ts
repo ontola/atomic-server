@@ -196,6 +196,10 @@ export async function waitForCommitOnCurrentResource(
   });
 }
 
+export async function waitForSearchIndex(page: Page) {
+  return page.waitForTimeout(REBUILD_INDEX_TIME);
+}
+
 export async function openAgentPage(page: Page) {
   page.goto(`${FRONTEND_URL}/app/agent`);
 }

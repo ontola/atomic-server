@@ -3,7 +3,6 @@ import {
   signIn,
   newDrive,
   before,
-  REBUILD_INDEX_TIME,
   addressBar,
   clickSidebarItem,
   editTitle,
@@ -12,6 +11,7 @@ import {
   contextMenuClick,
   timestamp,
   newResource,
+  waitForSearchIndex,
 } from './test-utils';
 test.describe('search', async () => {
   test.beforeEach(before);
@@ -63,7 +63,7 @@ test.describe('search', async () => {
     await clickSidebarItem('Cake Folder', page);
 
     // Set search scope to 'Cake folder'
-    await page.waitForTimeout(REBUILD_INDEX_TIME);
+    await waitForSearchIndex(page);
     await page.reload();
     await contextMenuClick('scope', page);
     // Search for 'Avocado'
@@ -115,7 +115,7 @@ test.describe('search', async () => {
     await expect(page.getByRole('link', { name: secondTagName })).toBeVisible();
 
     // Wait for the index to be rebuilt
-    await page.waitForTimeout(REBUILD_INDEX_TIME);
+    await waitForSearchIndex(page);
 
     // Search for the folder by the first tag
     await addressBar(page).fill('tag:first');

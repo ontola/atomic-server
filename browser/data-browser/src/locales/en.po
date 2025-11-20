@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2025-09-26T12:18:27.636Z\n"
-"PO-Revision-Date: 2025-11-18T09:35:24.168Z\n"
+"PO-Revision-Date: 2025-11-20T14:47:29.904Z\n"
 "Last-Translator: \n"
 "Language: en\n"
 "Language-Team: \n"
@@ -3088,3 +3088,7 @@ msgstr "Untitled Agent"
 #: src/chunks/RTE/CollaborativeEditor.tsx
 msgid "Rich Text Editor"
 msgstr "Rich Text Editor"
+
+#: src/views/BookmarkPage/BookmarkPage.tsx
+msgid "Bookmark URL"
+msgstr "Bookmark URL"

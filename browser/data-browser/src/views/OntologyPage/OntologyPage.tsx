@@ -177,7 +177,7 @@ const FullPageWrapper = styled.div<{ edit: boolean }>`
   @container (max-width: 600px) {
     grid-template-areas: ${p =>
       p.edit ? `'title' 'list' 'list'` : `'title' 'graph' 'list'`};
-    grid-template-columns: 100vw;
+    grid-template-columns: 100cqw;
 
     ${SidebarSlot} {
       display: none;

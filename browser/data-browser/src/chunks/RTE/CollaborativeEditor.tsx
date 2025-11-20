@@ -159,8 +159,8 @@ export default function CollaborativeEditor({
               title: 'Resource',
               id: 'resource',
               icon: FaLink,
-              command: ({ range }) =>
-                editor
+              command: ({ range, editor: internalEditor }) =>
+                internalEditor
                   .chain()
                   .focus()
                   .deleteRange(range)
@@ -171,11 +171,11 @@ export default function CollaborativeEditor({
               title: 'Data Table',
               id: 'data-table',
               icon: FaTable,
-              command: ({ range }) => {
+              command: ({ range, editor: internalEditor }) => {
                 showNewResourceUI(dataBrowser.classes.table, resource.subject, {
                   skipNavigation: true,
                   onCreated: table => {
-                    editor
+                    internalEditor
                       .chain()
                       .focus()
                       .deleteRange(range)
@@ -255,7 +255,7 @@ export default function CollaborativeEditor({
         },
       },
     },
-    [canWrite],
+    [canWrite, drive],
   );
 
   useEffect(() => {

@@ -10,6 +10,7 @@ import { styled } from 'styled-components';
 import { ScrollArea } from '../../../components/ScrollArea';
 import type { SuggestionItem } from '../types';
 import { useOnValueChange } from '@helpers/useOnValueChange';
+import { Column } from '@components/Row';
 
 export type CommandListRefType = {
   onKeyDown: (event: KeyboardEvent) => boolean;
@@ -82,24 +83,26 @@ export const CommandList = forwardRef<CommandListRefType, CommandListProps>(
     );
 
     return (
-      <ScrollingList type='hover'>
-        {items.length === 0 && <div>No results found</div>}
-        {items.map((item, index) => {
-          const Icon = item.icon;
+      <ScrollingList type='hover' data-testid='rte-command-list'>
+        <ContainedColumn gap='0'>
+          {items.length === 0 && <div>No results found</div>}
+          {items.map((item, index) => {
+            const Icon = item.icon;
 
-          return (
-            <ListItemButton
-              key={item.id}
-              id={buildItemId(compId, index)}
-              onClick={() => selectItem(index)}
-              onMouseEnter={() => setSelectedIndex(index)}
-              active={selectedIndex === index}
-            >
-              <Icon />
-              {item.title}
-            </ListItemButton>
-          );
-        })}
+            return (
+              <ListItemButton
+                key={item.id}
+                id={buildItemId(compId, index)}
+                onClick={() => selectItem(index)}
+                onMouseEnter={() => setSelectedIndex(index)}
+                active={selectedIndex === index}
+              >
+                <Icon />
+                <span>{item.title}</span>
+              </ListItemButton>
+            );
+          })}
+        </ContainedColumn>
       </ScrollingList>
     );
   },
@@ -134,4 +137,19 @@ const ListItemButton = styled.button<{ active: boolean }>`
   gap: 1ch;
   padding: 0.5rem;
   border-radius: ${p => p.theme.radius};
+  max-width: 60ch;
+  overflow: hidden;
+
+  & > svg {
+    min-width: 1rem;
+    flex-basis: 1rem;
+  }
+
+  & > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 `;
+
+const ContainedColumn = styled(Column)``;
