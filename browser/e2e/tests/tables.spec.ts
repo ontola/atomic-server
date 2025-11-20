@@ -25,6 +25,13 @@ test.describe('tables', async () => {
     await expect(input).toBeFocused();
   });
 
+  // FLAKY (dagger CI + remote CI): the long table-fill choreography has
+  // many sub-steps (column dialogs, tag picker, sequential row fills)
+  // and any of them can blow the action budget under dagger contention.
+  // Most-frequent failure: the gridcell Visual→Edit-mode transition
+  // races, leaving the cell-input not focused. Investigate: replace the
+  // double-click pattern with a single-click + explicit Edit-mode
+  // assertion, or use the keyboard-driven flow exclusively.
   test('create and fill', async ({ page }) => {
     test.slow();
 

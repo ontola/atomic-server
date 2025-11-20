@@ -2,6 +2,14 @@ import { test, expect, Browser } from '@playwright/test';
 import { FRONTEND_URL } from './test-utils';
 
 test.describe('onboarding', () => {
+  // FLAKY (remote CI, observed twice): the auto-verify form flow
+  // depends on a 150 ms timer (`GettingStartedFlow useEffect`) and the
+  // cross-context profile-name propagation needs the second context to
+  // pick up the agent + drive over WS within ~10 s. Either step can
+  // miss its budget under contention. Investigate: drop the auto-submit
+  // race by clicking the explicit Continue button + `waitForCommit`,
+  // and gate the second-context assertion on `store.getAgent()` instead
+  // of DOM text.
   test('create new identity with verifySecret flow - profile name persists', async ({
     page,
     browser,

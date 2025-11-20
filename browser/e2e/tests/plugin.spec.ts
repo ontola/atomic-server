@@ -18,6 +18,11 @@ const BIRD =
 test.describe('Plugins', () => {
   test.beforeEach(before);
 
+  // FLAKY (dagger CI + remote CI): plugin install relies on a wasm
+  // upload + commit + plugin-install commit chain; one of the post-
+  // install assertions intermittently times out under dagger CPU load.
+  // Investigate: rerun locally with `--workers=1` and add intermediate
+  // `waitForCommit` poll points so we can see which step is slow.
   test('install a plugin', async ({ page }) => {
     await signIn(page);
     await newDrive(page);
