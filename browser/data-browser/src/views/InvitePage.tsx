@@ -24,6 +24,7 @@ import type { JSX } from 'react';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { useNavState } from '../components/NavState';
 import { toast } from 'react-hot-toast';
+import { getResourcesDrive } from '@helpers/getResourcesDrive';
 
 /** A View that opens an invite */
 function InvitePage({ resource }: ResourcePageProps): JSX.Element {
@@ -32,7 +33,7 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
   const [write] = useBoolean(resource, server.properties.write);
   const navigate = useNavigateWithTransition();
   const navigationType = useNavState();
-  const { agent, setAgent } = useSettings();
+  const { agent, setAgent, setDrive } = useSettings();
   const agentResource = useResource(agent?.subject);
   const [agentTitle] = useTitle(agentResource, 15);
 
@@ -90,8 +91,14 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
         // Refetch the resource now that we have read access.
         store
           .fetchResourceFromServer(redirect.props.destination)
-          .then(() => {
-            navigate(constructOpenURL(redirect.props.destination));
+          .then(target => {
+            // Try to set the current drive to the drive containing the target resource.
+            // Then navigate to the target resource.
+            getResourcesDrive(target, store)
+              .then(setDrive)
+              .finally(() => {
+                navigate(constructOpenURL(redirect.props.destination));
+              });
           })
           .catch(err => {
             console.error(err);

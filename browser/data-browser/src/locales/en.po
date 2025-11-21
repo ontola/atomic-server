@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2025-09-26T12:18:27.636Z\n"
-"PO-Revision-Date: 2025-11-20T14:47:29.904Z\n"
+"PO-Revision-Date: 2025-11-21T12:23:49.305Z\n"
 "Last-Translator: \n"
 "Language: en\n"
 "Language-Team: \n"
@@ -3092,3 +3092,27 @@ msgstr "Rich Text Editor"
 #: src/views/BookmarkPage/BookmarkPage.tsx
 msgid "Bookmark URL"
 msgstr "Bookmark URL"
+
+#. placeholder {0}: ' '
+#: src/chunks/RTE/CollaborativeEditor.tsx
+msgid ""
+"There was an error in the editor, please refresh the page to\n"
+"continue.{0} <0>Refresh</0>"
+msgstr ""
+"There was an error in the editor, please refresh the page to\n"
+"continue.{0} <0>Refresh</0>"
+
+#: src/chunks/RTE/ImagePicker.tsx
+msgid "Failed to load image."
+msgstr "Failed to load image."
+
+#: src/chunks/RTE/CollaborativeEditor.tsx
+msgid "Note"
+msgstr "Note"
+
+#~ msgid "Hallo"
+#~ msgstr "Hallo"
+
+#: src/chunks/RTE/NoteExtention/NoteComponent.tsx
+msgid "<0/> Note"
+msgstr "<0/> Note"

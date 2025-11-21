@@ -24,7 +24,10 @@ export const ResourceComponent = (
   return (
     <RTENodeViewWrapper wide={wide} key={props.node.attrs.subject}>
       <ErrorBoundary>
-        <Component subject={props.node.attrs.subject} />
+        <Component
+          subject={props.node.attrs.subject}
+          highlight={props.selected}
+        />
       </ErrorBoundary>
     </RTENodeViewWrapper>
   );
