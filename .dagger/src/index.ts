@@ -475,6 +475,15 @@ export class AtomicServer {
       .withFile('/code/Cargo.toml', source.file('Cargo.toml'))
       .withFile('/code/Cargo.lock', source.file('Cargo.lock'))
       .withFile('/code/Cross.toml', source.file('Cross.toml'))
+      // Nextest reads `.config/nextest.toml` from the workspace root.
+      // Without this the override that bumps the flaky search test's
+      // retries silently doesn't apply — symptom: dagger reports a hard
+      // FAIL with no `FLAKY` indicator while the same test recovers
+      // locally on retry.
+      .withFile(
+        '/code/.config/nextest.toml',
+        source.file('.config/nextest.toml'),
+      )
       // Cargo validates every workspace member listed in Cargo.toml, so
       // mount all of them — not just the server/lib/cli we actually
       // build.
