@@ -23,7 +23,11 @@ test-group = 'serial'
 # thread can starve when 20+ actix HTTP servers are spinning up). The
 # in-test poll loop already waits 30s; allow more retries on top so a
 # truly unlucky run still has a fallback before the hard fail.
-retries = 5
+# The `{ count, ... }` form is required for the override to actually
+# replace the profile-default `retries`; the bare `retries = 5` form
+# parses but silently inherits the profile default (a longstanding
+# nextest quirk).
+retries = { backoff = "fixed", count = 5, delay = "1s" }
 
 [test-groups]
 serial = { max-threads = 1 }
