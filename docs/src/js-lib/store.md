@@ -24,7 +24,7 @@ const store = new Store({
 });
 ```
 
-> **NOTE** </br>
+> **NOTE** <br/>
 > You can always change or set both the serverUrl and agent at a later time using `store.setServerUrl()` and `store.setAgent()` respectively.
 
 ### One vs Many Stores
@@ -35,7 +35,7 @@ If `store` is used on the server however, you might want to consider creating a 
 
 ## Fetching resources
 
-> **NOTE:** </br>
+> **NOTE:** <br/>
 > If you're using atomic in a frontend library like React or Svelte there might be other ways to fetch resources that are better suited to those libraries. Check [@tomic/react](../usecases/react.md) or [@tomic/svelte](../svelte.md)
 
 Fetching resources is generally done using the `store.getResource()` method.
@@ -194,7 +194,7 @@ The tree does not have to be complete and can contain any property, this way you
 
 ## (Advanced) Fetching resources in render code
 
-> **NOTE:** </br>
+> **NOTE:** <br/>
 > The following is mostly intended for library authors.
 
 When building frontends it is often critical to render as soon as possible, waiting for requests to finish leads to a sluggish UI.

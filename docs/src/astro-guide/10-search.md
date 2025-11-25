@@ -154,7 +154,7 @@ We then add a `<script>` that Astro will add to the head of our HTML.
 In this script, we define the class that handles how to render the `<blog-search>` element.
 At the end of the script, we register the custom element class.
 
-> NOTE: </br>
+> NOTE: <br/>
 > Eventhough the server will most likely keep up with this many requests, lower end devices might not so it's still a good idea to add some kind of debounce to your searchbar.
 
 Now all that's left to do is use the component to the blog page.

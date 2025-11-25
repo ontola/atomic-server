@@ -2,7 +2,7 @@
 
 Let's start with setting up Astro.
 
-> **NOTE:** </br>
+> **NOTE:** <br/>
 > I will use **npm** since that is the standard but you can of course use other package managers like pnpm.
 
 To create an Astro project open your terminal in the folder you'd like to house the projects folder and run the following command:

@@ -28,22 +28,31 @@ const defaultBackgroundColors = defaultColors.map(color =>
 // Add a good highlight color to the first position.
 defaultBackgroundColors[0] = '#e9ff70';
 
+const sanitizeColor = (color: string | undefined) => {
+  if (color === undefined) return;
+
+  // Word sometimes adds `!important` to the color, which breaks the color picker.
+  return color.replace('!important', '').trim();
+};
+
 export const ColorMenu: React.FC = () => {
   const editor = useTipTapEditor();
   const { selectedTextColor, selectedBackgroundColor } = useEditorState({
     editor,
     selector: snapshot => {
       return {
-        selectedTextColor:
+        selectedTextColor: sanitizeColor(
           (snapshot.editor.getAttributes('textStyle').color as
             | string
             | undefined
             | null) || undefined,
-        selectedBackgroundColor:
+        ),
+        selectedBackgroundColor: sanitizeColor(
           (snapshot.editor.getAttributes('textStyle').backgroundColor as
             | string
             | undefined
             | null) || undefined,
+        ),
       };
     },
   });

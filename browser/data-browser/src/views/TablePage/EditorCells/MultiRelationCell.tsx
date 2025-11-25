@@ -280,7 +280,7 @@ const ResultButton = styled.button`
   gap: 0.5rem;
   background: none;
   border: none;
-  color: currentColor;
+  color: ${p => p.theme.colors.textLight};
   cursor: pointer;
   padding: 0.3rem;
   border-radius: ${p => p.theme.radius};

@@ -3,7 +3,7 @@
 Atomic data is strictly typed meaning we need to define the data model first.
 To do this we'll make an ontology.
 
-> **NOTE:** </br>
+> **NOTE:** <br/>
 > You'll likely have some stuff in your atomic data browser sidebar that you won't see in these screenshots. This is because I created a new drive for the purpose of this guide (you can visit the drive yourself to see what the end result will look like [here](https://atomicdata.dev/drive/r4l5tBUX))
 
 To create an ontology click on the plus icon in the top left of the page. From the list of classes pick 'Ontology'.
@@ -19,7 +19,7 @@ For now, we'll give our homepage the required properties: `name`, `heading`, `su
 
 For the name property, we can use the existing atomic property [name](https://atomicdata.dev/properties/name).
 
-> **NOTE:** </br>
+> **NOTE:** <br/>
 > If a class has a title or name that describes the instance, e.g. books and movies have a title and a person has a name, you should always use the existing [name](https://atomicdata.dev/properties/name) property. This makes it more easy to share data between applications and implementations.
 
 Click on the + icon under 'Requires' and type 'name'.

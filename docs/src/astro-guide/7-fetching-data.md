@@ -21,7 +21,7 @@ ATOMIC_HOMEPAGE_SUBJECT=<REPLACE WITH SUBJECT OF THE HOMEPAGE RESOURCE>
 Next, we'll create a folder called `helpers` and in it a file called `getStore.ts`.
 This file will contain a function we can call anywhere in our app to get the global Store instance.
 
-> **NOTE:** </br>
+> **NOTE:** <br/>
 > If you don't like singletons and want to make a different system of passing the store around you can totally do that but for a simple portfolio website there is really no need
 
 ```typescript
@@ -94,7 +94,7 @@ const description = myResource.get(core.properties.description);
 
 This method always works even if the class is not known beforehand.
 
-> **NOTE:** </br>
+> **NOTE:** <br/>
 > Using the `.get()` method is actually a tiny bit faster performance wise since we don't have to construct an object with reverse name to subject mapping on call. For normal use it really won't matter but if you have to read hundreds of props in a loop you should go for `.get()` instead of `.props`.
 
 ## Updating the homepage
