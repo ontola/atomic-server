@@ -67,6 +67,6 @@
     "watch": "tsup --watch",
     "typecheck": "pnpm exec tsc --noEmit",
     "publint": "pnpm dlx publint",
-    "attw": "pnpm exec attw $(pnpm pack)"
+    "attw": "pnpm pack --out tomic-react.tgz && pnpm exec attw tomic-react.tgz"
   }
 }

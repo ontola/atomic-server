@@ -55,11 +55,7 @@ export function getResource<T extends OptionalClass = never>(
   const subject = $derived(subjectGetter() ?? unknownSubject);
 
   const store = getStoreFromContext();
-  let resource = $state(store.getResourceLoading(subject, opts));
-
-  $effect(() => {
-    resource = store.getResourceLoading(subject, opts);
-  });
+  let resource = $derived(store.getResourceLoading(subject, opts));
 
   $effect(() => {
     const unsubLocal = resource.on(ResourceEvents.LocalChange, () => {

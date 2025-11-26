@@ -40,6 +40,6 @@ const PruneTestsRoute: React.FC = () => {
   );
 };
 
-export const pruneTestRouteLazy = createLazyRoute('/$')({
+export const pruneTestRouteLazy = createLazyRoute('/app/prunetests')({
   component: PruneTestsRoute,
 });
