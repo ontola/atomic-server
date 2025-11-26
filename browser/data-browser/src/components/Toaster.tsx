@@ -2,15 +2,16 @@ import toast, {
   type Toast,
   ToastBar,
   Toaster as ReactHotToast,
+  resolveValue,
   type Renderable,
 } from 'react-hot-toast';
 import { FaCopy, FaTimes } from 'react-icons/fa';
-import { useTheme } from 'styled-components';
+import styled, { useTheme } from 'styled-components';
 import { zIndex } from '../styling';
 import { Row } from './Row';
 import { IconButton } from './IconButton/IconButton';
 
-import type { JSX } from 'react';
+import { useRef, type JSX } from 'react';
 
 /**
  * Makes themed toast notifications available in the Context. Render this
@@ -59,31 +60,28 @@ interface ToastMessageProps {
 }
 
 function ToastMessage({ icon, message, t }: ToastMessageProps) {
-  let text: string;
-
-  if (typeof message === 'string') {
-    text = message;
-  } else if (message && 'props' in message) {
-    // children can technically still be a react node but we never do that in our code so we'll just assume it to be a string.
-    text = message.props.children;
-  } else {
-    text = '';
-  }
+  const textRef = useRef<HTMLDivElement>(null);
 
   function handleCopy() {
+    const text = textRef.current?.textContent;
+
+    if (text === undefined) {
+      toast.error('Nothing to copy.');
+
+      return;
+    }
+
     toast.success('Copied error to clipboard');
     navigator.clipboard.writeText(text);
     toast.dismiss(t.id);
   }
 
-  if (text.length > 100) {
-    text = text.substring(0, 100) + '...';
-  }
-
   return (
-    <Row gap='1ch' center>
+    <StyledRow gap='1ch' center>
       {icon}
-      {text}
+      <div ref={textRef} style={{ display: 'contents' }}>
+        {resolveValue(message, t)}
+      </div>
       {t.type !== 'loading' && (
         <div
           style={{
@@ -101,6 +99,11 @@ function ToastMessage({ icon, message, t }: ToastMessageProps) {
           )}
         </div>
       )}
-    </Row>
+    </StyledRow>
   );
 }
+
+const StyledRow = styled(Row)`
+  max-height: 10rem;
+  overflow-y: auto;
+`;

@@ -15,6 +15,6 @@ function Sandbox(): JSX.Element {
   );
 }
 
-export const sandboxRouteLazy = createLazyRoute('/$')({
+export const sandboxRouteLazy = createLazyRoute('/app/sandbox')({
   component: Sandbox,
 });

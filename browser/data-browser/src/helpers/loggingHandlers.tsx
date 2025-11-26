@@ -21,5 +21,6 @@ export function initBugsnag(apiKey: string): BugsnagErrorBoundary {
     autoDetectErrors: !isDev(),
   });
 
+  // @ts-expect-error - BugsnagPluginReact types do not match React 19.2 types.
   return Bugsnag.getPlugin('react')!.createErrorBoundary(React);
 }

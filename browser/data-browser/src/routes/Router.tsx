@@ -22,6 +22,7 @@ import { LinkOpenRouter } from './LinkOpenRouter';
 const PruneTestsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: pathNames.pruneTests,
+  // @ts-expect-error - Mismatch between unavailable route name and prune route name, not sure how to fix this.
 }).lazy(() => {
   if (isDev()) {
     return import('./PruneTestsRoute').then(mod => mod.pruneTestRouteLazy);
@@ -33,6 +34,7 @@ const PruneTestsRoute = createRoute({
 const SandboxRoute = createRoute({
   getParentRoute: () => appRoute,
   path: pathNames.sandbox,
+  // @ts-expect-error - Mismatch between unavailable route name and sandbox route name, not sure how to fix this.
 }).lazy(() => {
   if (isDev()) {
     return import('./Sandbox').then(mod => mod.sandboxRouteLazy);
