@@ -18,7 +18,7 @@
     "@emoji-mart/react": "^1.1.1",
     "@emotion/is-prop-valid": "^1.4.0",
     "@floating-ui/dom": "^1.7.4",
-    "@modelcontextprotocol/sdk": "^1.22.0",
+    "@modelcontextprotocol/sdk": "^1.23.0",
     "@oddbird/css-anchor-positioning": "^0.6.1",
     "@openrouter/ai-sdk-provider": "^1.2.5",
     "@radix-ui/react-popover": "^1.1.15",

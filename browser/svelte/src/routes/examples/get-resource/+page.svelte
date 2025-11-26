@@ -8,5 +8,9 @@
 </script>
 
 <div>
-  <h1>{resource.title}</h1>
+  <h1>{resource.props.name}</h1>
+  <label for="name">
+    Edit name:
+    <input type="text" bind:value={resource.props.name} />
+  </label>
 </div>

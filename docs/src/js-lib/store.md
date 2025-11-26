@@ -24,7 +24,7 @@ const store = new Store({
 });
 ```
 
-> **NOTE** <br/>
+> [!NOTE]
 > You can always change or set both the serverUrl and agent at a later time using `store.setServerUrl()` and `store.setAgent()` respectively.
 
 ### One vs Many Stores
@@ -35,7 +35,7 @@ If `store` is used on the server however, you might want to consider creating a 
 
 ## Fetching resources
 
-> **NOTE:** <br/>
+> [!NOTE]
 > If you're using atomic in a frontend library like React or Svelte there might be other ways to fetch resources that are better suited to those libraries. Check [@tomic/react](../usecases/react.md) or [@tomic/svelte](../svelte.md)
 
 Fetching resources is generally done using the `store.getResource()` method.
@@ -138,9 +138,9 @@ const subject = store.createSubject();
 // With parent subject
 const subject = store.createSubject(parent.subject);
 ```
-
-Keep in mind that subjects never change once they are set, even if the parent changes.
-This means you can't reliably infer the parent from the subject.
+> [!WARNING]
+> Keep in mind that subjects never change once they are set, even if the parent changes.
+> This means you can't reliably infer the parent from the subject.
 
 ## Full-Text Search
 
@@ -192,9 +192,32 @@ await store.preloadResourceTree('https://myapp.com/my-blog-post', {
 
 The tree does not have to be complete and can contain any property, this way you can preload any resource even if you're not sure of what type it might be.
 
+## Events
+
+Store emits a few types of events that your app can listen to.
+
+To listen to these events use the `store.on` method.
+
+```typescript
+import { StoreEvents } from '@tomic/lib';
+
+store.on(StoreEvents.Error, error => {
+  notifyErrorReportingServer(error);
+});
+```
+
+The following events are available
+
+| Event ID                      | Handler type                 | Description                                |
+|-------------------------------|------------------------------|--------------------------------------------|
+| `StoreEvents.ResourceSaved`   | (resource: Resource) => void | Fired when any resource was saved          |
+| `StoreEvents.ResourceRemoved` | (resource: Resource) => void | Fired when any resource was deleted        |
+| `StoreEvents.AgentChanged`    | (agent: Agent) => void       | Fired when a new agent is set on the store |
+| `StoreEvents.Error`           | (error: Error) => void       | Fired when store encounters an error       |
+
 ## (Advanced) Fetching resources in render code
 
-> **NOTE:** <br/>
+> [!WARNING]
 > The following is mostly intended for library authors.
 
 When building frontends it is often critical to render as soon as possible, waiting for requests to finish leads to a sluggish UI.
@@ -220,26 +243,3 @@ function renderSomeComponent(subject: string) {
 ```
 
 For a real-world example check out how we use it inside [@tomic/react useResource hook](https://github.com/atomicdata-dev/atomic-server/blob/ff8abb8503c72ef040cbb3f88fdd6c0318c16051/browser/react/src/hooks.ts#L36)
-
-## Events
-
-Store emits a few types of events that your app can listen to.
-
-To listen to these events use the `store.on` method.
-
-```typescript
-import { StoreEvents } from '@tomic/lib';
-
-store.on(StoreEvents.Error, error => {
-  notifyErrorReportingServer(error);
-});
-```
-
-The following events are available
-
-| Event ID                      | Handler type                 | Description                                |
-|-------------------------------|------------------------------|--------------------------------------------|
-| `StoreEvents.ResourceSaved`   | (resource: Resource) => void | Fired when any resource was saved          |
-| `StoreEvents.ResourceRemoved` | (resource: Resource) => void | Fired when any resource was deleted        |
-| `StoreEvents.AgentChanged`    | (agent: Agent) => void       | Fired when a new agent is set on the store |
-| `StoreEvents.Error`           | (error: Error) => void       | Fired when store encounters an error       |
