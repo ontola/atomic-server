@@ -504,11 +504,13 @@ impl Commit {
             );
         }
         if let Some(y_update) = &self.y_update {
-            let mut newy_update = PropVals::new();
-            for (prop, val) in y_update {
-                newy_update.insert(prop.into(), val.clone());
+            if !y_update.is_empty() {
+                let mut newy_update = PropVals::new();
+                for (prop, val) in y_update {
+                    newy_update.insert(prop.into(), val.clone());
+                }
+                resource.set_unsafe(urls::Y_UPDATE.into(), newy_update.into());
             }
-            resource.set_unsafe(urls::Y_UPDATE.into(), newy_update.into());
         }
         resource.set_unsafe(
             SIGNER.into(),
