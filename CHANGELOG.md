@@ -7,6 +7,7 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- We changed the binary format in which resources are stored. This means your data will be migrated the first time you run the server. This could take some time depending on the size of your database.
 - [#1048](https://github.com/atomicdata-dev/atomic-server/issues/1048) Fix search index not removing old versions of resources.
 - [#1056](https://github.com/atomicdata-dev/atomic-server/issues/1056) Switched from Earthly to Dagger for CI. Also made improvements to E2E test publishing and building docker images.
 - [#979](https://github.com/atomicdata-dev/atomic-server/issues/979) Fix nested resource deletion, use transactions
@@ -16,8 +17,9 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 - [#958](https://github.com/atomicdata-dev/atomic-server/issues/958) Fix search in CLI / atomic_lib
 - [#658](https://github.com/atomicdata-dev/atomic-server/issues/658) Added JSON datatype.
 - [#1024](https://github.com/atomicdata-dev/atomic-server/issues/1024) Added URI datatype.
+- [#998](https://github.com/atomicdata-dev/atomic-server/issues/998) Added YJS datatype.
 BREAKING: [#1107](https://github.com/atomicdata-dev/atomic-server/issues/1107) Named nested resources are no longer supported. Value::Resource and SubResource::Resource have been removed. If you need to include multiple resources in a response use an array.
-BREAKING: `store.get_resource_extended()` now returns a `ResourceResponse` instead of a `Resource` due to the removal of named nested resources.
+BREAKING: `store.get_resource_extended()` now returns a `ResourceResponse` instead of a `Resource` due to the removal of named nested resources. Use `.into()` or `.to_single()` to convert to a `Resource`.
 
 ## [v0.40.2]
 

@@ -13,6 +13,11 @@ import { useResource } from '@tomic/react';
 export const Component = () => {
   const resource = useResource('https://my-atomic-server/my-resource');
 
+  // Show an error message if the resource has an error
+  if (resource.error) {
+    return <ErrorCard error={resource.error} />
+  }
+
   // Optionally show a loading state
   if (resource.loading) {
     return <Loader />
@@ -42,15 +47,15 @@ const age = Date.now() - resource.props.yearOfBirth
 ### Parameters
 
 - **subject**: `string` - The subject of the resource you want to fetch.
-- **options**: `FetchOpts` - (Optional) Options for how the store should fetch the resource.
+- **options**: `UseResourceOptions` - (Optional) Options for how the store should fetch or update the resource.
 
-**FetchOpts**:
+**UseResourceOptions**:
 
 | Name | Type | Description |
 | --- | --- | --- |
-| allowIncomplete | `boolean` | ? |
 | noWebSocket | `boolean` | (Optional) If true, uses HTTP to fetch resources instead of websockets |
 | newResource | `Resource` | (Optional) If true, will not send a request to a server, it will simply create a new local resource.|
+| track | `string[]` | (Optional) By default `useResource` will update the reference of the resource whenever any property changes, both local and remote changes. Sometimes you want to only update the resource when certain properties change, you can use this option to specify which properties to track. Remote changes will still trigger a rerender.|
 
 ### Returns
 
@@ -92,9 +97,7 @@ export const ResourceInline = ({ subject }: ResourceInlineProps): JSX.Element =>
   return <Comp subject={subject} />
 }
 
-const Default = ({ subject }: ResourceInlineViewProps<unknown>) => {
-  const resource = useResource(subject);
-
+const Default = ({ resource }: ResourceInlineViewProps<unknown>) => {
   return <span>{resource.title}</span>
 }
 ```
@@ -109,6 +112,7 @@ import type { Person } from '../../ontologies/social' // <-- Generated with @tom
 import type { ResourceInlineViewProps } from './ResourceInline';
 
 export const PersonInline = ({ resource }: ResourceInlineViewProps<Person>) => {
+  // Get the person's profile picture resource with the useResource hook
   const image = useResource<Server.File>(resource.props.image);
 
   return (
