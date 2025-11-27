@@ -1,4 +1,9 @@
-import { Page, expect, Browser, Locator } from '@playwright/test';
+import { Page, expect, Browser, Locator, TestInfo } from '@playwright/test';
+import {
+  applyCpuThrottle,
+  envCpuThrottle,
+  registerPerfPage,
+} from './perf-attach';
 
 export const PROPERTIES = {
   isA: 'https://atomicdata.dev/properties/isA',
@@ -130,10 +135,27 @@ export const REBUILD_INDEX_TIME = 5000;
  * server and switches to it. Most specs use `test.beforeEach(before)` so every
  * test starts isolated without extra navigation.
  */
-export const before = async ({ page }: { page: Page }): Promise<void> => {
+export const before = async (
+  // Accept the second positional `testInfo` argument so we can stash
+  // the page for `attachPerfOnFailure`. `beforeEach` callbacks in
+  // Playwright receive `(fixtures, testInfo)` — most callers don't
+  // need it, but optional second-arg ergonomics keeps the signature
+  // backwards-compatible for the dozens of specs that already call
+  // `test.beforeEach(before)`.
+  { page }: { page: Page },
+  testInfo?: TestInfo,
+): Promise<void> => {
   if (!SERVER_URL) {
     throw new Error('serverUrl is not set');
   }
+
+  // Optional CPU throttle: simulates dagger's single-core slowdown
+  // locally so flaky tests reproduce on a dev box. No-op when the
+  // env var is unset.
+  const throttle = envCpuThrottle();
+  if (throttle) await applyCpuThrottle(page, throttle);
+
+  if (testInfo) registerPerfPage(testInfo, page);
 
   await devDrive(page);
 };

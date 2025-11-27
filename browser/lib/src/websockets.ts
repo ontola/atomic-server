@@ -24,6 +24,7 @@ import {
 } from './ws-v2.js';
 import { BLOB } from './urls.js';
 import { hexToBytes, bytesToHex } from './value.js';
+import { perfMark, perfSpan } from './perf-trace.js';
 
 // 5s is too tight for a shared atomic-server under suite-wide e2e load
 // (auth race + drive sub + several parallel GETs queue up). Above ~10s, the
@@ -715,24 +716,34 @@ export class WSClient {
   // ---- Private: connection lifecycle ----
 
   private handleOpen() {
+    perfMark('ws.open');
     const agent = this.store.getAgent();
     const drive = this.store.getDrive();
 
     const doSync = async () => {
       try {
-        await this.store
-          .syncDirtyResources()
-          .then(() => this.startVVSync(drive))
-          .catch(() => this.startVVSync(drive));
+        const dirtyClose = perfSpan('ws.syncDirtyResources');
+        try {
+          await this.store.syncDirtyResources();
+        } finally {
+          dirtyClose();
+        }
+        await this.startVVSync(drive);
       } catch {
-        // Non-fatal
+        // Non-fatal — VV sync gets a separate attempt below.
+        await this.startVVSync(drive);
       }
     };
 
     if (agent?.subject) {
+      const authClose = perfSpan('ws.authenticate');
       this.authenticate()
+        .then(() => authClose('ok'))
         .then(doSync)
-        .catch(e => console.error('Auth error:', e));
+        .catch(e => {
+          authClose({ err: String(e) });
+          console.error('Auth error:', e);
+        });
     } else {
       doSync().catch(() => {});
     }
@@ -742,12 +753,16 @@ export class WSClient {
     if (this.readyState !== WebSocket.OPEN) return;
 
     this.store.startDriveSync(drive);
+    const close = perfSpan('ws.computeDriveSyncState');
 
     try {
       const syncState = await this.store.computeDriveSyncState(drive);
+      close({ resourceCount: Object.keys(syncState.resources).length });
       // Still sending as text SYNC_VV — will migrate to binary SYNC later
       this.ws.send('SYNC_VV ' + JSON.stringify(syncState));
+      perfMark('ws.SYNC_VV.sent');
     } catch (e) {
+      close({ err: String(e) });
       console.warn('[WS] VV sync failed:', e);
     }
   }
