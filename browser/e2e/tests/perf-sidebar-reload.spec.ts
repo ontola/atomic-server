@@ -28,23 +28,117 @@ test.describe('perf: sidebar after reload', () => {
   test('create + reload: sidebar item visibility timing', async ({
     page,
   }, testInfo) => {
-    // 1. Create the document so we know it's persisted server-side AND
-    // in OPFS before we reload.
+    // Phase A: click "New Document" → editable title appears
+    const phaseA_start = Date.now();
     await page
       .getByTestId('sidebar')
       .getByRole('button', { name: 'New Document' })
       .click();
     await expect(editableTitle(page)).toBeVisible({ timeout: 10000 });
+    const phaseA_ms = Date.now() - phaseA_start;
+
+    // Phase B: enter title + Escape → commit fires
+    const phaseB_start = Date.now();
     await editableTitle(page).click();
     await expect(editableTitle(page)).toHaveRole('textbox');
     await editableTitle(page).fill('Perf Probe Doc');
     await page.keyboard.press('Escape');
 
-    // Sidebar shows the doc (this is normally fast — the drive's
-    // children list updated locally).
-    await expect(
-      page.getByTestId('sidebar').getByText('Perf Probe Doc'),
-    ).toBeVisible({ timeout: 10000 });
+    // Phase C: sidebar shows the doc title (this is the assertion that
+    // flakes in dagger). Poll the DOM directly so we can distinguish
+    // "slow render" from "stuck pipeline" — the snapshot at the failure
+    // point shows nothing, but if the text appears at e.g. t+12s after
+    // a 10s assertion budget, that's just slowness, not deadlock.
+    const phaseC_start = Date.now();
+    const sidebarText = await page.evaluate(async () => {
+      const target = 'Perf Probe Doc';
+      const sidebar = document.querySelector('[data-testid="sidebar"]');
+      const start = performance.now();
+      const samples: { ms: number; hasText: boolean }[] = [];
+      while (performance.now() - start < 16000) {
+        const has = !!sidebar?.textContent?.includes(target);
+        samples.push({ ms: Math.round(performance.now() - start), hasText: has });
+        if (has) break;
+        await new Promise(r => setTimeout(r, 200));
+      }
+
+      return samples;
+    });
+    const phaseC_ms = Date.now() - phaseC_start;
+    const phaseB_ms = phaseC_start - phaseB_start;
+    const firstHit = sidebarText.find(s => s.hasText);
+    // eslint-disable-next-line no-console
+    console.log(
+      `[perf] sidebar polling: first hit at ${firstHit ? firstHit.ms + 'ms' : 'NEVER'}` +
+        ` (samples: ${sidebarText.length}, last sample at ${sidebarText[sidebarText.length - 1]?.ms}ms)`,
+    );
+
+    if (!firstHit) {
+      // Always attach the perf snapshot first — without this, the throw
+      // below skips it and we lose the diagnostic data we came for.
+      await attachPerfSnapshot(page, testInfo, 'perf-sidebar-stuck');
+      const dump = await page.evaluate(async () => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const w = window as any;
+        const store = w.store;
+        const drive = store?.getDrive?.();
+        // The drive's children query — same params as `useChildren(drive)`.
+        const childrenInStore: string[] = [];
+        const resources = store?.resources;
+        if (resources && drive) {
+          for (const [subject, r] of resources) {
+            if (
+              r?.get?.('https://atomicdata.dev/properties/parent') === drive
+            ) {
+              childrenInStore.push(subject);
+            }
+          }
+        }
+
+        // Also do a fresh collection query — same params useChildren
+        // uses — to see if the collection layer reports the doc.
+        let freshCollectionMembers: string[] | string = 'no-collection-builder';
+        try {
+          const CollectionBuilder = w.CollectionBuilder;
+          if (CollectionBuilder && drive) {
+            const c = new CollectionBuilder(store, drive)
+              .setProperty('https://atomicdata.dev/properties/parent')
+              .setValue(drive)
+              .build();
+            await c.waitForReady();
+            const total = c.totalMembers;
+            const members: string[] = [];
+            for (let i = 0; i < total; i++) {
+              const m = await c.getMemberWithIndex(i);
+              if (m) members.push(m);
+            }
+            freshCollectionMembers = members;
+          }
+        } catch (e) {
+          freshCollectionMembers = 'err: ' + (e as Error).message;
+        }
+
+        const sidebar = document.querySelector('[data-testid="sidebar"]');
+
+        return {
+          drive,
+          inMemoryChildren: childrenInStore,
+          freshCollectionMembers,
+          sidebarText: sidebar?.textContent?.slice(0, 600),
+          syncStatus: store?.getSyncStatus?.(),
+        };
+      });
+      // eslint-disable-next-line no-console
+      console.log('[perf] failure state:', JSON.stringify(dump, null, 2));
+    }
+    expect(firstHit, 'sidebar text never appeared').toBeTruthy();
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `[perf] phases: A(click→editable)=${phaseA_ms}ms` +
+        ` B(fill+escape)=${phaseB_ms}ms` +
+        ` C(escape→sidebar-text)=${phaseC_ms}ms`,
+    );
 
     // Wait for the commit to actually reach the server. Reloading
     // before this means the next session has nothing to sync.
