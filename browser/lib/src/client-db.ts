@@ -63,7 +63,17 @@ const RPC_CHANNEL = 'atomic-db-rpc';
  */
 type Role = 'initializing' | 'leader' | 'follower' | 'failed';
 
-const LEADERSHIP_TIMEOUT_MS = 5000;
+// Originally 5s, but in dagger CI the cross-context `BroadcastChannel`
+// `leader-ping` → `leader-announce` round-trip routinely exceeds 5s
+// under CPU contention, sending the second context to `'failed'` and
+// leaving every multi-context e2e test (chatroom propagation, document
+// second-window delete, sync.spec.ts cross-device) unable to query
+// the local DB. The fall-through is a console-loud RPC failure that
+// surfaces as 9 distinct "ClientDb leadership election timed out"
+// errors per CI run. 30s is comfortably above observed ceilings;
+// recovery via late `leader-announce` is already wired (handler in
+// `handleBroadcast`), so a longer wait is purely a flake-budget fix.
+const LEADERSHIP_TIMEOUT_MS = 30_000;
 
 type BroadcastMessage =
   | { type: 'leader-ping' }
