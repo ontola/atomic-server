@@ -174,8 +174,8 @@ pub fn before_apply_commit(context: CommitExtenderContext) -> AtomicResult<()> {
 pub fn build_invite_extender() -> ClassExtender {
     ClassExtender {
         class: urls::INVITE.to_string(),
-        on_resource_get: Some(construct_invite_redirect),
-        before_commit: Some(before_apply_commit),
+        on_resource_get: Some(ClassExtender::wrap_get_handler(construct_invite_redirect)),
+        before_commit: Some(ClassExtender::wrap_commit_handler(before_apply_commit)),
         after_commit: None,
     }
 }

@@ -37,6 +37,7 @@ They are used for performing custom queries, or calculating dynamic attributes.
 pub mod chatroom;
 pub mod importer;
 pub mod invite;
+pub mod wasm;
 
 // Endpoints
 #[cfg(feature = "html")]

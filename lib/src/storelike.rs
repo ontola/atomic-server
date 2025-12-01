@@ -76,6 +76,7 @@ impl ResourceResponse {
         }
     }
 
+    #[cfg(feature = "rdf")]
     pub fn to_n_triples(&self, store: &impl Storelike) -> AtomicResult<String> {
         match self {
             ResourceResponse::Resource(resource) => Ok(resource.to_n_triples(store)?),
