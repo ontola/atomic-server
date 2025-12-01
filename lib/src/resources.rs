@@ -606,6 +606,7 @@ impl Resource {
         atoms
     }
 
+    #[cfg(feature = "rdf")]
     pub fn vec_to_n_triples(
         resources: &Vec<Resource>,
         store: &impl Storelike,

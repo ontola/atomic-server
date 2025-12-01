@@ -131,7 +131,7 @@ pub fn after_apply_commit_message(context: CommitExtenderContext) -> AtomicResul
 pub fn build_chatroom_extender() -> ClassExtender {
     ClassExtender {
         class: urls::CHATROOM.to_string(),
-        on_resource_get: Some(construct_chatroom),
+        on_resource_get: Some(ClassExtender::wrap_get_handler(construct_chatroom)),
         before_commit: None,
         after_commit: None,
     }
@@ -142,6 +142,8 @@ pub fn build_message_extender() -> ClassExtender {
         class: urls::MESSAGE.to_string(),
         on_resource_get: None,
         before_commit: None,
-        after_commit: Some(after_apply_commit_message),
+        after_commit: Some(ClassExtender::wrap_commit_handler(
+            after_apply_commit_message,
+        )),
     }
 }
