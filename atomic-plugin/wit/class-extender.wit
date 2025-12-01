@@ -1,4 +1,4 @@
-package example:random-folder-extender;
+package atomic:class-extender@0.1.0;
 
 interface types {
   /// JSON-AD encoded Resource.
@@ -29,7 +29,7 @@ interface types {
   }
 }
 
-world folder-extender {
+world class-extender {
   use types.{resource-response, get-context, commit-context};
 
   /// Returns the class URL this extender applies to.
