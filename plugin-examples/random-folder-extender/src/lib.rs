@@ -1,26 +1,21 @@
-use atomic_plugin::AtomicPlugin;
+use atomic_plugin::{ClassExtender, Commit, Resource};
 use rand::Rng;
-use serde_json::{json, Value as JsonValue};
 
 struct RandomFolderExtender;
 
 const FOLDER_CLASS: &str = "https://atomicdata.dev/classes/Folder";
 const NAME_PROP: &str = "https://atomicdata.dev/properties/name";
 
-impl AtomicPlugin for RandomFolderExtender {
+impl ClassExtender for RandomFolderExtender {
     fn class_url() -> String {
         FOLDER_CLASS.to_string()
     }
 
-    fn on_resource_get(
-        _subject: &str,
-        resource: &mut JsonValue,
-    ) -> Result<Option<JsonValue>, String> {
-        let Some(obj) = resource.as_object_mut() else {
-            return Err("Resource is not a JSON object".into());
-        };
-
-        let base_name = obj
+    // Modify the response from the server every time a folder is fetched.
+    // Appends a random number to the end of the folder name.
+    fn on_resource_get(resource: &mut Resource) -> Result<Option<&Resource>, String> {
+        let base_name = resource
+            .props
             .get(NAME_PROP)
             .and_then(|val| val.as_str())
             .unwrap_or("Folder");
@@ -28,8 +23,28 @@ impl AtomicPlugin for RandomFolderExtender {
         let random_suffix = rand::thread_rng().gen_range(0..=9999);
         let updated_name = format!("{} {}", base_name.trim_end(), random_suffix);
 
-        obj.insert(NAME_PROP.to_string(), json!(updated_name));
-        Ok(Some(resource.clone()))
+        resource
+            .props
+            .insert(NAME_PROP.to_string(), updated_name.into());
+
+        Ok(Some(resource))
+    }
+
+    // Prevent commits if the folder name contains uppercase letters.
+    fn before_commit(commit: &Commit, _snapshot: Option<&Resource>) -> Result<(), String> {
+        let Some(set) = &commit.set else {
+            return Ok(());
+        };
+
+        let Some(name) = set.get(NAME_PROP).and_then(|val| val.as_str()) else {
+            return Ok(());
+        };
+
+        if name.chars().any(|c| c.is_uppercase()) {
+            return Err("Folder name cannot contain uppercase letters".into());
+        }
+
+        Ok(())
     }
 }
 

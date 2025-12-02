@@ -10,24 +10,66 @@ pub use bindings::atomic::class_extender::types::{
 };
 pub use bindings::Guest;
 
+use serde::Deserialize;
 use serde_json::Value as JsonValue;
 
+pub struct Resource {
+    pub subject: String,
+    pub props: serde_json::Map<String, JsonValue>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct Commit {
+    /// The subject URL that is to be modified by this Delta
+    #[serde(rename = "https://atomicdata.dev/properties/subject")]
+    pub subject: String,
+    /// The date it was created, as a unix timestamp
+    #[serde(rename = "https://atomicdata.dev/properties/createdAt")]
+    pub created_at: i64,
+    /// The URL of the one signing this Commit
+    #[serde(rename = "https://atomicdata.dev/properties/signer")]
+    pub signer: String,
+    /// The set of PropVals that need to be added.
+    /// Overwrites existing values
+    #[serde(rename = "https://atomicdata.dev/properties/set")]
+    pub set: Option<std::collections::HashMap<String, JsonValue>>,
+    #[serde(rename = "https://atomicdata.dev/properties/yUpdate")]
+    pub y_update: Option<std::collections::HashMap<String, JsonValue>>,
+    #[serde(rename = "https://atomicdata.dev/properties/remove")]
+    /// The set of property URLs that need to be removed
+    pub remove: Option<Vec<String>>,
+    /// If set to true, deletes the entire resource
+    #[serde(rename = "https://atomicdata.dev/properties/destroy")]
+    pub destroy: Option<bool>,
+    /// Base64 encoded signature of the JSON serialized Commit
+    #[serde(rename = "https://atomicdata.dev/properties/signature")]
+    pub signature: Option<String>,
+    /// List of Properties and Arrays to be appended to them
+    #[serde(rename = "https://atomicdata.dev/properties/push")]
+    pub push: Option<std::collections::HashMap<String, JsonValue>>,
+    /// The previously applied commit to this Resource.
+    #[serde(rename = "https://atomicdata.dev/properties/previousCommit")]
+    pub previous_commit: Option<String>,
+    /// The URL of the Commit
+    pub url: Option<String>,
+}
+
 /// High-level trait for implementing a Class Extender plugin.
-pub trait AtomicPlugin {
+pub trait ClassExtender {
     fn class_url() -> String;
 
-    fn on_resource_get(
-        _subject: &str,
-        _resource: &mut JsonValue,
-    ) -> Result<Option<JsonValue>, String> {
-        Ok(None)
+    /// Called when a resource is fetched from the server. You can modify the resource in place.
+    fn on_resource_get<'a>(resource: &'a mut Resource) -> Result<Option<&'a Resource>, String> {
+        Ok(Some(resource))
     }
 
-    fn before_commit(_subject: &str, _resource: &JsonValue) -> Result<(), String> {
+    /// Called before a Commit that targets the class is persisted. If you return an error, the commit will be rejected.
+    fn before_commit(_commit: &Commit, _snapshot: Option<&Resource>) -> Result<(), String> {
         Ok(())
     }
 
-    fn after_commit(_subject: &str, _resource: &JsonValue) -> Result<(), String> {
+    /// Called after a Commit that targets the class has been applied. Returning an error will not cancel the commit.
+    fn after_commit(_commit: &Commit, _resource: Option<&Resource>) -> Result<(), String> {
         Ok(())
     }
 }
@@ -35,51 +77,47 @@ pub trait AtomicPlugin {
 #[doc(hidden)]
 pub struct PluginWrapper<T>(std::marker::PhantomData<T>);
 
-impl<T: AtomicPlugin> Guest for PluginWrapper<T> {
+impl<T: ClassExtender> Guest for PluginWrapper<T> {
     fn class_url() -> String {
         T::class_url()
     }
 
     fn on_resource_get(ctx: GetContext) -> Result<Option<ResourceResponse>, String> {
-        let mut json_value: JsonValue =
-            serde_json::from_str(&ctx.snapshot.json_ad).map_err(|e| e.to_string())?;
+        let mut resource = Resource::try_from(ctx.snapshot)?;
 
-        let result = T::on_resource_get(&ctx.snapshot.subject, &mut json_value)?;
+        let Some(result) = T::on_resource_get(&mut resource)? else {
+            return Ok(None);
+        };
 
-        match result {
-            Some(updated_json) => {
-                let updated_payload = serde_json::to_string(&updated_json)
-                    .map_err(|e| format!("Serialize error: {e}"))?;
-                Ok(Some(ResourceResponse {
-                    primary: ResourceJson {
-                        subject: ctx.snapshot.subject,
-                        json_ad: updated_payload,
-                    },
-                    referenced: Vec::new(),
-                }))
-            }
-            None => Ok(None),
-        }
+        let updated_payload = result.to_json()?;
+
+        Ok(Some(ResourceResponse {
+            primary: ResourceJson {
+                subject: resource.subject,
+                json_ad: updated_payload,
+            },
+            referenced: Vec::new(),
+        }))
     }
 
     fn before_commit(ctx: CommitContext) -> Result<(), String> {
-        if let Some(snapshot) = ctx.snapshot {
-            let json_value: JsonValue =
-                serde_json::from_str(&snapshot.json_ad).map_err(|e| e.to_string())?;
-            T::before_commit(&ctx.subject, &json_value)
-        } else {
-            Ok(())
-        }
+        let commit: Commit = serde_json::from_str(&ctx.commit_json).map_err(|e| e.to_string())?;
+        let snapshot: Option<Resource> = match ctx.snapshot {
+            Some(snapshot) => Some(Resource::try_from(snapshot)?),
+            None => None,
+        };
+
+        T::before_commit(&commit, snapshot.as_ref())
     }
 
     fn after_commit(ctx: CommitContext) -> Result<(), String> {
-        if let Some(snapshot) = ctx.snapshot {
-            let json_value: JsonValue =
-                serde_json::from_str(&snapshot.json_ad).map_err(|e| e.to_string())?;
-            T::after_commit(&ctx.subject, &json_value)
-        } else {
-            Ok(())
-        }
+        let commit: Commit = serde_json::from_str(&ctx.commit_json).map_err(|e| e.to_string())?;
+        let snapshot: Option<Resource> = match ctx.snapshot {
+            Some(snapshot) => Some(Resource::try_from(snapshot)?),
+            None => None,
+        };
+
+        T::after_commit(&commit, snapshot.as_ref())
     }
 }
 
@@ -104,4 +142,33 @@ macro_rules! export_plugin {
 
        $crate::__export_world_class_extender_cabi!(Shim with_types_in $crate::bindings);
     };
+}
+
+impl TryFrom<ResourceJson> for Resource {
+    type Error = String;
+
+    fn try_from(resource_json: ResourceJson) -> Result<Self, Self::Error> {
+        let json_value: JsonValue = serde_json::from_str(&resource_json.json_ad)
+            .map_err(|e| format!("Invalid JSON: {}", e))?;
+
+        let Some(obj) = json_value.as_object() else {
+            return Err("Resource is not a JSON object".into());
+        };
+
+        let mut props = obj.clone();
+        props.remove("@id");
+
+        Ok(Self {
+            subject: resource_json.subject,
+            props,
+        })
+    }
+}
+
+impl Resource {
+    pub fn to_json(&self) -> Result<String, String> {
+        let mut props = self.props.clone();
+        props.insert("@id".to_string(), JsonValue::String(self.subject.clone()));
+        serde_json::to_string(&props).map_err(|e| format!("Serialize error: {e}"))
+    }
 }
