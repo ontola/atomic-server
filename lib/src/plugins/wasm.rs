@@ -32,7 +32,7 @@ use bindings::atomic::class_extender::types::{
     ResourceJson as WasmResourceJson, ResourceResponse as WasmResourceResponse,
 };
 
-const WASM_EXTENDER_DIR: &str = "../plugins/class-extenders";
+const WASM_EXTENDER_DIR: &str = "../plugins/class-extenders"; // Relative to the store path.
 
 pub fn load_wasm_class_extenders(store_path: &Path) -> Vec<ClassExtender> {
     let plugins_dir = store_path.join(WASM_EXTENDER_DIR);
