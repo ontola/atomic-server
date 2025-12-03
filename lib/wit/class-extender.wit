@@ -1,6 +1,18 @@
 package atomic:class-extender@0.1.0;
 
+interface host {
+  use types.{resource-json, atomic-agent};
+
+  get-resource: func(subject: string, agent: option<string>) -> result<resource-json, string>;
+  query: func(property: string, value: string, agent: option<string>) -> result<list<resource-json>, string>;
+  get-plugin-agent: func() -> string;
+}
+
 interface types {
+  record atomic-agent {
+    subject: string,
+  }
+
   /// JSON-AD encoded Resource.
   record resource-json {
     subject: string,
@@ -31,6 +43,8 @@ interface types {
 
 world class-extender {
   use types.{resource-response, get-context, commit-context};
+
+  import host;
 
   /// Returns the class URL this extender applies to.
   export class-url: func() -> string;

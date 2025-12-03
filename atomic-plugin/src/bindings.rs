@@ -438,6 +438,9 @@ macro_rules! __export_world_class_extender_cabi {
         (arg0) } } };
     };
 }
+#[doc(hidden)]
+#[allow(unused_imports)]
+pub(crate) use __export_world_class_extender_cabi;
 #[cfg_attr(target_pointer_width = "64", repr(align(8)))]
 #[cfg_attr(target_pointer_width = "32", repr(align(4)))]
 struct _RetArea([::core::mem::MaybeUninit<u8>; 8 * ::core::mem::size_of::<*const u8>()]);
@@ -528,6 +531,324 @@ pub mod atomic {
                 }
             }
         }
+        #[allow(dead_code, async_fn_in_trait, unused_imports, clippy::all)]
+        pub mod host {
+            #[used]
+            #[doc(hidden)]
+            static __FORCE_SECTION_REF: fn() = super::super::super::__link_custom_section_describing_imports;
+            use super::super::super::_rt;
+            pub type ResourceJson = super::super::super::atomic::class_extender::types::ResourceJson;
+            #[allow(unused_unsafe, clippy::all)]
+            pub fn get_resource(
+                subject: &str,
+                agent: Option<&str>,
+            ) -> Result<ResourceJson, _rt::String> {
+                unsafe {
+                    #[cfg_attr(target_pointer_width = "64", repr(align(8)))]
+                    #[cfg_attr(target_pointer_width = "32", repr(align(4)))]
+                    struct RetArea(
+                        [::core::mem::MaybeUninit<
+                            u8,
+                        >; 5 * ::core::mem::size_of::<*const u8>()],
+                    );
+                    let mut ret_area = RetArea(
+                        [::core::mem::MaybeUninit::uninit(); 5
+                            * ::core::mem::size_of::<*const u8>()],
+                    );
+                    let vec0 = subject;
+                    let ptr0 = vec0.as_ptr().cast::<u8>();
+                    let len0 = vec0.len();
+                    let (result2_0, result2_1, result2_2) = match agent {
+                        Some(e) => {
+                            let vec1 = e;
+                            let ptr1 = vec1.as_ptr().cast::<u8>();
+                            let len1 = vec1.len();
+                            (1i32, ptr1.cast_mut(), len1)
+                        }
+                        None => (0i32, ::core::ptr::null_mut(), 0usize),
+                    };
+                    let ptr3 = ret_area.0.as_mut_ptr().cast::<u8>();
+                    #[cfg(target_arch = "wasm32")]
+                    #[link(wasm_import_module = "atomic:class-extender/host@0.1.0")]
+                    unsafe extern "C" {
+                        #[link_name = "get-resource"]
+                        fn wit_import4(
+                            _: *mut u8,
+                            _: usize,
+                            _: i32,
+                            _: *mut u8,
+                            _: usize,
+                            _: *mut u8,
+                        );
+                    }
+                    #[cfg(not(target_arch = "wasm32"))]
+                    unsafe extern "C" fn wit_import4(
+                        _: *mut u8,
+                        _: usize,
+                        _: i32,
+                        _: *mut u8,
+                        _: usize,
+                        _: *mut u8,
+                    ) {
+                        unreachable!()
+                    }
+                    unsafe {
+                        wit_import4(
+                            ptr0.cast_mut(),
+                            len0,
+                            result2_0,
+                            result2_1,
+                            result2_2,
+                            ptr3,
+                        )
+                    };
+                    let l5 = i32::from(*ptr3.add(0).cast::<u8>());
+                    let result15 = match l5 {
+                        0 => {
+                            let e = {
+                                let l6 = *ptr3
+                                    .add(::core::mem::size_of::<*const u8>())
+                                    .cast::<*mut u8>();
+                                let l7 = *ptr3
+                                    .add(2 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<usize>();
+                                let len8 = l7;
+                                let bytes8 = _rt::Vec::from_raw_parts(
+                                    l6.cast(),
+                                    len8,
+                                    len8,
+                                );
+                                let l9 = *ptr3
+                                    .add(3 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<*mut u8>();
+                                let l10 = *ptr3
+                                    .add(4 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<usize>();
+                                let len11 = l10;
+                                let bytes11 = _rt::Vec::from_raw_parts(
+                                    l9.cast(),
+                                    len11,
+                                    len11,
+                                );
+                                super::super::super::atomic::class_extender::types::ResourceJson {
+                                    subject: _rt::string_lift(bytes8),
+                                    json_ad: _rt::string_lift(bytes11),
+                                }
+                            };
+                            Ok(e)
+                        }
+                        1 => {
+                            let e = {
+                                let l12 = *ptr3
+                                    .add(::core::mem::size_of::<*const u8>())
+                                    .cast::<*mut u8>();
+                                let l13 = *ptr3
+                                    .add(2 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<usize>();
+                                let len14 = l13;
+                                let bytes14 = _rt::Vec::from_raw_parts(
+                                    l12.cast(),
+                                    len14,
+                                    len14,
+                                );
+                                _rt::string_lift(bytes14)
+                            };
+                            Err(e)
+                        }
+                        _ => _rt::invalid_enum_discriminant(),
+                    };
+                    result15
+                }
+            }
+            #[allow(unused_unsafe, clippy::all)]
+            pub fn query(
+                property: &str,
+                value: &str,
+                agent: Option<&str>,
+            ) -> Result<_rt::Vec<ResourceJson>, _rt::String> {
+                unsafe {
+                    #[cfg_attr(target_pointer_width = "64", repr(align(8)))]
+                    #[cfg_attr(target_pointer_width = "32", repr(align(4)))]
+                    struct RetArea(
+                        [::core::mem::MaybeUninit<
+                            u8,
+                        >; 3 * ::core::mem::size_of::<*const u8>()],
+                    );
+                    let mut ret_area = RetArea(
+                        [::core::mem::MaybeUninit::uninit(); 3
+                            * ::core::mem::size_of::<*const u8>()],
+                    );
+                    let vec0 = property;
+                    let ptr0 = vec0.as_ptr().cast::<u8>();
+                    let len0 = vec0.len();
+                    let vec1 = value;
+                    let ptr1 = vec1.as_ptr().cast::<u8>();
+                    let len1 = vec1.len();
+                    let (result3_0, result3_1, result3_2) = match agent {
+                        Some(e) => {
+                            let vec2 = e;
+                            let ptr2 = vec2.as_ptr().cast::<u8>();
+                            let len2 = vec2.len();
+                            (1i32, ptr2.cast_mut(), len2)
+                        }
+                        None => (0i32, ::core::ptr::null_mut(), 0usize),
+                    };
+                    let ptr4 = ret_area.0.as_mut_ptr().cast::<u8>();
+                    #[cfg(target_arch = "wasm32")]
+                    #[link(wasm_import_module = "atomic:class-extender/host@0.1.0")]
+                    unsafe extern "C" {
+                        #[link_name = "query"]
+                        fn wit_import5(
+                            _: *mut u8,
+                            _: usize,
+                            _: *mut u8,
+                            _: usize,
+                            _: i32,
+                            _: *mut u8,
+                            _: usize,
+                            _: *mut u8,
+                        );
+                    }
+                    #[cfg(not(target_arch = "wasm32"))]
+                    unsafe extern "C" fn wit_import5(
+                        _: *mut u8,
+                        _: usize,
+                        _: *mut u8,
+                        _: usize,
+                        _: i32,
+                        _: *mut u8,
+                        _: usize,
+                        _: *mut u8,
+                    ) {
+                        unreachable!()
+                    }
+                    unsafe {
+                        wit_import5(
+                            ptr0.cast_mut(),
+                            len0,
+                            ptr1.cast_mut(),
+                            len1,
+                            result3_0,
+                            result3_1,
+                            result3_2,
+                            ptr4,
+                        )
+                    };
+                    let l6 = i32::from(*ptr4.add(0).cast::<u8>());
+                    let result19 = match l6 {
+                        0 => {
+                            let e = {
+                                let l7 = *ptr4
+                                    .add(::core::mem::size_of::<*const u8>())
+                                    .cast::<*mut u8>();
+                                let l8 = *ptr4
+                                    .add(2 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<usize>();
+                                let base15 = l7;
+                                let len15 = l8;
+                                let mut result15 = _rt::Vec::with_capacity(len15);
+                                for i in 0..len15 {
+                                    let base = base15
+                                        .add(i * (4 * ::core::mem::size_of::<*const u8>()));
+                                    let e15 = {
+                                        let l9 = *base.add(0).cast::<*mut u8>();
+                                        let l10 = *base
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        let len11 = l10;
+                                        let bytes11 = _rt::Vec::from_raw_parts(
+                                            l9.cast(),
+                                            len11,
+                                            len11,
+                                        );
+                                        let l12 = *base
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>();
+                                        let l13 = *base
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        let len14 = l13;
+                                        let bytes14 = _rt::Vec::from_raw_parts(
+                                            l12.cast(),
+                                            len14,
+                                            len14,
+                                        );
+                                        super::super::super::atomic::class_extender::types::ResourceJson {
+                                            subject: _rt::string_lift(bytes11),
+                                            json_ad: _rt::string_lift(bytes14),
+                                        }
+                                    };
+                                    result15.push(e15);
+                                }
+                                _rt::cabi_dealloc(
+                                    base15,
+                                    len15 * (4 * ::core::mem::size_of::<*const u8>()),
+                                    ::core::mem::size_of::<*const u8>(),
+                                );
+                                result15
+                            };
+                            Ok(e)
+                        }
+                        1 => {
+                            let e = {
+                                let l16 = *ptr4
+                                    .add(::core::mem::size_of::<*const u8>())
+                                    .cast::<*mut u8>();
+                                let l17 = *ptr4
+                                    .add(2 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<usize>();
+                                let len18 = l17;
+                                let bytes18 = _rt::Vec::from_raw_parts(
+                                    l16.cast(),
+                                    len18,
+                                    len18,
+                                );
+                                _rt::string_lift(bytes18)
+                            };
+                            Err(e)
+                        }
+                        _ => _rt::invalid_enum_discriminant(),
+                    };
+                    result19
+                }
+            }
+            #[allow(unused_unsafe, clippy::all)]
+            pub fn get_plugin_agent() -> _rt::String {
+                unsafe {
+                    #[cfg_attr(target_pointer_width = "64", repr(align(8)))]
+                    #[cfg_attr(target_pointer_width = "32", repr(align(4)))]
+                    struct RetArea(
+                        [::core::mem::MaybeUninit<
+                            u8,
+                        >; 2 * ::core::mem::size_of::<*const u8>()],
+                    );
+                    let mut ret_area = RetArea(
+                        [::core::mem::MaybeUninit::uninit(); 2
+                            * ::core::mem::size_of::<*const u8>()],
+                    );
+                    let ptr0 = ret_area.0.as_mut_ptr().cast::<u8>();
+                    #[cfg(target_arch = "wasm32")]
+                    #[link(wasm_import_module = "atomic:class-extender/host@0.1.0")]
+                    unsafe extern "C" {
+                        #[link_name = "get-plugin-agent"]
+                        fn wit_import1(_: *mut u8);
+                    }
+                    #[cfg(not(target_arch = "wasm32"))]
+                    unsafe extern "C" fn wit_import1(_: *mut u8) {
+                        unreachable!()
+                    }
+                    unsafe { wit_import1(ptr0) };
+                    let l2 = *ptr0.add(0).cast::<*mut u8>();
+                    let l3 = *ptr0
+                        .add(::core::mem::size_of::<*const u8>())
+                        .cast::<usize>();
+                    let len4 = l3;
+                    let bytes4 = _rt::Vec::from_raw_parts(l2.cast(), len4, len4);
+                    let result5 = _rt::string_lift(bytes4);
+                    result5
+                }
+            }
+        }
     }
 }
 #[rustfmt::skip]
@@ -535,9 +856,19 @@ mod _rt {
     #![allow(dead_code, clippy::all)]
     pub use alloc_crate::string::String;
     pub use alloc_crate::vec::Vec;
-    #[cfg(target_arch = "wasm32")]
-    pub fn run_ctors_once() {
-        wit_bindgen_rt::run_ctors_once();
+    pub unsafe fn string_lift(bytes: Vec<u8>) -> String {
+        if cfg!(debug_assertions) {
+            String::from_utf8(bytes).unwrap()
+        } else {
+            String::from_utf8_unchecked(bytes)
+        }
+    }
+    pub unsafe fn invalid_enum_discriminant<T>() -> T {
+        if cfg!(debug_assertions) {
+            panic!("invalid enum discriminant")
+        } else {
+            unsafe { core::hint::unreachable_unchecked() }
+        }
     }
     pub unsafe fn cabi_dealloc(ptr: *mut u8, size: usize, align: usize) {
         if size == 0 {
@@ -546,21 +877,11 @@ mod _rt {
         let layout = alloc::Layout::from_size_align_unchecked(size, align);
         alloc::dealloc(ptr, layout);
     }
-    pub unsafe fn string_lift(bytes: Vec<u8>) -> String {
-        if cfg!(debug_assertions) {
-            String::from_utf8(bytes).unwrap()
-        } else {
-            String::from_utf8_unchecked(bytes)
-        }
+    #[cfg(target_arch = "wasm32")]
+    pub fn run_ctors_once() {
+        wit_bindgen_rt::run_ctors_once();
     }
     pub use alloc_crate::alloc;
-    pub unsafe fn invalid_enum_discriminant<T>() -> T {
-        if cfg!(debug_assertions) {
-            panic!("invalid enum discriminant")
-        } else {
-            unsafe { core::hint::unreachable_unchecked() }
-        }
-    }
     extern crate alloc as alloc_crate;
 }
 /// Generates `#[unsafe(no_mangle)]` functions to export the specified type as
@@ -591,27 +912,34 @@ macro_rules! __export_class_extender_impl {
     };
 }
 #[doc(inline)]
-#[allow(unused)]
+#[allow(unused_imports)]
 pub(crate) use __export_class_extender_impl as export;
 #[cfg(target_arch = "wasm32")]
 #[unsafe(link_section = "component-type:wit-bindgen:0.41.0:atomic:class-extender@0.1.0:class-extender:encoded world")]
 #[doc(hidden)]
 #[allow(clippy::octal_escapes)]
-pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 677] = *b"\
-\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\xa0\x04\x01A\x02\x01\
-A\x12\x01B\x0a\x01r\x02\x07subjects\x07json-ads\x04\0\x0dresource-json\x03\0\0\x01\
-p\x01\x01r\x02\x07primary\x01\x0areferenced\x02\x04\0\x11resource-response\x03\0\
-\x03\x01r\x04\x0brequest-urls\x11requested-subjects\x0dagent-subjects\x08snapsho\
-t\x01\x04\0\x0bget-context\x03\0\x05\x01k\x01\x01r\x03\x07subjects\x0bcommit-jso\
-ns\x08snapshot\x07\x04\0\x0ecommit-context\x03\0\x08\x03\0!atomic:class-extender\
-/types@0.1.0\x05\0\x02\x03\0\0\x11resource-response\x03\0\x11resource-response\x03\
-\0\x01\x02\x03\0\0\x0bget-context\x03\0\x0bget-context\x03\0\x03\x02\x03\0\0\x0e\
-commit-context\x03\0\x0ecommit-context\x03\0\x05\x01@\0\0s\x04\0\x09class-url\x01\
-\x07\x01k\x02\x01j\x01\x08\x01s\x01@\x01\x03ctx\x04\0\x09\x04\0\x0fon-resource-g\
-et\x01\x0a\x01j\0\x01s\x01@\x01\x03ctx\x06\0\x0b\x04\0\x0dbefore-commit\x01\x0c\x04\
-\0\x0cafter-commit\x01\x0c\x04\0*atomic:class-extender/class-extender@0.1.0\x04\0\
-\x0b\x14\x01\0\x0eclass-extender\x03\0\0\0G\x09producers\x01\x0cprocessed-by\x02\
-\x0dwit-component\x070.227.1\x10wit-bindgen-rust\x060.41.0";
+pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 950] = *b"\
+\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\xb1\x06\x01A\x02\x01\
+A\x16\x01B\x0c\x01r\x01\x07subjects\x04\0\x0catomic-agent\x03\0\0\x01r\x02\x07su\
+bjects\x07json-ads\x04\0\x0dresource-json\x03\0\x02\x01p\x03\x01r\x02\x07primary\
+\x03\x0areferenced\x04\x04\0\x11resource-response\x03\0\x05\x01r\x04\x0brequest-\
+urls\x11requested-subjects\x0dagent-subjects\x08snapshot\x03\x04\0\x0bget-contex\
+t\x03\0\x07\x01k\x03\x01r\x03\x07subjects\x0bcommit-jsons\x08snapshot\x09\x04\0\x0e\
+commit-context\x03\0\x0a\x03\0!atomic:class-extender/types@0.1.0\x05\0\x02\x03\0\
+\0\x11resource-response\x03\0\x11resource-response\x03\0\x01\x02\x03\0\0\x0bget-\
+context\x03\0\x0bget-context\x03\0\x03\x02\x03\0\0\x0ecommit-context\x03\0\x0eco\
+mmit-context\x03\0\x05\x02\x03\0\0\x0dresource-json\x02\x03\0\0\x0catomic-agent\x01\
+B\x0e\x02\x03\x02\x01\x07\x04\0\x0dresource-json\x03\0\0\x02\x03\x02\x01\x08\x04\
+\0\x0catomic-agent\x03\0\x02\x01ks\x01j\x01\x01\x01s\x01@\x02\x07subjects\x05age\
+nt\x04\0\x05\x04\0\x0cget-resource\x01\x06\x01p\x01\x01j\x01\x07\x01s\x01@\x03\x08\
+propertys\x05values\x05agent\x04\0\x08\x04\0\x05query\x01\x09\x01@\0\0s\x04\0\x10\
+get-plugin-agent\x01\x0a\x03\0\x20atomic:class-extender/host@0.1.0\x05\x09\x01@\0\
+\0s\x04\0\x09class-url\x01\x0a\x01k\x02\x01j\x01\x0b\x01s\x01@\x01\x03ctx\x04\0\x0c\
+\x04\0\x0fon-resource-get\x01\x0d\x01j\0\x01s\x01@\x01\x03ctx\x06\0\x0e\x04\0\x0d\
+before-commit\x01\x0f\x04\0\x0cafter-commit\x01\x0f\x04\0*atomic:class-extender/\
+class-extender@0.1.0\x04\0\x0b\x14\x01\0\x0eclass-extender\x03\0\0\0G\x09produce\
+rs\x01\x0cprocessed-by\x02\x0dwit-component\x070.227.1\x10wit-bindgen-rust\x060.\
+41.0";
 #[inline(never)]
 #[doc(hidden)]
 pub fn __link_custom_section_describing_imports() {
