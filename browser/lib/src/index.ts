@@ -59,6 +59,11 @@ export type { ClientDbQueryOpts, ClientDbQueryResult } from './client-db.js';
 export { LocalSearch } from './local-search.js';
 export { OpfsPersistor } from './opfs-persistor.js';
 export {
+  LocalOutbox,
+  type OutboxEntry,
+  type OutboxDrainContext,
+} from './local-outbox.js';
+export {
   perfMark,
   perfSpan,
   perfSnapshot,
