@@ -108,10 +108,9 @@ impl Db {
         let query_index = db.open_tree(Tree::QueryMembers)?;
         let prop_val_sub_index = db.open_tree(Tree::PropValSub)?;
         let watched_queries = db.open_tree(Tree::WatchedQueries)?;
-        let mut class_extenders = plugins::default_class_extenders();
-        class_extenders.extend(wasm::load_wasm_class_extenders(path));
+        let class_extenders = plugins::default_class_extenders();
 
-        let store = Db {
+        let mut store = Db {
             path: path.into(),
             db,
             default_agent: Arc::new(Mutex::new(None)),
@@ -125,6 +124,11 @@ impl Db {
             class_extenders,
             on_commit: None,
         };
+
+        store
+            .class_extenders
+            .extend(wasm::load_wasm_class_extenders(path, &store));
+
         migrate_maybe(&store).map(|e| format!("Error during migration of database: {:?}", e))?;
         crate::populate::populate_base_models(&store)
             .map_err(|e| format!("Failed to populate base models. {}", e))?;

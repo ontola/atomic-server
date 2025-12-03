@@ -44,6 +44,7 @@ wasmtime = { version = "39.0.1", optional = true, features = [
   "component-model",
 ] }
 wasmtime-wasi = { version = "39.0.1", optional = true, features = ["p2"] }
+wasmtime-wasi-http = "39.0.1"
 
 [dev-dependencies]
 criterion = "0.5"

@@ -5,6 +5,17 @@ struct RandomFolderExtender;
 
 const FOLDER_CLASS: &str = "https://atomicdata.dev/classes/Folder";
 const NAME_PROP: &str = "https://atomicdata.dev/properties/name";
+const IS_A: &str = "https://atomicdata.dev/properties/isA";
+
+fn get_name_from_folder(folder: &Resource) -> Result<&str, String> {
+    let name = folder
+        .props
+        .get(NAME_PROP)
+        .and_then(|val| val.as_str())
+        .ok_or("Folder name not found")?;
+
+    Ok(name)
+}
 
 impl ClassExtender for RandomFolderExtender {
     fn class_url() -> String {
@@ -30,7 +41,7 @@ impl ClassExtender for RandomFolderExtender {
         Ok(Some(resource))
     }
 
-    // Prevent commits if the folder name contains uppercase letters.
+    // Enforce that folder names are unique
     fn before_commit(commit: &Commit, _snapshot: Option<&Resource>) -> Result<(), String> {
         let Some(set) = &commit.set else {
             return Ok(());
@@ -40,8 +51,14 @@ impl ClassExtender for RandomFolderExtender {
             return Ok(());
         };
 
-        if name.chars().any(|c| c.is_uppercase()) {
-            return Err("Folder name cannot contain uppercase letters".into());
+        let all_folders = atomic_plugin::query(IS_A.to_string(), FOLDER_CLASS.to_string(), None)?;
+        let all_names: Vec<&str> = all_folders
+            .iter()
+            .filter_map(|folder| get_name_from_folder(folder).ok())
+            .collect();
+
+        if all_names.contains(&name) {
+            return Err("Folder name must be unique".into());
         }
 
         Ok(())
