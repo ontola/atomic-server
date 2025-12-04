@@ -486,75 +486,48 @@ export class WSClient {
 
         if (!msg) break;
 
-        // Is this a response to a pending GET?
+        // Pending-GET response: route through `applyIncoming` and
+        // resolve the awaiting fetch promise. The previous
+        // `getResourceLoading` + `importLoroUpdate` + `setLastCommit`
+        // + `setSource` + `setLoading` + `addResources` chain is now
+        // one call.
         if (msg.requestId && this.pendingGets.has(msg.requestId)) {
           const pending = this.pendingGets.get(msg.requestId)!;
           clearTimeout(pending.timer);
           this.pendingGets.delete(msg.requestId);
 
-          const resource = this.store.getResourceLoading(msg.subject);
-          resource.importLoroUpdate(msg.loroBytes);
+          this.store.applyIncoming({
+            subject: msg.subject,
+            loroBytes: msg.loroBytes,
+            commitId: msg.commitId,
+            source: 'ws-pending-get',
+          });
 
-          if (msg.commitId) {
-            resource.setLastCommitValue(msg.commitId);
-          }
-
-          resource.source = 'server-ws';
-          resource.sourceTimestamp = Date.now();
-          resource.loading = false;
-          this.store.addResources(resource, { skipCommitCompare: true });
-          pending.resolve(resource);
+          // The resource we just hydrated is what the GET caller
+          // is waiting for — read it back from the store map.
+          const resource = this.store.resources.get(msg.subject);
+          if (resource) pending.resolve(resource);
 
           break;
         }
 
-        // Subscription push
-        let resource = this.store.resources.get(msg.subject);
-        // Capture the pre-import commit so we can detect echo pushes
-        // (the server replaying a commit we just sent) and skip the
-        // re-render storm. `addResources` always runs with
-        // `skipCommitCompare: true` for SUB pushes because the store-side
-        // check compares `storeResource.get(lastCommit)` to itself
-        // (`resource` IS `storeResource` for in-place updates) — by then
-        // it's too late, the value has already been mutated. So we gate
-        // the notify here, on the WS side, with a *temporal* compare.
-        const isExisting = !!resource;
-        const prevCommit = resource?.get(
-          'https://atomicdata.dev/properties/lastCommit',
-        ) as string | undefined;
+        // Subscription push: same call, different `source`. The
+        // commit-id dedup inside `applyIncoming` replaces the
+        // hand-rolled `isExisting + prevCommit` echo check that
+        // used to live here. `addResource`'s `skipCommitCompare`
+        // flag is still honoured for the rare case where the
+        // pre-import lastCommit equals the post-import (e.g. a
+        // properties-only push) — applyIncoming sets it
+        // unconditionally, so the gate runs once at the top.
+        this.store.applyIncoming({
+          subject: msg.subject,
+          loroBytes: msg.loroBytes,
+          commitId: msg.commitId,
+          source: msg.flags & Flags.PUSH ? 'ws-sub-push' : 'ws-pending-get',
+        });
 
-        if (resource) {
-          resource.importLoroUpdate(msg.loroBytes);
-        } else {
-          resource = this.store.getResourceLoading(msg.subject);
-          resource.importLoroUpdate(msg.loroBytes);
-          resource.loading = false;
-        }
-
-        if (msg.commitId) {
-          resource.setLastCommitValue(msg.commitId);
-        }
-
-        resource.source = msg.flags & Flags.PUSH ? 'ws-commit' : 'server-ws';
-        resource.sourceTimestamp = Date.now();
-
-        // Echo detection: pre-existing resource + unchanged lastCommit =
-        // server replayed a commit we already applied. Persist + check
-        // blobs (idempotent), but skip the notify so subscribers don't
-        // re-render for nothing.
-        const newCommit = resource.get(
-          'https://atomicdata.dev/properties/lastCommit',
-        ) as string | undefined;
-        const isEcho =
-          isExisting && prevCommit !== undefined && prevCommit === newCommit;
-
-        if (!isEcho) {
-          // `addResources` now persists JSON-AD + Loro snapshot
-          // atomically via the OPFS chokepoint, so the previous
-          // `persistToClientDb(...)` call here is redundant.
-          this.store.addResources(resource, { skipCommitCompare: true });
-        }
-        this.checkForMissingBlobs(resource);
+        const resource = this.store.resources.get(msg.subject);
+        if (resource) this.checkForMissingBlobs(resource);
 
         break;
       }
@@ -593,32 +566,18 @@ export class WSClient {
         const msg = decodeSyncPush(payload);
 
         if (msg) {
+          // Per-entry `getResourceLoading + importLoroUpdate +
+          // setSource + addResources({skipCommitCompare:true})`
+          // collapsed into one `applyIncoming` call per entry.
+          // The chunked-final-chunk drive-sync signal stays here.
           for (const { subject, loroBytes } of msg.entries) {
-            let resource = this.store.resources.get(subject);
-
-            if (resource) {
-              resource.importLoroUpdate(loroBytes);
-            } else {
-              resource = this.store.getResourceLoading(subject);
-              resource.importLoroUpdate(loroBytes);
-              // Setting `loading = false` here is safe even when Loro
-              // hasn't loaded yet: the `loading` getter checks for
-              // buffered `_loroSnapshotBytes` and keeps reporting `true`
-              // until `getLoroDoc()` hydrates the buffer. So consumers
-              // (useTitle, etc.) keep seeing a loading state for the
-              // brief window where bytes are buffered but unreadable.
-              resource.loading = false;
-            }
-
-            resource.source = 'server-ws';
-            resource.sourceTimestamp = Date.now();
-            // `addResources` persists JSON-AD + Loro snapshot
-            // atomically; the explicit snapshot persist that used
-            // to follow this call is no longer needed.
-            this.store.addResources(resource, {
-              skipCommitCompare: true,
+            this.store.applyIncoming({
+              subject,
+              loroBytes,
+              source: 'ws-sync-push',
             });
-            this.checkForMissingBlobs(resource);
+            const resource = this.store.resources.get(subject);
+            if (resource) this.checkForMissingBlobs(resource);
           }
 
           // Only mark the drive sync as finished on the final chunk —
