@@ -261,14 +261,22 @@ export type ChangeSource =
  */
 export interface IncomingChange {
   subject: string;
-  /** Loro snapshot or delta — exclusive with {@link jsonAd}. */
+  /** Loro snapshot or delta — exclusive with {@link jsonAd} /
+   * {@link resource}. Used by WS UPDATE / SYNC_PUSH. */
   loroBytes?: Uint8Array;
-  /** JSON-AD payload — exclusive with {@link loroBytes}. Used for
-   * the HTTP fetch path where the server returns JSON-AD. */
+  /** JSON-AD payload — exclusive with {@link loroBytes} /
+   * {@link resource}. Reserved for paths that have raw JSON-AD
+   * but no parsed Resource yet. */
   jsonAd?: string;
+  /** Already-hydrated Resource — exclusive with {@link loroBytes} /
+   * {@link jsonAd}. Used by HTTP fetch (parsed via JSONADParser),
+   * local commit (the `Resource` instance the user just signed),
+   * and offline replay (rehydrated from outbox). Skip the
+   * commit-id dedup since the caller has already produced the
+   * authoritative state. */
+  resource?: Resource;
   /** `did:ad:commit:<sig>` of the commit that produced this state.
-   * Used for echo dedup: a change whose commitId equals the cached
-   * resource's `lastCommit` is a no-op. */
+   * Used for echo dedup on the bytes/jsonAd paths. */
   commitId?: string;
   source: ChangeSource;
   /** Defaults to `Date.now()` when omitted. */
@@ -804,9 +812,13 @@ export class Store {
       resource.getLoroDoc();
 
       resource.loading = false;
-      resource.source = 'client-db';
-      resource.sourceTimestamp = Date.now();
-      this.addResources(resource, { skipCommitCompare: true });
+      // Route through unified ingress; the source tag tells listeners
+      // this is an OPFS rehydrate, not a server-fresh result.
+      this.applyIncoming({
+        subject: resource.subject,
+        resource,
+        source: 'offline-replay',
+      });
 
       return resource;
     } catch {
@@ -890,6 +902,22 @@ export class Store {
   public applyIncoming(
     change: IncomingChange,
   ): 'applied' | 'deduped' | 'invalid' {
+    // Resource-direct path: caller has already hydrated. Skip dedup
+    // (the caller is the authoritative producer) and route straight
+    // to the addResource flow with the source tagged.
+    if (change.resource) {
+      change.resource.source = mapChangeSourceToResourceSource(change.source);
+      change.resource.sourceTimestamp = change.receivedAt ?? Date.now();
+      const aliasArg =
+        change.subject !== change.resource.subject ? change.subject : undefined;
+      this.addResource(change.resource, {
+        skipCommitCompare: true,
+        alias: aliasArg,
+      });
+
+      return 'applied';
+    }
+
     if (!change.loroBytes && !change.jsonAd) return 'invalid';
 
     const subject = this.normalizeSubject(change.subject);
@@ -1523,14 +1551,17 @@ export class Store {
     resource.getLoroDoc();
 
     resource.loading = false;
-    resource.source = 'client-db';
-    resource.sourceTimestamp = Date.now();
-    this.addResources(resource, { alias: subject });
+    this.applyIncoming({
+      subject,
+      resource,
+      source: 'offline-replay',
+    });
 
-    // Re-attach restored commits AFTER addResources because addResources may
-    // merge the new instance into an existing placeholder (created by
-    // getResourceLoading); merge() carries Loro/cache state but not
-    // `_pendingCommits`, so writing them on the just-created `resource`
+    // Re-attach restored commits AFTER applyIncoming because the
+    // ingress may merge the new instance into an existing placeholder
+    // (created by getResourceLoading); merge() carries Loro/cache
+    // state but not `_pendingCommits`, so writing them on the
+    // just-created `resource`
     // wouldn't survive. Pull the canonical instance back out and patch it.
     if (restoredCommits?.length) {
       const stored = this.resources.get(this.normalizeSubject(subject));
@@ -1619,11 +1650,16 @@ export class Store {
           serverURL: this.getServerUrl(),
         });
 
-      resource.source = 'server-http';
-      resource.sourceTimestamp = Date.now();
-      this.addResources(resource, {
-        alias: subject,
-        skipCommitCompare: opts.method === 'POST',
+      // Single chokepoint: the JSONADParser already hydrated each
+      // resource, so we use the `resource:` ingress on
+      // `applyIncoming` instead of calling `addResources` directly.
+      // The `subject` arg becomes the alias if it differs from the
+      // resolved subject (e.g. POST endpoint that returns the
+      // canonical resource).
+      this.applyIncoming({
+        subject,
+        resource,
+        source: 'http-fetch',
       });
 
       createdResources.forEach(r => {
@@ -1631,9 +1667,11 @@ export class Store {
           this.normalizeSubject(r.subject) !==
           this.normalizeSubject(resource.subject)
         ) {
-          r.source = 'server-http';
-          r.sourceTimestamp = Date.now();
-          this.addResources(r);
+          this.applyIncoming({
+            subject: r.subject,
+            resource: r,
+            source: 'http-fetch',
+          });
         }
       });
     }
