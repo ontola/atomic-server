@@ -35,7 +35,7 @@ impl AppState {
     /// Creates the AppState (the server's context available in Handlers).
     /// Initializes or opens a store on disk.
     /// Creates a new agent, if necessary.
-    pub fn init(config: Config) -> AtomicServerResult<AppState> {
+    pub async fn init(config: Config) -> AtomicServerResult<AppState> {
         tracing::info!("Initializing AppState");
 
         // We warn over here because tracing needs to be initialized first.
@@ -46,8 +46,8 @@ impl AppState {
             tracing::warn!("Development mode is enabled. This will use staging environments for services like LetsEncrypt.");
         }
 
-        let mut store = atomic_lib::Db::init(&config.store_path, config.server_url.clone())?;
-        let no_server_resource = store.get_resource(&config.server_url).is_err();
+        let mut store = atomic_lib::Db::init(&config.store_path, config.server_url.clone()).await?;
+        let no_server_resource = store.get_resource(&config.server_url).await.is_err();
         if no_server_resource {
             tracing::warn!("Server URL resource not found. This is likely because the server URL has changed. Initializing a new database...");
         }
@@ -55,10 +55,11 @@ impl AppState {
         if should_init {
             tracing::info!("Initialize: creating and populating new Database...");
             atomic_lib::populate::populate_default_store(&store)
+                .await
                 .map_err(|e| format!("Failed to populate default store. {}", e))?;
         }
 
-        set_default_agent(&config, &store)?;
+        set_default_agent(&config, &store).await?;
 
         // Initialize search constructs
         let search_state = SearchState::new(&config)
@@ -83,22 +84,26 @@ impl AppState {
         // If the user changes their server_url, the drive will not exist.
         // In this situation, we should re-build a new drive from scratch.
         if should_init {
-            atomic_lib::populate::populate_all(&store)?;
+            atomic_lib::populate::populate_all(&store).await?;
             // Building the index here is needed to perform Queries on imported resources
             let store_clone = store.clone();
             std::thread::spawn(move || {
-                let res = store_clone.build_index(true);
-                if let Err(e) = res {
-                    tracing::error!("Failed to build index: {}", e);
-                }
+                let rt = tokio::runtime::Runtime::new().unwrap();
+                rt.block_on(async {
+                    let res = store_clone.build_index(true);
+                    if let Err(e) = res {
+                        tracing::error!("Failed to build index: {}", e);
+                    }
+                });
             });
 
             set_up_initial_invite(&store)
+                .await
                 .map_err(|e| format!("Error while setting up initial invite: {}", e))?;
             // This means that editing the .env does _not_ grant you the rights to edit the Drive.
 
             tracing::info!("Adding all resources to search index");
-            search_state.add_all_resources(&store)?;
+            search_state.add_all_resources(&store).await?;
         }
 
         Ok(AppState {
@@ -127,13 +132,13 @@ impl Drop for AppState {
 }
 
 /// Create a new agent if it does not yet exist.
-fn set_default_agent(config: &Config, store: &impl Storelike) -> AtomicServerResult<()> {
+async fn set_default_agent(config: &Config, store: &impl Storelike) -> AtomicServerResult<()> {
     tracing::info!("Setting default agent");
 
     let agent = match atomic_lib::config::read_config(Some(&config.config_file_path)) {
         Ok(agent_config) => {
             let agent = Agent::from_secret(&agent_config.shared.agent_secret)?;
-            match store.get_resource(&agent.subject) {
+            match store.get_resource(&agent.subject).await {
                 Ok(_) => agent,
                 Err(e) => {
                     if agent.subject.contains(&config.server_url) {
@@ -147,7 +152,7 @@ fn set_default_agent(config: &Config, store: &impl Storelike) -> AtomicServerRes
                             store,
                             &agent.private_key.ok_or("No private key found")?,
                         )?;
-                        store.add_resource(&recreated_agent.to_resource()?)?;
+                        store.add_resource(&recreated_agent.to_resource()?).await?;
 
                         recreated_agent
                     } else {
@@ -160,7 +165,7 @@ fn set_default_agent(config: &Config, store: &impl Storelike) -> AtomicServerRes
             }
         }
         Err(_no_config) => {
-            let agent = store.create_agent(Some("server"))?;
+            let agent = store.create_agent(Some("server")).await?;
             let cfg = atomic_lib::config::Config {
                 shared: SharedConfig {
                     agent_secret: agent.build_secret()?,
@@ -185,43 +190,55 @@ fn set_default_agent(config: &Config, store: &impl Storelike) -> AtomicServerRes
 }
 
 /// Creates the first Invitation that is opened by the user on the Home page.
-fn set_up_initial_invite(store: &impl Storelike) -> AtomicServerResult<()> {
+async fn set_up_initial_invite(store: &impl Storelike) -> AtomicServerResult<()> {
     let subject = format!("{}/setup", store.get_server_url()?);
     tracing::info!("Creating initial Invite at {}", subject);
-    let mut invite = store.get_resource_new(&subject);
+    let mut invite = store.get_resource_new(&subject).await;
     invite.set_class(atomic_lib::urls::INVITE);
     invite.set_subject(subject);
     // This invite can be used only once
-    invite.set(
-        atomic_lib::urls::USAGES_LEFT.into(),
-        atomic_lib::Value::Integer(1),
-        store,
-    )?;
-    invite.set(
-        atomic_lib::urls::WRITE_BOOL.into(),
-        atomic_lib::Value::Boolean(true),
-        store,
-    )?;
-    invite.set(
-        atomic_lib::urls::TARGET.into(),
-        atomic_lib::Value::AtomicUrl(store.get_server_url()?.into()),
-        store,
-    )?;
-    invite.set(
-        atomic_lib::urls::PARENT.into(),
-        atomic_lib::Value::AtomicUrl(store.get_server_url()?.into()),
-        store,
-    )?;
-    invite.set(
-        atomic_lib::urls::NAME.into(),
-        atomic_lib::Value::String("Setup".into()),
-        store,
-    )?;
-    invite.set_string(
-        atomic_lib::urls::DESCRIPTION.into(),
-        "Use this Invite to create an Agent, or use an existing one. Accepting will grant your Agent the necessary rights to edit the data in your Atomic Server. This can only be used once. If you, for whatever reason, need a new `/setup` invite, you can pass the `--initialize` flag to `atomic-server`.",
-        store,
-    )?;
-    invite.save_locally(store)?;
+    invite
+        .set(
+            atomic_lib::urls::USAGES_LEFT.into(),
+            atomic_lib::Value::Integer(1),
+            store,
+        )
+        .await?;
+    invite
+        .set(
+            atomic_lib::urls::WRITE_BOOL.into(),
+            atomic_lib::Value::Boolean(true),
+            store,
+        )
+        .await?;
+    invite
+        .set(
+            atomic_lib::urls::TARGET.into(),
+            atomic_lib::Value::AtomicUrl(store.get_server_url()?.into()),
+            store,
+        )
+        .await?;
+    invite
+        .set(
+            atomic_lib::urls::PARENT.into(),
+            atomic_lib::Value::AtomicUrl(store.get_server_url()?.into()),
+            store,
+        )
+        .await?;
+    invite
+        .set(
+            atomic_lib::urls::NAME.into(),
+            atomic_lib::Value::String("Setup".into()),
+            store,
+        )
+        .await?;
+    invite
+        .set_string(
+            atomic_lib::urls::DESCRIPTION.into(),
+            "Use this Invite to create an Agent, or use an existing one. Accepting will grant your Agent the necessary rights to edit the data in your Atomic Server. This can only be used once. If you, for whatever reason, need a new `/setup` invite, you can pass the `--initialize` flag to `atomic-server`.",
+            store,
+        )
+        .await?;
+    invite.save_locally(store).await?;
     Ok(())
 }

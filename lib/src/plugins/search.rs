@@ -1,5 +1,5 @@
 use crate::{
-    endpoints::{Endpoint, HandleGetContext},
+    endpoints::{BoxFuture, Endpoint, HandleGetContext},
     errors::AtomicResult,
     storelike::ResourceResponse,
     urls,
@@ -22,17 +22,21 @@ pub fn search_endpoint() -> Endpoint {
 }
 
 #[tracing::instrument(skip(context))]
-fn handle_search(context: HandleGetContext) -> AtomicResult<ResourceResponse> {
-    let HandleGetContext {
-        subject,
-        store,
-        for_agent: _for_agent,
-    } = context;
-    let params = subject.query_pairs();
-    if params.into_iter().next().is_none() {
-        return search_endpoint().to_resource_response(store);
-    }
-    return Err(
-        "Search endpoint is only available through HTTP requests, not through webhooks".into(),
-    );
+fn handle_search<'a>(
+    context: HandleGetContext<'a>,
+) -> BoxFuture<'a, AtomicResult<ResourceResponse>> {
+    Box::pin(async move {
+        let HandleGetContext {
+            subject,
+            store,
+            for_agent: _for_agent,
+        } = context;
+        let params = subject.query_pairs();
+        if params.into_iter().next().is_none() {
+            return search_endpoint().to_resource_response(store).await;
+        }
+        return Err(
+            "Search endpoint is only available through HTTP requests, not through webhooks".into(),
+        );
+    })
 }

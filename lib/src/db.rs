@@ -36,6 +36,7 @@ use crate::{
     values::SortableValue,
     Atom, Commit, Resource,
 };
+use async_trait::async_trait;
 use tracing::{info, instrument};
 use trees::{Method, Operation, Transaction, Tree};
 
@@ -99,7 +100,7 @@ impl Db {
     /// Creates a new store at the specified path, or opens the store if it already exists.
     /// The server_url is the domain where the db will be hosted, e.g. http://localhost/
     /// It is used for distinguishing locally defined items from externally defined ones.
-    pub fn init(path: &std::path::Path, server_url: String) -> AtomicResult<Db> {
+    pub async fn init(path: &std::path::Path, server_url: String) -> AtomicResult<Db> {
         tracing::info!("Opening database at {:?}", path);
 
         let db = sled::open(path).map_err(|e|format!("Failed opening DB at this location: {:?} . Is another instance of Atomic Server running? {}", path, e))?;
@@ -125,28 +126,29 @@ impl Db {
             on_commit: None,
         };
 
-        store
-            .class_extenders
-            .extend(wasm::load_wasm_class_extenders(path, &store));
+        let extenders = wasm::load_wasm_class_extenders(path, &store).await;
+        store.class_extenders.extend(extenders);
 
         migrate_maybe(&store).map(|e| format!("Error during migration of database: {:?}", e))?;
         crate::populate::populate_base_models(&store)
+            .await
             .map_err(|e| format!("Failed to populate base models. {}", e))?;
         Ok(store)
     }
 
     /// Create a temporary Db in `.temp/db/{id}`. Useful for testing.
     /// Populates the database, creates a default agent, and sets the server_url to "http://localhost/".
-    pub fn init_temp(id: &str) -> AtomicResult<Db> {
+    pub async fn init_temp(id: &str) -> AtomicResult<Db> {
         let tmp_dir_path = format!(".temp/db/{}", id);
         let _try_remove_existing = std::fs::remove_dir_all(&tmp_dir_path);
         let store = Db::init(
             std::path::Path::new(&tmp_dir_path),
             "https://localhost".into(),
-        )?;
-        let agent = store.create_agent(None)?;
+        )
+        .await?;
+        let agent = store.create_agent(None).await?;
         store.set_default_agent(agent);
-        store.populate()?;
+        store.populate().await?;
         Ok(store)
     }
 
@@ -321,7 +323,7 @@ impl Db {
         Some(Resource::from_propvals(propvals, subject))
     }
 
-    fn build_index_for_atom(
+    async fn build_index_for_atom(
         &self,
         atom: &IndexAtom,
         query_filter: &QueryFilter,
@@ -333,7 +335,7 @@ impl Db {
                 atom.sort_value.clone()
             } else {
                 // Find the sort value in the store
-                match self.get_value(&atom.subject, sort) {
+                match self.get_value(&atom.subject, sort).await {
                     Ok(val) => val.to_sortable_string(),
                     // If we try sorting on a value that does not exist,
                     // we'll use an empty string as the sortable value.
@@ -440,7 +442,7 @@ impl Db {
         Ok(())
     }
 
-    fn query_basic(&self, q: &Query) -> AtomicResult<QueryResult> {
+    async fn query_basic(&self, q: &Query) -> AtomicResult<QueryResult> {
         let self_url = self
             .get_self_url()
             .ok_or("No self_url set, required for Queries")?;
@@ -469,7 +471,9 @@ impl Db {
                     continue;
                 }
 
-                if let Ok(resource) = self.get_resource_extended(&atom.subject, true, &q.for_agent)
+                if let Ok(resource) = self
+                    .get_resource_extended(&atom.subject, true, &q.for_agent)
+                    .await
                 {
                     subjects.push(atom.subject.clone());
                     resources.push(resource.to_single());
@@ -484,8 +488,8 @@ impl Db {
         })
     }
 
-    fn query_complex(&self, q: &Query) -> AtomicResult<QueryResult> {
-        let (mut subjects, mut resources, mut total_count) = query_sorted_indexed(self, q)?;
+    async fn query_complex(&self, q: &Query) -> AtomicResult<QueryResult> {
+        let (mut subjects, mut resources, mut total_count) = query_sorted_indexed(self, q).await?;
         let q_filter: QueryFilter = q.into();
 
         if total_count == 0 && !q_filter.is_watched(self) {
@@ -496,12 +500,13 @@ impl Db {
             let mut transaction = Transaction::new();
             // Build indexes
             for atom in atoms.flatten() {
-                self.build_index_for_atom(&atom, &q_filter, &mut transaction)?;
+                self.build_index_for_atom(&atom, &q_filter, &mut transaction)
+                    .await?;
             }
             self.apply_transaction(&mut transaction)?;
 
             // Query through the new indexes.
-            (subjects, resources, total_count) = query_sorted_indexed(self, q)?;
+            (subjects, resources, total_count) = query_sorted_indexed(self, q).await?;
         }
 
         Ok(QueryResult {
@@ -536,13 +541,18 @@ impl Db {
     }
 
     /// Recursively removes a resource and its children from the database
-    fn recursive_remove(&self, subject: &str, transaction: &mut Transaction) -> AtomicResult<()> {
+    async fn recursive_remove(
+        &self,
+        subject: &str,
+        transaction: &mut Transaction,
+    ) -> AtomicResult<()> {
         if let Ok(found) = self.get_propvals(subject) {
             let resource = Resource::from_propvals(found, subject.to_string());
             transaction.push(Operation::remove_resource(subject));
-            let mut children = resource.get_children(self)?;
+            let mut children = resource.get_children(self).await?;
             for child in children.iter_mut() {
-                self.recursive_remove(child.get_subject(), transaction)?;
+                // Because the function is async we need to box it to use recursion.
+                Box::pin(self.recursive_remove(child.get_subject(), transaction)).await?;
             }
             for (prop, val) in resource.get_propvals() {
                 let remove_atom = crate::Atom::new(subject.into(), prop.clone(), val.clone());
@@ -563,7 +573,11 @@ impl Db {
     }
 
     #[tracing::instrument(skip(self))]
-    fn call_endpoint(&self, subject: &str, for_agent: &ForAgent) -> AtomicResult<ResourceResponse> {
+    async fn call_endpoint(
+        &self,
+        subject: &str,
+        for_agent: &ForAgent,
+    ) -> AtomicResult<ResourceResponse> {
         let url = url::Url::parse(subject)?;
 
         // Check if the subject matches one of the endpoints
@@ -578,11 +592,11 @@ impl Db {
                         store: self,
                         for_agent,
                     };
-                    (handle)(context).map_err(|e| {
+                    (handle)(context).await.map_err(|e| {
                         format!("Error handling {} Endpoint: {}", endpoint.shortname, e)
                     })?
                 } else {
-                    endpoint.to_resource_response(self)?
+                    endpoint.to_resource_response(self).await?
                 };
 
                 // Extended resources must always return the requested subject as their own subject
@@ -614,9 +628,10 @@ impl Drop for Db {
     }
 }
 
+#[async_trait]
 impl Storelike for Db {
     #[instrument(skip(self))]
-    fn add_atoms(&self, atoms: Vec<Atom>) -> AtomicResult<()> {
+    async fn add_atoms(&self, atoms: Vec<Atom>) -> AtomicResult<()> {
         // Start with a nested HashMap, containing only strings.
         let mut map: HashMap<String, Resource> = HashMap::new();
         for atom in atoms {
@@ -625,6 +640,7 @@ impl Storelike for Db {
                 Some(resource) => {
                     resource
                         .set_string(atom.property.clone(), &atom.value.to_string(), self)
+                        .await
                         .map_err(|e| format!("Failed adding attom {}. {}", atom, e))?;
                 }
                 // Resource does not exist
@@ -632,20 +648,21 @@ impl Storelike for Db {
                     let mut resource = Resource::new(atom.subject.clone());
                     resource
                         .set_string(atom.property.clone(), &atom.value.to_string(), self)
+                        .await
                         .map_err(|e| format!("Failed adding attom {}. {}", atom, e))?;
                     map.insert(atom.subject, resource);
                 }
             }
         }
         for (_subject, resource) in map.iter() {
-            self.add_resource(resource)?
+            self.add_resource(resource).await?
         }
         self.db.flush()?;
         Ok(())
     }
 
     #[instrument(skip(self, resource), fields(sub = %resource.get_subject()))]
-    fn add_resource_opts(
+    async fn add_resource_opts(
         &self,
         resource: &Resource,
         check_required_props: bool,
@@ -663,7 +680,7 @@ impl Storelike for Db {
             .into());
         }
         if check_required_props {
-            resource.check_required_props(self)?;
+            resource.check_required_props(self).await?;
         }
         if update_index {
             let mut transaction = Transaction::new();
@@ -692,10 +709,14 @@ impl Storelike for Db {
     /// Allows for control over which validations should be performed.
     /// Returns the generated Commit, the old Resource and the new Resource.
     #[tracing::instrument(skip(self))]
-    fn apply_commit(&self, commit: Commit, opts: &CommitOpts) -> AtomicResult<CommitResponse> {
+    async fn apply_commit(
+        &self,
+        commit: Commit,
+        opts: &CommitOpts,
+    ) -> AtomicResult<CommitResponse> {
         let store = self;
 
-        let commit_response = commit.validate_and_build_response(opts, store)?;
+        let commit_response = commit.validate_and_build_response(opts, store).await?;
 
         let mut transaction = Transaction::new();
 
@@ -707,11 +728,12 @@ impl Storelike for Db {
                         continue;
                     };
 
-                    (handler)(CommitExtenderContext {
+                    let fut = (handler)(CommitExtenderContext {
                         store,
                         commit: &commit_response.commit,
                         resource: resource_new,
-                    })?;
+                    });
+                    fut.await?;
                 }
             }
         }
@@ -730,7 +752,7 @@ impl Storelike for Db {
             (Some(_old), None) => {
                 assert_eq!(_old.get_subject(), &commit_response.commit.subject);
                 assert!(&commit_response.commit.destroy.expect("Resource was removed but `commit.destroy` was not set!"));
-                self.remove_resource(&commit_response.commit.subject)?;
+                self.remove_resource(&commit_response.commit.subject).await?;
             },
             _ => {}
         };
@@ -772,11 +794,12 @@ impl Storelike for Db {
                         continue;
                     };
 
-                    (handler)(CommitExtenderContext {
+                    let fut = (handler)(CommitExtenderContext {
                         store,
                         commit: &commit_response.commit,
                         resource: resource_new,
-                    })?;
+                    });
+                    fut.await?;
                 }
             }
         }
@@ -801,7 +824,7 @@ impl Storelike for Db {
     }
 
     #[instrument(skip(self))]
-    fn get_resource(&self, subject: &str) -> AtomicResult<Resource> {
+    async fn get_resource(&self, subject: &str) -> AtomicResult<Resource> {
         match self.get_propvals(subject) {
             Ok(propvals) => {
                 let resource = crate::resources::Resource::from_propvals(propvals, subject.into());
@@ -809,13 +832,13 @@ impl Storelike for Db {
             }
             Err(e) => {
                 tracing::error!("Error getting resource: {:?}", e);
-                self.handle_not_found(subject, e, None)
+                self.handle_not_found(subject, e, None).await
             }
         }
     }
 
     #[instrument(skip(self))]
-    fn get_resource_extended(
+    async fn get_resource_extended(
         &self,
         subject: &str,
         skip_dynamic: bool,
@@ -837,69 +860,70 @@ impl Storelike for Db {
 
         url_span.exit();
 
-        let endpoint_span = tracing::span!(tracing::Level::TRACE, "Endpoint").entered();
+        let is_endpoint = {
+            let _guard = tracing::span!(tracing::Level::TRACE, "Endpoint").entered();
+            self.is_endpoint(&url)
+        };
 
         // Check if the subject matches one of the endpoints, if so, call the endpoint.
-        if self.is_endpoint(&url) {
-            return self.call_endpoint(subject, for_agent);
+        if is_endpoint {
+            return self.call_endpoint(subject, for_agent).await;
         }
 
-        endpoint_span.exit();
+        async move {
+            let mut resource = self.get_resource(&removed_query_params).await?;
 
-        let dynamic_span =
-            tracing::span!(tracing::Level::TRACE, "get_resource_extended (dynamic)").entered();
+            let _explanation = crate::hierarchy::check_read(self, &resource, for_agent).await?;
 
-        let mut resource = self.get_resource(&removed_query_params)?;
+            // If a certain class needs to be extended, add it to this match statement
+            for extender in self.class_extenders.iter() {
+                if extender.resource_has_extender(&resource)? {
+                    if skip_dynamic {
+                        // This lets clients know that the resource may have dynamic properties that are currently not included
+                        resource
+                            .set(
+                                crate::urls::INCOMPLETE.into(),
+                                crate::Value::Boolean(true),
+                                self,
+                            )
+                            .await?;
 
-        let _explanation = crate::hierarchy::check_read(self, &resource, for_agent)?;
+                        return Ok(resource.into());
+                    }
 
-        // If a certain class needs to be extended, add it to this match statement
-        for extender in self.class_extenders.iter() {
-            if extender.resource_has_extender(&resource)? {
-                if skip_dynamic {
-                    // This lets clients know that the resource may have dynamic properties that are currently not included
-                    resource.set(
-                        crate::urls::INCOMPLETE.into(),
-                        crate::Value::Boolean(true),
-                        self,
-                    )?;
+                    if let Some(handler) = extender.on_resource_get.as_ref() {
+                        let fut = (handler)(GetExtenderContext {
+                            store: self,
+                            url: &url,
+                            db_resource: &mut resource,
+                            for_agent,
+                        });
+                        let resource_response = fut.await?;
 
-                    dynamic_span.exit();
-                    return Ok(resource.into());
-                }
+                        // TODO: Check if we actually need this
+                        // make sure the actual subject matches the one requested - It should not be changed in the logic above
+                        match resource_response {
+                            ResourceResponse::Resource(mut resource) => {
+                                resource.set_subject(subject.into());
+                                return Ok(resource.into());
+                            }
+                            ResourceResponse::ResourceWithReferenced(mut resource, referenced) => {
+                                resource.set_subject(subject.into());
 
-                if let Some(handler) = extender.on_resource_get.as_ref() {
-                    let resource_response = (handler)(GetExtenderContext {
-                        store: self,
-                        url: &url,
-                        db_resource: &mut resource,
-                        for_agent,
-                    })?;
-
-                    dynamic_span.exit();
-
-                    // TODO: Check if we actually need this
-                    // make sure the actual subject matches the one requested - It should not be changed in the logic above
-                    match resource_response {
-                        ResourceResponse::Resource(mut resource) => {
-                            resource.set_subject(subject.into());
-                            return Ok(resource.into());
-                        }
-                        ResourceResponse::ResourceWithReferenced(mut resource, referenced) => {
-                            resource.set_subject(subject.into());
-
-                            return Ok(ResourceResponse::ResourceWithReferenced(
-                                resource, referenced,
-                            ));
+                                return Ok(ResourceResponse::ResourceWithReferenced(
+                                    resource, referenced,
+                                ));
+                            }
                         }
                     }
                 }
             }
+
+            resource.set_subject(subject.into());
+
+            Ok(resource.into())
         }
-
-        resource.set_subject(subject.into());
-
-        Ok(resource.into())
+        .await
     }
 
     fn handle_commit(&self, commit_response: &CommitResponse) {
@@ -912,19 +936,19 @@ impl Storelike for Db {
     /// The second returned vector should be filled if query.include_resources is true.
     /// Tries `query_cache`, which you should implement yourself.
     #[instrument(skip(self))]
-    fn query(&self, q: &Query) -> AtomicResult<QueryResult> {
+    async fn query(&self, q: &Query) -> AtomicResult<QueryResult> {
         if requires_query_index(q) {
-            return self.query_complex(q);
+            return self.query_complex(q).await;
         }
 
-        self.query_basic(q)
+        self.query_basic(q).await
     }
 
     #[instrument(skip(self))]
     fn all_resources(
         &self,
         include_external: bool,
-    ) -> Box<dyn std::iter::Iterator<Item = Resource>> {
+    ) -> Box<dyn std::iter::Iterator<Item = Resource> + Send> {
         let self_url = self
             .get_self_url()
             .expect("No self URL set, is required in DB");
@@ -936,7 +960,7 @@ impl Storelike for Db {
         Box::new(result)
     }
 
-    fn post_resource(
+    async fn post_resource(
         &self,
         subject: &str,
         body: Vec<u8>,
@@ -949,11 +973,11 @@ impl Storelike for Db {
                 if subj_url.path() == e.path {
                     let handle_post_context = crate::endpoints::HandlePostContext {
                         store: self,
-                        body,
+                        body: body.clone(),
                         for_agent,
-                        subject: subj_url,
+                        subject: subj_url.clone(),
                     };
-                    let mut resource = fun(handle_post_context)?.to_single();
+                    let mut resource = fun(handle_post_context).await?.to_single();
                     resource.set_subject(subject.into());
 
                     return Ok(resource);
@@ -983,15 +1007,15 @@ impl Storelike for Db {
         )
     }
 
-    fn populate(&self) -> AtomicResult<()> {
-        crate::populate::populate_all(self)
+    async fn populate(&self) -> AtomicResult<()> {
+        crate::populate::populate_all(self).await
     }
 
     #[instrument(skip(self))]
-    fn remove_resource(&self, subject: &str) -> AtomicResult<()> {
+    async fn remove_resource(&self, subject: &str) -> AtomicResult<()> {
         let mut transaction = Transaction::new();
 
-        self.recursive_remove(subject, &mut transaction)?;
+        self.recursive_remove(subject, &mut transaction).await?;
 
         self.apply_transaction(&mut transaction)
     }

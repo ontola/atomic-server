@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use super::trees::{self, Operation, Transaction, Tree};
 
 /// Returned by functions that iterate over [IndexAtom]s
-pub type IndexIterator = Box<dyn Iterator<Item = AtomicResult<IndexAtom>>>;
+pub type IndexIterator = Box<dyn Iterator<Item = AtomicResult<IndexAtom>> + Send>;
 
 /// A subset of a full [Query].
 /// Represents a sorted filter on the Store.
@@ -74,7 +74,7 @@ pub const NO_VALUE: &str = "";
 
 #[tracing::instrument(skip(store))]
 /// Performs a query on the `query_index` Tree, which is a lexicographic sorted list of all hits for QueryFilters.
-pub fn query_sorted_indexed(
+pub async fn query_sorted_indexed(
     store: &Db,
     q: &Query,
 ) -> AtomicResult<(Vec<String>, Vec<Resource>, usize)> {
@@ -93,12 +93,13 @@ pub fn query_sorted_indexed(
     let start_key = create_query_index_key(&q.into(), Some(&start.to_sortable_string()), None)?;
     let end_key = create_query_index_key(&q.into(), Some(&end.to_sortable_string()), None)?;
 
-    let iter: Box<dyn Iterator<Item = std::result::Result<(sled::IVec, sled::IVec), sled::Error>>> =
-        if q.sort_desc {
-            Box::new(store.query_index.range(start_key..end_key).rev())
-        } else {
-            Box::new(store.query_index.range(start_key..end_key))
-        };
+    let iter: Box<
+        dyn Iterator<Item = std::result::Result<(sled::IVec, sled::IVec), sled::Error>> + Send,
+    > = if q.sort_desc {
+        Box::new(store.query_index.range(start_key..end_key).rev())
+    } else {
+        Box::new(store.query_index.range(start_key..end_key))
+    };
 
     let mut subjects: Vec<String> = vec![];
     let mut resources: Vec<Resource> = vec![];
@@ -125,7 +126,10 @@ pub fn query_sorted_indexed(
             }
 
             if should_include_resource(q) {
-                if let Ok(resource) = store.get_resource_extended(subject, true, &q.for_agent) {
+                if let Ok(resource) = store
+                    .get_resource_extended(subject, true, &q.for_agent)
+                    .await
+                {
                     resources.push(resource.to_single());
                     subjects.push(subject.into());
                 }
@@ -397,12 +401,11 @@ pub fn should_include_resource(query: &Query) -> bool {
 
 #[cfg(test)]
 pub mod test {
+    use super::*;
     use crate::urls;
 
-    use super::*;
-
-    #[test]
-    fn create_and_parse_key() {
+    #[tokio::test]
+    async fn create_and_parse_key() {
         round_trip_same(Value::String("\n".into()));
         round_trip_same(Value::String("short".into()));
         round_trip_same(Value::Float(1.142));
@@ -501,9 +504,9 @@ pub mod test {
         assert_eq!(sorted, expected);
     }
 
-    #[test]
-    fn should_update_or_not() {
-        let store = &Db::init_temp("should_update_or_not").unwrap();
+    #[tokio::test]
+    async fn should_update_or_not() {
+        let store = &Db::init_temp("should_update_or_not").await.unwrap();
 
         let prop = urls::IS_A.to_string();
         let class = urls::AGENT;
@@ -526,7 +529,7 @@ pub mod test {
             sort_by: None,
         };
 
-        let resource_correct_class = Resource::new_instance(class, store).unwrap();
+        let resource_correct_class = Resource::new_instance(class, store).await.unwrap();
 
         let subject: String = "https://example.com/someAgent".into();
 
@@ -545,7 +548,9 @@ pub mod test {
         assert!(should_update_property(&qf_prop, &index_atom, &resource_correct_class).is_some());
 
         // Test when a different value is passed
-        let resource_wrong_class = Resource::new_instance(urls::PARAGRAPH, store).unwrap();
+        let resource_wrong_class = Resource::new_instance(urls::PARAGRAPH, store)
+            .await
+            .unwrap();
         assert!(should_update_property(&qf_prop, &index_atom, &resource_wrong_class).is_some());
         assert!(should_update_property(&qf_val, &index_atom, &resource_wrong_class).is_none());
         assert!(should_update_property(&qf_prop_val, &index_atom, &resource_wrong_class).is_none());

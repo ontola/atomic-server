@@ -12,7 +12,7 @@
 /// - [ ] ..and return the right type of data?
 /// - [X] Returns a report, instead of throwing an error
 #[allow(dead_code, unreachable_code)]
-pub fn validate_store(
+pub async fn validate_store(
     store: &impl crate::Storelike,
     fetch_items: bool,
 ) -> crate::validate::ValidationReport {
@@ -37,7 +37,9 @@ pub fn validate_store(
                 subject,
                 store,
                 store.get_default_agent().ok().as_ref(),
-            ) {
+            )
+            .await
+            {
                 Ok(_) => {}
                 Err(e) => unfetchable.push((subject.clone(), e.to_string())),
             }
@@ -48,7 +50,7 @@ pub fn validate_store(
         for (prop_url, value) in propvals {
             atom_count += 1;
 
-            let property = match store.get_property(prop_url) {
+            let property = match store.get_property(prop_url).await {
                 Ok(prop) => prop,
                 Err(e) => {
                     unfetchable_props.push((prop_url.clone(), e.to_string()));
@@ -66,7 +68,7 @@ pub fn validate_store(
             };
             found_props.push(prop_url.clone());
         }
-        let classes = match store.get_classes_for_subject(subject) {
+        let classes = match store.get_classes_for_subject(subject).await {
             Ok(classes) => classes,
             Err(e) => {
                 unfetchable_classes.push((subject.clone(), e.to_string()));
@@ -77,7 +79,7 @@ pub fn validate_store(
             println!("Class: {:?}", class.shortname);
             println!("Found: {:?}", found_props);
             for required_prop_subject in class.requires {
-                match store.get_property(&required_prop_subject) {
+                match store.get_property(&required_prop_subject).await {
                     Ok(required_prop) => {
                         println!("Required: {:?}", required_prop.shortname);
                         if !found_props.contains(&required_prop.subject) {
@@ -148,11 +150,11 @@ impl std::fmt::Display for ValidationReport {
 mod test {
     use crate::{Store, Storelike};
 
-    #[test]
-    fn validate_populated() {
-        let store = Store::init().unwrap();
-        store.populate().unwrap();
-        // let report = store.validate();
+    #[tokio::test]
+    async fn validate_populated() {
+        let store = Store::init().await.unwrap();
+        store.populate().await.unwrap();
+        // let report = store.validate().await;
         // assert!(report.atom_count > 30);
         // assert!(report.resource_count > 5);
         // assert!(report.is_valid());

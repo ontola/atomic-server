@@ -70,13 +70,13 @@ impl std::default::Default for ParseOpts {
 /// WARNING: Does not match all props to datatypes (in Nested Resources),
 /// so it could result in invalid data, if the input data does not match the required datatypes.
 #[tracing::instrument(skip(store))]
-pub fn parse_json_ad_resource(
+pub async fn parse_json_ad_resource(
     string: &str,
     store: &impl crate::Storelike,
     parse_opts: &ParseOpts,
 ) -> AtomicResult<Resource> {
     let json: Map<String, serde_json::Value> = serde_json::from_str(string)?;
-    parse_json_ad_map_to_resource(json, store, None, parse_opts)
+    parse_json_ad_map_to_resource(json, store, None, parse_opts).await
 }
 
 fn object_is_property(object: &serde_json::Value) -> bool {
@@ -149,7 +149,7 @@ fn pull_parents_of_props_to_front(array: &Vec<serde_json::Value>) -> Vec<serde_j
 /// Parses JSON-AD string.
 /// Accepts an array containing multiple objects, or one single object.
 #[tracing::instrument(skip(store))]
-pub fn parse_json_ad_string(
+pub async fn parse_json_ad_string(
     string: &str,
     store: &impl Storelike,
     parse_opts: &ParseOpts,
@@ -173,6 +173,7 @@ pub fn parse_json_ad_string(
                 match item {
                     serde_json::Value::Object(obj) => {
                         let resource = parse_json_ad_map_to_resource(obj, store, None, parse_opts)
+                            .await
                             .map_err(|e| format!("Unable to process resource in array. {}", e))?;
                         vec.push(resource);
                     }
@@ -186,6 +187,7 @@ pub fn parse_json_ad_string(
         }
         serde_json::Value::Object(obj) => vec.push(
             parse_json_ad_map_to_resource(obj, store, None, parse_opts)
+                .await
                 .map_err(|e| format!("Unable to parse object. {}", e))?,
         ),
         _other => return Err("Root JSON element must be an object or array.".into()),
@@ -198,7 +200,7 @@ pub fn parse_json_ad_string(
 /// WARNING: Does not match all props to datatypes (in Nested Resources), so it could result in invalid data,
 /// if the input data does not match the required datatypes.
 #[tracing::instrument(skip(store))]
-pub fn parse_json_ad_commit_resource(
+pub async fn parse_json_ad_commit_resource(
     string: &str,
     store: &impl crate::Storelike,
 ) -> AtomicResult<Resource> {
@@ -212,7 +214,7 @@ pub fn parse_json_ad_commit_resource(
     let subject = format!("{}/commits/{}", store.get_server_url()?, signature);
 
     let resource =
-        parse_json_ad_map_to_resource(json, store, Some(subject), &ParseOpts::default())?;
+        parse_json_ad_map_to_resource(json, store, Some(subject), &ParseOpts::default()).await?;
 
     Ok(resource)
 }
@@ -232,236 +234,246 @@ fn try_to_subject(subject: &str, prop: &str, parse_opts: &ParseOpts) -> AtomicRe
     }
 }
 
-fn parse_anonymous_resource(
-    map: &Map<String, serde_json::Value>,
-    subject: Option<&str>,
-    store: &impl crate::Storelike,
-    parse_opts: &ParseOpts,
-) -> AtomicResult<PropVals> {
-    let mut propvals = PropVals::new();
+use std::future::Future;
+use std::pin::Pin;
 
-    for (prop, val) in map {
-        if prop == "@id" || prop == urls::LOCAL_ID {
-            return Err(AtomicError::parse_error(
-                "`@id` and `localId` are not allowed in anonymous resources",
-                subject.as_deref(),
-                Some(prop),
-            ));
+fn parse_anonymous_resource<'a>(
+    map: &'a Map<String, serde_json::Value>,
+    subject: Option<&'a str>,
+    store: &'a (impl crate::Storelike + Sync),
+    parse_opts: &'a ParseOpts,
+) -> Pin<Box<dyn Future<Output = AtomicResult<PropVals>> + Send + 'a>> {
+    Box::pin(async move {
+        let mut propvals = PropVals::new();
+
+        for (prop, val) in map {
+            if prop == "@id" || prop == urls::LOCAL_ID {
+                return Err(AtomicError::parse_error(
+                    "`@id` and `localId` are not allowed in anonymous resources",
+                    subject.as_deref(),
+                    Some(prop),
+                ));
+            }
+
+            let (updated_key, atomic_val) =
+                parse_propval(prop, val, subject, store, parse_opts).await?;
+            propvals.insert(updated_key.to_string(), atomic_val);
         }
 
-        let (updated_key, atomic_val) = parse_propval(prop, val, subject, store, parse_opts)?;
-        propvals.insert(updated_key.to_string(), atomic_val);
-    }
-
-    Ok(propvals)
+        Ok(propvals)
+    })
 }
 
-fn parse_propval(
-    key: &str,
-    val: &serde_json::Value,
-    subject: Option<&str>,
-    store: &impl crate::Storelike,
-    parse_opts: &ParseOpts,
-) -> AtomicResult<(String, Value)> {
-    let prop = try_to_subject(&key, &key, parse_opts)?;
-    let property = store.get_property(&prop)?;
+fn parse_propval<'a>(
+    key: &'a str,
+    val: &'a serde_json::Value,
+    subject: Option<&'a str>,
+    store: &'a (impl crate::Storelike + Sync),
+    parse_opts: &'a ParseOpts,
+) -> Pin<Box<dyn Future<Output = AtomicResult<(String, Value)>> + Send + 'a>> {
+    Box::pin(async move {
+        let prop = try_to_subject(&key, &key, parse_opts)?;
+        let property = store.get_property(&prop).await?;
 
-    let atomic_val: Value = match property.data_type {
-        DataType::AtomicUrl => {
-            match val {
-                serde_json::Value::String(str) => {
-                    // If the value is not a valid URL, and we have an importer, we can generate_id_from_local_id
-                    let url = try_to_subject(&str, &prop, parse_opts)?;
-                    Value::new(&url, &property.data_type)?
+        let atomic_val: Value = match property.data_type {
+            DataType::AtomicUrl => {
+                match val {
+                    serde_json::Value::String(str) => {
+                        // If the value is not a valid URL, and we have an importer, we can generate_id_from_local_id
+                        let url = try_to_subject(&str, &prop, parse_opts)?;
+                        Value::new(&url, &property.data_type)?
+                    }
+                    serde_json::Value::Object(map) => {
+                        let propvals =
+                            parse_anonymous_resource(&map, subject, store, parse_opts).await?;
+                        Value::NestedResource(SubResource::Nested(propvals))
+                    }
+                    _ => {
+                        return Err(AtomicError::parse_error(
+                            "Invalid value for AtomicUrl, not a string or object",
+                            subject.as_deref(),
+                            Some(&prop),
+                        ));
+                    }
                 }
-                serde_json::Value::Object(map) => {
-                    let propvals = parse_anonymous_resource(&map, subject, store, parse_opts)?;
-                    Value::NestedResource(SubResource::Nested(propvals))
-                }
-                _ => {
+            }
+            DataType::ResourceArray => {
+                let serde_json::Value::Array(array) = val else {
                     return Err(AtomicError::parse_error(
-                        "Invalid value for AtomicUrl, not a string or object",
+                        "Invalid value for ResourceArray, not an array",
                         subject.as_deref(),
                         Some(&prop),
                     ));
-                }
-            }
-        }
-        DataType::ResourceArray => {
-            let serde_json::Value::Array(array) = val else {
-                return Err(AtomicError::parse_error(
-                    "Invalid value for ResourceArray, not an array",
-                    subject.as_deref(),
-                    Some(&prop),
-                ));
-            };
+                };
 
-            let mut newvec: Vec<SubResource> = Vec::new();
-            for item in array {
-                match item {
-                    serde_json::Value::String(str) => {
-                        let url = try_to_subject(&str, &prop, parse_opts)?;
-                        newvec.push(SubResource::Subject(url))
-                    }
-                    // If it's an Object, it can be either an anonymous or a full resource.
-                    serde_json::Value::Object(map) => {
-                        let propvals = parse_anonymous_resource(&map, subject, store, parse_opts)?;
-                        newvec.push(SubResource::Nested(propvals))
-                    }
-                    err => {
-                        return Err(AtomicError::parse_error(
-                            &format!("Found non-string item in resource array: {err}."),
-                            subject.as_deref(),
-                            Some(&prop),
-                        ))
+                let mut newvec: Vec<SubResource> = Vec::new();
+                for item in array {
+                    match item {
+                        serde_json::Value::String(str) => {
+                            let url = try_to_subject(&str, &prop, parse_opts)?;
+                            newvec.push(SubResource::Subject(url))
+                        }
+                        // If it's an Object, it can be either an anonymous or a full resource.
+                        serde_json::Value::Object(map) => {
+                            let propvals =
+                                parse_anonymous_resource(&map, subject, store, parse_opts).await?;
+                            newvec.push(SubResource::Nested(propvals))
+                        }
+                        err => {
+                            return Err(AtomicError::parse_error(
+                                &format!("Found non-string item in resource array: {err}."),
+                                subject.as_deref(),
+                                Some(&prop),
+                            ))
+                        }
                     }
                 }
+                Value::ResourceArray(newvec)
             }
-            Value::ResourceArray(newvec)
-        }
-        DataType::String => {
-            let serde_json::Value::String(str) = val else {
+            DataType::String => {
+                let serde_json::Value::String(str) = val else {
+                    return Err(AtomicError::parse_error(
+                        "Invalid value for String, not a string",
+                        subject.as_deref(),
+                        Some(&prop),
+                    ));
+                };
+
+                Value::String(str.clone())
+            }
+            DataType::Slug => {
+                let serde_json::Value::String(str) = val else {
+                    return Err(AtomicError::parse_error(
+                        "Invalid value for Slug, not a string",
+                        subject.as_deref(),
+                        Some(&prop),
+                    ));
+                };
+
+                Value::new(&str, &DataType::Slug)?
+            }
+            DataType::Markdown => {
+                let serde_json::Value::String(str) = val else {
+                    return Err(AtomicError::parse_error(
+                        "Invalid value for Markdown, not a string",
+                        subject.as_deref(),
+                        Some(&prop),
+                    ));
+                };
+
+                Value::new(&str, &DataType::Markdown)?
+            }
+            DataType::Uri => {
+                let serde_json::Value::String(str) = val else {
+                    return Err(AtomicError::parse_error(
+                        "Invalid value for URI, not a string",
+                        subject.as_deref(),
+                        Some(&prop),
+                    ));
+                };
+
+                Value::new(&str, &DataType::Uri)?
+            }
+            DataType::Date => {
+                let serde_json::Value::String(str) = val else {
+                    return Err(AtomicError::parse_error(
+                        "Invalid value for Date, not a string",
+                        subject.as_deref(),
+                        Some(&prop),
+                    ));
+                };
+
+                Value::new(&str, &DataType::Date)?
+            }
+            DataType::Boolean => {
+                let serde_json::Value::Bool(bool) = val else {
+                    return Err(AtomicError::parse_error(
+                        "Invalid value for Boolean, not a boolean",
+                        subject.as_deref(),
+                        Some(&prop),
+                    ));
+                };
+
+                Value::new(&bool.to_string(), &DataType::Boolean)?
+            }
+            DataType::Integer => {
+                let serde_json::Value::Number(num) = val else {
+                    return Err(AtomicError::parse_error(
+                        "Invalid value for Integer, not a number",
+                        subject.as_deref(),
+                        Some(&prop),
+                    ));
+                };
+
+                Value::new(&num.to_string(), &DataType::Integer)?
+            }
+            DataType::Float => {
+                let serde_json::Value::Number(num) = val else {
+                    return Err(AtomicError::parse_error(
+                        "Invalid value for Float, not a number",
+                        subject.as_deref(),
+                        Some(&prop),
+                    ));
+                };
+
+                Value::new(&num.to_string(), &DataType::Float)?
+            }
+            DataType::Timestamp => {
+                let serde_json::Value::Number(num) = val else {
+                    return Err(AtomicError::parse_error(
+                        "Invalid value for Timestamp, not a string",
+                        subject.as_deref(),
+                        Some(&prop),
+                    ));
+                };
+
+                Value::new(&num.to_string(), &DataType::Timestamp)?
+            }
+            DataType::JSON => Value::JSON(val.clone()),
+            DataType::Unsupported(s) => {
                 return Err(AtomicError::parse_error(
-                    "Invalid value for String, not a string",
+                    &format!("Unsupported datatype: {s}"),
                     subject.as_deref(),
                     Some(&prop),
                 ));
-            };
+            }
+            DataType::YDoc => {
+                let serde_json::Value::Object(map) = val else {
+                    return Err(AtomicError::parse_error(
+                        "Invalid value for YDoc, must be of shape { type: \"ydoc\", data: <base64 string> }",
+                        subject.as_deref(),
+                        Some(&prop),
+                    ));
+                };
 
-            Value::String(str.clone())
-        }
-        DataType::Slug => {
-            let serde_json::Value::String(str) = val else {
-                return Err(AtomicError::parse_error(
-                    "Invalid value for Slug, not a string",
-                    subject.as_deref(),
-                    Some(&prop),
-                ));
-            };
+                let Some(data) = map.get("data") else {
+                    return Err(AtomicError::parse_error(
+                        "Invalid value for YDoc, no data field",
+                        subject.as_deref(),
+                        Some(&prop),
+                    ));
+                };
 
-            Value::new(&str, &DataType::Slug)?
-        }
-        DataType::Markdown => {
-            let serde_json::Value::String(str) = val else {
-                return Err(AtomicError::parse_error(
-                    "Invalid value for Markdown, not a string",
-                    subject.as_deref(),
-                    Some(&prop),
-                ));
-            };
+                let serde_json::Value::String(data) = data else {
+                    return Err(AtomicError::parse_error(
+                        "Invalid value for YDoc, data field must be a string",
+                        subject.as_deref(),
+                        Some(&prop),
+                    ));
+                };
 
-            Value::new(&str, &DataType::Markdown)?
-        }
-        DataType::Uri => {
-            let serde_json::Value::String(str) = val else {
-                return Err(AtomicError::parse_error(
-                    "Invalid value for URI, not a string",
-                    subject.as_deref(),
-                    Some(&prop),
-                ));
-            };
+                Value::new(data.as_str(), &DataType::YDoc)?
+            }
+        };
 
-            Value::new(&str, &DataType::Uri)?
-        }
-        DataType::Date => {
-            let serde_json::Value::String(str) = val else {
-                return Err(AtomicError::parse_error(
-                    "Invalid value for Date, not a string",
-                    subject.as_deref(),
-                    Some(&prop),
-                ));
-            };
-
-            Value::new(&str, &DataType::Date)?
-        }
-        DataType::Boolean => {
-            let serde_json::Value::Bool(bool) = val else {
-                return Err(AtomicError::parse_error(
-                    "Invalid value for Boolean, not a boolean",
-                    subject.as_deref(),
-                    Some(&prop),
-                ));
-            };
-
-            Value::new(&bool.to_string(), &DataType::Boolean)?
-        }
-        DataType::Integer => {
-            let serde_json::Value::Number(num) = val else {
-                return Err(AtomicError::parse_error(
-                    "Invalid value for Integer, not a number",
-                    subject.as_deref(),
-                    Some(&prop),
-                ));
-            };
-
-            Value::new(&num.to_string(), &DataType::Integer)?
-        }
-        DataType::Float => {
-            let serde_json::Value::Number(num) = val else {
-                return Err(AtomicError::parse_error(
-                    "Invalid value for Float, not a number",
-                    subject.as_deref(),
-                    Some(&prop),
-                ));
-            };
-
-            Value::new(&num.to_string(), &DataType::Float)?
-        }
-        DataType::Timestamp => {
-            let serde_json::Value::Number(num) = val else {
-                return Err(AtomicError::parse_error(
-                    "Invalid value for Timestamp, not a string",
-                    subject.as_deref(),
-                    Some(&prop),
-                ));
-            };
-
-            Value::new(&num.to_string(), &DataType::Timestamp)?
-        }
-        DataType::JSON => Value::JSON(val.clone()),
-        DataType::Unsupported(s) => {
-            return Err(AtomicError::parse_error(
-                &format!("Unsupported datatype: {s}"),
-                subject.as_deref(),
-                Some(&prop),
-            ));
-        }
-        DataType::YDoc => {
-            let serde_json::Value::Object(map) = val else {
-                return Err(AtomicError::parse_error(
-                    "Invalid value for YDoc, must be of shape { type: \"ydoc\", data: <base64 string> }",
-                    subject.as_deref(),
-                    Some(&prop),
-                ));
-            };
-
-            let Some(data) = map.get("data") else {
-                return Err(AtomicError::parse_error(
-                    "Invalid value for YDoc, no data field",
-                    subject.as_deref(),
-                    Some(&prop),
-                ));
-            };
-
-            let serde_json::Value::String(data) = data else {
-                return Err(AtomicError::parse_error(
-                    "Invalid value for YDoc, data field must be a string",
-                    subject.as_deref(),
-                    Some(&prop),
-                ));
-            };
-
-            Value::new(data.as_str(), &DataType::YDoc)?
-        }
-    };
-
-    Ok((prop, atomic_val))
+        Ok((prop, atomic_val))
+    })
 }
 
 /// Parse a single Json AD string, convert to Atoms
 /// Adds to the store if `add` is true.
 #[tracing::instrument(skip(store))]
-fn parse_json_ad_map_to_resource(
+async fn parse_json_ad_map_to_resource(
     json: Map<String, serde_json::Value>,
     store: &impl crate::Storelike,
     overwrite_subject: Option<String>,
@@ -529,7 +541,7 @@ fn parse_json_ad_map_to_resource(
         }
 
         let (new_key, atomic_val) =
-            parse_propval(&prop, &val, subject.as_deref(), store, parse_opts)?;
+            parse_propval(&prop, &val, subject.as_deref(), store, parse_opts).await?;
 
         // Some of these values are _not correctly matched_ to the datatype.
         propvals.insert(new_key, atomic_val);
@@ -559,17 +571,17 @@ fn parse_json_ad_map_to_resource(
         SaveOpts::Save => {
             let mut r = Resource::new(subj);
             r.set_propvals_unsafe(propvals);
-            store.add_resource(&r)?;
+            store.add_resource(&r).await?;
             r
         }
         SaveOpts::Commit => {
-            let mut r = if let Ok(orig) = store.get_resource(&subj) {
+            let mut r = if let Ok(orig) = store.get_resource(&subj).await {
                 // If the resource already exists, and overwrites outside are not permitted, and it does not have the importer as parent...
                 // Then we throw!
                 // Because this would enable malicious users to overwrite resources that they shouldn't.
                 if !parse_opts.overwrite_outside {
                     let importer = parse_opts.importer.as_deref().unwrap();
-                    if !orig.has_parent(store, importer) {
+                    if !orig.has_parent(store, importer).await {
                         Err(
                             format!("Cannot overwrite {subj} outside of importer! Enable `overwrite_outside`"),
                         )?
@@ -580,13 +592,17 @@ fn parse_json_ad_map_to_resource(
                 Resource::new(subj)
             };
             for (prop, val) in propvals {
-                r.set(prop, val, store)?;
+                r.set(prop, val, store).await?;
             }
             let signer = parse_opts
                 .signer
                 .clone()
                 .ok_or("No agent to sign Commit with. Either pass a `for_agent` or ")?;
-            let commit = r.get_commit_builder().clone().sign(&signer, store, &r)?;
+            let commit = r
+                .get_commit_builder()
+                .clone()
+                .sign(&signer, store, &r)
+                .await?;
 
             let opts = CommitOpts {
                 validate_schema: true,
@@ -600,6 +616,7 @@ fn parse_json_ad_map_to_resource(
 
             store
                 .apply_commit(commit, &opts)
+                .await
                 .map_err(|e| format!("Failed to save {}: {}", r.get_subject(), e))?
                 .resource_new
                 .unwrap()
@@ -617,10 +634,10 @@ mod test {
     use super::*;
     use crate::Storelike;
 
-    #[test]
-    fn parse_and_serialize_json_ad() {
-        let store = crate::Store::init().unwrap();
-        store.populate().unwrap();
+    #[tokio::test]
+    async fn parse_and_serialize_json_ad() {
+        let store = crate::Store::init().await.unwrap();
+        store.populate().await.unwrap();
         let json_input = r#"{
             "@id": "https://atomicdata.dev/classes/Agent",
             "https://atomicdata.dev/properties/description": "An Agent is a user that can create or modify data. It has two keys: a private and a public one. The private key should be kept secret. The publik key is for proving that the ",
@@ -639,68 +656,78 @@ mod test {
             ],
             "https://atomicdata.dev/properties/shortname": "agent"
           }"#;
-        let resource = parse_json_ad_resource(json_input, &store, &ParseOpts::default()).unwrap();
+        let resource = parse_json_ad_resource(json_input, &store, &ParseOpts::default())
+            .await
+            .unwrap();
         let json_output = resource.to_json_ad().unwrap();
         let in_value: serde_json::Value = serde_json::from_str(json_input).unwrap();
         let out_value: serde_json::Value = serde_json::from_str(&json_output).unwrap();
         assert_eq!(in_value, out_value);
     }
 
-    #[test]
+    #[tokio::test]
     #[should_panic(expected = "@id must be a strin")]
-    fn parse_and_serialize_json_ad_wrong_id() {
-        let store = crate::Store::init().unwrap();
-        store.populate().unwrap();
+    async fn parse_and_serialize_json_ad_wrong_id() {
+        let store = crate::Store::init().await.unwrap();
+        store.populate().await.unwrap();
         let json_input = r#"{"@id": 5}"#;
-        parse_json_ad_resource(json_input, &store, &ParseOpts::default()).unwrap();
+        parse_json_ad_resource(json_input, &store, &ParseOpts::default())
+            .await
+            .unwrap();
     }
 
-    #[test]
+    #[tokio::test]
     // This test should actually fail, I think, because the datatype should match the property.
     #[should_panic(expected = "Invalid value for Markdown")]
-    fn parse_and_serialize_json_ad_wrong_datatype_int_to_str() {
-        let store = crate::Store::init().unwrap();
-        store.populate().unwrap();
+    async fn parse_and_serialize_json_ad_wrong_datatype_int_to_str() {
+        let store = crate::Store::init().await.unwrap();
+        store.populate().await.unwrap();
         let json_input = r#"{
             "@id": "https://atomicdata.dev/classes/Agent",
             "https://atomicdata.dev/properties/description": 1
           }"#;
-        parse_json_ad_resource(json_input, &store, &ParseOpts::default()).unwrap();
+        parse_json_ad_resource(json_input, &store, &ParseOpts::default())
+            .await
+            .unwrap();
     }
 
-    #[test]
+    #[tokio::test]
     #[should_panic(expected = "Not a valid Timestamp: 1.124. invalid digit found in string")]
-    fn parse_and_serialize_json_ad_wrong_datatype_float() {
-        let store = crate::Store::init().unwrap();
-        store.populate().unwrap();
+    async fn parse_and_serialize_json_ad_wrong_datatype_float() {
+        let store = crate::Store::init().await.unwrap();
+        store.populate().await.unwrap();
         let json_input = r#"{
             "@id": "https://atomicdata.dev/classes/Agent",
             "https://atomicdata.dev/properties/createdAt": 1.124
           }"#;
-        parse_json_ad_resource(json_input, &store, &ParseOpts::default()).unwrap();
+        parse_json_ad_resource(json_input, &store, &ParseOpts::default())
+            .await
+            .unwrap();
     }
 
     // Roundtrip test requires fixing, because the order of imports can get problematic.
     // We should first import all Properties, then Classes, then other things.
     // See https://github.com/atomicdata-dev/atomic-server/issues/614
     #[ignore]
-    #[test]
-    fn serialize_parse_roundtrip() {
+    #[tokio::test]
+    async fn serialize_parse_roundtrip() {
         use crate::Storelike;
-        let store1 = crate::Store::init().unwrap();
-        store1.populate().unwrap();
-        let store2 = crate::Store::init().unwrap();
+        let store1 = crate::Store::init().await.unwrap();
+        store1.populate().await.unwrap();
+        let store2 = crate::Store::init().await.unwrap();
         let all1: Vec<Resource> = store1.all_resources(true).collect();
         let serialized = crate::serialize::resources_to_json_ad(&all1).unwrap();
 
         store2
             .import(&serialized, &ParseOpts::default())
+            .await
             .expect("import failed");
         let all2_count = store2.all_resources(true).count();
 
         assert_eq!(all1.len(), all2_count);
         let found_shortname = store2
             .get_resource(urls::CLASS)
+            .await
             .unwrap()
             .get(urls::SHORTNAME)
             .unwrap()
@@ -708,10 +735,10 @@ mod test {
         assert_eq!(found_shortname.to_string(), "class");
     }
 
-    #[test]
-    fn parser_should_error_when_encountering_nested_resource() {
-        let store = crate::Store::init().unwrap();
-        store.populate().unwrap();
+    #[tokio::test]
+    async fn parser_should_error_when_encountering_nested_resource() {
+        let store = crate::Store::init().await.unwrap();
+        store.populate().await.unwrap();
 
         let json = r#"{
             "@id": "https://atomicdata.dev/classes",
@@ -726,24 +753,30 @@ mod test {
               "https://atomicdata.dev/classes/ThirdThing"
             ]
           }"#;
-        let parsed = parse_json_ad_resource(json, &store, &ParseOpts::default());
-        assert!(parsed.is_err(), "Subresource with @id should have errored");
+        let binding = ParseOpts::default();
+        let parsed = parse_json_ad_resource(json, &store, &binding);
+        assert!(
+            parsed.await.is_err(),
+            "Subresource with @id should have errored"
+        );
     }
 
-    fn create_store_and_importer() -> (crate::Store, String) {
-        let store = crate::Store::init().unwrap();
+    async fn create_store_and_importer() -> (crate::Store, String) {
+        let store = crate::Store::init().await.unwrap();
         store.set_server_url("http://localhost:9883");
-        store.populate().unwrap();
-        let agent = store.create_agent(None).unwrap();
+        store.populate().await.unwrap();
+        let agent = store.create_agent(None).await.unwrap();
         store.set_default_agent(agent);
-        let mut importer = Resource::new_instance(urls::IMPORTER, &store).unwrap();
-        importer.save_locally(&store).unwrap();
+        let mut importer = Resource::new_instance(urls::IMPORTER, &store)
+            .await
+            .unwrap();
+        importer.save_locally(&store).await.unwrap();
         (store, importer.get_subject().into())
     }
 
-    #[test]
-    fn import_resource_with_localid() {
-        let (store, importer) = create_store_and_importer();
+    #[tokio::test]
+    async fn import_resource_with_localid() {
+        let (store, importer) = create_store_and_importer().await;
 
         let local_id = "my-local-id";
 
@@ -760,20 +793,20 @@ mod test {
             importer: Some(importer.clone()),
         };
 
-        store.import(json, &parse_opts).unwrap();
+        store.import(json, &parse_opts).await.unwrap();
 
         let imported_subject = generate_id_from_local_id(&importer, local_id);
 
-        let found = store.get_resource(&imported_subject).unwrap();
+        let found = store.get_resource(&imported_subject).await.unwrap();
         println!("{:?}", found);
         assert_eq!(found.get(urls::NAME).unwrap().to_string(), "My resource");
 
         // LocalId should be removed from the imported resource
         assert_eq!(found.get(urls::LOCAL_ID).is_err(), true);
     }
-    #[test]
-    fn import_resource_with_json() {
-        let (store, importer) = create_store_and_importer();
+    #[tokio::test]
+    async fn import_resource_with_json() {
+        let (store, importer) = create_store_and_importer().await;
 
         let local_id = "my-local-id";
 
@@ -804,20 +837,20 @@ mod test {
             importer: Some(importer.clone()),
         };
 
-        store.import(json, &parse_opts).unwrap();
+        store.import(json, &parse_opts).await.unwrap();
 
         let imported_subject = generate_id_from_local_id(&importer, local_id);
 
-        let found = store.get_resource(&imported_subject).unwrap();
+        let found = store.get_resource(&imported_subject).await.unwrap();
         assert_eq!(found.get(urls::NAME).unwrap().to_string(), "My resource");
 
         // LocalId should be removed from the imported resource
         assert_eq!(found.get(urls::LOCAL_ID).is_err(), true);
     }
 
-    #[test]
-    fn import_resources_localid_references() {
-        let (store, importer) = create_store_and_importer();
+    #[tokio::test]
+    async fn import_resources_localid_references() {
+        let (store, importer) = create_store_and_importer().await;
 
         let parse_opts = ParseOpts {
             save: SaveOpts::Commit,
@@ -829,12 +862,13 @@ mod test {
 
         store
             .import(include_str!("../test_files/local_id.json"), &parse_opts)
+            .await
             .unwrap();
 
         let reference_subject = generate_id_from_local_id(&importer, "reference");
         let my_subject = generate_id_from_local_id(&importer, "my-local-id");
-        let found = store.get_resource(&my_subject).unwrap();
-        let found_ref = store.get_resource(&reference_subject).unwrap();
+        let found = store.get_resource(&my_subject).await.unwrap();
+        let found_ref = store.get_resource(&reference_subject).await.unwrap();
 
         assert_eq!(
             found.get(urls::PARENT).unwrap().to_string(),
@@ -853,9 +887,9 @@ mod test {
         );
     }
 
-    #[test]
-    fn import_resource_malicious() {
-        let (store, importer) = create_store_and_importer();
+    #[tokio::test]
+    async fn import_resource_malicious() {
+        let (store, importer) = create_store_and_importer().await;
         store.set_server_url("http://localhost:9883");
 
         // Try to overwrite the main drive with some malicious data
@@ -867,8 +901,9 @@ mod test {
                 vec![agent.subject.clone()].into(),
                 &store,
             )
+            .await
             .unwrap();
-        resource.save_locally(&store).unwrap();
+        resource.save_locally(&store).await.unwrap();
 
         let json = format!(
             r#"{{
@@ -887,11 +922,11 @@ mod test {
         };
 
         // We can't allow this to happen, so we expect an error
-        store.import(&json, &parse_opts).unwrap_err();
+        store.import(&json, &parse_opts).await.unwrap_err();
 
         // If we explicitly allow overwriting resources outside scope, we should be able to import it
         parse_opts.overwrite_outside = true;
-        store.import(&json, &parse_opts).unwrap();
+        store.import(&json, &parse_opts).await.unwrap();
     }
 
     #[test]
@@ -916,11 +951,11 @@ mod test {
         )
     }
 
-    #[test]
+    #[tokio::test]
     /// The importer should import properties first
-    fn parse_sorted_properties() {
-        let (store, importer) = create_store_and_importer();
-        store.populate().unwrap();
+    async fn parse_sorted_properties() {
+        let (store, importer) = create_store_and_importer().await;
+        store.populate().await.unwrap();
 
         let json = r#"[
 {
@@ -951,14 +986,14 @@ mod test {
             save: crate::parse::SaveOpts::Commit,
         };
 
-        store.import(json, &parse_opts).unwrap();
+        store.import(json, &parse_opts).await.unwrap();
 
         let parent_subject = generate_id_from_local_id(&importer, "test1");
-        let found = store.get_resource(&parent_subject).unwrap();
+        let found = store.get_resource(&parent_subject).await.unwrap();
         assert_eq!(found.get(urls::PARENT).unwrap().to_string(), importer);
 
         let newprop_subject = format!("{importer}/newprop");
-        let _prop = store.get_resource(&newprop_subject).unwrap();
+        let _prop = store.get_resource(&newprop_subject).await.unwrap();
     }
 
     // TODO: Add support for parent sorting in the parser.

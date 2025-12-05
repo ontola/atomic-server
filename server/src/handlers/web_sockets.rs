@@ -6,7 +6,9 @@ This keeps track of the Agent and handles messages.
 
 For information about the protocol, see https://docs.atomicdata.dev/websockets.html
  */
-use actix::{Actor, ActorContext, Addr, AsyncContext, Handler, StreamHandler};
+use actix::{
+    Actor, ActorContext, ActorFutureExt, Addr, AsyncContext, Handler, StreamHandler, WrapFuture,
+};
 use actix_web::{web, HttpRequest, HttpResponse};
 use actix_web_actors::ws;
 use atomic_lib::{
@@ -38,7 +40,8 @@ pub async fn web_socket_handler(
     let for_agent = atomic_lib::authentication::get_agent_from_auth_values_and_check(
         auth_header_values,
         &appstate.store,
-    )?;
+    )
+    .await?;
     tracing::debug!("Starting websocket for {}", for_agent);
 
     let result = ws::start(
@@ -83,176 +86,189 @@ impl Actor for WebSocketConnection {
 
 impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WebSocketConnection {
     fn handle(&mut self, msg: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
-        if let Err(e) = handle_ws_message(msg, ctx, self) {
-            ctx.text(format!("ERROR {e}"));
-            tracing::error!("Error handling WebSocket message: {}", e);
-            ctx.stop();
+        match msg {
+            Ok(ws::Message::Ping(msg)) => {
+                self.hb = Instant::now();
+                ctx.pong(&msg);
+            }
+            Ok(ws::Message::Pong(_)) => {
+                self.hb = Instant::now();
+            }
+            Ok(ws::Message::Text(text)) => {
+                let text = text.to_string();
+                tracing::debug!("Incoming websocket text message: {:?}", text);
+
+                if text.starts_with("GET ") {
+                    let mut parts = text.split("GET ");
+                    if let Some(subject) = parts.nth(1) {
+                        let subject = subject.to_string();
+                        let store = self.store.clone();
+                        let agent = self.agent.clone();
+                        ctx.spawn(
+                            async move {
+                                (
+                                    store.get_resource_extended(&subject, false, &agent).await,
+                                    subject,
+                                )
+                            }
+                            .into_actor(self)
+                            .map(|(res, subject), _actor, ctx| match res {
+                                Ok(r) => {
+                                    let serialized = r
+                                        .to_json_ad()
+                                        .expect("Can't serialize Resource to JSON-AD");
+                                    ctx.text(format!("RESOURCE {serialized}"));
+                                }
+                                Err(e) => {
+                                    let r = e.into_resource(subject);
+                                    let serialized_err = r
+                                        .to_json_ad()
+                                        .expect("Can't serialize Resource to JSON-AD");
+                                    ctx.text(format!("RESOURCE {serialized_err}"));
+                                }
+                            }),
+                        );
+                    } else {
+                        ctx.text("ERROR GET needs a subject");
+                    }
+                    return;
+                }
+
+                if text.starts_with("AUTHENTICATE ") {
+                    let mut parts = text.split("AUTHENTICATE ");
+                    if let Some(json) = parts.nth(1) {
+                        let json = json.to_string();
+                        let store = self.store.clone();
+                        ctx.spawn(
+                            async move {
+                                let auth_header_values: AuthValues = serde_json::from_str(&json)
+                                    .map_err(|err| format!("Invalid AUTHENTICATE JSON: {}", err))?;
+                                get_agent_from_auth_values_and_check(
+                                    Some(auth_header_values),
+                                    &store,
+                                )
+                                .await
+                                .map_err(|e| format!("Authentication failed: {}", e))
+                            }
+                            .into_actor(self)
+                            .map(|res, actor, ctx| match res {
+                                Ok(a) => {
+                                    tracing::debug!("Authenticated websocket for {}", a);
+                                    actor.agent = a;
+                                    ctx.text("AUTHENTICATED");
+                                }
+                                Err(e) => ctx.text(format!("ERROR {}", e)),
+                            }),
+                        );
+                    } else {
+                        ctx.text("ERROR AUTHENTICATE needs a JSON object");
+                    }
+                    return;
+                }
+
+                if let Err(e) = handle_ws_message_sync(text, ctx, self) {
+                    ctx.text(format!("ERROR {e}"));
+                    tracing::error!("Error handling WebSocket message: {}", e);
+                }
+            }
+            Ok(ws::Message::Binary(_bin)) => {
+                ctx.text("ERROR Binary not supported");
+            }
+            Ok(ws::Message::Close(reason)) => {
+                ctx.close(reason);
+                ctx.stop();
+            }
+            _ => {
+                ctx.stop();
+            }
         }
     }
 }
 
-fn handle_ws_message(
-    msg: Result<ws::Message, ws::ProtocolError>,
+fn handle_ws_message_sync(
+    text: String,
     ctx: &mut ws::WebsocketContext<WebSocketConnection>,
     conn: &mut WebSocketConnection,
 ) -> AtomicResult<()> {
-    match msg {
-        Ok(ws::Message::Ping(msg)) => {
-            conn.hb = Instant::now();
-            ctx.pong(&msg);
-            Ok(())
-        }
-        Ok(ws::Message::Pong(_)) => {
-            conn.hb = Instant::now();
-            Ok(())
-        }
-        // TODO: Check if it's a subscribe / unsubscribe / commit message
-        Ok(ws::Message::Text(bytes)) => {
-            let text = bytes.to_string();
-            tracing::debug!("Incoming websocket text message: {:?}", text);
-            match text.as_str() {
-                s if s.starts_with("SUBSCRIBE ") => {
-                    let mut parts = s.split("SUBSCRIBE ");
-                    if let Some(subject) = parts.nth(1) {
-                        conn.commit_monitor_addr
-                            .do_send(crate::actor_messages::Subscribe {
-                                addr: ctx.address(),
-                                subject: subject.to_string(),
-                                agent: conn.agent.to_string(),
-                            });
-                        conn.subscribed.insert(subject.into());
-                        Ok(())
-                    } else {
-                        Err("SUBSCRIBE needs a subject".into())
-                    }
-                }
-                s if s.starts_with("UNSUBSCRIBE ") => {
-                    let mut parts = s.split("UNSUBSCRIBE ");
-                    if let Some(subject) = parts.nth(1) {
-                        conn.subscribed.remove(subject);
-                        Ok(())
-                    } else {
-                        Err("UNSUBSCRIBE needs a subject".into())
-                    }
-                }
-                s if s.starts_with("Y_SYNC_SUBSCRIBE ") => {
-                    let mut parts = s.split("Y_SYNC_SUBSCRIBE ");
-
-                    let Some(json) = parts.nth(1) else {
-                        return Err("Y_SYNC_SUBSCRIBE needs a JSON object".into());
-                    };
-
-                    let message: YSubscriptionJSON = serde_json::from_str(json)?;
-
-                    conn.y_sync_broadcaster_addr
-                        .do_send(crate::actor_messages::SubscribeYSync {
-                            addr: ctx.address(),
-                            subject: message.subject.to_string(),
-                            property: message.property.to_string(),
-                            agent: conn.agent.to_string(),
-                        });
-                    Ok(())
-                }
-                s if s.starts_with("Y_SYNC_UNSUBSCRIBE ") => {
-                    let mut parts = s.split("Y_SYNC_UNSUBSCRIBE ");
-
-                    let Some(json) = parts.nth(1) else {
-                        return Err("Y_SYNC_UNSUBSCRIBE needs a JSON object".into());
-                    };
-
-                    let message: YSubscriptionJSON = serde_json::from_str(json)?;
-
-                    conn.y_sync_broadcaster_addr
-                        .do_send(crate::actor_messages::UnsubscribeYSync {
-                            addr: ctx.address(),
-                            subject: message.subject.to_string(),
-                            property: message.property.to_string(),
-                        });
-
-                    Ok(())
-                }
-                s if s.starts_with("GET ") => {
-                    let mut parts = s.split("GET ");
-                    if let Some(subject) = parts.nth(1) {
-                        match conn
-                            .store
-                            .get_resource_extended(subject, false, &conn.agent)
-                        {
-                            Ok(r) => {
-                                let serialized =
-                                    r.to_json_ad().expect("Can't serialize Resource to JSON-AD");
-                                ctx.text(format!("RESOURCE {serialized}"));
-                                Ok(())
-                            }
-                            Err(e) => {
-                                let r = e.into_resource(subject.into());
-                                let serialized_err =
-                                    r.to_json_ad().expect("Can't serialize Resource to JSON-AD");
-                                ctx.text(format!("RESOURCE {serialized_err}"));
-                                Ok(())
-                            }
-                        }
-                    } else {
-                        Err("GET needs a subject".into())
-                    }
-                }
-                s if s.starts_with("AUTHENTICATE ") => {
-                    let mut parts = s.split("AUTHENTICATE ");
-                    if let Some(json) = parts.nth(1) {
-                        let auth_header_values: AuthValues = match serde_json::from_str(json) {
-                            Ok(auth) => auth,
-                            Err(err) => {
-                                return Err(format!("Invalid AUTHENTICATE JSON: {}", err).into())
-                            }
-                        };
-                        match get_agent_from_auth_values_and_check(
-                            Some(auth_header_values),
-                            // How will we get a Store here?
-                            &conn.store,
-                        ) {
-                            Ok(a) => {
-                                tracing::debug!("Authenticated websocket for {}", a);
-                                conn.agent = a;
-                                Ok(())
-                            }
-                            Err(e) => Err(format!("Authentication failed: {}", e).into()),
-                        }
-                    } else {
-                        Err("AUTHENTICATE needs a JSON object".into())
-                    }
-                }
-                s if s.starts_with("Y_SYNC_UPDATE ") => {
-                    let mut parts = s.split("Y_SYNC_UPDATE ");
-                    let Some(json) = parts.nth(1) else {
-                        return Err("Y_SYNC_UPDATE needs a JSON object".into());
-                    };
-
-                    let mut update: YSyncUpdate = match serde_json::from_str(json) {
-                        Ok(update) => update,
-                        Err(err) => {
-                            return Err(format!("Invalid Y_SYNC_UPDATE JSON: {}", err).into())
-                        }
-                    };
-
-                    update.addr = Some(ctx.address());
-                    conn.y_sync_broadcaster_addr.do_send(update);
-                    Ok(())
-                }
-                other => {
-                    tracing::warn!("Unknown websocket message: {}", other);
-                    Err(format!("Unknown message: {}", other).into())
-                }
+    match text.as_str() {
+        s if s.starts_with("SUBSCRIBE ") => {
+            let mut parts = s.split("SUBSCRIBE ");
+            if let Some(subject) = parts.nth(1) {
+                conn.commit_monitor_addr
+                    .do_send(crate::actor_messages::Subscribe {
+                        addr: ctx.address(),
+                        subject: subject.to_string(),
+                        agent: conn.agent.to_string(),
+                    });
+                conn.subscribed.insert(subject.into());
+                Ok(())
+            } else {
+                Err("SUBSCRIBE needs a subject".into())
             }
         }
-        Ok(ws::Message::Binary(_bin)) => Err("ERROR: Binary not supported".into()),
-        Ok(ws::Message::Close(reason)) => {
-            ctx.close(reason);
-            ctx.stop();
+        s if s.starts_with("UNSUBSCRIBE ") => {
+            let mut parts = s.split("UNSUBSCRIBE ");
+            if let Some(subject) = parts.nth(1) {
+                conn.subscribed.remove(subject);
+                Ok(())
+            } else {
+                Err("UNSUBSCRIBE needs a subject".into())
+            }
+        }
+        s if s.starts_with("Y_SYNC_SUBSCRIBE ") => {
+            let mut parts = s.split("Y_SYNC_SUBSCRIBE ");
+
+            let Some(json) = parts.nth(1) else {
+                return Err("Y_SYNC_SUBSCRIBE needs a JSON object".into());
+            };
+
+            let message: YSubscriptionJSON = serde_json::from_str(json)?;
+
+            conn.y_sync_broadcaster_addr
+                .do_send(crate::actor_messages::SubscribeYSync {
+                    addr: ctx.address(),
+                    subject: message.subject.to_string(),
+                    property: message.property.to_string(),
+                    agent: conn.agent.to_string(),
+                });
             Ok(())
         }
-        _ => {
-            ctx.stop();
+        s if s.starts_with("Y_SYNC_UNSUBSCRIBE ") => {
+            let mut parts = s.split("Y_SYNC_UNSUBSCRIBE ");
+
+            let Some(json) = parts.nth(1) else {
+                return Err("Y_SYNC_UNSUBSCRIBE needs a JSON object".into());
+            };
+
+            let message: YSubscriptionJSON = serde_json::from_str(json)?;
+
+            conn.y_sync_broadcaster_addr
+                .do_send(crate::actor_messages::UnsubscribeYSync {
+                    addr: ctx.address(),
+                    subject: message.subject.to_string(),
+                    property: message.property.to_string(),
+                });
+
             Ok(())
+        }
+        s if s.starts_with("Y_SYNC_UPDATE ") => {
+            let mut parts = s.split("Y_SYNC_UPDATE ");
+            let Some(json) = parts.nth(1) else {
+                return Err("Y_SYNC_UPDATE needs a JSON object".into());
+            };
+
+            let mut update: YSyncUpdate = match serde_json::from_str(json) {
+                Ok(update) => update,
+                Err(err) => return Err(format!("Invalid Y_SYNC_UPDATE JSON: {}", err).into()),
+            };
+
+            update.addr = Some(ctx.address());
+            conn.y_sync_broadcaster_addr.do_send(update);
+            Ok(())
+        }
+        other => {
+            tracing::warn!("Unknown websocket message: {}", other);
+            Err(format!("Unknown message: {}", other).into())
         }
     }
 }

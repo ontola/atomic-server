@@ -39,44 +39,62 @@ impl CollectionBuilder {
     /// Converts a CollectionBuilder into a Resource.
     /// Note that this does not calculate any members, and it does not generate any pages.
     /// If that is what you need, use `.into_resource`
-    pub fn to_resource(&self, store: &impl Storelike) -> AtomicResult<crate::Resource> {
-        let mut resource = store.get_resource_new(&self.subject);
+    pub async fn to_resource(&self, store: &impl Storelike) -> AtomicResult<crate::Resource> {
+        let mut resource = store.get_resource_new(&self.subject).await;
         resource.set_class(urls::COLLECTION);
         if let Some(val) = &self.property {
-            resource.set_string(crate::urls::COLLECTION_PROPERTY.into(), val, store)?;
+            resource
+                .set_string(crate::urls::COLLECTION_PROPERTY.into(), val, store)
+                .await?;
         }
         if let Some(val) = &self.value {
-            resource.set_string(crate::urls::COLLECTION_VALUE.into(), val, store)?;
+            resource
+                .set_string(crate::urls::COLLECTION_VALUE.into(), val, store)
+                .await?;
         }
         if let Some(val) = &self.name {
-            resource.set_string(crate::urls::NAME.into(), val, store)?;
+            resource
+                .set_string(crate::urls::NAME.into(), val, store)
+                .await?;
         }
         if let Some(val) = &self.sort_by {
-            resource.set_string(crate::urls::COLLECTION_SORT_BY.into(), val, store)?;
+            resource
+                .set_string(crate::urls::COLLECTION_SORT_BY.into(), val, store)
+                .await?;
         }
         if self.include_nested {
-            resource.set_string(crate::urls::COLLECTION_INCLUDE_NESTED.into(), "true", store)?;
+            resource
+                .set_string(crate::urls::COLLECTION_INCLUDE_NESTED.into(), "true", store)
+                .await?;
         }
         if self.include_external {
-            resource.set_string(
-                crate::urls::COLLECTION_INCLUDE_EXTERNAL.into(),
-                "true",
-                store,
-            )?;
+            resource
+                .set_string(
+                    crate::urls::COLLECTION_INCLUDE_EXTERNAL.into(),
+                    "true",
+                    store,
+                )
+                .await?;
         }
         if self.sort_desc {
-            resource.set_string(crate::urls::COLLECTION_SORT_DESC.into(), "true", store)?;
+            resource
+                .set_string(crate::urls::COLLECTION_SORT_DESC.into(), "true", store)
+                .await?;
         }
-        resource.set_string(
-            crate::urls::COLLECTION_CURRENT_PAGE.into(),
-            &self.current_page.to_string(),
-            store,
-        )?;
-        resource.set(
-            crate::urls::COLLECTION_PAGE_SIZE.into(),
-            self.page_size.into(),
-            store,
-        )?;
+        resource
+            .set_string(
+                crate::urls::COLLECTION_CURRENT_PAGE.into(),
+                &self.current_page.to_string(),
+                store,
+            )
+            .await?;
+        resource
+            .set(
+                crate::urls::COLLECTION_PAGE_SIZE.into(),
+                self.page_size.into(),
+                store,
+            )
+            .await?;
         // Maybe include items directly
         Ok(resource)
     }
@@ -102,12 +120,12 @@ impl CollectionBuilder {
     }
 
     /// Converts the CollectionBuilder into a collection, with Members
-    pub fn into_collection(
+    pub async fn into_collection(
         self,
         store: &impl Storelike,
         for_agent: &ForAgent,
     ) -> AtomicResult<Collection> {
-        Collection::collect_members(store, self, for_agent)
+        Collection::collect_members(store, self, for_agent).await
     }
 }
 
@@ -179,7 +197,7 @@ impl Collection {
     /// Gets the required data from the store.
     /// Applies sorting settings.
     #[tracing::instrument(skip(store))]
-    pub fn collect_members(
+    pub async fn collect_members(
         store: &impl Storelike,
         collection_builder: crate::collections::CollectionBuilder,
         for_agent: &ForAgent,
@@ -210,7 +228,7 @@ impl Collection {
             for_agent: for_agent.clone(),
         };
 
-        let query_result = store.query(&q)?;
+        let query_result = store.query(&q).await?;
         let members = query_result.subjects;
         let referenced_resources = if collection_builder.include_nested {
             Some(query_result.resources)
@@ -247,63 +265,85 @@ impl Collection {
         Ok(collection)
     }
 
-    pub fn to_resource(&self, store: &impl Storelike) -> AtomicResult<ResourceResponse> {
+    pub async fn to_resource(&self, store: &impl Storelike) -> AtomicResult<ResourceResponse> {
         let mut resource = crate::Resource::new(self.subject.clone());
-        self.add_to_resource(&mut resource, store)
+        self.add_to_resource(&mut resource, store).await
     }
 
     /// Adds the Collection props to an existing Resource.
-    pub fn add_to_resource(
+    pub async fn add_to_resource(
         &self,
         resource: &mut Resource,
         store: &impl Storelike,
     ) -> AtomicResult<ResourceResponse> {
-        resource.set(
-            crate::urls::COLLECTION_MEMBERS.into(),
-            self.members.clone().into(),
-            store,
-        )?;
+        resource
+            .set(
+                crate::urls::COLLECTION_MEMBERS.into(),
+                self.members.clone().into(),
+                store,
+            )
+            .await?;
         if let Some(prop) = &self.property {
-            resource.set_string(crate::urls::COLLECTION_PROPERTY.into(), prop, store)?;
+            resource
+                .set_string(crate::urls::COLLECTION_PROPERTY.into(), prop, store)
+                .await?;
         }
         if self.include_nested {
-            resource.set_string(crate::urls::COLLECTION_INCLUDE_NESTED.into(), "true", store)?;
+            resource
+                .set_string(crate::urls::COLLECTION_INCLUDE_NESTED.into(), "true", store)
+                .await?;
         }
         if self.include_external {
-            resource.set_string(
-                crate::urls::COLLECTION_INCLUDE_EXTERNAL.into(),
-                "true",
-                store,
-            )?;
+            resource
+                .set_string(
+                    crate::urls::COLLECTION_INCLUDE_EXTERNAL.into(),
+                    "true",
+                    store,
+                )
+                .await?;
         }
         if let Some(val) = &self.value {
-            resource.set_string(crate::urls::COLLECTION_VALUE.into(), val, store)?;
+            resource
+                .set_string(crate::urls::COLLECTION_VALUE.into(), val, store)
+                .await?;
         }
         if let Some(val) = &self.name {
-            resource.set_string(crate::urls::NAME.into(), val, store)?;
+            resource
+                .set_string(crate::urls::NAME.into(), val, store)
+                .await?;
         }
-        resource.set(
-            crate::urls::COLLECTION_MEMBER_COUNT.into(),
-            self.total_items.into(),
-            store,
-        )?;
+        resource
+            .set(
+                crate::urls::COLLECTION_MEMBER_COUNT.into(),
+                self.total_items.into(),
+                store,
+            )
+            .await?;
         let classes: Vec<String> = vec![crate::urls::COLLECTION.into()];
-        resource.set(crate::urls::IS_A.into(), classes.into(), store)?;
-        resource.set(
-            crate::urls::COLLECTION_TOTAL_PAGES.into(),
-            self.total_pages.into(),
-            store,
-        )?;
-        resource.set(
-            crate::urls::COLLECTION_CURRENT_PAGE.into(),
-            self.current_page.into(),
-            store,
-        )?;
-        resource.set(
-            crate::urls::COLLECTION_PAGE_SIZE.into(),
-            self.page_size.into(),
-            store,
-        )?;
+        resource
+            .set(crate::urls::IS_A.into(), classes.into(), store)
+            .await?;
+        resource
+            .set(
+                crate::urls::COLLECTION_TOTAL_PAGES.into(),
+                self.total_pages.into(),
+                store,
+            )
+            .await?;
+        resource
+            .set(
+                crate::urls::COLLECTION_CURRENT_PAGE.into(),
+                self.current_page.into(),
+                store,
+            )
+            .await?;
+        resource
+            .set(
+                crate::urls::COLLECTION_PAGE_SIZE.into(),
+                self.page_size.into(),
+                store,
+            )
+            .await?;
 
         match &self.referenced_resources {
             Some(referenced_resources) => {
@@ -321,9 +361,9 @@ impl Collection {
 /// The query params are used to override the stored Collection resource properties.
 /// This also sets defaults for Collection properties when fields are missing
 #[tracing::instrument(skip(store, query_params))]
-pub fn construct_collection_from_params(
+pub async fn construct_collection_from_params(
     store: &impl Storelike,
-    query_params: url::form_urlencoded::Parse,
+    query_params: url::form_urlencoded::Parse<'_>,
     resource: &mut Resource,
     for_agent: &ForAgent,
 ) -> AtomicResult<ResourceResponse> {
@@ -382,17 +422,17 @@ pub fn construct_collection_from_params(
         include_nested,
         include_external,
     };
-    let collection = Collection::collect_members(store, collection_builder, for_agent)?;
-    collection.add_to_resource(resource, store)
+    let collection = Collection::collect_members(store, collection_builder, for_agent).await?;
+    collection.add_to_resource(resource, store).await
 }
 
 /// Creates a Collection resource in the Store for a Class, for example `/documents`.
 /// Does not save it, though.
-pub fn create_collection_resource_for_class(
+pub async fn create_collection_resource_for_class(
     store: &impl Storelike,
     class_subject: &str,
 ) -> AtomicResult<Resource> {
-    let class = store.get_class(class_subject)?;
+    let class = store.get_class(class_subject).await?;
 
     // Pluralize the shortname
     let pluralized = match class.shortname.as_ref() {
@@ -415,7 +455,7 @@ pub fn create_collection_resource_for_class(
         _other => false,
     };
 
-    let mut collection_resource = collection.to_resource(store)?;
+    let mut collection_resource = collection.to_resource(store).await?;
 
     let drive = store
         .get_self_url()
@@ -428,9 +468,13 @@ pub fn create_collection_resource_for_class(
         format!("{}/collections", drive)
     };
 
-    collection_resource.set_string(urls::PARENT.into(), &parent, store)?;
+    collection_resource
+        .set_string(urls::PARENT.into(), &parent, store)
+        .await?;
 
-    collection_resource.set_string(urls::NAME.into(), &pluralized, store)?;
+    collection_resource
+        .set_string(urls::NAME.into(), &pluralized, store)
+        .await?;
 
     // Should we use save_locally, which creates commits, or add_resource_unsafe, which is faster?
     Ok(collection_resource)
@@ -442,10 +486,10 @@ mod test {
     use crate::urls;
     use crate::Storelike;
 
-    #[test]
-    fn create_collection() {
-        let store = crate::Store::init().unwrap();
-        store.populate().unwrap();
+    #[tokio::test]
+    async fn create_collection() {
+        let store = crate::Store::init().await.unwrap();
+        store.populate().await.unwrap();
         let collection_builder = CollectionBuilder {
             subject: "test_subject".into(),
             property: Some(urls::IS_A.into()),
@@ -458,15 +502,16 @@ mod test {
             include_nested: false,
             include_external: false,
         };
-        let collection =
-            Collection::collect_members(&store, collection_builder, &ForAgent::Sudo).unwrap();
+        let collection = Collection::collect_members(&store, collection_builder, &ForAgent::Sudo)
+            .await
+            .unwrap();
         assert!(collection.members.contains(&urls::PROPERTY.into()));
     }
 
-    #[test]
-    fn create_collection_2() {
-        let store = crate::Store::init().unwrap();
-        store.populate().unwrap();
+    #[tokio::test]
+    async fn create_collection_2() {
+        let store = crate::Store::init().await.unwrap();
+        store.populate().await.unwrap();
         let collection_builder = CollectionBuilder {
             subject: "test_subject".into(),
             property: Some(urls::IS_A.into()),
@@ -479,20 +524,21 @@ mod test {
             include_nested: false,
             include_external: false,
         };
-        let collection =
-            Collection::collect_members(&store, collection_builder, &ForAgent::Sudo).unwrap();
+        let collection = Collection::collect_members(&store, collection_builder, &ForAgent::Sudo)
+            .await
+            .unwrap();
         assert!(collection.members.contains(&urls::PROPERTY.into()));
 
-        let resource_collection = &collection.to_resource(&store).unwrap().to_single();
+        let resource_collection = &collection.to_resource(&store).await.unwrap().to_single();
         resource_collection
             .get(urls::COLLECTION_INCLUDE_NESTED)
             .unwrap_err();
     }
 
-    #[test]
-    fn create_collection_nested_members_and_sorting() {
-        let store = crate::Store::init().unwrap();
-        store.populate().unwrap();
+    #[tokio::test]
+    async fn create_collection_nested_members_and_sorting() {
+        let store = crate::Store::init().await.unwrap();
+        store.populate().await.unwrap();
         let collection_builder = CollectionBuilder {
             subject: "test_subject".into(),
             property: Some(urls::IS_A.into()),
@@ -506,12 +552,13 @@ mod test {
             include_nested: true,
             include_external: false,
         };
-        let collection =
-            Collection::collect_members(&store, collection_builder, &ForAgent::Sudo).unwrap();
+        let collection = Collection::collect_members(&store, collection_builder, &ForAgent::Sudo)
+            .await
+            .unwrap();
         let first_resource = &collection.referenced_resources.clone().unwrap()[0];
         assert!(first_resource.get_subject().contains("Agent"));
 
-        let resource_collection = &collection.to_resource(&store).unwrap().to_single();
+        let resource_collection = &collection.to_resource(&store).await.unwrap().to_single();
         let val = resource_collection
             .get(urls::COLLECTION_INCLUDE_NESTED)
             .unwrap()
@@ -520,10 +567,14 @@ mod test {
         assert!(val, "Include nested must be true");
     }
 
+    #[tokio::test]
     #[cfg(feature = "db")]
-    #[test]
-    fn get_collection() {
-        let store = crate::db::test::DB.lock().unwrap().clone();
+    async fn get_collection() {
+        let store = crate::db::test::get_shared_db()
+            .await
+            .lock()
+            .unwrap()
+            .clone();
         let subjects: Vec<String> = store
             .all_resources(false)
             .map(|r| r.get_subject().into())
@@ -535,6 +586,7 @@ mod test {
                 false,
                 &ForAgent::Public,
             )
+            .await
             .unwrap()
             .to_single();
         assert!(
@@ -554,12 +606,12 @@ mod test {
         );
     }
 
-    #[test]
+    #[tokio::test]
     #[ignore]
     // TODO: This currently only tests atomicdata.dev, should test local resources. These need to be rewritten
-    fn get_collection_params() {
-        let store = crate::Store::init().unwrap();
-        store.populate().unwrap();
+    async fn get_collection_params() {
+        let store = crate::Store::init().await.unwrap();
+        store.populate().await.unwrap();
 
         let collection_page_size = store
             .get_resource_extended(
@@ -567,6 +619,7 @@ mod test {
                 false,
                 &ForAgent::Public,
             )
+            .await
             .unwrap()
             .to_single();
         assert!(
@@ -582,6 +635,7 @@ mod test {
                 false,
                 &ForAgent::Public,
             )
+            .await
             .unwrap()
             .to_single();
         assert!(

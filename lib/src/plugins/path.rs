@@ -1,5 +1,5 @@
 use crate::{
-    endpoints::{Endpoint, HandleGetContext},
+    endpoints::{BoxFuture, Endpoint, HandleGetContext},
     errors::AtomicResult,
     storelike::ResourceResponse,
     urls, Resource, Storelike,
@@ -17,34 +17,46 @@ pub fn path_endpoint() -> Endpoint {
 }
 
 #[tracing::instrument]
-fn handle_path_request(context: HandleGetContext) -> AtomicResult<ResourceResponse> {
-    let HandleGetContext {
-        store,
-        for_agent,
-        subject,
-    } = context;
-    let params = subject.query_pairs();
-    let mut path = None;
-    for (k, v) in params {
-        if let "path" = k.as_ref() {
-            path = Some(v.to_string())
-        };
-    }
-    if path.is_none() {
-        return path_endpoint().to_resource_response(store);
-    }
-    let result = store.get_path(&path.unwrap(), None, for_agent)?;
-    match result {
-        crate::storelike::PathReturn::Subject(subject) => {
-            store.get_resource_extended(&subject, false, for_agent)
+fn handle_path_request<'a>(
+    context: HandleGetContext<'a>,
+) -> BoxFuture<'a, AtomicResult<ResourceResponse>> {
+    Box::pin(async move {
+        let HandleGetContext {
+            store,
+            for_agent,
+            subject,
+        } = context;
+        let params = subject.query_pairs();
+        let mut path = None;
+        for (k, v) in params {
+            if let "path" = k.as_ref() {
+                path = Some(v.to_string())
+            };
         }
-        crate::storelike::PathReturn::Atom(atom) => {
-            let mut resource = Resource::new(subject.to_string());
-            resource.set_string(urls::ATOM_SUBJECT.into(), &atom.subject, store)?;
-            resource.set_string(urls::ATOM_PROPERTY.into(), &atom.property, store)?;
-            resource.set_string(urls::ATOM_VALUE.into(), &atom.value.to_string(), store)?;
+        if path.is_none() {
+            return path_endpoint().to_resource_response(store).await;
+        }
+        let result = store.get_path(&path.unwrap(), None, for_agent).await?;
+        match result {
+            crate::storelike::PathReturn::Subject(subject) => {
+                store
+                    .get_resource_extended(&subject, false, for_agent)
+                    .await
+            }
+            crate::storelike::PathReturn::Atom(atom) => {
+                let mut resource = Resource::new(subject.to_string());
+                resource
+                    .set_string(urls::ATOM_SUBJECT.into(), &atom.subject, store)
+                    .await?;
+                resource
+                    .set_string(urls::ATOM_PROPERTY.into(), &atom.property, store)
+                    .await?;
+                resource
+                    .set_string(urls::ATOM_VALUE.into(), &atom.value.to_string(), store)
+                    .await?;
 
-            Ok(ResourceResponse::Resource(resource))
+                Ok(ResourceResponse::Resource(resource))
+            }
         }
-    }
+    })
 }

@@ -10,7 +10,7 @@ use crate::{
 };
 use actix::{
     prelude::{Actor, Context, Handler},
-    ActorStreamExt, Addr, ContextFutureSpawner,
+    ActorFutureExt, ActorStreamExt, Addr, ContextFutureSpawner, ResponseActFuture, WrapFuture,
 };
 use atomic_lib::{agents::ForAgent, Db, Storelike};
 use chrono::Local;
@@ -45,7 +45,7 @@ impl Actor for CommitMonitor {
 }
 
 impl Handler<Subscribe> for CommitMonitor {
-    type Result = ();
+    type Result = ResponseActFuture<Self, ()>;
 
     // A message comes in when a client subscribes to a subject.
     #[tracing::instrument(
@@ -53,85 +53,66 @@ impl Handler<Subscribe> for CommitMonitor {
         skip_all,
         fields(to = %msg.subject, agent = %msg.agent)
     )]
-    fn handle(&mut self, msg: Subscribe, _ctx: &mut Context<Self>) {
-        // check if the agent has the rights to subscribe to this resource
-        if !msg.subject.starts_with(&self.store.get_self_url().unwrap()) {
-            tracing::warn!("can't subscribe to external resource");
-            return;
-        }
-        match self.store.get_resource(&msg.subject) {
-            Ok(resource) => {
-                match atomic_lib::hierarchy::check_read(
-                    &self.store,
-                    &resource,
-                    &ForAgent::AgentSubject(msg.agent.clone()),
-                ) {
-                    Ok(_explanation) => {
-                        let mut set = if let Some(set) = self.subscriptions.get(&msg.subject) {
-                            set.clone()
-                        } else {
-                            HashSet::new()
-                        };
-                        set.insert(msg.addr);
-                        tracing::debug!("handle subscribe {} ", msg.subject);
-                        self.subscriptions.insert(msg.subject.clone(), set);
+    fn handle(&mut self, msg: Subscribe, _ctx: &mut Context<Self>) -> Self::Result {
+        let store = self.store.clone();
+        Box::pin(
+            async move {
+                // check if the agent has the rights to subscribe to this resource
+                let self_url = store
+                    .get_self_url()
+                    .expect("No self url set in Commit Monitor");
+                if !msg.subject.starts_with(&self_url) {
+                    tracing::warn!("can't subscribe to external resource");
+                    return None;
+                }
+                match store.get_resource(&msg.subject).await {
+                    Ok(resource) => {
+                        match atomic_lib::hierarchy::check_read(
+                            &store,
+                            &resource,
+                            &ForAgent::AgentSubject(msg.agent.clone()),
+                        )
+                        .await
+                        {
+                            Ok(_explanation) => Some(msg),
+                            Err(unauthorized_err) => {
+                                tracing::debug!(
+                                    "Not allowed {} to subscribe to {}: {}",
+                                    &msg.agent,
+                                    &msg.subject,
+                                    unauthorized_err
+                                );
+                                None
+                            }
+                        }
                     }
-                    Err(unauthorized_err) => {
+                    Err(e) => {
                         tracing::debug!(
-                            "Not allowed {} to subscribe to {}: {}",
-                            &msg.agent,
+                            "Subscribe failed for {} by {}: {}",
                             &msg.subject,
-                            unauthorized_err
+                            msg.agent,
+                            e
                         );
+                        None
                     }
                 }
             }
-            Err(e) => {
-                tracing::debug!(
-                    "Subscribe failed for {} by {}: {}",
-                    &msg.subject,
-                    msg.agent,
-                    e
-                );
-            }
-        }
+            .into_actor(self)
+            .map(|msg, actor, _ctx| {
+                if let Some(msg) = msg {
+                    let set = actor
+                        .subscriptions
+                        .entry(msg.subject.clone())
+                        .or_insert_with(HashSet::new);
+                    set.insert(msg.addr);
+                    tracing::debug!("handle subscribe {} ", msg.subject);
+                }
+            }),
+        )
     }
 }
 
 impl CommitMonitor {
-    /// When a commit comes in, send it to any listening subscribers,
-    /// and update the value index.
-    /// The search index is only updated if the last search commit is 15 seconds or older.
-    fn handle_internal(&mut self, msg: CommitMessage) -> AtomicServerResult<()> {
-        let target = msg.commit_response.commit.subject.clone();
-
-        // Notify websocket listeners
-        if let Some(subscribers) = self.subscriptions.get(&target) {
-            tracing::debug!(
-                "Sending commit {} to {} subscribers",
-                target,
-                subscribers.len()
-            );
-            for connection in subscribers {
-                connection.do_send(msg.clone());
-            }
-        } else {
-            tracing::debug!("No subscribers for {}", target);
-        }
-
-        // Update the search index
-        self.search_state.remove_resource(&target)?;
-        if let Some(resource) = &msg.commit_response.resource_new {
-            // We could one day re-(allow) to keep old resources,
-            // but then we also should index the older versions when re-indexing.
-            // Add new resource to search index
-            self.search_state.add_resource(resource, &self.store)?;
-        }
-
-        self.run_expensive_next_tick = true;
-        Ok(())
-    }
-
     /// Runs every X seconds to perform expensive operations.
     fn tick(&mut self, _ctx: &mut Context<Self>) {
         if self.run_expensive_next_tick {
@@ -155,20 +136,62 @@ impl CommitMonitor {
 }
 
 impl Handler<CommitMessage> for CommitMonitor {
-    type Result = ();
+    type Result = ResponseActFuture<Self, ()>;
 
     #[tracing::instrument(name = "handle_commit_message", skip_all, fields(subscriptions = &self.subscriptions.len(), s = %msg.commit_response.commit_resource.get_subject()))]
-    fn handle(&mut self, msg: CommitMessage, _: &mut Context<Self>) {
-        // We have moved the logic to the `handle_internal` function for decent error handling
-        match self.handle_internal(msg) {
-            Ok(_) => {}
-            Err(e) => {
-                tracing::error!(
+    fn handle(&mut self, msg: CommitMessage, _: &mut Context<Self>) -> Self::Result {
+        let target = msg.commit_response.commit.subject.clone();
+
+        // Notify websocket listeners
+        if let Some(subscribers) = self.subscriptions.get(&target) {
+            tracing::debug!(
+                "Sending commit {} to {} subscribers",
+                target,
+                subscribers.len()
+            );
+            for connection in subscribers {
+                connection.do_send(msg.clone());
+            }
+        } else {
+            tracing::debug!("No subscribers for {}", target);
+        }
+
+        let store = self.store.clone();
+        let search_state = self.search_state.clone();
+        let resource_new = msg.commit_response.resource_new.clone();
+
+        Box::pin(
+            async move {
+                search_state.remove_resource(&target).map_err(|e| {
+                    format!(
+                        "Handling commit in CommitMonitor failed, cache may not be fully updated: {}",
+                        e
+                    )
+                })?;
+                if let Some(resource) = resource_new {
+                    // We could one day re-(allow) to keep old resources,
+                    // but then we also should index the older versions when re-indexing.
+                    // Add new resource to search index
+                    search_state
+                        .add_resource(&resource, &store)
+                        .await
+                        .map_err(|e| {
+                            format!(
                     "Handling commit in CommitMonitor failed, cache may not be fully updated: {}",
                     e
-                );
+                )
+                        })?;
+                }
+                Ok::<_, String>(())
             }
-        }
+            .into_actor(self)
+            .map(|res, actor, _ctx| {
+                if let Err(e) = res {
+                    tracing::error!("{}", e);
+                }
+                actor.run_expensive_next_tick = true;
+            }),
+        )
     }
 }
 

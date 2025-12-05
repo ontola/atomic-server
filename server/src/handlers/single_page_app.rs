@@ -13,10 +13,10 @@ pub async fn single_page(
     let template = include_str!("../../assets_tmp/index.html");
     let csp_nonce = generate_nonce().map_err(|_e| "Failed to generate nonce")?;
     let subject = format!("{}/{}", appstate.store.get_server_url()?, path);
-    let meta_tags: MetaTags = if let Ok(resource_response) =
-        appstate
-            .store
-            .get_resource_extended(&subject, true, &ForAgent::Public)
+    let meta_tags: MetaTags = if let Ok(resource_response) = appstate
+        .store
+        .get_resource_extended(&subject, true, &ForAgent::Public)
+        .await
     {
         resource_response.into()
     } else {
