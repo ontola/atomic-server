@@ -1723,7 +1723,6 @@ export class Resource<C extends OptionalClass = any> {
       // If the server is not connected, save locally and queue for sync.
       if (!this.store.serverConnected) {
         await this.applyPendingCommitsLocally();
-        this.store.markDirtyForSync(this.subject);
         this.commitError = undefined;
         this.loading = false;
         // Notify subscribers so the UI updates (e.g. sidebar sees new subResources)
@@ -1749,7 +1748,6 @@ export class Resource<C extends OptionalClass = any> {
       if (isNetworkError(e)) {
         this.store.setServerConnected(false);
         await this.applyPendingCommitsLocally();
-        this.store.markDirtyForSync(this.subject);
         this.commitError = undefined;
         this.loading = false;
         this.store.applyIncoming({
