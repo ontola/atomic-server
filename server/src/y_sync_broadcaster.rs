@@ -5,7 +5,7 @@ use crate::{
 
 use actix::{
     prelude::{Actor, Context, Handler},
-    Addr,
+    ActorFutureExt, Addr, ResponseActFuture, WrapFuture,
 };
 use atomic_lib::{agents::ForAgent, Db, Storelike};
 use std::collections::{HashMap, HashSet};
@@ -30,71 +30,83 @@ impl Actor for YSyncBroadcaster {
 }
 
 impl Handler<SubscribeYSync> for YSyncBroadcaster {
-    type Result = ();
+    type Result = ResponseActFuture<Self, ()>;
 
-    fn handle(&mut self, msg: SubscribeYSync, _ctx: &mut Context<Self>) {
-        if !msg.subject.starts_with(&self.store.get_self_url().unwrap()) {
-            tracing::warn!("can't subscribe to external resource");
-            return;
-        }
-        let key = (msg.subject.clone(), msg.property.clone());
+    fn handle(&mut self, msg: SubscribeYSync, _ctx: &mut Context<Self>) -> Self::Result {
+        let store = self.store.clone();
+        Box::pin(
+            async move {
+                let self_url = store.get_self_url().unwrap();
+                if !msg.subject.starts_with(&self_url) {
+                    tracing::warn!("can't subscribe to external resource");
+                    return None;
+                }
+                let key = (msg.subject.clone(), msg.property.clone());
 
-        let resource = match self.store.get_resource(&msg.subject) {
-            Ok(resource) => resource,
-            Err(e) => {
-                tracing::debug!(
-                    "Subscribe failed for {} by {}: {}",
-                    &msg.subject,
-                    msg.agent,
-                    e
-                );
-                return;
-            }
-        };
+                let resource = match store.get_resource(&msg.subject).await {
+                    Ok(resource) => resource,
+                    Err(e) => {
+                        tracing::debug!(
+                            "Subscribe failed for {} by {}: {}",
+                            &msg.subject,
+                            msg.agent,
+                            e
+                        );
+                        return None;
+                    }
+                };
 
-        let mut can_write = false;
+                let mut can_write = false;
 
-        // First check if the agent has write rights, if not, check for read rights, if not, don't subscribe.
-        match atomic_lib::hierarchy::check_write(
-            &self.store,
-            &resource,
-            &ForAgent::AgentSubject(msg.agent.clone()),
-        ) {
-            Ok(_) => {
-                can_write = true;
-            }
-            Err(_) => {
-                match atomic_lib::hierarchy::check_read(
-                    &self.store,
+                // First check if the agent has write rights, if not, check for read rights, if not, don't subscribe.
+                match atomic_lib::hierarchy::check_write(
+                    &store,
                     &resource,
                     &ForAgent::AgentSubject(msg.agent.clone()),
-                ) {
-                    Ok(_) => {}
-                    Err(unauthorized_err) => {
-                        tracing::debug!(
-                            "Not allowed {} to subscribe to {}: {}",
-                            &msg.agent,
-                            &msg.subject,
-                            unauthorized_err
-                        );
-                        return;
+                )
+                .await
+                {
+                    Ok(_) => {
+                        can_write = true;
+                    }
+                    Err(_) => {
+                        match atomic_lib::hierarchy::check_read(
+                            &store,
+                            &resource,
+                            &ForAgent::AgentSubject(msg.agent.clone()),
+                        )
+                        .await
+                        {
+                            Ok(_) => {}
+                            Err(unauthorized_err) => {
+                                tracing::debug!(
+                                    "Not allowed {} to subscribe to {}: {}",
+                                    &msg.agent,
+                                    &msg.subject,
+                                    unauthorized_err
+                                );
+                                return None;
+                            }
+                        }
                     }
                 }
+                Some((key, msg.addr, can_write, msg.subject))
             }
-        }
+            .into_actor(self)
+            .map(|res, actor, _ctx| {
+                if let Some((key, addr, can_write, subject)) = res {
+                    let mut set = actor
+                        .subscriptions
+                        .get(&key)
+                        .unwrap_or(&HashSet::new())
+                        .clone();
 
-        let mut set = self
-            .subscriptions
-            .get(&key)
-            .unwrap_or(&HashSet::new())
-            .clone();
-
-        set.insert(Subscription {
-            addr: msg.addr,
-            can_write,
-        });
-        tracing::debug!("handle subscribe {} ", msg.subject);
-        self.subscriptions.insert(key.clone(), set);
+                    set.insert(Subscription { addr, can_write });
+                    tracing::debug!("handle subscribe {} ", subject);
+                    actor.subscriptions.insert(key, set);
+                }
+            }),
+        )
     }
 }
 

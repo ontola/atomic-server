@@ -13,13 +13,14 @@ use crate::{
 /// Ignores all atoms where the subject is different.
 /// WARNING: Calls store methods, and is called by store methods, might get stuck in a loop!
 #[tracing::instrument(skip(store), level = "info")]
-pub fn fetch_resource(
+pub async fn fetch_resource(
     subject: &str,
     store: &impl Storelike,
     client_agent: Option<&Agent>,
 ) -> AtomicResult<ResourceResponse> {
     let body = fetch_body(subject, crate::parse::JSON_AD_MIME, client_agent)?;
-    let resources = parse_json_ad_string(&body, store, &ParseOpts::default())
+    let resources = Box::pin(parse_json_ad_string(&body, store, &ParseOpts::default()))
+        .await
         .map_err(|e| format!("Error parsing body of {}. {}", subject, e))?;
 
     if resources.len() == 1 {
@@ -124,21 +125,21 @@ pub fn fetch_body(
 }
 
 /// Posts a Commit to the endpoint of the Subject from the Commit
-pub fn post_commit(commit: &crate::Commit, store: &impl Storelike) -> AtomicResult<()> {
+pub async fn post_commit(commit: &crate::Commit, store: &impl Storelike) -> AtomicResult<()> {
     let server_url = crate::utils::server_url(commit.get_subject())?;
     // Default Commit endpoint is `https://example.com/commit`
     let endpoint = format!("{}commit", server_url);
-    post_commit_custom_endpoint(&endpoint, commit, store)
+    post_commit_custom_endpoint(&endpoint, commit, store).await
 }
 
 /// Posts a Commit to an endpoint
 /// Default commit endpoint is `https://example.com/commit`
-fn post_commit_custom_endpoint(
+async fn post_commit_custom_endpoint(
     endpoint: &str,
     commit: &crate::Commit,
     store: &impl Storelike,
 ) -> AtomicResult<()> {
-    let json = commit.into_resource(store)?.to_json_ad()?;
+    let json = commit.into_resource(store).await?.to_json_ad()?;
 
     let agent = ureq::builder()
         .timeout(std::time::Duration::from_secs(2))
@@ -167,11 +168,12 @@ fn post_commit_custom_endpoint(
 mod test {
     use super::*;
 
-    #[test]
+    #[tokio::test]
     #[ignore]
-    fn fetch_resource_basic() {
-        let store = crate::Store::init().unwrap();
+    async fn fetch_resource_basic() {
+        let store = crate::Store::init().await.unwrap();
         let resource = fetch_resource(crate::urls::SHORTNAME, &store, None)
+            .await
             .unwrap()
             .to_single();
 
@@ -179,9 +181,9 @@ mod test {
         assert!(shortname.to_string() == "shortname");
     }
 
-    #[test]
+    #[tokio::test]
     #[ignore]
-    fn post_commit_basic() {
+    async fn post_commit_basic() {
         // let store = Store::init().unwrap();
         // // TODO actually make this work
         // let commit = crate::commit::CommitBuilder::new("subject".into())

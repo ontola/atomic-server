@@ -69,7 +69,7 @@ pub async fn search_query(
         DEFAULT_RETURN_LIMIT
     };
 
-    let query = query_from_params(&params, &fields, &appstate)?;
+    let query = query_from_params(&params, &fields, &appstate).await?;
     timer.add("build_query");
     let top_docs = searcher
         .search(
@@ -89,22 +89,26 @@ pub async fn search_query(
         req.uri().path_and_query().ok_or("Add a query param")?
     );
 
-    let mut results_resource = atomic_lib::plugins::search::search_endpoint().to_resource(store)?;
+    let mut results_resource = atomic_lib::plugins::search::search_endpoint()
+        .to_resource(store)
+        .await?;
     results_resource.set_subject(subject.clone());
 
     timer.add("get_resources");
     // Get all resources returned by the search, this also performs authorization checks!
-    let resources = get_resources(req, &appstate, &subject, subjects.clone(), limit)?;
+    let resources = get_resources(req, &appstate, &subject, subjects.clone(), limit).await?;
 
     // Convert the list of resources back into subjects.
     let filtered_subjects: Vec<String> =
         resources.iter().map(|r| r.get_subject().clone()).collect();
 
-    results_resource.set(
-        urls::ENDPOINT_RESULTS.into(),
-        filtered_subjects.into(),
-        store,
-    )?;
+    results_resource
+        .set(
+            urls::ENDPOINT_RESULTS.into(),
+            filtered_subjects.into(),
+            store,
+        )
+        .await?;
 
     let mut result_vec: Vec<Resource> = if params.include.unwrap_or(false) {
         resources
@@ -129,7 +133,7 @@ pub struct StringAtom {
 }
 
 #[instrument(skip(appstate, req))]
-fn get_resources(
+async fn get_resources(
     req: actix_web::HttpRequest,
     appstate: &web::Data<AppState>,
     subject: &str,
@@ -143,9 +147,14 @@ fn get_resources(
     // But we could probably do some things to speed this up: make it async / parallel, check admin rights.
     // https://github.com/atomicdata-dev/atomic-server/issues/279
     // https://github.com/atomicdata-dev/atomic-server/issues/280/
-    let for_agent = crate::helpers::get_client_agent(req.headers(), appstate, subject.into())?;
+    let for_agent =
+        crate::helpers::get_client_agent(req.headers(), appstate, subject.into()).await?;
     for s in subjects {
-        match appstate.store.get_resource_extended(&s, true, &for_agent) {
+        match appstate
+            .store
+            .get_resource_extended(&s, true, &for_agent)
+            .await
+        {
             Ok(r) => {
                 if resources.len() < limit {
                     resources.push(r.to_single());
@@ -163,7 +172,7 @@ fn get_resources(
 }
 
 #[tracing::instrument(skip(appstate))]
-fn query_from_params(
+async fn query_from_params(
     params: &SearchQuery,
     fields: &Fields,
     appstate: &web::Data<AppState>,
@@ -173,7 +182,7 @@ fn query_from_params(
     if let Some(parents) = &params.parents {
         let mut queries: Vec<Box<dyn Query>> = Vec::new();
         for parent in parents {
-            let boxed_q = build_parent_query(parent, fields, &appstate.store)?;
+            let boxed_q = build_parent_query(parent, fields, &appstate.store).await?;
             queries.push(Box::new(boxed_q));
         }
 
@@ -258,9 +267,13 @@ fn build_filter_query(
 }
 
 #[tracing::instrument(skip(store))]
-fn build_parent_query(subject: &str, fields: &Fields, store: &Db) -> AtomicServerResult<TermQuery> {
-    let resource = store.get_resource(subject)?;
-    let facet = resource_to_facet(&resource, store)?;
+async fn build_parent_query(
+    subject: &str,
+    fields: &Fields,
+    store: &Db,
+) -> AtomicServerResult<TermQuery> {
+    let resource = store.get_resource(subject).await?;
+    let facet = resource_to_facet(&resource, store).await?;
     let term = Term::from_facet(fields.hierarchy, &facet);
 
     Ok(TermQuery::new(

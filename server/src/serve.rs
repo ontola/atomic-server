@@ -4,7 +4,7 @@ use actix_web::{middleware, web, HttpServer};
 use crate::errors::AtomicServerResult;
 
 /// Clears and rebuilds the Store & Search indexes
-fn rebuild_indexes(appstate: &crate::appstate::AppState) -> AtomicServerResult<()> {
+async fn rebuild_indexes(appstate: &crate::appstate::AppState) -> AtomicServerResult<()> {
     let appstate_clone = appstate.clone();
 
     actix_web::rt::spawn(async move {
@@ -25,7 +25,10 @@ fn rebuild_indexes(appstate: &crate::appstate::AppState) -> AtomicServerResult<(
         .write()
         .expect("Could not get a lock on search writer")
         .delete_all_documents()?;
-    appstate.search_state.add_all_resources(&appstate.store)?;
+    appstate
+        .search_state
+        .add_all_resources(&appstate.store)
+        .await?;
     Ok(())
 }
 
@@ -38,11 +41,11 @@ pub async fn serve(config: crate::config::Config) -> AtomicServerResult<()> {
     let tracing_chrome_flush_guard = crate::trace::init_tracing(&config);
 
     // Setup the database and more
-    let appstate = crate::appstate::AppState::init(config.clone())?;
+    let appstate = crate::appstate::AppState::init(config.clone()).await?;
 
     // Start async processes
     if config.opts.rebuild_indexes {
-        rebuild_indexes(&appstate)?;
+        rebuild_indexes(&appstate).await?;
     }
 
     let server = HttpServer::new(move || {

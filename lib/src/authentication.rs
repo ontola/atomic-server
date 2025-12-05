@@ -54,7 +54,7 @@ const ACCEPTABLE_TIME_DIFFERENCE: i64 = 10000;
 /// Checks if the auth headers are correct, whether signature matches the public key, whether the timestamp is valid.
 /// by default, returns the public agent
 #[tracing::instrument(skip_all)]
-pub fn get_agent_from_auth_values_and_check(
+pub async fn get_agent_from_auth_values_and_check(
     auth_header_values: Option<AuthValues>,
     store: &impl Storelike,
 ) -> AtomicResult<ForAgent> {
@@ -65,7 +65,9 @@ pub fn get_agent_from_auth_values_and_check(
         // check if the timestamp is valid
         check_timestamp_in_past(auth_vals.timestamp, ACCEPTABLE_TIME_DIFFERENCE)?;
         // check if the public key belongs to the agent
-        let found_public_key = store.get_value(&auth_vals.agent_subject, urls::PUBLIC_KEY)?;
+        let found_public_key = store
+            .get_value(&auth_vals.agent_subject, urls::PUBLIC_KEY)
+            .await?;
         if found_public_key.to_string() != auth_vals.public_key {
             Err(
                 "The public key in the auth headers does not match the public key in the agent"

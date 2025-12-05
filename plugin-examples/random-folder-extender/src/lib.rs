@@ -1,11 +1,19 @@
 use atomic_plugin::{ClassExtender, Commit, Resource};
 use rand::Rng;
+use serde::Serialize;
+use waki::Client;
 
 struct RandomFolderExtender;
+
+#[derive(Serialize)]
+struct DiscordWebhookBody {
+    content: String,
+}
 
 const FOLDER_CLASS: &str = "https://atomicdata.dev/classes/Folder";
 const NAME_PROP: &str = "https://atomicdata.dev/properties/name";
 const IS_A: &str = "https://atomicdata.dev/properties/isA";
+const DISCORD_WEBHOOK_URL: &str = "<YOUR DISCORD WEBHOOK URL>";
 
 fn get_name_from_folder(folder: &Resource) -> Result<&str, String> {
     let name = folder
@@ -41,7 +49,7 @@ impl ClassExtender for RandomFolderExtender {
         Ok(Some(resource))
     }
 
-    // Enforce that folder names are unique
+    // Enforce that folder names are unique. It looks up all folders and checks if any of them have the same name.
     fn before_commit(commit: &Commit, _snapshot: Option<&Resource>) -> Result<(), String> {
         let Some(set) = &commit.set else {
             return Ok(());
@@ -61,6 +69,30 @@ impl ClassExtender for RandomFolderExtender {
             return Err("Folder name must be unique".into());
         }
 
+        Ok(())
+    }
+
+    // Send a message to a Discord webhook when a folder is updated.
+    fn after_commit(_commit: &Commit, resource: Option<&Resource>) -> Result<(), String> {
+        let Some(resource) = resource else {
+            return Ok(());
+        };
+
+        let name = get_name_from_folder(resource)?;
+        let client = Client::new();
+
+        let body = DiscordWebhookBody {
+            content: format!("📁 [Folder]({}) updated: {}", resource.subject, name),
+        };
+
+        let res = client
+            .post(DISCORD_WEBHOOK_URL)
+            .header("Content-Type", "application/json")
+            .body(serde_json::to_string(&body).map_err(|e| e.to_string())?)
+            .send()
+            .map_err(|e| e.to_string())?;
+
+        println!("Response: {:?}", res.status_code());
         Ok(())
     }
 }

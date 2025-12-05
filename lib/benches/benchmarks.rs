@@ -5,6 +5,7 @@
 use atomic_lib::utils::random_string;
 use atomic_lib::*;
 use criterion::{criterion_group, criterion_main, Criterion};
+use tokio::runtime::Runtime;
 
 fn random_atom_string() -> Atom {
     Atom::new(
@@ -37,7 +38,8 @@ fn random_resource(atom: &Atom) -> Resource {
 }
 
 fn criterion_benchmark(c: &mut Criterion) {
-    let store = Db::init_temp("bench").unwrap();
+    let rt = Runtime::new().unwrap();
+    let store = rt.block_on(Db::init_temp("bench")).unwrap();
 
     let mut flushing = c.benchmark_group("IO bound benchmarks");
     flushing.significance_level(0.1).sample_size(10);
@@ -45,13 +47,16 @@ fn criterion_benchmark(c: &mut Criterion) {
     flushing.bench_function("flush 100 resources", |b| {
         b.iter_batched(
             || {
-                // SETUP: Create 100 dirty resources
-                for _ in 0..100 {
-                    let resource = random_resource(&random_atom_string());
-                    store
-                        .add_resource_opts(&resource, true, true, false)
-                        .unwrap();
-                }
+                rt.block_on(async {
+                    // SETUP: Create 100 dirty resources
+                    for _ in 0..100 {
+                        let resource = random_resource(&random_atom_string());
+                        store
+                            .add_resource_opts(&resource, true, true, false)
+                            .await
+                            .unwrap();
+                    }
+                })
             },
             |()| {
                 // MEASURE: Only the flush
@@ -63,58 +68,62 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     flushing.bench_function("resource.save() string", |b| {
         b.iter_custom(|iters| {
-            let mut total_duration = std::time::Duration::new(0, 0);
-            let mut i = 0;
-            let flush_interval = 100;
+            rt.block_on(async {
+                let mut total_duration = std::time::Duration::new(0, 0);
+                let mut i = 0;
+                let flush_interval = 100;
 
-            while i < iters {
-                let batch_size = std::cmp::min(flush_interval, iters - i);
+                while i < iters {
+                    let batch_size = std::cmp::min(flush_interval, iters - i);
 
-                let start = std::time::Instant::now();
-                for _ in 0..batch_size {
-                    let mut resource = random_resource(&random_atom_string());
-                    resource.save_locally(&store).unwrap();
+                    let start = std::time::Instant::now();
+                    for _ in 0..batch_size {
+                        let mut resource = random_resource(&random_atom_string());
+                        resource.save_locally(&store).await.unwrap();
+                    }
+                    total_duration += start.elapsed();
+
+                    store.flush().unwrap();
+                    i += batch_size;
                 }
-                total_duration += start.elapsed();
-
-                store.flush().unwrap();
-                i += batch_size;
-            }
-            total_duration
+                total_duration
+            })
         })
     });
 
     flushing.bench_function("resource.save() array", |b| {
         b.iter_custom(|iters| {
-            let mut total_duration = std::time::Duration::new(0, 0);
-            let mut i = 0;
-            let flush_interval = 100;
+            rt.block_on(async {
+                let mut total_duration = std::time::Duration::new(0, 0);
+                let mut i = 0;
+                let flush_interval = 100;
 
-            while i < iters {
-                let batch_size = std::cmp::min(flush_interval, iters - i);
+                while i < iters {
+                    let batch_size = std::cmp::min(flush_interval, iters - i);
 
-                let start = std::time::Instant::now();
-                for _ in 0..batch_size {
-                    let mut resource = random_resource(&random_atom_array());
-                    resource.save_locally(&store).unwrap();
+                    let start = std::time::Instant::now();
+                    for _ in 0..batch_size {
+                        let mut resource = random_resource(&random_atom_array());
+                        resource.save_locally(&store).await.unwrap();
+                    }
+                    total_duration += start.elapsed();
+
+                    store.flush().unwrap();
+                    i += batch_size;
                 }
-                total_duration += start.elapsed();
-
-                store.flush().unwrap();
-                i += batch_size;
-            }
-            total_duration
+                total_duration
+            })
         })
     });
 
     flushing.finish();
 
-    let big_resource = store
-        .get_resource_extended(
+    let big_resource = rt
+        .block_on(store.get_resource_extended(
             "https://localhost/collections",
             false,
             &agents::ForAgent::Public,
-        )
+        ))
         .unwrap();
 
     c.bench_function("resource.to_json_ad()", |b| {
@@ -124,20 +133,20 @@ fn criterion_benchmark(c: &mut Criterion) {
     });
 
     c.bench_function("resource.to_json_ld()", |b| {
-        b.iter(|| {
-            big_resource.to_json_ld(&store).unwrap();
+        b.to_async(&rt).iter(|| async {
+            big_resource.to_json_ld(&store).await.unwrap();
         })
     });
 
     c.bench_function("resource.to_json()", |b| {
-        b.iter(|| {
-            big_resource.to_json(&store).unwrap();
+        b.to_async(&rt).iter(|| async {
+            big_resource.to_json(&store).await.unwrap();
         })
     });
 
     c.bench_function("resource.to_n_triples()", |b| {
-        b.iter(|| {
-            big_resource.to_n_triples(&store).unwrap();
+        b.to_async(&rt).iter(|| async {
+            big_resource.to_n_triples(&store).await.unwrap();
         })
     });
 

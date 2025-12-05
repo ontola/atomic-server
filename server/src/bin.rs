@@ -49,7 +49,7 @@ async fn main_wrapped() -> errors::AtomicServerResult<()> {
                     pt
                 }
             };
-            let appstate = appstate::AppState::init(config.clone())?;
+            let appstate = appstate::AppState::init(config.clone()).await?;
             let outstr = appstate.store.export(!e.only_internal)?;
             std::fs::create_dir_all(path.parent().unwrap())
                 .map_err(|e| format!("Failed to create directory {:?}. {}", path, e))?;
@@ -65,7 +65,7 @@ async fn main_wrapped() -> errors::AtomicServerResult<()> {
                 std::fs::read_to_string(path)?
             };
 
-            let appstate = appstate::AppState::init(config.clone())?;
+            let appstate = appstate::AppState::init(config.clone()).await?;
             let importer_subject = if let Some(i) = &import_opts.parent {
                 i.into()
             } else {
@@ -83,8 +83,11 @@ async fn main_wrapped() -> errors::AtomicServerResult<()> {
                 signer: Some(appstate.store.get_default_agent()?),
             };
             println!("Importing...");
-            appstate.store.import(&readstring, &parse_opts)?;
-            appstate.search_state.add_all_resources(&appstate.store)?;
+            appstate.store.import(&readstring, &parse_opts).await?;
+            appstate
+                .search_state
+                .add_all_resources(&appstate.store)
+                .await?;
             println!("Successfully imported {:?} to store.", import_opts.file);
             println!("WARNING: Your search index is not yet updated with these imported items. Run `--rebuild-index` to fix that.");
             Ok(())

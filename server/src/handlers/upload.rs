@@ -27,7 +27,7 @@ pub async fn upload_handler(
     req: actix_web::HttpRequest,
 ) -> AtomicServerResult<HttpResponse> {
     let store = &appstate.store;
-    let parent = store.get_resource(&query.parent)?;
+    let parent = store.get_resource(&query.parent).await?;
     let subject = format!(
         "{}{}",
         store.get_server_url()?,
@@ -36,14 +36,14 @@ pub async fn upload_handler(
             .path_and_query()
             .ok_or("Path must be given")?
     );
-    let agent = get_client_agent(req.headers(), &appstate, subject)?;
-    check_write(store, &parent, &agent)?;
+    let agent = get_client_agent(req.headers(), &appstate, subject).await?;
+    check_write(store, &parent, &agent).await?;
 
     let mut created_resources: Vec<Resource> = Vec::new();
 
     while let Ok(Some(field)) = body.try_next().await {
         let mut resource = save_file_and_create_resource(field, &appstate, &query.parent).await?;
-        resource.save(store)?;
+        resource.save(store).await?;
         created_resources.push(resource);
     }
 
@@ -96,15 +96,21 @@ async fn save_file_and_create_resource(
     let new_subject = format!("{}/{}", store.get_server_url()?, subject_path);
     let download_url = format!("{}/download/{}", store.get_server_url()?, subject_path);
 
-    let mut resource = atomic_lib::Resource::new_instance(urls::FILE, store)?;
+    let mut resource = atomic_lib::Resource::new_instance(urls::FILE, store).await?;
     resource
         .set_subject(new_subject)
-        .set_string(urls::PARENT.into(), parent, store)?
-        .set_string(urls::INTERNAL_ID.into(), &file_id, store)?
-        .set(urls::FILESIZE.into(), Value::Integer(byte_count), store)?
-        .set_string(urls::MIMETYPE.into(), &mimetype, store)?
-        .set_string(urls::FILENAME.into(), filename, store)?
-        .set_string(urls::DOWNLOAD_URL.into(), &download_url, store)?;
+        .set_string(urls::PARENT.into(), parent, store)
+        .await?
+        .set_string(urls::INTERNAL_ID.into(), &file_id, store)
+        .await?
+        .set(urls::FILESIZE.into(), Value::Integer(byte_count), store)
+        .await?
+        .set_string(urls::MIMETYPE.into(), &mimetype, store)
+        .await?
+        .set_string(urls::FILENAME.into(), filename, store)
+        .await?
+        .set_string(urls::DOWNLOAD_URL.into(), &download_url, store)
+        .await?;
 
     if mimetype.starts_with("image/") {
         if let Ok(img) = image::ImageReader::open(&file_path)?.decode() {
@@ -114,12 +120,14 @@ async fn save_file_and_create_resource(
                     urls::IMAGE_WIDTH.into(),
                     Value::Integer(width as i64),
                     store,
-                )?
+                )
+                .await?
                 .set(
                     urls::IMAGE_HEIGHT.into(),
                     Value::Integer(height as i64),
                     store,
-                )?;
+                )
+                .await?;
         }
     }
 
