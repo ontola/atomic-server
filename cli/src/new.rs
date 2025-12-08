@@ -15,16 +15,16 @@ use regex::Regex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Create a new instance of some class through a series of prompts, adds it to the store
-pub fn new(context: &mut Context, class_input: &str) -> AtomicResult<()> {
+pub async fn new(context: &mut Context, class_input: &str) -> AtomicResult<()> {
     let class_url = context
         .mapping
         .lock()
         .unwrap()
         .try_mapping_or_url(class_input)
         .unwrap();
-    let class = context.store.get_class(&class_url)?;
+    let class = context.store.get_class(&class_url).await?;
     println!("Enter a new {}: {}", class.shortname, class.description);
-    let (resource, _bookmark) = prompt_instance(context, &class, None)?;
+    let (resource, _bookmark) = prompt_instance(context, &class, None).await?;
     println!(
         "Succesfully created a new {}: subject: {}",
         class.shortname,
@@ -36,7 +36,8 @@ pub fn new(context: &mut Context, class_input: &str) -> AtomicResult<()> {
 /// Lets the user enter an instance of an Atomic Class through multiple prompts.
 /// Adds the Resource to the store, and writes to disk.
 /// Returns the Resource, its URL and its Bookmark.
-fn prompt_instance(
+#[async_recursion::async_recursion]
+async fn prompt_instance(
     context: &Context,
     class: &Class,
     preferred_shortname: Option<String>,
@@ -60,20 +61,24 @@ fn prompt_instance(
 
     let mut new_resource: Resource = Resource::new(subject.clone());
 
-    new_resource.set(
-        "https://atomicdata.dev/properties/isA".into(),
-        Value::from(vec![class.subject.clone()]),
-        &context.store,
-    )?;
+    new_resource
+        .set(
+            "https://atomicdata.dev/properties/isA".into(),
+            Value::from(vec![class.subject.clone()]),
+            &context.store,
+        )
+        .await?;
 
     for prop_subject in &class.requires {
-        let field = context.store.get_property(prop_subject)?;
+        let field = context.store.get_property(prop_subject).await?;
         if field.subject == atomic_lib::urls::SHORTNAME && preferred_shortname.clone().is_some() {
-            new_resource.set_string(
-                field.subject.clone(),
-                &preferred_shortname.clone().unwrap(),
-                &context.store,
-            )?;
+            new_resource
+                .set_string(
+                    field.subject.clone(),
+                    &preferred_shortname.clone().unwrap(),
+                    &context.store,
+                )
+                .await?;
             println!(
                 "Shortname set to {}",
                 preferred_shortname.clone().unwrap().bold().green()
@@ -83,28 +88,32 @@ fn prompt_instance(
         println!("{}: {}", field.shortname.bold().blue(), field.description);
         // In multiple Properties, the shortname field is required.
         // A preferred shortname can be passed into this function
-        let mut input = prompt_field(&field, false, context)?;
+        let mut input = prompt_field(&field, false, context).await?;
         loop {
             if let Some(i) = input {
-                new_resource.set_string(field.subject.clone(), &i, &context.store)?;
+                new_resource
+                    .set_string(field.subject.clone(), &i, &context.store)
+                    .await?;
                 break;
             } else {
                 println!("Required field, please enter a value.");
-                input = prompt_field(&field, false, context)?;
+                input = prompt_field(&field, false, context).await?;
             }
         }
     }
 
     for prop_subject in &class.recommends {
-        let field = context.store.get_property(prop_subject)?;
+        let field = context.store.get_property(prop_subject).await?;
         println!("{}: {}", field.shortname.bold().blue(), field.description);
-        let input = prompt_field(&field, true, context)?;
+        let input = prompt_field(&field, true, context).await?;
         if let Some(i) = input {
-            new_resource.set_string(field.subject.clone(), &i, &context.store)?;
+            new_resource
+                .set_string(field.subject.clone(), &i, &context.store)
+                .await?;
         }
     }
 
-    new_resource.save(&context.store)?;
+    new_resource.save(&context.store).await?;
 
     println!("{} created with URL: {}", &class.shortname, &subject);
 
@@ -119,7 +128,8 @@ fn prompt_instance(
 }
 
 // Checks the property and its datatype, and issues a prompt that performs validation.
-fn prompt_field(
+#[async_recursion::async_recursion]
+async fn prompt_field(
     property: &Property,
     optional: bool,
     context: &Context,
@@ -219,7 +229,8 @@ fn prompt_field(
             if classtype.is_some() {
                 let class = context
                     .store
-                    .get_class(&String::from(classtype.as_ref().unwrap()))?;
+                    .get_class(&String::from(classtype.as_ref().unwrap()))
+                    .await?;
                 println!(
                     "Enter the URL of a {} (an instance of a {})",
                     class.shortname, class.subject
@@ -261,14 +272,14 @@ fn prompt_field(
                                 urls.push(url);
                             }
                             None => {
-                                let class = &context.store.get_class(&property.class_type.clone().expect("At this moment, this CLI only supports Properties that have a class-type."))?.clone();
+                                let class = &context.store.get_class(&property.class_type.clone().expect("At this moment, this CLI only supports Properties that have a class-type.")).await?.clone();
                                 println!(
                                     "Define the {} named {}",
                                     class.shortname,
                                     item.bold().green(),
                                 );
                                 let (resource, _shortname) =
-                                    prompt_instance(context, class, Some(item.into()))?;
+                                    prompt_instance(context, class, Some(item.into())).await?;
                                 urls.push(resource.get_subject().clone());
                                 continue;
                             }

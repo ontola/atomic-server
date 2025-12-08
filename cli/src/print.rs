@@ -8,7 +8,10 @@ use colored::*;
 use crate::{Context, SerializeOptions};
 
 /// Prints a resource for the terminal with readble formatting and colors
-pub fn pretty_print_resource(resource: &Resource, store: &impl Storelike) -> AtomicResult<String> {
+pub async fn pretty_print_resource(
+    resource: &Resource,
+    store: &impl Storelike,
+) -> AtomicResult<String> {
     let mut output = String::new();
     output.push_str(&format!(
         "{0: <15}{1: <10} \n",
@@ -16,7 +19,7 @@ pub fn pretty_print_resource(resource: &Resource, store: &impl Storelike) -> Ato
         resource.get_subject()
     ));
     for (prop_url, val) in resource.get_propvals() {
-        let prop_shortname = store.get_property(prop_url)?.shortname;
+        let prop_shortname = store.get_property(prop_url).await?.shortname;
         output.push_str(&format!(
             "{0: <15}{1: <10} \n",
             prop_shortname.blue().bold(),
@@ -27,18 +30,20 @@ pub fn pretty_print_resource(resource: &Resource, store: &impl Storelike) -> Ato
 }
 
 /// Prints a resource to the command line
-pub fn print_resource(
+pub async fn print_resource(
     context: &Context,
     resource: &Resource,
     serialize: &SerializeOptions,
 ) -> AtomicResult<()> {
     let format: Format = serialize.clone().into();
     let out = match format {
-        Format::Json => resource.to_json(&context.store)?,
-        Format::JsonLd => resource.to_json_ld(&context.store)?,
+        Format::Json => resource.to_json(&context.store).await?,
+        Format::JsonLd => resource.to_json_ld(&context.store).await?,
         Format::JsonAd => resource.to_json_ad()?,
-        Format::NTriples => serialize::atoms_to_ntriples(resource.to_atoms(), &context.store)?,
-        Format::Pretty => pretty_print_resource(resource, &context.store)?,
+        Format::NTriples => {
+            serialize::atoms_to_ntriples(resource.to_atoms(), &context.store).await?
+        }
+        Format::Pretty => pretty_print_resource(resource, &context.store).await?,
     };
     println!("{}", out);
     Ok(())
