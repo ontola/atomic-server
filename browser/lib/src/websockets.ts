@@ -635,15 +635,9 @@ export class WSClient {
 
       case Tag.BLOB_RESPONSE: {
         const resp = decodeBlobResponse(payload);
-
         if (resp) {
-          const persistor = this.store.getPersistor();
-
-          if (persistor) {
-            persistor.putBlob(resp.hash, resp.bytes);
-          }
+          this.store.getClientDb()?.putBlob(resp.hash, resp.bytes);
         }
-
         break;
       }
 
