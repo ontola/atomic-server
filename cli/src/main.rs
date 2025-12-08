@@ -7,7 +7,7 @@ use atomic_lib::{errors::AtomicResult, Storelike};
 use clap::{crate_version, Parser, Subcommand, ValueEnum};
 use colored::*;
 use dirs::home_dir;
-use std::{cell::RefCell, path::PathBuf, sync::Mutex};
+use std::{path::PathBuf, sync::Mutex};
 
 mod commit;
 mod get;
@@ -149,18 +149,18 @@ pub struct Context {
     config_folder: PathBuf,
     user_mapping_path: PathBuf,
     /// A set of configuration options that are required for writing data on some server
-    write: RefCell<Option<Config>>,
+    write: Mutex<Option<Config>>,
 }
 
 impl Context {
     /// Returns the config (agent, key) from the user config dir
     pub fn read_config(&self) -> Config {
-        if let Some(write_ctx) = self.write.borrow().as_ref() {
+        if let Some(write_ctx) = self.write.lock().unwrap().as_ref() {
             return write_ctx.clone();
         };
         let write_ctx =
             set_agent_config().expect("Issue while generating write context / agent configuration");
-        self.write.borrow_mut().replace(write_ctx.clone());
+        self.write.lock().unwrap().replace(write_ctx.clone());
         let agent = Agent::from_secret(&write_ctx.shared.agent_secret).unwrap();
         self.store.set_default_agent(agent);
         self.store
@@ -213,7 +213,8 @@ fn prompt_for_missing_config_values(config: &Config) -> AtomicResult<Config> {
     Ok(config.clone())
 }
 
-fn main() -> AtomicResult<()> {
+#[tokio::main]
+async fn main() -> AtomicResult<()> {
     let cli = Cli::parse();
 
     let config_folder = home_dir()
@@ -230,9 +231,9 @@ fn main() -> AtomicResult<()> {
     }
 
     // Initialize an in-memory store
-    let store = atomic_lib::Store::init()?;
+    let store = atomic_lib::Store::init().await?;
     // Add some default data / common properties to speed things up
-    store.populate()?;
+    store.populate().await?;
 
     let mut context = Context {
         mapping: Mutex::new(mapping),
@@ -240,10 +241,10 @@ fn main() -> AtomicResult<()> {
         matches: cli.command,
         config_folder,
         user_mapping_path,
-        write: RefCell::new(None),
+        write: Mutex::new(None),
     };
 
-    match exec_command(&mut context) {
+    match exec_command(&mut context).await {
         Ok(r) => r,
         Err(e) => {
             eprint!("{}", e);
@@ -254,17 +255,17 @@ fn main() -> AtomicResult<()> {
     Ok(())
 }
 
-fn exec_command(context: &mut Context) -> AtomicResult<()> {
+async fn exec_command(context: &mut Context) -> AtomicResult<()> {
     let command = context.matches.clone();
 
     match command {
         Commands::Destroy { subject } => {
-            commit::destroy(context, &subject)?;
+            commit::destroy(context, &subject).await?;
         }
         Commands::Edit { subject, property } => {
             #[cfg(feature = "native")]
             {
-                commit::edit(context, &subject, &property)?;
+                commit::edit(context, &subject, &property).await?;
             }
             #[cfg(not(feature = "native"))]
             {
@@ -272,23 +273,23 @@ fn exec_command(context: &mut Context) -> AtomicResult<()> {
             }
         }
         Commands::Get { subject, as_ } => {
-            get::get_resource(context, &subject, &as_)?;
+            get::get_resource(context, &subject, &as_).await?;
         }
         Commands::List => {
             list(context);
         }
         Commands::New { class } => {
-            new::new(context, &class)?;
+            new::new(context, &class).await?;
         }
         Commands::Remove { subject, property } => {
-            commit::remove(context, &subject, &property)?;
+            commit::remove(context, &subject, &property).await?;
         }
         Commands::Set {
             subject,
             property,
             value,
         } => {
-            commit::set(context, &subject, &property, &value)?;
+            commit::set(context, &subject, &property, &value).await?;
         }
         Commands::Search {
             query,
@@ -296,10 +297,10 @@ fn exec_command(context: &mut Context) -> AtomicResult<()> {
             server,
             as_,
         } => {
-            search::search(context, query, parent, server, &as_)?;
+            search::search(context, query, parent, server, &as_).await?;
         }
         Commands::Validate => {
-            validate(context);
+            validate(context).await;
         }
         Commands::Agent => {
             let config = context.read_config();
@@ -324,8 +325,8 @@ fn list(context: &mut Context) {
 }
 
 /// Validates the store
-fn validate(context: &mut Context) {
-    let reportstring = context.store.validate().to_string();
+async fn validate(context: &mut Context) {
+    let reportstring = context.store.validate().await.to_string();
     println!("{}", reportstring);
 }
 
