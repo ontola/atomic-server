@@ -1,7 +1,8 @@
-use crate::{
+use atomic_lib::{
     agents::Agent,
     class_extender::{BoxFuture, ClassExtender, CommitExtenderContext, GetExtenderContext},
     errors::AtomicResult,
+    hierarchy,
     storelike::ResourceResponse,
     urls,
     utils::check_valid_url,
@@ -104,7 +105,7 @@ pub fn construct_invite_redirect<'a>(
         }
 
         if let Ok(expires) = db_resource.get(urls::EXPIRES_AT) {
-            if expires.to_int()? > crate::utils::now() {
+            if expires.to_int()? > atomic_lib::utils::now() {
                 return Err("Invite is no longer valid".into());
             }
         }
@@ -114,7 +115,7 @@ pub fn construct_invite_redirect<'a>(
             crate::plugins::versioning::get_initial_commit_for_resource(target, store)
                 .await?
                 .signer;
-        crate::hierarchy::check_write(
+        hierarchy::check_write(
             store,
             &store.get_resource(target).await?,
             &invite_creator.into(),
@@ -138,11 +139,7 @@ pub fn construct_invite_redirect<'a>(
             )
             .await?;
         redirect
-            .set(
-                urls::REDIRECT_AGENT.into(),
-                crate::Value::AtomicUrl(agent),
-                store,
-            )
+            .set(urls::REDIRECT_AGENT.into(), Value::AtomicUrl(agent), store)
             .await?;
         // The front-end requires the @id to be the same as requested
         redirect.set_subject(requested_subject);
@@ -192,8 +189,7 @@ pub fn before_apply_commit<'a>(
 
         let target_resource = store.get_resource(&target.to_string()).await?;
 
-        crate::hierarchy::check_write(store, &target_resource, &commit.signer.clone().into())
-            .await?;
+        hierarchy::check_write(store, &target_resource, &commit.signer.clone().into()).await?;
         Ok(())
     })
 }

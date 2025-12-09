@@ -1,4 +1,5 @@
-use crate::{
+use atomic_lib::{
+    collections,
     endpoints::{BoxFuture, Endpoint, HandleGetContext},
     errors::AtomicResult,
     storelike::ResourceResponse,
@@ -43,7 +44,7 @@ fn handle_query_request<'a>(
         }
 
         let mut resource = Resource::new(subject.to_string());
-        let collection_resource_response = crate::collections::construct_collection_from_params(
+        let collection_resource_response = collections::construct_collection_from_params(
             store,
             subject.query_pairs(),
             &mut resource,

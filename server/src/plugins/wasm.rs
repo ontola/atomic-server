@@ -2,12 +2,16 @@ use std::future::Future;
 use std::pin::Pin;
 
 use std::{
+    collections::HashSet,
     ffi::OsStr,
     path::{Path, PathBuf},
     sync::Arc,
 };
 
-use crate::{
+use atomic_lib::{class_extender, AtomicErrorType};
+use ring::digest::{digest, SHA256};
+
+use atomic_lib::{
     agents::ForAgent,
     class_extender::ClassExtender,
     errors::{AtomicError, AtomicResult},
@@ -37,25 +41,67 @@ use bindings::atomic::class_extender::types::{
     ResourceJson as WasmResourceJson, ResourceResponse as WasmResourceResponse,
 };
 
-const WASM_EXTENDER_DIR: &str = "../plugins/class-extenders"; // Relative to the store path.
+const CLASS_EXTENDER_DIR_NAME: &str = "class-extenders"; // Relative to the store path.
 
-pub async fn load_wasm_class_extenders(store_path: &Path, db: &Db) -> Vec<ClassExtender> {
-    let plugins_dir = store_path.join(WASM_EXTENDER_DIR);
+// In your current crate (where AtomicError is defined or where you write the impl)
+// The newtype is a local type now.
+struct WasmtimeErrorWrapper(wasmtime::Error);
+
+// Now you implement From for the local newtype, which is allowed.
+impl From<wasmtime::Error> for WasmtimeErrorWrapper {
+    fn from(error: wasmtime::Error) -> Self {
+        WasmtimeErrorWrapper(error)
+    }
+}
+
+// Now you can implement the conversion FROM your local newtype TO AtomicError
+// This is also allowed because WasmtimeErrorWrapper is local.
+impl From<WasmtimeErrorWrapper> for AtomicError {
+    fn from(wrapper: WasmtimeErrorWrapper) -> Self {
+        AtomicError {
+            message: wrapper.0.to_string(),
+            error_type: AtomicErrorType::OtherError,
+            subject: None,
+        }
+    }
+}
+
+fn to_atomic_error(error: wasmtime::Error) -> AtomicError {
+    WasmtimeErrorWrapper(error).into()
+}
+
+pub async fn load_wasm_class_extenders(
+    plugin_path: &Path,
+    plugin_cache_path: &Path,
+    db: &Db,
+) -> Vec<ClassExtender> {
     // Create the plugin directory if it doesn't exist
-    if !plugins_dir.exists() {
-        if let Err(err) = std::fs::create_dir_all(&plugins_dir) {
+    let plugin_dir = plugin_path.join(CLASS_EXTENDER_DIR_NAME);
+
+    if !plugin_dir.exists() {
+        if let Err(err) = std::fs::create_dir_all(&plugin_dir) {
             warn!(
                 error = %err,
-                path = %plugins_dir.display(),
+                path = %plugin_dir.display(),
                 "Failed to create Wasm extender directory"
             );
         } else {
             info!(
-                path = %plugins_dir.display(),
+                path = %plugin_dir.display(),
                 "Created empty Wasm extender directory (drop .wasm files here to enable runtime plugins)"
             );
         }
         return Vec::new();
+    }
+
+    if !plugin_cache_path.exists() {
+        if let Err(err) = std::fs::create_dir_all(&plugin_cache_path) {
+            warn!(
+                error = %err,
+                path = %plugin_cache_path.display(),
+                "Failed to create Wasm cache directory"
+            );
+        }
     }
 
     let engine = match build_engine() {
@@ -66,34 +112,34 @@ pub async fn load_wasm_class_extenders(store_path: &Path, db: &Db) -> Vec<ClassE
         }
     };
 
-    let entries = match std::fs::read_dir(&plugins_dir) {
-        Ok(entries) => entries,
-        Err(err) => {
-            error!(
-                error = %err,
-                path = %plugins_dir.display(),
-                "Failed to read Wasm extender directory"
-            );
-            return Vec::new();
-        }
-    };
-
     let mut extenders = Vec::new();
+    let mut used_cwasm_files = HashSet::new();
 
     info!("Loading plugins...");
 
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.extension() != Some(OsStr::new("wasm")) {
-            continue;
-        }
+    let wasm_files = find_wasm_files(&plugin_dir);
 
-        match WasmPlugin::load(engine.clone(), &path, db).await {
+    for path in wasm_files {
+        let wasm_bytes = match std::fs::read(&path) {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                error!("Failed to read Wasm file at {}: {}", path.display(), e);
+                continue;
+            }
+        };
+
+        let hash = digest(&SHA256, &wasm_bytes);
+        let hash_hex = hex_encode(hash.as_ref());
+        let cwasm_filename = format!("{}.cwasm", hash_hex);
+        let cwasm_path = plugin_cache_path.join(cwasm_filename);
+
+        used_cwasm_files.insert(cwasm_path.clone());
+
+        match WasmPlugin::load(engine.clone(), &wasm_bytes, &path, &cwasm_path, db).await {
             Ok(plugin) => {
                 info!(
-                    path = %path.file_name().unwrap_or(OsStr::new("Unknown")).display(),
-                    class = %plugin.class_url(),
-                    "Loaded Wasm class extender"
+                    "Loaded {}",
+                    path.file_name().unwrap_or(OsStr::new("Unknown")).display()
                 );
                 extenders.push(plugin.into_class_extender());
             }
@@ -107,6 +153,8 @@ pub async fn load_wasm_class_extenders(store_path: &Path, db: &Db) -> Vec<ClassE
         }
     }
 
+    cleanup_cache(&plugin_cache_path, &used_cwasm_files);
+
     extenders
 }
 
@@ -114,7 +162,7 @@ fn build_engine() -> AtomicResult<Engine> {
     let mut config = Config::new();
     config.wasm_component_model(true);
     config.async_support(true);
-    Engine::new(&config).map_err(AtomicError::from)
+    Engine::new(&config).map_err(to_atomic_error)
 }
 
 #[derive(Clone)]
@@ -131,9 +179,40 @@ struct WasmPluginInner {
 }
 
 impl WasmPlugin {
-    async fn load(engine: Arc<Engine>, path: &Path, db: &Db) -> AtomicResult<Self> {
+    async fn load(
+        engine: Arc<Engine>,
+        wasm_bytes: &[u8],
+        path: &Path,
+        cwasm_path: &Path,
+        db: &Db,
+    ) -> AtomicResult<Self> {
         let db = Arc::new(db.clone());
-        let component = Component::from_file(&engine, path).map_err(AtomicError::from)?;
+
+        let component = if cwasm_path.exists() {
+            match std::fs::read(cwasm_path) {
+                Ok(bytes) => {
+                    // Safety: We trust the pre-compiled component on disk as it is generated by us or the admin
+                    match unsafe { Component::deserialize(&engine, &bytes) } {
+                        Ok(c) => c,
+                        Err(e) => {
+                            warn!(
+                                "Failed to deserialize cwasm at {}, recompiling. Error: {}",
+                                cwasm_path.display(),
+                                e
+                            );
+                            compile_and_save_component(&engine, wasm_bytes, path, cwasm_path)?
+                        }
+                    }
+                }
+                Err(e) => {
+                    warn!("Failed to read cwasm file: {}", e);
+                    compile_and_save_component(&engine, wasm_bytes, path, cwasm_path)?
+                }
+            }
+        } else {
+            compile_and_save_component(&engine, wasm_bytes, path, cwasm_path)?
+        };
+
         let runtime = WasmPlugin {
             inner: Arc::new(WasmPluginInner {
                 engine: engine.clone(),
@@ -154,10 +233,6 @@ impl WasmPlugin {
                 db,
             }),
         })
-    }
-
-    fn class_url(&self) -> &str {
-        &self.inner.class_url
     }
 
     fn into_class_extender(self) -> ClassExtender {
@@ -187,51 +262,50 @@ impl WasmPlugin {
         instance
             .call_class_url(&mut store)
             .await
-            .map_err(AtomicError::from)
+            .map_err(to_atomic_error)
     }
 
     async fn call_on_resource_get<'a>(
         &'a self,
-        context: crate::class_extender::GetExtenderContext<'a>,
+        context: class_extender::GetExtenderContext<'a>,
     ) -> AtomicResult<ResourceResponse> {
         let payload = self.build_get_context(&context)?;
         let (instance, mut store) = self.instantiate().await?;
         let response = instance
             .call_on_resource_get(&mut store, &payload)
             .await
-            .map_err(AtomicError::from)?
-            .map_err(AtomicError::other_error)?;
+            .map_err(to_atomic_error)??;
 
-        if let Some(payload) = response {
-            self.inflate_resource_response(payload, context.store).await
-        } else {
-            Ok(ResourceResponse::Resource(context.db_resource.clone()))
-        }
+        let Some(payload) = response else {
+            return Ok(ResourceResponse::Resource(context.db_resource.clone()));
+        };
+
+        self.inflate_resource_response(payload, context.store).await
     }
 
     async fn call_before_commit<'a>(
         &'a self,
-        context: crate::class_extender::CommitExtenderContext<'a>,
+        context: class_extender::CommitExtenderContext<'a>,
     ) -> AtomicResult<()> {
         let payload = self.build_commit_context(&context).await?;
         let (instance, mut store) = self.instantiate().await?;
         instance
             .call_before_commit(&mut store, &payload)
             .await
-            .map_err(AtomicError::from)?
+            .map_err(to_atomic_error)?
             .map_err(AtomicError::other_error)
     }
 
     async fn call_after_commit<'a>(
         &'a self,
-        context: crate::class_extender::CommitExtenderContext<'a>,
+        context: class_extender::CommitExtenderContext<'a>,
     ) -> AtomicResult<()> {
         let payload = self.build_commit_context(&context).await?;
         let (instance, mut store) = self.instantiate().await?;
         instance
             .call_after_commit(&mut store, &payload)
             .await
-            .map_err(AtomicError::from)?
+            .map_err(to_atomic_error)?
             .map_err(AtomicError::other_error)
     }
 
@@ -253,13 +327,13 @@ impl WasmPlugin {
         let instance =
             bindings::ClassExtender::instantiate_async(&mut store, &self.inner.component, &linker)
                 .await
-                .map_err(AtomicError::from)?;
+                .map_err(to_atomic_error)?;
         Ok((instance, store))
     }
 
     fn build_get_context(
         &self,
-        context: &crate::class_extender::GetExtenderContext,
+        context: &class_extender::GetExtenderContext,
     ) -> AtomicResult<WasmGetContext> {
         Ok(WasmGetContext {
             request_url: context.url.as_str().to_string(),
@@ -271,7 +345,7 @@ impl WasmPlugin {
 
     async fn build_commit_context<'a>(
         &self,
-        context: &'a crate::class_extender::CommitExtenderContext<'a>,
+        context: &'a class_extender::CommitExtenderContext<'a>,
     ) -> AtomicResult<WasmCommitContext> {
         Ok(WasmCommitContext {
             subject: context.resource.get_subject().to_string(),
@@ -293,7 +367,7 @@ impl WasmPlugin {
     fn inflate_resource_response<'a>(
         &self,
         payload: WasmResourceResponse,
-        store: &'a crate::Db,
+        store: &'a atomic_lib::Db,
     ) -> Pin<Box<dyn Future<Output = AtomicResult<ResourceResponse>> + Send + 'a>> {
         Box::pin(async move {
             let mut parse_opts = ParseOpts::default();
@@ -413,5 +487,84 @@ impl bindings::atomic::class_extender::host::Host for PluginHostState {
 
     async fn get_plugin_agent(&mut self) -> String {
         String::new()
+    }
+}
+
+fn find_wasm_files(dir: &Path) -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                if let Ok(sub_entries) = std::fs::read_dir(&path) {
+                    for sub_entry in sub_entries.flatten() {
+                        let sub_path = sub_entry.path();
+                        if sub_path.extension() == Some(OsStr::new("wasm")) {
+                            files.push(sub_path);
+                        }
+                    }
+                }
+            } else if path.extension() == Some(OsStr::new("wasm")) {
+                files.push(path);
+            }
+        }
+    }
+    files
+}
+
+fn compile_and_save_component(
+    engine: &Engine,
+    wasm_bytes: &[u8],
+    wasm_path: &Path,
+    cwasm_path: &Path,
+) -> AtomicResult<Component> {
+    info!(
+        "Pre-compiling {}",
+        wasm_path
+            .file_name()
+            .unwrap_or(OsStr::new("Unknown"))
+            .display()
+    );
+
+    let component_bytes = engine
+        .precompile_component(wasm_bytes)
+        .map_err(|e| AtomicError::from(format!("Failed to precompile component: {}", e)))?;
+
+    if let Err(e) = std::fs::write(cwasm_path, &component_bytes) {
+        warn!(
+            "Failed to write cwasm file to {}: {}",
+            cwasm_path.display(),
+            e
+        );
+    } else {
+        info!("Saved pre-compiled component to {}", cwasm_path.display());
+    }
+
+    unsafe { Component::deserialize(engine, &component_bytes) }
+        .map_err(|e| AtomicError::from(format!("Failed to deserialize compiled component: {}", e)))
+}
+
+fn hex_encode(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{:02x}", b)).collect()
+}
+
+fn cleanup_cache(cache_dir: &Path, used_files: &HashSet<PathBuf>) {
+    if let Ok(entries) = std::fs::read_dir(cache_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension() == Some(OsStr::new("cwasm")) {
+                if !used_files.contains(&path) {
+                    if let Err(e) = std::fs::remove_file(&path) {
+                        warn!(
+                            "Failed to delete unused cwasm file {}: {}",
+                            path.display(),
+                            e
+                        );
+                    } else {
+                        info!("Deleted unused cwasm file: {}", path.display());
+                    }
+                }
+            }
+        }
     }
 }

@@ -2,10 +2,12 @@
 Importers allow users to (periodically) import JSON-AD files from a remote source.
 */
 
-use crate::{
+use atomic_lib::{
     agents::ForAgent,
+    client,
     endpoints::{BoxFuture, Endpoint, HandleGetContext, HandlePostContext},
     errors::AtomicResult,
+    parse,
     storelike::ResourceResponse,
     urls, Storelike,
 };
@@ -70,19 +72,19 @@ pub fn handle_post<'a>(
 
         if let Some(fetch_url) = url {
             json = Some(
-                crate::client::fetch_body(&fetch_url, crate::parse::JSON_AD_MIME, None)
+                client::fetch_body(&fetch_url, parse::JSON_AD_MIME, None)
                     .map_err(|e| format!("Error while fetching {}: {}", fetch_url, e))?,
             );
         }
 
-        let parse_opts = crate::parse::ParseOpts {
+        let parse_opts = parse::ParseOpts {
             for_agent: for_agent.clone(),
             importer: Some(parent),
             overwrite_outside,
             // We sign the importer Commits with the default agent,
             // not the one performing the import, because we don't have their private key.
             signer: Some(store.get_default_agent()?),
-            save: crate::parse::SaveOpts::Commit,
+            save: parse::SaveOpts::Commit,
         };
 
         if let Some(json_string) = json {

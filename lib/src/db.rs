@@ -30,7 +30,6 @@ use crate::{
     },
     endpoints::{Endpoint, HandleGetContext},
     errors::{AtomicError, AtomicResult},
-    plugins::{plugins, wasm},
     resources::PropVals,
     storelike::{Query, QueryResult, ResourceResponse, Storelike},
     values::SortableValue,
@@ -74,7 +73,7 @@ pub struct Db {
     /// Try not to use this directly, but use the Trees.
     db: sled::Db,
     default_agent: Arc<Mutex<Option<crate::agents::Agent>>>,
-    /// Stores all resources. The Key is the Subject as a `string.as_bytes()`, the value a [PropVals]. Propvals must be serialized using [bincode].
+    /// Stores all resources. The Key is the Subject as a `string.as_bytes()`, the value a [PropVals]. Propvals must be serialized using messagepack.
     resources: sled::Tree,
     /// [Tree::ValPropSub]
     reference_index: sled::Tree,
@@ -109,9 +108,8 @@ impl Db {
         let query_index = db.open_tree(Tree::QueryMembers)?;
         let prop_val_sub_index = db.open_tree(Tree::PropValSub)?;
         let watched_queries = db.open_tree(Tree::WatchedQueries)?;
-        let class_extenders = plugins::default_class_extenders();
 
-        let mut store = Db {
+        let store = Db {
             path: path.into(),
             db,
             default_agent: Arc::new(Mutex::new(None)),
@@ -121,13 +119,10 @@ impl Db {
             prop_val_sub_index,
             server_url,
             watched_queries,
-            endpoints: plugins::default_endpoints(),
-            class_extenders,
+            endpoints: vec![],
+            class_extenders: vec![],
             on_commit: None,
         };
-
-        let extenders = wasm::load_wasm_class_extenders(path, &store).await;
-        store.class_extenders.extend(extenders);
 
         migrate_maybe(&store).map(|e| format!("Error during migration of database: {:?}", e))?;
         crate::populate::populate_base_models(&store)
@@ -150,6 +145,20 @@ impl Db {
         store.set_default_agent(agent);
         store.populate().await?;
         Ok(store)
+    }
+
+    pub fn add_class_extender(&mut self, class_extender: ClassExtender) -> AtomicResult<()> {
+        self.class_extenders.push(class_extender);
+        Ok(())
+    }
+
+    pub fn add_endpoint(&mut self, endpoint: Endpoint) -> AtomicResult<()> {
+        self.endpoints.push(endpoint);
+        Ok(())
+    }
+
+    pub fn get_endpoints(&self) -> &Vec<Endpoint> {
+        &self.endpoints
     }
 
     #[instrument(skip(self))]

@@ -190,10 +190,12 @@ pub struct Config {
     pub static_path: PathBuf,
     /// Path to where the store / database is located.
     pub store_path: PathBuf,
+    pub plugin_path: PathBuf,
     /// Path to where the uploaded files are stored.
     pub uploads_path: PathBuf,
     /// Path to where the search index for tantivy full text search is located
     pub search_index_path: PathBuf,
+    pub plugin_cache_path: PathBuf,
     /// If true, the initialization scripts will be ran (create first Drive, Agent, indexing, etc)
     pub initialize: bool,
 }
@@ -236,6 +238,9 @@ pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
     let mut store_path = data_dir.clone();
     store_path.push("store");
 
+    let mut plugin_path = data_dir.clone();
+    plugin_path.push("plugins");
+
     let mut uploads_path = data_dir.clone();
     uploads_path.push("uploads");
 
@@ -266,8 +271,11 @@ pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
         .clone()
         .unwrap_or_else(|| project_dirs.cache_dir().to_owned());
 
-    let mut search_index_path = cache_dir;
+    let mut search_index_path = cache_dir.clone();
     search_index_path.push("search_index");
+
+    let mut plugin_cache_path = cache_dir.clone();
+    plugin_cache_path.push("plugin_cache");
 
     let initialize = !std::path::Path::exists(&store_path) || opts.initialize;
 
@@ -298,9 +306,11 @@ pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
         https_path,
         key_path,
         server_url,
+        plugin_path,
         static_path,
         store_path,
         search_index_path,
+        plugin_cache_path,
         uploads_path,
     })
 }
