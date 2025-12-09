@@ -13,6 +13,7 @@ mod helpers;
 #[cfg(feature = "https")]
 mod https;
 mod jsonerrors;
+pub mod plugins;
 mod routes;
 pub mod serve;
 mod y_sync_broadcaster;

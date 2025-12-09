@@ -4,7 +4,7 @@ These are similar to Channels in Slack or Discord.
 They list a bunch of Messages.
 */
 
-use crate::{
+use atomic_lib::{
     class_extender::{BoxFuture, ClassExtender, CommitExtenderContext, GetExtenderContext},
     commit::{CommitBuilder, CommitOpts},
     errors::AtomicResult,

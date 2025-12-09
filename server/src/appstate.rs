@@ -3,6 +3,7 @@ use crate::{
     commit_monitor::CommitMonitor,
     config::Config,
     errors::AtomicServerResult,
+    plugins,
     search::SearchState,
     y_sync_broadcaster::{self, YSyncBroadcaster},
 };
@@ -13,6 +14,7 @@ use atomic_lib::{
     Storelike,
 };
 
+use crate::plugins::wasm;
 /// The AppState contains all the relevant Context for the server.
 /// This data object is available to all handlers and actors.
 /// Contains the store, configuration and addresses for Actix Actors, such as for the [CommitMonitor].
@@ -47,6 +49,36 @@ impl AppState {
         }
 
         let mut store = atomic_lib::Db::init(&config.store_path, config.server_url.clone()).await?;
+
+        // Register all built-in class extenders
+        store.add_class_extender(plugins::collections::build_collection_extender())?;
+        store.add_class_extender(plugins::chatroom::build_chatroom_extender())?;
+        store.add_class_extender(plugins::chatroom::build_message_extender())?;
+        store.add_class_extender(plugins::invite::build_invite_extender())?;
+
+        // Register all built-in endpoints
+        store.add_endpoint(plugins::versioning::version_endpoint())?;
+        store.add_endpoint(plugins::versioning::all_versions_endpoint())?;
+        store.add_endpoint(plugins::bookmark::bookmark_endpoint())?;
+        store.add_endpoint(plugins::files::upload_endpoint())?;
+        store.add_endpoint(plugins::files::download_endpoint())?;
+        store.add_endpoint(plugins::export::export_endpoint())?;
+        store.add_endpoint(plugins::path::path_endpoint())?;
+        store.add_endpoint(plugins::importer::import_endpoint())?;
+        #[cfg(debug_assertions)]
+        store.add_endpoint(plugins::prunetests::prune_tests_endpoint())?;
+        store.add_endpoint(plugins::query::query_endpoint())?;
+        store.add_endpoint(plugins::search::search_endpoint())?;
+
+        // Get and register Wasm class extender plugins
+        let extenders =
+            wasm::load_wasm_class_extenders(&config.plugin_path, &config.plugin_cache_path, &store)
+                .await;
+
+        for extender in extenders {
+            store.add_class_extender(extender)?;
+        }
+
         let no_server_resource = store.get_resource(&config.server_url).await.is_err();
         if no_server_resource {
             tracing::warn!("Server URL resource not found. This is likely because the server URL has changed. Initializing a new database...");

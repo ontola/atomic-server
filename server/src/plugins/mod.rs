@@ -9,9 +9,9 @@ For example:
 - Before returning a Resource. These are either Endpoints or Class Extenders.
 - Before applying a Commit.
 
-In the long term, these plugins will probably be powered by WASM and can be extended at runtime.
-They are created at compile time, the same as all other code in Atomic-Server.
-However, they are designed in such a way that they have a limited scope and a clearly defined API.
+Atomic-Server supports class-extender plugins that are compiled to WASM Components.
+These are loaded on startup.
+Most plugins defined here are build-in.
 
 ## Extending resources
 
@@ -33,21 +33,16 @@ Contrary to Endpoints, these can be any type of Class.
 They are used for performing custom queries, or calculating dynamic attributes.
 */
 
-// Class Extenders
-pub mod chatroom;
-pub mod importer;
-pub mod invite;
-pub mod wasm;
-
-// Endpoints
-#[cfg(feature = "html")]
 pub mod bookmark;
+pub mod chatroom;
 pub mod collections;
 pub mod export;
 pub mod files;
+pub mod importer;
+pub mod invite;
 pub mod path;
-pub mod plugins;
 pub mod prunetests;
 pub mod query;
 pub mod search;
 pub mod versioning;
+pub mod wasm;

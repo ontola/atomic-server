@@ -203,17 +203,6 @@ impl From<std::string::FromUtf8Error> for AtomicError {
     }
 }
 
-#[cfg(feature = "wasm-plugins")]
-impl From<wasmtime::Error> for AtomicError {
-    fn from(error: wasmtime::Error) -> Self {
-        AtomicError {
-            message: error.to_string(),
-            error_type: AtomicErrorType::OtherError,
-            subject: None,
-        }
-    }
-}
-
 impl From<ParseFloatError> for AtomicError {
     fn from(error: ParseFloatError) -> Self {
         AtomicError {

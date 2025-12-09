@@ -89,7 +89,7 @@ pub async fn search_query(
         req.uri().path_and_query().ok_or("Add a query param")?
     );
 
-    let mut results_resource = atomic_lib::plugins::search::search_endpoint()
+    let mut results_resource = crate::plugins::search::search_endpoint()
         .to_resource(store)
         .await?;
     results_resource.set_subject(subject.clone());
@@ -123,13 +123,6 @@ pub async fn search_query(
 
     // TODO: support other serialization options
     Ok(builder.body(Resource::vec_to_json_ad(&result_vec)?))
-}
-
-#[derive(Debug, std::hash::Hash, Eq, PartialEq)]
-pub struct StringAtom {
-    pub subject: String,
-    pub property: String,
-    pub value: String,
 }
 
 #[instrument(skip(appstate, req))]

@@ -1,6 +1,5 @@
 use actix_web::{error::ResponseError, http::StatusCode, HttpResponse};
 use atomic_lib::{parse::JSON_AD_MIME, urls, Resource, Value};
-use serde::Serialize;
 use std::error::Error;
 
 // More strict Result type
@@ -29,11 +28,6 @@ impl std::fmt::Debug for AtomicServerError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.message)
     }
-}
-
-#[derive(Serialize)]
-pub struct AppErrorResponse {
-    pub error: String,
 }
 
 impl Error for AtomicServerError {}
