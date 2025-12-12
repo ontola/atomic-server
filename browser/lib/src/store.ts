@@ -319,7 +319,6 @@ export class Store {
    */
   private _serverConnected = false;
   private _driveSyncInProgress = false;
-  private _dirtySyncInProgress = false;
   private _lastDriveSync?: {
     drive: string;
     count: number;
@@ -451,26 +450,15 @@ export class Store {
    * `pushCommits` / `save` flow.
    */
   public async syncDirtyResources(): Promise<void> {
-    if (this.outbox.size === 0) return;
-
-    this.setDirtySyncInProgress(true);
-    const agent = this.getAgent();
-
-    if (!agent) {
-      this.setDirtySyncInProgress(false);
-
-      return;
-    }
-
+    if (this.outbox.size === 0 || !this.getAgent()) return;
     perfMark('store.syncDirtyResources.subjects', { count: this.outbox.size });
-
+    this.emitSyncStatus();
     try {
       await this.outbox.drain({
         sort: this.sortOutboxEntries,
         postEntry: this.postOutboxEntry,
       });
     } finally {
-      this.setDirtySyncInProgress(false);
       this.emitSyncStatus();
     }
   }
@@ -1890,8 +1878,8 @@ export class Store {
     return {
       serverConnected: this._serverConnected,
       driveSyncInProgress: this._driveSyncInProgress,
-      dirtySyncInProgress: this._dirtySyncInProgress,
-      syncInProgress: this._driveSyncInProgress || this._dirtySyncInProgress,
+      dirtySyncInProgress: this.outbox.isDraining,
+      syncInProgress: this._driveSyncInProgress || this.outbox.isDraining,
       pendingDirtyCount: this.outbox.size,
       pendingDirtySubjects: this.outbox.pendingSubjects(),
       serverUrl: this.serverUrl,
@@ -2390,12 +2378,6 @@ export class Store {
 
   public on<T extends StoreEvents>(event: T, callback: StoreEventHandlers[T]) {
     return this.eventManager.register(event, callback);
-  }
-
-  private setDirtySyncInProgress(syncing: boolean): void {
-    if (this._dirtySyncInProgress === syncing) return;
-    this._dirtySyncInProgress = syncing;
-    this.emitSyncStatus();
   }
 
   private emitSyncStatus(): void {
