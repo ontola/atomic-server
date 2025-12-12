@@ -60,9 +60,7 @@ export function TableCell({
   onEditNextRow,
   onAddNewRow,
 }: TableCellProps): JSX.Element {
-  const resource = useResource(subject, {
-    track: [property.subject],
-  });
+  const resource = useResource(subject);
   const { setActiveCell } = useTableEditorContext();
   const { addItemsToHistoryStack } = useContext(TablePageContext);
   // We give an empty error handler to debouncedSave so it doesn't spam the user with error popups when the value is invalid.
