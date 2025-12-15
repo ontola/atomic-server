@@ -73,7 +73,7 @@ impl AppState {
         // Get and register Wasm class extender plugins
         let extenders =
             wasm::load_wasm_class_extenders(&config.plugin_path, &config.plugin_cache_path, &store)
-                .await;
+                .await?;
 
         for extender in extenders {
             store.add_class_extender(extender)?;
