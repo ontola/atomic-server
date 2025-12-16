@@ -33,7 +33,7 @@ export function HistoryMobileView({
     <>
       <CenteredScroller
         title={`History of ${resource.title}`}
-        subject={resource.getSubject()}
+        subject={resource.subject}
         groupedVersions={groupedVersions}
         selectedVersion={selectedVersion}
         onSelectVersion={handleVersionSelect}

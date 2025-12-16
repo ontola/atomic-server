@@ -20,9 +20,7 @@ import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition
 const Trigger = buildDefaultTrigger(<FaHardDrive />, 'Open Drive Settings');
 
 function getTitle(resource: Resource): string {
-  return (
-    (resource.get(core.properties.name) as string) ?? resource.getSubject()
-  );
+  return (resource.get(core.properties.name) as string) ?? resource.subject;
 }
 
 function dedupeAFromB<K, V>(a: Map<K, V>, b: Map<K, V>): Map<K, V> {

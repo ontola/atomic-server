@@ -12,7 +12,7 @@ export function ChildrenUsage({ resource }: ChildrenUsageProps): JSX.Element {
   const { collection } = useCollection(
     {
       property: properties.parent,
-      value: resource.getSubject(),
+      value: resource.subject,
     },
     { pageSize: 10 },
   );

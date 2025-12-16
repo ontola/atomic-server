@@ -12,7 +12,7 @@ const getTitle = (resource: Resource): string => {
   return (resource.get(properties.name) ??
     resource.get(properties.file.filename) ??
     resource.get(properties.shortname) ??
-    resource.getSubject()) as string;
+    resource.subject) as string;
 };
 
 const jsonValueToString = (value: JSONValue): string => {
@@ -34,7 +34,7 @@ const createAtomicURLCopyValue = async (
     };
   }
 
-  const referenceResource = await store.getResourceAsync(subject as string);
+  const referenceResource = await store.getResource(subject as string);
 
   const title = getTitle(referenceResource);
 
@@ -100,7 +100,7 @@ export const getValuesFromSubject = async (
   columns: Property[],
   store: Store,
 ): Promise<CopyValue[]> => {
-  const resource = await store.getResourceAsync(subject);
+  const resource = await store.getResource(subject);
 
   return Promise.all(
     columns.map(col =>
