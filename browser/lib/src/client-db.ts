@@ -413,10 +413,6 @@ export class ClientDbWorker {
     return r as number;
   }
 
-  async putLoroSnapshot(subject: string, data: Uint8Array): Promise<void> {
-    await this.send({ type: 'putLoroSnapshot', subject, data });
-  }
-
   async getLoroSnapshot(subject: string): Promise<Uint8Array | null> {
     const r = await this.send({ type: 'getLoroSnapshot', subject });
 

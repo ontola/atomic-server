@@ -210,10 +210,6 @@ export class NodeClientDb {
     return (await this.requireDb().importAllResources(jsonArray)) as number;
   }
 
-  async putLoroSnapshot(subject: string, data: Uint8Array): Promise<void> {
-    this.requireDb().putLoroSnapshot(subject, data);
-  }
-
   async getLoroSnapshot(subject: string): Promise<Uint8Array | null> {
     const r = this.requireDb().getLoroSnapshot(subject);
 
