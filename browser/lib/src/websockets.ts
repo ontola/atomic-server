@@ -301,11 +301,6 @@ export class WSClient {
 
   // ---- Resource operations ----
 
-  /** @deprecated Use drive-level subscriptions. */
-  public subscribeResource(_subject: string): void {
-    // No-op — v2 uses drive-level subscriptions only.
-  }
-
   public unsubscribeResource(subject: string): void {
     this.sendBinary(encodeUnsub(subject));
   }

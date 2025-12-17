@@ -1810,13 +1810,6 @@ export class Store {
     }
   }
 
-  /**
-   * @deprecated Use `serverConnected` instead. `navigator.onLine` is unreliable.
-   */
-  public isOffline(): boolean {
-    return !this._serverConnected;
-  }
-
   public startDriveSync(_drive: string): void {
     this._driveSyncInProgress = true;
     this.emitSyncStatus();
@@ -2181,9 +2174,11 @@ export class Store {
       return;
     }
 
+    // v2 uses drive-level subscriptions only — per-resource SUB
+    // is a no-op. We still call `getWebSocketForSubject` for the
+    // side effect of routing to the right WS connection.
     try {
-      const ws = this.getWebSocketForSubject(subject);
-      ws?.subscribeResource(subject);
+      this.getWebSocketForSubject(subject);
     } catch (e) {
       console.error(e);
     }
