@@ -4,10 +4,16 @@ Going back through `ARCHITECTURE_REVIEW.md` from earlier this session
 and checking which of the 10 gripes I actually closed vs. which are
 still open.
 
-Final cumulative session diff: **+1,011 net LoC** (peaked at +1,599;
-clawed back ~590 by aggressive trim). Of that +1,011, ~776 is test/
-diagnostic infrastructure (perf-trace, perf probes, integration
-tests for race fixes), ~235 is data-layer code growth.
+Final cumulative session diff: **+871 net LoC** in `browser/` (peaked
+at +1,599; clawed back ~728 by aggressive trim across 11 deletion
+commits). Of that +871, ~642 is test/diagnostic infrastructure
+(perf-trace, perf probes, integration tests for race fixes); the
+data-layer (`browser/lib/src` + `browser/react/src`) is **+229 net**.
+
+After this post-mortem was first written, Phases 4a + 5a–5h + a
+final `putLoroSnapshot` proxy trim shaved another −149 net out of
+`browser/` and reclassified two gripes as closed; this file has
+been updated to reflect the final post-Phase-5 state.
 
 ---
 
@@ -63,32 +69,47 @@ snapshot didn't" half-state is structurally impossible.
 
 ---
 
-## Gripe 3 — Three overlapping notification systems ❌ **NOT FIXED**
+## Gripe 3 — Three overlapping notification systems ✅ **CLOSED**
 
 > `useResource` subscribes to **three independent channels** for the
 > same resource: per-subject, `LocalChange`, `LoadingChange`. Plus
 > two more store-level events (`ResourceUpdated`,
 > `ResourceManuallyCreated`).
 
-**Status**: untouched. The `useResource` hook still has three
-`useEffect`s wiring up three subscriptions; `proxyResource` still
-allocates a new Proxy per notify. This is Phase 5 in the plan and
-I did not start it.
+**Fixed in `f239c503` (5b) + `84197161` (5c) + `e878843d` (5a) +
+`af2dda1b` (5e)**. The four React entry points now all go through
+`useSyncExternalStore` against `Store.getResourceSnapshot()`:
 
-**Reason**: Phase 5 touches every component in `data-browser` that
-reads a Resource (TableEditor, SidebarTree, etc.). Each component
-needs to be re-validated under the perf trace. Estimated ~4.5 days
-in the plan. Out of scope for this session.
+- `useResource` (singular) — Phase 5b, ~15 LoC, single subscribe
+  callback into `Store.subscribe(subject)`.
+- `useResources` (plural) — Phase 5c, ~30 LoC, snapshot-array cache
+  shared across all subjects.
+- `useValue` — Phase 5a, subscribes to per-subject + per-property
+  via the same store snapshot, no `Object.is` shortcut.
+- `useLoroDoc` — Phase 5e, plain `useSyncExternalStore` wrapper.
+
+`getResourceSnapshot` is the single notification chokepoint — bumped
+from inside `Store.notify` and keyed on the canonical normalized
+subject. The triple-`useEffect` mess is gone.
 
 ---
 
-## Gripe 4 — `proxyResource()` defeats referential equality ❌ **NOT FIXED**
+## Gripe 4 — `proxyResource()` defeats referential equality ✅ **SCOPED DOWN**
 
 > The Proxy is empty — its only role is to be a *different object
 > reference* than the previous proxy, so `useState`'s `Object.is`
 > check decides to re-render.
 
-**Status**: untouched. Folds into Gripe 3 / Phase 5.
+**Scoped down by Phase 5a–c**: `proxyResource` is now called from
+*one* place (`Store.getResourceSnapshot` / `Store.notify`) — every
+hook reads through that snapshot rather than allocating its own
+Proxy. The empty-handler Proxy still exists as the identity-bump
+mechanism, but it's no longer scattered across the hook layer and
+no longer fights React's render-bailout.
+
+The lingering thing: the Proxy itself could be replaced with a
+counter + tuple snapshot for the next major. Not load-bearing
+enough to do mid-session.
 
 ---
 
@@ -145,30 +166,31 @@ requires testing across browsers. Estimated 2.5 days. Skipped.
 **Partially fixed**: The drain re-entrance bug is structurally
 impossible now because `LocalOutbox.drain` joins the in-flight
 promise. `WSClient.handleOpen` was simplified in `bf24863c`.
+`_dirtySyncInProgress` was removed in `d34ea7ac` (Phase 4a) — its
+only readers now derive the same answer from `outbox.isDraining`.
 
-**Not fixed**: There's still no proper `DriveSync` state machine.
-Status flags (`_driveSyncInProgress`, `_dirtySyncInProgress`,
-`serverConnected`, `clientDbReady`, `clientDbAttached`) still live
-as separate booleans. I prototyped a `DriveSync` class during the
-session and reverted it because it was adding more code than it
-was deleting.
-
-**Reason**: Phase 4 in the plan (~2 days). Net LoC was estimated at
-−15 — small win. Higher-impact deletions took priority.
+**Not fixed**: There's still no proper `DriveSync` class.
+Status flags (`_driveSyncInProgress`, `_serverConnected`,
+`clientDbReady`, `clientDbAttached`) still live as separate
+booleans. I prototyped a `DriveSync` class during the session and
+reverted it because it was adding more code than it was deleting —
+Phase 4a took the deletion-only subset instead.
 
 ---
 
-## Gripe 8 — `Store` is a god object ❌ **NOT FIXED, MAYBE WORSE**
+## Gripe 8 — `Store` is a god object ❌ **NOT FIXED, BUT NOT WORSE**
 
 > `browser/lib/src/store.ts` is 3000+ lines with responsibilities
 > that fan out across agent management, drive management, resource
 > cache, subscription, OPFS, search index, WS client management,
 > dirty queue, commit log, batch saves, network detection, …
 
-**Status**: `store.ts` grew from 3,091 → ~3,250 lines. The session
-added the `applyIncoming` ingress + `IncomingChange` types + the
-outbox plumbing while not removing existing concerns. The "god
-object" property persists.
+**Status**: `store.ts` is 3,050 lines (was 3,091 at session start).
+Net change is essentially flat: the session added `applyIncoming`,
+`IncomingChange` types, `getResourceSnapshot`, the outbox
+constructor wiring, and `normalizeSubject` consistency, while
+deleting `getResourceAsync`, `markDirtyForSync`, `setDirtySync*`,
+`isOffline`, and assorted dead-code helpers.
 
 **Mitigations**: at least two responsibilities now have dedicated
 files (`local-outbox.ts` for the dirty queue,
@@ -231,28 +253,33 @@ LoC and one type-bridge function.
 |---|---|---|
 | 1. No single ingress | ✅ Closed | `f01cd175` + `5ed045ac` |
 | 2. OPFS three layers | ✅ Closed | `4b0a402a` + `b2f875e0` |
-| 3. 3 notification systems | ❌ Not started | (Phase 5) |
-| 4. `proxyResource` Proxy | ❌ Not started | (Phase 5) |
+| 3. 3 notification systems | ✅ Closed | `e878843d` + `f239c503` + `84197161` + `af2dda1b` (Phase 5a–e) |
+| 4. `proxyResource` Proxy | ✅ Scoped down | folded into `Store.getResourceSnapshot` (Phase 5a–c) |
 | 5. Pending commits 3 places | ✅ Closed | `098c8db9` |
 | 6. Leader election | ⚠️ Patched | `74f0834b` (timeout bump only) |
-| 7. Parallel drive sync | ⚠️ Partial | drain re-entrance fixed; state machine deferred |
-| 8. `Store` god object | ❌ Not fixed | (file grew slightly) |
+| 7. Parallel drive sync | ⚠️ Partial | drain re-entrance fixed; `_dirtySyncInProgress` removed (`d34ea7ac`); state machine deferred |
+| 8. `Store` god object | ❌ Not fixed | (file flat: 3,091 → 3,050) |
 | 9. Subject normalisation | ❌ Not started | |
 | 10a. Collection init | ✅ Closed | `73fecf18` (pre-plan, mid-session) |
 | 10b. Echo detection | ✅ Closed | folded into `applyIncoming` |
 | 10c. Two GET paths | ❌ Not touched | |
 | 10d. Loading-state booleans | ❌ Not touched | |
 | Bonus: `ResourceSource` dup | ✅ Closed | `12426da3` |
+| Bonus: `putLoroSnapshot` proxy | ✅ Closed | `b4f601de` |
 
-**5 closed structurally, 2 partially, 7 still open.** The closed
-ones are the ones the plan named as Phases 1–3 (which I did) plus
-two adjacent finds. The deferred ones are Phases 4–6 (DriveSync,
-useSyncExternalStore, SharedWorker) plus the major-bump items
-(Subject normalisation, Store split).
+**7 closed structurally, 2 partially, 5 still open.** The closed
+ones are Phases 1–5 of the plan (which all landed) plus the
+adjacent finds (`ResourceSource`, `putLoroSnapshot`, collection
+init, echo dedup). The deferred ones are Phase 6 (SharedWorker,
+explicitly skipped over Firefox/Safari OPFS quirks) plus the
+major-bump items (Subject normalisation, Store split, the two
+remaining HTTP/WS GET paths and loading-state booleans).
 
 The biggest *user-facing* improvements: every dagger-flake class
-that the original review attributed to gripes 1, 2, 5, and 10a is
-now structurally impossible (the bug paths don't exist). The
-remaining flake classes (proxyResource fan-out, multi-context
-leader-election under load) are workaround-patched but still
-fundamentally fragile.
+that the original review attributed to gripes 1, 2, 3, 5, and 10a
+is now structurally impossible — `useResource` is a single
+`useSyncExternalStore`, `applyIncoming` is the only resource
+ingress, and `LocalOutbox` is the only durable write queue. The
+remaining flake classes (multi-context leader-election under load)
+are workaround-patched (30s timeout vs 5s) but the underlying
+state machine is unchanged.
