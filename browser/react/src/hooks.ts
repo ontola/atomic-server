@@ -231,18 +231,11 @@ export function useValue(
 
   const store = useStore();
 
-  // Subscribe to BOTH per-property local changes (`LocalChange`,
-  // fires from `Resource.set()`) AND store-level notifies
-  // (`store.subscribe`, fires from any addResource — covers remote
-  // WS UPDATEs that come through `importLoroUpdate`). Either signal
-  // re-runs getSnapshot which reads `resource.get(propertyURL)`.
-  // Replaces the old `prevResourceReference !== resource` identity
-  // check that depended on `proxyResource` swapping per notify.
+  // Subscribe to per-property `LocalChange` (from `set()`) AND
+  // store-level notify (from remote WS UPDATEs that don't fire
+  // LocalChange). Either signal re-runs `resource.get(propertyURL)`.
   const stable = resource.stable;
   const subject = resource.subject;
-  // Subscribe to per-property `LocalChange` (fires from `set()`) AND
-  // store-level notify (covers remote WS UPDATEs that don't fire
-  // LocalChange). Either signal re-runs `resource.get(propertyURL)`.
   const subscribe = useCallback(
     (cb: () => void) => {
       const u1 = store.subscribe(subject, () => cb());
