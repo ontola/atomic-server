@@ -2037,8 +2037,6 @@ export function proxyResource<C extends OptionalClass = any>(
   return new Proxy(resource.__internalObject, {});
 }
 
-const WaitForImmediate = () => new Promise(resolve => setTimeout(resolve));
-
 /** Returns true if the error is a network/fetch failure (server unreachable). */
 function isNetworkError(e: unknown): boolean {
   if (e instanceof TypeError && e.message.includes('Failed to fetch')) {
