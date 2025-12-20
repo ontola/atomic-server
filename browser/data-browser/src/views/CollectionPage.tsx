@@ -95,7 +95,7 @@ function Collection({ resource }: ResourcePageProps): JSX.Element {
   useEffectOnce(() => {
     // Always refresh the collection when opening this page.
     // We don't have cool collection invalidation yet.
-    store.fetchResourceFromServer(resource.getSubject());
+    store.fetchResourceFromServer(resource.subject);
   });
 
   function handleToggleView() {
@@ -213,17 +213,14 @@ function Collection({ resource }: ResourcePageProps): JSX.Element {
       )}
       {members.length === 0 ? (
         valueFilter ? (
-          <NewInstanceButton
-            klass={valueFilter}
-            parent={resource.getSubject()}
-          />
+          <NewInstanceButton klass={valueFilter} parent={resource.subject} />
         ) : (
           <>empty</>
         )
       ) : (
         <>
           {displayStyle.id === 'cards' && (
-            <CardList members={members} subject={resource.getSubject()} />
+            <CardList members={members} subject={resource.subject} />
           )}
           {displayStyle.id === 'table' && (
             <Table
