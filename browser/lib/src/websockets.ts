@@ -711,7 +711,7 @@ export class WSClient {
   private async startVVSync(drive: string): Promise<void> {
     if (this.readyState !== WebSocket.OPEN) return;
 
-    this.store.startDriveSync(drive);
+    this.store.startDriveSync();
     const close = perfSpan('ws.computeDriveSyncState');
 
     try {
