@@ -37,12 +37,10 @@ export type UseResourceOptions = FetchOpts;
 
 /**
  * Hook for getting a Resource in a React component. Wraps the
- * Store's per-subject snapshot via `useSyncExternalStore`. Each
- * notify swaps the snapshot's Proxy identity so direct
- * `resource.title` / `resource.props.x` / `resource.loading`
- * reads re-render. Replaces the previous 3-`useEffect` shape that
- * manually set `proxyResource()` per notify and per
- * `LocalChange`/`LoadingChange` event.
+ * Store's per-subject snapshot via `useSyncExternalStore`: each
+ * notify replaces the snapshot tuple, the Resource itself is
+ * mutated in place, and reads like `resource.props.x` see the
+ * latest values without us having to invalidate them.
  */
 export function useResource<C extends OptionalClass = never>(
   subject: string = unknownSubject,

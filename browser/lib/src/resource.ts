@@ -2026,17 +2026,6 @@ export interface Version {
   propvals: Map<string, JSONValue>;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function proxyResource<C extends OptionalClass = any>(
-  resource: Resource<C>,
-): Resource<C> {
-  if (resource.__internalObject !== resource) {
-    console.warn('Attempted to proxy a proxy for ' + resource.subject);
-  }
-
-  return new Proxy(resource.__internalObject, {});
-}
-
 /** Returns true if the error is a network/fetch failure (server unreachable). */
 function isNetworkError(e: unknown): boolean {
   if (e instanceof TypeError && e.message.includes('Failed to fetch')) {

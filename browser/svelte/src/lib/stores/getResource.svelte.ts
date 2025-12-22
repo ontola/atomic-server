@@ -1,9 +1,7 @@
 import {
   type FetchOpts,
   type OptionalClass,
-  proxyResource,
   Resource,
-  ResourceEvents,
   unknownSubject,
 } from '@tomic/lib';
 
@@ -53,34 +51,25 @@ export function getResource<T extends OptionalClass = never>(
   }
 
   const subject = $derived(subjectGetter() ?? unknownSubject);
-
   const store = getStoreFromContext();
-  let resource = $derived(store.getResourceLoading(subject, opts));
 
-  $effect(() => {
-    const unsubLocal = resource.on(ResourceEvents.LocalChange, () => {
-      resource = proxyResource(resource.__internalObject);
-    });
+  // One state cell per call. `store.subscribe` fires for every resource
+  // change (local edits + WS pushes); we re-read the snapshot on each
+  // event, and Svelte's reactivity follows the `.resource` re-assignment.
+  let snap = $state(store.getResourceSnapshot(subject, opts));
 
-    const unsubLoading = resource.on(ResourceEvents.LoadingChange, () => {
-      resource = proxyResource(resource.__internalObject);
-    });
+  $effect(() =>
+    store.subscribe(subject, () => {
+      snap = store.getResourceSnapshot(subject, opts);
+    }),
+  );
 
-    const unsubRemote = store.subscribe(subject, r => {
-      resource = proxyResource(r);
-    });
-
-    return () => {
-      unsubLocal();
-      unsubRemote();
-      unsubLoading();
-    };
-  });
-
-  // Returning the resource directly would break the reactivity so we need to proxy it.
-  return new Proxy(resource, {
+  // The outer Proxy delegates property reads to the latest snapshot, so
+  // template expressions like `resource.props.x` stay reactive across
+  // snapshot replacements.
+  return new Proxy({} as Resource, {
     get(_, prop) {
-      return resource[prop as keyof Resource];
+      return snap.resource[prop as keyof Resource];
     },
-  });
+  }) as Resource<T>;
 }
