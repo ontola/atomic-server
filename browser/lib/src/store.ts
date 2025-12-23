@@ -710,6 +710,22 @@ export class Store {
    * Normalizes a subject: if it is a relative path, it becomes a full URL using the server's base URL.
    * DIDs and full HTTP URLs are returned as-is.
    */
+  /** Resolve a (possibly aliased) subject to its cached Resource. */
+  private getResolved(subject: string): Resource | undefined {
+    const normalized = this.normalizeSubject(subject);
+    return this.resources.get(this.aliases.get(normalized) ?? normalized);
+  }
+
+  /** Mark a resource as errored + not-loading + notify. No-op if
+   *  the subject isn't in the store. */
+  private failResource(subject: string, error: Error): void {
+    const resource = this.getResolved(subject);
+    if (!resource) return;
+    resource.loading = false;
+    resource.setError(error);
+    this.notify(resource);
+  }
+
   public normalizeSubject(subject: string): string {
     const stripLeadingSlash = (value: string) =>
       value.startsWith('/') ? value.slice(1) : value;
@@ -1209,19 +1225,12 @@ export class Store {
         // data, surface the offline state to the caller rather than leaving
         // the resource stuck in `loading`.
         if (!hasLocalData) {
-          const resource = this.resources.get(
-            this.aliases.get(subject) ?? subject,
+          this.failResource(
+            subject,
+            new Error(
+              'Offline: resource not available locally. Reconnect to fetch.',
+            ),
           );
-
-          if (resource) {
-            resource.loading = false;
-            resource.setError(
-              new Error(
-                'Offline: resource not available locally. Reconnect to fetch.',
-              ),
-            );
-            this.notify(resource);
-          }
         }
       } else if (hasLocalData) {
         // Online with local data — show local first, but background-verify
@@ -1241,18 +1250,13 @@ export class Store {
             e instanceof AtomicError &&
             (e.type === ErrorType.NotFound || /not found/i.test(message))
           ) {
-            const resolved = this.aliases.get(subject) ?? subject;
-            const resource = this.resources.get(resolved);
-
-            if (resource) {
-              resource.setError(
-                new AtomicError(
-                  `Resource ${subject} not found on server`,
-                  ErrorType.NotFound,
-                ),
-              );
-              this.notify(resource);
-            }
+            this.failResource(
+              subject,
+              new AtomicError(
+                `Resource ${subject} not found on server`,
+                ErrorType.NotFound,
+              ),
+            );
           }
         });
       } else {
@@ -1265,17 +1269,10 @@ export class Store {
       // can react correctly. Only fall back to a generic offline message when
       // we have no other signal.
       if (!hasLocalData) {
-        const resource = this.resources.get(
-          this.aliases.get(subject) ?? subject,
+        this.failResource(
+          subject,
+          e instanceof Error ? e : new Error('Resource fetch failed'),
         );
-
-        if (resource) {
-          resource.loading = false;
-          resource.setError(
-            e instanceof Error ? e : new Error('Resource fetch failed'),
-          );
-          this.notify(resource);
-        }
       }
     }
   }
