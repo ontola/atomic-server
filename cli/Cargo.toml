@@ -28,3 +28,15 @@ assert_cmd = "2"
 default = ["native"]
 # Non-wasi interface. These features cannot be compiled to WASI.
 native = ["edit"]
+
+[package.metadata.deb]
+extended-description = "Atomic CLI - A command-line interface for headless CMS and real-time databases."
+maintainer = "tomoyan <https://www.tomoyan.net/>"
+copyright = "2025, tomoyan"
+license-file = ["../LICENSE", "0"]
+depends = "$auto"
+section = "web"
+priority = "optional"
+assets = [
+    ["../target/arm-unknown-linux-gnueabihf/dietpi/atomic-cli", "/usr/bin/atomic-cli", "755"],
+]

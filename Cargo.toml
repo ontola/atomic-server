@@ -4,3 +4,16 @@ members = ["server", "cli", "lib"]
 # Tauri build is deprecated, see
 # https://github.com/atomicdata-dev/atomic-server/issues/718
 exclude = ["desktop"]
+
+[profile.release]
+opt-level = 3
+lto = true
+strip = false
+
+[profile.dietpi]
+inherits = "release"
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
+#panic = "abort"
