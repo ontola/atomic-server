@@ -1,20 +1,20 @@
 #!/bin/sh
 set -e
 
-# $1 が "configure" の時のみ実行（インストール・アップグレード時）
+# Only execute during the 'configure' phase (install and upgrade)
 if [ "$1" = "configure" ]; then
-    # ユーザーが存在しない場合に作成
+    # Create the system user if it doesn't exist
     if ! getent passwd atomic-server > /dev/null; then
         echo "Creating atomic-server system user..."
         adduser --system --group --no-create-home --home /var/lib/atomic-server --shell /usr/sbin/nologin atomic-server
     fi
 
-    # ディレクトリの所有権を確実に変更
-    # (systemdのStateDirectory等で作成されたディレクトリも含む)
+    # Ensure correct ownership for directories
+    # (Including those managed by systemd's StateDirectory etc.)
     chown -R atomic-server:atomic-server /var/lib/atomic-server || true
     chown -R atomic-server:atomic-server /etc/atomic-server || true
 
-    # .env内の localhost を実際のホスト名に置換
+    # Replace 'localhost' with the actual system hostname in the .env file
     if [ -f /etc/atomic-server/atomic-server.env ]; then
         HOSTNAME=$(hostname)
         sed -i "s/ATOMIC_DOMAIN=localhost/ATOMIC_DOMAIN=$HOSTNAME/g" /etc/atomic-server/atomic-server.env

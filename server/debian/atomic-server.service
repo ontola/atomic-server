@@ -9,16 +9,16 @@ Type=simple
 User=atomic-server
 Group=atomic-server
 
-# systemdにディレクトリ作成を依頼
+# Request systemd to manage these directories
 ConfigurationDirectory=atomic-server
 StateDirectory=atomic-server
 CacheDirectory=atomic-server
 
-# 環境変数の指定
+# Environment variables
 Environment=ATOMIC_CONFIG_DIR=/etc/atomic-server
 Environment=ATOMIC_DATA_DIR=/var/lib/atomic-server/data
 Environment=ATOMIC_PORT=9883
-# 必要に応じてドメインやIPを指定
+# Use system hostname as the domain by default
 Environment=ATOMIC_DOMAIN=%H
 
 ExecStart=/usr/bin/atomic-server
