@@ -6,6 +6,7 @@ license = "MIT"
 name = "atomic-cli"
 readme = "README.md"
 repository = "https://github.com/atomicdata-dev/atomic-server"
+homepage = "https://atomicserver.eu/"
 version = "0.40.0"
 
 [dependencies]
