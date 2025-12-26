@@ -149,9 +149,9 @@ name = "atomic_server_lib"
 path = "src/lib.rs"
 
 [package.metadata.deb]
+maintainer = "Joep Meindertsma <joep@ontola.io>"
+copyright = "2020-2025, Joep Meindertsma"
 extended-description = "Atomic Server - Headless CMS and real-time database."
-maintainer = "tomoyan <https://www.tomoyan.net/>"
-copyright = "2025, tomoyan"
 license-file = ["../LICENSE", "0"]
 depends = "$auto"
 section = "web"

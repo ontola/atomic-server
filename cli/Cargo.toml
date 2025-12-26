@@ -30,9 +30,9 @@ default = ["native"]
 native = ["edit"]
 
 [package.metadata.deb]
+maintainer = "Joep Meindertsma <joep@ontola.io>"
+copyright = "2020-2025, Joep Meindertsma"
 extended-description = "Atomic CLI - A command-line interface for headless CMS and real-time databases."
-maintainer = "tomoyan <https://www.tomoyan.net/>"
-copyright = "2025, tomoyan"
 license-file = ["../LICENSE", "0"]
 depends = "$auto"
 section = "web"

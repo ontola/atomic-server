@@ -47,4 +47,3 @@ pre-build = [
   # Install pnpm via npm
   "npm install -g pnpm"
 ]
-
