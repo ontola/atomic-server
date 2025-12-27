@@ -2352,27 +2352,41 @@ export class Store {
     this.eventManager.emit(StoreEvents.CommitLogChanged, this.getCommitLog());
   }
 
+  /** Build a commit-log entry with the fields shared across every
+   *  status / direction (subject, signer, prev, derived commitId,
+   *  flags, summary). Per-status extras (server-supplied commitId,
+   *  error message) come in via `extras`. */
+  private buildCommitLogEntry(
+    commit: Commit,
+    direction: 'incoming' | 'outgoing',
+    status: CommitLogEntry['status'],
+    extras: { commitId?: string; error?: string } = {},
+  ): Omit<CommitLogEntry, 'id'> {
+    return {
+      timestamp: Date.now(),
+      direction,
+      status,
+      subject: commit.subject,
+      signer: commit.signer,
+      previousCommit: commit.previousCommit,
+      commitId:
+        extras.commitId ??
+        (commit.signature ? `did:ad:commit:${commit.signature}` : undefined),
+      hasLoroUpdate: !!commit.loroUpdate,
+      destroy: !!commit.destroy,
+      summary: this.summarizeCommit(commit),
+      propertySummaries: this.summarizeCommitProperties(commit),
+      ...(extras.error !== undefined ? { error: extras.error } : {}),
+    };
+  }
+
   /**
    * Records a locally-signed but not-yet-pushed commit as `pending` in the
    * commit log. When the push resolves, {@link postCommit} reuses the same
    * `commitId` so the entry transitions in place to `sent` or `failed`.
    */
   public logPendingCommit(commit: Commit): void {
-    this.pushCommitLog({
-      timestamp: Date.now(),
-      direction: 'outgoing',
-      status: 'pending',
-      subject: commit.subject,
-      signer: commit.signer,
-      previousCommit: commit.previousCommit,
-      commitId: commit.signature
-        ? `did:ad:commit:${commit.signature}`
-        : undefined,
-      hasLoroUpdate: !!commit.loroUpdate,
-      destroy: !!commit.destroy,
-      summary: this.summarizeCommit(commit),
-      propertySummaries: this.summarizeCommitProperties(commit),
-    });
+    this.pushCommitLog(this.buildCommitLogEntry(commit, 'outgoing', 'pending'));
   }
 
   private summarizeCommit(commit: Commit): string {
@@ -2539,21 +2553,7 @@ export class Store {
   }
 
   public logIncomingCommit(commit: Commit): void {
-    this.pushCommitLog({
-      timestamp: Date.now(),
-      direction: 'incoming',
-      status: 'received',
-      subject: commit.subject,
-      signer: commit.signer,
-      previousCommit: commit.previousCommit,
-      commitId: commit.signature
-        ? `did:ad:commit:${commit.signature}`
-        : undefined,
-      hasLoroUpdate: !!commit.loroUpdate,
-      destroy: !!commit.destroy,
-      summary: this.summarizeCommit(commit),
-      propertySummaries: this.summarizeCommitProperties(commit),
-    });
+    this.pushCommitLog(this.buildCommitLogEntry(commit, 'incoming', 'received'));
   }
 
   /**
@@ -2661,45 +2661,26 @@ export class Store {
     try {
       const created = await this.client.postCommit(commit, endpoint);
       close('ok');
-      this.pushCommitLog({
-        timestamp: Date.now(),
-        direction: 'outgoing',
-        status: 'sent',
-        subject: commit.subject,
-        signer: commit.signer,
-        previousCommit: commit.previousCommit,
-        commitId:
-          (created.id as string | undefined) ??
-          (created.signature
-            ? `did:ad:commit:${created.signature}`
-            : undefined),
-        hasLoroUpdate: !!commit.loroUpdate,
-        destroy: !!commit.destroy,
-        summary: this.summarizeCommit(commit),
-        propertySummaries: this.summarizeCommitProperties(commit),
-      });
-
+      const serverCommitId =
+        (created.id as string | undefined) ??
+        (created.signature ? `did:ad:commit:${created.signature}` : undefined);
+      this.pushCommitLog(
+        this.buildCommitLogEntry(commit, 'outgoing', 'sent', {
+          commitId: serverCommitId,
+        }),
+      );
       return created;
     } catch (e) {
-      close({ err: e instanceof Error ? e.message : String(e) });
-      this.pushCommitLog({
-        timestamp: Date.now(),
-        direction: 'outgoing',
-        status: 'failed',
-        subject: commit.subject,
-        signer: commit.signer,
-        previousCommit: commit.previousCommit,
-        // Include commitId so a prior `pending` entry transitions in place to
-        // `failed` rather than producing a second row.
-        commitId: commit.signature
-          ? `did:ad:commit:${commit.signature}`
-          : undefined,
-        hasLoroUpdate: !!commit.loroUpdate,
-        destroy: !!commit.destroy,
-        summary: this.summarizeCommit(commit),
-        propertySummaries: this.summarizeCommitProperties(commit),
-        error: e instanceof Error ? e.message : String(e),
-      });
+      const errMsg = e instanceof Error ? e.message : String(e);
+      close({ err: errMsg });
+      // Pass the error through `extras.error`; the derived commitId in
+      // `buildCommitLogEntry` matches the prior `pending` entry so it
+      // transitions in place rather than producing a second row.
+      this.pushCommitLog(
+        this.buildCommitLogEntry(commit, 'outgoing', 'failed', {
+          error: errMsg,
+        }),
+      );
       throw e;
     }
   }
