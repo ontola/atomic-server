@@ -1819,11 +1819,6 @@ export class Resource<C extends OptionalClass = any> {
      */
     validate = true,
   ): Promise<void> {
-    // if (this.store.isOffline() && validate) {
-    //   console.warn('Offline, not validating');
-    //   validate = false;
-    // }
-
     if (value instanceof Uint8Array) {
       throw new Error('Binary values (Uint8Array) cannot be set via set().');
     }
