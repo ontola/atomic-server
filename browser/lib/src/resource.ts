@@ -611,30 +611,28 @@ export class Resource<C extends OptionalClass = any> {
     }
   }
 
+  /** Snapshot bytes from a source Resource: prefer the live Loro
+   *  doc, fall back to stored bytes (`Uint8Array` or base64 string).
+   *  Returns undefined if no Loro state exists. Used by both
+   *  `merge` and `cloneLoroStateFrom`. */
+  private static extractLoroSnapshot(
+    resource: Resource,
+  ): Uint8Array | undefined {
+    if (resource._loroDoc) {
+      return resource._loroDoc.export({ mode: 'snapshot' });
+    }
+    const bytes = resource._loroSnapshotBytes;
+    if (bytes instanceof Uint8Array) return bytes;
+    if (typeof bytes === 'string' && bytes.length > 0) return decodeB64(bytes);
+    return undefined;
+  }
+
   private cloneLoroStateFrom(resource: Resource): void {
     this.resetLoroState();
+    if (!LoroLoader.isLoaded()) return;
 
-    if (!LoroLoader.isLoaded()) {
-      return;
-    }
-
-    // Get snapshot bytes from the source: either from its live doc or stored bytes
-    let snapshot: Uint8Array | undefined;
-
-    if (resource._loroDoc) {
-      snapshot = resource._loroDoc.export({ mode: 'snapshot' });
-    } else if (resource._loroSnapshotBytes instanceof Uint8Array) {
-      snapshot = resource._loroSnapshotBytes;
-    } else if (
-      typeof resource._loroSnapshotBytes === 'string' &&
-      resource._loroSnapshotBytes.length > 0
-    ) {
-      snapshot = decodeB64(resource._loroSnapshotBytes);
-    }
-
-    if (!snapshot || snapshot.length === 0) {
-      return;
-    }
+    const snapshot = Resource.extractLoroSnapshot(resource);
+    if (!snapshot || snapshot.length === 0) return;
 
     const { LoroDoc: LoroDocClass } = LoroLoader.Loro;
     this._loroDoc = new LoroDocClass();
@@ -767,19 +765,7 @@ export class Resource<C extends OptionalClass = any> {
       throw new Error('Cannot merge resources with different subjects');
     }
 
-    // Get the incoming Loro bytes (from live doc or stored snapshot)
-    let incomingSnapshot: Uint8Array | undefined;
-
-    if (resourceB._loroDoc) {
-      incomingSnapshot = resourceB._loroDoc.export({ mode: 'snapshot' });
-    } else if (resourceB._loroSnapshotBytes instanceof Uint8Array) {
-      incomingSnapshot = resourceB._loroSnapshotBytes;
-    } else if (
-      typeof resourceB._loroSnapshotBytes === 'string' &&
-      resourceB._loroSnapshotBytes.length > 0
-    ) {
-      incomingSnapshot = decodeB64(resourceB._loroSnapshotBytes);
-    }
+    const incomingSnapshot = Resource.extractLoroSnapshot(resourceB);
 
     if (
       incomingSnapshot &&
