@@ -20,7 +20,7 @@ import {
   type OptionalClass,
   type QuickAccessPropType,
 } from './ontology.js';
-import type { Store } from './store.js';
+import type { ChangeSource, Store } from './store.js';
 import { properties, instances } from './urls.js';
 import {
   valToArray,
@@ -304,6 +304,21 @@ export class Resource<C extends OptionalClass = any> {
   /** @internal */
   public setStore(store: Store): void {
     this._store = store;
+  }
+
+  /** Funnel `this` through the store's unified ingress.
+   *  Defaults `subject` to `this.subject`; pass an override only
+   *  for the post-genesis subject-rename case. */
+  private applyToStore(
+    source: ChangeSource,
+    opts: { subject?: string; commitId?: string } = {},
+  ): void {
+    this.store.applyIncoming({
+      subject: opts.subject ?? this.subject,
+      resource: this,
+      source,
+      ...(opts.commitId !== undefined ? { commitId: opts.commitId } : {}),
+    });
   }
 
   /** Returns true if a LoroDoc has been initialized for this resource. */
@@ -1405,11 +1420,7 @@ export class Resource<C extends OptionalClass = any> {
         // which emits events that trigger cascading fetches (sideBarHandler etc.)
         this.store.resources.delete(oldSubject);
         // Keep an alias so children that reference the old _new: subject can still find it.
-        this.store.applyIncoming({
-          subject: oldSubject,
-          resource: this,
-          source: 'local-pre-push',
-        });
+        this.applyToStore('local-pre-push', { subject: oldSubject });
       }
     }
 
@@ -1474,11 +1485,7 @@ export class Resource<C extends OptionalClass = any> {
     try {
       this.commitError = undefined;
       // Pre-push: surface in-flight state to subscribers.
-      this.store.applyIncoming({
-        subject: this.subject,
-        resource: this,
-        source: 'local-pre-push',
-      });
+      this.applyToStore('local-pre-push');
 
       while (this._pendingCommits.length > 0) {
         const commit = this._pendingCommits[0];
@@ -1497,12 +1504,7 @@ export class Resource<C extends OptionalClass = any> {
 
       // Post-ack re-add: triggers the OPFS persist gate (which
       // skips when `hasPendingCommits` is true).
-      this.store.applyIncoming({
-        subject: this.subject,
-        resource: this,
-        source: 'local-acked',
-        commitId: lastCommitId,
-      });
+      this.applyToStore('local-acked', { commitId: lastCommitId });
 
       // Push referenced blobs. Awaited so a follow-up commit
       // referencing the blob doesn't race the server-side extender.
@@ -1686,11 +1688,7 @@ export class Resource<C extends OptionalClass = any> {
 
       this.commitError = e;
       this.new = wasNew;
-      this.store.applyIncoming({
-        subject: this.subject,
-        resource: this,
-        source: 'local-pre-push',
-      });
+      this.applyToStore('local-pre-push');
       reportDone();
       throw e;
     }
@@ -1702,11 +1700,7 @@ export class Resource<C extends OptionalClass = any> {
     await this.applyPendingCommitsLocally();
     this.commitError = undefined;
     this.loading = false;
-    this.store.applyIncoming({
-      subject: this.subject,
-      resource: this,
-      source: 'offline-replay',
-    });
+    this.applyToStore('offline-replay');
     this.store.notifyResourceSaved(this);
   }
 
@@ -1751,11 +1745,7 @@ export class Resource<C extends OptionalClass = any> {
         .catch(e => console.error('[Offline] persist failed:', e));
     }
 
-    this.store.applyIncoming({
-      subject: this.subject,
-      resource: this,
-      source: 'offline-replay',
-    });
+    this.applyToStore('offline-replay');
 
     // Outbox is durable — survives reload so reconnect drain
     // sees the queued commits even after the in-memory store
