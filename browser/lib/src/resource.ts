@@ -1287,11 +1287,7 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     const commit = await newCommitBuilder.sign(agent);
-    // DIDs don't have an origin, so use the store's server URL
-    const endpoint = this.subject.startsWith('did:')
-      ? new URL('/commit', this.store.getServerUrl()).toString()
-      : new URL(this.subject).origin + `/commit`;
-    await this.store.postCommit(commit, endpoint);
+    await this.store.postCommit(commit, this.getCommitEndpoint());
     this.store.removeResource(this.subject);
   }
 
