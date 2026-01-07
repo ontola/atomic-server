@@ -21,7 +21,8 @@ pub async fn handle_post_resource(
 
     let headers = req.headers();
     let mut content_type = get_accept(headers);
-    let server_url = &appstate.config.server_url;
+    let server_url = appstate.config.get_server_url_for_request(&req);
+
     // Get the subject from the path, or return the home URL
     let subject = if let Some(subj_end) = path {
         let mut subj_end_string = subj_end.as_str();
@@ -47,10 +48,10 @@ pub async fn handle_post_resource(
         }
     } else {
         // There is no end string, so It's the root of the URL, the base URL!
-        String::from(server_url)
+        String::from(&server_url)
     };
 
-    let store = &appstate.store;
+    let store = appstate.store.clone_with_url(server_url);
     timer.add("parse_headers");
 
     let for_agent = get_client_agent(headers, &appstate, subject.clone()).await?;
@@ -73,13 +74,13 @@ pub async fn handle_post_resource(
     timer.add("post_resource");
 
     let response_body = match content_type {
-        ContentType::Json => resource.to_json(store).await?,
-        ContentType::JsonLd => resource.to_json_ld(store).await?,
+        ContentType::Json => resource.to_json(&store).await?,
+        ContentType::JsonLd => resource.to_json_ld(&store).await?,
         ContentType::JsonAd => resource.to_json_ad()?,
         ContentType::Html => resource.to_json_ad()?,
         ContentType::Turtle | ContentType::NTriples => {
             let atoms = resource.to_atoms();
-            atomic_lib::serialize::atoms_to_ntriples(atoms, store).await?
+            atomic_lib::serialize::atoms_to_ntriples(atoms, &store).await?
         }
     };
     timer.add("serialize");
