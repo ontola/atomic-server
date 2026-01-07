@@ -7,6 +7,7 @@ use atomic_lib::{commit::CommitOpts, parse::parse_json_ad_commit_resource, Commi
 #[tracing::instrument(skip(appstate))]
 pub async fn post_commit(
     appstate: web::Data<AppState>,
+    req: actix_web::HttpRequest,
     body: String,
 ) -> AtomicServerResult<HttpResponse> {
     if appstate.config.opts.slow_mode {
@@ -15,7 +16,8 @@ pub async fn post_commit(
         let random_number = rng.gen_range(100..1000);
         tokio::time::sleep(tokio::time::Duration::from_millis(random_number)).await;
     }
-    let store = &appstate.store;
+    let server_url = appstate.config.get_server_url_for_request(&req);
+    let store = appstate.store.clone_with_url(server_url);
     let mut builder = HttpResponse::Ok();
     let incoming_commit_resource = parse_json_ad_commit_resource(&body, store).await?;
     let incoming_commit = Commit::from_resource(incoming_commit_resource)?;

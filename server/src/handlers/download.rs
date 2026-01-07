@@ -24,8 +24,8 @@ pub async fn handle_download(
     req: actix_web::HttpRequest,
 ) -> AtomicServerResult<HttpResponse> {
     let headers = req.headers();
-    let server_url = &appstate.config.server_url;
-    let store = &appstate.store;
+    let server_url = appstate.config.get_server_url_for_request(&req);
+    let store = appstate.store.clone_with_url(server_url.clone());
 
     // We replace `/download` with `/` to get the subject of the Resource.
     let subject = if let Some(pth) = path {
