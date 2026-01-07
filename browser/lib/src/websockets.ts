@@ -171,6 +171,16 @@ export class WSClient {
   >();
   private nextRequestId = 1;
 
+  /** Take a pending GET out of the queue, cancel its timer. Caller
+   *  invokes resolve/reject on the returned entry. */
+  private takePending(requestId: number) {
+    const pending = this.pendingGets.get(requestId);
+    if (!pending) return undefined;
+    clearTimeout(pending.timer);
+    this.pendingGets.delete(requestId);
+    return pending;
+  }
+
   constructor(url: string, store: Store) {
     this.store = store;
     this.handleMessage = this.handleMessage.bind(this);
@@ -444,19 +454,14 @@ export class WSClient {
 
       case Tag.ERROR: {
         const msg = decodeError(payload);
-
-        if (msg && msg.requestId) {
-          const pending = this.pendingGets.get(msg.requestId);
-
-          if (pending) {
-            clearTimeout(pending.timer);
-            this.pendingGets.delete(msg.requestId);
-            pending.reject(new AtomicError(msg.message, ErrorType.Server));
-          }
-        } else if (msg) {
+        if (!msg) break;
+        if (msg.requestId) {
+          this.takePending(msg.requestId)?.reject(
+            new AtomicError(msg.message, ErrorType.Server),
+          );
+        } else {
           this.store.notifyError(msg.message);
         }
-
         break;
       }
 
@@ -470,23 +475,20 @@ export class WSClient {
         // `getResourceLoading` + `importLoroUpdate` + `setLastCommit`
         // + `setSource` + `setLoading` + `addResources` chain is now
         // one call.
-        if (msg.requestId && this.pendingGets.has(msg.requestId)) {
-          const pending = this.pendingGets.get(msg.requestId)!;
-          clearTimeout(pending.timer);
-          this.pendingGets.delete(msg.requestId);
-
+        const pending = msg.requestId
+          ? this.takePending(msg.requestId)
+          : undefined;
+        if (pending) {
           this.store.applyIncoming({
             subject: msg.subject,
             loroBytes: msg.loroBytes,
             commitId: msg.commitId,
             source: 'ws-pending-get',
           });
-
-          // The resource we just hydrated is what the GET caller
-          // is waiting for — read it back from the store map.
+          // The resource we just hydrated is what the GET caller is
+          // waiting for — read it back from the store map.
           const resource = this.store.resources.get(msg.subject);
           if (resource) pending.resolve(resource);
-
           break;
         }
 
