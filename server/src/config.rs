@@ -214,22 +214,30 @@ impl Config {
     /// Returns the server URL for a given request.
     /// If multi-tenancy is enabled and the host matches a subdomain of the base domain, it returns the host URL.
     pub fn get_server_url_for_request(&self, req: &actix_web::HttpRequest) -> String {
-        if let Some(base) = &self.base_domain {
-            if let Some(host) = req.head().headers.get("Host") {
-                if let Ok(host_str) = host.to_str() {
-                    // Remove port if present
-                    let domain = host_str.split(':').next().unwrap_or(host_str);
-                    if domain.ends_with(base) {
-                        let schema =
-                            if let Some(proto) = req.head().headers.get("X-Forwarded-Proto") {
-                                proto.to_str().unwrap_or("http")
-                            } else if self.opts.https {
-                                "https"
-                            } else {
-                                "http"
-                            };
-                        return format!("{}://{}", schema, host_str);
-                    }
+        let host_header = req
+            .head()
+            .headers
+            .get("X-Forwarded-Host")
+            .or_else(|| req.head().headers.get("Host"));
+
+        if let Some(host) = host_header {
+            if let Ok(host_str) = host.to_str() {
+                let domain = host_str.split(':').next().unwrap_or(host_str);
+                let allowed = if let Some(base) = &self.base_domain {
+                    domain.ends_with(base)
+                } else {
+                    true
+                };
+
+                if allowed {
+                    let schema = if let Some(proto) = req.head().headers.get("X-Forwarded-Proto") {
+                        proto.to_str().unwrap_or("http")
+                    } else if self.opts.https {
+                        "https"
+                    } else {
+                        "http"
+                    };
+                    return format!("{}://{}", schema, host_str);
                 }
             }
         }
