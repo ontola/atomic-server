@@ -153,6 +153,7 @@ export class WSClient {
   private _closed = false;
   private _retryDelay = 1000;
   private _retryTimer: ReturnType<typeof setTimeout> | undefined;
+  private _onlineListener: (() => void) | undefined;
 
   /** When true, all WS frames are logged to the console in human-readable form. */
   public debug =
@@ -230,6 +231,24 @@ export class WSClient {
     };
 
     createSocket();
+
+    // Wake the retry loop immediately when the OS reports network back
+    // up — otherwise we wait out the current backoff (up to 30 s) before
+    // even trying. Matches the dagger-flake pattern where `setOffline(false)`
+    // doesn't reconnect within the test timeout. No-op outside the browser.
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      this._onlineListener = () => {
+        if (this._closed || this.ws.readyState === WebSocket.OPEN) return;
+        if (this._retryTimer) {
+          clearTimeout(this._retryTimer);
+          this._retryTimer = undefined;
+        }
+        this._retryDelay = 1000;
+        this.authenticatedWith = undefined;
+        createSocket();
+      };
+      window.addEventListener('online', this._onlineListener);
+    }
   }
 
   public get readyState(): number {
@@ -241,6 +260,15 @@ export class WSClient {
 
     if (this._retryTimer) {
       clearTimeout(this._retryTimer);
+    }
+
+    if (
+      this._onlineListener &&
+      typeof window !== 'undefined' &&
+      typeof window.removeEventListener === 'function'
+    ) {
+      window.removeEventListener('online', this._onlineListener);
+      this._onlineListener = undefined;
     }
 
     this.ws.close();
