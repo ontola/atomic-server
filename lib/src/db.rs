@@ -278,10 +278,18 @@ impl Db {
         Ok(())
     }
 
+    /// Flushes the current state to disk.
+    pub fn flush(&self) -> AtomicResult<()> {
+        self.db
+            .flush()
+            .map_err(|e| format!("Failed to flush: {}", e).into())
+            .map(|_| ())
+    }
+
     /// Removes the DB and all content from disk.
     /// WARNING: This is irreversible.
     pub fn clear_all_danger(self) -> AtomicResult<()> {
-        self.clear_index()?;
+        // self.clear_index()?;
         let path = self.path.clone();
         drop(self);
         fs::remove_dir_all(path)?;

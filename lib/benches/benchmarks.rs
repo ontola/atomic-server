@@ -39,28 +39,75 @@ fn random_resource(atom: &Atom) -> Resource {
 fn criterion_benchmark(c: &mut Criterion) {
     let store = Db::init_temp("bench").unwrap();
 
-    c.bench_function("add_resource", |b| {
-        b.iter(|| {
-            let resource = random_resource(&random_atom_string());
-            store
-                .add_resource_opts(&resource, true, true, false)
-                .unwrap();
+    let mut flushing = c.benchmark_group("IO bound benchmarks");
+    flushing.significance_level(0.1).sample_size(10);
+
+    flushing.bench_function("flush 100 resources", |b| {
+        b.iter_batched(
+            || {
+                // SETUP: Create 100 dirty resources
+                for _ in 0..100 {
+                    let resource = random_resource(&random_atom_string());
+                    store
+                        .add_resource_opts(&resource, true, true, false)
+                        .unwrap();
+                }
+            },
+            |()| {
+                // MEASURE: Only the flush
+                store.flush().unwrap();
+            },
+            criterion::BatchSize::SmallInput,
+        )
+    });
+
+    flushing.bench_function("resource.save() string", |b| {
+        b.iter_custom(|iters| {
+            let mut total_duration = std::time::Duration::new(0, 0);
+            let mut i = 0;
+            let flush_interval = 100;
+
+            while i < iters {
+                let batch_size = std::cmp::min(flush_interval, iters - i);
+
+                let start = std::time::Instant::now();
+                for _ in 0..batch_size {
+                    let mut resource = random_resource(&random_atom_string());
+                    resource.save_locally(&store).unwrap();
+                }
+                total_duration += start.elapsed();
+
+                store.flush().unwrap();
+                i += batch_size;
+            }
+            total_duration
         })
     });
 
-    c.bench_function("resource.save() string", |b| {
-        b.iter(|| {
-            let mut resource = random_resource(&random_atom_string());
-            resource.save(&store).unwrap();
+    flushing.bench_function("resource.save() array", |b| {
+        b.iter_custom(|iters| {
+            let mut total_duration = std::time::Duration::new(0, 0);
+            let mut i = 0;
+            let flush_interval = 100;
+
+            while i < iters {
+                let batch_size = std::cmp::min(flush_interval, iters - i);
+
+                let start = std::time::Instant::now();
+                for _ in 0..batch_size {
+                    let mut resource = random_resource(&random_atom_array());
+                    resource.save_locally(&store).unwrap();
+                }
+                total_duration += start.elapsed();
+
+                store.flush().unwrap();
+                i += batch_size;
+            }
+            total_duration
         })
     });
 
-    c.bench_function("resource.save() array", |b| {
-        b.iter(|| {
-            let mut resource = random_resource(&random_atom_array());
-            resource.save(&store).unwrap();
-        })
-    });
+    flushing.finish();
 
     let big_resource = store
         .get_resource_extended(
@@ -94,13 +141,20 @@ fn criterion_benchmark(c: &mut Criterion) {
         })
     });
 
-    c.bench_function("all_resources()", |b| {
+    let mut all_resources_group = c.benchmark_group("all_resources");
+    all_resources_group.sample_size(10);
+
+    all_resources_group.bench_function("all_resources()", |b| {
         b.iter(|| {
             let _all = store.all_resources(false).collect::<Vec<Resource>>();
         })
     });
 
+    all_resources_group.finish();
+    println!("Clearing store");
+    // If this takes a long time, it probably means there is still a lot of data that needs to be flushed.
     store.clear_all_danger().unwrap();
+    println!("Store cleared");
 }
 
 criterion_group!(benches, criterion_benchmark);

@@ -268,7 +268,7 @@ pub fn populate_default_store(store: &impl Storelike) -> AtomicResult<()> {
         )
         .map_err(|e| format!("Failed to import ontologies.json: {e}"))?;
     store
-        .import(include_str!("../defaults/ai.json",), &ParseOpts::default())
+        .import(include_str!("../defaults/ai.json"), &ParseOpts::default())
         .map_err(|e| format!("Failed to import ai.json: {e}"))?;
     Ok(())
 }

@@ -114,7 +114,7 @@ impl Commit {
     /// Throws an error if the parent is set to itself
     pub fn check_for_circular_parents(&self) -> AtomicResult<()> {
         // Check if the set hashset has a parent property and if it matches with this subject.
-        if let Some(set) = self.set.clone() {
+        if let Some(set) = &self.set {
             if let Some(parent) = set.get(urls::PARENT) {
                 if parent.to_string() == self.subject {
                     return Err("Circular parent reference".into());
