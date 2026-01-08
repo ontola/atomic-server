@@ -44,13 +44,16 @@ pub async fn web_socket_handler(
     .await?;
     tracing::debug!("Starting websocket for {}", for_agent);
 
+    let server_url = appstate.config.get_server_url_for_request(&req);
+    let store = appstate.store.clone_with_url(server_url);
+
     let result = ws::start(
         WebSocketConnection::new(
             appstate.commit_monitor.clone(),
             appstate.y_sync_broadcaster.clone(),
             for_agent,
             // We need to make sure this is easily clone-able
-            appstate.store.clone(),
+            store,
         ),
         &req,
         stream,
