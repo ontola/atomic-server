@@ -40,8 +40,16 @@ export function useChildren(parentSubject: string | undefined): {
       return;
     }
 
+    // Cancellation flag prevents a slow extract run from
+    // `setSubjects(...stale)` after a fresh one already landed. The
+    // collection-invalidate path can trigger overlapping runs when the
+    // user creates resources faster than `waitForReady` resolves, and
+    // the late writer used to overwrite the new data with the old.
+    let cancelled = false;
+
     const extractMembers = async () => {
       await collection.waitForReady();
+      if (cancelled) return;
 
       // Resolve all members in parallel — `getMemberWithIndex` is a
       // worker round-trip per call, so a 200-child folder used to pay
@@ -53,6 +61,7 @@ export function useChildren(parentSubject: string | undefined): {
           collection.getMemberWithIndex(i),
         ),
       );
+      if (cancelled) return;
 
       // Drop commit subjects: they leak into parent= queries when a resource
       // is created/updated, but they're never tree-children. Also dedupe —
@@ -75,6 +84,10 @@ export function useChildren(parentSubject: string | undefined): {
     };
 
     extractMembers();
+
+    return () => {
+      cancelled = true;
+    };
   }, [collection, disabled]);
 
   // Refresh when a resource is created under this parent
