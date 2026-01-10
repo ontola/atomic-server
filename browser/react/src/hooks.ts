@@ -301,7 +301,10 @@ export function useValue(
     ],
   );
 
-  return [val, validateAndSet];
+  // `resource.get(prop)` is typed AtomicValue (JSONValue | Uint8Array).
+  // useValue's contract is JSONValue-only (binary props live in auxValues
+  // and are not surfaced through this hook), so narrow at the boundary.
+  return [val as JSONValue | undefined, validateAndSet];
 }
 
 /**
