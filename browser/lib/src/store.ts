@@ -1768,10 +1768,6 @@ export class Store {
     this._driveSyncInProgress = false;
     this._lastDriveSync = { drive, count, timestamp };
     this.emitSyncStatus();
-    if (this._firstDriveSyncResolve) {
-      this._firstDriveSyncResolve();
-      this._firstDriveSyncResolve = undefined;
-    }
   }
 
   /** True once any drive sync has finished in this session. Used by
@@ -1781,24 +1777,6 @@ export class Store {
   public hasCompletedDriveSync(): boolean {
     return this._lastDriveSync !== undefined;
   }
-
-  /** Resolves once the WebSocket has run its first drive-sync handshake
-   * (`SYNC_DIFF` + `SYNC_PUSH` complete, `finishDriveSync` called). Used by
-   * collection fetches to defer the fallback `/query` GET until the local
-   * WASM DB has been populated by the sync — the index then satisfies the
-   * query locally and the server round-trip can be skipped entirely.
-   * Resolves immediately if a sync has already completed in this session. */
-  public waitForFirstDriveSync(): Promise<void> {
-    if (this._lastDriveSync) return Promise.resolve();
-    if (!this._firstDriveSyncPromise) {
-      this._firstDriveSyncPromise = new Promise<void>(resolve => {
-        this._firstDriveSyncResolve = resolve;
-      });
-    }
-    return this._firstDriveSyncPromise;
-  }
-  private _firstDriveSyncPromise: Promise<void> | undefined;
-  private _firstDriveSyncResolve: (() => void) | undefined;
 
   public getSyncStatus(): StoreSyncStatus {
     return {
