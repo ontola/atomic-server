@@ -69,3 +69,15 @@ pub fn check_timestamp_in_past(timestamp: i64, difference: i64) -> AtomicResult<
     }
     return Ok(());
 }
+
+pub fn truncate_string(s: &str, max_len: usize) -> String {
+    if s.len() <= max_len {
+        return s.to_string();
+    }
+
+    let mut end = max_len;
+    while !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    s[0..end].to_string()
+}
