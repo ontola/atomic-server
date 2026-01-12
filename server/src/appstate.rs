@@ -51,7 +51,6 @@ impl AppState {
         let mut store = atomic_lib::Db::init(&config.store_path, config.server_url.clone()).await?;
 
         // Register all built-in class extenders
-        store.add_class_extender(plugins::collections::build_collection_extender())?;
         store.add_class_extender(plugins::chatroom::build_chatroom_extender())?;
         store.add_class_extender(plugins::chatroom::build_message_extender())?;
         store.add_class_extender(plugins::invite::build_invite_extender())?;

@@ -1,11 +1,32 @@
 //! Collections are dynamic resources that refer to multiple resources.
 //! They are constructed using a [Query]
+use crate::class_extender::{ClassExtender, GetExtenderContext};
 use crate::{
     agents::ForAgent,
     errors::AtomicResult,
     storelike::{Query, ResourceCollection, ResourceResponse},
     urls, Resource, Storelike, Value,
 };
+
+pub fn get_collection_class_extender() -> ClassExtender {
+    ClassExtender {
+        class: urls::COLLECTION.to_string(),
+        on_resource_get: Some(ClassExtender::wrap_get_handler(|context| {
+            Box::pin(async move {
+                let GetExtenderContext {
+                    store,
+                    url,
+                    db_resource: resource,
+                    for_agent,
+                } = context;
+                construct_collection_from_params(store, url.query_pairs(), resource, for_agent)
+                    .await
+            })
+        })),
+        before_commit: None,
+        after_commit: None,
+    }
+}
 
 const DEFAULT_PAGE_SIZE: usize = 30;
 
@@ -575,11 +596,6 @@ mod test {
             .lock()
             .unwrap()
             .clone();
-        let subjects: Vec<String> = store
-            .all_resources(false)
-            .map(|r| r.get_subject().into())
-            .collect();
-        println!("{:?}", subjects);
         let collections_collection = store
             .get_resource_extended(
                 &format!("{}/collections", store.get_server_url().unwrap()),

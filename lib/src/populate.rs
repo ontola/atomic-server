@@ -382,15 +382,25 @@ pub async fn populate_all(store: &crate::Db) -> AtomicResult<()> {
         .map_err(|e| format!("Failed to populate default store. {}", e))?;
 
     // Use try_join! to run the rest concurrently
-    tokio::try_join!(
-        create_drive(store),
-        create_default_ontology(store),
-        set_drive_rights(store, true),
-        populate_collections(store),
-        populate_endpoints(store),
-        populate_importer(store),
-        populate_sidebar_items(store),
-    )?;
+    create_drive(store)
+        .await
+        .map_err(|e| format!("Failed to create drive. {}", e))?;
+    create_default_ontology(store)
+        .await
+        .map_err(|e| format!("Failed to create default ontology. {}", e))?;
+    set_drive_rights(store, true).await?;
+    populate_collections(store)
+        .await
+        .map_err(|e| format!("Failed to populate collections. {}", e))?;
+    populate_endpoints(store)
+        .await
+        .map_err(|e| format!("Failed to populate endpoints. {}", e))?;
+    populate_importer(store)
+        .await
+        .map_err(|e| format!("Failed to populate importer. {}", e))?;
+    populate_sidebar_items(store)
+        .await
+        .map_err(|e| format!("Failed to populate sidebar items. {}", e))?;
 
     Ok(())
 }
