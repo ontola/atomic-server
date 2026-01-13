@@ -80,10 +80,22 @@ const setCookieExpires = (
 const COOKIE_NAME_AUTH = 'atomic_session';
 
 /** Sets a cookie for the current Agent, signing the Authentication. It expires after some default time. */
-export const setCookieAuthentication = (serverURL: string, agent: Agent) => {
-  createAuthentication(serverURL, agent).then(auth => {
+export const setCookieAuthentication = async (
+  serverURL: string,
+  agent: Agent,
+): Promise<void> => {
+  // Returns a promise so callers (e.g. the HTTP request signing path
+  // in client.fetchResourceHTTP) can await the cookie before issuing
+  // the request. Without an await, the first request after `setAgent`
+  // race-conditions a 401: the cookie isn't installed yet because the
+  // signing is async. The catch is per-caller — failures here are
+  // surfaced via the request 401 if the cookie ever did matter.
+  try {
+    const auth = await createAuthentication(serverURL, agent);
     setCookieExpires(COOKIE_NAME_AUTH, btoa(JSON.stringify(auth)), serverURL);
-  });
+  } catch (e) {
+    console.warn('[Auth] cookie installation failed:', e);
+  }
 };
 
 /** Returns false if the auth cookie is not set / expired */
