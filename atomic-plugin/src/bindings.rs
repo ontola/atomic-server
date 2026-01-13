@@ -11,14 +11,38 @@ pub unsafe fn _export_class_url_cabi<T: Guest>() -> *mut u8 {
     _rt::run_ctors_once();
     let result0 = T::class_url();
     let ptr1 = (&raw mut _RET_AREA.0).cast::<u8>();
-    let vec2 = (result0.into_bytes()).into_boxed_slice();
-    let ptr2 = vec2.as_ptr().cast::<u8>();
-    let len2 = vec2.len();
-    ::core::mem::forget(vec2);
+    let vec3 = result0;
+    let len3 = vec3.len();
+    let layout3 = _rt::alloc::Layout::from_size_align_unchecked(
+        vec3.len() * (2 * ::core::mem::size_of::<*const u8>()),
+        ::core::mem::size_of::<*const u8>(),
+    );
+    let result3 = if layout3.size() != 0 {
+        let ptr = _rt::alloc::alloc(layout3).cast::<u8>();
+        if ptr.is_null() {
+            _rt::alloc::handle_alloc_error(layout3);
+        }
+        ptr
+    } else {
+        ::core::ptr::null_mut()
+    };
+    for (i, e) in vec3.into_iter().enumerate() {
+        let base = result3.add(i * (2 * ::core::mem::size_of::<*const u8>()));
+        {
+            let vec2 = (e.into_bytes()).into_boxed_slice();
+            let ptr2 = vec2.as_ptr().cast::<u8>();
+            let len2 = vec2.len();
+            ::core::mem::forget(vec2);
+            *base
+                .add(::core::mem::size_of::<*const u8>())
+                .cast::<usize>() = len2;
+            *base.add(0).cast::<*mut u8>() = ptr2.cast_mut();
+        }
+    }
     *ptr1
         .add(::core::mem::size_of::<*const u8>())
-        .cast::<usize>() = len2;
-    *ptr1.add(0).cast::<*mut u8>() = ptr2.cast_mut();
+        .cast::<usize>() = len3;
+    *ptr1.add(0).cast::<*mut u8>() = result3;
     ptr1
 }
 #[doc(hidden)]
@@ -28,7 +52,23 @@ pub unsafe fn __post_return_class_url<T: Guest>(arg0: *mut u8) {
     let l1 = *arg0
         .add(::core::mem::size_of::<*const u8>())
         .cast::<usize>();
-    _rt::cabi_dealloc(l0, l1, 1);
+    let base4 = l0;
+    let len4 = l1;
+    for i in 0..len4 {
+        let base = base4.add(i * (2 * ::core::mem::size_of::<*const u8>()));
+        {
+            let l2 = *base.add(0).cast::<*mut u8>();
+            let l3 = *base
+                .add(::core::mem::size_of::<*const u8>())
+                .cast::<usize>();
+            _rt::cabi_dealloc(l2, l3, 1);
+        }
+    }
+    _rt::cabi_dealloc(
+        base4,
+        len4 * (2 * ::core::mem::size_of::<*const u8>()),
+        ::core::mem::size_of::<*const u8>(),
+    );
 }
 #[doc(hidden)]
 #[allow(non_snake_case)]
@@ -245,11 +285,10 @@ pub unsafe fn _export_before_commit_cabi<T: Guest>(
     arg1: usize,
     arg2: *mut u8,
     arg3: usize,
-    arg4: i32,
-    arg5: *mut u8,
-    arg6: usize,
-    arg7: *mut u8,
-    arg8: usize,
+    arg4: *mut u8,
+    arg5: usize,
+    arg6: *mut u8,
+    arg7: usize,
 ) -> *mut u8 {
     #[cfg(target_arch = "wasm32")]
     _rt::run_ctors_once();
@@ -257,25 +296,16 @@ pub unsafe fn _export_before_commit_cabi<T: Guest>(
     let bytes0 = _rt::Vec::from_raw_parts(arg0.cast(), len0, len0);
     let len1 = arg3;
     let bytes1 = _rt::Vec::from_raw_parts(arg2.cast(), len1, len1);
+    let len2 = arg5;
+    let bytes2 = _rt::Vec::from_raw_parts(arg4.cast(), len2, len2);
+    let len3 = arg7;
+    let bytes3 = _rt::Vec::from_raw_parts(arg6.cast(), len3, len3);
     let result4 = T::before_commit(atomic::class_extender::types::CommitContext {
         subject: _rt::string_lift(bytes0),
         commit_json: _rt::string_lift(bytes1),
-        snapshot: match arg4 {
-            0 => None,
-            1 => {
-                let e = {
-                    let len2 = arg6;
-                    let bytes2 = _rt::Vec::from_raw_parts(arg5.cast(), len2, len2);
-                    let len3 = arg8;
-                    let bytes3 = _rt::Vec::from_raw_parts(arg7.cast(), len3, len3);
-                    atomic::class_extender::types::ResourceJson {
-                        subject: _rt::string_lift(bytes2),
-                        json_ad: _rt::string_lift(bytes3),
-                    }
-                };
-                Some(e)
-            }
-            _ => _rt::invalid_enum_discriminant(),
+        snapshot: atomic::class_extender::types::ResourceJson {
+            subject: _rt::string_lift(bytes2),
+            json_ad: _rt::string_lift(bytes3),
         },
     });
     let ptr5 = (&raw mut _RET_AREA.0).cast::<u8>();
@@ -323,11 +353,10 @@ pub unsafe fn _export_after_commit_cabi<T: Guest>(
     arg1: usize,
     arg2: *mut u8,
     arg3: usize,
-    arg4: i32,
-    arg5: *mut u8,
-    arg6: usize,
-    arg7: *mut u8,
-    arg8: usize,
+    arg4: *mut u8,
+    arg5: usize,
+    arg6: *mut u8,
+    arg7: usize,
 ) -> *mut u8 {
     #[cfg(target_arch = "wasm32")]
     _rt::run_ctors_once();
@@ -335,25 +364,16 @@ pub unsafe fn _export_after_commit_cabi<T: Guest>(
     let bytes0 = _rt::Vec::from_raw_parts(arg0.cast(), len0, len0);
     let len1 = arg3;
     let bytes1 = _rt::Vec::from_raw_parts(arg2.cast(), len1, len1);
+    let len2 = arg5;
+    let bytes2 = _rt::Vec::from_raw_parts(arg4.cast(), len2, len2);
+    let len3 = arg7;
+    let bytes3 = _rt::Vec::from_raw_parts(arg6.cast(), len3, len3);
     let result4 = T::after_commit(atomic::class_extender::types::CommitContext {
         subject: _rt::string_lift(bytes0),
         commit_json: _rt::string_lift(bytes1),
-        snapshot: match arg4 {
-            0 => None,
-            1 => {
-                let e = {
-                    let len2 = arg6;
-                    let bytes2 = _rt::Vec::from_raw_parts(arg5.cast(), len2, len2);
-                    let len3 = arg8;
-                    let bytes3 = _rt::Vec::from_raw_parts(arg7.cast(), len3, len3);
-                    atomic::class_extender::types::ResourceJson {
-                        subject: _rt::string_lift(bytes2),
-                        json_ad: _rt::string_lift(bytes3),
-                    }
-                };
-                Some(e)
-            }
-            _ => _rt::invalid_enum_discriminant(),
+        snapshot: atomic::class_extender::types::ResourceJson {
+            subject: _rt::string_lift(bytes2),
+            json_ad: _rt::string_lift(bytes3),
         },
     });
     let ptr5 = (&raw mut _RET_AREA.0).cast::<u8>();
@@ -396,7 +416,7 @@ pub unsafe fn __post_return_after_commit<T: Guest>(arg0: *mut u8) {
 }
 pub trait Guest {
     /// Returns the class URL this extender applies to.
-    fn class_url() -> _rt::String;
+    fn class_url() -> _rt::Vec<_rt::String>;
     /// Called before a Resource is returned to a client. Return `none` to leave the Resource untouched.
     fn on_resource_get(ctx: GetContext) -> Result<Option<ResourceResponse>, _rt::String>;
     /// Called before a Commit that targets the class is persisted.
@@ -422,24 +442,22 @@ macro_rules! __export_world_class_extender_cabi {
         unsafe extern "C" fn _post_return_on_resource_get(arg0 : * mut u8,) { unsafe {
         $($path_to_types)*:: __post_return_on_resource_get::<$ty > (arg0) } } #[unsafe
         (export_name = "before-commit")] unsafe extern "C" fn export_before_commit(arg0 :
-        * mut u8, arg1 : usize, arg2 : * mut u8, arg3 : usize, arg4 : i32, arg5 : * mut
-        u8, arg6 : usize, arg7 : * mut u8, arg8 : usize,) -> * mut u8 { unsafe {
+        * mut u8, arg1 : usize, arg2 : * mut u8, arg3 : usize, arg4 : * mut u8, arg5 :
+        usize, arg6 : * mut u8, arg7 : usize,) -> * mut u8 { unsafe {
         $($path_to_types)*:: _export_before_commit_cabi::<$ty > (arg0, arg1, arg2, arg3,
-        arg4, arg5, arg6, arg7, arg8) } } #[unsafe (export_name =
-        "cabi_post_before-commit")] unsafe extern "C" fn _post_return_before_commit(arg0
-        : * mut u8,) { unsafe { $($path_to_types)*:: __post_return_before_commit::<$ty >
-        (arg0) } } #[unsafe (export_name = "after-commit")] unsafe extern "C" fn
-        export_after_commit(arg0 : * mut u8, arg1 : usize, arg2 : * mut u8, arg3 : usize,
-        arg4 : i32, arg5 : * mut u8, arg6 : usize, arg7 : * mut u8, arg8 : usize,) -> *
-        mut u8 { unsafe { $($path_to_types)*:: _export_after_commit_cabi::<$ty > (arg0,
-        arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) } } #[unsafe (export_name =
-        "cabi_post_after-commit")] unsafe extern "C" fn _post_return_after_commit(arg0 :
-        * mut u8,) { unsafe { $($path_to_types)*:: __post_return_after_commit::<$ty >
-        (arg0) } } };
+        arg4, arg5, arg6, arg7) } } #[unsafe (export_name = "cabi_post_before-commit")]
+        unsafe extern "C" fn _post_return_before_commit(arg0 : * mut u8,) { unsafe {
+        $($path_to_types)*:: __post_return_before_commit::<$ty > (arg0) } } #[unsafe
+        (export_name = "after-commit")] unsafe extern "C" fn export_after_commit(arg0 : *
+        mut u8, arg1 : usize, arg2 : * mut u8, arg3 : usize, arg4 : * mut u8, arg5 :
+        usize, arg6 : * mut u8, arg7 : usize,) -> * mut u8 { unsafe {
+        $($path_to_types)*:: _export_after_commit_cabi::<$ty > (arg0, arg1, arg2, arg3,
+        arg4, arg5, arg6, arg7) } } #[unsafe (export_name = "cabi_post_after-commit")]
+        unsafe extern "C" fn _post_return_after_commit(arg0 : * mut u8,) { unsafe {
+        $($path_to_types)*:: __post_return_after_commit::<$ty > (arg0) } } };
     };
 }
 #[doc(hidden)]
-#[allow(unused_imports)]
 pub(crate) use __export_world_class_extender_cabi;
 #[cfg_attr(target_pointer_width = "64", repr(align(8)))]
 #[cfg_attr(target_pointer_width = "32", repr(align(4)))]
@@ -516,7 +534,7 @@ pub mod atomic {
             pub struct CommitContext {
                 pub subject: _rt::String,
                 pub commit_json: _rt::String,
-                pub snapshot: Option<ResourceJson>,
+                pub snapshot: ResourceJson,
             }
             impl ::core::fmt::Debug for CommitContext {
                 fn fmt(
@@ -912,7 +930,6 @@ macro_rules! __export_class_extender_impl {
     };
 }
 #[doc(inline)]
-#[allow(unused_imports)]
 pub(crate) use __export_class_extender_impl as export;
 #[cfg(target_arch = "wasm32")]
 #[unsafe(link_section = "component-type:wit-bindgen:0.41.0:atomic:class-extender@0.1.0:class-extender:encoded world")]
@@ -920,26 +937,26 @@ pub(crate) use __export_class_extender_impl as export;
 #[allow(clippy::octal_escapes)]
 pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 950] = *b"\
 \0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\xb1\x06\x01A\x02\x01\
-A\x16\x01B\x0c\x01r\x01\x07subjects\x04\0\x0catomic-agent\x03\0\0\x01r\x02\x07su\
+A\x17\x01B\x0b\x01r\x01\x07subjects\x04\0\x0catomic-agent\x03\0\0\x01r\x02\x07su\
 bjects\x07json-ads\x04\0\x0dresource-json\x03\0\x02\x01p\x03\x01r\x02\x07primary\
 \x03\x0areferenced\x04\x04\0\x11resource-response\x03\0\x05\x01r\x04\x0brequest-\
 urls\x11requested-subjects\x0dagent-subjects\x08snapshot\x03\x04\0\x0bget-contex\
-t\x03\0\x07\x01k\x03\x01r\x03\x07subjects\x0bcommit-jsons\x08snapshot\x09\x04\0\x0e\
-commit-context\x03\0\x0a\x03\0!atomic:class-extender/types@0.1.0\x05\0\x02\x03\0\
-\0\x11resource-response\x03\0\x11resource-response\x03\0\x01\x02\x03\0\0\x0bget-\
-context\x03\0\x0bget-context\x03\0\x03\x02\x03\0\0\x0ecommit-context\x03\0\x0eco\
-mmit-context\x03\0\x05\x02\x03\0\0\x0dresource-json\x02\x03\0\0\x0catomic-agent\x01\
-B\x0e\x02\x03\x02\x01\x07\x04\0\x0dresource-json\x03\0\0\x02\x03\x02\x01\x08\x04\
-\0\x0catomic-agent\x03\0\x02\x01ks\x01j\x01\x01\x01s\x01@\x02\x07subjects\x05age\
-nt\x04\0\x05\x04\0\x0cget-resource\x01\x06\x01p\x01\x01j\x01\x07\x01s\x01@\x03\x08\
-propertys\x05values\x05agent\x04\0\x08\x04\0\x05query\x01\x09\x01@\0\0s\x04\0\x10\
-get-plugin-agent\x01\x0a\x03\0\x20atomic:class-extender/host@0.1.0\x05\x09\x01@\0\
-\0s\x04\0\x09class-url\x01\x0a\x01k\x02\x01j\x01\x0b\x01s\x01@\x01\x03ctx\x04\0\x0c\
-\x04\0\x0fon-resource-get\x01\x0d\x01j\0\x01s\x01@\x01\x03ctx\x06\0\x0e\x04\0\x0d\
-before-commit\x01\x0f\x04\0\x0cafter-commit\x01\x0f\x04\0*atomic:class-extender/\
-class-extender@0.1.0\x04\0\x0b\x14\x01\0\x0eclass-extender\x03\0\0\0G\x09produce\
-rs\x01\x0cprocessed-by\x02\x0dwit-component\x070.227.1\x10wit-bindgen-rust\x060.\
-41.0";
+t\x03\0\x07\x01r\x03\x07subjects\x0bcommit-jsons\x08snapshot\x03\x04\0\x0ecommit\
+-context\x03\0\x09\x03\0!atomic:class-extender/types@0.1.0\x05\0\x02\x03\0\0\x11\
+resource-response\x03\0\x11resource-response\x03\0\x01\x02\x03\0\0\x0bget-contex\
+t\x03\0\x0bget-context\x03\0\x03\x02\x03\0\0\x0ecommit-context\x03\0\x0ecommit-c\
+ontext\x03\0\x05\x02\x03\0\0\x0dresource-json\x02\x03\0\0\x0catomic-agent\x01B\x0e\
+\x02\x03\x02\x01\x07\x04\0\x0dresource-json\x03\0\0\x02\x03\x02\x01\x08\x04\0\x0c\
+atomic-agent\x03\0\x02\x01ks\x01j\x01\x01\x01s\x01@\x02\x07subjects\x05agent\x04\
+\0\x05\x04\0\x0cget-resource\x01\x06\x01p\x01\x01j\x01\x07\x01s\x01@\x03\x08prop\
+ertys\x05values\x05agent\x04\0\x08\x04\0\x05query\x01\x09\x01@\0\0s\x04\0\x10get\
+-plugin-agent\x01\x0a\x03\0\x20atomic:class-extender/host@0.1.0\x05\x09\x01ps\x01\
+@\0\0\x0a\x04\0\x09class-url\x01\x0b\x01k\x02\x01j\x01\x0c\x01s\x01@\x01\x03ctx\x04\
+\0\x0d\x04\0\x0fon-resource-get\x01\x0e\x01j\0\x01s\x01@\x01\x03ctx\x06\0\x0f\x04\
+\0\x0dbefore-commit\x01\x10\x04\0\x0cafter-commit\x01\x10\x04\0*atomic:class-ext\
+ender/class-extender@0.1.0\x04\0\x0b\x14\x01\0\x0eclass-extender\x03\0\0\0G\x09p\
+roducers\x01\x0cprocessed-by\x02\x0dwit-component\x070.227.1\x10wit-bindgen-rust\
+\x060.41.0";
 #[inline(never)]
 #[doc(hidden)]
 pub fn __link_custom_section_describing_imports() {
