@@ -31,7 +31,7 @@ pub type CommitHandler =
 
 #[derive(Clone)]
 pub struct ClassExtender {
-    pub class: String,
+    pub classes: Vec<String>,
     pub on_resource_get: Option<ResourceGetHandler>,
     pub before_commit: Option<CommitHandler>,
     pub after_commit: Option<CommitHandler>,
@@ -43,7 +43,8 @@ impl ClassExtender {
             return Ok(false);
         };
 
-        Ok(is_a.to_subjects(None)?.iter().any(|c| c == &self.class))
+        let resource_classes = is_a.to_subjects(None)?;
+        Ok(resource_classes.iter().any(|c| self.classes.contains(c)))
     }
 
     pub fn wrap_get_handler<F>(handler: F) -> ResourceGetHandler

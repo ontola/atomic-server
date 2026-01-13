@@ -30,8 +30,8 @@ fn get_name_from_folder(folder: &Resource) -> Result<&str, String> {
 }
 
 impl ClassExtender for RandomFolderExtender {
-    fn class_url() -> String {
-        FOLDER_CLASS.to_string()
+    fn class_url() -> Vec<String> {
+        vec![FOLDER_CLASS.to_string()]
     }
 
     // Modify the response from the server every time a folder is fetched.
@@ -54,7 +54,7 @@ impl ClassExtender for RandomFolderExtender {
     }
 
     // Enforce that folder names are unique. It looks up all folders and checks if any of them have the same name.
-    fn before_commit(commit: &Commit, _snapshot: Option<&Resource>) -> Result<(), String> {
+    fn before_commit(commit: &Commit, _snapshot: &Resource) -> Result<(), String> {
         let Some(set) = &commit.set else {
             return Ok(());
         };
@@ -77,11 +77,7 @@ impl ClassExtender for RandomFolderExtender {
     }
 
     // Send a message to a Discord webhook when a folder is updated.
-    fn after_commit(_commit: &Commit, resource: Option<&Resource>) -> Result<(), String> {
-        let Some(resource) = resource else {
-            return Ok(());
-        };
-
+    fn after_commit(_commit: &Commit, resource: &Resource) -> Result<(), String> {
         let config_str = std::fs::read_to_string("/config.toml").map_err(|e| e.to_string())?;
         let config: Config = toml::from_str(&config_str).map_err(|e| e.to_string())?;
 
