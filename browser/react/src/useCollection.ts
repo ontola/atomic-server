@@ -156,8 +156,17 @@ export function useCollection(
   }, [queryFilterMemo, pageSize, store, server, includeNested]);
 
   const invalidateCollection = useCallback(async () => {
-    await collection.__internalObject.refresh();
-    setCollection(proxyCollection(collection.__internalObject));
+    const target = collection.__internalObject;
+    await target.refresh();
+    // Stale-write guard: a filter swap between when we kicked the
+    // refresh and when it resolved would have replaced
+    // `collectionRef.current` with a freshly-built Collection for the
+    // new filter. Writing the OLD collection's proxy on top of that
+    // would flip the UI back to the previous filter's data until the
+    // next render. Only commit if this is still the active collection.
+    if (collectionRef.current === target) {
+      setCollection(proxyCollection(target));
+    }
   }, [collection.__internalObject]);
 
   // Live-membership bridge. Each store-level resource change runs through
