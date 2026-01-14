@@ -5,7 +5,9 @@ They list a bunch of Messages.
 */
 
 use atomic_lib::{
-    class_extender::{BoxFuture, ClassExtender, CommitExtenderContext, GetExtenderContext},
+    class_extender::{
+        BoxFuture, ClassExtender, ClassExtenderScope, CommitExtenderContext, GetExtenderContext,
+    },
     commit::{CommitBuilder, CommitOpts},
     errors::AtomicResult,
     storelike::{Query, QueryResult, ResourceResponse},
@@ -149,6 +151,7 @@ pub fn build_chatroom_extender() -> ClassExtender {
         on_resource_get: Some(ClassExtender::wrap_get_handler(construct_chatroom)),
         before_commit: None,
         after_commit: None,
+        scope: ClassExtenderScope::Global,
     }
 }
 
@@ -160,5 +163,6 @@ pub fn build_message_extender() -> ClassExtender {
         after_commit: Some(ClassExtender::wrap_commit_handler(
             after_apply_commit_message,
         )),
+        scope: ClassExtenderScope::Global,
     }
 }

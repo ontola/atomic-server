@@ -731,10 +731,22 @@ impl Storelike for Db {
 
         let mut transaction = Transaction::new();
 
+        let mut root_subject: Option<String> = None;
+
         // BEFORE APPLY COMMIT HANDLERS
         if let Some(resource_new) = &commit_response.resource_new {
             for extender in self.class_extenders.iter() {
                 if extender.resource_has_extender(resource_new)? {
+                    let (is_in_scope, cached_root) = extender
+                        .check_scope(&resource_new, self, root_subject)
+                        .await?;
+
+                    root_subject = cached_root;
+
+                    if !is_in_scope {
+                        continue;
+                    }
+
                     let Some(handler) = extender.before_commit.as_ref() else {
                         continue;
                     };
@@ -799,6 +811,16 @@ impl Storelike for Db {
         if let Some(resource_new) = &commit_response.resource_new {
             for extender in self.class_extenders.iter() {
                 if extender.resource_has_extender(resource_new)? {
+                    let (is_in_scope, cached_root) = extender
+                        .check_scope(&resource_new, self, root_subject)
+                        .await?;
+
+                    root_subject = cached_root;
+
+                    if !is_in_scope {
+                        continue;
+                    }
+
                     use crate::class_extender::CommitExtenderContext;
 
                     let Some(handler) = extender.after_commit.as_ref() else {
@@ -886,9 +908,20 @@ impl Storelike for Db {
 
             let _explanation = crate::hierarchy::check_read(self, &resource, for_agent).await?;
 
+            let mut root_subject: Option<String> = None;
+
             // If a certain class needs to be extended, add it to this match statement
             for extender in self.class_extenders.iter() {
                 if extender.resource_has_extender(&resource)? {
+                    let (is_in_scope, cached_root) =
+                        extender.check_scope(&resource, self, root_subject).await?;
+
+                    root_subject = cached_root;
+
+                    if !is_in_scope {
+                        continue;
+                    }
+
                     if skip_dynamic {
                         // This lets clients know that the resource may have dynamic properties that are currently not included
                         resource
