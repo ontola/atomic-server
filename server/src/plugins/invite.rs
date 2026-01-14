@@ -1,6 +1,8 @@
 use atomic_lib::{
     agents::Agent,
-    class_extender::{BoxFuture, ClassExtender, CommitExtenderContext, GetExtenderContext},
+    class_extender::{
+        BoxFuture, ClassExtender, ClassExtenderScope, CommitExtenderContext, GetExtenderContext,
+    },
     errors::AtomicResult,
     hierarchy,
     storelike::ResourceResponse,
@@ -200,5 +202,6 @@ pub fn build_invite_extender() -> ClassExtender {
         on_resource_get: Some(ClassExtender::wrap_get_handler(construct_invite_redirect)),
         before_commit: Some(ClassExtender::wrap_commit_handler(before_apply_commit)),
         after_commit: None,
+        scope: ClassExtenderScope::Global,
     }
 }
