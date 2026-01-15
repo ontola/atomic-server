@@ -690,13 +690,18 @@ export class WSClient {
 
   /** Handle legacy text messages that haven't been migrated to binary yet. */
   private handleText(text: string) {
+    // Prefix lengths include the trailing space delimiter. Match the
+    // exact length sent by `sendText(prefix, payload)` which writes
+    // `${prefix} ${payload}`.
     if (text.startsWith('LORO_SYNC_UPDATE ')) {
-      this.store.__handleLoroSyncMessage(text.slice(17));
+      this.store.__handleLoroSyncMessage(text.slice('LORO_SYNC_UPDATE '.length));
     } else if (text.startsWith('LORO_EPHEMERAL_UPDATE ')) {
-      this.store.__handleLoroEphemeralMessage(text.slice(21));
+      this.store.__handleLoroEphemeralMessage(
+        text.slice('LORO_EPHEMERAL_UPDATE '.length),
+      );
     } else if (text.startsWith('QUERY_UPDATE ')) {
       try {
-        const update = JSON.parse(text.slice(13));
+        const update = JSON.parse(text.slice('QUERY_UPDATE '.length));
         const added: string[] = update.added ?? [];
         const removed: string[] = update.removed ?? [];
 

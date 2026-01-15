@@ -2142,10 +2142,24 @@ export class Store {
     map: Map<string, T[]>,
     message: string,
   ): void {
-    const { subject, update } = JSON.parse(message) as {
-      subject: string;
-      update: string;
-    };
+    let subject: string;
+    let update: string;
+    try {
+      const parsed = JSON.parse(message) as {
+        subject: string;
+        update: string;
+      };
+      subject = parsed.subject;
+      update = parsed.update;
+    } catch (e) {
+      // Malformed text frame (off-by-one slice on the receive side
+      // used to produce \"E {...}\" — fixed in websockets.ts but
+      // keeping this catch so a future format drift can't break
+      // the WS message pump). Bytes are dropped; the CRDT keeps
+      // its own state and re-syncs on next exchange.
+      console.warn('[Loro] dispatch parse failed:', e);
+      return;
+    }
     const subs = map.get(subject);
     if (!subs) return;
     const bytes = decodeB64(update);
