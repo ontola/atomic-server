@@ -590,7 +590,11 @@ export class WSClient {
         const msg = decodeSyncDiff(payload);
 
         if (msg) {
-          this.handleSyncDiff(msg);
+          // handleSyncDiff is async but unawaited here — catch any
+          // unhandled rejection so it can't propagate to the WS pump.
+          this.handleSyncDiff(msg).catch(e =>
+            console.warn('[WS] handleSyncDiff failed:', e),
+          );
         }
 
         break;
