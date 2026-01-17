@@ -132,6 +132,17 @@ export class AtomicServer {
       .container()
       .from(RUST_IMAGE)
       .withMountedCache('/usr/local/cargo/registry', cargoCache, { sharing: CacheSharingMode.Locked })
+      // Cache `cargo install`-built binaries (wasm-pack here). Without
+      // this, each CI run recompiled wasm-pack from source (~2 min).
+      // Routed through `CARGO_INSTALL_ROOT` to a non-default path so
+      // the cache mount can't hide the rust image's preinstalled
+      // \`cargo\`/\`rustc\` at \`/usr/local/cargo/bin\`. Adding the
+      // install root's \`bin\` to \`PATH\` makes \`wasm-pack\` resolvable.
+      // \`cargo install\` no-ops when the latest version is already
+      // present.
+      .withMountedCache('/opt/cargo-bin', dag.cacheVolume('cargo-bin'), { sharing: CacheSharingMode.Locked })
+      .withEnvVariable('CARGO_INSTALL_ROOT', '/opt/cargo-bin')
+      .withEnvVariable('PATH', '/opt/cargo-bin/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin')
       .withExec(['cargo', 'install', 'wasm-pack'])
       .withFile('/code/Cargo.toml', this.source.file('Cargo.toml'))
       .withFile('/code/Cargo.lock', this.source.file('Cargo.lock'))
@@ -407,7 +418,15 @@ export class AtomicServer {
       )
       .withFile('/app/plugin/package.json', browser.file('plugin/package.json'))
       .withFile('/app/e2e/package.json', browser.file('e2e/package.json'))
-      // .withMountedCache('/app/.pnpm-store', dag.cacheVolume('pnpm-store'))
+      // Cache pnpm's content-addressable store across CI runs. Without
+      // this, every push re-downloaded all node_modules from the
+      // registry — adding ~30-60s per run depending on registry latency.
+      // The store is mounted at a workspace-local path and pnpm is
+      // pointed at it explicitly; the default
+      // `~/.local/share/pnpm/store` wouldn't be picked up by a mount at
+      // `/app/.pnpm-store` without the config command.
+      .withMountedCache('/app/.pnpm-store', dag.cacheVolume('pnpm-store'))
+      .withExec(['pnpm', 'config', 'set', 'store-dir', '/app/.pnpm-store'])
       .withExec([
         'sh',
         '-c',
