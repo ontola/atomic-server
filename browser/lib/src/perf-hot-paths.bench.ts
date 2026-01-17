@@ -194,4 +194,3 @@ describe('Collection.applyResourceChange (B2: indexed lookup)', () => {
     collection.applyResourceChange(memberStill.subject, memberStill);
   });
 });
-
