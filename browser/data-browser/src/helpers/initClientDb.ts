@@ -27,12 +27,58 @@ export function initClientDb(store: Store): void {
   const clientDb = new ClientDbWorker(wasmUrl, clientDbWorkerUrl);
   currentWorker = clientDb;
 
+  const serializeResource = (subject: string): string | undefined => {
+    const resource = store.resources.get(subject);
+    if (!resource) return undefined;
+
+    // Skip resources whose commits haven't reached the server. Two cases:
+    //   1. Unsaved placeholders (e.g. `TableNewRow`'s pre-created empty
+    //      row): `signChanges` was called — flipping `new=false` and
+    //      queueing a commit — but `pushCommits` never ran. Seeding these
+    //      turns them into phantom children that accumulate every reload.
+    //   2. Offline-applied resources: `applyPendingCommitsLocally` already
+    //      persists them directly via `clientDb.putResource`. Seeding
+    //      again here is redundant.
+    // Genuinely-saved resources have an empty pending queue by the time
+    // this seeder runs, so they are the ones that actually land in OPFS.
+    if (resource.hasPendingCommits || resource.new) return undefined;
+
+    const obj: Record<string, unknown> = { '@id': resource.subject };
+    let hasProps = false;
+    for (const [key, value] of resource.getEntries()) {
+      if (value instanceof Uint8Array) continue;
+      obj[key] = value;
+      hasProps = true;
+    }
+    if (!hasProps) return undefined;
+    return JSON.stringify(obj);
+  };
+
   // Start init — this creates the Worker immediately (sync) and
   // sends the WASM init message (async). Messages sent to the worker
   // before WASM loads will queue and process after init.
   // After WASM is ready, seed the DB from the Store's in-memory map
   // so tables/queries work even without OPFS persistence.
   const initPromise = clientDb.init(store.getServerUrl()).then(async () => {
+    // Skip seeding entirely if the WASM DB already has data from a prior
+    // session (OPFS persists). The bootstrap resources are stable — they
+    // don't change between sessions — so a non-empty index means the
+    // seed has already happened and we can save ~200 puts × wasm-bindgen
+    // crossings (~1s of cold-load time on a slow runner).
+    let alreadyPopulated = false;
+    try {
+      const existing = await clientDb.allSubjects();
+      alreadyPopulated = existing.length > 0;
+    } catch {
+      // allSubjects failed — proceed with seed as fallback.
+    }
+    if (alreadyPopulated) {
+      console.info(
+        '[ClientDb] WASM database already populated from OPFS, skipping seed',
+      );
+      return;
+    }
+
     // Seed the WASM DB from resources already in the Store.
     // Properties must be seeded FIRST so that subsequent resources
     // can be parsed with correct datatype validation.
@@ -53,37 +99,6 @@ export function initClientDb(store: Store): void {
         }
       }
     }
-
-    const serializeResource = (subject: string): string | undefined => {
-      const resource = store.resources.get(subject);
-
-      if (!resource) return undefined;
-
-      // Skip resources whose commits haven't reached the server. Two cases:
-      //   1. Unsaved placeholders (e.g. `TableNewRow`'s pre-created empty
-      //      row): `signChanges` was called — flipping `new=false` and
-      //      queueing a commit — but `pushCommits` never ran. Seeding these
-      //      turns them into phantom children that accumulate every reload.
-      //   2. Offline-applied resources: `applyPendingCommitsLocally` already
-      //      persists them directly via `clientDb.putResource`. Seeding
-      //      again here is redundant.
-      // Genuinely-saved resources have an empty pending queue by the time
-      // this seeder runs, so they are the ones that actually land in OPFS.
-      if (resource.hasPendingCommits || resource.new) return undefined;
-
-      const obj: Record<string, unknown> = { '@id': resource.subject };
-      let hasProps = false;
-
-      for (const [key, value] of resource.getEntries()) {
-        if (value instanceof Uint8Array) continue;
-        obj[key] = value;
-        hasProps = true;
-      }
-
-      if (!hasProps) return undefined;
-
-      return JSON.stringify(obj);
-    };
 
     // Properties must be seeded first so subsequent resources parse with
     // correct datatype validation. Used to be 70 sequential `putResource`
@@ -114,44 +129,16 @@ export function initClientDb(store: Store): void {
   store.setClientDb(clientDb);
 
   initPromise
-    .then(async () => {
-      // Safety net: once the worker is truly ready, re-put every resource
-      // currently in memory. This captures resources that were added to the
-      // store during the init window, when calls to `clientDb.putResource`
-      // could race with the worker's async WASM init.
-      //
-      // Batched into one worker call — the previous sequential loop did
-      // ~200 round-trips (~1 second of post-init dead time on a populated
-      // session); the worker still processes them in order so any
-      // ordering invariants downstream of `putResource` are preserved.
-      const reseedAll = async () => {
-        const jsonAds: string[] = [];
-        for (const resource of store.resources.values()) {
-          if (
-            resource.loading ||
-            !resource.subject ||
-            resource.subject.startsWith('_new:') ||
-            resource.hasPendingCommits ||
-            resource.new
-          ) {
-            continue;
-          }
-          const obj: Record<string, unknown> = { '@id': resource.subject };
-          let hasProps = false;
-          for (const [key, value] of resource.getEntries()) {
-            if (value instanceof Uint8Array) continue;
-            obj[key] = value;
-            hasProps = true;
-          }
-          if (!hasProps) continue;
-          jsonAds.push(JSON.stringify(obj));
-        }
-        if (jsonAds.length > 0) {
-          await clientDb.putResources(jsonAds).catch(() => {});
-        }
-      };
-      await reseedAll();
+    .then(() => {
       // Re-emit so the sync page picks up clientDbReady: true.
+      // The previous "safety net" reseed at this point — every
+      // resource in `store.resources` re-pushed to the WASM index
+      // through wasm-bindgen — was solving a race that already had a
+      // guard: `ClientDbWorker.send()` awaits its own `initPromise`
+      // before forwarding to the worker, so any `addResource →
+      // clientDb.putResourceWithSnapshot` call that landed during the
+      // init window queued automatically. The reseed was paying ~1s
+      // of wasm-bindgen crossings every cold load for zero new state.
       store.setClientDb(clientDb);
     })
     .catch(err => {
