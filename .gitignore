@@ -2,6 +2,7 @@
 .envrc
 .env
 trace-*.json
+dev-drive-trace-*.json
 **/.temp
 .DS_Store
 .cargo
