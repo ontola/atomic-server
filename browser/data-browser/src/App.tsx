@@ -57,13 +57,26 @@ const serverUrl = storedIsValid ? storedServerUrl! : defaultServerUrl;
 // (`Resource.set`) also go through `getLoroDoc()` and force the
 // materialise-then-mutate path. No explicit "Loro is ready, now
 // rehydrate everything" sweep is needed.
-// Fire-and-forget — first paint doesn't wait. Catch so a failed import
-// (offline + no cached module) doesn't show up as an unhandledrejection
-// in the console; LoroLoader.isLoaded() stays false and code paths
-// that need Loro (editor, history scrub) gracefully no-op.
-enableLoro().catch(e =>
-  console.warn('[Loro] init failed, edit/history features disabled:', e),
-);
+// Defer the Loro WASM download until AFTER first paint. Module-eval
+// fire-and-forget would still kick off the ~920 KB request immediately,
+// competing with the much smaller FCP-critical chunks on the network.
+// `requestIdleCallback` (with a setTimeout fallback) lets the browser
+// finish layouts/paints first.
+//
+// Read paths don't need Loro — `_cache` is populated synchronously from
+// the JSON-AD-initial meta tag. Writes that hit `signChanges` before
+// Loro loads will trigger an on-demand `enableLoro()` there.
+const scheduleLoro = () => {
+  enableLoro().catch(e =>
+    console.warn('[Loro] init failed, edit/history features disabled:', e),
+  );
+};
+if (typeof requestIdleCallback === 'function') {
+  requestIdleCallback(scheduleLoro, { timeout: 2000 });
+} else {
+  setTimeout(scheduleLoro, 0);
+}
+
 const initalAgent = await getAgentFromIDB();
 
 // Initialize the store

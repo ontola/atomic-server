@@ -1,5 +1,5 @@
 import type { LoroDoc, LoroList, VersionVector } from 'loro-crdt';
-import { LoroLoader } from './loro-loader.js';
+import { enableLoro, LoroLoader } from './loro-loader.js';
 import { decodeB64 } from './base64.js';
 import { EventManager } from './EventManager.js';
 import type { Agent } from './agent.js';
@@ -1352,14 +1352,20 @@ export class Resource<C extends OptionalClass = any> {
       throw new Error('No agent has been set or passed, you cannot sign.');
     }
 
+    // Loro is required: commits ride on `loroUpdate` bytes. If the app
+    // deferred the WASM download (first paint optimization), trigger it
+    // here on demand. Subsequent calls are no-ops — `enableLoro` is
+    // idempotent and resolves immediately once the module is cached.
+    if (!LoroLoader.isLoaded()) {
+      await enableLoro();
+    }
+
     // Ensure all cached properties are in the Loro doc before signing.
     // This catches properties set via cache hydration that haven't been
     // written to Loro yet (e.g. write/read permissions during creation).
-    if (LoroLoader.isLoaded()) {
-      this.getLoroDoc();
-      this.rebuildCacheFromLoro();
-      this._cacheDirty = false;
-    }
+    this.getLoroDoc();
+    this.rebuildCacheFromLoro();
+    this._cacheDirty = false;
 
     // Chain: use last locally-signed commit, or the server-known lastCommit.
     if (this._lastLocalSignature) {
