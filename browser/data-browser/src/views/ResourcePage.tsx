@@ -14,7 +14,7 @@ import {
 import { ContainerNarrow } from '../components/Containers';
 import Collection from '../views/CollectionPage';
 import EndpointPage from './EndpointPage';
-import DrivePage from './DrivePage';
+import DrivePage from './Drive/DrivePage';
 import InvitePage from './InvitePage';
 import { DocumentPage } from './DocumentPage';
 import ErrorPage, { ErrorBoundary } from './ErrorPage';
@@ -34,6 +34,7 @@ import { OntologyPage } from './OntologyPage';
 import { TagPage } from './TagPage/TagPage';
 import { AIChatPage } from '@views/AIChat/AIChatPage';
 import { DocumentV2FullPage } from './Document/DocumentV2FullPage';
+import { PluginPage } from './Plugin/PluginPage';
 
 /** These properties are passed to every View at Page level */
 export type ResourcePageProps<Subject extends OptionalClass = never> = {
@@ -126,6 +127,8 @@ function selectComponent(klass: string) {
       return AIChatPage;
     case dataBrowser.classes.documentV2:
       return DocumentV2FullPage;
+    case server.classes.plugin:
+      return PluginPage;
     default:
       return ResourcePageDefault;
   }

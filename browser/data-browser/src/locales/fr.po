@@ -39,6 +39,7 @@ msgstr "Aucune classe"
 #: src/components/forms/ResourceForm.tsx
 #: src/components/forms/ValueForm/ValueFormEdit.tsx
 #: src/routes/History/HistoryMobileView.tsx
+#: src/views/Drive/NewPluginButton.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/OntologyPage/NewPropertyButton.tsx
 #: src/views/TablePage/PropertyForm/ExternalPropertyDialog.tsx
@@ -749,14 +750,17 @@ msgstr "chargement..."
 msgid "to"
 msgstr "à"
 
+#: src/views/Drive/DrivePage.tsx
 #: src/views/DrivePage.tsx
 msgid "Set as current drive"
 msgstr "Définir comme lecteur actuel"
 
+#: src/views/Drive/DrivePage.tsx
 #: src/views/DrivePage.tsx
 msgid "Default Ontology"
 msgstr "Ontologie par défaut"
 
+#: src/views/Drive/DrivePage.tsx
 #: src/views/DrivePage.tsx
 msgid ""
 "You are running Atomic-Server on `localhost`, which means that it\n"
@@ -1143,6 +1147,7 @@ msgstr "Texte alternatif"
 #: src/routes/SettingsServer/index.tsx
 #: src/routes/Share/ShareRoute.tsx
 #: src/views/Article/ArticleDescription.tsx
+#: src/views/Drive/NewPluginButton.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/OntologyPage/NewPropertyButton.tsx
 #: src/views/TablePage/PropertyForm/EditPropertyDialog.tsx
@@ -3152,3 +3157,42 @@ msgstr "En ligne"
 #: src/components/Toaster.tsx
 msgid "Nothing to copy."
 msgstr "Rien à copier."
+
+#: src/views/Drive/PluginList.tsx
+msgid "Plugins"
+msgstr ""
+
+#: src/views/Drive/NewPluginButton.tsx
+msgid "Add Plugin"
+msgstr ""
+
+#: src/views/Drive/NewPluginButton.tsx
+msgid "<0/> Add Plugin"
+msgstr ""
+
+#~ msgid "New Plugin"
+#~ msgstr ""
+
+#: src/views/Drive/NewPluginButton.tsx
+msgid "<0/> Upload Plugin"
+msgstr ""
+
+#~ msgid "Invalid plugin zip file. It must contain plugin.wasm and plugin.json at the root, and optionally an assets folder."
+#~ msgstr ""
+
+#~ msgid "Invalid plugin zip file."
+#~ msgstr ""
+
+#. placeholder {0}: metadata.version
+#: src/views/Drive/NewPluginButton.tsx
+msgid "v{0}"
+msgstr ""
+
+#. placeholder {0}: metadata.author
+#: src/views/Drive/NewPluginButton.tsx
+msgid "by {0}"
+msgstr ""
+
+#: src/views/Drive/NewPluginButton.tsx
+msgid "Configure"
+msgstr ""

@@ -2,6 +2,7 @@ use std::future::Future;
 use std::pin::Pin;
 
 use futures::future::join_all;
+use zip::ZipArchive;
 
 use std::{
     collections::HashSet,
@@ -11,20 +12,19 @@ use std::{
 };
 
 use atomic_lib::{
-    class_extender::{self, ClassExtenderScope},
-    AtomicErrorType,
-};
-use base64::{engine::general_purpose, Engine as _};
-use ring::digest::{digest, SHA256};
-
-use atomic_lib::{
     agents::ForAgent,
     class_extender::ClassExtender,
     errors::{AtomicError, AtomicResult},
     parse::{parse_json_ad_resource, ParseOpts, SaveOpts},
     storelike::{Query, ResourceResponse},
-    Db, Resource, Storelike,
+    urls, Db, Resource, Storelike,
 };
+use atomic_lib::{
+    class_extender::{self, ClassExtenderScope},
+    AtomicErrorType,
+};
+use base64::{engine::general_purpose, Engine as _};
+use ring::digest::{digest, SHA256};
 use tracing::{error, info, warn};
 use wasmtime::{
     component::{Component, Linker, ResourceTable},
@@ -48,6 +48,27 @@ use bindings::atomic::class_extender::types::{
 };
 
 const CLASS_EXTENDER_DIR_NAME: &str = "class-extenders"; // Relative to the store path.
+
+#[derive(serde::Deserialize, serde::Serialize)]
+struct PluginMetadata {
+    name: String,
+    namespace: String,
+    author: String,
+    description: String,
+    version: String,
+    #[serde(rename = "defaultConfig")]
+    default_config: Option<serde_json::Value>,
+    #[serde(rename = "configSchema")]
+    config_schema: Option<serde_json::Value>,
+    pub subject: Option<String>,
+}
+
+impl PluginMetadata {
+    fn from_json(json: &str) -> AtomicResult<Self> {
+        serde_json::from_str(json)
+            .map_err(|e| AtomicError::from(format!("Failed to parse plugin metadata: {}", e)))
+    }
+}
 
 // In your current crate (where AtomicError is defined or where you write the impl)
 // The newtype is a local type now.
@@ -198,56 +219,15 @@ pub async fn load_wasm_class_extenders(
             let db = db.clone();
 
             async move {
-                let owned_folder_path = setup_plugin_data_dir(&path, &plugin_dir);
-
-                let wasm_bytes = match std::fs::read(&path) {
-                    Ok(bytes) => bytes,
-                    Err(e) => {
-                        error!("Failed to read Wasm file at {}: {}", path.display(), e);
-                        return None;
-                    }
-                };
-
-                let hash = digest(&SHA256, &wasm_bytes);
-                let hash_hex = hex_encode(hash.as_ref());
-                let cwasm_filename = format!("{}.cwasm", hash_hex);
-                let cwasm_path = plugin_cache_path.join(cwasm_filename);
-
-                let cwasm_path_ret = cwasm_path.clone();
-
-                match WasmPlugin::load(
-                    engine.clone(),
-                    &wasm_bytes,
-                    &path,
-                    &cwasm_path,
-                    owned_folder_path,
-                    &db,
-                    scope,
-                )
-                .await
-                {
-                    Ok(plugin) => {
-                        info!(
-                            "Loaded {}",
-                            path.file_name().unwrap_or(OsStr::new("Unknown")).display()
-                        );
-                        Some((Some(plugin.into_class_extender()), cwasm_path_ret))
-                    }
-                    Err(err) => {
-                        error!(
-                            error = %err,
-                            path = %path.display(),
-                            "Failed to load Wasm class extender"
-                        );
-                        Some((None, cwasm_path_ret))
-                    }
-                }
+                load_plugin_from_disk(&path, &plugin_dir, &plugin_cache_path, scope, engine, &db)
+                    .await
+                    .unwrap_or((None, PathBuf::new()))
             }
         });
 
     let results = join_all(futures).await;
 
-    for res in results.into_iter().flatten() {
+    for res in results {
         let (extender_opt, cwasm_path) = res;
         used_cwasm_files.insert(cwasm_path);
         if let Some(extender) = extender_opt {
@@ -282,6 +262,7 @@ struct WasmPluginInner {
     scope: ClassExtenderScope,
     class_url: Vec<String>,
     db: Arc<Db>,
+    plugin_subject: Option<String>,
 }
 
 impl WasmPlugin {
@@ -293,6 +274,7 @@ impl WasmPlugin {
         owned_folder_path: Option<PathBuf>,
         db: &Db,
         scope: ClassExtenderScope,
+        plugin_subject: Option<String>,
     ) -> AtomicResult<Self> {
         let db = Arc::new(db.clone());
 
@@ -330,6 +312,7 @@ impl WasmPlugin {
                 class_url: Vec::new(),
                 scope: scope.clone(),
                 db: Arc::clone(&db),
+                plugin_subject: plugin_subject.clone(),
             }),
         };
 
@@ -343,6 +326,7 @@ impl WasmPlugin {
                 class_url,
                 scope,
                 db,
+                plugin_subject,
             }),
         })
     }
@@ -352,7 +336,26 @@ impl WasmPlugin {
         let before_plugin = self.clone();
         let after_plugin = self.clone();
 
+        let id = if let ClassExtenderScope::Drive(drive) = &self.inner.scope {
+            let filename = self
+                .inner
+                .path
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("");
+            Some(format!("{}:{}", drive, filename))
+        } else {
+            let filename = self
+                .inner
+                .path
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("");
+            Some(format!("global:{}", filename))
+        };
+
         ClassExtender {
+            id,
             classes: self.inner.class_url.clone(),
             on_resource_get: Some(ClassExtender::wrap_get_handler(move |context| {
                 let get_plugin = get_plugin.clone();
@@ -425,7 +428,11 @@ impl WasmPlugin {
     async fn instantiate(&self) -> AtomicResult<(bindings::ClassExtender, Store<PluginHostState>)> {
         let mut store = Store::new(
             &self.inner.engine,
-            PluginHostState::new(Arc::clone(&self.inner.db), &self.inner.owned_folder_path)?,
+            PluginHostState::new(
+                Arc::clone(&self.inner.db),
+                &self.inner.owned_folder_path,
+                self.inner.plugin_subject.clone(),
+            )?,
         );
         let mut linker = Linker::new(&self.inner.engine);
         p2::add_to_linker_async(&mut linker).map_err(|err| AtomicError::from(err.to_string()))?;
@@ -513,10 +520,15 @@ struct PluginHostState {
     ctx: WasiCtx,
     http: WasiHttpCtx,
     db: Arc<Db>,
+    plugin_subject: Option<String>,
 }
 
 impl PluginHostState {
-    fn new(db: Arc<Db>, owned_folder_path: &Option<PathBuf>) -> AtomicResult<Self> {
+    fn new(
+        db: Arc<Db>,
+        owned_folder_path: &Option<PathBuf>,
+        plugin_subject: Option<String>,
+    ) -> AtomicResult<Self> {
         let mut builder = WasiCtxBuilder::new();
         builder
             .inherit_stdout()
@@ -541,6 +553,7 @@ impl PluginHostState {
             ctx,
             http: WasiHttpCtx::new(),
             db,
+            plugin_subject,
         })
     }
 }
@@ -613,6 +626,147 @@ impl bindings::atomic::class_extender::host::Host for PluginHostState {
     async fn get_plugin_agent(&mut self) -> String {
         String::new()
     }
+
+    async fn get_config(&mut self) -> String {
+        let Some(subject) = &self.plugin_subject else {
+            return "{}".to_string();
+        };
+
+        let Ok(plugin_resource) = self.db.get_resource(subject).await else {
+            return "{}".to_string();
+        };
+
+        let Ok(val) = plugin_resource.get(urls::CONFIG) else {
+            return "{}".to_string();
+        };
+
+        match val {
+            atomic_lib::Value::JSON(json_val) => json_val.to_string(),
+            _ => "{}}".to_string(),
+        }
+    }
+}
+
+fn validate_plugin_zip(
+    zip: &mut ZipArchive<std::io::Cursor<Vec<u8>>>,
+) -> AtomicResult<(String, String)> {
+    use std::io::Read;
+    // Check for plugin.wasm
+    if zip.by_name("plugin.wasm").is_err() {
+        return Err(AtomicError::from("Missing plugin.wasm"));
+    }
+
+    // Check for plugin.json and read it
+    let (namespace, name) = {
+        let mut file = zip
+            .by_name("plugin.json")
+            .map_err(|_| AtomicError::from("Missing plugin.json"))?;
+        let mut content = String::new();
+
+        file.read_to_string(&mut content)
+            .map_err(|e| AtomicError::from(format!("Failed to read plugin.json: {}", e)))?;
+        let metadata: PluginMetadata = PluginMetadata::from_json(&content)?;
+        (metadata.namespace, metadata.name)
+    };
+
+    for i in 0..zip.len() {
+        let file = zip
+            .by_index(i)
+            .map_err(|e| AtomicError::from(e.to_string()))?;
+        let name = file.name();
+        if name == "plugin.wasm" || name == "plugin.json" || name.starts_with("assets/") {
+            continue;
+        }
+        // If it's a directory "assets/", that's fine too.
+        if name == "assets/" {
+            continue;
+        }
+        return Err(AtomicError::from(format!(
+            "Illegal file found in zip: {}. Only plugin.wasm, plugin.json and assets/ are allowed.",
+            name
+        )));
+    }
+
+    Ok((namespace, name))
+}
+
+fn extract_plugin_to_disk(
+    zip: &mut ZipArchive<std::io::Cursor<Vec<u8>>>,
+    plugins_dir: &Path,
+    encoded_subject: &str,
+    namespace: &str,
+    name: &str,
+) -> AtomicResult<PathBuf> {
+    let target_dir = plugins_dir
+        .join(CLASS_EXTENDER_DIR_NAME)
+        .join("scoped")
+        .join(encoded_subject);
+
+    // We do not clear the directory, as multiple plugins might share this scope.
+    // Existing files (wasm, json) will be overwritten by zip extraction.
+    // The assets directory will be merged (existing files kept, new files written/overwritten).
+    std::fs::create_dir_all(&target_dir)
+        .map_err(|e| AtomicError::from(format!("Failed to create plugin directory: {}", e)))?;
+
+    for i in 0..zip.len() {
+        let mut file = zip
+            .by_index(i)
+            .map_err(|e| AtomicError::from(e.to_string()))?;
+        let file_name = file.name().to_string();
+
+        let target_path = if file_name == "plugin.wasm" {
+            target_dir.join(format!("{}.{}.wasm", namespace, name))
+        } else if file_name == "plugin.json" {
+            target_dir.join(format!("{}.{}.json", namespace, name))
+        } else if file_name.starts_with("assets/") {
+            // Replace "assets/" with "{namespace}/"
+            let stripped = file_name.strip_prefix("assets/").unwrap();
+            if stripped.is_empty() {
+                // It is the "assets/" directory itself
+                target_dir.join(namespace)
+            } else {
+                target_dir.join(namespace).join(stripped)
+            }
+        } else {
+            continue;
+        };
+
+        if file.is_dir() {
+            std::fs::create_dir_all(&target_path).map_err(|e| {
+                AtomicError::from(format!(
+                    "Failed to create directory {}: {}",
+                    target_path.display(),
+                    e
+                ))
+            })?;
+        } else {
+            if let Some(parent) = target_path.parent() {
+                std::fs::create_dir_all(parent).map_err(|e| {
+                    AtomicError::from(format!(
+                        "Failed to create directory {}: {}",
+                        parent.display(),
+                        e
+                    ))
+                })?;
+            }
+            let mut outfile = std::fs::File::create(&target_path).map_err(|e| {
+                AtomicError::from(format!(
+                    "Failed to create file {}: {}",
+                    target_path.display(),
+                    e
+                ))
+            })?;
+            std::io::copy(&mut file, &mut outfile).map_err(|e| {
+                AtomicError::from(format!(
+                    "Failed to write file {}: {}",
+                    target_path.display(),
+                    e
+                ))
+            })?;
+        }
+    }
+
+    Ok(target_dir)
 }
 
 fn find_wasm_files(dir: &Path) -> Vec<PathBuf> {
@@ -655,8 +809,6 @@ fn setup_plugin_data_dir(wasm_file_path: &Path, plugin_dir: &Path) -> Option<Pat
 
     let data_dir = plugin_dir.join(plugin_name);
 
-    println!("Data dir: {}", data_dir.display());
-
     if !data_dir.exists() {
         if let Err(err) = std::fs::create_dir_all(&data_dir) {
             warn!(
@@ -672,6 +824,219 @@ fn setup_plugin_data_dir(wasm_file_path: &Path, plugin_dir: &Path) -> Option<Pat
         Some(data_dir)
     } else {
         None
+    }
+}
+
+pub async fn uninstall_plugin(
+    name: &str,
+    namespace: &str,
+    drive_subject: &str,
+    store: &Db,
+    plugins_dir: &Path,
+) -> AtomicResult<()> {
+    let encoded_subject = general_purpose::URL_SAFE.encode(drive_subject);
+    let target_dir = plugins_dir
+        .join(CLASS_EXTENDER_DIR_NAME)
+        .join("scoped")
+        .join(&encoded_subject);
+
+    if !target_dir.exists() {
+        return Err(AtomicError::not_found(format!(
+            "Plugin directory not found for drive: {}",
+            drive_subject
+        )));
+    }
+
+    let wasm_filename = format!("{}.{}.wasm", namespace, name);
+    let wasm_path = target_dir.join(&wasm_filename);
+    let json_path = target_dir.join(format!("{}.{}.json", namespace, name));
+
+    if !wasm_path.exists() {
+        return Err(AtomicError::not_found(format!(
+            "Plugin {}.{} not found",
+            namespace, name
+        )));
+    }
+
+    // 1. Remove from DB
+    let id = format!("{}:{}", drive_subject, wasm_filename);
+    store.remove_class_extender(&id)?;
+
+    // 2. Remove from disk
+    std::fs::remove_file(&wasm_path).map_err(|e| {
+        AtomicError::from(format!(
+            "Failed to remove wasm file {}: {}",
+            wasm_path.display(),
+            e
+        ))
+    })?;
+
+    if json_path.exists() {
+        std::fs::remove_file(&json_path).map_err(|e| {
+            AtomicError::from(format!(
+                "Failed to remove json file {}: {}",
+                json_path.display(),
+                e
+            ))
+        })?;
+    }
+
+    // 3. Handle assets folder
+    // Check if other plugins are using the same namespace in this drive
+    let mut namespace_still_used = false;
+    if let Ok(entries) = std::fs::read_dir(&target_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_file() {
+                if let Some(file_name) = path.file_name().and_then(|s| s.to_str()) {
+                    // Check for other plugins in the same namespace
+                    if file_name.starts_with(&format!("{}.", namespace))
+                        && (file_name.ends_with(".wasm") || file_name.ends_with(".json"))
+                    {
+                        namespace_still_used = true;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    if !namespace_still_used {
+        let assets_dir = target_dir.join(namespace);
+        if assets_dir.exists() && assets_dir.is_dir() {
+            info!("Removing unused assets directory: {}", assets_dir.display());
+            std::fs::remove_dir_all(&assets_dir).map_err(|e| {
+                AtomicError::from(format!(
+                    "Failed to remove assets directory {}: {}",
+                    assets_dir.display(),
+                    e
+                ))
+            })?;
+        }
+    }
+
+    info!("Uninstalled plugin {}.{}", namespace, name);
+
+    Ok(())
+}
+
+pub async fn install_plugin(
+    zip_file: &mut ZipArchive<std::io::Cursor<Vec<u8>>>,
+    drive_subject: &str,
+    plugin_subject: &str,
+    store: &Db,
+    plugins_dir: &Path,
+    plugin_cache_dir: &Path,
+) -> AtomicResult<()> {
+    // 1. Validation
+    let (namespace, name) = validate_plugin_zip(zip_file)?;
+    let wasm_target_name = format!("{}.{}.wasm", namespace, name);
+
+    // 2. Installation
+    let encoded_subject = general_purpose::URL_SAFE.encode(drive_subject);
+    let target_dir =
+        extract_plugin_to_disk(zip_file, plugins_dir, &encoded_subject, &namespace, &name)?;
+
+    // Update plugin.json with the plugin subject
+    let json_path = target_dir.join(format!("{}.{}.json", namespace, name));
+    if json_path.exists() {
+        let json_content = std::fs::read_to_string(&json_path)
+            .map_err(|e| AtomicError::from(format!("Failed to read plugin.json: {}", e)))?;
+        let mut metadata: PluginMetadata = serde_json::from_str(&json_content)
+            .map_err(|e| AtomicError::from(format!("Failed to parse plugin.json: {}", e)))?;
+        metadata.subject = Some(plugin_subject.to_string());
+        std::fs::write(&json_path, serde_json::to_string_pretty(&metadata).unwrap())
+            .map_err(|e| AtomicError::from(format!("Failed to write plugin.json: {}", e)))?;
+    }
+
+    // 3. Load Plugin
+    let engine = Arc::new(build_engine()?);
+    let wasm_path = target_dir.join(&wasm_target_name);
+
+    let scope = ClassExtenderScope::Drive(drive_subject.to_string());
+    let scoped_cache = plugin_cache_dir.join("scoped").join(&encoded_subject);
+
+    if !scoped_cache.exists() {
+        std::fs::create_dir_all(&scoped_cache).ok();
+    }
+
+    let (plugin, _) =
+        load_plugin_from_disk(&wasm_path, &target_dir, &scoped_cache, scope, engine, store).await?;
+
+    if let Some(plugin) = plugin {
+        store.add_class_extender(plugin)?;
+    } else {
+        return Err(AtomicError::from("Failed to load installed plugin"));
+    }
+
+    Ok(())
+}
+
+async fn load_plugin_from_disk(
+    path: &Path,
+    plugin_dir: &Path,
+    plugin_cache_path: &Path,
+    scope: ClassExtenderScope,
+    engine: Arc<Engine>,
+    db: &Db,
+) -> AtomicResult<(Option<ClassExtender>, PathBuf)> {
+    let owned_folder_path = setup_plugin_data_dir(path, plugin_dir);
+
+    // Attempt to read plugin.json to find the subject
+    let json_path = path.with_extension("json");
+    let plugin_subject = if json_path.exists() {
+        let content = std::fs::read_to_string(&json_path).ok();
+        if let Some(content) = content {
+            let meta: Result<PluginMetadata, _> = serde_json::from_str(&content);
+            meta.ok().and_then(|m| m.subject)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    let wasm_bytes = match std::fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            error!("Failed to read Wasm file at {}: {}", path.display(), e);
+            return Ok((None, PathBuf::new())); // Or return Error? Original code returned None.
+        }
+    };
+
+    let hash = digest(&SHA256, &wasm_bytes);
+    let hash_hex = hex_encode(hash.as_ref());
+    let cwasm_filename = format!("{}.cwasm", hash_hex);
+    let cwasm_path = plugin_cache_path.join(cwasm_filename);
+    let cwasm_path_ret = cwasm_path.clone();
+
+    match WasmPlugin::load(
+        engine.clone(),
+        &wasm_bytes,
+        path,
+        &cwasm_path,
+        owned_folder_path,
+        db,
+        scope,
+        plugin_subject,
+    )
+    .await
+    {
+        Ok(plugin) => {
+            info!(
+                "Loaded {}",
+                path.file_name().unwrap_or(OsStr::new("Unknown")).display()
+            );
+            Ok((Some(plugin.into_class_extender()), cwasm_path_ret))
+        }
+        Err(err) => {
+            error!(
+                error = %err,
+                path = %path.display(),
+                "Failed to load Wasm class extender"
+            );
+            Ok((None, cwasm_path_ret))
+        }
     }
 }
 

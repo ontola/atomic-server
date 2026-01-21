@@ -6,6 +6,7 @@ interface host {
   get-resource: func(subject: string, agent: option<string>) -> result<resource-json, string>;
   query: func(property: string, value: string, agent: option<string>) -> result<list<resource-json>, string>;
   get-plugin-agent: func() -> string;
+  get-config: func() -> string;
 }
 
 interface types {

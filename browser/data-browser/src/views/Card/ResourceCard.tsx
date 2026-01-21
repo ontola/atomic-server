@@ -34,6 +34,7 @@ import { DocumentV2Card } from './DocumentV2Card';
 import { HideInPrint } from '@components/HideInPrint';
 import { useOnValueChange } from '@helpers/useOnValueChange';
 import { FolderCard } from './FolderCard';
+import { PluginCard } from '@views/Plugin/PluginCard';
 
 interface ResourceCardProps extends CardViewPropsBase {
   /** The subject URL - the identifier of the resource. */
@@ -125,6 +126,8 @@ function ResourceCardInner(props: ResourceCardProps): JSX.Element {
       return <DocumentV2Card resource={resource} {...props} />;
     case dataBrowser.classes.folder:
       return <FolderCard resource={resource} {...props} />;
+    case server.classes.plugin:
+      return <PluginCard resource={resource} {...props} />;
     default:
       return <ResourceCardDefault resource={resource} {...props} />;
   }
