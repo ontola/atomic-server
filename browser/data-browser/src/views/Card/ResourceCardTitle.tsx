@@ -12,11 +12,12 @@ import { Row } from '../../components/Row';
 
 interface ResourceCardTitleProps {
   resource: Resource;
+  alternateTitle?: string;
 }
 
 export const ResourceCardTitle: FC<
   PropsWithChildren<ResourceCardTitleProps>
-> = ({ resource, children }) => {
+> = ({ resource, children, alternateTitle }) => {
   const [isA] = useArray(resource, core.properties.isA);
   const Icon = getIconForClass(isA[0]);
 
@@ -25,7 +26,7 @@ export const ResourceCardTitle: FC<
       <Row center gap='1ch'>
         <Icon />
         <AtomicLink subject={resource.subject}>
-          <Title subject={resource.subject}>{resource.title}</Title>
+          <Title subject={resource.subject}>{alternateTitle ?? resource.title}</Title>
         </AtomicLink>
       </Row>
       {children}

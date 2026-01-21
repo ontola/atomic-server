@@ -37,6 +37,7 @@ pub enum ClassExtenderScope {
 
 #[derive(Clone)]
 pub struct ClassExtender {
+    pub id: Option<String>,
     pub classes: Vec<String>,
     pub on_resource_get: Option<ResourceGetHandler>,
     pub before_commit: Option<CommitHandler>,

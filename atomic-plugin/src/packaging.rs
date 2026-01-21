@@ -80,9 +80,7 @@ pub mod packaging_impl {
             .unix_permissions(0o755);
 
         // Add WASM
-        // Rename to [namespace].[name].wasm
-        let wasm_filename = format!("{}.{}.wasm", namespace, name);
-        zip.start_file(&wasm_filename, options)?;
+        zip.start_file("plugin.wasm", options)?;
         let mut wasm_file = File::open(&wasm_path).context("Failed to open WASM file")?;
         let mut buffer = Vec::new();
         wasm_file.read_to_end(&mut buffer)?;
@@ -94,7 +92,6 @@ pub mod packaging_impl {
         zip.write_all(descriptor_content.as_bytes())?;
 
         // Add Assets
-        // Rename assets folder to [namespace]
         if assets_path.exists() {
             let walk = WalkDir::new(&assets_path);
             for entry in walk {
@@ -105,8 +102,8 @@ pub mod packaging_impl {
                 }
 
                 let relative_path = path.strip_prefix(&assets_path)?;
-                // Place inside [namespace]/...
-                let zip_path = Path::new(namespace).join(relative_path);
+                // Place inside assets/...
+                let zip_path = Path::new("assets").join(relative_path);
                 let zip_path_str = zip_path.to_string_lossy();
 
                 zip.start_file(zip_path_str, options)?;
