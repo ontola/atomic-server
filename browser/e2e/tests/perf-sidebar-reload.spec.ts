@@ -19,7 +19,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { before, editableTitle } from './test-utils';
+import { before, editableTitle, setTitle } from './test-utils';
 import { attachPerfSnapshot, resetPerfTrace } from './perf-attach';
 
 test.describe('perf: sidebar after reload', () => {
@@ -37,12 +37,13 @@ test.describe('perf: sidebar after reload', () => {
     await expect(editableTitle(page)).toBeVisible({ timeout: 10000 });
     const phaseA_ms = Date.now() - phaseA_start;
 
-    // Phase B: enter title + Escape → commit fires
+    // Phase B: enter title + Escape → commit fires. Use the `setTitle`
+    // helper rather than a raw `.fill()` + Escape so we get the
+    // built-in `waitForCommitOnCurrentResource` waiter — `.fill()`
+    // alone leaves the title save racing the input unmount, and we
+    // saw the commit POST silently skipped on local re-runs.
     const phaseB_start = Date.now();
-    await editableTitle(page).click();
-    await expect(editableTitle(page)).toHaveRole('textbox');
-    await editableTitle(page).fill('Perf Probe Doc');
-    await page.keyboard.press('Escape');
+    await setTitle(page, 'Perf Probe Doc');
 
     // Phase C: sidebar shows the doc title (this is the assertion that
     // flakes in dagger). Poll the DOM directly so we can distinguish

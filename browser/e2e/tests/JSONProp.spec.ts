@@ -4,6 +4,12 @@ import { before, newDrive, newResource, signIn } from './test-utils';
 test.describe('JSON prop', () => {
   test.beforeEach(before);
 
+  // FLAKY (local, intermittent): depends on a class hosted on the public
+  // `atomicdata.dev` (line 13: `01k10mtpp8fkkmsd6tkm9qrqyw/...`). When
+  // the public server is slow / unreachable, the form fields never
+  // render and `getByLabel('Name').fill(...)` times out at 10s.
+  // Investigation: inline the class definition or host a copy on the
+  // test atomic-server instead of crossing the internet.
   test('create JSON prop', async ({ page }) => {
     await signIn(page);
     await newDrive(page);
