@@ -3,6 +3,7 @@ import {
   CollectionBuilder,
   proxyCollection,
   QueryFilter,
+  Resource,
   Store,
   StoreEvents,
 } from '@tomic/lib';
@@ -189,14 +190,29 @@ export function useCollection(
     const col = collectionRef.current;
     if (!col) return;
 
-    const unsubUpdated = store.on(StoreEvents.ResourceUpdated, resource => {
+    const onResourceChange = (resource: Resource) => {
       const result = col.applyResourceChange(resource.subject, resource);
       if (result === 'membership-stale') {
         invalidateRef.current();
       } else if (result === 'member-removed' || result === 'member-added') {
         setCollection(proxyCollection(col));
       }
-    });
+    };
+
+    const unsubUpdated = store.on(StoreEvents.ResourceUpdated, onResourceChange);
+
+    // Also handle locally-created resources: `notifyResourceManuallyCreated`
+    // (chatroom send, sidebar New Folder, etc.) fires immediately after
+    // the local creation lands in the store — long before the
+    // server-side SYNC_PUSH announces it. Routing it through
+    // `applyResourceChange` lets the collection optimistically include
+    // the new resource without waiting for a `/query` refresh, which
+    // matters when the shared atomic-server is under load and SYNC_PUSH
+    // would otherwise land outside the test's visibility window.
+    const unsubCreated = store.on(
+      StoreEvents.ResourceManuallyCreated,
+      onResourceChange,
+    );
 
     const unsubRemoved = store.on(StoreEvents.ResourceRemoved, subject => {
       const result = col.applyResourceChange(subject, undefined);
@@ -207,6 +223,7 @@ export function useCollection(
 
     return () => {
       unsubUpdated();
+      unsubCreated();
       unsubRemoved();
     };
   }, [

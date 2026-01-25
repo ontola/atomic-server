@@ -179,7 +179,6 @@ export async function getDevDriveSecret(page: Page): Promise<string> {
 }
 
 export async function setTitle(page: Page, title: string) {
-  const waiter = waitForCommitOnCurrentResource(page);
   await editableTitle(page).click();
   await expect(editableTitle(page)).toHaveRole('textbox');
   // New resources pre-fill the title input with the class name (e.g. "Folder"),
@@ -190,7 +189,46 @@ export async function setTitle(page: Page, title: string) {
   );
   await editableTitle(page).type(title);
   await page.keyboard.press('Escape');
-  await waiter;
+
+  // Wait for the *actual* state change: the title is reflected in the
+  // store AND the outbox has drained (so the server has the commit).
+  //
+  // The previous waiter was `waitForCommitOnCurrentResource` matching
+  // ANY /commit response for this subject. That fires on the genesis
+  // commit too — for fresh resources, the genesis arrives before the
+  // name-change commit, so the waiter would return early and the test
+  // could reload before the title commit actually pushed. Under high
+  // parallelism (workers=4/8) that intermittency turned into a
+  // consistent failure: after reload the server still has the
+  // class-name placeholder ("Folder") rather than the typed title.
+  //
+  // Decoding loroUpdate from /commit responses to verify the title
+  // landed is impractical (binary CRDT diff). Instead, poll the
+  // in-page store: when `name === title` AND `pendingDirtyCount === 0`,
+  // we know the title is set locally and synced to the server.
+  await page.waitForFunction(
+    (target: string) => {
+      const w = window as unknown as {
+        store?: {
+          resources: Map<string, { get: (p: string) => unknown }>;
+          getSyncStatus: () => { pendingDirtyCount: number };
+        };
+        location: Location;
+      };
+      const store = w.store;
+      if (!store) return false;
+      const m = /subject=([^&]+)/.exec(w.location.search);
+      if (!m) return false;
+      const subject = decodeURIComponent(m[1]);
+      const r = store.resources.get(subject);
+      if (!r) return false;
+      const name = r.get('https://atomicdata.dev/properties/name');
+      const synced = store.getSyncStatus().pendingDirtyCount === 0;
+      return name === target && synced;
+    },
+    title,
+    { timeout: 15000 },
+  );
 }
 
 /**

@@ -519,22 +519,14 @@ function useChatMessages(chatSubject: string) {
     extractMembers();
   }, [collection]);
 
-  // Refresh when a resource is created under this chatroom
-  const invalidateRef = useRef(invalidateCollection);
-  invalidateRef.current = invalidateCollection;
-
-  const chatRef = useRef(chatSubject);
-  chatRef.current = chatSubject;
-
-  useEffect(() => {
-    const unsub = store.on(StoreEvents.ResourceManuallyCreated, resource => {
-      if (resource.get(core.properties.parent) === chatRef.current) {
-        invalidateRef.current();
-      }
-    });
-
-    return unsub;
-  }, [store]);
+  // `useCollection` (used internally by this hook) now routes
+  // `ResourceManuallyCreated` through `applyResourceChange` for an
+  // optimistic append — sent messages appear instantly without a
+  // server round-trip. The previous duplicate listener here called
+  // `invalidateCollection` which clobbered the optimistic add: it
+  // cleared the pages and re-fetched, so under parallel load the
+  // freshly-sent message vanished from the UI until `/query` caught
+  // up.
 
   return {
     messages,
