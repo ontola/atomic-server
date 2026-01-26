@@ -56,6 +56,16 @@ export function useCreateAndNavigate(): CreateAndNavigate {
           await onCreated(resource);
         }
 
+        // Notify subscribers (collections, sidebars, message lists) BEFORE
+        // navigation so the optimistic-add path runs synchronously
+        // against the still-active DOM. If we navigate first, the route
+        // change can suspend or re-render before
+        // `applyResourceChange` has a chance to settle into the
+        // collection, and downstream `expect(...).toBeVisible()` checks
+        // poll the new page mid-mount instead of seeing the new
+        // resource immediately.
+        store.notifyResourceManuallyCreated(resource);
+
         if (!skipNavigation) {
           await navigate({
             to: constructOpenURL(resource.subject, extraParams),
@@ -63,7 +73,6 @@ export function useCreateAndNavigate(): CreateAndNavigate {
         }
 
         toast.success(`${classTitle} created`);
-        store.notifyResourceManuallyCreated(resource);
       } catch (e) {
         store.notifyError(e);
         toast.error('Failed to save new resource');
