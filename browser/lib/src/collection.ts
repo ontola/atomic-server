@@ -55,6 +55,13 @@ export class Collection {
    * surgical mutations.
    */
   private _memberIndex = new Map<string, number>();
+  /** Subjects that were added by `applyResourceChange`'s optimistic
+   * path (matching newly-created resources whose server-side
+   * `/query` index might lag). Preserved across `setPage` writes
+   * from background fetches — without this, a stale server response
+   * that says "0 members" silently wipes the optimistic add and the
+   * UI loses the just-created resource until the next reload. */
+  private _optimisticAdds = new Set<string>();
   private server: string;
   private params: CollectionParams;
 
@@ -150,6 +157,10 @@ export class Collection {
   public clearPages(): void {
     this.pages = new Map();
     this._memberIndex.clear();
+    // Note: `_optimisticAdds` is preserved on `clearPages` — they
+    // represent subjects we trust are members (locally-created and
+    // confirmed at the resource layer); the next `setPage` merges
+    // them into whatever the fetch returned.
   }
 
   /** Write `members` + `totalMembers` propvals onto a page Resource. */
@@ -176,6 +187,15 @@ export class Collection {
   /**
    * Single point that mutates `pages` so the member-subject index stays
    * in sync. Replaces any existing mapping for the same page index.
+   *
+   * Preserves `_optimisticAdds` subjects across the swap. A background
+   * fetch (server `/query` or OPFS) can race a just-completed
+   * optimistic add: if the server's `parent=` index hasn't caught up
+   * with the just-pushed commit, it returns a member list that
+   * doesn't include the new resource. Without this merge,
+   * `setPage(0, server_empty)` clobbers the optimistic state and the
+   * UI loses the resource. With it, the resource sticks until the
+   * next iteration sees it server-side (or the user reloads).
    */
   private setPage(
     pageIdx: number,
@@ -190,6 +210,24 @@ export class Collection {
         if (this._memberIndex.get(s) === pageIdx) {
           this._memberIndex.delete(s);
         }
+      }
+    }
+    if (this._optimisticAdds.size > 0 && pageIdx === 0) {
+      const incoming = resource.getSubjects(collections.properties.members);
+      const incomingSet = new Set(incoming);
+      const toAppend: string[] = [];
+      for (const s of this._optimisticAdds) {
+        if (!incomingSet.has(s)) toAppend.push(s);
+      }
+      if (toAppend.length > 0) {
+        const merged = [...incoming, ...toAppend];
+        const totalProp = resource.get(collections.properties.totalMembers);
+        const baseTotal = typeof totalProp === 'number' ? totalProp : incoming.length;
+        const newTotal = baseTotal + toAppend.length;
+        this.writePageMembers(resource, merged, newTotal);
+        // The merged total is the source of truth — caller (fetch
+        // paths) will write `this._totalMembers = resource.props.totalMembers`
+        // after setPage; ensure they read the post-merge value.
       }
     }
     this.pages.set(pageIdx, resource);
@@ -313,15 +351,19 @@ export class Collection {
 
       // No page loaded yet — either the constructor's initial
       // `fetchPage(0)` hasn't completed, or `refresh()`'s active loop
-      // just called `clearPages()` and is mid-fetch. We still want the
-      // resource to land in the UI immediately: bootstrap a page 0
-      // with just this resource, so consumers (`useChildren`,
-      // `useChatMessages`, etc.) re-render against the new collection
-      // state. Also mark `_refreshPending` if a refresh is in flight
-      // so the loop iterates and produces server-authoritative
-      // ordering/count once the underlying fetch returns.
+      // just called `clearPages()` and is mid-fetch. Bootstrap a
+      // page 0 with this resource so consumers see it immediately.
+      //
+      // Don't set `_refreshPending`: the refresh loop would call
+      // `clearPages` and re-fetch, and under load the server's
+      // `/query` index can lag the just-pushed commit by enough that
+      // it returns an EMPTY page — which would clobber our optimistic
+      // add and the resource would vanish from the UI even though
+      // it's in the store. Trust the local data; the next user-
+      // initiated refresh (page reload, sort change) will reconcile
+      // against the server.
       if (!this.pages.has(0)) {
-        if (this._refreshInFlight) this._refreshPending = true;
+        this._optimisticAdds.add(subject);
         const page = new Resource<Collections.Collection>(
           this.buildSubject(0),
         );
@@ -350,6 +392,7 @@ export class Collection {
       const lastPage = this.pages.get(lastPageIdx)!;
       const members = lastPage.getSubjects(collections.properties.members);
       if (members.includes(subject)) return 'unchanged'; // paranoia
+      this._optimisticAdds.add(subject);
       this._totalMembers += 1;
       this._memberIndex.set(subject, lastPageIdx);
       this.writePageMembers(
@@ -379,6 +422,7 @@ export class Collection {
       next.splice(idx, 1);
       this._totalMembers = Math.max(0, this._totalMembers - 1);
       this._memberIndex.delete(subject);
+      this._optimisticAdds.delete(subject);
       this.writePageMembers(page, next, this._totalMembers);
       return 'member-removed';
     }
