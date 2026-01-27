@@ -160,7 +160,46 @@ test.describe('table refresh', () => {
     for (let i = 0; i < 8; i++) {
       await page.reload({ waitUntil: 'domcontentloaded' });
       await expect(editableTitle(page)).toBeVisible({ timeout: 15000 });
-      await page.waitForTimeout(1500);
+
+      // Wait for the table's collection to settle: server's `/query`
+      // index lookup completed AND `totalMembers` is stable for two
+      // consecutive ticks. The previous 1500ms fixed wait was racing
+      // the "saved row arrives, then placeholder render adjusts"
+      // sequence — sometimes we'd sample the count during the
+      // intermediate state and report `1` instead of `2`. Polling
+      // for stability removes the race without bumping a timeout.
+      await page.waitForFunction(
+        () => {
+          const w = window as unknown as {
+            __lastTableCountSample?: { count: number; ts: number };
+            store?: {
+              getSyncStatus: () => {
+                pendingDirtyCount: number;
+                syncInProgress: boolean;
+              };
+            };
+          };
+          const count = document.querySelectorAll('[aria-rowindex]').length;
+          const status = w.store?.getSyncStatus?.();
+          if (!status) return false;
+          // Don't trust the count while we're still pushing/pulling.
+          if (status.pendingDirtyCount > 0 || status.syncInProgress) {
+            w.__lastTableCountSample = undefined;
+            return false;
+          }
+          const prev = w.__lastTableCountSample;
+          const now = performance.now();
+          if (!prev || prev.count !== count) {
+            w.__lastTableCountSample = { count, ts: now };
+            return false;
+          }
+          // Two consecutive observations of the same count, separated
+          // by ≥250 ms, with no sync in flight.
+          return now - prev.ts >= 250;
+        },
+        undefined,
+        { timeout: 15000 },
+      );
 
       const nowCount = await rows.count();
 
