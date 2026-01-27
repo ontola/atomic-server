@@ -98,6 +98,9 @@ pub struct Opts {
     /// Introduces random delays in the server, to simulate a slow connection. Useful for testing.
     #[clap(long, env = "ATOMIC_SLOW_MODE")]
     pub slow_mode: bool,
+    /// Removes all remote resources from the store.
+    #[clap(long, env = "ATOMIC_CLEAR_REMOTE_CACHE")]
+    pub clear_remote_cache: bool,
 }
 
 #[derive(clap::ValueEnum, Clone, Debug)]

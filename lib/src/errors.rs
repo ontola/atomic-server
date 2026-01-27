@@ -24,7 +24,7 @@ pub struct AtomicError {
     pub subject: Option<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum AtomicErrorType {
     NotFoundError,
     UnauthorizedError,

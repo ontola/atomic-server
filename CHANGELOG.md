@@ -18,6 +18,7 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 - [#658](https://github.com/atomicdata-dev/atomic-server/issues/658) Added JSON datatype.
 - [#1024](https://github.com/atomicdata-dev/atomic-server/issues/1024) Added URI datatype.
 - [#998](https://github.com/atomicdata-dev/atomic-server/issues/998) Added YJS datatype.
+- [#851](https://github.com/atomicdata-dev/atomic-server/issues/851) Deleting file resources now also deletes the file from the filesystem.
 BREAKING: [#1107](https://github.com/atomicdata-dev/atomic-server/issues/1107) Named nested resources are no longer supported. Value::Resource and SubResource::Resource have been removed. If you need to include multiple resources in a response use an array.
 BREAKING: `store.get_resource_extended()` now returns a `ResourceResponse` instead of a `Resource` due to the removal of named nested resources. Use `.into()` or `.to_single()` to convert to a `Resource`.
 

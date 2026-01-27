@@ -1,5 +1,6 @@
 use actix_cors::Cors;
 use actix_web::{middleware, web, HttpServer};
+use atomic_lib::Storelike;
 
 use crate::errors::AtomicServerResult;
 
@@ -32,6 +33,31 @@ async fn rebuild_indexes(appstate: &crate::appstate::AppState) -> AtomicServerRe
     Ok(())
 }
 
+/// Removes all remote resources from the store.
+async fn clear_remote_cache(appstate: &crate::appstate::AppState) -> AtomicServerResult<()> {
+    let self_url = appstate.store.get_self_url().expect("No self url");
+    tracing::info!("Removing remote resources...");
+    let mut count = 0;
+    let mut subjects_to_remove = Vec::new();
+    for resource in appstate.store.all_resources(true) {
+        let subject = resource.get_subject();
+        if !subject.starts_with(&self_url) {
+            subjects_to_remove.push(subject.clone());
+        }
+    }
+
+    for subject in subjects_to_remove {
+        appstate.store.remove_resource(&subject).await?;
+        appstate.search_state.remove_resource(&subject)?;
+        count += 1;
+    }
+
+    appstate.search_state.writer.write()?.commit()?;
+
+    tracing::info!("Successfully removed {} remote resources.", count);
+    Ok(())
+}
+
 // Increase the maximum payload size (for POSTing a body, for example) to 50MB
 const PAYLOAD_MAX: usize = 50_242_880;
 
@@ -46,6 +72,9 @@ pub async fn serve(config: crate::config::Config) -> AtomicServerResult<()> {
     // Start async processes
     if config.opts.rebuild_indexes {
         rebuild_indexes(&appstate).await?;
+    }
+    if config.opts.clear_remote_cache {
+        clear_remote_cache(&appstate).await?;
     }
 
     let server = HttpServer::new(move || {
