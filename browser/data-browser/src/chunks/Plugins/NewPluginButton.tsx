@@ -1,54 +1,59 @@
 import { Button } from '@components/Button';
 import { Dialog, useDialog } from '@components/Dialog';
-import type { Resource, Server } from '@tomic/react';
+import type { JSONValue, Resource, Server } from '@tomic/react';
 import { useId, useRef, useState } from 'react';
 import { FaPlus } from 'react-icons/fa6';
-import {
-  TextWriter,
-  Uint8ArrayReader,
-  ZipReader,
-  type Entry,
-} from '@zip.js/zip.js';
 import { styled } from 'styled-components';
 import { Column, Row } from '@components/Row';
 import { JSONEditor } from '@components/JSONEditor';
 import Markdown from '@components/datatypes/Markdown';
-import { useCreatePlugin, type PluginMetadata } from './createPlugin';
+import { useCreatePlugin } from '@views/Plugin/createPlugin';
+import { readZip, type PluginMetadata } from './plugins';
+import { ConfigReference } from '@views/Plugin/ConfigReference';
 
 interface NewPluginButtonProps {
   drive: Resource<Server.Drive>;
 }
 
-export const NewPluginButton: React.FC<NewPluginButtonProps> = ({ drive }) => {
+const NewPluginButton: React.FC<NewPluginButtonProps> = ({ drive }) => {
   const configLabelId = useId();
   const [error, setError] = useState<string>();
   const [file, setFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [metadata, setMetadata] = useState<PluginMetadata>();
   const [configValid, setConfigValid] = useState(true);
+  const [config, setConfig] = useState<JSONValue>();
+
   const { createPluginResource, installPlugin } = useCreatePlugin();
+
+  const reset = () => {
+    setError(undefined);
+    setFile(null);
+    setMetadata(undefined);
+    setConfig(undefined);
+    setConfigValid(true);
+    fileInputRef.current!.value = '';
+  };
+
   const [dialogProps, show, hide] = useDialog({
-    onCancel: () => {
-      setError(undefined);
-      setFile(null);
-      setMetadata(undefined);
-      fileInputRef.current!.value = '';
-    },
+    onCancel: reset,
     onSuccess: async () => {
       if (!metadata || !file) {
         return setError('Please fill in all fields');
       }
 
       try {
-        const plugin = await createPluginResource({ metadata, file, drive });
+        const plugin = await createPluginResource({
+          metadata,
+          file,
+          drive,
+          config,
+        });
         await installPlugin(plugin, drive);
       } catch (err) {
         setError(`Failed to install plugin, error: ${err.message}`);
       } finally {
-        setError(undefined);
-        setFile(null);
-        setMetadata(undefined);
-        fileInputRef.current!.value = '';
+        reset();
       }
     },
   });
@@ -62,6 +67,7 @@ export const NewPluginButton: React.FC<NewPluginButtonProps> = ({ drive }) => {
       try {
         const readMetadata = await readZip(targetFile);
         setMetadata(readMetadata);
+        setConfig(readMetadata.defaultConfig);
         setFile(targetFile);
         setError(undefined);
         show();
@@ -112,11 +118,20 @@ export const NewPluginButton: React.FC<NewPluginButtonProps> = ({ drive }) => {
               <JSONEditor
                 labelId={configLabelId}
                 initialValue={JSON.stringify(metadata.defaultConfig, null, 2)}
-                onChange={() => {}}
+                onChange={val => {
+                  try {
+                    setConfig(JSON.parse(val));
+                  } catch (e) {
+                    // Do nothing
+                  }
+                }}
                 schema={metadata.configSchema}
                 showErrorStyling={!configValid}
                 onValidationChange={setConfigValid}
               />
+              {metadata.configSchema && (
+                <ConfigReference schema={metadata.configSchema} />
+              )}
             </Column>
           )}
           {!metadata && (
@@ -149,50 +164,7 @@ export const NewPluginButton: React.FC<NewPluginButtonProps> = ({ drive }) => {
   );
 };
 
-async function readZip(file: File): Promise<PluginMetadata> {
-  const zip = new ZipReader(new Uint8ArrayReader(await file.bytes()));
-  const entries = await zip.getEntries();
-
-  if (!validateZip(entries)) {
-    throw new Error('Invalid plugin zip file.');
-  }
-
-  for (const entry of entries) {
-    if (!entry.directory && entry.filename === 'plugin.json') {
-      const metadata = await entry.getData(new TextWriter());
-
-      return JSON.parse(metadata) as PluginMetadata;
-    }
-  }
-
-  throw new Error('Plugin metadata not found in zip file.');
-}
-
-function validateZip(entries: Entry[]): boolean {
-  const allowedRootFiles = ['plugin.json', 'plugin.wasm'];
-  let foundWasm = false;
-  let foundJson = false;
-
-  for (const entry of entries) {
-    if (entry.filename.startsWith('assets/')) {
-      continue;
-    }
-
-    if (!allowedRootFiles.includes(entry.filename)) {
-      return false;
-    }
-
-    if (entry.filename === 'plugin.wasm') {
-      foundWasm = true;
-    }
-
-    if (entry.filename === 'plugin.json') {
-      foundJson = true;
-    }
-  }
-
-  return foundWasm && foundJson;
-}
+export default NewPluginButton;
 
 const PluginName = styled.span`
   font-weight: bold;

@@ -14,7 +14,14 @@ import {
   handleRefresh,
 } from 'codemirror-json-schema';
 import { linter, lintGutter, type Diagnostic } from '@codemirror/lint';
-import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject,
+} from 'react';
 import { styled, useTheme } from 'styled-components';
 import type { JSONSchema7 } from 'ai';
 import { addIf } from '@helpers/addIf';
@@ -65,9 +72,8 @@ const AsyncJSONEditor: React.FC<JSONEditorProps> = ({
   const [reports, setReports] = useState<Reports>({});
 
   const reporter = useCallback((key: string, valid: boolean) => {
-      setReports((prev) => ({ ...prev, [key]: valid }))
+    setReports(prev => ({ ...prev, [key]: valid }));
   }, []);
-
 
   useOnValueChange(() => {
     // We can't move this to the report event because we need the most up to date reports which are modified in that event.
@@ -83,8 +89,18 @@ const AsyncJSONEditor: React.FC<JSONEditorProps> = ({
     [onChange],
   );
 
-  const jsonLinter = useHookIntoValidator('json', jsonParserLinterRef, reporter, !!required);
-  const schemaLinter = useHookIntoValidator('jsonSchema', schemaLinterRef, reporter, true);
+  const jsonLinter = useHookIntoValidator(
+    'json',
+    jsonParserLinterRef,
+    reporter,
+    !!required,
+  );
+  const schemaLinter = useHookIntoValidator(
+    'jsonSchema',
+    schemaLinterRef,
+    reporter,
+    true,
+  );
 
   const extensions = useMemo(
     () => [
@@ -93,7 +109,9 @@ const AsyncJSONEditor: React.FC<JSONEditorProps> = ({
         delay: 300,
       }),
       lintGutter(),
-      addIf(!!schema,
+      // If a schema is provided we add all the JSON Schema tooling.
+      addIf(
+        !!schema,
         linter(schemaLinter, {
           needsRefresh: handleRefresh,
         }),
@@ -102,7 +120,7 @@ const AsyncJSONEditor: React.FC<JSONEditorProps> = ({
         }),
         hoverTooltip(jsonSchemaHover()),
         stateExtensions(schema),
-      )
+      ),
     ],
     [jsonLinter, schemaLinter, schema],
   );
@@ -147,10 +165,15 @@ const AsyncJSONEditor: React.FC<JSONEditorProps> = ({
   );
 };
 
-function useHookIntoValidator(key: string, validator: RefObject<(view: EditorView) => Diagnostic[]>, reporter: (key: string, valid: boolean) => void, required: boolean): (view: EditorView) => Diagnostic[] {
-    const lastDiagnostics = useRef<Diagnostic[]>([]);
+function useHookIntoValidator(
+  key: string,
+  validator: RefObject<(view: EditorView) => Diagnostic[]>,
+  reporter: (key: string, valid: boolean) => void,
+  required: boolean,
+): (view: EditorView) => Diagnostic[] {
+  const lastDiagnostics = useRef<Diagnostic[]>([]);
 
-    const validationLinter = useMemo(() => {
+  const validationLinter = useMemo(() => {
     return (view: EditorView) => {
       const isEmpty = view.state.doc.length === 0;
       let diagnostics = validator.current(view);
@@ -207,7 +230,8 @@ const CodeEditorWrapper = styled.div`
     padding: ${p => p.theme.size(2)};
     box-shadow: ${p => p.theme.boxShadowSoft};
     border-radius: ${p => p.theme.radius};
-    border: ${p => p.theme.darkMode ? '1px solid' : 'none'} ${p => p.theme.colors.bg2};
+    border: ${p => (p.theme.darkMode ? '1px solid' : 'none')};
+    ${p => p.theme.colors.bg2};
 
     & .cm-tooltip-arrow {
       display: none;
@@ -215,7 +239,9 @@ const CodeEditorWrapper = styled.div`
   }
 
   & .cm-gutters {
-    background: transparent;
+    background: ${p => p.theme.colors.bg};
+    border-top-left-radius: ${p => p.theme.radius};
+    border-bottom-left-radius: ${p => p.theme.radius};
     min-height: 150px;
 
     & .cm-gutterElement {
@@ -241,7 +267,7 @@ const CodeEditorWrapper = styled.div`
     & > ul > li {
       background-color: none;
       padding: ${p => p.theme.size(2)} !important;
-      margin:0;
+      margin: 0;
 
       &:first-of-type {
         border-top-left-radius: ${p => p.theme.radius};

@@ -8,20 +8,33 @@ import Markdown from '@components/datatypes/Markdown';
 import { JSONEditor } from '@components/JSONEditor';
 import { Column, Row } from '@components/Row';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
-import { core, server, useString, useValue, type Server } from '@tomic/react';
-import { useCreatePlugin } from '@views/Drive/createPlugin';
+import {
+  core,
+  server,
+  useCanWrite,
+  useString,
+  useValue,
+  type Server,
+} from '@tomic/react';
+import { useCreatePlugin } from '@views/Plugin/createPlugin';
 import type { ResourcePageProps } from '@views/ResourcePage';
 import type { JSONSchema7 } from 'ai';
 import { constructOpenURL } from '@helpers/navigation';
-import { useId, useState } from 'react';
-import { FaFloppyDisk, FaTrash, FaUpload } from 'react-icons/fa6';
+import { lazy, useId, useState } from 'react';
+import { FaFloppyDisk, FaTrash } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import toast from 'react-hot-toast';
+import { ConfigReference } from './ConfigReference';
+
+const UpdatePluginButton = lazy(
+  () => import('@chunks/Plugins/UpdatePluginButton'),
+);
 
 export const PluginPage: React.FC<ResourcePageProps<Server.Plugin>> = ({
   resource,
 }) => {
   const configLabelId = useId();
+  const canWrite = useCanWrite(resource);
   const navigate = useNavigateWithTransition();
   const [showUninstallDialog, setShowUninstallDialog] = useState(false);
   const [name] = useString(resource, core.properties.name);
@@ -29,7 +42,6 @@ export const PluginPage: React.FC<ResourcePageProps<Server.Plugin>> = ({
   const [config, setConfig] = useValue(resource, server.properties.config);
   const [configValid, setConfigValid] = useState(true);
   const title = `${namespace ? `${namespace}/` : ''}${name}`;
-
   const parent = resource.props.parent;
 
   const { uninstallPlugin } = useCreatePlugin();
@@ -44,16 +56,15 @@ export const PluginPage: React.FC<ResourcePageProps<Server.Plugin>> = ({
           </Row>
           <PluginAuthor>by {resource.props.pluginAuthor}</PluginAuthor>
         </div>
-        <Row>
-          <Button>
-            <FaUpload />
-            Update
-          </Button>
-          <Button alert onClick={() => setShowUninstallDialog(true)}>
-            <FaTrash />
-            Uninstall
-          </Button>
-        </Row>
+        {canWrite && (
+          <Row justify='flex-end'>
+            <UpdatePluginButton plugin={resource} />
+            <Button alert onClick={() => setShowUninstallDialog(true)}>
+              <FaTrash />
+              Uninstall
+            </Button>
+          </Row>
+        )}
         {resource.props.description && (
           <DescriptionWrapper>
             <Markdown text={resource.props.description!} />
@@ -80,6 +91,9 @@ export const PluginPage: React.FC<ResourcePageProps<Server.Plugin>> = ({
           showErrorStyling={!configValid}
           onValidationChange={setConfigValid}
         />
+        {resource.props.jsonSchema && (
+          <ConfigReference schema={resource.props.jsonSchema as JSONSchema7} />
+        )}
       </Column>
       <ConfirmationDialog
         title='Uninstall Plugin'

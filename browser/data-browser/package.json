@@ -54,6 +54,7 @@
     "@wuchale/vite-plugin": "^0.16.3",
     "@zip.js/zip.js": "^2.8.15",
     "ai": "^5.0.101",
+    "ajv": "^8.17.1",
     "clsx": "^2.1.1",
     "codemirror-json-schema": "^0.8.1",
     "downshift": "^9.0.10",
