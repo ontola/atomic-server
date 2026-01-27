@@ -28,12 +28,26 @@ test.describe('perf: sidebar after reload', () => {
   test('create + reload: sidebar item visibility timing', async ({
     page,
   }, testInfo) => {
-    // Phase A: click "New Document" → editable title appears
+    // Phase A: click "New Document" → editable title appears on the
+    // NEW document's page. The previous version only waited for an
+    // `editableTitle` to be visible — but the drive page also has
+    // one, and under load the click→navigate gap was long enough
+    // that `setTitle` (Phase B) ran against the drive's title input
+    // before the navigate landed. That renamed the drive instead of
+    // the doc and the polling waitForFunction never saw
+    // `name === 'Perf Probe Doc'` on the doc subject.
+    //
+    // Wait for the URL to flip to the new document's subject before
+    // touching the title.
+    const driveUrl = page.url();
     const phaseA_start = Date.now();
     await page
       .getByTestId('sidebar')
       .getByRole('button', { name: 'New Document' })
       .click();
+    await page.waitForURL(url => url.toString() !== driveUrl, {
+      timeout: 10000,
+    });
     await expect(editableTitle(page)).toBeVisible({ timeout: 10000 });
     const phaseA_ms = Date.now() - phaseA_start;
 
