@@ -3385,3 +3385,7 @@ msgstr "Apply"
 #: src/chunks/Plugins/UpdatePluginButton.tsx
 msgid "Your config is not fully compatible with the new version."
 msgstr "Your config is not fully compatible with the new version."
+
+#: src/views/Drive/PluginList.tsx
+msgid "No plugins installed"
+msgstr "No plugins installed"

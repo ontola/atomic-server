@@ -1,4 +1,5 @@
-use atomic_plugin::{ClassExtender, Commit, Resource};
+use atomic_plugin::{ClassExtender, Commit, CommitBuilder, Resource};
+use rand::seq::SliceRandom;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use waki::Client;
@@ -68,7 +69,7 @@ impl ClassExtender for RandomFolderExtender {
             return Ok(());
         };
 
-        let all_folders = atomic_plugin::query(IS_A.to_string(), FOLDER_CLASS.to_string(), None)?;
+        let all_folders = atomic_plugin::query(IS_A.to_string(), FOLDER_CLASS.to_string())?;
         let all_names: Vec<&str> = all_folders
             .iter()
             .filter_map(|folder| get_name_from_folder(folder).ok())
@@ -96,16 +97,25 @@ impl ClassExtender for RandomFolderExtender {
 
     // Send a message to a Discord webhook when a folder is updated.
     fn after_commit(_commit: &Commit, resource: &Resource) -> Result<(), String> {
+        // Shuffle the name of the folder
+        let name = get_name_from_folder(resource)?;
+        let shuffled_name = shuffle_string(name);
+
+        // Commit the shuffled name to persist the change.
+        let mut commit_builder = CommitBuilder::new(resource.subject.clone());
+        commit_builder.set(NAME_PROP.to_string(), shuffled_name.clone().into());
+
+        atomic_plugin::commit(&commit_builder)?;
+
+        // Announce the update to a Discord server.
         let config = atomic_plugin::get_config::<Config>()
             .map_err(|_| "Could not parse plugin config".to_string())?;
-
-        let name = get_name_from_folder(resource)?;
         let client = Client::new();
 
         let body = DiscordWebhookBody {
             content: config
                 .update_message
-                .replace("{{name}}", name)
+                .replace("{{name}}", &shuffled_name)
                 .replace("{{subject}}", &resource.subject),
         };
 
@@ -119,6 +129,13 @@ impl ClassExtender for RandomFolderExtender {
         println!("Response: {:?}", res.status_code());
         Ok(())
     }
+}
+
+fn shuffle_string(string: &str) -> String {
+    let mut chars = string.chars().collect::<Vec<char>>();
+    let mut rng = rand::thread_rng();
+    chars.shuffle(&mut rng);
+    chars.into_iter().collect()
 }
 
 atomic_plugin::export_plugin!(RandomFolderExtender);

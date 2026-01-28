@@ -144,6 +144,7 @@ pub const NAMESPACE: &str = "https://atomicdata.dev/properties/namespace";
 pub const PLUGINS: &str = "https://atomicdata.dev/properties/plugins";
 pub const JSON_SCHEMA: &str = "https://atomicdata.dev/properties/jsonSchema";
 pub const PLUGIN_AUTHOR: &str = "https://atomicdata.dev/properties/pluginAuthor";
+pub const PLUGIN_AGENT: &str = "https://atomicdata.dev/properties/pluginAgent";
 // Datatypes
 pub const STRING: &str = "https://atomicdata.dev/datatypes/string";
 pub const MARKDOWN: &str = "https://atomicdata.dev/datatypes/markdown";

@@ -1,9 +1,16 @@
-import type { Resource, Server } from '@tomic/react';
+import {
+  useCanWrite,
+  useResource,
+  type Resource,
+  type Server,
+} from '@tomic/react';
 import type React from 'react';
-import ResourceCard from '@views/Card/ResourceCard';
-import { Column } from '@components/Row';
+import { Column, Row } from '@components/Row';
 import { lazy, Suspense } from 'react';
 import { Spinner } from '@components/Spinner';
+import { Card } from '@components/Card';
+import { AtomicLink } from '@components/AtomicLink';
+import styled from 'styled-components';
 
 const NewPluginButton = lazy(() => import('@chunks/Plugins/NewPluginButton'));
 interface PluginListProps {
@@ -11,17 +18,67 @@ interface PluginListProps {
 }
 
 export const PluginList: React.FC<PluginListProps> = ({ drive }) => {
+  const plugins = drive.props.plugins ?? [];
+  const canWriteDrive = useCanWrite(drive);
+
   return (
-    <div>
-      <h2>Plugins</h2>
+    <Card>
       <Column gap='1rem'>
         <Suspense fallback={<Spinner />}>
-          <NewPluginButton drive={drive} />
-          {(drive.props.plugins ?? []).map(plugin => (
-            <ResourceCard key={plugin} subject={plugin} />
-          ))}
+          <Row justify='space-between'>
+            <h2>Plugins</h2>
+            {canWriteDrive && <NewPluginButton drive={drive} />}
+          </Row>
         </Suspense>
+        {plugins.length > 0 ? (
+          <TableList>
+            <tbody>
+              {plugins.map(plugin => (
+                <PluginItem key={plugin} subject={plugin} />
+              ))}
+            </tbody>
+          </TableList>
+        ) : (
+          <NoPluginsInstalled>No plugins installed</NoPluginsInstalled>
+        )}
       </Column>
-    </div>
+    </Card>
   );
 };
+
+const PluginItem: React.FC<{ subject: string }> = ({ subject }) => {
+  const resource = useResource<Server.Plugin>(subject);
+
+  const title = `${resource.props.namespace ?? ''}/${resource.props.name ?? ''}`;
+
+  return (
+    <tr>
+      <td>
+        <AtomicLink subject={subject}>{title}</AtomicLink>
+      </td>
+      <td>{resource.props.version}</td>
+    </tr>
+  );
+};
+
+const TableList = styled.table`
+  width: 100%;
+  border-collapse: collapse;
+
+  td {
+    padding: ${p => p.theme.size(2)};
+  }
+  tr {
+    &:not(:last-child) {
+      border-bottom: 1px solid ${p => p.theme.colors.bg2};
+    }
+  }
+`;
+
+const NoPluginsInstalled = styled.p`
+  text-align: center;
+  color: ${p => p.theme.colors.textLight};
+  padding: ${p => p.theme.size()};
+  border-radius: ${p => p.theme.radius};
+  background-color: ${p => p.theme.colors.bg1};
+`;

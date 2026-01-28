@@ -54,6 +54,7 @@ export const server = {
     pluginAuthor: 'https://atomicdata.dev/properties/pluginAuthor',
     plugins: 'https://atomicdata.dev/properties/plugins',
     pluginFile: 'https://atomicdata.dev/properties/pluginFile',
+    pluginAgent: 'https://atomicdata.dev/properties/pluginAgent',
   },
   __classDefs: {
     ['https://atomicdata.dev/classes/Drive']: [
@@ -108,6 +109,7 @@ export const server = {
       'https://atomicdata.dev/properties/jsonSchema',
       'https://atomicdata.dev/properties/pluginFile',
       'https://atomicdata.dev/properties/description',
+      'https://atomicdata.dev/properties/pluginAgent',
     ],
   },
 } as const satisfies OntologyBaseObject;
@@ -191,7 +193,8 @@ declare module '../index.js' {
         | typeof server.properties.pluginAuthor
         | typeof server.properties.jsonSchema
         | typeof server.properties.pluginFile
-        | 'https://atomicdata.dev/properties/description';
+        | 'https://atomicdata.dev/properties/description'
+        | typeof server.properties.pluginAgent;
     };
   }
 
@@ -230,6 +233,7 @@ declare module '../index.js' {
     [server.properties.pluginAuthor]: string;
     [server.properties.plugins]: string[];
     [server.properties.pluginFile]: string;
+    [server.properties.pluginAgent]: string;
   }
 
   interface PropSubjectToNameMapping {
@@ -267,5 +271,6 @@ declare module '../index.js' {
     [server.properties.pluginAuthor]: 'pluginAuthor';
     [server.properties.plugins]: 'plugins';
     [server.properties.pluginFile]: 'pluginFile';
+    [server.properties.pluginAgent]: 'pluginAgent';
   }
 }
