@@ -16,6 +16,8 @@ pub enum Tree {
     /// Reference index, used for queries where the value (or one of the values, in case of an array) is known but the subject is not.
     /// Index sorted by {Value}-{Property}-{Subject}.
     ValPropSub,
+    /// Stores metadata about installed plugins.
+    PluginMeta,
 }
 
 const RESOURCES: &str = "resources_v2";
@@ -23,6 +25,7 @@ const VALPROPSUB: &str = "reference_index_v1";
 const QUERY_MEMBERS: &str = "members_index";
 const PROPVALSUB: &str = "prop_val_sub_index";
 const QUERIES_WATCHED: &str = "watched_queries";
+const PLUGIN_META: &str = "plugin_meta";
 
 impl std::fmt::Display for Tree {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -32,6 +35,7 @@ impl std::fmt::Display for Tree {
             Tree::PropValSub => f.write_str(PROPVALSUB),
             Tree::ValPropSub => f.write_str(VALPROPSUB),
             Tree::QueryMembers => f.write_str(QUERY_MEMBERS),
+            Tree::PluginMeta => f.write_str(PLUGIN_META),
         }
     }
 }
@@ -45,6 +49,7 @@ impl AsRef<[u8]> for Tree {
             Tree::PropValSub => PROPVALSUB.as_bytes(),
             Tree::ValPropSub => VALPROPSUB.as_bytes(),
             Tree::QueryMembers => QUERY_MEMBERS.as_bytes(),
+            Tree::PluginMeta => PLUGIN_META.as_bytes(),
         }
     }
 }

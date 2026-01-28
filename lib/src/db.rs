@@ -3,6 +3,7 @@
 
 mod encoding;
 mod migrations;
+pub mod plugin_meta;
 mod prop_val_sub_index;
 mod query_index;
 #[cfg(test)]
@@ -25,6 +26,7 @@ use crate::{
     commit::{CommitOpts, CommitResponse},
     db::{
         encoding::{decode_propvals, encode_propvals},
+        plugin_meta::{PluginMeta, PluginMetaKey},
         query_index::{requires_query_index, NO_VALUE},
         val_prop_sub_index::find_in_val_prop_sub_index,
     },
@@ -83,6 +85,8 @@ pub struct Db {
     query_index: sled::Tree,
     /// [Tree::WatchedQueries]
     watched_queries: sled::Tree,
+    /// [Tree::PluginMeta]
+    plugin_meta: sled::Tree,
     /// The address where the db will be hosted, e.g. http://localhost/
     server_url: String,
     /// Endpoints are checked whenever a resource is requested. They calculate (some properties of) the resource and return it.
@@ -108,6 +112,7 @@ impl Db {
         let query_index = db.open_tree(Tree::QueryMembers)?;
         let prop_val_sub_index = db.open_tree(Tree::PropValSub)?;
         let watched_queries = db.open_tree(Tree::WatchedQueries)?;
+        let plugin_meta = db.open_tree(Tree::PluginMeta)?;
 
         let store = Db {
             path: path.into(),
@@ -119,6 +124,7 @@ impl Db {
             prop_val_sub_index,
             server_url,
             watched_queries,
+            plugin_meta,
             endpoints: vec![],
             class_extenders: Arc::new(RwLock::new(vec![])),
             on_commit: None,
@@ -352,6 +358,30 @@ impl Db {
         Some(Resource::from_propvals(propvals, subject))
     }
 
+    pub fn get_plugin_meta(&self, key: &PluginMetaKey) -> AtomicResult<Option<PluginMeta>> {
+        let Some(plugin_meta_bin) = self.plugin_meta.get(key.encode()?)? else {
+            return Ok(None);
+        };
+        let plugin_meta = PluginMeta::from_bytes(&plugin_meta_bin)?;
+
+        Ok(Some(plugin_meta))
+    }
+
+    pub fn set_plugin_meta(
+        &self,
+        key: &PluginMetaKey,
+        plugin_meta: &PluginMeta,
+    ) -> AtomicResult<()> {
+        self.plugin_meta
+            .insert(key.encode()?, plugin_meta.encode()?)?;
+        Ok(())
+    }
+
+    pub fn delete_plugin_meta(&self, key: &PluginMetaKey) -> AtomicResult<()> {
+        self.plugin_meta.remove(key.encode()?)?;
+        Ok(())
+    }
+
     async fn build_index_for_atom(
         &self,
         atom: &IndexAtom,
@@ -395,6 +425,7 @@ impl Db {
         let mut batch_valpropsub = sled::Batch::default();
         let mut batch_watched_queries = sled::Batch::default();
         let mut batch_query_members = sled::Batch::default();
+        let mut batch_plugin_meta = sled::Batch::default();
 
         for op in transaction.iter() {
             match op.tree {
@@ -440,6 +471,14 @@ impl Db {
                         batch_query_members.remove(op.key.clone());
                     }
                 },
+                trees::Tree::PluginMeta => match op.method {
+                    trees::Method::Insert => {
+                        batch_plugin_meta.insert::<&[u8], &[u8]>(&op.key, op.val.as_ref().unwrap());
+                    }
+                    trees::Method::Delete => {
+                        batch_plugin_meta.remove(op.key.clone());
+                    }
+                },
             }
         }
 
@@ -449,6 +488,7 @@ impl Db {
             &self.reference_index,
             &self.watched_queries,
             &self.query_index,
+            &self.plugin_meta,
         )
             .transaction(
                 |(
@@ -457,12 +497,14 @@ impl Db {
                     tx_reference_index,
                     tx_watched_queries,
                     tx_query_index,
+                    tx_plugin_meta,
                 )| {
                     tx_resources.apply_batch(&batch_resources)?;
                     tx_prop_val_sub_index.apply_batch(&batch_propvalsub)?;
                     tx_reference_index.apply_batch(&batch_valpropsub)?;
                     tx_watched_queries.apply_batch(&batch_watched_queries)?;
                     tx_query_index.apply_batch(&batch_query_members)?;
+                    tx_plugin_meta.apply_batch(&batch_plugin_meta)?;
                     Ok::<(), sled::transaction::ConflictableTransactionError<sled::Error>>(())
                 },
             )

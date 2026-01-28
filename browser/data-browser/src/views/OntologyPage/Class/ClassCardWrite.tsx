@@ -105,7 +105,7 @@ export function ClassCardWrite({ subject }: ClassCardWriteProps): JSX.Element {
 const StyledCard = styled(TargetableCard)`
   padding-bottom: ${p => p.theme.size()}rem;
   max-width: 100rem;
-
+  box-shadow: ${p => p.theme.boxShadow};
   border: ${p =>
     p.theme.darkMode ? `1px solid ${p.theme.colors.bg2}` : 'none'};
 

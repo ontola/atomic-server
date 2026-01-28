@@ -21,10 +21,6 @@ export const Card = styled.div.attrs<CardProps>(p => ({
   container: ${CARD_CONTAINER} / inline-size;
   border: solid 1px
     ${p => (p.highlight ? p.theme.colors.main : p.theme.colors.bg2)};
-  box-shadow: ${p =>
-    p.highlight
-      ? `0 0 0 1px ${p.theme.colors.main}, ${p.theme.boxShadow}`
-      : p.theme.boxShadow};
 
   padding: ${p => p.theme.size()};
   border-radius: ${p => p.theme.radius};

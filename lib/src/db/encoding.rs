@@ -1,7 +1,14 @@
 use rmp_serde::Serializer;
 use serde::Serialize;
 
-use crate::{db::query_index::QueryFilter, errors::AtomicResult, resources::PropVals};
+use crate::{
+    db::{
+        plugin_meta::{PluginMeta, PluginMetaKey},
+        query_index::QueryFilter,
+    },
+    errors::AtomicResult,
+    resources::PropVals,
+};
 
 /// Encode PropVals to a message pack binary format
 #[tracing::instrument(level = "trace")]
@@ -38,5 +45,35 @@ impl super::query_index::QueryFilter {
             .map_err(|e| format!("Error decoding QueryFilter: {}", e))?;
 
         Ok(query_filter)
+    }
+}
+
+impl crate::db::plugin_meta::PluginMeta {
+    pub fn encode(&self) -> AtomicResult<Vec<u8>> {
+        let mut buf = Vec::new();
+        self.serialize(&mut Serializer::new(&mut buf))
+            .map_err(|e| format!("Failed to encode PluginMeta: {}", e))?;
+        Ok(buf)
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> AtomicResult<PluginMeta> {
+        let plugin_meta: PluginMeta = rmp_serde::from_slice(bytes)
+            .map_err(|e| format!("Failed to decode PluginMeta: {}", e))?;
+        Ok(plugin_meta)
+    }
+}
+
+impl crate::db::plugin_meta::PluginMetaKey {
+    pub fn encode(&self) -> AtomicResult<Vec<u8>> {
+        let mut buf = Vec::new();
+        self.serialize(&mut Serializer::new(&mut buf))
+            .map_err(|e| format!("Failed to encode PluginMetaKey: {}", e))?;
+        Ok(buf)
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> AtomicResult<PluginMetaKey> {
+        let plugin_meta_key: PluginMetaKey = rmp_serde::from_slice(bytes)
+            .map_err(|e| format!("Failed to decode PluginMetaKey: {}", e))?;
+        Ok(plugin_meta_key)
     }
 }
