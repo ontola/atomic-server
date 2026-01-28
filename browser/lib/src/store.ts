@@ -507,18 +507,32 @@ export class Store {
    * `LocalOutbox.drain` records `lastAttemptError` and continues.
    */
   private postOutboxEntry = async (entry: OutboxEntry): Promise<void> => {
+    // The outbox entry IS the source of truth for commits we owe the
+    // server. Post `entry.commits` directly rather than delegating to
+    // `resource.pushCommits()` — that method uses the resource's
+    // in-memory `_pendingCommits` list, which is empty after a page
+    // reload (the resource was just re-fetched from the server, so its
+    // local state has no pending changes). Relying on it silently
+    // dropped every offline commit on reload: outbox.drain saw no
+    // throw, deleted the entry, and the server never received the
+    // edit. sync.spec.ts:177 was the user-visible repro.
+    //
+    // If the resource has lingering unsaved local changes (rare —
+    // typically only when `save()` is called twice in quick succession
+    // and the second call hits before the first finished pushing),
+    // sign them into commits first so they ride along with the
+    // outbox-stored ones.
     const resource = this.resources.get(entry.subject);
-
-    if (!resource) {
-      // No in-memory resource — outbox is stale. Drop the entry
-      // (next reload won't see it either).
+    if (resource?.hasUnsavedChanges()) {
+      await resource.save();
+      // `save()` will have posted everything it could; if it
+      // re-queued anything to the outbox the drain will iterate it.
+      this.emitSyncStatus();
       return;
     }
-
-    if (resource.hasUnsavedChanges()) {
-      await resource.save();
-    } else {
-      await resource.pushCommits();
+    const endpoint = new URL('/commit', this.serverUrl).toString();
+    for (const commit of entry.commits) {
+      await this.postCommit(commit, endpoint);
     }
     this.emitSyncStatus();
   };
@@ -1019,6 +1033,11 @@ export class Store {
   public async createDrive(
     name: string,
     description?: string,
+    /** Optional name to persist on the Agent resource as part of the same
+     *  commit that links `personalDrive` + `drives`. Avoids needing a
+     *  separate save call for callers (e.g. `useDevDrive`) that want the
+     *  agent to be renderable as a named resource right away. */
+    agentName?: string,
   ): Promise<Resource> {
     const agent = this.getAgent();
 
@@ -1066,6 +1085,18 @@ export class Store {
       false,
     );
     agentResource.push(server.properties.drives, [drive.subject], true);
+    if (agentName) {
+      await agentResource.set(core.properties.name, agentName, false);
+      const currentIsA = (agentResource.get(core.properties.isA) ??
+        []) as string[];
+      if (!currentIsA.includes(core.classes.agent)) {
+        await agentResource.set(
+          core.properties.isA,
+          [...currentIsA, core.classes.agent],
+          false,
+        );
+      }
+    }
     await agentResource.save();
 
     return drive;

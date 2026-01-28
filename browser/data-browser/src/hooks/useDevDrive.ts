@@ -18,6 +18,11 @@ export const DEV_DRIVE_PRUNE_MARKER = '[atomic-data:dev-drive]';
 
 const DEV_DRIVE_DISPLAY_NAME = 'Dev drive';
 
+/** Name set on the dev-drive Agent resource. Visible anywhere the agent's
+ *  resource title is rendered — commit author lines, chat messages, etc.
+ *  E2E tests can assert against this exact string. */
+export const DEV_DRIVE_AGENT_NAME = 'Dev User';
+
 /** Resolve the atomic-server URL the dev drive should target. If the SPA
  *  is served by atomic-server itself (any non-Vite origin), use the same
  *  origin. Vite-served pages fall back to the hardcoded default. */
@@ -53,9 +58,15 @@ export function useDevDrive() {
 
       store.setAgent(newAgent);
 
+      // The third arg pipes `DEV_DRIVE_AGENT_NAME` into the same
+      // agent-resource save that `createDrive` already does (to wire up
+      // `personalDrive` + `drives`). The agent shows up as "Dev User"
+      // wherever its resource is rendered (commit author lines, chat
+      // messages, etc.). E2E tests assert against this constant.
       const driveResource = await store.createDrive(
         DEV_DRIVE_DISPLAY_NAME,
         `Created via \`/app/dev-drive\` for local development and E2E. You can remove these with Prune test data on \`/app/prunetests\`. \n\n${DEV_DRIVE_PRUNE_MARKER}`,
+        DEV_DRIVE_AGENT_NAME,
       );
 
       const finalSecret = Agent.buildSecret(

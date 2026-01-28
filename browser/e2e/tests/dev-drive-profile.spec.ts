@@ -22,6 +22,11 @@ import * as path from 'path';
  *   - or https://www.speedscope.app
  */
 
+// CDP-tracing profiler; requires `--headed` and is not part of CI runs.
+test.skip(
+  !process.env.PROFILE_PERF,
+  'perf-instrumentation only; run with PROFILE_PERF=1 and --headed',
+);
 test('dev-drive CDP trace', async ({ page, browser }) => {
   const throttle = envCpuThrottle();
   if (throttle) await applyCpuThrottle(page, throttle);

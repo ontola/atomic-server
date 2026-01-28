@@ -7,6 +7,14 @@ import { SERVER_URL, devDrive, currentDriveTitle } from './test-utils';
  * Captures Navigation Timing, top resource loads by transfer + duration,
  * Long Tasks, paint timings, and (if instrumented) user marks from the app.
  */
+// Perf-instrumentation test: cross-origin navigates from Vite (5173) to
+// atomic-server (9883). localStorage isn't shared between origins, so
+// the SPA on 9883 starts agent-less and can't render the drive title.
+// Run explicitly with `PROFILE_PERF=1` when measuring; skip otherwise.
+test.skip(
+  !process.env.PROFILE_PERF,
+  'perf-instrumentation only; run with PROFILE_PERF=1',
+);
 test('first paint — phase breakdown', async ({ page }) => {
   await devDrive(page);
   const driveUrl = page.url().replace(/^http:\/\/localhost:5173/, SERVER_URL);

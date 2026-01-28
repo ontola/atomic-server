@@ -63,17 +63,22 @@ const RPC_CHANNEL = 'atomic-db-rpc';
  */
 type Role = 'initializing' | 'leader' | 'follower' | 'failed';
 
-// Originally 5s, but in dagger CI the cross-context `BroadcastChannel`
-// `leader-ping` → `leader-announce` round-trip routinely exceeds 5s
-// under CPU contention, sending the second context to `'failed'` and
-// leaving every multi-context e2e test (chatroom propagation, document
-// second-window delete, sync.spec.ts cross-device) unable to query
-// the local DB. The fall-through is a console-loud RPC failure that
-// surfaces as 9 distinct "ClientDb leadership election timed out"
-// errors per CI run. 30s is comfortably above observed ceilings;
-// recovery via late `leader-announce` is already wired (handler in
-// `handleBroadcast`), so a longer wait is purely a flake-budget fix.
-const LEADERSHIP_TIMEOUT_MS = 30_000;
+// How long we wait for either our own `navigator.locks.request` callback
+// to fire OR a `leader-announce` to arrive from another tab. If neither
+// happens within this window we assume the lock is held by a ghost
+// leader — a prior tab whose `navigator.locks` lease is still active
+// but whose BroadcastChannel listener is dead (HMR-killed bundle, top-
+// frame crash, background-tab throttling). We then re-request the lock
+// with `{ steal: true }` (Chromium-only) to forcibly take over.
+//
+// Was 30s before the steal-recovery path existed — without recovery,
+// the only way out of a ghost-leader stall was to outwait it, so we
+// burned 30s of wall time on every cold load behind a stuck tab. 2s
+// is comfortably above the observed `leader-ping → leader-announce`
+// round-trip even under dagger CPU contention (~50–200ms locally,
+// ~500ms–1s on slow CI), so a healthy leader is never misclassified
+// as a ghost.
+const LEADER_ELECTION_WAIT_MS = 2_000;
 
 type BroadcastMessage =
   | { type: 'leader-ping' }
@@ -155,15 +160,80 @@ export class ClientDbWorker {
     this.bc.onmessage = (event: MessageEvent<BroadcastMessage>) =>
       this.handleBroadcast(event.data);
 
-    // Bid for leadership. `navigator.locks.request` queues this if another tab
-    // already holds the lock; our callback only fires when we own it (either
-    // immediately or after the current leader's tab closes).
-    //
-    // We deliberately do NOT await this request — we let it run forever. The
-    // callback holds the lock until the tab closes by returning a promise
-    // that never resolves.
+    // Bid for leadership. Normal queue request — callback fires when we own
+    // the lock (immediately if no leader, or after the current one closes).
+    this.requestLeaderLock(baseUrl, false);
+
+    // Ping any existing leader so it can announce itself. The announce also
+    // fires unprompted when a tab first becomes leader, so this is mainly for
+    // the case where we open AFTER the leader announced.
+    this.bc.postMessage({ type: 'leader-ping' } satisfies BroadcastMessage);
+
+    // Wait briefly for: us-as-leader, an announce from a healthy leader, or
+    // timeout. A timeout here means a ghost leader holds the
+    // `navigator.locks` lease but isn't responding on the BC — its bundle
+    // crashed, was HMR-killed, or its tab is background-throttled into
+    // ignoring BC messages.
+    const winner = await Promise.race([
+      this.leadershipGained.then(() => 'leader' as const),
+      this.leaderObserved.then(() => 'follower' as const),
+      new Promise<'timeout'>(resolve =>
+        setTimeout(() => resolve('timeout'), LEADER_ELECTION_WAIT_MS),
+      ),
+    ]);
+
+    if (winner === 'timeout') {
+      // Steal: forcibly take the lock from the ghost leader. The previous
+      // callback gets aborted by the browser; we run `becomeLeader` from
+      // this new callback. `steal: true` is Chromium-only — Firefox/Safari
+      // SPAs would fall through to `'failed'`. Since the data-browser
+      // targets Chromium-class browsers, this covers the production path;
+      // for other engines, manual tab close remains the workaround.
+      console.warn(
+        `[ClientDb] no leader-announce in ${LEADER_ELECTION_WAIT_MS}ms; stealing OPFS lock from suspected ghost leader`,
+      );
+      this.requestLeaderLock(baseUrl, true);
+
+      // Wait for the steal callback to actually run `becomeLeader`. Cap the
+      // wait so a non-Chromium engine (or a browser bug) surfaces a real
+      // error instead of hanging.
+      const stolen = await Promise.race([
+        this.leadershipGained.then(() => 'stolen' as const),
+        new Promise<'still-stuck'>(resolve =>
+          setTimeout(() => resolve('still-stuck'), LEADER_ELECTION_WAIT_MS),
+        ),
+      ]);
+
+      if (stolen === 'still-stuck') {
+        this.role = 'failed';
+        this._initError = new Error(
+          `ClientDb leadership election failed: lock-steal did not yield ownership within ${LEADER_ELECTION_WAIT_MS}ms. The browser may not support \`navigator.locks.request({ steal: true })\` (Chromium-only). Close other tabs of this origin and reload.`,
+        );
+        console.warn('[ClientDb]', this._initError.message);
+        return;
+      }
+    }
+
+    this.ready = true;
+  }
+
+  /**
+   * Bid for `LEADER_LOCK`. Detached from the await chain — the callback's
+   * "hold forever" promise (line below) is what keeps the lock owned
+   * until tab close. `steal: true` is used by the recovery path in
+   * `doInit` to forcibly take the lock from a ghost leader (a previous
+   * holder whose BC listener is dead).
+   *
+   * Re-entrancy: `becomeLeader` short-circuits if the worker is already
+   * spawned, so the rare case where the normal queue request finally
+   * fires after we already stole is harmless.
+   */
+  private requestLeaderLock(baseUrl: string | undefined, steal: boolean): void {
+    const opts: LockOptions = steal
+      ? { mode: 'exclusive', steal: true }
+      : { mode: 'exclusive' };
     void navigator.locks
-      .request(LEADER_LOCK, { mode: 'exclusive' }, async () => {
+      .request(LEADER_LOCK, opts, async () => {
         try {
           await this.becomeLeader(baseUrl);
         } catch (e) {
@@ -179,47 +249,25 @@ export class ClientDbWorker {
         });
       })
       .catch(e => {
-        // Typically only rejects if the callback throws.
-        this._initError = e instanceof Error ? e : new Error(String(e));
+        // Rejects if the callback throws OR if our hold was aborted by
+        // another tab stealing the lock. The latter is fine if we're
+        // already past `becomeLeader` (we just lost leadership); only
+        // surface as a hard error if init never completed.
+        if (!this.worker) {
+          this._initError = e instanceof Error ? e : new Error(String(e));
+        }
       });
-
-    // Ping any existing leader so it can announce itself. The announce also
-    // fires unprompted when a tab first becomes leader, so this is mainly for
-    // the case where we open AFTER the leader announced.
-    this.bc.postMessage({ type: 'leader-ping' } satisfies BroadcastMessage);
-
-    // Wait until we either become leader, hear from one, or time out.
-    // The timeout matters when a previous tab on this origin is holding the
-    // OPFS lock without responding to `leader-ping` (e.g. its bundle was
-    // broken from a stale dev-server cache). Without the timeout, every
-    // `await initPromise` and `clientDb.send()` deadlocks the rest of the
-    // app — symptom: "Syncing…" / "Initializing" / resources stuck loading.
-    const winner = await Promise.race([
-      this.leadershipGained.then(() => 'leader' as const),
-      this.leaderObserved.then(() => 'follower' as const),
-      new Promise<'timeout'>(resolve =>
-        setTimeout(() => resolve('timeout'), LEADERSHIP_TIMEOUT_MS),
-      ),
-    ]);
-
-    if (winner === 'timeout') {
-      this.role = 'failed';
-      this._initError = new Error(
-        `ClientDb leadership election timed out after ${LEADERSHIP_TIMEOUT_MS}ms. A stale tab on this origin is holding the OPFS lock without responding to leader-ping. Close it (or all tabs of this origin) and reload.`,
-      );
-      console.warn('[ClientDb]', this._initError.message);
-      return;
-    }
-
-    this.ready = true;
   }
 
   /**
    * Called when our `navigator.locks.request` callback fires. Spawn the
    * worker, init WASM, take ownership of OPFS, and start serving follower
-   * RPCs.
+   * RPCs. Idempotent: if a previous lock callback already ran (e.g. we
+   * issued both a queue-request and a steal-request, and the queue one
+   * resolved last), the second call is a no-op.
    */
   private async becomeLeader(baseUrl?: string): Promise<void> {
+    if (this.worker) return;
     this.worker = new Worker(this.workerUrl, { type: 'module' });
     this.worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
       const { id, type, ...rest } = event.data;

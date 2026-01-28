@@ -20,8 +20,22 @@ impl ClassExtender for TestPlugin {
         vec![FOLDER_CLASS.to_string(), BIRD_CLASS.to_string()]
     }
 
-    fn after_commit(commit: &Commit, resource: &Resource, _is_new: bool) -> Result<(), String> {
+    fn after_commit(commit: &Commit, resource: &Resource, is_new: bool) -> Result<(), String> {
         if !resource.is_a(FOLDER_CLASS) {
+            return Ok(());
+        }
+        // Skip the genesis commit. Renaming during genesis races
+        // user-initiated renames in the auto-focused EditableTitle:
+        // - Genesis lands → plugin emits "My Folder" commit
+        // - User immediately types "Problem" in the still-loading title
+        // - Two concurrent commits set the same property; Loro's
+        //   concurrent-merge rule picks one by peer/lamport (not by
+        //   wall-clock), so the plugin's commit can stick and the
+        //   user's rename is silently lost.
+        // By skipping genesis, the plugin only reacts to renames after
+        // the user has explicitly committed a title, giving a clear
+        // causal order: user-commit → plugin-commit.
+        if is_new {
             return Ok(());
         }
         let config = atomic_plugin::get_config::<Config>()?;

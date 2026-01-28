@@ -187,48 +187,41 @@ export async function setTitle(page: Page, title: string) {
   await page.keyboard.press(
     process.platform === 'darwin' ? 'Meta+a' : 'Control+a',
   );
-  await editableTitle(page).type(title);
-  await page.keyboard.press('Escape');
-
-  // Wait for the *actual* state change: the title is reflected in the
-  // store AND the outbox has drained (so the server has the commit).
-  //
-  // The previous waiter was `waitForCommitOnCurrentResource` matching
-  // ANY /commit response for this subject. That fires on the genesis
-  // commit too — for fresh resources, the genesis arrives before the
-  // name-change commit, so the waiter would return early and the test
-  // could reload before the title commit actually pushed. Under high
-  // parallelism (workers=4/8) that intermittency turned into a
-  // consistent failure: after reload the server still has the
-  // class-name placeholder ("Folder") rather than the typed title.
-  //
-  // Decoding loroUpdate from /commit responses to verify the title
-  // landed is impractical (binary CRDT diff). Instead, poll the
-  // in-page store: when `name === title` AND `pendingDirtyCount === 0`,
-  // we know the title is set locally and synced to the server.
-  await page.waitForFunction(
-    (target: string) => {
-      const w = window as unknown as {
-        store?: {
-          resources: Map<string, { get: (p: string) => unknown }>;
-          getSyncStatus: () => { pendingDirtyCount: number };
-        };
-        location: Location;
-      };
-      const store = w.store;
-      if (!store) return false;
-      const m = /subject=([^&]+)/.exec(w.location.search);
-      if (!m) return false;
-      const subject = decodeURIComponent(m[1]);
-      const r = store.resources.get(subject);
-      if (!r) return false;
-      const name = r.get('https://atomicdata.dev/properties/name');
-      const synced = store.getSyncStatus().pendingDirtyCount === 0;
-      return name === target && synced;
-    },
-    title,
+  // Read the resource subject BEFORE we close the editor — used to
+  // match the /commit POST that carries this rename.
+  const subject = await page.evaluate(() => {
+    const main = document.querySelector('main[about]');
+    return main?.getAttribute('about') ?? '';
+  });
+  // Arm the /commit waiter BEFORE pressing Enter — Playwright's
+  // `waitForResponse` only sees responses that complete AFTER the
+  // call is awaited, so installing it first guarantees we don't
+  // miss a fast post.
+  const commitPosted = page.waitForResponse(
+    r =>
+      r.url().endsWith('/commit') &&
+      r.request().method() === 'POST' &&
+      r.request().postData()?.includes(subject) === true &&
+      r.status() < 400,
     { timeout: 15000 },
   );
+  await editableTitle(page).type(title);
+  await page.keyboard.press('Enter');
+
+  // Wait for the /commit POST carrying this resource to complete
+  // server-side. This is the definitive signal that the rename has
+  // landed — far more reliable than polling `pendingDirtyCount === 0`,
+  // which is trivially true before `useValue`'s debounced save fires
+  // (the outbox doesn't even know about the change yet).
+  //
+  // We deliberately DON'T also poll the local store for `name === title`.
+  // Plugins / class-extender `after_commit` hooks can transform the
+  // commit's value before it's reflected back (e.g. test-plugin
+  // prefixes folder names with "My "), so the local store may end up
+  // with a derived value. The contract of `setTitle` is "the user's
+  // rename has been committed to the server"; what the server (or its
+  // plugins) does next is not setTitle's concern.
+  await commitPosted;
 }
 
 /**
