@@ -123,6 +123,14 @@ pub async fn query_sorted_indexed(
         // and
         // The users minimum starting distance (offset) has been reached
         let in_selection = subjects.len() < limit && i >= q.offset;
+        // Tracks whether this iter step should bump the visible count.
+        // Defaults to true so entries past the page limit still count
+        // (preserving the cheap-pagination behavior). Flipped to false
+        // for in-page entries that don't survive include_external /
+        // auth filtering, so count stays consistent with subjects.len()
+        // for the page the client just received — eliminates the
+        // `totalMembers: N, members: []` drift (issue #286).
+        let mut should_count = true;
         if in_selection {
             let (k, _v) = kv?;
             let (_q_filter, _val, subject_str) = parse_collection_members_key(&k)?;
@@ -130,16 +138,18 @@ pub async fn query_sorted_indexed(
             let subject = Subject::from_raw(subject_str, base_domain.as_deref());
 
             if !q.include_external && !subject.is_local() {
-                continue;
-            }
-
-            if should_include_resource(q) {
+                should_count = false;
+            } else if should_include_resource(q) {
                 if let Ok(resource) = store
                     .get_resource_extended(&subject, true, &q.for_agent)
                     .await
                 {
                     resources.push(resource.to_single());
                     subjects.push(subject);
+                } else {
+                    // Index hit that doesn't resolve for this agent
+                    // (auth-filtered or destroyed-with-stale-index).
+                    should_count = false;
                 }
             } else {
                 subjects.push(subject);
@@ -149,7 +159,9 @@ pub async fn query_sorted_indexed(
         // We iterate over every single resource, even if we don't perform any computation on the items.
         // This helps with pagination, but it comes at a serious performance cost. We might need to change how this works later on.
         // Also, this count does not take into account the `include_external` filter.
-        count += 1;
+        if should_count {
+            count += 1;
+        }
         // https://github.com/atomicdata-dev/atomic-server/issues/290
     }
 
