@@ -782,7 +782,7 @@ pub async fn sync_drive_with_peer_using(
 
     // Build our local sync state
     let drive_subject = crate::Subject::from_raw(drive, store.get_base_domain().as_deref());
-    let drive_subjects = super::engine::collect_drive_subjects(store, &drive_subject);
+    let drive_subjects = super::engine::collect_drive_subjects(store, &drive_subject).await;
     let vvs = super::engine::build_drive_vvs(store, &drive_subjects);
     let drive_hash = super::engine::compute_drive_hash(&vvs);
 
