@@ -504,3 +504,87 @@ describe('Commit parse and apply', () => {
     expect(description).to.equal('My new string');
   });
 });
+
+describe('Store.postCommit caches commit locally', () => {
+  /**
+   * Regression test for the "chatroom message post triggers a
+   * `GET did:ad:commit:<sig>`" trace the user observed in the WS log.
+   * Path: client signs commit → POST /commit → server applies → server
+   * pushes QUERY_UPDATE → UI mounts <Message> → <CommitDetail>
+   * → `useResource(commitSubject)` — which used to miss the local
+   * store (the online drain path didn't materialize commits as
+   * Resources, only `applyPendingCommitsLocally` did) and round-trip
+   * to the server for data we literally just signed.
+   *
+   * Contract under test: after a successful `Store.postCommit(...)`,
+   * the commit's subject MUST be present in `store.resources`, and
+   * MUST carry the `signer` / `createdAt` / `previousCommit` propvals
+   * that <CommitDetail> reads. We mock `client.postCommit` (NOT
+   * `store.postCommit`) so the new materialization step inside
+   * `Store.postCommit` actually runs.
+   */
+  it('adds the just-posted commit to store.resources', async ({ expect }) => {
+    const store = new Store({ serverUrl: 'https://example.com' });
+    store.setServerConnected(true);
+    const agentKeys = await Agent.generateKeyPair();
+    const agentDID = `did:ad:agent:${agentKeys.publicKey}`;
+    const agentProvider = new JSCryptoProvider(agentKeys.privateKey);
+    const signingAgent = new Agent(agentProvider, agentDID);
+    store.setAgent(signingAgent);
+
+    // Mock the LOWER client.postCommit so Store.postCommit's
+    // materialization step still runs. Capture every commit the mock
+    // returns — the signature is the source of truth for the
+    // commit's DID subject and we'll use it directly to look up
+    // the materialized Resource (the resource's `lastCommit`
+    // propval is a URL whose path-tail extraction is unreliable
+    // when the signature itself contains base64 `/` characters).
+    const posted: Commit[] = [];
+    vi.spyOn(store['client'], 'postCommit').mockImplementation(
+      async (commit: Commit) => {
+        const created = {
+          ...commit,
+          id: `https://example.com/commits/${commit.signature}`,
+        } as Commit;
+        posted.push(created);
+        return created;
+      },
+    );
+
+    const resource = new Resource('did:ad:genesis-msg');
+    resource.setStore(store);
+    resource.new = true;
+    await resource.set(
+      core.properties.isA,
+      ['https://atomicdata.dev/classes/Message'],
+      false,
+    );
+    await resource.set(
+      core.properties.description,
+      'hello chatroom',
+      false,
+    );
+
+    resource.markNextCommitAsGenesis();
+    await resource.save();
+
+    // Genesis save: exactly one commit is signed and posted.
+    expect(posted.length).toBe(1);
+    const commitDidSubject = `did:ad:commit:${posted[0].signature}`;
+
+    expect(
+      store.resources.has(commitDidSubject),
+      `expected commit Resource at ${commitDidSubject} in local store after postCommit`,
+    ).toBe(true);
+
+    const commitResource = store.resources.get(commitDidSubject)!;
+    expect(
+      commitResource.get('https://atomicdata.dev/properties/signer'),
+      'commit Resource must carry signer for <CommitDetail>',
+    ).toBe(agentDID);
+    expect(
+      commitResource.get('https://atomicdata.dev/properties/createdAt'),
+      'commit Resource must carry createdAt for <CommitDetail>',
+    ).toBeTypeOf('number');
+  });
+});
