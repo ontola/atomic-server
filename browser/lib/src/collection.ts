@@ -509,45 +509,37 @@ export class Collection {
 
     const hasClientDb = !!this.store.getClientDb();
 
-    // Kick off server `/query` immediately (non-blocking). It typically
-    // resolves faster than OPFS on cold loads (OPFS waits for
-    // `clientDb.waitForReady()` → bootstrap seed). We let it write the
-    // page in the background and only await it if OPFS doesn't answer.
+    // OPFS-first: try the local WASM DB before reaching for the
+    // network. After the initial drive-sync, the WASM DB is the
+    // source of truth for `parent=` queries — an authoritative empty
+    // result lands as `'ok'`. We only fall through to a server
+    // `/query` when OPFS is absent, not ready, or doesn't have the
+    // data yet (returns `'no-db'`).
     //
-    // We DON'T race server vs OPFS here — a previous race attempt let
-    // OPFS resolve first with one snapshot and then the server land
-    // later with a different snapshot, leaving React's `useChildren`
-    // stuck on the first read (it subscribes via `useSyncExternalStore`
-    // to a collection whose internal pages mutated without firing a
-    // notify). Awaiting OPFS first preserves the single
-    // `setPage`-followed-by-rerender shape that React consumers expect.
-    let serverPromise: Promise<void> | undefined;
-    if (this.store.serverConnected) {
-      serverPromise = this.fetchPageFromServer(page).catch(() => undefined);
-    } else if (!hasClientDb) {
-      // No OPFS *and* offline — give the WS a brief window to come up,
-      // otherwise the constructor's `_waitForReady` would resolve to an
-      // empty page and freeze the UI in a "no rows" state.
-      await this.waitForServerConnected(3000);
-      if (this.store.serverConnected) {
-        serverPromise = this.fetchPageFromServer(page).catch(() => undefined);
-      }
-    }
-
-    // Try OPFS. If the drive sync has already completed, an empty
-    // result here is authoritative (the empty-fast path inside
-    // `fetchPageFromLocalDb` returns 'ok' for empty + sync-completed).
+    // History: an earlier revision raced server vs OPFS to win the
+    // race on cold loads. That was paid for by every populated drive
+    // firing a redundant `/query` for every `useChildren` /
+    // `useCollection` mount on every page load — visible in the
+    // user's WS log as 30+ duplicate frames after refresh. Reversed
+    // here. The cold-load case pays at most one extra OPFS wait
+    // before the server fetch fires.
     if (hasClientDb && (await this.fetchPageFromLocalDb(page)) === 'ok') {
-      // OPFS won. The in-flight server fetch will land later and
-      // overwrite with identical data — non-blocking, non-fatal.
       return;
     }
 
-    // OPFS missed (or absent). Wait for the server result we kicked
-    // off above. If we never started one (offline + no clientDb),
-    // there's nothing to wait for — leave the page empty.
-    if (serverPromise) {
-      await serverPromise;
+    if (this.store.serverConnected) {
+      await this.fetchPageFromServer(page).catch(() => undefined);
+      return;
+    }
+
+    if (!hasClientDb) {
+      // Offline AND no OPFS: brief window for the WS to come up.
+      // Without this, the constructor's `_waitForReady` resolves to
+      // an empty page and the UI freezes in a "no rows" state.
+      await this.waitForServerConnected(3000);
+      if (this.store.serverConnected) {
+        await this.fetchPageFromServer(page).catch(() => undefined);
+      }
     }
   }
 

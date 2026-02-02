@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { before } from './test-utils';
+import { before, editableTitle } from './test-utils';
 
 /**
  * Regression test: after creating a fresh dev-drive and refreshing the
@@ -73,5 +73,130 @@ test.describe('query GETs after refresh', () => {
         'be a did:ad:... DID, never a server-origin URL:\n' +
         badRequests.map(u => '  ' + u).join('\n'),
     ).toEqual([]);
+  });
+
+  /**
+   * Regression test: after a hard refresh on a drive whose contents are
+   * already in OPFS, the collection layer must serve queries from the
+   * local WASM DB. No `/query?…` WS frames and no per-subject GETs for
+   * already-cached resources should fire.
+   *
+   * Background (user-observed): refreshing a populated drive produced
+   * 30+ WS GET frames — duplicate `/query?parent=drive` plus per-
+   * subject GETs for every child the drive already had cached. The
+   * `Collection.fetchPage` race kicks a `fetchPageFromServer` in
+   * parallel with the local-DB lookup; when local wins, the server
+   * response is pure wasted bandwidth.
+   *
+   * Contract: on a fresh dev-drive with at least one child resource,
+   * after a hard refresh, count the `→ GET` WS frames issued AFTER the
+   * initial drive `SUB` resolves. The expected post-fix count is 0.
+   * Per-subject WS GETs are encoded as a single subject string per
+   * frame (e.g. `did:ad:…`). `/query?` GETs are full URLs.
+   */
+  test('refresh on a populated drive does not refetch known resources from server', async ({
+    page,
+  }) => {
+    // Seed the drive with one document so children-of-drive isn't empty.
+    await page
+      .getByTestId('sidebar')
+      .getByRole('button', { name: 'New Document' })
+      .click();
+    await expect(editableTitle(page)).toBeVisible({ timeout: 10000 });
+
+    // Wait until everything is committed and synced — including the
+    // OPFS persist of the new document. If we reload before OPFS has
+    // the data, the post-reload server queries are legitimate (cold
+    // load), not the bug we're testing.
+    await page.waitForFunction(
+      () => {
+        const w = window as any;
+        return (
+          w.store?.getSyncStatus?.()?.pendingDirtyCount === 0 &&
+          w.store?.getClientDb?.()?.isReady === true
+        );
+      },
+      undefined,
+      { timeout: 30000 },
+    );
+
+    // Belt-and-braces: give the OPFS put queue a moment to drain so
+    // the post-reload bootstrap fingerprint matches.
+    await page.waitForTimeout(500);
+
+    // Wire WS listeners BEFORE reload so we don't miss any framesent.
+    // WS v2 framing is BINARY — see `ws-v2.ts:Tag`. GET = 0x10, encoded
+    // as [0x10][u16 requestId][subject_bytes]. Playwright's framesent
+    // gives us the raw payload as Buffer (Node) or string of bytes
+    // (browser). We sniff the first byte for the GET tag.
+    const WS_TAG_GET = 0x10;
+    const wsGetFrames: string[] = [];
+    page.on('websocket', ws => {
+      ws.on('framesent', frame => {
+        const raw = frame.payload;
+        if (!raw) return;
+        // Buffer in Node, ArrayBuffer / string in browser context.
+        let firstByte: number | undefined;
+        let asString: string;
+        if (typeof raw === 'string') {
+          firstByte = raw.charCodeAt(0);
+          asString = raw;
+        } else {
+          // Buffer or Uint8Array
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const b = raw as any;
+          firstByte = b[0];
+          asString = b.toString('utf8');
+        }
+        if (firstByte === WS_TAG_GET) {
+          // Skip tag + 2-byte requestId; subject is the rest as UTF-8.
+          wsGetFrames.push(asString.slice(3, 253));
+        }
+      });
+    });
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+
+    // Wait for steady state: WS connected, ClientDb ready, and the
+    // OPFS bootstrap-fingerprint check has completed (logged as
+    // "skipping seed" when the fingerprint matches).
+    await page.waitForFunction(
+      () => {
+        const w = window as any;
+        return (
+          w.store?.getSyncStatus?.()?.serverConnected === true &&
+          w.store?.getClientDb?.()?.isReady === true
+        );
+      },
+      undefined,
+      { timeout: 30000 },
+    );
+    // Settle window for any deferred fetches.
+    await page.waitForTimeout(2000);
+
+    // No `/query?` frames should fire at all — those are exclusively
+    // collection queries that the local WASM DB can serve.
+    const queryFrames = wsGetFrames.filter(f => f.includes('/query?'));
+    expect(
+      queryFrames,
+      'After refresh, no `/query?` WS GET should fire (collection layer ' +
+        'must serve from local WASM DB).\n' +
+        queryFrames.map(u => '  ' + u).join('\n'),
+    ).toEqual([]);
+
+    // Per-subject GETs may fire for resources that aren't in OPFS yet
+    // when the first `useResource(...)` mounts (the bootstrap order is
+    // racy — see store.ts:fetchResourceWithLocalFallback). The
+    // regression we care about is the storm: pre-fix the user saw
+    // 20–30+ frames; post-fix we want a handful at most.
+    const subjectFrames = wsGetFrames.filter(f => !f.includes('/query?'));
+    expect(
+      subjectFrames.length,
+      'After refresh, the per-subject WS GET count should be tiny — pre-fix ' +
+        'this routinely hit 20+ on a populated drive. Found ' +
+        subjectFrames.length +
+        ':\n' +
+        subjectFrames.map(u => '  ' + u).join('\n'),
+    ).toBeLessThanOrEqual(5);
   });
 });
