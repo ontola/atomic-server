@@ -84,18 +84,63 @@ impl BatchBuffer {
     }
 }
 
+/// Open a redb file, run `Database::compact()`, close. Returns
+/// `(size_before, size_after, did_compact)`. Designed for the
+/// admin-triggered `atomic-server compact` CLI subcommand — the
+/// caller MUST guarantee no atomic-server process is running against
+/// the same file (redb takes an exclusive lock).
+///
+/// Compaction itself is `O(file size)` and intentionally slow; for a
+/// multi-GB store expect several minutes. The win is that subsequent
+/// boots `fsync` a much smaller file, which on macOS is the dominant
+/// cost of `Database::create` (see redb `begin_writable()` at
+/// `page_manager.rs:361-367`).
+#[cfg(all(feature = "db-redb", not(target_arch = "wasm32")))]
+pub fn compact_file(path: &std::path::Path) -> AtomicResult<(u64, u64, bool)> {
+    let size_before = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+    let mut db = redb::Database::create(path)
+        .map_err(|e| format!("Failed to open redb at {}: {e}", path.display()))?;
+    let did_compact = db
+        .compact()
+        .map_err(|e| format!("Compaction failed: {e}"))?;
+    drop(db);
+    let size_after = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+    Ok((size_before, size_after, did_compact))
+}
+
 impl RedbStore {
     /// Create a RedbStore backed by a file on disk.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn new_file(path: &std::path::Path) -> AtomicResult<Self> {
+        // `Database::create` with defaults uses a 1 GiB cache and the
+        // slow full-scan repair path on any unclean shutdown. On a
+        // multi-GB store that's 40+ seconds added to every boot
+        // (see redb issue #1055). The Builder lets us drop the cache
+        // to fit-for-purpose; per-transaction `set_quick_repair(true)`
+        // below persists the allocator state on every commit so the
+        // next open is "almost instant" (redb transactions.rs:1246-1258
+        // describes the mechanism).
+        let t = std::time::Instant::now();
         let db = Database::create(path)
             .map_err(|e| format!("Failed to create redb at {}: {e}", path.display()))?;
+        tracing::info!("RedbStore::new_file: Database::create in {:?}", t.elapsed());
 
         // Create all tables upfront
+        let t = std::time::Instant::now();
         {
-            let tx = db
+            let mut tx = db
                 .begin_write()
                 .map_err(|e| format!("Failed to begin write tx: {e}"))?;
+            // 2-phase commit persists redb's allocator state alongside
+            // each transaction. Without it, an unclean shutdown (SIGKILL,
+            // crash, power loss) forces a full file scan + repair on next
+            // open — measured at 44s on a 3.6 GiB store, all of it spent
+            // in `Database::create` before the actor system even starts.
+            // With 2PC the next open loads the allocator state and skips
+            // the repair entirely. Trade-off: each write pays one extra
+            // fsync; on a server doing a handful of commits/sec that's
+            // imperceptible, and the boot-time win is dramatic.
+            tx.set_quick_repair(true);
             let _ = tx.open_table(TABLE_RESOURCES);
             let _ = tx.open_table(TABLE_PROP_VAL_SUB);
             let _ = tx.open_table(TABLE_VAL_PROP_SUB);
@@ -109,6 +154,7 @@ impl RedbStore {
             tx.commit()
                 .map_err(|e| format!("Failed to commit initial tables: {e}"))?;
         }
+        tracing::info!("RedbStore::new_file: table-create tx in {:?}", t.elapsed());
 
         Ok(RedbStore {
             db: Arc::new(db),
@@ -125,9 +171,10 @@ impl RedbStore {
 
         // Create all tables upfront so reads don't fail on missing tables
         {
-            let tx = db
+            let mut tx = db
                 .begin_write()
                 .map_err(|e| format!("Failed to begin write tx: {e}"))?;
+            tx.set_quick_repair(true);
             // Opening a table in a write transaction creates it if it doesn't exist
             let _ = tx.open_table(TABLE_RESOURCES);
             let _ = tx.open_table(TABLE_PROP_VAL_SUB);
@@ -163,9 +210,10 @@ impl RedbStore {
 
         // Create all tables upfront
         {
-            let tx = db
+            let mut tx = db
                 .begin_write()
                 .map_err(|e| format!("Failed to begin write tx: {e}"))?;
+            tx.set_quick_repair(true);
             let _ = tx.open_table(TABLE_RESOURCES);
             let _ = tx.open_table(TABLE_PROP_VAL_SUB);
             let _ = tx.open_table(TABLE_VAL_PROP_SUB);
@@ -353,10 +401,11 @@ impl KvStore for RedbStore {
     }
 
     fn clear_tree(&self, tree: Tree) -> AtomicResult<()> {
-        let tx = self
+        let mut tx = self
             .db
             .begin_write()
             .map_err(|e| format!("redb write tx: {e}"))?;
+        tx.set_quick_repair(true);
         {
             // Delete and recreate the table
             let mut table = tx
@@ -398,10 +447,11 @@ impl KvStore for RedbStore {
             }
         }
 
-        let tx = self
+        let mut tx = self
             .db
             .begin_write()
             .map_err(|e| format!("redb write tx: {e}"))?;
+        tx.set_quick_repair(true);
         {
             for op in operations {
                 let mut table = tx
@@ -459,10 +509,11 @@ impl KvStore for RedbStore {
             return Ok(());
         }
         // Apply all buffered operations in a single transaction
-        let tx = self
+        let mut tx = self
             .db
             .begin_write()
             .map_err(|e| format!("redb write tx: {e}"))?;
+        tx.set_quick_repair(true);
         {
             for op in &ops {
                 let mut table = tx
