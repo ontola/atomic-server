@@ -591,7 +591,17 @@ test.describe('data-browser', async () => {
     await page.getByLabel('Shortname').fill('test-shortname');
     await page.getByLabel('Description').fill('test-description');
     await page.getByRole('button', { name: 'Save' }).click();
+    // Save fires sign+commit+navigate-to-/show. The next step opens the
+    // resource context menu, which only exists on /show. Without this
+    // wait the click hit the form page's context menu (or an in-flight
+    // /new), and the subsequent "edit" menu item didn't navigate to
+    // /app/edit — leaving the test on /show and missing the
+    // "Add an item to the recommends list" button.
+    await page.waitForURL(/\/app\/show/, { timeout: 15000 });
     await contextMenuClick('edit', page);
+    // `contextMenuClick('edit')` fires `navigate(editURL(subject))` which is
+    // async. Wait for /app/edit so the recommends input has rendered.
+    await page.waitForURL(/\/app\/edit/, { timeout: 10000 });
 
     await page
       .locator('[title="Add an item to the recommends list"]')
