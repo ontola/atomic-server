@@ -1,32 +1,44 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { FaCheck, FaCopy } from 'react-icons/fa';
 import { styled } from 'styled-components';
 import { Button } from './Button';
+import clsx from 'clsx';
 
 interface CodeBlockProps {
   content?: string;
   loading?: boolean;
   wordWrap?: boolean;
+  className?: string;
+  onCopy?: () => void;
 }
 
 export function CodeBlock({
   content,
   loading,
   wordWrap = false,
+  className,
+  onCopy,
 }: CodeBlockProps) {
+  const preRef = useRef<HTMLPreElement>(null);
   const [isCopied, setIsCopied] = useState<string | undefined>(undefined);
 
   function copyToClipboard() {
     setIsCopied(content);
     navigator.clipboard.writeText(content || '');
     toast.success('Copied to clipboard');
+    onCopy?.();
   }
 
   return (
     <CodeBlockStyled
+      onCopy={() => {
+        onCopy?.();
+        setIsCopied(content);
+      }}
+      ref={preRef}
       data-code-content={content}
-      className={wordWrap ? 'word-wrap' : ''}
+      className={clsx({ 'word-wrap': wordWrap }, className)}
     >
       {loading ? (
         'loading...'

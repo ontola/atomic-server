@@ -23,6 +23,7 @@ export interface InternalDialogProps {
   show: boolean;
   onClose: (success: boolean) => void;
   onClosed: () => void;
+  disableLightDismiss?: boolean;
   width?: CSS.Property.Width;
 }
 
@@ -57,7 +58,7 @@ type DialogSlotComponent = React.FC<
  * return (
  * <button onClick={show}>Open</button>
  * <Dialog {...props}>
- *    <DialogTitle>Title</DialogTitle>
+ *    <Dialog.Title>Title</Dialog.Title>
  *    ...
  *  </Dialog>
  *  );
@@ -82,6 +83,7 @@ const InnerDialog: React.FC<React.PropsWithChildren<InternalDialogProps>> = ({
   children,
   show,
   width,
+  disableLightDismiss = false,
   onClose,
   onClosed,
 }) => {
@@ -100,6 +102,10 @@ const InnerDialog: React.FC<React.PropsWithChildren<InternalDialogProps>> = ({
     React.MouseEventHandler<HTMLDialogElement>
   >(
     e => {
+      if (disableLightDismiss) {
+        return;
+      }
+
       if (!isTopLevel) {
         // Don't react to closing events if the dialog is not on top.
 
@@ -113,16 +119,49 @@ const InnerDialog: React.FC<React.PropsWithChildren<InternalDialogProps>> = ({
         cancelDialog();
       }
     },
-    [cancelDialog, isTopLevel],
+    [cancelDialog, isTopLevel, disableLightDismiss],
   );
+
+  // Prevent native dialog cancel event when disableLightDismiss is true
+  // This must be set up before the dialog is shown
+  // Only needed for safary right now because it doesn't support the closedby attribute.
+  // https://caniuse.com/wf-dialog-closedby
+  useEffect(() => {
+    const dialog = dialogRef.current;
+
+    if (!dialog) {
+      return;
+    }
+
+    const handleCancel = (e: Event) => {
+      if (disableLightDismiss) {
+        e.preventDefault();
+        e.stopPropagation();
+      } else if (isTopLevel && !hasOpenInnerPopup) {
+        // Only handle cancel if we're the top level dialog
+        // The useHotkeys below will call cancelDialog
+      }
+    };
+
+    // Use capture phase to ensure we get the event first
+    dialog.addEventListener('cancel', handleCancel, true);
+
+    return () => {
+      dialog.removeEventListener('cancel', handleCancel, true);
+    };
+  }, [disableLightDismiss, isTopLevel, hasOpenInnerPopup]);
 
   // Close the dialog when the escape key is pressed
   useHotkeys(
     'esc',
     () => {
-      cancelDialog();
+      if (!disableLightDismiss) {
+        cancelDialog();
+      }
     },
-    { enabled: show && !hasOpenInnerPopup && isTopLevel },
+    {
+      enabled: show && !hasOpenInnerPopup && isTopLevel,
+    },
   );
 
   // When closing the `data-closing` attribute must be set before rendering so the animation has started when the regular useEffect is called.
@@ -158,15 +197,18 @@ const InnerDialog: React.FC<React.PropsWithChildren<InternalDialogProps>> = ({
       onMouseDown={handleOutSideClick}
       $width={width}
       data-top-level={isTopLevel}
+      closedby={disableLightDismiss ? 'none' : 'closerequest'}
     >
       <StyledInnerDialog ref={innerDialogRef}>
         <PopoverContainer>
           <DropdownContainer>
-            <CloseButtonSlot slot='close'>
-              <Button icon onClick={cancelDialog} aria-label='close'>
-                <FaTimes />
-              </Button>
-            </CloseButtonSlot>
+            {!disableLightDismiss && (
+              <CloseButtonSlot slot='close'>
+                <Button icon onClick={cancelDialog} aria-label='close'>
+                  <FaTimes />
+                </Button>
+              </CloseButtonSlot>
+            )}
             {children}
           </DropdownContainer>
         </PopoverContainer>

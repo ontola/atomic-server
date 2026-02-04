@@ -19,6 +19,7 @@ const TokenRoutePage: React.FunctionComponent = () => {
   const [token, setToken] = React.useState('');
   const { agent } = useSettings();
   const [server] = useServerURL();
+
   React.useEffect(() => {
     async function getToken() {
       if (agent) {
@@ -28,7 +29,7 @@ const TokenRoutePage: React.FunctionComponent = () => {
     }
 
     getToken();
-  }, [agent]);
+  }, [agent, server]);
 
   return (
     <Main>

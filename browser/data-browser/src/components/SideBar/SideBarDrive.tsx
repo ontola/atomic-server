@@ -16,7 +16,7 @@ import { paths } from '../../routes/paths';
 import { Button } from '../Button';
 import { ResourceSideBar } from './ResourceSideBar/ResourceSideBar';
 import { SideBarHeader } from './SideBarHeader';
-import { ErrorLook } from '../ErrorLook';
+import { SimpleErrorBlock } from '../ErrorLook';
 import { DriveSwitcher } from './DriveSwitcher';
 import { Row } from '../Row';
 import { useCurrentSubject } from '../../helpers/useCurrentSubject';
@@ -70,6 +70,10 @@ export function SideBarDrive({
     });
   }, [store, currentResource]);
 
+  const driveName = driveResource.isUnauthorized()
+    ? 'Unauthorized'
+    : title || drive;
+
   return (
     <>
       <SideBarHeader>
@@ -85,7 +89,7 @@ export function SideBarDrive({
           }}
         >
           <DriveTitle data-testid='current-drive-title'>
-            {title || drive}{' '}
+            {driveName}{' '}
           </DriveTitle>
         </TitleButton>
         <HeadingButtonWrapper gap='0'>
@@ -126,7 +130,7 @@ export function SideBarDrive({
                   (driveResource.isUnauthorized()
                     ? agent
                       ? 'unauthorized'
-                      : driveResource.error.message
+                      : 'This drive is private, sign in to view it'
                     : driveResource.error.message)}
               </SideBarErr>
             )}
@@ -185,8 +189,9 @@ const TitleButton = styled(Button)<{ current?: boolean }>`
   }
 `;
 
-const SideBarErr = styled(ErrorLook)`
-  padding-left: ${props => props.theme.margin}rem;
+const SideBarErr = styled(SimpleErrorBlock)`
+  margin-inline-start: ${props => props.theme.size(2)};
+  margin-inline-end: ${props => props.theme.size()};
 `;
 
 const ListWrapper = styled.div`

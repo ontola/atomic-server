@@ -1,7 +1,5 @@
-import { sign, getPublicKey, utils } from '@noble/ed25519';
 import stringify from 'fast-json-stable-stringify';
 // https://github.com/paulmillr/noble-ed25519/issues/38
-import { sha512 } from '@noble/hashes/sha512';
 
 import { YLoader } from './yjs.js';
 import { Client } from './client.js';
@@ -16,8 +14,7 @@ import {
 import { decodeB64, encodeB64 } from './base64.js';
 import { commits } from './ontologies/commits.js';
 import { core } from './ontologies/core.js';
-
-utils.sha512 = msg => Promise.resolve(sha512(msg));
+import type { Agent } from './agent.js';
 
 /** A {@link Commit} without its signature, signer and timestamp */
 export interface CommitBuilderI {
@@ -185,12 +182,8 @@ export class CommitBuilder {
    * Signs the commit using the privateKey of the Agent, and returns a full
    * Commit which is ready to be sent to an Atomic-Server `/commit` endpoint.
    */
-  public async sign(privateKey: string, agentSubject: string): Promise<Commit> {
-    const commit = await this.signAt(
-      agentSubject,
-      privateKey,
-      getTimestampNow(),
-    );
+  public async sign(agent: Agent): Promise<Commit> {
+    const commit = await this.signAt(agent, getTimestampNow());
 
     return commit;
   }
@@ -241,15 +234,13 @@ export class CommitBuilder {
 
   /** Creates a signature for a Commit using the private Key of some Agent. */
   public async signAt(
-    /** Subject URL of the Agent signing the Commit */
-    agent: string,
-    /** Base64 serialized private key matching the public key of the agent */
-    privateKey: string,
+    /** The agent signing the commit */
+    agent: Agent,
     /** Time of signing in millisecons since unix epoch */
     createdAt: number,
   ): Promise<Commit> {
-    if (agent === undefined) {
-      throw new Error('No agent passed to sign commit');
+    if (agent.subject === undefined) {
+      throw new Error('Cannot sign commit if the agent has no subject');
     }
 
     if (!this.hasUnsavedChanges()) {
@@ -259,10 +250,10 @@ export class CommitBuilder {
     const commitPreSigned: UnsignedCommit = {
       ...this.clone().toPlainObject(),
       createdAt,
-      signer: agent,
+      signer: agent.subject,
     };
     const serializedCommit = serializeDeterministically({ ...commitPreSigned });
-    const signature = await signToBase64(serializedCommit, privateKey);
+    const signature = await agent.sign(serializedCommit);
     const commitPostSigned: Commit = {
       ...commitPreSigned,
       signature,
@@ -388,53 +379,6 @@ export function serializeDeterministically(
 //   const serializedCommit = serializeDeterministically(commit);
 //   verify();
 // }
-
-/**
- * Signs a string using a base64 encoded ed25519 private key. Outputs a base64
- * encoded ed25519 signature
- */
-export const signToBase64 = async (
-  message: string,
-  privateKeyBase64: string,
-): Promise<string> => {
-  const privateKeyArrayBuffer = decodeB64(privateKeyBase64);
-  const privateKeyBytes: Uint8Array = new Uint8Array(privateKeyArrayBuffer);
-  const utf8Encode = new TextEncoder();
-  const messageBytes: Uint8Array = utf8Encode.encode(message);
-  const signatureHex = await sign(messageBytes, privateKeyBytes);
-  const signatureBase64 = encodeB64(signatureHex);
-
-  return signatureBase64;
-};
-
-/** From base64 encoded private key */
-export const generatePublicKeyFromPrivate = async (
-  privateKey: string,
-): Promise<string> => {
-  const privateKeyArrayBuffer = decodeB64(privateKey);
-  const privateKeyBytes: Uint8Array = new Uint8Array(privateKeyArrayBuffer);
-  const publickey = await getPublicKey(privateKeyBytes);
-  const publicBase64 = encodeB64(publickey);
-
-  return publicBase64;
-};
-
-interface KeyPair {
-  publicKey: string;
-  privateKey: string;
-}
-
-export async function generateKeyPair(): Promise<KeyPair> {
-  const privateBytes = utils.randomPrivateKey();
-  const publicBytes = await getPublicKey(privateBytes);
-  const privateKey = encodeB64(privateBytes);
-  const publicKey = encodeB64(publicBytes);
-
-  return {
-    publicKey,
-    privateKey,
-  };
-}
 
 export function parseCommitResource(resource: Resource): Commit {
   const commit: Commit = {

@@ -1,68 +1,111 @@
 import { Client } from './client.js';
-import { generatePublicKeyFromPrivate } from './commit.js';
+import {
+  JSCryptoProvider,
+  SubtleCryptoProvider,
+  type CryptoProvider,
+} from './CryptoProvider.js';
 import { AtomicError, ErrorType } from './error.js';
 import { core } from './ontologies/core.js';
 
+export interface StoredAgent {
+  subject: string;
+  keys: CryptoKeyPair;
+}
+
 /**
- * An Agent is a user or machine that can write data to an Atomic Server. An
- * Agent *might* not have subject, sometimes. https://atomicdata.dev/classes/Agent
+ * An Agent is a user or machine that can read and/or write data to an Atomic Server. An
+ * Agent *might* not have a subject. https://atomicdata.dev/classes/Agent
  */
 export class Agent implements AgentInterface {
-  public privateKey: string;
-  public publicKey?: string;
-  public subject?: string;
-
   public client: Client;
+  private _subject?: string;
 
-  public constructor(privateKey: string, subject?: string) {
+  #cryptoProvider: CryptoProvider;
+
+  public constructor(provider: CryptoProvider, subject?: string) {
     if (subject) {
       Client.tryValidSubject(subject);
     }
 
-    if (!privateKey) {
-      throw new AtomicError(`Agent requires a private key`, ErrorType.Client);
-    }
-
     this.client = new Client();
-    this.subject = subject;
-    this.privateKey = privateKey;
+    this._subject = subject;
+    this.#cryptoProvider = provider;
+  }
+
+  public get subject(): string | undefined {
+    return this._subject;
   }
 
   /**
    * Parses a base64 JSON object containing a privateKey and subject, and
    * constructs an Agent from that.
    */
-  public static fromSecret(secretB64: string): Agent {
-    const agentBytes = atob(secretB64);
-    const parsed = JSON.parse(agentBytes);
-    const { privateKey, subject } = parsed;
-    const agent = new Agent(privateKey, subject);
+  public static fromSecret(secretB64: string, type?: 'subtle'): Promise<Agent>;
+  public static fromSecret(secretB64: string, type: 'js'): Agent;
+  public static fromSecret(
+    secretB64: string,
+    type: 'js' | 'subtle' = 'subtle',
+  ): Agent | Promise<Agent> {
+    if (type === 'js') {
+      const [provider, subject] = JSCryptoProvider.fromSecret(secretB64);
 
-    return agent;
+      return new Agent(provider, subject);
+    }
+
+    return new Promise((resolve, reject) => {
+      SubtleCryptoProvider.createKeysFromSecret(secretB64)
+        .then(([keys, subject]) => {
+          const provider = new SubtleCryptoProvider(keys);
+          const agent = new Agent(provider, subject);
+
+          resolve(agent);
+        })
+        .catch(reject);
+    });
+  }
+
+  public static fromCryptoKeyPair(
+    keyPair: CryptoKeyPair,
+    subject?: string,
+  ): Agent {
+    const provider = new SubtleCryptoProvider(keyPair);
+
+    return new Agent(provider, subject);
+  }
+
+  /**
+   * Builds a secret from a private key and a subject. Give this to a user to store safely or store it in a database.
+   */
+  public static buildSecret(privateKey: string, subject: string): string {
+    const objJsonStr = JSON.stringify({
+      privateKey: privateKey,
+      subject: subject,
+    });
+
+    return btoa(objJsonStr);
   }
 
   /** Returns public key or generates one using the private key */
   public async getPublicKey(): Promise<string> {
-    if (!this.publicKey) {
-      const pubKey = await generatePublicKeyFromPrivate(this.privateKey);
-      this.publicKey = pubKey;
-    }
+    const publicKey = await this.#cryptoProvider.getPublicKey();
 
-    return this.publicKey;
+    return publicKey;
+  }
+
+  public async sign(message: string): Promise<string> {
+    return this.#cryptoProvider.sign(message);
+  }
+
+  public createSignature(subject: string, timestamp: number): Promise<string> {
+    const message = `${subject} ${timestamp}`;
+
+    return this.sign(message);
   }
 
   /**
    * Returns a base64 encoded JSON object containing the Subject and the Private
    * Key. Used for signing in with one string
    */
-  public buildSecret(): string {
-    const objJsonStr = JSON.stringify({
-      privateKey: this.privateKey,
-      subject: this.subject,
-    });
-
-    return btoa(objJsonStr);
-  }
 
   /** Fetches the public key for the agent, checks if it matches with the current one */
   public async verifyPublicKeyWithServer(): Promise<void> {
@@ -93,8 +136,6 @@ export class Agent implements AgentInterface {
  * Agent *might* not have subject, sometimes. https://atomicdata.dev/classes/Agent
  */
 export interface AgentInterface {
-  /** https://atomicdata.dev/properties/privateKey */
-  privateKey: string;
   /** https://atomicdata.dev/properties/publicKey */
   publicKey?: string;
   /** URL of the Agent */
