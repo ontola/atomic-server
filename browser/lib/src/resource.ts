@@ -730,7 +730,7 @@ export class Resource<C extends OptionalClass = any> {
       );
     }
 
-    const commit = await newCommitBuilder.sign(agent.privateKey, agent.subject);
+    const commit = await newCommitBuilder.sign(agent);
     const endpoint = new URL(this.subject).origin + `/commit`;
     await this.store.postCommit(commit, endpoint);
     this.store.removeResource(this.subject);
@@ -839,10 +839,7 @@ export class Resource<C extends OptionalClass = any> {
     // Cloning the CommitBuilder to prevent race conditions, and keeping a back-up of current state for when things go wrong during posting.
     const oldCommitBuilder = this.commitBuilder.clone();
     this.commitBuilder = new CommitBuilder(this.subject);
-    const commit = await oldCommitBuilder.sign(
-      agent.privateKey,
-      agent.subject!,
-    );
+    const commit = await oldCommitBuilder.sign(agent);
     // Add the signature to the list of applied ones, to prevent applying it again when the server
     this.appliedCommitSignatures.add(commit.signature);
     this.loading = false;

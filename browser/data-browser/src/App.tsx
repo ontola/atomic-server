@@ -2,7 +2,7 @@ import { StoreContext, Store, enableYjs } from '@tomic/react';
 
 import { isDev } from './config';
 import { registerHandlers } from './handlers';
-import { getAgentFromLocalStorage } from './helpers/agentStorage';
+import { getAgentFromIDB } from './helpers/agentStorage';
 import { registerCustomCreateActions } from './components/forms/NewForm/CustomCreateActions';
 import { serverURLStorage } from './helpers/serverURLStorage';
 
@@ -25,7 +25,7 @@ function fixDevUrl(url: string) {
  */
 
 const serverUrl = fixDevUrl(serverURLStorage.get() ?? window.location.origin);
-const initalAgent = getAgentFromLocalStorage();
+const initalAgent = await getAgentFromIDB();
 
 // Initialize the store
 const store = new Store({
