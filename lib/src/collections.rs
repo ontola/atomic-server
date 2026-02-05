@@ -8,6 +8,7 @@ use crate::{
     urls, Resource, Storelike, Value,
 };
 
+#[cfg(feature = "db")]
 pub fn get_collection_class_extender() -> ClassExtender {
     ClassExtender::builder()
         .id("collection".to_string())
@@ -60,7 +61,7 @@ impl CollectionBuilder {
     /// Note that this does not calculate any members, and it does not generate any pages.
     /// If that is what you need, use `.into_resource`
     pub async fn to_resource(&self, store: &impl Storelike) -> AtomicResult<crate::Resource> {
-        let mut resource = store.get_resource_new(&self.subject).await;
+        let mut resource = store.get_resource_new(&self.subject.as_str().into()).await;
         resource.set_class(urls::COLLECTION);
         if let Some(val) = &self.property {
             resource
@@ -431,7 +432,7 @@ pub async fn construct_collection_from_params(
         };
     }
     let collection_builder = crate::collections::CollectionBuilder {
-        subject: resource.get_subject().into(),
+        subject: resource.get_subject().to_string(),
         property,
         value,
         sort_by,
@@ -910,7 +911,7 @@ mod test {
             .clone();
         let collections_collection = store
             .get_resource_extended(
-                &format!("{}/collections", store.get_server_url().unwrap()),
+                &format!("{}/collections", store.get_server_url().unwrap()).into(),
                 false,
                 &ForAgent::Public,
             )
@@ -943,7 +944,7 @@ mod test {
 
         let collection_page_size = store
             .get_resource_extended(
-                "https://atomicdata.dev/classes?page_size=1",
+                &"https://atomicdata.dev/classes?page_size=1".into(),
                 false,
                 &ForAgent::Public,
             )
@@ -959,7 +960,7 @@ mod test {
         );
         let collection_page_nr = store
             .get_resource_extended(
-                "https://atomicdata.dev/classes?current_page=2&page_size=1",
+                &"https://atomicdata.dev/classes?current_page=2&page_size=1".into(),
                 false,
                 &ForAgent::Public,
             )

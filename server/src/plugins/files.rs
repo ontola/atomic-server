@@ -64,7 +64,7 @@ fn on_after_commit(
 
         let correct_subject = format!("{}/files/{}", store.get_server_url()?, file_name);
 
-        if resource.get_subject() != &correct_subject {
+        if resource.get_subject().as_str() != correct_subject {
             return Err(AtomicError::from(format!(
                 "Internal ID {} does not match resource subject {}",
                 file_name,

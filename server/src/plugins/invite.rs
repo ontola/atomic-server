@@ -42,7 +42,7 @@ pub fn construct_invite_redirect<'a>(
             (Some(public_key), None) => {
                 let new_agent = Agent::new_from_public_key(store, &public_key)?;
                 // Create an agent if there is none
-                match store.get_resource(&new_agent.subject).await {
+                match store.get_resource(&new_agent.subject.clone().into()).await {
                     Ok(_found) => {}
                     Err(_) => {
                         new_agent.to_resource()?.save_locally(store).await?;
@@ -80,7 +80,7 @@ pub fn construct_invite_redirect<'a>(
             .to_string();
 
         store
-            .get_resource(target)
+            .get_resource(&target.clone().into())
             .await
             .map_err(|_| format!("Target for invite does not exist: {}", target))?;
 
@@ -117,7 +117,7 @@ pub fn construct_invite_redirect<'a>(
                 .signer;
         hierarchy::check_write(
             store,
-            &store.get_resource(target).await?,
+            &store.get_resource(&target.clone().into()).await?,
             &invite_creator.into(),
         )
         .await
@@ -139,7 +139,11 @@ pub fn construct_invite_redirect<'a>(
             )
             .await?;
         redirect
-            .set(urls::REDIRECT_AGENT.into(), Value::AtomicUrl(agent), store)
+            .set(
+                urls::REDIRECT_AGENT.into(),
+                Value::AtomicUrl(agent.into()),
+                store,
+            )
             .await?;
         // The front-end requires the @id to be the same as requested
         redirect.set_subject(requested_subject);
@@ -160,7 +164,7 @@ pub async fn add_rights(
 ) -> AtomicResult<()> {
     check_valid_url(agent)?;
     // Get the Resource that the user is being invited to
-    let mut target = store.get_resource(target).await?;
+    let mut target = store.get_resource(&target.into()).await?;
     let right = if write { urls::WRITE } else { urls::READ };
 
     target.push(right, agent.into(), true)?;
@@ -188,7 +192,7 @@ pub fn before_apply_commit<'a>(
             .get(urls::TARGET)
             .map_err(|_e| "Invite does not have required Target attribute")?;
 
-        let target_resource = store.get_resource(&target.to_string()).await?;
+        let target_resource = store.get_resource(&target.to_string().into()).await?;
 
         hierarchy::check_write(store, &target_resource, &commit.signer.clone().into()).await?;
         Ok(())

@@ -101,7 +101,7 @@ pub fn check_rights<'a>(
             return Ok("Sudo has root access, and can edit anything.".into());
         }
         let for_agent = for_agent_enum.to_string();
-        if resource.get_subject() == &for_agent {
+        if resource.get_subject().as_str() == for_agent {
             return Ok("Agents can always edit themselves or their children.".into());
         }
         if let Ok(server_agent) = store.get_default_agent() {
@@ -115,7 +115,9 @@ pub fn check_rights<'a>(
             return match right {
                 Right::Read => {
                     // Commits can be read when their subject / target is readable.
-                    let target = store.get_resource(&commit_subject.to_string()).await?;
+                    let target = store
+                        .get_resource(&commit_subject.to_string().as_str().into())
+                        .await?;
                     check_rights(store, &target, for_agent_enum, right).await
                 }
                 Right::Write => Err("Commits cannot be edited.".into()),

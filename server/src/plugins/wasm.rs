@@ -535,7 +535,7 @@ impl WasmPlugin {
     fn encode_resource(&self, resource: &Resource) -> AtomicResult<WasmResourceJson> {
         Ok(WasmResourceJson {
             subject: resource.get_subject().to_string(),
-            json_ad: resource.to_json_ad()?,
+            json_ad: resource.to_json_ad(&*self.inner.db)?,
         })
     }
 
@@ -724,14 +724,14 @@ impl bindings::atomic::class_extender::host::Host for PluginHostState {
 
         let resource = self
             .db
-            .get_resource_extended(&subject, false, &for_agent)
+            .get_resource_extended(&subject.into(), false, &for_agent)
             .await
             .map_err(|e| e.to_string())?
             .to_single();
 
         Ok(WasmResourceJson {
             subject: resource.get_subject().to_string(),
-            json_ad: resource.to_json_ad().map_err(|e| e.to_string())?,
+            json_ad: resource.to_json_ad(&*self.db).map_err(|e| e.to_string())?,
         })
     }
 
@@ -757,7 +757,7 @@ impl bindings::atomic::class_extender::host::Host for PluginHostState {
         for resource in result.resources {
             resources.push(WasmResourceJson {
                 subject: resource.get_subject().to_string(),
-                json_ad: resource.to_json_ad().map_err(|e| e.to_string())?,
+                json_ad: resource.to_json_ad(&*self.db).map_err(|e| e.to_string())?,
             });
         }
 
@@ -779,7 +779,7 @@ impl bindings::atomic::class_extender::host::Host for PluginHostState {
 
         let resource = self
             .db
-            .get_resource_extended(&commit_builder.subject, false, &agent.into())
+            .get_resource_extended(&commit_builder.subject.clone().into(), false, &agent.into())
             .await
             .map_err(|e| e.to_string())?
             .to_single();
@@ -817,7 +817,7 @@ impl bindings::atomic::class_extender::host::Host for PluginHostState {
             return "{}".to_string();
         };
 
-        let Ok(plugin_resource) = self.db.get_resource(subject).await else {
+        let Ok(plugin_resource) = self.db.get_resource(&subject.clone().into()).await else {
             return "{}".to_string();
         };
 
@@ -1420,7 +1420,7 @@ async fn delete_plugin_meta(
 
     // Delete the agent resource
     let agent = Agent::from_secret(&plugin_meta.agent_secret)?;
-    let mut agent_resource = store.get_resource(&agent.subject).await?;
+    let mut agent_resource = store.get_resource(&agent.subject.clone().into()).await?;
     agent_resource.destroy(store).await?;
 
     // Delete the plugin metadata

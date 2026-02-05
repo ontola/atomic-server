@@ -16,6 +16,8 @@ struct Subscription {
     can_write: bool,
 }
 
+/// Yjs updates that do not need to be persisted (e.g. cursor positions and selections)
+/// The Yjs updates that do need persistence are handled by Commits.
 pub struct YSyncBroadcaster {
     subscriptions: HashMap<(String, String), HashSet<Subscription>>,
     store: Db,
@@ -43,7 +45,7 @@ impl Handler<SubscribeYSync> for YSyncBroadcaster {
                 }
                 let key = (msg.subject.clone(), msg.property.clone());
 
-                let resource = match store.get_resource(&msg.subject).await {
+                let resource = match store.get_resource(&msg.subject.clone().into()).await {
                     Ok(resource) => resource,
                     Err(e) => {
                         tracing::debug!(

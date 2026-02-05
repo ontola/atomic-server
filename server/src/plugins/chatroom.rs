@@ -69,13 +69,13 @@ pub fn construct_chatroom<'a>(
             let last_resource = store.get_resource(last_subject).await?;
             let last_timestamp = last_resource.get(urls::CREATED_AT)?;
             let next_page_url = url::Url::parse_with_params(
-                resource.get_subject(),
+                resource.get_subject().as_str(),
                 &[("before-timestamp", last_timestamp.to_string())],
             )?;
             resource
                 .set(
                     urls::NEXT_PAGE.into(),
-                    Value::AtomicUrl(next_page_url.to_string()),
+                    Value::AtomicUrl(next_page_url.to_string().into()),
                     store,
                 )
                 .await?;
@@ -121,13 +121,13 @@ pub fn after_apply_commit_message<'a>(
             // We do not save the actual changes in the ChatRoom itself for performance reasons.
 
             // We use the ChatRoom only for its `last_commit`
-            let chat_room = store.get_resource(&parent_subject).await?;
+            let mut chat_room = store.get_resource(&parent_subject.clone().into()).await?;
 
             let mut commit_builder = CommitBuilder::new(parent_subject);
 
             commit_builder.push_propval(
                 urls::MESSAGES,
-                SubResource::Subject(resource.get_subject().to_string()),
+                SubResource::Subject(resource.get_subject().clone()),
             )?;
 
             let commit = commit_builder

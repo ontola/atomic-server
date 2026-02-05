@@ -4,7 +4,7 @@
 use crate::agents::Agent;
 use crate::storelike::QueryResult;
 use crate::Value;
-use crate::{atoms::Atom, storelike::Storelike};
+use crate::{atoms::Atom, storelike::Storelike, Subject};
 use crate::{errors::AtomicResult, Resource};
 use async_trait::async_trait;
 use std::{collections::HashMap, sync::Arc, sync::Mutex};
@@ -62,7 +62,7 @@ impl Store {
             for resource in self.all_resources(include_external) {
                 for (property, value) in resource.get_propvals() {
                     vec.push(Atom::new(
-                        resource.get_subject().clone(),
+                        resource.get_subject().to_string(),
                         property.clone(),
                         value.clone(),
                     ))
@@ -78,31 +78,34 @@ impl Store {
                 if hasprop && q_property.as_ref().unwrap() == prop {
                     if hasval {
                         if val.contains_value(q_value.unwrap()) {
-                            vec.push(Atom::new(subj.into(), prop.into(), val.clone()))
+                            vec.push(Atom::new(subj.to_string(), prop.into(), val.clone()))
                         }
                         break;
                     } else {
-                        vec.push(Atom::new(subj.into(), prop.into(), val.clone()))
+                        vec.push(Atom::new(subj.to_string(), prop.into(), val.clone()))
                     }
                     break;
                 } else if hasval && !hasprop && val.contains_value(q_value.unwrap()) {
-                    vec.push(Atom::new(subj.into(), prop.into(), val.clone()))
+                    vec.push(Atom::new(subj.to_string(), prop.into(), val.clone()))
                 }
             }
         };
 
         match q_subject {
-            Some(sub) => match self.get_resource(sub).await {
-                Ok(resource) => {
-                    if hasprop | hasval {
-                        find_in_resource(&resource);
-                        Ok(vec)
-                    } else {
-                        Ok(resource.to_atoms())
+            Some(sub) => {
+                let s: Subject = sub.into();
+                match self.get_resource(&s).await {
+                    Ok(resource) => {
+                        if hasprop | hasval {
+                            find_in_resource(&resource);
+                            Ok(vec)
+                        } else {
+                            Ok(resource.to_atoms())
+                        }
                     }
+                    Err(_) => Ok(vec),
                 }
-                Err(_) => Ok(vec),
-            },
+            }
             None => {
                 for resource in self.all_resources(include_external) {
                     find_in_resource(&resource);
@@ -150,7 +153,7 @@ impl Storelike for Store {
         }
         if !overwrite_existing {
             let subject = resource.get_subject();
-            if let Some(_r) = self.hashmap.lock().unwrap().get(subject) {
+            if let Some(_r) = self.hashmap.lock().unwrap().get(&subject.to_string()) {
                 return Err(format!("{} already present, will not overwrite.", subject).into());
             }
         }
@@ -159,7 +162,7 @@ impl Storelike for Store {
         self.hashmap
             .lock()
             .unwrap()
-            .insert(resource.get_subject().into(), resource.clone());
+            .insert(resource.get_subject().to_string(), resource.clone());
         Ok(())
     }
 
@@ -187,27 +190,29 @@ impl Storelike for Store {
         }
     }
 
-    async fn get_resource(&self, subject: &str) -> AtomicResult<Resource> {
-        if let Some(resource) = self.hashmap.lock().unwrap().get(subject) {
+    async fn get_resource(&self, subject: &Subject) -> AtomicResult<Resource> {
+        let subject_str = subject.to_string();
+        if let Some(resource) = self.hashmap.lock().unwrap().get(&subject_str) {
             return Ok(resource.clone());
         }
 
         if let Ok(resource) = self
-            .fetch_resource(subject, self.get_default_agent().ok().as_ref())
+            .fetch_resource(&subject_str, self.get_default_agent().ok().as_ref())
             .await
         {
             return Ok(resource);
         };
 
         self.handle_not_found(
-            subject,
+            &subject_str,
             "Not found in HashMap.".into(),
             self.get_default_agent().ok().as_ref(),
         )
         .await
     }
 
-    async fn remove_resource(&self, subject: &str) -> AtomicResult<()> {
+    async fn remove_resource(&self, subject: &Subject) -> AtomicResult<()> {
+        let subject_str = subject.to_string();
         let resource = self.get_resource(subject).await?;
         for child in resource.get_children(self).await? {
             Box::pin(self.remove_resource(child.get_subject())).await?;
@@ -215,7 +220,7 @@ impl Storelike for Store {
         self.hashmap
             .lock()
             .unwrap()
-            .remove_entry(subject)
+            .remove_entry(&subject_str)
             .ok_or(format!(
                 "Resource {} could not be deleted, because it is not found",
                 subject
@@ -258,7 +263,7 @@ impl Storelike for Store {
         for subject in subjects_deduplicated.iter() {
             // These nested resources are not fully calculated - they will be presented as -is
             match self
-                .get_resource_extended(subject, true, &q.for_agent)
+                .get_resource_extended(&subject.clone().into(), true, &q.for_agent)
                 .await
             {
                 Ok(resource) => {
@@ -281,7 +286,7 @@ impl Storelike for Store {
         }
         let mut subjects = Vec::new();
         for r in resources.iter() {
-            subjects.push(r.get_subject().clone())
+            subjects.push(r.get_subject().to_string())
         }
 
         Ok(QueryResult {
@@ -323,7 +328,7 @@ mod test {
     #[tokio::test]
     async fn get_full_resource_and_shortname() {
         let store = init_store().await;
-        let resource = store.get_resource(urls::CLASS).await.unwrap();
+        let resource = store.get_resource(&urls::CLASS.into()).await.unwrap();
         let shortname = resource
             .get_shortname("shortname", &store)
             .await
@@ -336,7 +341,7 @@ mod test {
     async fn serialize() {
         let store = init_store().await;
         let subject = urls::CLASS;
-        let resource = store.get_resource(subject).await.unwrap();
+        let resource = store.get_resource(&subject.into()).await.unwrap();
         resource.to_json_ad().unwrap();
     }
 
@@ -414,7 +419,7 @@ mod test {
             let store = Store::init().await.unwrap();
             store.populate().await.unwrap();
             // If nothing happens - this night be deadlock.
-            store.get_resource(urls::CLASS).await.unwrap();
+            store.get_resource(&urls::CLASS.into()).await.unwrap();
         });
     }
 

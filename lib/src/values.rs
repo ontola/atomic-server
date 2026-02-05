@@ -5,7 +5,7 @@ use crate::{
     errors::AtomicResult,
     resources::PropVals,
     utils::{check_valid_uri, check_valid_url},
-    Resource,
+    Resource, Subject,
 };
 use base64::{engine::general_purpose, Engine};
 use regex::Regex;
@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 /// Use `Value::SomeDataType()` for explicit creation.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Value {
-    AtomicUrl(String),
+    AtomicUrl(Subject),
     Date(String),
     Integer(i64),
     Float(f64),
@@ -41,7 +41,7 @@ pub enum SubResource {
     // storing the paths in both the NestedResource as well as its parent
     // context, which could produce inconsistencies.
     Nested(PropVals),
-    Subject(String),
+    Subject(Subject),
 }
 
 /// When the Datatype of a Value is not handled by this library
@@ -135,7 +135,7 @@ impl Value {
                 })?;
                 let mut new_vec = Vec::new();
                 for i in vector {
-                    new_vec.push(SubResource::Subject(i));
+                    new_vec.push(SubResource::Subject(i.into()));
                 }
                 Ok(Value::ResourceArray(new_vec))
             }
@@ -202,12 +202,12 @@ impl Value {
                             };
                             vec.push(format!("{} {}", path_base, i))
                         }
-                        SubResource::Subject(s) => vec.push(s),
+                        SubResource::Subject(s) => vec.push(s.to_string()),
                     });
                 Ok(vec)
             }
             Value::AtomicUrl(s) => {
-                vec.push(s.into());
+                vec.push(s.to_string());
                 Ok(vec)
             }
             Value::NestedResource(_nr) => {
@@ -257,7 +257,7 @@ impl Value {
         let vals = match self {
             // TODO: This results in wrong indexing, as some subjects will be numbers.
             Value::ResourceArray(_v) => self.to_subjects(None).unwrap_or_else(|_| vec![]),
-            Value::AtomicUrl(v) => vec![v.into()],
+            Value::AtomicUrl(v) => vec![v.to_string()],
             // TODO We don't index nested resources for now
             Value::NestedResource(_r) => return None,
             // This might result in unnecessarily long strings, sometimes. We may want to shorten them later.
@@ -306,7 +306,7 @@ impl From<Vec<String>> for Value {
     fn from(val: Vec<String>) -> Self {
         let mut vec = Vec::new();
         for i in val {
-            vec.push(SubResource::Subject(i));
+            vec.push(SubResource::Subject(i.into()));
         }
         Value::ResourceArray(vec)
     }
@@ -381,13 +381,17 @@ impl fmt::Display for SubResource {
 
         match self {
             SubResource::Nested(pv) => {
-                let serialized = crate::serialize::propvals_to_json_ad_map(pv, None)
-                    .unwrap_or_else(|_e| {
-                        serde_json::Value::String(format!("Could not serialize {:?} : {}", pv, _e))
-                    });
+                let serialized =
+                    crate::serialize::propvals_to_json_ad_map(pv, None, "http://localhost/")
+                        .unwrap_or_else(|_e| {
+                            serde_json::Value::String(format!(
+                                "Could not serialize {:?} : {}",
+                                pv, _e
+                            ))
+                        });
                 s.push_str(&serialized.to_string());
             }
-            SubResource::Subject(sub) => s.push_str(sub),
+            SubResource::Subject(sub) => s.push_str(sub.as_str()),
         }
         write!(f, "{}", s)
     }
@@ -395,13 +399,13 @@ impl fmt::Display for SubResource {
 
 impl From<&str> for SubResource {
     fn from(val: &str) -> Self {
-        SubResource::Subject(val.to_owned())
+        SubResource::Subject(val.into())
     }
 }
 
 impl From<String> for SubResource {
     fn from(val: String) -> Self {
-        SubResource::Subject(val)
+        SubResource::Subject(val.into())
     }
 }
 
@@ -413,7 +417,7 @@ impl From<PropVals> for SubResource {
 
 impl From<Resource> for SubResource {
     fn from(val: Resource) -> Self {
-        SubResource::Subject(val.get_subject().into())
+        SubResource::Subject(val.get_subject().clone())
     }
 }
 

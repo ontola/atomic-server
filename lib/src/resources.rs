@@ -10,7 +10,7 @@ use crate::{commit::CommitBuilder, errors::AtomicResult};
 use crate::{
     mapping::is_url,
     schema::{Class, Property},
-    Atom, Storelike,
+    Atom, Storelike, Subject,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -24,7 +24,7 @@ use ulid::Ulid;
 pub struct Resource {
     /// A hashMap of all the Property Value combinations
     propvals: PropVals,
-    subject: String,
+    subject: Subject,
     commit: CommitBuilder,
 }
 
@@ -64,15 +64,18 @@ impl Resource {
     /// Gets the children of this resource.
     pub async fn get_children(&self, store: &impl Storelike) -> AtomicResult<Vec<Resource>> {
         let result = store
-            .query(&Query::new_prop_val(urls::PARENT, self.get_subject()))
+            .query(&Query::new_prop_val(
+                urls::PARENT,
+                self.get_subject().as_str(),
+            ))
             .await?;
         Ok(result.resources)
     }
 
-    pub fn from_propvals(propvals: PropVals, subject: String) -> Resource {
+    pub fn from_propvals(propvals: PropVals, subject: Subject) -> Resource {
         Resource {
             propvals,
-            commit: CommitBuilder::new(subject.clone()),
+            commit: CommitBuilder::new(subject.to_string()),
             subject,
         }
     }
@@ -120,7 +123,8 @@ impl Resource {
     pub async fn get_parent(&self, store: &impl Storelike) -> AtomicResult<Resource> {
         match self.get(urls::PARENT) {
             Ok(parent_val) => {
-                match store.get_resource(&parent_val.to_string()).await {
+                let subject = Subject::from(parent_val.to_string());
+                match store.get_resource(&subject).await {
                     Ok(parent) => {
                         if self.get_subject() == parent.get_subject() {
                             return Err(format!(
@@ -175,7 +179,7 @@ impl Resource {
         self.get(&prop.subject)
     }
 
-    pub fn get_subject(&self) -> &String {
+    pub fn get_subject(&self) -> &Subject {
         &self.subject
     }
 
@@ -184,7 +188,7 @@ impl Resource {
         let mut mut_res = self.to_owned();
         loop {
             if let Ok(found_parent) = mut_res.get_parent(store).await {
-                if found_parent.get_subject() == parent {
+                if found_parent.get_subject().as_str() == parent {
                     return true;
                 }
                 mut_res = found_parent;
@@ -204,7 +208,7 @@ impl Resource {
         let propvals: PropVals = HashMap::new();
         Resource {
             propvals,
-            subject: subject.clone(),
+            subject: subject.clone().into(),
             commit: CommitBuilder::new(subject),
         }
     }
@@ -234,7 +238,7 @@ impl Resource {
         );
         let mut resource = Resource {
             propvals,
-            subject: subject.clone(),
+            subject: subject.clone().into(),
             commit: CommitBuilder::new(subject),
         };
         let class_urls = Vec::from([String::from(class_url)]);
@@ -338,7 +342,7 @@ impl Resource {
     }
 
     pub fn reset_commit_builder(&mut self) {
-        self.commit = CommitBuilder::new(self.get_subject().clone());
+        self.commit = CommitBuilder::new(self.get_subject().to_string());
     }
 
     /// Saves the resource (with all the changes) to the store by creating a Commit.
@@ -354,7 +358,7 @@ impl Resource {
         let commit = commit_builder.sign(&agent, store, self).await?;
         // If the current client is a server, and the subject is hosted here, don't post
         let should_post = if let Some(self_url) = store.get_self_url() {
-            !self.subject.starts_with(&self_url)
+            !self.subject.as_str().starts_with(&self_url)
         } else {
             // Current client is not a server, has no own persisted store
             true
@@ -521,18 +525,33 @@ impl Resource {
     /// See https://github.com/atomicdata-dev/atomic-server/issues/44
     pub fn set_subject(&mut self, url: String) -> &mut Self {
         self.commit.set_subject(url.clone());
-        self.subject = url;
+        self.subject = url.into();
         self
     }
 
     /// Converts Resource to JSON-AD string.
     #[instrument(skip_all)]
-    pub fn to_json_ad(&self) -> AtomicResult<String> {
-        let obj = crate::serialize::propvals_to_json_ad_map(
-            self.get_propvals(),
-            Some(self.get_subject().clone()),
+    pub fn to_json_ad(&self, store: &impl Storelike) -> AtomicResult<String> {
+        let propvals = self.get_propvals();
+        let res = crate::serialize::propvals_to_json_ad_map(
+            propvals,
+            Some(self.get_subject().resolve(&store.get_server_url()?)),
+            &store.get_server_url()?,
         )?;
-        serde_json::to_string_pretty(&obj).map_err(|_| "Could not serialize to JSON-AD".into())
+        Ok(serde_json::to_string(&res)?)
+    }
+
+    /// Serializes the resource to JSON-AD string, using the provided base_url for resolving Local subjects.
+    pub fn to_json_ad_with_url(&self, base_url: &str) -> AtomicResult<String> {
+        let propvals = self.get_propvals();
+        let mut map = serde_json::Map::new();
+        for (prop, val) in propvals.iter() {
+            map.insert(
+                prop.to_string(),
+                crate::serialize::val_to_serde(val.clone(), base_url)?,
+            );
+        }
+        Ok(serde_json::to_string(&map)?)
     }
 
     /// Converts Resource to plain JSON string.
@@ -540,7 +559,7 @@ impl Resource {
     pub async fn to_json(&self, store: &impl Storelike) -> AtomicResult<String> {
         let obj = crate::serialize::propvals_to_json_ld(
             self.get_propvals(),
-            Some(self.get_subject().clone()),
+            Some(self.get_subject().to_string()),
             store,
             false,
         )
@@ -553,7 +572,7 @@ impl Resource {
     pub async fn to_json_ld(&self, store: &impl Storelike) -> AtomicResult<String> {
         let obj = crate::serialize::propvals_to_json_ld(
             self.get_propvals(),
-            Some(self.get_subject().clone()),
+            Some(self.get_subject().to_string()),
             store,
             true,
         )
@@ -579,10 +598,13 @@ impl Resource {
         crate::serialize::atoms_to_ntriples(self.to_atoms(), store).await
     }
 
-    pub fn vec_to_json_ad(resources: &Vec<Resource>) -> AtomicResult<String> {
+    pub fn vec_to_json_ad(
+        resources: &Vec<Resource>,
+        store: &impl Storelike,
+    ) -> AtomicResult<String> {
         let str = resources
             .iter()
-            .map(|r| r.to_json_ad())
+            .map(|r| r.to_json_ad(store))
             .collect::<AtomicResult<Vec<String>>>()?
             .join(",");
 
@@ -655,7 +677,7 @@ mod test {
     #[tokio::test]
     async fn get_and_set_resource_props() {
         let store = init_store().await;
-        let mut resource = store.get_resource(urls::CLASS).await.unwrap();
+        let mut resource = store.get_resource(&urls::CLASS.into()).await.unwrap();
         assert!(
             resource
                 .get_shortname("shortname", &store)
@@ -923,7 +945,11 @@ mod test {
 
         let mut resource2 = Resource::new_generate_subject(&store).unwrap();
         resource2
-            .set(urls::PARENT.into(), Value::AtomicUrl(subject1), &store)
+            .set(
+                urls::PARENT.into(),
+                Value::AtomicUrl(subject1.into()),
+                &store,
+            )
             .await
             .unwrap();
         let subject2 = resource2.get_subject().to_string();
@@ -932,6 +958,6 @@ mod test {
         let children = resource1.get_children(&store).await.unwrap();
 
         assert_eq!(children.len(), 1);
-        assert_eq!(children[0].get_subject(), &subject2);
+        assert_eq!(children[0].get_subject().to_string(), subject2);
     }
 }

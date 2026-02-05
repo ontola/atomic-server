@@ -17,10 +17,10 @@ pub async fn single_page(
     let csp_nonce = generate_nonce().map_err(|_e| "Failed to generate nonce")?;
     let subject = format!("{}/{}", server_url, path);
     let meta_tags: MetaTags = if let Ok(resource_response) = store
-        .get_resource_extended(&subject, true, &ForAgent::Public)
+        .get_resource_extended(&subject.clone().into(), true, &ForAgent::Public)
         .await
     {
-        resource_response.into()
+        MetaTags::from_resource_response(resource_response, &store)
     } else {
         MetaTags::default()
     };
@@ -66,14 +66,14 @@ struct MetaTags {
     json: Option<String>,
 }
 
-impl From<ResourceResponse> for MetaTags {
-    fn from(rr: ResourceResponse) -> Self {
+impl MetaTags {
+    pub fn from_resource_response(rr: ResourceResponse, store: &impl Storelike) -> Self {
         match rr {
-            ResourceResponse::Resource(r) => r.into(),
+            ResourceResponse::Resource(r) => Self::from_resource(r, store),
             ResourceResponse::ResourceWithReferenced(ref resource, _) => {
-                let mut tags: MetaTags = resource.clone().into();
+                let mut tags: MetaTags = Self::from_resource(resource.clone(), store);
 
-                let json = if let Ok(serialized) = rr.to_json_ad() {
+                let json = if let Ok(serialized) = rr.to_json_ad(store) {
                     // TODO: also fetch the parents for extra fast first renders.
                     Some(serialized)
                 } else {
@@ -88,8 +88,8 @@ impl From<ResourceResponse> for MetaTags {
     }
 }
 
-impl From<Resource> for MetaTags {
-    fn from(r: Resource) -> Self {
+impl MetaTags {
+    pub fn from_resource(r: Resource, store: &impl Storelike) -> Self {
         let description = if let Ok(d) = r.get(urls::DESCRIPTION) {
             d.to_string()
         } else {
@@ -106,7 +106,7 @@ impl From<Resource> for MetaTags {
         } else {
             "/default_social_preview.jpg".to_string()
         };
-        let json = if let Ok(serialized) = r.to_json_ad() {
+        let json = if let Ok(serialized) = r.to_json_ad(store) {
             // TODO: also fetch the parents for extra fast first renders.
             Some(serialized)
         } else {

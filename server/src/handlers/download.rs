@@ -40,7 +40,7 @@ pub async fn handle_download(
     tracing::info!("handle_download: {}", subject);
 
     let resource = store
-        .get_resource_extended(&subject, false, &for_agent)
+        .get_resource_extended(&subject.clone().into(), false, &for_agent)
         .await?
         .to_single();
 

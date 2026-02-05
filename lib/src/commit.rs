@@ -155,6 +155,55 @@ impl Commit {
         Ok(())
     }
 
+    /// Creates a new Commit with a `did:ad` Subject.
+    /// The ID of the Subject is the signature of the Commit.
+    pub async fn create_did(
+        mut commit_builder: CommitBuilder,
+        agent: &crate::agents::Agent,
+        store: &impl Storelike,
+    ) -> AtomicResult<Commit> {
+        let now = crate::utils::now();
+        // Create a temporary commit with empty signature and subject
+        // The subject is needed for serialization, but it will be removed for the signature check (and thus creation)
+        let temp_subject = "did:ad:temp".to_string();
+        commit_builder.subject = temp_subject.clone();
+
+        let mut commit = Commit {
+            subject: temp_subject,
+            signer: agent.subject.clone(),
+            set: Some(commit_builder.set),
+            y_update: Some(commit_builder.y_update),
+            remove: Some(commit_builder.remove.into_iter().collect()),
+            destroy: Some(commit_builder.destroy),
+            created_at: now,
+            previous_commit: None,
+            signature: None,
+            push: Some(commit_builder.push),
+            url: None,
+        };
+
+        // Serialize without subject
+        let stringified = commit
+            .serialize_deterministically_json_ad(store)
+            .await
+            .map_err(|e| format!("Failed serializing commit: {}", e))?;
+
+        let private_key = agent.private_key.clone().ok_or("No private key in agent")?;
+        let signature =
+            sign_message(&stringified, &private_key, &agent.public_key).map_err(|e| {
+                format!(
+                    "Failed to sign message for new did:ad commit with agent {}: {}",
+                    agent.subject, e
+                )
+            })?;
+
+        commit.signature = Some(signature.clone());
+        let did = format!("did:ad:{}", signature);
+        commit.subject = did;
+
+        Ok(commit)
+    }
+
     /// Check if the Commit's signature matches the signer's public key.
     pub async fn validate_signature(&self, store: &impl Storelike) -> AtomicResult<()> {
         let commit = self;
@@ -162,11 +211,31 @@ impl Commit {
             Some(sig) => sig,
             None => return Err("No signature set".into()),
         };
-        let pubkey_b64 = store
-            .get_resource(&commit.signer)
-            .await?
-            .get(urls::PUBLIC_KEY)?
-            .to_string();
+        // If the signer is the subject, we can't fetch the public key from the store.
+        // This is the case for self-signed DIDs.
+        let pubkey_b64 = if commit.signer == commit.subject {
+            // If the resource is being destroyed, we can't verify the signature using the resource itself.
+            if commit.destroy.unwrap_or(false) {
+                return Err("Cannot verify signature for self-signed destroy commit".into());
+            }
+            // Logic for self-signed commits (Did creation)
+            // We need to look at the `set` fields to find the public key
+            if let Some(set) = &commit.set {
+                if let Some(pk_val) = set.get(urls::PUBLIC_KEY) {
+                    pk_val.to_string()
+                } else {
+                    return Err("Self-signed commit must contain public key".into());
+                }
+            } else {
+                return Err("Self-signed commit must contain set".into());
+            }
+        } else {
+            store
+                .get_resource(&crate::Subject::from(commit.signer.as_str()))
+                .await?
+                .get(urls::PUBLIC_KEY)?
+                .to_string()
+        };
         let agent_pubkey = decode_base64(&pubkey_b64)?;
         let stringified_commit = commit.serialize_deterministically_json_ad(store).await?;
         let peer_public_key =
@@ -176,10 +245,21 @@ impl Commit {
             .verify(stringified_commit.as_bytes(), &signature_bytes)
             .map_err(|_e| {
                 format!(
-                    "Incorrect signature for Commit. This could be due to an error during signing or serialization of the commit. Compare this to the serialized commit in the client: {}",
+                    "Incorrect signature for Commit. This could be due to an error during signing or serialization of the commit. Compare this to the serialized commit in the server: {}",
                     stringified_commit,
                 )
             })?;
+
+        // Special check for did:ad
+        if commit.subject.starts_with("did:ad:") && commit.previous_commit.is_none() {
+            let subject_signature = commit
+                .subject
+                .strip_prefix("did:ad:")
+                .ok_or("Invalid did:ad subject")?;
+            if subject_signature != signature {
+                return Err(format!("Invalid did:ad subject. The subject part after 'did:ad:' ({}) must match the signature ({})", subject_signature, signature).into());
+            }
+        }
         Ok(())
     }
 
@@ -251,7 +331,7 @@ impl Commit {
             .resource_new
             .set(
                 urls::LAST_COMMIT.to_string(),
-                Value::AtomicUrl(commit_resource.get_subject().into()),
+                Value::AtomicUrl(commit_resource.get_subject().clone()),
                 store,
             )
             .await?;
@@ -300,7 +380,8 @@ impl Commit {
                 resource.remove_propval(prop);
 
                 if let Ok(val) = resource_unedited.get(prop) {
-                    let atom = Atom::new(resource.get_subject().clone(), prop.into(), val.clone());
+                    let atom =
+                        Atom::new(resource.get_subject().to_string(), prop.into(), val.clone());
                     remove_atoms.push(atom);
                 } else {
                     // The property does not exist, so nothing to remove.
@@ -323,11 +404,17 @@ impl Commit {
                         )
                     })?;
 
-                let new_atom =
-                    Atom::new(resource.get_subject().clone(), prop.into(), new_val.clone());
+                let new_atom = Atom::new(
+                    resource.get_subject().to_string(),
+                    prop.into(),
+                    new_val.clone(),
+                );
                 if let Ok(old_val) = resource_unedited.get(prop) {
-                    let old_atom =
-                        Atom::new(resource.get_subject().clone(), prop.into(), old_val.clone());
+                    let old_atom = Atom::new(
+                        resource.get_subject().to_string(),
+                        prop.into(),
+                        old_val.clone(),
+                    );
                     remove_atoms.push(old_atom);
                 }
                 add_atoms.push(new_atom);
@@ -350,7 +437,7 @@ impl Commit {
                 resource.set_unsafe(prop.into(), old_vec.into());
                 for added_resource in new_vec {
                     let atom = Atom::new(
-                        resource.get_subject().clone(),
+                        resource.get_subject().to_string(),
                         prop.into(),
                         added_resource.into(),
                     );
@@ -414,7 +501,6 @@ impl Commit {
     }
 
     /// Converts a Resource of a Commit into a Commit
-    #[tracing::instrument]
     pub fn from_resource(resource: Resource) -> AtomicResult<Commit> {
         let subject = resource.get(urls::SUBJECT)?.to_string();
         let created_at = resource.get(urls::CREATED_AT)?.to_int()?;
@@ -444,7 +530,7 @@ impl Commit {
             Err(_) => None,
         };
         let signature = resource.get(urls::SIGNATURE)?.to_string();
-        let url = Some(resource.get_subject().into());
+        let url = Some(resource.get_subject().to_string());
 
         Ok(Commit {
             subject,
@@ -509,7 +595,7 @@ impl Commit {
         if let Some(previous_commit) = &self.previous_commit {
             resource.set_unsafe(
                 urls::PREVIOUS_COMMIT.into(),
-                Value::AtomicUrl(previous_commit.into()),
+                Value::AtomicUrl(previous_commit.clone().into()),
             );
         }
         if let Some(y_update) = &self.y_update {
@@ -550,8 +636,15 @@ impl Commit {
         let mut commit_resource = self.into_resource(store).await?;
         // A deterministic serialization should not contain the hash (signature), since that would influence the hash.
         commit_resource.remove_propval(urls::SIGNATURE);
-        let json_obj =
-            crate::serialize::propvals_to_json_ad_map(commit_resource.get_propvals(), None)?;
+        // Special logic for did:ad genesis commits: remove subject from serialization
+        if self.subject.starts_with("did:ad:") && self.previous_commit.is_none() {
+            commit_resource.remove_propval(urls::SUBJECT);
+        }
+        let json_obj = crate::serialize::propvals_to_json_ad_map(
+            commit_resource.get_propvals(),
+            None,
+            &store.get_server_url()?,
+        )?;
         let json = serde_jcs::to_string(&json_obj)
             .map_err(|e| format!("Failed to serialize Commit: {}", e))?;
         Ok(json)
@@ -637,7 +730,8 @@ impl CommitBuilder {
         if let Some(push) = commit_builder_json.push {
             for (prop, vec) in push.iter() {
                 for value in vec {
-                    commit_builder.push_propval(prop, SubResource::Subject(value.clone()))?;
+                    commit_builder
+                        .push_propval(prop, SubResource::Subject(value.clone().into()))?;
                 }
             }
         }
@@ -812,9 +906,12 @@ mod test {
         let commit_subject = commit.get_subject().to_string();
         let _created_resource = store.apply_commit(commit, &OPTS).await.unwrap();
 
-        let resource = store.get_resource(subject).await.unwrap();
+        let resource = store.get_resource(&subject.as_str().into()).await.unwrap();
         assert!(resource.get(property1).unwrap().to_string() == value1.to_string());
-        let found_commit = store.get_resource(&commit_subject).await.unwrap();
+        let found_commit = store
+            .get_resource(&commit_subject.as_str().into())
+            .await
+            .unwrap();
         println!("{}", found_commit.get_subject());
 
         assert!(

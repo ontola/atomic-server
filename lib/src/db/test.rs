@@ -55,10 +55,19 @@ async fn basic() {
     assert!(description_val == "the age of a person");
 
     // Try removing something
-    store.get_resource(crate::urls::CLASS).await.unwrap();
-    store.remove_resource(crate::urls::CLASS).await.unwrap();
+    store
+        .get_resource(&crate::urls::CLASS.into())
+        .await
+        .unwrap();
+    store
+        .remove_resource(&crate::urls::CLASS.into())
+        .await
+        .unwrap();
     // Should throw an error, because can't remove non-existent resource
-    store.remove_resource(crate::urls::CLASS).await.unwrap_err();
+    store
+        .remove_resource(&crate::urls::CLASS.into())
+        .await
+        .unwrap_err();
     // Should throw an error, because resource is deleted
     store.get_propvals(crate::urls::CLASS).unwrap_err();
 
@@ -72,12 +81,16 @@ async fn populate_collections() {
     let store = Db::init_temp("populate_collections").await.unwrap();
     let subjects: Vec<String> = store
         .all_resources(false)
-        .map(|r| r.get_subject().into())
+        .map(|r| r.get_subject().to_string())
         .collect();
     println!("{:?}", subjects);
     let collections_collection_url = format!("{}/collections", store.get_server_url().unwrap());
     let collections_resource = store
-        .get_resource_extended(&collections_collection_url, false, &ForAgent::Public)
+        .get_resource_extended(
+            &collections_collection_url.as_str().into(),
+            false,
+            &ForAgent::Public,
+        )
         .await
         .unwrap();
     let member_count = collections_resource
@@ -106,7 +119,7 @@ async fn destroy_resource_and_check_collection_and_commits() {
     let for_agent = &ForAgent::Public;
     let agents_url = format!("{}/agents", store.get_server_url().unwrap());
     let agents_collection_1 = store
-        .get_resource_extended(&agents_url, false, for_agent)
+        .get_resource_extended(&agents_url.as_str().into(), false, for_agent)
         .await
         .unwrap();
     println!(
@@ -127,7 +140,7 @@ async fn destroy_resource_and_check_collection_and_commits() {
     // We will count the commits, and check if they've incremented later on.
     let commits_url = format!("{}/commits", store.get_server_url().unwrap());
     let commits_collection_1 = store
-        .get_resource_extended(&commits_url, false, for_agent)
+        .get_resource_extended(&commits_url.as_str().into(), false, for_agent)
         .await
         .unwrap();
     let commits_collection_count_1 = commits_collection_1
@@ -145,7 +158,7 @@ async fn destroy_resource_and_check_collection_and_commits() {
         .unwrap();
     let _res = resource.save_locally(&store).await.unwrap();
     let agents_collection_2 = store
-        .get_resource_extended(&agents_url, false, for_agent)
+        .get_resource_extended(&agents_url.as_str().into(), false, for_agent)
         .await
         .unwrap();
     let agents_collection_count_2 = agents_collection_2
@@ -160,7 +173,7 @@ async fn destroy_resource_and_check_collection_and_commits() {
     );
 
     let commits_collection_2 = store
-        .get_resource_extended(&commits_url, false, for_agent)
+        .get_resource_extended(&commits_url.as_str().into(), false, for_agent)
         .await
         .unwrap();
     let commits_collection_count_2 = commits_collection_2
@@ -186,7 +199,7 @@ async fn destroy_resource_and_check_collection_and_commits() {
     );
     assert!(resp.resource_old.is_some());
     let agents_collection_3 = store
-        .get_resource_extended(&agents_url, false, for_agent)
+        .get_resource_extended(&agents_url.as_str().into(), false, for_agent)
         .await
         .unwrap();
     let agents_collection_count_3 = agents_collection_3
@@ -201,7 +214,7 @@ async fn destroy_resource_and_check_collection_and_commits() {
     );
 
     let commits_collection_3 = store
-        .get_resource_extended(&commits_url, false, for_agent)
+        .get_resource_extended(&commits_url.as_str().into(), false, for_agent)
         .await
         .unwrap();
     let commits_collection_count_3 = commits_collection_3
@@ -229,7 +242,7 @@ async fn get_extended_resource_pagination() {
     );
     let for_agent = &ForAgent::Public;
     if store
-        .get_resource_extended(&subject, false, for_agent)
+        .get_resource_extended(&subject.as_str().into(), false, for_agent)
         .await
         .is_ok()
     {
@@ -238,7 +251,11 @@ async fn get_extended_resource_pagination() {
     // let subject = "https://atomicdata.dev/classes?current_page=2&page_size=1";
     let subject_with_page_size = format!("{}&page_size=1", subject);
     let resource = store
-        .get_resource_extended(&subject_with_page_size, false, &ForAgent::Public)
+        .get_resource_extended(
+            &subject_with_page_size.as_str().into(),
+            false,
+            &ForAgent::Public,
+        )
         .await
         .unwrap()
         .to_single();
@@ -376,7 +393,10 @@ async fn queries() {
         "order did not change after updating resource"
     );
 
-    let mut delete_resource = store.get_resource(&subject_to_delete).await.unwrap();
+    let mut delete_resource = store
+        .get_resource(&subject_to_delete.as_str().into())
+        .await
+        .unwrap();
     delete_resource.destroy(store).await.unwrap();
     let res = store.query(&q).await.unwrap();
     assert!(

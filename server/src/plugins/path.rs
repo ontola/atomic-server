@@ -40,7 +40,7 @@ fn handle_path_request<'a>(
         match result {
             PathReturn::Subject(subject) => {
                 store
-                    .get_resource_extended(&subject, false, for_agent)
+                    .get_resource_extended(&subject.into(), false, for_agent)
                     .await
             }
             PathReturn::Atom(atom) => {

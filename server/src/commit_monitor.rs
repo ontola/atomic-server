@@ -65,7 +65,7 @@ impl Handler<Subscribe> for CommitMonitor {
                     tracing::warn!("can't subscribe to external resource");
                     return None;
                 }
-                match store.get_resource(&msg.subject).await {
+                match store.get_resource(&msg.subject.clone().into()).await {
                     Ok(resource) => {
                         match atomic_lib::hierarchy::check_read(
                             &store,

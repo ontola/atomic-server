@@ -23,7 +23,7 @@ async fn get_parent_drive(resource: &Resource, store: &Db) -> AtomicResult<Strin
     };
 
     let parent_resource = store
-        .get_resource_extended(parent_subject, true, &ForAgent::Sudo)
+        .get_resource_extended(&parent_subject.clone().into(), true, &ForAgent::Sudo)
         .await?
         .to_single();
 
@@ -110,7 +110,7 @@ async fn do_install_plugin(
 
     let plugin_file = match store
         .get_resource_extended(
-            plugin_file_subject,
+            &plugin_file_subject.clone().into(),
             false,
             &ForAgent::AgentSubject(signer.to_string()),
         )
@@ -201,7 +201,7 @@ async fn do_install_plugin(
     install_or_update_plugin(
         &mut zip_file,
         &parent_subject,
-        resource.get_subject(),
+        resource.get_subject().as_str(),
         store,
         &plugins_dir,
         &plugin_cache_dir,

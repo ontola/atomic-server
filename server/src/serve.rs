@@ -41,14 +41,14 @@ async fn clear_remote_cache(appstate: &crate::appstate::AppState) -> AtomicServe
     let mut subjects_to_remove = Vec::new();
     for resource in appstate.store.all_resources(true) {
         let subject = resource.get_subject();
-        if !subject.starts_with(&self_url) {
+        if !subject.as_str().starts_with(&self_url) {
             subjects_to_remove.push(subject.clone());
         }
     }
 
     for subject in subjects_to_remove {
         appstate.store.remove_resource(&subject).await?;
-        appstate.search_state.remove_resource(&subject)?;
+        appstate.search_state.remove_resource(subject.as_str())?;
         count += 1;
     }
 

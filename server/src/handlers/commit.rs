@@ -40,7 +40,7 @@ pub async fn post_commit(
     };
     let commit_response = store.apply_commit(incoming_commit, &opts).await?;
 
-    let message = commit_response.commit_resource.to_json_ad()?;
+    let message = commit_response.commit_resource.to_json_ad(&store)?;
 
     Ok(builder.body(message))
 }

@@ -89,24 +89,27 @@ impl From<SubResourceV1> for crate::values::SubResource {
                     "Named SubResource found, converting to Subject {}",
                     resource.subject
                 );
-                return Self::Subject(resource.subject);
+                return Self::Subject(resource.subject.into());
             }
             SubResourceV1::Nested(propvals) => Self::Nested(propvals_v1_to_v2(propvals)),
-            SubResourceV1::Subject(subject) => Self::Subject(subject),
+            SubResourceV1::Subject(subject) => Self::Subject(subject.into()),
         }
     }
 }
 
 impl From<ResourceV1> for crate::resources::Resource {
     fn from(resource: ResourceV1) -> Self {
-        Self::from_propvals(propvals_v1_to_v2(resource.propvals), resource.subject)
+        Self::from_propvals(
+            propvals_v1_to_v2(resource.propvals),
+            resource.subject.into(),
+        )
     }
 }
 
 impl From<ValueV1> for crate::values::Value {
     fn from(value: ValueV1) -> Self {
         match value {
-            crate::db::v1_types::ValueV1::AtomicUrl(v) => Self::AtomicUrl(v.clone()),
+            crate::db::v1_types::ValueV1::AtomicUrl(v) => Self::AtomicUrl(v.clone().into()),
             crate::db::v1_types::ValueV1::Date(v) => Self::Date(v.clone()),
             crate::db::v1_types::ValueV1::Integer(v) => Self::Integer(v.clone()),
             crate::db::v1_types::ValueV1::Float(v) => Self::Float(v.clone()),
@@ -126,7 +129,7 @@ impl From<ValueV1> for crate::values::Value {
                     "Named SubResource found, converting to Subject {}",
                     resource_v1.subject
                 );
-                return Self::AtomicUrl(resource_v1.subject);
+                return Self::AtomicUrl(resource_v1.subject.into());
             }
             crate::db::v1_types::ValueV1::Boolean(v) => Self::Boolean(v),
             crate::db::v1_types::ValueV1::Unsupported(unsupported_value) => {

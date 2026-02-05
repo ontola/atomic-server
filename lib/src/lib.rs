@@ -88,6 +88,7 @@ pub mod schema;
 pub mod serialize;
 pub mod store;
 pub mod storelike;
+pub mod subject;
 #[cfg(test)]
 mod test_utils;
 pub mod urls;
@@ -104,4 +105,5 @@ pub use errors::AtomicErrorType;
 pub use resources::Resource;
 pub use store::Store;
 pub use storelike::Storelike;
+pub use subject::Subject;
 pub use values::Value;

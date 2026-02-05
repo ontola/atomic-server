@@ -47,7 +47,7 @@ impl Property {
             shortname,
             description,
             allows_only,
-            subject: resource.get_subject().into(),
+            subject: resource.get_subject().to_string(),
         })
     }
 
@@ -65,12 +65,12 @@ impl Property {
         );
         resource.set_unsafe(
             urls::DATATYPE_PROP.into(),
-            Value::AtomicUrl(self.data_type.to_string()),
+            Value::AtomicUrl(self.data_type.to_string().into()),
         );
         if let Some(classtype) = &self.class_type {
             resource.set_unsafe(
                 urls::CLASSTYPE_PROP.into(),
-                Value::AtomicUrl(classtype.clone()),
+                Value::AtomicUrl(classtype.clone().into()),
             );
         }
 
@@ -112,7 +112,7 @@ impl Class {
             requires,
             recommends,
             shortname,
-            subject: resource.get_subject().into(),
+            subject: resource.get_subject().to_string(),
             description,
         })
     }

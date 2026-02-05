@@ -127,7 +127,7 @@ pub async fn query_sorted_indexed(
 
             if should_include_resource(q) {
                 if let Ok(resource) = store
-                    .get_resource_extended(subject, true, &q.for_agent)
+                    .get_resource_extended(&crate::Subject::from(subject), true, &q.for_agent)
                     .await
                 {
                     resources.push(resource.to_single());

@@ -43,7 +43,11 @@ pub async fn handle_post_resource(
             } else {
                 format!("?{}", req.query_string())
             };
-            let subject = format!("{}/{}{}", server_url, subj_end_string, querystring);
+            let subject = if subj_end_string.starts_with("did:") {
+                subj_end_string.to_string()
+            } else {
+                format!("{}/{}{}", server_url, subj_end_string, querystring)
+            };
             subject
         }
     } else {
@@ -76,8 +80,8 @@ pub async fn handle_post_resource(
     let response_body = match content_type {
         ContentType::Json => resource.to_json(&store).await?,
         ContentType::JsonLd => resource.to_json_ld(&store).await?,
-        ContentType::JsonAd => resource.to_json_ad()?,
-        ContentType::Html => resource.to_json_ad()?,
+        ContentType::JsonAd => resource.to_json_ad(&store)?,
+        ContentType::Html => resource.to_json_ad(&store)?,
         ContentType::Turtle | ContentType::NTriples => {
             let atoms = resource.to_atoms();
             atomic_lib::serialize::atoms_to_ntriples(atoms, &store).await?
