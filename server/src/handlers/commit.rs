@@ -19,7 +19,7 @@ pub async fn post_commit(
     let server_url = appstate.config.get_server_url_for_request(&req);
     let store = appstate.store.clone_with_url(server_url);
     let mut builder = HttpResponse::Ok();
-    let incoming_commit_resource = parse_json_ad_commit_resource(&body, store).await?;
+    let incoming_commit_resource = parse_json_ad_commit_resource(&body, &store).await?;
     let incoming_commit = Commit::from_resource(incoming_commit_resource)?;
     if !incoming_commit.subject.contains(
         &store

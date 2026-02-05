@@ -118,7 +118,7 @@ pub async fn search_query(
     };
 
     result_vec.push(results_resource);
-    let body = Resource::vec_to_json_ad(&result_vec)?.into_bytes();
+    let _body = Resource::vec_to_json_ad(&result_vec)?.into_bytes();
 
     let mut builder = HttpResponse::Ok();
     builder.append_header(("Server-Timing", timer.header_value()));
