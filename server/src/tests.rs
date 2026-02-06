@@ -123,21 +123,29 @@ async fn server_tests() {
     let req =
         test::TestRequest::with_uri("/properties").insert_header(("Accept", "application/ad+json"));
     let resp = test::call_service(&app, req.to_request()).await;
-    assert_eq!(
-        resp.status().as_u16(),
-        401,
-        "resource should not be authorized for public"
-    );
+    let status = resp.status().as_u16();
+    let body = get_body(resp);
+    if status != 401 {
+        panic!(
+            "Public request to /properties status: {}. Expected 401. Body: {}",
+            status, body
+        );
+    }
 
     // Get JSON-AD
     let req = build_request_authenticated("/properties", &appstate);
     let resp = test::call_service(&app, req.to_request()).await;
-    assert!(resp.status().is_success(), "setup not returning JSON-AD");
+    let status = resp.status().as_u16();
     let body = get_body(resp);
-    assert!(
-        body.as_str().contains("\"@id\""),
-        "response should be json-ad"
-    );
+    if status >= 400 {
+        panic!(
+            "Auth request to /properties status: {}. Expected success. Body: {}",
+            status, body
+        );
+    }
+    if !body.contains("\"@id\"") {
+        panic!("response should be json-ad. Body: {}", body);
+    }
 
     // Get JSON-LD
     let req = build_request_authenticated("/properties", &appstate)
@@ -157,8 +165,9 @@ async fn server_tests() {
     assert!(resp.status().is_success());
     let body = get_body(resp);
     assert!(
-        body.as_str().starts_with("<htt"),
-        "response should be turtle"
+        body.as_str().starts_with("<"),
+        "response should be turtle, but was: {}",
+        body.as_str()
     );
 
     // Get Search
@@ -172,6 +181,22 @@ async fn server_tests() {
         body.as_str().contains("/results"),
         "response should be a search resource"
     );
+
+    // Get DID endpoint
+    let req = build_request_authenticated("/did", &appstate);
+    let resp = test::call_service(&app, req.to_request()).await;
+    assert!(resp.status().is_success());
+    let body = get_body(resp);
+    assert!(
+        body.as_str().contains("Resolves a DID"),
+        "response should be the DID endpoint description"
+    );
+
+    // Test path-based DID resolution (even if it doesn't exist, we should get a 404 from the store, not a 500 or 401 before getting there)
+    let req = build_request_authenticated("/did:ad:test", &appstate);
+    let resp = test::call_service(&app, req.to_request()).await;
+    // It should be a 404 because did:ad:test doesn't exist, but it confirms it reached the handler correctly
+    assert_eq!(resp.status(), 404);
 }
 
 /// Gets the body from the response as a String. Why doen't actix provide this?

@@ -61,6 +61,7 @@ impl AppState {
         // Register all built-in endpoints
         store.add_endpoint(plugins::versioning::version_endpoint())?;
         store.add_endpoint(plugins::versioning::all_versions_endpoint())?;
+        store.add_endpoint(plugins::did::did_endpoint())?;
         store.add_endpoint(plugins::bookmark::bookmark_endpoint())?;
         store.add_endpoint(plugins::files::upload_endpoint())?;
         store.add_endpoint(plugins::files::download_endpoint())?;

@@ -20,7 +20,7 @@ use std::collections::{HashMap, HashSet};
 /// It's also responsible for checking whether the rights are present
 pub struct CommitMonitor {
     /// Maintains a list of all the resources that are being subscribed to, and maps these to websocket connections.
-    subscriptions: HashMap<String, HashSet<Addr<WebSocketConnection>>>,
+    subscriptions: HashMap<atomic_lib::Subject, HashSet<Addr<WebSocketConnection>>>,
     store: Db,
     search_state: SearchState,
     last_search_commit: chrono::DateTime<Local>,
@@ -61,11 +61,11 @@ impl Handler<Subscribe> for CommitMonitor {
                 let self_url = store
                     .get_base_domain()
                     .expect("No base url set in Commit Monitor");
-                if !msg.subject.starts_with(&self_url) {
+                if !msg.subject.as_str().starts_with(&self_url) {
                     tracing::warn!("can't subscribe to external resource");
                     return None;
                 }
-                match store.get_resource(&msg.subject.clone().into()).await {
+                match store.get_resource(&msg.subject).await {
                     Ok(resource) => {
                         match atomic_lib::hierarchy::check_read(
                             &store,
@@ -141,9 +141,11 @@ impl Handler<CommitMessage> for CommitMonitor {
     #[tracing::instrument(name = "handle_commit_message", skip_all, fields(subscriptions = &self.subscriptions.len(), s = %msg.commit_response.commit_resource.get_subject()))]
     fn handle(&mut self, msg: CommitMessage, _: &mut Context<Self>) -> Self::Result {
         let target = msg.commit_response.commit.subject.clone();
+        let target_subject =
+            atomic_lib::Subject::from_raw(&target, self.store.get_base_domain().as_deref());
 
         // Notify websocket listeners
-        if let Some(subscribers) = self.subscriptions.get(&target) {
+        if let Some(subscribers) = self.subscriptions.get(&target_subject) {
             tracing::debug!(
                 "Sending commit {} to {} subscribers",
                 target,

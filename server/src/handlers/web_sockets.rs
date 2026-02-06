@@ -74,7 +74,7 @@ pub struct WebSocketConnection {
     /// otherwise we drop connection.
     hb: Instant,
     /// The Subjects that the client is subscribed to
-    subscribed: std::collections::HashSet<String>,
+    subscribed: std::collections::HashSet<atomic_lib::Subject>,
     /// The CommitMonitor Actor that receives and sends messages for Commits
     commit_monitor_addr: Addr<CommitMonitor>,
     y_sync_broadcaster_addr: Addr<YSyncBroadcaster>,
@@ -210,14 +210,18 @@ fn handle_ws_message_sync(
     match text.as_str() {
         s if s.starts_with("SUBSCRIBE ") => {
             let mut parts = s.split("SUBSCRIBE ");
-            if let Some(subject) = parts.nth(1) {
+            if let Some(subject_str) = parts.nth(1) {
+                let subject: atomic_lib::Subject = atomic_lib::Subject::from_raw(
+                    subject_str,
+                    conn.store.get_base_domain().as_deref(),
+                );
                 conn.commit_monitor_addr
                     .do_send(crate::actor_messages::Subscribe {
                         addr: ctx.address(),
-                        subject: subject.to_string(),
+                        subject: subject.clone(),
                         agent: conn.agent.to_string(),
                     });
-                conn.subscribed.insert(subject.into());
+                conn.subscribed.insert(subject);
                 Ok(())
             } else {
                 Err("SUBSCRIBE needs a subject".into())
@@ -225,8 +229,12 @@ fn handle_ws_message_sync(
         }
         s if s.starts_with("UNSUBSCRIBE ") => {
             let mut parts = s.split("UNSUBSCRIBE ");
-            if let Some(subject) = parts.nth(1) {
-                conn.subscribed.remove(subject);
+            if let Some(subject_str) = parts.nth(1) {
+                let subject = atomic_lib::Subject::from_raw(
+                    subject_str,
+                    conn.store.get_base_domain().as_deref(),
+                );
+                conn.subscribed.remove(&subject);
                 Ok(())
             } else {
                 Err("UNSUBSCRIBE needs a subject".into())
@@ -244,7 +252,7 @@ fn handle_ws_message_sync(
             conn.y_sync_broadcaster_addr
                 .do_send(crate::actor_messages::SubscribeYSync {
                     addr: ctx.address(),
-                    subject: message.subject.to_string(),
+                    subject: message.subject,
                     property: message.property.to_string(),
                     agent: conn.agent.to_string(),
                 });
@@ -262,7 +270,7 @@ fn handle_ws_message_sync(
             conn.y_sync_broadcaster_addr
                 .do_send(crate::actor_messages::UnsubscribeYSync {
                     addr: ctx.address(),
-                    subject: message.subject.to_string(),
+                    subject: message.subject,
                     property: message.property.to_string(),
                 });
 

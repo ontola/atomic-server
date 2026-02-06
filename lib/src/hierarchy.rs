@@ -74,9 +74,7 @@ pub async fn check_append(
                 .get_classes(store)
                 .await?
                 .iter()
-                .map(|c| c.subject.clone())
-                .collect::<String>()
-                .contains(urls::DRIVE)
+                .any(|c| c.subject == urls::DRIVE)
             {
                 Ok(String::from("Drive without a parent can be created"))
             } else {
@@ -101,11 +99,14 @@ pub fn check_rights<'a>(
             return Ok("Sudo has root access, and can edit anything.".into());
         }
         let for_agent = for_agent_enum.to_string();
-        if resource.get_subject().as_str() == for_agent {
+        let normalized_for_agent = store.normalize_subject(&for_agent.clone().into());
+        if resource.get_subject() == &normalized_for_agent {
             return Ok("Agents can always edit themselves or their children.".into());
         }
+
         if let Ok(server_agent) = store.get_default_agent() {
-            if server_agent.subject == for_agent {
+            let normalized_server_agent = store.normalize_subject(&server_agent.subject.into());
+            if normalized_server_agent == normalized_for_agent {
                 return Ok("Server agent has root access, and can edit anything.".into());
             }
         }
@@ -138,7 +139,8 @@ pub fn check_rights<'a>(
                         ))
                     }
                     agent => {
-                        if agent == for_agent {
+                        let normalized_agent = store.normalize_subject(&agent.into());
+                        if normalized_agent == normalized_for_agent {
                             return Ok(format!(
                                 "Right has been explicitly set in {}",
                                 resource.get_subject()

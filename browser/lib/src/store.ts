@@ -51,6 +51,8 @@ type CreateResourceOptions = {
   isA?: string | string[];
   /** Any additional properties the resource should have */
   propVals?: Record<string, JSONValue>;
+  /** Set to true if the resource should have a DID as subject. Defaults to true. */
+  did?: boolean;
 };
 
 type SerializedYSyncUpdate = {
@@ -309,9 +311,14 @@ export class Store {
     isA,
     propVals,
     noParent,
+    did = true,
   }: CreateResourceOptions = {}): Promise<Resource<C>> {
     const normalizedIsA = Array.isArray(isA) ? isA : [isA];
-    const newSubject = subject ?? this.createSubject();
+    const newSubject =
+      subject ??
+      (did
+        ? this.createSubject()
+        : this.createSubject(parent ?? this.serverUrl));
 
     const resource = this.getResourceLoading(newSubject, { newResource: true });
 
