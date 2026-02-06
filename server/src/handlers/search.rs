@@ -1,5 +1,5 @@
 //! Full-text search is achieved with the Tantivy crate.
-//! The index is built whenever --rebuild-index is passed,
+//! The index is built whenever --rebuild-indexes is passed,
 //! or after a commit is processed by the CommitMonitor.
 
 use crate::{
@@ -125,6 +125,7 @@ pub async fn search_query(
 
     let mut builder = HttpResponse::Ok();
     builder.append_header(("Server-Timing", timer.header_value()));
+    builder.content_type("application/ad+json");
 
     // TODO: support other serialization options
     Ok(builder.body(Resource::vec_to_json_ad(&result_vec, Some(&origin))?))
@@ -306,7 +307,7 @@ fn docs_to_subjects(
     // convert found documents to resources
     for (_score, doc_address) in docs {
         let retrieved_doc: tantivy::TantivyDocument = searcher.doc(doc_address)?;
-        let subject_val = retrieved_doc.get_first(fields.subject).ok_or("No 'subject' in search doc found. This is required when indexing. Run with --rebuild-index")?;
+        let subject_val = retrieved_doc.get_first(fields.subject).ok_or("No 'subject' in search doc found. This is required when indexing. Run with --rebuild-indexes")?;
 
         let subject = unpack_value(subject_val, &retrieved_doc, "Subject".to_string())?;
         if !subjects.contains(&subject) {
