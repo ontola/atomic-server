@@ -65,9 +65,10 @@ pub async fn get_agent_from_auth_values_and_check(
         // check if the timestamp is valid
         check_timestamp_in_past(auth_vals.timestamp, ACCEPTABLE_TIME_DIFFERENCE)?;
         // check if the public key belongs to the agent
-        let found_public_key = store
-            .get_value(&auth_vals.agent_subject, urls::PUBLIC_KEY)
-            .await?;
+        // For DID subjects, we need to fetch the agent resource locally
+        let agent_subject = crate::Subject::from_raw(&auth_vals.agent_subject, None);
+        let agent_resource = store.get_resource(&agent_subject).await?;
+        let found_public_key = agent_resource.get(urls::PUBLIC_KEY)?;
         if found_public_key.to_string() != auth_vals.public_key {
             Err(
                 "The public key in the auth headers does not match the public key in the agent"
