@@ -32,7 +32,7 @@ use wasmtime::{
     component::{Component, Linker, ResourceTable},
     Config, Engine, ResourceLimiter, Store, StoreLimits, StoreLimitsBuilder, Trap,
 };
-use wasmtime_wasi::{p2, DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
+use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 
 use atomic_lib::db::plugin_meta::PluginMetaKey;
@@ -535,7 +535,7 @@ impl WasmPlugin {
     fn encode_resource(&self, resource: &Resource) -> AtomicResult<WasmResourceJson> {
         Ok(WasmResourceJson {
             subject: resource.get_subject().to_string(),
-            json_ad: resource.to_json_ad(&*self.inner.db)?,
+            json_ad: resource.to_json_ad(None)?,
         })
     }
 
@@ -671,8 +671,8 @@ impl ResourceLimiter for PluginHostState {
 }
 
 impl WasiView for PluginHostState {
-    fn ctx(&mut self) -> WasiCtxView<'_> {
-        WasiCtxView {
+    fn ctx(&mut self) -> wasmtime_wasi::WasiCtxView<'_> {
+        wasmtime_wasi::WasiCtxView {
             ctx: &mut self.ctx,
             table: &mut self.table,
         }
@@ -731,7 +731,7 @@ impl bindings::atomic::class_extender::host::Host for PluginHostState {
 
         Ok(WasmResourceJson {
             subject: resource.get_subject().to_string(),
-            json_ad: resource.to_json_ad(&*self.db).map_err(|e| e.to_string())?,
+            json_ad: resource.to_json_ad(None).map_err(|e| e.to_string())?,
         })
     }
 
@@ -757,7 +757,7 @@ impl bindings::atomic::class_extender::host::Host for PluginHostState {
         for resource in result.resources {
             resources.push(WasmResourceJson {
                 subject: resource.get_subject().to_string(),
-                json_ad: resource.to_json_ad(&*self.db).map_err(|e| e.to_string())?,
+                json_ad: resource.to_json_ad(None).map_err(|e| e.to_string())?,
             });
         }
 

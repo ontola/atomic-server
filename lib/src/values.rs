@@ -57,7 +57,40 @@ pub const SLUG_REGEX: &str = r"^[a-z0-9]+(?:-[a-z0-9]+)*$";
 /// YYYY-MM-DD
 pub const DATE_REGEX: &str = r"^\d{4}\-(0[1-9]|1[012])\-(0[1-9]|[12][0-9]|3[01])$";
 
+use crate::storelike::Storelike;
+
+impl SubResource {
+    pub fn normalize(&mut self, store: &impl Storelike) {
+        match self {
+            SubResource::Subject(sub) => {
+                *sub = store.normalize_subject(sub);
+            }
+            SubResource::Nested(propvals) => {
+                for (_, val) in propvals.iter_mut() {
+                    val.normalize(store);
+                }
+            }
+        }
+    }
+}
+
 impl Value {
+    pub fn normalize(&mut self, store: &impl Storelike) {
+        match self {
+            Value::AtomicUrl(sub) => {
+                *sub = store.normalize_subject(sub);
+            }
+            Value::ResourceArray(sub_arr) => {
+                for sub in sub_arr.iter_mut() {
+                    sub.normalize(store);
+                }
+            }
+            Value::NestedResource(sub) => {
+                sub.normalize(store);
+            }
+            _ => {}
+        }
+    }
     /// Check if the value `q_val` is present in `val`
     pub fn contains_value(&self, q_val: &Value) -> bool {
         let query_value = q_val.to_string();
@@ -512,7 +545,7 @@ mod test {
             atom.values_to_subjects().unwrap(),
             vec![
                 "https://example.com/subject_string".to_string(),
-                full_resource.get_subject().into(),
+                full_resource.get_subject().to_string(),
                 "https://example.com/parent_resource https://atomicdata.dev/properties/parent 2"
                     .into(),
             ]

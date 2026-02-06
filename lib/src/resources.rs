@@ -213,9 +213,8 @@ impl Resource {
         }
     }
 
-    pub fn random_subject(store: &impl Storelike) -> AtomicResult<String> {
-        let server_url = store.get_server_url()?;
-        Ok(format!("{}/{}", server_url, Ulid::new().to_string()))
+    pub fn random_subject(_store: &impl Storelike) -> AtomicResult<String> {
+        Ok(format!("/{}", Ulid::new().to_string()))
     }
 
     /// Create a new resource with a generated Subject
@@ -230,12 +229,7 @@ impl Resource {
     pub async fn new_instance(class_url: &str, store: &impl Storelike) -> AtomicResult<Resource> {
         let propvals: PropVals = HashMap::new();
         let class = store.get_class(class_url).await?;
-        let subject = format!(
-            "{}/{}/{}",
-            store.get_server_url()?,
-            &class.shortname,
-            random_string(10)
-        );
+        let subject = format!("/{}/{}", &class.shortname, random_string(10));
         let mut resource = Resource {
             propvals,
             subject: subject.clone().into(),
@@ -357,11 +351,10 @@ impl Resource {
         let commit_builder = self.get_commit_builder().clone();
         let commit = commit_builder.sign(&agent, store, self).await?;
         // If the current client is a server, and the subject is hosted here, don't post
-        let should_post = if let Some(self_url) = store.get_self_url() {
-            !self.subject.as_str().starts_with(&self_url)
-        } else {
-            // Current client is not a server, has no own persisted store
-            true
+        let should_post = match self.subject.clone() {
+            crate::Subject::Internal(_) => false,
+            crate::Subject::External(_) => true,
+            crate::Subject::Did(_) => false,
         };
         if should_post {
             crate::client::post_commit(&commit, store).await?;
@@ -530,13 +523,15 @@ impl Resource {
     }
 
     /// Converts Resource to JSON-AD string.
+    /// If origin is provided, Internal subjects are resolved to it.
     #[instrument(skip_all)]
-    pub fn to_json_ad(&self, store: &impl Storelike) -> AtomicResult<String> {
+    pub fn to_json_ad(&self, origin: Option<&str>) -> AtomicResult<String> {
+        let origin = origin.unwrap_or("http://localhost");
         let propvals = self.get_propvals();
         let res = crate::serialize::propvals_to_json_ad_map(
             propvals,
-            Some(self.get_subject().resolve(&store.get_server_url()?)),
-            &store.get_server_url()?,
+            Some(self.get_subject().resolve(origin)),
+            origin,
         )?;
         Ok(serde_json::to_string(&res)?)
     }
@@ -556,12 +551,17 @@ impl Resource {
 
     /// Converts Resource to plain JSON string.
     #[instrument(skip_all)]
-    pub async fn to_json(&self, store: &impl Storelike) -> AtomicResult<String> {
+    pub async fn to_json(
+        &self,
+        store: &impl Storelike,
+        origin: Option<&str>,
+    ) -> AtomicResult<String> {
         let obj = crate::serialize::propvals_to_json_ld(
             self.get_propvals(),
             Some(self.get_subject().to_string()),
             store,
             false,
+            origin,
         )
         .await?;
         serde_json::to_string_pretty(&obj).map_err(|_| "Could not serialize to JSON".into())
@@ -569,12 +569,17 @@ impl Resource {
 
     /// Converts Resource to JSON-LD string, with @context object and RDF compatibility.
     #[instrument(skip_all)]
-    pub async fn to_json_ld(&self, store: &impl Storelike) -> AtomicResult<String> {
+    pub async fn to_json_ld(
+        &self,
+        store: &impl Storelike,
+        origin: Option<&str>,
+    ) -> AtomicResult<String> {
         let obj = crate::serialize::propvals_to_json_ld(
             self.get_propvals(),
             Some(self.get_subject().to_string()),
             store,
             true,
+            origin,
         )
         .await?;
         serde_json::to_string_pretty(&obj).map_err(|_| "Could not serialize to JSON-LD".into())
@@ -598,13 +603,10 @@ impl Resource {
         crate::serialize::atoms_to_ntriples(self.to_atoms(), store).await
     }
 
-    pub fn vec_to_json_ad(
-        resources: &Vec<Resource>,
-        store: &impl Storelike,
-    ) -> AtomicResult<String> {
+    pub fn vec_to_json_ad(resources: &Vec<Resource>, origin: Option<&str>) -> AtomicResult<String> {
         let str = resources
             .iter()
-            .map(|r| r.to_json_ad(store))
+            .map(|r| r.to_json_ad(origin))
             .collect::<AtomicResult<Vec<String>>>()?
             .join(",");
 
@@ -614,10 +616,11 @@ impl Resource {
     pub async fn vec_to_json(
         resources: &Vec<Resource>,
         store: &impl Storelike,
+        origin: Option<&str>,
     ) -> AtomicResult<String> {
         let mut strings = Vec::new();
         for r in resources {
-            strings.push(r.to_json(store).await?);
+            strings.push(r.to_json(store, origin).await?);
         }
         let str = strings.join(",");
 
@@ -627,10 +630,11 @@ impl Resource {
     pub async fn vec_to_json_ld(
         resources: &Vec<Resource>,
         store: &impl Storelike,
+        origin: Option<&str>,
     ) -> AtomicResult<String> {
         let mut strings = Vec::new();
         for r in resources {
-            strings.push(r.to_json_ld(store).await?);
+            strings.push(r.to_json_ld(store, origin).await?);
         }
         let str = strings.join(",");
 
@@ -933,7 +937,8 @@ mod test {
             .unwrap()
             .to_subjects(None)
             .unwrap();
-        assert_eq!(new_val.first().unwrap(), append_value);
+        // The URL is normalized to internal: format by the store
+        assert_eq!(new_val.first().unwrap(), "internal:/someURL");
     }
 
     #[tokio::test]

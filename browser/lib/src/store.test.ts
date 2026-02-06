@@ -83,4 +83,42 @@ describe('Store', () => {
     expect(resource2.props.parent).toBe(store.getServerUrl());
     expect(resource2.get(core.properties.isA)).toBe(undefined);
   });
+
+  it('resolves aliases correctly', async ({ expect }) => {
+    const store = new Store();
+    const alias = 'https://atomicdata.dev/alias';
+    const did = 'did:ad:123';
+
+    const resource = new Resource(did);
+    resource.setUnsafe(core.properties.description, 'Identity verified');
+
+    // Explicitly add with alias
+    store.addResources(resource, { alias });
+
+    // Both subjects should return the same resource
+    const gotByAlias = store.getResourceLoading(alias);
+    const gotByDID = store.getResourceLoading(did);
+
+    expect(gotByAlias.subject).toBe(did);
+    expect(gotByDID.subject).toBe(did);
+    expect(gotByAlias).toBe(gotByDID);
+  });
+
+  it('normalizes relative subjects to full URLs', async ({ expect }) => {
+    const store = new Store({ serverUrl: 'https://myserver.dev' });
+
+    // Relative path should become full URL
+    const normalizedRelative = store.normalizeSubject('classes');
+    expect(normalizedRelative).toBe('https://myserver.dev/classes');
+
+    // Full URL should remain unchanged
+    const normalizedFull = store.normalizeSubject(
+      'https://myserver.dev/classes?page_size=10',
+    );
+    expect(normalizedFull).toBe('https://myserver.dev/classes?page_size=10');
+
+    // DID should remain unchanged
+    const normalizedDID = store.normalizeSubject('did:ad:123');
+    expect(normalizedDID).toBe('did:ad:123');
+  });
 });

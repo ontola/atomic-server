@@ -10,25 +10,27 @@ use crate::{
 };
 
 /// Serializes a vector or Resources to a JSON-AD string
-pub fn resources_to_json_ad(resources: &[Resource], base_url: &str) -> AtomicResult<String> {
-    let mut vec: Vec<serde_json::Value> = Vec::new();
+pub fn resources_to_json_ad(resources: &[Resource], origin: &str) -> AtomicResult<String> {
+    let mut strings = Vec::new();
     for r in resources {
-        vec.push(crate::serialize::propvals_to_json_ad_map(
+        let res = propvals_to_json_ad_map(
             r.get_propvals(),
-            Some(r.get_subject().resolve(base_url)),
-            base_url,
-        )?)
+            Some(r.get_subject().resolve(origin)),
+            origin,
+        )?;
+        strings.push(serde_json::to_string(&res)?);
     }
-    let serde_array = serde_json::Value::from(vec);
-    serde_json::to_string_pretty(&serde_array).map_err(|_| "Could not serialize to JSON-AD".into())
+    let str = strings.join(",");
+
+    Ok(format!("[{}]", str))
 }
 
 /// Converts an Atomic Value to a Serde Value.
 // TODO: Accept JSON-LD / JSON as options
 // https://github.com/atomicdata-dev/atomic-server/issues/315
-pub fn val_to_serde(value: Value, base_url: &str) -> AtomicResult<SerdeValue> {
+pub fn val_to_serde(value: Value, origin: &str) -> AtomicResult<SerdeValue> {
     let json_val: SerdeValue = match value {
-        Value::AtomicUrl(val) => SerdeValue::String(val.resolve(base_url)),
+        Value::AtomicUrl(val) => SerdeValue::String(val.resolve(origin)),
         Value::Date(val) => SerdeValue::String(val),
         // TODO: Handle big numbers
         Value::Integer(val) => serde_json::from_str(&val.to_string()).unwrap_or_default(),
@@ -42,11 +44,11 @@ pub fn val_to_serde(value: Value, base_url: &str) -> AtomicResult<SerdeValue> {
                 match resource {
                     crate::values::SubResource::Nested(pv) => {
                         vec.push(crate::serialize::propvals_to_json_ad_map(
-                            &pv, None, base_url,
+                            &pv, None, origin,
                         )?);
                     }
                     crate::values::SubResource::Subject(s) => {
-                        vec.push(SerdeValue::String(s.resolve(base_url)))
+                        vec.push(SerdeValue::String(s.resolve(origin)))
                     }
                 }
             }
@@ -60,9 +62,9 @@ pub fn val_to_serde(value: Value, base_url: &str) -> AtomicResult<SerdeValue> {
         // TODO: fix this for nested resources in json and json-ld serialization, because this will cause them to fall back to json-ad
         Value::NestedResource(res) => match res {
             crate::values::SubResource::Nested(propvals) => {
-                propvals_to_json_ad_map(&propvals, None, base_url)?
+                propvals_to_json_ad_map(&propvals, None, origin)?
             }
-            crate::values::SubResource::Subject(s) => SerdeValue::String(s.resolve(base_url)),
+            crate::values::SubResource::Subject(s) => SerdeValue::String(s.resolve(origin)),
         },
         Value::YDoc(val) => {
             let mut obj = Map::new();
@@ -83,11 +85,11 @@ pub fn val_to_serde(value: Value, base_url: &str) -> AtomicResult<SerdeValue> {
 pub fn propvals_to_json_ad_map(
     propvals: &PropVals,
     subject: Option<String>,
-    base_url: &str,
+    origin: &str,
 ) -> AtomicResult<serde_json::Value> {
     let mut root = Map::new();
     for (prop_url, value) in propvals.iter() {
-        root.insert(prop_url.clone(), val_to_serde(value.clone(), base_url)?);
+        root.insert(prop_url.clone(), val_to_serde(value.clone(), origin)?);
     }
     if let Some(sub) = subject {
         root.insert("@id".into(), SerdeValue::String(sub));
@@ -105,7 +107,9 @@ pub async fn propvals_to_json_ld(
     subject: Option<String>,
     store: &impl Storelike,
     json_ld: bool,
+    origin: Option<&str>,
 ) -> AtomicResult<serde_json::Value> {
+    let origin = origin.unwrap_or("http://localhost");
     // Initiate JSON object
     let mut root = Map::new();
     // For JSON-LD serialization
@@ -156,9 +160,7 @@ pub async fn propvals_to_json_ld(
             context.insert(property.shortname.as_str().into(), ctx_value);
         }
         let key = property.shortname;
-        let base_url = store.get_server_url()?;
-
-        root.insert(key, val_to_serde(value.clone(), &base_url)?);
+        root.insert(key, val_to_serde(value.clone(), origin)?);
     }
 
     if let Some(sub) = subject {
@@ -283,7 +285,7 @@ mod test {
             .get_resource(&crate::urls::AGENT.into())
             .await
             .unwrap()
-            .to_json_ad(&store)
+            .to_json_ad(None)
             .unwrap();
         println!("json-ad: {}", json);
         let correct_json = r#"{
@@ -311,13 +313,9 @@ mod test {
 
     #[test]
     fn serialize_json_ad_multiple() {
-        let vec = vec![Resource::new("subjet".into())];
+        let vec = vec![Resource::new("subject".into())];
         let serialized = resources_to_json_ad(&vec, "http://localhost/").unwrap();
-        let correct_json = r#"[
-  {
-    "@id": "subjet"
-  }
-]"#;
+        let correct_json = r#"[{"@id":"http://localhost/subject"}]"#;
         assert_eq!(serialized, correct_json);
     }
 
@@ -329,7 +327,7 @@ mod test {
             .get_resource(&crate::urls::AGENT.into())
             .await
             .unwrap()
-            .to_json(&store)
+            .to_json(&store, None)
             .await
             .unwrap();
         println!("json: {}", json);
@@ -364,7 +362,7 @@ mod test {
             .get_resource(&crate::urls::AGENT.into())
             .await
             .unwrap()
-            .to_json_ld(&store)
+            .to_json_ld(&store, None)
             .await
             .unwrap();
         println!("json: {}", json);

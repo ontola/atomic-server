@@ -105,9 +105,7 @@ pub async fn query_sorted_indexed(
     let mut resources: Vec<Resource> = vec![];
     let mut count = 0;
 
-    let self_url = store
-        .get_self_url()
-        .ok_or("No self_url set, required for Queries")?;
+    let base_domain = store.get_base_domain();
 
     let limit = q.limit.unwrap_or(usize::MAX);
 
@@ -120,9 +118,16 @@ pub async fn query_sorted_indexed(
             let (k, _v) = kv.map_err(|_e| "Unable to parse query_cached")?;
             let (_q_filter, _val, subject) = parse_collection_members_key(&k)?;
 
-            // If no external resources should be included, skip this one if it's an external resource
-            if !q.include_external && !subject.starts_with(&self_url) {
-                continue;
+            if !q.include_external {
+                let is_internal = subject.starts_with("internal:") || subject.starts_with('/');
+                let matches_base = if let Some(base) = &base_domain {
+                    subject.contains(base)
+                } else {
+                    false
+                };
+                if !is_internal && !matches_base {
+                    continue;
+                }
             }
 
             if should_include_resource(q) {
@@ -420,7 +425,7 @@ pub mod test {
         fn round_trip(val: &Value, val_check: &Value) {
             let collection = QueryFilter {
                 property: Some("http://example.org/prop".to_string()),
-                value: Some(Value::AtomicUrl("http://example.org/value".to_string())),
+                value: Some(Value::AtomicUrl("http://example.org/value".into())),
                 sort_by: None,
             };
             let subject = "https://example.com/subject";
@@ -438,7 +443,7 @@ pub mod test {
     fn lexicographic_partial() {
         let q = QueryFilter {
             property: Some("http://example.org/prop".to_string()),
-            value: Some(Value::AtomicUrl("http://example.org/value".to_string())),
+            value: Some(Value::AtomicUrl("http://example.org/value".into())),
             sort_by: None,
         };
 
@@ -510,7 +515,7 @@ pub mod test {
 
         let qf_prop_val = QueryFilter {
             property: Some(prop.clone()),
-            value: Some(Value::AtomicUrl(class.to_string())),
+            value: Some(Value::AtomicUrl(class.to_string().into())),
             sort_by: None,
         };
 
@@ -522,7 +527,7 @@ pub mod test {
 
         let qf_val = QueryFilter {
             property: None,
-            value: Some(Value::AtomicUrl(class.to_string())),
+            value: Some(Value::AtomicUrl(class.to_string().into())),
             sort_by: None,
         };
 
@@ -583,7 +588,7 @@ pub mod test {
 
         let qf_prop_val_sort = QueryFilter {
             property: Some(prop.clone()),
-            value: Some(Value::AtomicUrl(class.to_string())),
+            value: Some(Value::AtomicUrl(class.to_string().into())),
             sort_by: Some(urls::DESCRIPTION.to_string()),
         };
         let qf_prop_sort = QueryFilter {
@@ -593,7 +598,7 @@ pub mod test {
         };
         let qf_val_sort = QueryFilter {
             property: Some(prop),
-            value: Some(Value::AtomicUrl(class.to_string())),
+            value: Some(Value::AtomicUrl(class.to_string().into())),
             sort_by: Some(urls::DESCRIPTION.to_string()),
         };
 

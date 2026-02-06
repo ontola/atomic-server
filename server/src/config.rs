@@ -82,10 +82,6 @@ pub struct Opts {
     #[clap(long, env = "ATOMIC_PUBLIC_MODE")]
     pub public_mode: bool,
 
-    /// The full URL of the server. It should resolve to the home page. Set this if you use an external server or tunnel, instead of directly exposing atomic-server. If you leave this out, it will be generated from `domain`, `port` and `http` / `https`.
-    #[clap(long, env = "ATOMIC_SERVER_URL")]
-    pub server_url: Option<String>,
-
     /// How much logs you want. Also influences what is sent to your trace service, if you've set one (e.g. OpenTelemetry)
     #[clap(value_enum, long, default_value = "info", env = "RUST_LOG")]
     pub log_level: LogLevel,
@@ -179,8 +175,6 @@ pub struct ServerOpts {}
 /// These are constructed from [Opts], which in turn are constructed from CLI arguments and ENV variables.
 #[derive(Clone, Debug)]
 pub struct Config {
-    /// Full domain + schema, e.g. `https://example.com`. Is either generated from `domain` and `schema`, or is the `custom_server_url`.
-    pub server_url: String,
     /// CLI + ENV options
     pub opts: Opts,
     // ===  PATHS  ===
@@ -211,44 +205,38 @@ pub struct Config {
 }
 
 impl Config {
-    /// Returns the server URL for a given request.
-    /// If multi-tenancy is enabled and the host matches a subdomain of the base domain, it returns the host URL.
-    pub fn get_server_url_for_request(&self, req: &actix_web::HttpRequest) -> String {
-        let host_header = req
-            .head()
-            .headers
-            .get("X-Forwarded-Host")
-            .or_else(|| req.head().headers.get("Host"));
-
-        if let Some(host) = host_header {
-            if let Ok(host_str) = host.to_str() {
-                let domain = host_str.split(':').next().unwrap_or(host_str);
-                let allowed = if let Some(base) = &self.base_domain {
-                    domain.ends_with(base)
-                } else {
-                    true
-                };
-
-                if allowed {
-                    let schema = if let Some(proto) = req.head().headers.get("X-Forwarded-Proto") {
-                        proto.to_str().unwrap_or("http")
-                    } else if self.opts.https {
-                        "https"
-                    } else {
-                        "http"
-                    };
-                    return format!("{}://{}", schema, host_str);
-                }
+    /// Returns the origin URL (scheme + domain + port) based on the configuration.
+    pub fn get_origin(&self) -> String {
+        let proto = if self.opts.https { "https" } else { "http" };
+        let host = &self.opts.domain;
+        let port = if self.opts.https {
+            if self.opts.port_https == 443 {
+                "".into()
+            } else {
+                format!(":{}", self.opts.port_https)
             }
-        }
-        self.server_url.clone()
+        } else if self.opts.port == 80 {
+            "".into()
+        } else {
+            format!(":{}", self.opts.port)
+        };
+        format!("{}://{}{}", proto, host, port)
+    }
+
+    /// Returns the base domain of the server (e.g. "atomicdata.dev").
+    pub fn get_base_domain(&self) -> Option<String> {
+        self.base_domain.clone()
     }
 }
 
 /// Parse .env and CLI options
 pub fn read_opts() -> Opts {
     // Parse .env file (do this before parsing the CLI opts)
-    dotenv().ok();
+
+    match dotenv() {
+        Ok(_) => println!(".env file found and parsed"),
+        Err(_e) => (),
+    }
 
     // Parse CLI options, .env values, set defaults
     Opts::parse()
@@ -331,17 +319,6 @@ pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
         );
     }
 
-    let schema = if opts.https { "https" } else { "http" };
-
-    // This logic could be a bit too complicated, but I'm not sure on how to make this simpler.
-    let server_url = if let Some(addr) = opts.server_url.clone() {
-        addr
-    } else if opts.https && opts.port_https == 443 || !opts.https && opts.port == 80 {
-        format!("{}://{}", schema, opts.domain)
-    } else {
-        format!("{}://{}:{}", schema, opts.domain, opts.port)
-    };
-
     let base_domain = opts.base_domain.clone();
 
     Ok(Config {
@@ -352,7 +329,6 @@ pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
         config_file_path,
         https_path,
         key_path,
-        server_url,
         plugin_path,
         static_path,
         store_path,

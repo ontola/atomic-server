@@ -15,7 +15,7 @@ describe('Agent', () => {
     // const invalidAgentSignature = () => new Agent(validSubject, 'ugh');
     // expect(invalidAgentSignature).to.throw();
     const invalidAgentUrl = () =>
-      new Agent(new JSCryptoProvider(validPrivateKey), 'not_a_url');
+      new Agent(new JSCryptoProvider(validPrivateKey), 'not a url');
     expect(invalidAgentUrl).to.throw();
   });
 

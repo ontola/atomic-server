@@ -8,6 +8,7 @@ use atomic_lib::{commit::CommitOpts, parse::parse_json_ad_commit_resource, Commi
 pub async fn post_commit(
     appstate: web::Data<AppState>,
     req: actix_web::HttpRequest,
+    context: crate::context::RequestContext,
     body: String,
 ) -> AtomicServerResult<HttpResponse> {
     if appstate.config.opts.slow_mode {
@@ -16,17 +17,23 @@ pub async fn post_commit(
         let random_number = rng.gen_range(100..1000);
         tokio::time::sleep(tokio::time::Duration::from_millis(random_number)).await;
     }
-    let server_url = appstate.config.get_server_url_for_request(&req);
-    let store = appstate.store.clone_with_url(server_url);
+    let origin = context.origin.clone();
+    let store = &appstate.store;
     let mut builder = HttpResponse::Ok();
-    let incoming_commit_resource = parse_json_ad_commit_resource(&body, &store).await?;
+    let incoming_commit_resource = parse_json_ad_commit_resource(&body, store).await?;
     let incoming_commit = Commit::from_resource(incoming_commit_resource)?;
-    if !incoming_commit.subject.contains(
-        &store
-            .get_self_url()
-            .ok_or("Cannot apply commits to this store. No self_url is set.")?,
-    ) {
-        return Err("Subject of commit should be sent to other domain - this store can not own this resource.".into());
+    let is_internal = incoming_commit.subject.starts_with("internal:");
+    let is_did = incoming_commit.subject.starts_with("did:ad:");
+    let matches_base = if let Some(base) = store.get_base_domain() {
+        incoming_commit.subject.contains(&base)
+    } else {
+        false
+    };
+    if !is_internal && !is_did && !matches_base {
+        return Err(
+            "Subject of commit should be sent to other domain - this store can not own this resource."
+                .into(),
+        );
     }
     let opts = CommitOpts {
         validate_schema: true,
@@ -40,7 +47,9 @@ pub async fn post_commit(
     };
     let commit_response = store.apply_commit(incoming_commit, &opts).await?;
 
-    let message = commit_response.commit_resource.to_json_ad(&store)?;
+    let message = commit_response
+        .commit_resource
+        .to_json_ad(Some(&origin))?;
 
     Ok(builder.body(message))
 }

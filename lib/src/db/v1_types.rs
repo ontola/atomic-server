@@ -32,6 +32,7 @@ pub enum SubResourceV1 {
 pub type PropValsV1 = HashMap<String, ValueV1>;
 
 #[derive(Debug, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct QueryFilterV1 {
     pub property: Option<String>,
     pub value: Option<ValueV1>,

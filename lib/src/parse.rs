@@ -204,17 +204,38 @@ pub async fn parse_json_ad_commit_resource(
     string: &str,
     store: &impl crate::Storelike,
 ) -> AtomicResult<Resource> {
-    let json: Map<String, serde_json::Value> = serde_json::from_str(string)?;
+    let mut json: Map<String, serde_json::Value> = serde_json::from_str(string)?;
+
+    // Get the signature - this is required for all commits
     let signature = json
-        .get(urls::SUBJECT)
-        .ok_or("No subject field in Commit.")?
+        .get(urls::SIGNATURE)
+        .ok_or("No signature field in Commit.")?
+        .as_str()
+        .ok_or("Signature must be a string")?
         .to_string();
 
+    // Get or derive the subject
+    // For genesis commits (no previousCommit), the subject should be did:ad:<signature>
+    let _target_subject = match json.get(urls::SUBJECT) {
+        Some(subj) => subj.as_str().ok_or("Subject must be a string")?.to_string(),
+        None => {
+            // Genesis commit - derive subject from signature
+            let derived_subject = format!("did:ad:{}", signature);
+            // Insert the derived subject into the JSON so it gets parsed correctly
+            json.insert(
+                urls::SUBJECT.to_string(),
+                serde_json::Value::String(derived_subject.clone()),
+            );
+            derived_subject
+        }
+    };
+
     // Incoming commits do not have an @id field, we generate that from the signature.
-    let subject = format!("{}/commits/{}", store.get_server_url()?, signature);
+    let commit_subject = format!("internal:/commits/{}", signature);
 
     let resource =
-        parse_json_ad_map_to_resource(json, store, Some(subject), &ParseOpts::default()).await?;
+        parse_json_ad_map_to_resource(json, store, Some(commit_subject), &ParseOpts::default())
+            .await?;
 
     Ok(resource)
 }
@@ -662,7 +683,7 @@ mod test {
         let resource = parse_json_ad_resource(json_input, &store, &ParseOpts::default())
             .await
             .unwrap();
-        let json_output = resource.to_json_ad().unwrap();
+        let json_output = resource.to_json_ad(None).unwrap();
         let in_value: serde_json::Value = serde_json::from_str(json_input).unwrap();
         let out_value: serde_json::Value = serde_json::from_str(&json_output).unwrap();
         assert_eq!(in_value, out_value);
@@ -719,7 +740,8 @@ mod test {
         store1.populate().await.unwrap();
         let store2 = crate::Store::init().await.unwrap();
         let all1: Vec<Resource> = store1.all_resources(true).collect();
-        let serialized = crate::serialize::resources_to_json_ad(&all1).unwrap();
+        let serialized =
+            crate::serialize::resources_to_json_ad(&all1, "https://atomicdata.dev").unwrap();
 
         store2
             .import(&serialized, &ParseOpts::default())
@@ -766,7 +788,7 @@ mod test {
 
     async fn create_store_and_importer() -> (crate::Store, String) {
         let store = crate::Store::init().await.unwrap();
-        store.set_server_url("http://localhost:9883");
+        store.set_base_url("http://localhost:9883");
         store.populate().await.unwrap();
         let agent = store.create_agent(None).await.unwrap();
         store.set_default_agent(agent);
@@ -774,7 +796,7 @@ mod test {
             .await
             .unwrap();
         importer.save_locally(&store).await.unwrap();
-        (store, importer.get_subject().into())
+        (store, importer.get_subject().clone().into())
     }
 
     #[tokio::test]
@@ -905,7 +927,7 @@ mod test {
     #[tokio::test]
     async fn import_resource_malicious() {
         let (store, importer) = create_store_and_importer().await;
-        store.set_server_url("http://localhost:9883");
+        store.set_base_url("http://localhost:9883");
 
         // Try to overwrite the main drive with some malicious data
         let agent = store.get_default_agent().unwrap();

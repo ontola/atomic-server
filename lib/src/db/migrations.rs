@@ -12,7 +12,7 @@ Therefore, we need migrations to convert the old schema to the new one.
 - Update the Tree key used in [crate::db::trees]
  */
 
-use crate::{db::v1_types::propvals_v1_to_v2, errors::AtomicResult, Db};
+use crate::{db::v1_types::propvals_v1_to_v2, errors::AtomicResult, storelike::Storelike, Db};
 
 /// Checks the current version(s) of the internal Store, and performs migrations if needed.
 pub fn migrate_maybe(store: &Db) -> AtomicResult<()> {
@@ -22,6 +22,7 @@ pub fn migrate_maybe(store: &Db) -> AtomicResult<()> {
             "resources" => v0_to_v1(store)?,
             "reference_index" => ref_v0_to_v1(store)?,
             "resources_v1" => resources_v1_to_v2(store)?,
+            "resources_v2" => resources_v2_to_v3(store)?,
             _other => {}
         }
     }
@@ -116,6 +117,57 @@ fn v0_to_v1(store: &Db) -> AtomicResult<()> {
     );
 
     tracing::warn!("Finished migration of {} resources", count);
+    Ok(())
+}
+
+fn resources_v2_to_v3(store: &Db) -> AtomicResult<()> {
+    tracing::warn!("Migrating resources from v2 to v3, this may take a while...");
+    let old_key = "resources_v2";
+    let old = store.db.open_tree(old_key)?;
+
+    let new_key = "resources_v3";
+    let new = store.db.open_tree(new_key)?;
+
+    new.clear()?;
+    let mut count = 0;
+    let base_domain = store
+        .get_base_domain()
+        .unwrap_or_else(|| "localhost".to_string());
+
+    for item in old.into_iter() {
+        let (subject, propvals_bin) = item.expect("Unable to convert into interable");
+
+        let subject_str: String =
+            String::from_utf8(subject.to_vec()).expect("Unable to deserialize subject");
+        let new_subject = crate::db::v2_types::string_to_subject(subject_str, &base_domain);
+        let new_subject_str = new_subject.to_string();
+
+        let propvals: crate::db::v2_types::PropValsV2 = rmp_serde::from_slice(&propvals_bin)
+            .map_err(|e| format!("Migration Error: Failed to deserialize propvals: {}", e))?;
+
+        let new_propvals = crate::db::v2_types::propvals_v2_to_v3(propvals, &base_domain);
+
+        new.insert(
+            new_subject_str.as_bytes(),
+            rmp_serde::to_vec(&new_propvals)
+                .map_err(|e| format!("Migration Error: Failed to encode propvals: {}", e))?,
+        )?;
+
+        count += 1;
+    }
+
+    store.db.drop_tree(old_key).map_err(|e| {
+        tracing::error!("Migration Error: Failed to drop old tree: {}", e);
+        e
+    })?;
+
+    tracing::info!("Finished migrating {} resources", count);
+
+    tracing::info!("clearing index...");
+    store.clear_index()?;
+
+    store.build_index(true)?;
+
     Ok(())
 }
 

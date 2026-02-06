@@ -128,7 +128,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     c.bench_function("resource.to_json_ad()", |b| {
         b.iter(|| {
-            big_resource.to_json_ad().unwrap();
+            big_resource.to_json_ad(None).unwrap();
         })
     });
 

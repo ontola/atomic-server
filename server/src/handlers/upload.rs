@@ -25,28 +25,29 @@ pub async fn upload_handler(
     appstate: web::Data<AppState>,
     query: web::Query<UploadQuery>,
     req: actix_web::HttpRequest,
+    context: crate::context::RequestContext,
 ) -> AtomicServerResult<HttpResponse> {
-    let server_url = appstate.config.get_server_url_for_request(&req);
-    let store = appstate.store.clone_with_url(server_url.clone());
+    let origin = context.origin.clone();
+    let store = &appstate.store;
 
     let parent = store.get_resource(&query.parent.clone().into()).await?;
     let subject = format!(
         "{}{}",
-        store.get_server_url()?,
+        origin,
         req.head()
             .uri
             .path_and_query()
             .ok_or("Path must be given")?
     );
     let agent = get_client_agent(req.headers(), &appstate, subject).await?;
-    check_write(&store, &parent, &agent).await?;
+    check_write(store, &parent, &agent).await?;
 
     let mut created_resources: Vec<Resource> = Vec::new();
 
     while let Ok(Some(field)) = body.try_next().await {
         let mut resource =
-            save_file_and_create_resource(field, &appstate, &query.parent, &store).await?;
-        resource.save(&store).await?;
+            save_file_and_create_resource(field, &appstate, &query.parent, store, &origin).await?;
+        resource.save(store).await?;
         created_resources.push(resource);
     }
 
@@ -54,7 +55,7 @@ pub async fn upload_handler(
 
     Ok(builder.body(atomic_lib::serialize::resources_to_json_ad(
         &created_resources,
-        &server_url,
+        &origin,
     )?))
 }
 
@@ -63,6 +64,8 @@ async fn save_file_and_create_resource(
     appstate: &web::Data<AppState>,
     parent: &str,
     store: &Db,
+    // The full origin URL (e.g., "https://example.com") for constructing resource subjects
+    origin: &str,
 ) -> AtomicServerResult<Resource> {
     let content_type = field.content_disposition().clone();
     let filename = content_type.get_filename().ok_or("Filename is missing")?;
@@ -97,8 +100,8 @@ async fn save_file_and_create_resource(
 
     let mimetype = guess_mime_for_filename(filename);
     let subject_path = format!("files/{}", urlencoding::encode(&file_id));
-    let new_subject = format!("{}/{}", store.get_server_url()?, subject_path);
-    let download_url = format!("{}/download/{}", store.get_server_url()?, subject_path);
+    let new_subject = format!("{}/{}", origin, subject_path);
+    let download_url = format!("{}/download/{}", origin, subject_path);
 
     let mut resource = atomic_lib::Resource::new_instance(urls::FILE, store).await?;
     resource

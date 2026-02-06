@@ -40,7 +40,7 @@ pub fn construct_invite_redirect<'a>(
             (None, None) => return Ok(db_resource.to_owned().into()),
             (None, Some(agent_url)) => agent_url,
             (Some(public_key), None) => {
-                let new_agent = Agent::new_from_public_key(store, &public_key)?;
+                let new_agent = Agent::new_from_public_key(&public_key)?;
                 // Create an agent if there is none
                 match store.get_resource(&new_agent.subject.clone().into()).await {
                     Ok(_found) => {}

@@ -40,10 +40,6 @@ type ErrorCallback = (e: Error) => void;
 type ServerURLCallback = (serverURL: string) => void;
 type Fetch = typeof fetch;
 
-type AddResourcesOpts = {
-  skipCommitCompare?: boolean;
-};
-
 type CreateResourceOptions = {
   /** Optional subject of the new resource, if not given the store will generate a random subject */
   subject?: string;
@@ -100,6 +96,13 @@ export interface ImportJsonADOptions {
   overwriteOutside?: boolean;
 }
 
+export interface AddResourcesOpts {
+  /** If true, the resource will not be compared to the existing resource in the store. This is useful when you want to force an update. */
+  skipCommitCompare?: boolean;
+  /** If the resource was fetched via an alias, we should record that alias. */
+  alias?: string;
+}
+
 /**
  * Handlers are functions that are called when a certain event occurs.
  */
@@ -138,6 +141,8 @@ export class Store {
   private serverUrl: string;
   /** All the resources of the store */
   private _resources: Map<string, Resource>;
+  /** Mapping from HTTP aliases to primary subjects (e.g. DIDs) */
+  private aliases: Map<string, string> = new Map();
 
   /** List of resources that have parents that are not saved to the server, when a parent is saved it should also save its children */
   private batchedResources: Map<string, Set<string>> = new Map();
@@ -178,6 +183,46 @@ export class Store {
     this.client.setFetch(fetchOverride);
   }
 
+  /**
+   * Normalizes a subject: if it is a relative path, it becomes a full URL using the server's base URL.
+   * DIDs and full HTTP URLs are returned as-is.
+   */
+  public normalizeSubject(subject: string): string {
+    // DIDs and full HTTP URLs are returned as-is, but normalized
+    if (
+      subject.startsWith('did:') ||
+      subject.startsWith('http://') ||
+      subject.startsWith('https://')
+    ) {
+      try {
+        const url = new URL(subject);
+
+        // Remove trailing slash if it's not the root
+        if (url.pathname.length > 1 && url.href.endsWith('/')) {
+          return url.href.slice(0, -1);
+        }
+
+        return url.href;
+      } catch (e) {
+        return subject;
+      }
+    }
+
+    // Relative path - resolve to full URL
+    // This also handles trailing slashes consistently
+    try {
+      const url = new URL(subject, this.serverUrl);
+
+      if (url.pathname.length > 1 && url.href.endsWith('/')) {
+        return url.href.slice(0, -1);
+      }
+
+      return url.href;
+    } catch (e) {
+      return subject;
+    }
+  }
+
   public addResources(
     resources: Resource | Resource[],
     opts?: AddResourcesOpts,
@@ -195,22 +240,36 @@ export class Store {
    */
   public addResource(
     resource: Resource,
-    { skipCommitCompare }: AddResourcesOpts,
+    { skipCommitCompare, alias }: AddResourcesOpts = {},
   ): void {
     // The resource might be new and not have a store yet. We set it here.
     resource.setStore(this);
 
+    const subject = this.normalizeSubject(resource.subject);
+
+    if (alias) {
+      const normalizedAlias = this.normalizeSubject(alias);
+
+      if (normalizedAlias !== subject) {
+        this.aliases.set(normalizedAlias, subject);
+      }
+    }
+
+    if (resource.subject !== subject) {
+      resource.setSubject(subject);
+    }
+
     // Incomplete resources may miss some properties
     if (resource.get(core.properties.incomplete)) {
       // If there is a resource with the same subject, we won't overwrite it with an incomplete one
-      const existing = this.resources.get(resource.subject);
+      const existing = this.resources.get(subject);
 
       if (existing && !existing.loading) {
         return;
       }
     }
 
-    const storeResource = this.resources.get(resource.subject);
+    const storeResource = this.resources.get(subject);
 
     // Check if the resource has the same last commit as the one already in the store, if so, we don't want to notify so we don't trigger rerenders.
     if (!skipCommitCompare) {
@@ -231,7 +290,7 @@ export class Store {
       storeResource.merge(resource.__internalObject);
       this.notify(storeResource);
     } else {
-      this.resources.set(resource.subject, resource.__internalObject);
+      this.resources.set(subject, resource.__internalObject);
       this.notify(resource.__internalObject);
     }
   }
@@ -328,13 +387,17 @@ export class Store {
     return this.findAvailableSubject(path, parentUrl);
   }
 
-  /** Creates a random subject url. You can pass a parent subject if you want that to be included in the url. */
+  /**
+   * Creates a random subject. If parentSubject is provided, creates an HTTP URL under that parent.
+   * Otherwise, returns a DID (did:ad:<ulid>) for self-sovereign resources.
+   */
   public createSubject(parentSubject?: string): string {
     if (parentSubject) {
       return `${parentSubject}/${this.randomPart()}`;
     }
 
-    return new URL(`/${this.randomPart()}`, this.serverUrl).toString();
+    // Return a DID for new resources without a parent context
+    return `did:ad:${this.randomPart()}`;
   }
 
   /**
@@ -367,8 +430,14 @@ export class Store {
       this.addResources(newR, { skipCommitCompare: true });
     }
 
+    // Resolve relative subjects to full URLs
+    const fetchSubject =
+      subject.startsWith('http') || subject.startsWith('did:ad:')
+        ? subject
+        : new URL(subject, this.serverUrl).toString();
+
     // Use WebSocket if available, else use HTTP(S)
-    const ws = this.getWebSocketForSubject(subject);
+    const ws = this.getWebSocketForSubject(fetchSubject);
 
     if (
       !opts.fromProxy &&
@@ -377,7 +446,7 @@ export class Store {
       ws?.readyState === WebSocket.OPEN
     ) {
       // Use WebSocket
-      await ws.fetch(subject);
+      await ws.fetch(fetchSubject);
       // Resource should now have been added to the store by the websocket client.
     } else {
       // Use HTTPS
@@ -386,7 +455,7 @@ export class Store {
         : undefined;
 
       const { createdResources } = await this.client.fetchResourceHTTP(
-        subject,
+        fetchSubject,
         {
           from: opts.fromProxy ? this.getServerUrl() : undefined,
           method: opts.method,
@@ -395,12 +464,24 @@ export class Store {
         },
       );
 
-      this.addResources(createdResources, {
-        skipCommitCompare: !!opts.forceOverride,
+      // The main resource that was requested
+      const resource = createdResources.find(r => r.subject === fetchSubject);
+      if (resource) {
+        this.addResources(resource, {
+          alias: subject,
+          skipCommitCompare: !!opts.forceOverride,
+        });
+      }
+
+      // Any other resources that were returned (e.g. linked resources)
+      createdResources.forEach(r => {
+        if (r.subject !== fetchSubject) {
+          this.addResources(r, { skipCommitCompare: !!opts.forceOverride });
+        }
       });
     }
 
-    return this.resources.get(subject)!;
+    return this.resources.get(this.normalizeSubject(subject))!;
   }
 
   public getAllSubjects(): string[] {
@@ -415,14 +496,25 @@ export class Store {
   /** Opens a Websocket for some subject URL, or returns the existing one. */
   public getWebSocketForSubject(subject: string): WSClient | undefined {
     try {
-      const url = new URL(subject);
-      const found = this.webSockets.get(url.origin);
+      // DIDs are hosted on the current server, so use server URL for WebSocket
+      let origin: string;
+
+      if (subject.startsWith('did:')) {
+        origin = new URL(this.serverUrl).origin;
+      } else if (subject.startsWith('http')) {
+        origin = new URL(subject).origin;
+      } else {
+        // Relative path - use server URL
+        origin = new URL(this.serverUrl).origin;
+      }
+
+      const found = this.webSockets.get(origin);
 
       if (found) {
         return found;
       } else {
         if (typeof window !== 'undefined') {
-          this.webSockets.set(url.origin, new WSClient(url.origin, this));
+          this.webSockets.set(origin, new WSClient(origin, this));
         }
       }
 
@@ -454,32 +546,33 @@ export class Store {
    * resource will be returned.
    */
   public getResourceLoading<C extends OptionalClass = UnknownClass>(
-    subject: string = unknownSubject,
+    subjectRaw: string = unknownSubject,
     opts: FetchOpts = {},
   ): Resource<C> {
+    const normalized = this.normalizeSubject(subjectRaw);
+    const resolved = this.aliases.get(normalized) ?? normalized;
+
     // This is needed because it can happen that the useResource react hook is called while there is no subject passed.
-    if (subject === unknownSubject || subject === null) {
+    if (normalized === unknownSubject || normalized === null) {
       const newR = new Resource<C>(unknownSubject, opts.newResource);
       newR.setStore(this);
 
       return newR;
     }
 
-    let resource = this.resources.get(subject);
+    let resource = this.resources.get(resolved);
 
     if (!resource) {
-      resource = new Resource<C>(subject, opts.newResource);
+      resource = new Resource<C>(normalized, opts.newResource);
 
       // New resources don't have to load, they are just created.
       if (!opts.newResource) {
         resource.loading = true;
       }
 
-      this.addResources(resource);
+      this.addResources(resource, { alias: normalized });
 
-      if (!opts.newResource) {
-        this.fetchResourceFromServer(subject, opts);
-      }
+      this.fetchResourceFromServer(normalized, opts);
 
       return resource;
     } else if (!opts.allowIncomplete && resource.loading === false) {
@@ -488,7 +581,7 @@ export class Store {
       if (resource.get(core.properties.incomplete)) {
         resource.loading = true;
         this.addResources(resource);
-        this.fetchResourceFromServer(subject, opts);
+        this.fetchResourceFromServer(resolved, opts);
       }
     }
 
@@ -511,9 +604,12 @@ export class Store {
    * resources to be fetched multiple times.
    */
   public async getResource<C extends OptionalClass = UnknownClass>(
-    subject: string,
+    subjectRaw: string,
   ): Promise<Resource<C>> {
-    const found = this.resources.get(subject);
+    const normalized = this.normalizeSubject(subjectRaw);
+    const resolved = this.aliases.get(normalized) ?? normalized;
+
+    const found = this.resources.get(resolved);
 
     if (found && found.isReady()) {
       return found;
@@ -525,27 +621,27 @@ export class Store {
         const defaultTimeout = 5000;
 
         const cb: ResourceCallback<C> = res => {
-          this.unsubscribe(subject, cb);
+          this.unsubscribe(subjectRaw, cb);
           resolve(res);
         };
 
-        this.subscribe(subject, cb);
+        this.subscribe(subjectRaw, cb);
 
         setTimeout(() => {
-          this.unsubscribe(subject, cb);
+          this.unsubscribe(subjectRaw, cb);
           reject(
             new Error(
-              `Async Request for subject "${subject}" timed out after ${defaultTimeout}ms.`,
+              `Async Request for subject "${subjectRaw}" timed out after ${defaultTimeout}ms.`,
             ),
           );
         }, defaultTimeout);
       });
     }
 
-    const result = await this.fetchResourceFromServer(subject);
+    const result = await this.fetchResourceFromServer(resolved);
 
     // If the resource was not in the store yet, subscripe to changes so we don't return stale results when the resource is updated.
-    this.subscribeWebSocket(subject);
+    this.subscribeWebSocket(resolved);
 
     return result;
   }
@@ -695,14 +791,17 @@ export class Store {
   }
 
   /** Removes resource from this store, does not delete it from the server, use `resource.destroy()` to delete it from the server. */
-  public removeResource(subject: string, shouldNotify = true): void {
-    const resource = this.resources.get(subject);
+  public removeResource(subjectRaw: string, shouldNotify = true): void {
+    const normalized = this.normalizeSubject(subjectRaw);
+    const resolved = this.aliases.get(normalized) ?? normalized;
+
+    const resource = this.resources.get(resolved);
 
     if (resource) {
-      this.resources.delete(subject);
+      this.resources.delete(resolved);
 
       if (shouldNotify) {
-        this.eventManager.emit(StoreEvents.ResourceRemoved, subject);
+        this.eventManager.emit(StoreEvents.ResourceRemoved, subjectRaw);
       }
     }
   }
@@ -713,10 +812,11 @@ export class Store {
    */
   public async renameSubject(
     resource: Resource,
-    newSubject: string,
+    newSubjectRaw: string,
   ): Promise<void> {
+    const newSubject = this.normalizeSubject(newSubjectRaw);
     Client.tryValidSubject(newSubject);
-    const oldSubject = resource.subject;
+    const oldSubject = this.normalizeSubject(resource.subject);
 
     if (await this.checkSubjectTaken(newSubject)) {
       throw Error(`New subject name is already taken: ${newSubject}`);
@@ -802,24 +902,28 @@ export class Store {
       throw Error('Cannot subscribe to undefined subject');
     }
 
-    let callbackArray = this.subscribers.get(subject);
+    const normalized = this.normalizeSubject(subject);
+
+    let callbackArray = this.subscribers.get(normalized);
 
     if (callbackArray === undefined) {
       // Only subscribe once
-      this.subscribeWebSocket(subject);
+      this.subscribeWebSocket(normalized);
       callbackArray = [];
     }
 
     callbackArray.push(callback);
-    this.subscribers.set(subject, callbackArray);
+    this.subscribers.set(normalized, callbackArray);
 
     return () => {
-      this.unsubscribe(subject, callback);
+      this.unsubscribe(normalized, callback);
     };
   }
 
   public subscribeWebSocket(subject: string): void {
-    if (subject === unknownSubject) {
+    const normalized = this.normalizeSubject(subject);
+
+    if (normalized === unknownSubject) {
       return;
     }
 
@@ -948,12 +1052,12 @@ export class Store {
       return;
     }
 
-    let callbackArray = this.subscribers.get(subject);
+    const normalized = this.normalizeSubject(subject);
+    let callbackArray = this.subscribers.get(normalized);
 
     if (callbackArray) {
-      // Remove the function from the callBackArray
-      callbackArray = callbackArray?.filter(item => item !== callback);
-      this.subscribers.set(subject, callbackArray);
+      callbackArray = callbackArray.filter(cb => cb !== callback);
+      this.subscribers.set(normalized, callbackArray);
     }
   }
 

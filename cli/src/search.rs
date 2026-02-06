@@ -17,7 +17,7 @@ pub async fn search(
         ..Default::default()
     };
     if let Some(server) = server {
-        context.store.set_server_url(&server);
+        context.store.set_base_url(&server);
     }
     let resources = context.store.search(&query, opts).await?;
     if resources.is_empty() {

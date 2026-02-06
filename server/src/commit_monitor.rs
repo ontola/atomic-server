@@ -59,8 +59,8 @@ impl Handler<Subscribe> for CommitMonitor {
             async move {
                 // check if the agent has the rights to subscribe to this resource
                 let self_url = store
-                    .get_self_url()
-                    .expect("No self url set in Commit Monitor");
+                    .get_base_domain()
+                    .expect("No base url set in Commit Monitor");
                 if !msg.subject.starts_with(&self_url) {
                     tracing::warn!("can't subscribe to external resource");
                     return None;

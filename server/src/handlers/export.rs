@@ -29,8 +29,7 @@ pub async fn handle_export(
     req: actix_web::HttpRequest,
 ) -> AtomicServerResult<HttpResponse> {
     let headers = req.headers();
-    let server_url = appstate.config.get_server_url_for_request(&req);
-    let store = appstate.store.clone_with_url(server_url);
+    let store = &appstate.store;
 
     let Some(subject) = params.subject.clone() else {
         return Err("No subject provided".into());
@@ -78,7 +77,7 @@ impl<'a> CSVExporter<'a> {
         println!("Exporting resource to CSV: {}", subject);
         let resource = self
             .store
-            .get_resource_extended(&subject.clone().into(), false, self.agent)
+            .get_resource_extended(&subject.into(), false, self.agent)
             .await?
             .to_single();
 
@@ -274,7 +273,7 @@ impl<'a> CSVExporter<'a> {
     async fn get_name_from_subject(&self, subject: &str) -> String {
         let Ok(resource_response) = self
             .store
-            .get_resource_extended(&subject.clone().into(), true, self.agent)
+            .get_resource_extended(&subject.into(), true, self.agent)
             .await
         else {
             return subject.to_string();

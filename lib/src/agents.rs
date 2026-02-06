@@ -6,7 +6,7 @@ use base64::{engine::general_purpose, Engine};
 use serde::{Deserialize, Serialize};
 use serde_json::from_slice;
 
-use crate::{errors::AtomicResult, urls, Resource, Storelike, Value};
+use crate::{errors::AtomicResult, urls, Resource, Value};
 
 #[derive(Serialize, Deserialize)]
 struct DecodedSecret {
@@ -90,25 +90,21 @@ impl Agent {
     }
 
     /// Creates a new Agent, generates a new Keypair.
-    pub fn new(name: Option<&str>, store: &impl Storelike) -> AtomicResult<Agent> {
+    pub fn new(name: Option<&str>) -> AtomicResult<Agent> {
         let keypair = generate_keypair()?;
 
-        Agent::new_from_private_key(name, store, &keypair.private)
+        Agent::new_from_private_key(name, &keypair.private)
     }
 
     /// Creates a new Agent on this server, using the server's Server URL.
     /// Derives the public key.
-    pub fn new_from_private_key(
-        name: Option<&str>,
-        store: &impl Storelike,
-        private_key: &str,
-    ) -> AtomicResult<Agent> {
+    pub fn new_from_private_key(name: Option<&str>, private_key: &str) -> AtomicResult<Agent> {
         let keypair = generate_public_key(private_key);
 
         Ok(Agent {
             private_key: Some(keypair.private),
             public_key: keypair.public.clone(),
-            subject: format!("{}/agents/{}", store.get_server_url()?, keypair.public),
+            subject: format!("internal:/agents/{}", keypair.public),
             name: name.map(|x| x.to_owned()),
             created_at: crate::utils::now(),
         })
@@ -116,13 +112,13 @@ impl Agent {
 
     /// Creates a new Agent on this server, using the server's Server URL.
     /// This will not be able to write, because there is no private key.
-    pub fn new_from_public_key(store: &impl Storelike, public_key: &str) -> AtomicResult<Agent> {
+    pub fn new_from_public_key(public_key: &str) -> AtomicResult<Agent> {
         verify_public_key(public_key)?;
 
         Ok(Agent {
             private_key: None,
             public_key: public_key.into(),
-            subject: format!("{}/agents/{}", store.get_server_url()?, public_key),
+            subject: format!("internal:/agents/{}", public_key),
             name: None,
             created_at: crate::utils::now(),
         })

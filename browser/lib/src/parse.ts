@@ -82,11 +82,27 @@ export class JSONADParser {
           if (
             resource.subject !== 'undefined' &&
             resource.subject !== unknownSubject &&
-            value !== resource.subject
+            value !== resource.subject &&
+            value !== resource.subject + '/' &&
+            value + '/' !== resource.subject
           ) {
-            throw new Error(
-              `Resource has wrong subject in @id. Received subject was ${value}, expected ${resource.subject}.`,
-            );
+            // If the requested subject is an HTTP URL or relative path, and the received subject is a DID, we allow it (Alias support).
+            const isDID = (s: string) => s.startsWith('did:');
+            const isAliasCandidate = (s: string) =>
+              s.startsWith('http') ||
+              s.startsWith('/') ||
+              !s.includes(':') ||
+              s === '';
+
+            if (isAliasCandidate(resource.subject) && isDID(value as string)) {
+              console.log(
+                `Alias detected: Requested ${resource.subject}, received ${value}. Allowing mismatch.`,
+              );
+            } else {
+              throw new Error(
+                `Resource has wrong subject in @id. Received subject was ${value}, expected ${resource.subject}.`,
+              );
+            }
           }
 
           resource.setSubject(value as string);

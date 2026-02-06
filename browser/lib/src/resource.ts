@@ -731,7 +731,10 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     const commit = await newCommitBuilder.sign(agent);
-    const endpoint = new URL(this.subject).origin + `/commit`;
+    // DIDs don't have an origin, so use the store's server URL
+    const endpoint = this.subject.startsWith('did:')
+      ? new URL('/commit', this.store.getServerUrl()).toString()
+      : new URL(this.subject).origin + `/commit`;
     await this.store.postCommit(commit, endpoint);
     this.store.removeResource(this.subject);
   }
@@ -840,13 +843,32 @@ export class Resource<C extends OptionalClass = any> {
     const oldCommitBuilder = this.commitBuilder.clone();
     this.commitBuilder = new CommitBuilder(this.subject);
     const commit = await oldCommitBuilder.sign(agent);
+
+    // If the subject was updated during signing (e.g. did:ad genesis)
+    if (commit.subject !== this.subject) {
+      const oldSubject = this.subject;
+      this._subject = commit.subject;
+      this.store.removeResource(oldSubject);
+    }
+
     // Add the signature to the list of applied ones, to prevent applying it again when the server
     this.appliedCommitSignatures.add(commit.signature);
     this.loading = false;
     this.new = false;
 
     // TODO: Check if all required props are there
-    const endpoint = new URL(this.subject).origin + `/commit`;
+    let endpoint = '';
+
+    // DIDs don't have an origin, so use the store's server URL
+    if (this.subject.startsWith('did:')) {
+      endpoint = new URL('/commit', this.store.getServerUrl()).toString();
+    } else {
+      try {
+        endpoint = new URL(this.subject).origin + `/commit`;
+      } catch (e) {
+        endpoint = new URL('/commit', this.store.getServerUrl()).toString();
+      }
+    }
 
     try {
       this.commitError = undefined;
@@ -994,9 +1016,10 @@ export class Resource<C extends OptionalClass = any> {
 
   /** Set the Subject / ID URL of the Resource. Does not update the Store. */
   public setSubject(subject: string): void {
-    Client.tryValidSubject(subject);
-    this.commitBuilder.setSubject(subject);
-    this._subject = subject;
+    const normalized = this._store?.normalizeSubject(subject) ?? subject;
+    Client.tryValidSubject(normalized);
+    this.commitBuilder.setSubject(normalized);
+    this._subject = normalized;
   }
 
   /** Refetches the resource from the server. Will reset all changes to the latest saved version */

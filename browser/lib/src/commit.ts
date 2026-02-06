@@ -254,8 +254,17 @@ export class CommitBuilder {
     };
     const serializedCommit = serializeDeterministically({ ...commitPreSigned });
     const signature = await agent.sign(serializedCommit);
+
+    let subject = commitPreSigned.subject;
+
+    // Special logic for did:ad genesis commits: the subject must be the signature.
+    if (subject.startsWith('did:ad:') && this.previousCommit === undefined) {
+      subject = `did:ad:${signature}`;
+    }
+
     const commitPostSigned: Commit = {
       ...commitPreSigned,
+      subject,
       signature,
     };
 
@@ -369,6 +378,14 @@ export function serializeDeterministically(
   }
 
   const jsonadCommit = commitToJsonADObject(commit);
+
+  // Special logic for did:ad genesis commits: remove subject from serialization
+  if (
+    commit.subject.startsWith('did:ad:') &&
+    commit.previousCommit === undefined
+  ) {
+    delete jsonadCommit[commits.properties.subject];
+  }
 
   return stringify(jsonadCommit);
 }

@@ -121,7 +121,7 @@ pub fn after_apply_commit_message<'a>(
             // We do not save the actual changes in the ChatRoom itself for performance reasons.
 
             // We use the ChatRoom only for its `last_commit`
-            let mut chat_room = store.get_resource(&parent_subject.clone().into()).await?;
+            let chat_room = store.get_resource(&parent_subject.clone().into()).await?;
 
             let mut commit_builder = CommitBuilder::new(parent_subject);
 

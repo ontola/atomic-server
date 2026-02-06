@@ -16,18 +16,17 @@ pub async fn handle_get_resource(
     path: Option<web::Path<String>>,
     appstate: web::Data<AppState>,
     req: actix_web::HttpRequest,
+    context: crate::context::RequestContext,
 ) -> AtomicServerResult<HttpResponse> {
     let mut timer = Timer::new();
 
     let headers = req.headers();
     let mut content_type = get_accept(headers);
-    let server_url = appstate.config.get_server_url_for_request(&req);
-    // Get the subject from the path, or return the home URL
-    let subject = if let Some(subj_end) = path {
+    let origin = context.origin.clone();
+    let subject_string = if let Some(subj_end) = path {
         let mut subj_end_string = subj_end.as_str();
-        // If the request is for the root, return the home URL
         if subj_end_string.is_empty() {
-            server_url.to_string()
+            "/".to_string()
         } else {
             if content_type == ContentType::Html {
                 if let Some((ext, path)) = try_extension(subj_end_string) {
@@ -35,28 +34,23 @@ pub async fn handle_get_resource(
                     subj_end_string = path;
                 }
             }
-            // Check extensions and set datatype. Harder than it looks to get right...
-            // This might not be the best way of creating the subject. But I can't access the full URL from any actix stuff!
             let querystring = if req.query_string().is_empty() {
                 "".to_string()
             } else {
                 format!("?{}", req.query_string())
             };
-            let subject = if subj_end_string.starts_with("did:") {
-                subj_end_string.to_string()
-            } else {
-                format!("{}/{}{}", server_url, subj_end_string, querystring)
-            };
-            subject
+            format!("/{}{}", subj_end_string, querystring)
         }
     } else {
-        // There is no end string, so It's the root of the URL, the base URL!
-        String::from(&server_url)
+        "/".to_string()
     };
+
+    let subject = atomic_lib::Subject::from_raw(&subject_string, None);
 
     timer.add("parse_headers");
 
-    let for_agent = get_client_agent(headers, &appstate, subject.clone()).await?;
+    let full_subject = format!("{}{}", origin, subject_string);
+    let for_agent = get_client_agent(headers, &appstate, full_subject).await?;
     timer.add("get_agent");
 
     let mut builder = HttpResponse::Ok();
@@ -70,17 +64,17 @@ pub async fn handle_get_resource(
         "no-store, no-cache, must-revalidate, private",
     ));
 
-    let store = appstate.store.clone_with_url(server_url);
+    let store = appstate.store.clone_with_url(origin.clone());
     let resource = store
         .get_resource_extended(&subject.clone().into(), false, &for_agent)
         .await?;
     timer.add("get_resource");
 
     let response_body = match content_type {
-        ContentType::Json => resource.to_json(&store).await?,
-        ContentType::JsonLd => resource.to_json_ld(&store).await?,
-        ContentType::JsonAd => resource.to_json_ad(&store)?,
-        ContentType::Html => resource.to_json_ad(&store)?,
+        ContentType::Json => resource.to_json(&store, Some(&origin)).await?,
+        ContentType::JsonLd => resource.to_json_ld(&store, Some(&origin)).await?,
+        ContentType::JsonAd => resource.to_json_ad(Some(&origin))?,
+        ContentType::Html => resource.to_json_ad(Some(&origin))?,
         ContentType::Turtle | ContentType::NTriples => {
             let atoms = resource.to_atoms();
             atomic_lib::serialize::atoms_to_ntriples(atoms, &store).await?

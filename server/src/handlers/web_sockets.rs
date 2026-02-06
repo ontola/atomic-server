@@ -34,6 +34,7 @@ pub async fn web_socket_handler(
     req: HttpRequest,
     stream: web::Payload,
     appstate: web::Data<AppState>,
+    context: crate::context::RequestContext,
 ) -> AtomicServerResult<HttpResponse> {
     // Authentication check. If the user has no headers, continue with the Public Agent.
     let auth_header_values = get_auth_headers(req.headers(), "ws".into())?;
@@ -44,8 +45,9 @@ pub async fn web_socket_handler(
     .await?;
     tracing::debug!("Starting websocket for {}", for_agent);
 
-    let server_url = appstate.config.get_server_url_for_request(&req);
-    let store = appstate.store.clone_with_url(server_url);
+    tracing::debug!("Starting websocket for {}", for_agent);
+
+    let store = appstate.store.clone();
 
     let result = WsResponseBuilder::new(
         WebSocketConnection::new(
@@ -129,14 +131,14 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WebSocketConnecti
                                 |(res, subject, store), _actor, ctx| match res {
                                     Ok(r) => {
                                         let serialized = r
-                                            .to_json_ad(&store)
+                                            .to_json_ad(store.get_base_domain().as_deref())
                                             .expect("Can't serialize Resource to JSON-AD");
                                         ctx.text(format!("RESOURCE {serialized}"));
                                     }
                                     Err(e) => {
                                         let r = e.into_resource(subject);
                                         let serialized_err = r
-                                            .to_json_ad(&store)
+                                            .to_json_ad(store.get_base_domain().as_deref())
                                             .expect("Can't serialize Resource to JSON-AD");
                                         ctx.text(format!("RESOURCE {serialized_err}"));
                                     }
@@ -342,7 +344,12 @@ impl Handler<CommitMessage> for WebSocketConnection {
     #[tracing::instrument(name = "handle_commit", skip_all)]
     fn handle(&mut self, msg: CommitMessage, ctx: &mut ws::WebsocketContext<Self>) {
         let resource = msg.commit_response.commit_resource;
-        let formatted_commit = format!("COMMIT {}", resource.to_json_ad(&self.store).unwrap());
+        let formatted_commit = format!(
+            "COMMIT {}",
+            resource
+                .to_json_ad(self.store.get_base_domain().as_deref())
+                .unwrap()
+        );
         ctx.text(formatted_commit);
     }
 }
