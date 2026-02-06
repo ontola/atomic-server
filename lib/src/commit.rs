@@ -1107,13 +1107,10 @@ mod test {
                 .unwrap(),
             ["https://localhost/classes/Test"]
         );
-        assert_eq!(
-            commit_builder
-                .remove
-                .contains("https://atomicdata.dev/properties/name"),
-            true
-        );
-        assert_eq!(commit_builder.destroy, false);
-        assert_eq!(commit_builder.y_update.is_empty(), true);
+        assert!(commit_builder
+            .remove
+            .contains("https://atomicdata.dev/properties/name"));
+        assert!(!commit_builder.destroy);
+        assert!(commit_builder.y_update.is_empty());
     }
 }

@@ -120,7 +120,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     let big_resource = rt
         .block_on(store.get_resource_extended(
-            "https://localhost/collections",
+            &"https://localhost/collections".into(),
             false,
             &agents::ForAgent::Public,
         ))
@@ -134,13 +134,13 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     c.bench_function("resource.to_json_ld()", |b| {
         b.to_async(&rt).iter(|| async {
-            big_resource.to_json_ld(&store).await.unwrap();
+            big_resource.to_json_ld(&store, None).await.unwrap();
         })
     });
 
     c.bench_function("resource.to_json()", |b| {
         b.to_async(&rt).iter(|| async {
-            big_resource.to_json(&store).await.unwrap();
+            big_resource.to_json(&store, None).await.unwrap();
         })
     });
 

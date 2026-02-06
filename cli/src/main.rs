@@ -129,9 +129,9 @@ pub enum SerializeOptions {
     NTriples,
 }
 
-impl Into<Format> for SerializeOptions {
-    fn into(self) -> Format {
-        match self {
+impl From<SerializeOptions> for Format {
+    fn from(val: SerializeOptions) -> Self {
+        match val {
             SerializeOptions::Pretty => Format::Pretty,
             SerializeOptions::Json => Format::Json,
             SerializeOptions::JsonAd => Format::JsonAd,
