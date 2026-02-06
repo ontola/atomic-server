@@ -476,6 +476,12 @@ pub async fn create_collection_resource_for_class(
         _other => false,
     };
 
+    // Agents use DID subjects which are external, so we need to include external resources
+    collection.include_external = match class_subject {
+        urls::AGENT => true,
+        _other => false,
+    };
+
     let mut collection_resource = collection.to_resource(store).await?;
 
     let drive = "/";

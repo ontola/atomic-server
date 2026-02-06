@@ -113,8 +113,6 @@ impl SearchState {
         let subject = resource.get_subject().to_string();
         let writer = self.writer.read()?;
 
-        println!("Adding resource to search index: {}", subject);
-
         let mut doc = tantivy::TantivyDocument::default();
         doc.add_object(
             fields.propvals,

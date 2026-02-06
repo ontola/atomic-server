@@ -197,6 +197,16 @@
         "https://atomicdata.dev/properties/shortname": "drives"
     },
     {
+        "@id": "https://atomicdata.dev/properties/availableDomains",
+        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
+        "https://atomicdata.dev/properties/description": "The set of domains where this resource should be available. Allows multi-server accessibility while maintaining DID identity. If this is concerns a `did:ad:` resource, it will be available on the `/did` endpoint of that domain.",
+        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+        "https://atomicdata.dev/properties/isA": [
+            "https://atomicdata.dev/classes/Property"
+        ],
+        "https://atomicdata.dev/properties/shortname": "available-domains"
+    },
+    {
         "@id": "https://atomicdata.dev/properties/edit",
         "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Agent",
         "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
