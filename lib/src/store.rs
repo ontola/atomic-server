@@ -228,6 +228,14 @@ impl Storelike for Store {
         .await
     }
 
+    fn has_stored_resource(&self, subject: &Subject) -> bool {
+        let normalized = self.normalize_subject(subject);
+        self.hashmap
+            .lock()
+            .unwrap()
+            .contains_key(&normalized.to_string())
+    }
+
     async fn remove_resource(&self, subject: &Subject) -> AtomicResult<()> {
         let subject_str = subject.to_string();
         let resource = self.get_resource(subject).await?;

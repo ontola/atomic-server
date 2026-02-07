@@ -254,27 +254,17 @@ pub async fn populate_default_store(store: &impl Storelike) -> AtomicResult<()> 
 /// Bootstraps the store with core models and default ontologies.
 /// Uses `begin_batch`/`commit_batch` to fold all writes into a single DB transaction.
 pub async fn bootstrap(store: &impl Storelike) -> AtomicResult<()> {
-    // Skip on already-seeded stores. `populate_base_models` writes the
-    // SHORTNAME property as one of the very first records (line ~21
-    // of this file), so its presence is a reliable sentinel that the
-    // base ontology import has completed at least once.
-    //
-    // The previous design re-imported every default JSON file (base
-    // models + chatroom + table + ontologies + ai + plugins) on every
-    // `Db::init_redb_file` call. On a 3+ GB store the validation +
-    // index-update churn pushed boot time to ~60s before the HTTP
-    // listener bound — visible in the user log as the gap between
-    // "Opening ReDB database" and "starting service: actix-web-service".
-    if store
-        .get_resource(&crate::urls::SHORTNAME.into())
-        .await
-        .is_ok()
-    {
+    // Skip on already-seeded stores. This must be a local storage check,
+    // not `get_resource`: `get_resource` may fetch external Atomic URLs
+    // and can make a fresh store look seeded after fetching only the
+    // sentinel resource.
+    if store.has_stored_resource(&crate::urls::SHORTNAME.into()) {
         tracing::debug!(
             "populate::bootstrap: store already seeded, skipping"
         );
         return Ok(());
     }
+
     tracing::info!("populate::bootstrap: seeding base models and ontologies");
     store.begin_batch();
     populate_base_models(store).await?;

@@ -2151,6 +2151,11 @@ impl Storelike for Db {
         }
     }
 
+    fn has_stored_resource(&self, subject: &Subject) -> bool {
+        let normalized = self.normalize_subject(subject);
+        self.get_propvals(&normalized.pure_id()).is_ok()
+    }
+
     #[instrument(skip_all)]
     async fn get_resource_extended(
         &self,
