@@ -329,10 +329,12 @@ msgid "Read more about permissions in the{0} <0>Atomic Data Docs</0>"
 msgstr "Read more about permissions in the{0} <0>Atomic Data Docs</0>"
 
 #: src/routes/Share/ShareRoute.tsx
+#: src/views/Plugin/AssignPermissions.tsx
 msgid "Read"
 msgstr "Read"
 
 #: src/routes/Share/ShareRoute.tsx
+#: src/views/Plugin/AssignPermissions.tsx
 msgid "Write"
 msgstr "Write"
 
@@ -706,6 +708,7 @@ msgstr "Name"
 #: src/routes/History/HistoryMobileView.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/OntologyPage/NewPropertyButton.tsx
+#: src/views/Plugin/AssignPermissions.tsx
 #: src/views/TablePage/PropertyForm/ExternalPropertyDialog.tsx
 #: src/views/TablePage/PropertyForm/NewPropertyDialog.tsx
 msgid "Cancel"
@@ -1525,6 +1528,7 @@ msgstr "The identifier of the resource. This also determines where the resource 
 
 #: src/chunks/RTE/CollaborativeEditor.tsx
 #: src/components/forms/NewForm/NewFormTitle.tsx
+#: src/views/Plugin/AssignPermissions.tsx
 msgid "Resource"
 msgstr "Resource"
 
@@ -3280,7 +3284,6 @@ msgid "Content saved"
 msgstr "Content saved"
 
 #: src/chunks/Plugins/NewPluginButton.tsx
-#: src/views/Plugin/PluginPage.tsx
 msgid "Config"
 msgstr "Config"
 
@@ -3454,3 +3457,29 @@ msgid ""
 msgstr ""
 "An Agent is a user, consisting of a Subject (its URL) and Private Key.\n"
 "Together, these can be used to edit data and sign Commits."
+
+#~ msgid "Assign Permissions"
+#~ msgstr "Assign Permissions"
+
+#: src/views/Plugin/AssignPermissions.tsx
+msgid "Pick a resource"
+msgstr "Pick a resource"
+
+#: src/views/Plugin/AssignPermissions.tsx
+msgid "Assign"
+msgstr "Assign"
+
+#~ msgid "Give full permissons <0/>"
+#~ msgstr "Give full permissons <0/>"
+
+#: src/views/Plugin/AssignPermissions.tsx
+msgid "<0/> Assign Permissions"
+msgstr "<0/> Assign Permissions"
+
+#: src/views/Plugin/PluginPage.tsx
+msgid "<0/> Config"
+msgstr "<0/> Config"
+
+#: src/views/Plugin/PluginPage.tsx
+msgid "Plugin Description"
+msgstr "Plugin Description"

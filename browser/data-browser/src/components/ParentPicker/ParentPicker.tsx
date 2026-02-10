@@ -4,10 +4,12 @@ import { ParentPickerItem } from './ParentPickerItem';
 import { InputStyled, InputWrapper } from '../forms/InputStyles';
 import { useSettings } from '../../helpers/AppSettings';
 import { FaFolderOpen } from 'react-icons/fa6';
+import type { Resource } from '@tomic/react';
 
 export interface ParentPickerProps {
   root?: string;
   value: string | undefined;
+  shouldBeRendered?: (resource: Resource) => boolean;
   onChange: (subject: string) => void;
 }
 
@@ -15,6 +17,7 @@ export function ParentPicker({
   root,
   value,
   onChange,
+  shouldBeRendered,
 }: ParentPickerProps): React.JSX.Element {
   const { drive } = useSettings();
 
@@ -30,10 +33,11 @@ export function ParentPicker({
       </InputWrapper>
       <PickerWrapper aria-label='parent selector'>
         <ParentPickerItem
-          inialOpen={true}
+          initialOpen={true}
           subject={root ?? drive}
           onClick={onChange}
           selectedValue={value}
+          shouldBeRendered={shouldBeRendered}
         />
       </PickerWrapper>
     </Column>

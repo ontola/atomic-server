@@ -158,11 +158,12 @@ fn find_matching_propval<'a>(
 ) -> Option<&'a String> {
     if let Some(property) = &q_filter.property {
         if let Ok(matched_val) = resource.get(property) {
-            if let Some(filter_val) = &q_filter.value {
-                if matched_val.to_string() == filter_val.to_string() {
-                    return Some(property);
-                }
-            } else {
+            let Some(filter_val) = &q_filter.value else {
+                // QueryFilter does not specify a value, so we always return a match for the property.
+                return Some(property);
+            };
+
+            if matched_val.contains_value(filter_val) {
                 return Some(property);
             }
         }
@@ -194,10 +195,9 @@ pub fn should_update_property<'a>(
     // So here we not only make sure that the QueryFilter actually matches the resource,
     // But we also return which prop & val we matched on, so we can update the index with the correct value.
     // See https://github.com/atomicdata-dev/atomic-server/issues/395
-    let matching_prop = match find_matching_propval(resource, q_filter) {
-        Some(a) => a,
+    let Some(matching_prop) = find_matching_propval(resource, q_filter) else {
         // if the resource doesn't match the filter, we don't need to update the index
-        None => return None,
+        return None;
     };
 
     // Now we know that our new Resource is a member for this QueryFilter.
@@ -275,9 +275,17 @@ pub fn check_if_atom_matches_watched_query_filters(
             let q_filter: QueryFilter = QueryFilter::from_bytes(&k)?;
 
             if let Some(prop) = should_update_property(&q_filter, index_atom, resource) {
-                let update_val = match resource.get(prop) {
-                    Ok(val) => val.to_sortable_string(),
-                    Err(_e) => NO_VALUE.to_string(),
+                let update_val = if &index_atom.property == prop {
+                    // The index_atom's sort_value is consistent (individual element value)
+                    index_atom.sort_value.clone()
+                } else {
+                    // Different property (e.g., sort_by different from matched property).
+                    // We need to read from the resource. For arrays, this will use length,
+                    // but this case is less common and typically sort properties are scalars.
+                    match resource.get(prop) {
+                        Ok(val) => val.to_sortable_string(),
+                        Err(_e) => NO_VALUE.to_string(),
+                    }
                 };
                 update_indexed_member(&q_filter, &atom.subject, &update_val, delete, transaction)?;
             }
@@ -298,12 +306,7 @@ pub fn update_indexed_member(
     delete: bool,
     transaction: &mut Transaction,
 ) -> AtomicResult<()> {
-    let key = create_query_index_key(
-        collection,
-        // Maybe here we should serialize the value a bit different - as a sortable string, where Arrays are sorted by their length.
-        Some(value),
-        Some(subject),
-    )?;
+    let key = create_query_index_key(collection, Some(value), Some(subject))?;
     if delete {
         transaction.push(Operation {
             tree: Tree::QueryMembers,
@@ -358,8 +361,7 @@ pub fn create_query_index_key(
     Ok(bytesvec)
 }
 
-/// Creates a key for a collection + value combination.
-/// These are designed to be lexicographically sortable.
+/// Parses a key that is meant for collections to a tuble of QueryFilter, value, and subject.
 #[tracing::instrument()]
 pub fn parse_collection_members_key(bytes: &[u8]) -> AtomicResult<(QueryFilter, &str, &str)> {
     let mut iter = bytes.split(|b| b == &SEPARATION_BIT);
@@ -397,7 +399,7 @@ pub fn should_include_resource(query: &Query) -> bool {
 #[cfg(test)]
 pub mod test {
     use super::*;
-    use crate::urls;
+    use crate::{urls, values::SubResource};
 
     #[tokio::test]
     async fn create_and_parse_key() {
@@ -524,7 +526,36 @@ pub mod test {
             sort_by: None,
         };
 
-        let resource_correct_class = Resource::new_instance(class, store).await.unwrap();
+        let mut resource_correct_class = Resource::new_instance(class, store).await.unwrap();
+
+        resource_correct_class
+            .set(
+                urls::IS_A.into(),
+                Value::ResourceArray(vec![
+                    SubResource::Subject(class.to_string()),
+                    SubResource::Subject(urls::PARAGRAPH.to_string()),
+                ]),
+                store,
+            )
+            .await
+            .unwrap();
+
+        resource_correct_class
+            .set(
+                urls::PUBLIC_KEY.into(),
+                Value::String("This is not a public key but it should be fine".into()),
+                store,
+            )
+            .await
+            .unwrap();
+        resource_correct_class
+            .set(
+                urls::DESCRIPTION.into(),
+                Value::Markdown("random description".into()),
+                store,
+            )
+            .await
+            .unwrap();
 
         let subject: String = "https://example.com/someAgent".into();
 

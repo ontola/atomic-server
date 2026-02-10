@@ -236,12 +236,12 @@ fn on_before_commit(
         }
 
         if let Some(set) = &commit.set {
-            tracing::info!(
-                "set found for plugin {}, installing...",
-                resource.get_subject()
-            );
             // The plugin file has been set or updated, so we need to (re)install the plugin.
             if set.contains_key(urls::PLUGIN_FILE) {
+                tracing::info!(
+                    "New plugin file found for plugin {}, installing...",
+                    resource.get_subject()
+                );
                 do_install_plugin(
                     resource,
                     &parent_subject,

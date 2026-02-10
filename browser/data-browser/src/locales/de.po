@@ -52,6 +52,7 @@ msgstr "Keine Ergebnisse"
 #: src/views/Drive/NewPluginButton.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/OntologyPage/NewPropertyButton.tsx
+#: src/views/Plugin/AssignPermissions.tsx
 #: src/views/TablePage/PropertyForm/ExternalPropertyDialog.tsx
 #: src/views/TablePage/PropertyForm/NewPropertyDialog.tsx
 msgid "Cancel"
@@ -2461,10 +2462,12 @@ msgid "Read more about permissions in the{0} <0>Atomic Data Docs</0>"
 msgstr "Weitere Informationen zu Berechtigungen findest du in den{0} <0>Atomic Data Docs</0>"
 
 #: src/routes/Share/ShareRoute.tsx
+#: src/views/Plugin/AssignPermissions.tsx
 msgid "Read"
 msgstr "Lesen"
 
 #: src/routes/Share/ShareRoute.tsx
+#: src/views/Plugin/AssignPermissions.tsx
 msgid "Write"
 msgstr "Schreiben"
 
@@ -2586,6 +2589,7 @@ msgstr "Die Kennung der Ressource. Dies bestimmt standardmäßig auch, wo die Re
 
 #: src/chunks/RTE/CollaborativeEditor.tsx
 #: src/components/forms/NewForm/NewFormTitle.tsx
+#: src/views/Plugin/AssignPermissions.tsx
 msgid "Resource"
 msgstr "Ressource"
 
@@ -3246,7 +3250,6 @@ msgid "<0/> Uninstall"
 msgstr "<0/> Deinstallieren"
 
 #: src/chunks/Plugins/NewPluginButton.tsx
-#: src/views/Plugin/PluginPage.tsx
 msgid "Config"
 msgstr "Konfiguration"
 
@@ -3465,3 +3468,29 @@ msgid ""
 "An Agent is a user, consisting of a Subject (its URL) and Private Key.\n"
 "Together, these can be used to edit data and sign Commits."
 msgstr "Ein Agent ist ein Benutzer, der aus einem Subjekt (seiner URL) und einem privaten Schlüssel besteht. Zusammen können diese verwendet werden, um Daten zu bearbeiten und Commits zu signieren."
+
+#~ msgid "Assign Permissions"
+#~ msgstr "Berechtigungen zuweisen"
+
+#: src/views/Plugin/AssignPermissions.tsx
+msgid "Pick a resource"
+msgstr "Wählen Sie eine Ressource aus"
+
+#: src/views/Plugin/AssignPermissions.tsx
+msgid "Assign"
+msgstr "Zuweisen"
+
+#~ msgid "Give full permissons <0/>"
+#~ msgstr "Vollständige Berechtigungen erteilen <0/>"
+
+#: src/views/Plugin/AssignPermissions.tsx
+msgid "<0/> Assign Permissions"
+msgstr "<0/> Berechtigungen zuweisen"
+
+#: src/views/Plugin/PluginPage.tsx
+msgid "<0/> Config"
+msgstr "<0/> Konfiguration"
+
+#: src/views/Plugin/PluginPage.tsx
+msgid "Plugin Description"
+msgstr "Plugin-Beschreibung"

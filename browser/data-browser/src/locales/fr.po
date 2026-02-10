@@ -45,6 +45,7 @@ msgstr "Aucune classe"
 #: src/views/Drive/NewPluginButton.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/OntologyPage/NewPropertyButton.tsx
+#: src/views/Plugin/AssignPermissions.tsx
 #: src/views/TablePage/PropertyForm/ExternalPropertyDialog.tsx
 #: src/views/TablePage/PropertyForm/NewPropertyDialog.tsx
 msgid "Cancel"
@@ -1952,10 +1953,12 @@ msgid "Read more about permissions in the{0} <0>Atomic Data Docs</0>"
 msgstr "Pour en savoir plus sur les permissions, consultez la{0} <0>documentation Atomic Data</0>"
 
 #: src/routes/Share/ShareRoute.tsx
+#: src/views/Plugin/AssignPermissions.tsx
 msgid "Read"
 msgstr "Lire"
 
 #: src/routes/Share/ShareRoute.tsx
+#: src/views/Plugin/AssignPermissions.tsx
 msgid "Write"
 msgstr "Écrire"
 
@@ -2526,6 +2529,7 @@ msgstr "Initialisation de la ressource"
 
 #: src/chunks/RTE/CollaborativeEditor.tsx
 #: src/components/forms/NewForm/NewFormTitle.tsx
+#: src/views/Plugin/AssignPermissions.tsx
 msgid "Resource"
 msgstr "Ressource"
 
@@ -3243,7 +3247,6 @@ msgid "<0/> Uninstall"
 msgstr "<0/> Désinstaller"
 
 #: src/chunks/Plugins/NewPluginButton.tsx
-#: src/views/Plugin/PluginPage.tsx
 msgid "Config"
 msgstr "Configuration"
 
@@ -3458,3 +3461,29 @@ msgid ""
 "An Agent is a user, consisting of a Subject (its URL) and Private Key.\n"
 "Together, these can be used to edit data and sign Commits."
 msgstr "Un agent est un utilisateur, composé d'un sujet (son URL) et d'une clé privée. Ensemble, ceux-ci peuvent être utilisés pour modifier des données et signer des Commits."
+
+#~ msgid "Assign Permissions"
+#~ msgstr "Attribuer les autorisations"
+
+#: src/views/Plugin/AssignPermissions.tsx
+msgid "Pick a resource"
+msgstr "Sélectionnez une ressource"
+
+#: src/views/Plugin/AssignPermissions.tsx
+msgid "Assign"
+msgstr "Attribuer"
+
+#~ msgid "Give full permissons <0/>"
+#~ msgstr "Donner toutes les permissions <0/>"
+
+#: src/views/Plugin/AssignPermissions.tsx
+msgid "<0/> Assign Permissions"
+msgstr "<0/> Attribuer les autorisations"
+
+#: src/views/Plugin/PluginPage.tsx
+msgid "<0/> Config"
+msgstr "<0/> Configuration"
+
+#: src/views/Plugin/PluginPage.tsx
+msgid "Plugin Description"
+msgstr "Description du plugin"
