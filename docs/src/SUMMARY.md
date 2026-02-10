@@ -34,6 +34,7 @@
       - [useCurrentAgent](react/useCurrentAgent.md)
       - [useCanWrite](react/useCanWrite.md)
       - [Image](react/Image.md)
+      - [VirtualizedCollectionList](react/VirtualizedCollectionList.md)
       - [Examples](react/examples.md)
     - [@tomic/svelte](svelte.md)
       - [Image](svelte/image.md)

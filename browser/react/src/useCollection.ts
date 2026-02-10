@@ -45,6 +45,8 @@ export type UseCollectionOptions = {
   pageSize?: number;
   /** URL of the server that should be queried. defaults to the store's serverURL */
   server?: string;
+  /** Whether to include nested resources in the collection, defaults to false */
+  includeNested?: boolean;
 };
 
 const buildCollection = (
@@ -52,6 +54,7 @@ const buildCollection = (
   server: string | undefined,
   { property, value, sort_by, sort_desc }: QueryFilter,
   pageSize?: number,
+  includeNested?: boolean,
 ) => {
   const builder = new CollectionBuilder(store, server);
 
@@ -60,6 +63,7 @@ const buildCollection = (
   if (sort_by) builder.setSortBy(sort_by);
   if (sort_desc !== undefined) builder.setSortDesc(sort_desc);
   if (pageSize) builder.setPageSize(pageSize);
+  if (includeNested) builder.setIncludeNested(includeNested);
 
   return builder.build();
 };
@@ -71,10 +75,11 @@ const buildCollection = (
  */
 export function useCollection(
   queryFilter: QueryFilter,
-  { pageSize, server }: UseCollectionOptions = {
-    pageSize: undefined,
-    server: undefined,
-  },
+  {
+    pageSize = undefined,
+    server = undefined,
+    includeNested = false,
+  }: UseCollectionOptions = {},
 ): UseCollectionResult {
   const firstRunRef = useRef(true);
 
@@ -82,7 +87,7 @@ export function useCollection(
   const queryFilterMemo = useQueryFilterMemo(queryFilter);
 
   const [collection, setCollection] = useState(() =>
-    buildCollection(store, server, queryFilterMemo, pageSize),
+    buildCollection(store, server, queryFilterMemo, pageSize, includeNested),
   );
 
   const mapAll = useCallback(

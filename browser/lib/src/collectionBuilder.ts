@@ -7,6 +7,7 @@ export class CollectionBuilder {
 
   private params: CollectionParams = {
     page_size: '30',
+    include_nested: false,
   };
 
   public constructor(store: Store, server?: string) {
@@ -40,6 +41,12 @@ export class CollectionBuilder {
 
   public setPageSize(pageSize: number): CollectionBuilder {
     this.params.page_size = `${pageSize}`;
+
+    return this;
+  }
+
+  public setIncludeNested(includeNested: boolean): CollectionBuilder {
+    this.params.include_nested = includeNested;
 
     return this;
   }

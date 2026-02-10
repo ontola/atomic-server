@@ -24,7 +24,7 @@ const NewPluginButton: React.FC<NewPluginButtonProps> = ({ drive }) => {
   const [configValid, setConfigValid] = useState(true);
   const [config, setConfig] = useState<JSONValue>();
 
-  const { createPluginResource, installPlugin } = useCreatePlugin();
+  const { createPluginResource, addPluginToDrive } = useCreatePlugin();
 
   const reset = () => {
     setError(undefined);
@@ -49,7 +49,7 @@ const NewPluginButton: React.FC<NewPluginButtonProps> = ({ drive }) => {
           drive,
           config,
         });
-        await installPlugin(plugin, drive);
+        await addPluginToDrive(plugin, drive);
       } catch (err) {
         setError(`Failed to install plugin, error: ${err.message}`);
       } finally {

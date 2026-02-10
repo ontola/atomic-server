@@ -85,6 +85,16 @@ Get the current agent and change it.
 
 Check for write access to a resource.
 
+## Components
+
+### [Image](../react/Image.md)
+
+A component that renders an image and optimizes them for the browser.
+
+### [VirtualizedCollectionList](../react/VirtualizedCollectionList.md)
+
+A component that helps with rendering larger collections by defering loading pages until the user scrolls to the bottom of the list.
+
 ## Examples
 
 Find some examples [here](../react/examples.md).

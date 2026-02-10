@@ -322,7 +322,7 @@ impl From<SubResource> for Value {
     fn from(val: SubResource) -> Self {
         match val {
             SubResource::Nested(n) => n.into(),
-            SubResource::Subject(s) => s.into(),
+            SubResource::Subject(s) => Value::AtomicUrl(s),
         }
     }
 }
