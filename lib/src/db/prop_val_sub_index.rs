@@ -41,7 +41,7 @@ pub fn propvalsub_key(atom: &IndexAtom) -> Vec<u8> {
         &[SEPARATION_BIT],
         atom.sort_value.as_bytes(),
         &[SEPARATION_BIT],
-        atom.subject.as_bytes(),
+        atom.subject.as_str().as_bytes(),
     ]
     .concat()
 }

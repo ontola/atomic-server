@@ -3,7 +3,7 @@
 
 use crate::{
     agents::ForAgent, atoms::IndexAtom, errors::AtomicResult, storelike::Query,
-    utils::truncate_string, values::SortableValue, Atom, Db, Resource, Storelike, Value,
+    utils::truncate_string, values::SortableValue, Atom, Db, Resource, Storelike, Subject, Value,
 };
 use serde::{Deserialize, Serialize};
 
@@ -77,7 +77,7 @@ pub const NO_VALUE: &str = "";
 pub async fn query_sorted_indexed(
     store: &Db,
     q: &Query,
-) -> AtomicResult<(Vec<String>, Vec<Resource>, usize)> {
+) -> AtomicResult<(Vec<Subject>, Vec<Resource>, usize)> {
     // When there is no explicit start / end value passed, we use the very first and last
     // lexicographic characters in existence to make the range practically encompass all values.
     let start = if let Some(val) = &q.start_val {
@@ -101,7 +101,7 @@ pub async fn query_sorted_indexed(
         Box::new(store.query_index.range(start_key..end_key))
     };
 
-    let mut subjects: Vec<String> = vec![];
+    let mut subjects: Vec<Subject> = vec![];
     let mut resources: Vec<Resource> = vec![];
     let mut count = 0;
 
@@ -116,30 +116,26 @@ pub async fn query_sorted_indexed(
         let in_selection = subjects.len() < limit && i >= q.offset;
         if in_selection {
             let (k, _v) = kv.map_err(|_e| "Unable to parse query_cached")?;
-            let (_q_filter, _val, subject) = parse_collection_members_key(&k)?;
+            let (_q_filter, _val, subject_str) = parse_collection_members_key(&k)?;
+
+            let subject = Subject::from_raw(subject_str, base_domain.as_deref());
 
             if !q.include_external {
-                let is_internal = subject.starts_with("internal:") || subject.starts_with('/');
-                let matches_base = if let Some(base) = &base_domain {
-                    subject.contains(base)
-                } else {
-                    false
-                };
-                if !is_internal && !matches_base {
+                if !subject.is_local() {
                     continue;
                 }
             }
 
             if should_include_resource(q) {
                 if let Ok(resource) = store
-                    .get_resource_extended(&crate::Subject::from(subject), true, &q.for_agent)
+                    .get_resource_extended(&subject, true, &q.for_agent)
                     .await
                 {
                     resources.push(resource.to_single());
-                    subjects.push(subject.into());
+                    subjects.push(subject);
                 }
             } else {
-                subjects.push(subject.into());
+                subjects.push(subject);
             }
         }
 
@@ -269,7 +265,7 @@ pub fn should_update_property<'a>(
 pub fn check_if_atom_matches_watched_query_filters(
     store: &Db,
     index_atom: &IndexAtom,
-    atom: &Atom,
+    _atom: &Atom,
     delete: bool,
     resource: &Resource,
     transaction: &mut Transaction,
@@ -292,7 +288,13 @@ pub fn check_if_atom_matches_watched_query_filters(
                         Err(_e) => NO_VALUE.to_string(),
                     }
                 };
-                update_indexed_member(&q_filter, &atom.subject, &update_val, delete, transaction)?;
+                update_indexed_member(
+                    &q_filter,
+                    index_atom.subject.as_str(),
+                    &update_val,
+                    delete,
+                    transaction,
+                )?;
             }
         } else {
             tracing::error!("Can't query collection index: {:?}", query);
@@ -562,7 +564,7 @@ pub mod test {
             .await
             .unwrap();
 
-        let subject: String = "https://example.com/someAgent".into();
+        let subject = Subject::from("https://example.com/someAgent");
 
         let index_atom = IndexAtom {
             subject,

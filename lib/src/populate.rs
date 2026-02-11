@@ -9,7 +9,7 @@ use crate::{
     parse::ParseOpts,
     schema::{Class, Property},
     storelike::Query,
-    urls, Storelike, Subject, Value,
+    urls, Storelike, Value,
 };
 
 const DEFAULT_ONTOLOGY_PATH: &str = "defaultOntology";
@@ -259,11 +259,10 @@ pub async fn set_drive_rights(store: &impl Storelike, public_read: bool) -> Atom
     }
 
     if let Err(_no_description) = drive.get(urls::DESCRIPTION) {
-        let setup_url = Subject::from_raw("/setup", None).resolve("http://localhost");
         let ontology_url = format!("{}{}", drive.get_subject().as_str(), DEFAULT_ONTOLOGY_PATH);
         drive.set_string(urls::DESCRIPTION.into(), &format!(r#"## Welcome to your Atomic-Server!
 ### Getting started
-Start by registering your Agent by visiting [`/setup`]({}).
+If you just started this server, you should have seen an invite link in the terminal output. Use that to create your first Agent and get write access.
 
 Note that, by default, all resources are `public`. You can edit this by opening the context menu (the three dots in the navigation bar), and going to `share`.
 
@@ -275,7 +274,7 @@ You can create folders to organise your resources.
 
 To use the data in your web apps checkout our client libraries: [@tomic/lib](https://docs.atomicdata.dev/js), [@tomic/react](https://docs.atomicdata.dev/usecases/react) and [@tomic/svelte](https://docs.atomicdata.dev/svelte)
 Use [@tomic/cli](https://docs.atomicdata.dev/js-cli) to generate typed ontologies inside your code.
-"#, setup_url, ontology_url), store).await?;
+"#, ontology_url), store).await?;
     }
     drive.save_locally(store).await?;
     Ok(())
@@ -334,7 +333,7 @@ pub async fn populate_collections(store: &impl Storelike) -> AtomicResult<()> {
 
     for subject in result.subjects {
         let mut collection =
-            crate::collections::create_collection_resource_for_class(store, &subject).await?;
+            crate::collections::create_collection_resource_for_class(store, subject.as_str()).await?;
         collection.save_locally(store).await?;
     }
 
@@ -348,7 +347,7 @@ pub async fn populate_endpoints(store: &crate::Db) -> AtomicResult<()> {
     let endpoints = store.get_endpoints();
     let endpoints_collection = "/endpoints";
     for endpoint in endpoints {
-        tracing::info!("Populating endpoint: {}", endpoint.path);
+        tracing::debug!("Populating endpoint: {}", endpoint.path);
         let mut resource = endpoint.to_resource(store).await?;
         resource
             .set(
@@ -357,7 +356,6 @@ pub async fn populate_endpoints(store: &crate::Db) -> AtomicResult<()> {
                 store,
             )
             .await?;
-        tracing::info!("Saving endpoint: {}", endpoint.path);
         resource.save_locally(store).await?;
     }
     tracing::info!("Endpoints populated.");
@@ -388,7 +386,7 @@ pub async fn populate_importer(store: &crate::Db) -> AtomicResult<()> {
 /// Useful for helping a new user get started.
 pub async fn populate_sidebar_items(store: &crate::Db) -> AtomicResult<()> {
     let mut drive = store.get_resource(&"/".into()).await?;
-    let arr = vec!["setup", "import", "collections"];
+    let arr = vec!["import", "collections"];
     for item in arr {
         drive.push(urls::SUBRESOURCES, item.into(), true)?;
     }

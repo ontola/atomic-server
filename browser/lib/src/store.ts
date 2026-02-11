@@ -473,6 +473,7 @@ export class Store {
 
       // The main resource that was requested
       const resource = createdResources.find(r => r.subject === fetchSubject);
+
       if (resource) {
         this.addResources(resource, {
           alias: subject,

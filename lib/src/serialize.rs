@@ -192,7 +192,10 @@ pub async fn atoms_to_ntriples(
 
     let mut formatter = NTriplesFormatter::new(Vec::default());
     for atom in atoms {
-        let subject = NamedNode { iri: &atom.subject }.into();
+        let subject = NamedNode {
+            iri: atom.subject.as_str(),
+        }
+        .into();
         let predicate = NamedNode {
             iri: &atom.property,
         };
@@ -234,7 +237,10 @@ pub async fn atoms_to_turtle(
     let mut formatter = TurtleFormatter::new(Vec::default());
 
     for atom in atoms {
-        let subject = NamedNode { iri: &atom.subject }.into();
+        let subject = NamedNode {
+            iri: atom.subject.as_str(),
+        }
+        .into();
         let predicate = NamedNode {
             iri: &atom.property,
         };

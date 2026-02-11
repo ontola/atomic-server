@@ -250,7 +250,7 @@ impl Collection {
         };
 
         let query_result = store.query(&q).await?;
-        let members = query_result.subjects;
+        let members: Vec<String> = query_result.subjects.iter().map(|s| s.to_string()).collect();
         let referenced_resources = if collection_builder.include_nested {
             Some(query_result.resources)
         } else {

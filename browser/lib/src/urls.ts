@@ -117,6 +117,7 @@ export const properties = {
     usagesLeft: 'https://atomicdata.dev/properties/invite/usagesLeft',
     users: 'https://atomicdata.dev/properties/invite/users',
     write: 'https://atomicdata.dev/properties/invite/write',
+    expiresAt: 'https://atomicdata.dev/properties/invite/expiresAt',
   },
   file: {
     filename: 'https://atomicdata.dev/properties/filename',

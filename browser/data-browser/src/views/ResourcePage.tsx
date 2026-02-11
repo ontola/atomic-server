@@ -126,6 +126,7 @@ function selectComponent(klass: string | undefined) {
     case server.classes.drive:
       return DrivePage;
     case server.classes.invite:
+    case server.classes.redirect:
       return InvitePage;
     case dataBrowser.classes.document:
       return DocumentPage;

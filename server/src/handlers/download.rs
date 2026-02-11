@@ -30,14 +30,14 @@ pub async fn handle_download(
     let origin = RequestContext::new(&req, &appstate).origin;
     let store = &appstate.store;
 
-    // We replace `/download` with `/` to get the subject of the Resource.
-    let subject = if let Some(pth) = path {
-        let subject = format!("{}/{}", origin, pth);
-        subject
+    let subject_path = if let Some(pth) = path {
+        format!("/{}", pth)
     } else {
         // There is no end string, so It's the root of the URL, the base URL!
         return Err("Put `/download` in front of an File URL to download it.".into());
     };
+
+    let subject = atomic_lib::Subject::from_raw(&subject_path, None).resolve(&origin);
 
     let for_agent = get_client_agent(headers, &appstate, subject.clone()).await?;
     tracing::info!("handle_download: {}", subject);

@@ -233,6 +233,12 @@ impl Commit {
                         commit.signer
                     )
                     .into());
+                } else if commit.signer.starts_with("did:ad:") {
+                    commit
+                        .signer
+                        .strip_prefix("did:ad:")
+                        .ok_or("Invalid did:ad signer")?
+                        .to_string()
                 } else if commit.signer == commit.subject && commit.previous_commit.is_none() {
                     // If the signer is not found in the store AND signer == subject,
                     // it's likely a self-signed genesis commit (e.g. creating a new DID/agent).
@@ -269,12 +275,12 @@ impl Commit {
 
         // Special check for did:ad
         if commit.subject.starts_with("did:ad:") && commit.previous_commit.is_none() {
-            let subject_signature = commit
+            let subject_val = commit
                 .subject
                 .strip_prefix("did:ad:")
                 .ok_or("Invalid did:ad subject")?;
-            if subject_signature != signature {
-                return Err(format!("Invalid did:ad subject. The subject part after 'did:ad:' ({}) must match the signature ({})", subject_signature, signature).into());
+            if subject_val != signature && subject_val != pubkey_b64 {
+                return Err(format!("Invalid did:ad subject. The subject part after 'did:ad:' ({}) must match the signature ({}) or the public key ({})", subject_val, signature, pubkey_b64).into());
             }
         }
         Ok(())
@@ -408,8 +414,7 @@ impl Commit {
                 resource.remove_propval(prop);
 
                 if let Ok(val) = resource_unedited.get(prop) {
-                    let atom =
-                        Atom::new(resource.get_subject().to_string(), prop.into(), val.clone());
+                    let atom = Atom::new(resource.get_subject().clone(), prop.into(), val.clone());
                     remove_atoms.push(atom);
                 } else {
                     // The property does not exist, so nothing to remove.
@@ -434,13 +439,13 @@ impl Commit {
                     })?;
 
                 let new_atom = Atom::new(
-                    resource.get_subject().to_string(),
+                    resource.get_subject().clone(),
                     prop.clone(),
                     new_val.clone(),
                 );
                 if let Ok(old_val) = resource_unedited.get(&prop) {
                     let old_atom = Atom::new(
-                        resource.get_subject().to_string(),
+                        resource.get_subject().clone(),
                         prop.clone(),
                         old_val.clone(),
                     );

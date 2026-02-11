@@ -31,14 +31,13 @@ pub async fn upload_handler(
     let store = &appstate.store;
 
     let parent = store.get_resource(&query.parent.clone().into()).await?;
-    let subject = format!(
-        "{}{}",
-        origin,
-        req.head()
-            .uri
-            .path_and_query()
-            .ok_or("Path must be given")?
-    );
+    let path_and_query = req
+        .head()
+        .uri
+        .path_and_query()
+        .ok_or("Path must be given")?
+        .to_string();
+    let subject = atomic_lib::Subject::from_raw(&path_and_query, None).resolve(&origin);
     let agent = get_client_agent(req.headers(), &appstate, subject).await?;
     check_write(store, &parent, &agent).await?;
 

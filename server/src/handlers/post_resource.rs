@@ -46,7 +46,7 @@ pub async fn handle_post_resource(
         "/".to_string()
     };
 
-    let full_subject = format!("{}{}", origin, subject_string);
+    let full_subject = atomic_lib::Subject::from_raw(&subject_string, None).resolve(&origin);
 
     let store = &appstate.store;
     timer.add("parse_headers");

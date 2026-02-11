@@ -62,7 +62,7 @@ pub async fn validate_store(
             match crate::Value::new(&value.to_string(), &property.data_type) {
                 Ok(_) => {}
                 Err(e) => invalid_value.push((
-                    crate::Atom::new(subject.to_string(), prop_url.clone(), value.clone()),
+                    crate::Atom::new(subject.clone(), prop_url.clone(), value.clone()),
                     e.to_string(),
                 )),
             };

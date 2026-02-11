@@ -345,6 +345,16 @@ impl From<Vec<String>> for Value {
     }
 }
 
+impl From<Vec<Subject>> for Value {
+    fn from(val: Vec<Subject>) -> Self {
+        let mut vec = Vec::new();
+        for subject in val {
+            vec.push(SubResource::Subject(subject));
+        }
+        Value::ResourceArray(vec)
+    }
+}
+
 impl From<Vec<SubResource>> for Value {
     fn from(val: Vec<SubResource>) -> Self {
         Value::ResourceArray(val)

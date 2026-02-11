@@ -49,7 +49,8 @@ pub async fn handle_get_resource(
 
     timer.add("parse_headers");
 
-    let full_subject = format!("{}{}", origin, subject_string);
+    // Use the full HTTP URL for auth validation, since that's what the client signed.
+    let full_subject = format!("{}{}", origin.trim_end_matches('/'), subject_string);
     let for_agent = get_client_agent(headers, &appstate, full_subject).await?;
     timer.add("get_agent");
 

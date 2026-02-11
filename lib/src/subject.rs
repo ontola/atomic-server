@@ -79,6 +79,12 @@ impl Subject {
         }
     }
 
+    /// Returns true if this subject is local to the server (Internal or Did).
+    /// External subjects are not considered local.
+    pub fn is_local(&self) -> bool {
+        matches!(self, Subject::Internal(_) | Subject::Did(_))
+    }
+
     /// Resolves the Subject to an absolute URL string based on the provided origin.
     /// If it's an `Internal` subject, it swaps the `internal:` scheme for the `origin`.
     pub fn resolve(&self, origin: &str) -> String {

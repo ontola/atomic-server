@@ -105,7 +105,7 @@ export class Resource<C extends OptionalClass = any> {
 
       throw new Error(
         'Invalid subject given to resource, must be a string, found ' +
-          typeof subject,
+        typeof subject,
       );
     }
 
@@ -283,11 +283,16 @@ export class Resource<C extends OptionalClass = any> {
     agent?: string,
     child?: string,
   ): Promise<[boolean, string | undefined]> {
-    const writeArray = this.get(core.properties.write);
-
     if (!agent) {
       return [false, 'No agent given'];
     }
+
+    // Agents can always edit their own resource (e.g. their profile)
+    if (agent === this.subject) {
+      return [true, undefined];
+    }
+
+    const writeArray = this.get(core.properties.write);
 
     if (writeArray && valToArray(writeArray).includes(agent)) {
       return [true, undefined];

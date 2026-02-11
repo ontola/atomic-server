@@ -12,8 +12,8 @@ There's a couple of levels at which you can start working with Atomic Data (from
 ## Play with the demo
 
 - Open [the Invite](https://atomicdata.dev/invites/1) on `atomicdata.dev`
-- Press `Accept`. Now, the front-end app will generate a Private-Public Key pair. The public key will be sent to the server, which creates an Agent for you.
-- You're now signed in! You can edit the document in your screen.
+- Press `Accept`. The front-end app will generate a cryptographic key pair. Your public key determines your Agent identity (`did:ad:{publicKey}`), and the server grants you rights to the shared resource.
+- You're now signed in! You can edit the document on your screen.
 - Edit your Agent by going to [user settings](https://atomicdata.dev/app/agent)
 - Copy your `secret`, and save it somewhere safe. You can use this to sign in on a different machine.
 - Press `edit user` to add your name and perhaps a bio.
