@@ -8,12 +8,24 @@ import {
 import type { JSONSchema7 } from 'ai';
 import { Ajv } from 'ajv';
 
+export type PluginPermissionType =
+  | 'network'
+  | 'storage'
+  | 'full-drive-access'
+  | 'extended-fuel'
+  | 'extended-memory';
+export interface PluginPermission {
+  permission: PluginPermissionType;
+  reason: string;
+}
+
 export interface PluginMetadata {
   name: string;
-  namespace?: string;
+  namespace: string;
   author?: string;
   description?: string;
   version: string;
+  permissions?: PluginPermission[];
   defaultConfig?: JSONValue;
   configSchema?: JSONSchema7;
 }

@@ -1,10 +1,21 @@
 import { Button } from '@components/Button';
 import { Dialog } from '@components/Dialog';
 import { useDialog } from '@components/Dialog/useDialog';
-import type { JSONValue, Resource, Server } from '@tomic/react';
+import {
+  server,
+  useValue,
+  type JSONValue,
+  type Resource,
+  type Server,
+} from '@tomic/react';
 import { useRef, useState } from 'react';
 import { FaUpload } from 'react-icons/fa6';
-import { readZip, validateConfig, type PluginMetadata } from './plugins';
+import {
+  readZip,
+  validateConfig,
+  type PluginMetadata,
+  type PluginPermission,
+} from './plugins';
 import toast from 'react-hot-toast';
 import { Column, Row } from '@components/Row';
 import { useCreatePlugin } from '@views/Plugin/createPlugin';
@@ -13,6 +24,8 @@ import type { JSONSchema7 } from 'ai';
 import { JSONEditor } from '@components/JSONEditor';
 import { WarningBlock } from '@components/WarningBlock';
 import { ConfigReference } from '@views/Plugin/ConfigReference';
+import { isPluginPermissions } from '@views/Plugin/pluginUtils';
+import { PluginPermissions } from '@views/Plugin/PluginPermissions';
 
 interface UpdatePluginButtonProps {
   plugin: Resource<Server.Plugin>;
@@ -25,8 +38,22 @@ const UpdatePluginButton: React.FC<UpdatePluginButtonProps> = ({ plugin }) => {
   const [configValid, setConfigValid] = useState(true);
   const [jsonEditorValid, setJsonEditorValid] = useState(true);
   const [updatedConfig, setUpdatedConfig] = useState<JSONValue>();
+  const [oldPermissions] = useValue(
+    plugin,
+    server.properties.pluginPermissions,
+  );
 
   const { updatePlugin } = useCreatePlugin();
+
+  const newPermissions: PluginPermission[] = [];
+
+  if (isPluginPermissions(oldPermissions) && metadata?.permissions) {
+    for (const perm of metadata.permissions) {
+      if (!oldPermissions.some(p => p.permission === perm.permission)) {
+        newPermissions.push(perm);
+      }
+    }
+  }
 
   const reset = () => {
     fileInputRef.current!.value = '';
@@ -117,6 +144,12 @@ const UpdatePluginButton: React.FC<UpdatePluginButtonProps> = ({ plugin }) => {
                   {plugin.props.version} → {metadata.version}
                 </VersionChange>
               </Row>
+              {newPermissions.length > 0 && (
+                <PluginPermissions
+                  permissions={newPermissions}
+                  title='New Permissions'
+                />
+              )}
               {!configValid && (
                 <>
                   <WarningBlock>

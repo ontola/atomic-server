@@ -1,33 +1,29 @@
 # Atomic Plugins
 
 Atomic Plugins are applications that can run inside of an Atomic Server.
-They enhance the functionality of an Atomic Server.
-For example, they can:
+They enhance the functionality of an Atomic Server by extending one or more classes.
 
-- Extend existing resources (e.g. automatic translations)
-- Provide new endpoints (maybe even ports?) with custom functionality (e.g. full text search for pod data, an e-mail server)
-- Periodically execute some code (e.g. fetch new data from a source)
-- Add datatypes and validation
+For example they can be used to create more restrictive requirements for classes, like requiring names to start with an uppercase letter.
+They can also add dynamic properties to classes that get populated each time the resource is fetched.
 
-## The Plugin Resource
+Plugins can be created in any programming language that compiles to Wasm.
+For more information on how to create a plugin, see [Creating Plugins](plugins/creating-plugins.md).
 
-A Plugin itself is a Resource: it is described using Atoms.
-The most important Atom for a Plugin, is the `wasm` property: this contains the actual code.
-Other properties include:
+## Installing a plugin
 
-- `name`
-- `description`
-- `author`
+To install a plugin you need to have write access to the drive that the plugin will be installed on.
+Navigate to the drive and click on the 'Upload Plugin' button.
+Select your plugin zip file.
+You will see a description of the plugin, any permissions it requires and a config field.
+Edit the config if needed and click 'Install'.
+You can change the config at any time once the plugin is installed.
 
-## Registering a plugin
+## Giving your plugin access to resources
 
-When a plugin is installed, the Server needs to be aware of when the functionality of the plugin needs to be called:
+By default plugins do not have access to any resources unless they have the `full-drive-access` permission.
+To add access to specific resources (and their children) navigate to the plugin page and add the resource in the 'Assign Rights' section.
 
-- Periodically (if so, when?)
-- On a certain endpoint (which endpoint? One or multiple?)
-- As a middleware when (specific) resources are created / read / updated.
-
-## Hooks
+<!-- ## Hooks
 
 ### BeforeCommit
 
@@ -56,4 +52,6 @@ All `.wasm` files in that folder are loaded on startup. Errors are logged but do
 
 ### Sample Wasm extender
 
-See `wasm-plugins/examples/random-folder-extender` for a minimal Rust project that implements the `class-extender` WIT interface. It appends a random suffix to the `name` property of every `https://atomicdata.dev/classes/Folder` resource whenever it is fetched. Build it with `cargo component build --release -p random-folder-extender --target wasm32-wasip2` and copy the resulting `.wasm` into your `wasm-class-extenders/` directory to try it out.
+See `wasm-plugins/examples/random-folder-extender` for a minimal Rust project that implements the `class-extender` WIT interface. It appends a random suffix to the `name` property of every `https://atomicdata.dev/classes/Folder` resource whenever it is fetched. Build it with `cargo component build --release -p random-folder-extender --target wasm32-wasip2` and copy the resulting `.wasm` into your `wasm-class-extenders/` directory to try it out. -->
+
+

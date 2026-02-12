@@ -330,11 +330,13 @@ msgstr "Read more about permissions in the{0} <0>Atomic Data Docs</0>"
 
 #: src/routes/Share/ShareRoute.tsx
 #: src/views/Plugin/AssignPermissions.tsx
+#: src/views/Plugin/AssignRights.tsx
 msgid "Read"
 msgstr "Read"
 
 #: src/routes/Share/ShareRoute.tsx
 #: src/views/Plugin/AssignPermissions.tsx
+#: src/views/Plugin/AssignRights.tsx
 msgid "Write"
 msgstr "Write"
 
@@ -709,6 +711,7 @@ msgstr "Name"
 #: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/OntologyPage/NewPropertyButton.tsx
 #: src/views/Plugin/AssignPermissions.tsx
+#: src/views/Plugin/AssignRights.tsx
 #: src/views/TablePage/PropertyForm/ExternalPropertyDialog.tsx
 #: src/views/TablePage/PropertyForm/NewPropertyDialog.tsx
 msgid "Cancel"
@@ -1529,6 +1532,7 @@ msgstr "The identifier of the resource. This also determines where the resource 
 #: src/chunks/RTE/CollaborativeEditor.tsx
 #: src/components/forms/NewForm/NewFormTitle.tsx
 #: src/views/Plugin/AssignPermissions.tsx
+#: src/views/Plugin/AssignRights.tsx
 msgid "Resource"
 msgstr "Resource"
 
@@ -3307,10 +3311,8 @@ msgstr "Install"
 msgid "Please fill in all fields"
 msgstr "Please fill in all fields"
 
-#. placeholder {0}: err.message
-#: src/chunks/Plugins/NewPluginButton.tsx
-msgid "Failed to install plugin, error: {0}"
-msgstr "Failed to install plugin, error: {0}"
+#~ msgid "Failed to install plugin, error: {0}"
+#~ msgstr "Failed to install plugin, error: {0}"
 
 #: src/views/Plugin/PluginPage.tsx
 msgid "Uninstall"
@@ -3462,19 +3464,20 @@ msgstr ""
 #~ msgstr "Assign Permissions"
 
 #: src/views/Plugin/AssignPermissions.tsx
+#: src/views/Plugin/AssignRights.tsx
 msgid "Pick a resource"
 msgstr "Pick a resource"
 
 #: src/views/Plugin/AssignPermissions.tsx
+#: src/views/Plugin/AssignRights.tsx
 msgid "Assign"
 msgstr "Assign"
 
 #~ msgid "Give full permissons <0/>"
 #~ msgstr "Give full permissons <0/>"
 
-#: src/views/Plugin/AssignPermissions.tsx
-msgid "<0/> Assign Permissions"
-msgstr "<0/> Assign Permissions"
+#~ msgid "<0/> Assign Permissions"
+#~ msgstr "<0/> Assign Permissions"
 
 #: src/views/Plugin/PluginPage.tsx
 msgid "<0/> Config"
@@ -3483,3 +3486,27 @@ msgstr "<0/> Config"
 #: src/views/Plugin/PluginPage.tsx
 msgid "Plugin Description"
 msgstr "Plugin Description"
+
+#: src/views/Plugin/AssignPermissions.tsx
+#: src/views/Plugin/AssignRights.tsx
+msgid "<0/> Assign Rights"
+msgstr "<0/> Assign Rights"
+
+#~ msgid "Permissions"
+#~ msgstr "Permissions"
+
+#: src/views/Plugin/PluginPermissions.tsx
+msgid "No reason provided"
+msgstr "No reason provided"
+
+#: src/views/Plugin/PluginPermissions.tsx
+msgid "No permissions required"
+msgstr "No permissions required"
+
+#: src/chunks/Plugins/UpdatePluginButton.tsx
+msgid "New Permissions"
+msgstr "New Permissions"
+
+#: src/chunks/Plugins/NewPluginButton.tsx
+msgid "Failed to install plugin"
+msgstr "Failed to install plugin"

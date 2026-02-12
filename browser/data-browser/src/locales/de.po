@@ -53,6 +53,7 @@ msgstr "Keine Ergebnisse"
 #: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/OntologyPage/NewPropertyButton.tsx
 #: src/views/Plugin/AssignPermissions.tsx
+#: src/views/Plugin/AssignRights.tsx
 #: src/views/TablePage/PropertyForm/ExternalPropertyDialog.tsx
 #: src/views/TablePage/PropertyForm/NewPropertyDialog.tsx
 msgid "Cancel"
@@ -2463,11 +2464,13 @@ msgstr "Weitere Informationen zu Berechtigungen findest du in den{0} <0>Atomic D
 
 #: src/routes/Share/ShareRoute.tsx
 #: src/views/Plugin/AssignPermissions.tsx
+#: src/views/Plugin/AssignRights.tsx
 msgid "Read"
 msgstr "Lesen"
 
 #: src/routes/Share/ShareRoute.tsx
 #: src/views/Plugin/AssignPermissions.tsx
+#: src/views/Plugin/AssignRights.tsx
 msgid "Write"
 msgstr "Schreiben"
 
@@ -2590,6 +2593,7 @@ msgstr "Die Kennung der Ressource. Dies bestimmt standardmäßig auch, wo die Re
 #: src/chunks/RTE/CollaborativeEditor.tsx
 #: src/components/forms/NewForm/NewFormTitle.tsx
 #: src/views/Plugin/AssignPermissions.tsx
+#: src/views/Plugin/AssignRights.tsx
 msgid "Resource"
 msgstr "Ressource"
 
@@ -3345,10 +3349,8 @@ msgstr "Mögliche Werte:"
 msgid "Please fill in all fields"
 msgstr "Bitte füllen Sie alle Felder aus"
 
-#. placeholder {0}: err.message
-#: src/chunks/Plugins/NewPluginButton.tsx
-msgid "Failed to install plugin, error: {0}"
-msgstr "Plugin-Installation fehlgeschlagen, Fehler: {0}"
+#~ msgid "Failed to install plugin, error: {0}"
+#~ msgstr "Plugin-Installation fehlgeschlagen, Fehler: {0}"
 
 #: src/chunks/Plugins/NewPluginButton.tsx
 msgid "Install"
@@ -3473,19 +3475,20 @@ msgstr "Ein Agent ist ein Benutzer, der aus einem Subjekt (seiner URL) und einem
 #~ msgstr "Berechtigungen zuweisen"
 
 #: src/views/Plugin/AssignPermissions.tsx
+#: src/views/Plugin/AssignRights.tsx
 msgid "Pick a resource"
 msgstr "Wählen Sie eine Ressource aus"
 
 #: src/views/Plugin/AssignPermissions.tsx
+#: src/views/Plugin/AssignRights.tsx
 msgid "Assign"
 msgstr "Zuweisen"
 
 #~ msgid "Give full permissons <0/>"
 #~ msgstr "Vollständige Berechtigungen erteilen <0/>"
 
-#: src/views/Plugin/AssignPermissions.tsx
-msgid "<0/> Assign Permissions"
-msgstr "<0/> Berechtigungen zuweisen"
+#~ msgid "<0/> Assign Permissions"
+#~ msgstr "<0/> Berechtigungen zuweisen"
 
 #: src/views/Plugin/PluginPage.tsx
 msgid "<0/> Config"
@@ -3494,3 +3497,27 @@ msgstr "<0/> Konfiguration"
 #: src/views/Plugin/PluginPage.tsx
 msgid "Plugin Description"
 msgstr "Plugin-Beschreibung"
+
+#: src/views/Plugin/AssignPermissions.tsx
+#: src/views/Plugin/AssignRights.tsx
+msgid "<0/> Assign Rights"
+msgstr "<0/> Rechte zuweisen"
+
+#~ msgid "Permissions"
+#~ msgstr "Berechtigungen"
+
+#: src/views/Plugin/PluginPermissions.tsx
+msgid "No reason provided"
+msgstr "Kein Grund angegeben"
+
+#: src/views/Plugin/PluginPermissions.tsx
+msgid "No permissions required"
+msgstr "Keine Berechtigungen erforderlich"
+
+#: src/chunks/Plugins/UpdatePluginButton.tsx
+msgid "New Permissions"
+msgstr "Neue Berechtigungen"
+
+#: src/chunks/Plugins/NewPluginButton.tsx
+msgid "Failed to install plugin"
+msgstr "Fehler bei der Installation des Plugins"
