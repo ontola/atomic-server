@@ -25,7 +25,9 @@ import { FaFloppyDisk, FaGear, FaTrash } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import toast from 'react-hot-toast';
 import { ConfigReference } from './ConfigReference';
-import { AssignPermissions } from './AssignPermissions';
+import { AssignRights } from './AssignRights';
+import { PluginPermissions } from './PluginPermissions';
+import { hasPermission, isPluginPermissions } from './pluginUtils';
 
 const UpdatePluginButton = lazy(
   () => import('@chunks/Plugins/UpdatePluginButton'),
@@ -41,11 +43,14 @@ export const PluginPage: React.FC<ResourcePageProps<Server.Plugin>> = ({
   const [name] = useString(resource, core.properties.name);
   const [namespace] = useString(resource, server.properties.namespace);
   const [config, setConfig] = useValue(resource, server.properties.config);
+  const [permissions] = useValue(resource, server.properties.pluginPermissions);
   const [configValid, setConfigValid] = useState(true);
   const title = `${namespace ? `${namespace}/` : ''}${name}`;
   const parent = resource.props.parent;
 
   const { uninstallPlugin } = useCreatePlugin();
+
+  const hasFullDriveAccess = hasPermission(permissions, 'full-drive-access');
 
   return (
     <ContainerNarrow>
@@ -73,7 +78,9 @@ export const PluginPage: React.FC<ResourcePageProps<Server.Plugin>> = ({
             </DescriptionWrapper>
           )}
         </Column>
-        {canWrite && <AssignPermissions plugin={resource} />}
+        {canWrite && (
+          <AssignRights plugin={resource} disabled={hasFullDriveAccess} />
+        )}
         <Column>
           <Row center justify='space-between'>
             <h3 id={configLabelId}>
@@ -107,6 +114,9 @@ export const PluginPage: React.FC<ResourcePageProps<Server.Plugin>> = ({
         </Column>
         {resource.props.jsonSchema && (
           <ConfigReference schema={resource.props.jsonSchema as JSONSchema7} />
+        )}
+        {isPluginPermissions(permissions) && (
+          <PluginPermissions permissions={permissions} />
         )}
       </Column>
       <ConfirmationDialog

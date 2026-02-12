@@ -64,17 +64,17 @@ export const TagBar: React.FC<TagBarProps> = ({ resource }) => {
 
   if (driveSubject === undefined || resource.loading) {
     return (
-      <Row center gap='0.5rem'>
+      <Wrapper center gap='0.5rem'>
         <FaTags />
         <SkeletonButton>
           <FaPlus />
         </SkeletonButton>
-      </Row>
+      </Wrapper>
     );
   }
 
   return (
-    <Row center gap='0.5rem' wrapItems>
+    <Wrapper center gap='0.5rem' wrapItems>
       <FaTags />
       {tags.map(tag => (
         <ResourceInline key={tag} subject={tag} />
@@ -93,7 +93,7 @@ export const TagBar: React.FC<TagBarProps> = ({ resource }) => {
           }
         />
       )}
-    </Row>
+    </Wrapper>
   );
 };
 
@@ -130,4 +130,8 @@ const NewTagButton = styled(SkeletonButton)`
   padding-inline: ${p => p.theme.size(4)};
   padding-block: 0.4em;
   border-radius: 1em;
+`;
+
+const Wrapper = styled(Row)`
+  view-transition-name: tag-bar;
 `;

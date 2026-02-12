@@ -17,13 +17,13 @@ It also prevents commits to the folder if the name contains uppercase letters.
 AtomicServer plugins are compiled to WebAssempbly (Wasm) using the component model.
 You should target the `wasm32-wasip2` architecture when building the project.
 
-```bash
-# Install the target if you haven't already.
-rustup target add wasm32-wasip2
+    ```bash
+    # Install the target if you haven't already.
+    rustup target add wasm32-wasip2
 
-# Build the plugin.
-cargo build --release -p random-folder-extender --target wasm32-wasip2
-```
+    # Build the plugin.
+    cargo build --release -p random-folder-extender --target wasm32-wasip2
+    ```
 
 In this example the build output location is `target/wasm32-wasip2/release/random-folder-extender.wasm`.
 
@@ -35,8 +35,9 @@ Check the [docs](https://docs.atomicdata.dev/atomicserver/faq.html#where-is-my-d
 ## Packaging the plugin
 
 Run the following command to package the plugin into a zip file.
-```sh
-cargo run --bin package -- --wasm ../../target/wasm32-wasip2/release/random_folder_extender.wasm
-```
+
+    ```bash
+    cargo run --bin package -- --wasm ../../target/wasm32-wasip2/release/random_folder_extender.wasm
+    ```
 
 In your own project you can install `atomic-plugin` and run `cargo atomic-plugin` instead.
