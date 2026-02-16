@@ -222,7 +222,8 @@ export class Collection {
       if (toAppend.length > 0) {
         const merged = [...incoming, ...toAppend];
         const totalProp = resource.get(collections.properties.totalMembers);
-        const baseTotal = typeof totalProp === 'number' ? totalProp : incoming.length;
+        const baseTotal =
+          typeof totalProp === 'number' ? totalProp : incoming.length;
         const newTotal = baseTotal + toAppend.length;
         this.writePageMembers(resource, merged, newTotal);
         // The merged total is the source of truth — caller (fetch
@@ -364,9 +365,7 @@ export class Collection {
       // against the server.
       if (!this.pages.has(0)) {
         this._optimisticAdds.add(subject);
-        const page = new Resource<Collections.Collection>(
-          this.buildSubject(0),
-        );
+        const page = new Resource<Collections.Collection>(this.buildSubject(0));
         this.writePageMembers(page, [subject], 1);
         this.setPage(0, page);
         this._totalMembers = 1;

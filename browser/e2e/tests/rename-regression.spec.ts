@@ -50,7 +50,9 @@ test.describe('drive rename regression', () => {
     });
   });
 
-  test('two sequential renames both persist across reload', async ({ page }) => {
+  test('two sequential renames both persist across reload', async ({
+    page,
+  }) => {
     await expect(editableTitle(page)).toBeVisible({ timeout: 15000 });
 
     await renameDrive(page, 'First Name');
@@ -65,4 +67,3 @@ test.describe('drive rename regression', () => {
     });
   });
 });
-

@@ -311,7 +311,7 @@ mod test {
         let decoded = InviteToken::decode(&encoded).expect("Failed to decode");
 
         assert_eq!(decoded.target, target);
-        assert_eq!(decoded.write, true);
+        assert!(decoded.write);
         assert_eq!(decoded.expires_at, expires_at);
         assert_eq!(decoded.signer, agent.subject);
 
@@ -339,7 +339,7 @@ mod test {
         let decoded = InviteToken::decode(&encoded).expect("Failed to decode");
 
         assert_eq!(decoded.target, target);
-        assert_eq!(decoded.write, true);
+        assert!(decoded.write);
         assert_eq!(decoded.expires_at, expires_at);
         assert_eq!(decoded.signer, agent.subject);
 

@@ -37,6 +37,7 @@ impl Actor for LoroSyncBroadcaster {
 impl Handler<SubscribeLoroSync> for LoroSyncBroadcaster {
     type Result = ResponseActFuture<Self, ()>;
 
+    #[allow(clippy::mutable_key_type)]
     fn handle(&mut self, msg: SubscribeLoroSync, _ctx: &mut Context<Self>) -> Self::Result {
         let store = self.store.clone();
         Box::pin(

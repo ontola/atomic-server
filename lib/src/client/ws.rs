@@ -269,12 +269,12 @@ impl WsClient {
 
 /// Parse a raw server message string into a typed `WsMessage`.
 fn parse_server_message(text: &str) -> WsMessage {
-    if text.starts_with("COMMIT ") {
-        WsMessage::Commit(text[7..].to_string())
-    } else if text.starts_with("RESOURCE ") {
-        WsMessage::Resource(text[9..].to_string())
-    } else if text.starts_with("LORO_SYNC_UPDATE ") {
-        match serde_json::from_str::<serde_json::Value>(&text[17..]) {
+    if let Some(stripped) = text.strip_prefix("COMMIT ") {
+        WsMessage::Commit(stripped.to_string())
+    } else if let Some(stripped) = text.strip_prefix("RESOURCE ") {
+        WsMessage::Resource(stripped.to_string())
+    } else if let Some(stripped) = text.strip_prefix("LORO_SYNC_UPDATE ") {
+        match serde_json::from_str::<serde_json::Value>(stripped) {
             Ok(v) => {
                 let subject = v["subject"].as_str().unwrap_or("").to_string();
                 let update_b64 = v["update"].as_str().unwrap_or("");
@@ -283,8 +283,8 @@ fn parse_server_message(text: &str) -> WsMessage {
             }
             Err(_) => WsMessage::Error(format!("Invalid LORO_SYNC_UPDATE: {}", text)),
         }
-    } else if text.starts_with("LORO_EPHEMERAL_UPDATE ") {
-        match serde_json::from_str::<serde_json::Value>(&text[21..]) {
+    } else if let Some(stripped) = text.strip_prefix("LORO_EPHEMERAL_UPDATE ") {
+        match serde_json::from_str::<serde_json::Value>(stripped) {
             Ok(v) => {
                 let subject = v["subject"].as_str().unwrap_or("").to_string();
                 let update_b64 = v["update"].as_str().unwrap_or("");
@@ -293,8 +293,8 @@ fn parse_server_message(text: &str) -> WsMessage {
             }
             Err(_) => WsMessage::Error(format!("Invalid LORO_EPHEMERAL_UPDATE: {}", text)),
         }
-    } else if text.starts_with("QUERY_UPDATE ") {
-        match serde_json::from_str::<serde_json::Value>(&text[13..]) {
+    } else if let Some(stripped) = text.strip_prefix("QUERY_UPDATE ") {
+        match serde_json::from_str::<serde_json::Value>(stripped) {
             Ok(v) => {
                 let property = v["property"].as_str().map(|s| s.to_string());
                 let value = v["value"].as_str().map(|s| s.to_string());
@@ -325,8 +325,8 @@ fn parse_server_message(text: &str) -> WsMessage {
         }
     } else if text.starts_with("AUTHENTICATED") {
         WsMessage::Authenticated
-    } else if text.starts_with("ERROR ") {
-        WsMessage::Error(text[6..].to_string())
+    } else if let Some(stripped) = text.strip_prefix("ERROR ") {
+        WsMessage::Error(stripped.to_string())
     } else {
         WsMessage::Error(format!("Unknown message: {}", text))
     }

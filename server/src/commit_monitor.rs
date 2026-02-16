@@ -94,19 +94,13 @@ impl Actor for CommitMonitor {
                     match writer.write() {
                         Ok(mut guard) => {
                             if let Err(e) = guard.commit() {
-                                tracing::error!(
-                                    "Tantivy commit failed: {}",
-                                    e
-                                );
+                                tracing::error!("Tantivy commit failed: {}", e);
                                 // Re-arm so the next pass retries.
                                 flag.store(true, Ordering::Release);
                             }
                         }
                         Err(e) => {
-                            tracing::error!(
-                                "Tantivy writer lock poisoned: {}",
-                                e
-                            );
+                            tracing::error!("Tantivy writer lock poisoned: {}", e);
                             flag.store(true, Ordering::Release);
                         }
                     }
@@ -451,10 +445,7 @@ impl CommitMonitor {
                         tracing::warn!("Failed to register filter in Tree::WatchedQueries: {e}");
                     }
                     #[allow(clippy::mutable_key_type)]
-                    let entry = self
-                        .query_subscriptions
-                        .entry(filter_bytes)
-                        .or_insert_with(HashSet::new);
+                    let entry = self.query_subscriptions.entry(filter_bytes).or_default();
                     entry.insert(addr);
                     return;
                 }
@@ -467,13 +458,9 @@ impl CommitMonitor {
 
         // Drive-wide subscription: drive only (no property/value).
         #[allow(clippy::mutable_key_type)]
-        let entry = self
-            .drive_subscriptions
-            .entry(drive_str)
-            .or_insert_with(HashSet::new);
+        let entry = self.drive_subscriptions.entry(drive_str).or_default();
         entry.insert(addr);
     }
-
 }
 
 impl Handler<CommitMessage> for CommitMonitor {

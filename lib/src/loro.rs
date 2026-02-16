@@ -605,7 +605,7 @@ pub fn loro_value_to_atomic_value(lv: &loro::LoroValue) -> Option<Value> {
                 loro::LoroValue::Map(_) => {
                     // Native LoroMaps → JsonArray
                     let json_items: Vec<serde_json::Value> =
-                        items.iter().map(|item| loro_value_to_json(item)).collect();
+                        items.iter().map(loro_value_to_json).collect();
                     Some(Value::JsonArray(json_items))
                 }
                 loro::LoroValue::String(first_s) => {
@@ -734,6 +734,12 @@ fn json_value_to_loro_list_item(
         serde_json::Value::Null => {}
     }
     Ok(())
+}
+
+impl Default for AtomicLoroDoc {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 /// Convert a LoroValue back to serde_json::Value.

@@ -595,7 +595,7 @@ mod test {
             .unwrap();
         resource1
             .push(
-                urls::ENDPOINT_RESULTS.into(),
+                urls::ENDPOINT_RESULTS,
                 SubResource::Subject("https://example.com/resource1".into()),
                 false,
             )
@@ -655,16 +655,13 @@ mod test {
             .await
             .unwrap();
 
-        assert_eq!(
-            collection
-                .members
-                .contains(&resource1.get_subject().to_string()),
-            false
-        );
+        assert!(!collection
+            .members
+            .contains(&resource1.get_subject().to_string()));
 
         resource1
             .push(
-                urls::ENDPOINT_RESULTS.into(),
+                urls::ENDPOINT_RESULTS,
                 SubResource::Subject("https://example.com/resource2".into()),
                 false,
             )
@@ -715,7 +712,7 @@ mod test {
         // Push first item
         resource1
             .push(
-                urls::ENDPOINT_RESULTS.into(),
+                urls::ENDPOINT_RESULTS,
                 SubResource::Subject("https://example.com/item1".into()),
                 false,
             )
@@ -752,7 +749,7 @@ mod test {
         // Push second item (array length changes from 1 to 2)
         resource1
             .push(
-                urls::ENDPOINT_RESULTS.into(),
+                urls::ENDPOINT_RESULTS,
                 SubResource::Subject("https://example.com/item2".into()),
                 false,
             )
@@ -816,7 +813,7 @@ mod test {
         // Push third item (array length changes from 2 to 3)
         resource1
             .push(
-                urls::ENDPOINT_RESULTS.into(),
+                urls::ENDPOINT_RESULTS,
                 SubResource::Subject("https://example.com/item3".into()),
                 false,
             )

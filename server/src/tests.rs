@@ -106,7 +106,7 @@ async fn server_tests() {
 
     // Edit the main drive, make it hidden to the public agent
     let drive_did = store.get_drive_did("localhost").await.unwrap().unwrap();
-    let mut drive = store.get_resource(&drive_did.into()).await.unwrap();
+    let mut drive = store.get_resource(&drive_did).await.unwrap();
     drive
         .set(
             urls::READ.into(),
@@ -464,7 +464,7 @@ async fn self_signed_agent_commit_keeps_name() {
 
     let agent = atomic_lib::agents::Agent::new(None).unwrap();
     let agent_did = agent.subject.pure_id();
-    let empty = atomic_lib::Resource::new(agent_did.clone().into());
+    let empty = atomic_lib::Resource::new(agent_did.clone());
 
     let mut builder = atomic_lib::commit::CommitBuilder::new(agent_did.clone().into());
     builder.is_genesis = true;

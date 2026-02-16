@@ -46,7 +46,7 @@ impl Clone for Resource {
             propvals: self.propvals.clone(),
             subject: self.subject.clone(),
             commit: self.commit.clone(),
-            loro: loro,
+            loro,
         }
     }
 }
@@ -313,7 +313,7 @@ impl Resource {
         let doc = self
             .loro
             .as_ref()
-            .ok_or_else(|| "No Loro doc loaded — call warm_history() first")?;
+            .ok_or("No Loro doc loaded — call warm_history() first")?;
         let props = doc.get_properties_at(version)?;
         let mut propvals = PropVals::new();
         for (key, loro_val) in &props {

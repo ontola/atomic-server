@@ -8,6 +8,16 @@ use crate::{
     Resource, Storelike, Subject,
 };
 
+#[cfg(not(target_arch = "wasm32"))]
+fn http_client_builder() -> reqwest::ClientBuilder {
+    reqwest::Client::builder().timeout(std::time::Duration::from_secs(10))
+}
+
+#[cfg(target_arch = "wasm32")]
+fn http_client_builder() -> reqwest::ClientBuilder {
+    reqwest::Client::builder()
+}
+
 /// Fetches a resource, makes sure its subject matches.
 /// Checks the datatypes for the Values.
 /// Ignores all atoms where the subject is different.
@@ -115,12 +125,7 @@ pub async fn fetch_body(
         return Err(format!("Could not fetch url '{}', must start with http.", url).into());
     }
 
-    let mut builder = reqwest::Client::builder();
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        builder = builder.timeout(std::time::Duration::from_secs(10));
-    }
-    let client = builder
+    let client = http_client_builder()
         .build()
         .map_err(|e| format!("Could not build HTTP client: {}", e))?;
 
@@ -212,12 +217,7 @@ async fn post_commit_custom_endpoint(
     }
     let json = serde_json::to_string(&json_val)?;
 
-    let mut builder = reqwest::Client::builder();
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        builder = builder.timeout(std::time::Duration::from_secs(10));
-    }
-    let client = builder
+    let client = http_client_builder()
         .build()
         .map_err(|e| format!("Could not build HTTP client: {}", e))?;
 

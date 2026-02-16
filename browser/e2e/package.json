@@ -12,8 +12,8 @@
     "url": "https://github.com/atomicdata-dev/atomic-server/"
   },
   "scripts": {
-    "format-check": "oxfmt -c ../.oxfmtrc.json --check .",
-    "format": "oxfmt -c ../.oxfmtrc.json .",
+    "format-check": "oxfmt -c ../.oxfmtrc.json --ignore-path ../../.gitignore --check .",
+    "format": "oxfmt -c ../.oxfmtrc.json --ignore-path ../../.gitignore .",
     "lint": "oxlint -c ../.oxlintrc.json . && pnpm format-check",
     "lint-fix": "oxlint -c ../.oxlintrc.json --fix . && pnpm format",
     "playwright-install": "playwright install chromium",

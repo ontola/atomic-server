@@ -481,29 +481,27 @@ mod tests {
         let initial_query = query_parser.parse_query("Initial").unwrap();
         let updated_query = query_parser.parse_query("Updated").unwrap();
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
-        let mut last_initial = usize::MAX;
-        let mut last_updated = usize::MAX;
-        loop {
+        let (last_initial, last_updated) = loop {
             search_state.reader.reload().unwrap();
             let searcher = search_state.reader.searcher();
-            last_initial = searcher
+            let last_initial = searcher
                 .search(&initial_query, &tantivy::collector::TopDocs::with_limit(1))
                 .unwrap()
                 .len();
-            last_updated = searcher
+            let last_updated = searcher
                 .search(&updated_query, &tantivy::collector::TopDocs::with_limit(1))
                 .unwrap()
                 .len();
             if last_initial == 0 && last_updated == 1 {
-                break;
+                break (last_initial, last_updated);
             }
             if std::time::Instant::now() >= deadline {
-                break;
+                break (last_initial, last_updated);
             }
             // Yield + delay, giving tantivy's background segment-merge
             // thread CPU time before we check again.
             std::thread::sleep(std::time::Duration::from_millis(100));
-        }
+        };
         assert_eq!(last_initial, 0, "Old title should not be found in index");
         assert_eq!(last_updated, 1, "New title should be found in index");
     }

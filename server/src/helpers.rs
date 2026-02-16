@@ -23,7 +23,7 @@ pub fn get_auth_headers(
             .to_str()
             .map_err(|_e| "Only string headers allowed in authorization header")?
             .trim_start_matches("Bearer ");
-        let auth_vals = get_auth_from_base64(bearer, &requested_subject)?;
+        let auth_vals = get_auth_from_base64(bearer, requested_subject)?;
         return Ok(Some(auth_vals));
     }
 
@@ -290,7 +290,7 @@ mod test {
             HeaderValue::from_str(token).unwrap(),
         );
         let subject = "https://atomicdata.dev";
-        let out = get_auth_headers(&headermap, subject.into())
+        let out = get_auth_headers(&headermap, subject)
             .expect("Should not return err")
             .expect("Should contain cookie");
 

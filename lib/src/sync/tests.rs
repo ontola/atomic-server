@@ -176,7 +176,7 @@ mod peer_sync_tests {
         let response_frames = crate::sync::engine::handle_sync_vv(
             &drive_a,
             "", // empty hash
-            &vec![],
+            &[],
             &std::collections::HashMap::new(),
             &db_a,
             &ForAgent::Sudo,
@@ -638,7 +638,7 @@ mod peer_sync_tests {
         // === Device B (client): restore agent, try to sync ===
         let db_b = Db::init_temp("iroh_auth_b").await.unwrap();
         let secret = agent.build_secret().unwrap();
-        db_b.load_agent_from_secret(&secret).await.unwrap().agent;
+        db_b.load_agent_from_secret(&secret).await.unwrap();
 
         // Create a separate Iroh endpoint for Device B
         let ep_b = iroh::Endpoint::builder().bind().await.unwrap();
@@ -795,7 +795,7 @@ mod peer_sync_tests {
 
         // === Device B: restore same agent, create its own canvas ===
         let db_b = Db::init_temp("qr_pair_b").await.unwrap();
-        db_b.load_agent_from_secret(&secret).await.unwrap().agent;
+        db_b.load_agent_from_secret(&secret).await.unwrap();
         let drive_b = db_b
             .get_active_drive()
             .expect("Should have drive from secret");
@@ -1366,7 +1366,9 @@ mod peer_sync_tests {
     async fn collect_drive_subjects_scales_with_target_drive_only() {
         use std::time::Instant;
 
-        let db = Db::init_temp("collect_drive_subjects_scales").await.unwrap();
+        let db = Db::init_temp("collect_drive_subjects_scales")
+            .await
+            .unwrap();
 
         // Drive A — small (4 children).
         let (_agent_a, drive_a) = db.setup("alice").await.unwrap();
@@ -1398,22 +1400,18 @@ mod peer_sync_tests {
             .unwrap();
         }
 
-        let drive_a_subject =
-            crate::Subject::from_raw(&drive_a, db.get_base_domain().as_deref());
-        let drive_b_subject =
-            crate::Subject::from_raw(&drive_b, db.get_base_domain().as_deref());
+        let drive_a_subject = crate::Subject::from_raw(&drive_a, db.get_base_domain().as_deref());
+        let drive_b_subject = crate::Subject::from_raw(&drive_b, db.get_base_domain().as_deref());
 
         // Warm-up: first call may touch caches / mmap. Discard it.
         let _ = crate::sync::engine::collect_drive_subjects(&db, &drive_a_subject).await;
 
         let t = Instant::now();
-        let a_subjects =
-            crate::sync::engine::collect_drive_subjects(&db, &drive_a_subject).await;
+        let a_subjects = crate::sync::engine::collect_drive_subjects(&db, &drive_a_subject).await;
         let time_a = t.elapsed();
 
         let t = Instant::now();
-        let b_subjects =
-            crate::sync::engine::collect_drive_subjects(&db, &drive_b_subject).await;
+        let b_subjects = crate::sync::engine::collect_drive_subjects(&db, &drive_b_subject).await;
         let time_b = t.elapsed();
 
         // Correctness — drive A's collection must contain A and its

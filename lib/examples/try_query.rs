@@ -21,7 +21,7 @@ async fn main() -> AtomicResult<()> {
     // Iterate through all found resources
     for subject in result.subjects {
         // Get the full resource
-        match store.get_resource(&subject.clone().into()).await {
+        match store.get_resource(&subject.clone()).await {
             Ok(resource) => {
                 // Try to get the shortname and description
                 let shortname = resource

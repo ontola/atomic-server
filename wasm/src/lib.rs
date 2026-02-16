@@ -145,6 +145,7 @@ impl ClientDb {
     /// Query the local database.
     /// `property` and `value` are optional filters.
     /// Returns a JSON object: `{ subjects: string[], resources: string[], count: number }`.
+    #[allow(clippy::too_many_arguments)]
     pub async fn query(
         &self,
         property: Option<String>,
@@ -347,7 +348,7 @@ impl QueryResponse {
         let resources: Vec<String> = result
             .resources
             .iter()
-            .map(|r| resource_to_json_ad(r))
+            .map(resource_to_json_ad)
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(QueryResponse {
