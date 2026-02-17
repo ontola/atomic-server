@@ -1,0 +1,13 @@
+[package]
+name = "test-plugin"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+# This is important for the Wasm build.
+crate-type = ["cdylib"]
+
+[dependencies]
+atomic-plugin = { path = "../../atomic-plugin" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1"

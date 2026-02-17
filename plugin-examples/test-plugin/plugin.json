@@ -1,0 +1,25 @@
+{
+  "name": "test-plugin",
+  "namespace": "ontola",
+  "version": "1.0.0",
+  "description": "A test plugin used in the end to end tests. When modifying this plugin, make sure to update the tests to reflect the changes.",
+  "author": "Ontola",
+  "permissions": [
+    {
+      "permission": "storage",
+      "reason": "This plugin doesn't need storage access but the tests should check if it's there."
+    }
+  ],
+  "defaultConfig": {
+    "folderPrefix": "My"
+  },
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "folderPrefix": {
+        "type": "string",
+        "description": "The prefix to add to the folder name."
+      }
+    }
+  }
+}

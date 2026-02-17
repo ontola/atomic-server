@@ -81,8 +81,7 @@ export function SideBarDrive({
           resource={drive}
           clean
           current={drive === currentSubject}
-          title={`Your current baseURL is ${drive}`}
-          data-test='sidebar-drive-open'
+          data-testid='sidebar-drive-open'
           onClick={() => {
             onItemClick();
             navigate(constructOpenURL(drive));

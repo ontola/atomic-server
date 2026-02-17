@@ -31,6 +31,7 @@ import {
   waitForCommitOnCurrentResource,
   clickSidebarItem,
   inDialog,
+  acceptInvite,
 } from './test-utils';
 
 test.describe('data-browser', async () => {
@@ -196,7 +197,7 @@ test.describe('data-browser', async () => {
     // Open invite
     const page3 = await openNewSubjectWindow(browser, inviteUrl as string);
     const waiter = page3.waitForNavigation();
-    await page3.click('button:has-text("Accept")');
+    await acceptInvite(page3);
     await waiter;
     await page3.reload();
     await expect(page3.getByText(driveTitle).first()).toBeVisible();
@@ -346,8 +347,7 @@ test.describe('data-browser', async () => {
     // await expect(currentDriveTitle(page)).toHaveText('Atomic Data');
 
     await openConfigureDrive(page);
-    await page.fill('[data-test="server-url-input"]', 'https://example.com');
-    await page.click('[data-test="server-url-save"]');
+    await changeDrive('https://example.com', page, false);
 
     await expect(currentDriveTitle(page)).toHaveText('example.com');
 

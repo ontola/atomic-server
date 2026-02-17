@@ -1519,10 +1519,8 @@ msgstr "Page précédente"
 msgid "Next page"
 msgstr "Page suivante"
 
-#. placeholder {0}: drive
-#: src/components/SideBar/SideBarDrive.tsx
-msgid "Your current baseURL is {0}"
-msgstr "Votre URL de base actuelle est {0}"
+#~ msgid "Your current baseURL is {0}"
+#~ msgstr "Votre URL de base actuelle est {0}"
 
 #: src/components/SideBar/SideBarDrive.tsx
 msgid "New resource"

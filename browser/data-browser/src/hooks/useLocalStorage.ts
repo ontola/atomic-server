@@ -54,7 +54,7 @@ export function useLocalStorage<T>(
         console.error(error);
       }
     },
-    [storedValue, key],
+    [storedValue, key, storage],
   );
 
   useEffect(() => {

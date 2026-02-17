@@ -6,6 +6,11 @@ import type { Store } from './store.js';
 
 const REQUEST_TIMEOUT = 5000;
 
+enum WS_Version {
+  LEGACY = 'legacy',
+  V1 = 'atomicdata-ws.v0.1',
+}
+
 function parseResourceMessage(ev: MessageEvent): Resource[] {
   const resourceJSON: string = ev.data.slice(9);
   const parsed = JSON.parse(resourceJSON);
@@ -61,6 +66,8 @@ export class WSClient {
   private authenticatedWith: string | undefined;
   private isAuthenticating = false;
 
+  private retryingOldVersion = false;
+
   constructor(url: string, store: Store) {
     this.store = store;
     this.handleMessage = this.handleMessage.bind(this);
@@ -76,21 +83,43 @@ export class WSClient {
     }
 
     wsURL.pathname = '/ws';
-    this.ws = new WebSocket(wsURL.toString());
+
     this.authPromise = Promise.resolve();
-    this.openPromise = new Promise(resolve => {
-      this.ws.addEventListener('open', () => {
-        resolve();
-        this.handleOpen();
+
+    const createSocket = (protocols?: string[]) => {
+      const ws = new WebSocket(wsURL.toString(), protocols);
+      ws.addEventListener('message', this.handleMessage);
+      ws.addEventListener('error', e => {
+        if (!this.retryingOldVersion) {
+          this.retryingOldVersion = true;
+          // eslint-disable-next-line no-console
+          console.log(`Retrying ${wsURL.toString()} with legacy protocol`);
+          createSocket();
+
+          return;
+        }
+
+        return console.error('websocket error:', e);
       });
-    });
-    this.ws.addEventListener('message', this.handleMessage);
-    this.ws.addEventListener('error', e =>
-      console.error('websocket error:', e),
-    );
+      this.openPromise = new Promise(resolve => {
+        ws.addEventListener('open', () => {
+          resolve();
+          this.handleOpen();
+        });
+      });
+
+      this.ws = ws;
+    };
+
+    createSocket([WS_Version.V1]);
   }
+
   public get readyState(): number {
     return this.ws.readyState;
+  }
+
+  private get version(): string {
+    return this.ws.protocol || WS_Version.LEGACY;
   }
 
   /**
@@ -134,7 +163,12 @@ export class WSClient {
     this.isAuthenticating = true;
 
     try {
-      this.authPromise = this.waitForMessage('AUTHENTICATED');
+      if (this.version === WS_Version.LEGACY) {
+        // If the server is using the legacy protocol, we don't wait for the AUTHENTICATED message.
+        this.authPromise = Promise.resolve();
+      } else {
+        this.authPromise = this.waitForMessage('AUTHENTICATED');
+      }
 
       const json = await createAuthentication(this.ws.url, agent);
       this.ws.send('AUTHENTICATE ' + JSON.stringify(json));

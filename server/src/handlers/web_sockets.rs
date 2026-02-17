@@ -10,7 +10,7 @@ use actix::{
     Actor, ActorContext, ActorFutureExt, Addr, AsyncContext, Handler, StreamHandler, WrapFuture,
 };
 use actix_web::{web, HttpRequest, HttpResponse};
-use actix_web_actors::ws;
+use actix_web_actors::ws::{self, WsResponseBuilder};
 use atomic_lib::{
     agents::ForAgent,
     authentication::{get_agent_from_auth_values_and_check, AuthValues},
@@ -44,7 +44,7 @@ pub async fn web_socket_handler(
     .await?;
     tracing::debug!("Starting websocket for {}", for_agent);
 
-    let result = ws::start(
+    let result = WsResponseBuilder::new(
         WebSocketConnection::new(
             appstate.commit_monitor.clone(),
             appstate.y_sync_broadcaster.clone(),
@@ -54,7 +54,10 @@ pub async fn web_socket_handler(
         ),
         &req,
         stream,
-    )?;
+    )
+    .protocols(&["atomicdata-ws.v0.1"])
+    .start()?;
+
     Ok(result)
 }
 
