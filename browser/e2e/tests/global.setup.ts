@@ -33,9 +33,16 @@ setup('delete previous test data', async ({ page }) => {
 
   await page.getByRole('button', { name: 'Edit profile' }).click();
 
-  await expect(page.getByRole('button', { name: 'Clear' })).toBeVisible();
-  await page.getByRole('button', { name: 'Clear' }).click();
+  try {
+    const clearButton = page.getByRole('button', { name: 'Clear' });
 
-  await page.getByRole('button', { name: 'Save' }).click();
-  await page.waitForNavigation();
+    if (await clearButton.isVisible()) {
+      await clearButton.click();
+      await page.getByRole('button', { name: 'Save' }).click();
+      await page.waitForNavigation();
+    }
+  } catch {
+    // There were no drives to clear. Do nothing.
+    await page.getByRole('button', { name: 'Back to Test User' }).click();
+  }
 });
