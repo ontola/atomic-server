@@ -102,11 +102,13 @@ test.describe('documents', async () => {
     //   page.getByLabel('Rich Text Editor').getByText('Test user edited'),
     // ).toBeVisible();
 
-    // Delete the word with Alt+Backspace
-    await page2.keyboard.press('ArrowRight');
-    await page2.keyboard.down('Alt');
+    // Delete the typed text. `Alt+Backspace` only deletes-word on macOS;
+    // headless chromium on Linux (dagger CI) treats it as a no-op, so the
+    // paragraph stayed and the cross-tab "not visible" assertion timed
+    // out. Re-select-then-Backspace deletes the selection deterministically
+    // on every platform.
+    await page2.getByText(syncText).selectText();
     await page2.keyboard.press('Backspace');
-    await page2.keyboard.up('Alt');
 
     // Loro CRDT sync between two browser contexts goes through the server's
     // WS hub, so propagation can take several seconds under suite-wide load.
