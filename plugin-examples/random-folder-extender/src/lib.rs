@@ -60,7 +60,7 @@ impl ClassExtender for RandomFolderExtender {
     }
 
     // Enforce that folder names are unique. It looks up all folders and checks if any of them have the same name.
-    fn before_commit(commit: &Commit, _snapshot: &Resource) -> Result<(), String> {
+    fn before_commit(commit: &Commit, _snapshot: &Resource, _is_new: bool) -> Result<(), String> {
         let Some(set) = &commit.set else {
             return Ok(());
         };
@@ -96,7 +96,7 @@ impl ClassExtender for RandomFolderExtender {
     }
 
     // Send a message to a Discord webhook when a folder is updated.
-    fn after_commit(_commit: &Commit, resource: &Resource) -> Result<(), String> {
+    fn after_commit(_commit: &Commit, resource: &Resource, _is_new: bool) -> Result<(), String> {
         // Shuffle the name of the folder
         let name = get_name_from_folder(resource)?;
         let shuffled_name = shuffle_string(name);

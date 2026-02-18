@@ -1,8 +1,6 @@
 use atomic_lib::{
     agents::Agent,
-    class_extender::{
-        BoxFuture, ClassExtender, ClassExtenderScope, CommitExtenderContext, GetExtenderContext,
-    },
+    class_extender::{BoxFuture, ClassExtender, CommitExtenderContext, GetExtenderContext},
     errors::AtomicResult,
     hierarchy,
     storelike::ResourceResponse,
@@ -183,6 +181,7 @@ pub fn before_apply_commit<'a>(
             store,
             commit,
             resource,
+            is_new: _,
         } = context;
 
         let target = resource
@@ -197,12 +196,10 @@ pub fn before_apply_commit<'a>(
 }
 
 pub fn build_invite_extender() -> ClassExtender {
-    ClassExtender {
-        id: Some("invite".to_string()),
-        classes: vec![urls::INVITE.to_string()],
-        on_resource_get: Some(ClassExtender::wrap_get_handler(construct_invite_redirect)),
-        before_commit: Some(ClassExtender::wrap_commit_handler(before_apply_commit)),
-        after_commit: None,
-        scope: ClassExtenderScope::Global,
-    }
+    ClassExtender::builder()
+        .id("invite".to_string())
+        .classes(vec![urls::INVITE.to_string()])
+        .on_resource_get(ClassExtender::wrap_get_handler(construct_invite_redirect))
+        .before_commit(ClassExtender::wrap_commit_handler(before_apply_commit))
+        .build()
 }

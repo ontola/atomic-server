@@ -128,6 +128,11 @@ const StyledTable = styled.table`
   th:last-child {
     padding-right: 2rem;
   }
+
+  td,
+  th {
+    border: none !important;
+  }
 `;
 
 const IconWrapper = styled.span`

@@ -145,12 +145,12 @@ pub trait ClassExtender {
     }
 
     /// Called before a Commit that targets the class is persisted. If you return an error, the commit will be rejected.
-    fn before_commit(_commit: &Commit, _snapshot: &Resource) -> Result<(), String> {
+    fn before_commit(_commit: &Commit, _snapshot: &Resource, _is_new: bool) -> Result<(), String> {
         Ok(())
     }
 
     /// Called after a Commit that targets the class has been applied. Returning an error will not cancel the commit.
-    fn after_commit(_commit: &Commit, _resource: &Resource) -> Result<(), String> {
+    fn after_commit(_commit: &Commit, _resource: &Resource, _is_new: bool) -> Result<(), String> {
         Ok(())
     }
 }
@@ -185,14 +185,14 @@ impl<T: ClassExtender> Guest for PluginWrapper<T> {
         let commit: Commit = serde_json::from_str(&ctx.commit_json).map_err(|e| e.to_string())?;
         let snapshot: Resource = Resource::try_from(ctx.snapshot)?;
 
-        T::before_commit(&commit, &snapshot)
+        T::before_commit(&commit, &snapshot, ctx.is_new)
     }
 
     fn after_commit(ctx: CommitContext) -> Result<(), String> {
         let commit: Commit = serde_json::from_str(&ctx.commit_json).map_err(|e| e.to_string())?;
         let snapshot: Resource = Resource::try_from(ctx.snapshot)?;
 
-        T::after_commit(&commit, &snapshot)
+        T::after_commit(&commit, &snapshot, ctx.is_new)
     }
 }
 

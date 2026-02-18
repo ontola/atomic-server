@@ -1,6 +1,6 @@
 //! Collections are dynamic resources that refer to multiple resources.
 //! They are constructed using a [Query]
-use crate::class_extender::{ClassExtender, ClassExtenderScope, GetExtenderContext};
+use crate::class_extender::{ClassExtender, GetExtenderContext};
 use crate::{
     agents::ForAgent,
     errors::AtomicResult,
@@ -9,10 +9,10 @@ use crate::{
 };
 
 pub fn get_collection_class_extender() -> ClassExtender {
-    ClassExtender {
-        id: Some("collection".to_string()),
-        classes: vec![urls::COLLECTION.to_string()],
-        on_resource_get: Some(ClassExtender::wrap_get_handler(|context| {
+    ClassExtender::builder()
+        .id("collection".to_string())
+        .classes(vec![urls::COLLECTION.to_string()])
+        .on_resource_get(ClassExtender::wrap_get_handler(|context| {
             Box::pin(async move {
                 let GetExtenderContext {
                     store,
@@ -23,11 +23,8 @@ pub fn get_collection_class_extender() -> ClassExtender {
                 construct_collection_from_params(store, url.query_pairs(), resource, for_agent)
                     .await
             })
-        })),
-        before_commit: None,
-        after_commit: None,
-        scope: ClassExtenderScope::Global,
-    }
+        }))
+        .build()
 }
 
 const DEFAULT_PAGE_SIZE: usize = 30;
