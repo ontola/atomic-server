@@ -207,14 +207,11 @@ impl Commit {
         }
 
         commit.check_for_circular_parents()?;
-        let mut is_new = false;
+
         // Create a new resource if it doesn't exist yet
-        let resource_old = match store.get_resource(&commit.subject).await {
-            Ok(rs) => rs,
-            Err(_) => {
-                is_new = true;
-                Resource::new(commit.subject.clone())
-            }
+        let (resource_old, is_new) = match store.get_resource(&commit.subject).await {
+            Ok(rs) => (rs, false),
+            Err(_) => (Resource::new(commit.subject.clone()), true),
         };
 
         // Make sure the one creating the commit had the same idea of what the current state is.

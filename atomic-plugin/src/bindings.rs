@@ -289,6 +289,7 @@ pub unsafe fn _export_before_commit_cabi<T: Guest>(
     arg5: usize,
     arg6: *mut u8,
     arg7: usize,
+    arg8: i32,
 ) -> *mut u8 {
     #[cfg(target_arch = "wasm32")]
     _rt::run_ctors_once();
@@ -307,6 +308,7 @@ pub unsafe fn _export_before_commit_cabi<T: Guest>(
             subject: _rt::string_lift(bytes2),
             json_ad: _rt::string_lift(bytes3),
         },
+        is_new: _rt::bool_lift(arg8 as u8),
     });
     let ptr5 = (&raw mut _RET_AREA.0).cast::<u8>();
     match result4 {
@@ -357,6 +359,7 @@ pub unsafe fn _export_after_commit_cabi<T: Guest>(
     arg5: usize,
     arg6: *mut u8,
     arg7: usize,
+    arg8: i32,
 ) -> *mut u8 {
     #[cfg(target_arch = "wasm32")]
     _rt::run_ctors_once();
@@ -375,6 +378,7 @@ pub unsafe fn _export_after_commit_cabi<T: Guest>(
             subject: _rt::string_lift(bytes2),
             json_ad: _rt::string_lift(bytes3),
         },
+        is_new: _rt::bool_lift(arg8 as u8),
     });
     let ptr5 = (&raw mut _RET_AREA.0).cast::<u8>();
     match result4 {
@@ -443,18 +447,19 @@ macro_rules! __export_world_class_extender_cabi {
         $($path_to_types)*:: __post_return_on_resource_get::<$ty > (arg0) } } #[unsafe
         (export_name = "before-commit")] unsafe extern "C" fn export_before_commit(arg0 :
         * mut u8, arg1 : usize, arg2 : * mut u8, arg3 : usize, arg4 : * mut u8, arg5 :
-        usize, arg6 : * mut u8, arg7 : usize,) -> * mut u8 { unsafe {
+        usize, arg6 : * mut u8, arg7 : usize, arg8 : i32,) -> * mut u8 { unsafe {
         $($path_to_types)*:: _export_before_commit_cabi::<$ty > (arg0, arg1, arg2, arg3,
-        arg4, arg5, arg6, arg7) } } #[unsafe (export_name = "cabi_post_before-commit")]
-        unsafe extern "C" fn _post_return_before_commit(arg0 : * mut u8,) { unsafe {
-        $($path_to_types)*:: __post_return_before_commit::<$ty > (arg0) } } #[unsafe
-        (export_name = "after-commit")] unsafe extern "C" fn export_after_commit(arg0 : *
-        mut u8, arg1 : usize, arg2 : * mut u8, arg3 : usize, arg4 : * mut u8, arg5 :
-        usize, arg6 : * mut u8, arg7 : usize,) -> * mut u8 { unsafe {
-        $($path_to_types)*:: _export_after_commit_cabi::<$ty > (arg0, arg1, arg2, arg3,
-        arg4, arg5, arg6, arg7) } } #[unsafe (export_name = "cabi_post_after-commit")]
-        unsafe extern "C" fn _post_return_after_commit(arg0 : * mut u8,) { unsafe {
-        $($path_to_types)*:: __post_return_after_commit::<$ty > (arg0) } } };
+        arg4, arg5, arg6, arg7, arg8) } } #[unsafe (export_name =
+        "cabi_post_before-commit")] unsafe extern "C" fn _post_return_before_commit(arg0
+        : * mut u8,) { unsafe { $($path_to_types)*:: __post_return_before_commit::<$ty >
+        (arg0) } } #[unsafe (export_name = "after-commit")] unsafe extern "C" fn
+        export_after_commit(arg0 : * mut u8, arg1 : usize, arg2 : * mut u8, arg3 : usize,
+        arg4 : * mut u8, arg5 : usize, arg6 : * mut u8, arg7 : usize, arg8 : i32,) -> *
+        mut u8 { unsafe { $($path_to_types)*:: _export_after_commit_cabi::<$ty > (arg0,
+        arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) } } #[unsafe (export_name =
+        "cabi_post_after-commit")] unsafe extern "C" fn _post_return_after_commit(arg0 :
+        * mut u8,) { unsafe { $($path_to_types)*:: __post_return_after_commit::<$ty >
+        (arg0) } } };
     };
 }
 #[doc(hidden)]
@@ -535,6 +540,8 @@ pub mod atomic {
                 pub subject: _rt::String,
                 pub commit_json: _rt::String,
                 pub snapshot: ResourceJson,
+                /// True if this is the first commit for the resource.
+                pub is_new: bool,
             }
             impl ::core::fmt::Debug for CommitContext {
                 fn fmt(
@@ -545,6 +552,7 @@ pub mod atomic {
                         .field("subject", &self.subject)
                         .field("commit-json", &self.commit_json)
                         .field("snapshot", &self.snapshot)
+                        .field("is-new", &self.is_new)
                         .finish()
                 }
             }
@@ -999,6 +1007,17 @@ mod _rt {
         wit_bindgen_rt::run_ctors_once();
     }
     pub use alloc_crate::alloc;
+    pub unsafe fn bool_lift(val: u8) -> bool {
+        if cfg!(debug_assertions) {
+            match val {
+                0 => false,
+                1 => true,
+                _ => panic!("invalid bool discriminant"),
+            }
+        } else {
+            val != 0
+        }
+    }
     extern crate alloc as alloc_crate;
 }
 /// Generates `#[unsafe(no_mangle)]` functions to export the specified type as
@@ -1034,29 +1053,29 @@ pub(crate) use __export_class_extender_impl as export;
 #[unsafe(link_section = "component-type:wit-bindgen:0.41.0:atomic:class-extender@0.1.0:class-extender:encoded world")]
 #[doc(hidden)]
 #[allow(clippy::octal_escapes)]
-pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 994] = *b"\
-\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\xdd\x06\x01A\x02\x01\
+pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 1002] = *b"\
+\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\xe5\x06\x01A\x02\x01\
 A\x17\x01B\x0b\x01r\x01\x07subjects\x04\0\x0catomic-agent\x03\0\0\x01r\x02\x07su\
 bjects\x07json-ads\x04\0\x0dresource-json\x03\0\x02\x01p\x03\x01r\x02\x07primary\
 \x03\x0areferenced\x04\x04\0\x11resource-response\x03\0\x05\x01r\x04\x0brequest-\
 urls\x11requested-subjects\x0dagent-subjects\x08snapshot\x03\x04\0\x0bget-contex\
-t\x03\0\x07\x01r\x03\x07subjects\x0bcommit-jsons\x08snapshot\x03\x04\0\x0ecommit\
--context\x03\0\x09\x03\0!atomic:class-extender/types@0.1.0\x05\0\x02\x03\0\0\x11\
-resource-response\x03\0\x11resource-response\x03\0\x01\x02\x03\0\0\x0bget-contex\
-t\x03\0\x0bget-context\x03\0\x03\x02\x03\0\0\x0ecommit-context\x03\0\x0ecommit-c\
-ontext\x03\0\x05\x02\x03\0\0\x0dresource-json\x02\x03\0\0\x0catomic-agent\x01B\x12\
-\x02\x03\x02\x01\x07\x04\0\x0dresource-json\x03\0\0\x02\x03\x02\x01\x08\x04\0\x0c\
-atomic-agent\x03\0\x02\x01ks\x01j\x01\x01\x01s\x01@\x02\x07subjects\x05agent\x04\
-\0\x05\x04\0\x0cget-resource\x01\x06\x01p\x01\x01j\x01\x07\x01s\x01@\x03\x08prop\
-ertys\x05values\x05agent\x04\0\x08\x04\0\x05query\x01\x09\x01@\0\0s\x04\0\x10get\
--plugin-agent\x01\x0a\x04\0\x0aget-config\x01\x0a\x01j\0\x01s\x01@\x01\x06commit\
-s\0\x0b\x04\0\x06commit\x01\x0c\x03\0\x20atomic:class-extender/host@0.1.0\x05\x09\
-\x01ps\x01@\0\0\x0a\x04\0\x09class-url\x01\x0b\x01k\x02\x01j\x01\x0c\x01s\x01@\x01\
-\x03ctx\x04\0\x0d\x04\0\x0fon-resource-get\x01\x0e\x01j\0\x01s\x01@\x01\x03ctx\x06\
-\0\x0f\x04\0\x0dbefore-commit\x01\x10\x04\0\x0cafter-commit\x01\x10\x04\0*atomic\
-:class-extender/class-extender@0.1.0\x04\0\x0b\x14\x01\0\x0eclass-extender\x03\0\
-\0\0G\x09producers\x01\x0cprocessed-by\x02\x0dwit-component\x070.227.1\x10wit-bi\
-ndgen-rust\x060.41.0";
+t\x03\0\x07\x01r\x04\x07subjects\x0bcommit-jsons\x08snapshot\x03\x06is-new\x7f\x04\
+\0\x0ecommit-context\x03\0\x09\x03\0!atomic:class-extender/types@0.1.0\x05\0\x02\
+\x03\0\0\x11resource-response\x03\0\x11resource-response\x03\0\x01\x02\x03\0\0\x0b\
+get-context\x03\0\x0bget-context\x03\0\x03\x02\x03\0\0\x0ecommit-context\x03\0\x0e\
+commit-context\x03\0\x05\x02\x03\0\0\x0dresource-json\x02\x03\0\0\x0catomic-agen\
+t\x01B\x12\x02\x03\x02\x01\x07\x04\0\x0dresource-json\x03\0\0\x02\x03\x02\x01\x08\
+\x04\0\x0catomic-agent\x03\0\x02\x01ks\x01j\x01\x01\x01s\x01@\x02\x07subjects\x05\
+agent\x04\0\x05\x04\0\x0cget-resource\x01\x06\x01p\x01\x01j\x01\x07\x01s\x01@\x03\
+\x08propertys\x05values\x05agent\x04\0\x08\x04\0\x05query\x01\x09\x01@\0\0s\x04\0\
+\x10get-plugin-agent\x01\x0a\x04\0\x0aget-config\x01\x0a\x01j\0\x01s\x01@\x01\x06\
+commits\0\x0b\x04\0\x06commit\x01\x0c\x03\0\x20atomic:class-extender/host@0.1.0\x05\
+\x09\x01ps\x01@\0\0\x0a\x04\0\x09class-url\x01\x0b\x01k\x02\x01j\x01\x0c\x01s\x01\
+@\x01\x03ctx\x04\0\x0d\x04\0\x0fon-resource-get\x01\x0e\x01j\0\x01s\x01@\x01\x03\
+ctx\x06\0\x0f\x04\0\x0dbefore-commit\x01\x10\x04\0\x0cafter-commit\x01\x10\x04\0\
+*atomic:class-extender/class-extender@0.1.0\x04\0\x0b\x14\x01\0\x0eclass-extende\
+r\x03\0\0\0G\x09producers\x01\x0cprocessed-by\x02\x0dwit-component\x070.227.1\x10\
+wit-bindgen-rust\x060.41.0";
 #[inline(never)]
 #[doc(hidden)]
 pub fn __link_custom_section_describing_imports() {
