@@ -2,7 +2,7 @@ import { Resource, useString, core } from '@tomic/react';
 import { useState, type JSX } from 'react';
 
 import toast from 'react-hot-toast';
-import { FaEdit, FaPlus } from 'react-icons/fa';
+import { FaPen, FaPlus } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import { Button } from '../../components/Button';
 import Markdown from '../../components/datatypes/Markdown';
@@ -55,7 +55,7 @@ export function ArticleDescription({
             variant={IconButtonVariant.Colored}
             color={'main'}
           >
-            <FaEdit />
+            <FaPen />
           </EditButton>
         )}
         <Markdown text={description ?? ''} />

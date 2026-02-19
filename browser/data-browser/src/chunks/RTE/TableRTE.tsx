@@ -1,9 +1,16 @@
 import { AtomicLink } from '@components/AtomicLink';
 import { HideInPrint } from '@components/HideInPrint';
 import { useResource, type DataBrowser } from '@tomic/react';
-import { TableResource } from '@views/TablePage/TableResource';
+import { lazy, Suspense } from 'react';
 import { FaArrowUpRightFromSquare } from 'react-icons/fa6';
 import { styled } from 'styled-components';
+import { Spinner } from '@components/Spinner';
+
+const TableResource = lazy(() =>
+  import('@chunks/TablePage/TableResource').then(m => ({
+    default: m.TableResource,
+  })),
+);
 
 interface TableRTEProps {
   subject: string;
@@ -15,7 +22,9 @@ export const TableRTE: React.FC<TableRTEProps> = ({ subject }) => {
   return (
     <HideInPrint>
       <div>
-        <TableResource resource={resource} />
+        <Suspense fallback={<Spinner />}>
+          <TableResource resource={resource} />
+        </Suspense>
         <TableTitle subject={resource.subject}>
           {resource.title} <FaArrowUpRightFromSquare size={'0.9rem'} />
         </TableTitle>

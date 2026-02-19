@@ -10,7 +10,7 @@ import {
   commits,
   dataBrowser,
 } from '@tomic/react';
-import { FaCaretDown, FaCaretRight } from 'react-icons/fa';
+import { FaCaretDown, FaCaretRight } from 'react-icons/fa6';
 
 import { constructOpenURL } from '../../helpers/navigation';
 import { Button } from '../Button';

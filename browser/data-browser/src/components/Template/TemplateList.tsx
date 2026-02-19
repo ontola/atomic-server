@@ -1,28 +1,22 @@
 import { TemplateListItem } from './TemplateListItem';
 import { styled } from 'styled-components';
-import { website } from './templates/website';
-import type { Template, TemplateFn } from './template';
+import { templates, type Template } from './template';
 import { useState } from 'react';
 import { ApplyTemplateDialog } from './ApplyTemplateDialog';
 import { useSettings } from '../../helpers/AppSettings';
-
-const templates: TemplateFn[] = [website];
 
 export function TemplateList(): React.JSX.Element {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<Template>();
   const { drive } = useSettings();
+  const context = {
+    driveURL: drive,
+  };
 
   return (
     <>
       <List>
-        {templates.map(templatefn => {
-          const context = {
-            driveURL: drive,
-          };
-
-          const template = templatefn(context);
-
+        {templates.map(template => {
           const { id, title, Image } = template;
 
           return (
@@ -31,15 +25,11 @@ export function TemplateList(): React.JSX.Element {
                 id={id}
                 title={title}
                 Image={Image}
-                onClick={tmpl => {
-                  const newTemplate = templates.find(
-                    t => t(context).id === tmpl,
-                  );
-
-                  if (!newTemplate) return;
-
-                  setSelectedTemplate(template);
-                  setDialogOpen(true);
+                onClick={() => {
+                  template.load().then(loadedTemplate => {
+                    setSelectedTemplate(loadedTemplate(context));
+                    setDialogOpen(true);
+                  });
                 }}
               />
             </li>

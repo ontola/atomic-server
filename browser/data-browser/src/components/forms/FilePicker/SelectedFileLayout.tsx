@@ -1,5 +1,5 @@
 import { PropsWithChildren } from 'react';
-import { FaTimes } from 'react-icons/fa';
+import { FaXmark } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import { IconButton } from '../../IconButton/IconButton';
 import { Row } from '../../Row';
@@ -24,7 +24,7 @@ export function SelectedFileLayout({
         <Title>{title}</Title>
         {!disabled && (
           <IconButton title='clear' onClick={onClear}>
-            <FaTimes />
+            <FaXmark />
           </IconButton>
         )}
       </Row>

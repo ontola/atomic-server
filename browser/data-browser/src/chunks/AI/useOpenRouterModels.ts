@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { effectFetch } from '@helpers/effectFetch';
+import type { Modalities } from './ClientOnlyTransport';
 
 export type OpenRouterAIModel = {
   id: string;
@@ -44,6 +45,18 @@ export function useOpenRouterModels() {
     return foundModel.architecture.input_modalities.includes('image');
   };
 
+  const getOutputModalities = (modelId: string): Modalities[] => {
+    const foundModel = models.find(m => m.id === modelId);
+
+    if (!foundModel) {
+      return ['text'];
+    }
+
+    return foundModel.architecture.output_modalities.filter(
+      (m): m is Modalities => m === 'text' || m === 'image',
+    );
+  };
+
   useEffect(() => {
     if (modelDataCache) {
       return;
@@ -55,5 +68,10 @@ export function useOpenRouterModels() {
     });
   }, []);
 
-  return { models, checkORModelSupport, checkORModelSupportsImageInput };
+  return {
+    models,
+    checkORModelSupport,
+    checkORModelSupportsImageInput,
+    getOutputModalities,
+  };
 }

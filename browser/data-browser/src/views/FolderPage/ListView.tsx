@@ -12,7 +12,7 @@ import { AtomicLink } from '../../components/AtomicLink';
 import { CommitDetail } from '../../components/CommitDetail';
 import { ViewProps } from './FolderDisplayStyle';
 import { getIconForClass } from '../../helpers/iconMap';
-import { FaPlus } from 'react-icons/fa';
+import { FaPlus } from 'react-icons/fa6';
 import { Button } from '../../components/Button';
 
 import type { JSX } from 'react';

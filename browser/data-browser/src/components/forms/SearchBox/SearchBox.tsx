@@ -12,7 +12,12 @@ import { removeCachedSearchResults, useResource, useStore } from '@tomic/react';
 import { DropdownPortalContext } from '../../Dropdown/dropdownContext';
 import * as RadixPopover from '@radix-ui/react-popover';
 import { SearchBoxWindow } from './SearchBoxWindow';
-import { FaExternalLinkAlt, FaSearch, FaTimes } from 'react-icons/fa';
+import {
+  FaArrowUpRightFromSquare,
+  FaMagnifyingGlass,
+  FaXmark,
+  FaTriangleExclamation,
+} from 'react-icons/fa6';
 import { constructOpenURL } from '../../../helpers/navigation';
 import { useNavigateWithTransition } from '../../../hooks/useNavigateWithTransition';
 import { SearchBoxButton } from './SearchBoxButton';
@@ -25,7 +30,6 @@ import {
 import { useDialogTreeContext } from '../../Dialog/dialogContext';
 import { useResourceFormContext } from '../ResourceFormContext';
 import clsx from 'clsx';
-import { FaTriangleExclamation } from 'react-icons/fa6';
 
 export type OnResourceError = (hasError: boolean) => void;
 
@@ -197,7 +201,7 @@ export function SearchBox({
               <ResourceTitle>{title}</ResourceTitle>
             ) : (
               <>
-                <FaSearch />
+                <FaMagnifyingGlass />
                 <PlaceholderText>{placeholderText}</PlaceholderText>
               </>
             )}
@@ -211,7 +215,7 @@ export function SearchBox({
                   onClick={() => onChange(undefined)}
                   type='button'
                 >
-                  <FaTimes />
+                  <FaXmark />
                 </SearchBoxButton>
               )}
 
@@ -221,7 +225,7 @@ export function SearchBox({
                 onClick={navigateToSelectedResource}
                 type='button'
               >
-                <FaExternalLinkAlt />
+                <FaArrowUpRightFromSquare />
               </SearchBoxButton>
             </>
           )}

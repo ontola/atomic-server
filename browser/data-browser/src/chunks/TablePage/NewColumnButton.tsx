@@ -1,0 +1,125 @@
+import { Datatype, useCanWrite, useResource } from '@tomic/react';
+import { useCallback, useContext, useMemo, useState } from 'react';
+import {
+  FaCircleChevronDown,
+  FaFile,
+  FaHashtag,
+  FaPlus,
+} from 'react-icons/fa6';
+import { DIVIDER, DropdownMenu, DropdownItem } from '@components/Dropdown';
+import { buildDefaultTrigger } from '@components/Dropdown/DefaultTrigger';
+import { NewPropertyDialog } from './PropertyForm/NewPropertyDialog';
+import { TablePageContext } from './tablePageContext';
+import { ExternalPropertyDialog } from './PropertyForm/ExternalPropertyDialog';
+import { dataTypeIconMap } from '../../helpers/iconMap';
+import { FaCode } from 'react-icons/fa6';
+
+const NewColumnTrigger = buildDefaultTrigger(<FaPlus />, 'Add column');
+
+const TextIcon = dataTypeIconMap.get(Datatype.STRING)!;
+const NumberIcon = dataTypeIconMap.get(Datatype.INTEGER)!;
+const DateIcon = dataTypeIconMap.get(Datatype.DATE)!;
+const CheckboxIcon = dataTypeIconMap.get(Datatype.BOOLEAN)!;
+const SelectIcon = FaCircleChevronDown;
+const FileIcon = FaFile;
+const RelationIcon = dataTypeIconMap.get(Datatype.ATOMIC_URL)!;
+
+export const NewColumnButton: React.FC = () => {
+  const [showDialog, setShowDialog] = useState(false);
+  const [showExternalDialog, setShowExternalDialog] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string>();
+
+  const { tableClassSubject } = useContext(TablePageContext);
+  const tableClassResource = useResource(tableClassSubject);
+
+  const canWrite = useCanWrite(tableClassResource);
+
+  const openDialog = useCallback(
+    (category: string) => () => {
+      setSelectedCategory(category);
+      setShowDialog(true);
+    },
+    [],
+  );
+
+  const items = useMemo((): DropdownItem[] => {
+    return [
+      {
+        id: 'text',
+        label: 'Text',
+        onClick: openDialog('text'),
+        icon: <TextIcon />,
+      },
+      {
+        id: 'number',
+        label: 'Number',
+        onClick: openDialog('number'),
+        icon: <NumberIcon />,
+      },
+      {
+        id: 'date',
+        label: 'Date',
+        onClick: openDialog('date'),
+        icon: <DateIcon />,
+      },
+      {
+        id: 'checkbox',
+        label: 'Checkbox',
+        onClick: openDialog('checkbox'),
+        icon: <CheckboxIcon />,
+      },
+      {
+        id: 'select',
+        label: 'Select',
+        onClick: openDialog('select'),
+        icon: <SelectIcon />,
+      },
+      {
+        id: 'file',
+        label: 'File',
+        onClick: openDialog('file'),
+        icon: <FileIcon />,
+      },
+      {
+        id: 'json',
+        label: 'JSON',
+        onClick: openDialog('json'),
+        icon: <FaCode />,
+      },
+      {
+        id: 'relation',
+        label: 'Relation',
+        onClick: openDialog('relation'),
+        icon: <RelationIcon />,
+      },
+      DIVIDER,
+      {
+        id: 'external',
+        label: 'External Property',
+        onClick: () => setShowExternalDialog(true),
+        icon: <FaHashtag />,
+      },
+    ];
+  }, []);
+
+  if (!canWrite) {
+    return null;
+  }
+
+  return (
+    <>
+      <DropdownMenu Trigger={NewColumnTrigger} items={items} />
+      <NewPropertyDialog
+        showDialog={showDialog}
+        tableClassResource={tableClassResource}
+        selectedCategory={selectedCategory}
+        bindShow={setShowDialog}
+      />
+      <ExternalPropertyDialog
+        open={showExternalDialog}
+        tableClassResource={tableClassResource}
+        bindShow={setShowExternalDialog}
+      />
+    </>
+  );
+};

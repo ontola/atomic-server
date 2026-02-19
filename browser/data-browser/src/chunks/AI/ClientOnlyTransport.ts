@@ -26,7 +26,7 @@ export interface ClientOnlyTransportOptions {
   addContextToMessages: (
     messages: AtomicUIMessage[],
   ) => Promise<AtomicUIMessage[]>;
-  modalities: Modalities[];
+  resolveOutputModalities: (modelId: string) => Modalities[];
 }
 
 /**
@@ -64,7 +64,7 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
       tools: this.options.tools,
       abortSignal,
       stopWhen: stepCountIs(10),
-      temperature: agent.temperature,
+      // temperature: agent.temperature,
     });
 
     const originalStream = result.toUIMessageStream({
@@ -102,14 +102,14 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
       agent.model.provider === AIProvider.OpenRouter &&
       this.options.openRouterAPIKey
     ) {
+      const modalities = this.options.resolveOutputModalities(agent.model.id);
+
       const openRouter = createOpenRouter({
         apiKey: this.options.openRouterAPIKey,
         compatibility: 'strict',
         extraBody: {
           transforms: ['middle-out'],
-          ...(Array.isArray(this.options.modalities)
-            ? { modalities: this.options.modalities }
-            : {}),
+          modalities,
         },
       });
 

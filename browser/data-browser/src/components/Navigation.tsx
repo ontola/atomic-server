@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { type JSX } from 'react';
-import { FaArrowLeft, FaArrowRight, FaBars } from 'react-icons/fa';
+import { FaArrowLeft, FaArrowRight, FaBars } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 
 import { ButtonBar } from './Button';

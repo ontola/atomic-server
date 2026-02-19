@@ -1,11 +1,8 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import {
-  useString,
   useResource,
-  useTitle,
   useArray,
   useCanWrite,
-  core,
   dataBrowser,
   unknownSubject,
 } from '@tomic/react';
@@ -16,7 +13,7 @@ import { styled } from 'styled-components';
 import { Details } from '../../Details';
 import { errorLookStyle } from '../../ErrorLook';
 import { LoaderInline } from '../../Loader';
-import { FaExclamationTriangle } from 'react-icons/fa';
+import { FaTriangleExclamation } from 'react-icons/fa6';
 import { useDraggable } from '@dnd-kit/core';
 import { SidebarItemTitle } from './SidebarItemTitle';
 import { TextWrapper } from './shared';
@@ -46,8 +43,6 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = ({
 
   const resource = useResource(subject, { allowIncomplete: true });
   const [currentUrl] = useCurrentSubject();
-  const [title] = useTitle(resource);
-  const [description] = useString(resource, core.properties.description);
   const canWrite = useCanWrite(resource);
   const active = currentUrl === subject;
   const [open, setOpen] = useState(active);
@@ -84,7 +79,7 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = ({
         attributes={canWrite ? attributes : undefined}
       />
     ),
-    [subject, active, onClick, description, title, listeners, attributes],
+    [subject, active, onClick, listeners, attributes, canWrite, setNodeRef],
   );
 
   const hasSubResources = subResources.length > 0;
@@ -126,7 +121,7 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = ({
       <StyledLink subject={subject} clean>
         <SideBarItem onClick={onClick} disabled={active} resource={subject}>
           <SideBarErrorWrapper>
-            <FaExclamationTriangle />
+            <FaTriangleExclamation />
             Resource with error
           </SideBarErrorWrapper>
         </SideBarItem>
