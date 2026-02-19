@@ -13,7 +13,7 @@ import {
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useHotkeys } from 'react-hotkeys-hook';
-import { FaCopy, FaLink, FaPencilAlt, FaReply, FaTimes } from 'react-icons/fa';
+import { FaCopy, FaLink, FaPencil, FaReply, FaXmark } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import { AtomicLink } from '../components/AtomicLink';
 import { Button } from '../components/Button';
@@ -147,7 +147,7 @@ export function ChatRoomPage({ resource }: ResourcePageProps) {
           <Detail>
             <MessageLine subject={isReplyTo} />
             <Button icon subtle onClick={() => setReplyTo(undefined)}>
-              <FaTimes />
+              <FaXmark />
             </Button>
           </Detail>
         )}
@@ -219,7 +219,7 @@ const Message = memo(function Message({ subject, setReplyTo }: MessageProps) {
               onClick={() => navigate(editURL(subject))}
               title='Edit message'
             >
-              <FaPencilAlt />
+              <FaPencil />
             </Button>
           )}
           <Button

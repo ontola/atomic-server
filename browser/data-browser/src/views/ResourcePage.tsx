@@ -1,4 +1,4 @@
-import { useEffect, type JSX } from 'react';
+import { useEffect, type JSX, lazy, Suspense } from 'react';
 import {
   useString,
   useResource,
@@ -28,13 +28,16 @@ import { BookmarkPage } from './BookmarkPage/BookmarkPage';
 import { ImporterPage } from './ImporterPage.jsx';
 import { FolderPage } from './FolderPage';
 import { ArticlePage } from './Article';
-import { TablePage } from './TablePage';
 import { Main } from '../components/Main';
 import { OntologyPage } from './OntologyPage';
 import { TagPage } from './TagPage/TagPage';
 import { AIChatPage } from '@views/AIChat/AIChatPage';
 import { DocumentV2FullPage } from './Document/DocumentV2FullPage';
 import { PluginPage } from '@views/Plugin/PluginPage';
+
+const TablePage = lazy(() =>
+  import('../chunks/TablePage').then(m => ({ default: m.TablePage })),
+);
 
 /** These properties are passed to every View at Page level */
 export type ResourcePageProps<Subject extends OptionalClass = never> = {
@@ -83,7 +86,9 @@ function ResourcePage({ subject }: Props): JSX.Element {
   return (
     <Main subject={subject}>
       <ErrorBoundary>
-        <ReturnComponent resource={resource} />
+        <Suspense fallback={<Spinner />}>
+          <ReturnComponent resource={resource} />
+        </Suspense>
       </ErrorBoundary>
     </Main>
   );

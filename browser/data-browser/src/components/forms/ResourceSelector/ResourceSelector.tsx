@@ -9,7 +9,7 @@ import {
   SearchBox,
   SearchBoxButton,
 } from '../SearchBox';
-import { FaTrash } from 'react-icons/fa';
+import { FaTrash, FaPencil } from 'react-icons/fa6';
 import { getTitlePropOfClass } from './useTitlePropOfClass';
 import {
   checkForInitialRequiredValue,
@@ -24,7 +24,6 @@ import {
   useStore,
 } from '@tomic/react';
 import { stringToSlug } from '../../../helpers/stringToSlug';
-import { FaPencil } from 'react-icons/fa6';
 import { EditFormDialog } from '../EditFormDialog';
 import { ResourceFormContext } from '../ResourceFormContext';
 import { isURL } from '../../../helpers/isURL';

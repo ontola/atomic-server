@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useHotkeys } from 'react-hotkeys-hook';
-import { FaTimes } from 'react-icons/fa';
+import { FaXmark } from 'react-icons/fa6';
 import { styled, keyframes } from 'styled-components';
 import * as CSS from 'csstype';
 import { Button } from '../Button';
@@ -205,7 +205,7 @@ const InnerDialog: React.FC<React.PropsWithChildren<InternalDialogProps>> = ({
             {!disableLightDismiss && (
               <CloseButtonSlot slot='close'>
                 <Button icon onClick={cancelDialog} aria-label='close'>
-                  <FaTimes />
+                  <FaXmark />
                 </Button>
               </CloseButtonSlot>
             )}

@@ -5,7 +5,7 @@ import { styled } from 'styled-components';
 import { Column } from '../../components/Row';
 import { VersionButton } from './VersionButton';
 import { IconButton } from '../../components/IconButton/IconButton';
-import { FaChevronLeft, FaChevronRight } from 'react-icons/fa';
+import { FaChevronLeft, FaChevronRight } from 'react-icons/fa6';
 import { AtomicLink } from '../../components/AtomicLink';
 import { versionsURL } from '../../helpers/navigation';
 

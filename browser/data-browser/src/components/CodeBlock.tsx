@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import toast from 'react-hot-toast';
-import { FaCheck, FaCopy } from 'react-icons/fa';
+import { FaCheck, FaCopy } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import { Button } from './Button';
 import clsx from 'clsx';

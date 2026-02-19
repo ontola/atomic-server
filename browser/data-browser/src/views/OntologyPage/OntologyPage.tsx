@@ -12,7 +12,7 @@ import { ClassCardRead } from './Class/ClassCardRead';
 import { PropertyCardRead } from './Property/PropertyCardRead';
 import { Button } from '../../components/Button';
 import { Column, Row } from '../../components/Row';
-import { FaEdit, FaEye } from 'react-icons/fa';
+import { FaPen, FaEye } from 'react-icons/fa6';
 import { OntologyDescription } from './OntologyDescription';
 import { ClassCardWrite } from './Class/ClassCardWrite';
 import { NewClassButton } from './NewClassButton';
@@ -62,7 +62,7 @@ export function OntologyPage({ resource }: ResourcePageProps) {
                 </Button>
               ) : (
                 <Button onClick={() => setEditMode(true)}>
-                  <FaEdit />
+                  <FaPen />
                   Edit
                 </Button>
               ))}

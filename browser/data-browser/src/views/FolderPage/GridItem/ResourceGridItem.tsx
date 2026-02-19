@@ -15,7 +15,7 @@ import { BasicGridItem } from './BasicGridItem';
 import { GridCard, GridItemTitle, GridItemWrapper } from './components';
 import { DefaultGridItem } from './DefaultGridItem';
 import { GridItemViewProps } from './GridItemViewProps';
-import { FaFolder } from 'react-icons/fa';
+import { FaFolder } from 'react-icons/fa6';
 import { ChatRoomGridItem } from './ChatRoomGridItem';
 import { DocumentGridItem } from './DocumentGridItem';
 import { DocumentV2GridItem } from './DocumentV2GridItem';

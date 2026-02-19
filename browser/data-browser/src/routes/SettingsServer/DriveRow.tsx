@@ -5,7 +5,7 @@ import { WSIndicator } from './WSIndicator';
 import { ResourceInline } from '../../views/ResourceInline';
 import { FavoriteButton } from './FavoriteButton';
 import { IconButton } from '../../components/IconButton/IconButton';
-import { FaTimes } from 'react-icons/fa';
+import { FaXmark } from 'react-icons/fa6';
 
 export interface DriveRowProps {
   subject: string;
@@ -28,7 +28,7 @@ export function DriveRow({
             title='Remove drive from list'
             onClick={() => onRemove(subject)}
           >
-            <FaTimes />
+            <FaXmark />
           </IconButton>
         )}
         <ResourceInline subject={subject} />

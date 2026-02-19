@@ -2,7 +2,7 @@ import { useStore } from '@tomic/react';
 import { useCallback, type JSX } from 'react';
 import toast from 'react-hot-toast';
 import { IconType } from 'react-icons';
-import { FaPlus } from 'react-icons/fa';
+import { FaPlus } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import { paths } from '../../routes/paths';
 import { Button } from '../Button';
@@ -42,7 +42,7 @@ export function Base({
     }
 
     onClick();
-  }, [agent, navigate]);
+  }, [agent, navigate, onClick]);
 
   const Icon = IconComponent ?? FaPlus;
 

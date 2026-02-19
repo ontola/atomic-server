@@ -1,7 +1,7 @@
 import { ReactNode, useCallback, useEffect, useRef } from 'react';
 import { styled } from 'styled-components';
 import { constructOpenURL, pathToURL } from '../helpers/navigation';
-import { FaExternalLinkAlt } from 'react-icons/fa';
+import { FaArrowUpRightFromSquare } from 'react-icons/fa6';
 import { ErrorLook } from '../components/ErrorLook';
 import { isRunningInTauri } from '../helpers/tauri';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
@@ -141,7 +141,7 @@ export const AtomicLink: React.FC<React.PropsWithChildren<AtomicLinkProps>> = ({
       {href && !clean && (
         <>
           {' '}
-          <FaExternalLinkAlt size='0.8em' />
+          <FaArrowUpRightFromSquare size='0.8em' />
         </>
       )}
     </LinkView>

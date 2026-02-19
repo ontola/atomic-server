@@ -2,7 +2,7 @@ import { Resource, core, useStore } from '@tomic/react';
 import { useRef, useState, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { transition } from '../../../helpers/transition';
-import { FaPlus } from 'react-icons/fa';
+import { FaPlus } from 'react-icons/fa6';
 import { SearchBox } from '../../../components/forms/SearchBox';
 import { focusOffsetElement } from '../../../helpers/focusOffsetElement';
 import { useOntologyContext } from '../OntologyContext';

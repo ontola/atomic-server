@@ -1,4 +1,4 @@
-import { FaEllipsisV } from 'react-icons/fa';
+import { FaEllipsisVertical } from 'react-icons/fa6';
 import { DropdownTriggerComponent } from '../Dropdown/DropdownTrigger';
 import { shortcuts } from '../HotKeyWrapper';
 import { IconButton } from '../IconButton/IconButton';
@@ -16,7 +16,7 @@ export const MenuBarDropdownTrigger: DropdownTriggerComponent = ({
     data-test='context-menu'
     onClick={onClick}
   >
-    <FaEllipsisV />
+    <FaEllipsisVertical />
   </IconButton>
 );
 

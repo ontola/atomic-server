@@ -6,7 +6,7 @@ import {
   type Core,
 } from '@tomic/react';
 import { useRef, useState, type JSX } from 'react';
-import { FaPlus } from 'react-icons/fa';
+import { FaPlus } from 'react-icons/fa6';
 import {
   Dialog,
   DialogActions,

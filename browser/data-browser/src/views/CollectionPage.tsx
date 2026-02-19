@@ -14,8 +14,8 @@ import {
   FaArrowRight,
   FaInfo,
   FaTable,
-  FaThLarge,
-} from 'react-icons/fa';
+  FaTableCellsLarge,
+} from 'react-icons/fa6';
 
 import { useViewport } from '../helpers/useMedia';
 import { Button } from '../components/Button';
@@ -41,7 +41,7 @@ import type { JSX } from 'react';
 const displayStyles = [
   {
     id: 'cards',
-    icon: <FaThLarge />,
+    icon: <FaTableCellsLarge />,
   },
   {
     id: 'table',

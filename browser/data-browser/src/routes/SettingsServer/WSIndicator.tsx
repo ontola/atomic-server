@@ -1,6 +1,6 @@
 import { useStore } from '@tomic/react';
 import { useEffect, useState, type JSX } from 'react';
-import { FaExclamationTriangle, FaSignal } from 'react-icons/fa';
+import { FaSignal, FaTriangleExclamation } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import { useSettings } from '../../helpers/AppSettings';
 
@@ -36,7 +36,7 @@ function getIndicatorState(
       ];
     case ReadyState.CLOSED:
       return [
-        <FaExclamationTriangle
+        <FaTriangleExclamation
           color='red'
           key='closed'
           title='Websocket Closed'

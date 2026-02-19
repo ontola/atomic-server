@@ -6,7 +6,7 @@ import {
   type JSX,
 } from 'react';
 import { styled } from 'styled-components';
-import { FaCaretRight } from 'react-icons/fa';
+import { FaCaretRight } from 'react-icons/fa6';
 import { Collapse } from './Collapse';
 import { IconButton } from './IconButton/IconButton';
 

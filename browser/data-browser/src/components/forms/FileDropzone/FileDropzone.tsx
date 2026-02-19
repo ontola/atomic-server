@@ -7,7 +7,7 @@ import {
   type JSX,
 } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { FaUpload } from 'react-icons/fa';
+import { FaUpload } from 'react-icons/fa6';
 import { styled, keyframes } from 'styled-components';
 import { ErrMessage } from '../InputStyles';
 import { useUpload } from '../../../hooks/useUpload';

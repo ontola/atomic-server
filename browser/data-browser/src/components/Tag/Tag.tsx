@@ -8,7 +8,7 @@ import { Popover } from '../Popover';
 import { PalettePicker } from '../PalettePicker';
 import { Button } from '../Button';
 import { Column, Row } from '../Row';
-import { FaTrash } from 'react-icons/fa';
+import { FaTrash } from 'react-icons/fa6';
 import { fadeIn } from '../../helpers/commonAnimations';
 import { tagColours } from './tagColours';
 
