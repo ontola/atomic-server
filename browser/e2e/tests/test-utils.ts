@@ -101,11 +101,12 @@ export async function searchAndOpen(
   resultText: string,
 ) {
   await typeInSearch(page, query);
-  await page
+  const result = page
     .locator('[data-index]')
     .filter({ hasText: resultText })
-    .first()
-    .click();
+    .first();
+  await expect(result).toBeVisible({ timeout: 15000 });
+  await result.click();
 }
 
 /**
@@ -128,7 +129,7 @@ export const sidebarDriveButtonId = 'sidebar-drive-open';
 export const defaultDevServer = 'http://localhost:9883';
 export const currentDialogOkButton = 'dialog[open] >> footer >> text=Ok';
 // Depends on server index throttle time, `commit_monitor.rs`
-export const REBUILD_INDEX_TIME = 5000;
+export const REBUILD_INDEX_TIME = 6500;
 
 /**
  * Default test setup: `/app/dev-drive` creates a fresh agent + drive on the dev
@@ -193,16 +194,23 @@ export async function setTitle(page: Page, title: string) {
     const main = document.querySelector('main[about]');
     return main?.getAttribute('about') ?? '';
   });
+  const renameStartedAt = Date.now();
   // Arm the /commit waiter BEFORE pressing Enter — Playwright's
   // `waitForResponse` only sees responses that complete AFTER the
   // call is awaited, so installing it first guarantees we don't
   // miss a fast post.
   const commitPosted = page.waitForResponse(
-    r =>
-      r.url().endsWith('/commit') &&
-      r.request().method() === 'POST' &&
-      r.request().postData()?.includes(subject) === true &&
-      r.status() < 400,
+    r => {
+      const request = r.request();
+
+      return (
+        r.url().endsWith('/commit') &&
+        request.method() === 'POST' &&
+        request.timing().startTime >= renameStartedAt &&
+        request.postData()?.includes(subject) === true &&
+        r.status() < 400
+      );
+    },
     { timeout: 15000 },
   );
   await editableTitle(page).type(title);

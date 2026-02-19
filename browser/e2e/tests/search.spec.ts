@@ -1,7 +1,6 @@
 import { test, expect } from '@playwright/test';
 import {
   before,
-  clickSidebarItem,
   editTitle,
   setTitle,
   sidebarNewResourceButton,
@@ -9,22 +8,16 @@ import {
   timestamp,
   newResource,
   waitForSearchIndex,
-  openSearchOverlay,
   typeInSearch,
   searchAndOpen,
+  getCurrentSubject,
+  openSubject,
 } from './test-utils';
 
-// Tests rewritten for the modal search overlay.
-// Old behavior (inline address bar auto-navigating to /app/search?query=...)
-// no longer exists. New flow: open overlay (cmd+K or the Search button),
-// type a query, pick a result — the overlay closes on navigation. See
-// data-browser/src/components/OverlayContainer.tsx → SearchOverlay.
-// Blocked by a server-side search-index bug: resources created with
-// `did:ad:...` subjects (which all user-created resources now use) are not
-// added to the Tantivy index. Repro: create a Folder, wait 30s, GET
-// /search?q=<name> → 0 hits. Re-enable when the index handles DID subjects.
-// Tracked as task #7.
-test.describe.skip('search', async () => {
+// Tests rewritten for the modal search overlay. Old behavior (inline address
+// bar auto-navigating to /app/search?query=...) no longer exists. New flow:
+// open overlay (cmd+K or the Search button), type a query, pick a result.
+test.describe('search', async () => {
   test.beforeEach(before);
 
   test('text search', async ({ page }) => {
@@ -32,6 +25,7 @@ test.describe.skip('search', async () => {
     // to find. Previously the test relied on onboarding content ("Welcome to
     // your drive…") that no longer ships with dev-drive. Avoid colons in the
     // name (the overlay parses `tag:...` specially).
+    const driveSubject = await getCurrentSubject(page);
     const unique = Date.now().toString(36);
     const targetName = `Searchable-Folder-${unique}`;
     await sidebarNewResourceButton(page).click();
@@ -41,33 +35,44 @@ test.describe.skip('search', async () => {
     await waitForSearchIndex(page);
 
     // Go somewhere else so navigation via search is observable.
-    await clickSidebarItem('Dev drive', page).catch(() => {});
+    await openSubject(page, driveSubject);
 
     await searchAndOpen(page, unique, targetName);
     await expect(page.getByRole('heading', { name: targetName })).toBeVisible();
   });
 
   test('scoped search', async ({ page }) => {
+    const driveSubject = await getCurrentSubject(page);
+
     // Create folder called 'Salad folder'
     await newResource('folder', page);
     await setTitle(page, 'Salad folder');
 
     // Create document called 'Avocado Salad'
-    await page.locator('button:has-text("New Resource")').click();
-    await page.locator('button:has-text("document")').click();
+    await page
+      .getByRole('main')
+      .getByRole('button', { name: 'New Document' })
+      .click();
     await editTitle('Avocado Salad', page);
 
     // Create folder called 'Cake folder' at root
+    await openSubject(page, driveSubject);
     await sidebarNewResourceButton(page).click();
     await page.locator('button:has-text("folder")').click();
     await setTitle(page, 'Cake Folder');
+    await expect(
+      page.getByRole('heading', { name: 'Cake Folder' }),
+    ).toBeVisible();
+    const cakeFolderSubject = await getCurrentSubject(page);
 
     // Create document called 'Avocado Cake'
-    await page.locator('button:has-text("New Resource")').click();
-    await page.locator('button:has-text("document")').click();
+    await page
+      .getByRole('main')
+      .getByRole('button', { name: 'New Document' })
+      .click();
     await editTitle('Avocado Cake', page);
 
-    await clickSidebarItem('Cake Folder', page);
+    await openSubject(page, cakeFolderSubject);
 
     // Set search scope to 'Cake folder'
     await waitForSearchIndex(page);
@@ -76,14 +81,25 @@ test.describe.skip('search', async () => {
 
     // Scoped-only results: Avocado Cake is under Cake folder; Avocado Salad is not.
     await typeInSearch(page, 'Avocado');
-    await expect(page.getByText('Avocado Cake').first()).toBeVisible();
-    await expect(page.getByText('Avocado Salad')).not.toBeVisible();
+    const searchResults = page.locator('[data-index]');
+    await expect(
+      searchResults.filter({ hasText: 'Avocado Cake' }).first(),
+    ).toBeVisible();
+    await expect(
+      searchResults.filter({ hasText: 'Avocado Salad' }),
+    ).toHaveCount(0);
 
-    // Remove scope — both now match.
-    await page.locator('button[title="Clear scope"]').click();
+    // Remove scope — the modal overlay does not render the old searchbar's
+    // clear-scope chip, so reopen the current subject without `queryscope`.
+    await page.keyboard.press('Escape');
+    await openSubject(page, cakeFolderSubject);
     await typeInSearch(page, 'Avocado');
-    await expect(page.getByText('Avocado Cake').first()).toBeVisible();
-    await expect(page.getByText('Avocado Salad').first()).toBeVisible();
+    await expect(
+      searchResults.filter({ hasText: 'Avocado Cake' }).first(),
+    ).toBeVisible();
+    await expect(
+      searchResults.filter({ hasText: 'Avocado Salad' }).first(),
+    ).toBeVisible();
   });
 
   test('add tags and search for them', async ({ page }) => {
@@ -94,37 +110,46 @@ test.describe.skip('search', async () => {
 
     // Add tags via the TagBar
     const firstTagName = `first-tag`;
-    await page.getByTitle('Add tags').click();
+    await page
+      .locator('[aria-label="navigation"] button')
+      .filter({ hasText: 'Tags' })
+      .click();
     await page.getByPlaceholder('New tag').fill(firstTagName);
-    await page.getByRole('button', { name: 'Add tag', exact: true }).click();
+    await page.getByTitle('Add tag').click();
+    await expect(
+      page.locator('[aria-label="navigation"]').getByText(firstTagName),
+    ).toBeVisible();
 
     const secondTagName = `second-tag`;
     await expect(page.getByPlaceholder('New tag')).toHaveValue('');
     await page.getByPlaceholder('New tag').fill(secondTagName);
-    await page.getByRole('button', { name: 'Add tag', exact: true }).click();
+    await page.getByTitle('Add tag').click();
+    await expect(
+      page.locator('[aria-label="navigation"]').getByText(secondTagName),
+    ).toBeVisible();
     await page.keyboard.press('Escape');
-    await expect(page.getByRole('link', { name: firstTagName })).toBeVisible();
-    await expect(page.getByRole('link', { name: secondTagName })).toBeVisible();
+    await expect(
+      page.getByTestId('sidebar').getByRole('button', { name: firstTagName }),
+    ).toBeVisible();
+    await expect(
+      page.getByTestId('sidebar').getByRole('button', { name: secondTagName }),
+    ).toBeVisible();
 
     await waitForSearchIndex(page);
 
     // Search by first tag — result should include our folder.
-    await typeInSearch(page, 'tag:first');
-    await expect(page.getByText(folderName).first()).toBeVisible();
-    await page.keyboard.press('ArrowDown');
-    await page.keyboard.press('Enter');
+    await searchAndOpen(page, `tag:${firstTagName}`, folderName);
     await expect(page.getByRole('heading', { name: folderName })).toBeVisible();
 
     // Search by second tag
-    await typeInSearch(page, `tag:${secondTagName}`);
-    await expect(page.getByText(folderName).first()).toBeVisible();
-    await page.keyboard.press('ArrowDown');
-    await page.keyboard.press('Enter');
+    await searchAndOpen(page, `tag:${secondTagName}`, folderName);
     await expect(page.getByRole('heading', { name: folderName })).toBeVisible();
 
     // Non-existent tag — overlay shows no match, close with Escape.
     await typeInSearch(page, `tag:nonexistent-tag`);
-    await expect(page.getByText(folderName)).not.toBeVisible();
+    await expect(
+      page.locator('[data-index]').filter({ hasText: folderName }),
+    ).toHaveCount(0);
     await page.keyboard.press('Escape');
   });
 });
