@@ -82,6 +82,8 @@ export interface StoreOpts {
 
 export interface StoreSyncStatus {
   serverConnected: boolean;
+  /** Last WebSocket/server connection error, if the server is currently offline. */
+  serverConnectionError?: string;
   /** True iff EITHER the WS-driven drive sync is mid-handshake OR
    * the outbox is currently draining. */
   syncInProgress: boolean;
@@ -333,6 +335,7 @@ export class Store {
    * locally and synced when the connection is restored.
    */
   private _serverConnected = false;
+  private _serverConnectionError: string | undefined;
   private _driveSyncInProgress = false;
   private _lastDriveSync?: {
     drive: string;
@@ -1851,10 +1854,19 @@ export class Store {
   }
 
   /** Called by WebSocket client when connection state changes. */
-  public setServerConnected(connected: boolean): void {
-    if (this._serverConnected === connected) return;
+  public setServerConnected(connected: boolean, error?: string): void {
+    const nextError = connected ? undefined : error;
+
+    if (
+      this._serverConnected === connected &&
+      this._serverConnectionError === nextError
+    ) {
+      return;
+    }
 
     this._serverConnected = connected;
+    this._serverConnectionError = nextError;
+
     if (!connected) {
       this._driveSyncInProgress = false;
     }
@@ -1934,6 +1946,7 @@ export class Store {
   public getSyncStatus(): StoreSyncStatus {
     return {
       serverConnected: this._serverConnected,
+      serverConnectionError: this._serverConnectionError,
       syncInProgress: this._driveSyncInProgress || this.outbox.isDraining,
       pendingDirtyCount: this.outbox.size,
       serverUrl: this.serverUrl,
@@ -2195,6 +2208,8 @@ export class Store {
     const url = this.serverUrl;
 
     if (!url) return;
+
+    this.setServerConnected(false);
 
     // Close existing WebSocket
     const existing = this.webSockets.get(url);

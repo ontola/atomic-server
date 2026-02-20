@@ -31,6 +31,9 @@ import { perfMark, perfSpan } from './perf-trace.js';
 const REQUEST_TIMEOUT = 10000;
 const WS_PROTOCOL = 'atomicdata-ws.v2';
 
+const connectionFailedMessage = (url: URL): string =>
+  `Could not connect to ${url.origin}. Check that the server is running and reachable.`;
+
 /**
  * Decide whether a QUERY_UPDATE `added` subject needs a network fetch.
  *
@@ -253,14 +256,20 @@ export class WSClient {
           console.warn('[WS] Connection failed');
         }
 
-        this.store.setServerConnected(false);
+        this.store.setServerConnected(false, connectionFailedMessage(wsURL));
         // Some environments fire error without an immediately-following
         // close. Reject anyway — if close does fire later, the second
         // rejectAllPending sees an empty Map and is a no-op.
         this.rejectAllPending('WebSocket error before response arrived');
       });
       ws.addEventListener('close', () => {
-        this.store.setServerConnected(false);
+        const error = this._closed
+          ? undefined
+          : opened
+            ? `Connection to ${wsURL.origin} closed.`
+            : connectionFailedMessage(wsURL);
+
+        this.store.setServerConnected(false, error);
         this.rejectAllPending('WebSocket closed before response arrived');
 
         if (!this._closed) {

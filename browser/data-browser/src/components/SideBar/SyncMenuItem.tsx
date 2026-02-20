@@ -57,7 +57,11 @@ function getSyncIcon(status: StoreSyncStatus): JSX.Element {
   }
 
   if (!status.serverConnected) {
-    return <MdSignalWifiOff title='Offline' />;
+    return (
+      <OfflineIcon>
+        <MdSignalWifiOff title='Offline' />
+      </OfflineIcon>
+    );
   }
 
   if (status.pendingDirtyCount > 0) {
@@ -92,5 +96,10 @@ const SpinningIcon = styled.span`
 
 const WarningIcon = styled.span`
   color: ${p => p.theme.colors.warning};
+  display: inline-flex;
+`;
+
+const OfflineIcon = styled.span`
+  color: ${p => p.theme.colors.alert};
   display: inline-flex;
 `;
