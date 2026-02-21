@@ -12,6 +12,8 @@ pub mod tag {
     pub const GET: u8 = 0x10;
     pub const UPDATE: u8 = 0x11;
     pub const DESTROY: u8 = 0x12;
+    pub const COMMIT: u8 = 0x13;
+    pub const COMMIT_OK: u8 = 0x14;
     pub const SUB: u8 = 0x20;
     pub const UNSUB: u8 = 0x21;
     pub const SYNC: u8 = 0x30;
@@ -118,6 +120,28 @@ pub fn encode_destroy(request_id: u16, subject: &str) -> Vec<u8> {
     buf.push(tag::DESTROY);
     buf.extend_from_slice(&request_id.to_be_bytes());
     buf.extend_from_slice(subject.as_bytes());
+    buf
+}
+
+/// Encode a COMMIT message.
+///
+/// Format: `[0x13] [request_id: u16] [commit_json_utf8]`.
+pub fn encode_commit(request_id: u16, commit_json: &str) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(3 + commit_json.len());
+    buf.push(tag::COMMIT);
+    buf.extend_from_slice(&request_id.to_be_bytes());
+    buf.extend_from_slice(commit_json.as_bytes());
+    buf
+}
+
+/// Encode a COMMIT_OK message.
+///
+/// Format: `[0x14] [request_id: u16] [server_commit_json_utf8]`.
+pub fn encode_commit_ok(request_id: u16, commit_json: &str) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(3 + commit_json.len());
+    buf.push(tag::COMMIT_OK);
+    buf.extend_from_slice(&request_id.to_be_bytes());
+    buf.extend_from_slice(commit_json.as_bytes());
     buf
 }
 
@@ -357,6 +381,12 @@ pub struct DecodedGet<'a> {
     pub subject: &'a str,
 }
 
+/// Decoded COMMIT / COMMIT_OK message.
+pub struct DecodedCommit<'a> {
+    pub request_id: u16,
+    pub commit_json: &'a str,
+}
+
 /// Decode a GET message (after the type tag).
 pub fn decode_get(data: &[u8]) -> Option<DecodedGet<'_>> {
     if data.len() < 2 {
@@ -368,6 +398,20 @@ pub fn decode_get(data: &[u8]) -> Option<DecodedGet<'_>> {
     Some(DecodedGet {
         request_id,
         subject,
+    })
+}
+
+/// Decode a COMMIT or COMMIT_OK message (after the type tag).
+pub fn decode_commit(data: &[u8]) -> Option<DecodedCommit<'_>> {
+    if data.len() < 2 {
+        return None;
+    }
+
+    let request_id = u16::from_be_bytes([data[0], data[1]]);
+    let commit_json = std::str::from_utf8(&data[2..]).ok()?;
+    Some(DecodedCommit {
+        request_id,
+        commit_json,
     })
 }
 
@@ -587,6 +631,26 @@ mod tests {
         let decoded = decode_get(&encoded[1..]).unwrap();
         assert_eq!(decoded.request_id, 7);
         assert_eq!(decoded.subject, "did:ad:agent:alice");
+    }
+
+    #[test]
+    fn commit_round_trip() {
+        let json = r#"{"https://atomicdata.dev/properties/subject":"did:ad:test"}"#;
+        let encoded = encode_commit(42, json);
+        assert_eq!(encoded[0], tag::COMMIT);
+        let decoded = decode_commit(&encoded[1..]).unwrap();
+        assert_eq!(decoded.request_id, 42);
+        assert_eq!(decoded.commit_json, json);
+    }
+
+    #[test]
+    fn commit_ok_round_trip() {
+        let json = r#"{"@id":"did:ad:commit:test"}"#;
+        let encoded = encode_commit_ok(43, json);
+        assert_eq!(encoded[0], tag::COMMIT_OK);
+        let decoded = decode_commit(&encoded[1..]).unwrap();
+        assert_eq!(decoded.request_id, 43);
+        assert_eq!(decoded.commit_json, json);
     }
 
     #[test]

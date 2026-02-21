@@ -4,11 +4,18 @@ import { recordServerVersionFromWsProtocol } from './serverCapabilities.js';
 import type { Store } from './store.js';
 import { AtomicError, ErrorType } from './error.js';
 import {
+  type Commit,
+  parseCommitJSON,
+  serializeDeterministically,
+} from './commit.js';
+import {
   Tag,
   Flags,
   encodeAuth,
+  encodeCommit,
   encodeGet,
   encodeSub,
+  decodeCommit,
   decodeUpdate,
   decodeError,
   decodeSyncOk,
@@ -200,6 +207,16 @@ export class WSClient {
       timer: ReturnType<typeof setTimeout>;
     }
   >();
+  /** Pending COMMIT requests awaiting a `COMMIT_OK` (or `ERROR`),
+   *  keyed by request_id. */
+  private pendingCommits = new Map<
+    number,
+    {
+      resolve: (c: Commit) => void;
+      reject: (e: Error) => void;
+      timer: ReturnType<typeof setTimeout>;
+    }
+  >();
   private nextRequestId = 1;
 
   /** Take a pending GET out of the queue, cancel its timer. Caller
@@ -209,6 +226,15 @@ export class WSClient {
     if (!pending) return undefined;
     clearTimeout(pending.timer);
     this.pendingGets.delete(requestId);
+    return pending;
+  }
+
+  /** Take a pending COMMIT out of the queue, cancel its timer. */
+  private takePendingCommit(requestId: number) {
+    const pending = this.pendingCommits.get(requestId);
+    if (!pending) return undefined;
+    clearTimeout(pending.timer);
+    this.pendingCommits.delete(requestId);
     return pending;
   }
 
@@ -225,12 +251,21 @@ export class WSClient {
       this.tagListeners.clear();
       for (const r of rejectors) r(err);
     }
-    if (this.pendingGets.size === 0) return;
-    const entries = [...this.pendingGets.values()];
-    this.pendingGets.clear();
-    for (const p of entries) {
-      clearTimeout(p.timer);
-      p.reject(err);
+    if (this.pendingGets.size > 0) {
+      const entries = [...this.pendingGets.values()];
+      this.pendingGets.clear();
+      for (const p of entries) {
+        clearTimeout(p.timer);
+        p.reject(err);
+      }
+    }
+    if (this.pendingCommits.size > 0) {
+      const entries = [...this.pendingCommits.values()];
+      this.pendingCommits.clear();
+      for (const p of entries) {
+        clearTimeout(p.timer);
+        p.reject(err);
+      }
     }
   }
 
@@ -475,6 +510,63 @@ export class WSClient {
     });
   }
 
+  /**
+   * Send a signed commit over the WebSocket. Resolves with the
+   * server's created commit resource (same shape as HTTP `/commit`
+   * returns) once a `COMMIT_OK` with a matching request id arrives.
+   *
+   * Throws `AtomicError` on `ERROR` with the same request id, on
+   * socket close mid-flight (`rejectAllPending`), or on timeout.
+   *
+   * The server stores the commit's `connection_id` as the event
+   * source and suppresses broadcasts back to this connection — the
+   * client never receives its own commit as a subscription push.
+   * HTTP `/commit` remains the fallback when the WS isn't usable.
+   */
+  public async postCommit(commit: Commit): Promise<Commit> {
+    await this.authenticate();
+
+    if (this.readyState !== WebSocket.OPEN) {
+      throw new AtomicError(
+        'WebSocket not open, cannot post commit',
+        ErrorType.Server,
+      );
+    }
+
+    const serialized = serializeDeterministically({ ...commit });
+    const requestId = this.nextRequestId++;
+    if (this.nextRequestId > 0xffff) {
+      this.nextRequestId = 1;
+    }
+
+    return new Promise((resolve, reject) => {
+      const close = perfSpan('ws.COMMIT');
+      const timer = setTimeout(() => {
+        this.pendingCommits.delete(requestId);
+        close({ err: 'timeout' });
+        reject(
+          new AtomicError(
+            `COMMIT timed out after ${REQUEST_TIMEOUT}ms.`,
+            ErrorType.Server,
+          ),
+        );
+      }, REQUEST_TIMEOUT);
+
+      this.pendingCommits.set(requestId, {
+        resolve: (c: Commit) => {
+          close('ok');
+          resolve(c);
+        },
+        reject: (e: Error) => {
+          close({ err: e.message });
+          reject(e);
+        },
+        timer,
+      });
+      this.sendBinary(encodeCommit(requestId, serialized));
+    });
+  }
+
   // ---- Loro sync (real-time collaboration) ----
 
   /** Send a text frame `<prefix> <payload>` if the WS is open.
@@ -567,11 +659,33 @@ export class WSClient {
         const msg = decodeError(payload);
         if (!msg) break;
         if (msg.requestId) {
-          this.takePending(msg.requestId)?.reject(
-            new AtomicError(msg.message, ErrorType.Server),
-          );
+          const err = new AtomicError(msg.message, ErrorType.Server);
+          const pendingGet = this.takePending(msg.requestId);
+          if (pendingGet) {
+            pendingGet.reject(err);
+          } else {
+            this.takePendingCommit(msg.requestId)?.reject(err);
+          }
         } else {
           this.store.notifyError(msg.message);
+        }
+        break;
+      }
+
+      case Tag.COMMIT_OK: {
+        const msg = decodeCommit(payload);
+        if (!msg) break;
+        const pending = this.takePendingCommit(msg.requestId);
+        if (!pending) break;
+        try {
+          const created = parseCommitJSON(msg.commitJson);
+          pending.resolve(created);
+        } catch (e) {
+          pending.reject(
+            e instanceof Error
+              ? e
+              : new AtomicError(String(e), ErrorType.Server),
+          );
         }
         break;
       }

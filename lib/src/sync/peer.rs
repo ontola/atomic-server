@@ -330,6 +330,7 @@ fn start_live_sync(store: Db) {
                 crate::DbEvent::Changed {
                     subject,
                     delta: Some(delta),
+                    ..
                 } if !delta.is_empty() => {
                     let frame = super::protocol::encode_update(0, 0, subject.as_str(), None, delta);
                     let len = frame.len() as u32;
@@ -338,7 +339,7 @@ fn start_live_sync(store: Db) {
                     msg.extend_from_slice(&frame);
                     msg
                 }
-                crate::DbEvent::Destroyed { subject } => {
+                crate::DbEvent::Destroyed { subject, .. } => {
                     let frame = super::protocol::encode_destroy(0, subject.as_str());
                     let len = frame.len() as u32;
                     let mut msg = Vec::with_capacity(4 + frame.len());

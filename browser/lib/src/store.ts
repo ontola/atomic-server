@@ -2771,7 +2771,7 @@ export class Store {
       genesis: commit.previousCommit === undefined,
     });
     try {
-      const created = await this.client.postCommit(commit, endpoint);
+      const created = await this.sendCommit(commit, endpoint);
       close('ok');
       this.pushCommitLog(
         this.buildCommitLogEntry(commit, 'outgoing', 'sent', {
@@ -2800,6 +2800,40 @@ export class Store {
         }),
       );
       throw e;
+    }
+  }
+
+  /**
+   * Prefer the WebSocket transport when the matching origin's WS is open and
+   * authenticated; fall back to HTTP `client.postCommit` otherwise. The WS
+   * round-trip lets the server tag the resulting `DbEvent`s with the
+   * originating connection id and suppress broadcasting them back — closes
+   * the "client gets its own commit as a subscription push" echo. HTTP
+   * commits still work; they just always reach every subscriber.
+   */
+  private async sendCommit(commit: Commit, endpoint: string): Promise<Commit> {
+    const ws = this.getWebSocketForEndpoint(endpoint);
+
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      try {
+        return await ws.postCommit(commit);
+      } catch (e) {
+        // Fall through to HTTP — a broken WS shouldn't block saves while
+        // the reconnect timer is still backing off. The WS error already
+        // surfaced in console; the HTTP path will produce its own.
+        console.warn('[Store.postCommit] WS path failed, using HTTP:', e);
+      }
+    }
+
+    return this.client.postCommit(commit, endpoint);
+  }
+
+  private getWebSocketForEndpoint(endpoint: string): WSClient | undefined {
+    try {
+      const origin = new URL(endpoint).origin;
+      return this.webSockets.get(origin);
+    } catch {
+      return this.getDefaultWebSocket();
     }
   }
 

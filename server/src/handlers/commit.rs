@@ -1,6 +1,6 @@
 use crate::{appstate::AppState, errors::AtomicServerResult};
 use actix_web::{web, HttpResponse};
-use atomic_lib::{commit::CommitOpts, parse::parse_json_ad_commit_resource, Commit, Storelike};
+use atomic_lib::{commit::CommitOpts, parse::parse_json_ad_commit_resource, Commit, Db, Storelike};
 
 /// Send and process a Commit.
 /// Currently only accepts JSON-AD
@@ -17,9 +17,20 @@ pub async fn post_commit(
         let random_number = rng.gen_range(100..1000);
         tokio::time::sleep(tokio::time::Duration::from_millis(random_number)).await;
     }
-    let origin = context.origin.clone();
     let store = &appstate.store;
-    let mut builder = HttpResponse::Ok();
+    let message = apply_commit_json(store, &context.origin, &body, None).await?;
+
+    Ok(HttpResponse::Ok()
+        .content_type("application/ad+json")
+        .body(message))
+}
+
+pub async fn apply_commit_json(
+    store: &Db,
+    origin: &str,
+    body: &str,
+    source_id: Option<String>,
+) -> AtomicServerResult<String> {
     // Reject commits with deprecated set/push/remove fields — use loroUpdate instead.
     if body.contains("\"https://atomicdata.dev/properties/set\"")
         || body.contains("\"https://atomicdata.dev/properties/push\"")
@@ -93,6 +104,7 @@ pub async fn post_commit(
         validate_loro_causality: true,
         validate_for_agent: Some(signer.to_string()),
         update_index: true,
+        source_id,
     };
 
     let signer = &incoming_commit.signer;
@@ -122,5 +134,5 @@ pub async fn post_commit(
 
     let message = commit_response.commit_resource.to_json_ad(Some(&origin))?;
 
-    Ok(builder.content_type("application/ad+json").body(message))
+    Ok(message)
 }

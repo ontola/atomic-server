@@ -158,8 +158,86 @@ export const before = async (
 
   if (testInfo) registerPerfPage(testInfo, page);
 
+  await installCommitWatcher(page);
   await devDrive(page);
 };
+
+/**
+ * Mirror outgoing v2 WebSocket COMMIT frames (tag `0x13`) into a
+ * `window.__atomicCommitLog` so {@link waitForCommit} can observe
+ * commits regardless of transport. Must be installed BEFORE
+ * `page.goto(...)` — `addInitScript` runs before any page script,
+ * including the SPA bundle that opens the WebSocket.
+ *
+ * The Store now prefers WS for persisted commits (HTTP `/commit`
+ * remains a fallback), so the previous `page.waitForResponse(/commit)`
+ * helper alone misses the happy path and tests time out.
+ */
+export async function installCommitWatcher(page: Page) {
+  await page.addInitScript(() => {
+    // Idempotent — `before()` may run multiple times against the same
+    // browser context if a spec opens additional pages.
+    if ((window as unknown as { __atomicCommitWatcherInstalled?: boolean })
+      .__atomicCommitWatcherInstalled) {
+      return;
+    }
+    (
+      window as unknown as { __atomicCommitWatcherInstalled: boolean }
+    ).__atomicCommitWatcherInstalled = true;
+    (window as unknown as { __atomicCommitLog: unknown[] }).__atomicCommitLog =
+      [];
+
+    const COMMIT_TAG = 0x13;
+    const ISA = 'https://atomicdata.dev/properties/isA';
+    const SUBJECT = 'https://atomicdata.dev/properties/subject';
+    const COMMIT_CLASS = 'https://atomicdata.dev/classes/Commit';
+
+    const origSend = WebSocket.prototype.send;
+    WebSocket.prototype.send = function (
+      data: string | ArrayBufferLike | Blob | ArrayBufferView,
+    ) {
+      try {
+        if (data instanceof ArrayBuffer || ArrayBuffer.isView(data)) {
+          const buf =
+            data instanceof ArrayBuffer
+              ? new Uint8Array(data)
+              : new Uint8Array(
+                  (data as ArrayBufferView).buffer,
+                  (data as ArrayBufferView).byteOffset,
+                  (data as ArrayBufferView).byteLength,
+                );
+
+          if (buf[0] === COMMIT_TAG && buf.length >= 3) {
+            const json = new TextDecoder().decode(buf.subarray(3));
+            const commit = JSON.parse(json) as Record<string, unknown>;
+            const isA = commit[ISA] as string[] | undefined;
+
+            if (Array.isArray(isA) && isA.includes(COMMIT_CLASS)) {
+              const log = (
+                window as unknown as {
+                  __atomicCommitLog: Array<{
+                    sentAt: number;
+                    subject: string;
+                    commit: Record<string, unknown>;
+                  }>;
+                }
+              ).__atomicCommitLog;
+              log.push({
+                sentAt: Date.now(),
+                subject: (commit[SUBJECT] as string | undefined) ?? '',
+                commit,
+              });
+            }
+          }
+        }
+      } catch {
+        // Best-effort — never break the real send.
+      }
+      // eslint-disable-next-line prefer-rest-params
+      return origSend.apply(this, arguments as unknown as [data: never]);
+    };
+  });
+}
 
 /**
  * Agent secret from the last `devDrive()` / `before()` (stored in localStorage).
@@ -189,38 +267,25 @@ export async function setTitle(page: Page, title: string) {
     process.platform === 'darwin' ? 'Meta+a' : 'Control+a',
   );
   // Read the resource subject BEFORE we close the editor — used to
-  // match the /commit POST that carries this rename.
+  // match the commit that carries this rename across either transport.
   const subject = await page.evaluate(() => {
     const main = document.querySelector('main[about]');
     return main?.getAttribute('about') ?? '';
   });
   const renameStartedAt = Date.now();
-  // Arm the /commit waiter BEFORE pressing Enter — Playwright's
-  // `waitForResponse` only sees responses that complete AFTER the
-  // call is awaited, so installing it first guarantees we don't
-  // miss a fast post.
-  const commitPosted = page.waitForResponse(
-    r => {
-      const request = r.request();
-
-      return (
-        r.url().endsWith('/commit') &&
-        request.method() === 'POST' &&
-        request.timing().startTime >= renameStartedAt &&
-        request.postData()?.includes(subject) === true &&
-        r.status() < 400
-      );
-    },
-    { timeout: 15000 },
-  );
+  // Arm the commit waiter BEFORE pressing Enter — Playwright's
+  // `waitForResponse` / `waitForFunction` only see signals that
+  // happen AFTER the call is awaited, so installing it first
+  // guarantees we don't miss a fast post.
+  const commitPosted = waitForCommitForSubject(page, subject, renameStartedAt);
   await editableTitle(page).type(title);
   await page.keyboard.press('Enter');
 
-  // Wait for the /commit POST carrying this resource to complete
-  // server-side. This is the definitive signal that the rename has
-  // landed — far more reliable than polling `pendingDirtyCount === 0`,
-  // which is trivially true before `useValue`'s debounced save fires
-  // (the outbox doesn't even know about the change yet).
+  // Wait for the commit carrying this resource to complete server-side.
+  // This is the definitive signal that the rename has landed — far more
+  // reliable than polling `pendingDirtyCount === 0`, which is trivially
+  // true before `useValue`'s debounced save fires (the outbox doesn't
+  // even know about the change yet).
   //
   // We deliberately DON'T also poll the local store for `name === title`.
   // Plugins / class-extender `after_commit` hooks can transform the
@@ -230,6 +295,48 @@ export async function setTitle(page: Page, title: string) {
   // rename has been committed to the server"; what the server (or its
   // plugins) does next is not setTitle's concern.
   await commitPosted;
+}
+
+/** Wait for either an HTTP `/commit` POST or a WS COMMIT frame whose
+ *  body references `subject` and was sent at or after `since`. */
+function waitForCommitForSubject(
+  page: Page,
+  subject: string,
+  since: number,
+) {
+  const http = page.waitForResponse(
+    r => {
+      const request = r.request();
+      return (
+        r.url().endsWith('/commit') &&
+        request.method() === 'POST' &&
+        request.timing().startTime >= since &&
+        request.postData()?.includes(subject) === true &&
+        r.status() < 400
+      );
+    },
+    { timeout: 15000 },
+  );
+  const ws = page.waitForFunction(
+    ({ targetSubject, sinceMs }) => {
+      const log =
+        (
+          window as unknown as {
+            __atomicCommitLog?: Array<{
+              sentAt: number;
+              subject: string;
+              commit: Record<string, unknown>;
+            }>;
+          }
+        ).__atomicCommitLog ?? [];
+      return log.some(
+        entry => entry.sentAt >= sinceMs && entry.subject === targetSubject,
+      );
+    },
+    { targetSubject: subject, sinceMs: since },
+    { polling: 100, timeout: 15000 },
+  );
+  return Promise.race([http, ws]);
 }
 
 /**
@@ -412,8 +519,9 @@ export async function waitForCommitOnCurrentResource(
   match?: { set?: Record<string, unknown> },
 ) {
   const currentSubject = await getCurrentSubject(page);
+  const startedAt = Date.now();
 
-  await page.waitForResponse(async response => {
+  const httpMatch = page.waitForResponse(async response => {
     if (!response.url().endsWith('/commit')) {
       return false;
     }
@@ -444,15 +552,52 @@ export async function waitForCommitOnCurrentResource(
           }
         }
       }
-
-      // Wait for commit response to be processed by the store.
-      await page.waitForTimeout(200);
     } catch (e) {
       return false;
     }
 
     return true;
   });
+
+  const wsMatch = page.waitForFunction(
+    ({ targetSubject, sinceMs, matchSet, setProp, subjectProp, loroProp }) => {
+      const log =
+        (
+          window as unknown as {
+            __atomicCommitLog?: Array<{
+              sentAt: number;
+              subject: string;
+              commit: Record<string, unknown>;
+            }>;
+          }
+        ).__atomicCommitLog ?? [];
+      return log.some(entry => {
+        if (entry.sentAt < sinceMs) return false;
+        const commit = entry.commit;
+        if (commit[subjectProp] !== targetSubject) return false;
+        if (!matchSet) return true;
+        const hasLoroUpdate = loroProp in commit;
+        if (hasLoroUpdate) return true;
+        const setMap = commit[setProp] as Record<string, unknown> | undefined;
+        if (!setMap) return false;
+        return Object.keys(matchSet).every(key => setMap[key] === matchSet[key]);
+      });
+    },
+    {
+      targetSubject: currentSubject,
+      sinceMs: startedAt,
+      matchSet: (match?.set ?? null) as Record<string, unknown> | null,
+      setProp: PROPERTIES.set,
+      subjectProp: 'https://atomicdata.dev/properties/subject',
+      loroProp: PROPERTIES.loroUpdate,
+    },
+    { polling: 100, timeout: 15000 },
+  );
+
+  await Promise.race([httpMatch, wsMatch]);
+  // Give the store a beat to apply the response before callers assert
+  // — matches the prior `waitForTimeout(200)` after HTTP detection.
+  await page.waitForTimeout(200);
 }
 
 export async function waitForSearchIndex(page: Page) {
@@ -710,7 +855,78 @@ type CommitFilter = {
   set?: Record<string, unknown | typeof anyValue>;
 };
 
-export const waitForCommit = async (page: Page, filter?: CommitFilter) =>
+/**
+ * Resolve when a commit matching `filter` lands on the server. Watches
+ * BOTH transports so the helper survives the WS-first commit path:
+ *
+ * - HTTP `POST /commit` responses (fallback path, anonymous flows, multi-server)
+ * - WS `COMMIT` frames captured by {@link installCommitWatcher} into
+ *   `window.__atomicCommitLog`
+ *
+ * Whichever signal fires first wins. The promise resolves once a match
+ * is found; rejecting is left to the surrounding `expect`/test timeout.
+ */
+export const waitForCommit = async (page: Page, filter?: CommitFilter) => {
+  // Capture wall-clock at call-time so the WS matcher only resolves
+  // on commits sent AFTER this point — matches `waitForResponse`'s
+  // future-only semantics. Without this, pre-existing entries in
+  // `__atomicCommitLog` would resolve the helper immediately.
+  const since = Date.now();
+  return Promise.race([
+    waitForHttpCommit(page, filter),
+    waitForWsCommit(page, filter, since),
+  ]);
+};
+
+const waitForWsCommit = (
+  page: Page,
+  filter: CommitFilter | undefined,
+  since: number,
+) =>
+  page.waitForFunction(
+    ({ filterSet, isAProp, setProp, loroProp, commitClass, sinceMs }) => {
+      const log =
+        (
+          window as unknown as {
+            __atomicCommitLog?: Array<{
+              sentAt: number;
+              subject: string;
+              commit: Record<string, unknown>;
+            }>;
+          }
+        ).__atomicCommitLog ?? [];
+
+      return log.some(entry => {
+        if (entry.sentAt < sinceMs) return false;
+        const commit = entry.commit;
+        const isA = commit[isAProp] as string[] | undefined;
+        if (!Array.isArray(isA) || !isA.includes(commitClass)) return false;
+
+        if (!filterSet) return true;
+
+        const hasLoroUpdate = loroProp in commit;
+        // Mirrors the HTTP filter below: a Loro-bearing commit can't be
+        // inspected per-property here, so a `set` filter degrades to a
+        // match on any Commit carrying a loroUpdate.
+        if (hasLoroUpdate) return true;
+
+        const setMap = commit[setProp] as Record<string, unknown> | undefined;
+        if (!setMap) return false;
+        return Object.keys(filterSet).every(key => key in setMap);
+      });
+    },
+    {
+      filterSet: (filter?.set ?? null) as Record<string, unknown> | null,
+      isAProp: PROPERTIES.isA,
+      setProp: PROPERTIES.set,
+      loroProp: PROPERTIES.loroUpdate,
+      commitClass: 'https://atomicdata.dev/classes/Commit',
+      sinceMs: since,
+    },
+    { polling: 100, timeout: 15000 },
+  );
+
+const waitForHttpCommit = (page: Page, filter?: CommitFilter) =>
   page.waitForResponse(async response => {
     if (
       !response.url().endsWith('/commit') ||

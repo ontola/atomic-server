@@ -77,9 +77,15 @@ pub enum DbEvent {
         subject: Subject,
         /// The Loro delta (from the commit's loro_update). None for non-Loro changes.
         delta: Option<Vec<u8>>,
+        /// Optional transport/source identity for echo suppression.
+        source_id: Option<String>,
     },
     /// Resource destroyed.
-    Destroyed { subject: Subject },
+    Destroyed {
+        subject: Subject,
+        /// Optional transport/source identity for echo suppression.
+        source_id: Option<String>,
+    },
     /// A resource entered or left the result set of a watched query. Emitted
     /// from `apply_transaction` after a successful write that touches
     /// `Tree::QueryMembers`. `filter_bytes` is the encoded `QueryFilter`
@@ -94,6 +100,8 @@ pub enum DbEvent {
         filter_bytes: Vec<u8>,
         subject: String,
         added: bool,
+        /// Optional transport/source identity for echo suppression.
+        source_id: Option<String>,
     },
 }
 
@@ -1320,6 +1328,14 @@ impl Db {
     /// membership from the raw atom stream.
     #[instrument(level = "trace", skip_all)]
     fn apply_transaction(&self, transaction: &mut Transaction) -> AtomicResult<()> {
+        self.apply_transaction_with_source(transaction, None)
+    }
+
+    fn apply_transaction_with_source(
+        &self,
+        transaction: &mut Transaction,
+        source_id: Option<&str>,
+    ) -> AtomicResult<()> {
         self.kv.apply_batch(transaction)?;
 
         for op in transaction.iter() {
@@ -1353,6 +1369,7 @@ impl Db {
                 filter_bytes,
                 subject,
                 added,
+                source_id: source_id.map(str::to_string),
             });
         }
         Ok(())
@@ -1483,6 +1500,7 @@ impl Db {
                 // rendering them.
                 let _ = self.db_events.send(DbEvent::Destroyed {
                     subject: child.get_subject().without_params(),
+                    source_id: None,
                 });
                 // Because the function is async we need to box it to use recursion.
                 Box::pin(self.recursive_remove(child.get_subject(), transaction)).await?;
@@ -1756,6 +1774,7 @@ impl Storelike for Db {
         let _ = self.db_events.send(DbEvent::Changed {
             subject: resource.get_subject().without_params(),
             delta: None,
+            source_id: None,
         });
         Ok(())
     }
@@ -1883,17 +1902,21 @@ impl Storelike for Db {
             }
         }
 
-        store.apply_transaction(&mut transaction)?;
+        store.apply_transaction_with_source(&mut transaction, commit_response.source_id.as_deref())?;
 
         // Notify subscribers
         let subject = commit_response.commit.subject.without_params();
         let is_destroy = commit_response.commit.destroy.unwrap_or(false);
         let event = if is_destroy {
-            DbEvent::Destroyed { subject }
+            DbEvent::Destroyed {
+                subject,
+                source_id: commit_response.source_id.clone(),
+            }
         } else {
             DbEvent::Changed {
                 subject,
                 delta: commit_response.commit.loro_update.clone(),
+                source_id: commit_response.source_id.clone(),
             }
         };
         let _ = store.db_events.send(event);

@@ -24,6 +24,8 @@ pub struct CommitResponse {
     pub remove_atoms: Vec<Atom>,
     /// The property URLs that were changed by this commit's Loro update.
     pub changed_props: HashSet<String>,
+    /// Optional transport/source identity for echo suppression.
+    pub source_id: Option<String>,
 }
 
 pub struct CommitApplied {
@@ -69,6 +71,8 @@ pub struct CommitOpts {
     pub update_index: bool,
     /// For who the right checks will be perormed. If empty, the signer of the Commit will be used.
     pub validate_for_agent: Option<String>,
+    /// Optional transport/source identity for echo suppression.
+    pub source_id: Option<String>,
 }
 
 impl CommitOpts {
@@ -82,6 +86,7 @@ impl CommitOpts {
             validate_loro_causality: false,
             update_index: false,
             validate_for_agent: None,
+            source_id: None,
         }
     }
 }
@@ -627,6 +632,7 @@ impl Commit {
                 Some(applied.resource_old)
             },
             changed_props: applied.changed_props,
+            source_id: opts.source_id.clone(),
         })
     }
 
@@ -1101,6 +1107,7 @@ mod test {
             validate_rights: false,
             validate_for_agent: None,
             update_index: true,
+            source_id: None,
         };
     }
 

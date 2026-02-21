@@ -10,3 +10,203 @@ But there are a bunch of shortcomings:
 ## Bugs
 
 - After signing in with the same secret on 2 devices, and using QR to set up sync, the resources sync successfully initially. Awesome. But after htat initial sync, i don't see new strokes appears. When i create a new resource, i do see a new (empty) item appearing, but not the strokes. Even after manual retry / refresh. I suppose we lack a test for this case.
+
+## Plan: Persist commits over WebSocket
+
+### Problem
+
+Persisted browser edits currently go through HTTP `POST /commit`, while live
+updates come back over WebSocket. Once the server applies the HTTP commit and
+emits database events, it no longer knows which WebSocket connection caused the
+change. The originating browser tab can therefore receive its own change back as
+a live update.
+
+Loro can safely import duplicate updates, but duplicate transport work is still
+wasteful and can trigger redundant UI fetches. The realtime Loro channel already
+does the right thing: `LoroSyncUpdate` carries the sender `Addr`, and
+`LoroSyncBroadcaster` broadcasts to every subscriber except the sender. Persisted
+commits should use the same source-aware shape.
+
+Do not suppress by agent. A single agent can be open in multiple tabs or devices;
+those other connections should receive the update. Suppression must be by
+originating WebSocket connection.
+
+### Direction
+
+Move browser-originated persisted commits onto the WebSocket transport while
+keeping HTTP `/commit` as a compatibility and fallback path.
+
+The client still builds and signs the same Atomic Commit object. The transport
+changes; the commit model does not.
+
+### Protocol Shape
+
+Add two v2 binary tags:
+
+| Tag | Name | Role | Payload |
+| --- | --- | --- | --- |
+| `0x13` | `COMMIT` | Init -> Resp | `[request_id: u16] [commit_json_utf8]` |
+| `0x14` | `COMMIT_OK` | Resp -> Init | `[request_id: u16] [server_commit_json_utf8]` |
+
+`commit_json_utf8` is the same signed commit JSON sent to HTTP `/commit` today.
+Keeping JSON here avoids changing deterministic signing, commit parsing, or
+`loroUpdate` encoding in the first implementation. A later protocol revision can
+compact the payload if needed.
+
+`ERROR (0x03)` with the same request id is the failure response.
+
+### Server Code Paths
+
+Factor the shared commit application logic out of
+`server/src/handlers/commit.rs::post_commit` into a reusable helper. Both HTTP
+and WS should call the same validation and apply path:
+
+```rust
+async fn apply_commit_json(
+    appstate: &AppState,
+    origin: &str,
+    body: &str,
+    source_id: Option<String>,
+) -> AtomicServerResult<String>
+```
+
+The returned `String` is the server-created commit resource JSON-AD that HTTP
+returns today and that WS should send as `COMMIT_OK`.
+
+Touched server files:
+
+- `server/src/handlers/commit.rs`: extract shared apply helper, keep `/commit`.
+- `server/src/handlers/web_sockets.rs`: decode `COMMIT`, call helper, send
+  `COMMIT_OK` or `ERROR`.
+- `server/src/actor_messages.rs`: carry source identity on commit/query
+  notifications.
+- `server/src/commit_monitor.rs`: store subscriber source ids and skip same
+  source during broadcast.
+- `lib/src/commit.rs`: add `source_id` to `CommitOpts` and `CommitResponse`, or
+  another equivalent internal carrier that reaches `handle_commit`.
+- `lib/src/db.rs`: copy the source id into emitted `DbEvent`s.
+- `lib/src/sync/protocol.rs`: add tags plus encode/decode helpers.
+
+### Source Tracking
+
+Each `WebSocketConnection` gets a generated `connection_id`. When it handles a
+`COMMIT`, it passes that id into the shared commit helper. The id must flow into
+the commit monitor through `CommitResponse` or `DbEvent`, because
+`store.apply_commit()` calls `store.handle_commit()` internally.
+
+Commit monitor subscription maps should store a small subscription record rather
+than only `Addr<WebSocketConnection>`:
+
+```rust
+struct Subscription {
+    addr: Addr<WebSocketConnection>,
+    source_id: String,
+}
+```
+
+Use this shape for:
+
+- resource subscriptions
+- drive-wide subscriptions
+- filter query subscriptions
+
+When broadcasting `UPDATE`, `DESTROY`, or `QUERY_UPDATE`, skip subscribers whose
+`source_id` equals the event source id.
+
+HTTP commits have no source id and continue to broadcast to all matching
+subscribers.
+
+### Browser Code Paths
+
+Add `WSClient.postCommit(commit): Promise<Commit>` in
+`browser/lib/src/websockets.ts`, using the same pending request pattern as
+`fetch()`.
+
+Update `Store.postCommit()` in `browser/lib/src/store.ts`:
+
+1. Prefer WS commit when the server WebSocket is open/authenticated.
+2. Fall back to the existing HTTP `Client.postCommit()` path if WS is unavailable
+   or the commit cannot be sent.
+3. Preserve existing commit log behavior: pending -> sent/failed, with
+   `commitIdOf(created)` coming from `COMMIT_OK`.
+
+`Resource.signChanges()` and `Resource.pushCommits()` should keep their current
+responsibilities: sign, queue, apply local pre-push state, drain commits, apply
+local ack state, and push blobs after commit ack.
+
+Touched browser files:
+
+- `browser/lib/src/ws-v2.ts`: add tags and encode/decode helpers.
+- `browser/lib/src/websockets.ts`: add pending commit requests and `COMMIT_OK`
+  handling.
+- `browser/lib/src/store.ts`: prefer WS in `postCommit`, retain HTTP fallback.
+- `browser/lib/src/client.ts`: keep HTTP post as fallback.
+- `browser/lib/src/resource.ts`: likely no behavior change, but tests should
+  cover that `pushCommits()` still works with WS ack.
+
+### Query Semantics Follow-Up
+
+Commit-over-WS fixes self-echo for the originating connection. It does not by
+itself fix the separate semantic issue where ordinary edits can be represented
+as drive-wide `QUERY_UPDATE` frames.
+
+After WS commits land, narrow `QUERY_UPDATE` to actual membership changes:
+
+- resource created in a drive
+- resource removed from a drive
+- filter membership changes, such as parent/class/property changes
+- sort membership updates if the watched query depends on sort order
+
+Existing resource edits should arrive through resource `UPDATE` pushes for
+subscribers of that resource, not through drive-wide `QUERY_UPDATE`.
+
+Keep this as a separate patch unless implementation shows the two are tightly
+coupled.
+
+### Documentation
+
+Update public protocol docs in `docs/src/websockets.md`:
+
+- Add `COMMIT` and `COMMIT_OK` to the v2 tag table.
+- Add a "Persisted Commits" section.
+- Document that the responder suppresses persisted commit broadcasts to the
+  originating WebSocket connection.
+- Update the typical session flow to show:
+
+```text
+-> COMMIT [request_id] [commit_json]
+<- COMMIT_OK [request_id] [server_commit_json]
+<- UPDATE ...     # sent to other subscribers, not the origin connection
+```
+
+Planning notes can stay here; the wire reference belongs in `docs/`.
+
+### Tests
+
+Add or update tests at these levels:
+
+- Rust protocol tests for `COMMIT` and `COMMIT_OK` encode/decode.
+- Server WS integration:
+  - client A sends commit over WS and receives `COMMIT_OK`
+  - client A does not receive its own `UPDATE` / `QUERY_UPDATE`
+  - client B, subscribed to the same resource/query, does receive the update
+- Browser lib tests for `WSClient.postCommit()`:
+  - resolves on matching `COMMIT_OK`
+  - rejects on matching `ERROR`
+  - ignores unrelated request ids
+- Browser/store tests for fallback:
+  - `Store.postCommit()` uses WS when available
+  - HTTP fallback still works when WS is unavailable
+- Existing HTTP commit tests must remain green.
+
+### Rollout
+
+- [x] Add protocol tags and helper functions.
+- [x] Factor server commit apply logic without changing behavior.
+- [x] Add WS `COMMIT` handling and `COMMIT_OK`.
+- [x] Thread source ids through commit events and suppress same-source broadcasts.
+- [x] Add browser `WSClient.postCommit()`.
+- [x] Switch browser `Store.postCommit()` to prefer WS with HTTP fallback.
+- [x] Update docs.
+- [ ] Add tests and run server + browser suites around commit, sync, and e2e save
+      flows.
