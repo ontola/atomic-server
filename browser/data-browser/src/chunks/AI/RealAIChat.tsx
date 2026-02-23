@@ -105,8 +105,11 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   } = useAIAgentConfig();
   const addContextToMessages = useProcessMessages();
   const getToolsForAgent = useTools();
-  const { checkORModelSupportsImageInput, getOutputModalities } =
-    useOpenRouterModels();
+  const {
+    checkORModelSupportsImageInput,
+    checkORModelSupport,
+    getOutputModalities,
+  } = useOpenRouterModels();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -155,6 +158,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     autoSelectAgent: autoAgentSelectEnabled,
     webSearchEnabled,
     resolveOutputModalities: getOutputModalities,
+    resolveParameterSupport: checkORModelSupport,
     addContextToMessages,
   });
 

@@ -214,6 +214,10 @@ export const messageResourcesToDisplayMessages = async (
             return toSourceUrlPart(r);
           }
 
+          if (resourceIsFilePart(r)) {
+            return toFilePart(r);
+          }
+
           throw new Error(
             `Content with class ${r.getClasses()} not supported on role: assistant`,
           );
