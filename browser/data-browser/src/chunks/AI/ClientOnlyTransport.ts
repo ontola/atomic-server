@@ -13,6 +13,7 @@ import { useRef } from 'react';
 import { useStore } from '@tomic/react';
 import { useAutoAgentSelect } from './useAgentAutoSelect';
 import { createOllama } from 'ollama-ai-provider-v2';
+import { addFieldsIf } from '@helpers/addIf';
 
 export type Modalities = 'text' | 'image';
 
@@ -27,6 +28,7 @@ export interface ClientOnlyTransportOptions {
     messages: AtomicUIMessage[],
   ) => Promise<AtomicUIMessage[]>;
   resolveOutputModalities: (modelId: string) => Modalities[];
+  resolveParameterSupport: (modelId: string, parameter: string) => boolean;
 }
 
 /**
@@ -64,7 +66,7 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
       tools: this.options.tools,
       abortSignal,
       stopWhen: stepCountIs(10),
-      // temperature: agent.temperature,
+      ...this.getParameters(agent),
     });
 
     const originalStream = result.toUIMessageStream({
@@ -116,15 +118,36 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
       return openRouter(
         agent.model.id + (this.options.webSearchEnabled ? ':online' : ''),
       );
-    } else if (
-      agent.model.provider === AIProvider.Ollama &&
-      this.options.ollamaURL
-    ) {
+    }
+
+    if (agent.model.provider === AIProvider.Ollama && this.options.ollamaURL) {
       const ollama = createOllama({
         baseURL: `${this.options.ollamaURL}/api`,
       });
 
       return ollama(agent.model.id);
+    }
+
+    throw new Error('Invalid model provider');
+  }
+
+  private getParameters(agent: AIAgent) {
+    if (agent.model.provider === AIProvider.Ollama) {
+      // We can't check if Ollama supports specific parameters, so we just return all of them.
+      return {
+        temperature: agent.temperature,
+      };
+    }
+
+    if (agent.model.provider === AIProvider.OpenRouter) {
+      return {
+        ...addFieldsIf(
+          this.options.resolveParameterSupport(agent.model.id, 'temperature'),
+          {
+            temperature: agent.temperature,
+          },
+        ),
+      };
     }
 
     throw new Error('Invalid model provider');

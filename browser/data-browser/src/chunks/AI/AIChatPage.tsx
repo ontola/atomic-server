@@ -22,6 +22,7 @@ import {
 import { TagBar } from '@components/Tag/TagBar';
 import { RealAIChat } from './RealAIChat';
 import { useAISettings } from '@components/AI/AISettingsContext';
+import { styled } from 'styled-components';
 
 const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
   const store = useStore();
@@ -172,7 +173,7 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
     >
       <Column gap='0.5rem'>
         <Row>
-          <EditableTitle resource={resource} />
+          <SmallTitle resource={resource} />
         </Row>
         <TagBar resource={resource} />
       </Column>
@@ -181,3 +182,7 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
 };
 
 export default AIChatPage;
+
+const SmallTitle = styled(EditableTitle)`
+  font-size: 1rem;
+`;
