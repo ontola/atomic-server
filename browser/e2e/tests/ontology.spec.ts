@@ -8,6 +8,7 @@ import {
   inDialog,
   DIALOG_CLOSE_BUTTON,
   SEARCHBOX_PROPERTY_PLACEHOLDER,
+  waitForCommit,
 } from './test-utils';
 
 test.describe('Ontology', async () => {
@@ -237,11 +238,17 @@ test.describe('Ontology', async () => {
 
         await expect(dialog.getByLabel('name')).toBeVisible();
         await dialog.getByLabel('name').fill(name);
-        closeDialogWith('Save');
+        const saved = waitForCommit(page, {
+          set: { ['https://atomicdata.dev/properties/name']: name },
+        });
+        await closeDialogWith('Save');
+        await saved;
       });
 
       await expect(page.getByText('Resource loading...')).not.toBeVisible();
-      await expect(page.getByRole('heading', { name })).toBeVisible();
+      await expect(
+        page.getByRole('heading', { name, level: 2 }),
+      ).toBeVisible({ timeout: 20000 });
     };
 
     await createInstance('Red arrow with circle');

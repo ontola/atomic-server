@@ -52,6 +52,13 @@ type ResourceEventHandlers = {
 };
 
 /**
+ * Loro oplog timestamps are normally Unix seconds; values >= 1e12 are already ms.
+ */
+export function normalizeLoroChangeTimestampMs(timestamp: number): number {
+  return timestamp >= 1_000_000_000_000 ? timestamp : timestamp * 1000;
+}
+
+/**
  * Describes an Atomic Resource, which has a Subject URL and a bunch of Property
  * / Value combinations.
  *
@@ -1167,7 +1174,7 @@ export class Resource<C extends OptionalClass = any> {
 
     const versions: Version[] = deduped.map(g => ({
       peer: g.step.peer,
-      timestamp: g.step.timestamp * 1000, // Loro uses seconds, we use ms
+      timestamp: normalizeLoroChangeTimestampMs(g.step.timestamp),
       frontiers: [
         { peer: g.step.peer as `${number}`, counter: g.step.counter },
       ],
