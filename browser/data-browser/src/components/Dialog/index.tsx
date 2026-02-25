@@ -23,6 +23,8 @@ export interface InternalDialogProps {
   show: boolean;
   onClose: (success: boolean) => void;
   onClosed: () => void;
+  /** Skip the exit animation (e.g. after a successful form save). */
+  instantClose?: boolean;
   disableLightDismiss?: boolean;
   width?: CSS.Property.Width;
 }
@@ -83,6 +85,7 @@ const InnerDialog: React.FC<React.PropsWithChildren<InternalDialogProps>> = ({
   children,
   show,
   width,
+  instantClose = false,
   disableLightDismiss = false,
   onClose,
   onClosed,
@@ -164,12 +167,24 @@ const InnerDialog: React.FC<React.PropsWithChildren<InternalDialogProps>> = ({
     },
   );
 
+  const finishClose = useCallback(() => {
+    dialogRef.current?.close();
+    dialogRef.current?.removeAttribute('data-closing');
+    onClosed();
+  }, [onClosed]);
+
   // When closing the `data-closing` attribute must be set before rendering so the animation has started when the regular useEffect is called.
   useLayoutEffect(() => {
     if (!show && dialogRef.current && dialogRef.current.hasAttribute('open')) {
+      if (instantClose) {
+        finishClose();
+
+        return;
+      }
+
       dialogRef.current.setAttribute('data-closing', 'true');
     }
-  }, [show]);
+  }, [show, instantClose, finishClose]);
 
   useEffect(() => {
     if (!dialogRef.current) {
@@ -184,12 +199,10 @@ const InnerDialog: React.FC<React.PropsWithChildren<InternalDialogProps>> = ({
     if (dialogRef.current.hasAttribute('data-closing')) {
       // TODO: Use getAnimations() api to wait for the animations to complete instead of a timeout.
       return timeoutEffect(() => {
-        dialogRef.current?.close();
-        dialogRef.current?.removeAttribute('data-closing');
-        onClosed();
+        finishClose();
       }, ANIM_MS);
     }
-  }, [show, onClosed]);
+  }, [show, finishClose]);
 
   return (
     <StyledDialog
