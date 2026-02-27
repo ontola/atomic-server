@@ -60,7 +60,11 @@ impl Resource {
     fn adopt_resource_state(&mut self, new: &Resource) {
         self.subject = new.subject.clone();
         self.propvals = new.propvals.clone();
-        self.loro = new.loro.as_ref().map(Self::clone_loro_state);
+        // Keep the in-memory Loro doc (and its UndoManager) across save_locally.
+        // Replacing with a snapshot clone drops undo history and breaks undo/redo.
+        if self.loro.is_none() {
+            self.loro = new.loro.as_ref().map(Self::clone_loro_state);
+        }
     }
 
     /// Builds a Loro doc from propvals. Skips the `LORO_UPDATE` value because that
@@ -215,8 +219,17 @@ impl Resource {
     /// Must be called after `init_loro()` and before the operations you want to undo.
     pub fn init_undo(&mut self) {
         if let Some(doc) = &self.loro {
+            // UndoManager needs a committed baseline (see loro undo_redo_json_array test).
+            doc.commit();
             doc.ensure_undo_manager();
         }
+    }
+
+    /// Start a new undo group so the next mutation can be undone independently.
+    /// Call after each user-visible edit (e.g. one stroke).
+    pub fn record_undo_checkpoint(&mut self) -> AtomicResult<()> {
+        self.init_loro()?;
+        self.loro().checkpoint()
     }
 
     /// Get a reference to the Loro doc. Panics if `init_loro()` hasn't been called.
@@ -571,6 +584,8 @@ impl Resource {
         };
         self.init_loro()?;
         self.loro().push_to_json_array(property, &item)?;
+        self.loro().commit();
+        let _ = self.record_undo_checkpoint();
         Ok(())
     }
 
@@ -650,6 +665,8 @@ impl Resource {
 
         self.init_loro()?;
         self.loro().delete_from_json_array(property, index)?;
+        self.loro().commit();
+        let _ = self.record_undo_checkpoint();
         Ok(())
     }
 
@@ -661,6 +678,7 @@ impl Resource {
         if !self.loro().undo()? {
             return Ok(false);
         }
+        self.loro().commit();
         self.sync_propvals_from_loro();
         Ok(true)
     }
@@ -673,6 +691,7 @@ impl Resource {
         if !self.loro().redo()? {
             return Ok(false);
         }
+        self.loro().commit();
         self.sync_propvals_from_loro();
         Ok(true)
     }
@@ -1572,6 +1591,76 @@ mod test {
         assert_eq!(
             resource.get(urls::NAME).unwrap().to_string(),
             "Fresh propvals"
+        );
+    }
+
+    const STROKE_DATA: &str = "https://atomicdata.dev/ontology/canvas/strokeData";
+
+    fn stroke_count(resource: &Resource) -> usize {
+        match resource.get(STROKE_DATA) {
+            Ok(Value::JsonArray(arr)) => arr.len(),
+            _ => 0,
+        }
+    }
+
+    /// Undo must work after `save_locally` (which clones the in-memory Loro doc).
+    #[tokio::test]
+    async fn undo_after_save_exports_loro_update_for_sync() {
+        let store: crate::Db = init_store().await;
+        let (_agent, drive) = store.setup("test").await.unwrap();
+        let canvas = store
+            .create_resource(
+                "https://atomicdata.dev/ontology/canvas/Canvas",
+                &drive,
+                "Undo export test",
+                Some(vec![(STROKE_DATA, Value::JsonArray(vec![]))]),
+            )
+            .await
+            .unwrap();
+
+        let mut resource = store.get_resource(&canvas.as_str().into()).await.unwrap();
+        resource.init_loro().unwrap();
+        resource.init_undo();
+        resource
+            .push_list_item(
+                STROKE_DATA,
+                serde_json::json!({"color": 1, "width": 2.0, "path": [[0.0, 0.0]]}),
+            )
+            .unwrap();
+        resource
+            .push_list_item(
+                STROKE_DATA,
+                serde_json::json!({"color": 2, "width": 2.0, "path": [[1.0, 1.0]]}),
+            )
+            .unwrap();
+        resource.save_locally(&store).await.unwrap();
+        assert_eq!(stroke_count(&resource), 2);
+        assert!(
+            resource.can_undo(),
+            "undo manager must survive save_locally (snapshot clone)"
+        );
+
+        assert!(
+            resource.undo().unwrap(),
+            "undo should remove the last stroke"
+        );
+        assert_eq!(stroke_count(&resource), 1);
+
+        let undo_resp = resource.save_locally(&store).await.unwrap();
+        assert!(
+            undo_resp
+                .commit
+                .loro_update
+                .as_ref()
+                .is_some_and(|u| !u.is_empty()),
+            "undo must produce a loro update commit so peers can import the change"
+        );
+
+        let reloaded = store.get_resource(&canvas.as_str().into()).await.unwrap();
+        assert_eq!(
+            stroke_count(&reloaded),
+            1,
+            "store should persist the undone stroke list"
         );
     }
 

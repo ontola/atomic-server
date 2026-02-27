@@ -3,8 +3,9 @@
 # Hot reload from any terminal: make reload-web / make reload-android
 FLUTTER="$HOME/.local/share/mise/installs/flutter/3.22.1-stable/bin/flutter"
 DART="$HOME/.local/share/mise/installs/flutter/3.22.1-stable/bin/dart"
-ANDROID1_ID="R52X80AC5CY"
-ANDROID2_ID="456cb10b"
+ANDROID1_ID="92f5edcb"   # xiaomi tablet (23043RP34G)
+ANDROID2_ID="456cb10b"   # xiaomi phone (24129PN74G)
+ANDROID3_ID="R52X80AC5CY" # samsung tablet s9plus
 
 TARGET=$1
 case $TARGET in
@@ -34,6 +35,12 @@ echo "  Hot restart: make restart-$TARGET"
 echo "  Quit:        Ctrl+C"
 
 EXTRA_ARGS=""
+APK="build/app/outputs/flutter-apk/app-debug.apk"
+# Reuse a recent APK to skip Gradle/cargokit when iterating (both devices share one build).
+if [ -f "$APK" ] && { [ "$TARGET" = "phone" ] || [ "$TARGET" = "tablet" ]; }; then
+  EXTRA_ARGS="--use-application-binary=$APK"
+  echo "  Using existing APK (skip rebuild): $APK"
+fi
 
 # For web, start the COOP/COEP proxy (needed for SharedArrayBuffer / WASM threads)
 if [ "$TARGET" = "web" ]; then
