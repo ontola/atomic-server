@@ -514,7 +514,7 @@ impl Commit {
                     doc.get_all_properties()
                 })
                 .unwrap_or_default();
-            let merged_doc = applied.resource_new.build_loro_doc_from_state()?;
+            let merged_doc = applied.resource_new.build_state_doc()?;
             let merged_state = merged_doc.get_all_properties();
 
             // Idempotent replay check: if every property the client tried to
@@ -655,7 +655,7 @@ impl Commit {
         if let Some(loro_update_bytes) = &self.loro_update {
             // Seed from the current resource state when no snapshot exists yet so
             // older resources can still apply snapshot/delta updates correctly.
-            let loro_doc = resource.build_loro_doc_from_state()?;
+            let loro_doc = resource.build_state_doc()?;
 
             // Import the update and compute the property-level diff for indexing
             let diff = loro_doc
@@ -674,7 +674,7 @@ impl Commit {
 
             // Rebuild the materialized resource state from the merged Loro doc so
             // deleted properties disappear from propvals as well.
-            resource.replace_state_from_loro_doc(loro_doc)?;
+            resource.apply_state_doc(loro_doc)?;
         }
 
         // Remove all atoms from index if destroy
@@ -929,8 +929,11 @@ impl CommitBuilder {
 
         // If the resource has a live Loro doc but no snapshot was eagerly
         // exported to the commit builder, export it now (single export).
-        if self.loro_update.is_none() {
-            if let Some(snapshot) = resource.export_loro_snapshot() {
+        // Skip when `set`/`remove` are pending — sign_at must merge those onto
+        // `existing_loro_snapshot`. Exporting the live doc here would freeze a
+        // stale snapshot and ignore commitbuilder.set (e.g. gallery folderId).
+        if self.loro_update.is_none() && self.set.is_empty() && self.remove.is_empty() {
+            if let Some(snapshot) = resource.export_open_state() {
                 self.loro_update = Some(snapshot);
             }
         }
@@ -938,28 +941,21 @@ impl CommitBuilder {
         // Pass the resource's existing Loro snapshot so sign_at can build
         // incremental updates on top of it instead of creating a detached doc.
         //
-        // We try three sources, in order:
-        //   1. the resource's `loroUpdate` propval (preferred — already a snapshot),
-        //   2. `resource.export_loro_snapshot()` if it has a live Loro doc,
-        //   3. build a Loro doc from the resource's propvals and snapshot that.
+        // Prefer the in-memory Loro doc over the persisted `loroUpdate` propval.
+        // `push_list_item` (strokes) updates the live doc but not the propval
+        // until after save. Using the propval here drops stroke edits when
+        // `touch_date_edited` also dirtied the commit builder via `set_unsafe`.
         //
-        // Without (3), resources whose state lives only in propvals (e.g.
-        // legacy agent rows added via `set_unsafe`) would give `sign_at` no
-        // base snapshot, so it would build the commit's Loro update on a
-        // FRESH doc. That update then merges concurrently with the receiver's
-        // seeded-from-propvals doc; LWW tie-breaks by peer-id and often
-        // silently drops the incoming writes — the exact symptom seen in
-        // `test_did_agent_edit` where an agent name edit didn't persist.
-        let existing_snapshot: Option<Vec<u8>> = match resource.get(urls::LORO_UPDATE) {
-            Ok(Value::LoroDoc(snapshot)) => Some(snapshot.clone()),
-            _ => resource.export_loro_snapshot().or_else(|| {
-                // Fall back to seeding a doc from propvals.
-                resource
-                    .build_loro_doc_from_state()
+        // Fall back to propvals / build_state_doc for resources without a live doc.
+        let existing_snapshot: Option<Vec<u8>> = resource
+            .export_open_state()
+            .or_else(|| match resource.get(urls::LORO_UPDATE) {
+                Ok(Value::LoroDoc(snapshot)) => Some(snapshot.clone()),
+                _ => resource
+                    .build_state_doc()
                     .ok()
-                    .map(|doc| doc.export_snapshot())
-            }),
-        };
+                    .map(|doc| doc.export_snapshot()),
+            });
 
         let now = crate::utils::now();
         sign_at(self, agent, now, store, existing_snapshot.as_deref()).await
@@ -996,6 +992,11 @@ impl CommitBuilder {
         self.loro_update = Some(update);
     }
 
+    /// Set the previous Commit URL (for the commit chain on the target resource).
+    pub fn set_previous_commit(&mut self, previous_commit: String) {
+        self.previous_commit = Some(previous_commit);
+    }
+
     /// Whether the resource needs to be removed fully
     pub fn destroy(&mut self, destroy: bool) {
         self.destroy = destroy
@@ -1015,27 +1016,32 @@ async fn sign_at(
     store: &impl Storelike,
     existing_loro_snapshot: Option<&[u8]>,
 ) -> AtomicResult<Commit> {
-    // If no Loro update was provided (i.e. server-side commit), convert
-    // the accumulated set/remove operations into a Loro update.
-    let loro_update = if let Some(update) = commitbuilder.loro_update {
-        Some(update)
-    } else if !commitbuilder.set.is_empty() || !commitbuilder.remove.is_empty() {
-        // Build on top of existing state if available, so the Loro CRDT
-        // correctly tracks causality and the update merges deterministically.
+    // Build the Loro payload: merge set/remove onto existing state when present.
+    // If both `loro_update` and set/remove are set, apply set/remove on top of the
+    // builder update (import as snapshot or incremental — prefer full snapshot from
+    // existing_loro_snapshot + set/remove when set/remove exist).
+    let loro_update = if !commitbuilder.set.is_empty() || !commitbuilder.remove.is_empty() {
         let doc = if let Some(snapshot) = existing_loro_snapshot {
             crate::loro::AtomicLoroDoc::from_snapshot(snapshot)?
+        } else if let Some(update) = &commitbuilder.loro_update {
+            crate::loro::AtomicLoroDoc::from_snapshot(update)?
         } else {
             crate::loro::AtomicLoroDoc::new()
         };
+        // Incremental loro_update from `sync_loro_changes_to_commit_builder`
+        // (stroke appends) must be merged before applying commitbuilder.set.
+        if let Some(update) = &commitbuilder.loro_update {
+            let _ = doc.import_update(update);
+        }
         for (prop, val) in &commitbuilder.set {
             doc.set_property(prop, val)?;
         }
         for prop in &commitbuilder.remove {
             doc.remove_property(prop)?;
         }
-        // Always export a full snapshot — the receiver's apply_changes will
-        // import it into its own doc and compute the diff.
         Some(doc.export_snapshot())
+    } else if let Some(update) = commitbuilder.loro_update {
+        Some(update)
     } else {
         None
     };
@@ -1189,6 +1195,55 @@ mod test {
         // Must contain loroUpdate and core fields
         assert!(serialized.contains("loroUpdate"));
         assert!(serialized.contains("https://atomicdata.dev/properties/signer"));
+    }
+
+    /// Regression: `sign()` must not export a stale live Loro snapshot when the
+    /// commit builder still has `set` entries (e.g. gallery `folderId` moves).
+    #[tokio::test]
+    async fn sign_merges_commit_set_onto_existing_loro_snapshot() {
+        let store = Store::init().await.unwrap();
+        store.set_base_url("http://localhost:9883");
+        store.populate().await.unwrap();
+        let agent = store.create_agent(Some("folder_signer")).await.unwrap();
+
+        const FOLDER_PROP: &str = "https://atomicdata.dev/ontology/canvas/folderId";
+        let mut resource =
+            Resource::new("https://localhost/canvas-folder-sign-test".into());
+        let doc = crate::loro::AtomicLoroDoc::new();
+        doc.set_property(
+            crate::urls::NAME,
+            &Value::String("Test canvas".into()),
+        )
+        .unwrap();
+        let snapshot = doc.export_snapshot();
+        resource.set_unsafe(
+            crate::urls::LORO_UPDATE.into(),
+            Value::LoroDoc(snapshot),
+        );
+        resource.ensure_materialized().unwrap();
+
+        resource.set_unsafe(
+            FOLDER_PROP.into(),
+            Value::String("did:ad:folder:test".into()),
+        );
+
+        let commit = resource
+            .get_commit_builder()
+            .clone()
+            .sign(&agent, &store, &resource)
+            .await
+            .unwrap();
+        let update = commit
+            .loro_update
+            .as_ref()
+            .expect("commit should carry loroUpdate");
+        let merged = crate::loro::AtomicLoroDoc::from_snapshot(update).unwrap();
+        let props = merged.get_all_properties();
+        assert!(
+            props.contains_key(FOLDER_PROP),
+            "signed commit must include folderId in Loro state, keys: {:?}",
+            props.keys().collect::<Vec<_>>()
+        );
     }
 
     #[tokio::test]

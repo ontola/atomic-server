@@ -210,8 +210,8 @@ impl WebSocketConnection {
                             // incompatible with content-addressed sync. See atomic-plugin
                             // wit `on-install` (declared, not yet wired) for the install-
                             // time fan-out hook.
-                            let snapshot = resource.get_loro_snapshot().unwrap_or_else(|| {
-                                match resource.build_loro_doc_from_state() {
+                            let snapshot = resource.materialized_state().unwrap_or_else(|| {
+                                match resource.build_state_doc() {
                                     Ok(doc) => doc.export_snapshot(),
                                     Err(_) => Vec::new(),
                                 }

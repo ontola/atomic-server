@@ -1,11 +1,39 @@
-We've recently implemented WS sync.
-It works pretty well on Browser + Server + OPFS interaction, and we also use it to sync 2 flutter instances in the canvas app.
-But there are a bunch of shortcomings:
+# WebSocket sync — commits and subscriptions
+
+> **Broader direction:** Multi-device and multi-transport sync is described in
+> [`unified-sync.md`](./unified-sync.md) (one API, WS or Iroh; mobile should match
+> browser live queries, not manual `peer_sync`).
+
+## Status
+
+**Persisted commits over WS** — implemented (protocol, server, browser). See
+[Rollout](#rollout) below.
+
+**Still open:** integration tests, `QUERY_UPDATE` membership narrowing, Flutter on WS
+session (see [`unified-sync.md`](./unified-sync.md)).
+
+---
+
+## History / context
+
+WS sync works well for browser + server + OPFS. Flutter canvas has used Iroh bulk
+sync separately; that path is being replaced by the unified plan.
+
+Outstanding product/UX issues (Iroh-era):
 
 ## Handshake and context
 
 - We can pair with QR code, and the QR code transfers some information about the name of the device. But this only gives ONE of the devices information about the other device - only the QR scanner knows the name of the other
 - The UX is odd. What if user A scans a QR of user B? That does not necessarily mean user B agrees that A should access this. I think this means we need to initialize a share request.
+
+## Deletes over bulk sync
+
+> Trust model (hub vs bulk, same-agent vs share): [`unified-sync.md` § Trust and authority](./unified-sync.md#trust-and-authority).
+
+- **Live path (no protocol change):** signed destroy commit → `DESTROY (0x12)` and/or `QUERY_UPDATE` `removed` on WS; Iroh live loop mirrors `DESTROY`.
+- **Bulk path:** `SYNC_DIFF` JSON now includes `remove: string[]` so peers delete instead of re-uploading subjects that vanished from the other side's VV map. Documented in [`docs/src/websockets.md`](../docs/src/websockets.md).
+- **Local tombstones:** `lib/src/sync/tombstones.rs` records destroys in `PluginMeta` so `handle_sync_vv` can emit `remove` and `import_sync_push` won't resurrect. Not on the wire.
+- **Flutter:** every delete must call signed destroy + `try_push_commit` / `nudge_peers` (folder delete was UI-only; fixed like folder rename).
 
 ## Bugs
 
@@ -13,7 +41,7 @@ But there are a bunch of shortcomings:
   - **Root cause (Flutter / Iroh):** `push_stroke` → `push_list_item` updates the in-memory Loro doc but not `CommitBuilder`, so `save_locally()` hit the no-op path (`has_changes() == false`). Strokes stayed in the tablet's `CANVAS_CACHE` only; no `apply_commit`, no `DbEvent` delta, no live Iroh push. New canvases worked because `create_resource` commits through a different path.
   - **Fix:** `Resource::sync_loro_changes_to_commit_builder()` (called from `save` / `save_locally`) exports a Loro delta when only the in-memory doc changed. Test: `resources::test::push_list_item_save_locally_persists_strokes`.
 
-## Plan: Persist commits over WebSocket
+## Plan: Persist commits over WebSocket (implemented)
 
 ### Problem
 
@@ -210,5 +238,7 @@ Add or update tests at these levels:
 - [x] Add browser `WSClient.postCommit()`.
 - [x] Switch browser `Store.postCommit()` to prefer WS with HTTP fallback.
 - [x] Update docs.
-- [ ] Add tests and run server + browser suites around commit, sync, and e2e save
-      flows.
+- [x] Server WS integration: `server/tests/ws_commit.rs` (COMMIT + subscriber UPDATE).
+- [x] Run server integration (`sync`, `query_subscribe`, `ws_commit`) + browser lib vitest.
+- [ ] Browser lib: dedicated `WSClient.postCommit()` COMMIT_OK / ERROR tests (still mocked in commit tests).
+- [ ] E2E save flows (browser `test-e2e`).

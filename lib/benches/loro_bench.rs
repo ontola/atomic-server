@@ -19,7 +19,7 @@ fn sample_stroke(i: usize) -> serde_json::Value {
 fn make_resource_with_strokes(n: usize) -> Resource {
     let mut r = Resource::new("did:ad:bench-canvas".to_string());
     r.set_unsafe(STROKE_PROP.into(), Value::JsonArray(vec![]));
-    r.init_loro().unwrap();
+    r.ensure_materialized().unwrap();
     for i in 0..n {
         r.push_list_item(STROKE_PROP, sample_stroke(i)).unwrap();
     }
@@ -31,7 +31,7 @@ fn bench_loro_doc_init(c: &mut Criterion) {
 
     for &n in &[0, 10, 50, 200] {
         let r = make_resource_with_strokes(n);
-        let snapshot = r.get_loro_snapshot().unwrap();
+        let snapshot = r.materialized_state().unwrap();
 
         group.bench_with_input(
             BenchmarkId::new("from_snapshot", n),
@@ -46,7 +46,7 @@ fn bench_loro_doc_init(c: &mut Criterion) {
 
     for &n in &[0, 10, 50] {
         group.bench_with_input(
-            BenchmarkId::new("init_loro_from_propvals", n),
+            BenchmarkId::new("ensure_materialized_from_propvals", n),
             &n,
             |b, &n| {
                 b.iter_batched(
@@ -59,7 +59,7 @@ fn bench_loro_doc_init(c: &mut Criterion) {
                         r
                     },
                     |mut r| {
-                        r.init_loro().unwrap();
+                        r.ensure_materialized().unwrap();
                     },
                     criterion::BatchSize::SmallInput,
                 );
@@ -138,7 +138,7 @@ fn bench_undo_redo(c: &mut Criterion) {
                 || {
                     let mut r = Resource::new("did:ad:bench-undo".into());
                     r.set_unsafe(STROKE_PROP.into(), Value::JsonArray(vec![]));
-                    r.init_loro().unwrap();
+                    r.ensure_materialized().unwrap();
                     r.init_undo();
                     for i in 0..n {
                         r.push_list_item(STROKE_PROP, sample_stroke(i)).unwrap();
@@ -157,7 +157,7 @@ fn bench_undo_redo(c: &mut Criterion) {
                 || {
                     let mut r = Resource::new("did:ad:bench-redo".into());
                     r.set_unsafe(STROKE_PROP.into(), Value::JsonArray(vec![]));
-                    r.init_loro().unwrap();
+                    r.ensure_materialized().unwrap();
                     r.init_undo();
                     for i in 0..n {
                         r.push_list_item(STROKE_PROP, sample_stroke(i)).unwrap();
@@ -181,7 +181,7 @@ fn bench_export_snapshot(c: &mut Criterion) {
 
     for &n in &[10, 50, 200] {
         let r = make_resource_with_strokes(n);
-        let snapshot = r.get_loro_snapshot().unwrap();
+        let snapshot = r.materialized_state().unwrap();
         let doc = AtomicLoroDoc::from_snapshot(&snapshot).unwrap();
 
         group.bench_with_input(BenchmarkId::new("export", n), &doc, |b, doc| {
@@ -199,7 +199,7 @@ fn bench_view_at(c: &mut Criterion) {
 
     for &n in &[10, 50, 200] {
         let mut r = make_resource_with_strokes(n);
-        r.init_loro().unwrap();
+        r.ensure_materialized().unwrap();
         let version = r.get_current_version().unwrap();
 
         group.bench_with_input(BenchmarkId::new("view_at", n), &version, |b, v| {

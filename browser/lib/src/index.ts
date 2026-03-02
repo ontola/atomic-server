@@ -35,6 +35,8 @@ export * from './ontologies/commits.js';
 export * from './ontologies/dataBrowser.js';
 export * from './ontologies/server.js';
 export * from './ontologies/ai.js';
+export * from './ontologies/canvas.js';
+export * from './canvas-strokes.js';
 export * from './agent.js';
 export * from './authentication.js';
 export * from './client.js';

@@ -195,7 +195,7 @@ mod peer_sync_tests {
 
         // A: two strokes, persist, replicate to B
         let mut resource_a = db_a.get_resource(&canvas.as_str().into()).await.unwrap();
-        resource_a.init_loro().unwrap();
+        resource_a.ensure_materialized().unwrap();
         resource_a.init_undo();
         resource_a
             .push_list_item(
@@ -380,7 +380,7 @@ mod peer_sync_tests {
         ep_b.add_node_addr(node_addr_a).unwrap();
 
         let imported =
-            peer::sync_drive_with_peer_using(&ep_b, &node_id_a.to_string(), &drive_a, &db_b)
+            peer::sync_drive_with_peer_using(&ep_b, &node_id_a.to_string(), &drive_a, &db_b, true)
                 .await
                 .expect("sync should succeed");
         assert!(
@@ -741,7 +741,7 @@ mod peer_sync_tests {
 
         // Sync using the explicit endpoint
         let result =
-            peer::sync_drive_with_peer_using(&ep_b, &node_id_a.to_string(), &drive_did, &db_b)
+            peer::sync_drive_with_peer_using(&ep_b, &node_id_a.to_string(), &drive_did, &db_b, true)
                 .await;
 
         // Device B has the same agent (restored from secret) so it SHOULD be able
@@ -836,7 +836,7 @@ mod peer_sync_tests {
         );
 
         // Sync via Iroh using the discovered NodeID
-        let count = peer::sync_drive_with_peer_using(&ep_b, &discovered_node_id, &drive_a, &db_b)
+        let count = peer::sync_drive_with_peer_using(&ep_b, &discovered_node_id, &drive_a, &db_b, true)
             .await
             .expect("Iroh sync should succeed");
 
@@ -932,7 +932,7 @@ mod peer_sync_tests {
 
         // === Device B syncs with Device A ===
         let count_b =
-            peer::sync_drive_with_peer_using(&ep_b, &node_id_a.to_string(), &drive_a, &db_b)
+            peer::sync_drive_with_peer_using(&ep_b, &node_id_a.to_string(), &drive_a, &db_b, true)
                 .await
                 .expect("Sync B→A should succeed");
         println!("Device B synced {count_b} resources from A");
@@ -1019,7 +1019,7 @@ mod peer_sync_tests {
         ep_b.add_node_addr(node_addr_a).unwrap();
 
         let count =
-            peer::sync_drive_with_peer_using(&ep_b, &node_id_a.to_string(), &drive_a, &db_b)
+            peer::sync_drive_with_peer_using(&ep_b, &node_id_a.to_string(), &drive_a, &db_b, true)
                 .await
                 .expect("Sync should succeed");
         println!("Device B synced {count} resources");
@@ -1148,7 +1148,7 @@ mod peer_sync_tests {
         ep_b.add_node_addr(node_addr_a).unwrap();
 
         let count =
-            peer::sync_drive_with_peer_using(&ep_b, &node_id_a.to_string(), &drive_a, &db_b)
+            peer::sync_drive_with_peer_using(&ep_b, &node_id_a.to_string(), &drive_a, &db_b, true)
                 .await
                 .expect("Sync should succeed");
         println!("Device B synced {count} resources");
@@ -1208,7 +1208,7 @@ mod peer_sync_tests {
         ep_b.add_node_addr(node_addr_a).unwrap();
 
         let count =
-            peer::sync_drive_with_peer_using(&ep_b, &node_id_a.to_string(), &drive_a, &db_b)
+            peer::sync_drive_with_peer_using(&ep_b, &node_id_a.to_string(), &drive_a, &db_b, true)
                 .await
                 .expect("Initial sync should succeed");
         println!("Initial sync: {count} resources");
@@ -1303,7 +1303,7 @@ mod peer_sync_tests {
         ep_b.add_node_addr(node_addr_a).unwrap();
 
         // Initial sync
-        peer::sync_drive_with_peer_using(&ep_b, &node_id_a.to_string(), &drive_a, &db_b)
+        peer::sync_drive_with_peer_using(&ep_b, &node_id_a.to_string(), &drive_a, &db_b, true)
             .await
             .expect("Initial sync should succeed");
 
@@ -1388,7 +1388,7 @@ mod peer_sync_tests {
         ep_b.add_node_addr(node_addr_a).unwrap();
 
         let count =
-            peer::sync_drive_with_peer_using(&ep_b, &node_id_a.to_string(), &drive_a, &db_b)
+            peer::sync_drive_with_peer_using(&ep_b, &node_id_a.to_string(), &drive_a, &db_b, true)
                 .await
                 .expect("Initial sync should succeed");
         println!("B synced {count} resources");

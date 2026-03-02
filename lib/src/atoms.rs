@@ -37,18 +37,23 @@ impl Atom {
     pub fn to_indexable_atoms(&self) -> Vec<IndexAtom> {
         // Using sort_value causes issues but we really need to look at how to do this properly.
         // let sort_value = self.value.to_sortable_string();
-        let index_atoms = match &self.value.to_reference_index_strings() {
-            Some(v) => v,
-            None => return vec![],
-        }
-        .iter()
-        .map(|v| IndexAtom {
-            ref_value: v.into(),
-            sort_value: v.into(),
-            subject: self.subject.clone(),
-            property: self.property.clone(),
-        })
-        .collect();
+        let index_atoms: Vec<IndexAtom> = match &self.value.to_reference_index_strings() {
+            Some(v) => {
+                tracing::info!("to_indexable_atoms: found {} reference strings for property {}", v.len(), self.property);
+                v.iter()
+                    .map(|v| IndexAtom {
+                        ref_value: v.into(),
+                        sort_value: v.into(),
+                        subject: self.subject.clone(),
+                        property: self.property.clone(),
+                    })
+                    .collect()
+            }
+            None => {
+                tracing::info!("to_indexable_atoms: no reference strings for property {}", self.property);
+                vec![]
+            }
+        };
         index_atoms
     }
 }

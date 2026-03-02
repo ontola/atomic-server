@@ -2396,6 +2396,14 @@ export class Store {
     );
   }
 
+  public getLoroSyncSubjects(): string[] {
+    return Array.from(this.loroSyncSubscribers.keys());
+  }
+
+  public getLoroEphemeralSubjects(): string[] {
+    return Array.from(this.loroEphemeralSubscribers.keys());
+  }
+
   /** @internal */
   public __handleLoroSyncMessage(message: string): void {
     this.dispatchLoroMessage(this.loroSyncSubscribers, message);

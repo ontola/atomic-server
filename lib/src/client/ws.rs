@@ -49,6 +49,11 @@ pub enum WsMessage {
     },
     /// A binary v2 `DESTROY` (0x12) frame: a subscribed resource was deleted.
     Destroy { subject: String },
+    /// Server confirmed a posted commit (binary COMMIT_OK).
+    CommitOk {
+        request_id: u16,
+        commit_json: String,
+    },
     /// Server sent an error.
     Error(String),
 }
@@ -265,6 +270,53 @@ impl WsClient {
             .await
             .map_err(|e| format!("Failed to send WebSocket binary: {}", e).into())
     }
+
+    /// Subscribe to drive-scoped updates (QUERY_UPDATE + UPDATE pushes).
+    pub async fn subscribe_drive(&self, drive_subject: &str) -> AtomicResult<()> {
+        self.send_binary(protocol::encode_sub(drive_subject)).await
+    }
+
+    /// Register a live query filter (text `SUBSCRIBE_QUERY` frame).
+    pub async fn subscribe_query(
+        &self,
+        property: &str,
+        value: &str,
+        drive: &str,
+    ) -> AtomicResult<()> {
+        let json = serde_json::json!({
+            "property": property,
+            "value": value,
+            "drive": drive,
+        });
+        self.send_raw(&format!("SUBSCRIBE_QUERY {}", json)).await
+    }
+
+    /// Post a commit over WebSocket; returns the server's commit JSON-AD on success.
+    pub async fn post_commit(&self, request_id: u16, commit_json: &str) -> AtomicResult<String> {
+        let mut rx = self.subscribe();
+        self.send_binary(protocol::encode_commit(request_id, commit_json))
+            .await?;
+
+        let timeout = tokio::time::timeout(std::time::Duration::from_secs(30), async {
+            while let Ok(msg) = rx.recv().await {
+                match msg {
+                    WsMessage::CommitOk {
+                        request_id: rid,
+                        commit_json,
+                    } if rid == request_id => return Ok(commit_json),
+                    WsMessage::Error(e) => {
+                        return Err(AtomicError::from(format!("COMMIT failed: {}", e)))
+                    }
+                    _ => continue,
+                }
+            }
+            Err(AtomicError::from("WebSocket closed while waiting for COMMIT_OK"))
+        });
+
+        timeout
+            .await
+            .map_err(|_| AtomicError::from("COMMIT timed out"))?
+    }
 }
 
 /// Parse a raw server message string into a typed `WsMessage`.
@@ -373,6 +425,13 @@ fn parse_binary_message(bin: &[u8]) -> Option<WsMessage> {
             }
             let subject = std::str::from_utf8(&bin[3..]).ok()?.to_string();
             Some(WsMessage::Destroy { subject })
+        }
+        tag::COMMIT_OK => {
+            let decoded = protocol::decode_commit(&bin[1..])?;
+            Some(WsMessage::CommitOk {
+                request_id: decoded.request_id,
+                commit_json: decoded.commit_json.to_string(),
+            })
         }
         _ => None,
     }

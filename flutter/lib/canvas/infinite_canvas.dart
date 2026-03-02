@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -67,6 +68,10 @@ class _InfiniteCanvasState extends State<InfiniteCanvas>
   List<StrokeData>? _scrubPreviewStrokes;
   double _scrubStartIndex = 0.0;
   double _scrubAccumDx = 0.0;
+  /// Loro oplog versions (oldest → newest) when history was created on another device.
+  List<List<int>> _loroVersionIds = [];
+  List<List<StrokeData>> _loroStrokeStates = [];
+  bool _useLoroHistory = false;
 
   // ── Tool ────────────────────────────────────────────────────────────────────
   bool _eraserMode = false;
@@ -133,6 +138,47 @@ class _InfiniteCanvasState extends State<InfiniteCanvas>
     }
     _startWatchingResource();
     _refreshUndoRedoState();
+    _hydrateLoroHistory();
+  }
+
+  List<StrokeData> _parseStrokesJson(String jsonStr) {
+    if (jsonStr.isEmpty || jsonStr == '[]') return const [];
+    final decoded = jsonDecode(jsonStr);
+    if (decoded is List) {
+      return decoded
+          .map((s) => StrokeData.fromJson(s as Map<String, dynamic>))
+          .toList();
+    }
+    return const [];
+  }
+
+  /// Build scrub steps from the synced Loro oplog (tablet edits → phone history).
+  Future<void> _hydrateLoroHistory() async {
+    final id = widget.canvas.id;
+    if (id.isEmpty) return;
+    try {
+      await AtomicClient.warmResourceHistory(id);
+      final versions = await AtomicClient.getResourceHistory(id);
+      if (versions.length < 2) return;
+
+      final states = <List<StrokeData>>[];
+      final ids = <List<int>>[];
+      for (final v in versions.reversed) {
+        final json = await AtomicClient.getResourceAtVersion(id, v.id);
+        states.add(_parseStrokesJson(json));
+        ids.add(v.id);
+      }
+      if (!mounted) return;
+      setState(() {
+        _loroStrokeStates = states;
+        _loroVersionIds = ids;
+        _useLoroHistory = true;
+        _historyIndex = states.length.toDouble();
+        _actionIndex = states.length;
+      });
+    } catch (e) {
+      debugPrint('Loro history hydrate failed: $e');
+    }
   }
 
   Future<void> _refreshUndoRedoState() async {
@@ -169,9 +215,15 @@ class _InfiniteCanvasState extends State<InfiniteCanvas>
         await widget.store.loadStrokes(widget.canvas);
         if (!mounted) break;
         final remote = widget.canvas.strokes;
-        if (remote.length != _strokes.length) {
+        final remoteLen = remote.length;
+        final localLen = _strokes.length;
+        if (remoteLen != localLen ||
+            (remoteLen > 0 &&
+                remoteLen == localLen &&
+                remote.last != _strokes.last)) {
           setState(() => _applyStrokesFromStore());
           await _refreshUndoRedoState();
+          await _hydrateLoroHistory();
         }
       }
     });
@@ -448,7 +500,7 @@ class _InfiniteCanvasState extends State<InfiniteCanvas>
   }
 
   void _peekHistory() {
-    if (_allActions.isEmpty) return;
+    if (_allActions.isEmpty && !_useLoroHistory) return;
     _cancelPeek();
     setState(() {
       _isPeeking = true;
@@ -553,6 +605,16 @@ class _InfiniteCanvasState extends State<InfiniteCanvas>
 
   void _onUndoPanDelta(double dx) {
     _scrubAccumDx += dx;
+    if (_useLoroHistory && _loroStrokeStates.isNotEmpty) {
+      final total = _loroStrokeStates.length.toDouble();
+      setState(() {
+        _historyIndex =
+            (_scrubStartIndex + (_scrubAccumDx / 300.0) * total).clamp(0, total);
+        final idx = _historyIndex.toInt().clamp(0, _loroStrokeStates.length - 1);
+        _scrubPreviewStrokes = List.of(_loroStrokeStates[idx]);
+      });
+      return;
+    }
     final total = _allActions.length.toDouble();
     setState(() {
       _historyIndex =
@@ -562,7 +624,7 @@ class _InfiniteCanvasState extends State<InfiniteCanvas>
     });
   }
 
-  void _onUndoPanEnd() {
+  Future<void> _onUndoPanEnd() async {
     if (!_isHistoryMode) return;
     final pb = _previewBranch;
     if (pb != null) {
@@ -589,6 +651,25 @@ class _InfiniteCanvasState extends State<InfiniteCanvas>
         _scrubPreviewStrokes = null;
         _isHistoryMode = false;
       });
+    } else if (_useLoroHistory && _loroVersionIds.isNotEmpty) {
+      final idx = _historyIndex
+          .toInt()
+          .clamp(0, _loroVersionIds.length - 1);
+      final versionId = _loroVersionIds[idx];
+      try {
+        await AtomicClient.checkoutCanvasVersion(widget.canvas.id, versionId);
+        await widget.store.loadStrokes(widget.canvas);
+        if (!mounted) return;
+        setState(() {
+          _applyStrokesFromStore();
+          _previewBranch = null;
+          _scrubPreviewStrokes = null;
+          _isHistoryMode = false;
+        });
+        await _refreshUndoRedoState();
+      } catch (e) {
+        debugPrint('Failed to apply Loro history version: $e');
+      }
     } else {
       final idx = _historyIndex.toInt();
       setState(() {
@@ -609,13 +690,12 @@ class _InfiniteCanvasState extends State<InfiniteCanvas>
           }
         });
       }
+      widget.store.onCanvasChanged(widget.canvas, _strokes,
+          isDarkMode: Theme.of(context).brightness == Brightness.dark,
+          penColor: _penColor,
+          prevColor: _prevColor);
+      widget.store.saveFullStrokeState(widget.canvas, _strokes);
     }
-    widget.store.onCanvasChanged(widget.canvas, _strokes,
-        isDarkMode: Theme.of(context).brightness == Brightness.dark,
-        penColor: _penColor,
-        prevColor: _prevColor);
-    // Persist the scrubbed state
-    widget.store.saveFullStrokeState(widget.canvas, _strokes);
   }
 
   // ── Eraser ─────────────────────────────────────────────────────────────────
@@ -877,7 +957,9 @@ class _InfiniteCanvasState extends State<InfiniteCanvas>
             if (_isHistoryMode)
               HistoryScrubberOverlay(
                 actionIndex: _historyIndex.toInt(),
-                totalActions: _allActions.length,
+                totalActions: _useLoroHistory && _loroStrokeStates.isNotEmpty
+                    ? _loroStrokeStates.length
+                    : _allActions.length,
                 branches: _discardedBranches,
                 previewBranch: _previewBranch,
                 onBranchHover: (b) => setState(() => _previewBranch = b),

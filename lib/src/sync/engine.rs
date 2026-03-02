@@ -61,9 +61,9 @@ pub async fn handle_frame(
                 match store.get_resource_extended(&subject, false, agent).await {
                     Ok(r) => {
                         let resource = r.to_single();
-                        let snapshot = resource.get_loro_snapshot().unwrap_or_else(|| {
+                        let snapshot = resource.materialized_state().unwrap_or_else(|| {
                             resource
-                                .build_loro_doc_from_state()
+                                .build_state_doc()
                                 .map(|doc| doc.export_snapshot())
                                 .unwrap_or_default()
                         });
@@ -345,6 +345,7 @@ pub async fn handle_sync_vv(
     }
 
     let mut pull: Vec<String> = Vec::new();
+    let mut remove: Vec<String> = Vec::new();
     let mut push_entries: Vec<(String, Vec<u8>)> = Vec::new();
 
     for (subject, server_vv) in &server_vvs {
@@ -422,24 +423,34 @@ pub async fn handle_sync_vv(
         }
     }
 
-    // Client resources not on server
+    // Client resources not on server: pull new data, or tell client to delete tombstones.
     for subject in client_vvs.keys() {
         if !server_vvs.contains_key(subject) {
-            pull.push(subject.clone());
+            if super::tombstones::is_tombstoned(store, subject) {
+                remove.push(subject.clone());
+            } else {
+                pull.push(subject.clone());
+            }
         }
     }
 
     let push_subjects: Vec<String> = push_entries.iter().map(|(s, _)| s.clone()).collect();
 
     tracing::info!(
-        "SYNC_VV: drive {} — {} to push, {} to pull",
+        "SYNC_VV: drive {} — {} to push, {} to pull, {} to remove",
         drive,
         push_subjects.len(),
         pull.len(),
+        remove.len(),
     );
 
     let mut frames = Vec::new();
-    frames.push(protocol::encode_sync_diff(drive, &pull, &push_subjects));
+    frames.push(protocol::encode_sync_diff(
+        drive,
+        &pull,
+        &push_subjects,
+        &remove,
+    ));
 
     if !push_entries.is_empty() {
         let entries: Vec<(&str, &[u8])> = push_entries
@@ -486,9 +497,20 @@ pub async fn import_sync_push(
     let mut blob_requests = Vec::new();
 
     for entry in &push.entries {
+        if super::tombstones::is_tombstoned(store, &entry.subject) {
+            tracing::debug!(
+                "import_sync_push: skip {:?} (tombstoned locally)",
+                &entry.subject[..entry.subject.len().min(24)]
+            );
+            continue;
+        }
+
+        let snapshot_key = crate::Subject::from_raw(&entry.subject, store.get_base_domain().as_deref())
+            .pure_id();
+
         // Load existing doc or create new
         let doc = if let Ok(Some(existing)) =
-            store.kv.get(Tree::LoroSnapshots, entry.subject.as_bytes())
+            store.kv.get(Tree::LoroSnapshots, snapshot_key.as_bytes())
         {
             match AtomicLoroDoc::from_snapshot(&existing) {
                 Ok(d) => {
@@ -530,19 +552,19 @@ pub async fn import_sync_push(
         let snapshot = doc.export_snapshot();
         if store
             .kv
-            .insert(Tree::LoroSnapshots, entry.subject.as_bytes(), &snapshot)
+            .insert(Tree::LoroSnapshots, snapshot_key.as_bytes(), &snapshot)
             .is_err()
         {
             continue;
         }
 
-        let subject = crate::Subject::from_raw(&entry.subject, store.get_base_domain().as_deref());
+        let subject = crate::Subject::from_raw(&snapshot_key, store.get_base_domain().as_deref());
         let mut resource = store
             .get_resource(&subject)
             .await
             .unwrap_or_else(|_| crate::Resource::new(subject.to_string()));
 
-        if resource.replace_state_from_loro_doc(doc).is_err() {
+        if resource.apply_state_doc(doc).is_err() {
             continue;
         }
 
@@ -636,7 +658,7 @@ pub async fn handle_sync_deltas(
             .await
             .unwrap_or_else(|_| crate::Resource::new(subject.to_string()));
 
-        if resource.replace_state_from_loro_doc(doc).is_err() {
+        if resource.apply_state_doc(doc).is_err() {
             continue;
         }
 

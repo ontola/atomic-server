@@ -4,6 +4,15 @@ plugins {
     id "dev.flutter.flutter-gradle-plugin"
 }
 
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withReader("UTF-8") { reader -> localProperties.load(reader) }
+}
+
+def flutterVersionCode = localProperties.getProperty("flutter.versionCode", "1")
+def flutterVersionName = localProperties.getProperty("flutter.versionName", "1.0")
+
 android {
     namespace "com.ontola.atomiccanvas_flutter"
     compileSdk 36
@@ -20,10 +29,10 @@ android {
 
     defaultConfig {
         applicationId "com.ontola.atomiccanvas_flutter"
-        minSdk flutter.minSdkVersion
+        minSdkVersion flutter.minSdkVersion
         targetSdk 36
-        versionCode flutter.versionCode
-        versionName flutter.versionName
+        versionCode flutterVersionCode.toInteger()
+        versionName flutterVersionName
         ndk {
             // only build for joep's local android devices
             abiFilters 'arm64-v8a'

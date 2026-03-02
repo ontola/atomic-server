@@ -20,11 +20,13 @@ class _LoginScreenState extends State<LoginScreen> {
   _Step _step = _Step.loading;
   final _nameController = TextEditingController(text: '');
   final _secretController = TextEditingController();
+  final _serverController = TextEditingController();
   String? _error;
   bool _busy = false;
 
   // After setup
   String? _generatedSecret;
+  bool _peerSyncAttempted = false;
 
   @override
   void initState() {
@@ -36,19 +38,35 @@ class _LoginScreenState extends State<LoginScreen> {
   void dispose() {
     _nameController.dispose();
     _secretController.dispose();
+    _serverController.dispose();
     super.dispose();
   }
 
-  /// Start Iroh peer and announce drive on DHT. Non-blocking.
-  void _startNetworking(String driveSubject) {
-    Future(() async {
-      try {
-        await AtomicClient.startPeer();
-        await AtomicClient.peerAnnounce(driveSubject);
-      } catch (e) {
-        debugPrint('Networking start failed (offline?): $e');
-      }
-    });
+  String get _serverOrigin => _serverController.text.trim();
+
+  /// Open WS sync to the server (primary path for multi-device).
+  Future<void> _startNetworking(String driveSubject, {String? serverUrl}) async {
+    final origin = (serverUrl != null && serverUrl.isNotEmpty)
+        ? serverUrl
+        : _serverOrigin;
+    try {
+      await AtomicClient.openWsSync(origin);
+    } catch (e) {
+      debugPrint('WS sync failed (offline?): $e');
+    }
+  }
+
+  /// True when the active drive exists in the local DB (name property readable).
+  Future<bool> _driveReady() async {
+    final drive = AtomicClient.getActiveDrive();
+    if (drive == null) return false;
+    try {
+      final name = await AtomicClient.getProperty(
+          drive, 'https://atomicdata.dev/properties/name');
+      return name.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> _tryAutoLogin() async {
@@ -58,33 +76,69 @@ class _LoginScreenState extends State<LoginScreen> {
         setState(() => _step = _Step.welcome);
         return;
       }
-
-      final agent = await AtomicClient.getActiveAgent();
-      if (agent != null) {
-        final drive = AtomicClient.getActiveDrive();
-        if (drive != null) {
-          _startNetworking(drive);
-          widget.onLoggedIn();
-          return;
-        }
+      if (session.serverUrl.isNotEmpty) {
+        _serverController.text = session.serverUrl;
       }
 
-      // Fallback: reload agent from session
-      final result = await AtomicClient.loadAgent(session.secret);
+      final status = await AtomicClient.resumeSession(
+        serverUrl: session.serverUrl,
+        secret: session.secret,
+        drive: session.drive,
+      );
+
       final drive = AtomicClient.getActiveDrive();
-      if (result == 'needs_sync') {
-        _startNetworking(drive ?? '');
-        setState(() => _step = _Step.needsSync);
-        return;
-      }
       if (drive != null) {
-        _startNetworking(drive);
+        await AtomicSession.saveDrive(drive);
+      }
+
+      if (status == 'ok' && await _driveReady()) {
         widget.onLoggedIn();
         return;
       }
-    } catch (_) {}
+
+      setState(() {
+        _step = _Step.needsSync;
+        _peerSyncAttempted = false;
+      });
+      return;
+    } catch (e) {
+      debugPrint('Auto-login failed: $e');
+    }
 
     setState(() => _step = _Step.welcome);
+  }
+
+  /// Re-run boot sync: optional WS hub (if configured) + Iroh known peers / discover.
+  Future<void> _retryPeerSync() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final session = await AtomicSession.load();
+      if (session == null) {
+        setState(() => _error = 'No saved session');
+        return;
+      }
+      final status = await AtomicClient.resumeSession(
+        serverUrl: session.serverUrl,
+        secret: session.secret,
+        drive: session.drive,
+      );
+      final drive = AtomicClient.getActiveDrive();
+      if (drive != null) {
+        await AtomicSession.saveDrive(drive);
+      }
+      if (status == 'ok' && await _driveReady()) {
+        widget.onLoggedIn();
+        return;
+      }
+      setState(() => _error = 'Drive not available on this device yet');
+    } catch (e) {
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   // ── Step: Create Agent ──────────────────────────────────────────────
@@ -103,13 +157,12 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       final result = await AtomicClient.setup(name);
       await AtomicSession.save(
-        serverUrl: '',
+        serverUrl: _serverOrigin,
         secret: result.agentSecret,
         drive: result.driveSubject,
       );
 
-      // Start networking in background (non-blocking)
-      _startNetworking(result.driveSubject);
+      await _startNetworking(result.driveSubject, serverUrl: _serverOrigin);
 
       setState(() {
         _generatedSecret = result.agentSecret;
@@ -138,24 +191,30 @@ class _LoginScreenState extends State<LoginScreen> {
       _error = null;
     });
     try {
-      final result = await AtomicClient.loadAgent(secret);
-      await AtomicSession.save(serverUrl: '', secret: secret, drive: null);
+      await AtomicSession.save(
+        serverUrl: _serverOrigin,
+        secret: secret,
+        drive: null,
+      );
+
+      final status = await AtomicClient.resumeSession(
+        serverUrl: _serverOrigin,
+        secret: secret,
+      );
 
       final drive = AtomicClient.getActiveDrive();
       if (drive != null) {
         await AtomicSession.saveDrive(drive);
       }
 
-      if (result == 'needs_sync') {
-        // Drive exists in secret but not locally — must pair first
-        _startNetworking(drive ?? '');
+      if (status == 'ok' && await _driveReady()) {
+        widget.onLoggedIn();
+      } else {
         setState(() {
           _busy = false;
           _step = _Step.needsSync;
+          _peerSyncAttempted = false;
         });
-      } else {
-        _startNetworking(drive ?? '');
-        widget.onLoggedIn();
       }
     } catch (e) {
       setState(() {
@@ -278,6 +337,8 @@ class _LoginScreenState extends State<LoginScreen> {
           style: TextStyle(fontSize: 13, color: c.iconDisabled),
         ),
         const SizedBox(height: 24),
+        _serverUrlField(),
+        const SizedBox(height: 12),
         TextField(
           controller: _nameController,
           decoration: const InputDecoration(
@@ -393,6 +454,8 @@ class _LoginScreenState extends State<LoginScreen> {
           style: TextStyle(fontSize: 13, color: c.iconDisabled),
         ),
         const SizedBox(height: 24),
+        _serverUrlField(),
+        const SizedBox(height: 12),
         TextField(
           controller: _secretController,
           decoration: const InputDecoration(
@@ -423,6 +486,10 @@ class _LoginScreenState extends State<LoginScreen> {
   // ── Needs Sync ──────────────────────────────────────────────────────
 
   Widget _buildNeedsSync(AppColors c) {
+    if (!_peerSyncAttempted && !_busy) {
+      _peerSyncAttempted = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _retryPeerSync());
+    }
     return Column(
       key: const ValueKey('needsSync'),
       mainAxisSize: MainAxisSize.min,
@@ -431,22 +498,35 @@ class _LoginScreenState extends State<LoginScreen> {
         const Icon(Icons.sync_problem, size: 48, color: Colors.orange),
         const SizedBox(height: 16),
         const Text(
-          'Pair with your other device',
+          'Sync your drive',
           style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 12),
         Text(
-          'Your drive was created on another device. '
-          'Scan that device\'s QR code to sync your data.',
+          'This device does not have your drive yet. '
+          'We look for other devices on the network, or you can pair with QR.',
           style: TextStyle(fontSize: 14, color: c.iconDisabled),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 24),
         ElevatedButton.icon(
-          icon: const Icon(Icons.qr_code_scanner),
-          label: const Text('Pair with QR Code'),
+          icon: _busy
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.sync),
+          label: Text(_busy ? 'Syncing…' : 'Try again'),
           style: ElevatedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14)),
+          onPressed: _busy ? null : _retryPeerSync,
+        ),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          icon: const Icon(Icons.qr_code_scanner),
+          label: const Text('Pair with QR'),
+          style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 14)),
           onPressed: () async {
             await PairScreen.show(context);
@@ -479,6 +559,20 @@ class _LoginScreenState extends State<LoginScreen> {
           child: const Text('Back'),
         ),
       ],
+    );
+  }
+
+  Widget _serverUrlField() {
+    return TextField(
+      controller: _serverController,
+      decoration: const InputDecoration(
+        labelText: 'Sync hub URL (optional)',
+        hintText: 'Leave empty for device-to-device only',
+        border: OutlineInputBorder(),
+        isDense: true,
+      ),
+      keyboardType: TextInputType.url,
+      autocorrect: false,
     );
   }
 

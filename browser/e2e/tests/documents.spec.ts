@@ -26,6 +26,9 @@ test.describe('documents', async () => {
     page,
     browser,
   }) => {
+    page.on('console', msg => {
+      console.log(`[page1-console] [${msg.type()}]`, msg.text());
+    });
     // The multi-user flow opens a second context, signs in, syncs, edits,
     // and waits for cross-tab WS propagation — frequently bumps past the
     // 30s default under suite-wide load.
@@ -56,6 +59,9 @@ test.describe('documents', async () => {
     // multi-user
     const currentSubject = await getCurrentSubject(page);
     const page2 = await openNewSubjectWindow(browser, currentSubject!, secret);
+    page2.on('console', msg => {
+      console.log(`[page2-console] [${msg.type()}]`, msg.text());
+    });
 
     // "Set Drive" historically appeared when opening a foreign-drive subject;
     // proper sign-in already sets the drive, so the button often isn't there.

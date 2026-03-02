@@ -67,14 +67,9 @@ impl Resource {
         }
     }
 
-    /// Builds a Loro doc from propvals. Skips the `LORO_UPDATE` value because that
-    /// is the encoded snapshot itself; the rest are typed property values that need
-    /// to be inserted as ops on the new doc.
-    ///
-    /// Public so callers like the WS GET handler can build a fresh snapshot that
-    /// reflects extender-modified propvals rather than the persisted (pre-extender)
-    /// Loro state.
-    pub fn seed_loro_doc_from_propvals(
+    /// Builds a versioned state doc from propvals. Skips the persisted `loroUpdate`
+    /// snapshot; other entries become property ops on a fresh doc.
+    pub fn seed_state_doc_from_propvals(
         doc: &crate::loro::AtomicLoroDoc,
         propvals: &PropVals,
     ) -> AtomicResult<()> {
@@ -101,7 +96,7 @@ impl Resource {
         propvals
     }
 
-    pub fn build_loro_doc_from_state(&self) -> AtomicResult<crate::loro::AtomicLoroDoc> {
+    pub fn build_state_doc(&self) -> AtomicResult<crate::loro::AtomicLoroDoc> {
         if let Some(doc) = &self.loro {
             return crate::loro::AtomicLoroDoc::from_snapshot(&doc.export_snapshot());
         }
@@ -119,13 +114,12 @@ impl Resource {
         }
 
         let doc = crate::loro::AtomicLoroDoc::new();
-        Self::seed_loro_doc_from_propvals(&doc, &self.propvals)?;
+        Self::seed_state_doc_from_propvals(&doc, &self.propvals)?;
         Ok(doc)
     }
 
-    /// Replace the resource's property state entirely from a Loro doc.
-    /// Used by the sync protocol to materialize state after importing deltas.
-    pub fn replace_state_from_loro_doc(
+    /// Replace property state from a materialized versioned doc (sync / import).
+    pub fn apply_state_doc(
         &mut self,
         doc: crate::loro::AtomicLoroDoc,
     ) -> AtomicResult<()> {
@@ -205,18 +199,33 @@ impl Resource {
         }
     }
 
-    /// Ensure the Loro CRDT document is initialized.
-    /// Lazily builds from the current state (snapshot or propvals).
-    /// After this call, `self.loro` is guaranteed to be `Some`.
-    pub fn init_loro(&mut self) -> AtomicResult<()> {
+    /// Update a property on the live Loro doc and propvals cache only.
+    /// Does not touch the legacy commit builder — use before `save_locally` so
+    /// `sync_loro_changes_to_commit_builder` can export one coherent `loroUpdate`
+    /// (e.g. stroke append + `dateEdited` in a single commit).
+    pub fn patch_loro_property(&mut self, property: &str, value: Value) -> AtomicResult<()> {
+        self.ensure_materialized()?;
+        self.propvals.insert(property.into(), value.clone());
+        self.loro().set_property(property, &value)?;
+        Ok(())
+    }
+
+    /// Ensure the in-memory versioned state is loaded (from propvals or persisted snapshot).
+    pub fn ensure_materialized(&mut self) -> AtomicResult<()> {
         if self.loro.is_none() {
-            self.loro = Some(self.build_loro_doc_from_state()?);
+            self.loro = Some(self.build_state_doc()?);
         }
         Ok(())
     }
 
-    /// Initialize the Loro UndoManager so that subsequent mutations are tracked.
-    /// Must be called after `init_loro()` and before the operations you want to undo.
+    /// Like [`Self::ensure_materialized`], plus undo/redo tracking for interactive edits.
+    pub fn ensure_editable(&mut self) -> AtomicResult<()> {
+        self.ensure_materialized()?;
+        self.init_undo();
+        Ok(())
+    }
+
+    /// Initialize undo tracking. Call after [`Self::ensure_materialized`].
     pub fn init_undo(&mut self) {
         if let Some(doc) = &self.loro {
             // UndoManager needs a committed baseline (see loro undo_redo_json_array test).
@@ -228,15 +237,14 @@ impl Resource {
     /// Start a new undo group so the next mutation can be undone independently.
     /// Call after each user-visible edit (e.g. one stroke).
     pub fn record_undo_checkpoint(&mut self) -> AtomicResult<()> {
-        self.init_loro()?;
+        self.ensure_materialized()?;
         self.loro().checkpoint()
     }
 
-    /// Get a reference to the Loro doc. Panics if `init_loro()` hasn't been called.
     fn loro(&self) -> &crate::loro::AtomicLoroDoc {
         self.loro
             .as_ref()
-            .expect("loro not initialized — call init_loro() first")
+            .expect("versioned state not loaded — call ensure_materialized() first")
     }
 
     /// Rebuild propvals + commit from the current Loro doc state.
@@ -247,23 +255,14 @@ impl Resource {
         self.propvals = Self::materialize_propvals_from_loro_doc(self.loro());
     }
 
-    /// Set a property on the resource through the Loro doc.
-    /// Updates both the Loro doc and the propvals cache.
-    pub fn set_loro(&mut self, property: &str, value: &Value) -> AtomicResult<()> {
-        self.init_loro()?;
-        self.loro().set_property(property, value)?;
-        self.propvals.insert(property.into(), value.clone());
-        Ok(())
-    }
-
-    /// Export the Loro snapshot, checking the live doc first, then propvals.
-    pub fn get_loro_snapshot(&self) -> Option<Vec<u8>> {
+    /// Persisted or in-memory materialized state bytes (for sync and signing).
+    pub fn materialized_state(&self) -> Option<Vec<u8>> {
         if let Some(doc) = &self.loro {
             return Some(doc.export_snapshot());
         }
 
         // Commits' `loroUpdate` value belongs to the committed resource, not
-        // the commit itself — see `build_loro_doc_from_state` above. Skip
+        // the commit itself — see `build_state_doc` above. Skip
         // the property-as-snapshot shortcut so callers that need the
         // commit's own state build it from propvals (via the build_*
         // path), not from the wrong-resource bytes.
@@ -276,37 +275,33 @@ impl Resource {
         None
     }
 
-    /// Export the Loro delta since this resource was loaded/last saved.
-    pub fn export_loro_snapshot(&self) -> Option<Vec<u8>> {
+    pub(crate) fn export_open_state(&self) -> Option<Vec<u8>> {
         self.loro.as_ref().map(|doc| doc.export_snapshot())
     }
 
-    /// Ensure the Loro doc is loaded ("warmed") for history operations.
-    /// Call this before `get_history()` or `view_at()` to avoid lazy-init overhead.
+    /// Load versioned state before history reads (`get_history`, `view_at`).
     pub fn warm_history(&mut self) -> AtomicResult<()> {
-        self.init_loro()
+        self.ensure_materialized()
     }
 
-    /// Returns the edit history of this resource from the Loro oplog.
-    pub fn get_history(&self) -> Vec<crate::loro::VersionMetadata> {
+    /// Edit history for this resource (newest first).
+    pub fn get_history(&self) -> Vec<crate::history::VersionMetadata> {
         match &self.loro {
             Some(doc) => doc.get_history(),
             None => Vec::new(),
         }
     }
 
-    /// Returns the current Loro version (frontiers) for this resource.
-    /// Useful for branching: save the version, checkout a previous one, then
-    /// compare or restore later.
-    pub fn get_current_version(&mut self) -> AtomicResult<crate::loro::VersionID> {
-        self.init_loro()?;
+    /// Current version marker (for branching / time-travel).
+    pub fn get_current_version(&mut self) -> AtomicResult<crate::history::VersionID> {
+        self.ensure_materialized()?;
         Ok(self.loro().current_version())
     }
 
     /// Checkout a specific historical version. The resource enters a detached
     /// read-only state — call `attach()` to return to the latest version.
-    pub fn checkout(&mut self, version: &crate::loro::VersionID) -> AtomicResult<()> {
-        self.init_loro()?;
+    pub fn checkout(&mut self, version: &crate::history::VersionID) -> AtomicResult<()> {
+        self.ensure_materialized()?;
         self.loro().checkout(version)?;
         self.sync_propvals_from_loro();
         Ok(())
@@ -314,19 +309,18 @@ impl Resource {
 
     /// Return to the latest version after a `checkout()`.
     pub fn attach(&mut self) -> AtomicResult<()> {
-        self.init_loro()?;
+        self.ensure_materialized()?;
         self.loro().attach()?;
         self.sync_propvals_from_loro();
         Ok(())
     }
 
-    /// Returns a read-only snapshot of this resource at a historical version.
-    /// The returned Resource has propvals materialized from the Loro state at that version.
-    pub fn view_at(&self, version: &crate::loro::VersionID) -> AtomicResult<Resource> {
+    /// Read-only view of this resource at a historical version.
+    pub fn view_at(&self, version: &crate::history::VersionID) -> AtomicResult<Resource> {
         let doc = self
             .loro
             .as_ref()
-            .ok_or("No Loro doc loaded — call warm_history() first")?;
+            .ok_or("Versioned state not loaded — call warm_history() first")?;
         let props = doc.get_properties_at(version)?;
         let mut propvals = PropVals::new();
         for (key, loro_val) in &props {
@@ -582,7 +576,7 @@ impl Resource {
                     .insert(property.into(), Value::JsonArray(vec![item.clone()]));
             }
         };
-        self.init_loro()?;
+        self.ensure_materialized()?;
         self.loro().push_to_json_array(property, &item)?;
         self.loro().commit();
         let _ = self.record_undo_checkpoint();
@@ -625,7 +619,7 @@ impl Resource {
                     .insert(property.into(), Value::JsonArray(vec![item.clone()]));
             }
         };
-        self.init_loro()?;
+        self.ensure_materialized()?;
         self.loro().insert_into_json_array(property, index, &item)?;
         Ok(())
     }
@@ -634,7 +628,7 @@ impl Resource {
     pub fn clear_json_array(&mut self, property: &str) -> crate::errors::AtomicResult<()> {
         self.propvals
             .insert(property.into(), Value::JsonArray(vec![]));
-        self.init_loro()?;
+        self.ensure_materialized()?;
         self.loro().clear_json_array(property)?;
         Ok(())
     }
@@ -663,7 +657,7 @@ impl Resource {
             }
         }
 
-        self.init_loro()?;
+        self.ensure_materialized()?;
         self.loro().delete_from_json_array(property, index)?;
         self.loro().commit();
         let _ = self.record_undo_checkpoint();
@@ -674,7 +668,7 @@ impl Resource {
     /// Returns true if something was undone.
     /// After undo, call `save_locally()` to persist and sync the change.
     pub fn undo(&mut self) -> crate::errors::AtomicResult<bool> {
-        self.init_loro()?;
+        self.ensure_materialized()?;
         if !self.loro().undo()? {
             return Ok(false);
         }
@@ -687,7 +681,7 @@ impl Resource {
     /// Returns true if something was redone.
     /// After redo, call `save_locally()` to persist and sync the change.
     pub fn redo(&mut self) -> crate::errors::AtomicResult<bool> {
-        self.init_loro()?;
+        self.ensure_materialized()?;
         if !self.loro().redo()? {
             return Ok(false);
         }
@@ -775,9 +769,6 @@ impl Resource {
     /// When only the in-memory Loro doc changed (`push_list_item`, undo/redo), copy
     /// an incremental update onto the commit builder so sign/apply can run.
     fn sync_loro_changes_to_commit_builder(&mut self) -> AtomicResult<()> {
-        if self.commit.has_changes() {
-            return Ok(());
-        }
         let Some(doc) = self.loro.as_ref() else {
             return Ok(());
         };
@@ -940,7 +931,7 @@ impl Resource {
     /// Use this for client-side code that talks to an AtomicServer.
     pub async fn save_remote(&mut self, store: &impl Storelike) -> AtomicResult<String> {
         let agent = store.get_default_agent()?;
-        let snapshot = self.build_loro_doc_from_state()?.export_snapshot();
+        let snapshot = self.build_state_doc()?.export_snapshot();
 
         // If this is a genesis commit (new DID resource), use create_did
         if self.subject.as_str() == "did:ad:placeholder" {
@@ -1549,12 +1540,11 @@ mod test {
         let store: crate::Db = init_store().await;
         let mut resource = Resource::new_generate_subject(&store).unwrap();
         resource.set_name("Loro-backed resource");
-        resource
-            .set_loro(
-                urls::DESCRIPTION,
-                &Value::String("Server-side snapshot".into()),
-            )
-            .unwrap();
+        resource.set_unsafe(
+            urls::DESCRIPTION.into(),
+            Value::String("Server-side snapshot".into()),
+        );
+        resource.ensure_materialized().unwrap();
 
         let json = resource.to_json_ad(Some("http://localhost")).unwrap();
 
@@ -1572,15 +1562,17 @@ mod test {
     async fn set_propvals_unsafe_resets_stale_loro_state() {
         let store: crate::Db = init_store().await;
         let mut resource = Resource::new_generate_subject(&store).unwrap();
-        resource
-            .set_loro(urls::DESCRIPTION, &Value::String("Old loro value".into()))
-            .unwrap();
+        resource.set_unsafe(
+            urls::DESCRIPTION.into(),
+            Value::String("Old materialized value".into()),
+        );
+        resource.ensure_materialized().unwrap();
 
         let mut propvals = PropVals::new();
         propvals.insert(urls::NAME.into(), Value::String("Fresh propvals".into()));
         resource.set_propvals_unsafe(propvals);
 
-        resource.init_loro().unwrap();
+        resource.ensure_materialized().unwrap();
         let doc = resource.loro.as_ref().unwrap();
         let properties = doc.get_all_properties();
 
@@ -1619,7 +1611,7 @@ mod test {
             .unwrap();
 
         let mut resource = store.get_resource(&canvas.as_str().into()).await.unwrap();
-        resource.init_loro().unwrap();
+        resource.ensure_materialized().unwrap();
         resource.init_undo();
         resource
             .push_list_item(
@@ -1665,6 +1657,55 @@ mod test {
     }
 
     #[tokio::test]
+    async fn push_stroke_with_date_edited_touch_persists_strokes() {
+        let store: crate::Db = init_store().await;
+        let (_agent, drive) = store.setup("test").await.unwrap();
+        let stroke_data = "https://atomicdata.dev/ontology/canvas/strokeData";
+        let date_edited = "https://atomicdata.dev/ontology/canvas/dateEdited";
+        let canvas = store
+            .create_resource(
+                "https://atomicdata.dev/ontology/canvas/Canvas",
+                &drive,
+                "Stroke test",
+                Some(vec![(stroke_data, Value::JsonArray(vec![]))]),
+            )
+            .await
+            .unwrap();
+
+        let mut resource = store.get_resource(&canvas.as_str().into()).await.unwrap();
+        resource.ensure_materialized().unwrap();
+        resource
+            .push_list_item(
+                stroke_data,
+                serde_json::json!({"color": 255, "width": 2.0, "path": [[1.0, 2.0]]}),
+            )
+            .unwrap();
+        // Mirrors Flutter `save_and_push` → `touch_date_edited` before `save_locally`.
+        resource
+            .patch_loro_property(date_edited, Value::Timestamp(crate::utils::now()))
+            .unwrap();
+        assert!(
+            !resource.get_commit_builder().has_changes(),
+            "dateEdited touch must not dirty the legacy commit builder"
+        );
+
+        let resp = resource.save_locally(&store).await.unwrap();
+        assert!(
+            resp.commit
+                .loro_update
+                .as_ref()
+                .is_some_and(|u| !u.is_empty()),
+            "stroke + dateEdited save should produce a non-empty loro update"
+        );
+
+        let reloaded = store.get_resource(&canvas.as_str().into()).await.unwrap();
+        match reloaded.get(stroke_data) {
+            Ok(Value::JsonArray(arr)) => assert_eq!(arr.len(), 1),
+            other => panic!("expected 1 stroke after save_locally, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
     async fn push_list_item_save_locally_persists_strokes() {
         let store: crate::Db = init_store().await;
         let (_agent, drive) = store.setup("test").await.unwrap();
@@ -1680,7 +1721,7 @@ mod test {
             .unwrap();
 
         let mut resource = store.get_resource(&canvas.as_str().into()).await.unwrap();
-        resource.init_loro().unwrap();
+        resource.ensure_materialized().unwrap();
         resource
             .push_list_item(
                 stroke_data,
@@ -1706,6 +1747,38 @@ mod test {
             Ok(Value::JsonArray(arr)) => assert_eq!(arr.len(), 1),
             other => panic!("expected 1 stroke after save_locally, got {other:?}"),
         }
+    }
+
+    #[tokio::test]
+    async fn get_resource_loads_full_loro_history_after_multiple_saves() {
+        let store: crate::Db = init_store().await;
+        let stroke_data = "https://atomicdata.dev/ontology/canvas/strokeData";
+        let mut resource = Resource::new_generate_subject(&store).unwrap();
+        let subject = resource.get_subject().clone();
+        resource.ensure_editable().unwrap();
+        resource
+            .push_list_item(
+                stroke_data,
+                serde_json::json!({"color": 1, "path": [[0, 0]]}),
+            )
+            .unwrap();
+        resource.save_locally(&store).await.unwrap();
+        resource
+            .push_list_item(
+                stroke_data,
+                serde_json::json!({"color": 2, "path": [[1, 1]]}),
+            )
+            .unwrap();
+        resource.save_locally(&store).await.unwrap();
+
+        let mut reloaded = store.get_resource(&subject).await.unwrap();
+        reloaded.warm_history().unwrap();
+        let history = reloaded.get_history();
+        assert!(
+            history.len() >= 2,
+            "get_resource should expose merged Loro oplog (got {} entries)",
+            history.len()
+        );
     }
 
     #[tokio::test]

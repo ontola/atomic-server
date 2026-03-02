@@ -317,7 +317,12 @@ export default function CollaborativeEditor({
     // so a test that focuses → types → asserts text races the recreate and
     // the typing lands on a stale editor that immediately unmounts. We use
     // setEditable below to flip read-only on the SAME editor instance.
-    [drive],
+    //
+    // Do include `doc`: the loro-prosemirror plugins close over the LoroDoc
+    // passed at editor construction time. If the Resource hydrates a newer doc
+    // instance after mount, keeping the editor alive would make remote sync
+    // import into one doc while ProseMirror renders another.
+    [drive, doc],
   );
 
   useEffect(() => {

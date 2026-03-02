@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../atomic_client.dart';
@@ -40,19 +42,35 @@ class _AgentSettingsDialogState extends State<AgentSettingsDialog> {
   String _deviceName = '';
   final _newDriveController = TextEditingController();
   final _peerController = TextEditingController();
+  Timer? _liveRefreshTimer;
+  VoidCallback? _livePeersListener;
 
   @override
   void initState() {
     super.initState();
     _loadData();
     _loadDeviceName();
+    _liveRefreshTimer =
+        Timer.periodic(const Duration(seconds: 2), (_) => _refreshLivePeers());
+    _livePeersListener = () => _refreshLivePeers();
+    AtomicClient.livePeersRevision.addListener(_livePeersListener!);
   }
 
   @override
   void dispose() {
+    if (_livePeersListener != null) {
+      AtomicClient.livePeersRevision.removeListener(_livePeersListener!);
+    }
+    _liveRefreshTimer?.cancel();
     _newDriveController.dispose();
     _peerController.dispose();
     super.dispose();
+  }
+
+  Future<void> _refreshLivePeers() async {
+    final live = AtomicClient.livePeerIds();
+    if (!mounted) return;
+    setState(() => _livePeerIds = live);
   }
 
   void _loadDeviceName() async {
@@ -86,7 +104,7 @@ class _AgentSettingsDialogState extends State<AgentSettingsDialog> {
     }
 
     final knownPeers = await AtomicClient.getKnownPeers();
-    final livePeerIds = await AtomicClient.livePeerIds();
+    final livePeerIds = AtomicClient.livePeerIds();
 
     setState(() {
       _agent = agent;
@@ -100,25 +118,46 @@ class _AgentSettingsDialogState extends State<AgentSettingsDialog> {
     });
   }
 
-  Future<void> _discoverAndSync() async {
+  /// Settings → Retry and automatic sync on open.
+  Future<void> _autoSyncConnectivity() async {
+    if (_activeDrive == null) return;
+    await _syncConnectivity();
+  }
+
+  Future<void> _discoverAndSync() => _syncConnectivity();
+
+  Future<void> _syncConnectivity() async {
     if (_activeDrive == null) return;
     setState(() {
       _discovering = true;
+      _syncResult = null;
     });
     try {
       if ((await AtomicClient.getPeerId()) == null) {
         await AtomicClient.startPeer();
       }
-      final count = await AtomicClient.peerDiscoverSync(_activeDrive!);
+      final report = await AtomicClient.syncConnectivityNow();
+      final liveIds = AtomicClient.livePeerIds();
+      if (!mounted) return;
       setState(() {
         _discovering = false;
-        _lastSyncCount = count;
+        _lastSyncCount = report.imported;
         _lastSyncTime = DateTime.now();
+        _livePeerIds = liveIds;
+        if (report.livePeers > 0) {
+          _syncResult = report.message;
+        } else if (report.imported > 0) {
+          _syncResult = report.message;
+        } else {
+          _syncResult = 'Error: ${report.message}';
+        }
       });
-      await _loadData(); // Refresh drives/resources
+      await _loadData();
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _discovering = false;
+        _syncResult = 'Error: $e';
       });
     }
   }
@@ -345,202 +384,227 @@ class _AgentSettingsDialogState extends State<AgentSettingsDialog> {
 
         const SizedBox(height: 12),
 
-        // QR pairing button
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            icon: const Icon(Icons.qr_code_2, size: 18),
-            label: const Text('Pair with QR Code'),
-            onPressed: () async {
-              final count = await PairScreen.show(context);
-              if (count != null) {
-                await _loadData();
-              }
-            },
-          ),
-        ),
-
-        const SizedBox(height: 16),
-
-        // Peers header
-        Row(
-          children: [
-            Text('Peers',
+        const SizedBox(height: 12),
+        // Advanced / Offline Sync (demoted)
+        Theme(
+          data: theme.copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            title: Text('Offline Sync & Pairing',
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                   color: theme.colorScheme.onSurfaceVariant,
                 )),
-            const Spacer(),
-            if (isOnline && !isBusy)
-              TextButton.icon(
-                icon: const Icon(Icons.refresh, size: 14),
-                label: const Text('Retry', style: TextStyle(fontSize: 11)),
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  minimumSize: const Size(0, 0),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            tilePadding: EdgeInsets.zero,
+            dense: true,
+            children: [
+              // QR pairing button
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.qr_code_2, size: 18),
+                  label: const Text('Pair with QR Code'),
+                  onPressed: () async {
+                    final count = await PairScreen.show(context);
+                    if (count != null) {
+                      await _loadData();
+                    }
+                  },
                 ),
-                onPressed: _discoverAndSync,
               ),
-          ],
-        ),
-        const SizedBox(height: 8),
 
-        // Known peers list
-        if (_knownPeers.isEmpty)
-          _peerStatusRow(theme, Icons.devices, 'No paired devices yet',
-              theme.colorScheme.onSurfaceVariant)
-        else
-          ..._knownPeers.map((peer) {
-            final nodeId = peer['node_id'] ?? '';
-            final name = peer['name'] ?? '';
-            final label = name.isNotEmpty
-                ? name
-                : '${nodeId.substring(0, nodeId.length.clamp(0, 16))}...';
-            final isLive = _livePeerIds.contains(nodeId);
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Row(
+              const SizedBox(height: 16),
+
+              // Peers header
+              Row(
                 children: [
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: isLive
-                          ? Colors.green
-                          : theme.colorScheme.onSurfaceVariant.withOpacity(0.3),
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      label,
+                  Text('Direct Peers',
                       style: TextStyle(
                         fontSize: 12,
-                        color: isLive
-                            ? theme.colorScheme.onSurface
-                            : theme.colorScheme.onSurfaceVariant,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
+                        fontWeight: FontWeight.w600,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      )),
+                  const Spacer(),
                   if (isOnline && !isBusy)
-                    TextButton(
+                    TextButton.icon(
+                      icon: const Icon(Icons.refresh, size: 14),
+                      label:
+                          const Text('Retry', style: TextStyle(fontSize: 11)),
                       style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
                         minimumSize: const Size(0, 0),
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
-                      onPressed: () async {
-                        setState(() {
-                          _syncing = true;
-                          _syncResult = null;
-                        });
-                        try {
-                          final count = await AtomicClient.peerSync(nodeId);
-                          setState(() {
-                            _syncResult = 'Synced $count resources';
-                            _lastSyncCount = count;
-                            _lastSyncTime = DateTime.now();
-                            _syncing = false;
-                          });
-                          await _loadData();
-                        } catch (e) {
-                          setState(() {
-                            _syncResult = 'Error: $e';
-                            _syncing = false;
-                          });
-                        }
-                      },
-                      child: const Text('Sync', style: TextStyle(fontSize: 11)),
+                      onPressed: _discoverAndSync,
                     ),
-                  IconButton(
-                    icon: const Icon(Icons.close, size: 14),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                    onPressed: () async {
-                      await AtomicClient.removeKnownPeer(nodeId);
-                      setState(() => _knownPeers
-                          .removeWhere((p) => p['node_id'] == nodeId));
-                    },
-                  ),
                 ],
               ),
-            );
-          }),
+              const SizedBox(height: 8),
 
-        // Sync result
-        if (isBusy)
-          _peerStatusRow(
-              theme, Icons.sync, 'Syncing...', theme.colorScheme.primary,
-              isLoading: true)
-        else if (isSynced)
-          _peerStatusRow(
-              theme,
-              Icons.check_circle,
-              'Synced $_lastSyncCount resources (${_timeAgo(_lastSyncTime!)})',
-              Colors.green)
-        else if (_syncResult != null && _syncResult!.startsWith('Error'))
-          _peerStatusRow(theme, Icons.error_outline, _syncResult!, Colors.red),
-
-        const SizedBox(height: 12),
-
-        // Manual connect
-        if (isOnline) ...[
-          if (!_showAddPeer)
-            TextButton.icon(
-              icon: const Icon(Icons.add, size: 14),
-              label: const Text('Connect manually',
-                  style: TextStyle(fontSize: 12)),
-              style: TextButton.styleFrom(
-                foregroundColor: theme.colorScheme.onSurfaceVariant,
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-              ),
-              onPressed: () => setState(() => _showAddPeer = true),
-            )
-          else ...[
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _peerController,
-                    autofocus: true,
-                    decoration: const InputDecoration(
-                      hintText: 'Paste device ID',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                      contentPadding:
-                          EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              // Known peers list
+              if (_knownPeers.isEmpty)
+                _peerStatusRow(theme, Icons.devices, 'No paired devices yet',
+                    theme.colorScheme.onSurfaceVariant)
+              else
+                ..._knownPeers.map((peer) {
+                  final nodeId = peer['node_id'] ?? '';
+                  final name = peer['name'] ?? '';
+                  final label = name.isNotEmpty
+                      ? name
+                      : '${nodeId.substring(0, nodeId.length.clamp(0, 16))}...';
+                  final isLive = AtomicClient.isLivePeer(nodeId, _livePeerIds);
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: isLive
+                                ? Colors.green
+                                : theme.colorScheme.onSurfaceVariant
+                                    .withOpacity(0.3),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            label,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isLive
+                                  ? theme.colorScheme.onSurface
+                                  : theme.colorScheme.onSurfaceVariant,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (isOnline && !isBusy)
+                          TextButton(
+                            style: TextButton.styleFrom(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 6),
+                              minimumSize: const Size(0, 0),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            onPressed: () async {
+                              setState(() {
+                                _syncing = true;
+                                _syncResult = null;
+                              });
+                              try {
+                                final count =
+                                    await AtomicClient.peerSync(nodeId);
+                                setState(() {
+                                  _syncResult = 'Synced $count resources';
+                                  _lastSyncCount = count;
+                                  _lastSyncTime = DateTime.now();
+                                  _syncing = false;
+                                });
+                                await _loadData();
+                              } catch (e) {
+                                setState(() {
+                                  _syncResult = 'Error: $e';
+                                  _syncing = false;
+                                });
+                              }
+                            },
+                            child: const Text('Sync',
+                                style: TextStyle(fontSize: 11)),
+                          ),
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 14),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          onPressed: () async {
+                            await AtomicClient.removeKnownPeer(nodeId);
+                            setState(() => _knownPeers
+                                .removeWhere((p) => p['node_id'] == nodeId));
+                          },
+                        ),
+                      ],
                     ),
-                    onSubmitted: (_) => _syncWithPeer(),
+                  );
+                }),
+
+              // Sync result
+              if (isBusy)
+                _peerStatusRow(
+                    theme, Icons.sync, 'Syncing...', theme.colorScheme.primary,
+                    isLoading: true)
+              else if (isSynced)
+                _peerStatusRow(
+                    theme,
+                    Icons.check_circle,
+                    'Synced $_lastSyncCount resources (${_timeAgo(_lastSyncTime!)})',
+                    Colors.green)
+              else if (_syncResult != null && _syncResult!.startsWith('Error'))
+                _peerStatusRow(
+                    theme, Icons.error_outline, _syncResult!, Colors.red),
+
+              const SizedBox(height: 12),
+
+              // Manual connect
+              if (isOnline) ...[
+                if (!_showAddPeer)
+                  TextButton.icon(
+                    icon: const Icon(Icons.add, size: 14),
+                    label: const Text('Connect manually',
+                        style: TextStyle(fontSize: 12)),
+                    style: TextButton.styleFrom(
+                      foregroundColor: theme.colorScheme.onSurfaceVariant,
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                    ),
+                    onPressed: () => setState(() => _showAddPeer = true),
+                  )
+                else ...[
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _peerController,
+                          autofocus: true,
+                          decoration: const InputDecoration(
+                            hintText: 'Paste device ID',
+                            border: OutlineInputBorder(),
+                            isDense: true,
+                            contentPadding: EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 10),
+                          ),
+                          onSubmitted: (_) => _syncWithPeer(),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        icon: _syncing
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.sync, size: 20),
+                        onPressed: _syncing ? null : _syncWithPeer,
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, size: 20),
+                        onPressed: () => setState(() => _showAddPeer = false),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  icon: _syncing
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Icon(Icons.sync, size: 20),
-                  onPressed: _syncing ? null : _syncWithPeer,
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close, size: 20),
-                  onPressed: () => setState(() => _showAddPeer = false),
-                ),
+                  if (_syncResult != null && _syncResult!.startsWith('Error'))
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(_syncResult!,
+                          style:
+                              const TextStyle(fontSize: 11, color: Colors.red)),
+                    ),
+                ],
               ],
-            ),
-            if (_syncResult != null && _syncResult!.startsWith('Error'))
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(_syncResult!,
-                    style: const TextStyle(fontSize: 11, color: Colors.red)),
-              ),
-          ],
-        ],
+            ],
+          ),
+        ),
       ],
     );
   }

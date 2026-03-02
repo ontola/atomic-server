@@ -438,6 +438,9 @@ export class WSClient {
           this.sendBinary(encodeSub(drive));
         }
 
+        // Re-subscribe to active Loro sync and ephemeral channels
+        this.reSubscribeAll();
+
         // Refetch resources that had 401 errors
         if (fetchAll) {
           for (const resource of this.store.resources.values()) {
@@ -574,7 +577,12 @@ export class WSClient {
    *  to binary later). No-op on non-open sockets. */
   private sendText(prefix: string, payload: string): void {
     if (this.readyState !== WebSocket.OPEN) return;
-    this.ws.send(new TextEncoder().encode(`${prefix} ${payload}`));
+    if (this.debug) {
+      console.log(`[WS] sendText: ${prefix} ${payload.slice(0, 100)}...`);
+    }
+    // Must send a string: `ws.send(Uint8Array)` emits a *binary* frame, which
+    // the server routes by tag byte and drops as an unknown tag.
+    this.ws.send(`${prefix} ${payload}`);
   }
 
   public subscribeLoroSync(subject: string): void {
@@ -867,6 +875,9 @@ export class WSClient {
 
   /** Handle legacy text messages that haven't been migrated to binary yet. */
   private handleText(text: string) {
+    if (this.debug) {
+      console.log(`[WS] handleText: ${text.slice(0, 100)}...`);
+    }
     // Prefix lengths include the trailing space delimiter. Match the
     // exact length sent by `sendText(prefix, payload)` which writes
     // `${prefix} ${payload}`.
@@ -899,6 +910,15 @@ export class WSClient {
       }
     } else if (text === 'AUTHENTICATED') {
       // Legacy auth response — handled for backward compat
+    }
+  }
+
+  private reSubscribeAll(): void {
+    for (const subject of this.store.getLoroSyncSubjects()) {
+      this.subscribeLoroSync(subject);
+    }
+    for (const subject of this.store.getLoroEphemeralSubjects()) {
+      this.subscribeLoroEphemeral(subject);
     }
   }
 
@@ -960,6 +980,7 @@ export class WSClient {
       // No agent to authenticate — the socket is open and we're ready
       // to serve anonymous fetches. Flip immediately.
       this.store.setServerConnected(true);
+      this.reSubscribeAll();
       doSync().catch(() => undefined);
     }
   }
@@ -990,7 +1011,12 @@ export class WSClient {
     drive: string;
     pull: string[];
     push: string[];
+    remove?: string[];
   }) {
+    for (const subject of diff.remove ?? []) {
+      this.store.removeResource(subject);
+    }
+
     const deltas: Record<string, string> = {};
 
     for (const subject of diff.pull) {

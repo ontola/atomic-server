@@ -121,8 +121,24 @@ Empty `property` and `value` signal a drive-wide notification. The client follow
 Drive sync ensures two peers have the same set of resources. It uses Loro CRDT version vectors for efficient diffing.
 
 1. **`SYNC (0x30)`**: Peers exchange drive-level hashes and version vectors.
-2. **`SYNC_DIFF (0x32)`**: A peer determines which resources to `pull` and `push`.
+2. **`SYNC_DIFF (0x32)`**: A peer determines which resources to `pull`, `push`, and `remove`.
 3. **`SYNC_PUSH (0x33)`**: Peers exchange binary Loro deltas for missing resources, **chunked**. Each chunk carries `[drive] [flags: u8] [count: u16] [entries...]`; bit 0 of `flags` is `LAST`. Senders cap chunks at 100 entries or 1 MiB (whichever fills first); receivers loop reading `SYNC_PUSH` frames until they see a chunk with `LAST` set. An empty push still emits a single `LAST`-flagged frame so the receiver doesn't hang.
+
+### `SYNC_DIFF` payload
+
+After the drive subject, the payload is UTF-8 JSON:
+
+```json
+{ "pull": ["subject", "..."], "push": ["subject", "..."], "remove": ["subject", "..."] }
+```
+
+- **`pull`**: Subjects the *initiator* should send to the *responder* (initiator has newer or missing data).
+- **`push`**: Subjects the *responder* will send via `SYNC_PUSH` (initiator is behind or missing data).
+- **`remove`**: Subjects the *initiator* should delete locally. The responder destroyed these (or has tombstoned them) and they are absent from its version vectors; without `remove`, bulk sync could resurrect deleted resources.
+
+`remove` is optional for backward compatibility (`[]` if omitted). Receivers apply removals the same way as `DESTROY (0x12)` or `QUERY_UPDATE` `removed` entries.
+
+**Live deletes** still use `COMMIT` (destroy) → `DESTROY` / `QUERY_UPDATE` subscriptions; `remove` is for **bulk reconcile** after offline or Iroh pairing.
 
 ## Content-Addressed Blob Syncing
 
