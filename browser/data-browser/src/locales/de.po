@@ -3314,6 +3314,7 @@ msgid "Agent created!"
 msgstr "Agent erstellt!"
 
 #: src/views/InvitePage.tsx
+#: src/views/InvitePage.tsx
 msgid "Continue"
 msgstr "Weiter"
 
@@ -3425,3 +3426,15 @@ msgid ""
 "<0/> wants to modify a resource that is not\n"
 "contained in the current scope."
 msgstr "<0/> möchte eine Ressource ändern, die nicht im aktuellen Geltungsbereich enthalten ist."
+
+#: src/routes/Search/SearchRoute.tsx
+msgid "Searching for <0/>..."
+msgstr ""
+
+#: src/views/InvitePage.tsx
+msgid "Failed to add invited drive to agent"
+msgstr ""
+
+#: src/views/InvitePage.tsx
+msgid "Failed to persist agent after accepting invite"
+msgstr ""
