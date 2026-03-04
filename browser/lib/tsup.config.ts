@@ -5,7 +5,15 @@ import { exec } from 'node:child_process';
 
 export default defineConfig(options => ({
   minify: !options.watch,
-  entry: ['src/index.ts'],
+  entry: {
+    index: 'src/index.ts',
+    'ontologies/core': 'src/ontologies/core.ts',
+    'ontologies/server': 'src/ontologies/server.ts',
+    'ontologies/dataBrowser': 'src/ontologies/dataBrowser.ts',
+    'ontologies/ai': 'src/ontologies/ai.ts',
+    'ontologies/collections': 'src/ontologies/collections.ts',
+    'ontologies/commits': 'src/ontologies/commits.ts',
+  },
   sourcemap: true,
   clean: true,
   format: ['esm', 'cjs'],

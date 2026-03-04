@@ -1,0 +1,46 @@
+{
+  "name": "@tomic/plugin",
+  "type": "module",
+  "version": "0.40.0",
+  "description": "Utils for building UI plugins for AtomicServer",
+  "author": "Polle Pas <polle@ontola.io>",
+  "license": "MIT",
+  "homepage": "https://github.com/ontola/atomic-server#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ontola/atomic-server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ontola/atomic-server/issues"
+  },
+  "exports": {
+    ".": "./dist/index.js",
+    "./package.json": "./package.json"
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "start": "tsdown --watch",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "pnpm run build"
+  },
+  "dependencies": {
+    "@tomic/lib": "workspace:*"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/core": "^0.18.2",
+    "@types/node": "^25.0.3",
+    "bumpp": "^10.3.2",
+    "publint": "^0.3.17",
+    "tsdown": "^0.18.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.16"
+  }
+}

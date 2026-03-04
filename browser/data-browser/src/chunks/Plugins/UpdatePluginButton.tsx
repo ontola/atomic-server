@@ -26,6 +26,7 @@ import { WarningBlock } from '@components/WarningBlock';
 import { ConfigReference } from '@views/Plugin/ConfigReference';
 import { isPluginPermissions } from '@views/Plugin/pluginUtils';
 import { PluginPermissions } from '@views/Plugin/PluginPermissions';
+import { useCustomViews } from '@components/CustomViewProvider';
 
 interface UpdatePluginButtonProps {
   plugin: Resource<Server.Plugin>;
@@ -37,6 +38,7 @@ const UpdatePluginButton: React.FC<UpdatePluginButtonProps> = ({ plugin }) => {
   const [metadata, setMetadata] = useState<PluginMetadata>();
   const [configValid, setConfigValid] = useState(true);
   const [jsonEditorValid, setJsonEditorValid] = useState(true);
+  const { refresh: refreshCustomViews } = useCustomViews();
   const [updatedConfig, setUpdatedConfig] = useState<JSONValue>();
   const [oldPermissions] = useValue(
     plugin,
@@ -75,6 +77,7 @@ const UpdatePluginButton: React.FC<UpdatePluginButtonProps> = ({ plugin }) => {
 
       try {
         await updatePlugin(plugin, metadata, file, updatedConfig);
+        await refreshCustomViews();
       } catch (err) {
         toast.error(err.message);
       } finally {

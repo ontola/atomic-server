@@ -248,6 +248,19 @@ fn on_before_commit(
                         "Cannot update plugin parent after it has been created",
                     ));
                 }
+            } else {
+                // For new plugins, check if name/namespace are already used on this drive.
+                if let Ok((namespace, name)) = get_namespace_and_name(resource) {
+                    let key = PluginMetaKey::new(&parent_subject, &namespace, &name);
+                    if let Some(meta) = store.get_plugin_meta(&key)? {
+                        if meta.subject.as_str() != resource.get_subject().as_str() {
+                            return Err(AtomicError::from(format!(
+                                "A plugin with the name '{}' and namespace '{}' is already installed on this drive.",
+                                name, namespace
+                            )));
+                        }
+                    }
+                }
             }
 
             // The plugin file has been set or updated, so we need to (re)install the plugin.
