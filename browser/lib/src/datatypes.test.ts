@@ -1,6 +1,6 @@
 import { describe, it } from 'vitest';
 
-import { Datatype, urls, validateDatatype } from './index.js';
+import { Datatype, datatypeTag, urls, validateDatatype } from './index.js';
 
 describe('Datatypes', () => {
   it('throws errors when datatypes dont match values', async ({ expect }) => {
@@ -63,5 +63,31 @@ describe('Datatypes', () => {
     expect(() => validateDatatype(float, Datatype.RESOURCEARRAY)).to.throw();
     expect(() => validateDatatype(string, Datatype.RESOURCEARRAY)).to.throw();
     expect(() => validateDatatype(int, Datatype.RESOURCEARRAY)).to.throw();
+  });
+});
+
+describe('datatypeTag', () => {
+  it('tags load-bearing datatypes and collapses the rest', ({ expect }) => {
+    // Load-bearing: references and arrays get a tag.
+    expect(datatypeTag(Datatype.ATOMIC_URL, 'https://example.com/x')).toBe(
+      'atomicUrl',
+    );
+    expect(datatypeTag(Datatype.RESOURCEARRAY, [])).toBe('resourceArray');
+    expect(datatypeTag(Datatype.RESOURCEARRAY, ['https://example.com/x'])).toBe(
+      'resourceArray',
+    );
+    expect(datatypeTag(Datatype.JSON, '{"a":1}')).toBe('json');
+
+    // A nested resource (object stored as a JSON string under an atomicURL
+    // property) stays untagged — the server heuristic handles `{...}`.
+    expect(datatypeTag(Datatype.ATOMIC_URL, '{"a":1}')).toBeUndefined();
+
+    // Cosmetic / scalar datatypes collapse — no tag.
+    expect(datatypeTag(Datatype.STRING, 'hello')).toBeUndefined();
+    expect(datatypeTag(Datatype.MARKDOWN, '# heading')).toBeUndefined();
+    expect(datatypeTag(Datatype.SLUG, 'a-slug')).toBeUndefined();
+    expect(datatypeTag(Datatype.DATE, '2026-05-21')).toBeUndefined();
+    expect(datatypeTag(Datatype.INTEGER, 5)).toBeUndefined();
+    expect(datatypeTag(Datatype.BOOLEAN, true)).toBeUndefined();
   });
 });

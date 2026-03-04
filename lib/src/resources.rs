@@ -86,9 +86,13 @@ impl Resource {
 
     fn materialize_propvals_from_loro_doc(doc: &crate::loro::AtomicLoroDoc) -> PropVals {
         let mut propvals = PropVals::new();
+        let datatypes = doc.get_all_datatypes();
 
         for (prop, loro_val) in doc.get_all_properties() {
-            if let Some(atomic_val) = crate::loro::loro_value_to_atomic_value(&loro_val) {
+            let tag = datatypes.get(&prop).map(String::as_str);
+            if let Some(atomic_val) =
+                crate::loro::loro_value_to_atomic_value_tagged(&loro_val, tag)
+            {
                 propvals.insert(prop, atomic_val);
             }
         }

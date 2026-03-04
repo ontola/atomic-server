@@ -233,6 +233,18 @@ impl AtomicLoroDoc {
     /// This is the Loro equivalent of a `set` in a commit.
     pub fn set_property(&self, property: &str, value: &Value) -> AtomicResult<()> {
         let root = self.doc.get_map("properties");
+        // Phase 1 (loro-source-of-truth): record a datatype tag in a sibling
+        // `datatypes` map for the load-bearing cases — reference strings,
+        // lists and nested objects — so materialization need not guess the
+        // `Value` variant from the bare primitive. Cosmetic types
+        // (`Markdown`/`Slug`/`Date`/`Uri`/`Timestamp`) carry no tag and
+        // collapse on read.
+        if let Some(tag) = datatype_tag(value) {
+            self.doc
+                .get_map("datatypes")
+                .insert(property, tag)
+                .map_err(|e| format!("Loro datatype tag error: {e}"))?;
+        }
         match value {
             Value::String(s) | Value::Markdown(s) | Value::Slug(s) | Value::Date(s) => {
                 root.insert(property, s.as_str())
@@ -504,12 +516,31 @@ impl AtomicLoroDoc {
         result
     }
 
+    /// Read the sibling `datatypes` map: `property_url → datatype tag`.
+    /// Only load-bearing properties (reference strings, lists, nested
+    /// objects) have an entry — see [`datatype_tag`]. Used by
+    /// materialization to recover the exact `Value` variant without guessing.
+    pub fn get_all_datatypes(&self) -> std::collections::HashMap<String, String> {
+        let root = self.doc.get_map("datatypes");
+        let mut result = std::collections::HashMap::new();
+        root.for_each(|key, value| {
+            if let Ok(loro::LoroValue::String(s)) = value.into_value() {
+                result.insert(key.to_string(), s.to_string());
+            }
+        });
+        result
+    }
+
     /// Import an update and compute the diff as add/remove atoms.
     /// Compares the properties map before and after the import.
     pub fn import_update_with_diff(&self, update: &[u8], subject: &str) -> AtomicResult<LoroDiff> {
         let before = self.get_all_properties();
         self.import_update(update)?;
         let after = self.get_all_properties();
+        // Tags are per-property and stable; one read after the import covers
+        // both the before and after value of every property.
+        let datatypes = self.get_all_datatypes();
+        let tag_of = |key: &str| datatypes.get(key).map(String::as_str);
 
         let mut add_atoms = Vec::new();
         let mut remove_atoms = Vec::new();
@@ -519,16 +550,16 @@ impl AtomicLoroDoc {
             match before.get(key) {
                 Some(old_val) if old_val != new_val => {
                     // Changed: remove old, add new
-                    if let Some(old_v) = loro_value_to_atomic_value(old_val) {
+                    if let Some(old_v) = loro_value_to_atomic_value_tagged(old_val, tag_of(key)) {
                         remove_atoms.push(Atom::new(subject.into(), key.clone(), old_v));
                     }
-                    if let Some(new_v) = loro_value_to_atomic_value(new_val) {
+                    if let Some(new_v) = loro_value_to_atomic_value_tagged(new_val, tag_of(key)) {
                         add_atoms.push(Atom::new(subject.into(), key.clone(), new_v));
                     }
                 }
                 None => {
                     // Added
-                    if let Some(new_v) = loro_value_to_atomic_value(new_val) {
+                    if let Some(new_v) = loro_value_to_atomic_value_tagged(new_val, tag_of(key)) {
                         add_atoms.push(Atom::new(subject.into(), key.clone(), new_v));
                     }
                 }
@@ -539,7 +570,7 @@ impl AtomicLoroDoc {
         // Check for removed properties
         for (key, old_val) in &before {
             if !after.contains_key(key) {
-                if let Some(old_v) = loro_value_to_atomic_value(old_val) {
+                if let Some(old_v) = loro_value_to_atomic_value_tagged(old_val, tag_of(key)) {
                     remove_atoms.push(Atom::new(subject.into(), key.clone(), old_v));
                 }
             }
@@ -549,6 +580,76 @@ impl AtomicLoroDoc {
             add_atoms,
             remove_atoms,
         })
+    }
+}
+
+/// The `datatypes`-map tag for a `Value`, or `None` for values whose Loro
+/// primitive already pins the variant (`Integer`/`Float`/`Boolean`) or which
+/// collapse to a plain string (`String`/`Markdown`/`Slug`/`Date`/`Uri`) or to
+/// `Integer` (`Timestamp`). Only the load-bearing reference / shape
+/// distinctions are tagged. See the `loro-source-of-truth` plan.
+pub fn datatype_tag(value: &Value) -> Option<&'static str> {
+    match value {
+        Value::AtomicUrl(_) => Some("atomicUrl"),
+        Value::ResourceArray(_) => Some("resourceArray"),
+        Value::JsonArray(_) => Some("jsonArray"),
+        Value::Json(_) => Some("json"),
+        Value::NestedResource(_) => Some("resource"),
+        _ => None,
+    }
+}
+
+/// Materialize a Loro value, using the `datatypes` tag when present.
+/// Falls back to [`loro_value_to_atomic_value`]'s heuristics for untagged
+/// values — legacy snapshots and docs written by clients that do not yet
+/// emit the `datatypes` map.
+pub fn loro_value_to_atomic_value_tagged(
+    lv: &loro::LoroValue,
+    tag: Option<&str>,
+) -> Option<Value> {
+    if let Some(tag) = tag {
+        if let Some(v) = atomic_value_from_tag(lv, tag) {
+            return Some(v);
+        }
+        // Tag present but the primitive shape did not match it — fall
+        // through to the heuristic rather than dropping the value.
+    }
+    loro_value_to_atomic_value(lv)
+}
+
+/// Reconstruct the exact `Value` variant from a primitive plus its tag.
+/// Returns `None` if the tag and primitive shape disagree (caller falls back).
+fn atomic_value_from_tag(lv: &loro::LoroValue, tag: &str) -> Option<Value> {
+    match (tag, lv) {
+        ("atomicUrl", loro::LoroValue::String(s)) => {
+            Some(Value::AtomicUrl(s.to_string().into()))
+        }
+        ("json", loro::LoroValue::String(s)) => {
+            serde_json::from_str(s.as_ref()).ok().map(Value::Json)
+        }
+        ("resource", loro::LoroValue::String(s)) => {
+            serde_json::from_str::<std::collections::HashMap<String, Value>>(s.as_ref())
+                .ok()
+                .map(|obj| {
+                    Value::NestedResource(crate::values::SubResource::Nested(obj))
+                })
+        }
+        ("resourceArray", loro::LoroValue::List(items)) => {
+            let subjects: Vec<crate::values::SubResource> = items
+                .iter()
+                .filter_map(|item| match item {
+                    loro::LoroValue::String(s) => Some(s.to_string().into()),
+                    _ => None,
+                })
+                .collect();
+            Some(Value::ResourceArray(subjects))
+        }
+        ("jsonArray", loro::LoroValue::List(items)) => {
+            Some(Value::JsonArray(
+                items.iter().map(loro_value_to_json).collect(),
+            ))
+        }
+        _ => None,
     }
 }
 
@@ -823,6 +924,67 @@ mod test {
             Value::ResourceArray(arr) => assert!(arr.is_empty()),
             other => panic!("expected empty ResourceArray, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn datatype_tags_preserve_load_bearing_variants() {
+        // Phase 1 (loro-source-of-truth): load-bearing variants survive a
+        // snapshot round-trip exactly, via the sibling `datatypes` map —
+        // not via the lossy heuristics.
+        let p = |n: &str| format!("https://atomicdata.dev/properties/{n}");
+        let doc = AtomicLoroDoc::new();
+        doc.set_property(&p("ref"), &Value::AtomicUrl("did:ad:target".into()))
+            .unwrap();
+        doc.set_property(
+            &p("refs"),
+            &Value::ResourceArray(vec!["did:ad:x".into(), "did:ad:y".into()]),
+        )
+        .unwrap();
+        doc.set_property(&p("emptyRefs"), &Value::ResourceArray(vec![]))
+            .unwrap();
+        doc.set_property(
+            &p("strokes"),
+            &Value::JsonArray(vec![serde_json::json!({"x": 1})]),
+        )
+        .unwrap();
+        doc.set_property(&p("text"), &Value::String("plain".into()))
+            .unwrap();
+
+        // Round-trip through a snapshot, as sync / persistence does.
+        let doc2 = AtomicLoroDoc::from_snapshot(&doc.export_snapshot()).unwrap();
+        let props = doc2.get_all_properties();
+        let tags = doc2.get_all_datatypes();
+        let mat = |n: &str| {
+            let key = p(n);
+            loro_value_to_atomic_value_tagged(
+                props.get(&key).expect("property present"),
+                tags.get(&key).map(String::as_str),
+            )
+        };
+
+        assert!(
+            matches!(mat("ref"), Some(Value::AtomicUrl(_))),
+            "tagged reference must materialize as AtomicUrl"
+        );
+        match mat("refs") {
+            Some(Value::ResourceArray(a)) => assert_eq!(a.len(), 2),
+            other => panic!("expected ResourceArray, got {other:?}"),
+        }
+        match mat("emptyRefs") {
+            // The tag pins the shape even when the list is empty — the
+            // heuristic alone cannot tell an empty ResourceArray from JsonArray.
+            Some(Value::ResourceArray(a)) => assert!(a.is_empty()),
+            other => panic!("expected empty ResourceArray, got {other:?}"),
+        }
+        match mat("strokes") {
+            Some(Value::JsonArray(a)) => assert_eq!(a.len(), 1),
+            other => panic!("expected JsonArray, got {other:?}"),
+        }
+        // Plain text carries no tag and stays string-like.
+        assert!(matches!(mat("text"), Some(Value::String(_))));
+        // Scalars and plain strings get no `datatypes` entry — the map is sparse.
+        assert!(!tags.contains_key(&p("text")));
+        assert!(tags.contains_key(&p("ref")));
     }
 
     #[test]
