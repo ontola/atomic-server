@@ -12,6 +12,7 @@ import { readZip, type PluginMetadata } from './plugins';
 import { ConfigReference } from '@views/Plugin/ConfigReference';
 import { PluginPermissions } from '@views/Plugin/PluginPermissions';
 import toast from 'react-hot-toast';
+import { useCustomViews } from '@components/CustomViewProvider';
 
 interface NewPluginButtonProps {
   drive: Resource<Server.Drive>;
@@ -25,7 +26,7 @@ const NewPluginButton: React.FC<NewPluginButtonProps> = ({ drive }) => {
   const [metadata, setMetadata] = useState<PluginMetadata>();
   const [configValid, setConfigValid] = useState(true);
   const [config, setConfig] = useState<JSONValue>();
-
+  const { refresh: refreshCustomViews } = useCustomViews();
   const { createPluginResource, addPluginToDrive } = useCreatePlugin();
 
   const reset = () => {
@@ -52,6 +53,7 @@ const NewPluginButton: React.FC<NewPluginButtonProps> = ({ drive }) => {
           config,
         });
         await addPluginToDrive(plugin, drive);
+        await refreshCustomViews();
         reset();
       } catch (err) {
         toast.error('Failed to install plugin');

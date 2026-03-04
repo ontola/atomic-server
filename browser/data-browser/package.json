@@ -48,6 +48,7 @@
     "@tiptap/suggestion": "^3.11.0",
     "@tiptap/y-tiptap": "^3.0.1",
     "@tomic/react": "workspace:*",
+    "@tomic/plugin": "workspace:*",
     "@uiw/codemirror-theme-github": "^4.25.3",
     "@uiw/react-codemirror": "^4.25.3",
     "@wuchale/jsx": "^0.10.1",

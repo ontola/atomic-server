@@ -1,0 +1,14 @@
+.container {
+  width: min(var(--t-container-width), 100%);
+  margin: auto;
+  padding: var(--t-size-4);
+}
+
+.tag {
+  background-color: var(--t-color-main-selected-bg);
+  border: 1px solid var(--t-color-main-selected-fg);
+  color: var(--t-color-main-selected-fg);
+  border-radius: var(--t-radius);
+  padding: var(--t-size-1);
+  width: fit-content;
+}

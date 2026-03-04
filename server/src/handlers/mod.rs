@@ -11,6 +11,7 @@ pub mod export;
 pub mod get_resource;
 #[cfg(feature = "image")]
 pub mod image;
+pub mod plugin_ui;
 pub mod post_resource;
 pub mod search;
 pub mod single_page_app;

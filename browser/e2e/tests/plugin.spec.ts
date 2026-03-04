@@ -1,6 +1,9 @@
 import test, { expect } from '@playwright/test';
 import {
   before,
+  clickSidebarItem,
+  currentDriveTitle,
+  fillSearchBox,
   inDialog,
   newDrive,
   newResource,
@@ -9,6 +12,9 @@ import {
   signIn,
   testFilePath,
 } from './test-utils';
+
+const BIRD =
+  'https://atomicdata.dev/01k10mtpp8fkkmsd6tkm9qrqyw/defaultontology/class/bird';
 
 test.describe('Plugins', () => {
   test.beforeEach(before);
@@ -75,6 +81,75 @@ test.describe('Plugins', () => {
       'Plugin did not react to config change',
     ).toBeVisible();
 
+    // Test the custom view
+    await newResource(BIRD, page);
+
+    await page.getByLabel('name').fill('Duck');
+
+    await page.getByTestId('input-characteristics-add-resource').click();
+
+    {
+      const pickOption = await fillSearchBox(
+        page,
+        'Search for a resource or enter a URL',
+        '',
+      );
+      await pickOption('water');
+    }
+
+    await page.getByRole('button', { name: 'Save' }).click();
+
+    {
+      const frame = page.frameLocator('#custom-view');
+
+      expect(frame).not.toBeNull();
+      if (!frame) throw new Error('Frame not found');
+
+      await expect(frame.getByRole('heading', { name: 'Duck' })).toBeVisible();
+      await expect(
+        frame.getByText('This is a custom view for the Bird class.'),
+      ).toBeVisible();
+      await expect(frame.getByText('Water')).toBeVisible();
+
+      await frame
+        .getByRole('button', { name: 'Select favorite folder' })
+        .click();
+
+      await inDialog(page, async (dialog, closeWith) => {
+        await expect(
+          dialog.getByRole('heading', { name: 'Select a folder' }),
+        ).toBeVisible();
+        await expect(
+          dialog.getByText("Pick the bird's favorite folder"),
+        ).toBeVisible();
+        const pickOption = await fillSearchBox(
+          dialog,
+          'Search for a folder',
+          '',
+        );
+        await pickOption('Not My Problem');
+        await closeWith('Confirm');
+      });
+
+      await expect(frame.getByText('Problem')).toBeVisible();
+    }
+
+    // Check if the view can commit by refreshing and checking the favorite folder.
+    await page.reload();
+
+    {
+      const frame = page.frameLocator('#custom-view');
+
+      expect(frame).not.toBeNull();
+      if (!frame) throw new Error('Frame not found');
+
+      expect(frame.getByText('Not My Problem')).toBeVisible();
+    }
+
+    // Navigate back to the plugin
+    await currentDriveTitle(page).click();
+    await page.getByRole('link', { name: 'ontola/test-plugin' }).click();
+
     // Uninstall the plugin
     await page.getByRole('button', { name: 'Uninstall' }).click();
 
@@ -91,5 +166,9 @@ test.describe('Plugins', () => {
 
     await expect(page.getByText('Problem', { exact: true })).toBeVisible();
     await expect(page.getByText('No plugins installed')).toBeVisible();
+
+    // Check if the custom view is gone.
+    await clickSidebarItem('Duck', page);
+    await expect(page.getByText('No custom views found')).not.toBeVisible();
   });
 });
