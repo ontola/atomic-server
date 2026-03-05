@@ -71,7 +71,7 @@ impl Agent {
     pub fn to_resource(&self) -> AtomicResult<Resource> {
         let mut resource = Resource::new(self.subject.to_string());
         resource.set_class(urls::AGENT);
-        resource.set_subject_from(self.subject.clone());
+        resource.set_subject(self.subject.to_string());
         if let Some(name) = &self.name {
             resource.set_unsafe(crate::urls::NAME.into(), Value::String(name.into()));
         }

@@ -210,7 +210,7 @@ impl ClassExtender {
                 // If the resource is the scope itself we can just return true.
                 let subject = resource.get_subject().clone();
                 if subject == scope.clone() {
-                    return Ok((true, Some(subject)));
+                    return Ok((true, Some(subject.to_string())));
                 }
 
                 // Find the root parent of the resource or use the cached root.

@@ -316,7 +316,8 @@ impl Commit {
         commit.check_for_circular_parents()?;
 
         // Create a new resource if it doesn't exist yet
-        let (resource_old, is_new) = match store.get_resource(&commit.subject).await {
+        let (resource_old, is_new) = match store.get_resource(&commit.subject.clone().into()).await
+        {
             Ok(rs) => (rs, false),
             Err(_) => (
                 Resource::new(
@@ -472,7 +473,7 @@ impl Commit {
                 resource.set_unsafe(prop.clone().into(), old_vec.into());
                 for added_resource in new_vec {
                     let atom = Atom::new(
-                        resource.get_subject().to_string(),
+                        resource.get_subject().clone(),
                         prop.clone().into(),
                         added_resource.into(),
                     );

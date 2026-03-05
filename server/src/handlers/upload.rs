@@ -2,7 +2,9 @@ use std::{ffi::OsStr, io::Write, path::Path};
 
 use actix_multipart::{Field, Multipart};
 use actix_web::{web, HttpResponse};
-use atomic_lib::{hierarchy::check_write, urls, utils::now, Db, Resource, Storelike, Subject, Value};
+use atomic_lib::{
+    hierarchy::check_write, urls, utils::now, Db, Resource, Storelike, Subject, Value,
+};
 use futures::{StreamExt, TryStreamExt};
 use image::GenericImageView;
 use serde::Deserialize;
@@ -107,7 +109,8 @@ async fn save_file_and_create_resource(
     let download_url = format!("{}/download/{}", origin, subject_path);
 
     let mut resource = atomic_lib::Resource::new_instance(urls::FILE, store).await?;
-    resource.set_subject_from(subject)
+    resource
+        .set_subject(subject.to_string())
         .set_string(urls::PARENT.into(), parent, store)
         .await?
         .set_string(urls::INTERNAL_ID.into(), &file_id, store)

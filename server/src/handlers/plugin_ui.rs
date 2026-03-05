@@ -112,7 +112,7 @@ pub async fn handle_plugin_list(
         };
 
         let resource = store
-            .get_resource_extended(&subject, true, &ForAgent::Sudo)
+            .get_resource_extended(&subject.into(), true, &ForAgent::Sudo)
             .await?
             .to_single();
 
