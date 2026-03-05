@@ -247,7 +247,7 @@ async fn server_tests() {
     );
     signable_json.insert(
         urls::SIGNER.into(),
-        serde_json::Value::String(issuer_agent.subject.clone()),
+        serde_json::Value::String(issuer_agent.subject.to_string()),
     );
 
     let serialized = serde_jcs::to_string(&signable_json).unwrap();

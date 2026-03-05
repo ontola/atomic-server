@@ -190,6 +190,19 @@ export class Store {
    * DIDs and full HTTP URLs are returned as-is.
    */
   public normalizeSubject(subject: string): string {
+    const stripLeadingSlash = (value: string) =>
+      value.startsWith('/') ? value.slice(1) : value;
+    const maybeTempSubject = stripLeadingSlash(subject);
+
+    // Internal temporary subjects (used during newResource before DID
+    // derivation) are returned verbatim — they must not be resolved as URLs.
+    if (
+      maybeTempSubject.startsWith('_new:') ||
+      maybeTempSubject.startsWith('_local:')
+    ) {
+      return maybeTempSubject;
+    }
+
     // DIDs and full HTTP URLs are returned as-is, but normalized
     if (
       subject.startsWith('did:') ||
@@ -281,7 +294,7 @@ export class Store {
         !storeResource.loading &&
         !storeResource.new &&
         storeResource.get(commits.properties.lastCommit) ===
-          resource.get(commits.properties.lastCommit)
+        resource.get(commits.properties.lastCommit)
       ) {
         return;
       }
@@ -298,12 +311,15 @@ export class Store {
   }
 
   /**
-   * A helper function for creating new resources.
-   * Options take:
-   * subject (optional) - defaults to random subject,
-   * parent (optional) - defaults to serverUrl,
-   * isA (optional),
-   * properties (optional) - any additional properties to be set on the resource.
+   * Create a new resource.
+   *
+   * When `did` is `true` (the default) the genesis commit is signed locally so
+   * the resource's real DID (`did:ad:<signature>`) is known immediately — no
+   * server round-trip required.  An agent must be set on the store for DID
+   * resources.
+   *
+   * The resource is **not** pushed to the server yet; call `resource.save()` or
+   * `resource.pushCommits()` to persist it.
    */
   public async newResource<C extends OptionalClass = UnknownClass>({
     subject,
@@ -314,11 +330,16 @@ export class Store {
     did = true,
   }: CreateResourceOptions = {}): Promise<Resource<C>> {
     const normalizedIsA = Array.isArray(isA) ? isA : [isA];
+
+    // When the caller supplies an explicit subject, use it as-is.
+    // For HTTP subjects use the parent-based path.
+    // For DID subjects a temporary internal key is used; the real DID is
+    // derived below after signing.
     const newSubject =
       subject ??
       (did
-        ? this.createSubject()
-        : this.createSubject(parent ?? this.serverUrl));
+        ? `_new:${this.randomPart()}`
+        : this.createHTTPSubject(parent ?? this.serverUrl));
 
     const resource = this.getResourceLoading(newSubject, { newResource: true });
 
@@ -334,6 +355,22 @@ export class Store {
       for (const [key, value] of Object.entries(propVals)) {
         await resource.set(key, value);
       }
+    }
+
+    // For DID resources: sign the genesis commit locally to derive the real
+    // DID from the signature.  The signed commit is queued on the resource and
+    // will be sent to the server on the next `save()` / `push()`.
+    if (did && !subject) {
+      const agent = this.getAgent();
+
+      if (!agent) {
+        throw new Error(
+          'Cannot create a DID resource without an agent. Set an agent on the store first.',
+        );
+      }
+
+      await resource.signChanges(agent);
+      // resource.subject is now did:ad:<signature>
     }
 
     return resource;
@@ -394,17 +431,9 @@ export class Store {
     return this.findAvailableSubject(path, parentUrl);
   }
 
-  /**
-   * Creates a random subject. If parentSubject is provided, creates an HTTP URL under that parent.
-   * Otherwise, returns a DID (did:ad:<ulid>) for self-sovereign resources.
-   */
-  public createSubject(parentSubject?: string): string {
-    if (parentSubject) {
-      return `${parentSubject}/${this.randomPart()}`;
-    }
-
-    // Return a DID for new resources without a parent context
-    return `did:ad:${this.randomPart()}`;
+  /** Creates a random HTTP subject under the given parent URL. */
+  private createHTTPSubject(parentSubject: string): string {
+    return `${parentSubject}/${this.randomPart()}`;
   }
 
   /**
@@ -427,10 +456,29 @@ export class Store {
       method?: 'GET' | 'POST';
       /** HTTP Body for POSTing */
       body?: ArrayBuffer | string;
-      /** Always override the existing resource with the remote version, even if the commits are the same */
-      forceOverride?: boolean;
     } = {},
   ): Promise<Resource<C>> {
+    const normalizedSubject = this.normalizeSubject(subject);
+    const isTemporarySubject =
+      normalizedSubject.startsWith('_new:') ||
+      normalizedSubject.startsWith('_local:');
+
+    // Temporary local subjects are never fetchable from the server.
+    // Return a local resource immediately and skip network traffic.
+    if (isTemporarySubject) {
+      const existing = this.resources.get(normalizedSubject);
+
+      if (existing) {
+        existing.loading = false;
+        return existing as Resource<C>;
+      }
+
+      const local = new Resource<C>(normalizedSubject, true);
+      local.loading = false;
+      this.addResources(local, { skipCommitCompare: true });
+      return local;
+    }
+
     if (opts.setLoading) {
       const newR = new Resource<C>(subject);
       newR.loading = true;
@@ -461,7 +509,7 @@ export class Store {
         ? { agent: this.agent, serverURL: this.getServerUrl() }
         : undefined;
 
-      const { createdResources } = await this.client.fetchResourceHTTP(
+      const { resource, createdResources } = await this.client.fetchResourceHTTP(
         fetchSubject,
         {
           from: opts.fromProxy ? this.getServerUrl() : undefined,
@@ -471,20 +519,18 @@ export class Store {
         },
       );
 
-      // The main resource that was requested
-      const resource = createdResources.find(r => r.subject === fetchSubject);
-
-      if (resource) {
-        this.addResources(resource, {
-          alias: subject,
-          skipCommitCompare: !!opts.forceOverride,
-        });
-      }
+      // The client already returns the requested top-level resource as `resource`.
+      this.addResources(resource, {
+        alias: subject,
+        // POST endpoint responses can reuse the same @id as an already loaded GET
+        // resource (e.g. invite preview -> invite accept redirect). Force merge.
+        skipCommitCompare: opts.method === 'POST',
+      });
 
       // Any other resources that were returned (e.g. linked resources)
       createdResources.forEach(r => {
-        if (r.subject !== fetchSubject) {
-          this.addResources(r, { skipCommitCompare: !!opts.forceOverride });
+        if (this.normalizeSubject(r.subject) !== this.normalizeSubject(resource.subject)) {
+          this.addResources(r);
         }
       });
     }
@@ -559,6 +605,8 @@ export class Store {
   ): Resource<C> {
     const normalized = this.normalizeSubject(subjectRaw);
     const resolved = this.aliases.get(normalized) ?? normalized;
+    const isTemporarySubject =
+      normalized.startsWith('_new:') || normalized.startsWith('_local:');
 
     // This is needed because it can happen that the useResource react hook is called while there is no subject passed.
     if (normalized === unknownSubject || normalized === null) {
@@ -571,16 +619,18 @@ export class Store {
     let resource = this.resources.get(resolved);
 
     if (!resource) {
-      resource = new Resource<C>(normalized, opts.newResource);
+      resource = new Resource<C>(normalized, opts.newResource || isTemporarySubject);
 
       // New resources don't have to load, they are just created.
-      if (!opts.newResource) {
+      if (!opts.newResource && !isTemporarySubject) {
         resource.loading = true;
       }
 
       this.addResources(resource, { alias: normalized });
 
-      this.fetchResourceFromServer(normalized, opts);
+      if (!opts.newResource && !isTemporarySubject) {
+        this.fetchResourceFromServer(normalized, opts);
+      }
 
       return resource;
     } else if (!opts.allowIncomplete && resource.loading === false) {

@@ -82,7 +82,13 @@ pub async fn search_query(
         .map_err(|e| format!("Error with creating search results: {} ", e))?;
 
     timer.add("execute_query");
+    tracing::debug!(
+        "search_query: {} docs found for params: {:?}",
+        top_docs.len(),
+        params
+    );
     let subjects = docs_to_subjects(top_docs, &fields, &searcher)?;
+    tracing::debug!("search_query: subjects after docs_to_subjects: {:?}", subjects);
 
     let path_and_query = req
         .uri()
@@ -101,9 +107,11 @@ pub async fn search_query(
     let resources = get_resources(req, &appstate, &subject, subjects.clone(), limit).await?;
 
     // Convert the list of resources back into subjects.
+    // We must resolve Internal subjects (e.g. "internal:/files/xxx") to full
+    // HTTP URLs using the origin so clients receive usable URLs.
     let filtered_subjects: Vec<String> = resources
         .iter()
-        .map(|r| r.get_subject().to_string())
+        .map(|r| r.get_subject().resolve(&origin))
         .collect();
 
     results_resource

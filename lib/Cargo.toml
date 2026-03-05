@@ -17,6 +17,7 @@ bincode1 = { package = "bincode", version = "1", optional = true }
 directories = { version = ">= 2, < 5", optional = true }
 rand = { version = "0.8" }
 regex = "1"
+hex = "0.4"
 ring = "0.17.14"
 rio_api = { version = "0.8", optional = true }
 rio_turtle = { version = "0.8", optional = true }

@@ -83,6 +83,18 @@ export class Resource<C extends OptionalClass = any> {
   private _subject: string;
   private propvals: PropVals = new Map();
 
+  /**
+   * Queue of commits that have been signed locally but not yet pushed to the
+   * server. `signChanges()` appends here; `push()` drains it.
+   */
+  private _pendingCommits: Commit[] = [];
+
+  /**
+   * Signature of the most recently locally-signed commit.  Used as
+   * `previousCommit` when chaining multiple local commits before pushing.
+   */
+  private _lastLocalSignature: string | undefined;
+
   private inProgressCommit: Promise<void> | undefined;
   private hasQueue = false;
 
@@ -142,6 +154,7 @@ export class Resource<C extends OptionalClass = any> {
     return (this.get(core.properties.name) ??
       this.get(core.properties.shortname) ??
       this.get(server.properties.filename) ??
+      this.get(core.properties.description) ??
       this.subject) as string;
   }
 
@@ -370,6 +383,8 @@ export class Resource<C extends OptionalClass = any> {
     res.commitError = this.commitError;
     res.commitBuilder = this.commitBuilder.clone();
     res.appliedCommitSignatures = this.appliedCommitSignatures;
+    res._pendingCommits = [...this._pendingCommits];
+    res._lastLocalSignature = this._lastLocalSignature;
 
     return res as Resource<C>;
   }
@@ -530,8 +545,12 @@ export class Resource<C extends OptionalClass = any> {
   }
 
   public getCommitsCollectionSubject(): string {
-    const url = new URL(this.subject);
-    url.pathname = '/commits';
+    // For DID subjects (or other non-HTTP URIs) we can't derive the server
+    // origin from the subject itself — use the store's server URL instead.
+    const base = this.subject.startsWith('did:') || this.subject.startsWith('_')
+      ? this.store.getServerUrl()
+      : this.subject;
+    const url = new URL('/commits', base);
     url.searchParams.append('property', commits.properties.subject);
     url.searchParams.append('value', this.subject);
     url.searchParams.append('sort_by', commits.properties.createdAt);
@@ -580,9 +599,9 @@ export class Resource<C extends OptionalClass = any> {
     const commitsCollection = await this.store.fetchResourceFromServer(
       this.getCommitsCollectionSubject(),
     );
-    const commitList = commitsCollection.get(
+    const commitList = (commitsCollection.get(
       collections.properties.members,
-    ) as string[];
+    ) ?? []) as string[];
 
     const builtVersions: Version[] = [];
 
@@ -659,6 +678,11 @@ export class Resource<C extends OptionalClass = any> {
 
   /** Returns the subject URL of the Resource */
   public getSubjectNoParams(): string {
+    // DID subjects (did:ad:...) don't have meaningful origin/pathname.
+    if (this.subject.startsWith('did:') || this.subject.startsWith('_')) {
+      return this.subject;
+    }
+
     const url = new URL(this.subject);
 
     return url.origin + url.pathname;
@@ -788,13 +812,154 @@ export class Resource<C extends OptionalClass = any> {
   }
 
   /**
+   * Sign pending changes into a {@link Commit} and queue it locally.
+   *
+   * - For DID genesis commits the subject is replaced with `did:ad:<signature>`.
+   * - Locally-queued commits are chained via their signatures so that
+   *   `previousCommit` stays consistent even before pushing.
+   * - Call {@link pushCommits} (or {@link save}) to send the queued commits to
+   *   the server.
+   *
+   * @returns The signed {@link Commit}.
+   */
+  public async signChanges(differentAgent?: Agent): Promise<Commit> {
+    const agent = this.store.getAgent() ?? differentAgent;
+
+    if (!agent) {
+      console.error('[signChanges] No agent set');
+      throw new Error('No agent has been set or passed, you cannot sign.');
+    }
+
+    if (!this.commitBuilder.hasUnsavedChanges()) {
+      console.error('[signChanges] No changes to sign');
+      throw new Error(`No changes to sign for ${this.subject}`);
+    }
+
+    // Chain: use last locally-signed commit, or the server-known lastCommit.
+    if (this._lastLocalSignature) {
+      // Construct the full commit URL that the server will use.  This ensures
+      // the serialization signed here matches what the server will produce when
+      // it verifies the signature.  The server stores commit resources at
+      // `{origin}/commits/{signature}`.
+      const commitUrl = `${this.store.getServerUrl()}/commits/${this._lastLocalSignature}`;
+      this.commitBuilder.setPreviousCommit(commitUrl);
+    } else {
+      const lastCommit = this.get(properties.commit.lastCommit)?.toString();
+
+      if (lastCommit) {
+        this.commitBuilder.setPreviousCommit(lastCommit);
+      }
+    }
+
+    // Clone the builder so new changes after this call go into a fresh one.
+    const builder = this.commitBuilder.clone();
+    this.commitBuilder = new CommitBuilder(this.subject);
+    const commit = await builder.sign(agent);
+
+    // DID genesis: the real subject is derived from the signature.
+    if (commit.subject !== this.subject) {
+      const oldSubject = this.subject;
+      this._subject = commit.subject;
+      // Update the fresh commitBuilder to use the real subject.
+      this.commitBuilder = new CommitBuilder(commit.subject);
+
+      if (this._store) {
+        this.store.removeResource(oldSubject);
+        this.store.addResources(this, { skipCommitCompare: true });
+      }
+    }
+
+    this.appliedCommitSignatures.add(commit.signature);
+    this._lastLocalSignature = commit.signature;
+    this._pendingCommits.push(commit);
+    this.loading = false;
+    this.new = false;
+
+    return commit;
+  }
+
+  /** Returns `true` when there are locally-signed commits waiting to be pushed. */
+  public get hasPendingCommits(): boolean {
+    return this._pendingCommits.length > 0;
+  }
+
+  /**
+   * Push all locally-queued commits to the server, in order.
+   *
+   * After a successful push the resource's `lastCommit` is updated from the
+   * server response and the local queue is cleared.
+   */
+  public async pushCommits(): Promise<string | undefined> {
+    if (this._pendingCommits.length === 0) {
+      return undefined;
+    }
+
+    const endpoint = this.getCommitEndpoint();
+    const wasNew = this._pendingCommits.length > 0 && this._pendingCommits[0].previousCommit === undefined;
+
+    let lastCommitId: string | undefined;
+
+    try {
+      this.commitError = undefined;
+      this.store.addResources(this, { skipCommitCompare: true });
+
+      while (this._pendingCommits.length > 0) {
+        const commit = this._pendingCommits[0];
+
+        const createdCommit = await this.store.postCommit(commit, endpoint);
+        lastCommitId = createdCommit.id as string;
+        this._pendingCommits.shift();
+      }
+
+      // All commits pushed successfully.
+      this._lastLocalSignature = undefined;
+
+      if (lastCommitId) {
+        this.setUnsafe(properties.commit.lastCommit, lastCommitId);
+      }
+
+      this.store.notifyResourceSaved(this);
+
+      if (wasNew) {
+        // The first `SUBSCRIBE` message will not have worked, because the resource didn't exist yet.
+        // https://github.com/atomicdata-dev/atomic-data-rust/issues/486
+        this.store.subscribeWebSocket(this.subject);
+        await this.store.saveBatchForParent(this.subject);
+      }
+
+      return lastCommitId;
+    } catch (e) {
+      this.commitError = e;
+      this.store.addResources(this, { skipCommitCompare: true });
+      throw e;
+    }
+  }
+
+  /** Resolves the `/commit` endpoint for this resource. */
+  private getCommitEndpoint(): string {
+    if (this.subject.startsWith('did:')) {
+      return new URL('/commit', this.store.getServerUrl()).toString();
+    }
+
+    try {
+      return new URL(this.subject).origin + `/commit`;
+    } catch {
+      return new URL('/commit', this.store.getServerUrl()).toString();
+    }
+  }
+
+  /**
    * Commits the changes and sends the Commit to the resource's `/commit`
    * endpoint. Returns the Url of the created Commit. If you don't pass an Agent
    * explicitly, the default Agent of the Store is used.
    * When there are no changes no commit is made and the function returns Promise<undefined>.
+   *
+   * This is equivalent to calling {@link signChanges} followed by {@link pushCommits}.
    */
   public async save(differentAgent?: Agent): Promise<string | undefined> {
-    if (!this.commitBuilder.hasUnsavedChanges()) {
+    const hasChanges = this.commitBuilder.hasUnsavedChanges();
+
+    if (!hasChanges && this._pendingCommits.length === 0) {
       console.warn(`No changes to ${this.subject}, not saving`);
 
       return undefined;
@@ -826,16 +991,6 @@ export class Resource<C extends OptionalClass = any> {
       return this.save(differentAgent);
     }
 
-    // The previousCommit is required in Commits. We should use the `lastCommit` value on the resource.
-    // This makes sure that we're making adjustments to the same version as the server.
-    const lastCommit = this.get(properties.commit.lastCommit)?.toString();
-
-    if (lastCommit) {
-      this.commitBuilder.setPreviousCommit(lastCommit);
-    }
-
-    const wasNew = this.new;
-
     let reportDone: () => void = () => undefined;
 
     this.inProgressCommit = new Promise(resolve => {
@@ -844,65 +999,25 @@ export class Resource<C extends OptionalClass = any> {
       };
     });
 
-    // Cloning the CommitBuilder to prevent race conditions, and keeping a back-up of current state for when things go wrong during posting.
-    const oldCommitBuilder = this.commitBuilder.clone();
-    this.commitBuilder = new CommitBuilder(this.subject);
-    const commit = await oldCommitBuilder.sign(agent);
-
-    // If the subject was updated during signing (e.g. did:ad genesis)
-    if (commit.subject !== this.subject) {
-      const oldSubject = this.subject;
-      this._subject = commit.subject;
-      this.store.removeResource(oldSubject);
-    }
-
-    // Add the signature to the list of applied ones, to prevent applying it again when the server
-    this.appliedCommitSignatures.add(commit.signature);
-    this.loading = false;
-    this.new = false;
-
-    // TODO: Check if all required props are there
-    let endpoint = '';
-
-    // DIDs don't have an origin, so use the store's server URL
-    if (this.subject.startsWith('did:')) {
-      endpoint = new URL('/commit', this.store.getServerUrl()).toString();
-    } else {
-      try {
-        endpoint = new URL(this.subject).origin + `/commit`;
-      } catch (e) {
-        endpoint = new URL('/commit', this.store.getServerUrl()).toString();
-      }
-    }
+    // Keep a backup of the commit builder in case push fails.
+    const oldCommitBuilder = hasChanges ? this.commitBuilder.clone() : undefined;
+    const wasNew = this.new;
 
     try {
-      this.commitError = undefined;
-      this.store.addResources(this, { skipCommitCompare: true });
-      const createdCommit = await this.store.postCommit(commit, endpoint);
-      // const res = store.getResourceLoading(this.subject);
-      this.setUnsafe(properties.commit.lastCommit, createdCommit.id!);
-
-      // Let all subscribers know that the commit has been applied
-      // store.addResources(this);
-      this.store.notifyResourceSaved(this);
-
-      if (wasNew) {
-        // The first `SUBSCRIBE` message will not have worked, because the resource didn't exist yet.
-        // That's why we need to repeat the process
-        // https://github.com/atomicdata-dev/atomic-data-rust/issues/486
-        this.store.subscribeWebSocket(this.subject);
-
-        // Save any children that have been batched while creating this resource
-        await this.store.saveBatchForParent(this.subject);
+      // Sign any unsaved changes into the local queue.
+      if (hasChanges) {
+        await this.signChanges(agent);
       }
+
+      // Push all queued commits to the server.
+      const result = await this.pushCommits();
 
       reportDone();
 
-      return createdCommit.id as string;
+      return result;
     } catch (e) {
       // Logic for handling error if the previousCommit is wrong.
-      // Is not stable enough, and maybe not required at the time.
-      if (e.message.includes('previousCommit')) {
+      if (e.message?.includes('previousCommit')) {
         if (this.errorRetries > 3) {
           this.errorRetries = 0;
           throw e;
@@ -911,7 +1026,6 @@ export class Resource<C extends OptionalClass = any> {
         this.errorRetries++;
 
         console.warn('previousCommit missing or mismatch, retrying...');
-        // We try again, but first we fetch the latest version of the resource to get its `lastCommit`
         const resourceFetched = await this.store.fetchResourceFromServer(
           this.subject,
         );
@@ -928,14 +1042,16 @@ export class Resource<C extends OptionalClass = any> {
           this.setUnsafe(properties.commit.lastCommit, fixedLastCommit);
         }
 
-        // Try again!
         reportDone();
 
         return await this.save(agent);
       }
 
-      // If it fails, revert to the old resource with the old CommitBuilder
-      this.commitBuilder = oldCommitBuilder;
+      // Revert the commit builder on failure.
+      if (oldCommitBuilder) {
+        this.commitBuilder = oldCommitBuilder;
+      }
+
       this.commitError = e;
       this.new = wasNew;
       this.store.addResources(this, { skipCommitCompare: true });
@@ -1031,7 +1147,6 @@ export class Resource<C extends OptionalClass = any> {
   public async refresh(): Promise<void> {
     await this.store.fetchResourceFromServer(this.subject, {
       noWebSocket: true,
-      forceOverride: true,
     });
   }
 

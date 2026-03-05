@@ -236,7 +236,7 @@ mod test {
             validate_rights: true,
             validate_previous_commit: false,
             update_index: true,
-            validate_for_agent: Some(agent.subject.clone()),
+            validate_for_agent: Some(agent.subject.to_string()),
         };
         store.apply_commit(commit, &opts).await.unwrap();
     }

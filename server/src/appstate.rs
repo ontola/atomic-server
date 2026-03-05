@@ -26,6 +26,7 @@ pub struct AppState {
     pub commit_monitor: actix::Addr<CommitMonitor>,
     pub y_sync_broadcaster: actix::Addr<YSyncBroadcaster>,
     pub search_state: SearchState,
+    pub dht: Option<crate::dht::DhtService>,
 }
 
 impl AppState {
@@ -100,6 +101,14 @@ impl AppState {
         let search_state = SearchState::new(&config)
             .map_err(|e| format!("Failed to start search service: {}", e))?;
 
+        let dht = if config.opts.mainline_dht {
+            tracing::info!("Starting Mainline DHT service");
+            let dht_service = crate::dht::DhtService::new()?;
+            Some(dht_service)
+        } else {
+            None
+        };
+
         // Initialize commit monitor, which watches commits and sends these to the commit_monitor actor
         let commit_monitor =
             crate::commit_monitor::create_commit_monitor(store.clone(), search_state.clone());
@@ -145,6 +154,7 @@ impl AppState {
             commit_monitor,
             y_sync_broadcaster,
             search_state,
+            dht,
         })
     }
 
@@ -170,14 +180,56 @@ async fn set_default_agent(config: &Config, store: &impl Storelike) -> AtomicSer
 
     let agent = match atomic_lib::config::read_config(Some(&config.config_file_path)) {
         Ok(agent_config) => {
-            let agent = Agent::from_secret(&agent_config.shared.agent_secret)?;
+            let mut agent = Agent::from_secret(&agent_config.shared.agent_secret)?;
+
+            // Migrate old-format agent subjects (e.g. "https://atomicdata.dev/agents/...")
+            // to the new "did:ad:" format. Old configs stored the agent subject as an
+            // HTTP URL on atomicdata.dev, but the agent's keys are local. During invite token
+            // verification the old URL would resolve to an external resource with a different
+            // public key, causing "Invalid signature" errors.
+            let needs_migration = agent
+                .subject
+                .as_str()
+                .starts_with("https://atomicdata.dev/agents/")
+                || agent
+                    .subject
+                    .as_str()
+                    .starts_with("http://atomicdata.dev/agents/");
+            if needs_migration {
+                let private_key = agent
+                    .private_key
+                    .clone()
+                    .ok_or("No private key found on agent to migrate")?;
+                let migrated = Agent::new_from_private_key(Some("server"), &private_key)?;
+                tracing::info!(
+                    "Migrating agent subject from old format '{}' to new format '{}'",
+                    agent.subject,
+                    migrated.subject
+                );
+                agent = migrated;
+
+                // Update the config file so the migration only happens once
+                let cfg = atomic_lib::config::Config {
+                    shared: SharedConfig {
+                        agent_secret: agent.build_secret()?,
+                    },
+                    client: agent_config.client,
+                };
+                cfg.save(&config.config_file_path)?;
+                tracing::info!(
+                    "Config file updated with migrated agent at {:?}",
+                    config.config_file_path
+                );
+            }
+
             match store.get_resource(&agent.subject.clone().into()).await {
                 Ok(_) => agent,
                 Err(e) => {
                     let is_local = if let Some(base) = &config.base_domain {
-                        agent.subject.contains(base)
+                        agent.subject.as_str().contains(base)
                     } else {
-                        agent.subject.starts_with("internal:")
+                        agent.subject.as_str().starts_with("internal:")
+                            || agent.subject.as_str().starts_with("did:")
                     };
 
                     if is_local {

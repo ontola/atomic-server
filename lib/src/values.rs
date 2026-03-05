@@ -464,6 +464,12 @@ impl From<Resource> for SubResource {
     }
 }
 
+impl From<crate::Subject> for SubResource {
+    fn from(val: crate::Subject) -> Self {
+        SubResource::Subject(val)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

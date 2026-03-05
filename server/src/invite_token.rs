@@ -6,10 +6,10 @@ use serde::{Deserialize, Serialize};
 /// It is a base64-encoded JSON-AD representation of a "virtual" Invite resource.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InviteToken {
-    pub target: String,
+    pub target: atomic_lib::Subject,
     pub write: bool,
     pub expires_at: i64,
-    pub signer: String,
+    pub signer: atomic_lib::Subject,
     pub signature: String,
 }
 
@@ -21,10 +21,15 @@ impl InviteToken {
         expires_at: i64,
         signer_agent: &atomic_lib::agents::Agent,
     ) -> AtomicResult<Self> {
+        // Normalize the target through Subject parsing so the signed string
+        // matches what encode()/verify() will produce via self.target.as_str().
+        let target_subject = atomic_lib::Subject::from(target);
+        let target_normalized = target_subject.as_str().to_string();
+
         let mut signable_json = serde_json::Map::new();
         signable_json.insert(
             urls::TARGET.into(),
-            serde_json::Value::String(target.clone()),
+            serde_json::Value::String(target_normalized.clone()),
         );
         signable_json.insert(urls::WRITE_BOOL.into(), serde_json::Value::Bool(write));
         signable_json.insert(
@@ -33,7 +38,7 @@ impl InviteToken {
         );
         signable_json.insert(
             urls::SIGNER.into(),
-            serde_json::Value::String(signer_agent.subject.clone()),
+            serde_json::Value::String(signer_agent.subject.as_str().to_string()),
         );
 
         let serialized = serde_jcs::to_string(&signable_json)
@@ -49,7 +54,7 @@ impl InviteToken {
         )?;
 
         Ok(Self {
-            target,
+            target: target_subject,
             write,
             expires_at,
             signer: signer_agent.subject.clone(),
@@ -61,7 +66,7 @@ impl InviteToken {
         let mut map = serde_json::Map::new();
         map.insert(
             urls::TARGET.into(),
-            serde_json::Value::String(self.target.clone()),
+            serde_json::Value::String(self.target.as_str().to_string()),
         );
         map.insert(urls::WRITE_BOOL.into(), serde_json::Value::Bool(self.write));
         map.insert(
@@ -70,7 +75,7 @@ impl InviteToken {
         );
         map.insert(
             urls::SIGNER.into(),
-            serde_json::Value::String(self.signer.clone()),
+            serde_json::Value::String(self.signer.as_str().to_string()),
         );
         map.insert(
             urls::SIGNATURE.into(),
@@ -98,6 +103,7 @@ impl InviteToken {
             .as_str()
             .ok_or("Target must be a string")?
             .to_string();
+        let target = atomic_lib::Subject::from(target);
 
         let write = json
             .get(urls::WRITE_BOOL)
@@ -111,12 +117,13 @@ impl InviteToken {
             .as_i64()
             .ok_or("Expires_at must be an integer")?;
 
-        let signer = json
+        let signer_str = json
             .get(urls::SIGNER)
             .ok_or("Missing signer in invite token")?
             .as_str()
             .ok_or("Signer must be a string")?
             .to_string();
+        let signer = atomic_lib::Subject::from(signer_str);
 
         let signature = json
             .get(urls::SIGNATURE)
@@ -136,6 +143,13 @@ impl InviteToken {
 
     /// Verifies the token's signature and the signer's rights.
     pub async fn verify(&self, store: &Db) -> AtomicResult<()> {
+        tracing::debug!(
+            "Verifying invite token: signer={}, target={}, expires_at={}",
+            self.signer,
+            self.target,
+            self.expires_at
+        );
+
         // 1. Check expiration
         let now = atomic_lib::utils::now();
         if self.expires_at < now {
@@ -166,18 +180,37 @@ impl InviteToken {
 
         // Let's manually verify the signature for now, using the signer's public key.
         let signer_resource = store
-            .get_resource(&self.signer.clone().into())
+            .get_resource(&self.signer)
             .await
             .map_err(|e| format!("Could not fetch invite issuer ({}): {}", self.signer, e))?;
 
-        let public_key = signer_resource.get(urls::PUBLIC_KEY)?.to_string();
+        tracing::debug!(
+            "Fetched signer resource, subject={}",
+            signer_resource.get_subject()
+        );
+
+        let public_key = match signer_resource.get(urls::PUBLIC_KEY) {
+            Ok(pk) => pk.to_string(),
+            Err(e) => {
+                if let Some(pk) = self
+                    .signer
+                    .as_str()
+                    .strip_prefix(atomic_lib::subject::DID_AD_AGENT_PREFIX)
+                {
+                    pk.to_string()
+                } else {
+                    return Err(e);
+                }
+            }
+        };
+        tracing::debug!("Public key for verification: {}", public_key);
         let pubkey_bytes = atomic_lib::agents::decode_base64(&public_key)?;
 
         // The data that was signed is the JSON-AD without the signature.
         let mut signable_json = serde_json::Map::new();
         signable_json.insert(
             urls::TARGET.into(),
-            serde_json::Value::String(self.target.clone()),
+            serde_json::Value::String(self.target.as_str().to_string()),
         );
         signable_json.insert(urls::WRITE_BOOL.into(), serde_json::Value::Bool(self.write));
         signable_json.insert(
@@ -186,11 +219,13 @@ impl InviteToken {
         );
         signable_json.insert(
             urls::SIGNER.into(),
-            serde_json::Value::String(self.signer.clone()),
+            serde_json::Value::String(self.signer.as_str().to_string()),
         );
 
         let serialized = serde_jcs::to_string(&signable_json)
             .map_err(|e| format!("Failed to serialize invite data for verification: {}", e))?;
+
+        tracing::debug!("Serialized signable data for verification: {}", serialized);
 
         let signature_bytes = atomic_lib::agents::decode_base64(&self.signature)?;
 
@@ -198,7 +233,10 @@ impl InviteToken {
             ring::signature::UnparsedPublicKey::new(&ring::signature::ED25519, pubkey_bytes);
         peer_public_key
             .verify(serialized.as_bytes(), &signature_bytes)
-            .map_err(|_| "Invalid signature in invite token")?;
+            .map_err(|_| format!(
+                "Invalid signature in invite token. signer={}, public_key={}, signature={}, serialized_data={}",
+                self.signer, public_key, self.signature, serialized
+            ))?;
 
         // 3. Check signer's rights to the target
         let target_resource = store
@@ -241,7 +279,7 @@ mod test {
         );
         signable_json.insert(
             urls::SIGNER.into(),
-            serde_json::Value::String(agent.subject.clone()),
+            serde_json::Value::String(agent.subject.as_str().to_string()),
         );
 
         let serialized = serde_jcs::to_string(&signable_json).unwrap();
@@ -253,7 +291,7 @@ mod test {
         .unwrap();
 
         let token = InviteToken {
-            target: target.clone(),
+            target: atomic_lib::Subject::from(target.clone()),
             write: true,
             expires_at,
             signer: agent.subject.clone(),
@@ -272,6 +310,64 @@ mod test {
     }
 
     #[tokio::test]
+    async fn test_invite_token_new_roundtrip() {
+        let store = atomic_lib::Db::init_temp("test_invite_token_new_roundtrip")
+            .await
+            .expect("Could not init db");
+        let agent = store.get_default_agent().expect("Could not get agent");
+
+        let target = urls::PROPERTIES.to_string();
+        let expires_at = atomic_lib::utils::now() + 10000;
+
+        // Use the production code path: InviteToken::new
+        let token = InviteToken::new(target.clone(), true, expires_at, &agent)
+            .expect("Failed to create invite token");
+
+        let encoded = token.encode().expect("Failed to encode");
+        let decoded = InviteToken::decode(&encoded).expect("Failed to decode");
+
+        assert_eq!(decoded.target, target);
+        assert_eq!(decoded.write, true);
+        assert_eq!(decoded.expires_at, expires_at);
+        assert_eq!(decoded.signer, agent.subject);
+
+        decoded
+            .verify(&store)
+            .await
+            .expect("Verification failed for token created via InviteToken::new");
+    }
+
+    #[tokio::test]
+    async fn test_invite_token_root_url_target() {
+        // Regression test: root URLs like "http://localhost:9883" get a trailing
+        // slash added by Url::parse ("http://localhost:9883/"). This caused a
+        // mismatch between the string signed in new() and the string used in
+        // encode()/verify(), resulting in "Invalid signature in invite token".
+        let store = atomic_lib::Db::init_temp("test_invite_token_root_url")
+            .await
+            .expect("Could not init db");
+        let agent = store.get_default_agent().expect("Could not get agent");
+
+        // Use a root URL without trailing slash, like get_origin() produces
+        let target = "https://atomicdata.dev".to_string();
+        let expires_at = atomic_lib::utils::now() + 10000;
+
+        let token = InviteToken::new(target.clone(), true, expires_at, &agent)
+            .expect("Failed to create invite token");
+
+        let encoded = token.encode().expect("Failed to encode");
+        let decoded = InviteToken::decode(&encoded).expect("Failed to decode");
+
+        // The target should be normalized consistently
+        assert_eq!(decoded.target.as_str(), token.target.as_str());
+
+        decoded
+            .verify(&store)
+            .await
+            .expect("Verification failed for root URL target");
+    }
+
+    #[tokio::test]
     async fn test_invite_token_expired() {
         let store = atomic_lib::Db::init_temp("test_invite_token_expired")
             .await
@@ -282,7 +378,7 @@ mod test {
         let expires_at = atomic_lib::utils::now() - 10000; // Expired
 
         let token = InviteToken {
-            target,
+            target: atomic_lib::Subject::from(target),
             write: true,
             expires_at,
             signer: agent.subject.clone(),

@@ -112,7 +112,7 @@ async fn do_install_plugin(
         .get_resource_extended(
             &plugin_file_subject.clone().into(),
             false,
-            &ForAgent::AgentSubject(signer.to_string()),
+            &ForAgent::AgentSubject(signer.to_string().into()),
         )
         .await
     {

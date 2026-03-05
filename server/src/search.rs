@@ -110,17 +110,23 @@ impl SearchState {
     #[tracing::instrument(skip(self, store))]
     pub async fn add_resource(&self, resource: &Resource, store: &Db) -> AtomicServerResult<()> {
         let fields = self.get_schema_fields()?;
-        let subject = store.normalize_subject(resource.get_subject()).to_string();
-        let writer = self.writer.read()?;
-
+        // Store the canonical subject (e.g. "internal:/files/xxx") as the index key.
+        // Resolution to full URLs (e.g. "http://localhost:9883/files/xxx") happens at the
+        // output layer (search handler), not here. This keeps add/remove symmetric — both
+        // just use subject.as_str().
+        let subject = resource.get_subject().as_str();
+        let origin = store
+            .get_base_domain()
+            .unwrap_or_else(|| "http://localhost".to_string());
+        tracing::debug!("search::add_resource subject={}", subject);
         let mut doc = tantivy::TantivyDocument::default();
         doc.add_object(
             fields.propvals,
-            serde_json::from_str(&resource.to_json_ad(None)?).map_err(|e| {
+            serde_json::from_str(&resource.to_json_ad(Some(&origin))?).map_err(|e| {
                 format!(
-                    "Failed to convert resource to json for search indexing. Subject: {}. Error: {}",
-                    subject, e
-                )
+                "Failed to convert resource to json for search indexing. Subject: {}. Error: {}",
+                subject, e
+            )
             })?,
         );
 
@@ -150,15 +156,29 @@ impl SearchState {
             doc.add_text(fields.description, content);
         }
 
-        let hierarchy = resource_to_facet(resource, store).await?;
+        let hierarchy = resource_to_facet(resource, store).await.map_err(|e| {
+            tracing::warn!(
+                "search::add_resource resource_to_facet FAILED for subject={}: {}",
+                subject,
+                e
+            );
+            e
+        })?;
+        tracing::debug!(
+            "search::add_resource facet={:?} for subject={}",
+            hierarchy,
+            subject
+        );
         doc.add_facet(fields.hierarchy, hierarchy);
 
+        let writer = self.writer.read()?;
         writer.add_document(doc)?;
 
         Ok(())
     }
 
     /// Removes a single resource from the search index, but does _not_ commit!
+    /// Pass `subject.as_str()` — the same canonical form that `add_resource` stores.
     /// Does not index outgoing links, or resourcesArrays
     /// `appstate.search_index_writer.write()?.commit()?;`
     #[tracing::instrument(skip(self))]
@@ -376,7 +396,7 @@ mod tests {
             .unwrap();
         resource.save(&store).await.unwrap();
 
-        // Update in search index
+        // Update in search index — just use the canonical subject, no resolution needed
         search_state
             .remove_resource(resource.get_subject().as_str())
             .unwrap();

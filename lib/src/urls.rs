@@ -95,6 +95,9 @@ pub const WRITE: &str = "https://atomicdata.dev/properties/write";
 pub const APPEND: &str = "https://atomicdata.dev/properties/append";
 pub const CHILDREN: &str = "https://atomicdata.dev/properties/children";
 pub const SUBRESOURCES: &str = "https://atomicdata.dev/properties/subresources";
+pub const DRIVE_PUBLIC_KEY: &str = "https://atomicdata.dev/properties/drive/publicKey";
+pub const DRIVE_PRIVATE_KEY: &str = "https://atomicdata.dev/properties/drive/privateKey";
+pub const DRIVE_HASH: &str = "https://atomicdata.dev/properties/drive/hash";
 // ... for Inivtations
 pub const DESTINATION: &str = "https://atomicdata.dev/properties/destination";
 pub const TARGET: &str = "https://atomicdata.dev/properties/invite/target";

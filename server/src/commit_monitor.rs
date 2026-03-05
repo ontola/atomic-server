@@ -18,6 +18,7 @@ use std::collections::{HashMap, HashSet};
 
 /// The Commit Monitor is an Actor that manages subscriptions for subjects and sends Commits to listeners.
 /// It's also responsible for checking whether the rights are present
+#[allow(clippy::mutable_key_type)]
 pub struct CommitMonitor {
     /// Maintains a list of all the resources that are being subscribed to, and maps these to websocket connections.
     subscriptions: HashMap<atomic_lib::Subject, HashSet<Addr<WebSocketConnection>>>,
@@ -73,7 +74,7 @@ impl Handler<Subscribe> for CommitMonitor {
                         match atomic_lib::hierarchy::check_read(
                             &store,
                             &resource,
-                            &ForAgent::AgentSubject(msg.agent.clone()),
+                            &ForAgent::AgentSubject(msg.agent.clone().into()),
                         )
                         .await
                         {
@@ -102,6 +103,7 @@ impl Handler<Subscribe> for CommitMonitor {
             }
             .into_actor(self)
             .map(|msg, actor, _ctx| {
+                #[allow(clippy::mutable_key_type)]
                 if let Some(msg) = msg {
                     let set = actor
                         .subscriptions
@@ -164,10 +166,11 @@ impl Handler<CommitMessage> for CommitMonitor {
         let store = self.store.clone();
         let search_state = self.search_state.clone();
         let resource_new = msg.commit_response.resource_new.clone();
+        let target_str = target_subject.to_string();
 
         Box::pin(
             async move {
-                search_state.remove_resource(&target).map_err(|e| {
+                search_state.remove_resource(&target_str).map_err(|e| {
                     format!(
                         "Handling commit in CommitMonitor failed, cache may not be fully updated: {}",
                         e
@@ -177,10 +180,19 @@ impl Handler<CommitMessage> for CommitMonitor {
                     // We could one day re-(allow) to keep old resources,
                     // but then we also should index the older versions when re-indexing.
                     // Add new resource to search index
+                    tracing::debug!(
+                        "CommitMonitor: adding resource to search index: {}",
+                        resource.get_subject()
+                    );
                     search_state
                         .add_resource(&resource, &store)
                         .await
                         .map_err(|e| {
+                            tracing::error!(
+                                "CommitMonitor: FAILED to add resource {} to search index: {}",
+                                resource.get_subject(),
+                                e
+                            );
                             format!(
                     "Handling commit in CommitMonitor failed, cache may not be fully updated: {}",
                     e
