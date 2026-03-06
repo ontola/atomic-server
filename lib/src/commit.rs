@@ -744,50 +744,55 @@ impl Commit {
                 format!("internal:/commitsUnsigned/{}", now)
             }
         };
+        // `new_instance(COMMIT, …)` already set `isA: Commit`, so the
+        // resource is `is_native()` from here on: every `set_unsafe_fallible`
+        // below takes the propval-only branch and never materializes a Loro
+        // state doc. That is exactly what keeps the commit's `loroUpdate`
+        // (its signed payload) from being re-derived as a doc snapshot.
         let mut resource = Resource::new_instance(urls::COMMIT, store).await?;
         resource.set_subject(commit_subject);
-        resource.set_unsafe(
+        resource.set_unsafe_fallible(
             urls::SUBJECT.into(),
             Value::new(self.subject.as_str(), &DataType::AtomicUrl)?,
-        );
+        )?;
         let classes = vec![urls::COMMIT.to_string()];
-        resource.set_unsafe(urls::IS_A.into(), classes.into());
-        resource.set_unsafe(
+        resource.set_unsafe_fallible(urls::IS_A.into(), classes.into())?;
+        resource.set_unsafe_fallible(
             urls::CREATED_AT.into(),
             Value::new(&self.created_at.to_string(), &DataType::Timestamp)?,
-        );
-        resource.set_unsafe(
+        )?;
+        resource.set_unsafe_fallible(
             SIGNER.into(),
             Value::new(self.signer.as_str(), &DataType::AtomicUrl)?,
-        );
+        )?;
         if let Some(destroy) = self.destroy {
             if destroy {
-                resource.set_unsafe(urls::DESTROY.into(), true.into());
+                resource.set_unsafe_fallible(urls::DESTROY.into(), true.into())?;
             }
         }
         if let Some(previous_commit) = &self.previous_commit {
-            resource.set_unsafe(
+            resource.set_unsafe_fallible(
                 urls::PREVIOUS_COMMIT.into(),
                 Value::AtomicUrl(previous_commit.clone().into()),
-            );
+            )?;
         }
         if let Some(is_genesis) = self.is_genesis {
-            resource.set_unsafe(urls::IS_GENESIS.into(), is_genesis.into());
+            resource.set_unsafe_fallible(urls::IS_GENESIS.into(), is_genesis.into())?;
         }
         if let Some(loro_update) = &self.loro_update {
             if !loro_update.is_empty() {
-                resource.set_unsafe(
+                resource.set_unsafe_fallible(
                     urls::LORO_UPDATE.into(),
                     Value::LoroDoc(loro_update.clone()),
-                );
+                )?;
             }
         }
-        resource.set_unsafe(
+        resource.set_unsafe_fallible(
             SIGNER.into(),
             Value::new(self.signer.as_str(), &DataType::AtomicUrl)?,
-        );
+        )?;
         if let Some(signature) = &self.signature {
-            resource.set_unsafe(urls::SIGNATURE.into(), signature.clone().into());
+            resource.set_unsafe_fallible(urls::SIGNATURE.into(), signature.clone().into())?;
         }
         Ok(resource)
     }
