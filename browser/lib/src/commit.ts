@@ -257,8 +257,15 @@ export class CommitBuilder {
 
     let subject = commitPreSigned.subject;
 
-    // Special logic for did:ad genesis commits: the subject must be the signature.
-    if (subject.startsWith('did:ad:') && this.previousCommit === undefined) {
+    // Special logic for DID genesis commits: the subject must be the signature.
+    // `_new:*` subjects are temporary local placeholders used before first sign.
+    const isDidSigner = agent.subject.startsWith('did:ad:agent:');
+
+    if (
+      (subject.startsWith('did:ad:') ||
+        (subject.startsWith('_new:') && isDidSigner)) &&
+      this.previousCommit === undefined
+    ) {
       subject = `did:ad:${signature}`;
     }
 
@@ -379,11 +386,16 @@ export function serializeDeterministically(
 
   const jsonadCommit = commitToJsonADObject(commit);
 
-  // Special logic for did:ad genesis commits: remove subject from serialization
-  if (
-    commit.subject.startsWith('did:ad:') &&
-    commit.previousCommit === undefined
-  ) {
+  // Special logic for did:ad genesis commits: remove subject from serialization.
+  // Also covers `_new:*` placeholder subjects used by DID agents before the
+  // first sign (the subject will become `did:ad:{signature}` after signing).
+  const isDidGenesis =
+    (commit.subject.startsWith('did:ad:') ||
+      (commit.subject.startsWith('_new:') &&
+        commit.signer?.startsWith('did:ad:agent:'))) &&
+    commit.previousCommit === undefined;
+
+  if (isDidGenesis) {
     delete jsonadCommit[commits.properties.subject];
   }
 

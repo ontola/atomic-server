@@ -50,7 +50,7 @@ export function useCreateAndNavigate(): CreateAndNavigate {
         await resource.save();
 
         if (onCreated) {
-          onCreated(resource);
+          await onCreated(resource);
         }
 
         if (!skipNavigation) {

@@ -172,7 +172,8 @@ const decodeSecret = (secret: string): DecodedSecret => {
     throw new Error('Invalid Secret, not a valid encoded JSON object');
   }
 
-  const { privateKey, subject } = parsed;
+  const { privateKey } = parsed;
+  let { subject } = parsed;
 
   if (!privateKey) {
     throw new Error('Invalid Secret, no private key found');
@@ -182,7 +183,14 @@ const decodeSecret = (secret: string): DecodedSecret => {
     throw new Error('Invalid Secret, no subject found');
   }
 
-  return parsed;
+  // Migrate legacy HTTP agent subjects (https://server/agents/{pubkey}) to did:ad:agent:{pubkey}
+  const httpAgentMatch = subject.match(/^https?:\/\/[^/]+\/agents\/(.+)$/);
+
+  if (httpAgentMatch) {
+    subject = `did:ad:agent:${httpAgentMatch[1]}`;
+  }
+
+  return { privateKey, subject };
 };
 
 export interface KeyPair {

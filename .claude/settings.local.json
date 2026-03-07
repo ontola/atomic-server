@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__chrome-devtools__new_page",
+      "mcp__chrome-devtools__take_screenshot",
+      "Bash(cargo test --package atomic-server --test dht_resolve --no-run)",
+      "Bash(cargo test --package atomic-server --test dht_resolve -- --nocapture)"
+    ]
+  }
+}

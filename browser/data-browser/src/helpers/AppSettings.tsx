@@ -54,10 +54,13 @@ export const AppSettingsContextProvider = (
 
   const setDrive = useCallback(
     (newDrive: string) => {
-      const url = new URL(newDrive);
       innerSetDrive(newDrive);
-      setBaseURL(url.origin);
-      serverURLStorage.set(url.origin);
+
+      if (newDrive.startsWith('http://') || newDrive.startsWith('https://')) {
+        const url = new URL(newDrive);
+        setBaseURL(url.origin);
+        serverURLStorage.set(url.origin);
+      }
     },
     [innerSetDrive, setBaseURL],
   );

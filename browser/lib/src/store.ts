@@ -51,7 +51,7 @@ type CreateResourceOptions = {
   isA?: string | string[];
   /** Any additional properties the resource should have */
   propVals?: Record<string, JSONValue>;
-  /** Set to true if the resource should have a DID as subject. Defaults to true. */
+  /** Set to true if the resource should have a DID as subject. Defaults to `true` for `did:ad` agents, otherwise `false`. */
   did?: boolean;
 };
 
@@ -294,7 +294,7 @@ export class Store {
         !storeResource.loading &&
         !storeResource.new &&
         storeResource.get(commits.properties.lastCommit) ===
-        resource.get(commits.properties.lastCommit)
+          resource.get(commits.properties.lastCommit)
       ) {
         return;
       }
@@ -327,8 +327,11 @@ export class Store {
     isA,
     propVals,
     noParent,
-    did = true,
+    did,
   }: CreateResourceOptions = {}): Promise<Resource<C>> {
+    const shouldUseDid =
+      did ?? this.getAgent()?.subject?.startsWith('did:ad:agent:') ?? false;
+
     const normalizedIsA = Array.isArray(isA) ? isA : [isA];
 
     // When the caller supplies an explicit subject, use it as-is.
@@ -337,7 +340,7 @@ export class Store {
     // derived below after signing.
     const newSubject =
       subject ??
-      (did
+      (shouldUseDid
         ? `_new:${this.randomPart()}`
         : this.createHTTPSubject(parent ?? this.serverUrl));
 
@@ -360,7 +363,7 @@ export class Store {
     // For DID resources: sign the genesis commit locally to derive the real
     // DID from the signature.  The signed commit is queued on the resource and
     // will be sent to the server on the next `save()` / `push()`.
-    if (did && !subject) {
+    if (shouldUseDid && !subject) {
       const agent = this.getAgent();
 
       if (!agent) {
@@ -436,6 +439,11 @@ export class Store {
     return `${parentSubject}/${this.randomPart()}`;
   }
 
+  /** Creates a random HTTP subject, optionally nested under a parent URL. */
+  public createSubject(parent?: string): string {
+    return this.createHTTPSubject(parent ?? this.serverUrl);
+  }
+
   /**
    * Always fetches the resource from the server then adds it to the store.
    */
@@ -509,15 +517,13 @@ export class Store {
         ? { agent: this.agent, serverURL: this.getServerUrl() }
         : undefined;
 
-      const { resource, createdResources } = await this.client.fetchResourceHTTP(
-        fetchSubject,
-        {
+      const { resource, createdResources } =
+        await this.client.fetchResourceHTTP(fetchSubject, {
           from: opts.fromProxy ? this.getServerUrl() : undefined,
           method: opts.method,
           body: opts.body,
           signInfo,
-        },
-      );
+        });
 
       // The client already returns the requested top-level resource as `resource`.
       this.addResources(resource, {
@@ -529,7 +535,10 @@ export class Store {
 
       // Any other resources that were returned (e.g. linked resources)
       createdResources.forEach(r => {
-        if (this.normalizeSubject(r.subject) !== this.normalizeSubject(resource.subject)) {
+        if (
+          this.normalizeSubject(r.subject) !==
+          this.normalizeSubject(resource.subject)
+        ) {
           this.addResources(r);
         }
       });
@@ -619,7 +628,10 @@ export class Store {
     let resource = this.resources.get(resolved);
 
     if (!resource) {
-      resource = new Resource<C>(normalized, opts.newResource || isTemporarySubject);
+      resource = new Resource<C>(
+        normalized,
+        opts.newResource || isTemporarySubject,
+      );
 
       // New resources don't have to load, they are just created.
       if (!opts.newResource && !isTemporarySubject) {

@@ -276,17 +276,9 @@ pub fn check_if_atom_matches_watched_query_filters(
             let q_filter: QueryFilter = QueryFilter::from_bytes(&k)?;
 
             if let Some(prop) = should_update_property(&q_filter, index_atom, resource) {
-                let update_val = if &index_atom.property == prop {
-                    // The index_atom's sort_value is consistent (individual element value)
-                    index_atom.sort_value.clone()
-                } else {
-                    // Different property (e.g., sort_by different from matched property).
-                    // We need to read from the resource. For arrays, this will use length,
-                    // but this case is less common and typically sort properties are scalars.
-                    match resource.get(prop) {
-                        Ok(val) => val.to_sortable_string(),
-                        Err(_e) => NO_VALUE.to_string(),
-                    }
+                let update_val = match resource.get(prop) {
+                    Ok(val) => val.to_sortable_string(),
+                    Err(_e) => NO_VALUE.to_string(),
                 };
                 update_indexed_member(
                     &q_filter,
@@ -539,8 +531,8 @@ pub mod test {
             .set(
                 urls::IS_A.into(),
                 Value::ResourceArray(vec![
-                    SubResource::Subject(class.to_string()),
-                    SubResource::Subject(urls::PARAGRAPH.to_string()),
+                    SubResource::Subject(class.to_string().into()),
+                    SubResource::Subject(urls::PARAGRAPH.to_string().into()),
                 ]),
                 store,
             )

@@ -58,6 +58,53 @@ describe('Commit signing and keys', () => {
       jsonCorrect['https://atomicdata.dev/properties/subject'],
     ).toBeUndefined();
   });
+
+  it('derives did:ad subject from temporary _new subject', async ({
+    expect,
+  }) => {
+    const tempSubject = '_new:01TESTTEMP';
+    const createdAt = 0;
+    const didAgent = new Agent(
+      new JSCryptoProvider(privateKey),
+      'did:ad:agent:TESTAGENT',
+    );
+
+    const commitBuilder = new CommitBuilder(tempSubject, {
+      set: new Map([
+        ['https://atomicdata.dev/properties/description', 'Genesis value'],
+      ]),
+    });
+
+    const commit = await commitBuilder.signAt(didAgent, createdAt);
+
+    expect(commit.subject).to.equal(`did:ad:${commit.signature}`);
+
+    const serialized = serializeDeterministically(commit);
+    const jsonCorrect = JSON.parse(serialized);
+    expect(
+      jsonCorrect['https://atomicdata.dev/properties/subject'],
+    ).toBeUndefined();
+  });
+
+  it('keeps _new subject for non-did signers', async ({ expect }) => {
+    const tempSubject = '_new:01TESTTEMP';
+    const createdAt = 0;
+    const commitBuilder = new CommitBuilder(tempSubject, {
+      set: new Map([
+        ['https://atomicdata.dev/properties/description', 'Regular value'],
+      ]),
+    });
+
+    const commit = await commitBuilder.signAt(agent, createdAt);
+
+    expect(commit.subject).to.equal(tempSubject);
+
+    const serialized = serializeDeterministically(commit);
+    const jsonCorrect = JSON.parse(serialized);
+    expect(jsonCorrect['https://atomicdata.dev/properties/subject']).to.equal(
+      tempSubject,
+    );
+  });
 });
 
 describe('Commit parse and apply', () => {

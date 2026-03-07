@@ -17,7 +17,14 @@ pub struct DhtService {
 impl DhtService {
     /// Starts a new DHT client.
     pub fn new() -> AtomicResult<Self> {
-        let dht = Dht::client().map_err(|e| format!("Failed to start DHT: {}", e))?;
+        let mut builder = Dht::builder();
+        if let Ok(bootstrap) = std::env::var("ATOMIC_DHT_BOOTSTRAP") {
+            let addrs: Vec<String> = bootstrap.split(',').map(|s| s.to_string()).collect();
+            builder.bootstrap(&addrs);
+        }
+        let dht = builder
+            .build()
+            .map_err(|e| format!("Failed to start DHT: {}", e))?;
         Ok(Self { dht })
     }
 
@@ -61,6 +68,13 @@ impl DhtService {
             .get_peers(id)
             .flat_map(|batch: Vec<SocketAddrV4>| batch.into_iter().map(SocketAddr::from))
             .collect();
+
+        tracing::debug!(
+            "DHT: get_peers for drive {} returned {} peer(s): {:?}",
+            drive_hash_hex,
+            peers.len(),
+            peers
+        );
 
         Ok(peers)
     }
@@ -139,9 +153,10 @@ impl DhtService {
                             )
                         })?;
 
+                        let pure_did = subject.pure_id();
                         if let Some(resource) = resources
                             .into_iter()
-                            .find(|r| r.get_subject().as_str() == did_str)
+                            .find(|r| r.get_subject().pure_id() == pure_did)
                         {
                             tracing::info!(
                                 "DHT: Successfully resolved {} from peer {}",

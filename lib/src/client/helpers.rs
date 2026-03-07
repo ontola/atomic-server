@@ -27,7 +27,22 @@ pub async fn fetch_resource(
     } else {
         subject.to_string()
     };
-    let body = fetch_body(&url, crate::parse::JSON_AD_MIME, client_agent)?;
+
+    // DID agents are not understood by old/external servers (they can't resolve
+    // `did:ad:agent:` to fetch the public key). Only sign requests to our own server.
+    let effective_agent = match client_agent {
+        Some(agent) if agent.subject.as_str().starts_with("did:") => {
+            let server = store.get_server_url();
+            if url.starts_with(server.trim_end_matches('/')) {
+                client_agent
+            } else {
+                None
+            }
+        }
+        _ => client_agent,
+    };
+
+    let body = fetch_body(&url, crate::parse::JSON_AD_MIME, effective_agent)?;
     let resources = Box::pin(parse_json_ad_string(&body, store, &ParseOpts::default()))
         .await
         .map_err(|e| format!("Error parsing body of {}. {}", subject, e))?;
@@ -100,14 +115,22 @@ pub fn fetch_body(
     }
 
     let client = ureq::builder()
-        .timeout(std::time::Duration::from_secs(2))
+        .timeout(std::time::Duration::from_secs(10))
         .build();
 
     let mut req = client.get(url);
     if let Some(agent) = client_agent {
-        let headers = get_authentication_headers(url, agent)?;
-        for (key, value) in headers {
-            req = req.set(key.as_str(), value.as_str());
+        if should_sign_request(url, agent) {
+            let headers = get_authentication_headers(url, agent)?;
+            for (key, value) in headers {
+                req = req.set(key.as_str(), value.as_str());
+            }
+        } else {
+            tracing::warn!(
+                "Skipping signed auth headers for cross-origin fetch. url={}, agent={}",
+                url,
+                agent.subject
+            );
         }
     }
 
@@ -139,6 +162,25 @@ pub fn fetch_body(
     Ok(body)
 }
 
+fn should_sign_request(url: &str, agent: &Agent) -> bool {
+    // DID agents can be verified without fetching an HTTP subject.
+    if agent.subject.as_str().starts_with("did:") {
+        return true;
+    }
+
+    let Ok(target) = url::Url::parse(url) else {
+        return false;
+    };
+
+    let Ok(agent_url) = url::Url::parse(agent.subject.as_str()) else {
+        return false;
+    };
+
+    target.scheme() == agent_url.scheme()
+        && target.host_str() == agent_url.host_str()
+        && target.port_or_known_default() == agent_url.port_or_known_default()
+}
+
 /// Posts a Commit to the endpoint of the Subject from the Commit
 pub async fn post_commit(commit: &crate::Commit, store: &impl Storelike) -> AtomicResult<()> {
     let subject = commit.get_subject();
@@ -166,7 +208,7 @@ async fn post_commit_custom_endpoint(
     let json = commit.into_resource(store).await?.to_json_ad(None)?;
 
     let agent = ureq::builder()
-        .timeout(std::time::Duration::from_secs(2))
+        .timeout(std::time::Duration::from_secs(10))
         .build();
 
     let resp = agent

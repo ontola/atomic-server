@@ -288,8 +288,8 @@ async fn server_tests() {
     let body = get_body(resp);
 
     assert!(
-        body.contains(urls::DESTINATION),
-        "Response should contain destination property. Body: {}",
+        body.contains(urls::DESTINATION) || body.contains(urls::INVITE),
+        "Response should contain either destination (redirect) or invite metadata. Body: {}",
         body
     );
 }

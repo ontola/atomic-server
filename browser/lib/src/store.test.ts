@@ -78,7 +78,7 @@ describe('Store', () => {
     expect(resource1.props.shortname).toBe('testthing');
     expect(resource1.hasClasses(core.classes.property)).toBe(true);
 
-    const resource2 = await store.newResource();
+    const resource2 = await store.newResource({ did: false });
 
     expect(resource2.props.parent).toBe(store.getServerUrl());
     expect(resource2.get(core.properties.isA)).toBe(undefined);

@@ -715,14 +715,20 @@ impl Db {
                     endpoint.to_resource_response(self).await?
                 };
 
-                // Extended resources must always return the requested subject as their own subject
+                // Extended resources must always return the requested subject as their own subject,
+                // EXCEPT when the handler returned a resource with its own canonical subject
+                // (e.g. the /did proxy endpoint returns DID resources that must keep their DID as @id).
                 match response {
                     ResourceResponse::Resource(mut resource) => {
-                        resource.set_subject(subject.into());
+                        if !matches!(resource.get_subject(), Subject::Did(_)) {
+                            resource.set_subject(subject.into());
+                        }
                         return Ok(resource.into());
                     }
                     ResourceResponse::ResourceWithReferenced(mut resource, references) => {
-                        resource.set_subject(subject.into());
+                        if !matches!(resource.get_subject(), Subject::Did(_)) {
+                            resource.set_subject(subject.into());
+                        }
                         return Ok(ResourceResponse::ResourceWithReferenced(
                             resource, references,
                         ));
@@ -809,8 +815,7 @@ impl Storelike for Db {
                 let subject = resource.get_subject();
                 for (prop, val) in pv.iter() {
                     // Possible performance hit - these clones can be replaced by modifying remove_atom_from_index
-                    let remove_atom =
-                        crate::Atom::new(subject.clone(), prop.into(), val.clone());
+                    let remove_atom = crate::Atom::new(subject.clone(), prop.into(), val.clone());
                     self.remove_atom_from_index(&remove_atom, resource, &mut transaction)
                         .map_err(|e| {
                             format!("Failed to remove atom from index {}. {}", remove_atom, e)
@@ -1071,11 +1076,6 @@ impl Storelike for Db {
         skip_dynamic: bool,
         for_agent: &ForAgent,
     ) -> AtomicResult<ResourceResponse> {
-        if subject.as_str().starts_with("did:ad:") {
-            let resource = self.get_resource(subject).await?;
-            return Ok(ResourceResponse::Resource(resource));
-        }
-
         let subject_without_params = subject.without_params();
 
         // Get the inner URL for endpoint checking and extender context

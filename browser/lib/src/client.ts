@@ -16,6 +16,11 @@ import {
 } from './index.js';
 import { JSONADParser } from './parse.js';
 import { Resource } from './resource.js';
+import {
+  recordServerVersionFromResponse,
+  shouldSkipDidAuthForLegacyServer,
+  warnDidAuthCompatibility,
+} from './serverCapabilities.js';
 
 /**
  * One key-value pair per HTTP Header. Since we need to support both browsers
@@ -32,8 +37,6 @@ const isFileLike = (file: FileOrFileLike): file is FileLike =>
   'blob' in file && 'name' in file;
 
 const JSON_AD_MIME = 'application/ad+json';
-const ATOMIC_SERVER_VERSION_HEADER = 'X-Atomic-Server-Version';
-const MIN_DID_AUTH_SERVER_MINOR = 40;
 
 interface FetchResourceOptions extends ParseOpts {
   /**
@@ -67,9 +70,6 @@ interface HTTPResourceResult {
 /** Contains a `fetch` instance, provides methods to GET and POST several types */
 export class Client {
   private __fetchOverride?: typeof fetch;
-  private warnedDidAuthCompatibilityOrigins = new Set<string>();
-  private supportsDidAuthByOrigin = new Map<string, boolean>();
-  private serverVersionByOrigin = new Map<string, string>();
 
   public constructor(fetchOverride?: typeof fetch) {
     if (fetchOverride) {
@@ -170,10 +170,8 @@ export class Client {
       // Sign the request with the actual URL being fetched (not the raw DID
       // subject) since the server verifies against the full HTTP URL.
       if (signInfo) {
-        if (
-          this.shouldSkipDidAuthForLegacyServer(url, signInfo.agent.subject)
-        ) {
-          this.warnDidAuthCompatibility(url);
+        if (shouldSkipDidAuthForLegacyServer(url, signInfo.agent.subject)) {
+          warnDidAuthCompatibility(url);
         } else if (!subject.startsWith('https://atomicdata.dev')) {
           // Cookies only work in browsers for same-origin requests right now
           // https://github.com/atomicdata-dev/atomic-data-browser/issues/253
@@ -202,7 +200,7 @@ export class Client {
         method: method ?? 'GET',
         body: bodyReq,
       });
-      this.recordServerVersionFromResponse(url, response);
+      recordServerVersionFromResponse(url, response);
       const body = await response.text();
 
       if (response.status === 200) {
@@ -334,113 +332,5 @@ export class Client {
     }
 
     return fetch(...params);
-  }
-
-  /**
-   * Legacy servers (<0.40) cannot verify DID-based auth for cross-origin
-   * requests. We default to legacy compatibility unless a custom handshake is
-   * implemented elsewhere.
-   */
-  private shouldSkipDidAuthForLegacyServer(
-    url: string,
-    agentSubject?: string,
-  ): boolean {
-    if (!agentSubject?.startsWith('did:ad:')) {
-      return false;
-    }
-
-    if (!hasBrowserAPI()) {
-      return false;
-    }
-
-    const requestOrigin = this.tryGetOrigin(url);
-
-    if (!requestOrigin) {
-      return false;
-    }
-
-    if (requestOrigin === window.location.origin) {
-      return false;
-    }
-
-    const supportsDidAuth = this.supportsDidAuthByOrigin.get(requestOrigin);
-
-    // Legacy-safe default: if we don't know this origin yet, assume <0.40.
-    return supportsDidAuth !== true;
-  }
-
-  private warnDidAuthCompatibility(url: string): void {
-    if (!hasBrowserAPI()) {
-      return;
-    }
-
-    const origin = this.tryGetOrigin(url);
-
-    if (!origin) {
-      return;
-    }
-
-    if (this.warnedDidAuthCompatibilityOrigins.has(origin)) {
-      return;
-    }
-
-    const version = this.serverVersionByOrigin.get(origin);
-    const reason = version
-      ? `server version '${version}' does not support DID auth`
-      : `server version unknown (assuming <0.40)`;
-
-    this.warnedDidAuthCompatibilityOrigins.add(origin);
-    console.warn(
-      `[atomic-lib] Skipping signed auth request for DID agent on cross-origin request to '${origin}': ${reason}.`,
-    );
-  }
-
-  private recordServerVersionFromResponse(
-    url: string,
-    response: Response,
-  ): void {
-    const version = response.headers.get(ATOMIC_SERVER_VERSION_HEADER);
-
-    if (!version) {
-      return;
-    }
-
-    const origin = this.tryGetOrigin(url);
-
-    if (!origin) {
-      return;
-    }
-
-    this.serverVersionByOrigin.set(origin, version);
-    this.supportsDidAuthByOrigin.set(
-      origin,
-      this.versionSupportsDidAuth(version),
-    );
-  }
-
-  private versionSupportsDidAuth(version: string): boolean {
-    const match = version.match(/^(\d+)\.(\d+)(?:\.(\d+))?/);
-
-    if (!match) {
-      return false;
-    }
-
-    const major = Number.parseInt(match[1], 10);
-    const minor = Number.parseInt(match[2], 10);
-
-    if (Number.isNaN(major) || Number.isNaN(minor)) {
-      return false;
-    }
-
-    return major > 0 || (major === 0 && minor >= MIN_DID_AUTH_SERVER_MINOR);
-  }
-
-  private tryGetOrigin(url: string): string | undefined {
-    try {
-      return new URL(url, hasBrowserAPI() ? window.location.origin : undefined)
-        .origin;
-    } catch {
-      return undefined;
-    }
   }
 }

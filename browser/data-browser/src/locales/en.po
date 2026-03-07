@@ -3457,3 +3457,11 @@ msgstr "Failed to persist agent after accepting invite"
 #: src/routes/Search/SearchRoute.tsx
 msgid "Searching for <0/>..."
 msgstr "Searching for <0/>..."
+
+#: src/views/InvitePage.tsx
+msgid "Invite accepted, but no destination was returned."
+msgstr "Invite accepted, but no destination was returned."
+
+#: src/components/forms/NewForm/SubjectField.tsx
+msgid "The identifier of the resource. DID subjects are determined by the genesis commit signature."
+msgstr "The identifier of the resource. DID subjects are determined by the genesis commit signature."

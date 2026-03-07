@@ -214,27 +214,13 @@ pub async fn parse_json_ad_commit_resource(
         .ok_or("Signature must be a string")?
         .to_string();
 
-    // Get signer if present - useful for self-signed / DID commits.
-    let signer: Option<String> = json
-        .get(urls::SIGNER)
-        .and_then(|v| v.as_str().map(|s| s.to_string()));
-
     // Get or derive the subject.
-    // If the client did not send an explicit subject, we try to infer it:
-    // - If the signer is a DID (`did:*`), we assume a self-signed commit and use the signer as subject.
-    // - Otherwise, we fall back to the previous behaviour and derive `did:ad:<signature>`.
+    // For genesis commits the client omits the subject; it is always derived
+    // from the signature as `did:ad:<signature>`.
     let _target_subject = match json.get(urls::SUBJECT) {
         Some(subj) => subj.as_str().ok_or("Subject must be a string")?.to_string(),
         None => {
-            let derived_subject = if let Some(signer) = signer {
-                if signer.starts_with("did:") {
-                    signer
-                } else {
-                    format!("did:ad:{}", signature)
-                }
-            } else {
-                format!("did:ad:{}", signature)
-            };
+            let derived_subject = format!("did:ad:{}", signature);
 
             // Insert the derived subject into the JSON so it gets parsed correctly
             json.insert(
