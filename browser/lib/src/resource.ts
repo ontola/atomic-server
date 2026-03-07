@@ -117,7 +117,7 @@ export class Resource<C extends OptionalClass = any> {
 
       throw new Error(
         'Invalid subject given to resource, must be a string, found ' +
-        typeof subject,
+          typeof subject,
       );
     }
 
@@ -547,9 +547,10 @@ export class Resource<C extends OptionalClass = any> {
   public getCommitsCollectionSubject(): string {
     // For DID subjects (or other non-HTTP URIs) we can't derive the server
     // origin from the subject itself — use the store's server URL instead.
-    const base = this.subject.startsWith('did:') || this.subject.startsWith('_')
-      ? this.store.getServerUrl()
-      : this.subject;
+    const base =
+      this.subject.startsWith('did:') || this.subject.startsWith('_')
+        ? this.store.getServerUrl()
+        : this.subject;
     const url = new URL('/commits', base);
     url.searchParams.append('property', commits.properties.subject);
     url.searchParams.append('value', this.subject);
@@ -599,9 +600,8 @@ export class Resource<C extends OptionalClass = any> {
     const commitsCollection = await this.store.fetchResourceFromServer(
       this.getCommitsCollectionSubject(),
     );
-    const commitList = (commitsCollection.get(
-      collections.properties.members,
-    ) ?? []) as string[];
+    const commitList = (commitsCollection.get(collections.properties.members) ??
+      []) as string[];
 
     const builtVersions: Version[] = [];
 
@@ -841,7 +841,7 @@ export class Resource<C extends OptionalClass = any> {
       // the serialization signed here matches what the server will produce when
       // it verifies the signature.  The server stores commit resources at
       // `{origin}/commits/{signature}`.
-      const commitUrl = `${this.store.getServerUrl()}/commits/${this._lastLocalSignature}`;
+      const commitUrl = `did:ad:commit:${this._lastLocalSignature}`;
       this.commitBuilder.setPreviousCommit(commitUrl);
     } else {
       const lastCommit = this.get(properties.commit.lastCommit)?.toString();
@@ -895,7 +895,9 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     const endpoint = this.getCommitEndpoint();
-    const wasNew = this._pendingCommits.length > 0 && this._pendingCommits[0].previousCommit === undefined;
+    const wasNew =
+      this._pendingCommits.length > 0 &&
+      this._pendingCommits[0].previousCommit === undefined;
 
     let lastCommitId: string | undefined;
 
@@ -1000,7 +1002,9 @@ export class Resource<C extends OptionalClass = any> {
     });
 
     // Keep a backup of the commit builder in case push fails.
-    const oldCommitBuilder = hasChanges ? this.commitBuilder.clone() : undefined;
+    const oldCommitBuilder = hasChanges
+      ? this.commitBuilder.clone()
+      : undefined;
     const wasNew = this.new;
 
     try {
