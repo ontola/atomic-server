@@ -77,7 +77,9 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
       store
         .fetchResourceFromServer(url)
         .then((target: Resource) => {
-          getResourcesDrive(target, store).then(setDrive).catch(() => undefined);
+          getResourcesDrive(target, store)
+            .then(setDrive)
+            .catch(() => undefined);
         })
         .catch(() => undefined);
     });
@@ -90,35 +92,45 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
     name?: string,
   ) => {
     const resourceToSave = store.getResourceLoading(subject);
+
     try {
       if (name?.trim()) {
         await resourceToSave.set(core.properties.name, name);
       }
+
       const currentIsA =
         (await resourceToSave.get(core.properties.isA)) ?? ([] as string[]);
+
       if (!currentIsA.includes(core.classes.agent)) {
         await resourceToSave.set(core.properties.isA, [
           ...currentIsA,
           core.classes.agent,
         ]);
       }
+
       if (destination) {
         try {
           const target = await store.fetchResourceFromServer(destination);
           const driveSubject = await getResourcesDrive(target, store);
+
           if (driveSubject) {
             resourceToSave.push(server.properties.drives, [driveSubject]);
           }
         } catch (e) {
           store.notifyError(
-            e instanceof Error ? e : new Error('Failed to add invited drive to agent'),
+            e instanceof Error
+              ? e
+              : new Error('Failed to add invited drive to agent'),
           );
         }
       }
+
       await resourceToSave.save();
     } catch (e) {
       store.notifyError(
-        e instanceof Error ? e : new Error('Failed to persist agent after accepting invite'),
+        e instanceof Error
+          ? e
+          : new Error('Failed to persist agent after accepting invite'),
       );
     }
   };
@@ -127,10 +139,13 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
     onSuccess: async () => {
       setAgentSecret(undefined);
       const agentSubject = agent?.subject;
+
       if (!agentSubject) {
         goToRedirect();
+
         return;
       }
+
       goToRedirect();
       void persistAgentAfterInvite(agentSubject, redirectURL, agentName);
     },
@@ -185,18 +200,21 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
 
     if (redirect.error) {
       store.notifyError(redirect.error);
+
       return;
     }
 
     const destination = await getRedirectDestination(redirect);
 
     if (!destination) {
-      store.notifyError(new Error('Invite accepted, but no destination was returned.'));
+      store.notifyError(
+        new Error('Invite accepted, but no destination was returned.'),
+      );
+
       return;
     }
 
     if (keys) {
-
       const newAgentSubject = `did:ad:${keys.real.publicKey}`;
       const secret = Agent.buildSecret(keys.real.privateKey, newAgentSubject);
 
@@ -218,6 +236,7 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
       setRedirectURL(destination);
       goToRedirect(destination);
       void persistAgentAfterInvite(agentSubject!, destination, undefined);
+
       return;
     }
 
@@ -284,9 +303,9 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
           {isNewAgent && agentSecret && (
             <Field label='Agent Secret'>
               <p>
-                IMPORTANT! Below is your agent secret, you use this to login. Save
-                it somewhere safe, the secret will not be show again and if you
-                lose it you will not be able to access this user again.
+                IMPORTANT! Below is your agent secret, you use this to login.
+                Save it somewhere safe, the secret will not be show again and if
+                you lose it you will not be able to access this user again.
               </p>
               <StyledCodeBlock
                 wordWrap

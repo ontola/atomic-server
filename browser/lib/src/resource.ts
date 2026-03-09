@@ -225,6 +225,11 @@ export class Resource<C extends OptionalClass = any> {
     });
   }
 
+  /** Returns `true` when there are locally-signed commits waiting to be pushed. */
+  public get hasPendingCommits(): boolean {
+    return this._pendingCommits.length > 0;
+  }
+
   private get store(): Store {
     if (!this._store) {
       console.error(`Resource ${this.subject} has no store`);
@@ -878,11 +883,6 @@ export class Resource<C extends OptionalClass = any> {
     return commit;
   }
 
-  /** Returns `true` when there are locally-signed commits waiting to be pushed. */
-  public get hasPendingCommits(): boolean {
-    return this._pendingCommits.length > 0;
-  }
-
   /**
    * Push all locally-queued commits to the server, in order.
    *
@@ -934,19 +934,6 @@ export class Resource<C extends OptionalClass = any> {
       this.commitError = e;
       this.store.addResources(this, { skipCommitCompare: true });
       throw e;
-    }
-  }
-
-  /** Resolves the `/commit` endpoint for this resource. */
-  private getCommitEndpoint(): string {
-    if (this.subject.startsWith('did:')) {
-      return new URL('/commit', this.store.getServerUrl()).toString();
-    }
-
-    try {
-      return new URL(this.subject).origin + `/commit`;
-    } catch {
-      return new URL('/commit', this.store.getServerUrl()).toString();
     }
   }
 
@@ -1152,6 +1139,19 @@ export class Resource<C extends OptionalClass = any> {
     await this.store.fetchResourceFromServer(this.subject, {
       noWebSocket: true,
     });
+  }
+
+  /** Resolves the `/commit` endpoint for this resource. */
+  private getCommitEndpoint(): string {
+    if (this.subject.startsWith('did:')) {
+      return new URL('/commit', this.store.getServerUrl()).toString();
+    }
+
+    try {
+      return new URL(this.subject).origin + `/commit`;
+    } catch {
+      return new URL('/commit', this.store.getServerUrl()).toString();
+    }
   }
 
   private isParentNew() {

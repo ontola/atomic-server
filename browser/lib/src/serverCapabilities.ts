@@ -116,8 +116,10 @@ function tryGetOrigin(url: string): string | undefined {
       .replace(/^wss:\/\//, 'https://')
       .replace(/^ws:\/\//, 'http://');
 
-    return new URL(normalized, hasBrowserAPI() ? window.location.origin : undefined)
-      .origin;
+    return new URL(
+      normalized,
+      hasBrowserAPI() ? window.location.origin : undefined,
+    ).origin;
   } catch {
     return undefined;
   }

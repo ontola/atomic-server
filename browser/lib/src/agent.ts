@@ -64,8 +64,7 @@ export class Agent implements AgentInterface {
           // Fallback to JS crypto if SubtleCrypto doesn't support Ed25519
           // (e.g. in some headless browser environments)
           try {
-            const [provider, subject] =
-              JSCryptoProvider.fromSecret(secretB64);
+            const [provider, subject] = JSCryptoProvider.fromSecret(secretB64);
             resolve(new Agent(provider, subject));
           } catch (e) {
             reject(e);

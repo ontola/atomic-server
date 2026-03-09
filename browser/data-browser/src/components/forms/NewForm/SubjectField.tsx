@@ -36,8 +36,12 @@ export function SubjectField({
   // DID subjects can't be parsed as URLs and are deterministic — show them
   // as plain read-only text.
   const isDID = value.startsWith('did:') || value.startsWith('_');
+  const isReadOnly = isDID || readOnly;
 
-  if (isDID || readOnly) {
+  const [origin, path] = isReadOnly ? ['', ''] : getPath(value);
+  const [inputValue, setInputValue] = useState(path);
+
+  if (isReadOnly) {
     return (
       <Field
         error={error}
@@ -50,9 +54,6 @@ export function SubjectField({
       </Field>
     );
   }
-
-  const [origin, path] = getPath(value);
-  const [inputValue, setInputValue] = useState(path);
 
   const handleChange = (v: string) => {
     const subject = new URL(normalizePath(v), value);

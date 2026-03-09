@@ -65,6 +65,7 @@ export const NewDriveDialog: FC<CustomResourceDialogProps> = ({
         'No agent set in the Store, required when creating a Drive',
       );
     }
+
     const driveKeys = await generateKeyPair();
     const drivePublicKeyBytes = decodeBase64(driveKeys.publicKey);
     const prefix = new TextEncoder().encode('atomicdata.drive');

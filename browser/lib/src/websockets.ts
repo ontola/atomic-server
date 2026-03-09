@@ -127,6 +127,13 @@ export class WSClient {
     return this.ws.protocol || WS_Version.LEGACY;
   }
 
+  private get serverOrigin(): string {
+    const wsUrl = new URL(this.ws.url);
+    const protocol = wsUrl.protocol === 'wss:' ? 'https:' : 'http:';
+
+    return `${protocol}//${wsUrl.host}`;
+  }
+
   /**
    * Authenticates current Agent over current WebSocket. Doesn't do anything if
    * there is no agent
@@ -204,13 +211,6 @@ export class WSClient {
     return;
   }
 
-  private get serverOrigin(): string {
-    const wsUrl = new URL(this.ws.url);
-    const protocol = wsUrl.protocol === 'wss:' ? 'https:' : 'http:';
-
-    return `${protocol}//${wsUrl.host}`;
-  }
-
   public subscribeResource(subject: string): void {
     if (this.readyState !== WebSocket.OPEN) {
       console.warn('WebSocket is not open, cannot subscribe to resource');
@@ -227,7 +227,10 @@ export class WSClient {
 
       // For HTTP(S) URLs, check origin matches and it's not an immutable commit
       if (url.protocol === 'http:' || url.protocol === 'https:') {
-        if (url.origin !== this.serverOrigin || url.pathname.startsWith('/commits/')) {
+        if (
+          url.origin !== this.serverOrigin ||
+          url.pathname.startsWith('/commits/')
+        ) {
           return;
         }
       }

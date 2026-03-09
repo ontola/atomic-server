@@ -434,11 +434,6 @@ export class Store {
     return this.findAvailableSubject(path, parentUrl);
   }
 
-  /** Creates a random HTTP subject under the given parent URL. */
-  private createHTTPSubject(parentSubject: string): string {
-    return `${parentSubject}/${this.randomPart()}`;
-  }
-
   /** Creates a random HTTP subject, optionally nested under a parent URL. */
   public createSubject(parent?: string): string {
     return this.createHTTPSubject(parent ?? this.serverUrl);
@@ -478,12 +473,14 @@ export class Store {
 
       if (existing) {
         existing.loading = false;
+
         return existing as Resource<C>;
       }
 
       const local = new Resource<C>(normalizedSubject, true);
       local.loading = false;
       this.addResources(local, { skipCommitCompare: true });
+
       return local;
     }
 
@@ -1001,7 +998,10 @@ export class Store {
     }
 
     // Commits are immutable — no need to subscribe for push updates
-    if (normalized.includes('/commits/') || normalized.startsWith('did:ad:commit:')) {
+    if (
+      normalized.includes('/commits/') ||
+      normalized.startsWith('did:ad:commit:')
+    ) {
       return;
     }
 
@@ -1329,6 +1329,11 @@ export class Store {
     const resource = await this.getResource(subject);
 
     await loadResourceTreeInner(resource, treeTemplate);
+  }
+
+  /** Creates a random HTTP subject under the given parent URL. */
+  private createHTTPSubject(parentSubject: string): string {
+    return `${parentSubject}/${this.randomPart()}`;
   }
 
   private randomPart(): string {
