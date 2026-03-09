@@ -6,6 +6,7 @@ license = "MIT"
 name = "atomic-cli"
 readme = "README.md"
 repository = "https://github.com/atomicdata-dev/atomic-server"
+homepage = "https://atomicserver.eu/"
 version = "0.40.0"
 
 [dependencies]
@@ -30,3 +31,15 @@ assert_cmd = "2"
 default = ["native"]
 # Non-wasi interface. These features cannot be compiled to WASI.
 native = ["edit"]
+
+[package.metadata.deb]
+maintainer = "Joep Meindertsma <joep@ontola.io>"
+copyright = "2020-2025, Joep Meindertsma"
+extended-description = "Atomic CLI - A command-line interface for headless CMS and real-time databases."
+license-file = ["../LICENSE", "0"]
+depends = "$auto"
+section = "web"
+priority = "optional"
+assets = [
+    ["../target/arm-unknown-linux-gnueabihf/dietpi/atomic-cli", "/usr/bin/atomic-cli", "755"],
+]

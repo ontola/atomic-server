@@ -1,0 +1,24 @@
+[Unit]
+Description=Atomic Server
+Documentation=https://docs.atomicdata.dev
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=atomic-server
+Group=atomic-server
+
+# Request systemd to manage these directories
+ConfigurationDirectory=atomic-server
+StateDirectory=atomic-server
+CacheDirectory=atomic-server
+
+ExecStart=/usr/bin/atomic-server
+WorkingDirectory=/etc/atomic-server/
+EnvironmentFile=/etc/atomic-server/atomic-server.env
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target

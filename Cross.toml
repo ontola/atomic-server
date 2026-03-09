@@ -33,3 +33,17 @@ pre-build = [
   "apt-get update",
   "apt-get install --assume-yes nasm:$CROSS_DEB_ARCH",
 ]
+
+[target.arm-unknown-linux-gnueabihf]
+pre-build = [
+  # Update package list
+  "apt-get update",
+  # Upgrade installed packages
+  "apt-get upgrade --assume-yes",
+  "apt-get install --assume-yes nasm curl",
+  # Add NodeSource repository for Node.js 20
+  "curl -fsSL https://deb.nodesource.com/setup_20.x | bash",
+  "apt-get install --assume-yes nodejs",
+  # Install pnpm via npm
+  "npm install -g pnpm"
+]
