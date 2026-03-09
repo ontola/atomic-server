@@ -57,14 +57,32 @@ impl Resource {
         crate::loro::AtomicLoroDoc::from_snapshot(&snapshot).expect("Failed to clone Loro doc")
     }
 
-    fn adopt_resource_state(&mut self, new: &Resource) {
+    fn adopt_resource_state(&mut self, new: &Resource) -> AtomicResult<()> {
         self.subject = new.subject.clone();
         self.propvals = new.propvals.clone();
-        // Keep the in-memory Loro doc (and its UndoManager) across save_locally.
-        // Replacing with a snapshot clone drops undo history and breaks undo/redo.
-        if self.loro.is_none() {
-            self.loro = new.loro.as_ref().map(Self::clone_loro_state);
+        // Bring the in-memory doc onto the SAME causal lineage as the
+        // server's post-commit doc. The server's apply path writes its own
+        // ops (e.g. `lastCommit`) under a fresh peer id; if we kept our
+        // pre-commit branch, the next edit would be causally *concurrent*
+        // with the server's state and every later commit would re-merge two
+        // divergent branches as LWW — silently dropping writes at random
+        // (peer-id tiebreak).
+        //
+        // Import the server's doc rather than replacing the instance: the
+        // shared client ops already match (same op identities), so only the
+        // server's extra ops are merged in, the doc converges to the
+        // server's state, and the live `UndoManager` survives — a snapshot
+        // clone would discard it.
+        match (&self.loro, &new.loro) {
+            (Some(doc), Some(new_doc)) => {
+                doc.import_update(&new_doc.export_snapshot())?;
+            }
+            (None, Some(new_doc)) => {
+                self.loro = Some(Self::clone_loro_state(new_doc));
+            }
+            _ => {}
         }
+        Ok(())
     }
 
     /// Builds a versioned state doc from propvals. Skips the persisted `loroUpdate`
@@ -105,13 +123,15 @@ impl Resource {
             return crate::loro::AtomicLoroDoc::from_snapshot(&doc.export_snapshot());
         }
 
-        // A Commit resource (`did:ad:commit:<sig>`) carries a `loroUpdate`
-        // property whose bytes are the COMMITTED resource's snapshot — NOT
-        // the commit's own Loro state. Using those bytes here would expose
-        // the committed resource's propvals (isA: Message, parent, …) as
-        // if they belonged to the commit. For commits, seed from propvals
-        // instead so the doc reflects (isA: Commit, signature, signer, …).
-        if !self.subject.is_commit_did() {
+        // A Commit resource carries a `loroUpdate` property whose bytes are
+        // the COMMITTED resource's snapshot — NOT the commit's own Loro
+        // state. Using those bytes here would expose the committed
+        // resource's propvals (isA: Message, parent, …) as if they belonged
+        // to the commit. For commits, seed from propvals instead so the doc
+        // reflects (isA: Commit, signature, signer, …). Gate on `is_native`,
+        // not the subject: a genesis commit's subject is a placeholder until
+        // it is signed, so a subject-based gate would miss it.
+        if !self.is_native() {
             if let Some(Value::LoroDoc(snapshot)) = self.propvals.get(urls::LORO_UPDATE) {
                 return crate::loro::AtomicLoroDoc::from_snapshot(snapshot);
             }
@@ -266,11 +286,12 @@ impl Resource {
         }
 
         // Commits' `loroUpdate` value belongs to the committed resource, not
-        // the commit itself — see `build_state_doc` above. Skip
-        // the property-as-snapshot shortcut so callers that need the
-        // commit's own state build it from propvals (via the build_*
-        // path), not from the wrong-resource bytes.
-        if !self.subject.is_commit_did() {
+        // the commit itself — see `build_state_doc` above. Skip the
+        // property-as-snapshot shortcut so callers that need the commit's
+        // own state build it from propvals (via the build_* path), not from
+        // the wrong-resource bytes. Gate on `is_native` so a genesis
+        // commit's placeholder subject is covered too.
+        if !self.is_native() {
             if let Some(Value::LoroDoc(snapshot)) = self.propvals.get(urls::LORO_UPDATE) {
                 return Some(snapshot.clone());
             }
@@ -729,20 +750,11 @@ impl Resource {
         self.loro.as_ref().is_some_and(|d| d.can_redo())
     }
 
-    /// Remove a propval from a resource by property URL.
-    pub fn remove_propval(&mut self, property_url: &str) {
-        self.propvals.remove_entry(property_url);
-        self.commit.remove(property_url.into());
-        if let Some(doc) = &self.loro {
-            let _ = doc.remove_property(property_url);
-        }
-    }
-
-    /// Doc-first, fallible propval removal — the Phase 2a replacement for
-    /// [`Self::remove_propval`]. For CRDT resources the removal is applied to
-    /// the live Loro doc with `?` (no swallowed error); commit resources
-    /// ([`Self::is_native`]) are propval-only and never get a state doc.
-    pub fn remove_propval_fallible(&mut self, property_url: &str) -> AtomicResult<()> {
+    /// Doc-first, fallible propval removal. For CRDT resources the removal is
+    /// applied to the live Loro doc with `?` (no swallowed error); commit
+    /// resources ([`Self::is_native`]) are propval-only and never get a state
+    /// doc.
+    pub fn remove_propval(&mut self, property_url: &str) -> AtomicResult<()> {
         if !self.is_native() {
             self.ensure_materialized()?;
             self.loro().remove_property(property_url)?;
@@ -762,7 +774,7 @@ impl Resource {
         let property_url = self
             .resolve_shortname_to_property(property_shortname, store)
             .await?;
-        self.remove_propval(&property_url.subject);
+        self.remove_propval(&property_url.subject)?;
         Ok(())
     }
 
@@ -853,7 +865,7 @@ impl Resource {
         };
         let commit_response = store.apply_commit(commit, &opts).await?;
         if let Some(new) = &commit_response.resource_new {
-            self.adopt_resource_state(new);
+            self.adopt_resource_state(new)?;
         }
         self.reset_commit_builder();
         Ok(commit_response)
@@ -965,7 +977,7 @@ impl Resource {
 
         let commit_response = store.apply_commit(final_commit, &opts).await?;
         if let Some(new) = &commit_response.resource_new {
-            self.adopt_resource_state(new);
+            self.adopt_resource_state(new)?;
         }
         self.reset_commit_builder();
         Ok(commit_response)
@@ -1021,8 +1033,9 @@ impl Resource {
     }
 
     /// Set the name property.
-    pub fn set_name(&mut self, name: &str) {
-        self.set_unsafe(urls::NAME.into(), Value::String(name.into()));
+    pub fn set_name(&mut self, name: &str) -> AtomicResult<&mut Self> {
+        self.set_unsafe(urls::NAME.into(), Value::String(name.into()))?;
+        Ok(self)
     }
 
     /// Get the name property.
@@ -1031,11 +1044,12 @@ impl Resource {
     }
 
     /// Overwrites the is_a (Class) of the Resource.
-    pub fn set_class(&mut self, is_a: &str) {
+    pub fn set_class(&mut self, is_a: &str) -> AtomicResult<()> {
         self.set_unsafe(
             crate::urls::IS_A.into(),
             Value::ResourceArray([is_a.into()].into()),
-        );
+        )?;
+        Ok(())
     }
 
     /// Insert a Property/Value combination.
@@ -1056,7 +1070,7 @@ impl Resource {
             )
         })?;
         let val = Value::new(value, &fullprop.data_type)?;
-        self.set_unsafe(property_url, val);
+        self.set_unsafe(property_url, val)?;
         Ok(self)
     }
 
@@ -1094,7 +1108,7 @@ impl Resource {
             }
         }
         if full_prop.data_type == value.datatype() {
-            self.set_unsafe(property, value);
+            self.set_unsafe(property, value)?;
             Ok(self)
         } else {
             Err(format!("Datatype for subject '{}', property '{}', value '{}' did not match. Wanted '{}', got '{}'",
@@ -1108,22 +1122,9 @@ impl Resource {
     }
 
     /// Does not validate property / datatype combination.
-    /// Inserts a Property/Value combination.
-    /// Overwrites existing.
-    /// Writes to Loro if initialized, and always to propvals + commit builder.
-    /// Loro is initialized lazily on first save, not here — avoids overhead
-    /// during bulk resource construction (e.g. populate).
-    pub fn set_unsafe(&mut self, property: String, value: Value) -> &mut Self {
-        if let Some(doc) = &self.loro {
-            let _ = doc.set_property(&property, &value);
-        }
-        self.propvals.insert(property.clone(), value.clone());
-        self.commit.set(property, value);
-        self
-    }
-
-    /// Doc-first, fallible mutation — the Phase 2a replacement for
-    /// [`Self::set_unsafe`]. For CRDT resources the live Loro doc is
+    /// Inserts a Property/Value combination. Overwrites existing.
+    ///
+    /// Doc-first, fallible mutation. For CRDT resources the live Loro doc is
     /// materialized and the write applied to it with `?`: a failed doc write
     /// surfaces instead of being swallowed, so the doc and the `propvals`
     /// cache cannot silently diverge.
@@ -1132,11 +1133,7 @@ impl Resource {
     /// get a state doc. Native-ness is read from `isA`; when `isA` itself is
     /// the property being set, the incoming value is consulted so a commit
     /// resource never acquires a doc, not even transiently while it is built.
-    pub fn set_unsafe_fallible(
-        &mut self,
-        property: String,
-        value: Value,
-    ) -> AtomicResult<&mut Self> {
+    pub fn set_unsafe(&mut self, property: String, value: Value) -> AtomicResult<&mut Self> {
         let is_native = if property == urls::IS_A {
             self.subject.is_commit_did()
                 || value
@@ -1166,7 +1163,7 @@ impl Resource {
     ) -> AtomicResult<&mut Self> {
         let fullprop = self.resolve_shortname_to_property(property, store).await?;
         let fullval = Value::new(value, &fullprop.data_type)?;
-        self.set_unsafe(fullprop.subject, fullval);
+        self.set_unsafe(fullprop.subject, fullval)?;
         Ok(self)
     }
 
@@ -1617,11 +1614,13 @@ mod test {
     async fn json_ad_serialization_includes_current_loro_snapshot() {
         let store: crate::Db = init_store().await;
         let mut resource = Resource::new_generate_subject(&store).unwrap();
-        resource.set_name("Loro-backed resource");
-        resource.set_unsafe(
-            urls::DESCRIPTION.into(),
-            Value::String("Server-side snapshot".into()),
-        );
+        resource.set_name("Loro-backed resource").unwrap();
+        resource
+            .set_unsafe(
+                urls::DESCRIPTION.into(),
+                Value::String("Server-side snapshot".into()),
+            )
+            .unwrap();
         resource.ensure_materialized().unwrap();
 
         let json = resource.to_json_ad(Some("http://localhost")).unwrap();
@@ -1644,12 +1643,16 @@ mod test {
         // make the bytes non-deterministic and break signature verification.
         let _store: crate::Db = init_store().await;
         let mut resource = Resource::new("did:ad:commit:test-signature".into());
-        resource.set_unsafe(urls::IS_A.into(), vec![urls::COMMIT.to_string()].into());
+        resource
+            .set_unsafe(urls::IS_A.into(), vec![urls::COMMIT.to_string()].into())
+            .unwrap();
         let signed_payload: Vec<u8> = vec![9, 8, 7, 6, 5, 4, 3, 2, 1];
-        resource.set_unsafe(
-            urls::LORO_UPDATE.into(),
-            Value::LoroDoc(signed_payload.clone()),
-        );
+        resource
+            .set_unsafe(
+                urls::LORO_UPDATE.into(),
+                Value::LoroDoc(signed_payload.clone()),
+            )
+            .unwrap();
         assert!(resource.is_native(), "a Commit-class resource is native");
 
         // Attach a live doc — its snapshot differs from the signed payload.
@@ -1665,11 +1668,11 @@ mod test {
     }
 
     #[tokio::test]
-    async fn set_unsafe_fallible_is_doc_first_for_crdt_resources() {
+    async fn set_unsafe_is_doc_first_for_crdt_resources() {
         let store: crate::Db = init_store().await;
         let mut resource = Resource::new_generate_subject(&store).unwrap();
         resource
-            .set_unsafe_fallible(
+            .set_unsafe(
                 urls::DESCRIPTION.into(),
                 Value::String("doc-first value".into()),
             )
@@ -1688,15 +1691,15 @@ mod test {
     }
 
     #[tokio::test]
-    async fn set_unsafe_fallible_keeps_commit_resources_docless() {
+    async fn set_unsafe_keeps_commit_resources_docless() {
         // `isA: Commit` set first → every subsequent fallible set is
         // propval-only; the commit resource never acquires a state doc.
         let mut resource = Resource::new("did:ad:will-be-a-commit".into());
         resource
-            .set_unsafe_fallible(urls::IS_A.into(), vec![urls::COMMIT.to_string()].into())
+            .set_unsafe(urls::IS_A.into(), vec![urls::COMMIT.to_string()].into())
             .unwrap();
         resource
-            .set_unsafe_fallible(
+            .set_unsafe(
                 urls::DESCRIPTION.into(),
                 Value::String("commit field".into()),
             )
@@ -1712,10 +1715,12 @@ mod test {
     async fn set_propvals_unsafe_resets_stale_loro_state() {
         let store: crate::Db = init_store().await;
         let mut resource = Resource::new_generate_subject(&store).unwrap();
-        resource.set_unsafe(
-            urls::DESCRIPTION.into(),
-            Value::String("Old materialized value".into()),
-        );
+        resource
+            .set_unsafe(
+                urls::DESCRIPTION.into(),
+                Value::String("Old materialized value".into()),
+            )
+            .unwrap();
         resource.ensure_materialized().unwrap();
 
         let mut propvals = PropVals::new();

@@ -67,20 +67,20 @@ async fn ws_commit_syncs_to_subscriber() -> AtomicResult<()> {
     let agent_a = client_a.new_agent("Alice").await?;
     let drive = client_a.new_public_drive(&agent_a, "Commit Drive").await?;
 
-    let mut resource = client_a.new_resource(&drive);
-    resource.set_name("Sync Target");
+    let mut resource = client_a.new_resource(&drive)?;
+    resource.set_name("Sync Target")?;
     resource.set_unsafe(
         atomic_lib::urls::IS_A.into(),
         atomic_lib::Value::ResourceArray(vec![atomic_lib::urls::CLASS.into()]),
-    );
+    )?;
     resource.set_unsafe(
         atomic_lib::urls::SHORTNAME.into(),
         atomic_lib::Value::Slug("sync-target".into()),
-    );
+    )?;
     resource.set_unsafe(
         atomic_lib::urls::DESCRIPTION.into(),
         atomic_lib::Value::String("A test resource for ws commit".into()),
-    );
+    )?;
     let subject = resource.save_remote(client_a.store()).await?;
     let subject_str = subject.clone();
     // Reload so local Loro state matches server (same as a real client after save_remote).
@@ -96,7 +96,7 @@ async fn ws_commit_syncs_to_subscriber() -> AtomicResult<()> {
     tokio::time::sleep(Duration::from_millis(200)).await;
 
     // Agent A posts a commit over WS (same commit construction as save_remote)
-    resource.set_name("Updated via WS commit");
+    resource.set_name("Updated via WS commit")?;
     let snapshot = resource.build_state_doc()?.export_snapshot();
     let mut commitbuilder = resource.get_commit_builder().clone();
     commitbuilder.set_loro_update(snapshot);

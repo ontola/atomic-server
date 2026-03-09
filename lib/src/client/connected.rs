@@ -12,8 +12,8 @@
 //! let agent = client.new_agent("Alice").await?;
 //! let drive = client.new_drive(&agent, "Alice's Drive").await?;
 //!
-//! let mut resource = client.new_resource(&drive);
-//! resource.set_name("My first resource");
+//! let mut resource = client.new_resource(&drive)?;
+//! resource.set_name("My first resource")?;
 //! resource.save_remote(client.store()).await?;
 //! # Ok(())
 //! # }
@@ -67,16 +67,16 @@ impl Client {
         drive.set_unsafe(
             urls::IS_A.into(),
             Value::ResourceArray(vec![urls::DRIVE.into()]),
-        );
-        drive.set_name(name);
+        )?;
+        drive.set_name(name)?;
         drive.set_unsafe(
             urls::WRITE.into(),
             Value::ResourceArray(vec![agent.subject.to_string().into()]),
-        );
+        )?;
         drive.set_unsafe(
             urls::READ.into(),
             Value::ResourceArray(vec![agent.subject.to_string().into()]),
-        );
+        )?;
         drive.save_remote(&self.store).await
     }
 
@@ -88,24 +88,24 @@ impl Client {
         drive.set_unsafe(
             urls::IS_A.into(),
             Value::ResourceArray(vec![urls::DRIVE.into()]),
-        );
-        drive.set_name(name);
+        )?;
+        drive.set_name(name)?;
         drive.set_unsafe(
             urls::WRITE.into(),
             Value::ResourceArray(vec![agent.subject.to_string().into()]),
-        );
+        )?;
         drive.set_unsafe(
             urls::READ.into(),
             Value::ResourceArray(vec![urls::PUBLIC_AGENT.into()]),
-        );
+        )?;
         drive.save_remote(&self.store).await
     }
 
     /// Create a new resource in the given drive.
-    pub fn new_resource(&self, parent: &str) -> Resource {
+    pub fn new_resource(&self, parent: &str) -> AtomicResult<Resource> {
         let mut resource = Resource::new("did:ad:placeholder".into());
-        resource.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(parent.into()));
-        resource
+        resource.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(parent.into()))?;
+        Ok(resource)
     }
 
     /// Fetch a resource from the server.

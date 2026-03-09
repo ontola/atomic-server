@@ -68,7 +68,7 @@ impl CollectionBuilder {
     /// If that is what you need, use `.into_resource`
     pub async fn to_resource(&self, store: &impl Storelike) -> AtomicResult<crate::Resource> {
         let mut resource = store.get_resource_new(&self.subject.as_str().into()).await;
-        resource.set_class(urls::COLLECTION);
+        resource.set_class(urls::COLLECTION)?;
         if let Some(val) = &self.property {
             resource
                 .set_string(crate::urls::COLLECTION_PROPERTY.into(), val, store)
@@ -1041,9 +1041,9 @@ mod test {
     fn sorting_resources() {
         let prop = urls::DESCRIPTION.to_string();
         let mut a = Resource::new("first".into());
-        a.set_unsafe(prop.clone(), Value::Markdown("1".into()));
+        a.set_unsafe(prop.clone(), Value::Markdown("1".into())).unwrap();
         let mut b = Resource::new("second".into());
-        b.set_unsafe(prop.clone(), Value::Markdown("2".into()));
+        b.set_unsafe(prop.clone(), Value::Markdown("2".into())).unwrap();
         let c = Resource::new("third_missing_property".into());
 
         let asc = vec![a.clone(), b.clone(), c.clone()];
@@ -1109,17 +1109,23 @@ mod test {
         // Create a message with a DID subject (simulating genesis commit result)
         let did_subject = crate::Subject::from("did:ad:TestSignatureHere123");
         let mut message = Resource::new(did_subject.to_string());
-        message.set_unsafe(
-            urls::PARENT.into(),
-            crate::Value::AtomicUrl(chatroom_subject.clone()),
-        );
-        message.set_unsafe(urls::CREATED_AT.into(), crate::Value::Timestamp(1000000));
-        message.set_unsafe(
-            urls::IS_A.into(),
-            crate::Value::ResourceArray(vec![crate::values::SubResource::Subject(
-                urls::MESSAGE.into(),
-            )]),
-        );
+        message
+            .set_unsafe(
+                urls::PARENT.into(),
+                crate::Value::AtomicUrl(chatroom_subject.clone()),
+            )
+            .unwrap();
+        message
+            .set_unsafe(urls::CREATED_AT.into(), crate::Value::Timestamp(1000000))
+            .unwrap();
+        message
+            .set_unsafe(
+                urls::IS_A.into(),
+                crate::Value::ResourceArray(vec![crate::values::SubResource::Subject(
+                    urls::MESSAGE.into(),
+                )]),
+            )
+            .unwrap();
 
         // Add the DID message to the store with index update (simulating apply_commit)
         store

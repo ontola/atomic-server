@@ -79,20 +79,20 @@ async fn two_clients_sync() -> AtomicResult<()> {
     let drive_a = client_a.new_public_drive(&agent_a, "Alice's Drive").await?;
     tracing::info!("Drive A: {}", drive_a);
 
-    let mut resource = client_a.new_resource(&drive_a);
-    resource.set_name("Hello from Alice");
+    let mut resource = client_a.new_resource(&drive_a)?;
+    resource.set_name("Hello from Alice")?;
     resource.set_unsafe(
         atomic_lib::urls::SHORTNAME.into(),
         atomic_lib::Value::Slug("test-resource".into()),
-    );
+    )?;
     resource.set_unsafe(
         atomic_lib::urls::DESCRIPTION.into(),
         atomic_lib::Value::String("A test resource for sync".into()),
-    );
+    )?;
     resource.set_unsafe(
         atomic_lib::urls::IS_A.into(),
         atomic_lib::Value::ResourceArray(vec![atomic_lib::urls::CLASS.into()]),
-    );
+    )?;
     let subject = resource.save_remote(client_a.store()).await?;
     tracing::info!("Created resource: {}", subject);
 
@@ -117,7 +117,7 @@ async fn two_clients_sync() -> AtomicResult<()> {
     tokio::time::sleep(Duration::from_millis(300)).await;
 
     // --- Client A: edit the resource ---
-    resource.set_name("Updated by Alice");
+    resource.set_name("Updated by Alice")?;
     resource.save_remote(client_a.store()).await?;
     tracing::info!("Agent A saved edit");
 
