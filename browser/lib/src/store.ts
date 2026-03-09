@@ -1001,9 +1001,7 @@ export class Store {
     }
 
     // Commits are immutable — no need to subscribe for push updates
-    const existing = this.getResourceLoading(normalized);
-
-    if (existing?.hasClasses(commits.classes.commit)) {
+    if (normalized.includes('/commits/') || normalized.startsWith('did:ad:commit:')) {
       return;
     }
 

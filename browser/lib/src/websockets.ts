@@ -204,10 +204,34 @@ export class WSClient {
     return;
   }
 
+  private get serverOrigin(): string {
+    const wsUrl = new URL(this.ws.url);
+    const protocol = wsUrl.protocol === 'wss:' ? 'https:' : 'http:';
+
+    return `${protocol}//${wsUrl.host}`;
+  }
+
   public subscribeResource(subject: string): void {
     if (this.readyState !== WebSocket.OPEN) {
       console.warn('WebSocket is not open, cannot subscribe to resource');
 
+      return;
+    }
+
+    if (subject.startsWith('did:ad:commit:')) {
+      return;
+    }
+
+    try {
+      const url = new URL(subject);
+
+      // For HTTP(S) URLs, check origin matches and it's not an immutable commit
+      if (url.protocol === 'http:' || url.protocol === 'https:') {
+        if (url.origin !== this.serverOrigin || url.pathname.startsWith('/commits/')) {
+          return;
+        }
+      }
+    } catch {
       return;
     }
 
@@ -287,7 +311,7 @@ export class WSClient {
     // Make sure user is authenticated before sending any messages
     this.authenticate()
       .then(() => {
-        // Subscribe to all existing messages
+        // Subscribe to all existing subjects (subscribeResource filters commits and external origins)
         for (const subject of this.store.subscribers.keys()) {
           this.subscribeResource(subject);
         }
