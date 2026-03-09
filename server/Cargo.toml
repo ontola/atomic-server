@@ -79,25 +79,42 @@ version = "1"
 optional = true
 version = "0.12"
 
+
+# Alias to get rustls 0.23 (used by tonic) so we can install the ring crypto provider
+[dependencies.rustls023]
+package = "rustls"
+optional = true
+version = "0.23"
+features = ["ring"]
+
+[dependencies.tonic]
+optional = true
+version = "0.14"
+features = ["tls-ring", "tls-native-roots"]
+
 [dependencies.tracing-opentelemetry]
 optional = true
-version = "0.29.0"
+version = "0.32"
 
 [dependencies.opentelemetry]
 optional = true
-version = "0.28.0"
+version = "0.31"
 
 [dependencies.opentelemetry-otlp]
 optional = true
-version = "0.28.0"
+version = "0.31"
 
 [dependencies.opentelemetry_sdk]
 optional = true
-version = "0.28.0"
+version = "0.31"
+
+[dependencies.opentelemetry-appender-tracing]
+optional = true
+version = "0.31"
 
 [dependencies.tracing-actix-web]
 version = "0.7"
-features = ["opentelemetry_0_29"]
+features = ["opentelemetry_0_31"]
 
 [dependencies.actix-web]
 features = ["rustls"]
@@ -156,9 +173,17 @@ telemetry = [
     "tracing-opentelemetry",
     "opentelemetry",
     "opentelemetry-otlp/trace",
+    "opentelemetry-otlp/logs",
     "opentelemetry-otlp/grpc-tonic",
+    "opentelemetry-otlp/tls",            # enable TLS for gRPC
+    "opentelemetry-otlp/tls-roots",      # system trust roots (needed for SigNoz cloud)
+    "opentelemetry-otlp/internal-logs",  # surface OTel SDK errors via tracing/log
+    "tonic",
+    "rustls023",
     "opentelemetry_sdk",
     "opentelemetry_sdk/rt-tokio",    # 👈 important for batching
+    "opentelemetry_sdk/logs",
+    "opentelemetry-appender-tracing",
 ]
 img = ["webp", "image"]
 https = ["rustls", "instant-acme", "rcgen", "rustls-pemfile"]
