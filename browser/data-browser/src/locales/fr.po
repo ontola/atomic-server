@@ -182,9 +182,8 @@ msgstr "Chargement {0}"
 msgid "You are offline, changes might not be persisted."
 msgstr "Vous êtes hors ligne, les modifications pourraient ne pas être conservées."
 
-#: src/components/NetworkIndicator.tsx
-msgid "No Internet Connection."
-msgstr "Aucune connexion Internet."
+#~ msgid "No Internet Connection."
+#~ msgstr "Aucune connexion Internet."
 
 #: src/components/SkipNav.tsx
 msgid "Skip Navigation?"
@@ -3444,4 +3443,19 @@ msgstr ""
 
 #: src/components/forms/NewForm/SubjectField.tsx
 msgid "The identifier of the resource. DID subjects are determined by the genesis commit signature."
+msgstr ""
+
+#: src/components/NetworkIndicator.tsx
+msgid "Connection to server lost, reconnecting..."
+msgstr ""
+
+#~ msgid "Server connection lost."
+#~ msgstr ""
+
+#: src/components/NetworkIndicator.tsx
+msgid "No internet connection"
+msgstr ""
+
+#: src/components/NetworkIndicator.tsx
+msgid "Server connection lost — reconnecting…"
 msgstr ""
