@@ -161,3 +161,83 @@ pub fn build_message_extender() -> ClassExtender {
         ))
         .build()
 }
+
+#[tokio::test]
+async fn test_ws_push_chatroom() {
+    use atomic_lib::commit::CommitOpts;
+    use atomic_lib::{commit::CommitBuilder, urls, values::SubResource, Db, Storelike, Value};
+
+    let mut db = Db::init(
+        &std::env::temp_dir().join("atomic-test-db-chat"),
+        Some("http://localhost".into()),
+    )
+    .await
+    .unwrap();
+
+    db.add_class_extender(build_chatroom_extender()).unwrap();
+    db.add_class_extender(build_message_extender()).unwrap();
+
+    let agent = db.create_agent(Some("agent")).await.unwrap();
+    db.set_default_agent(agent.clone());
+
+    let mut chatroom = atomic_lib::Resource::new("http://localhost/chat".into());
+    chatroom.set_class(urls::CHATROOM);
+    let mut chatroom_builder = CommitBuilder::new(chatroom.get_subject().to_string());
+    chatroom_builder
+        .push_propval(urls::IS_A, SubResource::Subject(urls::CHATROOM.into()))
+        .unwrap();
+    let chatroom_commit = chatroom_builder.sign(&agent, &db, &chatroom).await.unwrap();
+
+    db.apply_commit(chatroom_commit, &CommitOpts::no_validations_no_index())
+        .await
+        .unwrap();
+
+    let fetched = db
+        .get_resource(&"http://localhost/chat".into())
+        .await
+        .unwrap();
+    println!("Fetched chatroom: {}", fetched.get_subject());
+
+    let (tx, mut rx) = tokio::sync::mpsc::channel(10);
+    db.set_handle_commit(Box::new(move |resp| {
+        let _ = tx.try_send(resp.clone());
+    }));
+
+    let mut message = atomic_lib::Resource::new("http://localhost/msg1".into());
+    message.set_class(urls::MESSAGE);
+    message.set_unsafe(
+        urls::PARENT.into(),
+        Value::AtomicUrl("http://localhost/chat".into()),
+    );
+
+    let mut message_builder = CommitBuilder::new(message.get_subject().to_string());
+    message_builder
+        .push_propval(urls::IS_A, SubResource::Subject(urls::MESSAGE.into()))
+        .unwrap();
+
+    message_builder.set(
+        urls::PARENT.to_string(),
+        Value::AtomicUrl("http://localhost/chat".into()),
+    );
+
+    let message_commit = message_builder.sign(&agent, &db, &message).await.unwrap();
+
+    println!("All subjects in Sled:");
+    for item in db.all_resources(true) {
+        println!(" - {}", item.get_subject());
+    }
+
+    db.apply_commit(message_commit, &CommitOpts::no_validations_no_index())
+        .await
+        .unwrap();
+
+    while let Ok(resp) = rx.try_recv() {
+        println!("Received commit for: {}", resp.commit.subject);
+        println!(
+            "JSON: {}",
+            resp.commit_resource
+                .to_json_ad(Some("http://localhost"))
+                .unwrap()
+        );
+    }
+}
