@@ -40,7 +40,7 @@ pub fn init_tracing(config: &crate::config::Config) -> Option<tracing_chrome::Fl
                 use opentelemetry::trace::TracerProvider;
                 use opentelemetry::KeyValue;
                 use opentelemetry_otlp::WithTonicConfig;
-                use opentelemetry_sdk::{logs::SdkLoggerProvider, trace::SdkTracerProvider, Resource};
+                use opentelemetry_sdk::{logs::SdkLoggerProvider, metrics::SdkMeterProvider, trace::SdkTracerProvider, Resource};
 
                 // Install ring as the rustls 0.23 crypto provider (required by tonic TLS).
                 // Ignore the error — it just means another provider was already installed.
@@ -74,12 +74,23 @@ pub fn init_tracing(config: &crate::config::Config) -> Option<tracing_chrome::Fl
                 // Logs — bridges tracing events to SigNoz logs (linked to traces)
                 let log_exporter = opentelemetry_otlp::LogExporter::builder()
                     .with_tonic()
-                    .with_tls_config(tls)
+                    .with_tls_config(tls.clone())
                     .build()
                     .expect("build OTLP log exporter");
                 let logger_provider = SdkLoggerProvider::builder()
-                    .with_resource(resource)
+                    .with_resource(resource.clone())
                     .with_batch_exporter(log_exporter)
+                    .build();
+
+                // Metrics
+                let metric_exporter = opentelemetry_otlp::MetricExporter::builder()
+                    .with_tonic()
+                    .with_tls_config(tls)
+                    .build()
+                    .expect("build OTLP metric exporter");
+                let meter_provider = SdkMeterProvider::builder()
+                    .with_resource(resource)
+                    .with_periodic_exporter(metric_exporter)
                     .build();
 
                 let tracer = tracer_provider.tracer("atomic-server");
@@ -93,6 +104,7 @@ pub fn init_tracing(config: &crate::config::Config) -> Option<tracing_chrome::Fl
                     .init();
 
                 opentelemetry::global::set_tracer_provider(tracer_provider);
+                opentelemetry::global::set_meter_provider(meter_provider);
             }
             #[cfg(not(feature = "telemetry"))]
             {

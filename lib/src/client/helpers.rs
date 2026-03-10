@@ -151,6 +151,7 @@ pub async fn fetch_body(
         )
         .into());
     };
+    crate::metrics::external_fetch();
     Ok(body)
 }
 

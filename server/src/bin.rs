@@ -12,6 +12,7 @@ mod dht;
 mod errors;
 mod handlers;
 mod helpers;
+mod metrics;
 #[cfg(feature = "https")]
 mod https;
 mod invite_token;

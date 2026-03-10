@@ -82,6 +82,7 @@ pub async fn search_query(
         .map_err(|e| format!("Error with creating search results: {} ", e))?;
 
     timer.add("execute_query");
+    crate::metrics::search_performed();
     tracing::debug!(
         "search_query: {} docs found for params: {:?}",
         top_docs.len(),

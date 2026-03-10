@@ -235,7 +235,11 @@ export class WSClient {
         }
       }
     } catch {
-      return;
+      // DID subjects are not valid URLs but should still be subscribed to
+      // (immutable did:ad:commit: subjects are already filtered above)
+      if (!subject.startsWith('did:')) {
+        return;
+      }
     }
 
     this.authPromise

@@ -202,7 +202,7 @@ export async function waitForSearchIndex(page: Page) {
 }
 
 export async function openAgentPage(page: Page) {
-  page.goto(`${FRONTEND_URL}/app/agent`);
+  await page.goto(`${FRONTEND_URL}/app/agent`);
 }
 
 /** Set atomicdata.dev as current server */

@@ -47,7 +47,12 @@ iai = "0.1"
 lazy_static = "1"
 ntest = "0.9"
 
+[dependencies.opentelemetry]
+optional = true
+version = "0.31"
+
 [features]
 config = ["directories", "toml"]
 db = ["sled", "rmp-serde", "bincode1"]
 rdf = ["rio_api", "rio_turtle"]
+telemetry = ["opentelemetry"]
