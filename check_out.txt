@@ -1,0 +1,6 @@
+warning: atomic-server@0.40.2: No changes in JS source files, skipping JS build.
+warning: atomic-server@0.40.2: should_build() took: 0.006s
+warning: atomic-server@0.40.2: Found ./assets_tmp, skipping copy
+warning: atomic-server@0.40.2: Bundling static files took: 0.016s
+warning: atomic-server@0.40.2: Total build.rs time: 0.022s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 7.42s

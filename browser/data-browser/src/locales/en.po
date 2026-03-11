@@ -2766,9 +2766,8 @@ msgstr "Enter valid JSON..."
 msgid "ID: {0} Name: {1} Description: {2} Tools: {3}"
 msgstr "ID: {0} Name: {1} Description: {2} Tools: {3}"
 
-#: src/chunks/AI/AIChatMessageParts/UserMessage.tsx
-msgid "You"
-msgstr "You"
+#~ msgid "You"
+#~ msgstr "You"
 
 #: src/chunks/AI/AgentConfigItem.tsx
 msgid "Default agent"

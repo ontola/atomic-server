@@ -9,13 +9,15 @@ repository = "https://github.com/atomicdata-dev/atomic-server"
 version = "0.36.0"
 
 [build-dependencies]
-[build-dependencies.tauri-build]
-features = []
-version = "1"
+tauri-build = { version = "2", features = [] }
 
 [dependencies]
 actix-rt = "2.6.0"
+clap = "4"
 serde_json = "1.0"
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-plugin-shell = "2"
+tauri-plugin-process = "2"
 
 [dependencies.atomic-server]
 # We don't need HTTPS for desktop usage
@@ -26,9 +28,13 @@ path = "../server"
 features = ["derive"]
 version = "1.0"
 
-[dependencies.tauri]
-features = ["api-all", "system-tray", "updater"]
-version = "1"
+[lib]
+name = "atomic_server_tauri"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "atomic-server-tauri"
+path = "src/main.rs"
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]

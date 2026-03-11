@@ -9,6 +9,7 @@ use crate::{
 };
 use atomic_lib::{agents::Agent, commit::CommitResponse, config::SharedConfig, Storelike};
 
+#[cfg(feature = "wasm-plugins")]
 use crate::plugins::wasm;
 /// The AppState contains all the relevant Context for the server.
 /// This data object is available to all handlers and actors.
@@ -75,12 +76,18 @@ impl AppState {
         store.add_endpoint(plugins::search::search_endpoint())?;
 
         // Get and register Wasm class extender plugins
-        let extenders =
-            wasm::load_wasm_class_extenders(&config.plugin_path, &config.plugin_cache_path, &store)
-                .await?;
+        #[cfg(feature = "wasm-plugins")]
+        {
+            let extenders = wasm::load_wasm_class_extenders(
+                &config.plugin_path,
+                &config.plugin_cache_path,
+                &store,
+            )
+            .await?;
 
-        for extender in extenders {
-            store.add_class_extender(extender)?;
+            for extender in extenders {
+                store.add_class_extender(extender)?;
+            }
         }
 
         let no_root_drive = store.get_resource(&"internal:/".into()).await.is_err();

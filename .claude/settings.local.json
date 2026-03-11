@@ -10,7 +10,10 @@
       "Bash(grep -n \"async fn get_resource_extended\" /Users/joep/dev/github/atomicdata-dev/atomic-server/lib/src/*.rs)",
       "Bash(grep -n \"async fn query\\\\|fn query\" /Users/joep/dev/github/atomicdata-dev/atomic-server/server/src/*.rs)",
       "Bash(grep -E \"\\\\.\\(rs\\)$\")",
-      "Bash(grep -n \"pub async fn handle_get_resource\\\\|pub async fn post_commit\" /Users/joep/dev/github/atomicdata-dev/atomic-server/server/src/handlers/*.rs)"
+      "Bash(grep -n \"pub async fn handle_get_resource\\\\|pub async fn post_commit\" /Users/joep/dev/github/atomicdata-dev/atomic-server/server/src/handlers/*.rs)",
+      "Bash(cargo tauri --version)",
+      "Bash(echo $ANDROID_HOME)",
+      "Bash(adb devices)"
     ]
   }
 }

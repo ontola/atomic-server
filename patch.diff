@@ -1,0 +1,13 @@
+--- server/src/config.rs
++++ server/src/config.rs
+@@ -265,10 +265,9 @@
+ pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
+     // Directories & file system
+     // Only resolve platform-specific dirs when not explicitly set (avoids panic on Android)
+     let get_project_dirs = || {
+-        directories::ProjectDirs::from("", "", "atomic-data")
+-            .expect("Could not find Project directories on your OS")
++        directories::ProjectDirs::from("", "", "atomic-data").unwrap_or_else(|| panic!("Could not find Project dirs! Opts: {:?}", opts))
+     };
+ 
+     // Persistent user data

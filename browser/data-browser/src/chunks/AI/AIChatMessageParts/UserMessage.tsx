@@ -14,7 +14,6 @@ export const UserMessage: React.FC<UserMessageProps> = ({ message }) => {
 
   return (
     <UserMessageWrapper>
-      <SenderName>You</SenderName>
       {context && (
         <ContextItemRow wrapItems center gap='1ch'>
           {context.map(item => (
@@ -54,13 +53,4 @@ const UserMessageWrapper = styled(MessageWrapper)`
   background-color: ${p => p.theme.colors.bg};
   align-self: flex-end;
   box-shadow: ${p => p.theme.boxShadow};
-`;
-
-const SenderName = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 1ch;
-  font-weight: bold;
-  font-size: 0.6rem;
-  color: ${p => p.theme.colors.textLight};
 `;

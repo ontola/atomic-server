@@ -6,6 +6,7 @@ use atomic_lib::{
     hierarchy::check_write, urls, utils::now, Db, Resource, Storelike, Subject, Value,
 };
 use futures::{StreamExt, TryStreamExt};
+#[cfg(feature = "img")]
 use image::GenericImageView;
 use serde::Deserialize;
 
@@ -124,6 +125,7 @@ async fn save_file_and_create_resource(
         .set_string(urls::DOWNLOAD_URL.into(), &download_url, store)
         .await?;
 
+    #[cfg(feature = "img")]
     if mimetype.starts_with("image/") {
         if let Ok(img) = image::ImageReader::open(&file_path)?.decode() {
             let (width, height) = img.dimensions();

@@ -264,14 +264,16 @@ pub fn build_temp_config(random_id: &str) -> AtomicServerResult<Config> {
 /// Creates the server config, reads .env values and sets defaults
 pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
     // Directories & file system
-    let project_dirs = directories::ProjectDirs::from("", "", "atomic-data")
-        .expect("Could not find Project directories on your OS");
+    // Only resolve platform-specific dirs when not explicitly set (avoids panic on Android)
+    let get_project_dirs = || directories::ProjectDirs::from("", "", "atomic-data");
 
     // Persistent user data
-    let data_dir = opts
-        .data_dir
-        .clone()
-        .unwrap_or_else(|| project_dirs.data_dir().to_owned());
+    let data_dir = match opts.data_dir.clone() {
+        Some(dir) => dir,
+        None => get_project_dirs()
+            .map(|d| d.data_dir().to_owned())
+            .unwrap_or_else(|| PathBuf::from("atomic-data/data")),
+    };
     let mut store_path = data_dir.clone();
     store_path.push("store");
 
@@ -303,10 +305,12 @@ pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
 
     // Cache data
 
-    let cache_dir = opts
-        .cache_dir
-        .clone()
-        .unwrap_or_else(|| project_dirs.cache_dir().to_owned());
+    let cache_dir = match opts.cache_dir.clone() {
+        Some(dir) => dir,
+        None => get_project_dirs()
+            .map(|d| d.cache_dir().to_owned())
+            .unwrap_or_else(|| PathBuf::from("atomic-data/cache")),
+    };
 
     let mut search_index_path = cache_dir.clone();
     search_index_path.push("search_index");
