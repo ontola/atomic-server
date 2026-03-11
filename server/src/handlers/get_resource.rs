@@ -49,6 +49,26 @@ pub async fn handle_get_resource(
 
     timer.add("parse_headers");
 
+    // Extract host for drive mapping, stripping port if present
+    let host = headers
+        .get("Host")
+        .and_then(|h| h.to_str().ok())
+        .map(|h| h.split(':').next().unwrap_or(h))
+        .unwrap_or("localhost");
+
+    let mut mapped_subject = subject.clone();
+    if let Subject::Internal(_) = &subject {
+        if let Some(drive_did) = appstate.get_drive_did_for_host(host).await {
+            if let Ok(resolved) = appstate
+                .store
+                .get_resource_at_path(&drive_did, &subject_string)
+                .await
+            {
+                mapped_subject = resolved;
+            }
+        }
+    }
+
     // Use the full HTTP URL for auth validation, since that's what the client signed.
     let full_subject = format!("{}{}", origin.trim_end_matches('/'), subject_string);
     let for_agent = get_client_agent(headers, &appstate, full_subject).await?;
@@ -56,7 +76,12 @@ pub async fn handle_get_resource(
 
     let mut builder = HttpResponse::Ok();
 
-    tracing::debug!("get_resource: {} as {}", subject, content_type.to_mime());
+    tracing::debug!(
+        "get_resource: {} (mapped to {}) as {}",
+        subject,
+        mapped_subject,
+        content_type.to_mime()
+    );
     builder.append_header(("Content-Type", content_type.to_mime()));
     // This prevents the browser from displaying the JSON response upon re-opening a closed tab
     // https://github.com/atomicdata-dev/atomic-server/issues/137
@@ -67,15 +92,15 @@ pub async fn handle_get_resource(
 
     let store = appstate.store.clone_with_url(origin.clone());
     let resource = match store
-        .get_resource_extended(&subject.clone(), false, &for_agent)
+        .get_resource_extended(&mapped_subject, false, &for_agent)
         .await
     {
         Ok(r) => r,
         Err(e) => {
             // If the resource wasn't found locally and it's a DID subject,
             // try resolving via the Mainline DHT before giving up.
-            if matches!(subject, Subject::Did(_)) {
-                if let Some(r) = try_dht_resolve(&appstate, &subject, &store).await {
+            if let Subject::Did { .. } = mapped_subject {
+                if let Some(r) = try_dht_resolve(&appstate, &mapped_subject, &store).await {
                     r
                 } else {
                     return Err(e.into());

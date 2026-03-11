@@ -25,6 +25,7 @@ import { useSettings } from '../../../../../helpers/AppSettings';
 const DRIVE_PUBLIC_KEY = 'https://atomicdata.dev/properties/drive/publicKey';
 const DRIVE_PRIVATE_KEY = 'https://atomicdata.dev/properties/drive/privateKey';
 const DRIVE_HASH = 'https://atomicdata.dev/properties/drive/hash';
+const SUBDOMAIN = 'https://atomicdata.dev/properties/subdomain';
 
 function decodeBase64(base64: string): Uint8Array {
   const binary = atob(base64);
@@ -50,8 +51,17 @@ export const NewDriveDialog: FC<CustomResourceDialogProps> = ({
 }) => {
   const store = useStore();
   const nameFieldId = useId();
+  const subdomainFieldId = useId();
   const { setDrive } = useSettings();
   const [name, setName] = useState('');
+  const [subdomain, setSubdomain] = useState('');
+  const [subdomainEdited, setSubdomainEdited] = useState(false);
+
+  useEffect(() => {
+    if (!subdomainEdited) {
+      setSubdomain(stringToSlug(name));
+    }
+  }, [name, subdomainEdited]);
 
   const createAndNavigate = useCreateAndNavigate();
 
@@ -86,6 +96,7 @@ export const NewDriveDialog: FC<CustomResourceDialogProps> = ({
         [DRIVE_PUBLIC_KEY]: driveKeys.publicKey,
         [DRIVE_PRIVATE_KEY]: driveKeys.privateKey,
         [DRIVE_HASH]: driveHash,
+        [SUBDOMAIN]: subdomain.trim(),
       },
       {
         noParent: true,
@@ -138,6 +149,7 @@ export const NewDriveDialog: FC<CustomResourceDialogProps> = ({
     onClose();
   }, [
     name,
+    subdomain,
     createAndNavigate,
     onClose,
     setDrive,
@@ -172,6 +184,19 @@ export const NewDriveDialog: FC<CustomResourceDialogProps> = ({
                 value={name}
                 autoFocus={true}
                 onChange={e => setName(e.target.value)}
+              />
+            </InputWrapper>
+          </Field>
+          <Field label='Subdomain' fieldId={subdomainFieldId}>
+            <InputWrapper>
+              <InputStyled
+                id={subdomainFieldId}
+                placeholder='my-drive'
+                value={subdomain}
+                onChange={e => {
+                  setSubdomain(e.target.value);
+                  setSubdomainEdited(true);
+                }}
               />
             </InputWrapper>
           </Field>

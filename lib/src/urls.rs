@@ -98,6 +98,7 @@ pub const SUBRESOURCES: &str = "https://atomicdata.dev/properties/subresources";
 pub const DRIVE_PUBLIC_KEY: &str = "https://atomicdata.dev/properties/drive/publicKey";
 pub const DRIVE_PRIVATE_KEY: &str = "https://atomicdata.dev/properties/drive/privateKey";
 pub const DRIVE_HASH: &str = "https://atomicdata.dev/properties/drive/hash";
+pub const SUBDOMAIN: &str = "https://atomicdata.dev/properties/subdomain";
 // ... for Inivtations
 pub const DESTINATION: &str = "https://atomicdata.dev/properties/destination";
 pub const TARGET: &str = "https://atomicdata.dev/properties/invite/target";

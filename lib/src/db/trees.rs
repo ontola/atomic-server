@@ -18,6 +18,8 @@ pub enum Tree {
     ValPropSub,
     /// Stores metadata about installed plugins.
     PluginMeta,
+    /// Maps Drive Hints (short IDs) to full Drive DIDs.
+    DriveMapping,
 }
 
 const RESOURCES: &str = "resources_v3";
@@ -26,6 +28,7 @@ const QUERY_MEMBERS: &str = "members_index";
 const PROPVALSUB: &str = "prop_val_sub_index";
 const QUERIES_WATCHED: &str = "watched_queries";
 const PLUGIN_META: &str = "plugin_meta";
+const DRIVE_MAPPING: &str = "drive_mapping";
 
 impl std::fmt::Display for Tree {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -36,6 +39,7 @@ impl std::fmt::Display for Tree {
             Tree::ValPropSub => f.write_str(VALPROPSUB),
             Tree::QueryMembers => f.write_str(QUERY_MEMBERS),
             Tree::PluginMeta => f.write_str(PLUGIN_META),
+            Tree::DriveMapping => f.write_str(DRIVE_MAPPING),
         }
     }
 }
@@ -50,6 +54,7 @@ impl AsRef<[u8]> for Tree {
             Tree::ValPropSub => VALPROPSUB.as_bytes(),
             Tree::QueryMembers => QUERY_MEMBERS.as_bytes(),
             Tree::PluginMeta => PLUGIN_META.as_bytes(),
+            Tree::DriveMapping => DRIVE_MAPPING.as_bytes(),
         }
     }
 }

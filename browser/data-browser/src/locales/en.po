@@ -3487,3 +3487,7 @@ msgstr ""
 "IMPORTANT! Below is your agent secret, you use this to login.\n"
 "Save it somewhere safe, the secret will not be show again and if\n"
 "you lose it you will not be able to access this user again."
+
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
+msgid "Subdomain"
+msgstr "Subdomain"

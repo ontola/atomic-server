@@ -354,7 +354,7 @@ impl Resource {
         let should_post = match self.subject.clone() {
             crate::Subject::Internal(_) => false,
             crate::Subject::External(_) => true,
-            crate::Subject::Did(_) => false,
+            crate::Subject::Did { .. } => false,
         };
         if should_post {
             crate::client::post_commit(&commit, store).await?;
@@ -398,6 +398,47 @@ impl Resource {
             update_index: true,
         };
         let commit_response = store.apply_commit(commit, &opts).await?;
+        if let Some(new) = &commit_response.resource_new {
+            self.subject = new.subject.clone();
+            self.propvals = new.propvals.clone();
+        }
+        self.reset_commit_builder();
+        Ok(commit_response)
+    }
+
+    /// Saves the resource as a new DID-native resource.
+    /// The subject will be set to `did:ad:{genesis_signature}`.
+    pub async fn save_as_genesis(&mut self, store: &impl Storelike) -> AtomicResult<CommitResponse> {
+        let agent = store.get_default_agent()?;
+        // Use a placeholder that starts with did:ad: to trigger special genesis serialization logic
+        self.subject = Subject::from_raw("did:ad:placeholder", None);
+        self.commit.set_subject(self.subject.to_string());
+
+        let commitbuilder = self.get_commit_builder().clone();
+        let commit = commitbuilder.sign(&agent, store, self).await?;
+
+        let signature = commit
+            .signature
+            .as_ref()
+            .ok_or("No signature generated for genesis commit")?;
+        let did_subject = Subject::from_raw(&format!("did:ad:{}", signature), None);
+
+        // Update both the resource and the commit subject to the real DID
+        self.subject = did_subject.clone();
+        let mut final_commit = commit;
+        final_commit.subject = did_subject.to_string();
+
+        let opts = CommitOpts {
+            validate_schema: true,
+            validate_signature: true,
+            validate_timestamp: false,
+            validate_rights: false,
+            validate_for_agent: Some(agent.subject.to_string()),
+            validate_previous_commit: false,
+            update_index: true,
+        };
+
+        let commit_response = store.apply_commit(final_commit, &opts).await?;
         if let Some(new) = &commit_response.resource_new {
             self.subject = new.subject.clone();
             self.propvals = new.propvals.clone();
