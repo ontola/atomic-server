@@ -16,7 +16,7 @@ export function useProcessMessages() {
 
   return async (messages: AtomicUIMessage[]): Promise<AtomicUIMessage[]> => {
     const map = async (message: AtomicUIMessage) => {
-      if (message.metadata?.context) {
+      if (message.metadata?.userContext || message.metadata?.serverContext) {
         return {
           ...message,
           parts: [
@@ -25,7 +25,10 @@ export function useProcessMessages() {
               type: 'text',
               text: await addContextToMessage(
                 '',
-                message.metadata.context,
+                {
+                  userContext: message.metadata.userContext,
+                  serverContext: message.metadata.serverContext,
+                },
                 store,
                 readMCPResource,
               ),
@@ -78,7 +81,7 @@ const processAtomicResources = async (
 
   const resourcesContent = resources
     .map(
-      r => `An atomic resource called ${r.title}. Data:\n\`\`\`json
+      r => `An atomicdata resource called ${r.title}. Data:\n\`\`\`json
 ${JSON.stringify(toResultObject(r, true), null, 2)}
 \`\`\``,
     )
@@ -128,42 +131,53 @@ ${typeof resourceData.contents === 'string' ? resourceData.contents : JSON.strin
 /**
  * Adds context information to a message by including resource data and schema definitions
  * @param message - The original message to add context to
- * @param context - Array of context objects containing resource references
+ * @param userContext - Array of context objects containing resource references
  * @param store - An Atomic Data store instance
  * @param readMCPResource - Function to read MCP resources
  * @returns A promise that resolves to the message with added context
  */
 const addContextToMessage = async (
   message: string,
-  context: AIMessageContext[],
+  context: {
+    userContext?: AIMessageContext[];
+    serverContext?: string;
+  },
   store: Store,
   readMCPResource: ReadMCPResource,
 ) => {
-  const [atomicData, mcpContent] = await Promise.all([
-    processAtomicResources(context, store),
-    processMCPResources(context, readMCPResource),
-  ]);
+  const { userContext, serverContext } = context;
 
-  let messageWithContext = message;
+  let messageWithContext = '';
 
-  // Add atomic context if we have any atomic resources or schemas
-  if (atomicData.resourcesContent || atomicData.schemasContent) {
-    messageWithContext += `\n<atomic-context>`;
+  if (userContext) {
+    const [atomicData, mcpContent] = await Promise.all([
+      processAtomicResources(userContext, store),
+      processMCPResources(userContext, readMCPResource),
+    ]);
 
-    if (atomicData.resourcesContent) {
-      messageWithContext += `\n<resources>\n${atomicData.resourcesContent}\n</resources>`;
+    // Add atomic context if we have any atomic resources or schemas
+    if (atomicData.resourcesContent || atomicData.schemasContent) {
+      messageWithContext += `\n<atomic-context provided-by="user">`;
+
+      if (atomicData.resourcesContent) {
+        messageWithContext += `\n<resources>\n${atomicData.resourcesContent}\n</resources>`;
+      }
+
+      if (atomicData.schemasContent) {
+        messageWithContext += `\n<schemas>\n${atomicData.schemasContent}\n</schemas>`;
+      }
+
+      messageWithContext += `\n</atomic-context>`;
     }
 
-    if (atomicData.schemasContent) {
-      messageWithContext += `\n<schemas>\n${atomicData.schemasContent}\n</schemas>`;
+    // Add MCP context if we have any MCP resources
+    if (mcpContent) {
+      messageWithContext += `\n<context provided-by="user">\n${mcpContent}\n</context>`;
     }
-
-    messageWithContext += `\n</atomic-context>`;
   }
 
-  // Add MCP context if we have any MCP resources
-  if (mcpContent) {
-    messageWithContext += `\n<context>\n${mcpContent}\n</context>`;
+  if (serverContext) {
+    messageWithContext += `\n<atomic-context provider="RAG">\n${serverContext}\n</atomic-context>`;
   }
 
   return messageWithContext;

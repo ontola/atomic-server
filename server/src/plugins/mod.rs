@@ -44,5 +44,6 @@ pub mod plugin;
 pub mod prunetests;
 pub mod query;
 pub mod search;
+pub mod vector_search;
 pub mod versioning;
 pub mod wasm;

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Column, Row } from '@components/Row';
 import toast from 'react-hot-toast';
 import { useAtomicMCPTools } from './useAtomicTools';
@@ -42,6 +42,8 @@ import { useGenerativeData } from './useGenerativeData';
 import { FollowUpPrompt } from './FollowUpPrompt';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import UsesMCPServers from '@components/AI/MCP/UsesMCPServers';
+import { useRAG } from './useRAG';
+import { useOnValueChange } from '@helpers/useOnValueChange';
 
 const AIChatInput = React.lazy(
   () => import('@chunks/RTE/AIChatInput/AsyncAIChatInput'),
@@ -111,6 +113,8 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     getOutputModalities,
   } = useOpenRouterModels();
 
+  const getRAGData = useRAG();
+  const [isRagging, setIsRagging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [userInput, setUserInput] = useState('');
@@ -261,6 +265,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   ];
 
   const handleSubmit = async (inputOverride?: string) => {
+    const text = inputOverride || userInput;
     const context = [...externalContextItems, ...userSelectedContextItems];
     const message: AtomicUIMessage = {
       id: store.createSubject(),
@@ -268,10 +273,22 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
       parts: [
         {
           type: 'text',
-          text: inputOverride || userInput,
+          text: text,
         },
       ],
     };
+
+    if (selectedAgent.ragEnabled) {
+      setIsRagging(true);
+      const ragData = await getRAGData(text);
+
+      message.metadata = {
+        ...(message.metadata ?? {}),
+        serverContext: ragData,
+      };
+
+      setIsRagging(false);
+    }
 
     if (attachedFiles) {
       const fileParts = await filesToFileParts(attachedFiles);
@@ -280,7 +297,8 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
 
     if (context.length > 0) {
       message.metadata = {
-        context,
+        ...(message.metadata ?? {}),
+        userContext: context,
       };
 
       setUserSelectedContextItems([]);
@@ -312,7 +330,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     setMessages(prev => prev.filter(m => m !== message));
   };
 
-  useEffect(() => {
+  useOnValueChange(() => {
     if (!chatSubject) return;
 
     const initialAgent = getInitialAgent(false, chatSubject);
@@ -343,6 +361,11 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
             <IconButton title='Stop generating' onClick={stop}>
               <FaXmark />
             </IconButton>
+          </Row>
+        )}
+        {status !== 'streaming' && isRagging && (
+          <Row center gap='0.2ch'>
+            <GeneratingIndicator text='Gathering context' />
           </Row>
         )}
         {!readonly && (

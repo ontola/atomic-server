@@ -22,7 +22,8 @@
     ],
     "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
     "https://atomicdata.dev/properties/recommends": [
-      "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/provided-context"
+      "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/provided-context",
+      "https://atomicdata.dev/properties/serverProvidedContext"
     ],
     "https://atomicdata.dev/properties/requires": [
       "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/role",
@@ -268,5 +269,15 @@
     ],
     "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/role",
     "https://atomicdata.dev/properties/shortname": "error"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/serverProvidedContext",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "Context for a message provided by the server",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "server-provided-context"
   }
 ]

@@ -1230,6 +1230,19 @@
         "https://atomicdata.dev/properties/shortname": "document-v2"
     },
     {
+        "@id": "https://atomicdata.dev/classes/PlainText",
+        "https://atomicdata.dev/properties/description": "A simple class with a name and a description used to store plain text as resource.",
+        "https://atomicdata.dev/properties/isA": [
+            "https://atomicdata.dev/classes/Class"
+        ],
+        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+        "https://atomicdata.dev/properties/requires": [
+            "https://atomicdata.dev/properties/name",
+            "https://atomicdata.dev/properties/description"
+        ],
+        "https://atomicdata.dev/properties/shortname": "plain-text"
+    },
+    {
         "@id": "https://atomicdata.dev/properties/documentContent",
         "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/ydoc",
         "https://atomicdata.dev/properties/description": "The content of a Document",
@@ -1238,5 +1251,17 @@
         ],
         "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
         "https://atomicdata.dev/properties/shortname": "document-content"
+    },
+    {
+        "@id": "https://atomicdata.dev/properties/search/chunks",
+        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+        "https://atomicdata.dev/properties/description": "A JSON Array of text-chunks returned from a (vector)search endpoint",
+        "https://atomicdata.dev/properties/isA": [
+            "https://atomicdata.dev/classes/Property"
+        ],
+        "https://atomicdata.dev/properties/isDynamic": true,
+        "https://atomicdata.dev/properties/isLocked": true,
+        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+        "https://atomicdata.dev/properties/shortname": "search-chunks"
     }
 ]

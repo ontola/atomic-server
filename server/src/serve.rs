@@ -6,28 +6,36 @@ use crate::errors::AtomicServerResult;
 
 /// Clears and rebuilds the Store & Search indexes
 async fn rebuild_indexes(appstate: &crate::appstate::AppState) -> AtomicServerResult<()> {
-    let appstate_clone = appstate.clone();
+    let _appstate_clone = appstate.clone();
 
-    actix_web::rt::spawn(async move {
-        appstate_clone
-            .store
-            .clear_index()
-            .expect("Failed to clear value index");
-        appstate_clone
-            .store
-            .build_index(true)
-            .expect("Failed to build value index");
-    });
+    // actix_web::rt::spawn(async move {
+    //     appstate_clone
+    //         .store
+    //         .clear_index()
+    //         .expect("Failed to clear value index");
+    //     appstate_clone
+    //         .store
+    //         .build_index(true)
+    //         .expect("Failed to build value index");
+    // });
 
-    tracing::info!("Removing existing search index...");
+    // tracing::info!("Removing existing search index...");
+    // appstate
+    //     .search_state
+    //     .writer
+    //     .write()
+    //     .expect("Could not get a lock on search writer")
+    //     .delete_all_documents()?;
+    // appstate
+    //     .search_state
+    //     .add_all_resources(&appstate.store)
+    //     .await?;
+
+    tracing::info!("Removing existing vector search index...");
+    // vector search index was already wiped in VectorSearchState::new if rebuild_indexes was passed
+
     appstate
-        .search_state
-        .writer
-        .write()
-        .expect("Could not get a lock on search writer")
-        .delete_all_documents()?;
-    appstate
-        .search_state
+        .vector_search_state
         .add_all_resources(&appstate.store)
         .await?;
     Ok(())
@@ -49,6 +57,7 @@ async fn clear_remote_cache(appstate: &crate::appstate::AppState) -> AtomicServe
     for subject in subjects_to_remove {
         appstate.store.remove_resource(&subject).await?;
         appstate.search_state.remove_resource(&subject)?;
+        let _ = appstate.vector_search_state.remove_resource(&subject).await;
         count += 1;
     }
 

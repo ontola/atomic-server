@@ -55,6 +55,11 @@ pub fn config_routes(app: &mut actix_web::web::ServiceConfig) {
                 .to(handlers::search::search_query),
         )
         .service(
+            web::resource("/vector_search")
+                .guard(guard::Method(Method::GET))
+                .to(handlers::vector_search::vector_search_query),
+        )
+        .service(
             web::resource(ANY)
                 .guard(guard::Method(Method::GET))
                 .to(handlers::get_resource::handle_get_resource),

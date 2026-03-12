@@ -23,6 +23,7 @@ pub struct CommitMonitor {
     subscriptions: HashMap<String, HashSet<Addr<WebSocketConnection>>>,
     store: Db,
     search_state: SearchState,
+    vector_search_state: crate::vector_search::VectorSearchState,
     last_search_commit: chrono::DateTime<Local>,
     run_expensive_next_tick: bool,
 }
@@ -129,6 +130,8 @@ impl CommitMonitor {
     fn update_expensive(&mut self) -> AtomicServerResult<()> {
         tracing::debug!("Update expensive");
         self.search_state.writer.write()?.commit()?;
+        // polarisdb writes are auto-flushed, but we can flush here to be safe
+        // let _ = futures::executor::block_on(self.vector_search_state.collection.write()).flush();
         self.last_search_commit = chrono::Local::now();
         self.run_expensive_next_tick = false;
         Ok(())
@@ -158,6 +161,7 @@ impl Handler<CommitMessage> for CommitMonitor {
 
         let store = self.store.clone();
         let search_state = self.search_state.clone();
+        let vector_search_state = self.vector_search_state.clone();
         let resource_new = msg.commit_response.resource_new.clone();
 
         Box::pin(
@@ -165,6 +169,12 @@ impl Handler<CommitMessage> for CommitMonitor {
                 search_state.remove_resource(&target).map_err(|e| {
                     format!(
                         "Handling commit in CommitMonitor failed, cache may not be fully updated: {}",
+                        e
+                    )
+                })?;
+                vector_search_state.remove_resource(&target).await.map_err(|e| {
+                    format!(
+                        "Handling commit in CommitMonitor failed for vector search: {}",
                         e
                     )
                 })?;
@@ -178,6 +188,15 @@ impl Handler<CommitMessage> for CommitMonitor {
                         .map_err(|e| {
                             format!(
                     "Handling commit in CommitMonitor failed, cache may not be fully updated: {}",
+                    e
+                )
+                        })?;
+                    vector_search_state
+                        .add_resource(&resource, &store)
+                        .await
+                        .map_err(|e| {
+                            format!(
+                    "Handling commit in CommitMonitor failed for vector search: {}",
                     e
                 )
                         })?;
@@ -196,13 +215,14 @@ impl Handler<CommitMessage> for CommitMonitor {
 }
 
 /// Spawns a commit monitor actor
-pub fn create_commit_monitor(store: Db, search_state: SearchState) -> Addr<CommitMonitor> {
+pub fn create_commit_monitor(store: Db, search_state: SearchState, vector_search_state: crate::vector_search::VectorSearchState) -> Addr<CommitMonitor> {
     tracing::info!("spawning commit monitor");
     crate::commit_monitor::CommitMonitor::create(|_ctx: &mut Context<CommitMonitor>| {
         CommitMonitor {
             subscriptions: HashMap::new(),
             store,
             search_state,
+            vector_search_state,
             run_expensive_next_tick: false,
             last_search_commit: chrono::Local::now(),
         }

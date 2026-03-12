@@ -198,6 +198,8 @@ pub struct Config {
     pub uploads_path: PathBuf,
     /// Path to where the search index for tantivy full text search is located
     pub search_index_path: PathBuf,
+    /// Path to where the vector search index for polarisdb is located
+    pub vector_search_index_path: PathBuf,
     pub plugin_cache_path: PathBuf,
     /// If true, the initialization scripts will be ran (create first Drive, Agent, indexing, etc)
     pub initialize: bool,
@@ -277,6 +279,9 @@ pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
     let mut search_index_path = cache_dir.clone();
     search_index_path.push("search_index");
 
+    let mut vector_search_index_path = cache_dir.clone();
+    vector_search_index_path.push("vector_search_index");
+
     let mut plugin_cache_path = cache_dir.clone();
     plugin_cache_path.push("plugin_cache");
 
@@ -313,6 +318,7 @@ pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
         static_path,
         store_path,
         search_index_path,
+        vector_search_index_path,
         plugin_cache_path,
         uploads_path,
     })

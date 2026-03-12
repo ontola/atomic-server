@@ -16,7 +16,12 @@ import { server, type Server } from './ontologies/server.js';
 import type { OptionalClass, UnknownClass } from './ontology.js';
 import { JSONADParser } from './parse.js';
 import { Resource, unknownSubject } from './resource.js';
-import { type SearchOpts, buildSearchSubject } from './search.js';
+import {
+  type SearchOpts,
+  type VectorSearchOpts,
+  buildSearchSubject,
+  buildVectorSearchSubject,
+} from './search.js';
 import { stringToSlug } from './stringToSlug.js';
 import type { JSONValue } from './value.js';
 import { WSClient } from './websockets.js';
@@ -281,6 +286,35 @@ export class Store {
     const results = searchResource.get(server.properties.results) ?? [];
 
     return results;
+  }
+
+  public async vectorSearch(
+    query: string,
+    opts: VectorSearchOpts = {},
+  ): Promise<{ subject: string; chunk: string }[]> {
+    const vectorSearchSubject = buildVectorSearchSubject(
+      this.serverUrl,
+      query,
+      opts,
+    );
+    const vectorSearchResource = await this.fetchResourceFromServer(
+      vectorSearchSubject,
+      {
+        noWebSocket: true,
+      },
+    );
+    const results = vectorSearchResource.get(server.properties.results) ?? [];
+    const chunks =
+      vectorSearchResource.get(server.properties.searchChunks) ?? [];
+
+    if (!Array.isArray(chunks) || results.length !== chunks.length) {
+      throw new Error('Results and chunks length mismatch');
+    }
+
+    return results.map((result, index) => ({
+      subject: result,
+      chunk: chunks[index] as string,
+    }));
   }
 
   /** Checks if a subject is free to use */

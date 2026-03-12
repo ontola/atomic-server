@@ -200,10 +200,6 @@ pub fn build_schema() -> AtomicServerResult<tantivy::schema::Schema> {
 pub fn get_index(config: &Config) -> AtomicServerResult<(IndexWriter, tantivy::Index)> {
     let schema = build_schema()?;
     std::fs::create_dir_all(&config.search_index_path)?;
-    if config.opts.rebuild_indexes {
-        std::fs::remove_dir_all(&config.search_index_path)?;
-        std::fs::create_dir_all(&config.search_index_path)?;
-    }
     let mmap_directory = tantivy::directory::MmapDirectory::open(&config.search_index_path)?;
     let index = Index::open_or_create(mmap_directory, schema).map_err(|e| {
         format!(
@@ -265,7 +261,7 @@ pub async fn resource_to_facet(resource: &Resource, store: &Db) -> AtomicServerR
     Ok(result)
 }
 
-fn get_resource_title(resource: &Resource) -> String {
+pub fn get_resource_title(resource: &Resource) -> String {
     let title = if let Ok(name) = resource.get(atomic_lib::urls::NAME) {
         name.clone()
     } else if let Ok(shortname) = resource.get(atomic_lib::urls::SHORTNAME) {
@@ -287,7 +283,7 @@ fn get_resource_title(resource: &Resource) -> String {
 /// and extracts all nested plain text content.
 ///
 /// This function requires a Transaction to read the text data correctly.
-fn extract_plain_text(fragment: &yrs::XmlFragmentRef, txn: &yrs::TransactionMut) -> String {
+pub fn extract_plain_text(fragment: &yrs::XmlFragmentRef, txn: &yrs::TransactionMut) -> String {
     let mut text_content = String::new();
 
     for node in fragment.successors(txn) {

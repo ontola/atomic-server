@@ -14,6 +14,7 @@ import { useStore } from '@tomic/react';
 import { useAutoAgentSelect } from './useAgentAutoSelect';
 import { createOllama } from 'ollama-ai-provider-v2';
 import { addFieldsIf } from '@helpers/addIf';
+import { stringifyTree, useGetDriveStructure } from './useGetDriveStructure';
 
 export type Modalities = 'text' | 'image';
 
@@ -39,10 +40,17 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
     private options: ClientOnlyTransportOptions,
     private idGenerator: () => string,
     private _autoSelectAgent: ReturnType<typeof useAutoAgentSelect>,
+    private _prepareSystemPrompt: (systemPrompt: string) => Promise<string>,
   ) {}
 
   public set autoSelectAgent(func: ReturnType<typeof useAutoAgentSelect>) {
     this._autoSelectAgent = func;
+  }
+
+  public set prepareSystemPrompt(
+    func: (systemPrompt: string) => Promise<string>,
+  ) {
+    this._prepareSystemPrompt = func;
   }
 
   public setOptions(options: ClientOnlyTransportOptions) {
@@ -62,7 +70,7 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
     const result = streamText({
       messages: convertToModelMessages(transformedMessages),
       model: this.getModelFromAgent(agent),
-      system: agent.systemPrompt,
+      system: await this._prepareSystemPrompt(agent.systemPrompt),
       tools: this.options.tools,
       abortSignal,
       stopWhen: stepCountIs(10),
@@ -147,6 +155,15 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
             temperature: agent.temperature,
           },
         ),
+        ...addFieldsIf(
+          this.options.resolveParameterSupport(agent.model.id, 'reasoning'),
+          {
+            reasoning: {
+              effort: 'low',
+              summary: 'auto',
+            },
+          },
+        ),
       };
     }
 
@@ -171,9 +188,37 @@ export const useClientOnlyTransport = (options: ClientOnlyTransportOptions) => {
   const store = useStore();
   const generateId = () => store.createSubject();
   const pickAgent = useAutoAgentSelect();
+  const getDriveTree = useGetDriveStructure();
+
+  const prepareSystemPrompt = async (systemPrompt: string) => {
+    const driveTree = await getDriveTree();
+    let modifiedSystemPrompt = systemPrompt;
+
+    if (systemPrompt.includes('{{drive-structure}}')) {
+      modifiedSystemPrompt = modifiedSystemPrompt.replace(
+        '{{drive-structure}}',
+        stringifyTree(driveTree),
+      );
+    }
+
+    if (systemPrompt.includes('{{timestamp}}')) {
+      modifiedSystemPrompt = modifiedSystemPrompt.replace(
+        '{{timestamp}}',
+        new Date().toISOString(),
+      );
+    }
+
+    return modifiedSystemPrompt;
+  };
+
   // The useChat aggressively memoizes the transport so we need to make sure we always modify the same instance.
   const transportRef = useRef(
-    new ClientOnlyTransport(options, generateId, pickAgent),
+    new ClientOnlyTransport(
+      options,
+      generateId,
+      pickAgent,
+      prepareSystemPrompt,
+    ),
   );
   const prevOptionsRef = useRef(options);
 
@@ -183,6 +228,7 @@ export const useClientOnlyTransport = (options: ClientOnlyTransportOptions) => {
   }
 
   transportRef.current.autoSelectAgent = pickAgent;
+  transportRef.current.prepareSystemPrompt = prepareSystemPrompt;
 
   return transportRef.current;
 };

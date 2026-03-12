@@ -10,7 +10,7 @@ interface UserMessageProps {
 }
 
 export const UserMessage: React.FC<UserMessageProps> = ({ message }) => {
-  const context = message.metadata?.context;
+  const context = message.metadata?.userContext;
 
   return (
     <UserMessageWrapper>

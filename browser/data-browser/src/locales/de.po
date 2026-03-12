@@ -3425,3 +3425,26 @@ msgid ""
 "<0/> wants to modify a resource that is not\n"
 "contained in the current scope."
 msgstr "<0/> möchte eine Ressource ändern, die nicht im aktuellen Geltungsbereich enthalten ist."
+
+#~ msgid "Ragging..."
+#~ msgstr "Ragging..."
+
+#~ msgid "Oh hallo <0>Description</0> <1/>"
+#~ msgstr "Oh hallo <0>Beschreibung</0> <1/>"
+
+#~ msgid "Knowledge (RAG)"
+#~ msgstr "Wissen (RAG)"
+
+#~ msgid "<0/> Search my data for context"
+#~ msgstr "<0/> Meine Daten nach Kontext durchsuchen"
+
+#~ msgid "<0/> Write <1><0/> Provide relevant context from your knowledge base to the Agent.</1>"
+#~ msgstr "<0/> Schreiben <1><0/> Stellen Sie dem Agenten relevante Informationen aus Ihrer Wissensdatenbank zur Verfügung.</1>"
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "<0/> Provide relevant context from your knowledge base to the Agent."
+msgstr "<0/> Stellen Sie dem Agenten relevante Informationen aus Ihrer Wissensdatenbank zur Verfügung."
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Gathering context"
+msgstr "Kontext wird gesammelt"

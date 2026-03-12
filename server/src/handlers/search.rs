@@ -126,7 +126,7 @@ pub async fn search_query(
 }
 
 #[instrument(skip(appstate, req))]
-async fn get_resources(
+pub async fn get_resources(
     req: actix_web::HttpRequest,
     appstate: &web::Data<AppState>,
     subject: &str,

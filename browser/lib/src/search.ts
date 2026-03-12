@@ -13,6 +13,16 @@ export interface SearchOpts {
   };
 }
 
+export interface VectorSearchOpts {
+  /** Fetch full resources instead of subjects */
+  include?: boolean;
+  /** Max of how many results to return */
+  limit?: number;
+  parents?: string[] | string;
+  classes?: string[] | string;
+  rerank?: boolean;
+}
+
 const baseURL = (serverURL: string) => {
   const url = new URL(serverURL);
   url.pathname = 'search';
@@ -100,6 +110,38 @@ export function buildSearchSubject(
       url.searchParams.append('parents', parents.join(','));
     } else {
       url.searchParams.append('parents', parents);
+    }
+  }
+
+  return url.toString();
+}
+
+export function buildVectorSearchSubject(
+  serverURL: string,
+  query: string,
+  opts: VectorSearchOpts = {},
+) {
+  const url = new URL(serverURL);
+  url.pathname = 'vector_search';
+
+  url.searchParams.set('q', query);
+  if (opts.include) url.searchParams.set('include', opts.include.toString());
+  if (opts.limit) url.searchParams.set('limit', opts.limit.toString());
+  if (opts.rerank) url.searchParams.set('rerank', opts.rerank.toString());
+
+  if (opts.classes) {
+    if (Array.isArray(opts.classes)) {
+      url.searchParams.append('classes', opts.classes.join(','));
+    } else {
+      url.searchParams.append('classes', opts.classes);
+    }
+  }
+
+  if (opts.parents) {
+    if (Array.isArray(opts.parents)) {
+      url.searchParams.append('parents', opts.parents.join(','));
+    } else {
+      url.searchParams.append('parents', opts.parents);
     }
   }
 

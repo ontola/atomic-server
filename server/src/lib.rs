@@ -18,6 +18,7 @@ pub mod plugins;
 mod routes;
 pub mod serve;
 mod y_sync_broadcaster;
+pub mod vector_search;
 // #[cfg(feature = "search")]
 mod search;
 #[cfg(test)]

@@ -31,6 +31,7 @@ pub struct AppState {
     pub commit_monitor: actix::Addr<CommitMonitor>,
     pub y_sync_broadcaster: actix::Addr<YSyncBroadcaster>,
     pub search_state: SearchState,
+    pub vector_search_state: crate::vector_search::VectorSearchState,
 }
 
 impl AppState {
@@ -76,6 +77,7 @@ impl AppState {
         store.add_endpoint(plugins::prunetests::prune_tests_endpoint())?;
         store.add_endpoint(plugins::query::query_endpoint())?;
         store.add_endpoint(plugins::search::search_endpoint())?;
+        store.add_endpoint(plugins::vector_search::vector_search_endpoint())?;
 
         // Get and register Wasm class extender plugins
         let extenders =
@@ -104,9 +106,12 @@ impl AppState {
         let search_state = SearchState::new(&config)
             .map_err(|e| format!("Failed to start search service: {}", e))?;
 
+        let vector_search_state = crate::vector_search::VectorSearchState::new(&config).await
+            .map_err(|e| format!("Failed to start vector search service: {}", e))?;
+
         // Initialize commit monitor, which watches commits and sends these to the commit_monitor actor
         let commit_monitor =
-            crate::commit_monitor::create_commit_monitor(store.clone(), search_state.clone());
+            crate::commit_monitor::create_commit_monitor(store.clone(), search_state.clone(), vector_search_state.clone());
 
         let commit_monitor_clone = commit_monitor.clone();
 
@@ -143,6 +148,8 @@ impl AppState {
 
             tracing::info!("Adding all resources to search index");
             search_state.add_all_resources(&store).await?;
+            tracing::info!("Adding all resources to vector search index");
+            vector_search_state.add_all_resources(&store).await?;
         }
 
         Ok(AppState {
@@ -151,6 +158,7 @@ impl AppState {
             commit_monitor,
             y_sync_broadcaster,
             search_state,
+            vector_search_state,
         })
     }
 

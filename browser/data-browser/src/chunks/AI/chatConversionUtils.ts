@@ -54,7 +54,7 @@ export const uiMessageToResource = async (
     },
   });
 
-  const context = message.metadata?.context;
+  const context = message.metadata?.userContext;
 
   if (context && context.length > 0) {
     const subjects = await Promise.all(
@@ -62,6 +62,11 @@ export const uiMessageToResource = async (
     );
 
     messageResource.props.providedContext = subjects;
+  }
+
+  if (message.metadata?.serverContext) {
+    messageResource.props.serverProvidedContext =
+      message.metadata.serverContext;
   }
 
   const builder = partsToResourceBuilder(messageResource, store);
@@ -188,7 +193,15 @@ export const messageResourcesToDisplayMessages = async (
           .map(c => c.value);
 
         message.metadata = {
-          context,
+          ...(message.metadata ?? {}),
+          userContext: context,
+        };
+      }
+
+      if (resource.props.serverProvidedContext) {
+        message.metadata = {
+          ...(message.metadata ?? {}),
+          serverContext: resource.props.serverProvidedContext,
         };
       }
     }

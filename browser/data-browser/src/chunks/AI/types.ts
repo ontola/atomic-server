@@ -17,6 +17,7 @@ export interface AIAgent {
   model: AIModelIdentifier;
   canReadAtomicData: boolean;
   canWriteAtomicData: boolean;
+  ragEnabled: boolean;
   temperature?: number;
 }
 
@@ -47,7 +48,8 @@ export type AIMessageContext =
   | AIMCPResourceMessageContext;
 
 export type MessageMetadata = {
-  context?: AIMessageContext[];
+  userContext?: AIMessageContext[];
+  serverContext?: string;
   inputTokensUsed?: number;
   outputTokensUsed?: number;
   error?: string;

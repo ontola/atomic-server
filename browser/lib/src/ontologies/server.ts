@@ -56,6 +56,7 @@ export const server = {
     pluginFile: 'https://atomicdata.dev/properties/pluginFile',
     pluginAgent: 'https://atomicdata.dev/properties/pluginAgent',
     pluginPermissions: 'https://atomicdata.dev/properties/pluginPermissions',
+    searchChunks: 'https://atomicdata.dev/properties/search/chunks',
   },
   __classDefs: {
     ['https://atomicdata.dev/classes/Drive']: [
@@ -238,6 +239,7 @@ declare module '../index.js' {
     [server.properties.pluginFile]: string;
     [server.properties.pluginAgent]: string;
     [server.properties.pluginPermissions]: JSONValue;
+    [server.properties.searchChunks]: JSONValue;
   }
 
   interface PropSubjectToNameMapping {
@@ -277,5 +279,6 @@ declare module '../index.js' {
     [server.properties.pluginFile]: 'pluginFile';
     [server.properties.pluginAgent]: 'pluginAgent';
     [server.properties.pluginPermissions]: 'pluginPermissions';
+    [server.properties.searchChunks]: 'searchChunks';
   }
 }
