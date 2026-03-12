@@ -3,6 +3,12 @@
  *
  * Indexes resource fields (name, description, shortname) for fast
  * prefix/fuzzy search without a server round-trip.
+ *
+ * One index PER DRIVE. A single global index leaks results across drives
+ * and surfaces the bootstrap ontology (the `atomicdata.dev` drive's classes
+ * and properties) when a user searches their own drive. Partitioning by
+ * drive keeps each search scoped to exactly the drive being browsed —
+ * matching the server's `parents`-scoped search.
  */
 
 import MiniSearch, { type SearchResult } from 'minisearch';
@@ -24,11 +30,17 @@ export interface LocalSearchResult {
   subjects: string[];
 }
 
-export class LocalSearch {
-  private index: MiniSearch;
+/** Commits are write-time metadata, never searchable content. */
+function isCommitSubject(subject: string): boolean {
+  return subject.startsWith('did:ad:commit:');
+}
 
-  constructor() {
-    this.index = new MiniSearch({
+export class LocalSearch {
+  /** One MiniSearch index per drive subject. */
+  private indexes = new Map<string, MiniSearch>();
+
+  private createIndex(): MiniSearch {
+    return new MiniSearch({
       fields: [...INDEXED_FIELDS],
       storeFields: [],
       idField: 'id',
@@ -40,45 +52,91 @@ export class LocalSearch {
     });
   }
 
-  /** Add or update a resource in the search index. */
-  addResource(resource: Resource): void {
-    if (!resource.subject || resource.loading || resource.new) return;
+  private indexForDrive(drive: string): MiniSearch {
+    let index = this.indexes.get(drive);
+
+    if (!index) {
+      index = this.createIndex();
+      this.indexes.set(drive, index);
+    }
+
+    return index;
+  }
+
+  /**
+   * Add or update a resource in its drive's search index.
+   * `drive` is the subject of the drive the resource belongs to.
+   */
+  addResource(resource: Resource, drive: string): void {
+    if (!resource.subject || resource.loading || resource.new || !drive) {
+      return;
+    }
+
+    // Commits are not searchable content — skip them.
+    if (isCommitSubject(resource.subject)) {
+      return;
+    }
 
     const doc = this.resourceToDoc(resource);
 
-    if (!doc) return;
-
-    // MiniSearch throws if you add a duplicate ID — remove first if exists
-    if (this.index.has(doc.id)) {
-      this.index.discard(doc.id);
+    if (!doc) {
+      return;
     }
 
-    this.index.add(doc);
+    const index = this.indexForDrive(drive);
+
+    // MiniSearch throws if you add a duplicate ID — remove first if exists.
+    if (index.has(doc.id)) {
+      index.discard(doc.id);
+    }
+
+    index.add(doc);
   }
 
-  /** Remove a resource from the search index. */
+  /**
+   * Remove a resource from the search index. The drive is usually unknown
+   * at removal time, so sweep every drive's index.
+   */
   removeResource(subject: string): void {
-    if (this.index.has(subject)) {
-      this.index.discard(subject);
+    for (const index of this.indexes.values()) {
+      if (index.has(subject)) {
+        index.discard(subject);
+      }
     }
   }
 
-  /** Search the local index. Returns matching subject URLs ordered by relevance. */
-  search(query: string, limit = 30): LocalSearchResult {
-    if (!query.trim()) {
+  /**
+   * Search one drive's index. Returns matching subject URLs ordered by
+   * relevance. An unknown drive yields no results.
+   */
+  search(query: string, drive: string, limit = 30): LocalSearchResult {
+    const index = this.indexes.get(drive);
+
+    if (!index || !query.trim()) {
       return { subjects: [] };
     }
 
-    const results: SearchResult[] = this.index.search(query);
+    const results: SearchResult[] = index.search(query);
 
     return {
       subjects: results.slice(0, limit).map(r => r.id),
     };
   }
 
-  /** Number of documents in the index. */
+  /** Number of documents indexed for a specific drive. */
+  sizeForDrive(drive: string): number {
+    return this.indexes.get(drive)?.documentCount ?? 0;
+  }
+
+  /** Total documents across every drive's index. */
   get size(): number {
-    return this.index.documentCount;
+    let total = 0;
+
+    for (const index of this.indexes.values()) {
+      total += index.documentCount;
+    }
+
+    return total;
   }
 
   /** Extract searchable fields from a Resource. Returns null if nothing to index. */
