@@ -131,4 +131,41 @@ describe('Store', () => {
     const normalizedDID = store.normalizeSubject('did:ad:123');
     expect(normalizedDID).toBe('did:ad:123');
   });
+
+  it('rehydrates local search from the ClientDb so offline search survives a reload', async ({
+    expect,
+  }) => {
+    // `LocalSearch` is in-memory and starts empty on every page load.
+    // `setClientDb` must rebuild it from the persistent ClientDb so a
+    // reloaded, offline session can still search its whole local dataset.
+    const store = new Store({ serverUrl: 'https://atomicdata.dev' });
+    const subject = 'https://atomicdata.dev/offline-search-target';
+    const name = 'ZephyrQuokkaOfflineTarget';
+    const exported = JSON.stringify([
+      { '@id': subject, [core.properties.name]: name },
+    ]);
+
+    const fakeClientDb = {
+      isReady: true,
+      isInitialized: true,
+      initError: undefined,
+      waitForReady: async () => true,
+      exportAllResources: async () => exported,
+    };
+
+    store.setClientDb(
+      fakeClientDb as unknown as Parameters<Store['setClientDb']>[0],
+    );
+
+    // Rehydration runs in the background — poll until the resource is
+    // searchable from the local index (no server is reachable here).
+    let results: string[] = [];
+
+    for (let i = 0; i < 100 && results.length === 0; i++) {
+      await new Promise(resolve => setTimeout(resolve, 10));
+      results = await store.search(name);
+    }
+
+    expect(results).toContain(subject);
+  });
 });
