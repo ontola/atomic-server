@@ -39,6 +39,11 @@ pub struct CommitApplied {
     pub remove_atoms: Vec<Atom>,
     /// The property URLs that were changed by this commit's Loro update.
     pub changed_props: HashSet<String>,
+    /// True when importing the commit's `loroUpdate` actually advanced the
+    /// doc's oplog — i.e. the ops were new. False means every op was already
+    /// present (an idempotent replay), so producing no state change is
+    /// expected and correct, not a silent LWW loss.
+    pub imported_new_ops: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -483,18 +488,28 @@ impl Commit {
             })?;
 
         // Causality guard: a commit with a non-trivial loroUpdate that
-        // produces ZERO net state change means the incoming ops lost LWW
-        // against stored state — silent drop. Happens when the client's
-        // Loro doc isn't seeded from the server's state (fresh peer ID,
-        // concurrent writes). Reject so the silent data loss surfaces.
+        // produces ZERO net state change.
+        //
+        // Two cases look identical at the projection level but mean opposite
+        // things, so they must be distinguished:
+        //
+        //  1. Idempotent replay — the commit's ops are already in the doc's
+        //     oplog (importing the update did not advance the version
+        //     vector). Re-applying it changed nothing because there was
+        //     nothing new to apply. This is correct and safe — Loro
+        //     deduplicates ops by ID — so ACCEPT. The browser outbox relies
+        //     on this when it retransmits a commit the server already has.
+        //
+        //  2. Silent LWW loss — the commit's ops ARE new (the VV advanced)
+        //     but lost last-writer-wins against stored state, contributing
+        //     nothing. Happens when the client's Loro doc was not seeded
+        //     from the server's state (fresh peer ID, concurrent writes).
+        //     REJECT so the silent data loss surfaces.
         //
         // Exemptions:
         // - destroy commits (no Loro merge to evaluate).
         // - tiny/empty loroUpdate (client didn't really try to write).
-        // - genesis commits (is_new): there is no stored state to lose to,
-        //   so an empty diff here just means the client's Loro ops didn't
-        //   translate into materialized atoms (e.g. raw container init
-        //   without value writes). Not the bug we're catching.
+        // - genesis commits (is_new): no stored state to lose to.
         if opts.validate_loro_causality
             && !is_new
             && !commit.destroy.unwrap_or(false)
@@ -502,60 +517,67 @@ impl Commit {
             && applied.add_atoms.is_empty()
             && applied.remove_atoms.is_empty()
         {
-            // Decode the incoming update in isolation to see what the client
-            // INTENDED to write. Works cleanly when the client sends snapshots;
-            // may be empty for pure deltas.
-            let incoming_intent = commit
-                .loro_update
-                .as_ref()
-                .map(|bytes| {
-                    let doc = crate::loro::AtomicLoroDoc::new();
-                    let _ = doc.import_update(bytes);
-                    doc.get_all_properties()
-                })
-                .unwrap_or_default();
-            let merged_doc = applied.resource_new.build_state_doc()?;
-            let merged_state = merged_doc.get_all_properties();
-
-            // Idempotent replay check: if every property the client tried to
-            // write already matches the merged state exactly, the commit is a
-            // no-op, not a silent drop. Let it through — the client simply
-            // re-sent state that was already correct (common pattern when an
-            // UI flow calls `resource.set(x, v)` with the same v that's
-            // already stored, then saves).
-            let all_match = !incoming_intent.is_empty()
-                && incoming_intent.iter().all(|(key, incoming_val)| {
-                    merged_state.get(key).is_some_and(|mv| mv == incoming_val)
-                });
-
-            if all_match {
+            if !applied.imported_new_ops {
+                // Case 1: every op was already present — idempotent replay.
                 tracing::debug!(
                     subject = %commit.subject,
-                    keys = ?incoming_intent.keys().collect::<Vec<_>>(),
-                    "[causality-guard] accepting idempotent no-op commit (values match stored state)"
+                    "[causality-guard] accepting idempotent replay (ops already in oplog)"
                 );
             } else {
-                tracing::warn!(
-                    subject = %commit.subject,
-                    loro_bytes = commit.loro_update.as_ref().map(|b| b.len()).unwrap_or(0),
-                    incoming_intent = ?incoming_intent,
-                    merged_state = ?merged_state,
-                    "[causality-guard] rejecting commit with non-trivial loroUpdate that produced no state changes (silent LWW loss)"
-                );
+                // The ops were new but produced no atom change. Decode the
+                // incoming update in isolation to see what the client
+                // INTENDED to write. Works cleanly for snapshots; may be
+                // empty for pure deltas.
+                let incoming_intent = commit
+                    .loro_update
+                    .as_ref()
+                    .map(|bytes| {
+                        let doc = crate::loro::AtomicLoroDoc::new();
+                        let _ = doc.import_update(bytes);
+                        doc.get_all_properties()
+                    })
+                    .unwrap_or_default();
+                let merged_doc = applied.resource_new.build_state_doc()?;
+                let merged_state = merged_doc.get_all_properties();
 
-                return Err(format!(
-                    "Commit's Loro update produced no state changes — its writes were \
-                     silently dropped by LWW against stored state. The client's Loro doc \
-                     wasn't seeded from the server's current state. Refetch the resource \
-                     and retry the commit. subject={} incoming_intent={:?} merged_state_keys={:?}",
-                    commit.subject,
-                    incoming_intent
-                        .iter()
-                        .map(|(k, v)| format!("{k} = {v:?}"))
-                        .collect::<Vec<_>>(),
-                    merged_state.keys().collect::<Vec<_>>(),
-                )
-                .into());
+                // Semantic no-op: the client re-set values that already match
+                // stored state (e.g. a UI flow calls `set(x, v)` with the
+                // current `v`, then saves). New ops, but no real change —
+                // accept rather than reject.
+                let all_match = !incoming_intent.is_empty()
+                    && incoming_intent.iter().all(|(key, incoming_val)| {
+                        merged_state.get(key).is_some_and(|mv| mv == incoming_val)
+                    });
+
+                if all_match {
+                    tracing::debug!(
+                        subject = %commit.subject,
+                        keys = ?incoming_intent.keys().collect::<Vec<_>>(),
+                        "[causality-guard] accepting semantic no-op commit (values match stored state)"
+                    );
+                } else {
+                    tracing::warn!(
+                        subject = %commit.subject,
+                        loro_bytes = commit.loro_update.as_ref().map(|b| b.len()).unwrap_or(0),
+                        incoming_intent = ?incoming_intent,
+                        merged_state = ?merged_state,
+                        "[causality-guard] rejecting commit with non-trivial loroUpdate that produced no state changes (silent LWW loss)"
+                    );
+
+                    return Err(format!(
+                        "Commit's Loro update produced no state changes — its writes were \
+                         silently dropped by LWW against stored state. The client's Loro doc \
+                         wasn't seeded from the server's current state. Refetch the resource \
+                         and retry the commit. subject={} incoming_intent={:?} merged_state_keys={:?}",
+                        commit.subject,
+                        incoming_intent
+                            .iter()
+                            .map(|(k, v)| format!("{k} = {v:?}"))
+                            .collect::<Vec<_>>(),
+                        merged_state.keys().collect::<Vec<_>>(),
+                    )
+                    .into());
+                }
             }
         }
 
@@ -651,15 +673,22 @@ impl Commit {
         let mut remove_atoms: Vec<Atom> = Vec::new();
         let mut add_atoms: Vec<Atom> = Vec::new();
         let mut changed_props: HashSet<String> = HashSet::new();
+        let mut imported_new_ops = false;
 
         if let Some(loro_update_bytes) = &self.loro_update {
             // Seed from the current resource state when no snapshot exists yet so
             // older resources can still apply snapshot/delta updates correctly.
             let loro_doc = resource.build_state_doc()?;
 
+            // Whether the import actually advances the oplog tells idempotent
+            // replay (every op already present → VV unchanged) apart from a
+            // genuine new write. See the causality guard in `apply_commit`.
+            let vv_before = loro_doc.oplog_vv_map();
+
             // Import the update and compute the property-level diff for indexing
             let diff = loro_doc
                 .import_update_with_diff(loro_update_bytes, &resource.get_subject().to_string())?;
+            imported_new_ops = loro_doc.oplog_vv_map() != vv_before;
 
             // Track which properties changed
             for atom in &diff.add_atoms {
@@ -692,6 +721,7 @@ impl Commit {
             add_atoms,
             remove_atoms,
             changed_props,
+            imported_new_ops,
         })
     }
 
@@ -1927,6 +1957,80 @@ mod test {
             after_second.get(crate::urls::NAME).unwrap().to_string(),
             "Ne",
             "commit 2 should rename name to Ne — if this fails, sequential commits aren't merging properly"
+        );
+    }
+
+    /// Re-applying a commit the server has already applied must be accepted
+    /// as an idempotent replay — NOT rejected as a silent LWW loss. The
+    /// browser outbox relies on this when it retransmits a commit. The
+    /// causality guard distinguishes "ops already in the oplog" (accept)
+    /// from "new ops that lost LWW" (reject).
+    #[tokio::test]
+    async fn idempotent_commit_replay_is_accepted() {
+        let (store, agent) = store_with_known_agent().await;
+        let subject = "https://localhost/idempotent_replay_target";
+
+        // Causality guard ON, previous-commit check OFF — matches the real
+        // `/commit` apply path (a replay legitimately carries a stale
+        // `previousCommit`, so that check is not the gate under test).
+        let opts = CommitOpts {
+            validate_schema: true,
+            validate_signature: true,
+            validate_timestamp: false,
+            validate_previous_commit: false,
+            validate_loro_causality: true,
+            validate_rights: false,
+            validate_for_agent: None,
+            update_index: true,
+            source_id: None,
+        };
+
+        // Commit 1: create the resource.
+        let client_doc = crate::loro::AtomicLoroDoc::new();
+        client_doc
+            .set_property(crate::urls::NAME, &Value::String("Original".into()))
+            .unwrap();
+        client_doc
+            .set_property(
+                crate::urls::IS_A,
+                &Value::ResourceArray(vec![crate::urls::CLASS.to_string().into()]),
+            )
+            .unwrap();
+        client_doc
+            .set_property(crate::urls::SHORTNAME, &Value::String("orig".into()))
+            .unwrap();
+        client_doc
+            .set_property(crate::urls::DESCRIPTION, &Value::String("desc".into()))
+            .unwrap();
+        let empty = Resource::new(subject.into());
+        let mut builder = CommitBuilder::new(subject.into());
+        builder.set_loro_update(client_doc.export_snapshot());
+        let commit1 = builder.sign(&agent, &store, &empty).await.unwrap();
+        store.apply_commit(commit1, &opts).await.unwrap();
+
+        // Commit 2: a rename.
+        let after_first = store.get_resource(&subject.into()).await.unwrap();
+        client_doc
+            .set_property(crate::urls::NAME, &Value::String("Renamed".into()))
+            .unwrap();
+        let mut builder2 = CommitBuilder::new(subject.into());
+        builder2.set_loro_update(client_doc.export_snapshot());
+        let commit2 = builder2.sign(&agent, &store, &after_first).await.unwrap();
+
+        // Apply commit 2, then RE-APPLY the identical commit. Its ops are
+        // already in the resource's oplog, so the second apply must be
+        // accepted (idempotent replay), not rejected.
+        store.apply_commit(commit2.clone(), &opts).await.unwrap();
+        store
+            .apply_commit(commit2, &opts)
+            .await
+            .expect("idempotent replay of an already-applied commit must be accepted");
+
+        let after = store.get_resource(&subject.into()).await.unwrap();
+        assert_eq!(
+            after.get(crate::urls::NAME).unwrap().to_string(),
+            "Renamed",
+            "state must be unchanged by the idempotent replay",
         );
     }
 
