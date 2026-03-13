@@ -71,11 +71,34 @@ test.describe('search', async () => {
       .getByRole('button', { name: 'New Document' })
       .click();
     await editTitle('Avocado Cake', page);
+    const avocadoCakeSubject = await getCurrentSubject(page);
 
     await openSubject(page, cakeFolderSubject);
 
+    // Wait until the server's scoped search index actually contains the
+    // doc. A fixed sleep races the ~5s index-commit throttle; poll the
+    // real scoped query (`parents` forces the server path) instead.
+    await page.waitForFunction(
+      async (args: { subject: string; parent: string }) => {
+        const store = (window as { store?: { search(q: string, o: object): Promise<string[]> } }).store;
+
+        if (!store) return false;
+
+        try {
+          const results = await store.search('Avocado', {
+            parents: args.parent,
+          });
+
+          return results.includes(args.subject);
+        } catch {
+          return false;
+        }
+      },
+      { subject: avocadoCakeSubject, parent: cakeFolderSubject },
+      { timeout: 30000, polling: 1000 },
+    );
+
     // Set search scope to 'Cake folder'
-    await waitForSearchIndex(page);
     await page.reload();
     await contextMenuClick('scope', page);
 
