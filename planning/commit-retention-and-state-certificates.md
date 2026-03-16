@@ -37,7 +37,9 @@ The system has already moved most state semantics to Loro:
 - [`loro-source-of-truth.md`](./loro-source-of-truth.md) makes the Loro
   snapshot the canonical state for CRDT-backed resources.
 - `loro.rs::get_history()` already reconstructs history by walking the Loro
-  oplog's change ancestors — not the commit chain.
+  oplog's change ancestors — not the commit chain. (The older
+  `server/src/plugins/versioning.rs` endpoints still replay stored commits to
+  rebuild versions; Phase 3 retires them — see the Phase 0 findings.)
 
 But commits still carry responsibilities that belong elsewhere:
 
@@ -376,10 +378,57 @@ history model):
 
 ### Phase 0 — audit assumptions
 
-- [ ] Find code that fetches or depends on historical commit resources.
-- [ ] Find code that treats `previousCommit` as required causal state.
-- [ ] Find tests that assume commits are persisted; separate
+- [x] Find code that fetches or depends on historical commit resources.
+- [x] Find code that treats `previousCommit` as required causal state.
+- [x] Find tests that assume commits are persisted; separate
       resource-history tests from audit-retention tests.
+
+**Findings (2026-05-23 audit).**
+
+*Code that depends on retained commit resources:*
+
+- **`server/src/plugins/versioning.rs` — the real blocker.** The
+  `/all-versions` and `/version?commit=` endpoints reconstruct history by
+  *replaying commits*: `get_commits_for_resource()` queries every commit with
+  `Query::new_prop_val(SUBJECT, …)`, and `construct_version()` fetches a commit
+  by URL and calls `commit.apply_changes()`. This legacy path **duplicates**
+  `loro.rs::get_history()`, which already derives history from the Loro oplog
+  with no commit dependency. Phase 3 must retire the commit-replay plugin in
+  favour of the oplog path.
+- **Commits are queryable resources** (`isA=Commit`): any commits collection or
+  `Query` over commits depends on retention. This is the audit-feed surface the
+  plan already scopes to `recent` / `full`.
+- **Browser per-change attribution UI.** `data-browser` `CommitDetail.tsx` does
+  `useResource(commitSubject)` to render signer + timestamp (chatroom, message,
+  and resource pages); `lib/src/store.ts::materializeCommitLocally()` seeds that
+  resource right after a post; `lib/src/websockets.ts::shouldFetchOnQueryUpdate`
+  treats `did:ad:commit:` subjects as immutable-cacheable. All of this is the
+  "edited by «agent»" feature the plan already says `retention=none` sacrifices.
+- *Not* a blocker: `lib/src/hierarchy.rs` commit read-authorization fetches the
+  *target* resource, not the commit resource.
+
+*`previousCommit` as required causal state — confirmed NOT a blocker:*
+
+- Rust `validate_previous_commit()` (`lib/src/commit.rs`) is opt-in via a bool
+  flag that is **false** on the production apply path; it compares `lastCommit`
+  equality and never walks a chain. `previousCommit` is audit/display metadata,
+  exactly as this plan assumes.
+- The browser only *builds* `previousCommit` chains. The chain token is
+  `lastCommit`, a propval on the **resource projection** (always retained).
+  `save()` / `destroy()` recovery re-fetches the *resource*, never the commit
+  resource — so an unresolvable `did:ad:commit:` reference is harmless.
+
+*Tests that assume commits are persisted (Phase 2 must gate, not delete, these):*
+
+- Rust: `lib/src/commit.rs::agent_and_commit` (fetches the commit back via
+  `get_resource`), and the `lib/src/db/test.rs` commits-collection-count test.
+  Genesis-followup tests are fine — genesis is always retained.
+- Browser: `commit.test.ts` "adds the just-posted commit to store.resources",
+  `parse.test.ts` "keeps a commit resource as a commit", `websockets.test.ts`
+  "still fetches unknown commit subjects".
+- None of these exercise *resulting resource state* — they assert commit
+  *retrievability* specifically. Phase 2's retention-disabled test mode must
+  gate them on policy rather than remove them.
 
 ### Phase 1 — correct idempotency (do this first; unblocks the outbox)
 
@@ -397,6 +446,9 @@ history model):
 
 ### Phase 3 — Loro-based history
 
+- [ ] Retire `server/src/plugins/versioning.rs` (the commit-replay
+      `/all-versions` and `/version` endpoints) in favour of
+      `loro.rs::get_history()`, which already derives versions from the oplog.
 - [ ] Move the history UI/API onto the Loro oplog.
 - [ ] Keep audit/feed UI explicitly backed by retained commits, surfacing when
       retention is unavailable.
