@@ -17,6 +17,7 @@ superseded at the top.
 | [`sync.md`](./sync.md) | WS `COMMIT` / echo suppression (mostly done); query-semantics follow-up. |
 | [`unified-data-layer.md`](./unified-data-layer.md) | Browser/JS data-layer simplification: one ingress, one outbox, one subscription model. |
 | [`loro-source-of-truth.md`](./loro-source-of-truth.md) | Make the Loro doc authoritative; `PropVals` becomes a derived projection. |
+| [`commit-retention-and-state-certificates.md`](./commit-retention-and-state-certificates.md) | Proposal: commits remain signed write certificates, but commit retention is optional node policy. |
 | [`s3-blob-storage.md`](./s3-blob-storage.md) | Pluggable blob backend design for redb/S3/hybrid storage. |
 
 Protocol reference lives in the public docs: [`docs/src/websockets.md`](../docs/src/websockets.md).

@@ -73,20 +73,21 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
         />
         {canEdit && <QuickCreateRow parent={resource.subject} />}
 
-        <DriveSubResourcesSection>
-          <ScrollArea>
-            {subResources.map((child, index) => (
-              <ResourceSideBar
-                key={child}
-                subject={child}
-                renderedHierarchy={[resource.subject]}
-                ancestry={ancestry}
-              />
-            ))}
-          </ScrollArea>
-        </DriveSubResourcesSection>
-
         <SettingsGroup>
+          <SettingsSection label='Resources'>
+            <DriveSubResourcesSection>
+              <ScrollArea>
+                {subResources.map(child => (
+                  <ResourceSideBar
+                    key={child}
+                    subject={child}
+                    renderedHierarchy={[resource.subject]}
+                    ancestry={ancestry}
+                  />
+                ))}
+              </ScrollArea>
+            </DriveSubResourcesSection>
+          </SettingsSection>
           <SettingsSection label='Tags'>
             <DriveTagList resource={resource} />
           </SettingsSection>
