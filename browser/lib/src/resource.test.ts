@@ -138,4 +138,58 @@ describe('resource.ts', () => {
     const peerAfter = (resource as any)._loroDoc.peerIdStr as string;
     expect(peerAfter).toBe(peerBefore);
   });
+
+  /**
+   * Regression: the resource history page used to read only `getMap('properties')`,
+   * so a Document's body content (which loro-prosemirror writes into a separate
+   * top-level `doc` container) never showed up — only title/metadata edits did.
+   * `getLoroHistory()` must surface every top-level container besides
+   * `properties` in `Version.containers`.
+   */
+  it('captures body container content in version history', async ({
+    expect,
+  }) => {
+    const subject = 'https://example.com/loro-history-doc';
+    const name = 'https://atomicdata.dev/properties/name';
+
+    const resource = new Resource(subject);
+    await resource.set(name, 'Initial title', false);
+    const doc = resource.getLoroDoc()!;
+    doc.commit();
+
+    // Simulate what loro-prosemirror does for Document bodies: write to a
+    // top-level `doc` map, not the `properties` map.
+    const docMap = doc.getMap('doc');
+    docMap.set('content', 'Hello world body');
+    doc.commit();
+
+    await resource.set(name, 'Updated title', false);
+    doc.commit();
+
+    const history = resource.getLoroHistory();
+    expect(history.length).toBeGreaterThan(0);
+
+    // Every Version exposes `containers`, and at least one must carry the
+    // body content we wrote into `doc`.
+    for (const v of history) {
+      expect(v.containers).toBeInstanceOf(Map);
+    }
+
+    const docContents = history
+      .map(v => v.containers.get('doc'))
+      .filter((c): c is Record<string, unknown> => c !== undefined);
+
+    expect(docContents.length).toBeGreaterThan(0);
+    expect(
+      docContents.some(
+        c => (c as Record<string, unknown>).content === 'Hello world body',
+      ),
+    ).toBe(true);
+
+    // Sanity: the `properties` root must NOT leak into containers — it's
+    // already exposed as propvals and would double-render in the UI.
+    for (const v of history) {
+      expect(v.containers.has('properties')).toBe(false);
+    }
+  });
 });

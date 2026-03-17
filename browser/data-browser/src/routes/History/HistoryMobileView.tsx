@@ -6,6 +6,7 @@ import { Card } from '../../components/Card';
 import { Column } from '../../components/Row';
 import { VersionTitle } from './VersionTitle';
 import { VersionScroller } from './VersionScroller';
+import { VersionContent } from './VersionContent';
 import {
   Dialog,
   DialogActions,
@@ -60,6 +61,7 @@ export function HistoryMobileView({
                         </div>
                       ))}
                   </PropertiesList>
+                  <VersionContent containers={selectedVersion.containers} />
                 </StyledCard>
               </>
             )}
