@@ -38,10 +38,41 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   const strokesRef = useRef(strokes);
   const currentStrokeRef = useRef(currentStroke);
   const isPanningRef = useRef(false);
-  const panStartRef = useRef<{ x: number; y: number; ox: number; oy: number } | null>(
-    null,
-  );
+  const panStartRef = useRef<{
+    x: number;
+    y: number;
+    ox: number;
+    oy: number;
+  } | null>(null);
   const drawingPointerRef = useRef<number | null>(null);
+  const isPanModeRef = useRef(false);
+  const [panMode, setPanMode] = useState<'idle' | 'ready' | 'panning'>('idle');
+
+  // Track Space key for pan mode
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && !e.repeat) {
+        e.preventDefault();
+        isPanModeRef.current = true;
+        setPanMode('ready');
+      }
+    };
+
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        isPanModeRef.current = false;
+        setPanMode(p => (p === 'panning' ? 'idle' : 'idle'));
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+    };
+  }, []);
 
   scaleRef.current = scale;
   offsetRef.current = offset;
@@ -144,8 +175,9 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       return;
     }
 
-    if (e.button === 1 || (e.button === 0 && e.altKey)) {
+    if (e.button === 1 || (e.button === 0 && isPanModeRef.current)) {
       isPanningRef.current = true;
+      setPanMode('panning');
       panStartRef.current = {
         x: e.clientX,
         y: e.clientY,
@@ -190,7 +222,10 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       return;
     }
 
-    if (drawingPointerRef.current !== e.pointerId || !currentStrokeRef.current) {
+    if (
+      drawingPointerRef.current !== e.pointerId ||
+      !currentStrokeRef.current
+    ) {
       return;
     }
 
@@ -214,9 +249,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     const last = stroke.path[stroke.path.length - 1];
     const minDist = 2 / scaleRef.current;
 
-    if (
-      Math.hypot(x - last[0], y - last[1]) > minDist
-    ) {
+    if (Math.hypot(x - last[0], y - last[1]) > minDist) {
       setCurrentStroke({
         ...stroke,
         path: [...stroke.path, [x, y]],
@@ -228,6 +261,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     if (isPanningRef.current) {
       isPanningRef.current = false;
       panStartRef.current = null;
+      setPanMode(isPanModeRef.current ? 'ready' : 'idle');
       canvasRef.current?.releasePointerCapture(e.pointerId);
       return;
     }
@@ -309,6 +343,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
         ref={containerRef}
         onWheel={onWheel}
         $dark={darkMode}
+        $panMode={panMode}
       >
         <DrawCanvas
           ref={canvasRef}
@@ -317,7 +352,10 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
           onPointerUp={finishStroke}
           onPointerCancel={finishStroke}
         />
-        <Hint>Draw with left click · Pan with Alt+drag or middle mouse · Scroll to zoom</Hint>
+        <Hint>
+          Draw with left click · Pan with Space+drag or middle mouse · Scroll to
+          zoom
+        </Hint>
       </CanvasArea>
     </Page>
   );
@@ -366,7 +404,7 @@ const ColorSwatch = styled.button<{ $color: number; $active: boolean }>`
   border-radius: 50%;
   border: 2px solid
     ${p => (p.$active ? p.theme.colors.text : p.theme.colors.bg3)};
-  background: #${(p => (p.$color >>> 0).toString(16).padStart(8, '0').slice(2))};
+  background: #${p => (p.$color >>> 0).toString(16).padStart(8, '0').slice(2)};
   cursor: pointer;
   padding: 0;
 `;
@@ -376,14 +414,19 @@ const Status = styled.span<{ $error?: boolean }>`
   color: ${p => (p.$error ? p.theme.colors.danger : p.theme.colors.textLight)};
 `;
 
-const CanvasArea = styled.div<{ $dark: boolean }>`
+const CanvasArea = styled.div<{ $dark: boolean; $panMode: string }>`
   position: relative;
   flex: 1;
   min-height: 400px;
   overflow: hidden;
   touch-action: none;
   background: ${p => (p.$dark ? '#1a1a1a' : '#f5f5f0')};
-  cursor: crosshair;
+  cursor: ${p =>
+    p.$panMode === 'ready'
+      ? 'grab'
+      : p.$panMode === 'panning'
+        ? 'grabbing'
+        : 'crosshair'};
 `;
 
 const DrawCanvas = styled.canvas`

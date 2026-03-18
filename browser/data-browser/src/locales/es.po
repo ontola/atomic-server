@@ -5217,10 +5217,32 @@ msgstr ""
 msgid "Saving…"
 msgstr ""
 
-#: src/views/Canvas/CanvasPage.tsx
-msgid "Draw with left click · Pan with Alt+drag or middle mouse · Scroll to zoom"
-msgstr ""
+#~ msgid "Draw with left click · Pan with Alt+drag or middle mouse · Scroll to zoom"
+#~ msgstr ""
 
 #: src/views/Drive/DrivePage.tsx
 msgid "Resources"
+msgstr ""
+
+#: src/routes/History/VersionContent.tsx
+msgid "Document body"
+msgstr ""
+
+#: src/routes/History/VersionContent.tsx
+msgid "(empty)"
+msgstr ""
+
+#: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
+msgid "Canvas"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Space"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid ""
+"Draw with left click · Pan with Space+drag or middle mouse · Scroll to\n"
+"zoom"
 msgstr ""
