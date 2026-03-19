@@ -18,7 +18,7 @@ pub fn setup_endpoint() -> Endpoint {
     Endpoint {
         path: "/setup".to_string(),
         params: vec![urls::SETUP_RESET.into()],
-        description: "Binds the current host to a Drive DID, routing all requests on this domain to that drive. Only works if the host is uninitialized.".to_string(),
+        description: "Binds the current host to a Drive DID, routing all requests on this domain to that drive.".to_string(),
         shortname: "setup".to_string(),
         handle: None,
         handle_post: Some(handle_setup_request),
@@ -38,8 +38,7 @@ fn handle_setup_request<'a>(
 
         let host = subject.host_str().unwrap_or("localhost");
 
-        // ?reset clears the drive mapping for this host, restoring the uninitialized state.
-        // Intended for development use only.
+        // ?reset clears the drive mapping for this host. Intended for development use only.
         let is_reset = subject.query_pairs().any(|(k, _)| k == "reset");
 
         if is_reset {
@@ -53,11 +52,7 @@ fn handle_setup_request<'a>(
 
         // If the host is already bound, only allow rebinding if the caller has
         // write rights on the current drive.
-        if !store.is_uninitialized_for_host(host).await {
-            let current_drive = store
-                .get_drive_did(host)
-                .await?
-                .ok_or("Host is bound but no drive DID found")?;
+        if let Some(current_drive) = store.get_drive_did(host).await? {
             let drive_resource = store.get_resource(&current_drive).await?;
             check_write(store, &drive_resource, for_agent).await.map_err(|_| {
                 "This host is already bound to a drive. Only agents with write access to the current drive can rebind it."

@@ -863,12 +863,10 @@ export class Resource<C extends OptionalClass = any> {
       // it verifies the signature.  The server stores commit resources at
       // `{origin}/commits/{signature}`.
       const commitUrl = `did:ad:commit:${this._lastLocalSignature}`;
-      console.log(`[signChanges] Using _lastLocalSignature as chain: ${commitUrl}`);
       this.commitBuilder.setPreviousCommit(commitUrl);
     } else {
       const lastCommit =
         this._lastCommit ?? this.get(properties.commit.lastCommit)?.toString();
-      console.log(`[signChanges] Using chain: ${lastCommit}`);
 
       if (lastCommit) {
         this.commitBuilder.setPreviousCommit(lastCommit);
@@ -936,7 +934,6 @@ export class Resource<C extends OptionalClass = any> {
       this._lastLocalSignature = undefined;
 
       if (lastCommitId) {
-        console.log(`[pushCommits] Setting lastCommit property to: ${lastCommitId}`);
         this._lastCommit = lastCommitId;
         this.setUnsafe(properties.commit.lastCommit, lastCommitId);
       }

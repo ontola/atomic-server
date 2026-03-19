@@ -331,6 +331,9 @@ export class Store {
   }: CreateResourceOptions = {}): Promise<Resource<C>> {
     const shouldUseDid =
       did ?? this.getAgent()?.subject?.startsWith('did:ad:agent:') ?? false;
+    const normalizedParent = parent
+      ? this.normalizeSubject(parent)
+      : this.normalizeSubject(this.serverUrl);
 
     const normalizedIsA = Array.isArray(isA) ? isA : [isA];
 
@@ -342,7 +345,7 @@ export class Store {
       subject ??
       (shouldUseDid
         ? `_new:${this.randomPart()}`
-        : this.createHTTPSubject(parent ?? this.serverUrl));
+        : this.createHTTPSubject(normalizedParent));
 
     const resource = this.getResourceLoading(newSubject, { newResource: true });
 
@@ -351,7 +354,7 @@ export class Store {
     }
 
     if (!noParent) {
-      await resource.set(core.properties.parent, parent ?? this.serverUrl);
+      await resource.set(core.properties.parent, normalizedParent);
     }
 
     if (propVals) {
@@ -541,7 +544,7 @@ export class Store {
       });
     }
 
-    return this.resources.get(this.normalizeSubject(subject));
+    return this.resources.get(this.normalizeSubject(subject))!;
   }
 
   public getAllSubjects(): string[] {

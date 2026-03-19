@@ -21,35 +21,7 @@ export default defineConfig({
     wuchale(),
     react({
       babel: {
-        plugins: [
-          [
-            'babel-plugin-react-compiler',
-            {
-              logger: {
-                logEvent(filename, event) {
-                  if (event.kind === 'CompileError') {
-                    console.error(`\nCompilation failed: ${filename}`);
-                    console.error(`Reason: ${event.detail.reason}`);
-
-                    if (event.detail.description) {
-                      console.error(`Details: ${event.detail.description}`);
-                    }
-
-                    if (event.detail.loc) {
-                      const { line, column } = event.detail.loc.start;
-                      console.error(`Location: Line ${line}, Column ${column}`);
-                    }
-
-                    if (event.detail.suggestions) {
-                      console.error('Suggestions:', event.detail.suggestions);
-                    }
-                  }
-                },
-              },
-            },
-          ],
-          'babel-plugin-styled-components',
-        ],
+        plugins: ['babel-plugin-styled-components'],
       },
     }),
     VitePWA({

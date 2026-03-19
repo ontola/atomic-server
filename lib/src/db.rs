@@ -60,18 +60,10 @@ use sled::{transaction::TransactionError, Transactional};
 // A function called by the Store when a Commit is accepted
 type HandleCommit = Box<dyn Fn(&CommitResponse) + Send + Sync>;
 
-/// Result of a subject resolution, which can either be a Resource or an Uninitialized signal.
-pub enum ResolveSubjectResult {
-    Resource {
-        resource: Box<ResourceResponse>,
-        /// If the resource was requested via an alias (e.g. localhost), this contains the requested subject.
-        /// The handler should rewrite the @id of the returned resource to this value.
-        redirect_subject: Option<String>,
-    },
-    Uninitialized {
-        full_subject: String,
-        host: String,
-    },
+/// Result of mapping an incoming request target to a canonical subject.
+pub struct ResolvedTarget {
+    pub subject: Subject,
+    pub alias_subject: Option<String>,
 }
 
 /// Inside the reference_index, each value is mapped to this type.
@@ -191,47 +183,72 @@ impl Db {
         Ok(store)
     }
 
-    /// Returns true if no Drive resources exist in the entire store.
-    pub async fn is_uninitialized(&self) -> bool {
-        if let Ok(res) = self.query(&Query::new_class(urls::DRIVE)).await {
-            return res.subjects.is_empty();
-        }
-        true
-    }
-
-    /// Returns true if no Drive is mapped to the given host.
-    pub async fn is_uninitialized_for_host(&self, host: &str) -> bool {
-        if let Ok(Some(_)) = self.get_drive_did(host).await {
-            return false;
-        }
-
-        // If no mapping exists, we are uninitialized for this host.
-        true
-    }
-
     /// Sets the DHT service for decentralized discovery.
     pub fn set_dht(&mut self, dht: DhtService) {
         self.dht = Arc::new(Some(dht));
     }
 
-    /// Resolves a subject to a Resource, handling drive mappings and uninitialized states.
-    /// This is the primary entry point for resolving subjects in a multi-tenant environment.
-    pub async fn resolve_subject(
+    pub async fn resolve_request_target(
         &self,
         subject: &Subject,
         host: &str,
         subject_string: &str,
         origin: &str,
-        for_agent: &ForAgent,
-    ) -> AtomicResult<ResolveSubjectResult> {
-        let mut mapped_subject = subject.clone();
+    ) -> AtomicResult<ResolvedTarget> {
         let full_subject = format!("{}{}", origin.trim_end_matches('/'), subject_string);
+        let mapped_subject = self
+            .map_request_subject(subject, host, subject_string)
+            .await?;
 
-        // DIDs are already global identifiers and should not be routed relative to a drive.
-        let is_did = subject.is_did();
+        let alias_subject = if mapped_subject != *subject {
+            Some(full_subject)
+        } else {
+            None
+        };
 
-        // Reserved internal paths that should not be routed to a drive
-        let is_reserved = is_did
+        Ok(ResolvedTarget {
+            subject: mapped_subject,
+            alias_subject,
+        })
+    }
+
+    async fn map_request_subject(
+        &self,
+        subject: &Subject,
+        host: &str,
+        subject_string: &str,
+    ) -> AtomicResult<Subject> {
+        if Self::should_bypass_drive_routing(subject, subject_string) {
+            return Ok(subject.clone());
+        }
+
+        let Some(drive_did) = self.get_drive_did(host).await? else {
+            return Ok(subject.clone());
+        };
+
+        if self.get_resource(&drive_did).await.is_err() {
+            return Ok(subject.clone());
+        }
+
+        if subject_string == "/" {
+            return Ok(drive_did);
+        }
+
+        let resolved = self
+            .get_resource_at_path(&drive_did, subject_string)
+            .await
+            .map_err(|e| {
+                AtomicError::not_found(format!(
+                    "Path '{}' not found in drive {}: {}",
+                    subject_string, drive_did, e
+                ))
+            })?;
+
+        Ok(resolved.set_drive_hint(drive_did.as_str().to_string()))
+    }
+
+    fn should_bypass_drive_routing(subject: &Subject, subject_string: &str) -> bool {
+        subject.is_did()
             || subject_string.starts_with("/did")
             || subject_string.starts_with("/setup")
             || subject_string.starts_with("/search")
@@ -241,84 +258,36 @@ impl Db {
             || subject_string.starts_with("/invites")
             || subject_string.starts_with("/commit")
             || subject_string.starts_with("/path")
-            || subject_string.starts_with("/query");
+            || subject_string.starts_with("/query")
+    }
 
-        if !is_reserved {
-            if let Ok(Some(drive_did)) = self.get_drive_did(host).await {
-                // We have a mapping. Does the drive resource actually exist?
-                if self.get_resource(&drive_did.as_str().into()).await.is_ok() {
-                    // Drive exists! Resolve the path relative to it.
-                    if subject_string == "/" {
-                        mapped_subject = drive_did;
-                    } else {
-                        match self.get_resource_at_path(&drive_did, subject_string).await {
-                            Ok(resolved) => {
-                                mapped_subject =
-                                    resolved.set_drive_hint(drive_did.as_str().to_string());
-                            }
-                            Err(e) => {
-                                // If path not found relative to drive, we should return a 404
-                                // instead of falling back to the root or internal subject.
-                                return Err(crate::errors::AtomicError::not_found(format!(
-                                    "Path '{}' not found in drive {}: {}",
-                                    subject_string, drive_did, e
-                                )));
-                            }
-                        }
-                    }
-                } else if subject_string == "/" {
-                    // Mapping exists but drive resource is missing.
-                    return Ok(ResolveSubjectResult::Uninitialized {
-                        full_subject,
-                        host: host.to_string(),
-                    });
-                }
-            } else if subject_string == "/" {
-                // No mapping and we are at the root.
-                return Ok(ResolveSubjectResult::Uninitialized {
-                    full_subject,
-                    host: host.to_string(),
-                });
-            }
-        }
-
+    pub async fn fetch_resource_with_did_fallback(
+        &self,
+        subject: &Subject,
+        origin: &str,
+        for_agent: &ForAgent,
+    ) -> AtomicResult<ResourceResponse> {
         let store = self.clone_with_url(origin.to_string());
-        let redirect_subject = if mapped_subject != *subject {
-            Some(full_subject.clone())
-        } else {
-            None
-        };
 
-        match store
-            .get_resource_extended(&mapped_subject, false, for_agent)
-            .await
-        {
-            Ok(r) => Ok(ResolveSubjectResult::Resource {
-                resource: Box::new(r),
-                redirect_subject,
-            }),
-            Err(e) => {
-                // If the resource wasn't found locally and it's a DID subject,
-                // try resolving via the Mainline DHT before giving up.
-                if let Subject::Did { .. } = mapped_subject {
+        match store.get_resource_extended(subject, false, for_agent).await {
+            Ok(resource) => Ok(resource),
+            Err(error) => {
+                if let Subject::Did { .. } = subject {
                     if let Some(dht) = self.dht.as_ref() {
-                        if let Ok(resource) = dht.resolve(&mapped_subject, &store).await {
-                            // Cache the resource locally
-                            if let Err(e) = store.add_resource(&resource).await {
+                        if let Ok(resource) = dht.resolve(subject, &store).await {
+                            if let Err(cache_error) = store.add_resource(&resource).await {
                                 tracing::warn!(
                                     "DHT: Resolved {} but failed to cache locally: {}",
-                                    mapped_subject,
-                                    e
+                                    subject,
+                                    cache_error
                                 );
                             }
-                            return Ok(ResolveSubjectResult::Resource {
-                                resource: Box::new(resource.into()),
-                                redirect_subject,
-                            });
+                            return Ok(resource.into());
                         }
                     }
                 }
-                Err(e)
+
+                Err(error)
             }
         }
     }
@@ -389,7 +358,7 @@ impl Db {
         Ok(())
     }
 
-    /// Removes the drive mapping for a given host, making it uninitialized again.
+    /// Removes the drive mapping for a given host.
     pub fn remove_drive_mapping(&self, host: &str) -> AtomicResult<()> {
         self.drive_mapping.remove(host.as_bytes())?;
         tracing::info!("Removed drive mapping for host: {}", host);
@@ -1027,6 +996,69 @@ impl Db {
     }
 }
 
+#[cfg(test)]
+mod resolver_tests {
+    use super::*;
+    use crate::{test_utils::setup_test_env, urls, Resource, Storelike, Value};
+
+    #[tokio::test]
+    async fn resolves_root_to_drive_subject() {
+        let store = Db::init_temp("resolver_root").await.unwrap();
+        setup_test_env(&store).await.unwrap();
+
+        let resolved = store
+            .resolve_request_target(
+                &Subject::from_raw("/", None),
+                "localhost",
+                "/",
+                "http://localhost",
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            resolved.alias_subject,
+            Some("http://localhost/".to_string())
+        );
+        assert!(matches!(resolved.subject, Subject::Did { .. }));
+    }
+
+    #[tokio::test]
+    async fn resolves_drive_relative_paths_to_canonical_did() {
+        let store = Db::init_temp("resolver_path").await.unwrap();
+        setup_test_env(&store).await.unwrap();
+
+        let drive_did = store.get_drive_did("localhost").await.unwrap().unwrap();
+        let mut resource = Resource::new("did:ad:test-child".into());
+        resource.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(drive_did.clone()));
+        resource.set_unsafe(urls::SHORTNAME.into(), Value::Slug("about".into()));
+        resource.set_unsafe(urls::NAME.into(), Value::String("About".into()));
+        store
+            .add_resource_opts(&resource, false, true, true)
+            .await
+            .unwrap();
+
+        let resolved = store
+            .resolve_request_target(
+                &Subject::from_raw("/about", None),
+                "localhost",
+                "/about",
+                "http://localhost",
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            resolved.alias_subject,
+            Some("http://localhost/about".to_string())
+        );
+        assert_eq!(
+            resolved.subject.as_str(),
+            "did:ad:test-child?drive=".to_string() + drive_did.as_str()
+        );
+    }
+}
+
 impl Drop for Db {
     fn drop(&mut self) {
         match self.db.flush() {
@@ -1081,7 +1113,7 @@ impl Storelike for Db {
         self.add_drive_mapping(host, drive_did)
     }
 
-    /// Removes the drive mapping for a given host, making it uninitialized again.
+    /// Removes the drive mapping for a given host.
     fn remove_drive_mapping(&self, host: &str) -> AtomicResult<()> {
         self.remove_drive_mapping(host)
     }

@@ -72,9 +72,11 @@ async fn server_tests() {
     let appstate = crate::appstate::AppState::init(config.clone())
         .await
         .expect("failed init appstate");
-    
+
     // For tests, we manually populate a test drive and collections
-    atomic_lib::test_utils::setup_test_env(&appstate.store).await.unwrap();
+    atomic_lib::test_utils::setup_test_env(&appstate.store)
+        .await
+        .unwrap();
 
     let data = Data::new(appstate.clone());
     let app = test::init_service(
@@ -116,8 +118,7 @@ async fn server_tests() {
     drive.save(store).await.unwrap();
 
     // Should 401 (Unauthorized)
-    let req =
-        test::TestRequest::with_uri("/").insert_header(("Accept", "application/ad+json"));
+    let req = test::TestRequest::with_uri("/").insert_header(("Accept", "application/ad+json"));
     let resp = test::call_service(&app, req.to_request()).await;
     let status = resp.status().as_u16();
     let body = get_body(resp);
@@ -155,8 +156,7 @@ async fn server_tests() {
     );
 
     // Get turtle
-    let req = build_request_authenticated("/", &appstate)
-        .insert_header(("Accept", "text/turtle"));
+    let req = build_request_authenticated("/", &appstate).insert_header(("Accept", "text/turtle"));
     let resp = test::call_service(&app, req.to_request()).await;
     assert!(resp.status().is_success());
     let body = get_body(resp);
@@ -281,11 +281,11 @@ async fn server_tests() {
         "Response should contain either destination (redirect) or invite metadata. Body: {}",
         body
     );
-    }
+}
 
-    #[actix_rt::test]
-    async fn test_did_agent_edit() {
-    use atomic_lib::{agents::Agent, commit::CommitBuilder, urls, Value, Resource};
+#[actix_rt::test]
+async fn test_did_agent_edit() {
+    use atomic_lib::{agents::Agent, commit::CommitBuilder, urls, Resource, Value};
     let unique_string = atomic_lib::utils::random_string(10);
     use clap::Parser;
     let opts = Opts::parse_from([
@@ -322,28 +322,59 @@ async fn server_tests() {
     let drive_did = "did:ad:test-drive";
     let mut drive = Resource::new(drive_did.into());
     drive.set_class(urls::DRIVE);
-    drive.set(urls::READ.into(), vec![urls::PUBLIC_AGENT.to_string()].into(), &appstate.store).await.unwrap();
-    drive.set(urls::WRITE.into(), vec![agent_did.clone()].into(), &appstate.store).await.unwrap();
+    drive
+        .set(
+            urls::READ.into(),
+            vec![urls::PUBLIC_AGENT.to_string()].into(),
+            &appstate.store,
+        )
+        .await
+        .unwrap();
+    drive
+        .set(
+            urls::WRITE.into(),
+            vec![agent_did.clone()].into(),
+            &appstate.store,
+        )
+        .await
+        .unwrap();
     appstate.store.add_resource(&drive).await.unwrap();
 
-    appstate.store.add_drive_mapping("localhost", &Value::AtomicUrl(drive_did.into())).unwrap();
+    appstate
+        .store
+        .add_drive_mapping("localhost", &Value::AtomicUrl(drive_did.into()))
+        .unwrap();
 
     // 3. Setup the agent resource manually in the store
     let mut agent_res = agent.to_resource().unwrap();
     agent_res.set_subject(agent_did.clone());
     agent_res.set_unsafe(urls::NAME.into(), Value::String("Initial Name".into()));
     // Dummy last commit to avoid genesis trigger
-    agent_res.set_unsafe(urls::LAST_COMMIT.into(), Value::AtomicUrl("dummy-initial-commit".into()));
-    appstate.store.add_resource_opts(&agent_res, false, false, true).await.unwrap();
+    agent_res.set_unsafe(
+        urls::LAST_COMMIT.into(),
+        Value::AtomicUrl("dummy-initial-commit".into()),
+    );
+    appstate
+        .store
+        .add_resource_opts(&agent_res, false, false, true)
+        .await
+        .unwrap();
 
     // 4. Create a commit to edit the agent's name
     let mut builder = CommitBuilder::new(agent_did.clone());
     builder.set(urls::NAME.into(), Value::String("Updated Name".into()));
 
-    let commit = builder.sign(&agent, &appstate.store, &agent_res).await.unwrap();
+    let commit = builder
+        .sign(&agent, &appstate.store, &agent_res)
+        .await
+        .unwrap();
     let mut opts = atomic_lib::commit::CommitOpts::no_validations_no_index();
     opts.update_index = true;
-    appstate.store.apply_commit(commit, &opts, None).await.expect("Failed to apply commit directly");
+    appstate
+        .store
+        .apply_commit(commit, &opts)
+        .await
+        .expect("Failed to apply commit directly");
 
     // 5. Fetch the agent resource via GET and verify the name change
     let req = test::TestRequest::get()
@@ -351,12 +382,19 @@ async fn server_tests() {
         .insert_header(("Accept", "application/ad+json"))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_success(), "Fetch failed with status: {:?}", resp.status());
+    assert!(
+        resp.status().is_success(),
+        "Fetch failed with status: {:?}",
+        resp.status()
+    );
 
     let body = get_body(resp);
-    assert!(body.contains("Updated Name"), "Body does not contain 'Updated Name'. Body: {}", body);
-    }
-
+    assert!(
+        body.contains("Updated Name"),
+        "Body does not contain 'Updated Name'. Body: {}",
+        body
+    );
+}
 
 /// Gets the body from the response as a String. Why doen't actix provide this?
 fn get_body(resp: ServiceResponse) -> String {

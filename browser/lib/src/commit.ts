@@ -276,15 +276,12 @@ export class CommitBuilder {
       (commitPreSigned.subject.startsWith('_new:') && isDidSigner) ||
       commitPreSigned.subject === 'did:ad:genesis';
 
-    console.log(`[signAt] subject: ${commitPreSigned.subject}, isPlaceholder: ${isPlaceholder}, previousCommit: ${commitPreSigned.previousCommit}`);
-
     if (
       commitPreSigned.isGenesis === undefined &&
       !isAgentSubject &&
       isPlaceholder &&
       commitPreSigned.previousCommit === undefined
     ) {
-      console.log('[signAt] Setting isGenesis: true');
       commitPreSigned.isGenesis = true;
     }
 
@@ -303,7 +300,6 @@ export class CommitBuilder {
       this.previousCommit === undefined
     ) {
       subject = `did:ad:${signature}`;
-      console.log(`[signAt] Derived new DID subject: ${subject}`);
     }
 
     const commitPostSigned: Commit = {

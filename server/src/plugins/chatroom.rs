@@ -29,7 +29,6 @@ pub fn construct_chatroom<'a>(
         } = context;
 
         println!("tesw!!!awdwdawdawd11as!!!st");
-        println!("tesw!!!awdwdawdawd11as!!!st");
 
         // TODO: From range
         let mut start_val = utils::now();
@@ -191,13 +190,9 @@ async fn test_ws_push_chatroom() {
         .unwrap();
     let chatroom_commit = chatroom_builder.sign(&agent, &db, &chatroom).await.unwrap();
 
-    db.apply_commit(
-        chatroom_commit,
-        &CommitOpts::no_validations_no_index(),
-        None,
-    )
-    .await
-    .unwrap();
+    db.apply_commit(chatroom_commit, &CommitOpts::no_validations_no_index())
+        .await
+        .unwrap();
 
     let fetched = db
         .get_resource(&"http://localhost/chat".into())
@@ -234,7 +229,7 @@ async fn test_ws_push_chatroom() {
         println!(" - {}", item.get_subject());
     }
 
-    db.apply_commit(message_commit, &CommitOpts::no_validations_no_index(), None)
+    db.apply_commit(message_commit, &CommitOpts::no_validations_no_index())
         .await
         .unwrap();
 

@@ -51,26 +51,16 @@ export function useResource<C extends OptionalClass = never>(
 ): Resource<C> {
   const { track, ...fetchOpts } = opts;
   const store = useStore();
-  const [prevSubject, setPrevSubject] = useState(subject);
   const [resource, setResource] = useState<Resource<C>>(() =>
     store.getResourceLoading(subject, fetchOpts),
-  );
-  const unsubLoadingChangeRef = useRef(
-    resource.on(ResourceEvents.LoadingChange, () => {
-      setResource(proxyResource(resource.stable));
-    }),
   );
 
   const memoizedOpts = useMemoizedOpts(fetchOpts);
 
-  // Update the resource when the subject changes
-  if (subject !== prevSubject) {
-    setPrevSubject(subject);
-    setResource(proxyResource(store.getResourceLoading(subject, memoizedOpts)));
-  }
-
   // When a component mounts or the subject changes, it needs to let the store know that it will subscribe to changes to that resource.
   useEffect(() => {
+    setResource(proxyResource(store.getResourceLoading(subject, memoizedOpts)));
+
     return store.subscribe(subject, (updated: Resource<C>) => {
       setResource(proxyResource(updated));
     });
@@ -88,10 +78,6 @@ export function useResource<C extends OptionalClass = never>(
 
   // Update the proxy when the resource is done loading.
   useEffect(() => {
-    if (unsubLoadingChangeRef.current) {
-      unsubLoadingChangeRef.current();
-    }
-
     return resource.stable.on(ResourceEvents.LoadingChange, () => {
       setResource(proxyResource(resource.stable));
     });
@@ -111,13 +97,11 @@ export function useResources(
   opts: FetchOpts = {},
 ): Map<string, Resource> {
   const [resources, setResources] = useState(new Map<string, Resource>());
-  const [prevSubjects, setPrevSubjects] = useState<string[]>([]);
   const store = useStore();
 
   const memoizedOpts = useMemoizedOpts(opts);
 
-  if (subjects !== prevSubjects) {
-    setPrevSubjects(subjects);
+  useEffect(() => {
     setResources(prev => {
       const newResources = new Map<string, Resource>();
 
@@ -133,7 +117,7 @@ export function useResources(
 
       return newResources;
     });
-  }
+  }, [memoizedOpts, store, subjects]);
 
   useEffect(() => {
     // When a change happens, set the new Resource.

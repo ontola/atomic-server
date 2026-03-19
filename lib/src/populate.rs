@@ -118,21 +118,14 @@ pub async fn populate_base_models(store: &impl Storelike) -> AtomicResult<()> {
             allows_only: None,
         },
         Property {
-            class_type: None,
-            data_type: DataType::Boolean,
-            shortname: "is-uninitialized".into(),
-            description: "If this is true, the Server Node requires initial setup for the current host.".into(),
-            subject: urls::IS_UNINITIALIZED.into(),
-            allows_only: None,
-            },
-            Property {
-                class_type: Some(urls::DRIVE.into()),
-                data_type: DataType::AtomicUrl,
-                shortname: "initial-drive".into(),            description: "The DID of the drive that should be mapped to the current host.".into(),
+            class_type: Some(urls::DRIVE.into()),
+            data_type: DataType::AtomicUrl,
+            shortname: "initial-drive".into(),
+            description: "The DID of the drive that should be mapped to the current host.".into(),
             subject: urls::INITIAL_DRIVE.into(),
             allows_only: None,
-            }
-            ];
+        }
+    ];
     let classes = vec![
         Class {
             requires: vec![urls::SHORTNAME.into(), urls::DATATYPE_PROP.into(), urls::DESCRIPTION.into()],

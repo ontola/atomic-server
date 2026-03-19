@@ -7,7 +7,6 @@ import {
 } from '@tomic/react';
 import { useCallback } from 'react';
 import { CellPasteData } from '@chunks/TableEditor';
-import { randomSubject } from '@helpers/randomString';
 import { appendStringToType } from '../dataTypeMaps';
 import {
   HistoryItemBatch,
@@ -50,7 +49,6 @@ export function useHandlePaste(
             shouldInvalidate = true;
 
             row = await store.newResource({
-              subject: randomSubject(table.subject, 'row'),
               isA: tableClass.subject,
               parent: table.subject,
               propVals: {

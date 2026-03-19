@@ -95,10 +95,7 @@ export class JSONADParser {
               s === '';
 
             if (isAliasCandidate(resource.subject) && isDID(value as string)) {
-              // eslint-disable-next-line no-console
-              console.log(
-                `Alias detected: Requested ${resource.subject}, received ${value}. Allowing mismatch.`,
-              );
+              // Allow alias mismatch: requested an HTTP subject but received a DID
             } else {
               throw new Error(
                 `Resource has wrong subject in @id. Received subject was ${value}, expected ${resource.subject}.`,

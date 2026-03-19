@@ -1,5 +1,6 @@
 import { describe, it, vi } from 'vitest';
 import {
+  Commit,
   CommitBuilder,
   parseAndApplyCommit,
   serializeDeterministically,
@@ -75,37 +76,56 @@ describe('Commit signing and keys', () => {
     store.setAgent(agent);
 
     // Mock postCommit to return a commit with a proper subject
-    const postCommitSpy = vi.spyOn(store, 'postCommit').mockImplementation(async commit => {
-      return {
-        id: `https://example.com/commits/${commit.signature}`,
-        commit_resource: {} as any,
-        resource_new: {} as any,
-        resource_old: {} as any,
-      };
-    });
+    const postCommitSpy = vi
+      .spyOn(store, 'postCommit')
+      .mockImplementation(async commit => {
+        const mockCommit = {
+          ...commit,
+          id: `https://example.com/commits/${commit.signature}`,
+        } as Commit;
+        return mockCommit;
+      });
 
     // Use Resource constructor directly to avoid fetches
     const resource = new Resource('did:ad:genesis');
     resource.setStore(store);
     resource.new = true;
-    await resource.set('https://atomicdata.dev/properties/isA', ['https://atomicdata.dev/classes/Drive'], false);
-    await resource.set('https://atomicdata.dev/properties/name', 'First Save', false);
+    await resource.set(
+      'https://atomicdata.dev/properties/isA',
+      ['https://atomicdata.dev/classes/Drive'],
+      false,
+    );
+    await resource.set(
+      'https://atomicdata.dev/properties/name',
+      'First Save',
+      false,
+    );
 
     // First save (Genesis)
     const firstCommitId = await resource.save();
     const genesisSubject = resource.subject;
     expect(genesisSubject).toMatch(/^did:ad:/);
     expect(genesisSubject).not.toBe('did:ad:genesis');
-    expect(firstCommitId).toBe(`https://example.com/commits/${resource.appliedCommitSignatures.values().next().value}`);
+    expect(firstCommitId).toBe(
+      `https://example.com/commits/${resource.appliedCommitSignatures.values().next().value}`,
+    );
 
     // Simulate clobbering: remove lastCommit property from propvals
     // (This simulates an old remote state being merged)
-    resource.getPropVals().delete('https://atomicdata.dev/properties/lastCommit');
-    expect(resource.get('https://atomicdata.dev/properties/lastCommit')).toBeUndefined();
+    resource
+      .getPropVals()
+      .delete('https://atomicdata.dev/properties/lastCommit');
+    expect(
+      resource.get('https://atomicdata.dev/properties/lastCommit'),
+    ).toBeUndefined();
 
     // Second save (Update)
     // Use set with validate: false to avoid property fetches in test
-    await resource.set('https://atomicdata.dev/properties/description', 'Second Save', false);
+    await resource.set(
+      'https://atomicdata.dev/properties/description',
+      'Second Save',
+      false,
+    );
     const secondCommitId = await resource.save();
 
     // The subject MUST NOT have changed
@@ -165,7 +185,9 @@ describe('Commit signing and keys', () => {
     // Serialization must include the subject (not omit it like genesis commits).
     const serialized = serializeDeterministically(commit);
     const json = JSON.parse(serialized);
-    expect(json['https://atomicdata.dev/properties/subject']).to.equal(agentDid);
+    expect(json['https://atomicdata.dev/properties/subject']).to.equal(
+      agentDid,
+    );
   });
 
   it('keeps _new subject for non-did signers', async ({ expect }) => {

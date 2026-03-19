@@ -42,7 +42,7 @@ fn handle_did_request<'a>(
 
         let did_subject = atomic_lib::Subject::from_raw(&did.unwrap(), None);
         store
-            .get_resource_extended(&did_subject, false, for_agent)
+            .fetch_resource_with_did_fallback(&did_subject, &store.get_server_url(), for_agent)
             .await
     })
 }

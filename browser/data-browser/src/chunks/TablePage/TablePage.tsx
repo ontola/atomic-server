@@ -1,4 +1,4 @@
-import { useId, useState, type JSX } from 'react';
+import { useId, useMemo, useState, type JSX } from 'react';
 import { ContainerFull } from '@components/Containers';
 import { EditableTitle } from '@components/EditableTitle';
 import type { ResourcePageProps } from '@views/ResourcePage';
@@ -15,15 +15,20 @@ export function TablePage({ resource }: ResourcePageProps): JSX.Element {
 
   const [showExportDialog, setShowExportDialog] = useState(false);
 
-  useCustomContextItems([
-    DIVIDER,
-    {
-      id: 'export-csv',
-      label: 'Export to CSV',
-      onClick: () => setShowExportDialog(true),
-      icon: <FaFileCsv />,
-    },
-  ]);
+  const customMenuItems = useMemo(
+    () => [
+      DIVIDER,
+      {
+        id: 'export-csv',
+        label: 'Export to CSV',
+        onClick: () => setShowExportDialog(true),
+        icon: <FaFileCsv />,
+      },
+    ],
+    [],
+  );
+
+  useCustomContextItems(customMenuItems);
 
   return (
     <ContainerFull>
