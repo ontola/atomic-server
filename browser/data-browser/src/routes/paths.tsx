@@ -22,6 +22,7 @@ export const pathNames = {
   fetchBookmark: '/fetch-bookmark',
   pruneTests: '/prunetests',
   linkOpenRouter: '/link-openrouter',
+  devDrive: '/dev-drive',
 } as const;
 export const paths = {
   agentSettings: `${pathNames.app}${pathNames.agentSettings}`,
@@ -44,4 +45,5 @@ export const paths = {
   fetchBookmark: pathNames.fetchBookmark,
   pruneTests: `${pathNames.app}${pathNames.pruneTests}`,
   linkOpenRouter: `${pathNames.app}${pathNames.linkOpenRouter}`,
+  devDrive: `${pathNames.app}${pathNames.devDrive}`,
 } as const;

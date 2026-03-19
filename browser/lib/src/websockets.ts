@@ -154,20 +154,7 @@ export class WSClient {
       return;
     }
 
-    await ensureServerVersionKnown(this.ws.url);
-
-    if (shouldSkipDidAuthForLegacyServer(this.ws.url, agent.subject)) {
-      warnDidAuthCompatibility(this.ws.url);
-
-      return;
-    }
-
-    await this.openPromise;
-
-    if (this.authenticatedWith === agent.subject) {
-      return;
-    }
-
+    // If already authenticating, wait for the in-progress attempt.
     if (this.isAuthenticating) {
       try {
         await this.authPromise;
@@ -178,20 +165,47 @@ export class WSClient {
       return;
     }
 
+    if (this.authenticatedWith === agent.subject) {
+      return;
+    }
+
     this.isAuthenticating = true;
 
+    // Gate authPromise immediately so that any ws.fetch() calls issued during
+    // the async setup (ensureServerVersionKnown, createAuthentication, etc.)
+    // block until the server has actually confirmed authentication.
+    let releaseGate!: () => void;
+    let rejectGate!: (e: unknown) => void;
+    this.authPromise = new Promise<void>((resolve, reject) => {
+      releaseGate = resolve;
+      rejectGate = reject;
+    });
+
     try {
-      if (this.version === WS_Version.LEGACY) {
-        // If the server is using the legacy protocol, we don't wait for the AUTHENTICATED message.
-        this.authPromise = Promise.resolve();
-      } else {
-        this.authPromise = this.waitForMessage('AUTHENTICATED');
+      await ensureServerVersionKnown(this.ws.url);
+
+      if (shouldSkipDidAuthForLegacyServer(this.ws.url, agent.subject)) {
+        warnDidAuthCompatibility(this.ws.url);
+        releaseGate();
+
+        return;
       }
+
+      await this.openPromise;
 
       const json = await createAuthentication(this.ws.url, agent);
       this.ws.send('AUTHENTICATE ' + JSON.stringify(json));
 
-      await this.authPromise;
+      if (this.version === WS_Version.LEGACY) {
+        // Legacy servers don't send AUTHENTICATED back; release immediately.
+        releaseGate();
+      } else {
+        // Wait for AUTHENTICATED confirmation, then release the gate.
+        await this.waitForMessage('AUTHENTICATED');
+        releaseGate();
+      }
+
+      this.authenticatedWith = agent?.subject;
 
       if (fetchAll) {
         this.store.resources.forEach(r => {
@@ -200,8 +214,9 @@ export class WSClient {
           }
         });
       }
-
-      this.authenticatedWith = agent?.subject;
+    } catch (e) {
+      rejectGate(e);
+      throw e;
     } finally {
       this.isAuthenticating = false;
     }
@@ -211,8 +226,6 @@ export class WSClient {
 
   public subscribeResource(subject: string): void {
     if (this.readyState !== WebSocket.OPEN) {
-      console.warn('WebSocket is not open, cannot subscribe to resource');
-
       return;
     }
 

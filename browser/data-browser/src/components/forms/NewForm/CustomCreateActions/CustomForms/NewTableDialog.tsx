@@ -1,5 +1,5 @@
 import { dataBrowser, core, type Server, useStore } from '@tomic/react';
-import { useState, useCallback, useEffect, FormEvent, FC } from 'react';
+import { useState, useCallback, useEffect, useRef, FormEvent, FC } from 'react';
 import { styled } from 'styled-components';
 import { stringToSlug } from '../../../../../helpers/stringToSlug';
 import { useSettings } from '../../../../../helpers/AppSettings';
@@ -38,7 +38,8 @@ export const NewTableDialog: FC<NewTableDialogProps> = ({
   const [existingClass, setExistingClass] = useState<string | undefined>(
     initialExistingClass,
   );
-  const [name, setName] = useState('');
+  const [name, setName] = useState('table');
+  const nameInputRef = useRef<HTMLInputElement>(null);
 
   const addToOntology = useAddToOntology();
   const createResourceAndNavigate = useCreateAndNavigate();
@@ -114,6 +115,13 @@ export const NewTableDialog: FC<NewTableDialogProps> = ({
     show();
   }, []);
 
+  useEffect(() => {
+    if (isOpen) {
+      nameInputRef.current?.focus();
+      nameInputRef.current?.select();
+    }
+  }, [isOpen]);
+
   const hasName = name.trim() !== '';
   const saveDisabled = useExistingClass ? !hasName || !existingClass : !hasName;
 
@@ -135,9 +143,9 @@ export const NewTableDialog: FC<NewTableDialogProps> = ({
               <Field required label='Name'>
                 <InputWrapper>
                   <InputStyled
+                    ref={nameInputRef}
                     placeholder='New Table'
                     value={name}
-                    autoFocus={true}
                     onChange={e => setName(e.target.value)}
                   />
                 </InputWrapper>

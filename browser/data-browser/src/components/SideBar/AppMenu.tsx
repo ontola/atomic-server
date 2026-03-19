@@ -5,7 +5,9 @@ import {
   FaKeyboard,
   FaCirclePlus,
   FaUser,
+  FaCode,
 } from 'react-icons/fa6';
+import { isDev } from '../../config';
 import { constructOpenURL } from '../../helpers/navigation';
 import { useCurrentSubject } from '../../helpers/useCurrentSubject';
 import { SideBarMenuItem } from './SideBarMenuItem';
@@ -33,7 +35,6 @@ export function AppMenu({ onItemClick }: AppMenuProps): JSX.Element {
   const [showInstallButton, setShowInstallButton] = useState(false);
   const [agent] = useCurrentAgent();
   const agentResource = useResource(agent?.subject ?? unknownSubject);
-
   const install = useCallback(() => {
     if (!event.current) {
       return;
@@ -92,6 +93,15 @@ export function AppMenu({ onItemClick }: AppMenuProps): JSX.Element {
         path={paths.about}
         onClick={onItemClick}
       />
+      {isDev() && (
+        <SideBarMenuItem
+          icon={<FaCode />}
+          label='Dev Drive'
+          helper='Create a fresh agent + drive on localhost:9883'
+          path={paths.devDrive}
+          onClick={onItemClick}
+        />
+      )}
       {showInstallButton && (
         <SideBarMenuItem
           icon={<FaCirclePlus />}

@@ -1,6 +1,10 @@
 import { JSONADParser, type Store } from '@tomic/react';
 import baseModels from '../../../lib/defaults/default_base_models.json';
 import defaultStore from '../../../lib/defaults/default_store.json';
+import tableDefaults from '../../../lib/defaults/table.json';
+import chatroomDefaults from '../../../lib/defaults/chatroom.json';
+import ontologiesDefaults from '../../../lib/defaults/ontologies.json';
+import aiDefaults from '../../../lib/defaults/ai.json';
 
 /**
  * Injects base models and default store resources into the store.
@@ -25,6 +29,10 @@ export function bootstrap(store: Store): void {
   try {
     const baseCount = addBootstrapped(baseModels);
     const storeCount = addBootstrapped(defaultStore);
+    addBootstrapped(tableDefaults);
+    addBootstrapped(chatroomDefaults);
+    addBootstrapped(ontologiesDefaults);
+    addBootstrapped(aiDefaults);
 
   } catch (e) {
     console.error('Failed to bootstrap store:', e);

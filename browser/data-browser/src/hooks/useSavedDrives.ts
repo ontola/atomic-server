@@ -8,7 +8,7 @@ const getRootDrives = () => {
   const known = serverURLStorage.getKnownServers();
   const current = isDev() ? 'http://localhost:9883' : window.location.origin;
 
-  const roots = new Set(['https://atomicdata.dev', current, ...known]);
+  const roots = new Set([current, ...known]);
 
   if (isDev()) {
     roots.add('http://localhost:9883');

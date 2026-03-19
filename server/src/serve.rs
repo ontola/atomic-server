@@ -158,7 +158,7 @@ pub async fn serve(config: crate::config::Config) -> AtomicServerResult<()> {
     spawn_dht_announcer(appstate.clone());
 
     let server = HttpServer::new(move || {
-        let cors = Cors::permissive();
+        let cors = Cors::permissive().expose_headers([SERVER_VERSION_HEADER]);
 
         actix_web::App::new()
             .app_data(web::PayloadConfig::new(PAYLOAD_MAX))

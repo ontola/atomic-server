@@ -20,6 +20,18 @@ import { HistoryRoute } from './History/HistoryRoute';
 import { LinkOpenRouter } from './LinkOpenRouter';
 import { OnboardingRoute } from './OnboardingRoute';
 
+const DevDriveRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: pathNames.devDrive,
+  // @ts-expect-error - Mismatch between unavailable route name and dev-drive route name
+}).lazy(() => {
+  if (isDev()) {
+    return import('./DevDriveRoute').then(mod => mod.devDriveRouteLazy);
+  } else {
+    return Promise.resolve(unavailableLazyRoute);
+  }
+});
+
 const PruneTestsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: pathNames.pruneTests,
@@ -63,6 +75,7 @@ const routeTree = rootRoute.addChildren({
     NewRoute,
     PruneTestsRoute,
     SandboxRoute,
+    DevDriveRoute,
     LinkOpenRouter,
   }),
   topRoute,
