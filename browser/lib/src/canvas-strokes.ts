@@ -64,7 +64,11 @@ function strokeFromJson(item: unknown): CanvasStroke | undefined {
   const width = obj.width;
   const path = obj.path;
 
-  if (typeof color !== 'number' || typeof width !== 'number' || !Array.isArray(path)) {
+  if (
+    typeof color !== 'number' ||
+    typeof width !== 'number' ||
+    !Array.isArray(path)
+  ) {
     return undefined;
   }
 
@@ -93,7 +97,10 @@ function strokeFromJson(item: unknown): CanvasStroke | undefined {
 }
 
 /** Dark-mode stroke color (invert HSL lightness), matching Flutter. */
-export function adjustStrokeColorForDarkMode(color: number, darkMode: boolean): string {
+export function adjustStrokeColorForDarkMode(
+  color: number,
+  darkMode: boolean,
+): string {
   const a = ((color >>> 24) & 0xff) / 255;
   let r = (color >> 16) & 0xff;
   let g = (color >> 8) & 0xff;

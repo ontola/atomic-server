@@ -44,17 +44,19 @@ async function waitForSynced(page: import('@playwright/test').Page) {
       .evaluate(() => {
         const store = (window as any).store;
         const status = store?.getSyncStatus();
-        const entries = (store?.outbox?.pending?.() ?? []).map((entry: any) => ({
-          subject: entry.subject,
-          commitCount: entry.commits?.length,
-          commits: (entry.commits ?? []).map((c: any) => ({
-            signature: c.signature,
-            previousCommit: c.previousCommit,
-            setKeys: c.set ? Object.keys(c.set) : undefined,
-            destroy: c.destroy,
-          })),
-          lastAttemptError: entry.lastAttemptError,
-        }));
+        const entries = (store?.outbox?.pending?.() ?? []).map(
+          (entry: any) => ({
+            subject: entry.subject,
+            commitCount: entry.commits?.length,
+            commits: (entry.commits ?? []).map((c: any) => ({
+              signature: c.signature,
+              previousCommit: c.previousCommit,
+              setKeys: c.set ? Object.keys(c.set) : undefined,
+              destroy: c.destroy,
+            })),
+            lastAttemptError: entry.lastAttemptError,
+          }),
+        );
 
         return { status, entries };
       })
