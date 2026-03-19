@@ -2,12 +2,24 @@ import { urls, useArray, useResource } from '@tomic/react';
 import { useCallback, useMemo } from 'react';
 import { isDev } from '../config';
 import { useSettings } from '../helpers/AppSettings';
+import { serverURLStorage } from '../helpers/serverURLStorage';
 
-const rootDrives = [
-  window.location.origin,
-  'https://atomicdata.dev',
-  ...(isDev() ? ['http://localhost:9883'] : []),
-];
+const getRootDrives = () => {
+  const known = serverURLStorage.getKnownServers();
+  const current = window.location.origin;
+
+  const roots = new Set([
+    'https://atomicdata.dev',
+    current,
+    ...known,
+  ]);
+
+  if (isDev()) {
+    roots.add('http://localhost:9883');
+  }
+
+  return Array.from(roots);
+};
 
 const arrayOpts = {
   commit: true,
@@ -26,7 +38,12 @@ export function useSavedDrives(): [
     arrayOpts,
   );
 
-  const extraDrives = useMemo(() => [...rootDrives, ...drives], [drives]);
+  const rootDrives = useMemo(() => getRootDrives(), []);
+  const extraDrives = useMemo(() => {
+    const all = new Set([...rootDrives, ...drives]);
+
+    return Array.from(all);
+  }, [drives, rootDrives]);
 
   const add = useCallback(
     (drive: string) => {
@@ -41,7 +58,7 @@ export function useSavedDrives(): [
         });
       }
     },
-    [drives, setDrives],
+    [drives, setDrives, rootDrives],
   );
 
   const remove = useCallback(
@@ -57,7 +74,7 @@ export function useSavedDrives(): [
         });
       }
     },
-    [drives, setDrives],
+    [drives, setDrives, rootDrives],
   );
 
   return [extraDrives, add, remove];

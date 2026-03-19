@@ -545,9 +545,11 @@ impl WasmPlugin {
         store: &'a atomic_lib::Db,
     ) -> Pin<Box<dyn Future<Output = AtomicResult<ResourceResponse>> + Send + 'a>> {
         Box::pin(async move {
-            let mut parse_opts = ParseOpts::default();
-            parse_opts.save = SaveOpts::DontSave;
-            parse_opts.for_agent = ForAgent::Sudo;
+            let parse_opts = ParseOpts {
+                save: SaveOpts::DontSave,
+                for_agent: ForAgent::Sudo,
+                ..Default::default()
+            };
 
             let mut base =
                 parse_json_ad_resource(&payload.primary.json_ad, store, &parse_opts).await?;
@@ -779,7 +781,11 @@ impl bindings::atomic::class_extender::host::Host for PluginHostState {
 
         let resource = self
             .db
-            .get_resource_extended(&commit_builder.subject.clone().into(), false, &agent.into())
+            .get_resource_extended(
+                &atomic_lib::Subject::from_raw(&commit_builder.subject, None),
+                false,
+                &agent.into(),
+            )
             .await
             .map_err(|e| e.to_string())?
             .to_single();
@@ -817,7 +823,11 @@ impl bindings::atomic::class_extender::host::Host for PluginHostState {
             return "{}".to_string();
         };
 
-        let Ok(plugin_resource) = self.db.get_resource(&subject.clone().into()).await else {
+        let Ok(plugin_resource) = self
+            .db
+            .get_resource(&atomic_lib::Subject::from_raw(subject, None))
+            .await
+        else {
             return "{}".to_string();
         };
 
@@ -826,7 +836,7 @@ impl bindings::atomic::class_extender::host::Host for PluginHostState {
         };
 
         match val {
-            atomic_lib::Value::JSON(json_val) => json_val.to_string(),
+            atomic_lib::Value::Json(json_val) => json_val.to_string(),
             _ => "{}".to_string(),
         }
     }
@@ -994,9 +1004,7 @@ fn setup_plugin_data_dir(wasm_file_path: &Path, plugin_dir: &Path) -> Option<Pat
     // If there is no second extension (e.g. just my-plugin.wasm), we don't grant access to a folder.
     // This is to prevent plugins from accessing arbitrary folders.
     // Only namespaced plugins (e.g. google.calendar.wasm or my-plugin.plugin.wasm) get a folder.
-    if stem_path.extension().is_none() {
-        return None;
-    }
+    stem_path.extension()?;
 
     // Remove the second extension (e.g. .plugin in my_script.plugin.wasm), if present.
     // This allows for any suffix without dots.
@@ -1363,14 +1371,14 @@ async fn create_plugin_meta(
     let namespace = &manifest.namespace;
     let name = &manifest.name;
 
-    let key = PluginMetaKey::new(&drive_subject, &namespace, &name);
+    let key = PluginMetaKey::new(drive_subject, namespace, name);
     let plugin_meta = store.get_plugin_meta(&key)?;
 
     let agent: Agent = if let Some(plugin_meta) = plugin_meta {
         Agent::from_secret(&plugin_meta.agent_secret)?
     } else {
         // If the plugin meta does not exist yet we create a new agent.
-        let new_agent = Agent::new(Some(&name))?;
+        let new_agent = Agent::new(Some(name))?;
 
         let mut agent_resource = new_agent.to_resource()?;
         let full_name = format!("{}/{}", namespace, name);
@@ -1388,8 +1396,16 @@ async fn create_plugin_meta(
 
     if manifest.has_permission(PermissionType::FullDriveAccess) {
         let mut drive = store.get_resource(&drive_subject.into()).await?;
-        drive.push(urls::WRITE, agent.subject.clone().into(), true)?;
-        drive.push(urls::READ, agent.subject.clone().into(), true)?;
+        drive.push(
+            urls::WRITE,
+            atomic_lib::values::SubResource::Subject(agent.subject.clone()),
+            true,
+        )?;
+        drive.push(
+            urls::READ,
+            atomic_lib::values::SubResource::Subject(agent.subject.clone()),
+            true,
+        )?;
         drive.save(store).await?;
     }
 
@@ -1411,7 +1427,7 @@ async fn delete_plugin_meta(
     namespace: &str,
     name: &str,
 ) -> AtomicResult<()> {
-    let key = PluginMetaKey::new(&drive_subject, &namespace, &name);
+    let key = PluginMetaKey::new(drive_subject, namespace, name);
 
     let Some(plugin_meta) = store.get_plugin_meta(&key)? else {
         // The plugin does not have any metadata so we don't have to delete anything.
@@ -1420,7 +1436,7 @@ async fn delete_plugin_meta(
 
     // Delete the agent resource
     let agent = Agent::from_secret(&plugin_meta.agent_secret)?;
-    let mut agent_resource = store.get_resource(&agent.subject.clone().into()).await?;
+    let mut agent_resource = store.get_resource(&agent.subject.clone()).await?;
     agent_resource.destroy(store).await?;
 
     // Delete the plugin metadata
@@ -1559,17 +1575,17 @@ fn cleanup_cache(cache_dir: &Path, used_files: &HashSet<PathBuf>) {
     if let Ok(entries) = std::fs::read_dir(cache_dir) {
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.extension() == Some(OsStr::new("cwasm")) {
-                if !used_files.contains(&path) {
-                    if let Err(e) = std::fs::remove_file(&path) {
-                        warn!(
-                            "Failed to delete unused cwasm file {}: {}",
-                            path.display(),
-                            e
-                        );
-                    } else {
-                        info!("Deleted unused cwasm file: {}", path.display());
-                    }
+            if path.extension() == Some(std::ffi::OsStr::new("cwasm"))
+                && !used_files.contains(&path)
+            {
+                if let Err(e) = std::fs::remove_file(&path) {
+                    warn!(
+                        "Failed to delete unused cwasm file {}: {}",
+                        path.display(),
+                        e
+                    );
+                } else {
+                    info!("Deleted unused cwasm file: {}", path.display());
                 }
             }
         }

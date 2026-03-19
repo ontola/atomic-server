@@ -1,0 +1,57 @@
+[
+  {
+    "label": "run atomic-server (cargo run)",
+    "command": "cargo run --bin atomic-server",
+    "cwd": "$ZED_WORKTREE_ROOT"
+  },
+  {
+    "label": "test atomic-server (cargo nextest run)",
+    "command": "cargo nextest run",
+    "cwd": "$ZED_WORKTREE_ROOT"
+  },
+  {
+    "label": "run data-browser dev server (pnpm start)",
+    "command": "pnpm start",
+    "cwd": "$ZED_WORKTREE_ROOT/browser"
+  },
+  {
+    "label": "test data-browser e2e",
+    "command": "pnpm test-e2e",
+    "cwd": "$ZED_WORKTREE_ROOT/browser"
+  },
+  {
+    "label": "test end-to-end / E2E (npm playwright)",
+    "command": "cd server/e2e_tests/ && npm i && npm run test",
+    "cwd": "$ZED_WORKTREE_ROOT"
+  },
+  {
+    "label": "build desktop atomic-server tauri",
+    "command": "cargo tauri build",
+    "cwd": "$ZED_WORKTREE_ROOT/desktop"
+  },
+  {
+    "label": "dev desktop atomic-server tauri",
+    "command": "cargo tauri dev",
+    "cwd": "$ZED_WORKTREE_ROOT/desktop"
+  },
+  {
+    "label": "benchmark criterion atomic-server",
+    "command": "cargo criterion",
+    "cwd": "$ZED_WORKTREE_ROOT/server"
+  },
+  {
+    "label": "docs atomic data (mdbook serve)",
+    "command": "mdbook serve",
+    "cwd": "$ZED_WORKTREE_ROOT/docs"
+  },
+  {
+    "label": "run SigNoz for tracing locally (docker)",
+    "command": "git clone https://github.com/SigNoz/signoz.git /tmp/signoz 2>/dev/null || true && cd /tmp/signoz/deploy && docker compose up",
+    "cwd": "$ZED_WORKTREE_ROOT"
+  },
+  {
+    "label": "dagger call rust-build",
+    "command": "dagger call rust-build",
+    "cwd": "$ZED_WORKTREE_ROOT"
+  }
+]

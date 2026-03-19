@@ -5,7 +5,7 @@ use atomic_lib::{
     storelike::ResourceResponse,
     urls,
     utils::check_valid_url,
-    Resource, Storelike, Value,
+    Resource, Storelike, Subject, Value,
 };
 
 use crate::invite_token::InviteToken;
@@ -43,7 +43,11 @@ pub fn handle_invite_request<'a>(
 
         let token_str = match read_token_from_subject(&subject) {
             Some(t) => t,
-            None => return invite_endpoint().to_resource_response(store).await,
+            None => {
+                return invite_endpoint()
+                    .to_resource_response(store, subject.as_str())
+                    .await
+            }
         };
 
         let token = InviteToken::decode(&token_str)?;
@@ -97,7 +101,11 @@ pub fn handle_invite_post<'a>(
 
         let token_str = match read_token_from_subject(&subject) {
             Some(t) => t,
-            None => return invite_endpoint().to_resource_response(store).await,
+            None => {
+                return invite_endpoint()
+                    .to_resource_response(store, subject.as_str())
+                    .await
+            }
         };
 
         let token = InviteToken::decode(&token_str)?;
@@ -113,17 +121,17 @@ pub fn handle_invite_post<'a>(
             }
         };
 
-        if agent.as_str().starts_with("did:ad:agent:") {
-            if store.get_resource(&agent.as_str().into()).await.is_err() {
-                let mut new_agent = Resource::new_instance(urls::AGENT, store).await?;
-                new_agent.set_subject(agent.to_string());
-                if let Some(pk) = agent.as_str().strip_prefix("did:ad:agent:") {
-                    new_agent
-                        .set_string(urls::PUBLIC_KEY.into(), pk, store)
-                        .await?;
-                }
-                new_agent.save_locally(store).await?;
+        if agent.as_str().starts_with("did:ad:agent:")
+            && store.get_resource(&agent.as_str().into()).await.is_err()
+        {
+            let mut new_agent = Resource::new_instance(urls::AGENT, store).await?;
+            new_agent.set_subject(agent.to_string());
+            if let Some(pk) = agent.as_str().strip_prefix("did:ad:agent:") {
+                new_agent
+                    .set_string(urls::PUBLIC_KEY.into(), pk, store)
+                    .await?;
             }
+            new_agent.save_locally(store).await?;
         }
 
         add_rights(agent.as_str(), token.target.as_str(), token.write, store).await?;
@@ -156,7 +164,8 @@ pub async fn add_rights(
     write: bool,
     store: &impl Storelike,
 ) -> AtomicResult<()> {
-    if !agent.starts_with("did:") {
+    let agent_subject = Subject::from_raw(agent, store.get_base_domain().as_deref());
+    if !agent_subject.is_did() {
         check_valid_url(agent)?;
     }
     // Get the Resource that the user is being invited to

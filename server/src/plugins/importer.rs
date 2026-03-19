@@ -31,7 +31,11 @@ pub fn import_endpoint() -> Endpoint {
 pub fn handle_get<'a>(
     context: HandleGetContext<'a>,
 ) -> BoxFuture<'a, AtomicResult<ResourceResponse>> {
-    Box::pin(async move { import_endpoint().to_resource_response(context.store).await })
+    Box::pin(async move {
+        import_endpoint()
+            .to_resource_response(context.store, context.subject.as_str())
+            .await
+    })
 }
 
 /// When an importer is shown, we list a bunch of Parameters and a list of previously imported items.
@@ -44,7 +48,7 @@ pub fn handle_post<'a>(
             store,
             body,
             for_agent,
-            subject,
+            ref subject,
         } = context;
         let mut url = None;
         let mut json = None;
@@ -101,6 +105,8 @@ pub fn handle_post<'a>(
             );
         }
 
-        import_endpoint().to_resource_response(context.store).await
+        import_endpoint()
+            .to_resource_response(context.store, context.subject.as_str())
+            .await
     })
 }

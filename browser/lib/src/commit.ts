@@ -37,6 +37,8 @@ export interface CommitBuilderI {
    * having the same current version.
    */
   previousCommit?: string;
+  /** Whether this is the first commit for a Resource. */
+  isGenesis?: boolean;
 }
 
 interface CommitBuilderBase {
@@ -46,6 +48,7 @@ interface CommitBuilderBase {
   remove?: Set<string>;
   destroy?: boolean;
   previousCommit?: string;
+  isGenesis?: boolean;
 }
 
 type JSONADObject = Record<string, JSONValue>;
@@ -66,6 +69,7 @@ export class CommitBuilder {
   private _remove: Set<string>;
   private _destroy?: boolean;
   private _previousCommit?: string;
+  private _isGenesis?: boolean;
 
   /** Removes any query parameters from the Subject */
   public constructor(subject: string, base: CommitBuilderBase = {}) {
@@ -76,6 +80,7 @@ export class CommitBuilder {
     this._remove = base.remove ?? new Set();
     this._destroy = base.destroy;
     this._previousCommit = base.previousCommit;
+    this._isGenesis = base.isGenesis;
   }
 
   public get subject(): string {
@@ -104,6 +109,10 @@ export class CommitBuilder {
 
   public get previousCommit() {
     return this._previousCommit;
+  }
+
+  public get isGenesis() {
+    return this._isGenesis;
   }
 
   public addSetAction(property: string, value: JSONValue): CommitBuilder {
@@ -172,6 +181,12 @@ export class CommitBuilder {
     return this;
   }
 
+  public setIsGenesis(isGenesis: boolean): CommitBuilder {
+    this._isGenesis = isGenesis;
+
+    return this;
+  }
+
   public setSubject(subject: string): CommitBuilder {
     this._subject = subject;
 
@@ -213,6 +228,7 @@ export class CommitBuilder {
       remove: this.remove,
       destroy: this.destroy,
       previousCommit: this.previousCommit,
+      isGenesis: this.isGenesis,
     };
 
     return new CommitBuilder(this.subject, structuredClone(base));
@@ -228,6 +244,7 @@ export class CommitBuilder {
       remove: Array.from(this.remove),
       destroy: this.destroy,
       previousCommit: this.previousCommit,
+      isGenesis: this.isGenesis,
       yUpdate: Object.fromEntries(this.yUpdate.entries()),
     };
   }
@@ -252,6 +269,25 @@ export class CommitBuilder {
       createdAt,
       signer: agent.subject,
     };
+
+    const isDidSigner = agent.subject.startsWith('did:ad:agent:');
+    const isAgentSubject = commitPreSigned.subject.startsWith('did:ad:agent:');
+    const isPlaceholder =
+      (commitPreSigned.subject.startsWith('_new:') && isDidSigner) ||
+      commitPreSigned.subject === 'did:ad:genesis';
+
+    console.log(`[signAt] subject: ${commitPreSigned.subject}, isPlaceholder: ${isPlaceholder}, previousCommit: ${commitPreSigned.previousCommit}`);
+
+    if (
+      commitPreSigned.isGenesis === undefined &&
+      !isAgentSubject &&
+      isPlaceholder &&
+      commitPreSigned.previousCommit === undefined
+    ) {
+      console.log('[signAt] Setting isGenesis: true');
+      commitPreSigned.isGenesis = true;
+    }
+
     const serializedCommit = serializeDeterministically({ ...commitPreSigned });
     const signature = await agent.sign(serializedCommit);
 
@@ -259,14 +295,15 @@ export class CommitBuilder {
 
     // Special logic for DID genesis commits: the subject must be the signature.
     // `_new:*` subjects are temporary local placeholders used before first sign.
-    const isDidSigner = agent.subject.startsWith('did:ad:agent:');
-
+    // `did:ad:agent:` subjects are stable identifiers (derived from public key),
+    // not genesis placeholders — they must never be replaced with the signature.
     if (
-      (subject.startsWith('did:ad:') ||
-        (subject.startsWith('_new:') && isDidSigner)) &&
+      !isAgentSubject &&
+      isPlaceholder &&
       this.previousCommit === undefined
     ) {
       subject = `did:ad:${signature}`;
+      console.log(`[signAt] Derived new DID subject: ${subject}`);
     }
 
     const commitPostSigned: Commit = {
@@ -309,6 +346,7 @@ const serializeMap = {
   remove: commits.properties.remove,
   destroy: commits.properties.destroy,
   previousCommit: commits.properties.previousCommit,
+  isGenesis: commits.properties.isGenesis,
   createdAt: commits.properties.createdAt,
   signer: commits.properties.signer,
   signature: commits.properties.signature,
@@ -317,7 +355,10 @@ const serializeMap = {
 };
 
 /** Replaces the keys of a Commit object with their respective json-ad key */
-function commitToJsonADObject(commit: UnsignedCommit | Commit): JSONADObject {
+function commitToJsonADObject(
+  commit: UnsignedCommit | Commit,
+  origin?: string,
+): JSONADObject {
   const jsonAdObj: JSONADObject = {
     [core.properties.isA]: [commits.classes.commit],
   };
@@ -325,7 +366,16 @@ function commitToJsonADObject(commit: UnsignedCommit | Commit): JSONADObject {
   for (const kv of Object.entries(commit)) {
     const [key, value] = kv as [keyof Commit, Commit[keyof Commit]];
     const serializedKey = serializeMap[key];
-    jsonAdObj[serializedKey] = serializeCommitValue(key, value);
+
+    if (serializedKey) {
+      jsonAdObj[serializedKey] = serializeCommitValue(key, value);
+    }
+  }
+
+  // Commits are identified by their hash, so we should not include an @id field
+  // if the subject is a commit DID. This matches the server's serialization logic.
+  if (origin && commit.subject && !commit.subject.startsWith('did:ad:commit:')) {
+    jsonAdObj['@id'] = commit.subject;
   }
 
   return jsonAdObj;
@@ -390,6 +440,7 @@ export function serializeDeterministically(
   // Also covers `_new:*` placeholder subjects used by DID agents before the
   // first sign (the subject will become `did:ad:{signature}` after signing).
   const isDidGenesis =
+    !commit.subject.startsWith('did:ad:agent:') &&
     (commit.subject.startsWith('did:ad:') ||
       (commit.subject.startsWith('_new:') &&
         commit.signer?.startsWith('did:ad:agent:'))) &&
@@ -397,7 +448,12 @@ export function serializeDeterministically(
 
   if (isDidGenesis) {
     delete jsonadCommit[commits.properties.subject];
+    // isGenesis should also be removed for deterministic serialization of DID genesis commits
+    delete jsonadCommit[commits.properties.isGenesis];
   }
+
+  // Canonical serialization should never include @id for commits
+  delete jsonadCommit['@id'];
 
   return stringify(jsonadCommit);
 }
@@ -421,6 +477,8 @@ export function parseCommitResource(resource: Resource): Commit {
     remove: resource.get(commits.properties.remove),
     destroy: resource.get(commits.properties.destroy),
     signature: resource.get(commits.properties.signature),
+    isGenesis: resource.get(commits.properties.isGenesis),
+    previousCommit: resource.get(commits.properties.previousCommit),
   };
 
   return commit;
@@ -447,6 +505,8 @@ export function parseCommitJSON(str: string): Commit {
     const id: undefined | string = jsonAdObj['@id'];
     const previousCommit: undefined | string =
       jsonAdObj[commits.properties.previousCommit];
+    const isGenesis: undefined | boolean =
+      jsonAdObj[commits.properties.isGenesis];
 
     if (!signature) {
       throw new Error(`Commit has no signature`);
@@ -464,6 +524,7 @@ export function parseCommitJSON(str: string): Commit {
       signature,
       id,
       previousCommit,
+      isGenesis,
     };
   } catch (e) {
     throw new Error(`Could not parse commit: ${e}, Commit: ${str}`);

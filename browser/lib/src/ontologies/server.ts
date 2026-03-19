@@ -35,6 +35,7 @@ export const server = {
     imageWidth: 'https://atomicdata.dev/properties/imageWidth',
     internalId: 'https://atomicdata.dev/properties/internalId',
     mimetype: 'https://atomicdata.dev/properties/mimetype',
+    isPost: 'https://atomicdata.dev/properties/endpoint/isPost',
     parameters: 'https://atomicdata.dev/properties/endpoint/parameters',
     property: 'https://atomicdata.dev/properties/search/property',
     publicKey: 'https://atomicdata.dev/properties/invite/publicKey',

@@ -4,6 +4,7 @@ import {
   useCallback,
   useContext,
   useMemo,
+  useEffect,
   type JSX,
 } from 'react';
 import { DarkModeOption, useDarkMode } from './useDarkMode';
@@ -51,6 +52,21 @@ export const AppSettingsContextProvider = (
   );
   const [sidebarKeyboardDndEnabled, setSidebarKeyboardDndEnabled] =
     useLocalStorage('sidebarKeyboardDndEnabled', false);
+
+  useEffect(() => {
+    serverURLStorage.addKnownServer(window.location.origin);
+  }, []);
+
+  const setServer = useCallback(
+    (newServer: string) => {
+      if (newServer.startsWith('http://') || newServer.startsWith('https://')) {
+        const url = new URL(newServer);
+        setBaseURL(url.origin);
+        serverURLStorage.set(url.origin);
+      }
+    },
+    [setBaseURL],
+  );
 
   const setDrive = useCallback(
     (newDrive: string) => {
@@ -107,6 +123,9 @@ export const AppSettingsContextProvider = (
       setSidebarKeyboardDndEnabled,
       hideTemplates,
       setHideTemplates,
+      baseURL,
+      setBaseURL,
+      setServer,
     }),
     [
       drive,
@@ -130,6 +149,9 @@ export const AppSettingsContextProvider = (
       setSidebarKeyboardDndEnabled,
       hideTemplates,
       setHideTemplates,
+      baseURL,
+      setBaseURL,
+      setServer,
     ],
   );
 
@@ -174,6 +196,12 @@ export interface AppSettings {
   setSidebarKeyboardDndEnabled: (b: boolean) => void;
   hideTemplates: boolean;
   setHideTemplates: (b: boolean) => void;
+  /** The URL of the currently active server / peer used for resolution. */
+  baseURL: string;
+  /** Sets the active server / peer. */
+  setBaseURL: (s: string) => void;
+  /** Robustly sets the server and adds it to the known list. */
+  setServer: (s: string) => void;
 }
 
 const initialState: AppSettings = {
@@ -198,6 +226,9 @@ const initialState: AppSettings = {
   setSidebarKeyboardDndEnabled: () => undefined,
   hideTemplates: false,
   setHideTemplates: () => undefined,
+  baseURL: '',
+  setBaseURL: () => undefined,
+  setServer: () => undefined,
 };
 
 /** Hook for using App Settings, such as theme and darkmode */

@@ -99,9 +99,9 @@ async fn test_dht_resolve() {
         .build()
         .unwrap();
 
-    // Wait for server A to start and get its drive hash
-    let mut drive_hash = None;
+    // Wait for server A to start
     let start = Instant::now();
+    let mut a_started = false;
     while start.elapsed() < Duration::from_secs(30) {
         if let Ok(resp) = client
             .get("http://localhost:9011/")
@@ -109,23 +109,37 @@ async fn test_dht_resolve() {
             .send()
             .await
         {
-            if resp.status().is_success() {
-                if let Ok(text) = resp.text().await {
-                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
-                        if let Some(hash) =
-                            json["https://atomicdata.dev/properties/drive/hash"].as_str()
-                        {
-                            drive_hash = Some(hash.to_string());
-                            break;
-                        }
-                    }
-                }
+            // Even if it returns 401 Unauthorized, the server is up
+            if resp.status().is_success() || resp.status() == reqwest::StatusCode::UNAUTHORIZED {
+                a_started = true;
+                break;
             }
         }
         tokio::time::sleep(Duration::from_secs(1)).await;
     }
+    assert!(a_started, "Server A did not start");
 
-    let drive_hash = drive_hash.expect("Server A did not start or provide a drive hash");
+    // Perform manual onboarding for Server A
+    let agent_a = Agent::new(None).expect("failed to create agent a");
+    
+    // 1. Create a genesis Drive commit
+    let mut drive_claim = atomic_lib::commit::CommitBuilder::new("did:ad:placeholder".into());
+    drive_claim.set(atomic_lib::urls::IS_A.into(), atomic_lib::Value::ResourceArray(vec![atomic_lib::urls::DRIVE.into()]));
+    drive_claim.set(atomic_lib::urls::NAME.into(), atomic_lib::Value::String("Test Drive A".into()));
+    let drive_genesis_commit = drive_claim.sign(&agent_a, &atomic_lib::Store::init().await.unwrap(), &atomic_lib::Resource::new("did:ad:placeholder".into())).await.expect("failed to sign drive genesis");
+    let drive_did = drive_genesis_commit.subject.clone();
+
+    // 2. Claim Server A via /setup
+    let setup_body = serde_json::json!({
+        "https://atomicdata.dev/properties/initialDrive": drive_did
+    });
+    let resp = client.post("http://localhost:9011/setup")
+        .header("Content-Type", "application/json")
+        .body(setup_body.to_string())
+        .send()
+        .await
+        .expect("failed to send setup request a");
+    assert!(resp.status().is_success(), "Failed to claim Server A: {}", resp.text().await.unwrap());
 
     // Wait for Server B to start
     let start = Instant::now();
@@ -137,7 +151,7 @@ async fn test_dht_resolve() {
             .send()
             .await
         {
-            if resp.status().is_success() {
+            if resp.status().is_success() || resp.status() == reqwest::StatusCode::UNAUTHORIZED {
                 b_started = true;
                 break;
             }
@@ -146,15 +160,30 @@ async fn test_dht_resolve() {
     }
     assert!(b_started, "Server B did not start");
 
-    // Read Agent secret from Server A's config to get its agent DID.
-    let config_path_a = cfg_dir_a.join("config.toml");
-    let cfg_a = atomic_lib::config::read_config(Some(&config_path_a))
-        .expect("failed to read config a");
-    let agent_a = Agent::from_secret(&cfg_a.shared.agent_secret).expect("failed to parse secret");
+    // Perform manual onboarding for Server B
+    let agent_b = Agent::new(None).expect("failed to create agent b");
+    
+    let mut drive_claim_b = atomic_lib::commit::CommitBuilder::new("did:ad:placeholder".into());
+    drive_claim_b.set(atomic_lib::urls::IS_A.into(), atomic_lib::Value::ResourceArray(vec![atomic_lib::urls::DRIVE.into()]));
+    drive_claim_b.set(atomic_lib::urls::NAME.into(), atomic_lib::Value::String("Test Drive B".into()));
+    let drive_genesis_commit_b = drive_claim_b.sign(&agent_b, &atomic_lib::Store::init().await.unwrap(), &atomic_lib::Resource::new("did:ad:placeholder".into())).await.expect("failed to sign drive genesis b");
+    let drive_did_b = drive_genesis_commit_b.subject.clone();
+
+    // Claim Server B via /setup
+    let setup_body_b = serde_json::json!({
+        "https://atomicdata.dev/properties/initialDrive": drive_did_b
+    });
+    let resp_b = client.post("http://localhost:9012/setup")
+        .header("Content-Type", "application/json")
+        .body(setup_body_b.to_string())
+        .send()
+        .await
+        .expect("failed to send setup request b");
+    assert!(resp_b.status().is_success(), "Failed to claim Server B: {}", resp_b.text().await.unwrap());
 
     // Resolve Server A's agent DID from Server B via DHT.
     // The ?drive= hint tells the DHT which drive to look up peers for.
-    let did_subject = format!("{}?drive={}", agent_a.subject, drive_hash);
+    let did_subject = format!("{}?drive={}", agent_a.subject, drive_did);
 
     // Give DHT some time to propagate
     tokio::time::sleep(Duration::from_secs(5)).await;

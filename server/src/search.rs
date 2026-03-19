@@ -373,6 +373,7 @@ mod tests {
             .expect("failed init config");
 
         let store = atomic_lib::Db::init_temp(&unique_string).await.unwrap();
+        atomic_lib::test_utils::setup_test_env(&store).await.unwrap();
 
         let search_state = SearchState::new(&config).unwrap();
         let fields = search_state.get_schema_fields().unwrap();

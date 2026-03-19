@@ -11,6 +11,7 @@ export interface CryptoProvider {
 interface DecodedSecret {
   privateKey: string;
   subject: string;
+  initialDrive?: string;
 }
 
 /**
@@ -28,10 +29,12 @@ export class JSCryptoProvider implements CryptoProvider {
     return 'js';
   }
 
-  static fromSecret(secret: string): [JSCryptoProvider, string] {
-    const { privateKey, subject } = decodeSecret(secret);
+  static fromSecret(
+    secret: string,
+  ): [provider: JSCryptoProvider, subject: string, initialDrive?: string] {
+    const { privateKey, subject, initialDrive } = decodeSecret(secret);
 
-    return [new JSCryptoProvider(privateKey), subject];
+    return [new JSCryptoProvider(privateKey), subject, initialDrive];
   }
 
   async sign(message: string): Promise<string> {
@@ -74,8 +77,10 @@ export class SubtleCryptoProvider implements CryptoProvider {
 
   static async createKeysFromSecret(
     secret: string,
-  ): Promise<[keyPair: CryptoKeyPair, subject: string]> {
-    const { privateKey, subject } = decodeSecret(secret);
+  ): Promise<
+    [keyPair: CryptoKeyPair, subject: string, initialDrive?: string]
+  > {
+    const { privateKey, subject, initialDrive } = decodeSecret(secret);
     const rawKey = decodeB64(privateKey);
     const privateCryptoKey =
       await SubtleCryptoProvider.importPrivateKey(rawKey);
@@ -88,6 +93,7 @@ export class SubtleCryptoProvider implements CryptoProvider {
     return [
       { privateKey: privateCryptoKey, publicKey: publicCryptoKey },
       subject,
+      initialDrive,
     ];
   }
 
@@ -190,7 +196,7 @@ const decodeSecret = (secret: string): DecodedSecret => {
     subject = `did:ad:agent:${httpAgentMatch[1]}`;
   }
 
-  return { privateKey, subject };
+  return { privateKey, subject, initialDrive: parsed.initialDrive };
 };
 
 export interface KeyPair {

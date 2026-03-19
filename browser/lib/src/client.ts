@@ -83,8 +83,12 @@ export class Client {
       throw new Error(`Subject is not a string: ${subject}`);
     }
 
-    if (subject.startsWith('http') || subject.startsWith('did:ad:')) {
-      if (subject.startsWith('http')) {
+    if (
+      subject.startsWith('http') ||
+      subject.startsWith('did:ad:') ||
+      subject.startsWith('internal:')
+    ) {
+      if (subject.startsWith('http') || subject.startsWith('internal:')) {
         try {
           new URL(subject);
 
@@ -154,6 +158,10 @@ export class Client {
       let requestHeaders: HeadersObject = {
         Accept: JSON_AD_MIME,
       };
+
+      if (method === 'POST' && !bodyReq) {
+        requestHeaders['Content-Length'] = '0';
+      }
 
       let url = subject;
 

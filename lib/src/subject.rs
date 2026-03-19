@@ -18,11 +18,15 @@ pub const DID_AD_COMMIT_PREFIX: &str = "did:ad:commit:";
 pub enum Subject {
     /// Internal representation for local data.
     /// Format: `internal:/path` (root) or `internal:sub:/path` (tenant).
-    Internal(Url),
+    Internal {
+        url: Url,
+        /// Drive shortname (used for subdomain routing).
+        subdomain: Option<String>,
+    },
     /// External resource identifier (usually over HTTP).
     External(Url),
     /// Decentralized Identifier (typically did:ad:{genesis}).
-    /// Contains an optional drive identifier (short hash or alias) for routing.
+    /// Contains an optional drive identifier (DID or alias) for routing.
     Did {
         url: Url,
         drive_hint: Option<String>,
@@ -32,13 +36,13 @@ pub enum Subject {
 impl Subject {
     pub fn as_str(&self) -> &str {
         match self {
-            Subject::Internal(u) => u.as_str(),
+            Subject::Internal { url, .. } => url.as_str(),
             Subject::External(u) => u.as_str(),
             Subject::Did { url, .. } => url.as_str(),
         }
     }
 
-    /// Returns the drive routing hint (hash or alias) if this is a DID subject.
+    /// Returns the drive routing hint (DID or alias) if this is a DID subject.
     pub fn drive_hint(&self) -> Option<&str> {
         match self {
             Subject::Did { drive_hint, .. } => drive_hint.as_deref(),
@@ -49,24 +53,45 @@ impl Subject {
     /// Creates a new Internal subject.
     /// subdomain: None for root, Some("sub") for tenant.
     pub fn new_local(path: &str, subdomain: Option<&str>) -> Self {
-        let path = if path.starts_with('/') {
+        let mut path = if path.starts_with('/') {
             path.to_string()
         } else {
             format!("/{}", path)
         };
-        let uri = match subdomain {
-            Some(s) => format!("internal:{}:{}", s, path),
-            None => format!("internal:{}", path),
+        if path.len() > 1 && path.ends_with('/') {
+            path.pop();
+        }
+        // The Url::parse might result in internal:path instead of internal:/path
+        // if path doesn't start with //, but we want internal:/path
+        let mut url = if let Some(s) = subdomain {
+            Url::parse(&format!("internal:{}:{}", s, path)).unwrap()
+        } else {
+            Url::parse(&format!("internal:/{}", &path[1..])).unwrap()
         };
-        Subject::Internal(Url::parse(&uri).expect("Failed to parse internal URI"))
+
+
+        // Some URL parsers might strip the slash for 'internal:' scheme.
+        // We MUST have it for consistent internal subjects.
+        if !url.as_str().starts_with("internal:/") && url.scheme() == "internal" {
+            let mut s = url.as_str().to_string();
+            if let Some(colon_pos) = s.find(':') {
+                s.insert(colon_pos + 1, '/');
+                url = Url::parse(&s).expect("Failed to re-parse internal URI with slash");
+            }
+        }
+
+        Subject::Internal {
+            url,
+            subdomain: subdomain.map(|s| s.to_string()),
+        }
     }
 
     /// Returns the path part of an Internal subject.
     /// For external subjects, it returns the URL's path.
     pub fn path(&self) -> String {
         match self {
-            Subject::Internal(u) => {
-                let opaque = u.path();
+            Subject::Internal { url, .. } => {
+                let opaque = url.path();
                 if opaque.starts_with('/') {
                     opaque.to_string()
                 } else if let Some(slash_pos) = opaque.find('/') {
@@ -76,40 +101,92 @@ impl Subject {
                 }
             }
             Subject::External(u) => u.path().to_string(),
-            Subject::Did { .. } => "/".to_string(),
+            Subject::Did { .. } => self.as_str().to_string(),
         }
     }
 
     /// Returns the subdomain part of an Internal subject, if any.
     pub fn subdomain(&self) -> Option<String> {
         match self {
-            Subject::Internal(u) => {
-                let opaque = u.path();
-                if opaque.starts_with('/') {
-                    None
-                } else if let Some(slash_pos) = opaque.find('/') {
-                    Some(opaque[..slash_pos].to_string())
-                } else {
-                    Some(opaque.to_string())
-                }
-            }
+            Subject::Internal { subdomain, .. } => subdomain.clone(),
             _ => None,
         }
+    }
+
+    /// Returns a new Subject with the drive_hint set.
+    /// Only has an effect on DID subjects.
+    pub fn set_drive_hint(&self, drive_hint: String) -> Self {
+        match self {
+            Subject::Did { url, .. } => {
+                let mut u = url.clone();
+                // Manually reconstruct query to avoid '+' -> ' ' decoding
+                let mut new_query = format!("drive={}", drive_hint);
+
+                if let Some(existing_query) = url.query() {
+                    for pair in existing_query.split('&') {
+                        if let Some((k, v)) = pair.split_once('=') {
+                            if k != "drive" {
+                                new_query.push('&');
+                                new_query.push_str(k);
+                                new_query.push('=');
+                                new_query.push_str(v);
+                            }
+                        } else if !pair.is_empty() {
+                            new_query.push('&');
+                            new_query.push_str(pair);
+                        }
+                    }
+                }
+
+                u.set_query(Some(&new_query));
+
+                Subject::Did {
+                    url: u,
+                    drive_hint: Some(drive_hint),
+                }
+            }
+            _ => self.clone(),
+        }
+    }
+
+    /// Returns true if this is a DID subject.
+    pub fn is_did(&self) -> bool {
+        matches!(self, Subject::Did { .. })
+    }
+
+    /// Returns true if this is a DID Agent subject (did:ad:agent:).
+    pub fn is_agent_did(&self) -> bool {
+        match self {
+            Subject::Did { url, .. } => url.as_str().starts_with("did:ad:agent:"),
+            _ => false,
+        }
+    }
+
+    /// Returns true if this is an internal subject (mapped to the server's base domain).
+    pub fn is_internal(&self) -> bool {
+        matches!(self, Subject::Internal { .. })
+    }
+
+    /// Returns true if this is an external subject (not mapped to the server's base domain).
+    pub fn is_external(&self) -> bool {
+        matches!(self, Subject::External(_))
     }
 
     /// Returns true if this subject is local to the server (Internal or Did).
     /// External subjects are not considered local.
     pub fn is_local(&self) -> bool {
-        matches!(self, Subject::Internal(_) | Subject::Did { .. })
+        matches!(
+            self,
+            Subject::Internal { .. } | Subject::Did { .. }
+        )
     }
 
     /// Resolves the Subject to an absolute URL string based on the provided origin.
     /// If it's an `Internal` subject, it swaps the `internal:` scheme for the `origin`.
     pub fn resolve(&self, origin: &str) -> String {
         match self {
-            Subject::Internal(_u) => {
+            Subject::Internal { url, subdomain } => {
                 let path = self.path();
-                let subdomain = self.subdomain();
                 let trimmed_origin = origin.trim_end_matches('/');
 
                 let mut resolved = if let Some(s) = subdomain {
@@ -123,11 +200,11 @@ impl Subject {
                     format!("{}{}", trimmed_origin, path)
                 };
 
-                if let Some(q) = _u.query() {
+                if let Some(q) = url.query() {
                     resolved.push('?');
                     resolved.push_str(q);
                 }
-                if let Some(f) = _u.fragment() {
+                if let Some(f) = url.fragment() {
                     resolved.push('#');
                     resolved.push_str(f);
                 }
@@ -145,16 +222,56 @@ impl Subject {
             return Subject::from_raw(&s[1..], base_domain);
         }
 
-        if s.starts_with("internal:") {
-            if let Ok(u) = Url::parse(s) {
-                return Subject::Internal(u);
+        let s = if s.len() > 1 && s.ends_with('/') {
+            if s.starts_with("internal:") {
+                // If it's internal:/, don't strip. internal:/path/ -> internal:/path
+                if s.len() > 10 {
+                    &s[..s.len() - 1]
+                } else {
+                    s
+                }
+            } else {
+                &s[..s.len() - 1]
             }
-        }
+        } else {
+            s
+        };
 
         if s.starts_with("did:") {
             if let Ok(u) = Url::parse(s) {
-                let drive_hint = u.query_pairs().find(|(k, _)| k == "drive").map(|(_, v)| v.into_owned());
-                return Subject::Did { url: u, drive_hint };
+                let mut drive_hint = None;
+                if let Some(query) = u.query() {
+                    for pair in query.split('&') {
+                        if let Some((k, v)) = pair.split_once('=') {
+                            if k == "drive" {
+                                drive_hint = Some(v.to_string());
+                                break;
+                            }
+                        }
+                    }
+                }
+                return Subject::Did {
+                    url: u,
+                    drive_hint,
+                };
+            }
+        }
+
+        if s.starts_with("internal:") {
+            if let Ok(u) = Url::parse(s) {
+                let opaque = u.path();
+                let subdomain = if opaque.starts_with('/') {
+                    None
+                } else if let Some(slash_pos) = opaque.find('/') {
+                    Some(opaque[..slash_pos].to_string())
+                } else {
+                    Some(opaque.to_string())
+                };
+
+                return Subject::Internal {
+                    url: u,
+                    subdomain,
+                };
             }
         }
 
@@ -190,14 +307,18 @@ impl Subject {
         // Fallback: treat as local path
         Subject::new_local(s, None)
     }
+
     /// Returns a new Subject without query parameters or fragments.
     pub fn without_params(&self) -> Self {
         match self {
-            Subject::Internal(u) => {
-                let mut u = u.clone();
+            Subject::Internal { url, subdomain } => {
+                let mut u = url.clone();
                 u.set_query(None);
                 u.set_fragment(None);
-                Subject::Internal(u)
+                Subject::Internal {
+                    url: u,
+                    subdomain: subdomain.clone(),
+                }
             }
             Subject::External(u) => {
                 let mut u = u.clone();
@@ -209,7 +330,10 @@ impl Subject {
                 let mut u = url.clone();
                 u.set_query(None);
                 u.set_fragment(None);
-                Subject::Did { url: u, drive_hint: None }
+                Subject::Did {
+                    url: u,
+                    drive_hint: None,
+                }
             }
         }
     }
@@ -217,7 +341,34 @@ impl Subject {
     /// Returns the core identifier as a String, stripping any query parameters or fragments.
     /// This is used for database keys and cryptographic signatures.
     pub fn pure_id(&self) -> String {
-        self.without_params().to_string()
+        match self {
+            Subject::Internal { url, .. } => {
+                let mut u = url.clone();
+                u.set_query(None);
+                u.set_fragment(None);
+                let mut s = u.to_string();
+                if s.len() > 10 && s.ends_with('/') {
+                    s.pop();
+                }
+                s
+            }
+            Subject::External(url) => {
+                let mut u = url.clone();
+                u.set_query(None);
+                u.set_fragment(None);
+                u.to_string()
+            }
+            Subject::Did { url, .. } => {
+                let mut u = url.clone();
+                u.set_query(None);
+                u.set_fragment(None);
+                let mut s = u.to_string();
+                if s.ends_with('/') {
+                    s.pop();
+                }
+                s
+            }
+        }
     }
 }
 
@@ -309,10 +460,23 @@ mod tests {
     }
 
     #[test]
+    fn test_agent_did_parsing() {
+        let agent_did = "did:ad:agent:sLKUH+UJiTMm+dxzbAFf1h3gDonWQaOgU++2HD1bueQ=";
+        let subject = Subject::from_raw(agent_did, None);
+        assert!(
+            matches!(subject, Subject::Did { .. }),
+            "Expected Subject::Did, got {:?}",
+            subject
+        );
+        assert_eq!(subject.as_str(), agent_did, "as_str() must preserve + and = without percent-encoding");
+        assert!(subject.is_agent_did());
+    }
+
+    #[test]
     fn test_did_drive_hint_parsing() {
         let did_with_drive = "did:ad:123?drive=abc";
         let subject = Subject::from_raw(did_with_drive, None);
-        
+
         assert!(matches!(subject, Subject::Did { .. }));
         assert_eq!(subject.drive_hint(), Some("abc"));
         assert_eq!(subject.pure_id(), "did:ad:123");

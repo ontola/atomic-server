@@ -6,7 +6,7 @@ use crate::{
     helpers::{get_client_agent, try_extension},
 };
 use actix_web::{web, HttpResponse};
-use atomic_lib::{storelike::ResourceResponse, Storelike, Subject};
+use atomic_lib::db::ResolveSubjectResult;
 use simple_server_timing_header::Timer;
 
 /// Respond to a single resource.
@@ -56,32 +56,58 @@ pub async fn handle_get_resource(
         .map(|h| h.split(':').next().unwrap_or(h))
         .unwrap_or("localhost");
 
-    let mut mapped_subject = subject.clone();
-    if let Subject::Internal(_) = &subject {
-        if let Some(drive_did) = appstate.get_drive_did_for_host(host).await {
-            if let Ok(resolved) = appstate
-                .store
-                .get_resource_at_path(&drive_did, &subject_string)
-                .await
-            {
-                mapped_subject = resolved;
-            }
-        }
-    }
-
-    // Use the full HTTP URL for auth validation, since that's what the client signed.
-    let full_subject = format!("{}{}", origin.trim_end_matches('/'), subject_string);
-    let for_agent = get_client_agent(headers, &appstate, full_subject).await?;
+    let for_agent =
+        get_client_agent(headers, &appstate, &format!("{}{}", origin, subject_string)).await?;
     timer.add("get_agent");
+
+    let res = appstate
+        .store
+        .resolve_subject(&subject, host, &subject_string, &origin, &for_agent)
+        .await?;
 
     let mut builder = HttpResponse::Ok();
 
-    tracing::debug!(
-        "get_resource: {} (mapped to {}) as {}",
-        subject,
-        mapped_subject,
-        content_type.to_mime()
-    );
+    let (mut resource, redirect_subject) = match res {
+        ResolveSubjectResult::Uninitialized {
+            full_subject,
+            host,
+        } => {
+            tracing::info!("Server is uninitialized for host: {}", host);
+            builder.append_header(("Content-Type", ContentType::JsonAd.to_mime()));
+            return Ok(builder.body(
+                serde_json::json!({
+                    "@id": full_subject,
+                    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Server"],
+                    "https://atomicdata.dev/properties/isUninitialized": true,
+                    "https://atomicdata.dev/properties/name": format!("Uninitialized Atomic Server ({})", host),
+                })
+                .to_string(),
+            ));
+        }
+        ResolveSubjectResult::Resource {
+            resource,
+            redirect_subject,
+        } => {
+            if let atomic_lib::Subject::Did { .. } = resource.get_subject() {
+                builder.append_header((
+                    "Link",
+                    format!("<{}>; rel=\"canonical\"", resource.get_subject().as_str()),
+                ));
+            }
+            (resource.to_single().clone(), redirect_subject)
+        }
+    };
+
+    if let Some(redirect) = redirect_subject {
+        let old_subject: &str = resource.get_subject().as_str();
+        tracing::debug!("Aliasing resource {} to requested subject {}", old_subject, redirect);
+        resource.set_subject(redirect);
+        builder.append_header((
+            "Warning",
+            "299 - \"Resource resolved via alias. Identity is the canonical DID.\"",
+        ));
+    }
+
     builder.append_header(("Content-Type", content_type.to_mime()));
     // This prevents the browser from displaying the JSON response upon re-opening a closed tab
     // https://github.com/atomicdata-dev/atomic-server/issues/137
@@ -91,26 +117,7 @@ pub async fn handle_get_resource(
     ));
 
     let store = appstate.store.clone_with_url(origin.clone());
-    let resource = match store
-        .get_resource_extended(&mapped_subject, false, &for_agent)
-        .await
-    {
-        Ok(r) => r,
-        Err(e) => {
-            // If the resource wasn't found locally and it's a DID subject,
-            // try resolving via the Mainline DHT before giving up.
-            if let Subject::Did { .. } = mapped_subject {
-                if let Some(r) = try_dht_resolve(&appstate, &mapped_subject, &store).await {
-                    r
-                } else {
-                    return Err(e.into());
-                }
-            } else {
-                return Err(e.into());
-            }
-        }
-    };
-    timer.add("get_resource");
+
     crate::metrics::resource_fetched_http();
 
     let response_body = match content_type {
@@ -126,35 +133,4 @@ pub async fn handle_get_resource(
 
     timer.add("serialize");
     Ok(builder.body(response_body))
-}
-
-/// Attempts to resolve a `did:ad` resource via the Mainline DHT.
-/// On success, caches the resource locally and returns it.
-async fn try_dht_resolve(
-    appstate: &web::Data<AppState>,
-    subject: &Subject,
-    store: &atomic_lib::Db,
-) -> Option<ResourceResponse> {
-    let dht = appstate.dht.as_ref()?;
-
-    tracing::info!("DHT: Attempting to resolve {}", subject);
-
-    match dht.resolve(subject, store).await {
-        Ok(resource) => {
-            tracing::info!("DHT: Successfully resolved {}", subject);
-            // Cache the resource locally so future requests don't need DHT
-            if let Err(e) = store.add_resource(&resource).await {
-                tracing::warn!(
-                    "DHT: Resolved {} but failed to cache locally: {}",
-                    subject,
-                    e
-                );
-            }
-            Some(resource.into())
-        }
-        Err(e) => {
-            tracing::debug!("DHT: Failed to resolve {}: {}", subject, e);
-            None
-        }
-    }
 }

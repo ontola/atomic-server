@@ -61,13 +61,7 @@ impl Handler<Subscribe> for CommitMonitor {
         Box::pin(
             async move {
                 // check if the agent has the rights to subscribe to this resource
-                let self_url = store
-                    .get_base_domain()
-                    .expect("No base url set in Commit Monitor");
-                if !msg.subject.as_str().starts_with(&self_url)
-                    && !msg.subject.as_str().starts_with("did:")
-                    && !msg.subject.as_str().starts_with("internal:")
-                {
+                if !msg.subject.is_local() {
                     tracing::warn!("can't subscribe to external resource: {}", msg.subject);
                     return None;
                 }

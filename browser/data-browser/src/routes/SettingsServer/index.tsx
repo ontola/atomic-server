@@ -10,6 +10,7 @@ import { ContainerWide } from '../../components/Containers';
 import { Column, Row } from '../../components/Row';
 import { useDriveHistory } from '../../hooks/useDriveHistory';
 import { DrivesCard } from './DrivesCard';
+import { ServersCard } from './ServersCard';
 import { styled } from 'styled-components';
 import { useSavedDrives } from '../../hooks/useSavedDrives';
 import { constructOpenURL } from '../../helpers/navigation';
@@ -19,6 +20,8 @@ import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition
 import { createRoute } from '@tanstack/react-router';
 import { pathNames } from '../paths';
 import { appRoute } from '../RootRoutes';
+import { serverURLStorage } from '../../helpers/serverURLStorage';
+import { isURL } from '../../helpers/isURL';
 
 export const ServerSettingsRoute = createRoute({
   path: pathNames.serverSettings,
@@ -28,25 +31,50 @@ export const ServerSettingsRoute = createRoute({
 
 function SettingsServer(): JSX.Element {
   const currentDriveId = useId();
-  const { drive: baseURL, setDrive: setBaseURL } = useSettings();
+  const currentServerId = useId();
+  const { drive, setDrive, baseURL, setServer } = useSettings();
   const navigate = useNavigateWithTransition();
-  const [baseUrlInput, setBaseUrlInput] = useState<string>(baseURL);
-  const [baseUrlErr, setErrBaseUrl] = useState<Error | undefined>();
+
+  const isHttpDrive = isURL(drive);
+
+  const [driveInput, setDriveInput] = useState<string>(drive);
+  const [driveErr, setDriveErr] = useState<Error | undefined>();
+
+  const [serverInput, setServerInput] = useState<string>(baseURL);
+  const [serverErr, setServerErr] = useState<Error | undefined>();
 
   const [savedDrives] = useSavedDrives();
+  const [knownServers, setKnownServers] = useState<string[]>(
+    serverURLStorage.getKnownServers(),
+  );
 
   const [history, addDriveToHistory, removeFromHistory] =
     useDriveHistory(savedDrives);
 
-  function handleSetBaseUrl(url: string) {
+  function handleSetDrive(url: string) {
     try {
-      setBaseURL(url);
-      setBaseUrlInput(url);
+      setDrive(url);
+      setDriveInput(url);
       addDriveToHistory(url);
       navigate(constructOpenURL(url));
     } catch (e) {
-      setErrBaseUrl(e);
+      setDriveErr(e);
     }
+  }
+
+  function handleSetServer(url: string) {
+    try {
+      setServer(url);
+      setServerInput(url);
+      setKnownServers(serverURLStorage.getKnownServers());
+    } catch (e) {
+      setServerErr(e);
+    }
+  }
+
+  function handleRemoveServer(url: string) {
+    serverURLStorage.removeKnownServer(url);
+    setKnownServers(serverURLStorage.getKnownServers());
   }
 
   return (
@@ -54,37 +82,84 @@ function SettingsServer(): JSX.Element {
       <ContainerWide>
         <Column>
           <Heading>Drive Configuration</Heading>
-          <LabelStyled htmlFor={currentDriveId}>Current Drive</LabelStyled>
+
+          <Heading as='h2'>Saved Drives</Heading>
+          <DrivesCard
+            showNewOption
+            drives={savedDrives}
+            onDriveSelect={subject => handleSetDrive(subject)}
+          />
+
+          <LabelStyled htmlFor={currentDriveId}>Custom Drive URL</LabelStyled>
           <Row>
             <InputWrapper>
               <InputStyled
                 id={currentDriveId}
-                data-testid='server-url-input'
-                value={baseUrlInput}
-                onChange={e => setBaseUrlInput(e.target.value)}
+                data-testid='drive-url-input'
+                value={driveInput}
+                onChange={e => setDriveInput(e.target.value)}
+                placeholder='Enter a Drive DID or URL'
               />
             </InputWrapper>
             <Button
-              onClick={() => handleSetBaseUrl(baseUrlInput)}
-              disabled={baseURL === baseUrlInput}
-              data-test='server-url-save'
+              onClick={() => handleSetDrive(driveInput)}
+              disabled={drive === driveInput}
+              data-test='drive-url-save'
             >
-              Save
+              Set
             </Button>
           </Row>
-          {baseUrlErr && <ErrorLook>{baseUrlErr?.message}</ErrorLook>}
-          <Heading as='h2'>Saved</Heading>
-          <DrivesCard
-            showNewOption
-            drives={savedDrives}
-            onDriveSelect={subject => handleSetBaseUrl(subject)}
-          />
-          <Heading as='h2'>Other</Heading>
+          {driveErr && <ErrorLook>{driveErr?.message}</ErrorLook>}
+
+          <Heading as='h2'>History</Heading>
           <DrivesCard
             drives={history}
-            onDriveSelect={subject => handleSetBaseUrl(subject)}
+            onDriveSelect={subject => handleSetDrive(subject)}
             onDriveRemove={subject => removeFromHistory(subject)}
           />
+
+          <Heading as='h2'>Gateway Server</Heading>
+          {isHttpDrive ? (
+            <p>
+              The gateway is currently locked to{' '}
+              <strong>{new URL(drive).origin}</strong> because you are using an
+              HTTP-based drive.
+            </p>
+          ) : (
+            <p>
+              The gateway server is used to resolve DIDs and fetch data from the
+              network.
+            </p>
+          )}
+
+          <ServersCard
+            servers={knownServers}
+            onServerSelect={handleSetServer}
+            onServerRemove={handleRemoveServer}
+            disabled={isHttpDrive}
+          />
+
+          <LabelStyled htmlFor={currentServerId}>Add Gateway by URL</LabelStyled>
+          <Row>
+            <InputWrapper>
+              <InputStyled
+                id={currentServerId}
+                data-testid='server-url-input'
+                value={isHttpDrive ? new URL(drive).origin : serverInput}
+                disabled={isHttpDrive}
+                onChange={e => setServerInput(e.target.value)}
+                placeholder='https://example.com'
+              />
+            </InputWrapper>
+            <Button
+              onClick={() => handleSetServer(serverInput)}
+              disabled={isHttpDrive || baseURL === serverInput}
+              data-test='server-url-save'
+            >
+              {isHttpDrive ? 'Locked' : 'Set Active'}
+            </Button>
+          </Row>
+          {serverErr && <ErrorLook>{serverErr?.message}</ErrorLook>}
         </Column>
       </ContainerWide>
     </Main>

@@ -56,6 +56,7 @@ pub const CREATED_AT: &str = "https://atomicdata.dev/properties/createdAt";
 pub const SIGNATURE: &str = "https://atomicdata.dev/properties/signature";
 pub const PREVIOUS_COMMIT: &str = "https://atomicdata.dev/properties/previousCommit";
 pub const LAST_COMMIT: &str = "https://atomicdata.dev/properties/lastCommit";
+pub const IS_GENESIS: &str = "https://atomicdata.dev/properties/isGenesis";
 // ... for Agents
 pub const PUBLIC_KEY: &str = "https://atomicdata.dev/properties/publicKey";
 pub const NAME: &str = "https://atomicdata.dev/properties/name";
@@ -80,10 +81,12 @@ pub const COLLECTION_SORT_DESC: &str = "https://atomicdata.dev/properties/collec
 // ... for Endpoints
 pub const ENDPOINT_PARAMETERS: &str = "https://atomicdata.dev/properties/endpoint/parameters";
 pub const ENDPOINT_RESULTS: &str = "https://atomicdata.dev/properties/endpoint/results";
+pub const ENDPOINT_IS_POST: &str = "https://atomicdata.dev/properties/endpoint/isPost";
 pub const PATH: &str = "https://atomicdata.dev/properties/path";
 pub const SEARCH_QUERY: &str = "https://atomicdata.dev/properties/search/query";
 pub const SEARCH_LIMIT: &str = "https://atomicdata.dev/properties/search/limit";
 pub const SEARCH_PROPERTY: &str = "https://atomicdata.dev/properties/search/property";
+pub const SETUP_RESET: &str = "https://atomicdata.dev/properties/setup/reset";
 pub const URL: &str = "https://atomicdata.dev/property/url";
 pub const PREVIEW: &str = "https://atomicdata.dev/property/preview";
 // ... for Bookmarks
@@ -95,10 +98,9 @@ pub const WRITE: &str = "https://atomicdata.dev/properties/write";
 pub const APPEND: &str = "https://atomicdata.dev/properties/append";
 pub const CHILDREN: &str = "https://atomicdata.dev/properties/children";
 pub const SUBRESOURCES: &str = "https://atomicdata.dev/properties/subresources";
-pub const DRIVE_PUBLIC_KEY: &str = "https://atomicdata.dev/properties/drive/publicKey";
-pub const DRIVE_PRIVATE_KEY: &str = "https://atomicdata.dev/properties/drive/privateKey";
-pub const DRIVE_HASH: &str = "https://atomicdata.dev/properties/drive/hash";
 pub const SUBDOMAIN: &str = "https://atomicdata.dev/properties/subdomain";
+pub const IS_UNINITIALIZED: &str = "https://atomicdata.dev/properties/isUninitialized";
+pub const INITIAL_DRIVE: &str = "https://atomicdata.dev/properties/initialDrive";
 // ... for Inivtations
 pub const DESTINATION: &str = "https://atomicdata.dev/properties/destination";
 pub const TARGET: &str = "https://atomicdata.dev/properties/invite/target";

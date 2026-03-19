@@ -1,4 +1,4 @@
-import { describe, it } from 'vitest';
+import { describe, it, vi } from 'vitest';
 import {
   CommitBuilder,
   parseAndApplyCommit,
@@ -7,6 +7,7 @@ import {
 import { Store } from './store.js';
 import { JSCryptoProvider } from './CryptoProvider.js';
 import { Agent } from './agent.js';
+import { Resource } from './resource.js';
 
 describe('Commit signing and keys', () => {
   const privateKey = 'CapMWIhFUT+w7ANv9oCPqrHrwZpkP2JhzF9JnyT6WcI=';
@@ -37,7 +38,7 @@ describe('Commit signing and keys', () => {
   });
 
   it('handles did:ad genesis commits correctly', async ({ expect }) => {
-    const tempSubject = 'did:ad:temp';
+    const tempSubject = 'did:ad:genesis';
     const createdAt = 0;
 
     const commitBuilder = new CommitBuilder(tempSubject, {
@@ -50,13 +51,71 @@ describe('Commit signing and keys', () => {
 
     // Subject should match signature
     expect(commit.subject).to.equal(`did:ad:${commit.signature}`);
+    expect(commit.isGenesis).toBe(true);
 
-    // Serialization should NOT contain the subject
+    // Serialization should NOT contain the subject or isGenesis
     const serialized = serializeDeterministically(commit);
     const jsonCorrect = JSON.parse(serialized);
     expect(
       jsonCorrect['https://atomicdata.dev/properties/subject'],
     ).toBeUndefined();
+    expect(
+      jsonCorrect['https://atomicdata.dev/properties/isGenesis'],
+    ).toBeUndefined();
+  });
+
+  it('preserves DID subject and chains commits on sequential saves', async ({
+    expect,
+  }) => {
+    const store = new Store({ serverUrl: 'https://example.com' });
+    const agentKeys = await Agent.generateKeyPair();
+    const agentDID = `did:ad:agent:${agentKeys.publicKey}`;
+    const agentProvider = new JSCryptoProvider(agentKeys.privateKey);
+    const agent = new Agent(agentProvider, agentDID);
+    store.setAgent(agent);
+
+    // Mock postCommit to return a commit with a proper subject
+    const postCommitSpy = vi.spyOn(store, 'postCommit').mockImplementation(async commit => {
+      return {
+        id: `https://example.com/commits/${commit.signature}`,
+        commit_resource: {} as any,
+        resource_new: {} as any,
+        resource_old: {} as any,
+      };
+    });
+
+    // Use Resource constructor directly to avoid fetches
+    const resource = new Resource('did:ad:genesis');
+    resource.setStore(store);
+    resource.new = true;
+    await resource.set('https://atomicdata.dev/properties/isA', ['https://atomicdata.dev/classes/Drive'], false);
+    await resource.set('https://atomicdata.dev/properties/name', 'First Save', false);
+
+    // First save (Genesis)
+    const firstCommitId = await resource.save();
+    const genesisSubject = resource.subject;
+    expect(genesisSubject).toMatch(/^did:ad:/);
+    expect(genesisSubject).not.toBe('did:ad:genesis');
+    expect(firstCommitId).toBe(`https://example.com/commits/${resource.appliedCommitSignatures.values().next().value}`);
+
+    // Simulate clobbering: remove lastCommit property from propvals
+    // (This simulates an old remote state being merged)
+    resource.getPropVals().delete('https://atomicdata.dev/properties/lastCommit');
+    expect(resource.get('https://atomicdata.dev/properties/lastCommit')).toBeUndefined();
+
+    // Second save (Update)
+    // Use set with validate: false to avoid property fetches in test
+    await resource.set('https://atomicdata.dev/properties/description', 'Second Save', false);
+    const secondCommitId = await resource.save();
+
+    // The subject MUST NOT have changed
+    expect(resource.subject).toBe(genesisSubject);
+    expect(secondCommitId).not.toBe(firstCommitId);
+
+    // Verify the second commit has the first one as previousCommit
+    const secondCommitCall = postCommitSpy.mock.calls[1][0];
+    expect(secondCommitCall.previousCommit).toBe(firstCommitId);
+    expect(secondCommitCall.subject).toBe(genesisSubject);
   });
 
   it('derives did:ad subject from temporary _new subject', async ({
@@ -84,6 +143,29 @@ describe('Commit signing and keys', () => {
     expect(
       jsonCorrect['https://atomicdata.dev/properties/subject'],
     ).toBeUndefined();
+  });
+
+  it('preserves did:ad:agent subject — never treats it as genesis', async ({
+    expect,
+  }) => {
+    const agentDid = 'did:ad:agent:SOMEPUBLICKEY123';
+    const didAgent = new Agent(new JSCryptoProvider(privateKey), agentDid);
+    const createdAt = 0;
+
+    // Editing an existing agent resource (no previousCommit yet on first edit).
+    const commitBuilder = new CommitBuilder(agentDid, {
+      set: new Map([['https://atomicdata.dev/properties/name', 'Alice']]),
+    });
+
+    const commit = await commitBuilder.signAt(didAgent, createdAt);
+
+    // Subject must remain the agent DID, not become did:ad:{signature}.
+    expect(commit.subject).to.equal(agentDid);
+
+    // Serialization must include the subject (not omit it like genesis commits).
+    const serialized = serializeDeterministically(commit);
+    const json = JSON.parse(serialized);
+    expect(json['https://atomicdata.dev/properties/subject']).to.equal(agentDid);
   });
 
   it('keeps _new subject for non-did signers', async ({ expect }) => {

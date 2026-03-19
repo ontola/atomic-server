@@ -88,8 +88,13 @@ fn spawn_dht_announcer(appstate: crate::appstate::AppState) {
         tracing::info!("DHT: Spawning drive announcer on port {}", port);
 
         actix_web::rt::spawn(async move {
+            let interval_secs = if std::env::var("ATOMIC_DHT_BOOTSTRAP").is_ok() {
+                15
+            } else {
+                20 * 60
+            };
             let mut interval =
-                actix_web::rt::time::interval(std::time::Duration::from_secs(20 * 60));
+                actix_web::rt::time::interval(std::time::Duration::from_secs(interval_secs));
             loop {
                 interval.tick().await;
                 tracing::info!("DHT: Starting periodic drive announcement...");
@@ -109,18 +114,16 @@ fn spawn_dht_announcer(appstate: crate::appstate::AppState) {
                     }
 
                     if is_drive {
-                        if let Ok(drive_hash) =
-                            resource.get(urls::DRIVE_HASH).map(|v| v.to_string())
-                        {
-                            if let Err(e) = dht.announce_drive(&drive_hash, port as u16) {
-                                tracing::error!(
-                                    "DHT: Failed to announce drive {}: {}",
-                                    drive_hash,
-                                    e
-                                );
-                            } else {
-                                announced_count += 1;
-                            }
+                        let drive_did = resource.get_subject().as_str();
+                        if let Err(e) = dht.announce_drive(drive_did, port as u16) {
+                            let e: atomic_lib::errors::AtomicError = e;
+                            tracing::error!(
+                                "DHT: Failed to announce drive {}: {}",
+                                drive_did,
+                                e
+                            );
+                        } else {
+                            announced_count += 1;
                         }
                     }
                 }

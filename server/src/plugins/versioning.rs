@@ -42,7 +42,9 @@ fn handle_version_request<'a>(
             };
         }
         if commit_url.is_none() {
-            return version_endpoint().to_resource_response(context.store).await;
+            return version_endpoint()
+                .to_resource_response(context.store, context.subject.as_str())
+                .await;
         }
         let mut resource =
             construct_version(&commit_url.unwrap(), context.store, context.for_agent).await?;
@@ -68,7 +70,9 @@ fn handle_all_versions_request<'a>(
             };
         }
         if target_subject.is_none() {
-            return all_versions_endpoint().to_resource_response(store).await;
+            return all_versions_endpoint()
+                .to_resource_response(store, subject.as_str())
+                .await;
         }
         let target = target_subject.unwrap();
         let collection_builder = CollectionBuilder {

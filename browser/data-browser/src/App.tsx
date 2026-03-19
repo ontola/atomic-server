@@ -33,6 +33,9 @@ const store = new Store({
   serverUrl,
 });
 
+import { bootstrap } from './bootstrap';
+bootstrap(store);
+
 await enableYjs();
 
 store.parseMetaTags();
@@ -44,7 +47,7 @@ declare global {
 }
 
 // Fetch all the Properties and Classes - this helps speed up the app.
-store.preloadPropsAndClasses();
+// store.preloadPropsAndClasses();
 
 registerCustomCreateActions();
 // Register global event handlers.

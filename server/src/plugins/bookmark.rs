@@ -64,7 +64,11 @@ fn handle_bookmark_request<'a>(
 
         let (name, path) = match (name, path) {
             (Some(name), Some(path)) => (name, path),
-            _ => return bookmark_endpoint().to_resource_response(store).await,
+            _ => {
+                return bookmark_endpoint()
+                    .to_resource_response(store, &subject.to_string())
+                    .await
+            }
         };
 
         let mut resource = Resource::new(subject.to_string());
@@ -114,7 +118,9 @@ fn handle_bookmark_request<'a>(
 }
 
 async fn fetch_data(url: &str) -> AtomicResult<String> {
-    fetch_body(url, "text/html", None).await.map_err(|e| format!("Fetching failed: {}", e).into())
+    fetch_body(url, "text/html", None)
+        .await
+        .map_err(|e| format!("Fetching failed: {}", e).into())
 }
 
 struct Parser {

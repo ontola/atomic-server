@@ -3,7 +3,6 @@ import {
   useStore,
   server,
   dataBrowser,
-  generateKeyPair,
 } from '@tomic/react';
 import { useState, useCallback, FormEvent, FC, useEffect, useId } from 'react';
 import { styled } from 'styled-components';
@@ -22,27 +21,7 @@ import { CustomResourceDialogProps } from '../../useNewResourceUI';
 import { useCreateAndNavigate } from '../../../../../hooks/useCreateAndNavigate';
 import { useSettings } from '../../../../../helpers/AppSettings';
 
-const DRIVE_PUBLIC_KEY = 'https://atomicdata.dev/properties/drive/publicKey';
-const DRIVE_PRIVATE_KEY = 'https://atomicdata.dev/properties/drive/privateKey';
-const DRIVE_HASH = 'https://atomicdata.dev/properties/drive/hash';
 const SUBDOMAIN = 'https://atomicdata.dev/properties/subdomain';
-
-function decodeBase64(base64: string): Uint8Array {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-
-  return bytes;
-}
-
-function toHex(bytes: Uint8Array): string {
-  return Array.from(bytes)
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
-}
 
 export const NewDriveDialog: FC<CustomResourceDialogProps> = ({
   onClose,
@@ -76,26 +55,12 @@ export const NewDriveDialog: FC<CustomResourceDialogProps> = ({
       );
     }
 
-    const driveKeys = await generateKeyPair();
-    const drivePublicKeyBytes = decodeBase64(driveKeys.publicKey);
-    const prefix = new TextEncoder().encode('atomicdata.drive');
-    const hashInput = new Uint8Array(
-      prefix.length + drivePublicKeyBytes.length,
-    );
-    hashInput.set(prefix, 0);
-    hashInput.set(drivePublicKeyBytes, prefix.length);
-    const digest = await crypto.subtle.digest('SHA-256', hashInput);
-    const driveHash = toHex(new Uint8Array(digest).slice(0, 16));
-
     await createAndNavigate(
       server.classes.drive,
       {
         [core.properties.name]: name,
         [core.properties.write]: [agent.subject],
         [core.properties.read]: [agent.subject],
-        [DRIVE_PUBLIC_KEY]: driveKeys.publicKey,
-        [DRIVE_PRIVATE_KEY]: driveKeys.privateKey,
-        [DRIVE_HASH]: driveHash,
         [SUBDOMAIN]: subdomain.trim(),
       },
       {

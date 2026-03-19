@@ -4,7 +4,6 @@
 
 use base64::{engine::general_purpose, Engine};
 use serde::{Deserialize, Serialize};
-use serde_json::from_slice;
 
 use crate::{errors::AtomicResult, urls, Resource, Value};
 
@@ -13,6 +12,8 @@ struct DecodedSecret {
     #[serde(rename = "privateKey")]
     private_key: String,
     subject: crate::Subject,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    initial_drive: Option<crate::Subject>,
 }
 
 /// None represents no right checks will be performed, effectively SUDO mode.
@@ -63,6 +64,8 @@ pub struct Agent {
     pub subject: crate::Subject,
     pub created_at: i64,
     pub name: Option<String>,
+    /// The DID of the drive that should be opened by default for this agent.
+    pub initial_drive: Option<crate::Subject>,
 }
 
 impl Agent {
@@ -85,6 +88,14 @@ impl Agent {
             crate::urls::CREATED_AT.into(),
             Value::Timestamp(self.created_at),
         );
+        if let Some(initial_drive) = &self.initial_drive {
+            resource.set_unsafe(
+                urls::DRIVES.into(),
+                Value::ResourceArray(vec![crate::values::SubResource::Subject(
+                    initial_drive.clone(),
+                )]),
+            );
+        }
         Ok(resource)
     }
 
@@ -108,6 +119,7 @@ impl Agent {
             subject,
             name: name.map(|x| x.to_owned()),
             created_at: crate::utils::now(),
+            initial_drive: None,
         })
     }
 
@@ -124,22 +136,22 @@ impl Agent {
             subject,
             name: None,
             created_at: crate::utils::now(),
+            initial_drive: None,
         })
     }
 
     pub fn from_secret(secret_b64: &str) -> AtomicResult<Agent> {
         let agent_bytes = decode_base64(secret_b64)?;
-        let parsed: serde_json::Value = from_slice(&agent_bytes)?;
-        let private_key = parsed["privateKey"].as_str().ok_or("Invalid private key")?;
-        let raw_subject = parsed["subject"].as_str().ok_or("Invalid subject")?;
+        let decoded: DecodedSecret = serde_json::from_slice(&agent_bytes)?;
         // Migrate legacy HTTP agent subjects (https://server/agents/{pubkey}) to did:ad:agent:{pubkey}
-        let subject = migrate_http_agent_subject(raw_subject);
+        let subject = migrate_http_agent_subject(decoded.subject.as_str());
         let agent = Agent {
-            private_key: Some(private_key.into()),
-            public_key: generate_public_key(private_key).public,
+            private_key: Some(decoded.private_key.clone()),
+            public_key: generate_public_key(&decoded.private_key).public,
             subject: crate::Subject::from_raw(&subject, None),
             name: None,
             created_at: crate::utils::now(),
+            initial_drive: decoded.initial_drive,
         };
         Ok(agent)
     }
@@ -153,6 +165,7 @@ impl Agent {
             subject: subject.into(),
             name: None,
             created_at: crate::utils::now(),
+            initial_drive: None,
         })
     }
 
@@ -160,6 +173,7 @@ impl Agent {
         let decoded_secret = DecodedSecret {
             private_key: self.private_key.clone().ok_or("No private key on agent")?,
             subject: self.subject.clone(),
+            initial_drive: self.initial_drive.clone(),
         };
 
         let vec = serde_json::to_vec(&decoded_secret)?;

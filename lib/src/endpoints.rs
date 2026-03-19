@@ -64,9 +64,12 @@ pub struct PostEndpoint {
 
 impl Endpoint {
     /// Converts Endpoint to resource. Does not save it.
-    pub async fn to_resource(&self, store: &impl Storelike) -> AtomicResult<Resource> {
-        let subject = self.path.clone();
-        let mut resource = Resource::new(subject.into());
+    pub async fn to_resource(
+        &self,
+        store: &impl Storelike,
+        subject: &str,
+    ) -> AtomicResult<Resource> {
+        let mut resource = Resource::new(subject.to_string());
         resource
             .set_string(urls::DESCRIPTION.into(), &self.description, store)
             .await?;
@@ -83,14 +86,20 @@ impl Endpoint {
                 store,
             )
             .await?;
+        if self.handle_post.is_some() {
+            resource
+                .set(urls::ENDPOINT_IS_POST.into(), Value::Boolean(true), store)
+                .await?;
+        }
         Ok(resource)
     }
 
     pub async fn to_resource_response(
         &self,
         store: &impl Storelike,
+        subject: &str,
     ) -> AtomicResult<ResourceResponse> {
-        let resource = self.to_resource(store).await?;
+        let resource = self.to_resource(store, subject).await?;
         Ok(resource.into())
     }
 }

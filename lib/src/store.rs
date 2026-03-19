@@ -16,9 +16,10 @@ pub struct Store {
     // The store currently holds two stores - that is not ideal
     hashmap: Arc<Mutex<HashMap<String, Resource>>>,
     default_agent: Arc<Mutex<Option<crate::agents::Agent>>>,
-    /// The base URL for client-side operations (optional).
-    /// Used as a fallback for resolving relative paths.
-    base_url: Arc<Mutex<Option<String>>>,
+    /// Maps hosts to Drive DIDs
+    drive_mappings: Arc<Mutex<HashMap<String, String>>>,
+    /// The base domain of the store
+    pub base_domain: Arc<Mutex<Option<String>>>,
 }
 
 impl Store {
@@ -28,15 +29,16 @@ impl Store {
         let store = Store {
             hashmap: Arc::new(Mutex::new(HashMap::new())),
             default_agent: Arc::new(Mutex::new(None)),
-            base_url: Arc::new(Mutex::new(Some("http://localhost".to_string()))),
+            drive_mappings: Arc::new(Mutex::new(HashMap::new())),
+            base_domain: Arc::new(Mutex::new(None)),
         };
         crate::populate::populate_base_models(&store).await?;
         Ok(store)
     }
 
-    /// Set the base URL for client-side operations.
-    pub fn set_base_url(&self, base_url: &str) {
-        self.base_url.lock().unwrap().replace(base_url.into());
+    /// Sets the base URL of the store.
+    pub fn set_base_url(&self, url: &str) {
+        self.base_domain.lock().unwrap().replace(url.to_string());
     }
 
     /// Triple Pattern Fragments interface.
@@ -145,8 +147,25 @@ impl Storelike for Store {
         Ok(())
     }
 
+    fn add_drive_mapping(&self, host: &str, drive_did: &Value) -> AtomicResult<()> {
+        self.drive_mappings
+            .lock()
+            .unwrap()
+            .insert(host.to_string(), drive_did.to_string());
+        Ok(())
+    }
+
+    fn remove_drive_mapping(&self, host: &str) -> AtomicResult<()> {
+        self.drive_mappings.lock().unwrap().remove(host);
+        Ok(())
+    }
+
     fn get_base_domain(&self) -> Option<String> {
-        self.base_url.lock().unwrap().clone()
+        self.base_domain.lock().unwrap().clone()
+    }
+
+    fn set_base_url(&self, url: &str) {
+        self.set_base_url(url);
     }
 
     async fn add_resource_opts(

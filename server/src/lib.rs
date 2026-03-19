@@ -4,12 +4,11 @@ It is currently used as an embedded server in the Tauri distribution of Atomic S
 See https://github.com/atomicdata-dev/atomic-server/tree/master/src-tauri
 */
 mod actor_messages;
-mod appstate;
+pub mod appstate;
 mod commit_monitor;
 pub mod config;
 mod content_types;
 pub mod context;
-mod dht;
 mod errors;
 mod handlers;
 mod helpers;
@@ -19,7 +18,7 @@ mod https;
 pub mod invite_token;
 mod jsonerrors;
 pub mod plugins;
-mod routes;
+pub mod routes;
 pub mod serve;
 mod y_sync_broadcaster;
 // #[cfg(feature = "search")]

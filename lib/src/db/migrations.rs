@@ -12,7 +12,7 @@ Therefore, we need migrations to convert the old schema to the new one.
 - Update the Tree key used in [crate::db::trees]
  */
 
-use crate::{db::v1_types::propvals_v1_to_v2, errors::AtomicResult, storelike::Storelike, Db};
+use crate::{db::v1_types::propvals_v1_to_v2, errors::AtomicResult, Db, storelike::Storelike};
 
 /// Checks the current version(s) of the internal Store, and performs migrations if needed.
 pub fn migrate_maybe(store: &Db) -> AtomicResult<()> {

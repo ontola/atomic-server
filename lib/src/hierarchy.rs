@@ -131,25 +131,32 @@ pub fn check_rights<'a>(
         }
 
         // Check if the resource's rights explicitly refers to the agent or the public agent
-        if let Ok(arr_val) = resource.get(&right.to_string()) {
-            for s in arr_val.to_subjects(None)? {
-                match s.as_str() {
-                    urls::PUBLIC_AGENT => {
-                        return Ok(format!(
-                            "PublicAgent has been granted rights in {}",
-                            resource.get_subject()
-                        ))
-                    }
-                    agent => {
-                        let normalized_agent = store.normalize_subject(&agent.into());
-                        if normalized_agent == normalized_for_agent {
+        let mut properties_to_check = vec![right.to_string()];
+        if matches!(right, Right::Read | Right::Append) {
+            properties_to_check.push(urls::WRITE.to_string());
+        }
+
+        for prop in properties_to_check {
+            if let Ok(arr_val) = resource.get(&prop) {
+                for s in arr_val.to_subjects(None)? {
+                    match s.as_str() {
+                        urls::PUBLIC_AGENT => {
                             return Ok(format!(
-                                "Right has been explicitly set in {}",
+                                "PublicAgent has been granted rights in {}",
                                 resource.get_subject()
-                            ));
+                            ))
                         }
-                    }
-                };
+                        agent => {
+                            let normalized_agent = store.normalize_subject(&agent.into());
+                            if normalized_agent == normalized_for_agent {
+                                return Ok(format!(
+                                    "Right has been explicitly set in {}",
+                                    resource.get_subject()
+                                ));
+                            }
+                        }
+                    };
+                }
             }
         }
 

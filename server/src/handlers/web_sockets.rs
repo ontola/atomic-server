@@ -48,6 +48,7 @@ pub async fn web_socket_handler(
     tracing::debug!("Starting websocket for {}", for_agent);
 
     let store = appstate.store.clone();
+    let origin = context.origin.clone();
 
     let result = WsResponseBuilder::new(
         WebSocketConnection::new(
@@ -56,6 +57,7 @@ pub async fn web_socket_handler(
             for_agent,
             // We need to make sure this is easily clone-able
             store,
+            origin,
         ),
         &req,
         stream,
@@ -82,6 +84,7 @@ pub struct WebSocketConnection {
     /// If it's not specified, it's the Public Agent.
     agent: ForAgent,
     store: Db,
+    origin: String,
 }
 
 impl Actor for WebSocketConnection {
@@ -108,43 +111,41 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WebSocketConnecti
 
                 if text.starts_with("GET ") {
                     let mut parts = text.split("GET ");
-                    if let Some(subject) = parts.nth(1) {
-                        let subject = subject.to_string();
+                    if let Some(subject_str) = parts.nth(1) {
+                        let subject_str = subject_str.to_string();
                         let store = self.store.clone();
                         let agent = self.agent.clone();
+                        let origin = self.origin.clone();
                         ctx.spawn(
                             async move {
+                                let subject = atomic_lib::Subject::from_raw(
+                                    &subject_str,
+                                    store.get_base_domain().as_deref(),
+                                );
+                                tracing::debug!("WebSocket GET {}", subject_str);
                                 (
-                                    store
-                                        .get_resource_extended(
-                                            &subject.clone().into(),
-                                            false,
-                                            &agent,
-                                        )
-                                        .await,
-                                    subject,
-                                    store,
+                                    store.get_resource_extended(&subject, false, &agent).await,
+                                    subject_str,
+                                    origin,
                                 )
                             }
                             .into_actor(self)
-                            .map(
-                                |(res, subject, store), _actor, ctx| match res {
-                                    Ok(r) => {
-                                        let serialized = r
-                                            .to_json_ad(store.get_base_domain().as_deref())
-                                            .expect("Can't serialize Resource to JSON-AD");
-                                        ctx.text(format!("RESOURCE {serialized}"));
-                                        crate::metrics::resource_fetched_ws();
-                                    }
-                                    Err(e) => {
-                                        let r = e.into_resource(subject);
-                                        let serialized_err = r
-                                            .to_json_ad(store.get_base_domain().as_deref())
-                                            .expect("Can't serialize Resource to JSON-AD");
-                                        ctx.text(format!("RESOURCE {serialized_err}"));
-                                    }
-                                },
-                            ),
+                            .map(|(res, subject_str, origin), _actor, ctx| match res {
+                                Ok(r) => {
+                                    let serialized = r
+                                        .to_json_ad(Some(&origin))
+                                        .expect("Can't serialize Resource to JSON-AD");
+                                    ctx.text(format!("RESOURCE {serialized}"));
+                                    crate::metrics::resource_fetched_ws();
+                                }
+                                Err(e) => {
+                                    let r = e.into_resource(subject_str);
+                                    let serialized_err = r
+                                        .to_json_ad(Some(&origin))
+                                        .expect("Can't serialize Resource to JSON-AD");
+                                    ctx.text(format!("RESOURCE {serialized_err}"));
+                                }
+                            }),
                         );
                     } else {
                         ctx.text("ERROR GET needs a subject");
@@ -202,13 +203,14 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WebSocketConnecti
         }
     }
 }
-
 fn handle_ws_message_sync(
     text: String,
     ctx: &mut ws::WebsocketContext<WebSocketConnection>,
     conn: &mut WebSocketConnection,
 ) -> AtomicResult<()> {
+    tracing::debug!("WebSocket message {}", text);
     match text.as_str() {
+
         s if s.starts_with("SUBSCRIBE ") => {
             let mut parts = s.split("SUBSCRIBE ");
             if let Some(subject_str) = parts.nth(1) {
@@ -305,6 +307,7 @@ impl WebSocketConnection {
         y_sync_broadcaster_addr: Addr<YSyncBroadcaster>,
         agent: ForAgent,
         store: Db,
+        origin: String,
     ) -> Self {
         let size = std::mem::size_of::<Db>();
         if size > 10000 {
@@ -322,6 +325,7 @@ impl WebSocketConnection {
             y_sync_broadcaster_addr,
             agent,
             store,
+            origin,
         }
     }
 

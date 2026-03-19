@@ -1,5 +1,10 @@
 import { useState, type JSX } from 'react';
-import { useResource, signRequest, HeadersObject } from '@tomic/react';
+import {
+  useResource,
+  signRequest,
+  HeadersObject,
+  useStore,
+} from '@tomic/react';
 
 import AllProps from '../components/AllProps';
 import { ContainerNarrow } from '../components/Containers';
@@ -40,6 +45,7 @@ function Data(): JSX.Element {
   const [err, setErr] = useState<Error | undefined>(undefined);
   const { agent } = useSettings();
   const navigate = useNavigateWithTransition();
+  const store = useStore();
 
   if (!subject) {
     <ContainerNarrow>No subject passed</ContainerNarrow>;
@@ -58,17 +64,25 @@ function Data(): JSX.Element {
   }
 
   async function fetchAs(contentType: string) {
+    if (!subject) return;
+
     let headers: HeadersObject = {};
     headers['Accept'] = contentType;
 
+    let url = subject;
+
+    if (subject.startsWith('did:')) {
+      url = `${store.getServerUrl()}/did?subject=${encodeURIComponent(subject)}`;
+    }
+
     if (agent) {
-      headers = await signRequest(subject!, agent, headers);
+      headers = await signRequest(url, agent, headers);
     }
 
     setTextResponseLoading(true);
 
     try {
-      const resp = await window.fetch(subject!, { headers: headers });
+      const resp = await window.fetch(url, { headers: headers });
       const body = await resp.text();
       setTextResponseLoading(false);
       setTextResponse(body);

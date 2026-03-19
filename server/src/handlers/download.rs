@@ -39,7 +39,7 @@ pub async fn handle_download(
 
     let subject = atomic_lib::Subject::from_raw(&subject_path, None).resolve(&origin);
 
-    let for_agent = get_client_agent(headers, &appstate, subject.clone()).await?;
+    let for_agent = get_client_agent(headers, &appstate, &subject).await?;
     tracing::info!("handle_download: {}", subject);
 
     let resource = store
@@ -122,8 +122,8 @@ pub fn build_prossesed_file_path(
     Ok(processed_file_path)
 }
 
-fn create_processed_folder_if_not_exists(base_path: &PathBuf) -> AtomicServerResult<()> {
-    let mut processed_folder = base_path.clone();
+fn create_processed_folder_if_not_exists(base_path: &std::path::Path) -> AtomicServerResult<()> {
+    let mut processed_folder = base_path.to_path_buf();
     processed_folder.push("processed");
     std::fs::create_dir_all(processed_folder)?;
     Ok(())

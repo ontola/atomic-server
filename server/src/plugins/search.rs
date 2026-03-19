@@ -33,10 +33,10 @@ fn handle_search<'a>(
         } = context;
         let params = subject.query_pairs();
         if params.into_iter().next().is_none() {
-            return search_endpoint().to_resource_response(store).await;
+            return search_endpoint()
+                .to_resource_response(store, subject.as_str())
+                .await;
         }
-        return Err(
-            "Search endpoint is only available through HTTP requests, not through webhooks".into(),
-        );
+        Err("Search endpoint is only available through HTTP requests, not through webhooks".into())
     })
 }

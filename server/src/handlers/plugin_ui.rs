@@ -129,7 +129,7 @@ pub async fn handle_plugin_list(
         let css_file_path = get_plugin_file_path(&appstate, drive_subject, &plugin_name, "css")?;
 
         let Some(meta) =
-            store.get_plugin_meta(&PluginMetaKey::new(drive_subject, &namespace, &name))?
+            store.get_plugin_meta(&PluginMetaKey::new(drive_subject, namespace, name))?
         else {
             tracing::warn!("Plugin {} has no metadata", plugin_name);
             continue;

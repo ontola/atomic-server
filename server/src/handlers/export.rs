@@ -39,13 +39,13 @@ pub async fn handle_export(
         return Err("No format provided".into());
     };
 
-    let for_agent = get_client_agent(headers, &appstate, subject.clone()).await?;
+    let for_agent = get_client_agent(headers, &appstate, &subject).await?;
     let display_refs_as_name = params.display_refs_as_name.unwrap_or(false);
 
     match format.as_str() {
         "csv" => {
             let exporter = CSVExporter {
-                store: &store,
+                store,
                 agent: &for_agent,
                 display_refs_as_name,
             };
@@ -112,7 +112,7 @@ impl<'a> CSVExporter<'a> {
         let propvals = match class_value {
             Value::AtomicUrl(subject) => self
                 .store
-                .get_resource_extended(&subject.clone().into(), false, self.agent)
+                .get_resource_extended(&subject.clone(), false, self.agent)
                 .await?
                 .to_single()
                 .get_propvals()
@@ -120,7 +120,7 @@ impl<'a> CSVExporter<'a> {
             Value::NestedResource(nested) => match nested {
                 SubResource::Subject(subject) => self
                     .store
-                    .get_resource_extended(&subject.clone().into(), false, self.agent)
+                    .get_resource_extended(&subject.clone(), false, self.agent)
                     .await?
                     .to_single()
                     .get_propvals()

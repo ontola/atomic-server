@@ -18,7 +18,7 @@ pub enum DataType {
     String,
     Timestamp,
     Uri,
-    JSON,
+    Json,
     YDoc,
     Unsupported(String),
 }
@@ -36,7 +36,7 @@ pub fn match_datatype(string: &str) -> DataType {
         urls::STRING => DataType::String,
         urls::TIMESTAMP => DataType::Timestamp,
         urls::URI => DataType::Uri,
-        urls::JSON => DataType::JSON,
+        urls::JSON => DataType::Json,
         urls::YDOC => DataType::YDoc,
         unsupported_datatype => DataType::Unsupported(unsupported_datatype.into()),
     }
@@ -58,7 +58,7 @@ impl std::str::FromStr for DataType {
             urls::STRING => DataType::String,
             urls::TIMESTAMP => DataType::Timestamp,
             urls::URI => DataType::Uri,
-            urls::JSON => DataType::JSON,
+            urls::JSON => DataType::Json,
             urls::YDOC => DataType::YDoc,
             unsupported_datatype => DataType::Unsupported(unsupported_datatype.into()),
         })
@@ -79,7 +79,7 @@ impl fmt::Display for DataType {
             DataType::String => write!(f, "{}", urls::STRING),
             DataType::Timestamp => write!(f, "{}", urls::TIMESTAMP),
             DataType::Uri => write!(f, "{}", urls::URI),
-            DataType::JSON => write!(f, "{}", urls::JSON),
+            DataType::Json => write!(f, "{}", urls::JSON),
             DataType::YDoc => write!(f, "{}", urls::YDOC),
             DataType::Unsupported(url) => write!(f, "{}", url),
         }

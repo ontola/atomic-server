@@ -3,50 +3,52 @@
 
 <head>
   <meta charset="utf-8" />
-  <html lang="en">
-
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta content="The easiest way to create, share and model Linked Atomic Data." name="description" />
-  <link href="%PUBLIC_URL%/icon.png" rel="icon" type="image/png" />
-  <link href="%PUBLIC_URL%/apple-touch-icon.png" rel="apple-touch-icon" sizes="180x180" />
-  <link href="%PUBLIC_URL%/favicon-32x32.png" rel="icon" sizes="32x32" type="image/png" />
-  <link href="%PUBLIC_URL%/favicon-16x16.png" rel="icon" sizes="16x16" type="image/png" />
-  <link href="%PUBLIC_URL%/site.webmanifest" rel="manifest" />
-  <link color="#1e43a3" href="%PUBLIC_URL%/safari-pinned-tab.svg" rel="mask-icon" />
+  <link href="/app_data/images/icon.png" rel="icon" type="image/png" />
+  <link href="/app_data/images/apple-touch-icon.png" rel="apple-touch-icon" sizes="180x180" />
+  <link href="/app_data/images/favicon-32x32.png" rel="icon" sizes="32x32" type="image/png" />
+  <link href="/app_data/images/favicon-16x16.png" rel="icon" sizes="16x16" type="image/png" />
+  <link color="#1e43a3" href="/app_data/images/mask-icon.svg" rel="mask-icon" />
   <meta content="yes" name="apple-mobile-web-app-capable" />
   <meta content="yes" name="mobile-web-app-capable" />
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link
-    href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&family=Open+Sans:ital,wght@0,400;0,700;1,400;1,700&display=swap"
-    rel="stylesheet">
-  <title>Atomic Data Browser</title>
-  <style>
+  <link rel="preconnect" crossorigin="anonymous" href="https://atomicdata.dev">
+  <!-- Custom fonts -->
+  <title>Atomic Data</title>
+  <style nonce="ATOMICSERVER_NONCE">
     :root {
       --text-splash: black;
       --background-color: white;
-      --safe-area-inset-top: env(safe-area-inset-top);
-      --safe-area-inset-right: env(safe-area-inset-right);
-      --safe-area-inset-bottom: env(safe-area-inset-bottom);
-      --safe-area-inset-left: env(safe-area-inset-left);
     }
 
     body {
       background-color: var(--background-color);
-      padding-top: var(--safe-area-inset-top);
-      padding-right: var(--safe-area-inset-right);
-      padding-bottom: var(--safe-area-inset-bottom);
-      padding-left: var(--safe-area-inset-left);
+    }
+
+    .loader {
+      opacity: 1;
+      transition: opacity 300ms ease-out, transform 300ms ease-out;
+      transform: translateY(0);
+
+      @starting-style {
+        opacity: 0;
+        transform: translateY(20px);
+      }
     }
   </style>
-</head>
+  <!-- Meta tags and code added by Atomic-Server -->
+  <!-- { inject_html_head } -->
+  <!-- Javascript added by Atomic-Server -->
+  <!-- { inject_script } -->
+  <meta property="csp-nonce" nonce="ATOMICSERVER_NONCE">
+  <script type="module" crossorigin src="/assets/index-DBqiw5X7.js" nonce="ATOMICSERVER_NONCE"></script>
+  <link rel="stylesheet" crossorigin href="/assets/reset.css" nonce="ATOMICSERVER_NONCE">
+<link rel="manifest" href="/manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="/registerSW.js" nonce="ATOMICSERVER_NONCE"></script><style>@font-face{font-family:Montserrat;font-style:normal;font-weight:700;font-display:swap;src:url(/assets/JTUHjIg1_i6t8kCHKm4532VJOt5-QNFgpCuM73w0aXpsog.woff2) format('woff2');unicode-range:U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F}@font-face{font-family:Montserrat;font-style:normal;font-weight:700;font-display:swap;src:url(/assets/JTUHjIg1_i6t8kCHKm4532VJOt5-QNFgpCuM73w9aXpsog.woff2) format('woff2');unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}@font-face{font-family:Montserrat;font-style:normal;font-weight:700;font-display:swap;src:url(/assets/JTUHjIg1_i6t8kCHKm4532VJOt5-QNFgpCuM73w2aXpsog.woff2) format('woff2');unicode-range:U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB}@font-face{font-family:Montserrat;font-style:normal;font-weight:700;font-display:swap;src:url(/assets/JTUHjIg1_i6t8kCHKm4532VJOt5-QNFgpCuM73w3aXpsog.woff2) format('woff2');unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}@font-face{font-family:Montserrat;font-style:normal;font-weight:700;font-display:swap;src:url(/assets/JTUHjIg1_i6t8kCHKm4532VJOt5-QNFgpCuM73w5aXo.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}@font-face{font-family:'Open Sans';font-style:italic;font-weight:400;font-stretch:100%;font-display:swap;src:url(/assets/memtYaGs126MiZpBA-UFUIcVXSCEkx2cmqvXlWqWtE6F15M.woff2) format('woff2');unicode-range:U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F}@font-face{font-family:'Open Sans';font-style:italic;font-weight:400;font-stretch:100%;font-display:swap;src:url(/assets/memtYaGs126MiZpBA-UFUIcVXSCEkx2cmqvXlWqWvU6F15M.woff2) format('woff2');unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}@font-face{font-family:'Open Sans';font-style:italic;font-weight:400;font-stretch:100%;font-display:swap;src:url(/assets/memtYaGs126MiZpBA-UFUIcVXSCEkx2cmqvXlWqWtU6F15M.woff2) format('woff2');unicode-range:U+1F00-1FFF}@font-face{font-family:'Open Sans';font-style:italic;font-weight:400;font-stretch:100%;font-display:swap;src:url(/assets/memtYaGs126MiZpBA-UFUIcVXSCEkx2cmqvXlWqWuk6F15M.woff2) format('woff2');unicode-range:U+0370-0377,U+037A-037F,U+0384-038A,U+038C,U+038E-03A1,U+03A3-03FF}@font-face{font-family:'Open Sans';font-style:italic;font-weight:400;font-stretch:100%;font-display:swap;src:url(/assets/memtYaGs126MiZpBA-UFUIcVXSCEkx2cmqvXlWqWu06F15M.woff2) format('woff2');unicode-range:U+0307-0308,U+0590-05FF,U+200C-2010,U+20AA,U+25CC,U+FB1D-FB4F}@font-face{font-family:'Open Sans';font-style:italic;font-weight:400;font-stretch:100%;font-display:swap;src:url(/assets/memtYaGs126MiZpBA-UFUIcVXSCEkx2cmqvXlWqWxU6F15M.woff2) format('woff2');unicode-range:U+0302-0303,U+0305,U+0307-0308,U+0310,U+0312,U+0315,U+031A,U+0326-0327,U+032C,U+032F-0330,U+0332-0333,U+0338,U+033A,U+0346,U+034D,U+0391-03A1,U+03A3-03A9,U+03B1-03C9,U+03D1,U+03D5-03D6,U+03F0-03F1,U+03F4-03F5,U+2016-2017,U+2034-2038,U+203C,U+2040,U+2043,U+2047,U+2050,U+2057,U+205F,U+2070-2071,U+2074-208E,U+2090-209C,U+20D0-20DC,U+20E1,U+20E5-20EF,U+2100-2112,U+2114-2115,U+2117-2121,U+2123-214F,U+2190,U+2192,U+2194-21AE,U+21B0-21E5,U+21F1-21F2,U+21F4-2211,U+2213-2214,U+2216-22FF,U+2308-230B,U+2310,U+2319,U+231C-2321,U+2336-237A,U+237C,U+2395,U+239B-23B7,U+23D0,U+23DC-23E1,U+2474-2475,U+25AF,U+25B3,U+25B7,U+25BD,U+25C1,U+25CA,U+25CC,U+25FB,U+266D-266F,U+27C0-27FF,U+2900-2AFF,U+2B0E-2B11,U+2B30-2B4C,U+2BFE,U+3030,U+FF5B,U+FF5D,U+1D400-1D7FF,U+1EE00-1EEFF}@font-face{font-family:'Open Sans';font-style:italic;font-weight:400;font-stretch:100%;font-display:swap;src:url(/assets/memtYaGs126MiZpBA-UFUIcVXSCEkx2cmqvXlWqW106F15M.woff2) format('woff2');unicode-range:U+0001-000C,U+000E-001F,U+007F-009F,U+20DD-20E0,U+20E2-20E4,U+2150-218F,U+2190,U+2192,U+2194-2199,U+21AF,U+21E6-21F0,U+21F3,U+2218-2219,U+2299,U+22C4-22C6,U+2300-243F,U+2440-244A,U+2460-24FF,U+25A0-27BF,U+2800-28FF,U+2921-2922,U+2981,U+29BF,U+29EB,U+2B00-2BFF,U+4DC0-4DFF,U+FFF9-FFFB,U+10140-1018E,U+10190-1019C,U+101A0,U+101D0-101FD,U+102E0-102FB,U+10E60-10E7E,U+1D2C0-1D2D3,U+1D2E0-1D37F,U+1F000-1F0FF,U+1F100-1F1AD,U+1F1E6-1F1FF,U+1F30D-1F30F,U+1F315,U+1F31C,U+1F31E,U+1F320-1F32C,U+1F336,U+1F378,U+1F37D,U+1F382,U+1F393-1F39F,U+1F3A7-1F3A8,U+1F3AC-1F3AF,U+1F3C2,U+1F3C4-1F3C6,U+1F3CA-1F3CE,U+1F3D4-1F3E0,U+1F3ED,U+1F3F1-1F3F3,U+1F3F5-1F3F7,U+1F408,U+1F415,U+1F41F,U+1F426,U+1F43F,U+1F441-1F442,U+1F444,U+1F446-1F449,U+1F44C-1F44E,U+1F453,U+1F46A,U+1F47D,U+1F4A3,U+1F4B0,U+1F4B3,U+1F4B9,U+1F4BB,U+1F4BF,U+1F4C8-1F4CB,U+1F4D6,U+1F4DA,U+1F4DF,U+1F4E3-1F4E6,U+1F4EA-1F4ED,U+1F4F7,U+1F4F9-1F4FB,U+1F4FD-1F4FE,U+1F503,U+1F507-1F50B,U+1F50D,U+1F512-1F513,U+1F53E-1F54A,U+1F54F-1F5FA,U+1F610,U+1F650-1F67F,U+1F687,U+1F68D,U+1F691,U+1F694,U+1F698,U+1F6AD,U+1F6B2,U+1F6B9-1F6BA,U+1F6BC,U+1F6C6-1F6CF,U+1F6D3-1F6D7,U+1F6E0-1F6EA,U+1F6F0-1F6F3,U+1F6F7-1F6FC,U+1F700-1F7FF,U+1F800-1F80B,U+1F810-1F847,U+1F850-1F859,U+1F860-1F887,U+1F890-1F8AD,U+1F8B0-1F8BB,U+1F8C0-1F8C1,U+1F900-1F90B,U+1F93B,U+1F946,U+1F984,U+1F996,U+1F9E9,U+1FA00-1FA6F,U+1FA70-1FA7C,U+1FA80-1FA89,U+1FA8F-1FAC6,U+1FACE-1FADC,U+1FADF-1FAE9,U+1FAF0-1FAF8,U+1FB00-1FBFF}@font-face{font-family:'Open Sans';font-style:italic;font-weight:400;font-stretch:100%;font-display:swap;src:url(/assets/memtYaGs126MiZpBA-UFUIcVXSCEkx2cmqvXlWqWtk6F15M.woff2) format('woff2');unicode-range:U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB}@font-face{font-family:'Open Sans';font-style:italic;font-weight:400;font-stretch:100%;font-display:swap;src:url(/assets/memtYaGs126MiZpBA-UFUIcVXSCEkx2cmqvXlWqWt06F15M.woff2) format('woff2');unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}@font-face{font-family:'Open Sans';font-style:italic;font-weight:400;font-stretch:100%;font-display:swap;src:url(/assets/memtYaGs126MiZpBA-UFUIcVXSCEkx2cmqvXlWqWuU6F.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}@font-face{font-family:'Open Sans';font-style:italic;font-weight:700;font-stretch:100%;font-display:swap;src:url(/assets/memtYaGs126MiZpBA-UFUIcVXSCEkx2cmqvXlWqWtE6F15M.woff2) format('woff2');unicode-range:U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F}@font-face{font-family:'Open Sans';font-style:italic;font-weight:700;font-stretch:100%;font-display:swap;src:url(/assets/memtYaGs126MiZpBA-UFUIcVXSCEkx2cmqvXlWqWvU6F15M.woff2) format('woff2');unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}@font-face{font-family:'Open Sans';font-style:italic;font-weight:700;font-stretch:100%;font-display:swap;src:url(/assets/memtYaGs126MiZpBA-UFUIcVXSCEkx2cmqvXlWqWtU6F15M.woff2) format('woff2');unicode-range:U+1F00-1FFF}@font-face{font-family:'Open Sans';font-style:italic;font-weight:700;font-stretch:100%;font-display:swap;src:url(/assets/memtYaGs126MiZpBA-UFUIcVXSCEkx2cmqvXlWqWuk6F15M.woff2) format('woff2');unicode-range:U+0370-0377,U+037A-037F,U+0384-038A,U+038C,U+038E-03A1,U+03A3-03FF}@font-face{font-family:'Open Sans';font-style:italic;font-weight:700;font-stretch:100%;font-display:swap;src:url(/assets/memtYaGs126MiZpBA-UFUIcVXSCEkx2cmqvXlWqWu06F15M.woff2) format('woff2');unicode-range:U+0307-0308,U+0590-05FF,U+200C-2010,U+20AA,U+25CC,U+FB1D-FB4F}@font-face{font-family:'Open Sans';font-style:italic;font-weight:700;font-stretch:100%;font-display:swap;src:url(/assets/memtYaGs126MiZpBA-UFUIcVXSCEkx2cmqvXlWqWxU6F15M.woff2) format('woff2');unicode-range:U+0302-0303,U+0305,U+0307-0308,U+0310,U+0312,U+0315,U+031A,U+0326-0327,U+032C,U+032F-0330,U+0332-0333,U+0338,U+033A,U+0346,U+034D,U+0391-03A1,U+03A3-03A9,U+03B1-03C9,U+03D1,U+03D5-03D6,U+03F0-03F1,U+03F4-03F5,U+2016-2017,U+2034-2038,U+203C,U+2040,U+2043,U+2047,U+2050,U+2057,U+205F,U+2070-2071,U+2074-208E,U+2090-209C,U+20D0-20DC,U+20E1,U+20E5-20EF,U+2100-2112,U+2114-2115,U+2117-2121,U+2123-214F,U+2190,U+2192,U+2194-21AE,U+21B0-21E5,U+21F1-21F2,U+21F4-2211,U+2213-2214,U+2216-22FF,U+2308-230B,U+2310,U+2319,U+231C-2321,U+2336-237A,U+237C,U+2395,U+239B-23B7,U+23D0,U+23DC-23E1,U+2474-2475,U+25AF,U+25B3,U+25B7,U+25BD,U+25C1,U+25CA,U+25CC,U+25FB,U+266D-266F,U+27C0-27FF,U+2900-2AFF,U+2B0E-2B11,U+2B30-2B4C,U+2BFE,U+3030,U+FF5B,U+FF5D,U+1D400-1D7FF,U+1EE00-1EEFF}@font-face{font-family:'Open Sans';font-style:italic;font-weight:700;font-stretch:100%;font-display:swap;src:url(/assets/memtYaGs126MiZpBA-UFUIcVXSCEkx2cmqvXlWqW106F15M.woff2) format('woff2');unicode-range:U+0001-000C,U+000E-001F,U+007F-009F,U+20DD-20E0,U+20E2-20E4,U+2150-218F,U+2190,U+2192,U+2194-2199,U+21AF,U+21E6-21F0,U+21F3,U+2218-2219,U+2299,U+22C4-22C6,U+2300-243F,U+2440-244A,U+2460-24FF,U+25A0-27BF,U+2800-28FF,U+2921-2922,U+2981,U+29BF,U+29EB,U+2B00-2BFF,U+4DC0-4DFF,U+FFF9-FFFB,U+10140-1018E,U+10190-1019C,U+101A0,U+101D0-101FD,U+102E0-102FB,U+10E60-10E7E,U+1D2C0-1D2D3,U+1D2E0-1D37F,U+1F000-1F0FF,U+1F100-1F1AD,U+1F1E6-1F1FF,U+1F30D-1F30F,U+1F315,U+1F31C,U+1F31E,U+1F320-1F32C,U+1F336,U+1F378,U+1F37D,U+1F382,U+1F393-1F39F,U+1F3A7-1F3A8,U+1F3AC-1F3AF,U+1F3C2,U+1F3C4-1F3C6,U+1F3CA-1F3CE,U+1F3D4-1F3E0,U+1F3ED,U+1F3F1-1F3F3,U+1F3F5-1F3F7,U+1F408,U+1F415,U+1F41F,U+1F426,U+1F43F,U+1F441-1F442,U+1F444,U+1F446-1F449,U+1F44C-1F44E,U+1F453,U+1F46A,U+1F47D,U+1F4A3,U+1F4B0,U+1F4B3,U+1F4B9,U+1F4BB,U+1F4BF,U+1F4C8-1F4CB,U+1F4D6,U+1F4DA,U+1F4DF,U+1F4E3-1F4E6,U+1F4EA-1F4ED,U+1F4F7,U+1F4F9-1F4FB,U+1F4FD-1F4FE,U+1F503,U+1F507-1F50B,U+1F50D,U+1F512-1F513,U+1F53E-1F54A,U+1F54F-1F5FA,U+1F610,U+1F650-1F67F,U+1F687,U+1F68D,U+1F691,U+1F694,U+1F698,U+1F6AD,U+1F6B2,U+1F6B9-1F6BA,U+1F6BC,U+1F6C6-1F6CF,U+1F6D3-1F6D7,U+1F6E0-1F6EA,U+1F6F0-1F6F3,U+1F6F7-1F6FC,U+1F700-1F7FF,U+1F800-1F80B,U+1F810-1F847,U+1F850-1F859,U+1F860-1F887,U+1F890-1F8AD,U+1F8B0-1F8BB,U+1F8C0-1F8C1,U+1F900-1F90B,U+1F93B,U+1F946,U+1F984,U+1F996,U+1F9E9,U+1FA00-1FA6F,U+1FA70-1FA7C,U+1FA80-1FA89,U+1FA8F-1FAC6,U+1FACE-1FADC,U+1FADF-1FAE9,U+1FAF0-1FAF8,U+1FB00-1FBFF}@font-face{font-family:'Open Sans';font-style:italic;font-weight:700;font-stretch:100%;font-display:swap;src:url(/assets/memtYaGs126MiZpBA-UFUIcVXSCEkx2cmqvXlWqWtk6F15M.woff2) format('woff2');unicode-range:U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB}@font-face{font-family:'Open Sans';font-style:italic;font-weight:700;font-stretch:100%;font-display:swap;src:url(/assets/memtYaGs126MiZpBA-UFUIcVXSCEkx2cmqvXlWqWt06F15M.woff2) format('woff2');unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}@font-face{font-family:'Open Sans';font-style:italic;font-weight:700;font-stretch:100%;font-display:swap;src:url(/assets/memtYaGs126MiZpBA-UFUIcVXSCEkx2cmqvXlWqWuU6F.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}@font-face{font-family:'Open Sans';font-style:normal;font-weight:400;font-stretch:100%;font-display:swap;src:url(/assets/memvYaGs126MiZpBA-UvWbX2vVnXBbObj2OVTSKmu1aB.woff2) format('woff2');unicode-range:U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F}@font-face{font-family:'Open Sans';font-style:normal;font-weight:400;font-stretch:100%;font-display:swap;src:url(/assets/memvYaGs126MiZpBA-UvWbX2vVnXBbObj2OVTSumu1aB.woff2) format('woff2');unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}@font-face{font-family:'Open Sans';font-style:normal;font-weight:400;font-stretch:100%;font-display:swap;src:url(/assets/memvYaGs126MiZpBA-UvWbX2vVnXBbObj2OVTSOmu1aB.woff2) format('woff2');unicode-range:U+1F00-1FFF}@font-face{font-family:'Open Sans';font-style:normal;font-weight:400;font-stretch:100%;font-display:swap;src:url(/assets/memvYaGs126MiZpBA-UvWbX2vVnXBbObj2OVTSymu1aB.woff2) format('woff2');unicode-range:U+0370-0377,U+037A-037F,U+0384-038A,U+038C,U+038E-03A1,U+03A3-03FF}@font-face{font-family:'Open Sans';font-style:normal;font-weight:400;font-stretch:100%;font-display:swap;src:url(/assets/memvYaGs126MiZpBA-UvWbX2vVnXBbObj2OVTS2mu1aB.woff2) format('woff2');unicode-range:U+0307-0308,U+0590-05FF,U+200C-2010,U+20AA,U+25CC,U+FB1D-FB4F}@font-face{font-family:'Open Sans';font-style:normal;font-weight:400;font-stretch:100%;font-display:swap;src:url(/assets/memvYaGs126MiZpBA-UvWbX2vVnXBbObj2OVTVOmu1aB.woff2) format('woff2');unicode-range:U+0302-0303,U+0305,U+0307-0308,U+0310,U+0312,U+0315,U+031A,U+0326-0327,U+032C,U+032F-0330,U+0332-0333,U+0338,U+033A,U+0346,U+034D,U+0391-03A1,U+03A3-03A9,U+03B1-03C9,U+03D1,U+03D5-03D6,U+03F0-03F1,U+03F4-03F5,U+2016-2017,U+2034-2038,U+203C,U+2040,U+2043,U+2047,U+2050,U+2057,U+205F,U+2070-2071,U+2074-208E,U+2090-209C,U+20D0-20DC,U+20E1,U+20E5-20EF,U+2100-2112,U+2114-2115,U+2117-2121,U+2123-214F,U+2190,U+2192,U+2194-21AE,U+21B0-21E5,U+21F1-21F2,U+21F4-2211,U+2213-2214,U+2216-22FF,U+2308-230B,U+2310,U+2319,U+231C-2321,U+2336-237A,U+237C,U+2395,U+239B-23B7,U+23D0,U+23DC-23E1,U+2474-2475,U+25AF,U+25B3,U+25B7,U+25BD,U+25C1,U+25CA,U+25CC,U+25FB,U+266D-266F,U+27C0-27FF,U+2900-2AFF,U+2B0E-2B11,U+2B30-2B4C,U+2BFE,U+3030,U+FF5B,U+FF5D,U+1D400-1D7FF,U+1EE00-1EEFF}@font-face{font-family:'Open Sans';font-style:normal;font-weight:400;font-stretch:100%;font-display:swap;src:url(/assets/memvYaGs126MiZpBA-UvWbX2vVnXBbObj2OVTUGmu1aB.woff2) format('woff2');unicode-range:U+0001-000C,U+000E-001F,U+007F-009F,U+20DD-20E0,U+20E2-20E4,U+2150-218F,U+2190,U+2192,U+2194-2199,U+21AF,U+21E6-21F0,U+21F3,U+2218-2219,U+2299,U+22C4-22C6,U+2300-243F,U+2440-244A,U+2460-24FF,U+25A0-27BF,U+2800-28FF,U+2921-2922,U+2981,U+29BF,U+29EB,U+2B00-2BFF,U+4DC0-4DFF,U+FFF9-FFFB,U+10140-1018E,U+10190-1019C,U+101A0,U+101D0-101FD,U+102E0-102FB,U+10E60-10E7E,U+1D2C0-1D2D3,U+1D2E0-1D37F,U+1F000-1F0FF,U+1F100-1F1AD,U+1F1E6-1F1FF,U+1F30D-1F30F,U+1F315,U+1F31C,U+1F31E,U+1F320-1F32C,U+1F336,U+1F378,U+1F37D,U+1F382,U+1F393-1F39F,U+1F3A7-1F3A8,U+1F3AC-1F3AF,U+1F3C2,U+1F3C4-1F3C6,U+1F3CA-1F3CE,U+1F3D4-1F3E0,U+1F3ED,U+1F3F1-1F3F3,U+1F3F5-1F3F7,U+1F408,U+1F415,U+1F41F,U+1F426,U+1F43F,U+1F441-1F442,U+1F444,U+1F446-1F449,U+1F44C-1F44E,U+1F453,U+1F46A,U+1F47D,U+1F4A3,U+1F4B0,U+1F4B3,U+1F4B9,U+1F4BB,U+1F4BF,U+1F4C8-1F4CB,U+1F4D6,U+1F4DA,U+1F4DF,U+1F4E3-1F4E6,U+1F4EA-1F4ED,U+1F4F7,U+1F4F9-1F4FB,U+1F4FD-1F4FE,U+1F503,U+1F507-1F50B,U+1F50D,U+1F512-1F513,U+1F53E-1F54A,U+1F54F-1F5FA,U+1F610,U+1F650-1F67F,U+1F687,U+1F68D,U+1F691,U+1F694,U+1F698,U+1F6AD,U+1F6B2,U+1F6B9-1F6BA,U+1F6BC,U+1F6C6-1F6CF,U+1F6D3-1F6D7,U+1F6E0-1F6EA,U+1F6F0-1F6F3,U+1F6F7-1F6FC,U+1F700-1F7FF,U+1F800-1F80B,U+1F810-1F847,U+1F850-1F859,U+1F860-1F887,U+1F890-1F8AD,U+1F8B0-1F8BB,U+1F8C0-1F8C1,U+1F900-1F90B,U+1F93B,U+1F946,U+1F984,U+1F996,U+1F9E9,U+1FA00-1FA6F,U+1FA70-1FA7C,U+1FA80-1FA89,U+1FA8F-1FAC6,U+1FACE-1FADC,U+1FADF-1FAE9,U+1FAF0-1FAF8,U+1FB00-1FBFF}@font-face{font-family:'Open Sans';font-style:normal;font-weight:400;font-stretch:100%;font-display:swap;src:url(/assets/memvYaGs126MiZpBA-UvWbX2vVnXBbObj2OVTSCmu1aB.woff2) format('woff2');unicode-range:U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB}@font-face{font-family:'Open Sans';font-style:normal;font-weight:400;font-stretch:100%;font-display:swap;src:url(/assets/memvYaGs126MiZpBA-UvWbX2vVnXBbObj2OVTSGmu1aB.woff2) format('woff2');unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}@font-face{font-family:'Open Sans';font-style:normal;font-weight:400;font-stretch:100%;font-display:swap;src:url(/assets/memvYaGs126MiZpBA-UvWbX2vVnXBbObj2OVTS-muw.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}@font-face{font-family:'Open Sans';font-style:normal;font-weight:700;font-stretch:100%;font-display:swap;src:url(/assets/memvYaGs126MiZpBA-UvWbX2vVnXBbObj2OVTSKmu1aB.woff2) format('woff2');unicode-range:U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F}@font-face{font-family:'Open Sans';font-style:normal;font-weight:700;font-stretch:100%;font-display:swap;src:url(/assets/memvYaGs126MiZpBA-UvWbX2vVnXBbObj2OVTSumu1aB.woff2) format('woff2');unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}@font-face{font-family:'Open Sans';font-style:normal;font-weight:700;font-stretch:100%;font-display:swap;src:url(/assets/memvYaGs126MiZpBA-UvWbX2vVnXBbObj2OVTSOmu1aB.woff2) format('woff2');unicode-range:U+1F00-1FFF}@font-face{font-family:'Open Sans';font-style:normal;font-weight:700;font-stretch:100%;font-display:swap;src:url(/assets/memvYaGs126MiZpBA-UvWbX2vVnXBbObj2OVTSymu1aB.woff2) format('woff2');unicode-range:U+0370-0377,U+037A-037F,U+0384-038A,U+038C,U+038E-03A1,U+03A3-03FF}@font-face{font-family:'Open Sans';font-style:normal;font-weight:700;font-stretch:100%;font-display:swap;src:url(/assets/memvYaGs126MiZpBA-UvWbX2vVnXBbObj2OVTS2mu1aB.woff2) format('woff2');unicode-range:U+0307-0308,U+0590-05FF,U+200C-2010,U+20AA,U+25CC,U+FB1D-FB4F}@font-face{font-family:'Open Sans';font-style:normal;font-weight:700;font-stretch:100%;font-display:swap;src:url(/assets/memvYaGs126MiZpBA-UvWbX2vVnXBbObj2OVTVOmu1aB.woff2) format('woff2');unicode-range:U+0302-0303,U+0305,U+0307-0308,U+0310,U+0312,U+0315,U+031A,U+0326-0327,U+032C,U+032F-0330,U+0332-0333,U+0338,U+033A,U+0346,U+034D,U+0391-03A1,U+03A3-03A9,U+03B1-03C9,U+03D1,U+03D5-03D6,U+03F0-03F1,U+03F4-03F5,U+2016-2017,U+2034-2038,U+203C,U+2040,U+2043,U+2047,U+2050,U+2057,U+205F,U+2070-2071,U+2074-208E,U+2090-209C,U+20D0-20DC,U+20E1,U+20E5-20EF,U+2100-2112,U+2114-2115,U+2117-2121,U+2123-214F,U+2190,U+2192,U+2194-21AE,U+21B0-21E5,U+21F1-21F2,U+21F4-2211,U+2213-2214,U+2216-22FF,U+2308-230B,U+2310,U+2319,U+231C-2321,U+2336-237A,U+237C,U+2395,U+239B-23B7,U+23D0,U+23DC-23E1,U+2474-2475,U+25AF,U+25B3,U+25B7,U+25BD,U+25C1,U+25CA,U+25CC,U+25FB,U+266D-266F,U+27C0-27FF,U+2900-2AFF,U+2B0E-2B11,U+2B30-2B4C,U+2BFE,U+3030,U+FF5B,U+FF5D,U+1D400-1D7FF,U+1EE00-1EEFF}@font-face{font-family:'Open Sans';font-style:normal;font-weight:700;font-stretch:100%;font-display:swap;src:url(/assets/memvYaGs126MiZpBA-UvWbX2vVnXBbObj2OVTUGmu1aB.woff2) format('woff2');unicode-range:U+0001-000C,U+000E-001F,U+007F-009F,U+20DD-20E0,U+20E2-20E4,U+2150-218F,U+2190,U+2192,U+2194-2199,U+21AF,U+21E6-21F0,U+21F3,U+2218-2219,U+2299,U+22C4-22C6,U+2300-243F,U+2440-244A,U+2460-24FF,U+25A0-27BF,U+2800-28FF,U+2921-2922,U+2981,U+29BF,U+29EB,U+2B00-2BFF,U+4DC0-4DFF,U+FFF9-FFFB,U+10140-1018E,U+10190-1019C,U+101A0,U+101D0-101FD,U+102E0-102FB,U+10E60-10E7E,U+1D2C0-1D2D3,U+1D2E0-1D37F,U+1F000-1F0FF,U+1F100-1F1AD,U+1F1E6-1F1FF,U+1F30D-1F30F,U+1F315,U+1F31C,U+1F31E,U+1F320-1F32C,U+1F336,U+1F378,U+1F37D,U+1F382,U+1F393-1F39F,U+1F3A7-1F3A8,U+1F3AC-1F3AF,U+1F3C2,U+1F3C4-1F3C6,U+1F3CA-1F3CE,U+1F3D4-1F3E0,U+1F3ED,U+1F3F1-1F3F3,U+1F3F5-1F3F7,U+1F408,U+1F415,U+1F41F,U+1F426,U+1F43F,U+1F441-1F442,U+1F444,U+1F446-1F449,U+1F44C-1F44E,U+1F453,U+1F46A,U+1F47D,U+1F4A3,U+1F4B0,U+1F4B3,U+1F4B9,U+1F4BB,U+1F4BF,U+1F4C8-1F4CB,U+1F4D6,U+1F4DA,U+1F4DF,U+1F4E3-1F4E6,U+1F4EA-1F4ED,U+1F4F7,U+1F4F9-1F4FB,U+1F4FD-1F4FE,U+1F503,U+1F507-1F50B,U+1F50D,U+1F512-1F513,U+1F53E-1F54A,U+1F54F-1F5FA,U+1F610,U+1F650-1F67F,U+1F687,U+1F68D,U+1F691,U+1F694,U+1F698,U+1F6AD,U+1F6B2,U+1F6B9-1F6BA,U+1F6BC,U+1F6C6-1F6CF,U+1F6D3-1F6D7,U+1F6E0-1F6EA,U+1F6F0-1F6F3,U+1F6F7-1F6FC,U+1F700-1F7FF,U+1F800-1F80B,U+1F810-1F847,U+1F850-1F859,U+1F860-1F887,U+1F890-1F8AD,U+1F8B0-1F8BB,U+1F8C0-1F8C1,U+1F900-1F90B,U+1F93B,U+1F946,U+1F984,U+1F996,U+1F9E9,U+1FA00-1FA6F,U+1FA70-1FA7C,U+1FA80-1FA89,U+1FA8F-1FAC6,U+1FACE-1FADC,U+1FADF-1FAE9,U+1FAF0-1FAF8,U+1FB00-1FBFF}@font-face{font-family:'Open Sans';font-style:normal;font-weight:700;font-stretch:100%;font-display:swap;src:url(/assets/memvYaGs126MiZpBA-UvWbX2vVnXBbObj2OVTSCmu1aB.woff2) format('woff2');unicode-range:U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB}@font-face{font-family:'Open Sans';font-style:normal;font-weight:700;font-stretch:100%;font-display:swap;src:url(/assets/memvYaGs126MiZpBA-UvWbX2vVnXBbObj2OVTSGmu1aB.woff2) format('woff2');unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}@font-face{font-family:'Open Sans';font-style:normal;font-weight:700;font-stretch:100%;font-display:swap;src:url(/assets/memvYaGs126MiZpBA-UvWbX2vVnXBbObj2OVTS-muw.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}</style></head>
 
 <body>
   <div id="root">
     <svg width="647" height="75" viewBox="0 0 647 75" fill="none" xmlns="http://www.w3.org/2000/svg"
-      style="max-width: 70vw; width: 30rem; margin: auto; display: block; margin-top: 45vh;">
+      style="max-width: 70vw; width: 30rem; margin: auto; display: block; margin-top: 45vh;" class="loader">
       <path
         d="M57.512 58.4H23.712L17.264 74H0L32.448 1.19995H49.088L81.64 74H63.96L57.512 58.4ZM52.208 45.608L40.664 17.736L29.12 45.608H52.208Z"
         fill="var(--text-splash)" />
@@ -88,8 +90,9 @@
     </svg>
   </div>
 
+
   <!-- Dark mode for first few seconds  -->
-  <script>
+  <script nonce="ATOMICSERVER_NONCE">
     const dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
     if (dark) {
       document.documentElement.style
@@ -98,124 +101,6 @@
         .setProperty('--background-color', 'black');
     }
   </script>
-  <script>
-    // TODO: do not hardcode this value!
-    const serverUrl = "http://localhost:9883";
-    // Reload window to check if page is ready
-    async function checkServer() {
-      let response = await fetch(serverUrl);
-      if (response.status == 200) {
-        window.location.href = serverUrl;
-      }
-    }
-    setInterval(checkServer, 50);
-  </script>
 </body>
 
 </html>
-  <meta content="The easiest way to create, share and model Linked Atomic Data." name="description" />
-  <link href="%PUBLIC_URL%/icon.png" rel="icon" type="image/png" />
-  <link href="%PUBLIC_URL%/apple-touch-icon.png" rel="apple-touch-icon" sizes="180x180" />
-  <link href="%PUBLIC_URL%/favicon-32x32.png" rel="icon" sizes="32x32" type="image/png" />
-  <link href="%PUBLIC_URL%/favicon-16x16.png" rel="icon" sizes="16x16" type="image/png" />
-  <link href="%PUBLIC_URL%/site.webmanifest" rel="manifest" />
-  <link color="#1e43a3" href="%PUBLIC_URL%/safari-pinned-tab.svg" rel="mask-icon" />
-  <meta content="yes" name="apple-mobile-web-app-capable" />
-  <meta content="yes" name="mobile-web-app-capable" />
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link
-    href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&family=Open+Sans:ital,wght@0,400;0,700;1,400;1,700&display=swap"
-    rel="stylesheet">
-  <title>Atomic Data Browser</title>
-  <style>
-    :root {
-      --text-splash: black;
-      --background-color: white;
-      --safe-area-inset-top: env(safe-area-inset-top);
-      --safe-area-inset-right: env(safe-area-inset-right);
-      --safe-area-inset-bottom: env(safe-area-inset-bottom);
-      --safe-area-inset-left: env(safe-area-inset-left);
-    }
-
-    body {
-      background-color: var(--background-color);
-      padding-top: var(--safe-area-inset-top);
-      padding-right: var(--safe-area-inset-right);
-      padding-bottom: var(--safe-area-inset-bottom);
-      padding-left: var(--safe-area-inset-left);
-    }
-  </style>
-</head>
-
-<body>
-  <div id="root">
-    <svg width="647" height="75" viewBox="0 0 647 75" fill="none" xmlns="http://www.w3.org/2000/svg"
-      style="max-width: 70vw; width: 30rem; margin: auto; display: block; margin-top: 45vh;">
-      <path
-        d="M57.512 58.4H23.712L17.264 74H0L32.448 1.19995H49.088L81.64 74H63.96L57.512 58.4ZM52.208 45.608L40.664 17.736L29.12 45.608H52.208Z"
-        fill="var(--text-splash)" />
-      <path
-        d="M119.469 71.296C117.875 72.4746 115.899 73.376 113.541 74C111.253 74.5546 108.827 74.832 106.261 74.832C99.6052 74.832 94.4398 73.1333 90.7652 69.736C87.1598 66.3386 85.3572 61.3466 85.3572 54.76V31.776H76.7252V19.296H85.3572V5.67196H101.581V19.296H115.517V31.776H101.581V54.552C101.581 56.9093 102.171 58.7466 103.349 60.064C104.597 61.312 106.331 61.936 108.549 61.936C111.115 61.936 113.299 61.2426 115.101 59.856L119.469 71.296Z"
-        fill="var(--text-splash)" />
-      <path
-        d="M258.334 17.216C265.337 17.216 270.884 19.296 274.974 23.456C279.134 27.5466 281.214 33.7173 281.214 41.9679V74H264.99V44.464C264.99 40.0266 264.054 36.7333 262.182 34.584C260.38 32.3653 257.78 31.256 254.382 31.256C250.569 31.256 247.553 32.504 245.334 35C243.116 37.4266 242.006 41.0666 242.006 45.92V74H225.782V44.464C225.782 35.6586 222.246 31.256 215.174 31.256C211.43 31.256 208.449 32.504 206.23 35C204.012 37.4266 202.902 41.0666 202.902 45.92V74H186.678V18.048H202.174V24.496C204.254 22.1386 206.785 20.336 209.766 19.088C212.817 17.84 216.145 17.216 219.75 17.216C223.702 17.216 227.273 18.0133 230.462 19.608C233.652 21.1333 236.217 23.3866 238.158 26.368C240.446 23.456 243.324 21.2026 246.79 19.608C250.326 18.0133 254.174 17.216 258.334 17.216Z"
-        fill="var(--text-splash)" />
-      <path d="M291.596 18.048H307.82V74H291.596V18.048Z" fill="var(--text-splash)" />
-      <path
-        d="M345.758 74.832C339.795 74.832 334.422 73.6186 329.638 71.192C324.923 68.696 321.214 65.264 318.51 60.896C315.875 56.528 314.558 51.5706 314.558 46.0239C314.558 40.4773 315.875 35.52 318.51 31.152C321.214 26.784 324.923 23.3866 329.638 20.96C334.422 18.464 339.795 17.216 345.758 17.216C351.651 17.216 356.782 18.464 361.15 20.96C365.587 23.3866 368.811 26.888 370.822 31.464L358.238 38.224C355.326 33.0933 351.131 30.528 345.654 30.528C341.424 30.528 337.923 31.9146 335.15 34.688C332.376 37.4613 330.99 41.2399 330.99 46.0239C330.99 50.808 332.376 54.5866 335.15 57.36C337.923 60.1333 341.424 61.52 345.654 61.52C351.2 61.52 355.395 58.9546 358.238 53.824L370.822 60.688C368.811 65.1253 365.587 68.592 361.15 71.088C356.782 73.584 351.651 74.832 345.758 74.832Z"
-        fill="var(--text-splash)" />
-      <path fill-rule="evenodd" clip-rule="evenodd"
-        d="M137.633 17.5725C139.483 22.4964 144.235 26 149.806 26C155.376 26 160.128 22.4964 161.979 17.5725C172.482 22.241 179.806 32.7652 179.806 45C179.806 61.5685 166.374 75 149.806 75C133.237 75 119.806 61.5685 119.806 45C119.806 32.7652 127.13 22.241 137.633 17.5725ZM141.39 16.1965C142.679 19.589 145.961 22 149.806 22C153.65 22 156.932 19.589 158.221 16.1965C155.551 15.4176 152.727 15 149.806 15C146.884 15 144.06 15.4176 141.39 16.1965ZM163.806 45C163.806 52.732 157.538 59 149.806 59C142.074 59 135.806 52.732 135.806 45C135.806 37.268 142.074 31 149.806 31C157.538 31 163.806 37.268 163.806 45Z"
-        fill="var(--text-splash)" />
-      <path
-        d="M143.442 19.364C139.927 15.8492 139.927 10.1508 143.442 6.63604C146.956 3.12132 152.655 3.12132 156.17 6.63604C157.784 8.25001 158.656 10.3245 158.788 12.4365C158.943 14.9238 158.07 17.4632 156.17 19.364C152.655 22.8787 146.956 22.8787 143.442 19.364Z"
-        fill="url(#paint0_linear)" />
-      <path
-        d="M415.806 1.19995H448.878C456.782 1.19995 463.75 2.72528 469.782 5.77595C475.883 8.75729 480.598 12.9866 483.926 18.464C487.323 23.9413 489.022 30.32 489.022 37.6C489.022 44.88 487.323 51.2586 483.926 56.736C480.598 62.2133 475.883 66.4773 469.782 69.528C463.75 72.5093 456.782 74 448.878 74H415.806V1.19995ZM448.046 60.168C455.326 60.168 461.115 58.1573 465.414 54.136C469.782 50.0453 471.966 44.5333 471.966 37.6C471.966 30.6666 469.782 25.1893 465.414 21.168C461.115 17.0773 455.326 15.032 448.046 15.032H432.654V60.168H448.046Z"
-        fill="var(--text-splash)" />
-      <path
-        d="M518.992 17.216C527.658 17.216 534.314 19.296 538.96 23.456C543.605 27.5466 545.928 33.752 545.928 42.072V74H530.744V67.032C527.693 72.232 522.008 74.832 513.688 74.832C509.389 74.832 505.645 74.104 502.456 72.648C499.336 71.192 496.944 69.1813 495.28 66.616C493.616 64.0506 492.784 61.1386 492.784 57.88C492.784 52.68 494.725 48.5893 498.608 45.608C502.56 42.6266 508.626 41.136 516.808 41.136H529.704C529.704 37.6 528.629 34.896 526.48 33.024C524.33 31.0826 521.106 30.112 516.808 30.112C513.826 30.112 510.88 30.5973 507.968 31.568C505.125 32.4693 502.698 33.7173 500.688 35.312L494.864 23.976C497.914 21.8266 501.554 20.1626 505.784 18.9839C510.082 17.8053 514.485 17.216 518.992 17.216ZM517.744 63.912C520.517 63.912 522.978 63.288 525.128 62.04C527.277 60.7226 528.802 58.816 529.704 56.32V50.6H518.576C511.92 50.6 508.592 52.784 508.592 57.152C508.592 59.232 509.389 60.896 510.984 62.144C512.648 63.3226 514.901 63.912 517.744 63.912Z"
-        fill="var(--text-splash)" />
-      <path
-        d="M592.539 71.296C590.944 72.4746 588.968 73.376 586.611 74C584.323 74.5546 581.896 74.832 579.331 74.832C572.675 74.832 567.51 73.1333 563.835 69.736C560.23 66.3386 558.427 61.3466 558.427 54.76V31.776H549.795V19.296H558.427V5.67196H574.651V19.296H588.587V31.776H574.651V54.552C574.651 56.9093 575.24 58.7466 576.419 60.064C577.667 61.312 579.4 61.936 581.619 61.936C584.184 61.936 586.368 61.2426 588.171 59.856L592.539 71.296Z"
-        fill="var(--text-splash)" />
-      <path
-        d="M620.054 17.216C628.721 17.216 635.377 19.296 640.022 23.456C644.668 27.5466 646.99 33.752 646.99 42.072V74H631.806V67.032C628.756 72.232 623.07 74.832 614.75 74.832C610.452 74.832 606.708 74.104 603.518 72.648C600.398 71.192 598.006 69.1813 596.342 66.616C594.678 64.0506 593.846 61.1386 593.846 57.88C593.846 52.68 595.788 48.5893 599.67 45.608C603.622 42.6266 609.689 41.136 617.87 41.136H630.766C630.766 37.6 629.692 34.896 627.542 33.024C625.393 31.0826 622.169 30.112 617.87 30.112C614.889 30.112 611.942 30.5973 609.03 31.568C606.188 32.4693 603.761 33.7173 601.75 35.312L595.926 23.976C598.977 21.8266 602.617 20.1626 606.846 18.9839C611.145 17.8053 615.548 17.216 620.054 17.216ZM618.806 63.912C621.58 63.912 624.041 63.288 626.19 62.04C628.34 60.7226 629.865 58.816 630.766 56.32V50.6H619.638C612.982 50.6 609.654 52.784 609.654 57.152C609.654 59.232 610.452 60.896 612.046 62.144C613.71 63.3226 615.964 63.912 618.806 63.912Z"
-        fill="var(--text-splash)" />
-      <defs>
-        <linearGradient id="paint0_linear" x1="156.17" y1="19.364" x2="143.442" y2="6.63604"
-          gradientUnits="userSpaceOnUse">
-          <stop stop-color="#033049" />
-          <stop offset="1" stop-color="#00C2FF" />
-        </linearGradient>
-      </defs>
-    </svg>
-  </div>
-
-  <!-- Dark mode for first few seconds  -->
-  <script>
-    const dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-    if (dark) {
-      document.documentElement.style
-        .setProperty('--text-splash', 'white');
-      document.documentElement.style
-        .setProperty('--background-color', 'black');
-    }
-  </script>
-  <script>
-    // TODO: do not hardcode this value!
-    const serverUrl = "http://localhost:9883";
-    // Reload window to check if page is ready
-    async function checkServer() {
-      let response = await fetch(serverUrl);
-      if (response.status == 200) {
-        window.location.href = serverUrl;
-      }
-    }
-    setInterval(checkServer, 50);
-  </script>
-</body>
-
-</html>
-

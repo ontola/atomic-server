@@ -16,7 +16,7 @@ use crate::{appstate::AppState, content_types::ContentType, errors::AtomicServer
 #[tracing::instrument(skip_all)]
 pub fn get_auth_headers(
     map: &HeaderMap,
-    requested_subject: String,
+    requested_subject: &str,
 ) -> AtomicServerResult<Option<AuthValues>> {
     if let Some(bearer) = map.get("authorization") {
         let bearer = bearer
@@ -50,7 +50,7 @@ pub fn get_auth_headers(
                 .map_err(|_e| "Only string headers allowed")?
                 .parse::<i64>()
                 .map_err(|_e| "Timestamp must be a number (milliseconds since unix epoch)")?,
-            requested_subject,
+            requested_subject: requested_subject.to_string(),
         })),
         (None, None, None, None) => Ok(None),
         _missing => Err("Missing authentication headers. You need `x-atomic-public-key`, `x-atomic-signature`, `x-atomic-agent` and `x-atomic-timestamp` for authentication checks.".into()),
@@ -58,6 +58,9 @@ pub fn get_auth_headers(
 }
 
 fn origin(url: &str) -> String {
+    if url.starts_with("internal:/") {
+        return url.to_string();
+    }
     let parsed = Uri::from_str(url).unwrap();
 
     format!(
@@ -149,13 +152,13 @@ fn get_auth_from_base64(base64: &str, requested_subject: &str) -> AtomicServerRe
 
 pub fn get_auth(
     map: &HeaderMap,
-    requested_subject: String,
+    requested_subject: &str,
 ) -> AtomicServerResult<Option<AuthValues>> {
-    let from_header = get_auth_headers(map, requested_subject.clone())?;
+    let from_header = get_auth_headers(map, requested_subject)?;
 
     match from_header {
         Some(v) => Ok(Some(v)),
-        None => get_auth_from_cookie(map, &requested_subject),
+        None => get_auth_from_cookie(map, requested_subject),
     }
 }
 
@@ -165,7 +168,7 @@ pub fn get_auth(
 pub async fn get_client_agent(
     headers: &HeaderMap,
     appstate: &AppState,
-    requested_subject: String,
+    requested_subject: &str,
 ) -> AtomicServerResult<ForAgent> {
     if appstate.config.opts.public_mode {
         return Ok(ForAgent::Public);

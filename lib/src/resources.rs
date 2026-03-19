@@ -36,13 +36,25 @@ impl Resource {
     pub async fn check_required_props(&self, store: &impl Storelike) -> AtomicResult<()> {
         let classvec = self.get_classes(store).await?;
         for class in classvec.iter() {
+            tracing::debug!(
+                "Checking required props for class {} on resource {}",
+                class.subject,
+                self.get_subject()
+            );
             for required_prop in class.requires.clone() {
-                self.get(&required_prop).map_err(|_e| {
-                    format!(
+                if self.get(&required_prop).is_err() {
+                    tracing::error!(
+                        "Property {} missing from {}. Resource has properties: {:?}",
+                        required_prop,
+                        self.get_subject(),
+                        self.propvals.keys().collect::<Vec<_>>()
+                    );
+                    return Err(format!(
                         "Property {} missing. Is required in class {} ",
-                        &required_prop, class.subject
+                        required_prop, class.subject
                     )
-                })?;
+                    .into());
+                }
             }
         }
         Ok(())
@@ -78,6 +90,11 @@ impl Resource {
             commit: CommitBuilder::new(subject.to_string()),
             subject,
         }
+    }
+
+    /// Returns the subject of the resource as a Subject enum.
+    pub fn get_subject_enum(&self) -> &Subject {
+        &self.subject
     }
 
     /// Get a value by property URL
@@ -352,7 +369,7 @@ impl Resource {
         let commit = commit_builder.sign(&agent, store, self).await?;
         // If the current client is a server, and the subject is hosted here, don't post
         let should_post = match self.subject.clone() {
-            crate::Subject::Internal(_) => false,
+            crate::Subject::Internal { .. } => false,
             crate::Subject::External(_) => true,
             crate::Subject::Did { .. } => false,
         };
@@ -408,7 +425,10 @@ impl Resource {
 
     /// Saves the resource as a new DID-native resource.
     /// The subject will be set to `did:ad:{genesis_signature}`.
-    pub async fn save_as_genesis(&mut self, store: &impl Storelike) -> AtomicResult<CommitResponse> {
+    pub async fn save_as_genesis(
+        &mut self,
+        store: &impl Storelike,
+    ) -> AtomicResult<CommitResponse> {
         let agent = store.get_default_agent()?;
         // Use a placeholder that starts with did:ad: to trigger special genesis serialization logic
         self.subject = Subject::from_raw("did:ad:placeholder", None);
@@ -573,6 +593,7 @@ impl Resource {
             propvals,
             Some(self.get_subject().resolve(origin)),
             origin,
+            true,
         )?;
         Ok(serde_json::to_string(&res)?)
     }
@@ -583,8 +604,8 @@ impl Resource {
         let mut map = serde_json::Map::new();
         for (prop, val) in propvals.iter() {
             map.insert(
-                prop.to_string(),
-                crate::serialize::val_to_serde(val.clone(), base_url)?,
+                prop.clone(),
+                crate::serialize::val_to_serde(val.clone(), base_url, true)?,
             );
         }
         Ok(serde_json::to_string(&map)?)
@@ -644,7 +665,7 @@ impl Resource {
         crate::serialize::atoms_to_ntriples(self.to_atoms(), store).await
     }
 
-    pub fn vec_to_json_ad(resources: &Vec<Resource>, origin: Option<&str>) -> AtomicResult<String> {
+    pub fn vec_to_json_ad(resources: &[Resource], origin: Option<&str>) -> AtomicResult<String> {
         let str = resources
             .iter()
             .map(|r| r.to_json_ad(origin))
@@ -714,14 +735,14 @@ impl From<&Resource> for crate::storelike::ResourceResponse {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "db"))]
 mod test {
     use super::*;
     use crate::{test_utils::init_store, urls};
 
     #[tokio::test]
     async fn get_and_set_resource_props() {
-        let store = init_store().await;
+        let store: crate::Db = init_store().await;
         let mut resource = store.get_resource(&urls::CLASS.into()).await.unwrap();
         assert!(
             resource
@@ -751,7 +772,7 @@ mod test {
 
     #[tokio::test]
     async fn check_required_props() {
-        let store = init_store().await;
+        let store: crate::Db = init_store().await;
         let mut new_resource = Resource::new_instance(urls::CLASS, &store).await.unwrap();
         new_resource
             .set_shortname("shortname", "should-fail", &store)
@@ -767,7 +788,7 @@ mod test {
 
     #[tokio::test]
     async fn new_instance() {
-        let store = init_store().await;
+        let store: crate::Db = init_store().await;
         let mut new_resource = Resource::new_instance(urls::CLASS, &store).await.unwrap();
         new_resource
             .set_shortname("shortname", "person", &store)
@@ -830,7 +851,7 @@ mod test {
 
     #[tokio::test]
     async fn new_instance_using_commit() {
-        let store = init_store().await;
+        let store: crate::Db = init_store().await;
         let agent = store.get_default_agent().unwrap();
         let mut new_resource = Resource::new_instance(urls::CLASS, &store).await.unwrap();
         new_resource
@@ -871,6 +892,7 @@ mod test {
                     validate_for_agent: None,
                     update_index: true,
                 },
+                None,
             )
             .await
             .unwrap();
@@ -914,7 +936,7 @@ mod test {
 
     #[tokio::test]
     async fn iterate() {
-        let store = init_store().await;
+        let store: crate::Db = init_store().await;
         let new_resource = Resource::new_instance(urls::CLASS, &store).await.unwrap();
         let mut success = false;
         for (prop, val) in new_resource.get_propvals() {
@@ -928,7 +950,7 @@ mod test {
 
     #[tokio::test]
     async fn save() {
-        let store = init_store().await;
+        let store: crate::Db = init_store().await;
         let property: String = urls::DESCRIPTION.into();
         let value = Value::Markdown("joe".into());
         let mut new_resource = Resource::new_instance(urls::CLASS, &store).await.unwrap();
@@ -955,7 +977,7 @@ mod test {
 
     #[tokio::test]
     async fn push_propval() {
-        let store = init_store().await;
+        let store: crate::Db = init_store().await;
         let property: String = urls::CHILDREN.into();
         let append_value = "http://localhost/someURL";
         let mut resource = Resource::new_generate_subject(&store).unwrap();
@@ -984,7 +1006,7 @@ mod test {
 
     #[tokio::test]
     async fn get_children() {
-        let store = init_store().await;
+        let store: crate::Db = init_store().await;
         let mut resource1 = Resource::new_generate_subject(&store).unwrap();
         let subject1 = resource1.get_subject().to_string();
         resource1.save_locally(&store).await.unwrap();
