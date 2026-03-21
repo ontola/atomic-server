@@ -31,7 +31,6 @@ msgstr "Upload"
 #: src/components/forms/SearchBox/SearchBoxWindow.tsx
 #: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
-#: src/views/ResourceLine.tsx
 #: src/views/ResourceRow.tsx
 msgid "Error: {0}"
 msgstr "Error: {0}"
@@ -73,9 +72,6 @@ msgstr "You don't have access to this, try signing in:"
 #: src/views/ErrorPage.tsx
 msgid "Could not open {0}"
 msgstr "Could not open {0}"
-
-#~ msgid "If this host has not been bound to a Drive yet, continue at{0} <0>the onboarding page</0> ."
-#~ msgstr "If this host has not been bound to a Drive yet, continue at{0} <0>the onboarding page</0> ."
 
 #: src/views/ErrorPage.tsx
 msgid "Hard reset"
@@ -310,7 +306,6 @@ msgstr "Try Again"
 #: src/views/Document/DocumentV2FullPage.tsx
 #: src/views/File/FilePreview.tsx
 #: src/views/File/FilePreviewThumbnail.tsx
-#: src/views/ResourceLine.tsx
 #: src/views/ResourcePage.tsx
 #: src/views/ResourceRow.tsx
 msgid "Loading..."
@@ -618,17 +613,6 @@ msgstr "Sorry, there is no support for editing nested resources yet"
 msgid "Set as current drive"
 msgstr "Set as current drive"
 
-#~ msgid ""
-#~ "You are running Atomic-Server on `localhost`, which means that it\n"
-#~ "will not be available from any other machine than your current local\n"
-#~ "device. If you want your Atomic-Server to be available from the web,\n"
-#~ "you should set this up at a Domain on a server."
-#~ msgstr ""
-#~ "You are running Atomic-Server on `localhost`, which means that it\n"
-#~ "will not be available from any other machine than your current local\n"
-#~ "device. If you want your Atomic-Server to be available from the web,\n"
-#~ "you should set this up at a Domain on a server."
-
 #: src/views/Drive/DrivePage.tsx
 msgid "Default Ontology"
 msgstr "Default Ontology"
@@ -677,9 +661,6 @@ msgstr "Property does not exist anymore"
 msgid "Search (Cmd+K)"
 msgstr "Search (Cmd+K)"
 
-#~ msgid "Toggle AI panel"
-#~ msgstr "Toggle AI panel"
-
 #: src/components/NavBar.tsx
 #: src/components/Parent.tsx
 msgid "Breadcrumbs"
@@ -697,12 +678,6 @@ msgstr "Set Drive"
 msgid "Set {0} as current drive"
 msgstr "Set {0} as current drive"
 
-#~ msgid "Set as drive"
-#~ msgstr "Set as drive"
-
-#~ msgid "Failed to add invited drive to agent"
-#~ msgstr "Failed to add invited drive to agent"
-
 #: src/views/InvitePage.tsx
 msgid "Failed to persist agent after accepting invite"
 msgstr "Failed to persist agent after accepting invite"
@@ -711,19 +686,10 @@ msgstr "Failed to persist agent after accepting invite"
 msgid "Invite accepted, but no destination was returned."
 msgstr "Invite accepted, but no destination was returned."
 
-#~ msgid "Invite to {0}"
-#~ msgstr "Invite to {0}"
-
-#~ msgid "Sorry, this Invite has no usages left. Ask for a new one."
-#~ msgstr "Sorry, this Invite has no usages left. Ask for a new one."
-
 #. placeholder {0}: agentTitle
 #: src/views/InvitePage.tsx
 msgid "Accept as {0}"
 msgstr "Accept as {0}"
-
-#~ msgid "Accept as new user"
-#~ msgstr "Accept as new user"
 
 #: src/components/LoggedOutAgentPanel.tsx
 #: src/components/SignInButton.tsx
@@ -731,9 +697,6 @@ msgstr "Accept as {0}"
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Sign in"
 msgstr "Sign in"
-
-#~ msgid "({0} usages left)"
-#~ msgstr "({0} usages left)"
 
 #: src/views/InvitePage.tsx
 msgid "Agent created!"
@@ -795,31 +758,13 @@ msgstr "Insufficient rights to view resource"
 msgid "Settings"
 msgstr "Settings"
 
-#~ msgid "<0/> Language"
-#~ msgstr "<0/> Language"
-
 #: src/routes/AppSettings.tsx
 msgid "Theme"
 msgstr "Theme"
 
-#~ msgid "🌓 Auto"
-#~ msgstr "🌓 Auto"
-
 #: src/routes/AppSettings.tsx
 msgid "Use the browser's / OS dark mode settings"
 msgstr "Use the browser's / OS dark mode settings"
-
-#~ msgid "🌑 Dark"
-#~ msgstr "🌑 Dark"
-
-#~ msgid "🌕 Light"
-#~ msgstr "🌕 Light"
-
-#~ msgid "Navigation bar position"
-#~ msgstr "Navigation bar position"
-
-#~ msgid "Floating"
-#~ msgstr "Floating"
 
 #: src/routes/AppSettings.tsx
 msgid "Bottom"
@@ -832,12 +777,6 @@ msgstr "Top"
 #: src/routes/AppSettings.tsx
 msgid "Main color"
 msgstr "Main color"
-
-#~ msgid "<0/>{0} Hide templates on new resource page."
-#~ msgstr "<0/>{0} Hide templates on new resource page."
-
-#~ msgid "Panels"
-#~ msgstr "Panels"
 
 #. placeholder {0}: ' '
 #: src/routes/AppSettings.tsx
@@ -1024,18 +963,6 @@ msgstr "New Drive"
 msgid "Create a new drive"
 msgstr "Create a new drive"
 
-#~ msgid "Gateway (Locked to Drive)"
-#~ msgstr "Gateway (Locked to Drive)"
-
-#~ msgid "Active Gateway"
-#~ msgstr "Active Gateway"
-
-#~ msgid "Cannot change gateway for HTTP drives"
-#~ msgstr "Cannot change gateway for HTTP drives"
-
-#~ msgid "Connect via {0}"
-#~ msgstr "Connect via {0}"
-
 #: src/components/SideBar/DriveSwitcher.tsx
 msgid "Configure"
 msgstr "Configure"
@@ -1158,15 +1085,6 @@ msgstr "<0/> Use existing class"
 msgid "Create"
 msgstr "Create"
 
-#~ msgid "Untitled Folder"
-#~ msgstr "Untitled Folder"
-
-#~ msgid "Untitled ChatRoom"
-#~ msgstr "Untitled ChatRoom"
-
-#~ msgid "Untitled Document"
-#~ msgstr "Untitled Document"
-
 #: src/components/Share/ShareDialog.tsx
 #: src/routes/Share/ShareRoute.tsx
 msgid "Share settings saved"
@@ -1246,66 +1164,25 @@ msgstr "Sign Out"
 msgid "Sign out with current Agent and reset this form"
 msgstr "Sign out with current Agent and reset this form"
 
-#~ msgid "Create a new identity"
-#~ msgstr "Create a new identity"
-
-#~ msgid "Generate a new self-sovereign Agent and Drive on this server."
-#~ msgstr "Generate a new self-sovereign Agent and Drive on this server."
-
 #: src/components/NewIdentitySection.tsx
 msgid "Create new identity"
 msgstr "Create new identity"
-
-#~ msgid "Sign in with existing secret"
-#~ msgstr "Sign in with existing secret"
 
 #: src/components/NewIdentitySection.tsx
 msgid "Enter your Agent Secret"
 msgstr "Enter your Agent Secret"
 
-#~ msgid "The Agent Secret is a long string of characters that encodes both the Subject and the Private Key. You can think of it as a combined username + password. Store it safely, and don't share it with others."
-#~ msgstr "The Agent Secret is a long string of characters that encodes both the Subject and the Private Key. You can think of it as a combined username + password. Store it safely, and don't share it with others."
-
 #: src/routes/History/HistoryRoute.tsx
 msgid "Resource version updated"
 msgstr "Resource version updated"
-
-#~ msgid "Building history of {0}"
-#~ msgstr "Building history of {0}"
-
-#: src/views/OnboardingPage.tsx
-msgid "Welcome to Atomic Data"
-msgstr "Welcome to Atomic Data"
-
-#. placeholder {0}: ' '
-#: src/views/OnboardingPage.tsx
-msgid "This server node is currently uninitialized for{0} <0/>."
-msgstr "This server node is currently uninitialized for{0} <0/>."
 
 #: src/components/NewIdentitySection.tsx
 msgid "Yes, I've stored it safely"
 msgstr "Yes, I've stored it safely"
 
-#: src/views/OnboardingPage.tsx
-msgid "Use an existing identity"
-msgstr "Use an existing identity"
-
-#: src/views/OnboardingPage.tsx
-msgid ""
-"Paste your Atomic Data secret key below to connect your\n"
-"existing identity to this node."
-msgstr ""
-"Paste your Atomic Data secret key below to connect your\n"
-"existing identity to this node."
-
 #: src/views/ImporterPage.tsx
-#: src/views/OnboardingPage.tsx
 msgid "Importing..."
 msgstr "Importing..."
-
-#: src/views/OnboardingPage.tsx
-msgid "Import & Connect"
-msgstr "Import & Connect"
 
 #: src/routes/SettingsServer/index.tsx
 msgid "Drive Configuration"
@@ -1328,32 +1205,6 @@ msgstr "Enter a Drive DID or URL"
 msgid "Set"
 msgstr "Set"
 
-#~ msgid "Gateway Server"
-#~ msgstr "Gateway Server"
-
-#~ msgid ""
-#~ "The gateway is currently locked to{0} <0/> because you are using an\n"
-#~ "HTTP-based drive."
-#~ msgstr ""
-#~ "The gateway is currently locked to{0} <0/> because you are using an\n"
-#~ "HTTP-based drive."
-
-#~ msgid ""
-#~ "The gateway server is used to resolve DIDs and fetch data from the\n"
-#~ "network."
-#~ msgstr ""
-#~ "The gateway server is used to resolve DIDs and fetch data from the\n"
-#~ "network."
-
-#~ msgid "Add Gateway by URL"
-#~ msgstr "Add Gateway by URL"
-
-#~ msgid "Locked"
-#~ msgstr "Locked"
-
-#~ msgid "Set Active"
-#~ msgstr "Set Active"
-
 #. placeholder {0}: name
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 msgid "Default ontology for the {0} drive"
@@ -1366,31 +1217,6 @@ msgstr "My Drive"
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 msgid "Subdomain"
 msgstr "Subdomain"
-
-#~ msgid "This is your personal Atomic Data drive. Edit this description to tell visitors what this space is about."
-#~ msgstr "This is your personal Atomic Data drive. Edit this description to tell visitors what this space is about."
-
-#~ msgid "Your new identity is ready"
-#~ msgstr "Your new identity is ready"
-
-#~ msgid ""
-#~ "<0>IMPORTANT:</0> Save this secret key. It is the only way\n"
-#~ "to access your data if you clear your browser cache or sign in from\n"
-#~ "another device."
-#~ msgstr ""
-#~ "<0>IMPORTANT:</0> Save this secret key. It is the only way\n"
-#~ "to access your data if you clear your browser cache or sign in from\n"
-#~ "another device."
-
-#~ msgid ""
-#~ "Are you sure you{0}ve stored this secret somewhere safe? You\n"
-#~ "cannot recover it if you lose it."
-#~ msgstr ""
-#~ "Are you sure you{0}ve stored this secret somewhere safe? You\n"
-#~ "cannot recover it if you lose it."
-
-#~ msgid "Copy the secret key to continue"
-#~ msgstr "Copy the secret key to continue"
 
 #: src/components/NewIdentitySection.tsx
 msgid "Generating..."
@@ -2155,15 +1981,6 @@ msgstr "This URL will be used as the default Parent for imported resources."
 msgid "History of"
 msgstr "History of"
 
-#~ msgid "Make current version"
-#~ msgstr "Make current version"
-
-#~ msgid "Show Commit"
-#~ msgstr "Show Commit"
-
-#~ msgid "Versions"
-#~ msgstr "Versions"
-
 #. placeholder {0}: resource.title
 #. placeholder {0}: resource.title
 #: src/routes/History/HistoryDesktopView.tsx
@@ -2187,9 +2004,6 @@ msgstr ""
 msgid "<0/> Show token usage in chats"
 msgstr "<0/> Show token usage in chats"
 
-#~ msgid "AI Providers"
-#~ msgstr "AI Providers"
-
 #: src/components/AI/AISettings.tsx
 msgid "<0/> Enable OpenRouter"
 msgstr "<0/> Enable OpenRouter"
@@ -2212,17 +2026,6 @@ msgstr "Enter your OpenRouter API key"
 #: src/components/AI/AISettings.tsx
 msgid "Credits used: {0} /{1} {2}"
 msgstr "Credits used: {0} /{1} {2}"
-
-#~ msgid ""
-#~ "OpenRouter provides a unified API that gives you access to\n"
-#~ "hundreds of AI models from all major vendors, while\n"
-#~ "automatically handling fallbacks and selecting the most\n"
-#~ "cost-effective options."
-#~ msgstr ""
-#~ "OpenRouter provides a unified API that gives you access to\n"
-#~ "hundreds of AI models from all major vendors, while\n"
-#~ "automatically handling fallbacks and selecting the most\n"
-#~ "cost-effective options."
 
 #: src/components/AI/AISettings.tsx
 msgid "OpenRouter"
@@ -2253,9 +2056,6 @@ msgstr "Ollama API Url"
 msgid "Ollama"
 msgstr "Ollama"
 
-#~ msgid "Generative Features"
-#~ msgstr "Generative Features"
-
 #: src/components/AI/AISettings.tsx
 msgid "<0/> Generate AI Chat titles"
 msgstr "<0/> Generate AI Chat titles"
@@ -2275,9 +2075,6 @@ msgstr "(Tip) Choose a cheap and fast model"
 #: src/components/AI/AISettings.tsx
 msgid "Change what model is used for generative features"
 msgstr "Change what model is used for generative features"
-
-#~ msgid "MCP Servers"
-#~ msgstr "MCP Servers"
 
 #: src/chunks/RTE/CollaborativeEditor.tsx
 #: src/components/forms/NewForm/NewFormTitle.tsx
@@ -2457,21 +2254,6 @@ msgstr "Next item"
 msgid "All versions <0/>"
 msgstr "All versions <0/>"
 
-#~ msgid "Editted <0/> by{0} <1/>"
-#~ msgstr "Editted <0/> by{0} <1/>"
-
-#~ msgid "No internet connection"
-#~ msgstr "No internet connection"
-
-#~ msgid "Server connection lost — reconnecting…"
-#~ msgstr "Server connection lost — reconnecting…"
-
-#~ msgid "You are offline, changes might not be persisted."
-#~ msgstr "You are offline, changes might not be persisted."
-
-#~ msgid "Connection to server lost, reconnecting..."
-#~ msgstr "Connection to server lost, reconnecting..."
-
 #: src/components/SkipNav.tsx
 msgid "Skip Navigation?"
 msgstr "Skip Navigation?"
@@ -2493,22 +2275,10 @@ msgstr "Copy"
 msgid "No MCP servers configured"
 msgstr "No MCP servers configured"
 
-#~ msgid "Add Server"
-#~ msgstr "Add Server"
-
-#~ msgid "Server Name"
-#~ msgstr "Server Name"
-
-#~ msgid "Enter server name"
-#~ msgstr "Enter server name"
-
 #: src/components/AI/MCP/MCPServersManager.tsx
 #: src/components/AI/MCP/ServerItem.tsx
 msgid "Server URL"
 msgstr "Server URL"
-
-#~ msgid "Enter server URL"
-#~ msgstr "Enter server URL"
 
 #: src/components/AI/MCP/MCPServersManager.tsx
 msgid "Type"
@@ -2571,9 +2341,6 @@ msgstr "Preview hidden because the file is larger than{0} {1}."
 msgid "Load anyway ({0})"
 msgstr "Load anyway ({0})"
 
-#~ msgid "Add tags"
-#~ msgstr "Add tags"
-
 #: src/components/forms/FileDropzone/FileDropzone.tsx
 msgid "<0/> Drop files here to upload."
 msgstr "<0/> Drop files here to upload."
@@ -2601,9 +2368,6 @@ msgstr "Class"
 #: src/views/FolderPage/ListView.tsx
 msgid "Last Modified"
 msgstr "Last Modified"
-
-#~ msgid "<0/> New Resource"
-#~ msgstr "<0/> New Resource"
 
 #: src/components/Tag/CreateTagRow.tsx
 msgid "New tag"
@@ -2712,17 +2476,8 @@ msgid "{0} at {1}"
 msgstr "{0} at {1}"
 
 #: src/components/LoroDocValue.tsx
-#: src/components/YDocValue.tsx
 msgid "Empty"
 msgstr "Empty"
-
-#: src/components/YDocValue.tsx
-msgid "Hide encoded state"
-msgstr "Hide encoded state"
-
-#: src/components/YDocValue.tsx
-msgid "Show encoded state"
-msgstr "Show encoded state"
 
 #: src/routes/SettingsServer/FavoriteButton.tsx
 msgid "Remove from favorites"
@@ -3572,42 +3327,13 @@ msgstr "No results found"
 msgid "Drives"
 msgstr "Drives"
 
-#~ msgid "That secret does not match. Please try again or start over."
-#~ msgstr "That secret does not match. Please try again or start over."
-
-#~ msgid "Something went wrong. You can start over if you lost your secret."
-#~ msgstr "Something went wrong. You can start over if you lost your secret."
-
 #: src/components/NewIdentitySection.tsx
 msgid "Verify your secret"
 msgstr "Verify your secret"
 
-#~ msgid ""
-#~ "You have been signed out to verify that you saved your secret. Enter it\n"
-#~ "below to sign in. If you lost it, you can start over."
-#~ msgstr ""
-#~ "You have been signed out to verify that you saved your secret. Enter it\n"
-#~ "below to sign in. If you lost it, you can start over."
-
 #: src/components/NewIdentitySection.tsx
 msgid "Paste your secret here"
 msgstr "Paste your secret here"
-
-#~ msgid "Signing in..."
-#~ msgstr "Signing in..."
-
-#~ msgid "Start over"
-#~ msgstr "Start over"
-
-#~ msgid "You're signed in!"
-#~ msgstr "You're signed in!"
-
-#~ msgid ""
-#~ "Now, set your profile name. Note that this is only set for this specific\n"
-#~ "server, but you can use your secret also on other servers."
-#~ msgstr ""
-#~ "Now, set your profile name. Note that this is only set for this specific\n"
-#~ "server, but you can use your secret also on other servers."
 
 #: src/components/NewIdentitySection.tsx
 msgid "Enter your name"
@@ -3617,53 +3343,9 @@ msgstr "Enter your name"
 msgid "Profile Name"
 msgstr "Profile Name"
 
-#~ msgid "Saving..."
-#~ msgstr "Saving..."
-
-#~ msgid "Skip"
-#~ msgstr "Skip"
-
-#~ msgid "Create your Drive"
-#~ msgstr "Create your Drive"
-
-#~ msgid ""
-#~ "A Drive is your personal data space on this server. You\n"
-#~ "can create more drives later."
-#~ msgstr ""
-#~ "A Drive is your personal data space on this server. You\n"
-#~ "can create more drives later."
-
-#~ msgid "Drive Name"
-#~ msgstr "Drive Name"
-
-#~ msgid "Creating..."
-#~ msgstr "Creating..."
-
-#~ msgid "Create Drive"
-#~ msgstr "Create Drive"
-
-#~ msgid "Save & Next"
-#~ msgstr "Save & Next"
-
-#~ msgid ""
-#~ "A Drive is your personal data space on this server. You can create more\n"
-#~ "drives later."
-#~ msgstr ""
-#~ "A Drive is your personal data space on this server. You can create more\n"
-#~ "drives later."
-
 #: src/components/NewIdentitySection.tsx
 msgid "Generating your identity..."
 msgstr "Generating your identity..."
-
-#~ msgid ""
-#~ "<0>IMPORTANT:</0> Save this secret key. It is the only way to\n"
-#~ "access your data if you clear your browser cache or sign in from another\n"
-#~ "device."
-#~ msgstr ""
-#~ "<0>IMPORTANT:</0> Save this secret key. It is the only way to\n"
-#~ "access your data if you clear your browser cache or sign in from another\n"
-#~ "device."
 
 #: src/components/NewIdentitySection.tsx
 msgid ""
@@ -3676,12 +3358,6 @@ msgstr ""
 #: src/components/NewIdentitySection.tsx
 msgid "Yes, I've stored it — sign me out to verify"
 msgstr "Yes, I've stored it — sign me out to verify"
-
-#~ msgid "The secret is invalid or this session has expired. You can start over."
-#~ msgstr "The secret is invalid or this session has expired. You can start over."
-
-#~ msgid "The secret is invalid. You can start over."
-#~ msgstr "The secret is invalid. You can start over."
 
 #: src/chunks/RTE/CollaborativeEditor.tsx
 msgid "Note"
@@ -3712,9 +3388,6 @@ msgstr "Untitled Agent"
 msgid "Type '/' for options or '@' for resources"
 msgstr "Type '/' for options or '@' for resources"
 
-#~ msgid "Center"
-#~ msgstr "Center"
-
 #: src/chunks/RTE/NoteExtention/NoteComponent.tsx
 msgid "<0/> Note"
 msgstr "<0/> Note"
@@ -3734,13 +3407,6 @@ msgstr "Setting up dev drive..."
 #: src/routes/PruneTestsRoute.tsx
 msgid "Prune Test Data"
 msgstr "Prune Test Data"
-
-#~ msgid ""
-#~ "Pruning test data will delete all drives on the server that have\n"
-#~ "’testdrive’ in their name."
-#~ msgstr ""
-#~ "Pruning test data will delete all drives on the server that have\n"
-#~ "’testdrive’ in their name."
 
 #: src/routes/PruneTestsRoute.tsx
 msgid "Prune"
@@ -3844,11 +3510,6 @@ msgstr "Tags"
 msgid "More"
 msgstr "More"
 
-#. placeholder {0}: tags.length
-#: src/components/Tag/TagCountPopover.tsx
-msgid "Tags +{0}"
-msgstr "Tags +{0}"
-
 #: src/views/Drive/DrivePage.tsx
 msgid "Remove tag"
 msgstr "Remove tag"
@@ -3865,9 +3526,6 @@ msgstr "No messages yet"
 msgid "Be the first to say something"
 msgstr "Be the first to say something"
 
-#~ msgid "The Ontology that"
-#~ msgstr "The Ontology that"
-
 #. placeholder {0}: shortcuts.search
 #: src/components/NavBar.tsx
 msgid "Search ({0})"
@@ -3876,15 +3534,6 @@ msgstr "Search ({0})"
 #: src/routes/AppSettings.tsx
 msgid "NavBar position"
 msgstr "NavBar position"
-
-#~ msgid "Replying to"
-#~ msgstr "Replying to"
-
-#~ msgid "Clear reply"
-#~ msgstr "Clear reply"
-
-#~ msgid "Reply"
-#~ msgstr "Reply"
 
 #: src/routes/AppSettings.tsx
 msgid "Language"
@@ -3915,17 +3564,6 @@ msgstr "<0/>{0} Hide templates on new resource page"
 msgid "Panels & Templates"
 msgstr "Panels & Templates"
 
-#~ msgid ""
-#~ "OpenRouter provides a unified API that gives you access\n"
-#~ "to hundreds of AI models from all major vendors, while\n"
-#~ "automatically handling fallbacks and selecting the most\n"
-#~ "cost-effective options."
-#~ msgstr ""
-#~ "OpenRouter provides a unified API that gives you access\n"
-#~ "to hundreds of AI models from all major vendors, while\n"
-#~ "automatically handling fallbacks and selecting the most\n"
-#~ "cost-effective options."
-
 #: src/routes/AppSettings.tsx
 msgid "Search settings..."
 msgstr "Search settings..."
@@ -3946,18 +3584,6 @@ msgstr "New Folder"
 msgid "New ChatRoom"
 msgstr "New ChatRoom"
 
-#~ msgid "<0/> New"
-#~ msgstr "<0/> New"
-
-#~ msgid ""
-#~ "You are connecting to <0/>. Create a new\n"
-#~ "identity and drive to get started, or use User Settings to sign in\n"
-#~ "with an existing secret."
-#~ msgstr ""
-#~ "You are connecting to <0/>. Create a new\n"
-#~ "identity and drive to get started, or use User Settings to sign in\n"
-#~ "with an existing secret."
-
 #. placeholder {0}: ' '
 #: src/views/ErrorPage.tsx
 msgid "If you have not set up an identity on this server yet,{0} <0>create one here</0>."
@@ -3967,36 +3593,6 @@ msgstr "If you have not set up an identity on this server yet,{0} <0>create one 
 msgid "Could not parse that secret."
 msgstr "Could not parse that secret."
 
-#~ msgid "Welcome"
-#~ msgstr "Welcome"
-
-#~ msgid ""
-#~ "You are connected to <0/>. There is no default\n"
-#~ "data space at the site root yet, or you need to sign in. Create a\n"
-#~ "new identity on this server, or sign in with a secret you already\n"
-#~ "have."
-#~ msgstr ""
-#~ "You are connected to <0/>. There is no default\n"
-#~ "data space at the site root yet, or you need to sign in. Create a\n"
-#~ "new identity on this server, or sign in with a secret you already\n"
-#~ "have."
-
-#~ msgid "New here"
-#~ msgstr "New here"
-
-#~ msgid ""
-#~ "Create an agent and a personal drive. You will get a secret to\n"
-#~ "store safely—this is your account on this server."
-#~ msgstr ""
-#~ "Create an agent and a personal drive. You will get a secret to\n"
-#~ "store safely—this is your account on this server."
-
-#~ msgid "Create your account"
-#~ msgstr "Create your account"
-
-#~ msgid "Already have a secret"
-#~ msgstr "Already have a secret"
-
 #: src/components/LoggedOutAgentPanel.tsx
 #: src/components/LoggedOutAgentPanel.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
@@ -4004,65 +3600,14 @@ msgstr "Could not parse that secret."
 msgid "Agent secret"
 msgstr "Agent secret"
 
-#~ msgid "Paste the full secret (the long base64 string from when you created or exported your identity)."
-#~ msgstr "Paste the full secret (the long base64 string from when you created or exported your identity)."
-
 #: src/components/LoggedOutAgentPanel.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Signing in…"
 msgstr "Signing in…"
 
-#~ msgid "<0>Open User Settings</0>{0} for more options (e.g. switching drives)."
-#~ msgstr "<0>Open User Settings</0>{0} for more options (e.g. switching drives)."
-
 #: src/components/NewIdentitySection.tsx
 msgid "Set your profile name!"
 msgstr "Set your profile name!"
-
-#~ msgid ""
-#~ "Note that this is only set for this specific\n"
-#~ "server, but you can use your secret also on other servers."
-#~ msgstr ""
-#~ "Note that this is only set for this specific\n"
-#~ "server, but you can use your secret also on other servers."
-
-#~ msgid "Welcome to AtomicServer"
-#~ msgstr "Welcome to AtomicServer"
-
-#~ msgid ""
-#~ "You are connected to <0/>. There is no default\n"
-#~ "data space at the site root yet, or you need to sign in. Use the\n"
-#~ "same options as in User Settings below."
-#~ msgstr ""
-#~ "You are connected to <0/>. There is no default\n"
-#~ "data space at the site root yet, or you need to sign in. Use the\n"
-#~ "same options as in User Settings below."
-
-#~ msgid "<0>User Settings</0>{0} for drive switching and your profile."
-#~ msgstr "<0>User Settings</0>{0} for drive switching and your profile."
-
-#~ msgid ""
-#~ "You are connected to <0/>. There is no default\n"
-#~ "data space at the site root yet, or you need to sign in."
-#~ msgstr ""
-#~ "You are connected to <0/>. There is no default\n"
-#~ "data space at the site root yet, or you need to sign in."
-
-#~ msgid "Set up your identity"
-#~ msgstr "Set up your identity"
-
-#~ msgid ""
-#~ "On <0/>. You already chose to create a new\n"
-#~ "identity — continue with your profile and drive below."
-#~ msgstr ""
-#~ "On <0/>. You already chose to create a new\n"
-#~ "identity — continue with your profile and drive below."
-
-#~ msgid "On <0/>."
-#~ msgstr "On <0/>."
-
-#~ msgid "Set up your Agent on <0/>."
-#~ msgstr "Set up your Agent on <0/>."
 
 #: src/components/AI/AISettings.tsx
 msgid ""
@@ -4075,13 +3620,6 @@ msgstr ""
 "access to hundreds of AI models from all major\n"
 "vendors, while automatically handling fallbacks and\n"
 "selecting the most cost-effective options."
-
-#~ msgid ""
-#~ "Note that this is only set for this specific server, but you can use\n"
-#~ "your secret also on other servers."
-#~ msgstr ""
-#~ "Note that this is only set for this specific server, but you can use\n"
-#~ "your secret also on other servers."
 
 #. placeholder {0}: ' '
 #. placeholder {1}: ' '
@@ -4115,16 +3653,6 @@ msgstr ""
 msgid "Creating your personal drive…"
 msgstr "Creating your personal drive…"
 
-#~ msgid ""
-#~ "This name is shown on this server. We also create a private drive named\n"
-#~ "after you as your home; you can add more drives later in settings."
-#~ msgstr ""
-#~ "This name is shown on this server. We also create a private drive named\n"
-#~ "after you as your home; you can add more drives later in settings."
-
-#~ msgid "Agent: {0}"
-#~ msgstr "Agent: {0}"
-
 #: src/components/NewIdentitySection.tsx
 msgid "Creating drive…"
 msgstr "Creating drive…"
@@ -4132,15 +3660,6 @@ msgstr "Creating drive…"
 #: src/components/NewIdentitySection.tsx
 msgid "Save & continue"
 msgstr "Save & continue"
-
-#~ msgid "Skip (drive will be named \"Personal\")"
-#~ msgstr "Skip (drive will be named \"Personal\")"
-
-#~ msgid "Set up your Agent and personal drive on <0/>."
-#~ msgstr "Set up your Agent and personal drive on <0/>."
-
-#~ msgid "Failed to update agent after invite"
-#~ msgstr "Failed to update agent after invite"
 
 #: src/components/SideBar/SideBarDrive.tsx
 msgid "Shared with me"
@@ -4153,13 +3672,6 @@ msgstr "Collapse"
 #: src/components/SideBar/SideBarPanel.tsx
 msgid "Expand"
 msgstr "Expand"
-
-#~ msgid ""
-#~ "Created via `/app/dev-drive` for local development and E2E. You can remove these with Prune test data on `/app/prunetests`.\n"
-#~ "{0}"
-#~ msgstr ""
-#~ "Created via `/app/dev-drive` for local development and E2E. You can remove these with Prune test data on `/app/prunetests`.\n"
-#~ "{0}"
 
 #. placeholder {0}: DEV_DRIVE_PRUNE_MARKER
 #: src/hooks/useDevDrive.ts
@@ -4189,15 +3701,6 @@ msgstr "Rearrange {0}"
 msgid "New"
 msgstr "New"
 
-#~ msgid "Sign Up"
-#~ msgstr "Sign Up"
-
-#~ msgid "Create Agetn"
-#~ msgstr "Create Agetn"
-
-#~ msgid "New User"
-#~ msgstr "New User"
-
 #: src/components/LoggedOutAgentPanel.tsx
 #: src/routes/SettingsAgent.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
@@ -4208,265 +3711,18 @@ msgstr "Create account"
 msgid "Back"
 msgstr "Back"
 
-#~ msgid "Welcome{0}"
-#~ msgstr "Welcome{0}"
-
 #: src/views/InvitePage.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "AtomicServer"
 msgstr "AtomicServer"
 
-#~ msgid ""
-#~ "A production-grade data workspace — graph-native, permission-aware,\n"
-#~ "and ready to self-host."
-#~ msgstr ""
-#~ "A production-grade data workspace — graph-native, permission-aware,\n"
-#~ "and ready to self-host."
-
-#~ msgid ""
-#~ "<0>Fastest all-in-one workspace</0> — documents, tables,\n"
-#~ "linked data, and HTTP APIs together, without duct-taping half a\n"
-#~ "dozen services."
-#~ msgstr ""
-#~ "<0>Fastest all-in-one workspace</0> — documents, tables,\n"
-#~ "linked data, and HTTP APIs together, without duct-taping half a\n"
-#~ "dozen services."
-
-#~ msgid ""
-#~ "<0>Open source</0> — inspect the stack, adapt it, and\n"
-#~ "run it wherever you need it."
-#~ msgstr ""
-#~ "<0>Open source</0> — inspect the stack, adapt it, and\n"
-#~ "run it wherever you need it."
-
-#~ msgid ""
-#~ "<0>Offline-first</0> — keep working locally; sync and\n"
-#~ "resolve conflicts when you are back online."
-#~ msgstr ""
-#~ "<0>Offline-first</0> — keep working locally; sync and\n"
-#~ "resolve conflicts when you are back online."
-
-#~ msgid ""
-#~ "<0>Fully featured</0> — realtime collaboration, search,\n"
-#~ "invites, fine-grained rights, and extensible ontologies out of the\n"
-#~ "box."
-#~ msgstr ""
-#~ "<0>Fully featured</0> — realtime collaboration, search,\n"
-#~ "invites, fine-grained rights, and extensible ontologies out of the\n"
-#~ "box."
-
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Get started"
 msgstr "Get started"
 
-#~ msgid ""
-#~ "A production-grade data workspace. Graph-native, permission-aware, and ready\n"
-#~ "to self-host."
-#~ msgstr ""
-#~ "A production-grade data workspace. Graph-native, permission-aware, and ready\n"
-#~ "to self-host."
-
-#~ msgid ""
-#~ "<0>Fastest all-in-one workspace</0>: documents, tables, linked\n"
-#~ "data, and HTTP APIs together, without duct-taping half a dozen services."
-#~ msgstr ""
-#~ "<0>Fastest all-in-one workspace</0>: documents, tables, linked\n"
-#~ "data, and HTTP APIs together, without duct-taping half a dozen services."
-
-#~ msgid ""
-#~ "<0>Open source</0>: inspect the stack, adapt it, and run it\n"
-#~ "wherever you need it."
-#~ msgstr ""
-#~ "<0>Open source</0>: inspect the stack, adapt it, and run it\n"
-#~ "wherever you need it."
-
-#~ msgid ""
-#~ "<0>Offline-first</0>: keep working locally; sync and resolve\n"
-#~ "conflicts when you are back online."
-#~ msgstr ""
-#~ "<0>Offline-first</0>: keep working locally; sync and resolve\n"
-#~ "conflicts when you are back online."
-
-#~ msgid ""
-#~ "<0>Fully featured</0>: realtime collaboration, search, invites,\n"
-#~ "fine-grained rights, and extensible ontologies out of the box."
-#~ msgstr ""
-#~ "<0>Fully featured</0>: realtime collaboration, search, invites,\n"
-#~ "fine-grained rights, and extensible ontologies out of the box."
-
-#~ msgid ""
-#~ "<0>Integrated knowledge environment</0>: build an AI-ready\n"
-#~ "knowledge base from your docs, linked data, and workflows."
-#~ msgstr ""
-#~ "<0>Integrated knowledge environment</0>: build an AI-ready\n"
-#~ "knowledge base from your docs, linked data, and workflows."
-
-#~ msgid ""
-#~ "A production-grade data workspace. Graph-native, permission-aware,\n"
-#~ "and ready to self-host."
-#~ msgstr ""
-#~ "A production-grade data workspace. Graph-native, permission-aware,\n"
-#~ "and ready to self-host."
-
-#~ msgid ""
-#~ "<0>Fastest all-in-one workspace</0>: documents, tables,\n"
-#~ "linked data, and HTTP APIs together, without duct-taping half a\n"
-#~ "dozen services."
-#~ msgstr ""
-#~ "<0>Fastest all-in-one workspace</0>: documents, tables,\n"
-#~ "linked data, and HTTP APIs together, without duct-taping half a\n"
-#~ "dozen services."
-
-#~ msgid ""
-#~ "<0>Integrated knowledge environment</0>: build an\n"
-#~ "AI-ready knowledge base from your docs, structured data, and\n"
-#~ "files."
-#~ msgstr ""
-#~ "<0>Integrated knowledge environment</0>: build an\n"
-#~ "AI-ready knowledge base from your docs, structured data, and\n"
-#~ "files."
-
-#~ msgid ""
-#~ "<0>Open source</0>: inspect the stack, adapt it, and run\n"
-#~ "it wherever you need it."
-#~ msgstr ""
-#~ "<0>Open source</0>: inspect the stack, adapt it, and run\n"
-#~ "it wherever you need it."
-
-#~ msgid ""
-#~ "<0>Offline-first</0>: keep working locally; sync and\n"
-#~ "resolve conflicts when you are back online."
-#~ msgstr ""
-#~ "<0>Offline-first</0>: keep working locally; sync and\n"
-#~ "resolve conflicts when you are back online."
-
-#~ msgid ""
-#~ "<0>Fully featured</0>: realtime collaboration, search,\n"
-#~ "invites, fine-grained rights, and extensible ontologies out of the\n"
-#~ "box."
-#~ msgstr ""
-#~ "<0>Fully featured</0>: realtime collaboration, search,\n"
-#~ "invites, fine-grained rights, and extensible ontologies out of the\n"
-#~ "box."
-
-#~ msgid ""
-#~ "<0>One workspace for knowledge and apps</0>: documents,\n"
-#~ "tables, files, and APIs in one graph, built to stay coherent as it\n"
-#~ "grows."
-#~ msgstr ""
-#~ "<0>One workspace for knowledge and apps</0>: documents,\n"
-#~ "tables, files, and APIs in one graph, built to stay coherent as it\n"
-#~ "grows."
-
-#~ msgid ""
-#~ "<0>Your data, your rules</0>: self-host and keep control\n"
-#~ "over access, structure, and sharing. No vendor lock-in."
-#~ msgstr ""
-#~ "<0>Your data, your rules</0>: self-host and keep control\n"
-#~ "over access, structure, and sharing. No vendor lock-in."
-
-#~ msgid ""
-#~ "<0>Linked data that is practical</0>: a developer-friendly\n"
-#~ "take on the semantic web, with strict schemas and predictable\n"
-#~ "behavior."
-#~ msgstr ""
-#~ "<0>Linked data that is practical</0>: a developer-friendly\n"
-#~ "take on the semantic web, with strict schemas and predictable\n"
-#~ "behavior."
-
-#~ msgid ""
-#~ "<0>Standardized from the start</0>: reuse properties and\n"
-#~ "models, validate automatically, and keep systems interoperable."
-#~ msgstr ""
-#~ "<0>Standardized from the start</0>: reuse properties and\n"
-#~ "models, validate automatically, and keep systems interoperable."
-
-#~ msgid ""
-#~ "<0>Feature complete by default</0>: rights, history,\n"
-#~ "realtime sync, search, invites, and collaboration built in."
-#~ msgstr ""
-#~ "<0>Feature complete by default</0>: rights, history,\n"
-#~ "realtime sync, search, invites, and collaboration built in."
-
-#~ msgid ""
-#~ "<0>Fast</0>: a snappy workspace and API, optimized for\n"
-#~ "realtime interaction."
-#~ msgstr ""
-#~ "<0>Fast</0>: a snappy workspace and API, optimized for\n"
-#~ "realtime interaction."
-
-#~ msgid ""
-#~ "<0>Lightweight</0>: small download, minimal dependencies,\n"
-#~ "runs anywhere."
-#~ msgstr ""
-#~ "<0>Lightweight</0>: small download, minimal dependencies,\n"
-#~ "runs anywhere."
-
-#~ msgid ""
-#~ "<0>Open source</0>: inspect, fork, and self-host. Keep\n"
-#~ "control of your data and avoid lock-in."
-#~ msgstr ""
-#~ "<0>Open source</0>: inspect, fork, and self-host. Keep\n"
-#~ "control of your data and avoid lock-in."
-
-#~ msgid ""
-#~ "<0>Feature complete by default</0>: rights, history,\n"
-#~ "search, invites, realtime sync, and collaboration built in."
-#~ msgstr ""
-#~ "<0>Feature complete by default</0>: rights, history,\n"
-#~ "search, invites, realtime sync, and collaboration built in."
-
-#~ msgid ""
-#~ "<0>All-in-one workspace</0>: documents, tables, files,\n"
-#~ "and APIs in one place, designed to stay coherent as it grows."
-#~ msgstr ""
-#~ "<0>All-in-one workspace</0>: documents, tables, files,\n"
-#~ "and APIs in one place, designed to stay coherent as it grows."
-
-#~ msgid ""
-#~ "<0>Fast and lightweight</0>: a snappy workspace and API,\n"
-#~ "small download, minimal dependencies, runs anywhere."
-#~ msgstr ""
-#~ "<0>Fast and lightweight</0>: a snappy workspace and API,\n"
-#~ "small download, minimal dependencies, runs anywhere."
-
-#~ msgid ""
-#~ "<0>Feature complete by default</0>: rights, history,\n"
-#~ "search, invites, realtime sync, collaboration, and AI chat built\n"
-#~ "in."
-#~ msgstr ""
-#~ "<0>Feature complete by default</0>: rights, history,\n"
-#~ "search, invites, realtime sync, collaboration, and AI chat built\n"
-#~ "in."
-
-#~ msgid ""
-#~ "<0>Future of the web</0>: decentralized by design, built\n"
-#~ "for interoperability so your data and tools can work together."
-#~ msgstr ""
-#~ "<0>Future of the web</0>: decentralized by design, built\n"
-#~ "for interoperability so your data and tools can work together."
-
 #: src/components/NewIdentitySection.tsx
 msgid "Others can read this. You can change this later."
 msgstr "Others can read this. You can change this later."
-
-#~ msgid "Your Integrated Knowledge Environment"
-#~ msgstr "Your Integrated Knowledge Environment"
-
-#~ msgid "Make your knowledge work for you"
-#~ msgstr "Make your knowledge work for you"
-
-#~ msgid "Fast and lightweight"
-#~ msgstr "Fast and lightweight"
-
-#~ msgid "Open source"
-#~ msgstr "Open source"
-
-#~ msgid "Future of the web"
-#~ msgstr "Future of the web"
-
-#~ msgid "Feature complete by default"
-#~ msgstr "Feature complete by default"
 
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Make your knowledge work for you."
@@ -4480,48 +3736,10 @@ msgstr "Generative features"
 msgid "MCP servers"
 msgstr "MCP servers"
 
-#~ msgid ""
-#~ "<0>All-in-one workspace</0>: documents, tables, files, and APIs\n"
-#~ "in one place, designed to stay coherent as it grows."
-#~ msgstr ""
-#~ "<0>All-in-one workspace</0>: documents, tables, files, and APIs\n"
-#~ "in one place, designed to stay coherent as it grows."
-
-#~ msgid ""
-#~ "<0>Fast and lightweight</0>: a snappy workspace and API, small\n"
-#~ "download, minimal dependencies, runs anywhere."
-#~ msgstr ""
-#~ "<0>Fast and lightweight</0>: a snappy workspace and API, small\n"
-#~ "download, minimal dependencies, runs anywhere."
-
-#~ msgid ""
-#~ "<0>Open source</0>: inspect, fork, and self-host. Keep control\n"
-#~ "of your data and avoid lock-in."
-#~ msgstr ""
-#~ "<0>Open source</0>: inspect, fork, and self-host. Keep control\n"
-#~ "of your data and avoid lock-in."
-
-#~ msgid ""
-#~ "<0>Future of the web</0>: decentralized by design, built for\n"
-#~ "interoperability so your data and tools can work together."
-#~ msgstr ""
-#~ "<0>Future of the web</0>: decentralized by design, built for\n"
-#~ "interoperability so your data and tools can work together."
-
-#~ msgid ""
-#~ "<0>Feature complete by default</0>: rights, history, search,\n"
-#~ "invites, realtime sync, collaboration, and AI chat built in."
-#~ msgstr ""
-#~ "<0>Feature complete by default</0>: rights, history, search,\n"
-#~ "invites, realtime sync, collaboration, and AI chat built in."
-
 #: src/views/getting-started/GettingStartedFlow.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "<0/> Back"
 msgstr "<0/> Back"
-
-#~ msgid "The secret is invalid."
-#~ msgstr "The secret is invalid."
 
 #: src/components/NewIdentitySection.tsx
 msgid ""
@@ -4555,13 +3773,6 @@ msgstr "Created: {0}"
 #: src/components/NewIdentitySection.tsx
 msgid "Backup file downloaded — move it out of Downloads if you share this computer"
 msgstr "Backup file downloaded — move it out of Downloads if you share this computer"
-
-#~ msgid ""
-#~ "<0>IMPORTANT:</0> You need this secret to sign in again. We\n"
-#~ "do not store a copy you can reset like a normal password."
-#~ msgstr ""
-#~ "<0>IMPORTANT:</0> You need this secret to sign in again. We\n"
-#~ "do not store a copy you can reset like a normal password."
 
 #. placeholder {0}: ' '
 #: src/components/NewIdentitySection.tsx
@@ -4644,12 +3855,6 @@ msgstr ""
 "search, invites, realtime sync, collaboration, and AI chat\n"
 "built in."
 
-#~ msgid "Loro document ({0} bytes)"
-#~ msgstr "Loro document ({0} bytes)"
-
-#~ msgid "Version restore not yet implemented for Loro"
-#~ msgstr "Version restore not yet implemented for Loro"
-
 #. placeholder {0}: resource.title
 #: src/routes/History/HistoryRoute.tsx
 msgid "Loading history of {0}..."
@@ -4707,12 +3912,6 @@ msgstr "{0} {1} Loro snapshot ({2} {3})"
 msgid "Failed to decode Loro snapshot"
 msgstr "Failed to decode Loro snapshot"
 
-#~ msgid "Connected to server over WebSocket"
-#~ msgstr "Connected to server over WebSocket"
-
-#~ msgid "Offline / server connection unavailable"
-#~ msgstr "Offline / server connection unavailable"
-
 #: src/components/SideBar/SyncMenuItem.tsx
 #: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
@@ -4720,100 +3919,9 @@ msgstr "Failed to decode Loro snapshot"
 msgid "Sync"
 msgstr "Sync"
 
-#~ msgid "Show current connection and sync state"
-#~ msgstr "Show current connection and sync state"
-
-#~ msgid "connection"
-#~ msgstr "connection"
-
-#~ msgid "syncing"
-#~ msgstr "syncing"
-
-#~ msgid "drive sync"
-#~ msgstr "drive sync"
-
-#~ msgid "dirty sync"
-#~ msgstr "dirty sync"
-
-#~ msgid "pending dirty"
-#~ msgstr "pending dirty"
-
-#~ msgid "ws state"
-#~ msgstr "ws state"
-
-#~ msgid "ws protocol"
-#~ msgstr "ws protocol"
-
-#~ msgid "client db"
-#~ msgstr "client db"
-
-#~ msgid "server"
-#~ msgstr "server"
-
-#~ msgid "drive"
-#~ msgstr "drive"
-
-#~ msgid "last drive sync"
-#~ msgstr "last drive sync"
-
-#~ msgid "Inspect sync and connection state"
-#~ msgstr "Inspect sync and connection state"
-
-#~ msgid ""
-#~ "Inspect the current connection state, background sync activity, and\n"
-#~ "websocket details for this client."
-#~ msgstr ""
-#~ "Inspect the current connection state, background sync activity, and\n"
-#~ "websocket details for this client."
-
-#~ msgid "Status"
-#~ msgstr "Status"
-
-#~ msgid "Connection"
-#~ msgstr "Connection"
-
-#~ msgid "Last Drive Sync"
-#~ msgstr "Last Drive Sync"
-
-#~ msgid "resources"
-#~ msgstr "resources"
-
-#~ msgid "timestamp"
-#~ msgstr "timestamp"
-
-#~ msgid "No completed drive sync recorded yet."
-#~ msgstr "No completed drive sync recorded yet."
-
-#~ msgid "Commit Log"
-#~ msgstr "Commit Log"
-
-#~ msgid "commit"
-#~ msgstr "commit"
-
-#~ msgid "previous"
-#~ msgstr "previous"
-
-#~ msgid "signer"
-#~ msgstr "signer"
-
-#~ msgid "No commits recorded in this session yet."
-#~ msgstr "No commits recorded in this session yet."
-
-#~ msgid "by"
-#~ msgstr "by"
-
 #: src/routes/SyncRoute.tsx
 msgid "destroy"
 msgstr "destroy"
-
-#~ msgid "source:"
-#~ msgstr "source:"
-
-#~ msgid "Where this resource was last loaded from"
-#~ msgstr "Where this resource was last loaded from"
-
-#~ msgid "Running in offline mode"
-#~ msgstr "Running in offline mode"
 
 #: src/routes/SyncRoute.tsx
 msgid "In sync"
@@ -4840,20 +3948,10 @@ msgstr "Offline"
 msgid "Unknown"
 msgstr "Unknown"
 
-#~ msgid ""
-#~ "Your data is stored locally on this device. When connected to a\n"
-#~ "server, changes sync automatically."
-#~ msgstr ""
-#~ "Your data is stored locally on this device. When connected to a\n"
-#~ "server, changes sync automatically."
-
 #: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "This device"
 msgstr "This device"
-
-#~ msgid "{0} pending"
-#~ msgstr "{0} pending"
 
 #: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
@@ -4873,12 +3971,6 @@ msgstr "Drive"
 msgid "Connected"
 msgstr "Connected"
 
-#~ msgid "Local storage"
-#~ msgstr "Local storage"
-
-#~ msgid "Ready"
-#~ msgstr "Ready"
-
 #: src/routes/SyncRoute.tsx
 msgid "Initializing..."
 msgstr "Initializing..."
@@ -4894,15 +3986,9 @@ msgstr "Last sync"
 msgid "{0} resources,{1} {2}"
 msgstr "{0} resources,{1} {2}"
 
-#~ msgid "Activity"
-#~ msgstr "Activity"
-
 #: src/routes/SyncRoute.tsx
 msgid "No activity recorded in this session yet."
 msgstr "No activity recorded in this session yet."
-
-#~ msgid "Connected to server"
-#~ msgstr "Connected to server"
 
 #: src/components/NetworkIndicator.tsx
 msgid "Working offline — your changes are saved locally"
@@ -4930,16 +4016,10 @@ msgstr "Commit Log {0}"
 msgid "Sorry, this invite has no usages left. Ask for a new one."
 msgstr "Sorry, this invite has no usages left. Ask for a new one."
 
-#~ msgid "{0} usages left"
-#~ msgstr "{0} usages left"
-
 #. placeholder {0}: showInherited ? <FaChevronDown /> : <FaChevronRight />
 #: src/components/Share/ShareDialog.tsx
 msgid "{0} Inherited permissions"
 msgstr "{0} Inherited permissions"
-
-#~ msgid "Create Invite"
-#~ msgstr "Create Invite"
 
 #: src/components/Share/ShareDialog.tsx
 msgid "<0><0/> Back</0> Create Invite"
@@ -4949,15 +4029,6 @@ msgstr "<0><0/> Back</0> Create Invite"
 msgid "No invite token provided."
 msgstr "No invite token provided."
 
-#~ msgid "You've been invited"
-#~ msgstr "You've been invited"
-
-#~ msgid "You've been invited to {0}{1} <0/>"
-#~ msgstr "You've been invited to {0}{1} <0/>"
-
-#~ msgid "You've been invited to {0} a resource"
-#~ msgstr "You've been invited to {0} a resource"
-
 #: src/views/InvitePage.tsx
 msgid "Create account and accept"
 msgstr "Create account and accept"
@@ -4965,18 +4036,6 @@ msgstr "Create account and accept"
 #: src/views/InvitePage.tsx
 msgid "I already have an account"
 msgstr "I already have an account"
-
-#~ msgid "What is AtomicServer?"
-#~ msgstr "What is AtomicServer?"
-
-#~ msgid "<0>All-in-one workspace</0>: documents, tables, files, and APIs in one place."
-#~ msgstr "<0>All-in-one workspace</0>: documents, tables, files, and APIs in one place."
-
-#~ msgid "<0>Real-time collaboration</0>: edit together with instant sync."
-#~ msgstr "<0>Real-time collaboration</0>: edit together with instant sync."
-
-#~ msgid "<0>Open source</0>: inspect, fork, and self-host. Keep control of your data."
-#~ msgstr "<0>Open source</0>: inspect, fork, and self-host. Keep control of your data."
 
 #. placeholder {0}: write ? 'edit' : 'view'
 #. placeholder {1}: resourceName ? ` "${resourceName}"` : ''
@@ -5018,27 +4077,15 @@ msgstr "+ Add"
 msgid "/app/sync"
 msgstr "/app/sync"
 
-#~ msgid "Server settings have moved to the{0} <0>Sync page</0>."
-#~ msgstr "Server settings have moved to the{0} <0>Sync page</0>."
-
 #: src/routes/SyncRoute.tsx
 msgid "How to run your own server"
 msgstr "How to run your own server"
-
-#~ msgid "Peer ID"
-#~ msgstr "Peer ID"
 
 #. placeholder {0}: data.count
 #. placeholder {1}: data.count !== 1 ? 's' : ''
 #: src/routes/SyncRoute.tsx
 msgid "Synced {0} resource{1}"
 msgstr "Synced {0} resource{1}"
-
-#~ msgid "Peer sync"
-#~ msgstr "Peer sync"
-
-#~ msgid "Paste device ID to sync with"
-#~ msgstr "Paste device ID to sync with"
 
 #: src/routes/SyncRoute.tsx
 msgid "Peers"
@@ -5047,9 +4094,6 @@ msgstr "Peers"
 #: src/routes/SyncRoute.tsx
 msgid "No peers connected"
 msgstr "No peers connected"
-
-#~ msgid "Paste device ID"
-#~ msgstr "Paste device ID"
 
 #: src/routes/SyncRoute.tsx
 msgid "Node DID"
@@ -5088,12 +4132,6 @@ msgstr "Embedded (local)"
 msgid "Local DB"
 msgstr "Local DB"
 
-#~ msgid "WASM + OPFS enabled"
-#~ msgstr "WASM + OPFS enabled"
-
-#~ msgid "Disabled (server-only, reload to apply)"
-#~ msgstr "Disabled (server-only, reload to apply)"
-
 #: src/routes/SyncRoute.tsx
 msgid "Disabled (server-only)"
 msgstr "Disabled (server-only)"
@@ -5121,15 +4159,6 @@ msgstr ""
 #: src/views/ResourcePage.tsx
 msgid "Check the browser console for details, or try navigating back."
 msgstr "Check the browser console for details, or try navigating back."
-
-#~ msgid "Failed to set agent identity after invite"
-#~ msgstr "Failed to set agent identity after invite"
-
-#~ msgid "Failed to create personal drive after invite"
-#~ msgstr "Failed to create personal drive after invite"
-
-#~ msgid "Failed to link shared resource after invite"
-#~ msgstr "Failed to link shared resource after invite"
 
 #. placeholder {0}: e instanceof Error ? e.message : String(e)
 #: src/routes/History/HistoryRoute.tsx
@@ -5159,9 +4188,6 @@ msgstr "Width <0/>"
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Saving…"
 msgstr "Saving…"
-
-#~ msgid "Draw with left click · Pan with Alt+drag or middle mouse · Scroll to zoom"
-#~ msgstr "Draw with left click · Pan with Alt+drag or middle mouse · Scroll to zoom"
 
 #: src/views/Drive/DrivePage.tsx
 msgid "Resources"
