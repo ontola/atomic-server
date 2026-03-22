@@ -68,12 +68,19 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
 
   const tablePageContext: TablePageContextType = useMemo(
     () => ({
+      tableSubject: resource.subject,
       tableClassSubject: tableClass.subject,
       sorting,
       setSortBy,
       addItemsToHistoryStack,
     }),
-    [tableClass, setSortBy, sorting, addItemsToHistoryStack],
+    [
+      resource.subject,
+      tableClass.subject,
+      sorting,
+      setSortBy,
+      addItemsToHistoryStack,
+    ],
   );
 
   const handleDeleteRow = useCallback(

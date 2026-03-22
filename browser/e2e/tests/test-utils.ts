@@ -16,7 +16,6 @@ export const DELETE_PREVIOUS_TEST_DRIVES =
 
 export const SERVER_URL = process.env.SERVER_URL || 'http://localhost:9883';
 export const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
-const startDriveName = new URL(FRONTEND_URL).hostname;
 
 export const DEMO_INVITE_NAME = 'document demo invite';
 
@@ -65,11 +64,9 @@ export const before = async ({ page }: { page: Page }): Promise<boolean> => {
     const test_agent =
       'eyJwcml2YXRlS2V5IjoidDBDM2pQYW8wUmMyNHVsVWw5ZzZrcFUrRlo0clFNK1I5dDhpaVo4SHBrQT0iLCJzdWJqZWN0IjoiZGlkOmFkOmFnZW50OnNMS1VIK1VKaVRNbStkeHpiQUZmMWgzZ0RvbldRYU9nVSsrMkhEMWJ1ZVE9IiwiaW5pdGlhbERyaXZlIjoiaHR0cDovL2xvY2FsaG9zdDo5ODgzIn0K';
     await page.locator('textarea').fill(test_agent);
-    const navPromise = page.waitForNavigation();
     await page.getByRole('button', { name: 'Import & Connect' }).click();
-    await navPromise;
+    await page.waitForURL(/\/app\/show/, { timeout: 15000 });
 
-    // Wait for the reload and sidebar to appear
     await page.goto(
       `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(SERVER_URL)}`,
     );
@@ -77,12 +74,6 @@ export const before = async ({ page }: { page: Page }): Promise<boolean> => {
 
     return true;
   }
-
-  // // Sometimes we run the test server on a different port, but we should
-  // // only change the drive if it is non-default.
-  // if (SERVER_URL !== FRONTEND_URL) {
-  //   await changeDrive(SERVER_URL, page);
-  // }
 
   await expect(currentDriveTitle(page)).toBeVisible();
 
@@ -95,24 +86,34 @@ export async function setTitle(page: Page, title: string) {
   await expect(editableTitle(page)).toHaveRole('textbox');
   await editableTitle(page).type(title);
   await page.keyboard.press('Escape');
-  // await page.waitForTimeout(500);
   await waiter;
 }
 
-export async function signIn(page: Page) {
+export async function signIn(page: Page, secret: string = SECRET) {
   await page.getByRole('link', { name: 'Login / New User' }).click();
-  await page.locator('#current-password').fill(SECRET);
+  await page.locator('#current-password').fill(secret);
   await page.goBack();
 }
 
 /**
  * Quick dev setup: navigates to /app/dev-drive which creates a fresh agent +
  * drive on localhost:9883 and switches to it automatically.
+ * Returns the agent secret so other pages/contexts can sign in as the same user.
  */
-export async function devDrive(page: Page) {
+export async function devDrive(page: Page): Promise<string> {
   await page.goto(`${FRONTEND_URL}/app/dev-drive`);
   await page.waitForURL(/did(?:%3A|:)ad(?:%3A|:)/, { timeout: 30000 });
   await expect(currentDriveTitle(page)).toBeVisible({ timeout: 15000 });
+
+  const secret = await page.evaluate(() =>
+    localStorage.getItem('atomic-test.dev-drive-secret'),
+  );
+
+  if (!secret) {
+    throw new Error('devDrive: agent secret not found in localStorage');
+  }
+
+  return secret;
 }
 
 /**
@@ -143,9 +144,6 @@ export async function newDrive(page: Page) {
 
   // Wait for the URL to change to did:ad: (newly created drive)
   await page.waitForURL(/did(?:%3A|:)ad(?:%3A|:)/, { timeout: 30000 });
-
-  // Wait for the sidebar to update with the new drive title
-  await expect(currentDriveTitle(page)).not.toHaveText(startDriveName);
   await expect(currentDriveTitle(page)).toHaveText(driveTitle);
   const driveURL = await getCurrentSubject(page);
   expect(driveURL).toBeTruthy();
@@ -183,8 +181,7 @@ export async function getCurrentSubject(page: Page): Promise<string> {
   return about;
 }
 
-/** Waits until a commit for main resource is processed
- */
+/** Waits until a commit for main resource is processed */
 export async function waitForCommitOnCurrentResource(
   page: Page,
   match?: { set?: Record<string, unknown> },
@@ -233,26 +230,16 @@ export async function openAgentPage(page: Page) {
   await page.goto(`${FRONTEND_URL}/app/agent`);
 }
 
-/** Set atomicdata.dev as current server */
-export async function openAtomic(page: Page) {
-  await changeDrive('https://atomicdata.dev', page);
-  // Accept the invite, create an account if necessary
-  await expect(currentDriveTitle(page)).toHaveText('Atomic Data');
-}
-
 /** Opens the users' profile, sets a username, saves, reloads and verifies the change persisted. */
 export async function editProfileAndCommit(page: Page) {
   await openAgentPage(page);
-  // Wait for the agent to be loaded
   await expect(
     page.getByRole('button', { name: 'Edit profile' }),
   ).toBeVisible();
 
-  const navigationPromise = page.waitForNavigation({ timeout: 5000 });
   await page.getByRole('button', { name: 'Edit profile' }).click();
-  await navigationPromise;
+  await page.waitForURL(/\/app\/edit/);
 
-  // Name is a recommended property for Agent — it shows directly in the main form.
   const nameInput = page.locator('[data-test="input-name"]');
   await expect(nameInput).toBeVisible({ timeout: 10000 });
   const username = `Test user edited at ${new Date().toLocaleDateString()}`;
@@ -302,11 +289,9 @@ export async function newResource(klass: string, page: Page) {
   await expect(page).toHaveURL(`${FRONTEND_URL}/app/new`);
 
   const waitForResourcePage = async () => {
-    await Promise.any([
-      page.waitForURL(url => !url.pathname.endsWith('/app/new'), {
-        timeout: 10000,
-      }),
-    ]);
+    await page.waitForURL(url => !url.pathname.endsWith('/app/new'), {
+      timeout: 10000,
+    });
   };
 
   const waitForResourceForm = async () => {
@@ -335,12 +320,17 @@ export async function newResource(klass: string, page: Page) {
     await waitForResourceForm();
   } else {
     await page.locator(`button:has-text("${klass}")`).click();
-    await page.waitForTimeout(300);
-    await waitForResourcePage();
+    // Some classes (e.g. bookmark, table) open a dialog instead of navigating.
+    await Promise.race([
+      page.waitForURL(url => !url.pathname.endsWith('/app/new'), {
+        timeout: 10000,
+      }),
+      page.locator('dialog[open]').waitFor({ state: 'visible', timeout: 10000 }),
+    ]);
   }
 }
 
-/** Opens a new browser page (for) */
+/** Opens a new browser page for multi-user testing */
 export async function openNewSubjectWindow(
   browser: Browser,
   url: string,
@@ -353,24 +343,6 @@ export async function openNewSubjectWindow(
   if (doSignIn) {
     await signIn(page);
   }
-
-  // // Only when we run on `localhost` we don't need to change drive during tests
-  // if (SERVER_URL !== FRONTEND_URL) {
-  //   try {
-  //     await page.waitForSelector(`[data-testid="${sidebarDriveButtonId}"]`, {
-  //       timeout: 5000,
-  //     });
-  //     await changeDrive(SERVER_URL, page);
-  //   } catch (error) {
-  //     console.error('Error changing drive in new window:', error);
-  //     // Try reloading the page if the sidebar drive element is not found
-  //     await page.reload();
-  //     await page.waitForSelector(`[data-testid="${sidebarDriveButtonId}"]`, {
-  //       timeout: 5000,
-  //     });
-  //     await changeDrive(SERVER_URL, page);
-  //   }
-  // }
 
   await openSubject(page, url);
   await page.setViewportSize({ width: 1000, height: 400 });
@@ -397,7 +369,6 @@ export async function changeDrive(
     const currentDriveInput = page.getByTestId('drive-url-input');
 
     if ((await currentDriveInput.inputValue()) === subject) {
-      // We are already on the correct drive, close the dialog.
       await page.keyboard.press('Escape');
 
       if (validate) {
@@ -415,67 +386,18 @@ export async function changeDrive(
   }
 }
 
-/**
- * Checks if the current drive matches the given URL
- * @param url The URL to compare with the current drive
- * @param page The Playwright Page object
- * @returns True if the current drive matches the URL
- */
-export async function isCurrentDrive(
-  url: string,
-  page: Page,
-): Promise<boolean> {
-  try {
-    const driveButton = page.getByTestId(sidebarDriveButtonId);
-
-    if (!(await driveButton.isVisible())) {
-      return false;
-    }
-
-    // Get the title attribute which contains the current drive URL
-    const titleAttr = await driveButton.getAttribute('title');
-
-    if (!titleAttr) {
-      return false;
-    }
-
-    // Extract the URL from the title attribute
-    // Format: "Your current baseURL is {url}"
-    const currentUrl = titleAttr.replace('Your current baseURL is ', '');
-
-    // Normalize URLs for comparison (remove trailing slashes and protocol)
-    const normalizeUrl = (urlString: string): string => {
-      try {
-        // Remove trailing slashes
-        const cleanUrl = urlString.replace(/\/$/, '');
-        const urlObj = new URL(cleanUrl);
-
-        // Compare only hostname and path, ignoring protocol
-        return `${urlObj.hostname}${urlObj.pathname}`;
-      } catch (e) {
-        return urlString.replace(/\/$/, '');
-      }
-    };
-
-    const normalizedCurrentUrl = normalizeUrl(currentUrl);
-    const normalizedUrl = normalizeUrl(url);
-
-    return normalizedCurrentUrl === normalizedUrl;
-  } catch (error) {
-    console.error('Error in isCurrentDrive:', error);
-
-    return false;
-  }
-}
-
 export async function editTitle(title: string, page: Page) {
-  await expect(editableTitle(page)).toHaveRole('heading');
-  await editableTitle(page).click();
-  await expect(editableTitle(page)).toHaveRole('textbox');
-  await editableTitle(page).fill(title);
+  const titleEl = editableTitle(page);
+  // After resource creation, EditableTitle auto-enters edit mode (textbox).
+  // If it's still a heading, click to activate edit mode first.
+  const isInput = await titleEl.evaluate(el => el.tagName === 'INPUT');
+  if (!isInput) {
+    await expect(titleEl).toHaveRole('heading');
+    await titleEl.click();
+    await expect(titleEl).toHaveRole('textbox');
+  }
+  await titleEl.fill(title);
   await page.keyboard.press('Enter');
-  // Make sure the commit is processed
-  // await page.waitForTimeout(300);
 }
 
 export async function clickSidebarItem(text: string, page: Page) {
@@ -492,7 +414,6 @@ export async function contextMenuClick(text: string, page: Page) {
 export const anyValue = Symbol('any');
 type CommitFilter = {
   set?: Record<string, unknown | typeof anyValue>;
-  // TODO: Add push and delete filters when they're needed.
 };
 
 export const waitForCommit = async (page: Page, filter?: CommitFilter) =>
@@ -512,7 +433,6 @@ export const waitForCommit = async (page: Page, filter?: CommitFilter) =>
       return false;
     }
 
-    // We have a commit and there is no filter so we can stop waiting.
     if (!filter) {
       return true;
     }

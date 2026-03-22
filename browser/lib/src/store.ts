@@ -375,6 +375,9 @@ export class Store {
         );
       }
 
+      // Explicitly flag as genesis before signing so the commit builder never
+      // accidentally produces a genesis commit for a later edit.
+      resource.markNextCommitAsGenesis();
       await resource.signChanges(agent);
       // resource.subject is now did:ad:<signature>
     }
@@ -523,6 +526,9 @@ export class Store {
           method: opts.method,
           body: opts.body,
           signInfo,
+          // Always pass serverURL so DID subjects can be resolved via the
+          // correct backend URL even when the agent hasn't loaded from IDB yet.
+          serverURL: this.getServerUrl(),
         });
 
       // The client already returns the requested top-level resource as `resource`.

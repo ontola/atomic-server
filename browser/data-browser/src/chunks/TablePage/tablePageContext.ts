@@ -4,6 +4,7 @@ import { TableSorting } from './tableSorting';
 import { AddItemToHistoryStack } from './helpers/useTableHistory';
 
 export interface TablePageContextType {
+  tableSubject: string;
   tableClassSubject: string;
   sorting: TableSorting;
   setSortBy: React.Dispatch<string>;
@@ -11,6 +12,7 @@ export interface TablePageContextType {
 }
 
 export const TablePageContext = createContext<TablePageContextType>({
+  tableSubject: unknownSubject,
   tableClassSubject: unknownSubject,
   sorting: {
     prop: '',

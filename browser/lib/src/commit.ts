@@ -270,18 +270,14 @@ export class CommitBuilder {
       signer: agent.subject,
     };
 
-    const isDidSigner = agent.subject.startsWith('did:ad:agent:');
     const isAgentSubject = commitPreSigned.subject.startsWith('did:ad:agent:');
-    const isPlaceholder =
-      (commitPreSigned.subject.startsWith('_new:') && isDidSigner) ||
-      commitPreSigned.subject === 'did:ad:genesis';
+    // Genesis must be set explicitly via CommitBuilder.setIsGenesis(true).
+    // We never infer genesis from the subject pattern — that was the source of
+    // accidental genesis commits when a stale `_new:` subject ended up on an
+    // edit commit.
+    const isExplicitGenesis = this._isGenesis === true;
 
-    if (
-      commitPreSigned.isGenesis === undefined &&
-      !isAgentSubject &&
-      isPlaceholder &&
-      commitPreSigned.previousCommit === undefined
-    ) {
+    if (isExplicitGenesis) {
       commitPreSigned.isGenesis = true;
     }
 
@@ -291,14 +287,9 @@ export class CommitBuilder {
     let subject = commitPreSigned.subject;
 
     // Special logic for DID genesis commits: the subject must be the signature.
-    // `_new:*` subjects are temporary local placeholders used before first sign.
-    // `did:ad:agent:` subjects are stable identifiers (derived from public key),
-    // not genesis placeholders — they must never be replaced with the signature.
-    if (
-      !isAgentSubject &&
-      isPlaceholder &&
-      this.previousCommit === undefined
-    ) {
+    // Only applies when the caller explicitly requested a genesis commit.
+    // `did:ad:agent:` subjects are stable identifiers and must never be replaced.
+    if (!isAgentSubject && isExplicitGenesis) {
       subject = `did:ad:${signature}`;
     }
 
@@ -433,14 +424,8 @@ export function serializeDeterministically(
   const jsonadCommit = commitToJsonADObject(commit);
 
   // Special logic for did:ad genesis commits: remove subject from serialization.
-  // Also covers `_new:*` placeholder subjects used by DID agents before the
-  // first sign (the subject will become `did:ad:{signature}` after signing).
-  const isDidGenesis =
-    !commit.subject.startsWith('did:ad:agent:') &&
-    (commit.subject.startsWith('did:ad:') ||
-      (commit.subject.startsWith('_new:') &&
-        commit.signer?.startsWith('did:ad:agent:'))) &&
-    commit.previousCommit === undefined;
+  // Genesis is only recognised when explicitly flagged via CommitBuilder.setIsGenesis(true).
+  const isDidGenesis = commit.isGenesis === true;
 
   if (isDidGenesis) {
     delete jsonadCommit[commits.properties.subject];

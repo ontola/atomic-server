@@ -1,13 +1,10 @@
 use url::Url;
 
 fn main() {
-    let s = "did:ad:C1PsEdNI7K1D4N2dMVaaHwxwevsl/6pL8rSdejvD+ori3rZb6eafyTgeEVKCHPG0Po3SBQyT7Ea/7pB/Fl8PCg==";
-    match Url::parse(s) {
-        Ok(u) => {
-            println!("Scheme: {}", u.scheme());
-            println!("Path: {}", u.path());
-            println!("Opaque: {}", u.as_str());
-        }
-        Err(e) => println!("Error: {}", e),
-    }
+    let url1 = Url::parse("did:ad:agent:MVDkLucjukHLJNh+1lIaS0Ph8U3sjJvS1xyYyoO/Oyo=").unwrap();
+    println!("url1 path: {:?}", url1.path());
+    let url2 = Url::parse("did:ad:cbXxQGm7UBBS5JPvl/NR/p9RJNbSMUjvA7lRYQt9lZvKZrU1FBo6Icl5uctr7i1AMZ/mElWZ3X1dApo5ifzmBg==").unwrap();
+    println!("url2 path: {:?}", url2.path());
+    let url3 = Url::parse("did:ad:cbXxQGm7UBBS5JPvl/NR/p9RJNbSMUjvA7lRYQt9lZvKZrU1FBo6Icl5uctr7i1AMZ/mElWZ3X1dApo5ifzmBg==/subpath").unwrap();
+    println!("url3 path: {:?}", url3.path());
 }

@@ -41,7 +41,7 @@ setup('delete previous test data', async ({ page }) => {
     if (await clearButton.isVisible()) {
       await clearButton.click();
       await page.getByRole('button', { name: 'Save' }).click();
-      await page.waitForNavigation();
+      await page.waitForURL(/\/app\/show/, { timeout: 10000 });
     }
   } catch {
     // There were no drives to clear. Do nothing.

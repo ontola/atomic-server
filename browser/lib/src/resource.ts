@@ -467,6 +467,16 @@ export class Resource<C extends OptionalClass = any> {
     this.loading = resourceB.loading;
   }
 
+  /**
+   * Marks the next commit as a DID genesis commit. Must be called before
+   * {@link signChanges} when creating a brand-new DID resource. This is the
+   * only way to produce a genesis commit — the old implicit detection based on
+   * `_new:` subject prefixes has been removed to prevent accidental genesis.
+   */
+  public markNextCommitAsGenesis(): void {
+    this.commitBuilder.setIsGenesis(true);
+  }
+
   /** Checks if the resource is both loaded and free from errors */
   public isReady(): boolean {
     return !this.loading && this.error === undefined;
@@ -572,7 +582,7 @@ export class Resource<C extends OptionalClass = any> {
       this.subject.startsWith('did:') || this.subject.startsWith('_')
         ? this.store.getServerUrl()
         : this.subject;
-    const url = new URL('/commits', base);
+    const url = new URL('/query', base);
     url.searchParams.append('property', commits.properties.subject);
     url.searchParams.append('value', this.subject);
     url.searchParams.append('sort_by', commits.properties.createdAt);
@@ -629,7 +639,11 @@ export class Resource<C extends OptionalClass = any> {
     let previousResource = new Resource(this.subject);
 
     for (let i = 0; i < commitList.length; i++) {
-      const commitResource = await this.store.getResource(commitList[i]);
+      // Commits are immutable; skip WebSocket subscription and fetch via HTTP.
+      const commitResource = await this.store.fetchResourceFromServer(
+        commitList[i],
+        { noWebSocket: true },
+      );
       const parsedCommit = parseCommitResource(commitResource);
       const builtResource = applyCommitToResource(
         previousResource.clone(),
@@ -769,6 +783,15 @@ export class Resource<C extends OptionalClass = any> {
 
     const newCommitBuilder = new CommitBuilder(this.subject);
     newCommitBuilder.setDestroy(true);
+
+    // Include previousCommit so DID-based resources can be destroyed without a signature mismatch.
+    const lastCommit =
+      this._lastCommit ??
+      this.get(properties.commit.lastCommit)?.toString();
+
+    if (lastCommit) {
+      newCommitBuilder.setPreviousCommit(lastCommit);
+    }
 
     if (agent === undefined) {
       agent = this.store.getAgent();
@@ -927,6 +950,11 @@ export class Resource<C extends OptionalClass = any> {
 
         const createdCommit = await this.store.postCommit(commit, endpoint);
         lastCommitId = createdCommit.id as string;
+        // Server omits @id for did:ad:commit: subjects, so derive it from the signature.
+        if (!lastCommitId && createdCommit.signature) {
+          lastCommitId = `did:ad:commit:${createdCommit.signature}`;
+        }
+
         this._pendingCommits.shift();
       }
 
@@ -966,24 +994,13 @@ export class Resource<C extends OptionalClass = any> {
       throw new Error('No agent set, cannot sign genesis commit');
     }
 
-    // Use a placeholder that triggers special genesis serialization logic
-    this.setSubject('did:ad:genesis');
+    // Explicitly mark as genesis so signChanges derives the DID subject from
+    // the signature rather than relying on implicit subject-pattern detection.
+    this.markNextCommitAsGenesis();
 
-    const commit = await this.signChanges(agent);
-    const signature = commit.signature;
+    await this.signChanges(agent);
+    // signChanges has already updated this._subject to did:ad:{signature}.
 
-    if (!signature) {
-      throw new Error('No signature generated for genesis commit');
-    }
-
-    const didSubject = `did:ad:${signature}`;
-
-    // Update both the resource and the commit subject to the real DID
-    // this.setSubject handles updating the internal state and the store mapping
-    this.setSubject(didSubject);
-
-    // If there were multiple commits queued, we'd need to update their subjects too,
-    // but signChanges drains the queue into one commit for genesis.
     const result = await this.pushCommits();
 
     return result as string;

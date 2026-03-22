@@ -308,6 +308,32 @@ impl Commit {
     ) -> AtomicResult<CommitResponse> {
         let commit = self;
         let subject = Subject::from(commit.subject.clone());
+
+        if subject.is_did() && subject.as_str().starts_with("did:ad:") {
+            let pure_id = subject.pure_id();
+            let b64_part = if subject.is_agent_did() {
+                pure_id.strip_prefix("did:ad:agent:")
+            } else if subject.is_commit_did() {
+                pure_id.strip_prefix("did:ad:commit:")
+            } else {
+                pure_id.strip_prefix("did:ad:")
+            }
+            .ok_or("Invalid DID format")?;
+
+            let decoded = crate::agents::decode_base64(b64_part)
+                .map_err(|_| "Invalid DID: not valid base64")?;
+
+            let expected_len = if subject.is_agent_did() { 32 } else { 64 };
+            if decoded.len() != expected_len {
+                return Err(format!(
+                    "Invalid DID: expected {} bytes, got {}. DID subjects cannot contain a path.",
+                    expected_len,
+                    decoded.len()
+                )
+                .into());
+            }
+        }
+
         let subject_url = match &subject {
             Subject::Internal { url, .. } => url.clone(),
             Subject::External(u) => u.clone(),
@@ -362,11 +388,7 @@ impl Commit {
         // Exception: Agents (did:ad:agent:...) don't have genesis commits in the same way,
         // so we allow updates without previousCommit for agents.
         let is_agent = commit.subject.starts_with("did:ad:agent:");
-        if !is_new
-            && commit.subject.starts_with("did:ad:")
-            && !is_agent
-            && commit.previous_commit.is_none()
-        {
+        if !is_new && subject.is_did() && !is_agent && commit.previous_commit.is_none() {
             return Err(format!(
                 "Resource {} already exists. Updates to DID resources must provide a `previousCommit` to prevent accidental forks.",
                 commit.subject
@@ -1153,6 +1175,17 @@ mod test {
             let commitbuiler = crate::commit::CommitBuilder::new(subject.into());
             let commit = commitbuiler.sign(&agent, &store, &resource).await.unwrap();
             store.apply_commit(commit, &OPTS).await.unwrap();
+        }
+        {
+            let subject = "did:ad:cbXxQGm7UBBS5JPvl/NR/p9RJNbSMUjvA7lRYQt9lZvKZrU1FBo6Icl5uctr7i1AMZ/mElWZ3X1dApo5ifzmBg==/subpath";
+            let commitbuilder = crate::commit::CommitBuilder::new(subject.into());
+            let commit = commitbuilder.sign(&agent, &store, &resource).await.unwrap();
+            let err = store.apply_commit(commit, &OPTS).await.unwrap_err();
+            assert!(
+                err.to_string().contains("Invalid DID"),
+                "Expected Invalid DID error, got: {}",
+                err
+            );
         }
     }
 

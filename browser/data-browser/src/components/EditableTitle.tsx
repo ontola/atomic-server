@@ -1,4 +1,10 @@
-import { Resource, useCanWrite, useTitle } from '@tomic/react';
+import {
+  Resource,
+  StoreEvents,
+  useCanWrite,
+  useStore,
+  useTitle,
+} from '@tomic/react';
 import { useEffect, useRef, useState, type JSX } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { FaPencil } from 'react-icons/fa6';
@@ -31,12 +37,22 @@ export function EditableTitle({
   className,
   ...props
 }: EditableTitleProps): JSX.Element {
+  const store = useStore();
+
   const [text, setText] = useTitle(resource, Infinity, opts);
   const [isEditing, setIsEditing] = useState(false);
   const innerRef = useRef<HTMLInputElement>(null);
   const ref = parentRef || innerRef;
 
   const canEdit = useCanWrite(resource);
+
+  useEffect(() => {
+    return store.on(StoreEvents.ResourceManuallyCreated, created => {
+      if (created.subject === resource.subject) {
+        setIsEditing(true);
+      }
+    });
+  }, [store, resource.subject]);
 
   useHotkeys(
     'enter',

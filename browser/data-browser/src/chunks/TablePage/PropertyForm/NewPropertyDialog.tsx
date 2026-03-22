@@ -10,7 +10,6 @@ import {
   useStore,
 } from '@tomic/react';
 import { useCallback, useEffect, type JSX } from 'react';
-import { randomString } from '@helpers/randomString';
 import { stringToSlug } from '@helpers/stringToSlug';
 import { PropertyFormCategory } from './categories';
 import { sortSubjectList } from '@views/OntologyPage/sortSubjectList';
@@ -22,58 +21,35 @@ interface NewPropertyDialogProps {
   selectedCategory?: string;
 }
 
-const createSubjectWithBase = (base: string) => {
-  const sepperator = base.endsWith('/') ? '' : '/';
-
-  return `${base}${sepperator}property-${randomString(8)}`;
-};
-
-const populatePropertyWithDefaults = async (
-  property: Resource,
-  tableClass: Resource<Core.Class>,
-  name: string,
-) => {
-  await property.set(core.properties.isA, [core.classes.property]);
-  await property.set(core.properties.parent, tableClass.props.parent);
-  await property.set(core.properties.shortname, stringToSlug(name), false);
-  await property.set(core.properties.name, name, false);
-  await property.set(core.properties.description, '');
-  await property.set(core.properties.datatype, Datatype.STRING);
-};
-
-const applyCategoryDefaults = async (
+/** Returns the isA classes and propVals for a given category, for inclusion in the genesis commit. */
+const getCategoryGenesisPropVals = (
   category: PropertyFormCategory | undefined,
-  resource: Resource,
-) => {
+): { isA: string | string[]; propVals: Record<string, unknown> } => {
   switch (category) {
     case 'number':
-      await resource.set(core.properties.datatype, Datatype.INTEGER);
-      break;
+      return { isA: core.classes.property, propVals: { [core.properties.datatype]: Datatype.INTEGER } };
     case 'date':
-      await resource.set(core.properties.datatype, Datatype.DATE);
-      break;
+      return { isA: core.classes.property, propVals: { [core.properties.datatype]: Datatype.DATE } };
     case 'checkbox':
-      await resource.set(core.properties.datatype, Datatype.BOOLEAN);
-      break;
+      return { isA: core.classes.property, propVals: { [core.properties.datatype]: Datatype.BOOLEAN } };
     case 'file':
-      await resource.set(core.properties.datatype, Datatype.ATOMIC_URL);
-      await resource.set(core.properties.classtype, server.classes.file);
-      break;
+      return { isA: core.classes.property, propVals: { [core.properties.datatype]: Datatype.ATOMIC_URL, [core.properties.classtype]: server.classes.file } };
     case 'json':
-      await resource.set(core.properties.datatype, Datatype.JSON);
-      break;
+      return { isA: core.classes.property, propVals: { [core.properties.datatype]: Datatype.JSON } };
     case 'select':
-      await resource.set(core.properties.datatype, Datatype.RESOURCEARRAY);
-      await resource.set(core.properties.classtype, dataBrowser.classes.tag);
-      await resource.addClasses(dataBrowser.classes.selectProperty);
-      break;
+      return {
+        isA: [core.classes.property, dataBrowser.classes.selectProperty],
+        propVals: {
+          [core.properties.datatype]: Datatype.RESOURCEARRAY,
+          [core.properties.classtype]: dataBrowser.classes.tag,
+          [core.properties.allowsOnly]: [],
+        },
+      };
     case 'relation':
-      await resource.set(core.properties.datatype, Datatype.ATOMIC_URL);
-      break;
+      return { isA: core.classes.property, propVals: { [core.properties.datatype]: Datatype.ATOMIC_URL } };
     case 'text':
     default:
-      // STRING is already set in populatePropertyWithDefaults
-      break;
+      return { isA: core.classes.property, propVals: { [core.properties.datatype]: Datatype.STRING } };
   }
 };
 
@@ -109,8 +85,6 @@ export function NewPropertyDialog({
       );
 
       if (tableClassParent.hasClasses(core.classes.ontology)) {
-        await prop.set(core.properties.parent, tableClassParent.subject);
-
         const ontologyProps =
           tableClassParent.get(core.properties.properties) ?? [];
 
@@ -133,21 +107,30 @@ export function NewPropertyDialog({
     if (!showDialog) return;
 
     const create = async () => {
-      const subject = createSubjectWithBase(tableClassResource.subject);
-      const propertyResource = store.getResourceLoading(subject, {
-        newResource: true,
-      });
+      // Determine the correct parent before signing the genesis commit, since
+      // the parent is baked into the commit and controls authorization.
+      const tableClassParent = await store.getResource(
+        tableClassResource.props.parent,
+      );
+      const parentSubject = tableClassParent.hasClasses(core.classes.ontology)
+        ? tableClassParent.subject
+        : tableClassResource.subject;
 
       const name = selectedCategory ?? 'column';
-      await populatePropertyWithDefaults(
-        propertyResource,
-        tableClassResource,
-        name,
-      );
-      await applyCategoryDefaults(
+      const { isA, propVals } = getCategoryGenesisPropVals(
         selectedCategory as PropertyFormCategory,
-        propertyResource,
       );
+
+      const propertyResource = await store.newResource({
+        parent: parentSubject,
+        isA,
+        propVals: {
+          [core.properties.shortname]: stringToSlug(name),
+          [core.properties.name]: name,
+          [core.properties.description]: '',
+          ...propVals,
+        },
+      });
       await savePropertyToTable(propertyResource);
       bindShow(false);
     };

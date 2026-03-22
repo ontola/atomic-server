@@ -1,7 +1,6 @@
 import { test, expect } from '@playwright/test';
 import {
-  signIn,
-  newDrive,
+  devDrive,
   newResource,
   waitForCommit,
   before,
@@ -18,6 +17,14 @@ type Row = {
 
 test.describe('tables', async () => {
   test.beforeEach(before);
+
+  test('table dialog pre-fills name and focuses input', async ({ page }) => {
+    await devDrive(page);
+    await newResource('table', page);
+    const input = page.getByPlaceholder('New Table');
+    await expect(input).toHaveValue('table');
+    await expect(input).toBeFocused();
+  });
 
   test('create and fill', async ({ page }) => {
     test.slow();
@@ -63,16 +70,13 @@ test.describe('tables', async () => {
         .fill(name);
       await page.waitForTimeout(300);
       await tab();
-      // Flay newline
       await page.waitForTimeout(300);
-      // Wait for the table to refresh by checking if the next row is visible
       await expect(
         page.getByRole('rowheader', { name: `${currentRowNumber + 1}` }),
       ).toBeAttached();
 
       await page.keyboard.type(date);
       await tab();
-      // check if focus is on the next column
       await page.keyboard.type(number);
       await tab();
 
@@ -106,20 +110,16 @@ test.describe('tables', async () => {
     };
 
     // --- Test Start ---
-    await signIn(page);
-    await newDrive(page);
-
-    // Create new Table
+    await devDrive(page);
     await newResource('table', page);
 
-    // Name table
+    // Name table (pre-filled with "table", replace it)
     const tableName = 'Made up music genres';
     await page.getByPlaceholder('New Table').fill(tableName);
     await page.locator('dialog[open] button:has-text("Create")').click();
     await expect(page.locator(`h1:has-text("${tableName}")`)).toBeVisible();
 
     const dateColumnName = 'Existed since';
-    // Create Date column
     await newColumn('Date');
     await inDialog(page, async (dialog, closeDialogWith) => {
       await expect(page.locator('text=New Date Column')).toBeVisible();
@@ -133,7 +133,6 @@ test.describe('tables', async () => {
       page.getByRole('button', { name: dateColumnName }),
     ).toBeVisible();
 
-    // Create Number column
     await newColumn('Number');
     const numberColumnName = 'Number of tracks';
 
@@ -148,7 +147,6 @@ test.describe('tables', async () => {
       page.getByRole('button', { name: numberColumnName }),
     ).toBeVisible();
 
-    // Create Checkbox column
     await newColumn('Checkbox');
     const checkboxColumnName = 'Approved by W3C';
 
@@ -163,7 +161,6 @@ test.describe('tables', async () => {
       page.getByRole('button', { name: checkboxColumnName }),
     ).toBeVisible();
 
-    // Create Select column
     await newColumn('Select');
     const selectColumnName = 'Descriptive words';
 
@@ -211,7 +208,6 @@ test.describe('tables', async () => {
         select: 'wtf',
       },
     ];
-    // Start filling cells
     await page.getByRole('gridcell').first().click({ force: true });
     await expect(page.getByRole('gridcell').first()).toBeFocused();
     await page.waitForTimeout(1000);
@@ -226,7 +222,7 @@ test.describe('tables', async () => {
     await expect(page.getByRole('gridcell', { name: '😤 wild' })).toBeVisible();
     await expect(page.getByRole('gridcell', { name: '🤨 wtf' })).toBeVisible();
 
-    // Move to the first cell and change its content.
+    // Edit first cell content
     await page.keyboard.press('Escape');
     await page.keyboard.press('ArrowUp');
     await page.keyboard.press('ArrowUp');
@@ -245,7 +241,7 @@ test.describe('tables', async () => {
       'New cell name not visible',
     ).toBeVisible();
 
-    // Move to the index cell on the second row and delete the row.
+    // Delete second row
     await page.keyboard.press('ArrowDown');
     await page.keyboard.press('ArrowLeft');
     await page.keyboard.press('Backspace');
