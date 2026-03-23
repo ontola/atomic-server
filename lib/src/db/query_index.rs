@@ -17,6 +17,8 @@ pub type IndexIterator = Box<dyn Iterator<Item = AtomicResult<IndexAtom>> + Send
 /// A Value in the `watched_collections`.
 /// Used as keys in the query_index.
 /// These are used to check whether collections have to be updated when values have changed.
+///
+/// Every `QueryFilter` is scoped to a specific drive. Cross-drive indexed queries are not supported.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueryFilter {
     /// Filtering by property URL
@@ -25,6 +27,9 @@ pub struct QueryFilter {
     pub value: Option<Value>,
     /// The property by which the collection is sorted
     pub sort_by: Option<String>,
+    /// Drive scope: only index/match resources whose subject starts with this URL prefix.
+    /// All watched queries must be drive-scoped to avoid spurious cross-tenant index updates.
+    pub drive: Subject,
 }
 
 impl QueryFilter {
@@ -53,13 +58,19 @@ impl QueryFilter {
     }
 }
 
-impl From<&Query> for QueryFilter {
-    fn from(q: &Query) -> Self {
-        QueryFilter {
+impl QueryFilter {
+    /// Constructs a QueryFilter from a Query that has a drive set.
+    /// Returns an error if the query has no drive — all indexed queries must be drive-scoped.
+    pub fn try_from_query(q: &Query) -> AtomicResult<Self> {
+        let drive = q.drive.clone().ok_or(
+            "Indexed queries require a drive scope. Set Query::drive to the drive Subject.",
+        )?;
+        Ok(QueryFilter {
             property: q.property.clone(),
             value: q.value.clone(),
             sort_by: q.sort_by.clone(),
-        }
+            drive,
+        })
     }
 }
 
@@ -77,6 +88,7 @@ pub const NO_VALUE: &str = "";
 pub async fn query_sorted_indexed(
     store: &Db,
     q: &Query,
+    q_filter: &QueryFilter,
 ) -> AtomicResult<(Vec<Subject>, Vec<Resource>, usize)> {
     // When there is no explicit start / end value passed, we use the very first and last
     // lexicographic characters in existence to make the range practically encompass all values.
@@ -90,8 +102,8 @@ pub async fn query_sorted_indexed(
     } else {
         Value::String(END_CHAR.into())
     };
-    let start_key = create_query_index_key(&q.into(), Some(&start.to_sortable_string()), None)?;
-    let end_key = create_query_index_key(&q.into(), Some(&end.to_sortable_string()), None)?;
+    let start_key = create_query_index_key(q_filter, Some(&start.to_sortable_string()), None)?;
+    let end_key = create_query_index_key(q_filter, Some(&end.to_sortable_string()), None)?;
 
     let iter: Box<
         dyn Iterator<Item = std::result::Result<(sled::IVec, sled::IVec), sled::Error>> + Send,
@@ -274,6 +286,15 @@ pub fn check_if_atom_matches_watched_query_filters(
         if let Ok((k, _v)) = query {
             let q_filter: QueryFilter = QueryFilter::from_bytes(&k)?;
 
+            // Skip this filter if it's scoped to a different drive than the resource.
+            // DID subjects are drive-agnostic (not URL-prefix scoped), so always include them.
+            let subject_str = index_atom.subject.as_str();
+            if !subject_str.starts_with("did:")
+                && !subject_str.starts_with(q_filter.drive.as_str())
+            {
+                continue;
+            }
+
             if let Some(prop) = should_update_property(&q_filter, index_atom, resource) {
                 let update_val = match resource.get(prop) {
                     Ok(val) => val.to_sortable_string(),
@@ -390,6 +411,31 @@ pub fn requires_query_index(query: &Query) -> bool {
     query.sort_by.is_some() || query.start_val.is_some() || query.end_val.is_some()
 }
 
+/// Extracts the drive prefix from a resource subject URL.
+///
+/// - `internal:/path` → `"internal:/"`
+/// - `internal:tenant:/path` → `"internal:tenant:/"`
+/// - `https://example.com/path` → `"https://example.com"`
+/// - `did:ad:...` → the subject itself (DID subjects have no prefix drive)
+pub fn drive_prefix_from_subject(subject: &Subject) -> Subject {
+    let s = subject.as_str();
+    let prefix = if s.starts_with("internal:") {
+        // Matches both "internal:/path" and "internal:sub:/path"
+        s.find(":/").map(|pos| s[..pos + 2].to_string())
+    } else if s.starts_with("http://") || s.starts_with("https://") {
+        url::Url::parse(s).ok().map(|url| {
+            let host = url.host_str().unwrap_or("");
+            match url.port() {
+                Some(port) => format!("{}://{}:{}", url.scheme(), host, port),
+                None => format!("{}://{}", url.scheme(), host),
+            }
+        })
+    } else {
+        None
+    };
+    Subject::from(prefix.unwrap_or_else(|| s.to_string()))
+}
+
 pub fn should_include_resource(query: &Query) -> bool {
     query.include_nested || query.for_agent != ForAgent::Sudo
 }
@@ -420,6 +466,7 @@ pub mod test {
                 property: Some("http://example.org/prop".to_string()),
                 value: Some(Value::AtomicUrl("http://example.org/value".into())),
                 sort_by: None,
+                drive: Subject::from("https://example.com"),
             };
             let subject = "https://example.com/subject";
             let key =
@@ -438,6 +485,7 @@ pub mod test {
             property: Some("http://example.org/prop".to_string()),
             value: Some(Value::AtomicUrl("http://example.org/value".into())),
             sort_by: None,
+            drive: Subject::from("https://example.com"),
         };
 
         let start_none = create_query_index_key(&q, None, None).unwrap();
@@ -510,18 +558,21 @@ pub mod test {
             property: Some(prop.clone()),
             value: Some(Value::AtomicUrl(class.to_string().into())),
             sort_by: None,
+            drive: Subject::from("https://example.com"),
         };
 
         let qf_prop = QueryFilter {
             property: Some(prop.clone()),
             value: None,
             sort_by: None,
+            drive: Subject::from("https://example.com"),
         };
 
         let qf_val = QueryFilter {
             property: None,
             value: Some(Value::AtomicUrl(class.to_string().into())),
             sort_by: None,
+            drive: Subject::from("https://example.com"),
         };
 
         let mut resource_correct_class = Resource::new_instance(class, store).await.unwrap();
@@ -583,16 +634,19 @@ pub mod test {
             property: Some(prop.clone()),
             value: Some(Value::AtomicUrl(class.to_string().into())),
             sort_by: Some(urls::DESCRIPTION.to_string()),
+            drive: Subject::from("https://example.com"),
         };
         let qf_prop_sort = QueryFilter {
             property: Some(prop.clone()),
             value: None,
             sort_by: Some(urls::DESCRIPTION.to_string()),
+            drive: Subject::from("https://example.com"),
         };
         let qf_val_sort = QueryFilter {
             property: Some(prop),
             value: Some(Value::AtomicUrl(class.to_string().into())),
             sort_by: Some(urls::DESCRIPTION.to_string()),
+            drive: Subject::from("https://example.com"),
         };
 
         // We should update with a sort_by attribute

@@ -2,11 +2,13 @@
 //! They are constructed using a [Query]
 #[cfg(feature = "db")]
 use crate::class_extender::{ClassExtender, GetExtenderContext};
+#[cfg(feature = "db")]
+use crate::db::drive_prefix_from_subject;
 use crate::{
     agents::ForAgent,
     errors::AtomicResult,
     storelike::{Query, ResourceCollection, ResourceResponse},
-    urls, Resource, Storelike, Value,
+    urls, Resource, Storelike, Subject, Value,
 };
 
 #[cfg(feature = "db")]
@@ -55,6 +57,9 @@ pub struct CollectionBuilder {
     pub include_nested: bool,
     /// Whether to include resources from other servers
     pub include_external: bool,
+    /// Scope results to a specific drive. When set, the query index is drive-scoped so watched
+    /// queries only trigger for resources in this drive.
+    pub drive: Option<Subject>,
 }
 
 impl CollectionBuilder {
@@ -138,6 +143,7 @@ impl CollectionBuilder {
             name: Some(format!("{} collection", path)),
             include_nested: true,
             include_external: false,
+            drive: None,
         })
     }
 
@@ -248,6 +254,7 @@ impl Collection {
             include_external: collection_builder.include_external,
             include_nested: collection_builder.include_nested,
             for_agent: for_agent.clone(),
+            drive: collection_builder.drive.clone(),
         };
 
         let query_result = store.query(&q).await?;
@@ -386,6 +393,7 @@ impl Collection {
 /// Builds a collection from query params and the passed Collection resource.
 /// The query params are used to override the stored Collection resource properties.
 /// This also sets defaults for Collection properties when fields are missing
+#[cfg(feature = "db")]
 #[tracing::instrument(skip(store, query_params))]
 pub async fn construct_collection_from_params(
     store: &impl Storelike,
@@ -447,6 +455,7 @@ pub async fn construct_collection_from_params(
         name,
         include_nested,
         include_external,
+        drive: Some(drive_prefix_from_subject(resource.get_subject())),
     };
     let collection = Collection::collect_members(store, collection_builder, for_agent).await?;
     collection.add_to_resource(resource, store).await
@@ -535,6 +544,7 @@ mod test {
             name: Some("Test collection".into()),
             include_nested: false,
             include_external: false,
+            drive: None,
         };
         let collection = Collection::collect_members(&store, collection_builder, &ForAgent::Sudo)
             .await
@@ -557,6 +567,7 @@ mod test {
             name: None,
             include_nested: false,
             include_external: false,
+            drive: None,
         };
         let collection = Collection::collect_members(&store, collection_builder, &ForAgent::Sudo)
             .await
@@ -603,6 +614,7 @@ mod test {
             name: None,
             include_nested: false,
             include_external: false,
+            drive: None,
         };
         let collection = Collection::collect_members(&store, collection_builder, &ForAgent::Sudo)
             .await
@@ -636,6 +648,7 @@ mod test {
             name: None,
             include_nested: false,
             include_external: false,
+            drive: None,
         };
 
         let collection = Collection::collect_members(&store, collection_builder, &ForAgent::Sudo)
@@ -670,6 +683,7 @@ mod test {
             name: None,
             include_nested: false,
             include_external: false,
+            drive: None,
         };
 
         let collection = Collection::collect_members(&store, collection_builder, &ForAgent::Sudo)
@@ -722,6 +736,7 @@ mod test {
                 name: None,
                 include_nested: false,
                 include_external: false,
+                drive: None,
             },
             &ForAgent::Sudo,
         )
@@ -758,6 +773,7 @@ mod test {
                 name: None,
                 include_nested: false,
                 include_external: false,
+                drive: None,
             },
             &ForAgent::Sudo,
         )
@@ -784,6 +800,7 @@ mod test {
                 name: None,
                 include_nested: false,
                 include_external: false,
+                drive: None,
             },
             &ForAgent::Sudo,
         )
@@ -821,6 +838,7 @@ mod test {
                     name: None,
                     include_nested: false,
                     include_external: false,
+                    drive: None,
                 },
                 &ForAgent::Sudo,
             )
@@ -863,6 +881,7 @@ mod test {
                     name: None,
                     include_nested: false,
                     include_external: false,
+                    drive: None,
                 },
                 &ForAgent::Sudo,
             )
@@ -891,6 +910,7 @@ mod test {
                 name: None,
                 include_nested: false,
                 include_external: false,
+                drive: None,
             },
             &ForAgent::Sudo,
         )
@@ -920,6 +940,7 @@ mod test {
             // The important bit here
             include_nested: true,
             include_external: false,
+            drive: None,
         };
         let collection = Collection::collect_members(&store, collection_builder, &ForAgent::Sudo)
             .await
@@ -1076,6 +1097,7 @@ mod test {
             limit: Some(10),
             include_nested: false,
             include_external: false,
+            drive: Some(crate::Subject::from("internal:/")),
             ..Default::default()
         };
         let result = store.query(&q).await.unwrap();

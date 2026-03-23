@@ -1,4 +1,4 @@
-use crate::{agents::ForAgent, urls, Value};
+use crate::{agents::ForAgent, urls, Subject, Value};
 
 use super::*;
 use ntest::timeout;
@@ -309,6 +309,7 @@ async fn queries() {
         include_external: true,
         include_nested: false,
         for_agent: ForAgent::Sudo,
+        drive: None,
     };
     let res = store.query(&q).await.unwrap();
     assert_eq!(
@@ -333,6 +334,7 @@ async fn queries() {
     assert_eq!(res.resources.len(), limit, "nested resources");
 
     q.sort_by = Some(sort_by.into());
+    q.drive = Some(Subject::from("internal:/"));
     let mut res = store.query(&q).await.unwrap();
     assert!(!res.resources.is_empty(), "resources should be returned");
     let mut prev_resource = res.resources[0].clone();
@@ -441,6 +443,7 @@ async fn query_include_external() {
         include_external: true,
         include_nested: false,
         for_agent: ForAgent::Sudo,
+        drive: None,
     };
     let res_include = store.query(&q).await.unwrap();
     q.include_external = false;
@@ -566,6 +569,7 @@ async fn test_collection_update_value(
         include_external: true,
         include_nested: true,
         for_agent: ForAgent::Sudo,
+        drive: Some(Subject::from("internal:/")),
     };
     let mut res = store.query(&q).await.unwrap();
     assert_eq!(

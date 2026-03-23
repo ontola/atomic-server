@@ -23,9 +23,13 @@ pub fn migrate_maybe(store: &Db) -> AtomicResult<()> {
             "reference_index" => ref_v0_to_v1(store)?,
             "resources_v1" => resources_v1_to_v2(store)?,
             "resources_v2" => resources_v2_to_v3(store)?,
+            // QueryFilter gained a `drive` field — old entries are unreadable.
+            // These are pure caches; dropping them causes a one-time rebuild on next query.
+            "watched_queries" | "members_index" => query_index_v1_to_v2(store)?,
             _other => {}
         }
     }
+
     Ok(())
 }
 
@@ -168,6 +172,18 @@ fn resources_v2_to_v3(store: &Db) -> AtomicResult<()> {
 
     store.build_index(true)?;
 
+    Ok(())
+}
+
+/// QueryFilter gained a mandatory `drive` field — old serialized entries are unreadable.
+/// These trees are pure caches; dropping them causes a one-time rebuild on next query.
+fn query_index_v1_to_v2(store: &Db) -> AtomicResult<()> {
+    tracing::warn!(
+        "Dropping old query index trees (QueryFilter schema changed — drive field added). \
+        They will rebuild on next query."
+    );
+    let _ = store.db.drop_tree("watched_queries");
+    let _ = store.db.drop_tree("members_index");
     Ok(())
 }
 

@@ -6,6 +6,7 @@ mod migrations;
 pub mod plugin_meta;
 mod prop_val_sub_index;
 mod query_index;
+pub use query_index::drive_prefix_from_subject;
 #[cfg(test)]
 pub mod test;
 mod trees;
@@ -152,7 +153,9 @@ impl Db {
         store.add_class_extender(crate::collections::get_collection_class_extender())?;
 
         migrate_maybe(&store).map(|e| format!("Error during migration of database: {:?}", e))?;
-        crate::populate::populate_base_models(&store)
+        // Re-run on every startup so new vocabulary (properties, classes) added
+        // to default_store.json is available without a manual `populate` command.
+        crate::populate::bootstrap(&store)
             .await
             .map_err(|e| format!("Failed to populate base models. {}", e))?;
         Ok(store)
@@ -864,8 +867,9 @@ impl Db {
     }
 
     async fn query_complex(&self, q: &Query) -> AtomicResult<QueryResult> {
-        let (mut subjects, mut resources, mut total_count) = query_sorted_indexed(self, q).await?;
-        let q_filter: QueryFilter = q.into();
+        let q_filter = QueryFilter::try_from_query(q)?;
+        let (mut subjects, mut resources, mut total_count) =
+            query_sorted_indexed(self, q, &q_filter).await?;
 
         if total_count == 0 && !q_filter.is_watched(self) {
             info!(filter = ?q_filter, "Building query index");
@@ -882,7 +886,8 @@ impl Db {
             self.apply_transaction(&mut transaction)?;
 
             // Query through the new indexes.
-            (subjects, resources, total_count) = query_sorted_indexed(self, q).await?;
+            (subjects, resources, total_count) =
+                query_sorted_indexed(self, q, &q_filter).await?;
         }
 
         Ok(QueryResult {

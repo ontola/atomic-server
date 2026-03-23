@@ -434,7 +434,8 @@ impl Resource {
         self.subject = Subject::from_raw("did:ad:placeholder", None);
         self.commit.set_subject(self.subject.to_string());
 
-        let commitbuilder = self.get_commit_builder().clone();
+        let mut commitbuilder = self.get_commit_builder().clone();
+        commitbuilder.is_genesis = true;
         let commit = commitbuilder.sign(&agent, store, self).await?;
 
         let signature = commit
@@ -892,7 +893,6 @@ mod test {
                     validate_for_agent: None,
                     update_index: true,
                 },
-                None,
             )
             .await
             .unwrap();

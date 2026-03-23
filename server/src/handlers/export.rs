@@ -177,6 +177,7 @@ impl<'a> CSVExporter<'a> {
             include_external: false,
             include_nested: true,
             for_agent: self.agent.clone(),
+            drive: None,
         };
 
         let results = self.store.query(&query).await?;

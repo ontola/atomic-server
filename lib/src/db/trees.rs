@@ -26,9 +26,9 @@ pub enum Tree {
 
 const RESOURCES: &str = "resources_v3";
 const VALPROPSUB: &str = "reference_index_v1";
-const QUERY_MEMBERS: &str = "members_index";
+const QUERY_MEMBERS: &str = "members_index_v2";
 const PROPVALSUB: &str = "prop_val_sub_index";
-const QUERIES_WATCHED: &str = "watched_queries";
+const QUERIES_WATCHED: &str = "watched_queries_v2";
 const PLUGIN_META: &str = "plugin_meta";
 const DRIVE_MAPPING: &str = "drive_mapping";
 const DID_MAPPING: &str = "did_mapping";

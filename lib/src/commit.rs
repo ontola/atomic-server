@@ -795,11 +795,10 @@ impl Commit {
         }
 
         // For genesis commits the subject is derived from the signature, so it
-        // must not be part of the signed bytes (circular dependency). is_genesis
-        // is also excluded to match the client's serializeDeterministically logic.
+        // must not be part of the signed bytes (circular dependency).
+        // is_genesis stays in the bytes so both sides sign/verify the same content.
         if is_genesis_flag {
             commit_resource.remove_propval(urls::SUBJECT);
-            commit_resource.remove_propval(urls::IS_GENESIS);
         }
         let json_obj = crate::serialize::propvals_to_json_ad_map(
             commit_resource.get_propvals(),

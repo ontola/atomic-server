@@ -55,7 +55,8 @@ describe('Commit signing and keys', () => {
     expect(commit.subject).to.equal(`did:ad:${commit.signature}`);
     expect(commit.isGenesis).toBe(true);
 
-    // Serialization should NOT contain the subject or isGenesis
+    // Serialization should NOT contain the subject (circular dep — subject IS the signature)
+    // but SHOULD contain isGenesis so the server can verify it
     const serialized = serializeDeterministically(commit);
     const jsonCorrect = JSON.parse(serialized);
     expect(
@@ -63,7 +64,7 @@ describe('Commit signing and keys', () => {
     ).toBeUndefined();
     expect(
       jsonCorrect['https://atomicdata.dev/properties/isGenesis'],
-    ).toBeUndefined();
+    ).toBe(true);
   });
 
   it('preserves DID subject and chains commits on sequential saves', async ({

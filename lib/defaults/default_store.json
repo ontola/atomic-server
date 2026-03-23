@@ -114,6 +114,16 @@
         "https://atomicdata.dev/properties/shortname": "is-dynamic"
     },
     {
+        "@id": "https://atomicdata.dev/properties/isGenesis",
+        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
+        "https://atomicdata.dev/properties/description": "If true, this is the first Commit for the target resource and there is no previous commit. Required for resources with a `did:ad:` subject, where the subject is derived from the genesis commit signature. The `subject` field is excluded from the signed bytes for genesis commits (it is the signature itself), but `isGenesis` is included in the signed bytes so both sides sign and verify the same content.",
+        "https://atomicdata.dev/properties/isA": [
+            "https://atomicdata.dev/classes/Property"
+        ],
+        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+        "https://atomicdata.dev/properties/shortname": "is-genesis"
+    },
+    {
         "@id": "https://atomicdata.dev/properties/atom/property",
         "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
         "https://atomicdata.dev/properties/description": "The property of an Atom is the relationship between the resource (subject) and the value. For example, in the sentence `john is born in 1991`, the property is `is born in`.",
@@ -959,6 +969,8 @@
         ],
         "https://atomicdata.dev/properties/recommends": [
             "https://atomicdata.dev/properties/destroy",
+            "https://atomicdata.dev/properties/isGenesis",
+            "https://atomicdata.dev/properties/previousCommit",
             "https://atomicdata.dev/properties/remove",
             "https://atomicdata.dev/properties/set",
             "https://atomicdata.dev/properties/push",

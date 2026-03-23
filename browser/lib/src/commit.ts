@@ -394,6 +394,11 @@ function serializeCommitValue<K extends keyof Commit>(
  * Takes a commit and serializes it deterministically (canonicilaization). Is
  * used both for signing Commits as well as serializing them.
  * https://docs.atomicdata.dev/core/json-ad.html#canonicalized-json-ad
+ *
+ * For DID genesis commits the `subject` field is excluded from the signed
+ * bytes because the subject is derived from the signature itself (circular
+ * dependency). `isGenesis` is kept in the bytes so both sides sign/verify the
+ * same content.
  */
 export function serializeDeterministically(
   commit: UnsignedCommit | Commit,
@@ -421,14 +426,11 @@ export function serializeDeterministically(
 
   const jsonadCommit = commitToJsonADObject(commit);
 
-  // Special logic for did:ad genesis commits: remove subject from serialization.
-  // Genesis is only recognised when explicitly flagged via CommitBuilder.setIsGenesis(true).
-  const isDidGenesis = commit.isGenesis === true;
-
-  if (isDidGenesis) {
+  // For DID genesis commits only the subject is excluded — it is derived from
+  // the signature so it cannot be part of the signed bytes (circular dep).
+  // isGenesis stays in the bytes so the server can read and verify it.
+  if (commit.isGenesis === true) {
     delete jsonadCommit[commits.properties.subject];
-    // isGenesis should also be removed for deterministic serialization of DID genesis commits
-    delete jsonadCommit[commits.properties.isGenesis];
   }
 
   // Canonical serialization should never include @id for commits
