@@ -170,7 +170,7 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
         ? new SubtleCryptoProvider(cryptoKeyPair)
         : new JSCryptoProvider(keypair.privateKey);
 
-      const subject = `did:ad:${keypair.publicKey}`;
+      const subject = `did:ad:agent:${keypair.publicKey}`;
       const newAgent = new Agent(provider, subject);
 
       store.setAgent(newAgent);
@@ -215,7 +215,7 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
     }
 
     if (keys) {
-      const newAgentSubject = `did:ad:${keys.real.publicKey}`;
+      const newAgentSubject = `did:ad:agent:${keys.real.publicKey}`;
       const secret = Agent.buildSecret(
         keys.real.privateKey,
         newAgentSubject,

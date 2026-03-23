@@ -9,10 +9,20 @@ import {
   useArray,
   useStore,
 } from '@tomic/react';
-import { useCallback, useEffect, type JSX } from 'react';
+import { useCallback, useEffect, useState, type JSX } from 'react';
 import { stringToSlug } from '@helpers/stringToSlug';
 import { PropertyFormCategory } from './categories';
 import { sortSubjectList } from '@views/OntologyPage/sortSubjectList';
+import {
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  useDialog,
+} from '@components/Dialog';
+import { Button } from '@components/Button';
+import { FormValidationContextProvider } from '@components/forms/formValidation/FormValidationContextProvider';
+import { PropertyForm } from './PropertyForm';
 
 interface NewPropertyDialogProps {
   showDialog: boolean;
@@ -70,12 +80,13 @@ export function NewPropertyDialog({
   bindShow,
 }: NewPropertyDialogProps): JSX.Element {
   const store = useStore();
+  const [propertyResource, setPropertyResource] = useState<Resource | null>(null);
+  const [valid, setValid] = useState(true);
+
   const [_properties, _setProperties, pushProp] = useArray(
     tableClassResource,
     core.properties.recommends,
-    {
-      commit: true,
-    },
+    { commit: true },
   );
 
   const savePropertyToTable = useCallback(
@@ -103,10 +114,21 @@ export function NewPropertyDialog({
     [store, tableClassResource, pushProp],
   );
 
-  useEffect(() => {
-    if (!showDialog) return;
+  const onSuccess = useCallback(async () => {
+    if (propertyResource) {
+      await savePropertyToTable(propertyResource);
+    }
+  }, [propertyResource, savePropertyToTable]);
 
-    const create = async () => {
+  const [dialogProps, show, hide] = useDialog({ bindShow, onSuccess });
+
+  useEffect(() => {
+    if (!showDialog) {
+      setPropertyResource(null);
+      return;
+    }
+
+    const init = async () => {
       // Determine the correct parent before signing the genesis commit, since
       // the parent is baked into the commit and controls authorization.
       const tableClassParent = await store.getResource(
@@ -121,7 +143,7 @@ export function NewPropertyDialog({
         selectedCategory as PropertyFormCategory,
       );
 
-      const propertyResource = await store.newResource({
+      const resource = await store.newResource({
         parent: parentSubject,
         isA,
         propVals: {
@@ -131,12 +153,47 @@ export function NewPropertyDialog({
           ...propVals,
         },
       });
-      await savePropertyToTable(propertyResource);
-      bindShow(false);
+
+      setPropertyResource(resource);
+      // show() is called in a separate effect after propertyResource is set,
+      // so the Dialog is already in the DOM when show() runs.
     };
 
-    create().catch(console.error);
+    init().catch(console.error);
   }, [showDialog]);
 
-  return <></>;
+  // Open dialog after propertyResource is set and Dialog is mounted.
+  useEffect(() => {
+    if (propertyResource && showDialog) {
+      show();
+    }
+  }, [propertyResource]);
+
+  const handleCreateClick = useCallback(() => {
+    hide(true);
+  }, [hide]);
+
+  return (
+    <FormValidationContextProvider onValidationChange={setValid}>
+      <Dialog {...dialogProps}>
+        <DialogTitle>
+          <h1>New {selectedCategory ? selectedCategory[0].toUpperCase() + selectedCategory.slice(1) : ''} Column</h1>
+        </DialogTitle>
+        <DialogContent>
+          {propertyResource && (
+            <PropertyForm
+              resource={propertyResource}
+              category={selectedCategory as PropertyFormCategory}
+              onSubmit={handleCreateClick}
+            />
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCreateClick} disabled={!valid}>
+            Create
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </FormValidationContextProvider>
+  );
 }

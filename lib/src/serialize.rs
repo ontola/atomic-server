@@ -123,11 +123,7 @@ pub fn propvals_to_json_ad_map(
         );
     }
     if let Some(sub) = subject {
-        // Commits are server-generated and should not have an @id field in the JSON-AD representation
-        // as they are identified by their hash which is derived from the other fields.
-        if !sub.starts_with("did:ad:commit:") {
-            root.insert("@id".into(), SerdeValue::String(sub));
-        }
+        root.insert("@id".into(), SerdeValue::String(sub));
     }
     let obj = SerdeValue::Object(root);
     Ok(obj)
@@ -199,11 +195,7 @@ pub async fn propvals_to_json_ld(
     }
 
     if let Some(sub) = subject {
-        // Commits are server-generated and should not have an @id field in the JSON-AD representation
-        // as they are identified by their hash which is derived from the other fields.
-        if !sub.starts_with("did:ad:commit:") {
-            root.insert("@id".into(), SerdeValue::String(sub));
-        }
+        root.insert("@id".into(), SerdeValue::String(sub));
     }
 
     if json_ld {

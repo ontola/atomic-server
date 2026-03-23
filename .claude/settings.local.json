@@ -24,7 +24,20 @@
       "Bash(npx tsc:*)",
       "mcp__charlotte__charlotte_screenshot",
       "Bash(npx vitest:*)",
-      "mcp__charlotte__charlotte_navigate"
+      "mcp__charlotte__charlotte_navigate",
+      "Bash(npx playwright:*)",
+      "Bash(npm run:*)",
+      "Bash(xargs grep:*)",
+      "Bash(find /Users/joep/dev/github/atomicdata-dev/atomic-server/browser/data-browser/src/components/Dialog -name *.ts -o -name *.tsx)",
+      "mcp__charlotte__charlotte_tab_open",
+      "mcp__charlotte__charlotte_click",
+      "mcp__charlotte__charlotte_find",
+      "Bash(pnpm exec:*)",
+      "Bash(curl -s http://localhost:9883)",
+      "Bash(curl -s http://localhost:5173)",
+      "mcp__charlotte__charlotte_tools",
+      "mcp__charlotte__charlotte_observe",
+      "mcp__charlotte__charlotte_type"
     ]
   }
 }

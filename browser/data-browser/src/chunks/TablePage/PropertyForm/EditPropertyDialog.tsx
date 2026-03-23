@@ -31,7 +31,7 @@ export function EditPropertyDialog({
     resource.save();
   }, [resource]);
 
-  const [dialogProps, show, hide] = useDialog({ bindShow, onSuccess });
+  const [dialogProps, show, hide, visible] = useDialog({ bindShow, onSuccess });
 
   useEffect(() => {
     if (showDialog) {
@@ -52,12 +52,14 @@ export function EditPropertyDialog({
           <h1>Edit Column</h1>
         </DialogTitle>
         <DialogContent>
-          <PropertyForm
-            existingProperty
-            resource={resource}
-            category={category}
-            onSubmit={handleSaveClick}
-          />
+          {visible && (
+            <PropertyForm
+              existingProperty
+              resource={resource}
+              category={category}
+              onSubmit={handleSaveClick}
+            />
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={handleSaveClick} disabled={!valid}>
