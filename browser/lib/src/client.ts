@@ -108,9 +108,10 @@ export class Client {
 
     // Relative path validation
     // Allow empty string for root. Allow ?, =, &, % for collections/search.
+    // Must start with '/' to distinguish from arbitrary text (e.g. search queries).
     if (
       subject !== '' &&
-      !subject.match(/^[a-zA-Z0-9/][a-zA-Z0-9/._\-:?=&%]*$/)
+      !subject.match(/^\/[a-zA-Z0-9/._\-:?=&%]*$/)
     ) {
       throw new Error(
         `Not a valid Relative Subject: ${subject}. This should be a slug-like string without spaces.`,

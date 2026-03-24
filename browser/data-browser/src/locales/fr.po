@@ -3757,3 +3757,13 @@ msgstr ""
 
 #~ msgid "AbortError"
 #~ msgstr ""
+
+#~ msgid ""
+#~ "Welcome to your Drive.\n"
+#~ "\n"
+#~ "This is your personal Atomic Data drive. Edit this description to tell visitors what this space is about."
+#~ msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "This is your personal Atomic Data drive. Edit this description to tell visitors what this space is about."
+msgstr ""
