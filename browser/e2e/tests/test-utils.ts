@@ -325,7 +325,9 @@ export async function newResource(klass: string, page: Page) {
       page.waitForURL(url => !url.pathname.endsWith('/app/new'), {
         timeout: 10000,
       }),
-      page.locator('dialog[open]').waitFor({ state: 'visible', timeout: 10000 }),
+      page
+        .locator('dialog[open]')
+        .waitFor({ state: 'visible', timeout: 10000 }),
     ]);
   }
 }
@@ -354,7 +356,9 @@ export async function openConfigureDrive(page: Page) {
   await page.goto(`${FRONTEND_URL}/app/server`);
   await expect(
     page.getByRole('heading', { name: 'Drive Configuration' }),
-  ).toBeVisible({ timeout: 10000 });
+  ).toBeVisible({
+    timeout: 10000,
+  });
 }
 
 export async function changeDrive(

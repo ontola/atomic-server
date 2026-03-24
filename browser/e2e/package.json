@@ -1,23 +1,21 @@
 {
+  "name": "@tomic/e2e",
   "version": "0.40.0",
-  "author": {
-    "email": "joep@ontola.io",
-    "name": "Joep Meindertsma"
-  },
+  "private": true,
   "homepage": "https://atomicdata.dev/",
   "license": "MIT",
-  "name": "@tomic/e2e",
-  "private": true,
+  "author": {
+    "name": "Joep Meindertsma",
+    "email": "joep@ontola.io"
+  },
   "repository": {
     "url": "https://github.com/atomicdata-dev/atomic-server/"
   },
-  "devDependencies": {
-    "@playwright/test": "1.58.2",
-    "@types/kill-port": "^2.0.3",
-    "@axe-core/playwright": "^4.10.1",
-    "kill-port": "^2.0.1"
-  },
   "scripts": {
+    "format-check": "oxfmt -c ../.oxfmtrc.json --check .",
+    "format": "oxfmt -c ../.oxfmtrc.json .",
+    "lint": "oxlint -c ../.oxlintrc.json . && pnpm format-check",
+    "lint-fix": "oxlint -c ../.oxlintrc.json --fix . && pnpm format",
     "playwright-install": "playwright install chromium",
     "upload-report": "netlify deploy --dir playwright-report --prod --site atomic-tests",
     "test-e2e": "playwright test --config=./playwright.config.ts",
@@ -28,5 +26,11 @@
     "test-query-debug": "DELETE_PREVIOUS_TEST_DRIVES=false PWDEBUG=1 playwright test --project=chromium -g",
     "test-ui": "playwright test --ui"
   },
-  "dependencies": {}
+  "dependencies": {},
+  "devDependencies": {
+    "@axe-core/playwright": "^4.10.1",
+    "@playwright/test": "1.58.2",
+    "@types/kill-port": "^2.0.3",
+    "kill-port": "^2.0.1"
+  }
 }

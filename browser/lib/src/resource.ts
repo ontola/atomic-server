@@ -786,8 +786,7 @@ export class Resource<C extends OptionalClass = any> {
 
     // Include previousCommit so DID-based resources can be destroyed without a signature mismatch.
     const lastCommit =
-      this._lastCommit ??
-      this.get(properties.commit.lastCommit)?.toString();
+      this._lastCommit ?? this.get(properties.commit.lastCommit)?.toString();
 
     if (lastCommit) {
       newCommitBuilder.setPreviousCommit(lastCommit);

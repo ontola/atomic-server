@@ -3,8 +3,7 @@ import { styled } from 'styled-components';
 import { transition } from '../helpers/transition';
 import { Spinner } from './Spinner';
 
-export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   /** Description of the button, required if the button only has an icon */
   name?: string;
   /** Renders the button less clicky */

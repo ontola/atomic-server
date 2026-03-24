@@ -1,9 +1,4 @@
-import {
-  core,
-  useStore,
-  server,
-  dataBrowser,
-} from '@tomic/react';
+import { core, useStore, server, dataBrowser } from '@tomic/react';
 import { useState, useCallback, FormEvent, FC, useEffect, useId } from 'react';
 import { styled } from 'styled-components';
 import { stringToSlug } from '../../../../../helpers/stringToSlug';

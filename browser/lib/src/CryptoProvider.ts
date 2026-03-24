@@ -77,9 +77,7 @@ export class SubtleCryptoProvider implements CryptoProvider {
 
   static async createKeysFromSecret(
     secret: string,
-  ): Promise<
-    [keyPair: CryptoKeyPair, subject: string, initialDrive?: string]
-  > {
+  ): Promise<[keyPair: CryptoKeyPair, subject: string, initialDrive?: string]> {
     const { privateKey, subject, initialDrive } = decodeSecret(secret);
     const rawKey = decodeB64(privateKey);
     const privateCryptoKey =

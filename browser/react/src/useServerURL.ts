@@ -22,11 +22,7 @@ export const useServerURL = (): [string, (serverUrl: string) => void] => {
       if (Client.isValidSubject(value)) {
         newValue = value;
       } else {
-        store.notifyError(
-          new Error(
-            `Invalid Server URL: ${value}`,
-          ),
-        );
+        store.notifyError(new Error(`Invalid Server URL: ${value}`));
       }
 
       store.setServerUrl(newValue);

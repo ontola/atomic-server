@@ -87,9 +87,7 @@ export function SideBarDrive({
             navigate(constructOpenURL(drive));
           }}
         >
-          <DriveTitle data-testid='current-drive-title'>
-            {driveName}
-          </DriveTitle>
+          <DriveTitle data-testid='current-drive-title'>{driveName}</DriveTitle>
         </TitleButton>
         <HeadingButtonWrapper gap='0'>
           <DriveSwitcher />

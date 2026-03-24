@@ -1,0 +1,46 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": [
+    "eslint",
+    "typescript",
+    "unicorn",
+    "react",
+    "oxc",
+    "import",
+    "jsdoc",
+    "jsx-a11y",
+    "vitest"
+  ],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn",
+    "pedantic": "warn",
+    "perf": "warn",
+    "style": "warn"
+  },
+  "rules": {
+    "no-undef": "off",
+    "no-unused-vars": "off",
+    "no-redeclare": "off",
+    "@typescript-eslint/no-unused-vars": ["warn", { "varsIgnorePattern": "^_", "argsIgnorePattern": "^_", "caughtErrorsIgnorePattern": "^_|^e$" }],
+    "@typescript-eslint/no-explicit-any": "warn",
+    "no-shadow": "off",
+    "@typescript-eslint/no-shadow": "warn",
+    "no-console": ["warn", { "allow": ["error", "warn"] }],
+    "react/prop-types": "off",
+    "react/no-unknown-property": ["warn", { "ignore": ["about"] }],
+    "jsx-a11y/no-autofocus": "off"
+  },
+  "globals": {
+    "React": "readonly"
+  },
+  "ignorePatterns": [
+    "**/node_modules",
+    "**/dist",
+    "**/lib-out",
+    "**/build",
+    "**/.svelte-kit",
+    "**/.netlify",
+    "browser/data-browser/src/locales/**"
+  ]
+}

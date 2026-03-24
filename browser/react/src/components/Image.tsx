@@ -36,11 +36,10 @@ export type SizeIndication =
     }
   | Unit;
 
-interface ImageInnerProps
-  extends Omit<
-    React.ImgHTMLAttributes<HTMLPictureElement>,
-    'resource' | 'src'
-  > {
+interface ImageInnerProps extends Omit<
+  React.ImgHTMLAttributes<HTMLPictureElement>,
+  'resource' | 'src'
+> {
   resource: Resource<Server.File>;
   /**
    * SizeIndication is used to help the browser choose the right image size to fetch.

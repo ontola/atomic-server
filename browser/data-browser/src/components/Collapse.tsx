@@ -55,7 +55,8 @@ const GridCollapser = styled.div<GridCollapserProps>`
   transition:
     grid-template-rows ${() => ANIMATION_DURATION()}ms ease-in-out,
     // In some cases, a margin is added. This needs to animate as well.
-    margin-top ${() => ANIMATION_DURATION()}ms ease-in-out;
+    margin-top ${() => ANIMATION_DURATION()}ms
+      ease-in-out;
 
   @media (prefers-reduced-motion) {
     transition: unset;

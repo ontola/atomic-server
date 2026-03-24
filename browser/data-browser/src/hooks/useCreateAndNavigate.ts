@@ -36,9 +36,10 @@ export function useCreateAndNavigate(): CreateAndNavigate {
       propVals,
       { parent, extraParams, onCreated, subject, noParent, skipNavigation },
     ): Promise<Resource> => {
-      const classTitle = store
-        .getResourceLoading(isA)
-        ?.title?.replace(/^https?:\/\/[^/]+\/classes\//, '') ?? 'Resource';
+      const classTitle =
+        store
+          .getResourceLoading(isA)
+          ?.title?.replace(/^https?:\/\/[^/]+\/classes\//, '') ?? 'Resource';
 
       const resource = await store.newResource({
         subject,
