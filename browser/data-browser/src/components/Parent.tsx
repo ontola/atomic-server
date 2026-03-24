@@ -16,11 +16,13 @@ import { BREADCRUMB_BAR_TRANSITION_TAG } from '../helpers/transitionName';
 import { ResourceContextMenu } from './ResourceContextMenu';
 import { MenuBarDropdownTrigger } from './ResourceContextMenu/MenuBarDropdownTrigger';
 import { IconButton, IconButtonVariant } from './IconButton/IconButton';
+import { FaMagnifyingGlass } from 'react-icons/fa6';
 
 import type { JSX } from 'react';
 import { useAISidebar } from './AI/AISidebarContext';
 import { AIIcon } from './AI/AIIcon';
 import { useAISettings } from './AI/AISettingsContext';
+import { openSearchOverlay } from './OverlayContainer';
 
 type ParentProps = {
   resource: Resource;
@@ -41,6 +43,16 @@ function Parent({ resource }: ParentProps): JSX.Element {
       </BreadcrumbRow>
       <Spacer />
       <ButtonArea>
+        <IconButton
+          title='Search (Cmd+K)'
+          variant={IconButtonVariant.Simple}
+          onClick={() => {
+            console.log('SEARCH CLICKED');
+            openSearchOverlay();
+          }}
+        >
+          <FaMagnifyingGlass />
+        </IconButton>
         {enableAI && (
           <IconButton
             title='Toggle AI panel'

@@ -9,6 +9,7 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 - [#1139](https://github.com/ontola/atomic-server/issues/1139) AtomicServer can now create data without being dependent on a server! AtomicServer is now Local-First, using the new `did:ad` schema.
 - #584 Replace ureq with reqwest (async HTTP calls)
+- Search UI is redesigned, now as an overlay, feels like a command bar
 - #481 Drive scoped queries
 - #1160 Switch to Oxlint + Oxfmt
 - #420 Fix OTLP / OpenTelemetry, update docs from Jaeger to SigNoz, add metrics

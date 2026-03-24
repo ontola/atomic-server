@@ -9,6 +9,7 @@ import { SideBar } from './SideBar';
 import { isRunningInTauri } from '../helpers/tauri';
 import { shortcuts } from './HotKeyWrapper';
 import { Searchbar } from './Searchbar/Searchbar';
+import { OverlayContainer } from './OverlayContainer';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useBackForward } from '../hooks/useNavigateWithTransition';
 import { NAVBAR_TRANSITION_TAG } from '../helpers/transitionName';
@@ -60,6 +61,7 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
         </HideInPrint>
       </SideBarWrapper>
       {!navbarTop && <NavBar />}
+      <OverlayContainer />
     </AISidebarContextProvider>
   );
 }

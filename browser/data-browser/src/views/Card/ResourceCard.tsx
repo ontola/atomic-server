@@ -50,6 +50,7 @@ function ResourceCard(
     JSX.IntrinsicElements['div'] & { className?: string },
 ): JSX.Element {
   const { initialInView, className, ...rest } = props;
+
   // The (more expensive) ResourceCardInner is only rendered when the component has been in View
   const { ref, inView } = useInView({
     threshold: 0,

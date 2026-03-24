@@ -29,7 +29,7 @@ type SearchRouteQueryParams = {
 
 export const SearchRoute = createRoute({
   path: pathNames.search,
-  component: () => <Search />,
+  component: () => null,
   getParentRoute: () => appRoute,
   validateSearch: {
     parse: (search: Record<string, unknown>): SearchRouteQueryParams => {

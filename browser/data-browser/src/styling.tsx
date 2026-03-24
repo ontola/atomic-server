@@ -35,6 +35,7 @@ export const ThemeWrapper = ({ children }: ThemeWrapperProps): JSX.Element => {
  */
 export const zIndex = {
   sidebar: 10,
+  searchOverlay: 9,
   dialog: 100,
   dropdown: 200,
   networkIndicator: 300,
