@@ -743,6 +743,7 @@ msgid "No hits"
 msgstr "Sin resultados"
 
 #: src/chunks/AI/AISidebar.tsx
+#: src/components/OverlayContainer.tsx
 msgid "New Chat"
 msgstr "Nuevo Chat"
 
@@ -3791,7 +3792,6 @@ msgstr ""
 msgid "esc"
 msgstr ""
 
-#: src/components/OverlayContainer.tsx
 #: src/routes/Search/SearchOverlay.tsx
 msgid ""
 "Search matches on the names and descriptions of resources.\n"
@@ -3803,7 +3803,6 @@ msgstr ""
 msgid "<0/> <1/> navigate"
 msgstr ""
 
-#: src/components/OverlayContainer.tsx
 #: src/routes/Search/SearchOverlay.tsx
 msgid "<0/> open"
 msgstr ""
@@ -3908,4 +3907,21 @@ msgstr ""
 #. placeholder {2}: ' '
 #: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
 msgid "New{0} {1}{2} Column"
+msgstr ""
+
+#. placeholder {0}: query
+#: src/components/OverlayContainer.tsx
+msgid "Start AI Chat with \"{0}\""
+msgstr ""
+
+#: src/components/OverlayContainer.tsx
+msgid "<0/> open / chat"
+msgstr ""
+
+#: src/components/OverlayContainer.tsx
+msgid "<0/> chat"
+msgstr ""
+
+#: src/routes/SettingsAgent.tsx
+msgid "Drives"
 msgstr ""

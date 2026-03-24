@@ -74,8 +74,8 @@ describe('Commit signing and keys', () => {
     const agentKeys = await Agent.generateKeyPair();
     const agentDID = `did:ad:agent:${agentKeys.publicKey}`;
     const agentProvider = new JSCryptoProvider(agentKeys.privateKey);
-    const agent = new Agent(agentProvider, agentDID);
-    store.setAgent(agent);
+    const signingAgent = new Agent(agentProvider, agentDID);
+    store.setAgent(signingAgent);
 
     // Mock postCommit to return a commit with a proper subject
     const postCommitSpy = vi

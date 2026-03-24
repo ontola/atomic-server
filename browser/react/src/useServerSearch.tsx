@@ -1,5 +1,5 @@
 import { removeCachedSearchResults, SearchOpts } from '@tomic/lib';
-import { useEffect, useEffectEvent, useState } from 'react';
+import { useEffect, useEffectEvent, useMemo, useState } from 'react';
 import { useStore } from './index.js';
 import { useDebounce } from './useDebounce.js';
 import { useOnValueChange } from './helpers/useOnValueChange.js';
@@ -36,6 +36,9 @@ export function useServerSearch(
   const [loading, setLoading] = useState(false);
   const debouncedQuery = useDebounce(query, debounce) ?? '';
 
+  // Memoize searchOpts to prevent unnecessary effect re-runs
+  const memoizedSearchOpts = useMemo(() => searchOpts, [searchOpts]);
+
   useOnValueChange(() => {
     if (debouncedQuery) {
       setLoading(true);
@@ -64,9 +67,9 @@ export function useServerSearch(
     }
 
     store
-      .search(debouncedQuery, searchOpts)
+      .search(debouncedQuery, memoizedSearchOpts)
       .then(r => {
-        updateResults(r, debouncedQuery, searchOpts);
+        updateResults(r, debouncedQuery, memoizedSearchOpts);
         setError(undefined);
       })
       .catch(e => {
@@ -76,7 +79,7 @@ export function useServerSearch(
       .finally(() => {
         setLoading(false);
       });
-  }, [store, allowEmptyQuery, debouncedQuery, JSON.stringify(searchOpts)]);
+  }, [store, allowEmptyQuery, debouncedQuery, memoizedSearchOpts]);
 
   // Remove cached results when component unmounts.
   useEffect(() => {

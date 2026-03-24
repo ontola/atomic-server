@@ -2,8 +2,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-03-24T18:30:50.340Z\n"
-"PO-Revision-Date: 2026-03-24T18:30:50.340Z\n"
+"POT-Creation-Date: 2026-03-24T18:56:41.523Z\n"
+"PO-Revision-Date: 2026-03-24T18:56:41.523Z\n"
 "Last-Translator: \n"
 "Language: en\n"
 "Language-Team: \n"
@@ -21,8 +21,10 @@ msgstr "Search or enter a URL..."
 msgid "Upload"
 msgstr "Upload"
 
+#. placeholder {0}: JSON.stringify(error)
 #. placeholder {0}: searchError.message
 #. placeholder {0}: resource.error.message
+#: src/components/forms/Field.tsx
 #: src/components/forms/SearchBox/SearchBoxWindow.tsx
 #: src/views/ResourceLine.tsx
 msgid "Error: {0}"
@@ -97,7 +99,21 @@ msgstr "Enter a subject"
 
 #: src/chunks/TablePage/PropertyForm/PropertyForm.tsx
 #: src/components/forms/FilePicker/FilePicker.tsx
+#: src/components/forms/InputDate.tsx
+#: src/components/forms/InputMarkdown.tsx
+#: src/components/forms/InputNumber.tsx
+#: src/components/forms/InputNumber.tsx
+#: src/components/forms/InputResourceArray.tsx
+#: src/components/forms/InputResourceArray.tsx
+#: src/components/forms/InputResourceArray.tsx
+#: src/components/forms/InputSlug.tsx
+#: src/components/forms/InputString.tsx
+#: src/components/forms/InputTimestamp.tsx
+#: src/components/forms/InputURI.tsx
 #: src/components/forms/ResourceSelector/ResourceSelector.tsx
+#: src/components/forms/formValidation/useValidation.ts
+#: src/components/forms/formValidation/useValidation.ts
+#: src/components/forms/formValidation/useValidation.ts
 msgid "Required"
 msgstr "Required"
 
@@ -106,6 +122,8 @@ msgstr "Required"
 msgid "Edit resource"
 msgstr "Edit resource"
 
+#: src/chunks/AI/MessageContextItem.tsx
+#: src/chunks/RTE/EditLinkForm.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/components/forms/ResourceSelector/ResourceSelector.tsx
@@ -123,6 +141,7 @@ msgstr "App"
 
 #: src/components/OverlayContainer.tsx
 #: src/routes/Search/SearchRoute.tsx
+#: src/views/EndpointPage.tsx
 msgid "No hits"
 msgstr "No hits"
 
@@ -151,9 +170,8 @@ msgstr "With Tags:"
 msgid "<0/> <1/> navigate"
 msgstr "<0/> <1/> navigate"
 
-#: src/components/OverlayContainer.tsx
-msgid "<0/> open"
-msgstr "<0/> open"
+#~ msgid "<0/> open"
+#~ msgstr "<0/> open"
 
 #: src/components/OverlayContainer.tsx
 msgid "<0>esc</0> close"
@@ -210,6 +228,7 @@ msgid "Ctrl+H"
 msgstr "Ctrl+H"
 
 #: src/components/OverlayContainer.tsx
+#: src/routes/Router.tsx
 msgid "Go home"
 msgstr "Go home"
 
@@ -251,6 +270,7 @@ msgid "This page"
 msgstr "This page"
 
 #: src/components/OverlayContainer.tsx
+#: src/routes/ShortcutsRoute.tsx
 msgid "Keyboard shortcuts"
 msgstr "Keyboard shortcuts"
 
@@ -266,9 +286,14 @@ msgstr "Clear error"
 msgid "Try Again"
 msgstr "Try Again"
 
+#: src/chunks/AI/ModelSelect/OllamaModelSelector.tsx
+#: src/components/HighlightedCodeBlock.tsx
+#: src/components/Searchbar/TagSuggestionOverlay.tsx
 #: src/views/Card/ResourceCard.tsx
 #: src/views/Document/DocumentV2FullPage.tsx
 #: src/views/Document/DocumentV2FullPage.tsx
+#: src/views/File/FilePreview.tsx
+#: src/views/File/FilePreviewThumbnail.tsx
 #: src/views/ResourceLine.tsx
 #: src/views/ResourcePage.tsx
 msgid "Loading..."
@@ -337,23 +362,44 @@ msgid "No parent set"
 msgstr "No parent set"
 
 #: src/components/SideBar/OntologySideBar/OntologiesPanel.tsx
+#: src/components/forms/FilePicker/FilePickerItem.tsx
 #: src/components/forms/NewForm/NewFormDialog.tsx
 #: src/views/ResourceInline/ResourceInline.tsx
 msgid "loading"
 msgstr "loading"
 
+#: src/chunks/AI/AgentConfig.tsx
+#: src/chunks/Plugins/NewPluginButton.tsx
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
+#: src/components/ConfirmationDialog.tsx
+#: src/components/ParentPicker/ParentPickerDialog.tsx
 #: src/components/forms/EditFormDialog.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: src/components/forms/NewForm/NewFormDialog.tsx
+#: src/components/forms/ResourceForm.tsx
+#: src/components/forms/ValueForm/ValueFormEdit.tsx
+#: src/routes/History/HistoryMobileView.tsx
+#: src/views/OntologyPage/NewClassButton.tsx
+#: src/views/OntologyPage/NewPropertyButton.tsx
+#: src/views/Plugin/AssignRights.tsx
+#: src/views/PluginView/useResourcePicker.tsx
 msgid "Cancel"
 msgstr "Cancel"
 
+#: src/chunks/RTE/ImagePicker.tsx
 #: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
 #: src/components/forms/EditFormDialog.tsx
 #: src/components/forms/NewForm/NewFormDialog.tsx
+#: src/components/forms/ResourceForm.tsx
 #: src/routes/Share/ShareRoute.tsx
+#: src/views/Article/ArticleDescription.tsx
+#: src/views/OntologyPage/NewClassButton.tsx
+#: src/views/OntologyPage/NewPropertyButton.tsx
 msgid "Save"
 msgstr "Save"
 
@@ -362,11 +408,13 @@ msgid "Select a class"
 msgstr "Select a class"
 
 #: src/components/ClassSelectorDialog.tsx
+#: src/views/OntologyPage/OntologyPage.tsx
 msgid "No classes"
 msgstr "No classes"
 
 #. placeholder {0}: prop.shortname
 #. placeholder {0}: prop.shortname
+#. placeholder {0}: title
 #: src/chunks/TablePage/EditorCells/JSONCell.tsx
 #: src/chunks/TablePage/EditorCells/MarkdownCell.tsx
 #: src/components/forms/EditFormDialog.tsx
@@ -422,9 +470,11 @@ msgstr "Open"
 msgid "Open the resource"
 msgstr "Open the resource"
 
+#: src/chunks/AI/AgentConfigItem.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/components/ResourceContextMenu/index.tsx
 #: src/routes/EditRoute.tsx
+#: src/views/ResourcePageDefault.tsx
 msgid "Edit"
 msgstr "Edit"
 
@@ -482,6 +532,7 @@ msgid "Show the history of this resource"
 msgstr "Show the history of this resource"
 
 #: src/components/ResourceContextMenu/index.tsx
+#: src/views/ImporterPage.tsx
 msgid "Import"
 msgstr "Import"
 
@@ -589,10 +640,12 @@ msgstr "Children"
 msgid "Class name"
 msgstr "Class name"
 
+#: src/views/OntologyPage/Class/ClassCardRead.tsx
 #: src/views/OntologyPage/Class/ClassCardWrite.tsx
 msgid "Requires"
 msgstr "Requires"
 
+#: src/views/OntologyPage/Class/ClassCardRead.tsx
 #: src/views/OntologyPage/Class/ClassCardWrite.tsx
 msgid "Recommends"
 msgstr "Recommends"
@@ -602,6 +655,7 @@ msgid "Property does not exist anymore"
 msgstr "Property does not exist anymore"
 
 #: src/components/Parent.tsx
+#: src/components/Searchbar/Searchbar.tsx
 msgid "Search (Cmd+K)"
 msgstr "Search (Cmd+K)"
 
@@ -656,6 +710,7 @@ msgstr "Accept as {0}"
 msgid "Accept as new user"
 msgstr "Accept as new user"
 
+#: src/components/SignInButton.tsx
 #: src/views/InvitePage.tsx
 msgid "Sign in"
 msgstr "Sign in"
@@ -717,6 +772,7 @@ msgstr "Table"
 msgid "Insufficient rights to view resource"
 msgstr "Insufficient rights to view resource"
 
+#: src/components/SideBar/AppMenu.tsx
 #: src/routes/AppSettings.tsx
 msgid "Settings"
 msgstr "Settings"
@@ -797,12 +853,14 @@ msgstr "<0/>{0} Enable keyboard drag & drop in sidebar"
 msgid "Initializing Resource"
 msgstr "Initializing Resource"
 
-#. placeholder {0}: resource.props.version
+#. placeholder {0}: metadata.version
+#: src/chunks/Plugins/NewPluginButton.tsx
 #: src/views/Plugin/PluginPage.tsx
 msgid "v{0}"
 msgstr "v{0}"
 
-#. placeholder {0}: resource.props.pluginAuthor
+#. placeholder {0}: metadata.author
+#: src/chunks/Plugins/NewPluginButton.tsx
 #: src/views/Plugin/PluginPage.tsx
 msgid "by {0}"
 msgstr "by {0}"
@@ -819,6 +877,7 @@ msgstr "Plugin Description"
 msgid "<0/> Config"
 msgstr "<0/> Config"
 
+#: src/components/forms/ValueForm/ValueFormEdit.tsx
 #: src/views/Plugin/PluginPage.tsx
 msgid "<0/> Save"
 msgstr "<0/> Save"
@@ -859,6 +918,7 @@ msgstr "Enter a Resource URL..."
 msgid "Loading {0}..."
 msgstr "Loading {0}..."
 
+#: src/chunks/AI/RealAIChat.tsx
 #: src/routes/DataRoute.tsx
 msgid "Accept"
 msgstr "Accept"
@@ -1030,6 +1090,8 @@ msgstr "<0/> Apply template"
 
 #: src/chunks/TablePage/PropertyForm/NumberPropertyForm.tsx
 #: src/views/BookmarkPage/BookmarkPreview.tsx
+#: src/views/ChatRoomPage.tsx
+#: src/views/ChatRoomPage.tsx
 msgid "loading..."
 msgstr "loading..."
 
@@ -1069,6 +1131,7 @@ msgstr "Represents a row in the {0} table"
 msgid "New Table"
 msgstr "New Table"
 
+#: src/chunks/AI/AgentConfig.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 msgid "Name"
@@ -1080,7 +1143,9 @@ msgstr "<0/> Use existing class"
 
 #: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
 #: src/components/InviteForm.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 msgid "Create"
 msgstr "Create"
@@ -1124,10 +1189,12 @@ msgid "Read more about permissions in the{0} <0>Atomic Data Docs</0>"
 msgstr "Read more about permissions in the{0} <0>Atomic Data Docs</0>"
 
 #: src/routes/Share/ShareRoute.tsx
+#: src/views/Plugin/AssignRights.tsx
 msgid "Read"
 msgstr "Read"
 
 #: src/routes/Share/ShareRoute.tsx
+#: src/views/Plugin/AssignRights.tsx
 msgid "Write"
 msgstr "Write"
 
@@ -1135,10 +1202,12 @@ msgstr "Write"
 msgid "Invalid secret."
 msgstr "Invalid secret."
 
+#: src/components/SideBar/AppMenu.tsx
 #: src/routes/SettingsAgent.tsx
 msgid "User Settings"
 msgstr "User Settings"
 
+#: src/components/SideBar/AppMenu.tsx
 #: src/routes/SettingsAgent.tsx
 msgid "Login / New User"
 msgstr "Login / New User"
@@ -1229,6 +1298,7 @@ msgstr ""
 "Paste your Atomic Data secret key below to connect your\n"
 "existing identity to this node."
 
+#: src/views/ImporterPage.tsx
 #: src/views/OnboardingPage.tsx
 msgid "Importing..."
 msgstr "Importing..."
@@ -1253,6 +1323,7 @@ msgstr "Custom Drive URL"
 msgid "Enter a Drive DID or URL"
 msgstr "Enter a Drive DID or URL"
 
+#: src/chunks/RTE/EditLinkForm.tsx
 #: src/routes/SettingsServer/index.tsx
 msgid "Set"
 msgstr "Set"
@@ -1338,6 +1409,7 @@ msgstr "Copy the secret key to continue"
 msgid "Generating..."
 msgstr "Generating..."
 
+#: src/components/CodeBlock.tsx
 #: src/components/InviteForm.tsx
 msgid "Copied to clipboard"
 msgstr "Copied to clipboard"
@@ -1396,6 +1468,7 @@ msgid "<0/>{0} Reference resources by subject instead of name."
 msgstr "<0/>{0} Reference resources by subject instead of name."
 
 #: src/chunks/TablePage/TableExportDialog.tsx
+#: src/views/File/DownloadButton.tsx
 msgid "<0/> Download"
 msgstr "<0/> Download"
 
@@ -1417,6 +1490,8 @@ msgid "Checkbox"
 msgstr "Checkbox"
 
 #: src/chunks/TablePage/NewColumnButton.tsx
+#: src/components/ParentPicker/ParentPickerDialog.tsx
+#: src/routes/SettingsServer/DriveRow.tsx
 msgid "Select"
 msgstr "Select"
 
@@ -1495,10 +1570,12 @@ msgstr "Search..."
 #: src/chunks/TablePage/EditorCells/AtomicURLCell.tsx
 #: src/chunks/TablePage/EditorCells/MultiRelationCell.tsx
 #: src/chunks/TablePage/EditorCells/SelectCell.tsx
+#: src/components/ComboBox.tsx
 msgid "No results"
 msgstr "No results"
 
 #: src/chunks/TablePage/EditorCells/AtomicURLCell.tsx
+#: src/components/Toaster.tsx
 msgid "Clear"
 msgstr "Clear"
 
@@ -1512,6 +1589,7 @@ msgid "Edit Column"
 msgstr "Edit Column"
 
 #: src/chunks/TablePage/EditorCells/SelectCell.tsx
+#: src/components/Tag/CreateTagRow.tsx
 msgid "Add tag"
 msgstr "Add tag"
 
@@ -1607,3 +1685,1903 @@ msgstr "Value should be a round number."
 #: src/components/forms/RangeInput.tsx
 msgid "Min must be a less than max"
 msgstr "Min must be a less than max"
+
+#: src/chunks/AI/AgentConfig.tsx
+#: src/views/OntologyPage/OntologyPage.tsx
+msgid "<0/> Read"
+msgstr "<0/> Read"
+
+#: src/views/OntologyPage/OntologyPage.tsx
+msgid "<0/> Edit"
+msgstr "<0/> Edit"
+
+#: src/views/OntologyPage/OntologyPage.tsx
+msgid "Classes"
+msgstr "Classes"
+
+#: src/views/OntologyPage/OntologyPage.tsx
+msgid "Properties"
+msgstr "Properties"
+
+#: src/views/OntologyPage/OntologyPage.tsx
+msgid "No properties"
+msgstr "No properties"
+
+#: src/views/OntologyPage/OntologyPage.tsx
+msgid "Instances"
+msgstr "Instances"
+
+#: src/views/OntologyPage/OntologyPage.tsx
+msgid "No instances"
+msgstr "No instances"
+
+#: src/views/OntologyPage/NewPropertyButton.tsx
+msgid "<0/> Add property"
+msgstr "<0/> Add property"
+
+#: src/views/OntologyPage/NewPropertyButton.tsx
+msgid "New Property"
+msgstr "New Property"
+
+#: src/routes/ShortcutsRoute.tsx
+msgid "Global"
+msgstr "Global"
+
+#: src/routes/ShortcutsRoute.tsx
+msgid "<0/> Search"
+msgstr "<0/> Search"
+
+#: src/routes/ShortcutsRoute.tsx
+msgid "<0/> Show or hide the sidebar"
+msgstr "<0/> Show or hide the sidebar"
+
+#: src/routes/ShortcutsRoute.tsx
+msgid "<0/> Show these keyboard shortcuts"
+msgstr "<0/> Show these keyboard shortcuts"
+
+#: src/routes/ShortcutsRoute.tsx
+msgid "<0/> <1/>dit resource"
+msgstr "<0/> <1/>dit resource"
+
+#: src/routes/ShortcutsRoute.tsx
+msgid "<0/> Show <1>d</1>ata for resource"
+msgstr "<0/> Show <1>d</1>ata for resource"
+
+#: src/routes/ShortcutsRoute.tsx
+msgid "<0/> Show <1>h</1>ome page"
+msgstr "<0/> Show <1>h</1>ome page"
+
+#: src/routes/ShortcutsRoute.tsx
+msgid "<0/> <1/>ew resource"
+msgstr "<0/> <1/>ew resource"
+
+#: src/routes/ShortcutsRoute.tsx
+msgid "<0/> Open <1>m</1>enu"
+msgstr "<0/> Open <1>m</1>enu"
+
+#: src/routes/ShortcutsRoute.tsx
+msgid "<0/> <1/>ser settings"
+msgstr "<0/> <1/>ser settings"
+
+#: src/routes/ShortcutsRoute.tsx
+msgid "<0/> <1/>heme settings"
+msgstr "<0/> <1/>heme settings"
+
+#: src/routes/ShortcutsRoute.tsx
+msgid "Document"
+msgstr "Document"
+
+#: src/routes/ShortcutsRoute.tsx
+msgid "<0/> Move line / section up"
+msgstr "<0/> Move line / section up"
+
+#: src/routes/ShortcutsRoute.tsx
+msgid "<0/> Move line / section down"
+msgstr "<0/> Move line / section down"
+
+#: src/routes/ShortcutsRoute.tsx
+msgid "<0/> Delete line"
+msgstr "<0/> Delete line"
+
+#. placeholder {0}: shortcuts.menu
+#: src/components/ResourceContextMenu/MenuBarDropdownTrigger.tsx
+msgid "Open menu ({0})"
+msgstr "Open menu ({0})"
+
+#: src/routes/Router.tsx
+msgid "Not found!"
+msgstr "Not found!"
+
+#: src/routes/UnavailableLazyRoute.tsx
+msgid "Unavailable"
+msgstr "Unavailable"
+
+#: src/routes/AboutRoute.tsx
+msgid ""
+"The easiest way to <0>create</0>, <1>share</1> and <2>model</2> linked\n"
+"data."
+msgstr ""
+"The easiest way to <0>create</0>, <1>share</1> and <2>model</2> linked\n"
+"data."
+
+#: src/routes/AboutRoute.tsx
+msgid ""
+"Atomic Data is a modular specification for sharing, modifying and\n"
+"modeling graph data. It combines the ease of use of JSON, the\n"
+"connectivity of RDF (linked data) and the reliability of type-safety."
+msgstr ""
+"Atomic Data is a modular specification for sharing, modifying and\n"
+"modeling graph data. It combines the ease of use of JSON, the\n"
+"connectivity of RDF (linked data) and the reliability of type-safety."
+
+#. placeholder {0}: ' '
+#. placeholder {1}: ' '
+#: src/routes/AboutRoute.tsx
+msgid ""
+"Atomic Data is especially suitable for knowledge graphs, distributed\n"
+"datasets, semantic data, p2p applications, decentralized apps, and data\n"
+"that is meant to be shared. It is designed to be highly extensible, easy\n"
+"to use, and to make the process of domain specific standardization as\n"
+"simple as possible. Check out{0} <0>the docs</0>{1} for more information about Atomic Data."
+msgstr ""
+"Atomic Data is especially suitable for knowledge graphs, distributed\n"
+"datasets, semantic data, p2p applications, decentralized apps, and data\n"
+"that is meant to be shared. It is designed to be highly extensible, easy\n"
+"to use, and to make the process of domain specific standardization as\n"
+"simple as possible. Check out{0} <0>the docs</0>{1} for more information about Atomic Data."
+
+#: src/routes/AboutRoute.tsx
+msgid "About this app"
+msgstr "About this app"
+
+#. placeholder {0}: ' '
+#: src/routes/AboutRoute.tsx
+msgid ""
+"You're looking at{0} <0>atomic-data-browser</0> , an open-source client for viewing and editing data. Please add an\n"
+"issue if you encouter problems or have a feature request. Expect bugs\n"
+"and issues, because this stuff is pretty beta."
+msgstr ""
+"You're looking at{0} <0>atomic-data-browser</0> , an open-source client for viewing and editing data. Please add an\n"
+"issue if you encouter problems or have a feature request. Expect bugs\n"
+"and issues, because this stuff is pretty beta."
+
+#. placeholder {0}: ' '
+#: src/routes/AboutRoute.tsx
+msgid "The back-end of this app is{0} <0>atomic-server</0> , which you can think of as an open source, web-native database."
+msgstr "The back-end of this app is{0} <0>atomic-server</0> , which you can think of as an open source, web-native database."
+
+#: src/routes/AboutRoute.tsx
+msgid "Things to visit"
+msgstr "Things to visit"
+
+#: src/routes/AboutRoute.tsx
+msgid "List of lists"
+msgstr "List of lists"
+
+#: src/routes/AboutRoute.tsx
+msgid "List of Classes"
+msgstr "List of Classes"
+
+#: src/routes/AboutRoute.tsx
+msgid "List of Properties"
+msgstr "List of Properties"
+
+#: src/routes/AboutRoute.tsx
+msgid "Run your own server"
+msgstr "Run your own server"
+
+#. placeholder {0}: ' '
+#. placeholder {1}: ' '
+#: src/routes/AboutRoute.tsx
+msgid "The easiest way to run an{0} <0>atomic-server</0>{1} is by using Docker:"
+msgstr "The easiest way to run an{0} <0>atomic-server</0>{1} is by using Docker:"
+
+#. placeholder {0}: ' '
+#: src/routes/AboutRoute.tsx
+msgid "...and visit{0} <0>localhost</0>."
+msgstr "...and visit{0} <0>localhost</0>."
+
+#: src/routes/AboutRoute.tsx
+msgid "Join the community"
+msgstr "Join the community"
+
+#. placeholder {0}: ' '
+#. placeholder {1}: ' '
+#. placeholder {2}: ' '
+#. placeholder {3}: "'"
+#: src/routes/AboutRoute.tsx
+msgid ""
+"Atomic Data is open and fully powered by volunteers. We're looking\n"
+"for people who want to help discuss various design challenges and work\n"
+"on implmenentations. If you have any questions, or want to help out,\n"
+"feel free to join our{0} <0>Discord</0>! Sign\n"
+"up to{1} <1>our newsletter</1>{2} if you{3}d like to get updated! ."
+msgstr ""
+"Atomic Data is open and fully powered by volunteers. We're looking\n"
+"for people who want to help discuss various design challenges and work\n"
+"on implmenentations. If you have any questions, or want to help out,\n"
+"feel free to join our{0} <0>Discord</0>! Sign\n"
+"up to{1} <1>our newsletter</1>{2} if you{3}d like to get updated! ."
+
+#: src/routes/LinkOpenRouter.tsx
+msgid "No code verifier found"
+msgstr "No code verifier found"
+
+#: src/components/forms/SearchBox/SearchBox.tsx
+#: src/routes/LinkOpenRouter.tsx
+msgid "Error"
+msgstr "Error"
+
+#: src/routes/LinkOpenRouter.tsx
+msgid "Linking OpenRouter"
+msgstr "Linking OpenRouter"
+
+#: src/routes/LinkOpenRouter.tsx
+msgid "Please wait while we link your OpenRouter account..."
+msgstr "Please wait while we link your OpenRouter account..."
+
+#: src/routes/RootRoutes.tsx
+msgid "404 Not found"
+msgstr "404 Not found"
+
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
+msgid "New Bookmark"
+msgstr "New Bookmark"
+
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
+msgid "Ok"
+msgstr "Ok"
+
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
+msgid "New Ontology"
+msgstr "New Ontology"
+
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
+msgid ""
+"An ontology is a collection of classes and properties that together\n"
+"describe a concept. Great for data models."
+msgstr ""
+"An ontology is a collection of classes and properties that together\n"
+"describe a concept. Great for data models."
+
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
+msgid "Shortname"
+msgstr "Shortname"
+
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
+msgid "New Article"
+msgstr "New Article"
+
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
+#: src/views/FolderPage/ListView.tsx
+msgid "Title"
+msgstr "Title"
+
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
+msgid ""
+"Title is used to construct the subject, keep in mind that the\n"
+"subject cannot be changed later."
+msgstr ""
+"Title is used to construct the subject, keep in mind that the\n"
+"subject cannot be changed later."
+
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
+msgid "New Collection"
+msgstr "New Collection"
+
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
+msgid "Name your Collection"
+msgstr "Name your Collection"
+
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
+msgid "Set a value filter (optional)"
+msgstr "Set a value filter (optional)"
+
+#: src/components/ErrorLook.tsx
+msgid "Stack trace:"
+msgstr "Stack trace:"
+
+#: src/helpers/AppSettings.tsx
+msgid "Signed in!"
+msgstr "Signed in!"
+
+#: src/helpers/AppSettings.tsx
+msgid "Signed out."
+msgstr "Signed out."
+
+#: src/helpers/AppSettings.tsx
+msgid "Agent setting failed:"
+msgstr "Agent setting failed:"
+
+#: src/components/Main.tsx
+msgid "Start of main content"
+msgstr "Start of main content"
+
+#: src/routes/NewResource/BaseButtons.tsx
+msgid "Base classes"
+msgstr "Base classes"
+
+#: src/components/forms/FileDropzone/FileDropzoneInput.tsx
+msgid "Drop a file or click here to upload."
+msgstr "Drop a file or click here to upload."
+
+#: src/components/forms/FileDropzone/FileDropzoneInput.tsx
+msgid "Drop files or click here to upload."
+msgstr "Drop files or click here to upload."
+
+#: src/components/forms/FileDropzone/FileDropzone.tsx
+#: src/components/forms/FileDropzone/FileDropzoneInput.tsx
+#: src/components/forms/UploadForm.tsx
+msgid "Uploading..."
+msgstr "Uploading..."
+
+#: src/components/forms/Field.tsx
+msgid "Required field"
+msgstr "Required field"
+
+#: src/components/forms/Field.tsx
+#: src/views/OntologyPage/InfoTitle.tsx
+msgid "Show helper"
+msgstr "Show helper"
+
+#: src/components/forms/Field.tsx
+msgid "Delete this property"
+msgstr "Delete this property"
+
+#: src/components/forms/Field.tsx
+msgid "Required field."
+msgstr "Required field."
+
+#: src/components/forms/ResourceForm.tsx
+msgid "Loading resource..."
+msgstr "Loading resource..."
+
+#: src/components/forms/ResourceForm.tsx
+msgid "Loading class..."
+msgstr "Loading class..."
+
+#. placeholder {0}: classSubject
+#: src/components/forms/ResourceForm.tsx
+msgid ""
+"{0} is not a Class. Only resources with valid classes can be\n"
+"created or edited at this moment."
+msgstr ""
+"{0} is not a Class. Only resources with valid classes can be\n"
+"created or edited at this moment."
+
+#: src/components/forms/ResourceForm.tsx
+msgid "Invalid URL"
+msgstr "Invalid URL"
+
+#: src/components/forms/ResourceForm.tsx
+msgid "That property already exists in this resource. It can only be added once."
+msgstr "That property already exists in this resource. It can only be added once."
+
+#. placeholder {0}: klass.error.message
+#: src/components/forms/ResourceForm.tsx
+msgid ""
+"Error in class, so this form could miss properties. You can\n"
+"still edit the resource, though. Error message: ` {0}`"
+msgstr ""
+"Error in class, so this form could miss properties. You can\n"
+"still edit the resource, though. Error message: ` {0}`"
+
+#: src/components/forms/ResourceForm.tsx
+msgid "Cannot save edits: Agent does not have edit rights"
+msgstr "Cannot save edits: Agent does not have edit rights"
+
+#. placeholder {0}: showAdvanced ? <FaCaretDown /> : <FaCaretRight />
+#: src/components/forms/ResourceForm.tsx
+msgid "{0} Advanced"
+msgstr "{0} Advanced"
+
+#: src/components/forms/ResourceForm.tsx
+msgid "Add another property..."
+msgstr "Add another property..."
+
+#: src/components/forms/ResourceForm.tsx
+msgid "In Atomic Data, any Resource could have any single Property. Use this field to add new property-value combinations to your resource."
+msgstr "In Atomic Data, any Resource could have any single Property. Use this field to add new property-value combinations to your resource."
+
+#: src/components/forms/ResourceForm.tsx
+msgid "You are offline, changes can not be saved"
+msgstr "You are offline, changes can not be saved"
+
+#: src/components/CodeBlock.tsx
+msgid "Copied!"
+msgstr "Copied!"
+
+#: src/components/CodeBlock.tsx
+msgid "Copy to clipboard"
+msgstr "Copy to clipboard"
+
+#. placeholder {0}: ' '
+#: src/routes/Share/AgentRights.tsx
+msgid "<0/> Public (anyone){0}"
+msgstr "<0/> Public (anyone){0}"
+
+#: src/routes/Share/AgentRights.tsx
+msgid "Read access. Toggle to remove access."
+msgstr "Read access. Toggle to remove access."
+
+#: src/routes/Share/AgentRights.tsx
+msgid "No read access. Toggle to give read access."
+msgstr "No read access. Toggle to give read access."
+
+#: src/routes/Share/AgentRights.tsx
+msgid "Write access. Toggle to remove access."
+msgstr "Write access. Toggle to remove access."
+
+#: src/routes/Share/AgentRights.tsx
+msgid "No write access. Toggle to give write access."
+msgstr "No write access. Toggle to give write access."
+
+#: src/views/ImporterPage.tsx
+msgid "Imported!"
+msgstr "Imported!"
+
+#: src/views/ImporterPage.tsx
+msgid "Import to"
+msgstr "Import to"
+
+#. placeholder {0}: ' '
+#: src/views/ImporterPage.tsx
+msgid "Read more about how importing Atomic Data works{0} <0>in the docs</0> ."
+msgstr "Read more about how importing Atomic Data works{0} <0>in the docs</0> ."
+
+#: src/views/ImporterPage.tsx
+msgid "Paste your JSON-AD..."
+msgstr "Paste your JSON-AD..."
+
+#: src/views/ImporterPage.tsx
+msgid "Options"
+msgstr "Options"
+
+#: src/views/ImporterPage.tsx
+msgid "Overwrite resources that are outside the scope of the parent. Do this only if you trust the imported data."
+msgstr "Overwrite resources that are outside the scope of the parent. Do this only if you trust the imported data."
+
+#: src/views/ImporterPage.tsx
+msgid "Enter subject"
+msgstr "Enter subject"
+
+#: src/views/ImporterPage.tsx
+msgid "Target parent"
+msgstr "Target parent"
+
+#: src/views/ImporterPage.tsx
+msgid "This URL will be used as the default Parent for imported resources."
+msgstr "This URL will be used as the default Parent for imported resources."
+
+#: src/routes/History/HistoryDesktopView.tsx
+msgid "History of"
+msgstr "History of"
+
+#: src/routes/History/HistoryDesktopView.tsx
+#: src/routes/History/HistoryMobileView.tsx
+msgid "Make current version"
+msgstr "Make current version"
+
+#: src/routes/History/HistoryDesktopView.tsx
+msgid "Show Commit"
+msgstr "Show Commit"
+
+#: src/routes/History/HistoryDesktopView.tsx
+msgid "Versions"
+msgstr "Versions"
+
+#. placeholder {0}: resource.title
+#: src/routes/History/HistoryMobileView.tsx
+msgid "History of {0}"
+msgstr "History of {0}"
+
+#: src/routes/History/HistoryMobileView.tsx
+msgid "Version"
+msgstr "Version"
+
+#: src/components/AI/AISettings.tsx
+msgid ""
+"<0/> Enable AI\n"
+"Features"
+msgstr ""
+"<0/> Enable AI\n"
+"Features"
+
+#: src/components/AI/AISettings.tsx
+msgid "<0/> Show token usage in chats"
+msgstr "<0/> Show token usage in chats"
+
+#: src/components/AI/AISettings.tsx
+msgid "AI Providers"
+msgstr "AI Providers"
+
+#: src/components/AI/AISettings.tsx
+msgid "<0/> Enable OpenRouter"
+msgstr "<0/> Enable OpenRouter"
+
+#: src/components/AI/AISettings.tsx
+msgid "OpenRouter API Key"
+msgstr "OpenRouter API Key"
+
+#: src/components/AI/AISettings.tsx
+msgid "<0/> or"
+msgstr "<0/> or"
+
+#: src/components/AI/AISettings.tsx
+msgid "Enter your OpenRouter API key"
+msgstr "Enter your OpenRouter API key"
+
+#. placeholder {0}: intl.format(creditUsage.used)
+#. placeholder {1}: ' '
+#. placeholder {2}: intl.format(creditUsage.total)
+#: src/components/AI/AISettings.tsx
+msgid "Credits used: {0} /{1} {2}"
+msgstr "Credits used: {0} /{1} {2}"
+
+#: src/components/AI/AISettings.tsx
+msgid ""
+"OpenRouter provides a unified API that gives you access to\n"
+"hundreds of AI models from all major vendors, while\n"
+"automatically handling fallbacks and selecting the most\n"
+"cost-effective options."
+msgstr ""
+"OpenRouter provides a unified API that gives you access to\n"
+"hundreds of AI models from all major vendors, while\n"
+"automatically handling fallbacks and selecting the most\n"
+"cost-effective options."
+
+#: src/components/AI/AISettings.tsx
+msgid "OpenRouter"
+msgstr "OpenRouter"
+
+#: src/components/AI/AISettings.tsx
+msgid "Enable Ollama"
+msgstr "Enable Ollama"
+
+#. placeholder {0}: ' '
+#: src/components/AI/AISettings.tsx
+msgid "Host your own AI models locally using{0} <0>Ollama</0>"
+msgstr "Host your own AI models locally using{0} <0>Ollama</0>"
+
+#: src/components/AI/AISettings.tsx
+msgid "Server found"
+msgstr "Server found"
+
+#: src/components/AI/AISettings.tsx
+msgid "Server not responding"
+msgstr "Server not responding"
+
+#: src/components/AI/AISettings.tsx
+msgid "Ollama API Url"
+msgstr "Ollama API Url"
+
+#: src/components/AI/AISettings.tsx
+msgid "Ollama"
+msgstr "Ollama"
+
+#: src/components/AI/AISettings.tsx
+msgid "Generative Features"
+msgstr "Generative Features"
+
+#: src/components/AI/AISettings.tsx
+msgid "<0/> Generate AI Chat titles"
+msgstr "<0/> Generate AI Chat titles"
+
+#: src/components/AI/AISettings.tsx
+msgid "Show follow up prompts in chats"
+msgstr "Show follow up prompts in chats"
+
+#: src/components/AI/AISettings.tsx
+msgid "Uses a small model to generate a follow up prompt based on the last message in the chat."
+msgstr "Uses a small model to generate a follow up prompt based on the last message in the chat."
+
+#: src/components/AI/AISettings.tsx
+msgid "(Tip) Choose a cheap and fast model"
+msgstr "(Tip) Choose a cheap and fast model"
+
+#: src/components/AI/AISettings.tsx
+msgid "Change what model is used for generative features"
+msgstr "Change what model is used for generative features"
+
+#: src/components/AI/AISettings.tsx
+msgid "MCP Servers"
+msgstr "MCP Servers"
+
+#: src/components/forms/NewForm/NewFormTitle.tsx
+#: src/hooks/useCreateAndNavigate.ts
+#: src/views/Plugin/AssignRights.tsx
+msgid "Resource"
+msgstr "Resource"
+
+#: src/hooks/useCreateAndNavigate.ts
+msgid "Failed to save new resource"
+msgstr "Failed to save new resource"
+
+#: src/views/CollectionPage.tsx
+msgid "CollectionDisplayStyle"
+msgstr "CollectionDisplayStyle"
+
+#. placeholder {0}: classTitle
+#: src/views/CollectionPage.tsx
+msgid "Hide {0} info"
+msgstr "Hide {0} info"
+
+#. placeholder {0}: classTitle
+#: src/views/CollectionPage.tsx
+msgid "Show {0} info"
+msgstr "Show {0} info"
+
+#: src/views/CollectionPage.tsx
+msgid "empty"
+msgstr "empty"
+
+#: src/components/Table.tsx
+#: src/views/CollectionPage.tsx
+msgid "This collection is empty"
+msgstr "This collection is empty"
+
+#. placeholder {0}: title
+#: src/views/EndpointPage.tsx
+msgid "{0} endpoint"
+msgstr "{0} endpoint"
+
+#: src/views/Card/MessageCard.tsx
+#: src/views/MessagePage.tsx
+msgid "Message in <0/>"
+msgstr "Message in <0/>"
+
+#: src/views/ChatRoomPage.tsx
+msgid "Chat input"
+msgstr "Chat input"
+
+#: src/views/ChatRoomPage.tsx
+msgid "Send"
+msgstr "Send"
+
+#: src/views/ChatRoomPage.tsx
+msgid "Send message [enter]"
+msgstr "Send message [enter]"
+
+#: src/views/ChatRoomPage.tsx
+msgid "Copied message URL to clipboard"
+msgstr "Copied message URL to clipboard"
+
+#: src/views/ChatRoomPage.tsx
+msgid "Copied message text to clipboard"
+msgstr "Copied message text to clipboard"
+
+#: src/views/ChatRoomPage.tsx
+msgid "Edit message"
+msgstr "Edit message"
+
+#: src/views/ChatRoomPage.tsx
+msgid "Reply to this message"
+msgstr "Reply to this message"
+
+#: src/views/ChatRoomPage.tsx
+msgid "Copy link to this message"
+msgstr "Copy link to this message"
+
+#: src/views/ChatRoomPage.tsx
+msgid "Copy message text"
+msgstr "Copy message text"
+
+#: src/views/ChatRoomPage.tsx
+msgid "to"
+msgstr "to"
+
+#: src/views/DocumentPage.tsx
+msgid ""
+"<0/> This document needs to be updated to the new format in order to\n"
+"be edited."
+msgstr ""
+"<0/> This document needs to be updated to the new format in order to\n"
+"be edited."
+
+#: src/views/DocumentPage.tsx
+msgid "Update Document"
+msgstr "Update Document"
+
+#: src/views/DocumentPage.tsx
+msgid "Could not update document"
+msgstr "Could not update document"
+
+#: src/views/TagPage/TagPage.tsx
+msgid "Edit tag"
+msgstr "Edit tag"
+
+#: src/views/File/FileCard.tsx
+msgid "Can not show file due to invalid data."
+msgstr "Can not show file due to invalid data."
+
+#: src/views/Card/BookmarkCard.tsx
+msgid "Open site"
+msgstr "Open site"
+
+#: src/views/Card/CollectionCard.tsx
+msgid "No resources"
+msgstr "No resources"
+
+#: src/components/SignInButton.tsx
+msgid "Go the the User Settings page"
+msgstr "Go the the User Settings page"
+
+#. placeholder {0}: classSubject ? klassTitle : 'Resource'
+#: src/components/forms/NewForm/NewFormTitle.tsx
+msgid "new {0}"
+msgstr "new {0}"
+
+#: src/components/forms/NewForm/NewFormTitle.tsx
+msgid "Toggle show Class details"
+msgstr "Toggle show Class details"
+
+#: src/components/forms/NewForm/SubjectField.tsx
+msgid "The identifier of the resource. DID subjects are determined by the genesis commit signature."
+msgstr "The identifier of the resource. DID subjects are determined by the genesis commit signature."
+
+#: src/components/forms/NewForm/SubjectField.tsx
+msgid "URL of the new resource..."
+msgstr "URL of the new resource..."
+
+#: src/components/forms/NewForm/SubjectField.tsx
+msgid "The identifier of the resource. This also determines where the resource is saved, by default."
+msgstr "The identifier of the resource. This also determines where the resource is saved, by default."
+
+#. placeholder {0}: e.message
+#. placeholder {1}: value?.toString()
+#: src/components/ValueComp.tsx
+msgid "{0} original value: {1}"
+msgstr "{0} original value: {1}"
+
+#: src/routes/SettingsServer/DriveRow.tsx
+msgid "Remove drive from list"
+msgstr "Remove drive from list"
+
+#: src/components/forms/ResourceField.tsx
+msgid "<0/> This field is calculated server-side."
+msgstr "<0/> This field is calculated server-side."
+
+#: src/components/forms/ValueForm/ValueFormEdit.tsx
+#: src/components/forms/hooks/useSaveResource.ts
+msgid "Resource saved"
+msgstr "Resource saved"
+
+#: src/components/forms/hooks/useSaveResource.ts
+msgid "Could not save resource"
+msgstr "Could not save resource"
+
+#: src/routes/History/VersionScroller.tsx
+msgid "Previous item"
+msgstr "Previous item"
+
+#: src/routes/History/VersionScroller.tsx
+msgid "Next item"
+msgstr "Next item"
+
+#: src/routes/History/VersionScroller.tsx
+msgid "All versions <0/>"
+msgstr "All versions <0/>"
+
+#. placeholder {0}: ' '
+#: src/routes/History/VersionTitle.tsx
+msgid "Editted <0/> by{0} <1/>"
+msgstr "Editted <0/> by{0} <1/>"
+
+#: src/components/NetworkIndicator.tsx
+msgid "No internet connection"
+msgstr "No internet connection"
+
+#: src/components/NetworkIndicator.tsx
+msgid "Server connection lost — reconnecting…"
+msgstr "Server connection lost — reconnecting…"
+
+#: src/components/NetworkIndicator.tsx
+msgid "You are offline, changes might not be persisted."
+msgstr "You are offline, changes might not be persisted."
+
+#: src/components/NetworkIndicator.tsx
+msgid "Connection to server lost, reconnecting..."
+msgstr "Connection to server lost, reconnecting..."
+
+#: src/components/SkipNav.tsx
+msgid "Skip Navigation?"
+msgstr "Skip Navigation?"
+
+#: src/components/Toaster.tsx
+msgid "Nothing to copy."
+msgstr "Nothing to copy."
+
+#: src/components/Toaster.tsx
+msgid "Copied error to clipboard"
+msgstr "Copied error to clipboard"
+
+#: src/components/Toaster.tsx
+msgid "Copy"
+msgstr "Copy"
+
+#: src/components/AI/MCP/MCPServersManager.tsx
+msgid "No MCP servers configured"
+msgstr "No MCP servers configured"
+
+#: src/components/AI/MCP/MCPServersManager.tsx
+msgid "Add Server"
+msgstr "Add Server"
+
+#: src/components/AI/MCP/MCPServersManager.tsx
+msgid "Server Name"
+msgstr "Server Name"
+
+#: src/components/AI/MCP/MCPServersManager.tsx
+msgid "Enter server name"
+msgstr "Enter server name"
+
+#: src/components/AI/MCP/MCPServersManager.tsx
+#: src/components/AI/MCP/ServerItem.tsx
+msgid "Server URL"
+msgstr "Server URL"
+
+#: src/components/AI/MCP/MCPServersManager.tsx
+msgid "Enter server URL"
+msgstr "Enter server URL"
+
+#: src/components/AI/MCP/MCPServersManager.tsx
+msgid "Type"
+msgstr "Type"
+
+#: src/components/AI/MCP/MCPServersManager.tsx
+#: src/components/AI/MCP/ServerItem.tsx
+msgid "Select transport type"
+msgstr "Select transport type"
+
+#: src/components/AI/MCP/MCPServersManager.tsx
+msgid "Add server"
+msgstr "Add server"
+
+#: src/views/Drive/PluginList.tsx
+msgid "Plugins"
+msgstr "Plugins"
+
+#: src/views/Drive/PluginList.tsx
+msgid "No plugins installed"
+msgstr "No plugins installed"
+
+#: src/components/EditableTitle.tsx
+msgid "Set a title"
+msgstr "Set a title"
+
+#: src/components/EditableTitle.tsx
+msgid "Untitled"
+msgstr "Untitled"
+
+#: src/components/EditableTitle.tsx
+msgid "Click to edit title"
+msgstr "Click to edit title"
+
+#. placeholder {0}: displayFileSize(fileSize ?? 0)
+#. placeholder {0}: displayFileSize(fileSize ?? 0)
+#: src/views/File/DownloadButton.tsx
+#: src/views/File/DownloadButton.tsx
+msgid "Download file ({0})"
+msgstr "Download file ({0})"
+
+#: src/views/File/FilePreview.tsx
+msgid "Sorry, your browser doesn't support embedded videos."
+msgstr "Sorry, your browser doesn't support embedded videos."
+
+#: src/views/File/FilePreview.tsx
+#: src/views/File/FilePreviewThumbnail.tsx
+msgid "No preview available"
+msgstr "No preview available"
+
+#. placeholder {0}: ' '
+#. placeholder {1}: displayFileSize(fileSizeLimit)
+#: src/views/File/FilePreview.tsx
+msgid "Preview hidden because the file is larger than{0} {1}."
+msgstr "Preview hidden because the file is larger than{0} {1}."
+
+#. placeholder {0}: displayFileSize(bytes)
+#: src/views/File/FilePreview.tsx
+msgid "Load anyway ({0})"
+msgstr "Load anyway ({0})"
+
+#: src/components/Tag/TagBar.tsx
+msgid "Add tags"
+msgstr "Add tags"
+
+#: src/components/forms/FileDropzone/FileDropzone.tsx
+msgid "<0/> Drop files here to upload."
+msgstr "<0/> Drop files here to upload."
+
+#: src/views/FolderPage/DisplayStyleButton.tsx
+msgid "List View"
+msgstr "List View"
+
+#: src/views/FolderPage/DisplayStyleButton.tsx
+msgid "Grid View"
+msgstr "Grid View"
+
+#: src/views/FolderPage/GridView.tsx
+msgid "Create new resource"
+msgstr "Create new resource"
+
+#: src/views/FolderPage/GridView.tsx
+msgid "New Resource"
+msgstr "New Resource"
+
+#: src/views/FolderPage/ListView.tsx
+msgid "Class"
+msgstr "Class"
+
+#: src/views/FolderPage/ListView.tsx
+msgid "Last Modified"
+msgstr "Last Modified"
+
+#: src/views/FolderPage/ListView.tsx
+msgid "<0/> New Resource"
+msgstr "<0/> New Resource"
+
+#: src/components/Tag/CreateTagRow.tsx
+msgid "New tag"
+msgstr "New tag"
+
+#: src/components/datatypes/Markdown.tsx
+msgid "Read more"
+msgstr "Read more"
+
+#: src/components/Tag/Tag.tsx
+msgid "<0/> Delete"
+msgstr "<0/> Delete"
+
+#: src/components/Dropdown/DefaultTrigger.tsx
+msgid "DefaultTrigger"
+msgstr "DefaultTrigger"
+
+#: src/views/CodeUsage/ResourceCodeUsageDialog.tsx
+msgid "Use <0/> in code"
+msgstr "Use <0/> in code"
+
+#. placeholder {0}: resource.title
+#. placeholder {1}: ' '
+#: src/components/ResourceUsage/PropertyUsage.tsx
+msgid "<0/> resources have a {0}{1} property"
+msgstr "<0/> resources have a {0}{1} property"
+
+#: src/components/ResourceUsage/PropertyUsage.tsx
+msgid "<0/> classes require this property"
+msgstr "<0/> classes require this property"
+
+#: src/components/ResourceUsage/PropertyUsage.tsx
+msgid "<0/> classes recommend this property"
+msgstr "<0/> classes recommend this property"
+
+#: src/components/ResourceUsage/ClassUsage.tsx
+msgid "No usage of class found."
+msgstr "No usage of class found."
+
+#. placeholder {0}: ' '
+#. placeholder {1}: resource.title
+#: src/components/ResourceUsage/ClassUsage.tsx
+msgid "<0/> resources are an instance of{0} {1}"
+msgstr "<0/> resources are an instance of{0} {1}"
+
+#. placeholder {0}: resource.title
+#. placeholder {1}: ' '
+#: src/components/ResourceUsage/ClassUsage.tsx
+msgid "<0/> properties have {0}{1} as a classtype."
+msgstr "<0/> properties have {0}{1} as a classtype."
+
+#. placeholder {0}: ' '
+#. placeholder {1}: resource.title
+#: src/components/ResourceUsage/ReferenceUsage.tsx
+msgid "<0/> resources reference{0} {1}"
+msgstr "<0/> resources reference{0} {1}"
+
+#: src/components/ResourceUsage/ChildrenUsage.tsx
+msgid "This resource has <0/> children"
+msgstr "This resource has <0/> children"
+
+#: src/views/Plugin/AssignRights.tsx
+msgid "<0/> Assign Rights"
+msgstr "<0/> Assign Rights"
+
+#: src/views/Plugin/AssignRights.tsx
+msgid "Pick a resource"
+msgstr "Pick a resource"
+
+#: src/views/Plugin/AssignRights.tsx
+msgid "Assign"
+msgstr "Assign"
+
+#: src/views/Plugin/ConfigReference.tsx
+msgid "Config Reference"
+msgstr "Config Reference"
+
+#: src/views/Plugin/ConfigReference.tsx
+msgid "required"
+msgstr "required"
+
+#: src/views/Plugin/ConfigReference.tsx
+msgid "Default:"
+msgstr "Default:"
+
+#: src/views/Plugin/ConfigReference.tsx
+msgid "Possible values:"
+msgstr "Possible values:"
+
+#: src/views/Plugin/PluginPermissions.tsx
+msgid "No permissions required"
+msgstr "No permissions required"
+
+#: src/views/Plugin/PluginPermissions.tsx
+msgid "No reason provided"
+msgstr "No reason provided"
+
+#: src/components/Table.tsx
+msgid "subject"
+msgstr "subject"
+
+#. placeholder {0}: date.toLocaleDateString()
+#. placeholder {1}: date.toLocaleTimeString()
+#: src/components/datatypes/DateTime.tsx
+msgid "{0} at {1}"
+msgstr "{0} at {1}"
+
+#: src/components/YDocValue.tsx
+msgid "Empty"
+msgstr "Empty"
+
+#: src/components/YDocValue.tsx
+msgid "Hide encoded state"
+msgstr "Hide encoded state"
+
+#: src/components/YDocValue.tsx
+msgid "Show encoded state"
+msgstr "Show encoded state"
+
+#: src/routes/SettingsServer/FavoriteButton.tsx
+msgid "Remove from favorites"
+msgstr "Remove from favorites"
+
+#: src/routes/SettingsServer/FavoriteButton.tsx
+msgid "Add to favorites"
+msgstr "Add to favorites"
+
+#: src/components/SideBar/AppMenu.tsx
+msgid "See and edit the current Agent / User (u)"
+msgstr "See and edit the current Agent / User (u)"
+
+#: src/components/SideBar/AppMenu.tsx
+msgid "Change client settings (t)"
+msgstr "Change client settings (t)"
+
+#: src/components/SideBar/AppMenu.tsx
+msgid "About"
+msgstr "About"
+
+#: src/components/SideBar/AppMenu.tsx
+msgid "Welcome page, tells about this app"
+msgstr "Welcome page, tells about this app"
+
+#: src/components/SideBar/AppMenu.tsx
+msgid "Dev Drive"
+msgstr "Dev Drive"
+
+#: src/components/SideBar/AppMenu.tsx
+msgid "Create a fresh agent + drive on localhost:9883"
+msgstr "Create a fresh agent + drive on localhost:9883"
+
+#: src/components/SideBar/AppMenu.tsx
+msgid "Install App"
+msgstr "Install App"
+
+#: src/components/SideBar/AppMenu.tsx
+msgid "Install app to desktop"
+msgstr "Install app to desktop"
+
+#: src/components/SideBar/AppMenu.tsx
+msgid "App menu"
+msgstr "App menu"
+
+#: src/components/SideBar/About.tsx
+msgid "Sandbox, test components in isolation"
+msgstr "Sandbox, test components in isolation"
+
+#. placeholder {0}: title
+#: src/components/Searchbar/Searchbar.tsx
+msgid "in:{0}"
+msgstr "in:{0}"
+
+#: src/components/Searchbar/Searchbar.tsx
+msgid "Clear scope"
+msgstr "Clear scope"
+
+#: src/components/AI/ChatLoadingIndicator.tsx
+msgid "Loading AI"
+msgstr "Loading AI"
+
+#: src/components/AI/MCP/ServerItem.tsx
+msgid "Server name"
+msgstr "Server name"
+
+#: src/components/AI/MCP/ServerItem.tsx
+msgid "Save changes"
+msgstr "Save changes"
+
+#: src/components/AI/MCP/ServerItem.tsx
+msgid "Cancel edit"
+msgstr "Cancel edit"
+
+#. placeholder {0}: server.transport
+#: src/components/AI/MCP/ServerItem.tsx
+msgid "Transport: {0}"
+msgstr "Transport: {0}"
+
+#: src/components/AI/MCP/ServerItem.tsx
+msgid "Edit server"
+msgstr "Edit server"
+
+#: src/components/AI/MCP/ServerItem.tsx
+msgid "Remove server"
+msgstr "Remove server"
+
+#: src/components/forms/UploadForm.tsx
+msgid "You can add attachments after saving the resource."
+msgstr "You can add attachments after saving the resource."
+
+#: src/components/forms/UploadForm.tsx
+msgid "Drop the files here ..."
+msgstr "Drop the files here ..."
+
+#: src/components/forms/UploadForm.tsx
+msgid "Upload file(s)..."
+msgstr "Upload file(s)..."
+
+#: src/views/Article/ArticleCover.tsx
+#: src/views/Article/ArticleCover.tsx
+msgid "Click or drop image to use as a cover"
+msgstr "Click or drop image to use as a cover"
+
+#: src/views/Article/ArticleDescription.tsx
+msgid "Content saved"
+msgstr "Content saved"
+
+#: src/components/forms/ValueForm/ValueFormEdit.tsx
+#: src/views/Article/ArticleDescription.tsx
+msgid "Could not save resource..."
+msgstr "Could not save resource..."
+
+#: src/views/Article/ArticleDescription.tsx
+msgid "<0/> Add Content"
+msgstr "<0/> Add Content"
+
+#: src/views/Article/ArticleDescription.tsx
+msgid "Edit content"
+msgstr "Edit content"
+
+#: src/views/OntologyPage/Property/PropertyCardRead.tsx
+msgid "Allows only:"
+msgstr "Allows only:"
+
+#: src/views/OntologyPage/OntologySidebar.tsx
+msgid "<0/> Classes"
+msgstr "<0/> Classes"
+
+#: src/views/OntologyPage/OntologySidebar.tsx
+msgid "<0/> Properties"
+msgstr "<0/> Properties"
+
+#: src/views/OntologyPage/OntologySidebar.tsx
+msgid "<0/> Instances"
+msgstr "<0/> Instances"
+
+#: src/chunks/AI/AgentConfig.tsx
+#: src/views/OntologyPage/OntologyDescription.tsx
+msgid "Description"
+msgstr "Description"
+
+#: src/views/OntologyPage/Class/ClassCardRead.tsx
+#: src/views/OntologyPage/Class/ClassCardRead.tsx
+msgid "none"
+msgstr "none"
+
+#: src/views/OntologyPage/NewClassButton.tsx
+msgid "<0/> Add class"
+msgstr "<0/> Add class"
+
+#: src/views/OntologyPage/NewClassButton.tsx
+msgid "New Class"
+msgstr "New Class"
+
+#: src/views/OntologyPage/CreateInstanceButton.tsx
+msgid "<0/> New Instance"
+msgstr "<0/> New Instance"
+
+#. placeholder {0}: isA ? typeResource.title : 'resource'
+#: src/components/forms/SearchBox/SearchBox.tsx
+msgid "Search for a {0} or enter a URL..."
+msgstr "Search for a {0} or enter a URL..."
+
+#: src/components/NewInstanceButton/Base.tsx
+msgid "You need to be logged in to create new things"
+msgstr "You need to be logged in to create new things"
+
+#. placeholder {0}: title
+#: src/components/NewInstanceButton/Base.tsx
+msgid "Create a new {0}"
+msgstr "Create a new {0}"
+
+#: src/components/NewInstanceButton/Base.tsx
+msgid "No User set - sign in first"
+msgstr "No User set - sign in first"
+
+#. placeholder {0}: property.shortname
+#: src/components/forms/InputResourceArray.tsx
+msgid "Add an item to the {0} list"
+msgstr "Add an item to the {0} list"
+
+#: src/components/forms/InputResourceArray.tsx
+msgid "<0/> Clear"
+msgstr "<0/> Clear"
+
+#: src/components/forms/InputResourceArray.tsx
+msgid "Remove all items from this list"
+msgstr "Remove all items from this list"
+
+#: src/components/forms/InputResourceArray.tsx
+msgid "Move item"
+msgstr "Move item"
+
+#: src/components/forms/InputMarkdown.tsx
+#: src/components/forms/InputString.tsx
+msgid "Invalid value"
+msgstr "Invalid value"
+
+#: src/components/forms/InputNumber.tsx
+msgid "Invalid Number"
+msgstr "Invalid Number"
+
+#: src/components/forms/InputNumber.tsx
+msgid "Enter a number..."
+msgstr "Enter a number..."
+
+#: src/components/forms/InputSlug.tsx
+msgid "Invalid Slug"
+msgstr "Invalid Slug"
+
+#: src/components/forms/InputJSON.tsx
+#: src/components/forms/InputJSON.tsx
+msgid "Invalid JSON"
+msgstr "Invalid JSON"
+
+#: src/components/forms/InputURI.tsx
+msgid "Invalid URI"
+msgstr "Invalid URI"
+
+#: src/components/forms/InputYDoc.tsx
+msgid "Editing YDoc directly is not supported"
+msgstr "Editing YDoc directly is not supported"
+
+#: src/views/PluginView/useResourcePicker.tsx
+msgid "Pick Resource"
+msgstr "Pick Resource"
+
+#: src/views/PluginView/useResourcePicker.tsx
+msgid "Confirm"
+msgstr "Confirm"
+
+#: src/views/PluginView/useRequestPermissionDialog.tsx
+msgid "Read Request"
+msgstr "Read Request"
+
+#: src/views/PluginView/useRequestPermissionDialog.tsx
+msgid "Write Request"
+msgstr "Write Request"
+
+#: src/views/PluginView/useRequestPermissionDialog.tsx
+msgid "Allow all reads done by this plugin"
+msgstr "Allow all reads done by this plugin"
+
+#: src/views/PluginView/useRequestPermissionDialog.tsx
+msgid "Allow all writes done by this plugin"
+msgstr "Allow all writes done by this plugin"
+
+#: src/views/PluginView/useRequestPermissionDialog.tsx
+msgid ""
+"<0/> wants to read a resource that is not\n"
+"contained in the current scope."
+msgstr ""
+"<0/> wants to read a resource that is not\n"
+"contained in the current scope."
+
+#: src/views/PluginView/useRequestPermissionDialog.tsx
+msgid ""
+"<0/> wants to modify a resource that is not\n"
+"contained in the current scope."
+msgstr ""
+"<0/> wants to modify a resource that is not\n"
+"contained in the current scope."
+
+#: src/views/PluginView/useRequestPermissionDialog.tsx
+msgid "Deny"
+msgstr "Deny"
+
+#: src/views/PluginView/useRequestPermissionDialog.tsx
+msgid "Allow"
+msgstr "Allow"
+
+#: src/components/ImageViewer.tsx
+msgid "Click to enlarge"
+msgstr "Click to enlarge"
+
+#: src/components/Tag/TagSelectPopover.tsx
+msgid "There are no tags yet."
+msgstr "There are no tags yet."
+
+#: src/components/ResourceUsage/UsageCard.tsx
+msgid "Previous page"
+msgstr "Previous page"
+
+#: src/components/ResourceUsage/UsageCard.tsx
+msgid "Next page"
+msgstr "Next page"
+
+#: src/views/CodeUsage/ResourceCodeUsage.tsx
+msgid "Read a property: <0/>"
+msgstr "Read a property: <0/>"
+
+#: src/views/CodeUsage/ResourceCodeUsage.tsx
+msgid "<0/> Typescript"
+msgstr "<0/> Typescript"
+
+#: src/components/Searchbar/TagSuggestionOverlay.tsx
+msgid "No tags found"
+msgstr "No tags found"
+
+#: src/views/OntologyPage/Property/PropertyFormCommon.tsx
+msgid "Datatype"
+msgstr "Datatype"
+
+#: src/views/OntologyPage/Property/PropertyFormCommon.tsx
+msgid "Classtype"
+msgstr "Classtype"
+
+#: src/views/OntologyPage/Property/EnumFormPart.tsx
+#: src/views/OntologyPage/Property/PropertyFormCommon.tsx
+msgid "Allows Only"
+msgstr "Allows Only"
+
+#: src/components/forms/FilePicker/FilePickerButton.tsx
+msgid "<0/> Select File"
+msgstr "<0/> Select File"
+
+#: src/views/FolderPage/GridItem/ChatRoomGridItem.tsx
+msgid "Empty Chat"
+msgstr "Empty Chat"
+
+#: src/views/File/FilePreviewThumbnail.tsx
+msgid "<0/> Could not display file preview."
+msgstr "<0/> Could not display file preview."
+
+#: src/views/File/FilePreviewThumbnail.tsx
+msgid "To large for preview"
+msgstr "To large for preview"
+
+#. placeholder {0}: ' '
+#. placeholder {1}: ' '
+#: src/views/CodeUsage/CodeUsage.tsx
+msgid "Read the{0} <0>@tomic/lib docs</0>{1} for more info."
+msgstr "Read the{0} <0>@tomic/lib docs</0>{1} for more info."
+
+#. placeholder {0}: ' '
+#. placeholder {1}: ' '
+#: src/views/CodeUsage/CodeUsage.tsx
+msgid "Read the{0} <0>@tomic/react docs</0>{1} for more info."
+msgstr "Read the{0} <0>@tomic/react docs</0>{1} for more info."
+
+#. placeholder {0}: ' '
+#. placeholder {1}: ' '
+#: src/views/CodeUsage/CodeUsage.tsx
+msgid "Read the{0} <0>@tomic/svelte docs</0>{1} for more info."
+msgstr "Read the{0} <0>@tomic/svelte docs</0>{1} for more info."
+
+#. placeholder {0}: ' '
+#: src/views/CodeUsage/CodeUsage.tsx
+msgid "Read more about generating schema's using{0} <0>@tomic/cli</0> ."
+msgstr "Read more about generating schema's using{0} <0>@tomic/cli</0> ."
+
+#: src/views/CodeUsage/PropSelector.tsx
+msgid "None"
+msgstr "None"
+
+#: src/views/OntologyPage/PropertyDatatypePicker.tsx
+msgid "Property datatype"
+msgstr "Property datatype"
+
+#: src/components/forms/FilePicker/FilePickerItem.tsx
+msgid "Resource not found"
+msgstr "Resource not found"
+
+#: src/components/ParentPicker/ParentPickerDialog.tsx
+msgid "Select a location"
+msgstr "Select a location"
+
+#: src/views/OntologyPage/Property/EnumFormPart.tsx
+msgid "ResourceArray Types"
+msgstr "ResourceArray Types"
+
+#: src/views/OntologyPage/Property/EnumFormPart.tsx
+msgid "Only allow its value to be selected from the following tags:"
+msgstr "Only allow its value to be selected from the following tags:"
+
+#: src/components/forms/FilePicker/SelectedFile.tsx
+msgid "File preview not available at this time"
+msgstr "File preview not available at this time"
+
+#: src/components/forms/FilePicker/SelectedFile.tsx
+msgid "Will be uploaded when resource is saved"
+msgstr "Will be uploaded when resource is saved"
+
+#: src/components/OverlayContainer.tsx
+msgid "New Chat"
+msgstr "New Chat"
+
+#. placeholder {0}: query
+#: src/components/OverlayContainer.tsx
+msgid "Start AI Chat with \"{0}\""
+msgstr "Start AI Chat with \"{0}\""
+
+#: src/components/OverlayContainer.tsx
+msgid "<0/> open / chat"
+msgstr "<0/> open / chat"
+
+#: src/components/OverlayContainer.tsx
+msgid "<0/> chat"
+msgstr "<0/> chat"
+
+#: src/chunks/Plugins/NewPluginButton.tsx
+msgid "Please fill in all fields"
+msgstr "Please fill in all fields"
+
+#: src/chunks/Plugins/NewPluginButton.tsx
+msgid "Failed to install plugin"
+msgstr "Failed to install plugin"
+
+#: src/chunks/Plugins/NewPluginButton.tsx
+#: src/chunks/Plugins/NewPluginButton.tsx
+msgid "<0/> Upload Plugin"
+msgstr "<0/> Upload Plugin"
+
+#: src/chunks/Plugins/NewPluginButton.tsx
+msgid "Add Plugin"
+msgstr "Add Plugin"
+
+#: src/chunks/Plugins/NewPluginButton.tsx
+msgid "Config"
+msgstr "Config"
+
+#: src/chunks/Plugins/NewPluginButton.tsx
+msgid "Install"
+msgstr "Install"
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Something went wrong"
+msgstr "Something went wrong"
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Changes Saved!"
+msgstr "Changes Saved!"
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Failed to save changes"
+msgstr "Failed to save changes"
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Generating"
+msgstr "Generating"
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Stop generating"
+msgstr "Stop generating"
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Unsaved changes"
+msgstr "Unsaved changes"
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Remove file"
+msgstr "Remove file"
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Automatic"
+msgstr "Automatic"
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Toggle web search"
+msgstr "Toggle web search"
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Attach file"
+msgstr "Attach file"
+
+#. placeholder {0}: usage.input
+#. placeholder {1}: usage.output
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Tokens used: {0} input, {1} output"
+msgstr "Tokens used: {0} input, {1} output"
+
+#: src/chunks/AI/AIChatMessage.tsx
+msgid "Unknown message type"
+msgstr "Unknown message type"
+
+#: src/chunks/AI/AIChatMessage.tsx
+msgid "Delete Message"
+msgstr "Delete Message"
+
+#: src/chunks/AI/AIChatMessage.tsx
+msgid "Regenerate response"
+msgstr "Regenerate response"
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "Select AI Agents"
+msgstr "Select AI Agents"
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "Automatic Agent Selection"
+msgstr "Automatic Agent Selection"
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid ""
+"Pick best agent for the job based on name, description and\n"
+"available tools"
+msgstr ""
+"Pick best agent for the job based on name, description and\n"
+"available tools"
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "AI Agents"
+msgstr "AI Agents"
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "<0/> Create New Agent"
+msgstr "<0/> Create New Agent"
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "Create Agent"
+msgstr "Create Agent"
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "Save Changes"
+msgstr "Save Changes"
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "Agent name"
+msgstr "Agent name"
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "Agent description"
+msgstr "Agent description"
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "System Prompt"
+msgstr "System Prompt"
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "System prompt that defines how the agent behaves"
+msgstr "System prompt that defines how the agent behaves"
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "Atomic Data Access"
+msgstr "Atomic Data Access"
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "<0/> Write"
+msgstr "<0/> Write"
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "Tools"
+msgstr "Tools"
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "No MCP servers configured."
+msgstr "No MCP servers configured."
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "Model"
+msgstr "Model"
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "Temperature"
+msgstr "Temperature"
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "Temperature value"
+msgstr "Temperature value"
+
+#: src/chunks/AI/NoKeyOverlay.tsx
+msgid "No AI providers enabled."
+msgstr "No AI providers enabled."
+
+#: src/chunks/AI/NoKeyOverlay.tsx
+#: src/chunks/AI/NoKeyOverlay.tsx
+msgid "<0/> Settings"
+msgstr "<0/> Settings"
+
+#: src/chunks/AI/NoKeyOverlay.tsx
+msgid "No AI provider configured."
+msgstr "No AI provider configured."
+
+#. placeholder {0}: agent.id
+#. placeholder {1}: agent.name
+#. placeholder {2}: agent.description
+#. placeholder {3}: agent.availableTools.map(t => mcpServers.find(s => s.id === t)?.name).join(', ')
+#: src/chunks/AI/useAgentAutoSelect.ts
+msgid "ID: {0} Name: {1} Description: {2} Tools: {3}"
+msgstr "ID: {0} Name: {1} Description: {2} Tools: {3}"
+
+#. placeholder {0}: ' '
+#: src/chunks/AI/ModelSelect/ModelSelect.tsx
+msgid "OpenRouter API key is not configured. Go to{0} <0>Settings</0>."
+msgstr "OpenRouter API key is not configured. Go to{0} <0>Settings</0>."
+
+#. placeholder {0}: ' '
+#: src/chunks/AI/ModelSelect/ModelSelect.tsx
+msgid "Ollama URL is not configured. Go to{0} <0>Settings</0>."
+msgstr "Ollama URL is not configured. Go to{0} <0>Settings</0>."
+
+#: src/chunks/AI/ModelSelect/ModelSelect.tsx
+msgid "Provider"
+msgstr "Provider"
+
+#: src/chunks/AI/AgentConfigItem.tsx
+msgid "Default agent"
+msgstr "Default agent"
+
+#. placeholder {0}: agent.name
+#: src/chunks/AI/AgentConfigItem.tsx
+msgid "Set {0} as default"
+msgstr "Set {0} as default"
+
+#: src/chunks/AI/AgentConfigItem.tsx
+msgid "Provider not enabled"
+msgstr "Provider not enabled"
+
+#: src/chunks/AI/AIChatMessageParts/FileContent.tsx
+msgid "Attached File"
+msgstr "Attached File"
+
+#. placeholder {0}: ' '
+#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
+msgid "Fetching{0} <0/>"
+msgstr "Fetching{0} <0/>"
+
+#. placeholder {0}: propertyResource.title
+#. placeholder {1}: resource.title
+#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
+msgid "Editing {0} on {1}"
+msgstr "Editing {0} on {1}"
+
+#: src/chunks/AI/AIChatMessageParts/ReasoningMessage.tsx
+msgid "Thinking..."
+msgstr "Thinking..."
+
+#: src/chunks/AI/AIChatMessageParts/ReasoningMessage.tsx
+msgid "Thinking"
+msgstr "Thinking"
+
+#: src/chunks/AI/ModelSelect/OpenRouterModelSelector.tsx
+msgid "OpenRouter is not enabled"
+msgstr "OpenRouter is not enabled"
+
+#. placeholder {0}: models.length
+#: src/chunks/AI/ModelSelect/OllamaModelSelector.tsx
+#: src/chunks/AI/ModelSelect/OpenRouterModelSelector.tsx
+msgid "{0} Models"
+msgstr "{0} Models"
+
+#: src/chunks/AI/ModelSelect/OpenRouterModelSelector.tsx
+msgid "<0/> The selected model does not support tool use."
+msgstr "<0/> The selected model does not support tool use."
+
+#. placeholder {0}: formatter.format(selectedModel?.pricing.prompt * 1000000)
+#: src/chunks/AI/ModelSelect/OpenRouterModelSelector.tsx
+msgid ""
+"{0}/M\n"
+"input tokens"
+msgstr ""
+"{0}/M\n"
+"input tokens"
+
+#. placeholder {0}: formatter.format(selectedModel?.pricing.completion * 1000000)
+#: src/chunks/AI/ModelSelect/OpenRouterModelSelector.tsx
+msgid "{0} /M output tokens"
+msgstr "{0} /M output tokens"
+
+#. placeholder {0}: formatter.format(selectedModel?.pricing.web_search * 1000)
+#: src/chunks/AI/ModelSelect/OpenRouterModelSelector.tsx
+msgid "{0} /1K web search results"
+msgstr "{0} /1K web search results"
+
+#: src/chunks/AI/ModelSelect/OllamaModelSelector.tsx
+#: src/chunks/AI/ModelSelect/OpenRouterModelSelector.tsx
+msgid "Select a model"
+msgstr "Select a model"
+
+#: src/chunks/AI/ModelSelect/OllamaModelSelector.tsx
+msgid "Unable to connect to Ollama server. Check if the server is running and you configured the correct url in the settings"
+msgstr "Unable to connect to Ollama server. Check if the server is running and you configured the correct url in the settings"
+
+#: src/chunks/AI/ModelSelect/OllamaModelSelector.tsx
+msgid "Ollama is not enabled"
+msgstr "Ollama is not enabled"
+
+#: src/chunks/AI/ModelSelect/OllamaModelSelector.tsx
+msgid "Format:"
+msgstr "Format:"
+
+#: src/chunks/AI/ModelSelect/OllamaModelSelector.tsx
+msgid "Parent Model:"
+msgstr "Parent Model:"
+
+#: src/chunks/AI/ModelSelect/OllamaModelSelector.tsx
+msgid "Family:"
+msgstr "Family:"
+
+#: src/chunks/AI/ModelSelect/OllamaModelSelector.tsx
+msgid "Parameter Size:"
+msgstr "Parameter Size:"
+
+#: src/chunks/RTE/AsyncMarkdownEditor.tsx
+#: src/chunks/RTE/AsyncMarkdownEditor.tsx
+msgid "Start typing..."
+msgstr "Start typing..."
+
+#: src/chunks/RTE/AsyncMarkdownEditor.tsx
+msgid "Type '/' for options"
+msgstr "Type '/' for options"
+
+#: src/chunks/RTE/AsyncMarkdownEditor.tsx
+msgid "Edit raw markdown"
+msgstr "Edit raw markdown"
+
+#: src/chunks/RTE/NodeSelectMenu.tsx
+#: src/chunks/RTE/SlashMenu/CommandsExtension.ts
+msgid "Bullet List"
+msgstr "Bullet List"
+
+#: src/chunks/RTE/NodeSelectMenu.tsx
+#: src/chunks/RTE/SlashMenu/CommandsExtension.ts
+msgid "Ordered List"
+msgstr "Ordered List"
+
+#: src/chunks/RTE/NodeSelectMenu.tsx
+#: src/chunks/RTE/SlashMenu/CommandsExtension.ts
+msgid "Task List"
+msgstr "Task List"
+
+#: src/chunks/RTE/NodeSelectMenu.tsx
+#: src/chunks/RTE/SlashMenu/CommandsExtension.ts
+msgid "Codeblock"
+msgstr "Codeblock"
+
+#: src/chunks/RTE/SlashMenu/CommandsExtension.ts
+msgid "Quote"
+msgstr "Quote"
+
+#: src/chunks/RTE/SlashMenu/CommandsExtension.ts
+msgid "Image"
+msgstr "Image"
+
+#: src/chunks/RTE/NodeSelectMenu.tsx
+#: src/chunks/RTE/SlashMenu/CommandsExtension.ts
+msgid "Heading 1"
+msgstr "Heading 1"
+
+#: src/chunks/RTE/NodeSelectMenu.tsx
+#: src/chunks/RTE/SlashMenu/CommandsExtension.ts
+msgid "Heading 2"
+msgstr "Heading 2"
+
+#: src/chunks/RTE/NodeSelectMenu.tsx
+#: src/chunks/RTE/SlashMenu/CommandsExtension.ts
+msgid "Heading 3"
+msgstr "Heading 3"
+
+#: src/chunks/RTE/NodeSelectMenu.tsx
+#: src/chunks/RTE/SlashMenu/CommandsExtension.ts
+msgid "Heading 4"
+msgstr "Heading 4"
+
+#: src/chunks/RTE/NodeSelectMenu.tsx
+#: src/chunks/RTE/SlashMenu/CommandsExtension.ts
+msgid "Heading 5"
+msgstr "Heading 5"
+
+#: src/chunks/RTE/NodeSelectMenu.tsx
+#: src/chunks/RTE/SlashMenu/CommandsExtension.ts
+msgid "Heading 6"
+msgstr "Heading 6"
+
+#: src/chunks/RTE/NodeSelectMenu.tsx
+#: src/chunks/RTE/SlashMenu/CommandsExtension.ts
+msgid "Paragraph"
+msgstr "Paragraph"
+
+#: src/chunks/RTE/ImagePicker.tsx
+msgid "Left"
+msgstr "Left"
+
+#: src/chunks/RTE/ImagePicker.tsx
+msgid "Inline"
+msgstr "Inline"
+
+#: src/chunks/RTE/ImagePicker.tsx
+msgid "Right"
+msgstr "Right"
+
+#: src/chunks/RTE/ImagePicker.tsx
+msgid "Failed to load image."
+msgstr "Failed to load image."
+
+#: src/chunks/RTE/ImagePicker.tsx
+msgid "Enter a URL..."
+msgstr "Enter a URL..."
+
+#: src/chunks/RTE/ImagePicker.tsx
+msgid "Choose an image <0/>"
+msgstr "Choose an image <0/>"
+
+#: src/chunks/RTE/ImagePicker.tsx
+msgid "Or"
+msgstr "Or"
+
+#: src/chunks/RTE/ImagePicker.tsx
+msgid "Add a caption..."
+msgstr "Add a caption..."
+
+#: src/chunks/RTE/ImagePicker.tsx
+msgid "Caption <0/>"
+msgstr "Caption <0/>"
+
+#: src/chunks/RTE/ImagePicker.tsx
+msgid "Alt text"
+msgstr "Alt text"
+
+#: src/chunks/RTE/ImagePicker.tsx
+msgid "Textual Description <0/>"
+msgstr "Textual Description <0/>"
+
+#: src/chunks/RTE/ImagePicker.tsx
+msgid "Text Flow <0/>"
+msgstr "Text Flow <0/>"
+
+#: src/chunks/RTE/BubbleMenu.tsx
+msgid "Toggle bold"
+msgstr "Toggle bold"
+
+#: src/chunks/RTE/BubbleMenu.tsx
+msgid "Toggle italic"
+msgstr "Toggle italic"
+
+#: src/chunks/RTE/BubbleMenu.tsx
+msgid "Toggle strikethrough"
+msgstr "Toggle strikethrough"
+
+#: src/chunks/RTE/BubbleMenu.tsx
+msgid "Toggle blockquote"
+msgstr "Toggle blockquote"
+
+#: src/chunks/RTE/BubbleMenu.tsx
+msgid "Toggle inline code"
+msgstr "Toggle inline code"
+
+#: src/chunks/RTE/SlashMenu/CommandList.tsx
+msgid "No results found"
+msgstr "No results found"
+
+#: src/routes/SettingsAgent.tsx
+msgid "Drives"
+msgstr "Drives"

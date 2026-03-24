@@ -36,42 +36,30 @@ export function useSavedDrives(): [
 
   const rootDrives = useMemo(() => getRootDrives(), []);
   const extraDrives = useMemo(() => {
-    const all = new Set([...rootDrives, ...drives]);
-
-    return Array.from(all);
-  }, [drives, rootDrives]);
+    return drives;
+  }, [drives]);
 
   const add = useCallback(
     (drive: string) => {
-      // Don't do anything if the drive is hardcoded into the list.
-      if (rootDrives.includes(drive)) {
-        return;
-      }
-
       if (!drives.includes(drive)) {
         setDrives([...drives, drive]).then(() => {
           agentResource.save();
         });
       }
     },
-    [drives, setDrives, rootDrives],
+    [drives, setDrives],
   );
 
   const remove = useCallback(
     (drive: string) => {
-      // Don't do anything if the drive is hardcoded into the list.
-      if (rootDrives.includes(drive)) {
-        return;
-      }
-
       if (drives.includes(drive)) {
         setDrives(drives.filter(d => d !== drive)).then(() => {
           agentResource.save();
         });
       }
     },
-    [drives, setDrives, rootDrives],
+    [drives, setDrives],
   );
 
-  return [extraDrives, add, remove];
+  return [drives, add, remove];
 }
