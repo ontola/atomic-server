@@ -68,8 +68,13 @@ async fn save_file_and_create_resource(
     // The full origin URL (e.g., "https://example.com") for constructing resource subjects
     origin: &str,
 ) -> AtomicServerResult<Resource> {
-    let content_type = field.content_disposition().clone();
-    let filename = content_type.get_filename().ok_or("Filename is missing")?;
+    let content_type = field
+        .content_disposition()
+        .ok_or("Content-Disposition header is missing")?;
+    let filename = content_type
+        .get_filename()
+        .ok_or("Filename is missing")?
+        .to_string();
 
     let mut hasher = blake3::Hasher::new();
     let mut buffer = Vec::new();
@@ -94,7 +99,7 @@ async fn save_file_and_create_resource(
 
     let byte_count: i64 = buffer.len() as i64;
 
-    let mimetype = guess_mime_for_filename(filename);
+    let mimetype = guess_mime_for_filename(&filename);
     let subject_path = format!("files/{}", urlencoding::encode(&hash_str));
     // Build a proper Internal subject using Subject::new_local so that
     // Resource::save correctly identifies this as a local resource and applies
@@ -120,7 +125,7 @@ async fn save_file_and_create_resource(
         .await?
         .set_string(urls::MIMETYPE.into(), &mimetype, store)
         .await?
-        .set_string(urls::FILENAME.into(), filename, store)
+        .set_string(urls::FILENAME.into(), &filename, store)
         .await?
         .set_string(urls::DOWNLOAD_URL.into(), &download_url, store)
         .await?;

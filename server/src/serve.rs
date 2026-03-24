@@ -262,7 +262,7 @@ pub async fn serve(config: crate::config::Config) -> AtomicServerResult<()> {
                 tracing::info!("Binding HTTPS server to endpoint {}", endpoint);
                 println!("{}", message);
                 server
-                    .bind_rustls(&endpoint, https_config)
+                    .bind_rustls_0_23(&endpoint, https_config)
                     .map_err(|e| format!("Cannot bind to endpoint {}: {}", &endpoint, e))?
                     .shutdown_timeout(TIMEOUT)
                     .run()

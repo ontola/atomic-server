@@ -58,7 +58,7 @@ pub fn init_tracing(config: &crate::config::Config) -> Option<tracing_chrome::Fl
 
                 // Install ring as the rustls 0.23 crypto provider (required by tonic TLS).
                 // Ignore the error — it just means another provider was already installed.
-                let _ = rustls023::crypto::ring::default_provider().install_default();
+                let _ = rustls::crypto::ring::default_provider().install_default();
 
                 let endpoint = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT")
                     .or_else(|_| std::env::var("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"))

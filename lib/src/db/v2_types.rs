@@ -32,7 +32,7 @@ pub type PropValsV2 = HashMap<String, ValueV2>;
 pub fn propvals_v2_to_v3(propvals: PropValsV2, base_domain: &str) -> crate::resources::PropVals {
     propvals
         .into_iter()
-        .map(|(k, v)| (k, v.to_v3(base_domain)))
+        .map(|(k, v)| (k, v.into_v3(base_domain)))
         .collect()
 }
 
@@ -41,7 +41,7 @@ pub fn string_to_subject(s: String, base_domain: &str) -> crate::Subject {
 }
 
 impl ValueV2 {
-    pub fn to_v3(self, base_domain: &str) -> crate::values::Value {
+    pub fn into_v3(self, base_domain: &str) -> crate::values::Value {
         match self {
             ValueV2::AtomicUrl(v) => {
                 crate::values::Value::AtomicUrl(string_to_subject(v, base_domain))
@@ -53,7 +53,7 @@ impl ValueV2 {
             ValueV2::ResourceArray(sub_resources) => {
                 let sub_resources = sub_resources
                     .into_iter()
-                    .map(|v| v.to_v3(base_domain))
+                    .map(|v| v.into_v3(base_domain))
                     .collect();
                 crate::values::Value::ResourceArray(sub_resources)
             }
@@ -61,7 +61,7 @@ impl ValueV2 {
             ValueV2::String(v) => crate::values::Value::String(v),
             ValueV2::Timestamp(v) => crate::values::Value::Timestamp(v),
             ValueV2::NestedResource(sub_resource) => {
-                crate::values::Value::NestedResource(sub_resource.to_v3(base_domain))
+                crate::values::Value::NestedResource(sub_resource.into_v3(base_domain))
             }
             ValueV2::Boolean(v) => crate::values::Value::Boolean(v),
             ValueV2::Uri(v) => crate::values::Value::Uri(v),
@@ -76,7 +76,7 @@ impl ValueV2 {
 }
 
 impl SubResourceV2 {
-    pub fn to_v3(self, base_domain: &str) -> crate::values::SubResource {
+    pub fn into_v3(self, base_domain: &str) -> crate::values::SubResource {
         match self {
             SubResourceV2::Nested(propvals) => {
                 crate::values::SubResource::Nested(propvals_v2_to_v3(propvals, base_domain))

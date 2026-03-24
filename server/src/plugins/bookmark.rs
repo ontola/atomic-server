@@ -436,7 +436,7 @@ impl Parser {
                     .unwrap_or_else(|| "link".to_string());
 
                 if let Some(handlers) = el.end_tag_handlers() {
-                    handlers.push(Box::new(move |end| {
+                    let handler: lol_html::EndTagHandler<'_> = Box::new(move |end| {
                         let s = buffer.lock().unwrap();
                         let mut text = s.as_str().trim();
 
@@ -447,7 +447,8 @@ impl Parser {
                         end.before(text, lol_html::html_content::ContentType::Text);
 
                         Ok(())
-                    }));
+                    });
+                    handlers.push(handler);
                 }
 
                 Ok(())

@@ -8,7 +8,6 @@ use atomic_lib::{
         ws::{WsClient, WsMessage},
     },
     errors::AtomicResult,
-    Storelike,
 };
 use atomic_server_lib as atomic_server;
 use std::sync::atomic::{AtomicU16, Ordering};
