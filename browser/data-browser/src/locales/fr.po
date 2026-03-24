@@ -598,6 +598,7 @@ msgstr "Modifier le profil"
 msgid "Agent Secret"
 msgstr "Secret de l'Agent"
 
+#: src/components/NewIdentitySection.tsx
 #: src/routes/SettingsAgent.tsx
 msgid "Enter your Agent Secret"
 msgstr "Entrez votre secret d'Agent"
@@ -2788,6 +2789,7 @@ msgstr "Définir un filtre de valeur (facultatif)"
 msgid "Default ontology for the {0} drive"
 msgstr "Ontologie par défaut pour le lecteur {0}"
 
+#: src/components/NewIdentitySection.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 msgid "My Drive"
 msgstr "Mon lecteur"
@@ -3674,7 +3676,6 @@ msgstr "Votre nouvelle identité est prête"
 #~ msgid "Done"
 #~ msgstr ""
 
-#: src/components/NewIdentitySection.tsx
 #: src/routes/SettingsAgent.tsx
 msgid "Create a new identity"
 msgstr "Créer une nouvelle identité"
@@ -3700,12 +3701,11 @@ msgstr "Se connecter avec un secret existant"
 msgid "Use an existing identity"
 msgstr "Utiliser une identité existante"
 
-#: src/components/NewIdentitySection.tsx
-msgid ""
-"<0>IMPORTANT:</0> Save this secret key. It is the only way\n"
-"to access your data if you clear your browser cache or sign in from\n"
-"another device."
-msgstr "<0>IMPORTANT :</0> Enregistrez cette clé secrète. C'est le seul moyen d'accéder à vos données si vous videz le cache de votre navigateur ou si vous vous connectez depuis un autre appareil."
+#~ msgid ""
+#~ "<0>IMPORTANT:</0> Save this secret key. It is the only way\n"
+#~ "to access your data if you clear your browser cache or sign in from\n"
+#~ "another device."
+#~ msgstr "<0>IMPORTANT :</0> Enregistrez cette clé secrète. C'est le seul moyen d'accéder à vos données si vous videz le cache de votre navigateur ou si vous vous connectez depuis un autre appareil."
 
 #~ msgid "Are you sure you{0}ve stored this secret somewhere safe? You cannot recover it if you lose it."
 #~ msgstr "Êtes-vous sûr d'avoir stocké ce secret en lieu sûr ? Vous ne pourrez pas le récupérer si vous le perdez."
@@ -3714,6 +3714,7 @@ msgstr "<0>IMPORTANT :</0> Enregistrez cette clé secrète. C'est le seul moyen 
 msgid "Copy the secret key to continue"
 msgstr "Copiez la clé secrète pour continuer"
 
+#: src/components/NewIdentitySection.tsx
 #: src/views/OnboardingPage.tsx
 msgid "Yes, I've stored it safely"
 msgstr "Oui, je l'ai stocké en toute sécurité"
@@ -3731,12 +3732,10 @@ msgstr "Connexion / Nouvel utilisateur"
 msgid "If this host has not been bound to a Drive yet, continue at{0} <0>the onboarding page</0> ."
 msgstr ""
 
-#. placeholder {0}: "'"
-#: src/components/NewIdentitySection.tsx
-msgid ""
-"Are you sure you{0}ve stored this secret somewhere safe? You\n"
-"cannot recover it if you lose it."
-msgstr ""
+#~ msgid ""
+#~ "Are you sure you{0}ve stored this secret somewhere safe? You\n"
+#~ "cannot recover it if you lose it."
+#~ msgstr ""
 
 #~ msgid "Setting up..."
 #~ msgstr ""
@@ -3768,7 +3767,6 @@ msgstr ""
 #~ "This is your personal Atomic Data drive. Edit this description to tell visitors what this space is about."
 #~ msgstr ""
 
-#: src/components/NewIdentitySection.tsx
 #: src/hooks/useDevDrive.ts
 msgid "This is your personal Atomic Data drive. Edit this description to tell visitors what this space is about."
 msgstr ""
@@ -3934,4 +3932,118 @@ msgstr ""
 
 #: src/routes/SettingsAgent.tsx
 msgid "Drives"
+msgstr ""
+
+#~ msgid "That secret does not match. Please try again or start over."
+#~ msgstr ""
+
+#~ msgid "Something went wrong. You can start over if you lost your secret."
+#~ msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Verify your secret"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid ""
+"You have been signed out to verify that you saved your secret. Enter it\n"
+"below to sign in. If you lost it, you can start over."
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Paste your secret here"
+msgstr ""
+
+#~ msgid "Signing in..."
+#~ msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+#: src/components/NewIdentitySection.tsx
+msgid "Start over"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "You're signed in!"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid ""
+"Now, set your profile name. Note that this is only set for this specific\n"
+"server, but you can use your secret also on other servers."
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Enter your name"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Profile Name"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Saving..."
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+#: src/components/NewIdentitySection.tsx
+msgid "Skip"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Create your Drive"
+msgstr ""
+
+#~ msgid ""
+#~ "A Drive is your personal data space on this server. You\n"
+#~ "can create more drives later."
+#~ msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Drive Name"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Creating..."
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Create Drive"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Save & Next"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid ""
+"A Drive is your personal data space on this server. You can create more\n"
+"drives later."
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Generating your identity..."
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid ""
+"<0>IMPORTANT:</0> Save this secret key. It is the only way to\n"
+"access your data if you clear your browser cache or sign in from another\n"
+"device."
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid ""
+"Are you sure you've stored this secret somewhere safe? You\n"
+"cannot recover it if you lose it."
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Yes, I've stored it — sign me out to verify"
+msgstr ""
+
+#~ msgid "The secret is invalid or this session has expired. You can start over."
+#~ msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "The secret is invalid. You can start over."
 msgstr ""

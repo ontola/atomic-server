@@ -75,7 +75,11 @@ const SettingsAgent: React.FunctionComponent = () => {
       <ContainerNarrow>
         <h1>{agent ? 'User Settings' : 'Login / New User'}</h1>
         {showCreate ? (
-          <NewIdentitySection autoStart onDone={() => setShowCreate(false)} />
+          <NewIdentitySection
+            autoStart
+            verifySecret
+            onDone={() => setShowCreate(false)}
+          />
         ) : agent ? (
           <Column>
             {agent.subject?.startsWith('http://localhost') && (
