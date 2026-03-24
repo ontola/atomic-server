@@ -47,7 +47,6 @@ function Parent({ resource }: ParentProps): JSX.Element {
           title='Search (Cmd+K)'
           variant={IconButtonVariant.Simple}
           onClick={() => {
-            console.log('SEARCH CLICKED');
             openSearchOverlay();
           }}
         >
