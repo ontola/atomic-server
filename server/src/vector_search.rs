@@ -1,6 +1,6 @@
 use crate::config::Config;
 use crate::errors::AtomicServerResult;
-use crate::search::{extract_plain_text, get_resource_title};
+use crate::search::extract_plain_text;
 use arrow::array::{
     ArrayRef, FixedSizeListArray, Float32Array, ListBuilder, RecordBatch, RecordBatchIterator,
     StringArray, StringBuilder,
@@ -10,13 +10,13 @@ use atomic_lib::{Db, Resource, Storelike};
 use fastembed::{
     EmbeddingModel, InitOptions, RerankInitOptions, RerankerModel, TextEmbedding, TextRerank,
 };
-use lancedb::index::scalar::{BTreeIndexBuilder, LabelListIndexBuilder};
+use lancedb::index::scalar::{BTreeIndexBuilder, FtsIndexBuilder, LabelListIndexBuilder};
 use lancedb::index::vector::IvfPqIndexBuilder;
 use lancedb::index::Index;
 use lancedb::table::OptimizeAction;
 use lancedb::{DistanceType, Table};
 use std::sync::Arc;
-use text_splitter::{ChunkConfig, TextSplitter};
+use text_splitter::{ChunkConfig, MarkdownSplitter, TextSplitter};
 // use tokio::sync::RwLock;
 use yrs::updates::decoder::Decode;
 use yrs::Transact;
@@ -28,27 +28,58 @@ const CLASS_INDEX_BLACKLIST: &[&str] = &[
     atomic_lib::urls::REASONING_PART,
 ];
 
-pub fn get_resource_text_parts(resource: &Resource) -> Vec<String> {
-    let mut text_parts = Vec::new();
-    text_parts.push(get_resource_title(resource));
+pub fn get_resource_title(resource: &Resource) -> Option<String> {
+    let title = if let Ok(name) = resource.get(atomic_lib::urls::NAME) {
+        name.clone()
+    } else if let Ok(shortname) = resource.get(atomic_lib::urls::SHORTNAME) {
+        shortname.clone()
+    } else if let Ok(filename) = resource.get(atomic_lib::urls::FILENAME) {
+        filename.clone()
+    } else {
+        // We don't return the subject as a default because we don't want to index it.
+        return None;
+    };
 
-    if let Ok(atomic_lib::Value::Markdown(description)) =
+    match title {
+        atomic_lib::Value::String(s) => Some(s),
+        atomic_lib::Value::Slug(s) => Some(s),
+        _ => None,
+    }
+}
+
+pub fn get_resource_text_parts(
+    resource: &Resource,
+) -> (Option<String>, Option<String>, Option<String>) {
+    let title = get_resource_title(resource);
+
+    let description = if let Ok(atomic_lib::Value::Markdown(description)) =
         resource.get(atomic_lib::urls::DESCRIPTION)
     {
-        text_parts.push(description.to_string());
-    }
+        Some(description.to_string())
+    } else {
+        None
+    };
 
-    if let Ok(atomic_lib::Value::YDoc(state)) = resource.get(atomic_lib::urls::DOCUMENT_CONTENT) {
+    let doc_content = if let Ok(atomic_lib::Value::YDoc(state)) =
+        resource.get(atomic_lib::urls::DOCUMENT_CONTENT)
+    {
         let ydoc = yrs::Doc::new();
         let mut txn = ydoc.transact_mut();
-        if let Ok(()) = txn.apply_update(yrs::Update::decode_v2(state).unwrap_or_default()) {
-            let xml_content = txn.get_or_insert_xml_fragment("content");
-            let content = extract_plain_text(&xml_content, &txn);
-            text_parts.push(content.to_string());
-        }
-    }
 
-    text_parts
+        if txn
+            .apply_update(yrs::Update::decode_v2(state).unwrap_or_default())
+            .is_ok()
+        {
+            let xml_content = txn.get_or_insert_xml_fragment("content");
+            Some(extract_plain_text(&xml_content, &txn))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    (title, description, doc_content)
 }
 
 /// State for the vector search, utilizing fastembed and lancedb
@@ -63,20 +94,56 @@ impl VectorSearchState {
     pub async fn new(config: &Config) -> AtomicServerResult<Self> {
         tracing::info!("Starting vector search service");
 
-        // Initialize the embedding model
-        let model = TextEmbedding::try_new(
-            InitOptions::new(EmbeddingModel::AllMiniLML12V2).with_show_download_progress(true),
-        )
-        .map_err(|e| format!("Failed to initialize fastembed: {}", e))?;
+        let mut embedding_options =
+            InitOptions::new(EmbeddingModel::AllMiniLML6V2).with_show_download_progress(true);
 
-        let rerank_model = TextRerank::try_new(
-            RerankInitOptions::new(RerankerModel::BGERerankerBase)
-                .with_show_download_progress(true),
-        )
-        .map_err(|e| format!("Failed to initialize fastembed reranker: {}", e))?;
+        let mut rerank_options = RerankInitOptions::new(RerankerModel::BGERerankerBase)
+            .with_show_download_progress(true);
+
+        if config.gpu_indexing {
+            tracing::info!("Enabling GPU execution providers for fastembed");
+            let mut execution_providers = Vec::new();
+
+            #[cfg(target_os = "macos")]
+            {
+                execution_providers.push(
+                    ort::execution_providers::CoreMLExecutionProvider::default()
+                        .with_compute_units(
+                            ort::execution_providers::coreml::ComputeUnits::CPUAndNeuralEngine,
+                        )
+                        .with_model_format(ort::execution_providers::coreml::ModelFormat::MLProgram)
+                        .build(),
+                );
+            }
+            #[cfg(target_os = "windows")]
+            {
+                execution_providers
+                    .push(ort::execution_providers::DirectMLExecutionProvider::default().build());
+                execution_providers
+                    .push(ort::execution_providers::CUDAExecutionProvider::default().build());
+            }
+            #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+            {
+                execution_providers
+                    .push(ort::execution_providers::CUDAExecutionProvider::default().build());
+            }
+
+            embedding_options =
+                embedding_options.with_execution_providers(execution_providers.clone());
+            rerank_options = rerank_options.with_execution_providers(execution_providers);
+        }
+
+        // Initialize the embedding model
+        let model = TextEmbedding::try_new(embedding_options)
+            .map_err(|e| format!("Failed to initialize fastembed: {}", e))?;
+
+        let rerank_model = TextRerank::try_new(rerank_options)
+            .map_err(|e| format!("Failed to initialize fastembed reranker: {}", e))?;
 
         // Open or create lancedb table
-        if config.opts.rebuild_indexes {
+        if config.opts.rebuild_indexes == Some(crate::config::RebuildIndexMode::All)
+            || config.opts.rebuild_indexes == Some(crate::config::RebuildIndexMode::Vector)
+        {
             let _ = std::fs::remove_dir_all(&config.vector_search_index_path);
         }
         std::fs::create_dir_all(&config.vector_search_index_path)?;
@@ -131,6 +198,7 @@ impl VectorSearchState {
         })
     }
 
+    #[tracing::instrument(skip(self, store), level = "trace")]
     pub async fn add_all_resources(&self, store: &Db) -> AtomicServerResult<()> {
         tracing::info!("Building vector search index...");
 
@@ -142,46 +210,46 @@ impl VectorSearchState {
         let mut batch_is_a = Vec::new();
         let mut batch_hierarchy = Vec::new();
         let mut batch_text_chunks = Vec::new();
-        let mut batch_embeddings = Vec::new();
         let batch_size = 100;
+        let mut batch_count = 0;
+        let mut resources_processed = 0;
 
         for resource in resources {
-            if let Some((subject, is_a, hierarchy, chunks, embeddings)) =
-                self.create_resource_embeddings(&resource, store).await?
+            if let Some((subject, is_a, hierarchy, chunks)) =
+                self.create_resource_chunks(&resource, store).await?
             {
-                for (chunk, embedding) in chunks.into_iter().zip(embeddings) {
+                for chunk in chunks {
                     batch_subjects.push(subject.clone());
                     batch_is_a.push(is_a.clone());
                     batch_hierarchy.push(hierarchy.clone());
                     batch_text_chunks.push(chunk);
-                    batch_embeddings.push(embedding);
+
+                    if batch_subjects.len() >= batch_size {
+                        batch_count += 1;
+                        println!(
+                            "starting batch: {}, resources processed: {}",
+                            batch_count, resources_processed
+                        );
+                        self.embed_and_add_batch(
+                            &mut batch_subjects,
+                            &mut batch_is_a,
+                            &mut batch_hierarchy,
+                            &mut batch_text_chunks,
+                        )
+                        .await?;
+                    }
                 }
             }
 
-            if batch_subjects.len() >= batch_size {
-                self.add_batch(
-                    &batch_subjects,
-                    &batch_is_a,
-                    &batch_hierarchy,
-                    &batch_text_chunks,
-                    &batch_embeddings,
-                )
-                .await?;
-                batch_subjects.clear();
-                batch_is_a.clear();
-                batch_hierarchy.clear();
-                batch_text_chunks.clear();
-                batch_embeddings.clear();
-            }
+            resources_processed += 1;
         }
 
         if !batch_subjects.is_empty() {
-            self.add_batch(
-                &batch_subjects,
-                &batch_is_a,
-                &batch_hierarchy,
-                &batch_text_chunks,
-                &batch_embeddings,
+            self.embed_and_add_batch(
+                &mut batch_subjects,
+                &mut batch_is_a,
+                &mut batch_hierarchy,
+                &mut batch_text_chunks,
             )
             .await?;
         }
@@ -197,6 +265,12 @@ impl VectorSearchState {
             .map_err(|e| format!("Failed to create vector index: {}", e))?;
 
         tracing::info!("Creating scalar indexes...");
+        self.table
+            .create_index(&["text_chunk"], Index::FTS(FtsIndexBuilder::default()))
+            .execute()
+            .await
+            .map_err(|e| format!("Failed to create FTS index: {}", e))?;
+
         self.table
             .create_index(&["subject"], Index::BTree(BTreeIndexBuilder::default()))
             .execute()
@@ -231,6 +305,53 @@ impl VectorSearchState {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self, chunks), level = "trace")]
+    async fn embed_chunks(&self, chunks: &[String]) -> AtomicServerResult<Vec<Vec<f32>>> {
+        let embeddings = {
+            let mut model = self.model.lock().await;
+
+            model
+                .embed(chunks, None)
+                .map_err(|e| format!("Failed to embed text: {}", e))?
+        };
+
+        Ok(embeddings)
+    }
+
+    async fn embed_and_add_batch(
+        &self,
+        batch_subjects: &mut Vec<String>,
+        batch_is_a: &mut Vec<Vec<String>>,
+        batch_hierarchy: &mut Vec<Vec<String>>,
+        batch_text_chunks: &mut Vec<String>,
+    ) -> AtomicServerResult<()> {
+        if batch_subjects.is_empty() {
+            return Ok(());
+        }
+
+        let embeddings = self.embed_chunks(batch_text_chunks).await?;
+
+        self.add_batch(
+            batch_subjects,
+            batch_is_a,
+            batch_hierarchy,
+            batch_text_chunks,
+            &embeddings,
+        )
+        .await?;
+
+        batch_subjects.clear();
+        batch_is_a.clear();
+        batch_hierarchy.clear();
+        batch_text_chunks.clear();
+
+        Ok(())
+    }
+
+    #[tracing::instrument(
+        skip(self, subjects, is_a_arrays, hierarchy_arrays, text_chunks, embeddings),
+        level = "trace"
+    )]
     async fn add_batch(
         &self,
         subjects: &[String],
@@ -307,12 +428,12 @@ impl VectorSearchState {
         Ok(())
     }
 
-    async fn create_resource_embeddings(
+    #[tracing::instrument(skip(self, resource, store))]
+    async fn create_resource_chunks(
         &self,
         resource: &Resource,
         store: &Db,
-    ) -> AtomicServerResult<Option<(String, Vec<String>, Vec<String>, Vec<String>, Vec<Vec<f32>>)>>
-    {
+    ) -> AtomicServerResult<Option<(String, Vec<String>, Vec<String>, Vec<String>)>> {
         let subject = resource.get_subject().to_string();
 
         let mut is_a = Vec::new();
@@ -329,6 +450,12 @@ impl VectorSearchState {
             return Ok(None);
         }
 
+        let (title, description, doc_content) = get_resource_text_parts(resource);
+
+        if title.is_none() && description.is_none() && doc_content.is_none() {
+            return Ok(None);
+        }
+
         let mut hierarchy = Vec::new();
         if let Ok(parent_tree) = resource.get_parent_tree(store).await {
             hierarchy = parent_tree
@@ -337,20 +464,34 @@ impl VectorSearchState {
                 .collect();
         }
 
-        let text_to_split = get_resource_text_parts(resource);
+        let max_length = 256;
+        let overlap = 100;
 
-        if text_to_split.is_empty() {
-            return Ok(None);
-        }
-
-        let chunk_config = ChunkConfig::new(500)
-            .with_overlap(100)
-            .map_err(|e| format!("Failed to create chunk config: {}", e))?;
-        let splitter = TextSplitter::new(chunk_config);
+        let plain_text_splitter = TextSplitter::new(
+            ChunkConfig::new(max_length)
+                .with_overlap(overlap)
+                .map_err(|e| format!("Failed to create chunk config: {}", e))?,
+        );
+        let markdown_splitter = MarkdownSplitter::new(
+            ChunkConfig::new(max_length)
+                .with_overlap(overlap)
+                .map_err(|e| format!("Failed to create chunk config: {}", e))?,
+        );
 
         let mut chunks = Vec::new();
-        for text in text_to_split {
-            for chunk in splitter.chunks(&text) {
+
+        if let Some(title) = title {
+            chunks.push(title);
+        }
+
+        if let Some(description) = description {
+            for chunk in markdown_splitter.chunks(&description) {
+                chunks.push(chunk.to_string());
+            }
+        }
+
+        if let Some(doc_content) = doc_content {
+            for chunk in plain_text_splitter.chunks(&doc_content) {
                 chunks.push(chunk.to_string());
             }
         }
@@ -359,36 +500,49 @@ impl VectorSearchState {
             return Ok(None);
         }
 
-        let embeddings = self
-            .model
-            .lock()
-            .await
-            .embed(chunks.clone(), None)
-            .map_err(|e| format!("Failed to embed text: {}", e))?;
-
-        if embeddings.is_empty() {
-            return Ok(None);
-        }
-
-        Ok(Some((subject, is_a, hierarchy, chunks, embeddings)))
+        Ok(Some((subject, is_a, hierarchy, chunks)))
     }
 
     #[tracing::instrument(skip(self, resource, store))]
     pub async fn add_resource(&self, resource: &Resource, store: &Db) -> AtomicServerResult<()> {
-        let Some((subject, is_a, hierarchy, chunks, embeddings)) =
-            self.create_resource_embeddings(resource, store).await?
+        let Some((subject, is_a, hierarchy, chunks)) =
+            self.create_resource_chunks(resource, store).await?
         else {
             return Ok(());
         };
 
-        self.add_batch(
-            &vec![subject.clone(); embeddings.len()],
-            &vec![is_a; embeddings.len()],
-            &vec![hierarchy; embeddings.len()],
-            &chunks,
-            &embeddings,
-        )
-        .await?;
+        let batch_size = 100;
+        let mut batch_subjects = Vec::new();
+        let mut batch_is_a = Vec::new();
+        let mut batch_hierarchy = Vec::new();
+        let mut batch_text_chunks = Vec::new();
+
+        for chunk in chunks {
+            batch_subjects.push(subject.clone());
+            batch_is_a.push(is_a.clone());
+            batch_hierarchy.push(hierarchy.clone());
+            batch_text_chunks.push(chunk);
+
+            if batch_subjects.len() >= batch_size {
+                self.embed_and_add_batch(
+                    &mut batch_subjects,
+                    &mut batch_is_a,
+                    &mut batch_hierarchy,
+                    &mut batch_text_chunks,
+                )
+                .await?;
+            }
+        }
+
+        if !batch_subjects.is_empty() {
+            self.embed_and_add_batch(
+                &mut batch_subjects,
+                &mut batch_is_a,
+                &mut batch_hierarchy,
+                &mut batch_text_chunks,
+            )
+            .await?;
+        }
 
         Ok(())
     }

@@ -44,6 +44,7 @@ import { useAISettings } from '@components/AI/AISettingsContext';
 import UsesMCPServers from '@components/AI/MCP/UsesMCPServers';
 import { useRAG } from './useRAG';
 import { useOnValueChange } from '@helpers/useOnValueChange';
+import { transition } from '@helpers/transition';
 
 const AIChatInput = React.lazy(
   () => import('@chunks/RTE/AIChatInput/AsyncAIChatInput'),
@@ -278,7 +279,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
       ],
     };
 
-    if (selectedAgent.ragEnabled) {
+    if (selectedAgent.ragEnabled && messages.length === 0) {
       setIsRagging(true);
       const ragData = await getRAGData(text);
 
@@ -338,8 +339,11 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     setSelectedAgent(initialAgent);
   }, [chatSubject]);
 
+  const isEmptyChat = messages.length === 0;
+  const totalTokensUsed = usage.input + usage.output;
+
   return (
-    <ChatWindow fullView={fullView}>
+    <ChatWindow fullView={fullView} empty={messages.length === 0}>
       {children}
       <ChatMessagesContainer
         enableAutoScroll={status === 'streaming'}
@@ -370,15 +374,17 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
         )}
         {!readonly && (
           <>
-            <Column gap='0px'>
-              {followUpQuestions.map(question => (
-                <FollowUpPrompt
-                  key={question}
-                  text={question}
-                  onClick={() => handleSubmit(question)}
-                />
-              ))}
-            </Column>
+            {followUpQuestions.length > 0 && (
+              <Column gap='0px'>
+                {followUpQuestions.map(question => (
+                  <FollowUpPrompt
+                    key={question}
+                    text={question}
+                    onClick={() => handleSubmit(question)}
+                  />
+                ))}
+              </Column>
+            )}
             <ChatInputWrapper>
               <Column fullWidth gap='none' style={{ position: 'relative' }}>
                 <FloatingChatWidgetsContainer>
@@ -393,49 +399,56 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                       </Row>
                     </UnsavedChangesIndicator>
                   )}
-                  {attachedFiles.map(file => (
-                    <AttachmentPreview key={file.name}>
-                      <Row gap='1ch' center>
-                        <FaFile />
-                        <span>{file.name}</span>
-                      </Row>
-                      <IconButton
-                        title='Remove file'
-                        onClick={() => removeAttachedFile(file)}
-                        size='small'
-                      >
-                        <FaXmark />
-                      </IconButton>
-                    </AttachmentPreview>
-                  ))}
+                  {attachedFiles.length > 0 && (
+                    <Row gap='1ch' wrapItems>
+                      {attachedFiles.map(file => (
+                        <AttachmentPreview key={file.name}>
+                          <Row gap='1ch' center>
+                            <FaFile />
+                            <span>{file.name}</span>
+                          </Row>
+                          <IconButton
+                            title='Remove file'
+                            onClick={() => removeAttachedFile(file)}
+                            size='small'
+                          >
+                            <FaXmark />
+                          </IconButton>
+                        </AttachmentPreview>
+                      ))}
+                    </Row>
+                  )}
                 </FloatingChatWidgetsContainer>
-                <ContextItemRow wrapItems center gap='1ch'>
-                  {allContextItems.map(item => (
-                    <MessageContextItem
-                      key={item.id}
-                      contextItem={item}
-                      onRemove={
-                        // Only allow removing external context items, normal items are removed via the input.
-                        externalContextItems.some(x => x.id === item.id)
-                          ? () => {
-                              setExternalContextItems(prev => {
-                                const newList = prev.filter(
-                                  i => i.id !== item.id,
-                                );
+                {allContextItems.length > 0 && (
+                  <ContextItemRow wrapItems center gap='1ch'>
+                    {allContextItems.map(item => (
+                      <MessageContextItem
+                        key={item.id}
+                        contextItem={item}
+                        onRemove={
+                          // Only allow removing external context items, normal items are removed via the input.
+                          externalContextItems.some(x => x.id === item.id)
+                            ? () => {
+                                setExternalContextItems(prev => {
+                                  const newList = prev.filter(
+                                    i => i.id !== item.id,
+                                  );
 
-                                if (newList.length === prev.length) {
-                                  return prev;
-                                }
+                                  if (newList.length === prev.length) {
+                                    return prev;
+                                  }
 
-                                return newList;
-                              });
-                            }
-                          : undefined
-                      }
-                    />
-                  ))}
-                </ContextItemRow>
+                                  return newList;
+                                });
+                              }
+                            : undefined
+                        }
+                      />
+                    ))}
+                  </ContextItemRow>
+                )}
                 <AIChatInput
+                  large={isEmptyChat && fullView}
                   disabled={!canSubmit}
                   hasFiles={!!attachedFiles}
                   onMentionUpdate={handleMentionUpdate}
@@ -490,11 +503,13 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                   </Row>
                 </AIChatInput>
               </Column>
+              {messages.length === 0 && <div></div>}
               <NoKeyOverlay />
             </ChatInputWrapper>
-            {showTokenUsage && (
+            {showTokenUsage && totalTokensUsed > 0 && (
               <TokensUsed>
-                Tokens used: {usage.input} input, {usage.output} output
+                Tokens used: {nummberFormatter.format(usage.input)} input,{' '}
+                {nummberFormatter.format(usage.output)} output
               </TokensUsed>
             )}
           </>
@@ -509,6 +524,8 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     </ChatWindow>
   );
 };
+
+const nummberFormatter = new Intl.NumberFormat(undefined, {});
 
 const filesToFileParts = (files: File[]): Promise<FileUIPart[]> =>
   Promise.all(
@@ -546,6 +563,7 @@ const ChatInputWrapper = styled.div`
   gap: ${p => p.theme.size()};
   position: relative;
 
+  ${transition('border-color')}
   &:focus-within {
     border-color: ${p => p.theme.colors.main};
   }
@@ -559,19 +577,20 @@ const AttachmentPreview = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background-color: ${p => p.theme.colors.bg1};
+  background-color: ${p => p.theme.colors.bg};
   padding: ${p => p.theme.size(1)};
   border-radius: ${p => p.theme.radius};
   font-size: 0.8rem;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 `;
 
-const ChatWindow = styled.div<{ fullView?: boolean }>`
+const ChatWindow = styled.div<{ fullView?: boolean; empty?: boolean }>`
   padding: ${p => (p.fullView ? p.theme.size() : 0)};
   padding-top: ${p => (p.fullView ? p.theme.size(2) : 0)};
   position: relative;
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: ${p =>
+    p.empty && p.fullView ? 'auto 1fr auto 1fr' : 'auto 1fr auto'};
   height: ${p => (p.fullView ? '90vh' : '100%')};
   width: min(100%, 40rem);
   margin-inline: auto;
@@ -628,7 +647,7 @@ const FloatingChatWidgetsContainer = styled.div`
   gap: ${p => p.theme.size(2)};
   position: absolute;
   width: 100%;
-  bottom: calc(100% + ${p => p.theme.size(2)});
+  bottom: calc(100% + ${p => p.theme.size(3)});
   left: 0;
   right: 0;
   z-index: 10;

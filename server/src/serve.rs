@@ -5,39 +5,58 @@ use atomic_lib::Storelike;
 use crate::errors::AtomicServerResult;
 
 /// Clears and rebuilds the Store & Search indexes
-async fn rebuild_indexes(appstate: &crate::appstate::AppState) -> AtomicServerResult<()> {
-    let _appstate_clone = appstate.clone();
+async fn rebuild_indexes(
+    appstate: &crate::appstate::AppState,
+    mode: &crate::config::RebuildIndexMode,
+) -> AtomicServerResult<()> {
+    if matches!(
+        mode,
+        crate::config::RebuildIndexMode::All | crate::config::RebuildIndexMode::Atoms
+    ) {
+        let appstate_clone = appstate.clone();
 
-    // actix_web::rt::spawn(async move {
-    //     appstate_clone
-    //         .store
-    //         .clear_index()
-    //         .expect("Failed to clear value index");
-    //     appstate_clone
-    //         .store
-    //         .build_index(true)
-    //         .expect("Failed to build value index");
-    // });
+        actix_web::rt::spawn(async move {
+            appstate_clone
+                .store
+                .clear_index()
+                .expect("Failed to clear value index");
+            appstate_clone
+                .store
+                .build_index(true)
+                .expect("Failed to build value index");
+        });
+    }
 
-    // tracing::info!("Removing existing search index...");
-    // appstate
-    //     .search_state
-    //     .writer
-    //     .write()
-    //     .expect("Could not get a lock on search writer")
-    //     .delete_all_documents()?;
-    // appstate
-    //     .search_state
-    //     .add_all_resources(&appstate.store)
-    //     .await?;
+    if matches!(
+        mode,
+        crate::config::RebuildIndexMode::All | crate::config::RebuildIndexMode::Search
+    ) {
+        tracing::info!("Removing existing search index...");
+        appstate
+            .search_state
+            .writer
+            .write()
+            .expect("Could not get a lock on search writer")
+            .delete_all_documents()?;
+        appstate
+            .search_state
+            .add_all_resources(&appstate.store)
+            .await?;
+    }
 
-    tracing::info!("Removing existing vector search index...");
-    // vector search index was already wiped in VectorSearchState::new if rebuild_indexes was passed
+    if matches!(
+        mode,
+        crate::config::RebuildIndexMode::All | crate::config::RebuildIndexMode::Vector
+    ) {
+        tracing::info!("Removing existing vector search index...");
+        // vector search index was already wiped in VectorSearchState::new if rebuild_indexes was passed
 
-    appstate
-        .vector_search_state
-        .add_all_resources(&appstate.store)
-        .await?;
+        appstate
+            .vector_search_state
+            .add_all_resources(&appstate.store)
+            .await?;
+    }
+
     Ok(())
 }
 
@@ -79,8 +98,8 @@ pub async fn serve(config: crate::config::Config) -> AtomicServerResult<()> {
     let appstate = crate::appstate::AppState::init(config.clone()).await?;
 
     // Start async processes
-    if config.opts.rebuild_indexes {
-        rebuild_indexes(&appstate).await?;
+    if let Some(mode) = &config.opts.rebuild_indexes {
+        rebuild_indexes(&appstate, mode).await?;
     }
     if config.opts.clear_remote_cache {
         clear_remote_cache(&appstate).await?;

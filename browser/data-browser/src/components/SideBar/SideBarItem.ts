@@ -17,7 +17,7 @@ export const SideBarItem = styled('span')<SideBarItemProps>`
   text-overflow: ellipsis;
   text-decoration: none;
   border-radius: ${p => p.theme.radius};
-
+  overflow: hidden;
   &:hover,
   &:focus {
     background-color: ${p => p.theme.colors.bg1};

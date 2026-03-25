@@ -203,7 +203,7 @@ pub fn get_index(config: &Config) -> AtomicServerResult<(IndexWriter, tantivy::I
     let mmap_directory = tantivy::directory::MmapDirectory::open(&config.search_index_path)?;
     let index = Index::open_or_create(mmap_directory, schema).map_err(|e| {
         format!(
-            "Failed to create or open search index. Try starting again with --rebuild-index. Error: {}",
+            "Failed to create or open search index. Try starting again with --rebuild-indexes search. Error: {}",
             e
         )
     })?;

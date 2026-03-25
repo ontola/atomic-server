@@ -18,9 +18,9 @@ import { JSONADParser } from './parse.js';
 import { Resource, unknownSubject } from './resource.js';
 import {
   type SearchOpts,
-  type VectorSearchOpts,
+  type SemanticSearchOpts,
   buildSearchSubject,
-  buildVectorSearchSubject,
+  buildSemanticSearchSubject,
 } from './search.js';
 import { stringToSlug } from './stringToSlug.js';
 import type { JSONValue } from './value.js';
@@ -288,11 +288,11 @@ export class Store {
     return results;
   }
 
-  public async vectorSearch(
+  public async semanticSearch(
     query: string,
-    opts: VectorSearchOpts = {},
+    opts: SemanticSearchOpts = {},
   ): Promise<{ subject: string; chunk: string }[]> {
-    const vectorSearchSubject = buildVectorSearchSubject(
+    const vectorSearchSubject = buildSemanticSearchSubject(
       this.serverUrl,
       query,
       opts,

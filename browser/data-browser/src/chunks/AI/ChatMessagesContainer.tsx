@@ -15,7 +15,7 @@ export const ChatMessagesContainer: React.FC<
   const containerRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: 'instant' });
   };
 
   useEffect(() => {
@@ -54,7 +54,7 @@ export const ChatMessagesContainer: React.FC<
   }, [enableAutoScroll]);
 
   return (
-    <MessagesContainer fullView={fullView}>
+    <MessagesContainer $fullView={fullView}>
       <Column ref={containerRef}>
         {children}
         <div ref={messagesEndRef} />
@@ -63,10 +63,10 @@ export const ChatMessagesContainer: React.FC<
   );
 };
 
-const MessagesContainer = styled(ScrollArea)<{ fullView?: boolean }>`
+const MessagesContainer = styled(ScrollArea)<{ $fullView?: boolean }>`
   overflow: auto;
   height: 100%;
   background-color: ${p => p.theme.colors.bgBody};
   border-radius: ${p => p.theme.radius};
-  padding: ${p => (p.fullView ? '0' : p.theme.size())};
+  padding: ${p => (p.$fullView ? '0' : p.theme.size())};
 `;

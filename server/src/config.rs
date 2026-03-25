@@ -20,8 +20,8 @@ pub struct Opts {
 
     /// Re-builds the indexes. Parses all the resources.
     /// Do this when updating requires it, or if you have issues with Collections / Queries / Search.
-    #[clap(long, env = "ATOMIC_REBUILD_INDEX")]
-    pub rebuild_indexes: bool,
+    #[clap(value_enum, long, env = "ATOMIC_REBUILD_INDEX")]
+    pub rebuild_indexes: Option<RebuildIndexMode>,
 
     /// Use staging environments for services like LetsEncrypt
     #[clap(long, env = "ATOMIC_DEVELOPMENT")]
@@ -101,6 +101,9 @@ pub struct Opts {
     /// Removes all remote resources from the store.
     #[clap(long, env = "ATOMIC_CLEAR_REMOTE_CACHE")]
     pub clear_remote_cache: bool,
+    /// Use the GPU (if available) for processing vector search embeddings.
+    #[clap(long, env = "ATOMIC_GPU_INDEXING")]
+    pub gpu_indexing: bool,
 }
 
 #[derive(clap::ValueEnum, Clone, Debug)]
@@ -119,6 +122,14 @@ pub enum LogLevel {
     Info,
     Debug,
     Trace,
+}
+
+#[derive(clap::ValueEnum, Clone, Debug, PartialEq)]
+pub enum RebuildIndexMode {
+    All,
+    Atoms,
+    Vector,
+    Search,
 }
 
 #[derive(Parser, Clone, Debug)]
@@ -203,6 +214,8 @@ pub struct Config {
     pub plugin_cache_path: PathBuf,
     /// If true, the initialization scripts will be ran (create first Drive, Agent, indexing, etc)
     pub initialize: bool,
+    /// Use the GPU (if available) for processing vector search embeddings.
+    pub gpu_indexing: bool,
 }
 
 /// Parse .env and CLI options
@@ -305,8 +318,11 @@ pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
         format!("{}://{}:{}", schema, opts.domain, opts.port)
     };
 
+    let gpu_indexing = opts.gpu_indexing;
+
     Ok(Config {
         initialize,
+        gpu_indexing,
         opts,
         cert_path,
         config_dir,

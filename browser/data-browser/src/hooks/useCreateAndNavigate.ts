@@ -17,6 +17,8 @@ export type CreateAndNavigate = (
     subject?: string;
     /** If true, skip navigation after resource creation */
     skipNavigation?: boolean;
+    /** If true, skip notifying the store after resource creation */
+    skipNotify?: boolean;
   },
 ) => Promise<Resource>;
 
@@ -34,7 +36,15 @@ export function useCreateAndNavigate(): CreateAndNavigate {
     async (
       isA,
       propVals,
-      { parent, extraParams, onCreated, subject, noParent, skipNavigation },
+      {
+        parent,
+        extraParams,
+        onCreated,
+        subject,
+        noParent,
+        skipNavigation,
+        skipNotify,
+      },
     ): Promise<Resource> => {
       const classResource = await store.getResource<Core.Class>(isA);
 
@@ -60,7 +70,10 @@ export function useCreateAndNavigate(): CreateAndNavigate {
         }
 
         toast.success(`${classResource.title} created`);
-        store.notifyResourceManuallyCreated(resource);
+
+        if (!skipNotify) {
+          store.notifyResourceManuallyCreated(resource);
+        }
       } catch (e) {
         store.notifyError(e);
         toast.error('Failed to save new resource');

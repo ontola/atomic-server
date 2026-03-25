@@ -1,4 +1,5 @@
 {{#title Installing AtomicServer}}
+
 # Setup / installation
 
 You can run AtomicServer in different ways:
@@ -175,8 +176,9 @@ Options:
 
           [env: ATOMIC_INITIALIZE=]
 
-      --rebuild-indexes
+      --rebuild-indexes <INDEX_TYPE>
           Re-builds the indexes. Parses all the resources. Do this when updating requires it, or if you have issues with Collections / Queries / Search
+          [possible values: all, atoms, vector, search]
 
           [env: ATOMIC_REBUILD_INDEX=]
 

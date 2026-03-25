@@ -203,7 +203,7 @@ impl Db {
         &self.endpoints
     }
 
-    #[instrument(skip(self))]
+    #[instrument(skip(self, atom, resource, transaction))]
     fn add_atom_to_index(
         &self,
         atom: &Atom,
@@ -434,7 +434,7 @@ impl Db {
     }
 
     /// Apply made changes to the store.
-    #[instrument(skip(self))]
+    #[instrument(skip(self, transaction))]
     fn apply_transaction(&self, transaction: &mut Transaction) -> AtomicResult<()> {
         let mut batch_resources = sled::Batch::default();
         let mut batch_propvalsub = sled::Batch::default();
@@ -603,7 +603,7 @@ impl Db {
         })
     }
 
-    #[instrument(skip(self))]
+    #[instrument(skip(self, atom, resource, transaction))]
     fn remove_atom_from_index(
         &self,
         atom: &Atom,
@@ -628,6 +628,7 @@ impl Db {
     }
 
     /// Recursively removes a resource and its children from the database
+    #[tracing::instrument(skip(self, transaction))]
     async fn recursive_remove(
         &self,
         subject: &str,

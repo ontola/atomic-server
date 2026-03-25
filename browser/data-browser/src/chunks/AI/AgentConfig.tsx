@@ -20,6 +20,7 @@ import { InputWrapper, InputStyled } from '@components/forms/InputStyles';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import { CheckboxDescriptor } from '@components/forms/CheckboxDescriptor';
 import { AgentConfigItem } from './AgentConfigItem';
+import atomicAgentPrompt from './system-prompts/atomic-agent.md?raw';
 
 // Add this formatter at the top of the file, after imports
 const temperatureFormatter = new Intl.NumberFormat(undefined, {
@@ -60,34 +61,25 @@ const defaultAgents: AIAgent[] = [
     id: 'dev.atomicdata.atomic-agent',
     description:
       "An agent that is specialized in helping you use AtomicServer. It takes context from what you're doing.",
-    systemPrompt: /* @wc-ignore */ `You are an AI assistant in the Atomic Data Browser. Users will ask questions about their data and you will answer by looking at the data or using your own knowledge about the world.
-Atomic Data uses JSON-AD, Every resource including the properties themselves have a subject (the '@id' property in the JSON-AD), this is a URL that points to the resource.
-Resources are always referenced by subject so make sure you have all the subjects you need before editing or creating resources.
-
-Keep the following things in mind:
-- If the user mentions a resource by its name and you don't know the subject, use the search-resource tool to find its subject.
-- If you need details on resources referenced by another resource, use the get-atomic-resource tool.
-- When talking about a resource, always wrap the title in a link using markdown.
-- If you don't know the answer to the users question, try to figure it out by using the tools provided to you.
-`,
+    systemPrompt: atomicAgentPrompt,
     availableTools: [],
     model: {
-      id: 'openai/gpt-4o-mini',
+      id: 'google/gemini-3-flash-preview',
       provider: AIProvider.OpenRouter,
     },
     canReadAtomicData: true,
     canWriteAtomicData: true,
-    ragEnabled: true,
+    ragEnabled: false,
     temperature: 0.1,
   },
   {
     name: 'General Agent',
     id: 'dev.atomicdata.general-agent',
     description: "A basic agent that doesn't have any special purpose.",
-    systemPrompt: ``,
+    systemPrompt: `The current date is {{timestamp}}`,
     availableTools: [],
     model: {
-      id: 'openai/gpt-4.1-mini',
+      id: 'google/gemini-3-flash-preview',
       provider: AIProvider.OpenRouter,
     },
     canReadAtomicData: false,

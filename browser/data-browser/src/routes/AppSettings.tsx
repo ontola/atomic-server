@@ -113,6 +113,13 @@ const AppSettings: React.FunctionComponent = () => {
             />{' '}
             Enable Ontology panel
           </CheckboxLabel>
+          <CheckboxLabel>
+            <Checkbox
+              checked={enabledPanels.has(Panel.AIChats)}
+              onChange={changePanelPref(Panel.AIChats)}
+            />{' '}
+            Enable AIChats panel
+          </CheckboxLabel>
           <Heading>Accessibility</Heading>
           <CheckboxLabel>
             <Checkbox

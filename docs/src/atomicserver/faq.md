@@ -36,7 +36,7 @@ See the [Hierarchy chapter](https://docs.atomicdata.dev/hierarchy.html) in the d
 ## Items are missing in my Collections / Search results
 
 You might have a problem with your indexes.
-Try rebuilding the indexes using `atomic-server --rebuild-index`.
+Try rebuilding the indexes using `atomic-server --rebuild-indexes all`.
 Also, if you can, recreate and describe the indexing issue in the issue tracker, so we can fix it.
 
 ## I get a `failed to retrieve` error when opening

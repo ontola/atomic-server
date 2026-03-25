@@ -75,6 +75,7 @@ const SerializableMention = Mention.extend({
 interface AsyncAIChatInputProps {
   hasFiles: boolean;
   disabled?: boolean;
+  large?: boolean;
   onMentionUpdate: (mentions: MentionItem[]) => void;
   onChange: (markdown: string) => void;
   onSubmit: () => void;
@@ -87,6 +88,7 @@ const AsyncAIChatInput: React.FC<
   children,
   hasFiles,
   disabled,
+  large,
   onMentionUpdate,
   onChange,
   onSubmit,
@@ -198,7 +200,7 @@ const AsyncAIChatInput: React.FC<
 
   return (
     <>
-      <EditorWrapper hideEditor={false}>
+      <EditorWrapper hideEditor={false} $large={large}>
         <TiptapContextProvider editor={editor}>
           <EditorContent editor={editor} />
           <EditorEvents onChange={handleChange} />
@@ -225,11 +227,12 @@ const AsyncAIChatInput: React.FC<
 
 export default AsyncAIChatInput;
 
-const EditorWrapper = styled(EditorWrapperBase)`
+const EditorWrapper = styled(EditorWrapperBase)<{ $large?: boolean }>`
   padding: ${p => p.theme.size(2)};
   font-size: 16px;
   line-height: 1.5;
-
+  flex: unset !important;
+  min-height: ${p => (p.$large ? '8rem' : 'none')};
   .ai-chat-mention {
     background-color: ${p => p.theme.colors.mainSelectedBg};
     color: ${p => p.theme.colors.mainSelectedFg};

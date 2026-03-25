@@ -13,14 +13,15 @@ export interface SearchOpts {
   };
 }
 
-export interface VectorSearchOpts {
+export interface SemanticSearchOpts {
   /** Fetch full resources instead of subjects */
   include?: boolean;
   /** Max of how many results to return */
   limit?: number;
   parents?: string[] | string;
-  classes?: string[] | string;
+  isA?: string[] | string;
   rerank?: boolean;
+  text_query?: string;
 }
 
 const baseURL = (serverURL: string) => {
@@ -116,10 +117,10 @@ export function buildSearchSubject(
   return url.toString();
 }
 
-export function buildVectorSearchSubject(
+export function buildSemanticSearchSubject(
   serverURL: string,
   query: string,
-  opts: VectorSearchOpts = {},
+  opts: SemanticSearchOpts = {},
 ) {
   const url = new URL(serverURL);
   url.pathname = 'vector_search';
@@ -128,12 +129,14 @@ export function buildVectorSearchSubject(
   if (opts.include) url.searchParams.set('include', opts.include.toString());
   if (opts.limit) url.searchParams.set('limit', opts.limit.toString());
   if (opts.rerank) url.searchParams.set('rerank', opts.rerank.toString());
+  if (opts.text_query)
+    url.searchParams.set('text_q', opts.text_query.toString());
 
-  if (opts.classes) {
-    if (Array.isArray(opts.classes)) {
-      url.searchParams.append('classes', opts.classes.join(','));
+  if (opts.isA) {
+    if (Array.isArray(opts.isA)) {
+      url.searchParams.append('is_a', opts.isA.join(','));
     } else {
-      url.searchParams.append('classes', opts.classes);
+      url.searchParams.append('is_a', opts.isA);
     }
   }
 

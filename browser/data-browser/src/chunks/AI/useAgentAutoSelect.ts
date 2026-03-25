@@ -1,6 +1,6 @@
 import { useAIAgentConfig } from './AgentConfig';
 import type { AIAgent, MCPServer } from './types';
-import { generateObject } from 'ai';
+import { generateText, Output } from 'ai';
 import { z } from 'zod';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import { useGetModel } from './useModel';
@@ -33,17 +33,19 @@ User question: `;
 
     const prompt = basePrompt + question.trim();
 
-    const { object } = await generateObject({
+    const { output } = await generateText({
       model,
-      schemaName: /* @wc-ignore */ 'Agent',
-      schemaDescription: /* @wc-ignore */ 'The agent to use for the question.',
-      schema: z.object({
-        agentId: z.string(),
+      output: Output.object({
+        schema: z.object({
+          agentId: z
+            .string()
+            .describe(/* @wc-ignore */ 'The agent to use for the question.'),
+        }),
       }),
       prompt,
     });
 
-    const agent = agents.find(a => a.id === object.agentId);
+    const agent = agents.find(a => a.id === output.agentId);
 
     if (!agent) {
       throw new Error('Agent not found');

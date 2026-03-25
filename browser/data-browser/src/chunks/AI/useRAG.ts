@@ -13,7 +13,7 @@ export function useRAG(): GetRelevantResources {
   const { drive } = useSettings();
 
   const getRAGData = async (prompt: string) => {
-    const chunkData = await store.vectorSearch(prompt, {
+    const chunkData = await store.semanticSearch(prompt, {
       parents: drive,
       rerank: true,
     });

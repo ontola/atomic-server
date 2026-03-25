@@ -558,22 +558,6 @@ msgstr "<0/> <1>H</1>auptseite anzeigen"
 msgid "<0/> Open <1>m</1>enu"
 msgstr "<0/> <1>M</1>enü öffnen"
 
-#: src/routes/ShortcutsRoute.tsx
-msgid "Document"
-msgstr "Dokument"
-
-#: src/routes/ShortcutsRoute.tsx
-msgid "<0/> Move line / section up"
-msgstr "<0/> Zeile / Abschnitt nach oben verschieben"
-
-#: src/routes/ShortcutsRoute.tsx
-msgid "<0/> Move line / section down"
-msgstr "<0/> Zeile / Abschnitt nach unten verschieben"
-
-#: src/routes/ShortcutsRoute.tsx
-msgid "<0/> Delete line"
-msgstr "<0/> Zeile löschen"
-
 #: src/components/SideBar/AppMenu.tsx
 #: src/routes/SettingsAgent.tsx
 msgid "User Settings"
@@ -991,12 +975,6 @@ msgstr "Websuche umschalten"
 #: src/chunks/AI/RealAIChat.tsx
 msgid "Attach file"
 msgstr "Datei anhängen"
-
-#. placeholder {0}: usage.input
-#. placeholder {1}: usage.output
-#: src/chunks/AI/RealAIChat.tsx
-msgid "Tokens used: {0} input, {1} output"
-msgstr "Verwendete Token: {0} Eingabe, {1} Ausgabe"
 
 #: src/views/ImporterPage.tsx
 msgid "Import to"
@@ -2027,6 +2005,7 @@ msgstr "Keine Instanzen"
 msgid "Use <0/> in code"
 msgstr "<0/> im Code verwenden"
 
+#: src/components/SideBar/AIPanel.tsx
 #: src/components/SideBar/OntologySideBar/OntologiesPanel.tsx
 #: src/components/forms/FilePicker/FilePickerItem.tsx
 #: src/components/forms/NewForm/NewFormDialog.tsx
@@ -2426,6 +2405,7 @@ msgstr "Gespeichert"
 msgid "Other"
 msgstr "Andere"
 
+#: src/components/SideBar/AIPanel.tsx
 #: src/components/SideBar/OntologySideBar/OntologiesPanel.tsx
 msgid "Invalid Resource"
 msgstr "Ungültige Ressource"
@@ -3426,21 +3406,6 @@ msgid ""
 "contained in the current scope."
 msgstr "<0/> möchte eine Ressource ändern, die nicht im aktuellen Geltungsbereich enthalten ist."
 
-#~ msgid "Ragging..."
-#~ msgstr "Ragging..."
-
-#~ msgid "Oh hallo <0>Description</0> <1/>"
-#~ msgstr "Oh hallo <0>Beschreibung</0> <1/>"
-
-#~ msgid "Knowledge (RAG)"
-#~ msgstr "Wissen (RAG)"
-
-#~ msgid "<0/> Search my data for context"
-#~ msgstr "<0/> Meine Daten nach Kontext durchsuchen"
-
-#~ msgid "<0/> Write <1><0/> Provide relevant context from your knowledge base to the Agent.</1>"
-#~ msgstr "<0/> Schreiben <1><0/> Stellen Sie dem Agenten relevante Informationen aus Ihrer Wissensdatenbank zur Verfügung.</1>"
-
 #: src/chunks/AI/AgentConfig.tsx
 msgid "<0/> Provide relevant context from your knowledge base to the Agent."
 msgstr "<0/> Stellen Sie dem Agenten relevante Informationen aus Ihrer Wissensdatenbank zur Verfügung."
@@ -3448,3 +3413,35 @@ msgstr "<0/> Stellen Sie dem Agenten relevante Informationen aus Ihrer Wissensda
 #: src/chunks/AI/RealAIChat.tsx
 msgid "Gathering context"
 msgstr "Kontext wird gesammelt"
+
+#. placeholder {0}: ' '
+#: src/routes/AppSettings.tsx
+msgid "<0/>{0} Enable AIChats panel"
+msgstr "<0/>{0} AIChats-Panel aktivieren"
+
+#: src/components/SideBar/index.tsx
+msgid "AI Chats"
+msgstr "KI-Chats"
+
+#: src/components/SideBar/AIPanel.tsx
+msgid "<0/> New Chat"
+msgstr "<0/> Neuer Chat"
+
+#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
+msgid "Reading <0/> schema"
+msgstr "Lese <0/> Schema"
+
+#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
+msgid "Reading schema"
+msgstr "Lese Schema"
+
+#. placeholder {0}: nummberFormatter.format(usage.input)
+#. placeholder {1}: ' '
+#. placeholder {2}: nummberFormatter.format(usage.output)
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Tokens used: {0} input,{1} {2} output"
+msgstr "Verwendete Tokens: {0} Eingabe,{1} {2} Ausgabe"
+
+#: src/components/SideBar/AIPanel.tsx
+msgid "Untitled Chat"
+msgstr "Unbenannter Chat"

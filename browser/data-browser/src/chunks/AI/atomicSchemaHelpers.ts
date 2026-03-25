@@ -37,3 +37,41 @@ export const toPropertyLine = async (subject: string, store: Store) => {
 
   return `- ${resource.title} (${subject})`;
 };
+
+export async function toClassObject(subject: string, store: Store) {
+  const resource = await store.getResource<Core.Class>(subject);
+
+  if (resource.error || resource.loading) {
+    return `Could not read class: ${subject}`;
+  }
+
+  return {
+    subject,
+    shortname: resource.props.shortname,
+    description: resource.props.description,
+    required: await Promise.all(
+      (resource.props.requires ?? []).map(prop =>
+        toPropertyObject(prop, store),
+      ),
+    ),
+    recommended: await Promise.all(
+      (resource.props.recommends ?? []).map(prop =>
+        toPropertyObject(prop, store),
+      ),
+    ),
+  };
+}
+
+async function toPropertyObject(subject: string, store: Store) {
+  const resource = await store.getResource<Core.Property>(subject);
+
+  if (resource.error || resource.loading) {
+    return `Could not read property: ${subject}`;
+  }
+
+  return {
+    subject,
+    shortname: resource.props.shortname,
+    datatype: resource.props.datatype,
+  };
+}

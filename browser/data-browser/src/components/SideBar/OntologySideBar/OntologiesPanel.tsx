@@ -30,15 +30,15 @@ export function OntologiesPanel(): JSX.Element | null {
       parents: drive,
     });
 
-    setOntologies(result);
+    return result;
   }, [store, drive]);
 
   useEffect(() => {
-    search();
+    search().then(setOntologies);
 
     // If the drive was just created we need to wait for search to index the new ontology. So we search again after 5 seconds.
     setTimeout(() => {
-      search();
+      search().then(setOntologies);
     }, 5000);
   }, [drive, search]);
 

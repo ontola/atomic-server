@@ -1,10 +1,12 @@
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { Components } from 'react-markdown';
 import { styled } from 'styled-components';
 import remarkGFM from 'remark-gfm';
-import { Button } from '../Button';
-import { truncateMarkdown } from '../../helpers/markdown';
+import { Button } from '@components/Button';
+import { truncateMarkdown } from '@helpers/markdown';
 import { FC, useState } from 'react';
-import { AtomicLink } from '../AtomicLink';
+import { AtomicLink, AtomicLinkProps } from '@components/AtomicLink';
+import { remarkMention, Mention } from './MarkdownMention';
+import { addFieldsIf } from '@helpers/addIf';
 
 type Props = {
   text: string;
@@ -20,6 +22,15 @@ type Props = {
 };
 
 const disableElementsInLink = ['a'];
+
+const ExternalLinkComponent = ({
+  children: linkChildren,
+  ...props
+}: React.AnchorHTMLAttributes<HTMLAnchorElement>) => {
+  return (
+    <AtomicLink {...(props as AtomicLinkProps)}>{linkChildren}</AtomicLink>
+  );
+};
 
 /** Renders a markdown value */
 const Markdown: FC<Props> = ({
@@ -39,16 +50,16 @@ const Markdown: FC<Props> = ({
   return (
     <MarkdownWrapper className={className}>
       <ReactMarkdown
-        remarkPlugins={renderGFM ? [remarkGFM] : []}
+        remarkPlugins={renderGFM ? [remarkGFM, remarkMention] : [remarkMention]}
         disallowedElements={nestedInLink ? disableElementsInLink : undefined}
         components={
-          markExternalLinks
-            ? {
-                a: ({ node: _node, children, ...props }) => {
-                  return <AtomicLink {...props}>{children}</AtomicLink>;
-                },
-              }
-            : {}
+          {
+            mention: Mention,
+            ...addFieldsIf(markExternalLinks, {
+              a: ExternalLinkComponent,
+            }),
+            // ReactMarkdowns typing only allows existing html elements but our plugin creates a new type. It works fine, the types are just too strict.
+          } as unknown as Components
         }
       >
         {collapsed ? truncateMarkdown(text, maxLength) : text}

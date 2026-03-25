@@ -16,6 +16,8 @@ pub struct VectorSearchQuery {
     /// Maximum amount of results
     pub limit: Option<usize>,
     pub include: Option<bool>,
+    /// Optional hybrid search (Vector + Full-Text Search) with Reciprocal Rank Fusion (RRF)
+    pub text_q: Option<String>,
     /// Optional reranking for better result accuracy
     pub rerank: Option<bool>,
     /// Only include resources that have one of these resources as its ancestor
@@ -27,7 +29,7 @@ pub struct VectorSearchQuery {
     #[serde_as(
         as = "Option<serde_with::StringWithSeparator::<serde_with::formats::CommaSeparator, String>>"
     )]
-    pub classes: Option<Vec<String>>,
+    pub is_a: Option<Vec<String>>,
 }
 
 const DEFAULT_RETURN_LIMIT: usize = 30;
@@ -64,13 +66,22 @@ pub async fn vector_search_query(
 
     if let Some(q) = &params.q {
         timer.add("embed_query");
-        let embeddings = appstate
-            .vector_search_state
-            .model
-            .lock()
-            .await
-            .embed(vec![q], None)
-            .map_err(|e| format!("Error embedding query: {}", e))?;
+        let embeddings = {
+            let mut model = appstate.vector_search_state.model.lock().await;
+
+            #[cfg(target_os = "macos")]
+            {
+                objc::rc::autoreleasepool(|| model.embed(vec![q], None))
+                    .map_err(|e| format!("Error embedding query: {}", e))?
+            }
+
+            #[cfg(not(target_os = "macos"))]
+            {
+                model
+                    .embed(vec![q], None)
+                    .map_err(|e| format!("Error embedding query: {}", e))?
+            }
+        };
 
         if let Some(query_embedding) = embeddings.into_iter().next() {
             timer.add("search_lancedb");
@@ -88,7 +99,7 @@ pub async fn vector_search_query(
                 }
             }
 
-            if let Some(classes) = &params.classes {
+            if let Some(classes) = &params.is_a {
                 if !classes.is_empty() {
                     let class_list = classes
                         .iter()
@@ -105,7 +116,19 @@ pub async fn vector_search_query(
                 .query()
                 .select(Select::columns(&["subject", "text_chunk"]))
                 .nearest_to(query_embedding)
-                .map_err(|e| format!("Failed to create vector query: {}", e))?
+                .map_err(|e| format!("Failed to create vector query: {}", e))?;
+
+            if let Some(text_q) = &params.text_q {
+                query = query
+                    .full_text_search(lancedb::index::scalar::FullTextSearchQuery::new(
+                        text_q.clone(),
+                    ))
+                    .rerank(std::sync::Arc::new(
+                        lancedb::rerankers::rrf::RRFReranker::new(60.0),
+                    ));
+            }
+
+            let mut query = query
                 .distance_type(DistanceType::Cosine)
                 .limit(fetch_limit * UNAUTHORIZED_RESULTS_FACTOR);
 
@@ -182,13 +205,24 @@ pub async fn vector_search_query(
             timer.add("rerank");
 
             if !filtered_chunks.is_empty() {
-                let rerank_results = appstate
-                    .vector_search_state
-                    .rerank_model
-                    .lock()
-                    .await
-                    .rerank(q.clone(), &filtered_chunks, false, None)
-                    .map_err(|e| format!("Error reranking results: {}", e))?;
+                let rerank_results = {
+                    let mut rerank_model = appstate.vector_search_state.rerank_model.lock().await;
+
+                    #[cfg(target_os = "macos")]
+                    {
+                        objc::rc::autoreleasepool(|| {
+                            rerank_model.rerank(q.clone(), &filtered_chunks, false, None)
+                        })
+                        .map_err(|e| format!("Error reranking results: {}", e))?
+                    }
+
+                    #[cfg(not(target_os = "macos"))]
+                    {
+                        rerank_model
+                            .rerank(q.clone(), &filtered_chunks, false, None)
+                            .map_err(|e| format!("Error reranking results: {}", e))?
+                    }
+                };
 
                 resources = rerank_results
                     .into_iter()

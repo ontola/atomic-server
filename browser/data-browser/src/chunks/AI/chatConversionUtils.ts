@@ -9,8 +9,8 @@ import {
   dataBrowser,
 } from '@tomic/react';
 import {
-  getToolName,
-  isToolUIPart,
+  getStaticToolName,
+  isStaticToolUIPart,
   type FileUIPart,
   type ReasoningUIPart,
   type SourceUrlUIPart,
@@ -80,7 +80,7 @@ export const uiMessageToResource = async (
           return builder.textPartToResource(part);
         } else if (part.type === 'reasoning') {
           return builder.reasoningPartToResource(part);
-        } else if (isToolUIPart(part)) {
+        } else if (isStaticToolUIPart(part)) {
           return builder.toolCallPartToResource(part);
         } else if (part.type === 'source-url') {
           return builder.sourceUrlPartToResource(part);
@@ -404,7 +404,7 @@ const partsToResourceBuilder = (
       isA: ai.classes.toolCallPart,
       parent: parent.subject,
       propVals: {
-        [ai.properties.toolName]: getToolName(part),
+        [ai.properties.toolName]: getStaticToolName(part),
         [ai.properties.toolId]: part.toolCallId,
         ...addFieldsIf(!!part.input, {
           [ai.properties.toolInput]: part.input as JSONObject,

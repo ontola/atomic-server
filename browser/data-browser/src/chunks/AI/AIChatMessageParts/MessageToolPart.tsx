@@ -1,4 +1,4 @@
-import { getToolName, type ToolUIPart } from 'ai';
+import { getStaticToolName, type ToolUIPart } from 'ai';
 import { styled } from 'styled-components';
 import { Row } from '@components/Row';
 import {
@@ -18,17 +18,17 @@ interface ToolMessageProps {
 }
 
 export const MessageToolPart: React.FC<ToolMessageProps> = ({ part }) => {
-  const toolName = getToolName(part);
+  const toolName = getStaticToolName(part);
 
   const Icon = getIcon(toolName);
 
   if (part.state === 'input-streaming' || part.state === 'input-available') {
     return (
       <ToolUseMessage>
-        <Row center gap='0.5ch'>
+        <TitleRow center gap='0.5ch'>
           <Icon />
           <ToolTitle toolName={toolName} part={part} />
-        </Row>
+        </TitleRow>
       </ToolUseMessage>
     );
   }
@@ -38,10 +38,10 @@ export const MessageToolPart: React.FC<ToolMessageProps> = ({ part }) => {
       <Details
         title={
           <ToolUseMessage>
-            <Row center gap='0.5ch'>
+            <TitleRow center gap='0.5ch'>
               <Icon />
               <ToolTitle toolName={toolName} part={part} />
-            </Row>
+            </TitleRow>
           </ToolUseMessage>
         }
       >
@@ -55,7 +55,8 @@ export const MessageToolPart: React.FC<ToolMessageProps> = ({ part }) => {
 
 const getIcon = (toolName: string) => {
   switch (toolName) {
-    case TOOL_NAMES.SEARCH_RESOURCE:
+    case TOOL_NAMES.SEMANTIC_SEARCH:
+    case TOOL_NAMES.QUERY:
       return FaMagnifyingGlass;
     case TOOL_NAMES.GET_ATOMIC_RESOURCE:
       return FaAtom;
@@ -77,8 +78,8 @@ const ToolTitle = ({
 }) => {
   const args = part.input as unknown;
 
-  if (toolName === TOOL_NAMES.SEARCH_RESOURCE && isSearchArgs(args)) {
-    return <span>{args.query}</span>;
+  if (toolName === TOOL_NAMES.SEMANTIC_SEARCH && isVectorSearchArgs(args)) {
+    return <span>{args.description}</span>;
   }
 
   if (toolName === TOOL_NAMES.GET_ATOMIC_RESOURCE && isFetchArgs(args)) {
@@ -87,6 +88,22 @@ const ToolTitle = ({
 
   if (toolName === TOOL_NAMES.EDIT_ATOMIC_RESOURCE && isEditArgs(args)) {
     return <EditTitle property={args.property} subject={args.subject} />;
+  }
+
+  if (toolName === TOOL_NAMES.QUERY && isQueryArgs(args)) {
+    return <span>{args.description}</span>;
+  }
+
+  if (toolName === TOOL_NAMES.GET_SCHEMA && isGetSchemaArgs(args)) {
+    if (args.subject) {
+      return (
+        <span>
+          Reading <ResourceTitle subject={args.subject} /> schema
+        </span>
+      );
+    }
+
+    return <span>Reading schema</span>;
   }
 
   return <span>{toolName}</span>;
@@ -132,8 +149,23 @@ const EditTitle = ({
   );
 };
 
-function isSearchArgs(args: unknown): args is { query: string } {
-  return typeof args === 'object' && args !== null && 'query' in args;
+function isVectorSearchArgs(
+  args: unknown,
+): args is { query: string; description: string } {
+  return (
+    typeof args === 'object' &&
+    args !== null &&
+    'query' in args &&
+    'description' in args
+  );
+}
+
+function isQueryArgs(args: unknown): args is {
+  description: string;
+  filters: Record<string, unknown>;
+  limit: number;
+} {
+  return typeof args === 'object' && args !== null && 'description' in args;
 }
 
 function isEditArgs(
@@ -146,6 +178,10 @@ function isEditArgs(
     'property' in args &&
     'value' in args
   );
+}
+
+function isGetSchemaArgs(args: unknown): args is { subject?: string } {
+  return typeof args === 'object' && args !== null;
 }
 
 function isFetchArgs(args: unknown): args is { subjects: string[] } {
@@ -174,5 +210,12 @@ const StyledPre = styled.pre`
   code {
     font-family: Monaco, monospace;
     font-size: 0.8em;
+  }
+`;
+
+const TitleRow = styled(Row)`
+  & svg {
+    flex-basis: 1em;
+    min-width: 1em;
   }
 `;

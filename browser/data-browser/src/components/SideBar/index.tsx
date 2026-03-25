@@ -16,6 +16,7 @@ import { Panel, usePanelList } from './usePanelList';
 import { SIDEBAR_WIDTH_PROP } from './SidebarCSSVars';
 import { useRef, type JSX } from 'react';
 import { CalculatedPageHeight } from '../../globalCssVars';
+import { AIChatsPanel } from './AIPanel';
 
 /** Amount of pixels where the sidebar automatically shows */
 export const SIDEBAR_TOGGLE_WIDTH = 600;
@@ -76,6 +77,11 @@ export function SideBar(): JSX.Element {
         />
         <MenuWrapper>
           <Column gap='0.5rem'>
+            {enabledPanels.has(Panel.AIChats) && (
+              <SideBarPanel title='AI Chats' key={drive}>
+                <AIChatsPanel />
+              </SideBarPanel>
+            )}
             {enabledPanels.has(Panel.Ontologies) && (
               <SideBarPanel title='Ontologies' key={drive}>
                 <OntologiesPanel />

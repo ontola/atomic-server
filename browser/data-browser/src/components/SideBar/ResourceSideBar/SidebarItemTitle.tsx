@@ -3,7 +3,7 @@ import { styled, css, keyframes } from 'styled-components';
 import { SideBarItem } from '../SideBarItem';
 import { FloatingActions, floatingHoverStyles } from './FloatingActions';
 import { getIconForClass } from '../../../helpers/iconMap';
-import { useResource, useArray, core, useString } from '@tomic/react';
+import { useResource, useArray, core } from '@tomic/react';
 import { SyntheticListenerMap } from '@dnd-kit/core/dist/hooks/utilities';
 import { DraggableAttributes } from '@dnd-kit/core';
 import { StyledLink, TextWrapper } from './shared';
@@ -45,7 +45,6 @@ export const SidebarItemTitle = forwardRef<
     const resource = useResource(subject);
     const { sidebarKeyboardDndEnabled } = useSettings();
     const [classType] = useArray(resource, core.properties.isA);
-    const [description] = useString(resource, core.properties.description);
     const Icon = getIconForClass(classType[0]!);
 
     return (
@@ -55,12 +54,7 @@ export const SidebarItemTitle = forwardRef<
       >
         {sidebarKeyboardDndEnabled ? (
           <StyledLink subject={subject} clean ref={ref}>
-            <SideBarItem
-              onClick={onClick}
-              disabled={active}
-              resource={subject}
-              title={description}
-            >
+            <SideBarItem onClick={onClick} disabled={active} resource={subject}>
               <TextWrapper>
                 <StyledIconButton
                   title={`Rearange ${resource.title}`}
@@ -85,12 +79,7 @@ export const SidebarItemTitle = forwardRef<
             {...(attributes ?? {})}
             role='link'
           >
-            <SideBarItem
-              onClick={onClick}
-              disabled={active}
-              resource={subject}
-              title={description}
-            >
+            <SideBarItem onClick={onClick} disabled={active} resource={subject}>
               <TextWrapper>
                 <Icon />
                 {resource.title}

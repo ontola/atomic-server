@@ -29,6 +29,7 @@ export function SideBarPanel({
 
 const StyledCollapse = styled(Collapse)`
   padding-inline: 1rem;
+  width: var(--sidebar-width);
 `;
 
 export const PanelDevider = styled.h2`

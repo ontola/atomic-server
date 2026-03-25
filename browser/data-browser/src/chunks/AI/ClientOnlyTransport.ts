@@ -68,7 +68,7 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
     const agent = await this.getAgent(transformedMessages);
 
     const result = streamText({
-      messages: convertToModelMessages(transformedMessages),
+      messages: await convertToModelMessages(transformedMessages),
       model: this.getModelFromAgent(agent),
       system: await this._prepareSystemPrompt(agent.systemPrompt),
       tools: this.options.tools,

@@ -16,8 +16,8 @@ mod jsonerrors;
 pub mod plugins;
 mod routes;
 pub mod serve;
-mod y_sync_broadcaster;
 pub mod vector_search;
+mod y_sync_broadcaster;
 // #[cfg(feature = "search")]
 mod search;
 #[cfg(test)]
@@ -91,7 +91,7 @@ async fn main_wrapped() -> errors::AtomicServerResult<()> {
                 .add_all_resources(&appstate.store)
                 .await?;
             println!("Successfully imported {:?} to store.", import_opts.file);
-            println!("WARNING: Your search index is not yet updated with these imported items. Run `--rebuild-index` to fix that.");
+            println!("WARNING: Your search index is not yet updated with these imported items. Run `--rebuild-indexes search` to fix that.");
             Ok(())
         }
         Some(config::Command::ShowConfig) => {

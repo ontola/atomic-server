@@ -103,3 +103,5 @@ export const CheckboxLabel = styled.label`
   justify-content: flex-start;
   user-select: none;
 `;
+
+Checkbox.Label = CheckboxLabel;

@@ -39,6 +39,7 @@ const convertTool = (t: MCPTool, client: Client): Tool => {
 
       return result.content;
     },
+    strict: false,
   });
 };
 
