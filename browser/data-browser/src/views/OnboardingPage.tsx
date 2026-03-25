@@ -86,7 +86,6 @@ export const OnboardingPage: React.FC = () => {
               <NewIdentitySection
                 onAfterCreate={setupServer}
                 onDone={() => window.location.reload()}
-                doneLabel="Yes, I've stored it safely"
               />
 
               <hr

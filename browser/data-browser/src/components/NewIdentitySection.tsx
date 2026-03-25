@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Agent, JSCryptoProvider, core, server, useStore } from '@tomic/react';
 import { useSettings } from '../helpers/AppSettings';
 import { saveAgentToIDB } from '../helpers/agentStorage';
+import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
+import { constructOpenURL } from '../helpers/navigation';
 import { Button } from './Button';
 import { Column, Row } from './Row';
 import { CodeBlock } from './CodeBlock';
@@ -9,7 +11,7 @@ import { styled } from 'styled-components';
 import { InputStyled, InputWrapper } from './forms/InputStyles';
 import Field from './forms/Field';
 
-type Step = 'idle' | 'creating' | 'secret' | 'verify' | 'profile' | 'drive';
+type Step = 'idle' | 'creating' | 'profile' | 'drive' | 'secret' | 'verify';
 
 interface NewIdentitySectionProps {
   /** Called after the drive is created (or skipped). */
@@ -28,11 +30,13 @@ interface NewIdentitySectionProps {
 interface IdentityData {
   secret: string;
   agentSubject: string;
+  privateKey: string;
+  profileName: string;
 }
 
 /**
  * Multi-step onboarding flow for creating a new identity.
- * Steps: idle → create → secret → verify → profile → drive → done
+ * Steps: idle → creating → profile → drive → secret → verify → done
  */
 export function NewIdentitySection({
   onDone,
@@ -42,6 +46,7 @@ export function NewIdentitySection({
 }: NewIdentitySectionProps) {
   const store = useStore();
   const { setAgent, setDrive } = useSettings();
+  const navigate = useNavigateWithTransition();
   const [step, setStep] = useState<Step>('idle');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>();
@@ -70,15 +75,14 @@ export function NewIdentitySection({
 
       store.setAgent(newAgent);
 
-      const finalSecret = Agent.buildSecret(
-        agentKeys.privateKey,
-        agentDID,
-        '', // drive DID set later
-      );
+      setIdentity({
+        secret: '', // will be built after drive is created
+        agentSubject: agentDID,
+        privateKey: agentKeys.privateKey,
+        profileName: '',
+      });
 
-      setIdentity({ secret: finalSecret, agentSubject: agentDID });
-      await saveAgentToIDB(finalSecret);
-      setStep('secret');
+      setStep('profile');
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setStep('idle');
@@ -87,29 +91,7 @@ export function NewIdentitySection({
     }
   }
 
-  // ─── Step: Confirm Secret Saved ───────────────────────────────────────────
-
-  function handleConfirmSecret() {
-    if (!identity) return;
-
-    if (verifySecret) {
-      // Sign out and go to verify step
-      setAgent(undefined);
-      saveAgentToIDB(undefined);
-      setStep('verify');
-    } else {
-      // Skip verify, go straight to profile
-      setStep('profile');
-    }
-  }
-
-  // ─── Step: Verify Secret ──────────────────────────────────────────────────
-
-  function handleVerifySuccess() {
-    setStep('profile');
-  }
-
-  // ─── Step: Profile ────────────────────────────────────────────────────────
+  // ─── Step: Profile ───────────────────────────────────────────────────────
 
   function handleProfileNext() {
     setStep('drive');
@@ -117,6 +99,12 @@ export function NewIdentitySection({
 
   function handleProfileSave(name: string) {
     setProfileName(name);
+    setIdentity(prev => (prev ? { ...prev, profileName: name } : null));
+    setStep('drive');
+  }
+
+  function handleSkipProfile() {
+    setProfileName('');
     setStep('drive');
   }
 
@@ -139,19 +127,52 @@ export function NewIdentitySection({
         noParent: true,
         propVals: {
           [core.properties.name]: name.trim(),
+          [core.properties.description]:
+            'This is your personal Atomic Data drive. Edit this description to tell visitors what this space is about.',
           [core.properties.write]: [agent.subject],
           [core.properties.read]: [agent.subject],
         },
       });
 
       await resource.save();
+
+      // Add the new drive to the agent's drives array on the server
+      const agentResource = await store.getResource(identity.agentSubject);
+      const currentDrives =
+        (agentResource.get(server.properties.drives) as string[]) || [];
+      if (!currentDrives.includes(resource.subject)) {
+        agentResource.set(server.properties.drives, [
+          ...currentDrives,
+          resource.subject,
+        ]);
+        await agentResource.save();
+      }
+
+      // Build the secret WITH the drive URL and persist it
+      const finalSecret = Agent.buildSecret(
+        identity.privateKey,
+        identity.agentSubject,
+        resource.subject,
+      );
+
+      // Save the secret with the drive URL
+      await saveAgentToIDB(finalSecret);
+
+      // Update identity with the complete secret
+      setIdentity(prev => (prev ? { ...prev, secret: finalSecret } : null));
+
+      // Update store agent with new secret so initialDrive is set
+      const updatedAgent = await Agent.fromSecret(finalSecret);
+      store.setAgent(updatedAgent);
+
       setDrive(resource.subject);
 
       if (onAfterCreate) {
         await onAfterCreate(resource.subject);
       }
 
-      onDone();
+      // Now show the secret step
+      setStep('secret');
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -160,8 +181,70 @@ export function NewIdentitySection({
   }
 
   function handleSkipDrive() {
-    onDone();
+    if (!identity) return;
+
+    // Build secret without drive URL (skip drive creation)
+    const finalSecret = Agent.buildSecret(
+      identity.privateKey,
+      identity.agentSubject,
+      undefined,
+    );
+
+    setIdentity(prev => (prev ? { ...prev, secret: finalSecret } : null));
+    setStep('secret');
   }
+
+  // ─── Step: Confirm Secret ───────────────────────────────────────────────
+
+  function handleConfirmSecret() {
+    if (!identity) return;
+
+    if (verifySecret) {
+      // Sign out and go to verify step
+      setAgent(undefined);
+      saveAgentToIDB(undefined);
+      setStep('verify');
+    } else {
+      // Skip verify, we're done
+      onDone();
+    }
+  }
+
+  // ─── Step: Verify Secret ──────────────────────────────────────────────────
+
+  async function handleVerify(trimmedInput: string) {
+    if (!trimmedInput || !identity) return;
+
+    setLoading(true);
+    setError(undefined);
+
+    try {
+      const agent = await Agent.fromSecret(trimmedInput);
+      await saveAgentToIDB(trimmedInput);
+      setAgent(agent);
+
+      // Save profile name AFTER verifying the secret
+      await saveProfileName();
+
+      // Navigate to the drive
+      if (agent.initialDrive) {
+        setDrive(agent.initialDrive);
+        navigate(constructOpenURL(agent.initialDrive));
+      }
+
+      onDone();
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? e.message
+          : 'The secret is invalid. You can start over.',
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // ─── Start Over ──────────────────────────────────────────────────────────
 
   function handleStartOver() {
     setIdentity(null);
@@ -169,6 +252,18 @@ export function NewIdentitySection({
     setProfileName('');
     setError(undefined);
     setStep('idle');
+  }
+
+  async function saveProfileName() {
+    if (!identity || !identity.profileName) return;
+
+    try {
+      const agentResource = await store.getResource(identity.agentSubject);
+      agentResource.set(core.properties.name, identity.profileName);
+      await agentResource.save();
+    } catch (e) {
+      console.error('Failed to save profile name:', e);
+    }
   }
 
   // ─── Render ────────────────────────────────────────────────────────────────
@@ -193,6 +288,25 @@ export function NewIdentitySection({
         </Column>
       )}
 
+      {step === 'profile' && identity && (
+        <ProfileStep
+          agentSubject={identity.agentSubject}
+          onNext={handleProfileNext}
+          onSave={handleProfileSave}
+        />
+      )}
+
+      {step === 'drive' && (
+        <DriveStep
+          profileName={profileName}
+          loading={loading}
+          error={error}
+          verifySecret={verifySecret}
+          onCreate={handleCreateDrive}
+          onSkip={handleSkipDrive}
+        />
+      )}
+
       {step === 'secret' && identity && (
         <SecretStep
           secret={identity.secret}
@@ -207,26 +321,8 @@ export function NewIdentitySection({
       {step === 'verify' && identity && (
         <VerifyStep
           secret={identity.secret}
-          onSuccess={handleVerifySuccess}
+          onVerify={handleVerify}
           onStartOver={handleStartOver}
-        />
-      )}
-
-      {step === 'profile' && identity && (
-        <ProfileStep
-          agentSubject={identity.agentSubject}
-          onNext={handleProfileNext}
-          onSave={handleProfileSave}
-        />
-      )}
-
-      {step === 'drive' && (
-        <DriveStep
-          profileName={profileName}
-          loading={loading}
-          error={error}
-          onCreate={handleCreateDrive}
-          onSkip={handleSkipDrive}
         />
       )}
     </Column>
@@ -235,8 +331,8 @@ export function NewIdentitySection({
 
 // ─── Sub-components ─────────────────────────────────────────────────────────
 
-const STEPS_SECRET = ['secret', 'verify', 'profile', 'drive'];
-const STEPS_NO_SECRET = ['profile', 'drive'];
+const STEPS_SECRET = ['profile', 'drive', 'secret', 'verify'];
+const STEPS_NO_SECRET = ['profile', 'drive', 'secret'];
 
 function StepIndicator({
   step,
@@ -334,39 +430,14 @@ function SecretStep({
 
 function VerifyStep({
   secret,
-  onSuccess,
+  onVerify,
   onStartOver,
 }: {
   secret: string;
-  onSuccess: () => void;
+  onVerify: (input: string) => void;
   onStartOver: () => void;
 }) {
-  const { setAgent } = useSettings();
   const [input, setInput] = useState('');
-  const [error, setError] = useState<string | undefined>();
-  const [loading, setLoading] = useState(false);
-
-  async function handleVerify(trimmedInput: string) {
-    if (!trimmedInput) return;
-
-    setLoading(true);
-    setError(undefined);
-
-    try {
-      const agent = await Agent.fromSecret(trimmedInput);
-      await saveAgentToIDB(trimmedInput);
-      setAgent(agent);
-      onSuccess();
-    } catch (e) {
-      setError(
-        e instanceof Error
-          ? e.message
-          : 'The secret is invalid. You can start over.',
-      );
-    } finally {
-      setLoading(false);
-    }
-  }
 
   return (
     <Column gap='1rem'>
@@ -375,18 +446,16 @@ function VerifyStep({
         You have been signed out to verify that you saved your secret. Enter it
         below to sign in. If you lost it, you can start over.
       </p>
-      <Field
-        label='Enter your Agent Secret'
-        error={error ? new Error(error) : undefined}
-      >
+      <Field label='Enter your Agent Secret' fieldId='agent-secret'>
         <InputWrapper>
           <InputStyled
+            id='agent-secret'
             value={input}
             onChange={e => {
               const val = e.target.value;
               setInput(val);
               if (val.trim() === secret) {
-                void handleVerify(val.trim());
+                onVerify(val.trim());
               }
             }}
             type='password'
@@ -412,28 +481,13 @@ function ProfileStep({
   onNext: () => void;
   onSave: (name: string) => void;
 }) {
-  const store = useStore();
   const [name, setName] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | undefined>();
 
-  async function handleSave(e: React.FormEvent) {
+  function handleSave(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
 
-    setLoading(true);
-    setError(undefined);
-
-    try {
-      const agentResource = await store.getResource(agentSubject);
-      agentResource.set(core.properties.name, name.trim());
-      await agentResource.save();
-      onSave(name.trim());
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
-    }
+    onSave(name.trim());
   }
 
   return (
@@ -445,12 +499,10 @@ function ProfileStep({
       </p>
       <form onSubmit={handleSave}>
         <Column gap='1rem'>
-          <Field
-            label='Profile Name'
-            error={error ? new Error(error) : undefined}
-          >
+          <Field label='Profile Name' fieldId='profile-name'>
             <InputWrapper>
               <InputStyled
+                id='profile-name'
                 value={name}
                 onChange={e => setName(e.target.value)}
                 type='text'
@@ -461,8 +513,8 @@ function ProfileStep({
             </InputWrapper>
           </Field>
           <Row gap='1rem'>
-            <Button type='submit' disabled={loading || !name.trim()}>
-              {loading ? 'Saving...' : 'Save & Next'}
+            <Button type='submit' disabled={!name.trim()}>
+              Save & Next
             </Button>
             <Button type='button' subtle onClick={onNext}>
               Skip
@@ -478,16 +530,18 @@ function DriveStep({
   profileName,
   loading,
   error,
+  verifySecret,
   onCreate,
   onSkip,
 }: {
   profileName: string;
   loading: boolean;
   error: string | undefined;
+  verifySecret?: boolean;
   onCreate: (name: string) => void;
   onSkip: () => void;
 }) {
-  const [name, setName] = useState('');
+  const [name, setName] = useState(profileName ? `${profileName}'s Drive` : '');
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -511,14 +565,15 @@ function DriveStep({
         <Column gap='1rem'>
           <Field
             label='Drive Name'
+            fieldId='drive-name'
             error={error ? new Error(error) : undefined}
           >
             <InputWrapper>
               <InputStyled
+                id='drive-name'
                 value={name}
                 onChange={e => setName(e.target.value)}
                 type='text'
-                placeholder='My Drive'
                 autoComplete='off'
                 autoFocus
               />
@@ -528,9 +583,11 @@ function DriveStep({
             <Button type='submit' disabled={loading || !name.trim()}>
               {loading ? 'Creating...' : 'Create Drive'}
             </Button>
-            <Button type='button' subtle onClick={onSkip}>
-              Skip
-            </Button>
+            {!verifySecret && (
+              <Button type='button' subtle onClick={onSkip}>
+                Skip
+              </Button>
+            )}
           </Row>
         </Column>
       </form>

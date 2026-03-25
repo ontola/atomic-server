@@ -135,6 +135,7 @@ const SettingsAgent: React.FunctionComponent = () => {
               <h3>Sign in with existing secret</h3>
               <Field
                 label='Enter your Agent Secret'
+                fieldId='agent-secret'
                 helper={
                   "The Agent Secret is a long string of characters that encodes both the Subject and the Private Key. You can think of it as a combined username + password. Store it safely, and don't share it with others."
                 }
@@ -143,11 +144,11 @@ const SettingsAgent: React.FunctionComponent = () => {
                 <InputWrapper hasPrefix>
                   <FaKey />
                   <InputStyled
+                    id='agent-secret'
                     onChange={e => handleUpdateSecret(e.target.value)}
                     type='password'
                     disabled={agent !== undefined}
                     name='secret'
-                    id='current-password'
                     autoComplete='current-password'
                     spellCheck='false'
                   />

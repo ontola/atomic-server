@@ -166,7 +166,7 @@ export class SubtleCryptoProvider implements CryptoProvider {
   }
 }
 
-const decodeSecret = (secret: string): DecodedSecret => {
+export const decodeSecret = (secret: string): DecodedSecret => {
   const agentBytes = atob(secret);
   let parsed: DecodedSecret;
 
