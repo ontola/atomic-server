@@ -14,7 +14,7 @@ import { DisplayStyleButton } from './DisplayStyleButton';
 import { GridView } from './GridView';
 import { ListView } from './ListView';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
-import { TagBar } from '../../components/Tag/TagBar';
+
 import { Column, Row } from '../../components/Row';
 
 type PreferredFolderStyles = Record<string, string>;
@@ -72,7 +72,7 @@ export function FolderPage({
             />
           </TitleBarInner>
         </div>
-        <TagBar resource={resource} />
+
         <Wrapper>
           <FileDropZone parentResource={resource}>
             <View

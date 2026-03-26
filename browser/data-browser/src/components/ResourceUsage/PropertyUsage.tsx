@@ -11,19 +11,28 @@ interface PropertyUsageProps {
 }
 
 export function PropertyUsage({ resource }: PropertyUsageProps): JSX.Element {
-  const { collection: instancesWithPropCollection } = useCollection({
-    property: resource.getSubject(),
-  });
+  const { collection: instancesWithPropCollection } = useCollection(
+    {
+      property: resource.getSubject(),
+    },
+    { pageSize: 10 },
+  );
 
-  const { collection: requiresPropCollection } = useCollection({
-    property: properties.requires,
-    value: resource.getSubject(),
-  });
+  const { collection: requiresPropCollection } = useCollection(
+    {
+      property: properties.requires,
+      value: resource.getSubject(),
+    },
+    { pageSize: 10 },
+  );
 
-  const { collection: recommendsPropCollection } = useCollection({
-    property: properties.recommends,
-    value: resource.getSubject(),
-  });
+  const { collection: recommendsPropCollection } = useCollection(
+    {
+      property: properties.recommends,
+      value: resource.getSubject(),
+    },
+    { pageSize: 10 },
+  );
 
   const instanceTotal = instancesWithPropCollection.totalMembers;
   const requiresTotal = requiresPropCollection.totalMembers;

@@ -44,6 +44,7 @@ export const CardRow = styled.div<CardRowProps>`
 export const CardInsideFull = styled.div`
   margin-left: -${p => p.theme.size()};
   margin-right: -${p => p.theme.size()};
+  padding-inline: ${p => p.theme.size()};
 `;
 
 export const Margin = styled.div`

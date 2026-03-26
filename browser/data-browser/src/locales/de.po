@@ -97,6 +97,7 @@ msgstr "In die Zwischenablage kopieren"
 #: src/views/File/FilePreviewThumbnail.tsx
 #: src/views/ResourceLine.tsx
 #: src/views/ResourcePage.tsx
+#: src/views/ResourceRow.tsx
 msgid "Loading..."
 msgstr "Laden..."
 
@@ -162,9 +163,8 @@ msgstr "Sie sind offline, Änderungen werden möglicherweise nicht gespeichert."
 #~ msgid "No Internet Connection."
 #~ msgstr "Keine Internetverbindung."
 
-#: src/components/Parent.tsx
-msgid "Toggle AI panel"
-msgstr "KI-Panel umschalten"
+#~ msgid "Toggle AI panel"
+#~ msgstr "KI-Panel umschalten"
 
 #: src/components/Parent.tsx
 msgid "Breadcrumbs"
@@ -782,9 +782,11 @@ msgstr "({0} Nutzungen übrig)"
 #. placeholder {0}: JSON.stringify(error)
 #. placeholder {0}: searchError.message
 #. placeholder {0}: resource.error.message
+#. placeholder {0}: resource.error.message
 #: src/components/forms/Field.tsx
 #: src/components/forms/SearchBox/SearchBoxWindow.tsx
 #: src/views/ResourceLine.tsx
+#: src/views/ResourceRow.tsx
 msgid "Error: {0}"
 msgstr "Fehler: {0}"
 
@@ -1348,6 +1350,7 @@ msgstr "Caret"
 msgid "Enter an Atomic URL or search  (press \"/\")"
 msgstr "Gib eine Atomare URL ein oder suche (drücke \"/\")"
 
+#: src/components/Parent.tsx
 #: src/components/Searchbar/SearchbarInput.tsx
 msgid "Search"
 msgstr "Suchen"
@@ -1913,6 +1916,7 @@ msgstr "Lesen Sie die{0} <0>@tomic/svelte Dokumente</0>{1} für weitere Informat
 msgid "Read more about generating schema's using{0} <0>@tomic/cli</0> ."
 msgstr "Lesen Sie mehr über das Generieren von Schemas mit{0} <0>@tomic/cli</0> ."
 
+#: src/components/ResourceUsage/UsageCard.tsx
 #: src/views/Card/CollectionCard.tsx
 msgid "No resources"
 msgstr "Keine Ressourcen"
@@ -3782,7 +3786,6 @@ msgstr ""
 #~ "adding <0/> to your search."
 #~ msgstr ""
 
-#: src/components/Parent.tsx
 #: src/components/Searchbar/Searchbar.tsx
 msgid "Search (Cmd+K)"
 msgstr ""
@@ -4057,4 +4060,13 @@ msgstr ""
 
 #: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
 msgid "ChatRoom"
+msgstr ""
+
+#: src/components/Parent.tsx
+msgid "Share"
+msgstr ""
+
+#: src/components/Parent.tsx
+#: src/components/Parent.tsx
+msgid "Tags"
 msgstr ""

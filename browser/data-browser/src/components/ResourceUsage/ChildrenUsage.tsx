@@ -9,10 +9,13 @@ interface ChildrenUsageProps {
 }
 
 export function ChildrenUsage({ resource }: ChildrenUsageProps): JSX.Element {
-  const { collection } = useCollection({
-    property: properties.parent,
-    value: resource.getSubject(),
-  });
+  const { collection } = useCollection(
+    {
+      property: properties.parent,
+      value: resource.getSubject(),
+    },
+    { pageSize: 10 },
+  );
 
   if (collection.totalMembers === 0) {
     return <></>;

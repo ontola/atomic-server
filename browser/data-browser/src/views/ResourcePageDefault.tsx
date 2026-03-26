@@ -24,7 +24,6 @@ import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { editURL } from '../helpers/navigation';
 
 import type { JSX } from 'react';
-import { TagBar } from '../components/Tag/TagBar';
 
 /**
  * The properties that are shown in an alternative, custom way in default views.
@@ -81,7 +80,6 @@ export function ResourcePageDefault({
           <ClassDetail resource={resource} />
           <CommitDetail commitSubject={lastCommit} />
         </Details>
-        <TagBar resource={resource} />
         <ValueForm
           resource={resource}
           propertyURL={core.properties.description}

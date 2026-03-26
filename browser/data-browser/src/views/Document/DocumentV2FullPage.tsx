@@ -41,9 +41,7 @@ export const DocumentV2FullPage: React.FC<ResourcePageProps> = ({
     <FullPageWrapper>
       <DocumentContainer>
         <EditableTitle resource={resource} />
-        <HideInPrint>
-          <TagBar resource={resource} />
-        </HideInPrint>
+
         <Suspense fallback={<div>Loading...</div>}>
           <CollaborativeEditor
             resource={resource}

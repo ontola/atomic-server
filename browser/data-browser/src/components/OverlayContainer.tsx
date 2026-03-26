@@ -13,7 +13,6 @@ import { ErrorLook } from './ErrorLook';
 
 import { InlineFormattedResourceList } from './InlineFormattedResourceList';
 import { FaMagnifyingGlass, FaComments } from 'react-icons/fa6';
-import ResourceLine from '../views/ResourceLine';
 import ResourceCard from '../views/Card/ResourceCard';
 
 // ─── Module-level overlay state ────────────────────────────────────────────────
@@ -523,7 +522,7 @@ const ResultCard: React.FC<ResultCardProps> = ({
   onSelect,
 }) => (
   <ResultCardDiv data-index={index} onClick={onSelect} $selected={selected}>
-    <ResourceLine subject={subject} clickable />
+    <ResourceRow subject={subject} clickable />
   </ResultCardDiv>
 );
 
