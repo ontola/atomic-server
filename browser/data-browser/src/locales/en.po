@@ -409,6 +409,7 @@ msgstr "Cancel"
 
 #: src/chunks/RTE/ImagePicker.tsx
 #: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
+#: src/components/Share/ShareDialog.tsx
 #: src/components/forms/EditFormDialog.tsx
 #: src/components/forms/NewForm/NewFormDialog.tsx
 #: src/components/forms/ResourceForm.tsx
@@ -1178,6 +1179,7 @@ msgstr "Create"
 #~ msgid "Untitled Document"
 #~ msgstr "Untitled Document"
 
+#: src/components/Share/ShareDialog.tsx
 #: src/routes/Share/ShareRoute.tsx
 msgid "Share settings saved"
 msgstr "Share settings saved"
@@ -1186,28 +1188,35 @@ msgstr "Share settings saved"
 msgid "Permissions for"
 msgstr "Permissions for"
 
+#: src/components/Share/ShareDialog.tsx
 #: src/routes/Share/ShareRoute.tsx
 msgid "<0/> Create Invite"
 msgstr "<0/> Create Invite"
 
+#: src/components/Share/ShareDialog.tsx
 #: src/routes/Share/ShareRoute.tsx
 msgid "Permissions set here:"
 msgstr "Permissions set here:"
 
+#: src/components/Share/ShareDialog.tsx
 #: src/routes/Share/ShareRoute.tsx
 msgid "Inherited permissions:"
 msgstr "Inherited permissions:"
 
 #. placeholder {0}: ' '
+#. placeholder {0}: ' '
+#: src/components/Share/ShareDialog.tsx
 #: src/routes/Share/ShareRoute.tsx
 msgid "Read more about permissions in the{0} <0>Atomic Data Docs</0>"
 msgstr "Read more about permissions in the{0} <0>Atomic Data Docs</0>"
 
+#: src/components/Share/ShareDialog.tsx
 #: src/routes/Share/ShareRoute.tsx
 #: src/views/Plugin/AssignRights.tsx
 msgid "Read"
 msgstr "Read"
 
+#: src/components/Share/ShareDialog.tsx
 #: src/routes/Share/ShareRoute.tsx
 #: src/views/Plugin/AssignRights.tsx
 msgid "Write"
@@ -3881,6 +3890,7 @@ msgid "Searching..."
 msgstr "Searching..."
 
 #: src/components/Parent.tsx
+#: src/components/Share/ShareDialog.tsx
 msgid "Share"
 msgstr "Share"
 

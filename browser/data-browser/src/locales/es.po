@@ -1065,6 +1065,7 @@ msgstr "Texto alternativo"
 
 #: src/chunks/RTE/ImagePicker.tsx
 #: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
+#: src/components/Share/ShareDialog.tsx
 #: src/components/forms/EditFormDialog.tsx
 #: src/components/forms/NewForm/NewFormDialog.tsx
 #: src/components/forms/ResourceForm.tsx
@@ -1873,28 +1874,35 @@ msgstr "Sin acceso de escritura. Cambiar para dar acceso de escritura."
 msgid "Permissions for"
 msgstr "Permisos para"
 
+#: src/components/Share/ShareDialog.tsx
 #: src/routes/Share/ShareRoute.tsx
 msgid "<0/> Create Invite"
 msgstr "<0/> Crear invitación"
 
+#: src/components/Share/ShareDialog.tsx
 #: src/routes/Share/ShareRoute.tsx
 msgid "Permissions set here:"
 msgstr "Permisos establecidos aquí:"
 
+#: src/components/Share/ShareDialog.tsx
 #: src/routes/Share/ShareRoute.tsx
 msgid "Inherited permissions:"
 msgstr "Permisos heredados:"
 
 #. placeholder {0}: ' '
+#. placeholder {0}: ' '
+#: src/components/Share/ShareDialog.tsx
 #: src/routes/Share/ShareRoute.tsx
 msgid "Read more about permissions in the{0} <0>Atomic Data Docs</0>"
 msgstr "Lee más sobre los permisos en la{0} <0>Documentación de Atomic Data</0>"
 
+#: src/components/Share/ShareDialog.tsx
 #: src/routes/Share/ShareRoute.tsx
 #: src/views/Plugin/AssignRights.tsx
 msgid "Read"
 msgstr "Leer"
 
+#: src/components/Share/ShareDialog.tsx
 #: src/routes/Share/ShareRoute.tsx
 #: src/views/Plugin/AssignRights.tsx
 msgid "Write"
@@ -3104,6 +3112,7 @@ msgstr "por {0}"
 msgid "Invalid secret."
 msgstr "Secreto no válido."
 
+#: src/components/Share/ShareDialog.tsx
 #: src/routes/Share/ShareRoute.tsx
 msgid "Share settings saved"
 msgstr "Configuración de compartir guardada"
@@ -4049,6 +4058,7 @@ msgid "ChatRoom"
 msgstr ""
 
 #: src/components/Parent.tsx
+#: src/components/Share/ShareDialog.tsx
 msgid "Share"
 msgstr ""
 

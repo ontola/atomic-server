@@ -11,7 +11,7 @@ import {
   server,
   dataBrowser,
 } from '@tomic/react';
-import { constructOpenURL, shareURL } from '../helpers/navigation';
+import { constructOpenURL } from '../helpers/navigation';
 import { Row } from './Row';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { useSettings } from '../helpers/AppSettings';
@@ -31,6 +31,7 @@ import { TagSelectPopover } from './Tag/TagSelectPopover';
 import { getResourcesDrive } from '@helpers/getResourcesDrive';
 import * as RadixPopover from '@radix-ui/react-popover';
 import { SkeletonButton } from './SkeletonButton';
+import { ShareDialog } from './Share/ShareDialog';
 
 type ParentProps = {
   resource: Resource;
@@ -106,10 +107,15 @@ function Parent({ resource }: ParentProps): JSX.Element {
           <FaMagnifyingGlass />
           <span>Search</span>
         </LabelButton>
-        <LabelButton onClick={() => navigate(shareURL(resource.subject))}>
-          <FaShare />
-          <span>Share</span>
-        </LabelButton>
+        <ShareDialog
+          subject={resource.subject}
+          trigger={
+            <LabelButton as='button'>
+              <FaShare />
+              <span>Share</span>
+            </LabelButton>
+          }
+        />
         {enableAI && (
           <LabelButton onClick={() => setIsOpen(prev => !prev)}>
             <AIIcon />
