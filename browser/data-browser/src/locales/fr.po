@@ -164,9 +164,8 @@ msgstr "Définir le Drive"
 msgid "Set {0} as current drive"
 msgstr "Définir {0} comme lecteur actuel"
 
-#: src/components/Parent.tsx
-msgid "Set as drive"
-msgstr "Définir comme lecteur"
+#~ msgid "Set as drive"
+#~ msgstr "Définir comme lecteur"
 
 #: src/components/ImageViewer.tsx
 msgid "Click to enlarge"
@@ -4076,9 +4075,23 @@ msgstr ""
 
 #: src/components/Parent.tsx
 #: src/components/Parent.tsx
+#: src/views/Drive/DrivePage.tsx
 msgid "Tags"
 msgstr ""
 
 #: src/components/ResourceContextMenu/ParentContextMenuTrigger.tsx
 msgid "More"
+msgstr ""
+
+#. placeholder {0}: tags.length
+#: src/components/Tag/TagCountPopover.tsx
+msgid "Tags +{0}"
+msgstr ""
+
+#: src/views/Drive/DrivePage.tsx
+msgid "Remove tag"
+msgstr ""
+
+#: src/components/Tag/TagSelectPopover.tsx
+msgid "Open tag page"
 msgstr ""
