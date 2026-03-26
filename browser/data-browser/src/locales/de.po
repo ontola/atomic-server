@@ -1328,7 +1328,9 @@ msgid "<0/> classes recommend this property"
 msgstr "<0/> Klassen empfehlen diese Eigenschaft"
 
 #. placeholder {0}: shortcuts.menu
+#. placeholder {0}: shortcuts.menu
 #: src/components/ResourceContextMenu/MenuBarDropdownTrigger.tsx
+#: src/components/ResourceContextMenu/ParentContextMenuTrigger.tsx
 msgid "Open menu ({0})"
 msgstr "Menü öffnen ({0})"
 
@@ -4079,4 +4081,8 @@ msgstr ""
 #: src/components/Parent.tsx
 #: src/components/Parent.tsx
 msgid "Tags"
+msgstr ""
+
+#: src/components/ResourceContextMenu/ParentContextMenuTrigger.tsx
+msgid "More"
 msgstr ""
