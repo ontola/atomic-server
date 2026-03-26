@@ -108,8 +108,7 @@ impl Resource {
 
         for (prop, loro_val) in doc.get_all_properties() {
             let tag = datatypes.get(&prop).map(String::as_str);
-            if let Some(atomic_val) =
-                crate::loro::loro_value_to_atomic_value_tagged(&loro_val, tag)
+            if let Some(atomic_val) = crate::loro::loro_value_to_atomic_value_tagged(&loro_val, tag)
             {
                 propvals.insert(prop, atomic_val);
             }
@@ -143,10 +142,7 @@ impl Resource {
     }
 
     /// Replace property state from a materialized versioned doc (sync / import).
-    pub fn apply_state_doc(
-        &mut self,
-        doc: crate::loro::AtomicLoroDoc,
-    ) -> AtomicResult<()> {
+    pub fn apply_state_doc(&mut self, doc: crate::loro::AtomicLoroDoc) -> AtomicResult<()> {
         let snapshot = doc.export_snapshot();
         let mut propvals = Self::materialize_propvals_from_loro_doc(&doc);
         propvals.insert(urls::LORO_UPDATE.into(), Value::LoroDoc(snapshot));
@@ -909,7 +905,11 @@ impl Resource {
             self.reset_commit_builder();
             return Ok(self.empty_commit_response(agent.subject.clone()));
         }
-        let commit = self.get_commit_builder().clone().sign(&agent, store, self).await?;
+        let commit = self
+            .get_commit_builder()
+            .clone()
+            .sign(&agent, store, self)
+            .await?;
         let should_post = match self.subject.clone() {
             crate::Subject::Internal { .. } => false,
             crate::Subject::External(_) => true,
@@ -933,7 +933,11 @@ impl Resource {
             self.reset_commit_builder();
             return Ok(self.empty_commit_response(agent.subject.clone()));
         }
-        let commit = self.get_commit_builder().clone().sign(&agent, store, self).await?;
+        let commit = self
+            .get_commit_builder()
+            .clone()
+            .sign(&agent, store, self)
+            .await?;
         self.apply_signed_commit(store, commit).await
     }
 

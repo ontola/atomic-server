@@ -41,15 +41,12 @@ async fn apply_state_update_inner(
     subject: &str,
     state_bytes: &[u8],
 ) -> AtomicResult<()> {
-    let snapshot_key = crate::Subject::from_raw(subject, store.get_base_domain().as_deref())
-        .pure_id();
-    let doc = if let Ok(Some(existing)) = store
-        .kv
-        .get(
-            crate::db::trees::Tree::LoroSnapshots,
-            snapshot_key.as_bytes(),
-        )
-    {
+    let snapshot_key =
+        crate::Subject::from_raw(subject, store.get_base_domain().as_deref()).pure_id();
+    let doc = if let Ok(Some(existing)) = store.kv.get(
+        crate::db::trees::Tree::LoroSnapshots,
+        snapshot_key.as_bytes(),
+    ) {
         match crate::loro::AtomicLoroDoc::from_snapshot(&existing) {
             Ok(d) => {
                 if let Err(e) = d.import_update(state_bytes) {
@@ -103,7 +100,6 @@ pub async fn apply_destroy(store: &Db, subject: &str) -> AtomicResult<()> {
     if subject.is_empty() {
         return Ok(());
     }
-
 
     set_importing(true);
     let subj = crate::Subject::from_raw(subject, store.get_base_domain().as_deref());

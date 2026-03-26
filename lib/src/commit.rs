@@ -982,15 +982,16 @@ impl CommitBuilder {
         // `touch_date_edited` also dirtied the commit builder via `set_unsafe`.
         //
         // Fall back to propvals / build_state_doc for resources without a live doc.
-        let existing_snapshot: Option<Vec<u8>> = resource
-            .export_open_state()
-            .or_else(|| match resource.get(urls::LORO_UPDATE) {
-                Ok(Value::LoroDoc(snapshot)) => Some(snapshot.clone()),
-                _ => resource
-                    .build_state_doc()
-                    .ok()
-                    .map(|doc| doc.export_snapshot()),
-            });
+        let existing_snapshot: Option<Vec<u8>> =
+            resource
+                .export_open_state()
+                .or_else(|| match resource.get(urls::LORO_UPDATE) {
+                    Ok(Value::LoroDoc(snapshot)) => Some(snapshot.clone()),
+                    _ => resource
+                        .build_state_doc()
+                        .ok()
+                        .map(|doc| doc.export_snapshot()),
+                });
 
         let now = crate::utils::now();
         sign_at(self, agent, now, store, existing_snapshot.as_deref()).await
@@ -1240,20 +1241,13 @@ mod test {
         let agent = store.create_agent(Some("folder_signer")).await.unwrap();
 
         const FOLDER_PROP: &str = "https://atomicdata.dev/ontology/canvas/folderId";
-        let mut resource =
-            Resource::new("https://localhost/canvas-folder-sign-test".into());
+        let mut resource = Resource::new("https://localhost/canvas-folder-sign-test".into());
         let doc = crate::loro::AtomicLoroDoc::new();
-        doc.set_property(
-            crate::urls::NAME,
-            &Value::String("Test canvas".into()),
-        )
-        .unwrap();
+        doc.set_property(crate::urls::NAME, &Value::String("Test canvas".into()))
+            .unwrap();
         let snapshot = doc.export_snapshot();
         resource
-            .set_unsafe(
-                crate::urls::LORO_UPDATE.into(),
-                Value::LoroDoc(snapshot),
-            )
+            .set_unsafe(crate::urls::LORO_UPDATE.into(), Value::LoroDoc(snapshot))
             .unwrap();
         resource.ensure_materialized().unwrap();
 

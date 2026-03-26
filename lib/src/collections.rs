@@ -1041,9 +1041,11 @@ mod test {
     fn sorting_resources() {
         let prop = urls::DESCRIPTION.to_string();
         let mut a = Resource::new("first".into());
-        a.set_unsafe(prop.clone(), Value::Markdown("1".into())).unwrap();
+        a.set_unsafe(prop.clone(), Value::Markdown("1".into()))
+            .unwrap();
         let mut b = Resource::new("second".into());
-        b.set_unsafe(prop.clone(), Value::Markdown("2".into())).unwrap();
+        b.set_unsafe(prop.clone(), Value::Markdown("2".into()))
+            .unwrap();
         let c = Resource::new("third_missing_property".into());
 
         let asc = vec![a.clone(), b.clone(), c.clone()];

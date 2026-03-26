@@ -310,7 +310,9 @@ impl WsClient {
                     _ => continue,
                 }
             }
-            Err(AtomicError::from("WebSocket closed while waiting for COMMIT_OK"))
+            Err(AtomicError::from(
+                "WebSocket closed while waiting for COMMIT_OK",
+            ))
         });
 
         timeout

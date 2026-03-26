@@ -1528,8 +1528,7 @@ impl Db {
                     source_id: None,
                 });
                 // Because the function is async we need to box it to use recursion.
-                Box::pin(self.recursive_remove(child.get_subject(), transaction, removed))
-                    .await?;
+                Box::pin(self.recursive_remove(child.get_subject(), transaction, removed)).await?;
             }
             for (prop, val) in resource.get_propvals() {
                 let remove_atom = crate::Atom::new(subject.clone(), prop.clone(), val.clone());
@@ -1916,7 +1915,10 @@ impl Storelike for Db {
             }
         }
 
-        store.apply_transaction_with_source(&mut transaction, commit_response.source_id.as_deref())?;
+        store.apply_transaction_with_source(
+            &mut transaction,
+            commit_response.source_id.as_deref(),
+        )?;
 
         // Notify subscribers
         let subject = commit_response.commit.subject.without_params();
@@ -2026,10 +2028,10 @@ impl Storelike for Db {
             let mut resource = Resource::from_propvals(propvals, res_subject);
             // Authoritative merged CRDT state (full oplog) lives in LoroSnapshots.
             // Propvals may carry a smaller incremental `loroUpdate` from the last commit.
-            if let Ok(Some(snapshot)) = self
-                .kv
-                .get(crate::db::trees::Tree::LoroSnapshots, subject_str.as_bytes())
-            {
+            if let Ok(Some(snapshot)) = self.kv.get(
+                crate::db::trees::Tree::LoroSnapshots,
+                subject_str.as_bytes(),
+            ) {
                 if let Ok(doc) = crate::loro::AtomicLoroDoc::from_snapshot(&snapshot) {
                     let _ = resource.apply_state_doc(doc);
                 }

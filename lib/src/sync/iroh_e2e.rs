@@ -54,15 +54,9 @@ async fn setup_pair(prefix: &str) -> IrohPair {
 async fn sync_b_from_a(pair: &IrohPair) -> usize {
     use crate::sync::peer;
 
-    peer::sync_drive_with_peer_using(
-        &pair.ep_b,
-        &pair.node_id_a,
-        &pair.drive,
-        &pair.db_b,
-        true,
-    )
-    .await
-    .expect("B→A sync should succeed")
+    peer::sync_drive_with_peer_using(&pair.ep_b, &pair.node_id_a, &pair.drive, &pair.db_b, true)
+        .await
+        .expect("B→A sync should succeed")
 }
 
 async fn wait_until<F, Fut>(timeout: std::time::Duration, mut check: F) -> bool
@@ -178,7 +172,9 @@ async fn e2e_stroke_append_after_sync() {
             "Stroke canvas",
             Some(vec![(
                 STROKE_DATA,
-                crate::Value::JsonArray(vec![serde_json::json!({"color": 1, "path": [[0.0, 0.0]]})]),
+                crate::Value::JsonArray(vec![
+                    serde_json::json!({"color": 1, "path": [[0.0, 0.0]]}),
+                ]),
             )]),
         )
         .await
@@ -188,7 +184,11 @@ async fn e2e_stroke_append_after_sync() {
     wait_for_live_peers(1, std::time::Duration::from_secs(3)).await;
     assert_eq!(stroke_count(&pair.db_b, &canvas).await, 1);
 
-    let mut resource_a = pair.db_a.get_resource(&canvas.as_str().into()).await.unwrap();
+    let mut resource_a = pair
+        .db_a
+        .get_resource(&canvas.as_str().into())
+        .await
+        .unwrap();
     resource_a.ensure_materialized().unwrap();
     resource_a.init_undo();
     resource_a
@@ -323,7 +323,11 @@ async fn e2e_engine_pull_after_iroh_bulk_sync() {
 
     sync_b_from_a(&pair).await;
 
-    let mut resource_a = pair.db_a.get_resource(&canvas.as_str().into()).await.unwrap();
+    let mut resource_a = pair
+        .db_a
+        .get_resource(&canvas.as_str().into())
+        .await
+        .unwrap();
     resource_a.ensure_materialized().unwrap();
     resource_a.init_undo();
     resource_a
@@ -334,8 +338,7 @@ async fn e2e_engine_pull_after_iroh_bulk_sync() {
     // Simulate second bulk sync (nudge_peers / manual sync) via engine frames.
     let drive_subject =
         crate::Subject::from_raw(&pair.drive, pair.db_b.get_base_domain().as_deref());
-    let subjects =
-        crate::sync::engine::collect_drive_subjects(&pair.db_b, &drive_subject).await;
+    let subjects = crate::sync::engine::collect_drive_subjects(&pair.db_b, &drive_subject).await;
     let vvs = crate::sync::engine::build_drive_vvs(&pair.db_b, &subjects);
     let hash = crate::sync::engine::compute_drive_hash(&vvs);
     let frames = crate::sync::engine::handle_sync_vv(
@@ -353,8 +356,7 @@ async fn e2e_engine_pull_after_iroh_bulk_sync() {
         if frame.first() == Some(&crate::sync::protocol::tag::SYNC_PUSH) {
             if let Some(push) = crate::sync::protocol::decode_sync_push(&frame[1..]) {
                 let (count, _) =
-                    crate::sync::engine::import_sync_push(&push, &pair.db_b, &ForAgent::Sudo)
-                        .await;
+                    crate::sync::engine::import_sync_push(&push, &pair.db_b, &ForAgent::Sudo).await;
                 imported += count;
             }
         }
