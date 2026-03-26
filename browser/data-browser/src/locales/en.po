@@ -2569,7 +2569,7 @@ msgstr "Select transport type"
 msgid "Add server"
 msgstr "Add server"
 
-#: src/views/Drive/PluginList.tsx
+#: src/views/Drive/DrivePage.tsx
 msgid "Plugins"
 msgstr "Plugins"
 

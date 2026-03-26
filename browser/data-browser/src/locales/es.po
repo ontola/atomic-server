@@ -3080,7 +3080,7 @@ msgstr "En línea"
 msgid "Nothing to copy."
 msgstr "Nada para copiar."
 
-#: src/views/Drive/PluginList.tsx
+#: src/views/Drive/DrivePage.tsx
 msgid "Plugins"
 msgstr "Plugins"
 
