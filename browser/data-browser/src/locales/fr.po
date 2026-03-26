@@ -556,6 +556,8 @@ msgstr "<0/> Afficher la page d'<1>a</1>ccueil"
 msgid "<0/> Open <1>m</1>enu"
 msgstr "<0/> Ouvrir le <1>m</1>enu"
 
+#: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
+#: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
 #: src/routes/ShortcutsRoute.tsx
 msgid "Document"
 msgstr "Document"
@@ -2558,6 +2560,7 @@ msgstr "Nouvelle instance de {0}"
 msgid "Single instance"
 msgstr "Instance unique"
 
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: src/views/OntologyPage/Class/NewClassInstanceButton.tsx
 msgid "Table"
 msgstr "Tableau"
@@ -2707,18 +2710,14 @@ msgstr "<0/> Autoriser plusieurs valeurs"
 msgid "No Type selected"
 msgstr "Aucun type sélectionné"
 
-#: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
-msgid "Untitled Folder"
-msgstr "Dossier sans titre"
+#~ msgid "Untitled Folder"
+#~ msgstr "Dossier sans titre"
 
-#: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
-msgid "Untitled ChatRoom"
-msgstr "Salon de discussion sans titre"
+#~ msgid "Untitled ChatRoom"
+#~ msgstr "Salon de discussion sans titre"
 
-#: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
-#: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
-msgid "Untitled Document"
-msgstr "Document sans titre"
+#~ msgid "Untitled Document"
+#~ msgstr "Document sans titre"
 
 #: src/chunks/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
 msgid "Numeric"
@@ -2789,7 +2788,6 @@ msgstr "Définir un filtre de valeur (facultatif)"
 msgid "Default ontology for the {0} drive"
 msgstr "Ontologie par défaut pour le lecteur {0}"
 
-#: src/components/NewIdentitySection.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 msgid "My Drive"
 msgstr "Mon lecteur"
@@ -3822,6 +3820,8 @@ msgstr ""
 
 #. placeholder {0}: results.length
 #. placeholder {1}: results.length !== 1 ? 's' : ''
+#. placeholder {0}: results.length
+#. placeholder {1}: results.length !== 1 ? 's' : ''
 #: src/components/OverlayContainer.tsx
 #: src/routes/Search/SearchOverlay.tsx
 msgid "{0} result{1}"
@@ -4045,4 +4045,12 @@ msgstr ""
 
 #: src/components/NewIdentitySection.tsx
 msgid "The secret is invalid. You can start over."
+msgstr ""
+
+#: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
+msgid "Folder"
+msgstr ""
+
+#: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
+msgid "ChatRoom"
 msgstr ""

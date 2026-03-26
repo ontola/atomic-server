@@ -116,9 +116,7 @@ test.describe('data-browser', async () => {
     await newResource('chatroom', page);
     // EditableTitle auto-enters edit mode on creation; press Escape to see heading.
     await page.keyboard.press('Escape');
-    await expect(
-      page.getByRole('heading', { name: 'Untitled ChatRoom' }),
-    ).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'ChatRoom' })).toBeVisible();
     const teststring = `My test: ${timestamp()}`;
     await inputLocator(page).fill(teststring);
     await page.keyboard.press('Enter');
@@ -208,7 +206,7 @@ test.describe('data-browser', async () => {
     await editableTitle(page).click();
     await page.keyboard.type('RAM Downloading Strategies');
     await page.keyboard.press('Enter');
-    await clickSidebarItem('Untitled Folder', page);
+    await clickSidebarItem('Folder', page);
     await expect(
       page.locator(
         '[data-test="folder-list"] >> text=RAM Downloading Strategies',

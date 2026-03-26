@@ -38,7 +38,7 @@ export const NewTableDialog: FC<NewTableDialogProps> = ({
   const [existingClass, setExistingClass] = useState<string | undefined>(
     initialExistingClass,
   );
-  const [name, setName] = useState('table');
+  const [name, setName] = useState('Table');
   const nameInputRef = useRef<HTMLInputElement>(null);
 
   const addToOntology = useAddToOntology();

@@ -140,46 +140,57 @@ msgid "App"
 msgstr "App"
 
 #: src/components/OverlayContainer.tsx
+#: src/routes/Search/SearchOverlay.tsx
 #: src/routes/Search/SearchRoute.tsx
 #: src/views/EndpointPage.tsx
 msgid "No hits"
 msgstr "No hits"
 
 #: src/components/OverlayContainer.tsx
+#: src/routes/Search/SearchOverlay.tsx
 msgid "Search for resources..."
 msgstr "Search for resources..."
 
 #: src/components/OverlayContainer.tsx
 #: src/components/OverlayContainer.tsx
+#: src/routes/Search/SearchOverlay.tsx
 msgid "esc"
 msgstr "esc"
 
 #: src/components/OverlayContainer.tsx
+#: src/routes/Search/SearchOverlay.tsx
 #: src/routes/Search/SearchRoute.tsx
 msgid "With Tags:"
 msgstr "With Tags:"
 
-#~ msgid ""
-#~ "Search matches on the names and descriptions of resources.\n"
-#~ "Additionally you can filter by tag using <0/>"
-#~ msgstr ""
-#~ "Search matches on the names and descriptions of resources.\n"
-#~ "Additionally you can filter by tag using <0/>"
+#: src/routes/Search/SearchOverlay.tsx
+msgid ""
+"Search matches on the names and descriptions of resources.\n"
+"Additionally you can filter by tag using <0/>"
+msgstr ""
+"Search matches on the names and descriptions of resources.\n"
+"Additionally you can filter by tag using <0/>"
 
 #: src/components/OverlayContainer.tsx
+#: src/routes/Search/SearchOverlay.tsx
 msgid "<0/> <1/> navigate"
 msgstr "<0/> <1/> navigate"
 
-#~ msgid "<0/> open"
-#~ msgstr "<0/> open"
+#: src/routes/Search/SearchOverlay.tsx
+msgid "<0/> open"
+msgstr "<0/> open"
 
 #: src/components/OverlayContainer.tsx
+#: src/routes/Search/SearchOverlay.tsx
 msgid "<0>esc</0> close"
 msgstr "<0>esc</0> close"
 
 #. placeholder {0}: results.length
 #. placeholder {1}: results.length !== 1 ? 's' : ''
+#. placeholder {0}: results.length
+#. placeholder {1}: results.length !== 1 ? 's' : ''
 #: src/components/OverlayContainer.tsx
+#: src/routes/Search/SearchOverlay.tsx
 msgid "{0} result{1}"
 msgstr "{0} result{1}"
 
@@ -286,6 +297,7 @@ msgstr "Clear error"
 msgid "Try Again"
 msgstr "Try Again"
 
+#: src/chunks/AI/AIChatPage.tsx
 #: src/chunks/AI/ModelSelect/OllamaModelSelector.tsx
 #: src/components/HighlightedCodeBlock.tsx
 #: src/components/Searchbar/TagSuggestionOverlay.tsx
@@ -370,6 +382,7 @@ msgstr "loading"
 
 #: src/chunks/AI/AgentConfig.tsx
 #: src/chunks/Plugins/NewPluginButton.tsx
+#: src/chunks/Plugins/UpdatePluginButton.tsx
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
 #: src/components/ConfirmationDialog.tsx
 #: src/components/ParentPicker/ParentPickerDialog.tsx
@@ -421,6 +434,7 @@ msgstr "No classes"
 msgid "Edit {0}"
 msgstr "Edit {0}"
 
+#: src/chunks/RTE/AIChatInput/mcpSuggestions.ts
 #: src/components/MetaSetter.tsx
 msgid "Atomic Data"
 msgstr "Atomic Data"
@@ -764,6 +778,7 @@ msgstr "New instance of {0}"
 msgid "Single instance"
 msgstr "Single instance"
 
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: src/views/OntologyPage/Class/NewClassInstanceButton.tsx
 msgid "Table"
 msgstr "Table"
@@ -1152,18 +1167,14 @@ msgstr "<0/> Use existing class"
 msgid "Create"
 msgstr "Create"
 
-#: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
-msgid "Untitled Folder"
-msgstr "Untitled Folder"
+#~ msgid "Untitled Folder"
+#~ msgstr "Untitled Folder"
 
-#: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
-msgid "Untitled ChatRoom"
-msgstr "Untitled ChatRoom"
+#~ msgid "Untitled ChatRoom"
+#~ msgstr "Untitled ChatRoom"
 
-#: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
-#: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
-msgid "Untitled Document"
-msgstr "Untitled Document"
+#~ msgid "Untitled Document"
+#~ msgstr "Untitled Document"
 
 #: src/routes/Share/ShareRoute.tsx
 msgid "Share settings saved"
@@ -1767,6 +1778,8 @@ msgstr "<0/> <1/>ser settings"
 msgid "<0/> <1/>heme settings"
 msgstr "<0/> <1/>heme settings"
 
+#: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
+#: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
 #: src/routes/ShortcutsRoute.tsx
 msgid "Document"
 msgstr "Document"
@@ -2339,6 +2352,7 @@ msgstr "Message in <0/>"
 msgid "Chat input"
 msgstr "Chat input"
 
+#: src/chunks/RTE/AIChatInput/AsyncAIChatInput.tsx
 #: src/views/ChatRoomPage.tsx
 msgid "Send"
 msgstr "Send"
@@ -3126,6 +3140,7 @@ msgstr "File preview not available at this time"
 msgid "Will be uploaded when resource is saved"
 msgstr "Will be uploaded when resource is saved"
 
+#: src/chunks/AI/AISidebar.tsx
 #: src/components/OverlayContainer.tsx
 msgid "New Chat"
 msgstr "New Chat"
@@ -3378,6 +3393,7 @@ msgid "OpenRouter is not enabled"
 msgstr "OpenRouter is not enabled"
 
 #. placeholder {0}: models.length
+#. placeholder {0}: modelList.length
 #: src/chunks/AI/ModelSelect/OllamaModelSelector.tsx
 #: src/chunks/AI/ModelSelect/OpenRouterModelSelector.tsx
 msgid "{0} Models"
@@ -3784,3 +3800,79 @@ msgstr "Prune"
 #: src/routes/PruneTestsRoute.tsx
 msgid "Pruning, this might take a while..."
 msgstr "Pruning, this might take a while..."
+
+#: src/chunks/CodeEditor/AsyncJSONEditor.tsx
+msgid "Enter valid JSON..."
+msgstr "Enter valid JSON..."
+
+#: src/chunks/EmojiInput/EmojiInput.tsx
+msgid "Pick an emoji"
+msgstr "Pick an emoji"
+
+#: src/chunks/HighlightedCode/HighlightedCodeBlock.tsx
+msgid "Copy code"
+msgstr "Copy code"
+
+#: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
+msgid "Folder"
+msgstr "Folder"
+
+#: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
+msgid "ChatRoom"
+msgstr "ChatRoom"
+
+#: src/chunks/AI/AIChatPage.tsx
+msgid "Failed to create message resource"
+msgstr "Failed to create message resource"
+
+#: src/chunks/RTE/AIChatInput/AsyncAIChatInput.tsx
+msgid "Ask me anything..."
+msgstr "Ask me anything..."
+
+#: src/chunks/RTE/AIChatInput/MentionList.tsx
+msgid "No result"
+msgstr "No result"
+
+#: src/chunks/AI/AISidebar.tsx
+msgid "Reset"
+msgstr "Reset"
+
+#: src/chunks/AI/AISidebar.tsx
+msgid "Atomic Assistant"
+msgstr "Atomic Assistant"
+
+#: src/chunks/AI/AISidebar.tsx
+msgid "Save Chat"
+msgstr "Save Chat"
+
+#: src/chunks/AI/AISidebar.tsx
+msgid "Close AI Sidebar"
+msgstr "Close AI Sidebar"
+
+#: src/chunks/Plugins/UpdatePluginButton.tsx
+msgid "The update's identifier does not match the existing plugin."
+msgstr "The update's identifier does not match the existing plugin."
+
+#: src/chunks/Plugins/UpdatePluginButton.tsx
+msgid "<0/> Update"
+msgstr "<0/> Update"
+
+#: src/chunks/Plugins/UpdatePluginButton.tsx
+msgid "Change Version"
+msgstr "Change Version"
+
+#: src/chunks/Plugins/UpdatePluginButton.tsx
+msgid "New Permissions"
+msgstr "New Permissions"
+
+#: src/chunks/Plugins/UpdatePluginButton.tsx
+msgid "Your config is not fully compatible with the new version."
+msgstr "Your config is not fully compatible with the new version."
+
+#: src/chunks/Plugins/UpdatePluginButton.tsx
+msgid "Apply"
+msgstr "Apply"
+
+#: src/routes/Search/SearchOverlay.tsx
+msgid "Searching..."
+msgstr "Searching..."

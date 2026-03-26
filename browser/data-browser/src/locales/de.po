@@ -558,6 +558,8 @@ msgstr "<0/> <1>H</1>auptseite anzeigen"
 msgid "<0/> Open <1>m</1>enu"
 msgstr "<0/> <1>M</1>enü öffnen"
 
+#: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
+#: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
 #: src/routes/ShortcutsRoute.tsx
 msgid "Document"
 msgstr "Dokument"
@@ -2626,6 +2628,7 @@ msgstr "Neue Instanz von {0}"
 msgid "Single instance"
 msgstr "Einzelne Instanz"
 
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: src/views/OntologyPage/Class/NewClassInstanceButton.tsx
 msgid "Table"
 msgstr "Tabelle"
@@ -2775,18 +2778,14 @@ msgstr "Kein Ergebnis"
 msgid "Ask me anything..."
 msgstr "Frag mich alles..."
 
-#: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
-msgid "Untitled Folder"
-msgstr "Unbenannter Ordner"
+#~ msgid "Untitled Folder"
+#~ msgstr "Unbenannter Ordner"
 
-#: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
-msgid "Untitled ChatRoom"
-msgstr "Unbenannter Chatraum"
+#~ msgid "Untitled ChatRoom"
+#~ msgstr "Unbenannter Chatraum"
 
-#: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
-#: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
-msgid "Untitled Document"
-msgstr "Unbenanntes Dokument"
+#~ msgid "Untitled Document"
+#~ msgstr "Unbenanntes Dokument"
 
 #: src/chunks/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
 msgid "Numeric"
@@ -2805,7 +2804,6 @@ msgstr "Relativ"
 msgid "Default ontology for the {0} drive"
 msgstr "Standardontologie für das {0} Laufwerk"
 
-#: src/components/NewIdentitySection.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 msgid "My Drive"
 msgstr "Mein Laufwerk"
@@ -3826,6 +3824,8 @@ msgstr ""
 
 #. placeholder {0}: results.length
 #. placeholder {1}: results.length !== 1 ? 's' : ''
+#. placeholder {0}: results.length
+#. placeholder {1}: results.length !== 1 ? 's' : ''
 #: src/components/OverlayContainer.tsx
 #: src/routes/Search/SearchOverlay.tsx
 msgid "{0} result{1}"
@@ -4049,4 +4049,12 @@ msgstr ""
 
 #: src/components/NewIdentitySection.tsx
 msgid "The secret is invalid. You can start over."
+msgstr ""
+
+#: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
+msgid "Folder"
+msgstr ""
+
+#: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
+msgid "ChatRoom"
 msgstr ""
