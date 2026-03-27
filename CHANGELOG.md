@@ -7,11 +7,9 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
-- [#1139](https://github.com/ontola/atomic-server/issues/1139) AtomicServer can now create data without being dependent on a server! AtomicServer is now Local-First, using the new `did:ad` schema.
+- [#1139](https://github.com/ontola/atomic-server/issues/1139) AtomicServer can now create data without being dependent on a server! AtomicServer is now Local-First, using the new `did:ad` schema. Instead of relying on HTTP, Atomic can resolve resources over DHT Mainline. It combines true decentralization, cryptographic proof of ownership and high performance. User's agents are now also truly decentralized, relying solely on a private key.
 - #584 Replace ureq with reqwest (async HTTP calls)
-- Search UI is redesigned, now as an overlay, feels like a command bar
 - #481 Drive scoped queries
-- #1160 Switch to Oxlint + Oxfmt
 - #420 Fix OTLP / OpenTelemetry, update docs from Jaeger to SigNoz, add metrics
 - [#590](https://github.com/ontola/atomic-server/issues/590) Get rid of the `SERVER_URL` env var, which makes moving & setup easier. All resources are now relative to the hosted domain, and AtomicServer can be available from multiple domains at once.
 - [#544](https://github.com/ontola/atomicdata-dev/atomic-server/issues/544) Stateless invites, using JWTs. Server setup now requires you to check the logs for the invite token.

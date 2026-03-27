@@ -6,12 +6,13 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ### Atomic Browser
 
-- New search design. More compact view, shows previews on select.
+- Search UI is redesigned, now as an overlay, feels like a command bar, shows preview of selected item.
 - New navbar design. Always access to important features & hierarchy.
 - New onboarding UX for new users & drives.
 - Switch to OxLint
 - Add `drive` to Store. This used to be a React API, but it's useful in far more contexts.
 - #1163 New settings page design with search
+- #1160 Switch to Oxlint + Oxfmt
 - [#741](https://github.com/atomicdata-dev/atomic-server/issues/741) New feature: A brand new document editor with realtime collaboration and a fast and efficient editing experience.
 - [#741](https://github.com/atomicdata-dev/atomic-server/issues/741) New feature: A brand new document editor with realtime collaboration and a fast and efficient editing experience.
 - [#951](https://github.com/atomicdata-dev/atomic-server/issues/951) New feature: Atomic Assistant, AI chat interface with support for custom agents, MCP servers and more. Bring your own OpenRouter key or use Ollama to host your own models.
