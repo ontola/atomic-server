@@ -30,6 +30,7 @@ msgstr "No hay clases"
 #: src/chunks/Plugins/NewPluginButton.tsx
 #: src/chunks/Plugins/UpdatePluginButton.tsx
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
+#: src/components/AI/MCP/MCPServersManager.tsx
 #: src/components/ConfirmationDialog.tsx
 #: src/components/ParentPicker/ParentPickerDialog.tsx
 #: src/components/forms/EditFormDialog.tsx
@@ -227,29 +228,25 @@ msgstr "Ir a la página de Configuración de usuario"
 msgid "Settings"
 msgstr "Configuración"
 
-#: src/routes/AppSettings.tsx
-msgid "<0/> Language"
-msgstr "<0/> Idioma"
+#~ msgid "<0/> Language"
+#~ msgstr "<0/> Idioma"
 
 #: src/routes/AppSettings.tsx
 msgid "Theme"
 msgstr "Tema"
 
-#: src/routes/AppSettings.tsx
-msgid "🌓 Auto"
-msgstr "🌓 Automático"
+#~ msgid "🌓 Auto"
+#~ msgstr "🌓 Automático"
 
 #: src/routes/AppSettings.tsx
 msgid "Use the browser's / OS dark mode settings"
 msgstr "Usar la configuración del modo oscuro del navegador / sistema operativo"
 
-#: src/routes/AppSettings.tsx
-msgid "🌑 Dark"
-msgstr "🌑 Oscuro"
+#~ msgid "🌑 Dark"
+#~ msgstr "🌑 Oscuro"
 
-#: src/routes/AppSettings.tsx
-msgid "🌕 Light"
-msgstr "🌕 Claro"
+#~ msgid "🌕 Light"
+#~ msgstr "🌕 Claro"
 
 #~ msgid "Navigation bar position"
 #~ msgstr "Posición de la barra de navegación"
@@ -269,19 +266,15 @@ msgstr "Superior"
 msgid "Main color"
 msgstr "Color principal"
 
-#: src/routes/AppSettings.tsx
 #: src/routes/NewResource/NewRoute.tsx
 msgid "Templates"
 msgstr "Plantillas"
 
-#. placeholder {0}: ' '
-#: src/routes/AppSettings.tsx
-msgid "<0/>{0} Hide templates on new resource page."
-msgstr "<0/>{0} Ocultar plantillas en la página de nuevo recurso."
+#~ msgid "<0/>{0} Hide templates on new resource page."
+#~ msgstr "<0/>{0} Ocultar plantillas en la página de nuevo recurso."
 
-#: src/routes/AppSettings.tsx
-msgid "Panels"
-msgstr "Paneles"
+#~ msgid "Panels"
+#~ msgstr "Paneles"
 
 #. placeholder {0}: ' '
 #: src/routes/AppSettings.tsx
@@ -799,6 +792,7 @@ msgid "Save Changes"
 msgstr "Guardar Cambios"
 
 #: src/chunks/AI/AgentConfig.tsx
+#: src/components/AI/MCP/MCPServersManager.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 msgid "Name"
@@ -1156,9 +1150,8 @@ msgstr "<0/> Habilitar funciones de IA"
 msgid "<0/> Show token usage in chats"
 msgstr "<0/> Mostrar el uso de tokens en los chats"
 
-#: src/components/AI/AISettings.tsx
-msgid "AI Providers"
-msgstr "Proveedores de IA"
+#~ msgid "AI Providers"
+#~ msgstr "Proveedores de IA"
 
 #: src/components/AI/AISettings.tsx
 msgid "<0/> Enable OpenRouter"
@@ -1183,17 +1176,16 @@ msgstr "Introduce tu clave de API de OpenRouter"
 msgid "Credits used: {0} /{1} {2}"
 msgstr "Créditos usados: {0} /{1} {2}"
 
-#: src/components/AI/AISettings.tsx
-msgid ""
-"OpenRouter provides a unified API that gives you access to\n"
-"hundreds of AI models from all major vendors, while\n"
-"automatically handling fallbacks and selecting the most\n"
-"cost-effective options."
-msgstr ""
-"OpenRouter proporciona una API unificada que te da acceso a\n"
-"cientos de modelos de IA de los principales proveedores, mientras\n"
-"maneja automáticamente las alternativas y selecciona las opciones más\n"
-"rentables."
+#~ msgid ""
+#~ "OpenRouter provides a unified API that gives you access to\n"
+#~ "hundreds of AI models from all major vendors, while\n"
+#~ "automatically handling fallbacks and selecting the most\n"
+#~ "cost-effective options."
+#~ msgstr ""
+#~ "OpenRouter proporciona una API unificada que te da acceso a\n"
+#~ "cientos de modelos de IA de los principales proveedores, mientras\n"
+#~ "maneja automáticamente las alternativas y selecciona las opciones más\n"
+#~ "rentables."
 
 #: src/components/AI/AISettings.tsx
 msgid "OpenRouter"
@@ -2355,26 +2347,22 @@ msgstr "Sin resultados"
 msgid "No MCP servers configured"
 msgstr "No se han configurado servidores MCP"
 
-#: src/components/AI/MCP/MCPServersManager.tsx
-msgid "Add Server"
-msgstr "Añadir Servidor"
+#~ msgid "Add Server"
+#~ msgstr "Añadir Servidor"
 
-#: src/components/AI/MCP/MCPServersManager.tsx
-msgid "Server Name"
-msgstr "Nombre del Servidor"
+#~ msgid "Server Name"
+#~ msgstr "Nombre del Servidor"
 
-#: src/components/AI/MCP/MCPServersManager.tsx
-msgid "Enter server name"
-msgstr "Introduce el nombre del servidor"
+#~ msgid "Enter server name"
+#~ msgstr "Introduce el nombre del servidor"
 
 #: src/components/AI/MCP/MCPServersManager.tsx
 #: src/components/AI/MCP/ServerItem.tsx
 msgid "Server URL"
 msgstr "URL del Servidor"
 
-#: src/components/AI/MCP/MCPServersManager.tsx
-msgid "Enter server URL"
-msgstr "Introduce la URL del servidor"
+#~ msgid "Enter server URL"
+#~ msgstr "Introduce la URL del servidor"
 
 #: src/components/AI/MCP/MCPServersManager.tsx
 msgid "Type"
@@ -2386,9 +2374,11 @@ msgid "Select transport type"
 msgstr "Selecciona el tipo de transporte"
 
 #: src/components/AI/MCP/MCPServersManager.tsx
+#: src/components/AI/MCP/MCPServersManager.tsx
 msgid "Add server"
 msgstr "Añadir servidor"
 
+#: src/components/AI/MCP/MCPServersManager.tsx
 #: src/components/AI/MCP/ServerItem.tsx
 msgid "Server name"
 msgstr "Nombre del servidor"
@@ -4098,9 +4088,8 @@ msgstr ""
 msgid "Be the first to say something"
 msgstr ""
 
-#: src/views/Drive/DrivePage.tsx
-msgid "The Ontology that"
-msgstr ""
+#~ msgid "The Ontology that"
+#~ msgstr ""
 
 #. placeholder {0}: shortcuts.search
 #: src/components/NavBar.tsx
@@ -4119,3 +4108,48 @@ msgstr ""
 
 #~ msgid "Reply"
 #~ msgstr ""
+
+#: src/routes/AppSettings.tsx
+msgid "Language"
+msgstr ""
+
+#: src/routes/AppSettings.tsx
+msgid "Auto"
+msgstr ""
+
+#: src/routes/AppSettings.tsx
+msgid "Dark"
+msgstr ""
+
+#: src/routes/AppSettings.tsx
+msgid "Light"
+msgstr ""
+
+#: src/routes/AppSettings.tsx
+msgid "Appearance"
+msgstr ""
+
+#. placeholder {0}: ' '
+#: src/routes/AppSettings.tsx
+msgid "<0/>{0} Hide templates on new resource page"
+msgstr ""
+
+#: src/routes/AppSettings.tsx
+msgid "Panels & Templates"
+msgstr ""
+
+#: src/components/AI/AISettings.tsx
+msgid ""
+"OpenRouter provides a unified API that gives you access\n"
+"to hundreds of AI models from all major vendors, while\n"
+"automatically handling fallbacks and selecting the most\n"
+"cost-effective options."
+msgstr ""
+
+#: src/routes/AppSettings.tsx
+msgid "Search settings..."
+msgstr ""
+
+#: src/routes/AppSettings.tsx
+msgid "Clear search"
+msgstr ""

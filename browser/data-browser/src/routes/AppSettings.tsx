@@ -1,7 +1,7 @@
 import * as React from 'react';
+import { useState, useMemo } from 'react';
 import { createRoute } from '@tanstack/react-router';
 import { HexColorPicker } from 'react-colorful';
-import { styled } from 'styled-components';
 import { ContainerNarrow } from '../components/Containers';
 import { Button } from '../components/Button';
 import { useSettings } from '../helpers/AppSettings';
@@ -14,8 +14,15 @@ import { pathNames } from './paths';
 import { appRoute } from './RootRoutes';
 import AISettings from '@components/AI/AISettings';
 import { SUPPORTED_LOCALES, useLocale } from '@components/LocaleContext';
-import { FaGlobe } from 'react-icons/fa6';
 import { BasicSelect } from '@components/forms/BasicSelect';
+import { styled } from 'styled-components';
+import {
+  SettingsGroup,
+  SettingsSection,
+  SettingsSearchProvider,
+} from '@components/Settings';
+import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
+import { FaMagnifyingGlass, FaXmark } from 'react-icons/fa6';
 
 export const AppSettingsRoute = createRoute({
   path: pathNames.appSettings,
@@ -44,6 +51,7 @@ const AppSettings: React.FunctionComponent = () => {
   } = useSettings();
 
   const { locale, setLocale } = useLocale();
+  const [searchQuery, setSearchQuery] = useState('');
 
   const { enabledPanels, enablePanel, disablePanel } = usePanelList();
 
@@ -55,85 +63,135 @@ const AppSettings: React.FunctionComponent = () => {
     }
   };
 
+  const searchContext = useMemo(
+    () => ({ query: searchQuery, parentMatched: false }),
+    [searchQuery],
+  );
+
   return (
     <Main>
       <ContainerNarrow>
         <h1>Settings</h1>
-        <Column>
-          <Heading>
-            <FaGlobe />
-            Language
-          </Heading>
-          <BasicSelect value={locale} onChange={e => setLocale(e.target.value)}>
-            {SUPPORTED_LOCALES.map(locale_code => (
-              <option key={locale_code} value={locale_code}>
-                {getLocaleName(locale_code)}
-              </option>
-            ))}
-          </BasicSelect>
-          <Heading>Theme</Heading>
-          <Row>
-            <Button
-              subtle={!(darkModeSetting === DarkModeOption.auto)}
-              onClick={() => setDarkMode(undefined)}
-              title="Use the browser's / OS dark mode settings"
+        <InputWrapper hasPrefix>
+          <FaMagnifyingGlass />
+          <InputStyled
+            type='text'
+            placeholder='Search settings...'
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+          />
+          {searchQuery && (
+            <ClearButton
+              type='button'
+              onClick={() => setSearchQuery('')}
+              title='Clear search'
             >
-              🌓 Auto
-            </Button>
-            <Button
-              subtle={!(darkModeSetting === DarkModeOption.always)}
-              onClick={() => setDarkMode(true)}
-            >
-              🌑 Dark
-            </Button>
-            <Button
-              subtle={!(darkModeSetting === DarkModeOption.never)}
-              onClick={() => setDarkMode(false)}
-            >
-              🌕 Light
-            </Button>
-          </Row>
-          <Heading as='h3'>NavBar position</Heading>
-          <Row>
-            <Button subtle={!navbarTop} onClick={() => setNavbarTop(true)}>
-              Top
-            </Button>
-            <Button subtle={navbarTop} onClick={() => setNavbarTop(false)}>
-              Bottom
-            </Button>
-          </Row>
-          <Heading as='h3'>Main color</Heading>
-          <MainColorPicker />
-          <Heading>Templates</Heading>
-          <CheckboxLabel>
-            <Checkbox checked={hideTemplates} onChange={setHideTemplates} />{' '}
-            Hide templates on new resource page.
-          </CheckboxLabel>
-          <Heading>Panels</Heading>
-          <CheckboxLabel>
-            <Checkbox
-              checked={enabledPanels.has(Panel.Ontologies)}
-              onChange={changePanelPref(Panel.Ontologies)}
-            />{' '}
-            Enable Ontology panel
-          </CheckboxLabel>
-          <Heading>Accessibility</Heading>
-          <CheckboxLabel>
-            <Checkbox
-              checked={viewTransitionsDisabled}
-              onChange={checked => setViewTransitionsDisabled(checked)}
-            />{' '}
-            Disable page transition animations
-          </CheckboxLabel>
-          <CheckboxLabel>
-            <Checkbox
-              checked={sidebarKeyboardDndEnabled}
-              onChange={checked => setSidebarKeyboardDndEnabled(checked)}
-            />{' '}
-            Enable keyboard drag & drop in sidebar
-          </CheckboxLabel>
-          <AISettings />
-        </Column>
+              <FaXmark />
+            </ClearButton>
+          )}
+        </InputWrapper>
+        <SettingsSearchProvider value={searchContext}>
+          <SettingsGroup>
+            <SettingsSection label='Language'>
+              <BasicSelect
+                value={locale}
+                onChange={e => setLocale(e.target.value)}
+              >
+                {SUPPORTED_LOCALES.map(locale_code => (
+                  <option key={locale_code} value={locale_code}>
+                    {getLocaleName(locale_code)}
+                  </option>
+                ))}
+              </BasicSelect>
+            </SettingsSection>
+            <SettingsSection label='Appearance'>
+              <Column gap='1rem'>
+                <Column gap='0.5rem'>
+                  <SubLabel>Theme</SubLabel>
+                  <Row>
+                    <Button
+                      subtle={!(darkModeSetting === DarkModeOption.auto)}
+                      onClick={() => setDarkMode(undefined)}
+                      title="Use the browser's / OS dark mode settings"
+                    >
+                      Auto
+                    </Button>
+                    <Button
+                      subtle={!(darkModeSetting === DarkModeOption.always)}
+                      onClick={() => setDarkMode(true)}
+                    >
+                      Dark
+                    </Button>
+                    <Button
+                      subtle={!(darkModeSetting === DarkModeOption.never)}
+                      onClick={() => setDarkMode(false)}
+                    >
+                      Light
+                    </Button>
+                  </Row>
+                </Column>
+                <Column gap='0.5rem'>
+                  <SubLabel>NavBar position</SubLabel>
+                  <Row>
+                    <Button
+                      subtle={!navbarTop}
+                      onClick={() => setNavbarTop(true)}
+                    >
+                      Top
+                    </Button>
+                    <Button
+                      subtle={navbarTop}
+                      onClick={() => setNavbarTop(false)}
+                    >
+                      Bottom
+                    </Button>
+                  </Row>
+                </Column>
+                <Column gap='0.5rem'>
+                  <SubLabel>Main color</SubLabel>
+                  <MainColorPicker />
+                </Column>
+              </Column>
+            </SettingsSection>
+            <SettingsSection label='Panels & Templates'>
+              <Column gap='0.5rem'>
+                <CheckboxLabel>
+                  <Checkbox
+                    checked={enabledPanels.has(Panel.Ontologies)}
+                    onChange={changePanelPref(Panel.Ontologies)}
+                  />{' '}
+                  Enable Ontology panel
+                </CheckboxLabel>
+                <CheckboxLabel>
+                  <Checkbox
+                    checked={hideTemplates}
+                    onChange={setHideTemplates}
+                  />{' '}
+                  Hide templates on new resource page
+                </CheckboxLabel>
+              </Column>
+            </SettingsSection>
+            <SettingsSection label='Accessibility'>
+              <Column gap='0.5rem'>
+                <CheckboxLabel>
+                  <Checkbox
+                    checked={viewTransitionsDisabled}
+                    onChange={checked => setViewTransitionsDisabled(checked)}
+                  />{' '}
+                  Disable page transition animations
+                </CheckboxLabel>
+                <CheckboxLabel>
+                  <Checkbox
+                    checked={sidebarKeyboardDndEnabled}
+                    onChange={checked => setSidebarKeyboardDndEnabled(checked)}
+                  />{' '}
+                  Enable keyboard drag & drop in sidebar
+                </CheckboxLabel>
+              </Column>
+            </SettingsSection>
+            <AISettings />
+          </SettingsGroup>
+        </SettingsSearchProvider>
       </ContainerNarrow>
     </Main>
   );
@@ -147,11 +205,21 @@ const MainColorPicker = () => {
   );
 };
 
-const Heading = styled.h2`
+const ClearButton = styled.button`
   display: flex;
   align-items: center;
-  gap: 1ch;
-  font-size: 1em;
-  margin: 0;
-  margin-top: 1rem;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.4rem;
+  color: ${p => p.theme.colors.textLight};
+  &:hover {
+    color: ${p => p.theme.colors.text};
+  }
+`;
+
+const SubLabel = styled.span`
+  font-size: 0.85rem;
+  color: ${p => p.theme.colors.textLight};
 `;
