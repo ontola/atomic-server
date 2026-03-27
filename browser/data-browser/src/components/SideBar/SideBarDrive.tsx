@@ -8,11 +8,9 @@ import {
   useTitle,
 } from '@tomic/react';
 import { Fragment, useEffect, useState, type JSX } from 'react';
-import { FaPlus } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import { useSettings } from '../../helpers/AppSettings';
 import { constructOpenURL } from '../../helpers/navigation';
-import { paths } from '../../routes/paths';
 import { Button } from '../Button';
 import { ResourceSideBar } from './ResourceSideBar/ResourceSideBar';
 import { SideBarHeader } from './SideBarHeader';
@@ -28,6 +26,7 @@ import { DropEdge } from './ResourceSideBar/DropEdge';
 import { createPortal } from 'react-dom';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { SkeletonButton } from '../SkeletonButton';
+import { QuickCreateRow } from '../NewInstanceButton';
 
 interface SideBarDriveProps {
   onItemClick: () => unknown;
@@ -132,13 +131,9 @@ export function SideBarDrive({
               </SideBarErr>
             )}
             {agentCanWrite && (
-              <AddButton
-                title='New resource'
-                data-testid='sidebar-new-resource'
-                onClick={() => navigate(paths.new)}
-              >
-                <FaPlus />
-              </AddButton>
+              <NewResourceRow gap='0' center>
+                <QuickCreateRow parent={drive} />
+              </NewResourceRow>
             )}
           </ListWrapper>
         </StyledScrollArea>
@@ -206,10 +201,13 @@ const StyledScrollArea = styled(ScrollArea)`
   overflow: hidden;
 `;
 
-const AddButton = styled(SkeletonButton)`
-  width: calc(100% - 5rem);
-  padding-block: 0.3rem;
+const AddButton = styled(Button)`
+  flex: 1;
+`;
+
+const NewResourceRow = styled(Row)`
   margin-inline-start: 2rem;
-  margin-block-start: 0.5rem;
-  margin-block-end: 1rem;
+  margin-inline-end: 0.5rem;
+  padding-bottom: 1rem;
+  overflow: visible;
 `;

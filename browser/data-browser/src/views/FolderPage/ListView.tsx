@@ -14,6 +14,7 @@ import { ViewProps } from './FolderDisplayStyle';
 import { getIconForClass } from '../../helpers/iconMap';
 import { FaPlus } from 'react-icons/fa6';
 import { Button } from '../../components/Button';
+import { QuickCreateRow } from '../../components/NewInstanceButton';
 
 import type { JSX } from 'react';
 
@@ -22,6 +23,7 @@ export function ListView({
   onNewClick,
   showNewButton,
   basic,
+  parent,
 }: ViewProps): JSX.Element {
   return (
     <Wrapper>
@@ -56,11 +58,9 @@ export function ListView({
         </>
       </StyledTable>
       {showNewButton && (
-        <NewButton clean onClick={onNewClick} data-testid='new-resource-folder'>
-          <span>
-            <FaPlus /> New Resource
-          </span>
-        </NewButton>
+        <QuickCreateRowWrapper>
+          <QuickCreateRow parent={parent} />
+        </QuickCreateRowWrapper>
       )}
     </Wrapper>
   );
@@ -195,14 +195,9 @@ const ClassCell = styled.td`
   }
 `;
 
-const NewButton = styled(Button)`
+const QuickCreateRowWrapper = styled.div`
   margin-top: 1rem;
   margin-inline-start: calc(
     var(--icon-width) + var(--icon-title-spacing) + var(--cell-padding)
   );
-  > span {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
 `;

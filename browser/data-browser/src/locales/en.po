@@ -248,8 +248,8 @@ msgstr "Go home"
 msgid "Ctrl+N"
 msgstr "Ctrl+N"
 
+#: src/components/NewInstanceButton/QuickCreateRow.tsx
 #: src/components/OverlayContainer.tsx
-#: src/components/SideBar/SideBarDrive.tsx
 msgid "New resource"
 msgstr "New resource"
 
@@ -615,17 +615,16 @@ msgstr "Sorry, there is no support for editing nested resources yet"
 msgid "Set as current drive"
 msgstr "Set as current drive"
 
-#: src/views/Drive/DrivePage.tsx
-msgid ""
-"You are running Atomic-Server on `localhost`, which means that it\n"
-"will not be available from any other machine than your current local\n"
-"device. If you want your Atomic-Server to be available from the web,\n"
-"you should set this up at a Domain on a server."
-msgstr ""
-"You are running Atomic-Server on `localhost`, which means that it\n"
-"will not be available from any other machine than your current local\n"
-"device. If you want your Atomic-Server to be available from the web,\n"
-"you should set this up at a Domain on a server."
+#~ msgid ""
+#~ "You are running Atomic-Server on `localhost`, which means that it\n"
+#~ "will not be available from any other machine than your current local\n"
+#~ "device. If you want your Atomic-Server to be available from the web,\n"
+#~ "you should set this up at a Domain on a server."
+#~ msgstr ""
+#~ "You are running Atomic-Server on `localhost`, which means that it\n"
+#~ "will not be available from any other machine than your current local\n"
+#~ "device. If you want your Atomic-Server to be available from the web,\n"
+#~ "you should set this up at a Domain on a server."
 
 #: src/views/Drive/DrivePage.tsx
 msgid "Default Ontology"
@@ -1139,6 +1138,7 @@ msgstr "Configure {0}"
 msgid "Represents a row in the {0} table"
 msgstr "Represents a row in the {0} table"
 
+#: src/components/NewInstanceButton/QuickCreateRow.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 msgid "New Table"
@@ -2638,9 +2638,8 @@ msgstr "Class"
 msgid "Last Modified"
 msgstr "Last Modified"
 
-#: src/views/FolderPage/ListView.tsx
-msgid "<0/> New Resource"
-msgstr "<0/> New Resource"
+#~ msgid "<0/> New Resource"
+#~ msgstr "<0/> New Resource"
 
 #: src/components/Tag/CreateTagRow.tsx
 msgid "New tag"
@@ -3989,3 +3988,19 @@ msgstr "Search settings..."
 #: src/routes/AppSettings.tsx
 msgid "Clear search"
 msgstr "Clear search"
+
+#: src/components/NewInstanceButton/QuickCreateRow.tsx
+msgid "New Document"
+msgstr "New Document"
+
+#: src/components/NewInstanceButton/QuickCreateRow.tsx
+msgid "New Folder"
+msgstr "New Folder"
+
+#: src/components/NewInstanceButton/QuickCreateRow.tsx
+msgid "New ChatRoom"
+msgstr "New ChatRoom"
+
+#: src/components/NewInstanceButton/QuickCreateRow.tsx
+msgid "<0/> New"
+msgstr "<0/> New"

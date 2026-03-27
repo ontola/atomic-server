@@ -680,13 +680,12 @@ msgstr "Establecer como unidad actual"
 msgid "Default Ontology"
 msgstr "Ontología predeterminada"
 
-#: src/views/Drive/DrivePage.tsx
-msgid ""
-"You are running Atomic-Server on `localhost`, which means that it\n"
-"will not be available from any other machine than your current local\n"
-"device. If you want your Atomic-Server to be available from the web,\n"
-"you should set this up at a Domain on a server."
-msgstr "Estás ejecutando Atomic-Server en `localhost`, lo que significa que no estará disponible desde ninguna otra máquina que no sea tu dispositivo local actual. Si quieres que tu Atomic-Server esté disponible desde la web, deberías configurarlo en un dominio en un servidor."
+#~ msgid ""
+#~ "You are running Atomic-Server on `localhost`, which means that it\n"
+#~ "will not be available from any other machine than your current local\n"
+#~ "device. If you want your Atomic-Server to be available from the web,\n"
+#~ "you should set this up at a Domain on a server."
+#~ msgstr "Estás ejecutando Atomic-Server en `localhost`, lo que significa que no estará disponible desde ninguna otra máquina que no sea tu dispositivo local actual. Si quieres que tu Atomic-Server esté disponible desde la web, deberías configurarlo en un dominio en un servidor."
 
 #. placeholder {0}: JSON.stringify(error)
 #. placeholder {0}: searchError.message
@@ -1454,8 +1453,8 @@ msgstr "Página anterior"
 msgid "Next page"
 msgstr "Página siguiente"
 
+#: src/components/NewInstanceButton/QuickCreateRow.tsx
 #: src/components/OverlayContainer.tsx
-#: src/components/SideBar/SideBarDrive.tsx
 msgid "New resource"
 msgstr "Nuevo recurso"
 
@@ -2097,9 +2096,8 @@ msgstr "Clase"
 msgid "Last Modified"
 msgstr "Última modificación"
 
-#: src/views/FolderPage/ListView.tsx
-msgid "<0/> New Resource"
-msgstr "<0/> Nuevo recurso"
+#~ msgid "<0/> New Resource"
+#~ msgstr "<0/> Nuevo recurso"
 
 #: src/views/OntologyPage/CreateInstanceButton.tsx
 msgid "<0/> New Instance"
@@ -2788,6 +2786,7 @@ msgstr "Mi unidad"
 msgid "Represents a row in the {0} table"
 msgstr "Representa una fila en la tabla {0}"
 
+#: src/components/NewInstanceButton/QuickCreateRow.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 msgid "New Table"
@@ -4152,4 +4151,20 @@ msgstr ""
 
 #: src/routes/AppSettings.tsx
 msgid "Clear search"
+msgstr ""
+
+#: src/components/NewInstanceButton/QuickCreateRow.tsx
+msgid "New Document"
+msgstr ""
+
+#: src/components/NewInstanceButton/QuickCreateRow.tsx
+msgid "New Folder"
+msgstr ""
+
+#: src/components/NewInstanceButton/QuickCreateRow.tsx
+msgid "New ChatRoom"
+msgstr ""
+
+#: src/components/NewInstanceButton/QuickCreateRow.tsx
+msgid "<0/> New"
 msgstr ""

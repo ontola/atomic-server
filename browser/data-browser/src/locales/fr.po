@@ -693,17 +693,16 @@ msgstr "Définir comme lecteur actuel"
 msgid "Default Ontology"
 msgstr "Ontologie par défaut"
 
-#: src/views/Drive/DrivePage.tsx
-msgid ""
-"You are running Atomic-Server on `localhost`, which means that it\n"
-"will not be available from any other machine than your current local\n"
-"device. If you want your Atomic-Server to be available from the web,\n"
-"you should set this up at a Domain on a server."
-msgstr ""
-"Vous utilisez Atomic-Server sur `localhost`, ce qui signifie qu'il ne sera\n"
-"pas disponible depuis une autre machine que votre appareil local actuel. Si\n"
-"vous voulez que votre Atomic-Server soit disponible sur le web, vous devez le\n"
-"configurer sur un domaine sur un serveur."
+#~ msgid ""
+#~ "You are running Atomic-Server on `localhost`, which means that it\n"
+#~ "will not be available from any other machine than your current local\n"
+#~ "device. If you want your Atomic-Server to be available from the web,\n"
+#~ "you should set this up at a Domain on a server."
+#~ msgstr ""
+#~ "Vous utilisez Atomic-Server sur `localhost`, ce qui signifie qu'il ne sera\n"
+#~ "pas disponible depuis une autre machine que votre appareil local actuel. Si\n"
+#~ "vous voulez que votre Atomic-Server soit disponible sur le web, vous devez le\n"
+#~ "configurer sur un domaine sur un serveur."
 
 #. placeholder {0}: JSON.stringify(error)
 #. placeholder {0}: searchError.message
@@ -1467,8 +1466,8 @@ msgstr "Page précédente"
 msgid "Next page"
 msgstr "Page suivante"
 
+#: src/components/NewInstanceButton/QuickCreateRow.tsx
 #: src/components/OverlayContainer.tsx
-#: src/components/SideBar/SideBarDrive.tsx
 msgid "New resource"
 msgstr "Nouvelle ressource"
 
@@ -2110,9 +2109,8 @@ msgstr "Classe"
 msgid "Last Modified"
 msgstr "Dernière modification"
 
-#: src/views/FolderPage/ListView.tsx
-msgid "<0/> New Resource"
-msgstr "<0/> Nouvelle ressource"
+#~ msgid "<0/> New Resource"
+#~ msgstr "<0/> Nouvelle ressource"
 
 #: src/views/OntologyPage/CreateInstanceButton.tsx
 msgid "<0/> New Instance"
@@ -2801,6 +2799,7 @@ msgstr "Mon lecteur"
 msgid "Represents a row in the {0} table"
 msgstr "Représente une ligne dans la table {0}"
 
+#: src/components/NewInstanceButton/QuickCreateRow.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 msgid "New Table"
@@ -4162,4 +4161,20 @@ msgstr ""
 
 #: src/routes/AppSettings.tsx
 msgid "Clear search"
+msgstr ""
+
+#: src/components/NewInstanceButton/QuickCreateRow.tsx
+msgid "New Document"
+msgstr ""
+
+#: src/components/NewInstanceButton/QuickCreateRow.tsx
+msgid "New Folder"
+msgstr ""
+
+#: src/components/NewInstanceButton/QuickCreateRow.tsx
+msgid "New ChatRoom"
+msgstr ""
+
+#: src/components/NewInstanceButton/QuickCreateRow.tsx
+msgid "<0/> New"
 msgstr ""

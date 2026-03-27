@@ -7,6 +7,7 @@ import {
   GridItemWrapper,
 } from './GridItem/components';
 import { ResourceGridItem } from './GridItem/ResourceGridItem';
+import { QuickCreateRow } from '../../components/NewInstanceButton';
 
 import type { JSX } from 'react';
 
@@ -14,6 +15,7 @@ export function GridView({
   subResources,
   onNewClick,
   showNewButton,
+  parent,
 }: ViewProps): JSX.Element {
   return (
     <Grid>
