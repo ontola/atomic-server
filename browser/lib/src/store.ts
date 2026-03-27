@@ -38,6 +38,7 @@ type AgentCallback = (agent: Agent | undefined) => void;
 type ErrorCallback = (e: Error) => void;
 
 type ServerURLCallback = (serverURL: string) => void;
+type DriveCallback = (drive: string) => void;
 type Fetch = typeof fetch;
 
 type CreateResourceOptions = {
@@ -87,6 +88,8 @@ export enum StoreEvents {
   AgentChanged = 'agent-changed',
   /** Event that gets called whenever the server url changes */
   ServerURLChanged = 'server-url-changed',
+  /** Event that gets called whenever the drive changes */
+  DriveChanged = 'drive-changed',
   /** Event that gets called whenever the store encounters an error */
   Error = 'error',
 }
@@ -114,6 +117,7 @@ type StoreEventHandlers = {
   [StoreEvents.ResourceManuallyCreated]: ResourceCallback;
   [StoreEvents.AgentChanged]: AgentCallback;
   [StoreEvents.ServerURLChanged]: ServerURLCallback;
+  [StoreEvents.DriveChanged]: DriveCallback;
   [StoreEvents.Error]: ErrorCallback;
 };
 
@@ -137,10 +141,12 @@ export class Store {
     new Map();
   private injectedFetch: Fetch;
   /**
-   * The base URL of an Atomic Server. This is where to send commits, create new
-   * instances, search, etc.
-   */
+   /** The base URL of an Atomic Server. This is where to send commits, create new
+    * instances, search, etc.
+    */
   private serverUrl: string;
+  /** The current Drive subject URL */
+  private drive: string;
   /** All the resources of the store */
   private _resources: Map<string, Resource>;
   /** Mapping from HTTP aliases to primary subjects (e.g. DIDs) */
@@ -166,6 +172,13 @@ export class Store {
 
     if (opts.serverUrl) this.setServerUrl(opts.serverUrl);
     if (opts.agent) this.setAgent(opts.agent);
+
+    // Initialize drive from localStorage if available
+    if (typeof window !== 'undefined') {
+      this.drive = localStorage.getItem('drive') ?? opts.serverUrl ?? '';
+    } else {
+      this.drive = opts.serverUrl ?? '';
+    }
 
     this.client = new Client(this.injectedFetch);
 
@@ -953,6 +966,28 @@ export class Store {
     if (supportsWebSockets()) {
       this.openWebSocket(url);
     }
+  }
+
+  /** Returns the current Drive subject URL */
+  public getDrive(): string {
+    return this.drive;
+  }
+
+  /** Sets the current Drive and persists it to localStorage */
+  public setDrive(drive: string): void {
+    this.drive = drive;
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('drive', drive);
+    }
+
+    // If the drive is an HTTP URL, also update the server URL
+    if (drive.startsWith('http://') || drive.startsWith('https://')) {
+      const url = new URL(drive);
+      this.setServerUrl(url.origin);
+    }
+
+    this.eventManager.emit(StoreEvents.DriveChanged, drive);
   }
 
   /** Opens a WebSocket for this Atomic Server URL */

@@ -141,7 +141,6 @@ msgstr "Ontologies"
 msgid "App"
 msgstr "App"
 
-#: src/components/OverlayContainer.tsx
 #: src/routes/Search/SearchOverlay.tsx
 #: src/routes/Search/SearchRoute.tsx
 #: src/views/EndpointPage.tsx
