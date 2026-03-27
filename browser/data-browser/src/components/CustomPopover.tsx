@@ -72,13 +72,20 @@ export const usePopover = ({
     setIsOpen,
   };
 
+  const hasFocusedRef = useRef(false);
+
   useOnValueChange(() => {
     setHasOpenInnerPopup(isOpen);
+
+    if (!isOpen) {
+      hasFocusedRef.current = false;
+    }
   }, [isOpen]);
 
   useEffect(() => {
-    if (isOpen && autoFocusElement && autoFocusElement.current) {
+    if (isOpen && autoFocusElement && autoFocusElement.current && !hasFocusedRef.current) {
       autoFocusElement.current.focus();
+      hasFocusedRef.current = true;
     }
   }, [isOpen, autoFocusElement]);
 

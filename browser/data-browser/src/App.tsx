@@ -5,6 +5,7 @@ import { registerHandlers } from './handlers';
 import { getAgentFromIDB } from './helpers/agentStorage';
 import { registerCustomCreateActions } from './components/forms/NewForm/CustomCreateActions';
 import { serverURLStorage } from './helpers/serverURLStorage';
+import { driveStorage } from './helpers/driveStorage';
 
 import { useEffect, type JSX } from 'react';
 import { RouterProvider } from '@tanstack/react-router';
@@ -32,6 +33,11 @@ const store = new Store({
   agent: initalAgent,
   serverUrl,
 });
+
+const initialDrive = driveStorage.get();
+if (initialDrive) {
+  store.setDrive(initialDrive);
+}
 
 import { bootstrap } from './bootstrap';
 bootstrap(store);

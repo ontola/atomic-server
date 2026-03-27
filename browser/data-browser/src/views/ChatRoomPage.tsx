@@ -13,7 +13,14 @@ import {
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useHotkeys } from 'react-hotkeys-hook';
-import { FaCopy, FaLink, FaMessage, FaPencil, FaReply, FaXmark } from 'react-icons/fa6';
+import {
+  FaCopy,
+  FaLink,
+  FaMessage,
+  FaPencil,
+  FaReply,
+  FaXmark,
+} from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import { AtomicLink } from '../components/AtomicLink';
 import { Button } from '../components/Button';
@@ -21,7 +28,6 @@ import { CommitDetail } from '../components/CommitDetail';
 import Markdown from '../components/datatypes/Markdown';
 import { Detail } from '../components/Detail';
 import { EditableTitle } from '../components/EditableTitle';
-import { NavBarSpacer } from '../components/NavBarSpacer';
 import { editURL } from '../helpers/navigation';
 import { ResourceInline } from './ResourceInline';
 import { ResourcePageProps } from './ResourcePage';
@@ -199,7 +205,6 @@ export function ChatRoomPage({ resource }: ResourcePageProps) {
             Send
           </SendButton>
         </MessageForm>
-        <NavBarSpacer baseMargin='2rem' position='bottom' />
       </Column>
     </FullPageWrapper>
   );
@@ -411,8 +416,7 @@ const MessageForm = styled.form`
 const FullPageWrapper = styled.div`
   display: flex;
   flex-direction: column;
-  /* I think this warrants a prettier solution */
-  height: calc(100vh - 4rem);
+  height: 100%;
   padding: 1rem;
   flex: 1;
 `;

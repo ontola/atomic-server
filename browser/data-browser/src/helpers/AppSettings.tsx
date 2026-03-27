@@ -8,7 +8,7 @@ import {
   type JSX,
 } from 'react';
 import { DarkModeOption, useDarkMode } from './useDarkMode';
-import { useCurrentAgent, useServerURL, Agent } from '@tomic/react';
+import { useCurrentAgent, useServerURL, Agent, useStore, StoreEvents } from '@tomic/react';
 import toast from 'react-hot-toast';
 import { SIDEBAR_TOGGLE_WIDTH } from '../components/SideBar';
 import { serverURLStorage } from './serverURLStorage';
@@ -32,19 +32,29 @@ export const AppSettingsContextProvider = (
   // == APPEARANCE ==
   const [darkMode, setDarkMode, darkModeSetting] = useDarkMode();
   const [mainColor, setMainColor] = useLocalStorage('mainColor', '#1b50d8');
-  const [navbarTop, setNavbarTop] = useLocalStorage('navbarTop', false);
   const [hideTemplates, setHideTemplates] = useLocalStorage(
     'hideTemplates',
     false,
-  );
-  const [navbarFloating, setNavbarFloating] = useLocalStorage(
-    'navbarFloating',
-    true,
   );
   const [sideBarLocked, setSideBarLocked] = useLocalStorage(
     'sideBarOpen',
     window.innerWidth > SIDEBAR_TOGGLE_WIDTH,
   );
+  const [navbarTop, setNavbarTop] = useLocalStorage('navbarTop', true);
+
+  const store = useStore();
+
+  useEffect(() => {
+    return store.on(StoreEvents.DriveChanged, newDrive => {
+      if (newDrive !== drive) {
+        innerSetDrive(newDrive);
+      }
+    });
+  }, [drive, store, innerSetDrive]);
+
+  useEffect(() => {
+    store.setDrive(drive);
+  }, [drive, store]);
 
   // == ACCESSIBILITY ==
   const [viewTransitionsDisabled, setViewTransitionsDisabled] = useLocalStorage(
@@ -114,10 +124,6 @@ export const AppSettingsContextProvider = (
       setDarkMode,
       mainColor,
       setMainColor,
-      navbarTop,
-      setNavbarTop,
-      navbarFloating,
-      setNavbarFloating,
       sideBarLocked,
       setSideBarLocked,
       agent,
@@ -131,6 +137,8 @@ export const AppSettingsContextProvider = (
       baseURL,
       setBaseURL,
       setServer,
+      navbarTop,
+      setNavbarTop,
     }),
     [
       drive,
@@ -140,10 +148,6 @@ export const AppSettingsContextProvider = (
       setDarkMode,
       mainColor,
       setMainColor,
-      navbarTop,
-      setNavbarTop,
-      navbarFloating,
-      setNavbarFloating,
       sideBarLocked,
       setSideBarLocked,
       agent,
@@ -157,6 +161,8 @@ export const AppSettingsContextProvider = (
       baseURL,
       setBaseURL,
       setServer,
+      navbarTop,
+      setNavbarTop,
     ],
   );
 
@@ -182,12 +188,6 @@ export interface AppSettings {
   drive: string;
   /** Sets the current Drive (and therefore, server!) */
   setDrive: (s: string) => void;
-  /** If the navbar should be at the top of the page */
-  navbarTop: boolean;
-  setNavbarTop: (s: boolean) => void;
-  /** If the navbar should be floating instead of being fixed at the top or bottom */
-  navbarFloating: boolean;
-  setNavbarFloating: (s: boolean) => void;
   /** If the Sidebar should be locked to the side */
   sideBarLocked: boolean;
   setSideBarLocked: (s: boolean) => void;
@@ -207,6 +207,9 @@ export interface AppSettings {
   setBaseURL: (s: string) => void;
   /** Robustly sets the server and adds it to the known list. */
   setServer: (s: string) => void;
+  /** Whether the navbar should be at the top or bottom */
+  navbarTop: boolean;
+  setNavbarTop: (b: boolean) => void;
 }
 
 const initialState: AppSettings = {
@@ -217,10 +220,6 @@ const initialState: AppSettings = {
   setMainColor: () => undefined,
   drive: '',
   setDrive: () => undefined,
-  navbarTop: false,
-  setNavbarTop: () => undefined,
-  navbarFloating: false,
-  setNavbarFloating: () => undefined,
   sideBarLocked: false,
   setSideBarLocked: () => undefined,
   agent: undefined,
@@ -234,6 +233,8 @@ const initialState: AppSettings = {
   baseURL: '',
   setBaseURL: () => undefined,
   setServer: () => undefined,
+  navbarTop: true,
+  setNavbarTop: () => undefined,
 };
 
 /** Hook for using App Settings, such as theme and darkmode */

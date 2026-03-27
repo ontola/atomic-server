@@ -447,19 +447,15 @@ msgid "The easiest way to create and share linked data."
 msgstr "The easiest way to create and share linked data."
 
 #. placeholder {0}: shortcuts.sidebarToggle
-#. placeholder {0}: shortcuts.sidebarToggle
 #: src/components/NavBar.tsx
-#: src/components/Navigation.tsx
 msgid "Show / hide sidebar ({0})"
 msgstr "Show / hide sidebar ({0})"
 
 #: src/components/NavBar.tsx
-#: src/components/Navigation.tsx
 msgid "Go back"
 msgstr "Go back"
 
 #: src/components/NavBar.tsx
-#: src/components/Navigation.tsx
 msgid "Go forward"
 msgstr "Go forward"
 
@@ -824,13 +820,11 @@ msgstr "🌑 Dark"
 msgid "🌕 Light"
 msgstr "🌕 Light"
 
-#: src/routes/AppSettings.tsx
-msgid "Navigation bar position"
-msgstr "Navigation bar position"
+#~ msgid "Navigation bar position"
+#~ msgstr "Navigation bar position"
 
-#: src/routes/AppSettings.tsx
-msgid "Floating"
-msgstr "Floating"
+#~ msgid "Floating"
+#~ msgstr "Floating"
 
 #: src/routes/AppSettings.tsx
 msgid "Bottom"
@@ -3944,3 +3938,16 @@ msgstr "The Ontology that"
 #: src/components/NavBar.tsx
 msgid "Search ({0})"
 msgstr "Search ({0})"
+
+#: src/routes/AppSettings.tsx
+msgid "NavBar position"
+msgstr "NavBar position"
+
+#~ msgid "Replying to"
+#~ msgstr "Replying to"
+
+#~ msgid "Clear reply"
+#~ msgstr "Clear reply"
+
+#~ msgid "Reply"
+#~ msgstr "Reply"
