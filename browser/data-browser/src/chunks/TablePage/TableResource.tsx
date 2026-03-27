@@ -21,7 +21,7 @@ import {
 import { TableNewRow, TableRow } from '@chunks/TablePage/TableRow';
 import { useTableColumns } from '@chunks/TablePage/useTableColumns';
 import { useTableData } from '@chunks/TablePage/useTableData';
-import { useId, useState, useCallback, useMemo } from 'react';
+import { useId, useState, useCallback, useMemo, useRef } from 'react';
 import { FancyTable } from '@chunks/TableEditor/TableEditor';
 import { NewColumnButton } from './NewColumnButton';
 import { TableHeading } from './TableHeading';
@@ -52,6 +52,46 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
     tableClass,
     invalidateCollection,
     addItemsToHistoryStack,
+  );
+
+  const nextIdRef = useRef(0);
+  const generateRowId = useCallback(() => {
+    nextIdRef.current += 1;
+
+    return `new-row-${nextIdRef.current}`;
+  }, []);
+
+  const [newRowIds, setNewRowIds] = useState<string[]>(() => [generateRowId()]);
+  const prevTotalMembersRef = useRef(collection.totalMembers);
+
+  // Synchronously adjust newRowIds when totalMembers changes.
+  // Using useEffect would cause a one-render delay where keys are inconsistent,
+  // leading to react-window recycling components with the wrong state.
+  const totalMembersDiff = collection.totalMembers - prevTotalMembersRef.current;
+
+  if (totalMembersDiff > 0) {
+    prevTotalMembersRef.current = collection.totalMembers;
+    const remaining = newRowIds.slice(totalMembersDiff);
+    setNewRowIds(remaining.length > 0 ? remaining : [generateRowId()]);
+  } else if (totalMembersDiff < 0) {
+    prevTotalMembersRef.current = collection.totalMembers;
+  }
+
+  const addNewRow = useCallback(() => {
+    setNewRowIds(prev => [...prev, generateRowId()]);
+  }, [generateRowId]);
+
+  const itemKey = useCallback(
+    (index: number) => {
+      if (index < collection.totalMembers) {
+        return `member-${index}`;
+      }
+
+      const newRowIndex = index - collection.totalMembers;
+
+      return newRowIds[newRowIndex] ?? `new-row-fallback-${index}`;
+    },
+    [collection.totalMembers, newRowIds],
   );
 
   const [showExpandedRowDialog, setShowExpandedRowDialog] = useState(false);
@@ -124,13 +164,14 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
           columns={columns}
           index={index}
           invalidateTable={invalidateCollection}
+          addNewRow={addNewRow}
         />
       );
     },
 
     // Resource can update a lot but its internals are stable so removing it from the array saves a lot of rerenders and shouldn't cause issues.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [collection, columns, invalidateCollection, resource.subject],
+    [collection, columns, invalidateCollection, resource.subject, addNewRow],
   );
 
   return (
@@ -139,7 +180,8 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
         readOnly={!canWrite}
         columns={columns}
         columnSizes={columnSizes}
-        itemCount={collection.totalMembers + 1}
+        itemCount={collection.totalMembers + newRowIds.length}
+        itemKey={itemKey}
         columnToKey={columnToKey}
         labelledBy={titleId}
         onClearRow={handleDeleteRow}

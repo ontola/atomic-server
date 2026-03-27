@@ -11,7 +11,7 @@ function StringCellEdit({
 }: EditCellProps<JSONValue>): JSX.Element {
   return (
     <InputBase
-      value={value as string}
+      value={(value as string) ?? ''}
       autoFocus
       onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
         onChange(e.target.value)
