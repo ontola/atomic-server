@@ -8,11 +8,14 @@ export class CollectionBuilder {
   private params: CollectionParams = {
     page_size: '30',
     include_nested: false,
+    drive: undefined,
   };
 
   public constructor(store: Store, server?: string) {
     this.store = store;
     this.server = server ?? new URL(store.getServerUrl()).origin;
+    // Auto-derive drive from server URL if not explicitly set
+    this.params.drive = this.params.drive ?? this.server;
   }
 
   public setProperty(property: string): CollectionBuilder {
@@ -47,6 +50,12 @@ export class CollectionBuilder {
 
   public setIncludeNested(includeNested: boolean): CollectionBuilder {
     this.params.include_nested = includeNested;
+
+    return this;
+  }
+
+  public setDrive(drive: string): CollectionBuilder {
+    this.params.drive = drive;
 
     return this;
   }

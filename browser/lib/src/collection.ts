@@ -8,6 +8,7 @@ export interface QueryFilter {
   value?: string;
   sort_by?: string;
   sort_desc?: boolean;
+  drive?: string;
 }
 
 export interface CollectionParams extends QueryFilter {
@@ -163,7 +164,9 @@ export class Collection {
     const url = new URL(`${this.server}/query`);
 
     for (const [key, value] of Object.entries(this.params)) {
-      url.searchParams.set(key, value);
+      if (value !== undefined) {
+        url.searchParams.set(key, value);
+      }
     }
 
     url.searchParams.set('current_page', `${page}`);
