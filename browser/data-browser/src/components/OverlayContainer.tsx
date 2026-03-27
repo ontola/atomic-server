@@ -4,7 +4,14 @@ import { styled } from 'styled-components';
 import { shortcuts } from './HotKeyWrapper';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { constructOpenURL } from '../helpers/navigation';
-import { useServerSearch, useStore, ai, core, type Ai, type Store } from '@tomic/react';
+import {
+  useServerSearch,
+  useStore,
+  ai,
+  core,
+  type Ai,
+  type Store,
+} from '@tomic/react';
 import { useSettings } from '../helpers/AppSettings';
 import { useQueryScopeHandler } from '../hooks/useQueryScope';
 import { Column, Row } from './Row';
@@ -486,7 +493,7 @@ function CardPreview({ subject }: { subject: string }): JSX.Element {
   );
 }
 
-const ResultCardDiv = styled.div<{ $selected?: boolean }>`
+const ResultRowWrapper = styled.div<{ $selected?: boolean }>`
   display: block;
   width: 100%;
   cursor: pointer;
@@ -502,9 +509,9 @@ const ResultCard: React.FC<ResultCardProps> = ({
   selected,
   onSelect,
 }) => (
-  <ResultCardDiv data-index={index} onClick={onSelect} $selected={selected}>
+  <ResultRowWrapper data-index={index} onClick={onSelect} $selected={selected}>
     <ResourceRow subject={subject} clickable />
-  </ResultCardDiv>
+  </ResultRowWrapper>
 );
 
 // ─── Shortcuts Overlay ────────────────────────────────────────────────────────
