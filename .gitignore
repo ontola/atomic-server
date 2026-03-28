@@ -12,3 +12,15 @@ server/assets_tmp
 scratchpad
 .claude
 .antigravitycli
+
+# Release binaries and one-off rustc scratch files at repo root
+/build/
+/test_opts
+/test_parse
+/test_opts.rs
+/test_parse.rs
+/test_url.rs
+
+# Merge-tool backup files (*.orig, *.rej)
+*.orig
+*.rej
