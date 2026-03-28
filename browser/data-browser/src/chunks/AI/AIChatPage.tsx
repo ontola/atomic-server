@@ -19,7 +19,6 @@ import {
   uiMessageToResource,
   messageResourcesToDisplayMessages,
 } from './chatConversionUtils';
-import { TagBar } from '@components/Tag/TagBar';
 import { RealAIChat } from './RealAIChat';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import { styled } from 'styled-components';
@@ -175,7 +174,6 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
         <Row>
           <SmallTitle resource={resource} />
         </Row>
-        <TagBar resource={resource} />
       </Column>
     </RealAIChat>
   );

@@ -2606,9 +2606,8 @@ msgstr "Preview hidden because the file is larger than{0} {1}."
 msgid "Load anyway ({0})"
 msgstr "Load anyway ({0})"
 
-#: src/components/Tag/TagBar.tsx
-msgid "Add tags"
-msgstr "Add tags"
+#~ msgid "Add tags"
+#~ msgstr "Add tags"
 
 #: src/components/forms/FileDropzone/FileDropzone.tsx
 msgid "<0/> Drop files here to upload."

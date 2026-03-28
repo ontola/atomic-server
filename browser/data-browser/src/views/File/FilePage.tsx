@@ -10,7 +10,6 @@ import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { ResourcePageProps } from '../ResourcePage';
 import { DownloadButton, DownloadIconButton } from './DownloadButton';
 import { FilePreview } from './FilePreview';
-import { TagBar } from '../../components/Tag/TagBar';
 
 /** Full page File resource for showing and downloading files */
 export function FilePage({ resource }: ResourcePageProps) {

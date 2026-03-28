@@ -1,6 +1,4 @@
 import { EditableTitle } from '@components/EditableTitle';
-import { HideInPrint } from '@components/HideInPrint';
-import { TagBar } from '@components/Tag/TagBar';
 import { dataBrowser, useYDoc } from '@tomic/react';
 import type { ResourcePageProps } from '@views/ResourcePage';
 import { lazy, Suspense } from 'react';
@@ -37,13 +35,18 @@ export const DocumentV2FullPage: React.FC<ResourcePageProps> = ({
     return <div>Loading...</div>;
   }
 
+  const focusEditor = () => {
+    document.getElementById('document-editor')?.focus();
+  };
+
   return (
     <FullPageWrapper>
       <DocumentContainer>
-        <EditableTitle resource={resource} />
+        <EditableTitle resource={resource} onCommit={focusEditor} />
 
         <Suspense fallback={<div>Loading...</div>}>
           <CollaborativeEditor
+            id='document-editor'
             resource={resource}
             doc={doc}
             property={dataBrowser.properties.documentContent}

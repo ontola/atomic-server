@@ -59,7 +59,8 @@ export function EditableTitle({
 
   useHotkeys(
     'enter',
-    () => {
+    e => {
+      e.preventDefault();
       setIsEditing(false);
       onCommit?.();
     },
@@ -95,7 +96,10 @@ export function EditableTitle({
       placeholder={placeholder}
       onChange={e => setText(e.target.value)}
       value={text || ''}
-      onBlur={() => { setIsEditing(false); onCommit?.(); }}
+      onBlur={() => {
+        setIsEditing(false);
+        onCommit?.();
+      }}
       className={className}
     />
   ) : (

@@ -7,7 +7,6 @@ import { ElementShow } from './Element';
 import { Button } from '../components/Button';
 import { ResourcePageProps } from './ResourcePage';
 import { Column, Row } from '../components/Row';
-import { TagBar } from '../components/Tag/TagBar';
 import { upgradeDocument } from './Document/upgradeDocument';
 import toast from 'react-hot-toast';
 

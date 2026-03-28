@@ -1596,9 +1596,8 @@ msgstr "<0/> Supprimer"
 msgid "There are no tags yet."
 msgstr "Il n'y a pas encore d'étiquettes."
 
-#: src/components/Tag/TagBar.tsx
-msgid "Add tags"
-msgstr "Ajouter des étiquettes"
+#~ msgid "Add tags"
+#~ msgstr "Ajouter des étiquettes"
 
 #: src/routes/History/HistoryRoute.tsx
 msgid "Resource version updated"

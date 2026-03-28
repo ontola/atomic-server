@@ -1502,9 +1502,8 @@ msgstr "Tag hinzufügen"
 msgid "<0/> Delete"
 msgstr "<0/> Löschen"
 
-#: src/components/Tag/TagBar.tsx
-msgid "Add tags"
-msgstr "Tags hinzufügen"
+#~ msgid "Add tags"
+#~ msgstr "Tags hinzufügen"
 
 #: src/components/Tag/TagSelectPopover.tsx
 msgid "There are no tags yet."
