@@ -19,6 +19,7 @@ pub fn query_endpoint() -> Endpoint {
             urls::COLLECTION_INCLUDE_NESTED.to_string(),
             urls::COLLECTION_SORT_BY.to_string(),
             urls::COLLECTION_SORT_DESC.to_string(),
+            "drive".to_string(),
         ]
         .into(),
         description: "Query the server for resources matching the query filter.".to_string(),

@@ -410,6 +410,7 @@ pub async fn construct_collection_from_params(
     let mut name = None;
     let mut include_nested = false;
     let mut include_external = false;
+    let mut drive: Option<Subject> = None;
 
     if let Ok(val) = resource.get(urls::COLLECTION_PROPERTY) {
         property = Some(val.to_string());
@@ -439,6 +440,7 @@ pub async fn construct_collection_from_params(
             "page_size" => page_size = v.parse::<usize>()?,
             "include_nested" => include_nested = v.parse::<bool>()?,
             "include_external" => include_external = v.parse::<bool>()?,
+            "drive" => drive = Some(Subject::from(v.as_ref())),
             e => {
                 return Err(format!("Invalid query param: {}", e).into());
             }
@@ -455,7 +457,7 @@ pub async fn construct_collection_from_params(
         name,
         include_nested,
         include_external,
-        drive: Some(drive_prefix_from_subject(resource.get_subject())),
+        drive: Some(drive.unwrap_or_else(|| drive_prefix_from_subject(resource.get_subject()))),
     };
     let collection = Collection::collect_members(store, collection_builder, for_agent).await?;
     collection.add_to_resource(resource, store).await
