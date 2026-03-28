@@ -17,6 +17,7 @@ import { initBugsnag } from './helpers/loggingHandlers';
 import { ErrorBoundary } from './views/ErrorPage';
 import CrashPage from './views/CrashPage';
 import { AppSettingsContextProvider } from './helpers/AppSettings';
+import { RootWelcomeLayoutProvider } from './context/RootWelcomeLayoutContext';
 import { NavStateProvider } from './components/NavState';
 import { Toaster } from './components/Toaster';
 import { AISettingsContextProvider } from '@components/AI/AISettingsContext';
@@ -53,47 +54,49 @@ export const Providers: React.FC<React.PropsWithChildren> = ({ children }) => {
     <NavStateProvider>
       <LocaleProvider>
         <AppSettingsContextProvider>
-          <AISettingsContextProvider>
-            <LazyMCPProvider>
-              <ControlLockProvider>
-                <HotKeysWrapper>
-                  <StyleSheetManager shouldForwardProp={shouldForwardProp}>
-                    <ThemeWrapper>
-                      <GlobalStyle />
-                      <ErrBoundary FallbackComponent={CrashPage}>
-                        {/* Default form validation provider. Does not do anything on its own but will make sure useValidation works without context*/}
-                        <FormValidationContextProvider
-                          onValidationChange={() => undefined}
-                        >
-                          <Toaster />
-                          <CustomViewProvider>
-                            <MetaSetter />
-                            <DropdownContainer>
-                              <DialogGlobalContextProvider>
-                                <PopoverContainer>
-                                  <DropdownContainer>
-                                    <CustomContextItemsProvider>
-                                      <NewResourceUIProvider>
-                                        <SkipNav />
-                                        <SearchOverlayContextProvider>
-                                          <NavWrapper>{children}</NavWrapper>
-                                        </SearchOverlayContextProvider>
-                                      </NewResourceUIProvider>
-                                    </CustomContextItemsProvider>
-                                  </DropdownContainer>
-                                </PopoverContainer>
-                                <NetworkIndicator />
-                              </DialogGlobalContextProvider>
-                            </DropdownContainer>
-                          </CustomViewProvider>
-                        </FormValidationContextProvider>
-                      </ErrBoundary>
-                    </ThemeWrapper>
-                  </StyleSheetManager>
-                </HotKeysWrapper>
-              </ControlLockProvider>
-            </LazyMCPProvider>
-          </AISettingsContextProvider>
+          <RootWelcomeLayoutProvider>
+            <AISettingsContextProvider>
+              <LazyMCPProvider>
+                <ControlLockProvider>
+                  <HotKeysWrapper>
+                    <StyleSheetManager shouldForwardProp={shouldForwardProp}>
+                      <ThemeWrapper>
+                        <GlobalStyle />
+                        <ErrBoundary FallbackComponent={CrashPage}>
+                          {/* Default form validation provider. Does not do anything on its own but will make sure useValidation works without context*/}
+                          <FormValidationContextProvider
+                            onValidationChange={() => undefined}
+                          >
+                            <Toaster />
+                            <CustomViewProvider>
+                              <MetaSetter />
+                              <DropdownContainer>
+                                <DialogGlobalContextProvider>
+                                  <PopoverContainer>
+                                    <DropdownContainer>
+                                      <CustomContextItemsProvider>
+                                        <NewResourceUIProvider>
+                                          <SkipNav />
+                                          <SearchOverlayContextProvider>
+                                            <NavWrapper>{children}</NavWrapper>
+                                          </SearchOverlayContextProvider>
+                                        </NewResourceUIProvider>
+                                      </CustomContextItemsProvider>
+                                    </DropdownContainer>
+                                  </PopoverContainer>
+                                  <NetworkIndicator />
+                                </DialogGlobalContextProvider>
+                              </DropdownContainer>
+                            </CustomViewProvider>
+                          </FormValidationContextProvider>
+                        </ErrBoundary>
+                      </ThemeWrapper>
+                    </StyleSheetManager>
+                  </HotKeysWrapper>
+                </ControlLockProvider>
+              </LazyMCPProvider>
+            </AISettingsContextProvider>
+          </RootWelcomeLayoutProvider>
         </AppSettingsContextProvider>
       </LocaleProvider>
     </NavStateProvider>

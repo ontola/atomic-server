@@ -58,9 +58,9 @@ test.describe('data-browser', async () => {
 
     await openAgentPage(page);
     await page.click('[data-test="sign-out"]');
-    await expect(page.locator('text=Enter your Agent secret')).toBeVisible();
+    await expect(page.getByLabel('Enter your Agent Secret')).toBeVisible();
     await page.reload();
-    await expect(page.locator('text=Enter your Agent secret')).toBeVisible();
+    await expect(page.getByLabel('Enter your Agent Secret')).toBeVisible();
   });
 
   /**

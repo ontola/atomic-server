@@ -11,6 +11,8 @@ import CrashPage from './CrashPage';
 import { clearAllLocalData } from '../helpers/clearData';
 import { AtomicLink } from '../components/AtomicLink';
 import { paths } from '../routes/paths';
+import { isRootWelcomeResourceError } from '../helpers/isRootWelcomeResourceError';
+import { RootWelcomeGate } from './RootWelcomeGate';
 
 import type { JSX } from 'react';
 
@@ -21,6 +23,10 @@ import type { JSX } from 'react';
 function ErrorPage({ resource }: ResourcePageProps): JSX.Element {
   const { agent, baseURL } = useSettings();
   const store = useStore();
+
+  if (isRootWelcomeResourceError(resource, agent, baseURL)) {
+    return <RootWelcomeGate subject={resource.subject} />;
+  }
 
   if (isUnauthorized(resource.error)) {
     return (
@@ -58,9 +64,8 @@ function ErrorPage({ resource }: ResourcePageProps): JSX.Element {
         <ErrorBlock error={resource.error!} />
         {resource.subject === baseURL && (
           <p>
-            If this host has not been bound to a Drive yet, continue at{' '}
-            <AtomicLink path={paths.onboarding}>the onboarding page</AtomicLink>
-            .
+            If you have not set up an identity on this server yet,{' '}
+            <AtomicLink path={paths.onboarding}>create one here</AtomicLink>.
           </p>
         )}
         <Row>

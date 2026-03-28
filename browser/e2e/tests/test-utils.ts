@@ -47,35 +47,22 @@ export const currentDialogOkButton = 'dialog[open] >> footer >> text=Ok';
 // Depends on server index throttle time, `commit_monitor.rs`
 export const REBUILD_INDEX_TIME = 5000;
 
-/** Checks server URL and browser URL */
+/**
+ * Ensures the app is on a drive with sidebar chrome (ready for tests).
+ * Fresh `/` may show the root welcome gate with no sidebar — then we use devDrive.
+ */
 export const before = async ({ page }: { page: Page }): Promise<boolean> => {
   if (!SERVER_URL) {
     throw new Error('serverUrl is not set');
   }
 
-  // Open the server
   await page.goto(FRONTEND_URL);
 
-  // Handle onboarding if the server is uninitialized
-  const onboardingHeading = page.getByRole('heading', {
-    name: 'Welcome to Atomic Data',
-  });
-  if (await onboardingHeading.isVisible()) {
-    const test_agent =
-      'eyJwcml2YXRlS2V5IjoidDBDM2pQYW8wUmMyNHVsVWw5ZzZrcFUrRlo0clFNK1I5dDhpaVo4SHBrQT0iLCJzdWJqZWN0IjoiZGlkOmFkOmFnZW50OnNMS1VIK1VKaVRNbStkeHpiQUZmMWgzZ0RvbldRYU9nVSsrMkhEMWJ1ZVE9IiwiaW5pdGlhbERyaXZlIjoiaHR0cDovL2xvY2FsaG9zdDo5ODgzIn0K';
-    await page.locator('textarea').fill(test_agent);
-    await page.getByRole('button', { name: 'Import & Connect' }).click();
-    await page.waitForURL(/\/app\/show/, { timeout: 15000 });
-
-    await page.goto(
-      `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(SERVER_URL)}`,
-    );
-    await expect(sideBarDriveSwitcher(page)).toBeVisible({ timeout: 15000 });
-
-    return true;
+  try {
+    await expect(currentDriveTitle(page)).toBeVisible({ timeout: 4000 });
+  } catch {
+    await devDrive(page);
   }
-
-  await expect(currentDriveTitle(page)).toBeVisible();
 
   return false;
 };
@@ -89,10 +76,26 @@ export async function setTitle(page: Page, title: string) {
   await waiter;
 }
 
+/**
+ * Signs in with the shared test secret. Works from the drive (sidebar → Login)
+ * or from the root welcome gate / `/app/agent` where the secret field is already shown.
+ */
 export async function signIn(page: Page, secret: string = SECRET) {
-  await page.getByRole('link', { name: 'Login / New User' }).click();
+  const loginLink = page.getByRole('link', { name: 'Login / New User' });
+  const usedSidebarNav = await loginLink
+    .isVisible({ timeout: 3000 })
+    .catch(() => false);
+
+  if (usedSidebarNav) {
+    await loginLink.click();
+  }
+
   await page.getByLabel('Enter your Agent Secret').fill(secret);
-  await page.goBack();
+  await page.getByRole('button', { name: 'Sign in' }).click();
+
+  if (usedSidebarNav) {
+    await page.goBack();
+  }
 }
 
 /**

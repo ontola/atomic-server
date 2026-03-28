@@ -38,6 +38,15 @@ export function isUnauthorized(error?: Error): boolean {
   return false;
 }
 
+/** True when the error indicates the resource does not exist (e.g. no root resource yet). */
+export function isNotFound(error?: Error): boolean {
+  if (error instanceof AtomicError && error.type === ErrorType.NotFound) {
+    return true;
+  }
+
+  return false;
+}
+
 export function isAtomicError(error: Error): error is AtomicError {
   return error instanceof AtomicError;
 }

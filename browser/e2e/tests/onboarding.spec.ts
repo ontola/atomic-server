@@ -79,12 +79,11 @@ test.describe('onboarding', () => {
     const context2 = await browser.newContext();
     const page2 = await context2.newPage();
 
-    // Sign in with the secret on the SettingsAgent page
+    // Sign in with the secret on the SettingsAgent page (same flow as LoggedOutAgentPanel)
     await page2.goto(`${FRONTEND_URL}/app/agent`);
     await page2.getByLabel('Enter your Agent Secret').fill(secret!);
+    await page2.getByRole('button', { name: 'Sign in' }).click();
 
-    // SettingsAgent sign-in does NOT auto-navigate, so we need to wait for the
-    // agent to be set and then manually navigate to verify the profile name
     // Wait for "User Settings" heading which indicates successful sign-in
     await expect(
       page2.getByRole('heading', { name: 'User Settings' }),
