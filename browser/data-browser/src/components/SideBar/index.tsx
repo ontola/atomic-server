@@ -75,14 +75,14 @@ export function SideBar(): JSX.Element {
           onIsRearangingChange={setIsRearanging}
         />
         <MenuWrapper>
-          <Column gap='0.5rem' align='flex-start'>
+          <Column gap='0.5rem' align='stretch'>
             {enabledPanels.has(Panel.Ontologies) && (
               <SideBarPanel title='Ontologies' key={drive}>
                 <OntologiesPanel />
               </SideBarPanel>
             )}
             <SideBarPanel title='App'>
-              <Column align='flex-start'>
+              <Column gap='0.5rem' align='stretch'>
                 <AppMenu onItemClick={closeSideBar} />
                 <About />
               </Column>
@@ -153,6 +153,11 @@ const MenuWrapper = styled.div`
   justify-items: flex-end;
   display: flex;
   justify-content: end;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  /* Same horizontal inset as drive {@link SideBarDrive} ListWrapper */
+  padding-inline: ${p => p.theme.margin}rem;
 `;
 
 /** Just needed for positioning the overlay */

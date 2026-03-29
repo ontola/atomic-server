@@ -139,6 +139,7 @@ export function SideBarDrive({
                 <QuickCreateRow
                   parent={drive}
                   newResourceButtonTestId='sidebar-new-resource'
+                  onItemClick={onItemClick}
                 />
               </NewResourceRow>
             )}

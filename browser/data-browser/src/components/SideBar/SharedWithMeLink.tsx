@@ -1,7 +1,10 @@
 import { useArray, useResource, core } from '@tomic/react';
-import { AtomicLink } from '../AtomicLink';
-import { SideBarItem } from './SideBarItem';
-import { SideBarMenuRowIcon } from './SideBarMenuItem';
+import {
+  SideBarMenuItemLink,
+  SideBarMenuRow,
+  SideBarMenuRowIcon,
+  SideBarMenuRowLabel,
+} from './SideBarMenuItem';
 import { getIconForClass } from '../../helpers/iconMap';
 import type { JSX } from 'react';
 
@@ -26,13 +29,13 @@ export function SharedWithMeLink({
     | undefined;
 
   return (
-    <AtomicLink subject={subject} clean data-testid={dataTestId}>
-      <SideBarItem onClick={onClick} title={description}>
+    <SideBarMenuItemLink subject={subject} clean data-testid={dataTestId}>
+      <SideBarMenuRow onClick={onClick} title={description}>
         <SideBarMenuRowIcon>
           <Icon />
         </SideBarMenuRowIcon>
-        {label}
-      </SideBarItem>
-    </AtomicLink>
+        <SideBarMenuRowLabel>{label}</SideBarMenuRowLabel>
+      </SideBarMenuRow>
+    </SideBarMenuItemLink>
   );
 }

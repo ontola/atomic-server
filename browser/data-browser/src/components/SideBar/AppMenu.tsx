@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
+import { styled } from 'styled-components';
 import {
   FaGear,
   FaInfo,
@@ -60,7 +61,7 @@ export function AppMenu({ onItemClick }: AppMenuProps): JSX.Element {
   }, []);
 
   return (
-    <section aria-label='App menu'>
+    <AppMenuSection aria-label='App menu'>
       <SideBarMenuItem
         icon={<FaUser />}
         label={
@@ -104,6 +105,12 @@ export function AppMenu({ onItemClick }: AppMenuProps): JSX.Element {
           onClick={install}
         />
       )}
-    </section>
+    </AppMenuSection>
   );
 }
+
+const AppMenuSection = styled.section`
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+`;

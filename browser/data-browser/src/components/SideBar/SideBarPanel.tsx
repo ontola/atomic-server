@@ -54,11 +54,11 @@ const HeaderButton = styled.button`
   padding: 0.35rem 0.5rem;
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   cursor: pointer;
   border-radius: ${p => p.theme.radius};
-  /* Hit target only as wide as the label (not the whole sidebar) */
-  width: max-content;
-  max-width: 100%;
+  box-sizing: border-box;
+  width: 100%;
   text-align: start;
 
   &:hover {
@@ -76,16 +76,18 @@ const HeaderButton = styled.button`
 `;
 
 const StyledCollapse = styled(Collapse)<{ $embedded: boolean }>`
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
   padding-inline: 0;
   padding-bottom: ${p => (p.$embedded ? '0.35rem' : '0')};
 `;
 
 const Wrapper = styled.div<{ $embedded: boolean }>`
-  /* Hug content width; avoid a full-width collapsible bar in a wide sidebar */
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  width: max-content;
+  align-items: stretch;
+  width: 100%;
   max-width: 100%;
   min-width: 0;
   max-height: fit-content;
@@ -97,8 +99,5 @@ const Wrapper = styled.div<{ $embedded: boolean }>`
     margin-top: 0.5rem;
     padding-top: 0.25rem;
   `
-      : `
-    /* Match drive list: same horizontal inset as ListWrapper (theme.margin) */
-    padding-inline: ${p.theme.margin}rem;
-  `}
+      : ''}
 `;
