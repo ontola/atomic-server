@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Agent, JSCryptoProvider, core, server, useStore } from '@tomic/react';
+import { fetchPersonalDriveSubject } from '../helpers/personalDrive';
 import { useSettings } from '../helpers/AppSettings';
 import { saveAgentToIDB } from '../helpers/agentStorage';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
@@ -11,7 +12,13 @@ import { styled } from 'styled-components';
 import { InputStyled, InputWrapper } from './forms/InputStyles';
 import Field from './forms/Field';
 
-type Step = 'idle' | 'creating' | 'profile' | 'drive' | 'secret' | 'verify';
+type Step =
+  | 'idle'
+  | 'creating'
+  | 'profile'
+  | 'creating-drive'
+  | 'secret'
+  | 'verify';
 
 interface NewIdentitySectionProps {
   /** Called after the drive is created (or skipped). */
@@ -36,7 +43,9 @@ interface IdentityData {
 
 /**
  * Multi-step onboarding flow for creating a new identity.
- * Steps: idle → creating → profile → drive → secret → verify → done
+ * Steps: idle → creating → profile → creating-drive → secret → verify → done
+ *
+ * After the username step we create one private drive (read/write: agent only) and set it as home.
  */
 export function NewIdentitySection({
   onDone,
@@ -52,7 +61,6 @@ export function NewIdentitySection({
   const [error, setError] = useState<string | undefined>();
   const [identity, setIdentity] = useState<IdentityData | null>(null);
   const [hasCopied, setHasCopied] = useState(false);
-  const [profileName, setProfileName] = useState('');
 
   useEffect(() => {
     if (autoStart) {
@@ -91,28 +99,24 @@ export function NewIdentitySection({
     }
   }
 
-  // ─── Step: Profile ───────────────────────────────────────────────────────
-
-  function handleProfileNext() {
-    setStep('drive');
-  }
+  // ─── Step: Profile → private drive (automatic) ───────────────────────────
 
   function handleProfileSave(name: string) {
-    setProfileName(name);
-    setIdentity(prev => (prev ? { ...prev, profileName: name } : null));
-    setStep('drive');
+    const trimmed = name.trim();
+    setIdentity(prev => (prev ? { ...prev, profileName: trimmed } : null));
+    void createPersonalDrive(trimmed);
   }
 
   function handleSkipProfile() {
-    setProfileName('');
-    setStep('drive');
+    setIdentity(prev => (prev ? { ...prev, profileName: '' } : null));
+    void createPersonalDrive('');
   }
 
-  // ─── Step: Drive ──────────────────────────────────────────────────────────
-
-  async function handleCreateDrive(name: string) {
+  /** One private drive per user on this server; becomes default home / initialDrive. */
+  async function createPersonalDrive(username: string) {
     if (!identity) return;
 
+    setStep('creating-drive');
     setLoading(true);
     setError(undefined);
 
@@ -122,47 +126,40 @@ export function NewIdentitySection({
         throw new Error('No agent set');
       }
 
-      // Get the agent resource and load it fromset profile name BEFORE creating drive
-      // This ensures profile name is saved atomically with the drive
       const agentResource = await store.getResource(identity.agentSubject);
-      if (identity.profileName) {
-        agentResource.set(core.properties.name, identity.profileName);
+      if (username) {
+        agentResource.set(core.properties.name, username);
       }
 
-      // Create the drive resource (not yet saved)
+      const driveName = username ? `${username}'s Drive` : 'Personal';
+
       const resource = await store.newResource({
         isA: server.classes.drive,
         noParent: true,
         propVals: {
-          [core.properties.name]: name.trim(),
+          [core.properties.name]: driveName,
           [core.properties.description]:
-            'This is your personal Atomic Data drive. Edit this description to tell visitors what this space is about.',
+            'Your private space on this server. Only you can read and write here.',
           [core.properties.write]: [agent.subject],
           [core.properties.read]: [agent.subject],
         },
       });
 
-      // Add the new drive to the agent's drives array
+      agentResource.set(core.properties.personalDrive, resource.subject);
       agentResource.push(server.properties.drives, [resource.subject]);
 
-      // Save BOTH the agent (with profile name + drives) and the drive
-      // This ensures everything is persisted atomically - no partial state
       await Promise.all([agentResource.save(), resource.save()]);
 
-      // Build the secret WITH the drive URL
       const finalSecret = Agent.buildSecret(
         identity.privateKey,
         identity.agentSubject,
         resource.subject,
       );
 
-      // Save the secret with the drive URL
       await saveAgentToIDB(finalSecret);
 
-      // Update identity with the complete secret
       setIdentity(prev => (prev ? { ...prev, secret: finalSecret } : null));
 
-      // Update store agent with new secret so initialDrive is set
       const updatedAgent = await Agent.fromSecret(finalSecret);
       store.setAgent(updatedAgent);
 
@@ -172,27 +169,13 @@ export function NewIdentitySection({
         await onAfterCreate(resource.subject);
       }
 
-      // Now show the secret step
       setStep('secret');
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      setStep('profile');
     } finally {
       setLoading(false);
     }
-  }
-
-  function handleSkipDrive() {
-    if (!identity) return;
-
-    // Build secret without drive URL (skip drive creation)
-    const finalSecret = Agent.buildSecret(
-      identity.privateKey,
-      identity.agentSubject,
-      undefined,
-    );
-
-    setIdentity(prev => (prev ? { ...prev, secret: finalSecret } : null));
-    setStep('secret');
   }
 
   // ─── Step: Confirm Secret ───────────────────────────────────────────────
@@ -224,10 +207,11 @@ export function NewIdentitySection({
       await saveAgentToIDB(trimmedInput);
       setAgent(agent);
 
-      // Navigate to the drive
-      if (agent.initialDrive) {
-        setDrive(agent.initialDrive);
-        navigate(constructOpenURL(agent.initialDrive));
+      const home = await fetchPersonalDriveSubject(store, agent);
+
+      if (home) {
+        setDrive(home);
+        navigate(constructOpenURL(home));
       }
 
       onDone();
@@ -247,7 +231,6 @@ export function NewIdentitySection({
   function handleStartOver() {
     setIdentity(null);
     setHasCopied(false);
-    setProfileName('');
     setError(undefined);
     setStep('idle');
   }
@@ -260,7 +243,10 @@ export function NewIdentitySection({
 
       {step === 'idle' && (
         <Column gap='1rem'>
-          <p>Generate a new self-sovereign Agent and Drive on this server.</p>
+          <p>
+            Create a new Agent on this server. We will set your username and
+            create a private drive as your home.
+          </p>
           {error && <ErrorText>{error}</ErrorText>}
           <Button onClick={handleCreate} disabled={loading}>
             {loading ? 'Generating...' : 'Create new identity'}
@@ -276,21 +262,17 @@ export function NewIdentitySection({
 
       {step === 'profile' && identity && (
         <ProfileStep
-          agentSubject={identity.agentSubject}
-          onNext={handleProfileNext}
+          error={error}
+          loading={loading}
           onSave={handleProfileSave}
+          onSkip={handleSkipProfile}
         />
       )}
 
-      {step === 'drive' && (
-        <DriveStep
-          profileName={profileName}
-          loading={loading}
-          error={error}
-          verifySecret={verifySecret}
-          onCreate={handleCreateDrive}
-          onSkip={handleSkipDrive}
-        />
+      {step === 'creating-drive' && (
+        <Column gap='1rem'>
+          <p>Creating your personal drive…</p>
+        </Column>
       )}
 
       {step === 'secret' && identity && (
@@ -317,8 +299,8 @@ export function NewIdentitySection({
 
 // ─── Sub-components ─────────────────────────────────────────────────────────
 
-const STEPS_SECRET = ['profile', 'drive', 'secret', 'verify'];
-const STEPS_NO_SECRET = ['profile', 'drive', 'secret'];
+const STEPS_SECRET = ['profile', 'secret', 'verify'];
+const STEPS_NO_SECRET = ['profile', 'secret'];
 
 function StepIndicator({
   step,
@@ -330,7 +312,12 @@ function StepIndicator({
   const steps = verifySecret ? STEPS_SECRET : STEPS_NO_SECRET;
   const currentIndex = steps.indexOf(step);
 
-  if (currentIndex === -1 || step === 'idle' || step === 'creating') {
+  if (
+    currentIndex === -1 ||
+    step === 'idle' ||
+    step === 'creating' ||
+    step === 'creating-drive'
+  ) {
     return null;
   }
 
@@ -459,13 +446,15 @@ function VerifyStep({
 }
 
 function ProfileStep({
-  agentSubject,
-  onNext,
+  error,
+  loading,
   onSave,
+  onSkip,
 }: {
-  agentSubject: string;
-  onNext: () => void;
+  error: string | undefined;
+  loading: boolean;
   onSave: (name: string) => void;
+  onSkip: () => void;
 }) {
   const [name, setName] = useState('');
 
@@ -480,12 +469,16 @@ function ProfileStep({
     <Column gap='1rem'>
       <h3>Set your profile name!</h3>
       <p>
-        Note that this is only set for this specific server, but you can use
-        your secret also on other servers.
+        This name is shown on this server. We also create a private drive named
+        after you as your home; you can add more drives later in settings.
       </p>
       <form onSubmit={handleSave}>
         <Column gap='1rem'>
-          <Field label='Profile Name' fieldId='profile-name'>
+          <Field
+            label='Profile Name'
+            fieldId='profile-name'
+            error={error ? new Error(error) : undefined}
+          >
             <InputWrapper>
               <InputStyled
                 id='profile-name'
@@ -495,85 +488,17 @@ function ProfileStep({
                 placeholder='Enter your name'
                 autoComplete='off'
                 autoFocus
-              />
-            </InputWrapper>
-          </Field>
-          <Row gap='1rem'>
-            <Button type='submit' disabled={!name.trim()}>
-              Save & Next
-            </Button>
-            <Button type='button' subtle onClick={onNext}>
-              Skip
-            </Button>
-          </Row>
-        </Column>
-      </form>
-    </Column>
-  );
-}
-
-function DriveStep({
-  profileName,
-  loading,
-  error,
-  verifySecret,
-  onCreate,
-  onSkip,
-}: {
-  profileName: string;
-  loading: boolean;
-  error: string | undefined;
-  verifySecret?: boolean;
-  onCreate: (name: string) => void;
-  onSkip: () => void;
-}) {
-  const [name, setName] = useState(profileName ? `${profileName}'s Drive` : '');
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (name.trim()) {
-      onCreate(name.trim());
-    }
-  }
-
-  return (
-    <Column gap='1rem'>
-      <h3>
-        {profileName
-          ? `${profileName}, create your Drive`
-          : 'Create your Drive'}
-      </h3>
-      <p>
-        A Drive is your personal data space on this server. You can create more
-        drives later.
-      </p>
-      <form onSubmit={handleSubmit}>
-        <Column gap='1rem'>
-          <Field
-            label='Drive Name'
-            fieldId='drive-name'
-            error={error ? new Error(error) : undefined}
-          >
-            <InputWrapper>
-              <InputStyled
-                id='drive-name'
-                value={name}
-                onChange={e => setName(e.target.value)}
-                type='text'
-                autoComplete='off'
-                autoFocus
+                disabled={loading}
               />
             </InputWrapper>
           </Field>
           <Row gap='1rem'>
             <Button type='submit' disabled={loading || !name.trim()}>
-              {loading ? 'Creating...' : 'Create Drive'}
+              {loading ? 'Creating drive…' : 'Save & continue'}
             </Button>
-            {!verifySecret && (
-              <Button type='button' subtle onClick={onSkip}>
-                Skip
-              </Button>
-            )}
+            <Button type='button' subtle onClick={onSkip} disabled={loading}>
+              Skip (drive will be named &quot;Personal&quot;)
+            </Button>
           </Row>
         </Column>
       </form>

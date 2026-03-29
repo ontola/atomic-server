@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   useResource,
   useArray,
@@ -68,6 +68,10 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = ({
     disabled: !canWrite,
   });
 
+  const hasSubResources = subResources.length > 0;
+
+  const toggleExpanded = useCallback(() => setOpen(prev => !prev), []);
+
   const TitleComp = useMemo(
     () => (
       <SidebarItemTitle
@@ -77,12 +81,24 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = ({
         ref={setNodeRef}
         listeners={canWrite ? listeners : undefined}
         attributes={canWrite ? attributes : undefined}
+        expandable={hasSubResources}
+        expanded={open}
+        onToggleExpand={hasSubResources ? toggleExpanded : undefined}
       />
     ),
-    [subject, active, onClick, listeners, attributes, canWrite, setNodeRef],
+    [
+      subject,
+      active,
+      onClick,
+      listeners,
+      attributes,
+      canWrite,
+      setNodeRef,
+      hasSubResources,
+      open,
+      toggleExpanded,
+    ],
   );
-
-  const hasSubResources = subResources.length > 0;
   const isDragging = draggingNode?.id === subject;
   const isHoveringOver = over?.data.current?.parent === subject;
   const hierarchyWithItself = [...renderedHierarchy, subject];
@@ -137,6 +153,7 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = ({
         disabled={!hasSubResources}
         onStateToggle={setOpen}
         data-test='resource-sidebar'
+        summaryCaret={false}
         title={TitleComp}
       >
         <DropEdge parentHierarchy={hierarchyWithItself} position={0} />

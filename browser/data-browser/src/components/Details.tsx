@@ -18,6 +18,11 @@ export interface DetailsProps {
   /** Event that fires when a user opens or closes the details */
   onStateToggle?: (state: boolean) => void;
   noIndent?: boolean;
+  /**
+   * When false, no leading caret in the summary (e.g. resource sidebar puts expand
+   * affordance in the title row’s icon slot). Default true.
+   */
+  summaryCaret?: boolean;
 }
 
 /** A collapsible item with a title. Similar to the <details> HTML element. */
@@ -29,6 +34,7 @@ export function Details({
   disabled,
   noIndent,
   onStateToggle,
+  summaryCaret = true,
 }: PropsWithChildren<DetailsProps>): JSX.Element {
   const [isOpen, setIsOpen] = useState(initialState);
 
@@ -48,22 +54,27 @@ export function Details({
     });
   }, [onStateToggle]);
 
+  const summaryRowClickToggle =
+    summaryCaret && !disabled ? toggleOpen : undefined;
+
   return (
     <>
-      <SummaryWrapper onClick={disabled ? undefined : toggleOpen}>
-        <StyledIconButton
-          type='button'
-          title={isOpen ? 'collapse' : 'expand'}
-          onClick={e => {
-            e.stopPropagation();
-            toggleOpen();
-          }}
-          hide={!!disabled}
-          aria-label={isOpen ? 'collapse' : 'expand'}
-        >
-          <Icon $turn={!!isOpen} />
-        </StyledIconButton>
-        <TitleWrapper>{title}</TitleWrapper>
+      <SummaryWrapper onClick={summaryRowClickToggle}>
+        {summaryCaret ? (
+          <StyledIconButton
+            type='button'
+            title={isOpen ? 'collapse' : 'expand'}
+            onClick={e => {
+              e.stopPropagation();
+              toggleOpen();
+            }}
+            hide={!!disabled}
+            aria-label={isOpen ? 'collapse' : 'expand'}
+          >
+            <Icon $turn={!!isOpen} />
+          </StyledIconButton>
+        ) : null}
+        <TitleWrapper $noLeadingCaret={!summaryCaret}>{title}</TitleWrapper>
       </SummaryWrapper>
       <StyledCollapse open={!!isOpen} noIndent={noIndent}>
         {children}
@@ -81,9 +92,15 @@ const SummaryWrapper = styled.div`
   user-select: none;
 `;
 
-const TitleWrapper = styled.div`
+const TitleWrapper = styled.div<{ $noLeadingCaret: boolean }>`
   flex: 1;
-  width: 1px;
+  min-width: 0;
+  ${p =>
+    p.$noLeadingCaret
+      ? ''
+      : `
+    width: 1px;
+  `}
   * {
     user-select: none;
   }

@@ -124,7 +124,23 @@ pub async fn populate_base_models(store: &impl Storelike) -> AtomicResult<()> {
             description: "The DID of the drive that should be mapped to the current host.".into(),
             subject: urls::INITIAL_DRIVE.into(),
             allows_only: None,
-        }
+        },
+        Property {
+            class_type: Some(urls::DRIVE.into()),
+            data_type: DataType::AtomicUrl,
+            shortname: "personal-drive".into(),
+            description: "The agent's personal (private) drive on this server. Clients use this as home and for agent-scoped data such as shared-with-me. At most one per agent.".into(),
+            subject: urls::PERSONAL_DRIVE.into(),
+            allows_only: None,
+        },
+        Property {
+            class_type: None,
+            data_type: DataType::ResourceArray,
+            shortname: "shared-with-me".into(),
+            description: "Resources this agent can access via invites or other shares. Clients often show these in a Shared with me list.".into(),
+            subject: urls::SHARED_WITH_ME.into(),
+            allows_only: None,
+        },
     ];
     let classes = vec![
         Class {
@@ -151,7 +167,13 @@ pub async fn populate_base_models(store: &impl Storelike) -> AtomicResult<()> {
         },
         Class {
             requires: vec![urls::PUBLIC_KEY.into()],
-            recommends: vec![urls::NAME.into(), urls::DESCRIPTION.into(), urls::DRIVES.into()],
+            recommends: vec![
+                urls::NAME.into(),
+                urls::DESCRIPTION.into(),
+                urls::PERSONAL_DRIVE.into(),
+                urls::SHARED_WITH_ME.into(),
+                urls::DRIVES.into(),
+            ],
             shortname: "agent".into(),
             description:
                 "An Agent is a user that can create or modify data. It has two keys: a private and a public one. The private key should be kept secret. The public key is used to verify signatures (on [Commits](https://atomicdata.dev/classes/Commit)) set by the of the Agent.".into(),

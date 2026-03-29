@@ -95,6 +95,10 @@ impl Agent {
                     initial_drive.clone(),
                 )]),
             );
+            resource.set_unsafe(
+                urls::PERSONAL_DRIVE.into(),
+                Value::AtomicUrl(initial_drive.to_string().into()),
+            );
         }
         Ok(resource)
     }

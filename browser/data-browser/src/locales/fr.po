@@ -3424,9 +3424,8 @@ msgstr "<0/> veut modifier une ressource qui n'est pas contenue dans la portée 
 msgid "Searching for <0/>..."
 msgstr "Recherche de <0/>..."
 
-#: src/views/InvitePage.tsx
-msgid "Failed to add invited drive to agent"
-msgstr "Échec de l'ajout du disque invité à l'agent"
+#~ msgid "Failed to add invited drive to agent"
+#~ msgstr "Échec de l'ajout du disque invité à l'agent"
 
 #: src/views/InvitePage.tsx
 msgid "Failed to persist agent after accepting invite"
@@ -3682,7 +3681,6 @@ msgid "Create a new identity"
 msgstr "Créer une nouvelle identité"
 
 #: src/components/LoggedOutAgentPanel.tsx
-#: src/components/NewIdentitySection.tsx
 msgid "Generate a new self-sovereign Agent and Drive on this server."
 msgstr "Générer un nouvel Agent et Drive auto-souverains sur ce serveur."
 
@@ -3765,9 +3763,8 @@ msgstr ""
 #~ "This is your personal Atomic Data drive. Edit this description to tell visitors what this space is about."
 #~ msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid "This is your personal Atomic Data drive. Edit this description to tell visitors what this space is about."
-msgstr ""
+#~ msgid "This is your personal Atomic Data drive. Edit this description to tell visitors what this space is about."
+#~ msgstr ""
 
 #~ msgid "{0} {1}{2} for <0/>"
 #~ msgstr ""
@@ -3980,41 +3977,33 @@ msgstr ""
 #~ msgid "Saving..."
 #~ msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-#: src/components/NewIdentitySection.tsx
-msgid "Skip"
-msgstr ""
+#~ msgid "Skip"
+#~ msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid "Create your Drive"
-msgstr ""
+#~ msgid "Create your Drive"
+#~ msgstr ""
 
 #~ msgid ""
 #~ "A Drive is your personal data space on this server. You\n"
 #~ "can create more drives later."
 #~ msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid "Drive Name"
-msgstr ""
+#~ msgid "Drive Name"
+#~ msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid "Creating..."
-msgstr ""
+#~ msgid "Creating..."
+#~ msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid "Create Drive"
-msgstr ""
+#~ msgid "Create Drive"
+#~ msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid "Save & Next"
-msgstr ""
+#~ msgid "Save & Next"
+#~ msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid ""
-"A Drive is your personal data space on this server. You can create more\n"
-"drives later."
-msgstr ""
+#~ msgid ""
+#~ "A Drive is your personal data space on this server. You can create more\n"
+#~ "drives later."
+#~ msgstr ""
 
 #: src/components/NewIdentitySection.tsx
 msgid "Generating your identity..."
@@ -4168,9 +4157,8 @@ msgstr ""
 msgid "New ChatRoom"
 msgstr ""
 
-#: src/components/NewInstanceButton/QuickCreateRow.tsx
-msgid "<0/> New"
-msgstr ""
+#~ msgid "<0/> New"
+#~ msgstr ""
 
 #~ msgid ""
 #~ "You are connecting to <0/>. Create a new\n"
@@ -4262,9 +4250,8 @@ msgstr ""
 #~ msgid "On <0/>."
 #~ msgstr ""
 
-#: src/views/FullScreenNewIdentityPage.tsx
-msgid "Set up your Agent on <0/>."
-msgstr ""
+#~ msgid "Set up your Agent on <0/>."
+#~ msgstr ""
 
 #: src/components/AI/AISettings.tsx
 msgid ""
@@ -4274,11 +4261,10 @@ msgid ""
 "selecting the most cost-effective options."
 msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid ""
-"Note that this is only set for this specific server, but you can use\n"
-"your secret also on other servers."
-msgstr ""
+#~ msgid ""
+#~ "Note that this is only set for this specific server, but you can use\n"
+#~ "your secret also on other servers."
+#~ msgstr ""
 
 #. placeholder {0}: ' '
 #. placeholder {1}: ' '
@@ -4286,4 +4272,95 @@ msgstr ""
 msgid ""
 "This removes drives created for automated tests or local dev: names\n"
 "containing <0/> (E2E), or descriptions containing{0} <1/> (from{1} <2/>)."
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+#: src/views/InvitePage.tsx
+msgid "Personal"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+#: src/views/InvitePage.tsx
+msgid "Your private space on this server. Only you can read and write here."
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid ""
+"Create a new Agent on this server. We will set your username and\n"
+"create a private drive as your home."
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Creating your personal drive…"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid ""
+"This name is shown on this server. We also create a private drive named\n"
+"after you as your home; you can add more drives later in settings."
+msgstr ""
+
+#~ msgid "Agent: {0}"
+#~ msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Creating drive…"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Save & continue"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Skip (drive will be named \"Personal\")"
+msgstr ""
+
+#: src/views/FullScreenNewIdentityPage.tsx
+msgid "Set up your Agent and personal drive on <0/>."
+msgstr ""
+
+#: src/views/InvitePage.tsx
+msgid "Failed to update agent after invite"
+msgstr ""
+
+#: src/components/SideBar/SideBarDrive.tsx
+msgid "Shared with me"
+msgstr ""
+
+#: src/components/SideBar/SideBarPanel.tsx
+msgid "Collapse"
+msgstr ""
+
+#: src/components/SideBar/SideBarPanel.tsx
+msgid "Expand"
+msgstr ""
+
+#~ msgid ""
+#~ "Created via `/app/dev-drive` for local development and E2E. You can remove these with Prune test data on `/app/prunetests`.\n"
+#~ "{0}"
+#~ msgstr ""
+
+#. placeholder {0}: DEV_DRIVE_PRUNE_MARKER
+#: src/hooks/useDevDrive.ts
+msgid ""
+"Created via `/app/dev-drive` for local development and E2E. You can remove these with Prune test data on `/app/prunetests`.\n"
+"\n"
+"{0}"
+msgstr ""
+
+#: src/components/SideBar/ResourceSideBar/SidebarItemTitle.tsx
+msgid "Collapse folder"
+msgstr ""
+
+#: src/components/SideBar/ResourceSideBar/SidebarItemTitle.tsx
+msgid "Expand folder"
+msgstr ""
+
+#. placeholder {0}: resource.title
+#: src/components/SideBar/ResourceSideBar/SidebarItemTitle.tsx
+msgid "Rearrange {0}"
+msgstr ""
+
+#: src/components/NewInstanceButton/QuickCreateRow.tsx
+msgid "New"
 msgstr ""

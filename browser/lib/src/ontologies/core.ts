@@ -22,7 +22,9 @@ export const core = {
     isA: 'https://atomicdata.dev/properties/isA',
     isDynamic: 'https://atomicdata.dev/properties/isDynamic',
     name: 'https://atomicdata.dev/properties/name',
+    personalDrive: 'https://atomicdata.dev/properties/personalDrive',
     parent: 'https://atomicdata.dev/properties/parent',
+    sharedWithMe: 'https://atomicdata.dev/properties/sharedWithMe',
     read: 'https://atomicdata.dev/properties/read',
     recommends: 'https://atomicdata.dev/properties/recommends',
     requires: 'https://atomicdata.dev/properties/requires',
@@ -55,6 +57,8 @@ export const core = {
       'https://atomicdata.dev/properties/publicKey',
       'https://atomicdata.dev/properties/name',
       'https://atomicdata.dev/properties/description',
+      'https://atomicdata.dev/properties/personalDrive',
+      'https://atomicdata.dev/properties/sharedWithMe',
       'https://atomicdata.dev/properties/drives',
     ],
     ['https://atomicdata.dev/classes/Datatype']: [
@@ -108,6 +112,8 @@ declare module '../index.js' {
       recommends:
         | typeof core.properties.name
         | typeof core.properties.description
+        | typeof core.properties.personalDrive
+        | typeof core.properties.sharedWithMe
         | 'https://atomicdata.dev/properties/drives';
     };
     [core.classes.datatype]: {
@@ -138,7 +144,9 @@ declare module '../index.js' {
     [core.properties.isA]: string[];
     [core.properties.isDynamic]: boolean;
     [core.properties.name]: string;
+    [core.properties.personalDrive]: string;
     [core.properties.parent]: string;
+    [core.properties.sharedWithMe]: string[];
     [core.properties.read]: string[];
     [core.properties.recommends]: string[];
     [core.properties.requires]: string[];
@@ -161,7 +169,9 @@ declare module '../index.js' {
     [core.properties.isA]: 'isA';
     [core.properties.isDynamic]: 'isDynamic';
     [core.properties.name]: 'name';
+    [core.properties.personalDrive]: 'personalDrive';
     [core.properties.parent]: 'parent';
+    [core.properties.sharedWithMe]: 'sharedWithMe';
     [core.properties.read]: 'read';
     [core.properties.recommends]: 'recommends';
     [core.properties.requires]: 'requires';

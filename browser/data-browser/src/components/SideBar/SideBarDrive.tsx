@@ -27,6 +27,8 @@ import { createPortal } from 'react-dom';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { SkeletonButton } from '../SkeletonButton';
 import { QuickCreateRow } from '../NewInstanceButton';
+import { SideBarPanel } from './SideBarPanel';
+import { SharedWithMeLink } from './SharedWithMeLink';
 
 interface SideBarDriveProps {
   onItemClick: () => unknown;
@@ -50,6 +52,8 @@ export function SideBarDrive({
     announcements,
   } = useSidebarDnd(onIsRearangingChange);
   const driveResource = useResource(drive);
+  const agentResource = useResource(agent?.subject);
+  const [sharedWithMe] = useArray(agentResource, core.properties.sharedWithMe);
   const [subResources] = useArray(
     driveResource,
     dataBrowser.properties.subResources,
@@ -138,6 +142,22 @@ export function SideBarDrive({
                 />
               </NewResourceRow>
             )}
+            {agent && sharedWithMe.length > 0 ? (
+              <SideBarPanel
+                title='Shared with me'
+                embedded
+                data-testid='shared-with-me'
+              >
+                {sharedWithMe.map((subject: string) => (
+                  <SharedWithMeLink
+                    key={subject}
+                    subject={subject}
+                    onClick={onItemClick}
+                    data-testid='shared-with-me-item'
+                  />
+                ))}
+              </SideBarPanel>
+            ) : null}
           </ListWrapper>
         </StyledScrollArea>
         {createPortal(
@@ -164,10 +184,10 @@ const DriveTitle = styled.h2`
   flex: 1;
 `;
 
-const TitleButton = styled(Button) <{ current?: boolean }>`
+const TitleButton = styled(Button)<{ current?: boolean }>`
   text-align: left;
   flex: 1;
-  padding: 0.5rem 1rem;
+  padding: 0.5rem ${props => props.theme.margin}rem;
   border-radius: ${props => props.theme.radius};
 
   ${({ current, theme }) =>
@@ -185,14 +205,13 @@ const TitleButton = styled(Button) <{ current?: boolean }>`
 `;
 
 const SideBarErr = styled(SimpleErrorBlock)`
-  margin-inline-start: ${props => props.theme.size(2)};
   margin-inline-end: ${props => props.theme.size()};
 `;
 
 const ListWrapper = styled.div`
   overflow-x: hidden;
   position: relative;
-  margin-left: 0.5rem;
+  padding-inline: ${p => p.theme.margin}rem;
 `;
 
 const HeadingButtonWrapper = styled(Row)`
@@ -205,8 +224,6 @@ const StyledScrollArea = styled(ScrollArea)`
 `;
 
 const NewResourceRow = styled(Row)`
-  margin-inline-start: 2rem;
-  margin-inline-end: 0.5rem;
   padding-bottom: 1rem;
   overflow: visible;
 `;

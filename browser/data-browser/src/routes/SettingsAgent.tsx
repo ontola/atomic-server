@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { useState } from 'react';
-import { Agent } from '@tomic/react';
+import { Agent, useStore } from '@tomic/react';
+import { fetchPersonalDriveSubject } from '../helpers/personalDrive';
 import { useSettings } from '../helpers/AppSettings';
 import { Button } from '../components/Button';
 import { Margin } from '../components/Card';
@@ -32,6 +33,7 @@ export const AgentSettingsRoute = createRoute({
 });
 
 const SettingsAgent: React.FunctionComponent = () => {
+  const store = useStore();
   const { agent, setAgent, setDrive } = useSettings();
   const [error, setError] = useState<Error | undefined>(undefined);
   const [signInLoading, setSignInLoading] = useState(false);
@@ -55,6 +57,12 @@ const SettingsAgent: React.FunctionComponent = () => {
       const newAgent = await Agent.fromSecret(secret);
       setAgent(newAgent);
       await saveAgentToIDB(secret);
+      const home = await fetchPersonalDriveSubject(store, newAgent);
+
+      if (home) {
+        setDrive(home);
+        addToHistory(home);
+      }
     } catch (e) {
       setError(new Error('Invalid secret. ' + e));
     } finally {

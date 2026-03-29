@@ -8,7 +8,7 @@ import { useSavedDrives } from '../hooks/useSavedDrives';
 import { useDriveHistory } from '../hooks/useDriveHistory';
 
 /**
- * First-run experience: create an agent and drive, then open that drive.
+ * First-run experience: create an agent, set a name, auto-create a private home drive, then open it.
  * App chrome (sidebar, top bar, AI panel) is hidden on this route via NavWrapper.
  */
 export const FullScreenNewIdentityPage: React.FC = () => {
@@ -30,7 +30,7 @@ export const FullScreenNewIdentityPage: React.FC = () => {
           <Column gap='1.5rem'>
             <header>
               <h1>
-                Set up your Agent on <strong>{host}</strong>.
+                Set up your Agent and personal drive on <strong>{host}</strong>.
               </h1>
             </header>
             <NewIdentitySection
@@ -40,7 +40,7 @@ export const FullScreenNewIdentityPage: React.FC = () => {
                 addToHistory(driveSubject);
               }}
               onDone={() => {
-                /* After verify, NewIdentitySection already navigates to initialDrive */
+                /* After verify, NewIdentitySection navigates to personalDrive / home */
               }}
             />
           </Column>

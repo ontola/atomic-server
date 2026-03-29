@@ -75,14 +75,14 @@ export function SideBar(): JSX.Element {
           onIsRearangingChange={setIsRearanging}
         />
         <MenuWrapper>
-          <Column gap='0.5rem'>
+          <Column gap='0.5rem' align='flex-start'>
             {enabledPanels.has(Panel.Ontologies) && (
               <SideBarPanel title='Ontologies' key={drive}>
                 <OntologiesPanel />
               </SideBarPanel>
             )}
             <SideBarPanel title='App'>
-              <Column>
+              <Column align='flex-start'>
                 <AppMenu onItemClick={closeSideBar} />
                 <About />
               </Column>

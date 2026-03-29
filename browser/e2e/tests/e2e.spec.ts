@@ -1,6 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
 import {
-  DEMO_INVITE_NAME,
   FRONTEND_URL,
   SERVER_URL,
   before,
@@ -20,13 +19,10 @@ import {
   publicReadRightLocator,
   setTitle,
   signIn,
-  sideBarDriveSwitcher,
   timestamp,
   waitForCommit,
-  anyValue,
   openAgentPage,
   fillSearchBox,
-  waitForCommitOnCurrentResource,
   clickSidebarItem,
   inDialog,
   acceptInvite,
@@ -142,7 +138,7 @@ test.describe('data-browser', async () => {
     showFallback.searchParams.set('subject', chatSubject);
     const chatRoomHref =
       ownerLoc.pathname.endsWith('/app/show') &&
-      ownerLoc.searchParams.get('subject')
+        ownerLoc.searchParams.get('subject')
         ? ownerLoc.href
         : showFallback.href;
 
@@ -189,6 +185,15 @@ test.describe('data-browser', async () => {
         timeout: 15_000,
       });
     }
+
+    await expect(page2.getByTestId('current-drive-title')).toContainText(
+      "'s Drive",
+    );
+    await expect(page2.getByTestId('shared-with-me')).toBeVisible();
+    await expect(
+      page2.getByTestId('shared-with-me').getByTestId('shared-with-me-item'),
+    ).toContainText('Test Chat');
+
     const teststring2 = `My reply: ${timestamp()}`;
     await inputLocator(page2).fill(teststring2);
     await expect(page2.getByRole('button', { name: 'Send' })).toBeEnabled();

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useWelcomeLayoutEffect } from '../hooks/useWelcomeLayoutEffect';
 import { Agent, useStore } from '@tomic/react';
+import { fetchPersonalDriveSubject } from '../helpers/personalDrive';
 import { useSettings } from '../helpers/AppSettings';
 import { saveAgentToIDB } from '../helpers/agentStorage';
 import { constructOpenURL } from '../helpers/navigation';
@@ -50,11 +51,13 @@ export function RootWelcomeGate({ subject }: Props) {
       setAgent(newAgent);
       await saveAgentToIDB(secret);
 
-      if (newAgent.initialDrive) {
-        setDrive(newAgent.initialDrive);
-        addToHistory(newAgent.initialDrive);
+      const home = await fetchPersonalDriveSubject(store, newAgent);
+
+      if (home) {
+        setDrive(home);
+        addToHistory(home);
         await store.fetchResourceFromServer(subject, { setLoading: true });
-        navigate(constructOpenURL(newAgent.initialDrive));
+        navigate(constructOpenURL(home));
       } else {
         await store.fetchResourceFromServer(subject, { setLoading: true });
         navigate(paths.agentSettings);
