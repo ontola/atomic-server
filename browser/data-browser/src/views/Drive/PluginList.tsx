@@ -1,8 +1,4 @@
-import {
-  useResource,
-  type Resource,
-  type Server,
-} from '@tomic/react';
+import { useResource, type Resource, type Server } from '@tomic/react';
 import type React from 'react';
 import { AtomicLink } from '@components/AtomicLink';
 import styled from 'styled-components';

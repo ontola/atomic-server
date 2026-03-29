@@ -133,6 +133,9 @@ export const TagSelectPopover: React.FC<TagSelectPopoverProps> = ({
                   <label
                     data-selected={isSelected}
                     tabIndex={-1}
+                    onFocus={() => {
+                      onMouseOver(index);
+                    }}
                     onMouseOver={() => {
                       onMouseOver(index);
                     }}

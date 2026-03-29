@@ -46,9 +46,23 @@ export function ShareDialog({
     show();
   };
 
+  const handleTriggerKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      e.stopPropagation();
+      show();
+    }
+  };
+
   return (
     <>
-      <div onClick={handleTriggerClick} style={{ display: 'contents' }}>
+      <div
+        role='button'
+        tabIndex={0}
+        onClick={handleTriggerClick}
+        onKeyDown={handleTriggerKeyDown}
+        style={{ display: 'contents' }}
+      >
         {trigger}
       </div>
       <Dialog {...dialogProps} width='500px'>

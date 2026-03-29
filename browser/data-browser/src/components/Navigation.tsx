@@ -52,10 +52,7 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
   return (
     <AISidebarContextProvider>
       {!hideGlobalChrome && <TopBar resource={resource} top={navbarTop} />}
-      <SideBarWrapper
-        top={navbarTop}
-        fullViewportContent={hideGlobalChrome}
-      >
+      <SideBarWrapper top={navbarTop} fullViewportContent={hideGlobalChrome}>
         {!hideGlobalChrome && <SideBar />}
         <Content>{children}</Content>
         {!hideGlobalChrome && (
@@ -69,9 +66,7 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
   );
 }
 
-
-interface ContentProps {
-}
+interface ContentProps {}
 
 const Content = styled.div<ContentProps>`
   display: block;
@@ -80,12 +75,15 @@ const Content = styled.div<ContentProps>`
 `;
 
 /** Persistently shown navigation bar */
-function TopBar({ resource, top }: { resource: Resource; top: boolean }): JSX.Element {
+function TopBar({
+  resource,
+  top,
+}: {
+  resource: Resource;
+  top: boolean;
+}): JSX.Element {
   return (
-    <NavBarStyled
-      aria-label='navigation'
-      top={top}
-    >
+    <NavBarStyled aria-label='navigation' top={top}>
       <NavBarContent resource={resource} />
     </NavBarStyled>
   );
@@ -93,14 +91,14 @@ function TopBar({ resource, top }: { resource: Resource; top: boolean }): JSX.El
 
 const NavBarStyled = styled.div<{ top: boolean }>`
   position: fixed;
-  ${p => p.top ? 'top: 0;' : 'bottom: 0;'}
+  ${p => (p.top ? 'top: 0;' : 'bottom: 0;')}
   left: 0;
   right: 0;
   z-index: ${p => p.theme.zIndex.sidebar};
   height: ${p => p.theme.heights.breadCrumbBar};
   display: flex;
   background-color: ${props => props.theme.colors.bg};
-  border-${p => p.top ? 'bottom' : 'top'}: solid 1px ${props => props.theme.colors.bg2};
+  border-${p => (p.top ? 'bottom' : 'top')}: solid 1px ${props => props.theme.colors.bg2};
   container-name: nav-bar;
   container-type: inline-size;
 
@@ -113,7 +111,10 @@ const NavBarStyled = styled.div<{ top: boolean }>`
   }
 `;
 
-const SideBarWrapper = styled.div<{ top: boolean; fullViewportContent?: boolean }>`
+const SideBarWrapper = styled.div<{
+  top: boolean;
+  fullViewportContent?: boolean;
+}>`
   ${p =>
     p.fullViewportContent
       ? CalculatedPageHeight.define(`100dvh`)

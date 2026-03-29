@@ -66,11 +66,7 @@ export function TableCell({
   const { setActiveCell } = useTableEditorContext();
   const { addItemsToHistoryStack } = useContext(TablePageContext);
   // We give an empty error handler to debouncedSave so it doesn't spam the user with error popups when the value is invalid.
-  const [save] = useDebouncedSave(
-    resource,
-    SAVE_DEBOUNCE_TIME,
-    emptyFunc,
-  );
+  const [save] = useDebouncedSave(resource, SAVE_DEBOUNCE_TIME, emptyFunc);
   const [value, setValue] = useValue(resource, property.subject, valueOpts);
 
   const [createdAt, setCreatedAt] = useValue(

@@ -4245,12 +4245,17 @@ msgstr ""
 #~ "data space at the site root yet, or you need to sign in."
 #~ msgstr ""
 
-#: src/views/FullScreenNewIdentityPage.tsx
-msgid "Set up your identity"
-msgstr ""
+#~ msgid "Set up your identity"
+#~ msgstr ""
+
+#~ msgid ""
+#~ "On <0/>. You already chose to create a new\n"
+#~ "identity — continue with your profile and drive below."
+#~ msgstr ""
+
+#~ msgid "On <0/>."
+#~ msgstr ""
 
 #: src/views/FullScreenNewIdentityPage.tsx
-msgid ""
-"On <0/>. You already chose to create a new\n"
-"identity — continue with your profile and drive below."
+msgid "Set up your Agent on <0/>."
 msgstr ""

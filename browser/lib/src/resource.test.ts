@@ -1,5 +1,6 @@
 import { describe, it, vi } from 'vitest';
 import { Resource } from './resource.js';
+import type { Store } from './store.js';
 import { urls } from './urls.js';
 
 describe('resource.ts', () => {
@@ -42,10 +43,13 @@ describe('resource.ts', () => {
     // This test simulates Step 2 of onboarding where a remote merge might
     // clobber the local lastCommit property before the next save.
     const resource = new Resource('https://example.com/res');
+    const postCommit = vi.fn(async commit => ({
+      id: `commit-${commit.signature}`,
+    }));
     const store = {
       getServerUrl: () => 'https://example.com',
       getAgent: () => ({ subject: 'agent', sign: async () => 'sig' }),
-      postCommit: vi.fn(async commit => ({ id: `commit-${commit.signature}` })),
+      postCommit,
       addResources: vi.fn(),
       notifyResourceSaved: vi.fn(),
       isOffline: () => false,
@@ -77,7 +81,7 @@ describe('resource.ts', () => {
 
     // The second save MUST have used the first commit as previousCommit
     // despite the property being missing.
-    const secondCommitCall = store.postCommit.mock.calls[1][0];
+    const secondCommitCall = postCommit.mock.calls[1][0];
     expect(secondCommitCall.previousCommit).toBe(firstCommitId);
   });
 });

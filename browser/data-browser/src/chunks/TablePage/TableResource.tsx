@@ -67,7 +67,8 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
   // Synchronously adjust newRowIds when totalMembers changes.
   // Using useEffect would cause a one-render delay where keys are inconsistent,
   // leading to react-window recycling components with the wrong state.
-  const totalMembersDiff = collection.totalMembers - prevTotalMembersRef.current;
+  const totalMembersDiff =
+    collection.totalMembers - prevTotalMembersRef.current;
 
   if (totalMembersDiff > 0) {
     prevTotalMembersRef.current = collection.totalMembers;

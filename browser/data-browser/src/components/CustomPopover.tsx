@@ -83,7 +83,12 @@ export const usePopover = ({
   }, [isOpen]);
 
   useEffect(() => {
-    if (isOpen && autoFocusElement && autoFocusElement.current && !hasFocusedRef.current) {
+    if (
+      isOpen &&
+      autoFocusElement &&
+      autoFocusElement.current &&
+      !hasFocusedRef.current
+    ) {
       autoFocusElement.current.focus();
       hasFocusedRef.current = true;
     }

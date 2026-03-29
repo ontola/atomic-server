@@ -124,183 +124,191 @@ const AISettings: React.FC = () => {
 
   return (
     <SettingsSectionWrapper>
-      <Details noIndent title={<SettingsLabel>AI</SettingsLabel>} open={isSearching} initialState={isSearching}>
+      <Details
+        noIndent
+        title={<SettingsLabel>AI</SettingsLabel>}
+        open={isSearching}
+        initialState={isSearching}
+      >
         <SettingsContent>
           <SettingsSearchProvider value={childContext}>
-          <Column gap='0.75rem'>
-            <CheckboxLabel>
-              <Checkbox checked={enableAI} onChange={setEnableAI} /> Enable AI
-              Features
-            </CheckboxLabel>
-            <ConditionalSettings enabled={enableAI} inert={!enableAI}>
+            <Column gap='0.75rem'>
               <CheckboxLabel>
-                <Checkbox
-                  checked={showTokenUsage}
-                  onChange={setShowTokenUsage}
-                />
-                Show token usage in chats
+                <Checkbox checked={enableAI} onChange={setEnableAI} /> Enable AI
+                Features
               </CheckboxLabel>
+              <ConditionalSettings enabled={enableAI} inert={!enableAI}>
+                <CheckboxLabel>
+                  <Checkbox
+                    checked={showTokenUsage}
+                    onChange={setShowTokenUsage}
+                  />
+                  Show token usage in chats
+                </CheckboxLabel>
 
-              <SubGroup>
-                <SettingsSection label='OpenRouter'>
-                  <Column gap='0.5rem'>
-                    <CheckboxLabel>
-                      <Checkbox
-                        checked={isProviderEnabled(AIProvider.OpenRouter)}
-                        onChange={checked => {
-                          setIsProviderEnabled(AIProvider.OpenRouter, checked);
-                        }}
-                      />
-                      Enable OpenRouter
-                    </CheckboxLabel>
-                    <ConditionalSettings
-                      fullWidth
-                      gap='0.5rem'
-                      enabled={isProviderEnabled(AIProvider.OpenRouter)}
-                    >
-                      <label htmlFor='openrouter-api-key'>
-                        OpenRouter API Key
-                      </label>
-                      <Row center>
-                        {!openRouterApiKey && (
-                          <>
-                            <OpenRouterLoginButton />
-                            or
-                          </>
+                <SubGroup>
+                  <SettingsSection label='OpenRouter'>
+                    <Column gap='0.5rem'>
+                      <CheckboxLabel>
+                        <Checkbox
+                          checked={isProviderEnabled(AIProvider.OpenRouter)}
+                          onChange={checked => {
+                            setIsProviderEnabled(
+                              AIProvider.OpenRouter,
+                              checked,
+                            );
+                          }}
+                        />
+                        Enable OpenRouter
+                      </CheckboxLabel>
+                      <ConditionalSettings
+                        fullWidth
+                        gap='0.5rem'
+                        enabled={isProviderEnabled(AIProvider.OpenRouter)}
+                      >
+                        <label htmlFor='openrouter-api-key'>
+                          OpenRouter API Key
+                        </label>
+                        <Row center>
+                          {!openRouterApiKey && (
+                            <>
+                              <OpenRouterLoginButton />
+                              or
+                            </>
+                          )}
+                          <InputWrapper>
+                            <InputStyled
+                              id='openrouter-api-key'
+                              type='password'
+                              value={openRouterApiKey || ''}
+                              onChange={e =>
+                                setOpenRouterApiKey(e.target.value || undefined)
+                              }
+                              placeholder='Enter your OpenRouter API key'
+                            />
+                          </InputWrapper>
+                        </Row>
+                        {creditUsage && (
+                          <Subtle>
+                            Credits used: {intl.format(creditUsage.used)} /{' '}
+                            {intl.format(creditUsage.total)}
+                          </Subtle>
                         )}
+                        {!openRouterApiKey && (
+                          <Subtle>
+                            OpenRouter provides a unified API that gives you
+                            access to hundreds of AI models from all major
+                            vendors, while automatically handling fallbacks and
+                            selecting the most cost-effective options.
+                          </Subtle>
+                        )}
+                      </ConditionalSettings>
+                    </Column>
+                  </SettingsSection>
+
+                  <SettingsSection label='Ollama'>
+                    <Column gap='0.5rem'>
+                      <CheckboxDescriptor
+                        label='Enable Ollama'
+                        description={
+                          <>
+                            Host your own AI models locally using{' '}
+                            <a
+                              href='https://ollama.com/'
+                              target='_blank'
+                              rel='noreferrer'
+                            >
+                              Ollama
+                            </a>
+                          </>
+                        }
+                      >
+                        {id => (
+                          <Checkbox
+                            id={id}
+                            checked={isProviderEnabled(AIProvider.Ollama)}
+                            onChange={checked =>
+                              setIsProviderEnabled(AIProvider.Ollama, checked)
+                            }
+                          />
+                        )}
+                      </CheckboxDescriptor>
+                      <ConditionalSettings
+                        fullWidth
+                        gap='0.5rem'
+                        enabled={isProviderEnabled(AIProvider.Ollama)}
+                      >
+                        <Row center gap='1ch'>
+                          {isOllamaUrlValid ? (
+                            <FaCheck
+                              title='Server found'
+                              color={theme.colors.main}
+                            />
+                          ) : (
+                            <FaTriangleExclamation
+                              title='Server not responding'
+                              color={theme.colors.warning}
+                            />
+                          )}
+                          <label htmlFor='ollama-url'>Ollama API Url</label>
+                        </Row>
                         <InputWrapper>
                           <InputStyled
-                            id='openrouter-api-key'
-                            type='password'
-                            value={openRouterApiKey || ''}
+                            id='ollama-url'
+                            value={ollamaUrl || ''}
                             onChange={e =>
-                              setOpenRouterApiKey(e.target.value || undefined)
+                              setOllamaUrl(e.target.value || undefined)
                             }
-                            placeholder='Enter your OpenRouter API key'
+                            type='url'
+                            placeholder='http://localhost:11434'
                           />
                         </InputWrapper>
-                      </Row>
-                      {creditUsage && (
-                        <Subtle>
-                          Credits used: {intl.format(creditUsage.used)} /{' '}
-                          {intl.format(creditUsage.total)}
-                        </Subtle>
-                      )}
-                      {!openRouterApiKey && (
-                        <Subtle>
-                          OpenRouter provides a unified API that gives you access
-                          to hundreds of AI models from all major vendors, while
-                          automatically handling fallbacks and selecting the most
-                          cost-effective options.
-                        </Subtle>
-                      )}
-                    </ConditionalSettings>
-                  </Column>
-                </SettingsSection>
+                      </ConditionalSettings>
+                    </Column>
+                  </SettingsSection>
 
-                <SettingsSection label='Ollama'>
-                  <Column gap='0.5rem'>
-                    <CheckboxDescriptor
-                      label='Enable Ollama'
-                      description={
-                        <>
-                          Host your own AI models locally using{' '}
-                          <a
-                            href='https://ollama.com/'
-                            target='_blank'
-                            rel='noreferrer'
-                          >
-                            Ollama
-                          </a>
-                        </>
-                      }
-                    >
-                      {id => (
+                  <SettingsSection label='Generative Features'>
+                    <Column gap='0.5rem'>
+                      <CheckboxLabel>
                         <Checkbox
-                          id={id}
-                          checked={isProviderEnabled(AIProvider.Ollama)}
-                          onChange={checked =>
-                            setIsProviderEnabled(AIProvider.Ollama, checked)
-                          }
+                          checked={shouldGenerateTitles}
+                          onChange={setShouldGenerateTitles}
                         />
-                      )}
-                    </CheckboxDescriptor>
-                    <ConditionalSettings
-                      fullWidth
-                      gap='0.5rem'
-                      enabled={isProviderEnabled(AIProvider.Ollama)}
-                    >
-                      <Row center gap='1ch'>
-                        {isOllamaUrlValid ? (
-                          <FaCheck
-                            title='Server found'
-                            color={theme.colors.main}
-                          />
-                        ) : (
-                          <FaTriangleExclamation
-                            title='Server not responding'
-                            color={theme.colors.warning}
+                        Generate AI Chat titles
+                      </CheckboxLabel>
+                      <CheckboxDescriptor
+                        label='Show follow up prompts in chats'
+                        description='Uses a small model to generate a follow up prompt based on the last message in the chat.'
+                      >
+                        {id => (
+                          <Checkbox
+                            id={id}
+                            checked={showFollowUpPrompts}
+                            onChange={setShowFollowUpPrompts}
                           />
                         )}
-                        <label htmlFor='ollama-url'>Ollama API Url</label>
-                      </Row>
-                      <InputWrapper>
-                        <InputStyled
-                          id='ollama-url'
-                          value={ollamaUrl || ''}
-                          onChange={e =>
-                            setOllamaUrl(e.target.value || undefined)
-                          }
-                          type='url'
-                          placeholder='http://localhost:11434'
-                        />
-                      </InputWrapper>
-                    </ConditionalSettings>
-                  </Column>
-                </SettingsSection>
+                      </CheckboxDescriptor>
+                      <Details title='Change what model is used for generative features'>
+                        <Suspense>
+                          <Subtle>(Tip) Choose a cheap and fast model</Subtle>
+                          <ModelSelect
+                            defaultModel={genFeaturesModel}
+                            onSelect={setGenFeaturesModel}
+                          />
+                        </Suspense>
+                      </Details>
+                    </Column>
+                  </SettingsSection>
 
-                <SettingsSection label='Generative Features'>
-                  <Column gap='0.5rem'>
-                    <CheckboxLabel>
-                      <Checkbox
-                        checked={shouldGenerateTitles}
-                        onChange={setShouldGenerateTitles}
-                      />
-                      Generate AI Chat titles
-                    </CheckboxLabel>
-                    <CheckboxDescriptor
-                      label='Show follow up prompts in chats'
-                      description='Uses a small model to generate a follow up prompt based on the last message in the chat.'
-                    >
-                      {id => (
-                        <Checkbox
-                          id={id}
-                          checked={showFollowUpPrompts}
-                          onChange={setShowFollowUpPrompts}
-                        />
-                      )}
-                    </CheckboxDescriptor>
-                    <Details title='Change what model is used for generative features'>
-                      <Suspense>
-                        <Subtle>(Tip) Choose a cheap and fast model</Subtle>
-                        <ModelSelect
-                          defaultModel={genFeaturesModel}
-                          onSelect={setGenFeaturesModel}
-                        />
-                      </Suspense>
-                    </Details>
-                  </Column>
-                </SettingsSection>
-
-                <SettingsSection label='MCP Servers'>
-                  <MCPServersManager
-                    servers={mcpServers}
-                    setServers={setMcpServers}
-                  />
-                </SettingsSection>
-              </SubGroup>
-            </ConditionalSettings>
-          </Column>
+                  <SettingsSection label='MCP Servers'>
+                    <MCPServersManager
+                      servers={mcpServers}
+                      setServers={setMcpServers}
+                    />
+                  </SettingsSection>
+                </SubGroup>
+              </ConditionalSettings>
+            </Column>
           </SettingsSearchProvider>
         </SettingsContent>
       </Details>

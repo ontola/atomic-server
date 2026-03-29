@@ -4,7 +4,16 @@ import { VitePWA } from 'vite-plugin-pwa';
 import webfontDownload from 'vite-plugin-webfont-dl';
 import prismjs from 'vite-plugin-prismjs';
 import { wuchale } from '@wuchale/vite-plugin';
+import * as fs from 'node:fs';
 import * as path from 'node:path';
+
+const repoLibDefaults = path.resolve(__dirname, '../../lib/defaults');
+const ciLibDefaults = path.resolve(__dirname, '../lib-defaults');
+const libDefaultsDir = fs.existsSync(
+  path.join(repoLibDefaults, 'default_base_models.json'),
+)
+  ? repoLibDefaults
+  : ciLibDefaults;
 
 export default defineConfig({
   resolve: {
@@ -14,6 +23,7 @@ export default defineConfig({
       '@hooks': path.resolve(__dirname, 'src/hooks'),
       '@helpers': path.resolve(__dirname, 'src/helpers'),
       '@chunks': path.resolve(__dirname, 'src/chunks'),
+      '@repo-lib-defaults': libDefaultsDir,
     },
   },
   plugins: [
