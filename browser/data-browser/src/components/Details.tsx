@@ -5,7 +5,7 @@ import {
   useState,
   type JSX,
 } from 'react';
-import { styled } from 'styled-components';
+import { styled, css } from 'styled-components';
 import { FaCaretRight } from 'react-icons/fa6';
 import { Collapse } from './Collapse';
 import { IconButton } from './IconButton/IconButton';
@@ -56,10 +56,14 @@ export function Details({
 
   const summaryRowClickToggle =
     summaryCaret && !disabled ? toggleOpen : undefined;
+  const summaryClickable = summaryRowClickToggle != null;
 
   return (
     <>
-      <SummaryWrapper onClick={summaryRowClickToggle}>
+      <SummaryWrapper
+        onClick={summaryRowClickToggle}
+        $clickable={summaryClickable}
+      >
         {summaryCaret ? (
           <StyledIconButton
             type='button'
@@ -83,15 +87,35 @@ export function Details({
   );
 }
 
-const SummaryWrapper = styled.div`
+const SummaryWrapper = styled.div<{ $clickable: boolean }>`
   box-sizing: border-box;
   width: 100%;
   max-width: 100%;
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  cursor: pointer;
+  border-radius: ${p => p.theme.radius};
   user-select: none;
+  transition: background-color ${p => p.theme.animation.duration} ease-out;
+
+  cursor: ${p => (p.$clickable ? 'pointer' : 'default')};
+
+  ${p =>
+    p.$clickable
+      ? css`
+          /* Match {@link SideBarItem} padding + hover affordance */
+          padding: 0.2rem;
+
+          &:hover,
+          &:focus-within {
+            background-color: ${p.theme.colors.bg1};
+          }
+
+          &:active {
+            background-color: ${p.theme.colors.bg2};
+          }
+        `
+      : ''}
 `;
 
 const TitleWrapper = styled.div<{ $noLeadingCaret: boolean }>`

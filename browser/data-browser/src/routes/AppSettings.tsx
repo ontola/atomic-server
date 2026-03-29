@@ -72,7 +72,7 @@ const AppSettings: React.FunctionComponent = () => {
     <Main>
       <ContainerNarrow>
         <h1>Settings</h1>
-        <InputWrapper hasPrefix>
+        <SettingsSearchWrapper hasPrefix>
           <FaMagnifyingGlass />
           <InputStyled
             type='text'
@@ -89,7 +89,7 @@ const AppSettings: React.FunctionComponent = () => {
               <FaXmark />
             </ClearButton>
           )}
-        </InputWrapper>
+        </SettingsSearchWrapper>
         <SettingsSearchProvider value={searchContext}>
           <SettingsGroup>
             <SettingsSection label='Language'>
@@ -204,6 +204,10 @@ const MainColorPicker = () => {
     <HexColorPicker color={mainColor} onChange={val => setMainColor(val)} />
   );
 };
+
+const SettingsSearchWrapper = styled(InputWrapper)`
+  margin-block: ${p => p.theme.margin}rem;
+`;
 
 const ClearButton = styled.button`
   display: flex;
