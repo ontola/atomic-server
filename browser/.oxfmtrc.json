@@ -17,6 +17,8 @@
     "**/build",
     "**/.svelte-kit",
     "**/.netlify",
+    "**/playwright-report/**",
+    "**/test-results/**",
     "browser/data-browser/src/locales/**",
     "**/*.min.js",
     "**/*.min.css"
