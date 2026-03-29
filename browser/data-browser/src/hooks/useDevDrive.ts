@@ -8,6 +8,11 @@ import { useNavigateWithTransition } from './useNavigateWithTransition';
 export const DEV_SERVER = 'http://localhost:9883';
 export const DEV_DRIVE_TESTID = 'dev-drive-button';
 
+/** In drive description; server `/prunetests` deletes drives containing this. Keep in sync with `prunetests.rs`. */
+export const DEV_DRIVE_PRUNE_MARKER = '[atomic-data:dev-drive]';
+
+const DEV_DRIVE_DISPLAY_NAME = 'Atomic dev drive';
+
 /**
  * Creates a fresh agent and drive on the local dev server (localhost:9883) and
  * switches to it. Only intended for development / E2E-test use.
@@ -35,9 +40,8 @@ export function useDevDrive() {
         isA: server.classes.drive,
         noParent: true,
         propVals: {
-          [core.properties.name]: 'dev',
-          [core.properties.description]:
-            'This is your personal Atomic Data drive. Edit this description to tell visitors what this space is about.',
+          [core.properties.name]: DEV_DRIVE_DISPLAY_NAME,
+          [core.properties.description]: `${DEV_DRIVE_PRUNE_MARKER} Created via /app/dev-drive for local development and E2E. You can remove these with Prune test data on /app/prunetests.`,
           [core.properties.write]: [agentDID],
           [core.properties.read]: [agentDID],
         },

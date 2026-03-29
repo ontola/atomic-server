@@ -461,11 +461,10 @@ msgstr "Introduce una URL de recurso..."
 msgid "Prune Test Data"
 msgstr "Eliminar datos de prueba"
 
-#: src/routes/PruneTestsRoute.tsx
-msgid ""
-"Pruning test data will delete all drives on the server that have\n"
-"’testdrive’ in their name."
-msgstr "La eliminación de datos de prueba borrará todas las unidades del servidor que tengan 'testdrive' en su nombre."
+#~ msgid ""
+#~ "Pruning test data will delete all drives on the server that have\n"
+#~ "’testdrive’ in their name."
+#~ msgstr "La eliminación de datos de prueba borrará todas las unidades del servidor que tengan 'testdrive' en su nombre."
 
 #: src/routes/PruneTestsRoute.tsx
 msgid "Prune"
@@ -3757,7 +3756,6 @@ msgstr ""
 #~ msgstr ""
 
 #: src/components/NewIdentitySection.tsx
-#: src/hooks/useDevDrive.ts
 msgid "This is your personal Atomic Data drive. Edit this description to tell visitors what this space is about."
 msgstr ""
 
@@ -4133,13 +4131,12 @@ msgstr ""
 msgid "Panels & Templates"
 msgstr ""
 
-#: src/components/AI/AISettings.tsx
-msgid ""
-"OpenRouter provides a unified API that gives you access\n"
-"to hundreds of AI models from all major vendors, while\n"
-"automatically handling fallbacks and selecting the most\n"
-"cost-effective options."
-msgstr ""
+#~ msgid ""
+#~ "OpenRouter provides a unified API that gives you access\n"
+#~ "to hundreds of AI models from all major vendors, while\n"
+#~ "automatically handling fallbacks and selecting the most\n"
+#~ "cost-effective options."
+#~ msgstr ""
 
 #: src/routes/AppSettings.tsx
 msgid "Search settings..."
@@ -4221,11 +4218,10 @@ msgstr ""
 msgid "Set your profile name!"
 msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid ""
-"Note that this is only set for this specific\n"
-"server, but you can use your secret also on other servers."
-msgstr ""
+#~ msgid ""
+#~ "Note that this is only set for this specific\n"
+#~ "server, but you can use your secret also on other servers."
+#~ msgstr ""
 
 #: src/views/RootWelcomeGate.tsx
 msgid "Welcome to AtomicServer"
@@ -4258,4 +4254,26 @@ msgstr ""
 
 #: src/views/FullScreenNewIdentityPage.tsx
 msgid "Set up your Agent on <0/>."
+msgstr ""
+
+#: src/components/AI/AISettings.tsx
+msgid ""
+"OpenRouter provides a unified API that gives you\n"
+"access to hundreds of AI models from all major\n"
+"vendors, while automatically handling fallbacks and\n"
+"selecting the most cost-effective options."
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid ""
+"Note that this is only set for this specific server, but you can use\n"
+"your secret also on other servers."
+msgstr ""
+
+#. placeholder {0}: ' '
+#. placeholder {1}: ' '
+#: src/routes/PruneTestsRoute.tsx
+msgid ""
+"This removes drives created for automated tests or local dev: names\n"
+"containing <0/> (E2E), or descriptions containing{0} <1/> (from{1} <2/>)."
 msgstr ""

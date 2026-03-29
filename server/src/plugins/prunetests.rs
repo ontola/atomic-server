@@ -7,11 +7,34 @@ use atomic_lib::{
     urls, Resource, Storelike, Value,
 };
 
+/// Drives created by `/app/dev-drive` include this in `description`. Keep in sync with
+/// `DEV_DRIVE_PRUNE_MARKER` in `browser/data-browser/src/hooks/useDevDrive.ts`.
+const PRUNE_DEV_DRIVE_MARKER: &str = "[atomic-data:dev-drive]";
+
+/// E2E `newDrive()` uses names like `testdrive-…`.
+const PRUNE_TEST_DRIVE_NAME_SUBSTR: &str = "testdrive-";
+
+fn drive_should_be_pruned(resource: &Resource) -> bool {
+    let name = match resource.get(urls::NAME) {
+        Ok(Value::String(n)) => n.as_str(),
+        _ => "",
+    };
+    if name.contains(PRUNE_TEST_DRIVE_NAME_SUBSTR) {
+        return true;
+    }
+    match resource.get(urls::DESCRIPTION) {
+        Ok(Value::String(d)) => d.contains(PRUNE_DEV_DRIVE_MARKER),
+        _ => false,
+    }
+}
+
 pub fn prune_tests_endpoint() -> Endpoint {
     Endpoint {
         path: urls::PATH_PRUNE_TESTS.into(),
         params: [].into(),
-        description: "Deletes all drives with 'testdrive-' in their name.".to_string(),
+        description: format!(
+            "Deletes drives created by dev-drive ({PRUNE_DEV_DRIVE_MARKER} in description) or E2E ({PRUNE_TEST_DRIVE_NAME_SUBSTR} in name)."
+        ),
         shortname: "prunetests".to_string(),
         handle: Some(handle_get),
         handle_post: Some(handle_prune_tests_request),
@@ -28,7 +51,6 @@ pub fn handle_get<'a>(
     })
 }
 
-// Delete all drives with 'testdrive-' in their name. (These drive are generated with each e2e test run)
 fn handle_prune_tests_request<'a>(
     context: HandlePostContext<'a>,
 ) -> BoxFuture<'a, AtomicResult<ResourceResponse>> {
@@ -48,17 +70,12 @@ fn handle_prune_tests_request<'a>(
             let total_drives = query_result.resources.len();
 
             for resource in query_result.resources.iter_mut() {
-                if let Value::String(name) = resource
-                    .get(urls::NAME)
-                    .unwrap_or(&Value::String("".to_string()))
-                {
-                    if name.contains("testdrive-") {
-                        resource.destroy(store).await?;
-                        deleted_drives += 1;
+                if drive_should_be_pruned(resource) {
+                    resource.destroy(store).await?;
+                    deleted_drives += 1;
 
-                        if (deleted_drives % 10) == 0 {
-                            info!("Deleted {} of {} drives", deleted_drives, total_drives);
-                        }
+                    if (deleted_drives % 10) == 0 {
+                        info!("Deleted {} of {} drives", deleted_drives, total_drives);
                     }
                 }
             }

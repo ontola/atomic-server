@@ -1,12 +1,11 @@
 import { test, expect } from '@playwright/test';
 import {
-  devDrive,
   before,
   addressBar,
   clickSidebarItem,
   editTitle,
   setTitle,
-  sideBarNewResourceTestId,
+  sidebarNewResourceButton,
   contextMenuClick,
   timestamp,
   newResource,
@@ -37,8 +36,6 @@ test.describe('search', async () => {
   });
 
   test('scoped search', async ({ page }) => {
-    await devDrive(page);
-
     // Create folder called 'Salad folder'
     await newResource('folder', page);
     await setTitle(page, 'Salad folder');
@@ -49,7 +46,7 @@ test.describe('search', async () => {
     await editTitle('Avocado Salad', page);
 
     // Create folder called 'Cake folder' at root
-    await page.getByTestId(sideBarNewResourceTestId).click();
+    await sidebarNewResourceButton(page).click();
     await page.locator('button:has-text("folder")').click();
     await setTitle(page, 'Cake Folder');
 
@@ -77,10 +74,8 @@ test.describe('search', async () => {
   });
 
   test('add tags and search for them', async ({ page }) => {
-    await devDrive(page);
-
     const folderName = `TagTestFolder-${timestamp()}`;
-    await page.getByTestId(sideBarNewResourceTestId).click();
+    await sidebarNewResourceButton(page).click();
     await page.locator('button:has-text("folder")').click();
     await setTitle(page, folderName);
 

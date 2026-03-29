@@ -437,7 +437,6 @@ export class AtomicServer {
         browserContainer.directory('/app/node_modules'),
       )
       .withEnvVariable('LANGUAGE', 'en_GB')
-      .withEnvVariable('DELETE_PREVIOUS_TEST_DRIVES', 'false')
       .withEnvVariable('FRONTEND_URL', `http://${ATOMIC_DOMAIN}:9883`)
       .withEnvVariable('SERVER_URL', `http://${ATOMIC_DOMAIN}:9883`)
       .withServiceBinding('atomic', this.atomicService())

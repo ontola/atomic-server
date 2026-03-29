@@ -18,19 +18,27 @@ import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition
 interface QuickCreateRowProps {
   parent: string;
   className?: string;
+  /** E2E: only set on the sidebar row so "New" is unique (drive/folder rows omit this). */
+  newResourceButtonTestId?: string;
 }
 
 /** A row of buttons for quickly creating new resources */
 export function QuickCreateRow({
   parent,
   className,
+  newResourceButtonTestId,
 }: QuickCreateRowProps): JSX.Element {
   const createNewResource = useNewResourceUI();
   const navigate = useNavigateWithTransition();
 
   return (
     <Row gap='0rem' center className={className}>
-      <Button subtle title='New resource' onClick={() => navigate(paths.new)}>
+      <Button
+        subtle
+        title='New resource'
+        data-testid={newResourceButtonTestId}
+        onClick={() => navigate(paths.new)}
+      >
         <FaPlus /> New
       </Button>
       <IconButtonWrapper>

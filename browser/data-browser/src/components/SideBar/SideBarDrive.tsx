@@ -132,7 +132,10 @@ export function SideBarDrive({
             )}
             {agentCanWrite && (
               <NewResourceRow gap='0' center>
-                <QuickCreateRow parent={drive} />
+                <QuickCreateRow
+                  parent={drive}
+                  newResourceButtonTestId='sidebar-new-resource'
+                />
               </NewResourceRow>
             )}
           </ListWrapper>
@@ -161,7 +164,7 @@ const DriveTitle = styled.h2`
   flex: 1;
 `;
 
-const TitleButton = styled(Button)<{ current?: boolean }>`
+const TitleButton = styled(Button) <{ current?: boolean }>`
   text-align: left;
   flex: 1;
   padding: 0.5rem 1rem;
@@ -199,10 +202,6 @@ const HeadingButtonWrapper = styled(Row)`
 
 const StyledScrollArea = styled(ScrollArea)`
   overflow: hidden;
-`;
-
-const AddButton = styled(Button)`
-  flex: 1;
 `;
 
 const NewResourceRow = styled(Row)`

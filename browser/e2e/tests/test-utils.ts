@@ -1,5 +1,4 @@
 import { Page, expect, Browser, Locator } from '@playwright/test';
-import { urls } from '@tomic/react';
 
 export const PROPERTIES = {
   isA: 'https://atomicdata.dev/properties/isA',
@@ -10,9 +9,6 @@ export const PROPERTIES = {
 
 export const SECRET =
   'eyJwcml2YXRlS2V5IjoiVUZDV2xoMGM0b05XVm4ySnNXbndWRVp0VXVEZXBpQmRQelFRMWVVcjdLbz0iLCJzdWJqZWN0IjoiZGlkOmFkOmFnZW50OmdKUlpWVEdQbmdhRzNtU1BBL2U2TEVld0tpeFlwWnR1VVlRaE5nK3Q3WTQ9IiwiaW5pdGlhbERyaXZlIjoiZGlkOmFkOmJiWlRJd2hBbFdhQjl0enpuUVpVSlB0QlhldGhvSFcxYmpMc3VhMXQ5RUtYU3ZNU0k3TWdaKzg0bzJsRGZKR0lhbk8zai8zb2xYNTNwam9GWGVwT0RnPT0ifQ==';
-
-export const DELETE_PREVIOUS_TEST_DRIVES =
-  process.env.DELETE_PREVIOUS_TEST_DRIVES === 'false' ? false : true;
 
 export const SERVER_URL = process.env.SERVER_URL || 'http://localhost:9883';
 export const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
@@ -29,6 +25,17 @@ export const timestamp = () => new Date().toLocaleTimeString();
 export const sideBarDriveSwitcher = (page: Page) =>
   page.getByTitle('Open Drive Settings');
 export const sideBarNewResourceTestId = 'sidebar-new-resource';
+
+/** Sidebar "New" → `/app/new` (scoped so drive/folder QuickCreateRow duplicates do not match). */
+export const sidebarNewResourceButton = (page: Page) =>
+  page.getByTestId('sidebar').getByTestId(sideBarNewResourceTestId);
+
+/**
+ * Top bar Share control. `getByRole('button', { name: 'Share' })` matches twice because
+ * ShareDialog wraps the trigger in a `div[role="button"]` around the real `<button>`.
+ */
+export const topBarShareButton = (page: Page) =>
+  page.locator('[aria-label="navigation"] button').filter({ hasText: 'Share' });
 export const editableTitle = (page: Page) => page.getByTestId('editable-title');
 export const currentDriveTitle = (page: Page) =>
   page.getByTestId('current-drive-title');
@@ -48,24 +55,35 @@ export const currentDialogOkButton = 'dialog[open] >> footer >> text=Ok';
 export const REBUILD_INDEX_TIME = 5000;
 
 /**
- * Ensures the app is on a drive with sidebar chrome (ready for tests).
- * Fresh `/` may show the root welcome gate with no sidebar — then we use devDrive.
+ * Default test setup: `/app/dev-drive` creates a fresh agent + drive on the dev
+ * server and switches to it. Most specs use `test.beforeEach(before)` so every
+ * test starts isolated without extra navigation.
  */
-export const before = async ({ page }: { page: Page }): Promise<boolean> => {
+export const before = async ({ page }: { page: Page }): Promise<void> => {
   if (!SERVER_URL) {
     throw new Error('serverUrl is not set');
   }
 
-  await page.goto(FRONTEND_URL);
+  await devDrive(page);
+};
 
-  try {
-    await expect(currentDriveTitle(page)).toBeVisible({ timeout: 4000 });
-  } catch {
-    await devDrive(page);
+/**
+ * Agent secret from the last `devDrive()` / `before()` (stored in localStorage).
+ * Use for second browser contexts that must sign in as the same user.
+ */
+export async function getDevDriveSecret(page: Page): Promise<string> {
+  const secret = await page.evaluate(() =>
+    localStorage.getItem('atomic-test.dev-drive-secret'),
+  );
+
+  if (!secret) {
+    throw new Error(
+      'getDevDriveSecret: missing atomic-test.dev-drive-secret — run devDrive or before() first',
+    );
   }
 
-  return false;
-};
+  return secret;
+}
 
 export async function setTitle(page: Page, title: string) {
   const waiter = waitForCommitOnCurrentResource(page);
@@ -288,7 +306,7 @@ export async function fillSearchBox(
 /** Create a new Resource in the current Drive.
  * Class can be an Class URL or a shortname available in the new page. */
 export async function newResource(klass: string, page: Page) {
-  await page.getByTestId(sideBarNewResourceTestId).click();
+  await sidebarNewResourceButton(page).click();
   await expect(page).toHaveURL(`${FRONTEND_URL}/app/new`);
 
   const waitForResourcePage = async () => {

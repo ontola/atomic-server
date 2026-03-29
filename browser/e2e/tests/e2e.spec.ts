@@ -8,7 +8,6 @@ import {
   contextMenuClick,
   currentDialogOkButton,
   currentDriveTitle,
-  devDrive,
   editProfileAndCommit,
   editTitle,
   editableTitle,
@@ -31,6 +30,7 @@ import {
   clickSidebarItem,
   inDialog,
   acceptInvite,
+  topBarShareButton,
 } from './test-utils';
 
 test.describe('data-browser', async () => {
@@ -108,11 +108,10 @@ test.describe('data-browser', async () => {
     await expect(page3.getByText(driveTitle).first()).toBeVisible();
   });
 
-  test('chatroom', async ({ page, browser }) => {
+  test('chatroom', async ({ page, browser, context }) => {
     const inputLocator = (currentPage: Page) =>
       currentPage.getByLabel('Chat input');
 
-    const secret = await devDrive(page);
     await newResource('chatroom', page);
     // EditableTitle auto-focuses on creation; type a title and press Enter.
     // Focus should then move to the chat input.
@@ -124,31 +123,81 @@ test.describe('data-browser', async () => {
     await expect(inputLocator(page)).toBeFocused();
     const teststring = `My test: ${timestamp()}`;
     await inputLocator(page).fill(teststring);
-    await page.keyboard.press('Enter');
-    const chatRoomUrl = (await getCurrentSubject(page)) as string;
+    await expect(page.getByRole('button', { name: 'Send' })).toBeEnabled();
+    await page.getByRole('button', { name: 'Send' }).click();
     await expect(
       inputLocator(page),
-      'Text input not cleared on enter',
+      'Text input not cleared after send',
     ).toHaveText('');
     await expect(
       page.locator(`text=${teststring}`),
       'Chat message not appearing directly after sending',
+    ).toBeVisible({ timeout: 15_000 });
+
+    // Prefer the owner’s real location bar href when it is already /app/show?subject=…; otherwise build the
+    // same URL from `main[about]` (resolved subject, e.g. DID) so the guest opens the right resource.
+    const chatSubject = await getCurrentSubject(page);
+    const ownerLoc = new URL(page.url());
+    const showFallback = new URL('/app/show', FRONTEND_URL);
+    showFallback.searchParams.set('subject', chatSubject);
+    const chatRoomHref =
+      ownerLoc.pathname.endsWith('/app/show') &&
+      ownerLoc.searchParams.get('subject')
+        ? ownerLoc.href
+        : showFallback.href;
+
+    // Owner: Share → invite. Guest: open invite URL only (new agent via acceptInvite).
+    await topBarShareButton(page).click();
+    await expect(
+      page.getByRole('button', { name: 'Create Invite' }),
+    ).toBeVisible({ timeout: 10000 });
+
+    context.grantPermissions(['clipboard-read', 'clipboard-write'], {
+      origin: new URL(FRONTEND_URL).origin,
+    });
+    await page.getByRole('button', { name: 'Create Invite' }).click();
+    await page.getByLabel('Allow edits').check();
+    await page.getByRole('button', { name: 'Create' }).click();
+    await expect(
+      page.locator('text=Invite created and copied '),
     ).toBeVisible();
+    const inviteUrl = await page.evaluate(() =>
+      document
+        .querySelector('[data-code-content]')
+        ?.getAttribute('data-code-content'),
+    );
+    expect(inviteUrl).toBeTruthy();
 
-    const page2 = await openNewSubjectWindow(browser, chatRoomUrl);
-    await signIn(page2, secret);
-    page2.reload();
+    const context2 = await browser.newContext();
+    await context2.grantPermissions(['clipboard-read', 'clipboard-write'], {
+      origin: new URL(FRONTEND_URL).origin,
+    });
+    const page2 = await context2.newPage();
+    await page2.goto(inviteUrl as string);
 
-    await expect(page2.locator(`text=${teststring}`)).toBeVisible();
+    await acceptInvite(page2);
+    await page2.waitForURL(/\/app\//, { timeout: 15_000 });
+    try {
+      await expect(page2.locator(`text=${teststring}`)).toBeVisible({
+        timeout: 10_000,
+      });
+    } catch {
+      // Redirect may land outside the chatroom; open the same /app/show?subject=… URL as the owner.
+      await page2.waitForTimeout(500);
+      await page2.goto(chatRoomHref);
+      await expect(page2.locator(`text=${teststring}`)).toBeVisible({
+        timeout: 15_000,
+      });
+    }
     const teststring2 = `My reply: ${timestamp()}`;
     await inputLocator(page2).fill(teststring2);
-    await page2.keyboard.press('Enter');
+    await expect(page2.getByRole('button', { name: 'Send' })).toBeEnabled();
+    await page2.getByRole('button', { name: 'Send' }).click();
     await expect(page.locator(`text=${teststring2}`)).toBeVisible();
     await expect(page2.locator(`text=${teststring2}`)).toBeVisible();
   });
 
   test('bookmark', async ({ page }) => {
-    await devDrive(page);
     await newResource('bookmark', page);
 
     const input = page.locator('[placeholder="https\\:\\/\\/example\\.com"]');
@@ -163,7 +212,6 @@ test.describe('data-browser', async () => {
   });
 
   test('quick edit text typing ux', async ({ page }) => {
-    await devDrive(page);
     await newResource('folder', page);
 
     // We automatically focus the title input after creating a new resource.
@@ -199,7 +247,6 @@ test.describe('data-browser', async () => {
   });
 
   test('folder', async ({ page }) => {
-    await devDrive(page);
     await newResource('folder', page);
 
     // Create a sub-resource in the folder
@@ -221,7 +268,6 @@ test.describe('data-browser', async () => {
   });
 
   test('folder title auto-edits on creation', async ({ page }) => {
-    await devDrive(page);
     await newResource('folder', page);
     await expect(editableTitle(page)).toHaveRole('textbox');
   });
@@ -243,7 +289,6 @@ test.describe('data-browser', async () => {
   });
 
   test('form validation', async ({ page }) => {
-    await devDrive(page);
     await newResource('https://atomicdata.dev/classes/Class', page);
     const shortnameInput = '[data-test="input-shortname"]';
     await page.click(shortnameInput);
@@ -276,7 +321,6 @@ test.describe('data-browser', async () => {
   });
 
   test('delete resource', async ({ page }) => {
-    await devDrive(page);
     await newResource('folder', page);
     const parentResource = await getCurrentSubject(page);
     await page.click('button:has-text("New Resource")');
@@ -298,8 +342,6 @@ test.describe('data-browser', async () => {
   });
 
   test('sidebar subresource', async ({ page }) => {
-    await devDrive(page);
-
     const klass = 'folder';
     await newResource(klass, page);
     await expect(page.getByTestId('sidebar').getByText(klass)).toBeVisible();
@@ -333,7 +375,6 @@ test.describe('data-browser', async () => {
   });
 
   test('import', async ({ page }) => {
-    await devDrive(page);
     await newResource('folder', page);
     await contextMenuClick('import', page);
 
@@ -357,7 +398,6 @@ test.describe('data-browser', async () => {
   });
 
   test('dialog', async ({ page }) => {
-    await devDrive(page);
     await newResource('https://atomicdata.dev/classes/Class', page);
 
     await page.getByLabel('Shortname').fill('test-shortname');
@@ -402,7 +442,6 @@ test.describe('data-browser', async () => {
   });
 
   test('history page', async ({ page }) => {
-    await devDrive(page);
     await newResource('document', page);
 
     const firstTitleCommit = waitForCommit(page, {

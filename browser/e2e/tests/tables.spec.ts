@@ -1,6 +1,5 @@
 import { test, expect } from '@playwright/test';
 import {
-  devDrive,
   newResource,
   waitForCommit,
   before,
@@ -20,7 +19,6 @@ test.describe('tables', async () => {
   test.beforeEach(before);
 
   test('table dialog pre-fills name and focuses input', async ({ page }) => {
-    await devDrive(page);
     await newResource('table', page);
     const input = page.getByPlaceholder('New Table');
     await expect(input).toHaveValue('table');
@@ -111,7 +109,6 @@ test.describe('tables', async () => {
     };
 
     // --- Test Start ---
-    await devDrive(page);
     await newResource('table', page);
 
     // Name table (pre-filled with "table", replace it)
@@ -255,7 +252,6 @@ test.describe('tables', async () => {
   });
 
   test('fast row entry - rapidly adding rows with Enter', async ({ page }) => {
-    await devDrive(page);
     // Use the quick-create "New Table" button on the drive page directly.
     await page.getByTitle('New Table').first().click();
 

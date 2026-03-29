@@ -1392,7 +1392,6 @@ msgid "Subdomain"
 msgstr "Subdomain"
 
 #: src/components/NewIdentitySection.tsx
-#: src/hooks/useDevDrive.ts
 msgid "This is your personal Atomic Data drive. Edit this description to tell visitors what this space is about."
 msgstr "This is your personal Atomic Data drive. Edit this description to tell visitors what this space is about."
 
@@ -3784,13 +3783,12 @@ msgstr "Setting up dev drive..."
 msgid "Prune Test Data"
 msgstr "Prune Test Data"
 
-#: src/routes/PruneTestsRoute.tsx
-msgid ""
-"Pruning test data will delete all drives on the server that have\n"
-"’testdrive’ in their name."
-msgstr ""
-"Pruning test data will delete all drives on the server that have\n"
-"’testdrive’ in their name."
+#~ msgid ""
+#~ "Pruning test data will delete all drives on the server that have\n"
+#~ "’testdrive’ in their name."
+#~ msgstr ""
+#~ "Pruning test data will delete all drives on the server that have\n"
+#~ "’testdrive’ in their name."
 
 #: src/routes/PruneTestsRoute.tsx
 msgid "Prune"
@@ -3965,17 +3963,16 @@ msgstr "<0/>{0} Hide templates on new resource page"
 msgid "Panels & Templates"
 msgstr "Panels & Templates"
 
-#: src/components/AI/AISettings.tsx
-msgid ""
-"OpenRouter provides a unified API that gives you access\n"
-"to hundreds of AI models from all major vendors, while\n"
-"automatically handling fallbacks and selecting the most\n"
-"cost-effective options."
-msgstr ""
-"OpenRouter provides a unified API that gives you access\n"
-"to hundreds of AI models from all major vendors, while\n"
-"automatically handling fallbacks and selecting the most\n"
-"cost-effective options."
+#~ msgid ""
+#~ "OpenRouter provides a unified API that gives you access\n"
+#~ "to hundreds of AI models from all major vendors, while\n"
+#~ "automatically handling fallbacks and selecting the most\n"
+#~ "cost-effective options."
+#~ msgstr ""
+#~ "OpenRouter provides a unified API that gives you access\n"
+#~ "to hundreds of AI models from all major vendors, while\n"
+#~ "automatically handling fallbacks and selecting the most\n"
+#~ "cost-effective options."
 
 #: src/routes/AppSettings.tsx
 msgid "Search settings..."
@@ -4066,13 +4063,12 @@ msgstr "Signing in…"
 msgid "Set your profile name!"
 msgstr "Set your profile name!"
 
-#: src/components/NewIdentitySection.tsx
-msgid ""
-"Note that this is only set for this specific\n"
-"server, but you can use your secret also on other servers."
-msgstr ""
-"Note that this is only set for this specific\n"
-"server, but you can use your secret also on other servers."
+#~ msgid ""
+#~ "Note that this is only set for this specific\n"
+#~ "server, but you can use your secret also on other servers."
+#~ msgstr ""
+#~ "Note that this is only set for this specific\n"
+#~ "server, but you can use your secret also on other servers."
 
 #: src/views/RootWelcomeGate.tsx
 msgid "Welcome to AtomicServer"
@@ -4113,3 +4109,33 @@ msgstr "Welcome to AtomicServer"
 #: src/views/FullScreenNewIdentityPage.tsx
 msgid "Set up your Agent on <0/>."
 msgstr "Set up your Agent on <0/>."
+
+#: src/components/AI/AISettings.tsx
+msgid ""
+"OpenRouter provides a unified API that gives you\n"
+"access to hundreds of AI models from all major\n"
+"vendors, while automatically handling fallbacks and\n"
+"selecting the most cost-effective options."
+msgstr ""
+"OpenRouter provides a unified API that gives you\n"
+"access to hundreds of AI models from all major\n"
+"vendors, while automatically handling fallbacks and\n"
+"selecting the most cost-effective options."
+
+#: src/components/NewIdentitySection.tsx
+msgid ""
+"Note that this is only set for this specific server, but you can use\n"
+"your secret also on other servers."
+msgstr ""
+"Note that this is only set for this specific server, but you can use\n"
+"your secret also on other servers."
+
+#. placeholder {0}: ' '
+#. placeholder {1}: ' '
+#: src/routes/PruneTestsRoute.tsx
+msgid ""
+"This removes drives created for automated tests or local dev: names\n"
+"containing <0/> (E2E), or descriptions containing{0} <1/> (from{1} <2/>)."
+msgstr ""
+"This removes drives created for automated tests or local dev: names\n"
+"containing <0/> (E2E), or descriptions containing{0} <1/> (from{1} <2/>)."
