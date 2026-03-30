@@ -2905,16 +2905,13 @@ msgstr "Verstecke den kodierten Status"
 msgid "Editing YDoc directly is not supported"
 msgstr "Das direkte Bearbeiten von YDoc wird nicht unterstützt"
 
-#: src/chunks/RTE/FullBubbleMenu.tsx
 #: src/chunks/RTE/ImagePicker.tsx
 msgid "Left"
 msgstr "Links"
 
-#: src/chunks/RTE/FullBubbleMenu.tsx
-msgid "Center"
-msgstr "Zentriert"
+#~ msgid "Center"
+#~ msgstr "Zentriert"
 
-#: src/chunks/RTE/FullBubbleMenu.tsx
 #: src/chunks/RTE/ImagePicker.tsx
 msgid "Right"
 msgstr "Rechts"
