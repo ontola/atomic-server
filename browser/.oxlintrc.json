@@ -26,7 +26,8 @@
     "no-console": ["warn", { "allow": ["error", "warn", "debug"] }],
     "react/prop-types": "off",
     "react/no-unknown-property": ["warn", { "ignore": ["about"] }],
-    "react-hooks/exhaustive-deps": "warn",
+    // Disabling this because of react compiler
+    "react-hooks/exhaustive-deps": "off",
     "react-hooks/set-state-in-effect": "warn",
     "no-useless-escape": "off",
     "no-useless-rename": "off",

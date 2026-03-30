@@ -48,7 +48,7 @@ export function GettingStartedFlow({
   const [error, setError] = useState<Error | undefined>();
   const stepDotsSlotRef = useRef<HTMLDivElement | null>(null);
   const signInFormRef = useRef<HTMLFormElement | null>(null);
-  const [secret, setSecret] = useState('');
+  const [secretValue, setSecretValue] = useState('');
   const lastSubmittedSecret = useRef<string>('');
 
   const slogans: string[] = useMemo(
@@ -84,7 +84,7 @@ export function GettingStartedFlow({
 
   async function handleSubmitSignIn(e: FormEvent) {
     e.preventDefault();
-    const trimmed = secret.trim();
+    const trimmed = secretValue.trim();
     if (!trimmed || loading) return;
     await handleSignInWithSecret(trimmed);
   }
@@ -92,7 +92,7 @@ export function GettingStartedFlow({
   useEffect(() => {
     if (step !== 'signin') return;
     if (loading) return;
-    const trimmed = secret.trim();
+    const trimmed = secretValue.trim();
     if (!trimmed) return;
     if (trimmed === lastSubmittedSecret.current) return;
 
@@ -102,7 +102,7 @@ export function GettingStartedFlow({
     }, 150);
 
     return () => window.clearTimeout(t);
-  }, [loading, secret, step]);
+  }, [loading, secretValue, step]);
 
   return (
     <Shell>
@@ -157,7 +157,7 @@ export function GettingStartedFlow({
                     subtle
                     onClick={() => {
                       setError(undefined);
-                      setSecret('');
+                      setSecretValue('');
                       setStep('signin');
                     }}
                   >
@@ -182,7 +182,7 @@ export function GettingStartedFlow({
                     <InputWrapper hasPrefix>
                       <FaKey />
                       <InputStyled
-                        value={secret}
+                        value={secretValue}
                         onChange={e => setSecret(e.target.value)}
                         type='password'
                         name='secret'
@@ -196,7 +196,10 @@ export function GettingStartedFlow({
                     {error ? (
                       <CardError role='alert'>{error.message}</CardError>
                     ) : null}
-                    <Button type='submit' disabled={loading || !secret.trim()}>
+                    <Button
+                      type='submit'
+                      disabled={loading || !secretValue.trim()}
+                    >
                       {loading ? 'Signing in…' : 'Continue'}
                     </Button>
                   </Column>
@@ -209,7 +212,7 @@ export function GettingStartedFlow({
                 subtle
                 onClick={() => {
                   setError(undefined);
-                  setSecret('');
+                  setSecretValue('');
                   setStep('welcome');
                 }}
               >
