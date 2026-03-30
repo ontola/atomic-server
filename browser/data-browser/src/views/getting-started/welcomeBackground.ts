@@ -23,7 +23,8 @@ export const welcomeBackgroundCss = css`
     inset: 0;
     pointer-events: none;
     opacity: ${p => (p.theme.darkMode ? 0.85 : 0.7)};
-    background-image: radial-gradient(
+    background-image:
+      radial-gradient(
         900px 520px at 78% 18%,
         rgba(255, 64, 192, ${p => (p.theme.darkMode ? 0.22 : 0.18)}),
         transparent 60%
@@ -60,7 +61,8 @@ export const welcomeBackgroundCss = css`
   ${p =>
     p.theme.darkMode
       ? css`
-          background-image: linear-gradient(
+          background-image:
+            linear-gradient(
               135deg,
               rgba(0, 194, 255, 0.12),
               transparent 45%,
@@ -88,7 +90,8 @@ export const welcomeBackgroundCss = css`
             );
         `
       : css`
-          background-image: linear-gradient(
+          background-image:
+            linear-gradient(
               135deg,
               rgba(0, 194, 255, 0.14),
               transparent 45%,
@@ -116,4 +119,3 @@ export const welcomeBackgroundCss = css`
             );
         `}
 `;
-

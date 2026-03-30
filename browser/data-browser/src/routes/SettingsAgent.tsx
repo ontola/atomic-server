@@ -120,7 +120,9 @@ const SettingsAgent: React.FunctionComponent = () => {
                 <ResourceInline subject={effectiveAgent.subject!} />
               </div>
               <Row>
-                <Button onClick={() => navigate(editURL(effectiveAgent.subject!))}>
+                <Button
+                  onClick={() => navigate(editURL(effectiveAgent.subject!))}
+                >
                   Edit profile
                 </Button>
                 <Button

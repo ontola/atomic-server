@@ -54,10 +54,16 @@ test.describe('data-browser', async () => {
 
     await openAgentPage(page);
     await page.click('[data-test="sign-out"]');
-    await expect(page.getByRole('button', { name: 'Create account' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Create account' }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Sign in', exact: true }),
+    ).toBeVisible();
     await page.reload();
-    await expect(page.getByRole('button', { name: 'Create account' })).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Create account' }),
+    ).toBeVisible();
   });
 
   /**
@@ -139,7 +145,7 @@ test.describe('data-browser', async () => {
     showFallback.searchParams.set('subject', chatSubject);
     const chatRoomHref =
       ownerLoc.pathname.endsWith('/app/show') &&
-        ownerLoc.searchParams.get('subject')
+      ownerLoc.searchParams.get('subject')
         ? ownerLoc.href
         : showFallback.href;
 
@@ -155,9 +161,7 @@ test.describe('data-browser', async () => {
     await page.getByRole('button', { name: 'Create Invite' }).click();
     await page.getByLabel('Allow edits').check();
     await page.getByRole('button', { name: 'Create' }).click();
-    await expect(
-      page.locator('text=Invite created and copied '),
-    ).toBeVisible();
+    await expect(page.locator('text=Invite created and copied ')).toBeVisible();
     const inviteUrl = await page.evaluate(() =>
       document
         .querySelector('[data-code-content]')
