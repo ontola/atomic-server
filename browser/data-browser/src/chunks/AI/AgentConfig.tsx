@@ -21,6 +21,9 @@ import { useAISettings } from '@components/AI/AISettingsContext';
 import { CheckboxDescriptor } from '@components/forms/CheckboxDescriptor';
 import { AgentConfigItem } from './AgentConfigItem';
 
+/** Updated on 2026-03-30 */
+const bestOpenRouterModel = 'stepfun/step-3.5-flash';
+
 // Add this formatter at the top of the file, after imports
 const temperatureFormatter = new Intl.NumberFormat(undefined, {
   minimumFractionDigits: 2,
@@ -45,7 +48,7 @@ const defaultNewAgent: Omit<AIAgent, 'id'> = {
   systemPrompt: '',
   availableTools: [],
   model: {
-    id: 'openai/gpt-4o-mini',
+    id: bestOpenRouterModel,
     provider: AIProvider.OpenRouter,
   },
   canReadAtomicData: false,
@@ -71,7 +74,7 @@ Keep the following things in mind:
 `,
     availableTools: [],
     model: {
-      id: 'openai/gpt-4o-mini',
+      id: bestOpenRouterModel,
       provider: AIProvider.OpenRouter,
     },
     canReadAtomicData: true,

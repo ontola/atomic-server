@@ -1213,9 +1213,8 @@ msgstr "URL de la API de Ollama"
 msgid "Ollama"
 msgstr "Ollama"
 
-#: src/components/AI/AISettings.tsx
-msgid "Generative Features"
-msgstr "Funciones generativas"
+#~ msgid "Generative Features"
+#~ msgstr "Funciones generativas"
 
 #: src/components/AI/AISettings.tsx
 msgid "<0/> Generate AI Chat titles"
@@ -1237,9 +1236,8 @@ msgstr "(Consejo) Elige un modelo barato y rápido"
 msgid "Change what model is used for generative features"
 msgstr "Cambiar qué modelo se utiliza para las funciones generativas"
 
-#: src/components/AI/AISettings.tsx
-msgid "MCP Servers"
-msgstr "Servidores MCP"
+#~ msgid "MCP Servers"
+#~ msgstr "Servidores MCP"
 
 #: src/components/AI/ChatLoadingIndicator.tsx
 msgid "Loading AI"
@@ -4281,11 +4279,10 @@ msgstr ""
 msgid "Creating your personal drive…"
 msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid ""
-"This name is shown on this server. We also create a private drive named\n"
-"after you as your home; you can add more drives later in settings."
-msgstr ""
+#~ msgid ""
+#~ "This name is shown on this server. We also create a private drive named\n"
+#~ "after you as your home; you can add more drives later in settings."
+#~ msgstr ""
 
 #~ msgid "Agent: {0}"
 #~ msgstr ""
@@ -4298,9 +4295,8 @@ msgstr ""
 msgid "Save & continue"
 msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid "Skip (drive will be named \"Personal\")"
-msgstr ""
+#~ msgid "Skip (drive will be named \"Personal\")"
+#~ msgstr ""
 
 #~ msgid "Set up your Agent and personal drive on <0/>."
 #~ msgstr ""
@@ -4433,41 +4429,142 @@ msgstr ""
 #~ "knowledge base from your docs, linked data, and workflows."
 #~ msgstr ""
 
+#~ msgid ""
+#~ "A production-grade data workspace. Graph-native, permission-aware,\n"
+#~ "and ready to self-host."
+#~ msgstr ""
+
+#~ msgid ""
+#~ "<0>Fastest all-in-one workspace</0>: documents, tables,\n"
+#~ "linked data, and HTTP APIs together, without duct-taping half a\n"
+#~ "dozen services."
+#~ msgstr ""
+
+#~ msgid ""
+#~ "<0>Integrated knowledge environment</0>: build an\n"
+#~ "AI-ready knowledge base from your docs, structured data, and\n"
+#~ "files."
+#~ msgstr ""
+
+#~ msgid ""
+#~ "<0>Open source</0>: inspect the stack, adapt it, and run\n"
+#~ "it wherever you need it."
+#~ msgstr ""
+
+#~ msgid ""
+#~ "<0>Offline-first</0>: keep working locally; sync and\n"
+#~ "resolve conflicts when you are back online."
+#~ msgstr ""
+
+#~ msgid ""
+#~ "<0>Fully featured</0>: realtime collaboration, search,\n"
+#~ "invites, fine-grained rights, and extensible ontologies out of the\n"
+#~ "box."
+#~ msgstr ""
+
+#~ msgid ""
+#~ "<0>One workspace for knowledge and apps</0>: documents,\n"
+#~ "tables, files, and APIs in one graph, built to stay coherent as it\n"
+#~ "grows."
+#~ msgstr ""
+
+#~ msgid ""
+#~ "<0>Your data, your rules</0>: self-host and keep control\n"
+#~ "over access, structure, and sharing. No vendor lock-in."
+#~ msgstr ""
+
+#~ msgid ""
+#~ "<0>Linked data that is practical</0>: a developer-friendly\n"
+#~ "take on the semantic web, with strict schemas and predictable\n"
+#~ "behavior."
+#~ msgstr ""
+
+#~ msgid ""
+#~ "<0>Standardized from the start</0>: reuse properties and\n"
+#~ "models, validate automatically, and keep systems interoperable."
+#~ msgstr ""
+
+#~ msgid ""
+#~ "<0>Feature complete by default</0>: rights, history,\n"
+#~ "realtime sync, search, invites, and collaboration built in."
+#~ msgstr ""
+
+#~ msgid ""
+#~ "<0>Fast</0>: a snappy workspace and API, optimized for\n"
+#~ "realtime interaction."
+#~ msgstr ""
+
+#~ msgid ""
+#~ "<0>Lightweight</0>: small download, minimal dependencies,\n"
+#~ "runs anywhere."
+#~ msgstr ""
+
 #: src/views/RootWelcomeGate.tsx
 msgid ""
-"A production-grade data workspace. Graph-native, permission-aware,\n"
-"and ready to self-host."
+"<0>Open source</0>: inspect, fork, and self-host. Keep\n"
+"control of your data and avoid lock-in."
+msgstr ""
+
+#~ msgid ""
+#~ "<0>Feature complete by default</0>: rights, history,\n"
+#~ "search, invites, realtime sync, and collaboration built in."
+#~ msgstr ""
+
+#: src/views/RootWelcomeGate.tsx
+msgid ""
+"<0>All-in-one workspace</0>: documents, tables, files,\n"
+"and APIs in one place, designed to stay coherent as it grows."
 msgstr ""
 
 #: src/views/RootWelcomeGate.tsx
 msgid ""
-"<0>Fastest all-in-one workspace</0>: documents, tables,\n"
-"linked data, and HTTP APIs together, without duct-taping half a\n"
-"dozen services."
+"<0>Fast and lightweight</0>: a snappy workspace and API,\n"
+"small download, minimal dependencies, runs anywhere."
 msgstr ""
 
 #: src/views/RootWelcomeGate.tsx
 msgid ""
-"<0>Integrated knowledge environment</0>: build an\n"
-"AI-ready knowledge base from your docs, structured data, and\n"
-"files."
+"<0>Feature complete by default</0>: rights, history,\n"
+"search, invites, realtime sync, collaboration, and AI chat built\n"
+"in."
 msgstr ""
 
 #: src/views/RootWelcomeGate.tsx
 msgid ""
-"<0>Open source</0>: inspect the stack, adapt it, and run\n"
-"it wherever you need it."
+"<0>Future of the web</0>: decentralized by design, built\n"
+"for interoperability so your data and tools can work together."
 msgstr ""
 
-#: src/views/RootWelcomeGate.tsx
-msgid ""
-"<0>Offline-first</0>: keep working locally; sync and\n"
-"resolve conflicts when you are back online."
+#: src/components/NewIdentitySection.tsx
+msgid "Others can read this. You can change this later."
 msgstr ""
 
+#~ msgid "Your Integrated Knowledge Environment"
+#~ msgstr ""
+
+#~ msgid "Make your knowledge work for you"
+#~ msgstr ""
+
+#~ msgid "Fast and lightweight"
+#~ msgstr ""
+
+#~ msgid "Open source"
+#~ msgstr ""
+
+#~ msgid "Future of the web"
+#~ msgstr ""
+
+#~ msgid "Feature complete by default"
+#~ msgstr ""
+
 #: src/views/RootWelcomeGate.tsx
-msgid ""
-"<0>Fully featured</0>: realtime collaboration, search,\n"
-"invites, fine-grained rights, and extensible ontologies out of the\n"
-"box."
+msgid "Make your knowledge work for you."
+msgstr ""
+
+#: src/components/AI/AISettings.tsx
+msgid "Generative features"
+msgstr ""
+
+#: src/components/AI/AISettings.tsx
+msgid "MCP servers"
 msgstr ""

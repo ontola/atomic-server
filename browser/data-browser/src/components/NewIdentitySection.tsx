@@ -144,10 +144,13 @@ export function NewIdentitySection({
         },
       });
 
+      // Save the drive first, then persist the pointer on the Agent resource.
+      // (Avoids races where the Agent commit is written before the Drive exists.)
+      await resource.save();
+
       agentResource.set(core.properties.personalDrive, resource.subject);
       agentResource.push(server.properties.drives, [resource.subject]);
-
-      await Promise.all([agentResource.save(), resource.save()]);
+      await agentResource.save();
 
       const finalSecret = Agent.buildSecret(
         identity.privateKey,
@@ -392,7 +395,9 @@ function SecretStep({
           return (
             <>
               <span data-code-text-first>{firstLine}</span>
-              {restText ? <span data-code-text-rest>{'\n' + restText}</span> : null}
+              {restText ? (
+                <span data-code-text-rest>{'\n' + restText}</span>
+              ) : null}
             </>
           );
         }}
@@ -488,10 +493,7 @@ function ProfileStep({
   return (
     <Column gap='1rem'>
       <h3>Set your profile name!</h3>
-      <p>
-        This name is shown on this server. We also create a private drive named
-        after you as your home; you can add more drives later in settings.
-      </p>
+      <p>Others can read this. You can change this later.</p>
       <form onSubmit={handleSave}>
         <Column gap='1rem'>
           <Field

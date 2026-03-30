@@ -6,8 +6,6 @@ import { useMemo } from 'react';
 
 /** Container for a group of settings sections. Adds top border and resets Details toggle styling. */
 export const SettingsGroup = styled.div`
-  border-top: 1px solid ${p => p.theme.colors.bg2};
-
   button[aria-label='collapse'],
   button[aria-label='expand'] {
     height: 1.5em;
@@ -20,6 +18,14 @@ export const SettingsGroup = styled.div`
 export const SettingsSectionWrapper = styled.div`
   border-bottom: 1px solid ${p => p.theme.colors.bg2};
   padding-block: 0.4rem;
+
+  &:first-child {
+    border-top: 0;
+  }
+
+  &:last-child {
+    border-bottom: 0;
+  }
 `;
 
 /** Muted label for settings section titles. */

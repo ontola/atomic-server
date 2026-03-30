@@ -3,9 +3,10 @@ import { useSettings } from '../helpers/AppSettings';
 import { Main } from '../components/Main';
 import { Column } from '../components/Row';
 import { NewIdentitySection } from '../components/NewIdentitySection';
-import { css, styled } from 'styled-components';
+import { styled } from 'styled-components';
 import { useSavedDrives } from '../hooks/useSavedDrives';
 import { useDriveHistory } from '../hooks/useDriveHistory';
+import { welcomeBackgroundCss } from './welcomeBackground';
 
 /**
  * First-run experience: create an agent, set a name, auto-create a private home drive, then open it.
@@ -50,44 +51,7 @@ const Shell = styled.div`
   justify-content: center;
   padding: ${p => p.theme.size(7)} ${p => p.theme.size(5)};
   box-sizing: border-box;
-  background: ${p => p.theme.colors.bgBody};
-
-  ${p =>
-    p.theme.darkMode
-      ? css`
-          background-image: radial-gradient(
-              900px 420px at 20% 15%,
-              rgba(0, 194, 255, 0.14),
-              transparent 60%
-            ),
-            radial-gradient(
-              800px 460px at 85% 25%,
-              rgba(255, 255, 255, 0.07),
-              transparent 62%
-            ),
-            radial-gradient(
-              900px 520px at 50% 110%,
-              rgba(0, 194, 255, 0.07),
-              transparent 60%
-            );
-        `
-      : css`
-          background-image: radial-gradient(
-              900px 420px at 18% 15%,
-              rgba(0, 194, 255, 0.12),
-              transparent 60%
-            ),
-            radial-gradient(
-              800px 460px at 85% 25%,
-              rgba(0, 0, 0, 0.06),
-              transparent 62%
-            ),
-            radial-gradient(
-              900px 520px at 50% 110%,
-              rgba(49, 120, 198, 0.08),
-              transparent 60%
-            );
-        `}
+  ${welcomeBackgroundCss}
 `;
 
 const Inner = styled.div`
