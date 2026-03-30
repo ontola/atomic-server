@@ -54,9 +54,10 @@ test.describe('data-browser', async () => {
 
     await openAgentPage(page);
     await page.click('[data-test="sign-out"]');
-    await expect(page.getByLabel('Enter your Agent Secret')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Create account' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
     await page.reload();
-    await expect(page.getByLabel('Enter your Agent Secret')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Create account' })).toBeVisible();
   });
 
   /**

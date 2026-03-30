@@ -9,8 +9,8 @@ test.describe('onboarding', () => {
     // Navigate to user settings
     await page.goto(`${FRONTEND_URL}/app/agent`);
 
-    // Click "Create new identity"
-    await page.getByRole('button', { name: 'Create new identity' }).click();
+    // Card → create account (then NewIdentitySection auto-starts)
+    await page.getByRole('button', { name: 'Create account' }).click();
 
     // Wait for the profile step (after identity is created)
     await expect(
@@ -73,10 +73,11 @@ test.describe('onboarding', () => {
     const context2 = await browser.newContext();
     const page2 = await context2.newPage();
 
-    // Sign in with the secret on the SettingsAgent page (same flow as LoggedOutAgentPanel)
+    // Sign in with the secret on the SettingsAgent page (card → Sign in → secret)
     await page2.goto(`${FRONTEND_URL}/app/agent`);
-    await page2.getByLabel('Enter your Agent Secret').fill(secret!);
-    await page2.getByRole('button', { name: 'Sign in' }).click();
+    await page2.getByRole('button', { name: 'Sign in', exact: true }).click();
+    await page2.getByLabel('Agent secret').fill(secret!);
+    await page2.getByRole('button', { name: 'Continue' }).click();
 
     // Wait for "User Settings" heading which indicates successful sign-in
     await expect(

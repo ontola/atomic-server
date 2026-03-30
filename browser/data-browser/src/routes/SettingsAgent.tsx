@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useState } from 'react';
-import { Agent, useStore } from '@tomic/react';
+import { Agent, core, urls, useStore } from '@tomic/react';
 import { fetchPersonalDriveSubject } from '../helpers/personalDrive';
 import { useSettings } from '../helpers/AppSettings';
 import { Button } from '../components/Button';
@@ -25,6 +25,7 @@ import { DrivesCard } from './SettingsServer/DrivesCard';
 import { useSavedDrives } from '../hooks/useSavedDrives';
 import { useDriveHistory } from '../hooks/useDriveHistory';
 import { constructOpenURL } from '../helpers/navigation';
+import { paths } from './paths';
 
 export const AgentSettingsRoute = createRoute({
   path: pathNames.agentSettings,
@@ -34,7 +35,7 @@ export const AgentSettingsRoute = createRoute({
 
 const SettingsAgent: React.FunctionComponent = () => {
   const store = useStore();
-  const { agent, setAgent, setDrive } = useSettings();
+  const { agent, drive, setAgent, setDrive } = useSettings();
   const [error, setError] = useState<Error | undefined>(undefined);
   const [signInLoading, setSignInLoading] = useState(false);
   const navigate = useNavigateWithTransition();
@@ -43,10 +44,26 @@ const SettingsAgent: React.FunctionComponent = () => {
   const [savedDrives] = useSavedDrives();
   const [, addToHistory] = useDriveHistory(savedDrives);
 
-  function handleSignOut() {
+  async function handleSignOut() {
+    const currentDrive = drive;
+
     setAgent(undefined);
     setError(undefined);
     saveAgentToIDB(undefined);
+
+    try {
+      const driveResource = await store.getResource(currentDrive);
+      const readRight = driveResource.get(core.properties.read);
+      const readArray = Array.isArray(readRight) ? readRight : [];
+      const isPublic = readArray.includes(urls.instances.publicAgent);
+
+      if (!isPublic) {
+        navigate({ to: paths.welcome, replace: true });
+      }
+    } catch {
+      // If we can't determine visibility, default to welcome.
+      navigate({ to: paths.welcome, replace: true });
+    }
   }
 
   async function handleSignInWithSecret(secret: string) {
@@ -79,64 +96,78 @@ const SettingsAgent: React.FunctionComponent = () => {
   return (
     <Main>
       <ContainerNarrow>
-        <h1>{agent ? 'User Settings' : 'Login / New User'}</h1>
-        {showCreate ? (
-          <NewIdentitySection
-            autoStart
-            verifySecret
-            onDone={() => setShowCreate(false)}
-          />
-        ) : agent ? (
-          <Column>
-            {agent.subject?.startsWith('http://localhost') && (
-              <WarningBlock>
-                <WarningBlock.Title>Warning:</WarningBlock.Title>
-                {
-                  "You're using a local Agent, which cannot authenticate on other domains, because its URL does not resolve."
-                }
-              </WarningBlock>
-            )}
-            <div>
-              <LabelStyled>
-                <FaUser /> You{"'"}re signed in as
-              </LabelStyled>
-              <ResourceInline subject={agent.subject!} />
-            </div>
-            <Row>
-              <Button onClick={() => navigate(editURL(agent.subject!))}>
-                Edit profile
-              </Button>
-              <Button
-                subtle
-                title='Sign out with current Agent and reset this form'
-                onClick={handleSignOut}
-                data-test='sign-out'
-              >
-                Sign Out
-              </Button>
-            </Row>
+        {agent ? (
+          <>
+            <h1>User Settings</h1>
+            <Column>
+              {agent.subject?.startsWith('http://localhost') && (
+                <WarningBlock>
+                  <WarningBlock.Title>Warning:</WarningBlock.Title>
+                  {
+                    "You're using a local Agent, which cannot authenticate on other domains, because its URL does not resolve."
+                  }
+                </WarningBlock>
+              )}
+              <div>
+                <LabelStyled>
+                  <FaUser /> You{"'"}re signed in as
+                </LabelStyled>
+                <ResourceInline subject={agent.subject!} />
+              </div>
+              <Row>
+                <Button onClick={() => navigate(editURL(agent.subject!))}>
+                  Edit profile
+                </Button>
+                <Button
+                  subtle
+                  title='Sign out with current Agent and reset this form'
+                  onClick={handleSignOut}
+                  data-test='sign-out'
+                >
+                  Sign Out
+                </Button>
+              </Row>
 
-            <Margin />
+              <Margin />
 
-            <Heading as='h2'>Drives</Heading>
-            <DrivesCard
-              showNewOption
-              drives={savedDrives}
-              onDriveSelect={handleSetDrive}
+              <Heading as='h2'>Drives</Heading>
+              <DrivesCard
+                showNewOption
+                drives={savedDrives}
+                onDriveSelect={handleSetDrive}
+              />
+            </Column>
+          </>
+        ) : showCreate ? (
+          <>
+            <h1>Create account</h1>
+            <NewIdentitySection
+              autoStart
+              verifySecret
+              onDone={() => setShowCreate(false)}
             />
-          </Column>
+          </>
         ) : (
-          <LoggedOutAgentPanel
-            onCreateIdentityClick={() => setShowCreate(true)}
-            onSignInWithSecret={handleSignInWithSecret}
-            error={error}
-            loading={signInLoading}
-          />
+          <LoggedOutCenter>
+            <LoggedOutAgentPanel
+              heading='Login / New User'
+              onCreateIdentityClick={() => setShowCreate(true)}
+              onSignInWithSecret={handleSignInWithSecret}
+              error={error}
+              loading={signInLoading}
+            />
+          </LoggedOutCenter>
         )}
       </ContainerNarrow>
     </Main>
   );
 };
+
+const LoggedOutCenter = styled.div`
+  display: flex;
+  justify-content: center;
+  padding-block: ${p => p.theme.size(7)};
+`;
 
 const Heading = styled.h1`
   margin: 0;

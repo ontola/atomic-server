@@ -761,6 +761,7 @@ msgstr ""
 msgid "Agent Secret"
 msgstr "Agent Secret"
 
+#: src/components/LoggedOutAgentPanel.tsx
 #: src/views/InvitePage.tsx
 #: src/views/InvitePage.tsx
 msgid "Continue"
@@ -1253,31 +1254,25 @@ msgstr "Sign Out"
 msgid "Sign out with current Agent and reset this form"
 msgstr "Sign out with current Agent and reset this form"
 
-#: src/components/LoggedOutAgentPanel.tsx
-msgid "Create a new identity"
-msgstr "Create a new identity"
+#~ msgid "Create a new identity"
+#~ msgstr "Create a new identity"
 
-#: src/components/LoggedOutAgentPanel.tsx
-msgid "Generate a new self-sovereign Agent and Drive on this server."
-msgstr "Generate a new self-sovereign Agent and Drive on this server."
+#~ msgid "Generate a new self-sovereign Agent and Drive on this server."
+#~ msgstr "Generate a new self-sovereign Agent and Drive on this server."
 
-#: src/components/LoggedOutAgentPanel.tsx
 #: src/components/NewIdentitySection.tsx
 msgid "Create new identity"
 msgstr "Create new identity"
 
-#: src/components/LoggedOutAgentPanel.tsx
-msgid "Sign in with existing secret"
-msgstr "Sign in with existing secret"
+#~ msgid "Sign in with existing secret"
+#~ msgstr "Sign in with existing secret"
 
-#: src/components/LoggedOutAgentPanel.tsx
 #: src/components/NewIdentitySection.tsx
 msgid "Enter your Agent Secret"
 msgstr "Enter your Agent Secret"
 
-#: src/components/LoggedOutAgentPanel.tsx
-msgid "The Agent Secret is a long string of characters that encodes both the Subject and the Private Key. You can think of it as a combined username + password. Store it safely, and don't share it with others."
-msgstr "The Agent Secret is a long string of characters that encodes both the Subject and the Private Key. You can think of it as a combined username + password. Store it safely, and don't share it with others."
+#~ msgid "The Agent Secret is a long string of characters that encodes both the Subject and the Private Key. You can think of it as a combined username + password. Store it safely, and don't share it with others."
+#~ msgstr "The Agent Secret is a long string of characters that encodes both the Subject and the Private Key. You can think of it as a combined username + password. Store it safely, and don't share it with others."
 
 #: src/routes/History/HistoryRoute.tsx
 msgid "Resource version updated"
@@ -4034,8 +4029,10 @@ msgstr "Could not parse that secret."
 #~ msgid "Already have a secret"
 #~ msgstr "Already have a secret"
 
-#~ msgid "Agent secret"
-#~ msgstr "Agent secret"
+#: src/components/LoggedOutAgentPanel.tsx
+#: src/components/LoggedOutAgentPanel.tsx
+msgid "Agent secret"
+msgstr "Agent secret"
 
 #~ msgid "Paste the full secret (the long base64 string from when you created or exported your identity)."
 #~ msgstr "Paste the full secret (the long base64 string from when you created or exported your identity)."
@@ -4058,9 +4055,8 @@ msgstr "Set your profile name!"
 #~ "Note that this is only set for this specific\n"
 #~ "server, but you can use your secret also on other servers."
 
-#: src/views/RootWelcomeGate.tsx
-msgid "Welcome to AtomicServer"
-msgstr "Welcome to AtomicServer"
+#~ msgid "Welcome to AtomicServer"
+#~ msgstr "Welcome to AtomicServer"
 
 #~ msgid ""
 #~ "You are connected to <0/>. There is no default\n"
@@ -4167,13 +4163,11 @@ msgstr "Creating drive…"
 msgid "Save & continue"
 msgstr "Save & continue"
 
-#: src/components/NewIdentitySection.tsx
-msgid "Skip (drive will be named \"Personal\")"
-msgstr "Skip (drive will be named \"Personal\")"
+#~ msgid "Skip (drive will be named \"Personal\")"
+#~ msgstr "Skip (drive will be named \"Personal\")"
 
-#: src/views/FullScreenNewIdentityPage.tsx
-msgid "Set up your Agent and personal drive on <0/>."
-msgstr "Set up your Agent and personal drive on <0/>."
+#~ msgid "Set up your Agent and personal drive on <0/>."
+#~ msgstr "Set up your Agent and personal drive on <0/>."
 
 #: src/views/InvitePage.tsx
 msgid "Failed to update agent after invite"
@@ -4225,3 +4219,166 @@ msgstr "Rearrange {0}"
 #: src/components/NewInstanceButton/QuickCreateRow.tsx
 msgid "New"
 msgstr "New"
+
+#~ msgid "Sign Up"
+#~ msgstr "Sign Up"
+
+#~ msgid "Create Agetn"
+#~ msgstr "Create Agetn"
+
+#~ msgid "New User"
+#~ msgstr "New User"
+
+#: src/components/LoggedOutAgentPanel.tsx
+#: src/routes/SettingsAgent.tsx
+msgid "Create account"
+msgstr "Create account"
+
+#: src/components/LoggedOutAgentPanel.tsx
+msgid "Back"
+msgstr "Back"
+
+#~ msgid "Welcome{0}"
+#~ msgstr "Welcome{0}"
+
+#: src/views/RootWelcomeGate.tsx
+msgid "AtomicServer"
+msgstr "AtomicServer"
+
+#~ msgid ""
+#~ "A production-grade data workspace — graph-native, permission-aware,\n"
+#~ "and ready to self-host."
+#~ msgstr ""
+#~ "A production-grade data workspace — graph-native, permission-aware,\n"
+#~ "and ready to self-host."
+
+#~ msgid ""
+#~ "<0>Fastest all-in-one workspace</0> — documents, tables,\n"
+#~ "linked data, and HTTP APIs together, without duct-taping half a\n"
+#~ "dozen services."
+#~ msgstr ""
+#~ "<0>Fastest all-in-one workspace</0> — documents, tables,\n"
+#~ "linked data, and HTTP APIs together, without duct-taping half a\n"
+#~ "dozen services."
+
+#~ msgid ""
+#~ "<0>Open source</0> — inspect the stack, adapt it, and\n"
+#~ "run it wherever you need it."
+#~ msgstr ""
+#~ "<0>Open source</0> — inspect the stack, adapt it, and\n"
+#~ "run it wherever you need it."
+
+#~ msgid ""
+#~ "<0>Offline-first</0> — keep working locally; sync and\n"
+#~ "resolve conflicts when you are back online."
+#~ msgstr ""
+#~ "<0>Offline-first</0> — keep working locally; sync and\n"
+#~ "resolve conflicts when you are back online."
+
+#~ msgid ""
+#~ "<0>Fully featured</0> — realtime collaboration, search,\n"
+#~ "invites, fine-grained rights, and extensible ontologies out of the\n"
+#~ "box."
+#~ msgstr ""
+#~ "<0>Fully featured</0> — realtime collaboration, search,\n"
+#~ "invites, fine-grained rights, and extensible ontologies out of the\n"
+#~ "box."
+
+#: src/views/RootWelcomeGate.tsx
+msgid "Get started"
+msgstr "Get started"
+
+#~ msgid ""
+#~ "A production-grade data workspace. Graph-native, permission-aware, and ready\n"
+#~ "to self-host."
+#~ msgstr ""
+#~ "A production-grade data workspace. Graph-native, permission-aware, and ready\n"
+#~ "to self-host."
+
+#~ msgid ""
+#~ "<0>Fastest all-in-one workspace</0>: documents, tables, linked\n"
+#~ "data, and HTTP APIs together, without duct-taping half a dozen services."
+#~ msgstr ""
+#~ "<0>Fastest all-in-one workspace</0>: documents, tables, linked\n"
+#~ "data, and HTTP APIs together, without duct-taping half a dozen services."
+
+#~ msgid ""
+#~ "<0>Open source</0>: inspect the stack, adapt it, and run it\n"
+#~ "wherever you need it."
+#~ msgstr ""
+#~ "<0>Open source</0>: inspect the stack, adapt it, and run it\n"
+#~ "wherever you need it."
+
+#~ msgid ""
+#~ "<0>Offline-first</0>: keep working locally; sync and resolve\n"
+#~ "conflicts when you are back online."
+#~ msgstr ""
+#~ "<0>Offline-first</0>: keep working locally; sync and resolve\n"
+#~ "conflicts when you are back online."
+
+#~ msgid ""
+#~ "<0>Fully featured</0>: realtime collaboration, search, invites,\n"
+#~ "fine-grained rights, and extensible ontologies out of the box."
+#~ msgstr ""
+#~ "<0>Fully featured</0>: realtime collaboration, search, invites,\n"
+#~ "fine-grained rights, and extensible ontologies out of the box."
+
+#~ msgid ""
+#~ "<0>Integrated knowledge environment</0>: build an AI-ready\n"
+#~ "knowledge base from your docs, linked data, and workflows."
+#~ msgstr ""
+#~ "<0>Integrated knowledge environment</0>: build an AI-ready\n"
+#~ "knowledge base from your docs, linked data, and workflows."
+
+#~ msgid ""
+#~ "A production-grade data workspace. Graph-native, permission-aware,\n"
+#~ "and ready to self-host."
+#~ msgstr ""
+#~ "A production-grade data workspace. Graph-native, permission-aware,\n"
+#~ "and ready to self-host."
+
+#: src/views/RootWelcomeGate.tsx
+msgid ""
+"<0>Fastest all-in-one workspace</0>: documents, tables,\n"
+"linked data, and HTTP APIs together, without duct-taping half a\n"
+"dozen services."
+msgstr ""
+"<0>Fastest all-in-one workspace</0>: documents, tables,\n"
+"linked data, and HTTP APIs together, without duct-taping half a\n"
+"dozen services."
+
+#: src/views/RootWelcomeGate.tsx
+msgid ""
+"<0>Integrated knowledge environment</0>: build an\n"
+"AI-ready knowledge base from your docs, structured data, and\n"
+"files."
+msgstr ""
+"<0>Integrated knowledge environment</0>: build an\n"
+"AI-ready knowledge base from your docs, structured data, and\n"
+"files."
+
+#: src/views/RootWelcomeGate.tsx
+msgid ""
+"<0>Open source</0>: inspect the stack, adapt it, and run\n"
+"it wherever you need it."
+msgstr ""
+"<0>Open source</0>: inspect the stack, adapt it, and run\n"
+"it wherever you need it."
+
+#: src/views/RootWelcomeGate.tsx
+msgid ""
+"<0>Offline-first</0>: keep working locally; sync and\n"
+"resolve conflicts when you are back online."
+msgstr ""
+"<0>Offline-first</0>: keep working locally; sync and\n"
+"resolve conflicts when you are back online."
+
+#: src/views/RootWelcomeGate.tsx
+msgid ""
+"<0>Fully featured</0>: realtime collaboration, search,\n"
+"invites, fine-grained rights, and extensible ontologies out of the\n"
+"box."
+msgstr ""
+"<0>Fully featured</0>: realtime collaboration, search,\n"
+"invites, fine-grained rights, and extensible ontologies out of the\n"
+"box."

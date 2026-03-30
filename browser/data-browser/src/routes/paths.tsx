@@ -2,6 +2,7 @@ export const pathNames = {
   // Main app route
   app: '/app',
   // sub routes
+  welcome: '/welcome',
   agentSettings: '/agent',
   appSettings: '/settings',
   serverSettings: '/server',
@@ -25,6 +26,7 @@ export const pathNames = {
   devDrive: '/dev-drive',
 } as const;
 export const paths = {
+  welcome: `${pathNames.app}${pathNames.welcome}`,
   agentSettings: `${pathNames.app}${pathNames.agentSettings}`,
   appSettings: `${pathNames.app}${pathNames.appSettings}`,
   serverSettings: `${pathNames.app}${pathNames.serverSettings}`,

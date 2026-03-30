@@ -19,6 +19,7 @@ import { ImportRoute } from './ImportRoute';
 import { HistoryRoute } from './History/HistoryRoute';
 import { LinkOpenRouter } from './LinkOpenRouter';
 import { OnboardingRoute } from './OnboardingRoute';
+import { WelcomeRoute } from './WelcomeRoute';
 
 const DevDriveRoute = createRoute({
   getParentRoute: () => appRoute,
@@ -58,6 +59,7 @@ const SandboxRoute = createRoute({
 
 const routeTree = rootRoute.addChildren({
   appRoute: appRoute.addChildren({
+    WelcomeRoute,
     ShowRoute,
     SearchRoute,
     AppSettingsRoute,
