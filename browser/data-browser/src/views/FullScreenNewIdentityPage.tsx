@@ -1,12 +1,6 @@
-import React, { useRef } from 'react';
+import React from 'react';
 import { useSettings } from '../helpers/AppSettings';
-import { Main } from '../components/Main';
-import { Column } from '../components/Row';
-import { NewIdentitySection } from '../components/NewIdentitySection';
-import { styled } from 'styled-components';
-import { useSavedDrives } from '../hooks/useSavedDrives';
-import { useDriveHistory } from '../hooks/useDriveHistory';
-import { welcomeBackgroundCss } from './welcomeBackground';
+import { GettingStartedFlow } from './getting-started/GettingStartedFlow';
 
 /**
  * First-run experience: create an agent, set a name, auto-create a private home drive, then open it.
@@ -14,75 +8,6 @@ import { welcomeBackgroundCss } from './welcomeBackground';
  */
 export const FullScreenNewIdentityPage: React.FC = () => {
   const { baseURL } = useSettings();
-  const [savedDrives] = useSavedDrives();
-  const [, addToHistory] = useDriveHistory(savedDrives);
-  const stepDotsSlotRef = useRef<HTMLDivElement | null>(null);
 
-  return (
-    <Main subject={baseURL}>
-      <Shell>
-        <Inner>
-          <Card>
-            <Column gap='1.5rem'>
-              <NewIdentitySection
-                autoStart
-                verifySecret
-                stepIndicatorPortal={stepDotsSlotRef.current}
-                onAfterCreate={async driveSubject => {
-                  addToHistory(driveSubject);
-                }}
-                onDone={() => {
-                  /* After verify, NewIdentitySection navigates to personalDrive / home */
-                }}
-              />
-            </Column>
-          </Card>
-          <StepDotsSlot ref={stepDotsSlotRef} />
-        </Inner>
-      </Shell>
-    </Main>
-  );
+  return <GettingStartedFlow subject={baseURL} initialStep='create' />;
 };
-
-const Shell = styled.div`
-  min-height: ${p => p.theme.heights.fullPage};
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: ${p => p.theme.size(7)} ${p => p.theme.size(5)};
-  box-sizing: border-box;
-  ${welcomeBackgroundCss}
-`;
-
-const Inner = styled.div`
-  width: 100%;
-  max-width: 40rem;
-  margin-inline: auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-`;
-
-const Card = styled.div`
-  box-sizing: border-box;
-  width: 100%;
-  max-width: 36rem;
-  margin-inline: auto;
-  padding: ${p => p.theme.size(7)};
-  border-radius: ${p => p.theme.radius};
-  border: 1px solid ${p => p.theme.colors.bg2};
-  background: ${p => p.theme.colors.bg1};
-  box-shadow: ${p => p.theme.boxShadowSoft};
-  backdrop-filter: blur(10px);
-`;
-
-const StepDotsSlot = styled.div`
-  margin-top: ${p => p.theme.size(5)};
-  min-height: 1.25rem;
-
-  & [data-step-dots='true'] {
-    display: flex;
-    justify-content: center;
-    gap: 6px;
-  }
-`;

@@ -217,6 +217,8 @@ msgstr "Copier"
 #: src/components/LoggedOutAgentPanel.tsx
 #: src/components/SignInButton.tsx
 #: src/views/InvitePage.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Sign in"
 msgstr "Se connecter"
 
@@ -3307,6 +3309,7 @@ msgstr "Agent créé !"
 #: src/components/LoggedOutAgentPanel.tsx
 #: src/views/InvitePage.tsx
 #: src/views/InvitePage.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Continue"
 msgstr "Continuer"
 
@@ -3934,11 +3937,10 @@ msgstr ""
 msgid "Verify your secret"
 msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid ""
-"You have been signed out to verify that you saved your secret. Enter it\n"
-"below to sign in. If you lost it, you can start over."
-msgstr ""
+#~ msgid ""
+#~ "You have been signed out to verify that you saved your secret. Enter it\n"
+#~ "below to sign in. If you lost it, you can start over."
+#~ msgstr ""
 
 #: src/components/NewIdentitySection.tsx
 msgid "Paste your secret here"
@@ -3947,7 +3949,6 @@ msgstr ""
 #~ msgid "Signing in..."
 #~ msgstr ""
 
-#: src/components/NewIdentitySection.tsx
 #: src/components/NewIdentitySection.tsx
 msgid "Start over"
 msgstr ""
@@ -4023,9 +4024,8 @@ msgstr ""
 #~ msgid "The secret is invalid or this session has expired. You can start over."
 #~ msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid "The secret is invalid. You can start over."
-msgstr ""
+#~ msgid "The secret is invalid. You can start over."
+#~ msgstr ""
 
 #: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
 msgid "Folder"
@@ -4165,7 +4165,7 @@ msgstr ""
 msgid "If you have not set up an identity on this server yet,{0} <0>create one here</0>."
 msgstr ""
 
-#: src/views/RootWelcomeGate.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Could not parse that secret."
 msgstr ""
 
@@ -4195,6 +4195,8 @@ msgstr ""
 
 #: src/components/LoggedOutAgentPanel.tsx
 #: src/components/LoggedOutAgentPanel.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Agent secret"
 msgstr ""
 
@@ -4202,6 +4204,7 @@ msgstr ""
 #~ msgstr ""
 
 #: src/components/LoggedOutAgentPanel.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Signing in…"
 msgstr ""
 
@@ -4368,13 +4371,15 @@ msgstr ""
 
 #: src/components/LoggedOutAgentPanel.tsx
 #: src/routes/SettingsAgent.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Create account"
 msgstr ""
 
 #~ msgid "Welcome{0}"
 #~ msgstr ""
 
-#: src/views/RootWelcomeGate.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
 msgid "AtomicServer"
 msgstr ""
 
@@ -4405,7 +4410,7 @@ msgstr ""
 #~ "box."
 #~ msgstr ""
 
-#: src/views/RootWelcomeGate.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Get started"
 msgstr ""
 
@@ -4509,41 +4514,36 @@ msgstr ""
 #~ "runs anywhere."
 #~ msgstr ""
 
-#: src/views/RootWelcomeGate.tsx
-msgid ""
-"<0>Open source</0>: inspect, fork, and self-host. Keep\n"
-"control of your data and avoid lock-in."
-msgstr ""
+#~ msgid ""
+#~ "<0>Open source</0>: inspect, fork, and self-host. Keep\n"
+#~ "control of your data and avoid lock-in."
+#~ msgstr ""
 
 #~ msgid ""
 #~ "<0>Feature complete by default</0>: rights, history,\n"
 #~ "search, invites, realtime sync, and collaboration built in."
 #~ msgstr ""
 
-#: src/views/RootWelcomeGate.tsx
-msgid ""
-"<0>All-in-one workspace</0>: documents, tables, files,\n"
-"and APIs in one place, designed to stay coherent as it grows."
-msgstr ""
+#~ msgid ""
+#~ "<0>All-in-one workspace</0>: documents, tables, files,\n"
+#~ "and APIs in one place, designed to stay coherent as it grows."
+#~ msgstr ""
 
-#: src/views/RootWelcomeGate.tsx
-msgid ""
-"<0>Fast and lightweight</0>: a snappy workspace and API,\n"
-"small download, minimal dependencies, runs anywhere."
-msgstr ""
+#~ msgid ""
+#~ "<0>Fast and lightweight</0>: a snappy workspace and API,\n"
+#~ "small download, minimal dependencies, runs anywhere."
+#~ msgstr ""
 
-#: src/views/RootWelcomeGate.tsx
-msgid ""
-"<0>Feature complete by default</0>: rights, history,\n"
-"search, invites, realtime sync, collaboration, and AI chat built\n"
-"in."
-msgstr ""
+#~ msgid ""
+#~ "<0>Feature complete by default</0>: rights, history,\n"
+#~ "search, invites, realtime sync, collaboration, and AI chat built\n"
+#~ "in."
+#~ msgstr ""
 
-#: src/views/RootWelcomeGate.tsx
-msgid ""
-"<0>Future of the web</0>: decentralized by design, built\n"
-"for interoperability so your data and tools can work together."
-msgstr ""
+#~ msgid ""
+#~ "<0>Future of the web</0>: decentralized by design, built\n"
+#~ "for interoperability so your data and tools can work together."
+#~ msgstr ""
 
 #: src/components/NewIdentitySection.tsx
 msgid "Others can read this. You can change this later."
@@ -4567,7 +4567,7 @@ msgstr ""
 #~ msgid "Feature complete by default"
 #~ msgstr ""
 
-#: src/views/RootWelcomeGate.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Make your knowledge work for you."
 msgstr ""
 
@@ -4577,4 +4577,49 @@ msgstr ""
 
 #: src/components/AI/AISettings.tsx
 msgid "MCP servers"
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid ""
+"<0>All-in-one workspace</0>: documents, tables, files, and APIs\n"
+"in one place, designed to stay coherent as it grows."
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid ""
+"<0>Fast and lightweight</0>: a snappy workspace and API, small\n"
+"download, minimal dependencies, runs anywhere."
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid ""
+"<0>Open source</0>: inspect, fork, and self-host. Keep control\n"
+"of your data and avoid lock-in."
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid ""
+"<0>Future of the web</0>: decentralized by design, built for\n"
+"interoperability so your data and tools can work together."
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid ""
+"<0>Feature complete by default</0>: rights, history, search,\n"
+"invites, realtime sync, collaboration, and AI chat built in."
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "<0/> Back"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "The secret is invalid."
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid ""
+"You have been signed out to verify that you saved your secret. Enter it\n"
+"below to sign in."
 msgstr ""

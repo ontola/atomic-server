@@ -127,7 +127,7 @@ export function NewIdentitySection({
 
       const agentResource = await store.getResource(identity.agentSubject);
       if (username) {
-        agentResource.set(core.properties.name, username);
+        await agentResource.set(core.properties.name, username);
       }
 
       const driveName = username ? `${username}'s Drive` : 'Personal';
@@ -148,7 +148,7 @@ export function NewIdentitySection({
       // (Avoids races where the Agent commit is written before the Drive exists.)
       await resource.save();
 
-      agentResource.set(core.properties.personalDrive, resource.subject);
+      await agentResource.set(core.properties.personalDrive, resource.subject);
       agentResource.push(server.properties.drives, [resource.subject]);
       await agentResource.save();
 
@@ -221,20 +221,11 @@ export function NewIdentitySection({
       setError(
         e instanceof Error
           ? e.message
-          : 'The secret is invalid. You can start over.',
+          : 'The secret is invalid.',
       );
     } finally {
       setLoading(false);
     }
-  }
-
-  // ─── Start Over ──────────────────────────────────────────────────────────
-
-  function handleStartOver() {
-    setIdentity(null);
-    setHasCopied(false);
-    setError(undefined);
-    setStep('idle');
   }
 
   // ─── Render ────────────────────────────────────────────────────────────────
@@ -288,7 +279,6 @@ export function NewIdentitySection({
           hasCopied={hasCopied}
           onCopy={() => setHasCopied(true)}
           onConfirm={handleConfirmSecret}
-          onStartOver={handleStartOver}
           verifySecret={verifySecret}
         />
       )}
@@ -297,7 +287,6 @@ export function NewIdentitySection({
         <VerifyStep
           secret={identity.secret}
           onVerify={handleVerify}
-          onStartOver={handleStartOver}
         />
       )}
     </Column>
@@ -354,7 +343,7 @@ const Dot = styled.span`
   border-radius: 50%;
 `;
 
-const StepDots = styled.div.attrs({ 'data-step-dots': 'true' })`
+const StepDots = styled.div.attrs(() => ({ 'data-step-dots': 'true' } as any))`
   display: flex;
   gap: 6px;
   justify-content: center;
@@ -365,14 +354,12 @@ function SecretStep({
   hasCopied,
   onCopy,
   onConfirm,
-  onStartOver,
   verifySecret,
 }: {
   secret: string;
   hasCopied: boolean;
   onCopy: () => void;
   onConfirm: () => void;
-  onStartOver: () => void;
   verifySecret: boolean;
 }) {
   return (
@@ -415,9 +402,6 @@ function SecretStep({
                 ? "Yes, I've stored it — sign me out to verify"
                 : "Yes, I've stored it safely"}
             </Button>
-            <Button subtle onClick={onStartOver}>
-              Start over
-            </Button>
           </Row>
         </>
       ) : (
@@ -430,11 +414,9 @@ function SecretStep({
 function VerifyStep({
   secret,
   onVerify,
-  onStartOver,
 }: {
   secret: string;
   onVerify: (input: string) => void;
-  onStartOver: () => void;
 }) {
   const [input, setInput] = useState('');
 
@@ -443,7 +425,7 @@ function VerifyStep({
       <h3>Verify your secret</h3>
       <p>
         You have been signed out to verify that you saved your secret. Enter it
-        below to sign in. If you lost it, you can start over.
+        below to sign in.
       </p>
       <Field label='Enter your Agent Secret' fieldId='agent-secret'>
         <InputWrapper>
@@ -465,9 +447,6 @@ function VerifyStep({
           />
         </InputWrapper>
       </Field>
-      <Button subtle onClick={onStartOver}>
-        Start over
-      </Button>
     </Column>
   );
 }

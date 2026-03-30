@@ -50,7 +50,7 @@ export function useDevDrive() {
       await driveResource.save();
 
       const agentResource = await store.getResource(agentDID);
-      agentResource.set(core.properties.personalDrive, driveResource.subject);
+      await agentResource.set(core.properties.personalDrive, driveResource.subject);
       agentResource.push(server.properties.drives, [driveResource.subject]);
       await agentResource.save();
 

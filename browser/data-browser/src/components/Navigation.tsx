@@ -33,7 +33,10 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
   const onboardingOrChild =
     pathname === paths.onboarding ||
     pathname.startsWith(`${paths.onboarding}/`);
-  const hideGlobalChrome = rootWelcomeChromeHidden || onboardingOrChild;
+  const welcomeOrChild =
+    pathname === paths.welcome || pathname.startsWith(`${paths.welcome}/`);
+  const hideGlobalChrome =
+    rootWelcomeChromeHidden || onboardingOrChild || welcomeOrChild;
 
   const search = useMemo(() => new URLSearchParams(searchStr), [searchStr]);
 
