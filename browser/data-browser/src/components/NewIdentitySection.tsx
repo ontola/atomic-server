@@ -9,6 +9,8 @@ import { constructOpenURL } from '../helpers/navigation';
 import { Button } from './Button';
 import { Column, Row } from './Row';
 import { CodeBlock } from './CodeBlock';
+import toast from 'react-hot-toast';
+import { FaDownload } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import { InputStyled, InputWrapper } from './forms/InputStyles';
 import Field from './forms/Field';
@@ -64,7 +66,8 @@ export function NewIdentitySection({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [identity, setIdentity] = useState<IdentityData | null>(null);
-  const [hasCopied, setHasCopied] = useState(false);
+  /** True after the user copies the secret or saves the backup file. */
+  const [secretBackedUp, setSecretBackedUp] = useState(false);
 
   useEffect(() => {
     if (autoStart) {
@@ -218,11 +221,8 @@ export function NewIdentitySection({
 
       onDone();
     } catch (e) {
-      setError(
-        e instanceof Error
-          ? e.message
-          : 'The secret is invalid.',
-      );
+      console.error('Failed to verify secret:', e);
+      setError('The secret is invalid. Make sure you copied it correctly.');
     } finally {
       setLoading(false);
     }
@@ -276,18 +276,16 @@ export function NewIdentitySection({
       {step === 'secret' && identity && (
         <SecretStep
           secret={identity.secret}
-          hasCopied={hasCopied}
-          onCopy={() => setHasCopied(true)}
+          secretBackedUp={secretBackedUp}
+          onCopy={() => setSecretBackedUp(true)}
+          onDownloadBackup={() => setSecretBackedUp(true)}
           onConfirm={handleConfirmSecret}
           verifySecret={verifySecret}
         />
       )}
 
       {step === 'verify' && identity && (
-        <VerifyStep
-          secret={identity.secret}
-          onVerify={handleVerify}
-        />
+        <VerifyStep secret={identity.secret} onVerify={handleVerify} />
       )}
     </Column>
   );
@@ -343,32 +341,77 @@ const Dot = styled.span`
   border-radius: 50%;
 `;
 
-const StepDots = styled.div.attrs(() => ({ 'data-step-dots': 'true' } as any))`
+const StepDots = styled.div.attrs(() => ({ 'data-step-dots': 'true' }) as any)`
   display: flex;
   gap: 6px;
   justify-content: center;
 `;
 
+function downloadSecretBackupFile(secret: string): void {
+  const when = new Date().toISOString();
+  const lines = [
+    'Atomic Server — agent secret backup',
+    '',
+    'IMPORTANT: Store this file (or the secret line) somewhere only you can access.',
+    'Without it you cannot sign in after clearing the browser or on another device.',
+    'Anyone who gets this secret can access your account on this server.',
+    '',
+    `Created: ${when}`,
+    '',
+    '--- SECRET (single line; keep exactly as-is) ---',
+    secret,
+    '--- END ---',
+    '',
+  ];
+  const blob = new Blob([lines.join('\n')], {
+    type: 'text/plain;charset=utf-8',
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `atomic-agent-backup-${when.slice(0, 10)}.txt`;
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 function SecretStep({
   secret,
-  hasCopied,
+  secretBackedUp,
   onCopy,
+  onDownloadBackup,
   onConfirm,
   verifySecret,
 }: {
   secret: string;
-  hasCopied: boolean;
+  secretBackedUp: boolean;
   onCopy: () => void;
+  onDownloadBackup: () => void;
   onConfirm: () => void;
   verifySecret: boolean;
 }) {
+  function handleDownload() {
+    downloadSecretBackupFile(secret);
+    toast.success(
+      'Backup file downloaded — move it out of Downloads if you share this computer',
+    );
+    onDownloadBackup();
+  }
+
   return (
     <Column gap='1rem'>
-      <h3>Your new identity is ready</h3>
+      <h3>Safely store your secret</h3>
       <p>
-        <strong>IMPORTANT:</strong> Save this secret key. It is the only way to
-        access your data if you clear your browser cache or sign in from another
-        device.
+        <strong>IMPORTANT:</strong> You need this secret to sign in again. We do
+        not store a copy you can reset like a normal password.
+      </p>
+      <p>
+        <strong>Ways to keep it:</strong> a password manager (best),{' '}
+        <strong>Save as file</strong> below and move it to a private folder, or
+        copy into a <strong>locked note</strong> (Apple Notes, Google Keep,
+        etc.)—not email or chat.
       </p>
       <StyledCodeBlock
         className='secret-protected'
@@ -390,7 +433,13 @@ function SecretStep({
         }}
         onCopy={onCopy}
       />
-      {hasCopied ? (
+      <Row gap='0.75rem' wrapItems>
+        <Button type='button' subtle onClick={handleDownload}>
+          <FaDownload aria-hidden style={{ marginRight: '0.45em' }} />
+          Save backup file…
+        </Button>
+      </Row>
+      {secretBackedUp ? (
         <>
           <p>
             Are you sure you&apos;ve stored this secret somewhere safe? You
@@ -405,7 +454,9 @@ function SecretStep({
           </Row>
         </>
       ) : (
-        <Button disabled>Copy the secret key to continue</Button>
+        <Button disabled>
+          Copy the secret or save the backup file to continue
+        </Button>
       )}
     </Column>
   );

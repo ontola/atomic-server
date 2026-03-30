@@ -3651,9 +3651,8 @@ msgstr ""
 "Pega tu clave secreta de Atomic Data a continuación para conectar tu\n"
 "identidad existente a este nodo."
 
-#: src/components/NewIdentitySection.tsx
-msgid "Your new identity is ready"
-msgstr "Tu nueva identidad está lista"
+#~ msgid "Your new identity is ready"
+#~ msgstr "Tu nueva identidad está lista"
 
 #~ msgid ""
 #~ "<0>IMPORTANT:</0> Save this secret key. It is the only\n"
@@ -3696,9 +3695,8 @@ msgstr "Usar una identidad existente"
 #~ msgid "Are you sure you{0}ve stored this secret somewhere safe? You cannot recover it if you lose it."
 #~ msgstr "¿Estás seguro de que has guardado este secreto en un lugar seguro? No podrás recuperarlo si lo pierdes."
 
-#: src/components/NewIdentitySection.tsx
-msgid "Copy the secret key to continue"
-msgstr "Copia la clave secreta para continuar"
+#~ msgid "Copy the secret key to continue"
+#~ msgstr "Copia la clave secreta para continuar"
 
 #: src/components/NewIdentitySection.tsx
 msgid "Yes, I've stored it safely"
@@ -3939,9 +3937,8 @@ msgstr ""
 #~ msgid "Signing in..."
 #~ msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid "Start over"
-msgstr ""
+#~ msgid "Start over"
+#~ msgstr ""
 
 #~ msgid "You're signed in!"
 #~ msgstr ""
@@ -3994,12 +3991,11 @@ msgstr ""
 msgid "Generating your identity..."
 msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid ""
-"<0>IMPORTANT:</0> Save this secret key. It is the only way to\n"
-"access your data if you clear your browser cache or sign in from another\n"
-"device."
-msgstr ""
+#~ msgid ""
+#~ "<0>IMPORTANT:</0> Save this secret key. It is the only way to\n"
+#~ "access your data if you clear your browser cache or sign in from another\n"
+#~ "device."
+#~ msgstr ""
 
 #: src/components/NewIdentitySection.tsx
 msgid ""
@@ -4362,7 +4358,6 @@ msgstr ""
 #: src/components/LoggedOutAgentPanel.tsx
 #: src/routes/SettingsAgent.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
-#: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Create account"
 msgstr ""
 
@@ -4604,12 +4599,71 @@ msgstr ""
 msgid "<0/> Back"
 msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid "The secret is invalid."
-msgstr ""
+#~ msgid "The secret is invalid."
+#~ msgstr ""
 
 #: src/components/NewIdentitySection.tsx
 msgid ""
 "You have been signed out to verify that you saved your secret. Enter it\n"
 "below to sign in."
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Atomic Server — agent secret backup"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "IMPORTANT: Store this file (or the secret line) somewhere only you can access."
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Without it you cannot sign in after clearing the browser or on another device."
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Anyone who gets this secret can access your account on this server."
+msgstr ""
+
+#. placeholder {0}: when
+#: src/components/NewIdentitySection.tsx
+msgid "Created: {0}"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Backup file downloaded — move it out of Downloads if you share this computer"
+msgstr ""
+
+#~ msgid ""
+#~ "<0>IMPORTANT:</0> You need this secret to sign in again. We\n"
+#~ "do not store a copy you can reset like a normal password."
+#~ msgstr ""
+
+#. placeholder {0}: ' '
+#: src/components/NewIdentitySection.tsx
+msgid ""
+"<0>Ways to keep it:</0> a password manager (best),{0} <1>Save as file</1> below and move it to a private folder, or\n"
+"copy into a <2>locked note</2> (Apple Notes, Google Keep,\n"
+"etc.)—not email or chat."
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "<0/> Save backup file…"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Copy the secret or save the backup file to continue"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid ""
+"<0>IMPORTANT:</0> You need this secret to sign in again. We do\n"
+"not store a copy you can reset like a normal password."
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "The secret is invalid. Make sure you copied it correctly."
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Safely store your secret"
 msgstr ""
