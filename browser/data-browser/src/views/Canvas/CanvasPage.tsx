@@ -403,7 +403,7 @@ const ColorSwatch = styled.button<{ $color: number; $active: boolean }>`
   height: 24px;
   border-radius: 50%;
   border: 2px solid
-    ${p => (p.$active ? p.theme.colors.text : p.theme.colors.bg3)};
+    ${p => (p.$active ? p.theme.colors.text : p.theme.colors.bg2)};
   background: #${p => (p.$color >>> 0).toString(16).padStart(8, '0').slice(2)};
   cursor: pointer;
   padding: 0;
@@ -411,7 +411,7 @@ const ColorSwatch = styled.button<{ $color: number; $active: boolean }>`
 
 const Status = styled.span<{ $error?: boolean }>`
   font-size: 0.875rem;
-  color: ${p => (p.$error ? p.theme.colors.danger : p.theme.colors.textLight)};
+  color: ${p => (p.$error ? p.theme.colors.alert : p.theme.colors.textLight)};
 `;
 
 const CanvasArea = styled.div<{ $dark: boolean; $panMode: string }>`

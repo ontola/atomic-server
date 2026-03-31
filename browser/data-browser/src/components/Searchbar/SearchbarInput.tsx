@@ -62,11 +62,9 @@ function useTagHighlighting(
 
   useEffect(() => {
     if ('highlights' in CSS) {
-      // @ts-expect-error Typescript doesn't know that set() exists
       CSS.highlights.set('tag-highlight', tagHighlight.current);
 
       return () => {
-        // @ts-expect-error Typescript doesn't know that delete() exists
         CSS.highlights.delete('tag-highlight');
       };
     }
@@ -75,7 +73,6 @@ function useTagHighlighting(
   return (str: string): TagWithTitle[] => {
     if (!inputRef.current) return [];
 
-    // @ts-expect-error Typescript doesn't know that clear() exists
     tagHighlight.current.clear();
 
     const regex = /(?<=\btag:)[\w-]+/g;
@@ -97,7 +94,6 @@ function useTagHighlighting(
       range.setStart(inputRef.current.firstChild!, m.index);
       range.setEnd(inputRef.current.firstChild!, regex.lastIndex);
 
-      // @ts-expect-error Typescript doesn't know that add() exists
       tagHighlight.current.add(range);
 
       foundTags.push(foundTag);
@@ -252,14 +248,14 @@ export const SearchbarInput: React.FC<SearchbarInputProps> = ({
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLDivElement>) => {
+  const handleChange = (e: React.FormEvent<HTMLDivElement>) => {
     if (!inputRef.current) return;
 
-    let str = e.target.textContent ?? '';
+    let str = e.currentTarget.textContent ?? '';
 
     // For some reason a single <br /> tag is present when the user empties the input, we need to remove that so the placeholder is visible again.
     if (str === '') {
-      e.target.childNodes.forEach(child => {
+      e.currentTarget.childNodes.forEach(child => {
         child.remove();
       });
     }

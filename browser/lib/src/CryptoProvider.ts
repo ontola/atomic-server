@@ -1,6 +1,8 @@
-import { sha512 } from '@noble/hashes/sha512';
+import { sha512 } from '@noble/hashes/sha2.js';
 import { decodeB64, encodeB64 } from './base64.js';
-import { sign, getPublicKey, utils } from '@noble/ed25519';
+import { sign, getPublicKey, hashes, utils } from '@noble/ed25519';
+
+hashes.sha512 = sha512;
 
 export interface CryptoProvider {
   type: string;
@@ -21,7 +23,6 @@ interface DecodedSecret {
 export class JSCryptoProvider implements CryptoProvider {
   #privateKey: Uint8Array;
   constructor(privateKey: string) {
-    utils.sha512 = msg => Promise.resolve(sha512(msg));
     this.#privateKey = new Uint8Array(decodeB64(privateKey));
   }
 
@@ -203,7 +204,7 @@ export interface KeyPair {
 }
 
 export async function generateKeyPair(): Promise<KeyPair> {
-  const privateBytes = utils.randomPrivateKey();
+  const privateBytes = utils.randomSecretKey();
   const publicBytes = await getPublicKey(privateBytes);
   const privateKey = encodeB64(privateBytes);
   const publicKey = encodeB64(publicBytes);

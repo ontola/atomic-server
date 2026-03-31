@@ -104,13 +104,22 @@ export function ChatRoomPage({ resource }: ResourcePageProps) {
     }
   };
 
+  // `useHotkeys` with `deps: []` locks the callback closure to the first
+  // render, so the captured `sendMessage` always reads the *initial*
+  // `newMessageVal` (= ''). Result: every Enter-press saves an empty
+  // message and the user's typed text vanishes. Pass through a ref so
+  // the latest `sendMessage` is always invoked, while still telling the
+  // hotkey hook there's nothing to re-bind on.
+  const sendMessageRef = useRef(sendMessage);
+  sendMessageRef.current = sendMessage;
+
   useHotkeys(
     'enter',
     e => {
       e.preventDefault();
-      sendMessage();
+      sendMessageRef.current();
     },
-    { enableOnTags: ['TEXTAREA'] },
+    { enableOnFormTags: ['TEXTAREA'] },
     [],
   );
 
@@ -119,7 +128,7 @@ export function ChatRoomPage({ resource }: ResourcePageProps) {
     _e => {
       inputRef?.current?.blur();
     },
-    { enableOnTags: ['TEXTAREA'] },
+    { enableOnFormTags: ['TEXTAREA'] },
     [],
   );
   // Scroll to bottom when new messages arrive, and re-enable auto-scroll

@@ -11,6 +11,7 @@
         // We don't need type declarations for a cli app.
         "declaration": false,
         "allowJs": true,
+        "types": ["node"],
     },
     "include": [
         "./src",

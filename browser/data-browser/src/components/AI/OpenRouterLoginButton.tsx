@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { sha256 } from '@noble/hashes/sha256';
+import { sha256 } from '@noble/hashes/sha2.js';
 import { ButtonLink } from '../ButtonLink';
 import { paths } from '../../routes/paths';
 import { randomString } from '../../helpers/randomString';

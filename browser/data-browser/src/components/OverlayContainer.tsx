@@ -396,7 +396,7 @@ function SearchOverlay(): JSX.Element {
         closeOverlay();
       })();
     },
-    { enableOnTags: ['INPUT'] },
+    { enableOnFormTags: ['INPUT'] },
     [query, store, drive, navigate],
   );
 

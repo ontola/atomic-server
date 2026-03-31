@@ -8,8 +8,8 @@ import {
   type JSX,
 } from 'react';
 import { styled } from 'styled-components';
-import { FixedSizeList, ListOnScrollProps } from 'react-window';
-import Autosizer, { type VerticalSize } from 'react-virtualized-auto-sizer';
+import { List } from 'react-window';
+import { AutoSizer } from 'react-virtualized-auto-sizer';
 import { Cell, IndexCell } from './Cell';
 import { TableRow } from './TableRow';
 import { TableHeader, TableHeadingComponent } from './TableHeader';
@@ -65,9 +65,12 @@ interface FancyTableProps<T> {
 interface RowProps {
   index: number;
   style: React.CSSProperties;
+  ariaAttributes: React.AriaAttributes & { role: 'listitem' };
 }
 
-type OnScroll = (props: ListOnScrollProps) => unknown;
+type OnScroll = Parameters<
+  React.ComponentProps<typeof ActiveCellIndicator>['setOnScroll']
+>[0];
 
 export function FancyTable<T>({
   rowHeight = 40,
@@ -97,7 +100,6 @@ function FancyTableInner<T>({
   onPasteCommand,
   onColumnReorder,
   onRowExpand = () => undefined,
-  itemKey,
   HeadingComponent,
   NewColumnButtonComponent,
 }: FancyTableProps<T>): JSX.Element {
@@ -153,9 +155,20 @@ function FancyTableInner<T>({
   useClearCommands(columns, onClearRow, onClearCells);
 
   const Row = useCallback(
-    ({ index, style }: RowProps) => {
+    ({ index, style, ariaAttributes }: RowProps) => {
+      // react-window v2 hands every virtual item `role="listitem"` plus
+      // `aria-posinset` / `aria-setsize`. Those are wrong for a table — our
+      // rows live inside `role="rowgroup"` and need `role="row"` with
+      // `aria-rowindex`. Drop the listitem role so the TableRow's
+      // `role='row'` is not overridden when the spread reaches it.
+      const { role: _role, ...gridAria } = ariaAttributes;
       return (
-        <TableRow style={style} aria-rowindex={index + 2}>
+        <TableRow
+          {...gridAria}
+          style={style}
+          role='row'
+          aria-rowindex={index + 2}
+        >
           <IndexCell rowIndex={index} columnIndex={0} onExpand={onRowExpand}>
             {index + 1}
           </IndexCell>
@@ -167,22 +180,25 @@ function FancyTableInner<T>({
     [children, onRowExpand],
   );
 
-  const List = useCallback(
-    ({ height }: VerticalSize) => (
-      <StyledFixedSizeList
-        height={height}
-        width='100%'
-        itemSize={rowHeight!}
-        itemCount={itemCount}
-        itemKey={itemKey}
+  const rowProps = useMemo(() => ({}), []);
+
+  const VirtualList = useCallback(
+    ({ height }: { height: number | undefined }) => (
+      <StyledList
+        style={{ height: height ?? 0, width: '100%' }}
+        rowHeight={rowHeight!}
+        rowCount={itemCount}
+        rowProps={rowProps}
+        defaultHeight={height ?? 0}
         overscanCount={4}
-        onScroll={onScroll}
-        ref={listRef}
-      >
-        {Row}
-      </StyledFixedSizeList>
+        onScroll={() => {
+          onScroll({ scrollUpdateWasRequested: false });
+        }}
+        listRef={listRef}
+        rowComponent={Row}
+      />
     ),
-    [rowHeight, itemCount, itemKey, listRef, Row, onScroll],
+    [rowHeight, itemCount, rowProps, listRef, Row, onScroll],
   );
 
   useEffect(() => {
@@ -229,7 +245,9 @@ function FancyTableInner<T>({
               NewColumnButtonComponent={NewColumnButtonComponent}
             />
             <AutoSizeTamer role='rowgroup'>
-              <Autosizer disableWidth>{List}</Autosizer>
+              <AutoSizer
+                renderProp={({ height }) => <VirtualList height={height} />}
+              />
             </AutoSizeTamer>
             <ActiveCellIndicator
               sizeStr={templateColumns}
@@ -289,7 +307,7 @@ const PercentageInsanityFix = styled.div`
   min-width: 100%;
 `;
 
-const StyledFixedSizeList = styled(FixedSizeList)`
+const StyledList = styled(List)`
   overflow-x: hidden !important;
   overflow-y: auto !important;
 `;

@@ -33,6 +33,9 @@ import {
 import type { LoroDoc } from 'loro-crdt';
 import { useOnValueChange } from './helpers/useOnValueChange.js';
 
+const asError = (error: unknown): Error =>
+  error instanceof Error ? error : new Error(String(error));
+
 export type UseResourceOptions = FetchOpts;
 
 /**
@@ -270,7 +273,7 @@ export function useValue(
       try {
         await resource.__internalObject.save();
       } catch (e) {
-        store.notifyError(e);
+        store.notifyError(asError(e));
       }
     }, commitDebounce);
   }, [resource.__internalObject, store, commitDebounce, commit]);
@@ -292,8 +295,8 @@ export function useValue(
         saveResource();
         handleValidationError?.(undefined);
       } catch (e) {
-        if (handleValidationError) handleValidationError(e);
-        else store.notifyError(e);
+        if (handleValidationError) handleValidationError(asError(e));
+        else store.notifyError(asError(e));
       }
     },
 
@@ -521,7 +524,7 @@ export function useDate(
   try {
     return valToDate(value);
   } catch (e) {
-    store.notifyError(e);
+    store.notifyError(asError(e));
 
     return;
   }

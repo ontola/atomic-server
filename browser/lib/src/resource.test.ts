@@ -1,5 +1,6 @@
 import { describe, it } from 'vitest';
 import { normalizeLoroChangeTimestampMs, Resource } from './resource.js';
+import type { JSONValue } from './value.js';
 
 describe('resource.ts', () => {
   it('push propvals', ({ expect }) => {
@@ -177,7 +178,7 @@ describe('resource.ts', () => {
 
     const docContents = history
       .map(v => v.containers.get('doc'))
-      .filter((c): c is Record<string, unknown> => c !== undefined);
+      .filter((c): c is Record<string, JSONValue> => c !== undefined);
 
     expect(docContents.length).toBeGreaterThan(0);
     expect(

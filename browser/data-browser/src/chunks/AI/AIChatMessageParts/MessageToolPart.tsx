@@ -1,4 +1,4 @@
-import { getToolName, type ToolUIPart } from 'ai';
+import { getToolName, type DynamicToolUIPart, type ToolUIPart } from 'ai';
 import { styled } from 'styled-components';
 import { Row } from '@components/Row';
 import {
@@ -14,7 +14,7 @@ import { InlineFormattedResourceList } from '@components/InlineFormattedResource
 import { useResource } from '@tomic/react';
 
 interface ToolMessageProps {
-  part: ToolUIPart;
+  part: ToolUIPart | DynamicToolUIPart;
 }
 
 export const MessageToolPart: React.FC<ToolMessageProps> = ({ part }) => {
@@ -73,7 +73,7 @@ const ToolTitle = ({
   part,
 }: {
   toolName: string;
-  part: ToolUIPart;
+  part: ToolUIPart | DynamicToolUIPart;
 }) => {
   const args = part.input as unknown;
 

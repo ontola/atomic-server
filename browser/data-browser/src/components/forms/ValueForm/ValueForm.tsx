@@ -41,7 +41,7 @@ export function ValueForm({ resource, propertyURL, datatype }: ValueFormProps) {
       setEditMode(false);
     },
     {
-      enableOnTags: ['INPUT', 'TEXTAREA', 'SELECT'],
+      enableOnFormTags: ['INPUT', 'TEXTAREA', 'SELECT'],
     },
   );
 

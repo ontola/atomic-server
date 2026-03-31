@@ -51,16 +51,16 @@
     "svelte": "^5.1.4"
   },
   "devDependencies": {
-    "@sveltejs/adapter-auto": "^7.0.0",
-    "@sveltejs/kit": "^2.49.0",
-    "@sveltejs/package": "^2.5.6",
-    "@sveltejs/vite-plugin-svelte": "^6.2.1",
-    "publint": "^0.1.16",
-    "svelte": "^5.44.0",
-    "svelte-check": "^4.3.4",
-    "typescript": "^5.6.3",
-    "vite": "^8.0.0",
-    "vitest": "^4.0.14"
+    "@sveltejs/adapter-auto": "^7.0.1",
+    "@sveltejs/kit": "^2.61.0",
+    "@sveltejs/package": "^2.5.7",
+    "@sveltejs/vite-plugin-svelte": "^7.1.2",
+    "publint": "^0.3.21",
+    "svelte": "^5.55.9",
+    "svelte-check": "^4.4.8",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.14",
+    "vitest": "^4.1.7"
   },
   "svelte": "./dist/index.js",
   "types": "./dist/index.d.ts",
