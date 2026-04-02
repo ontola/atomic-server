@@ -141,6 +141,84 @@ describe('resource.ts', () => {
   });
 
   /**
+   * `replaceListItems` underpins the canvas history-scrub commit: dragging
+   * the undo button releases at a historical Version, and we need to swap
+   * the live stroke list to that Version's strokes in **one** undo
+   * checkpoint, with the same LoroList container identity preserved so
+   * concurrent remote writes against the old list still merge correctly.
+   */
+  it('replaceListItems swaps a list atomically and keeps container identity', async ({
+    expect,
+  }) => {
+    const subject = 'https://example.com/replace-list';
+    const prop = 'https://atomicdata.dev/ontology/canvas/strokeData';
+
+    const resource = new Resource(subject);
+    resource.pushListItem(prop, { color: 1, width: 2, path: [[0, 0]] });
+    resource.pushListItem(prop, { color: 3, width: 4, path: [[1, 1]] });
+
+    const doc = resource.getLoroDoc()!;
+    const map = doc.getMap('properties');
+    const originalListId = (map.get(prop) as unknown as { id?: string })?.id;
+
+    resource.replaceListItems(prop, [{ color: 9, width: 9, path: [[2, 2]] }]);
+
+    const items = resource.get(prop) as Record<string, unknown>[] | undefined;
+    expect(items ?? []).toHaveLength(1);
+    expect(items?.[0]?.color).toBe(9);
+
+    // Same LoroList container — identity preserved so any concurrent
+    // remote writes against the old container ID still target this one.
+    const newListId = (
+      doc.getMap('properties').get(prop) as unknown as { id?: string }
+    )?.id;
+    expect(newListId).toBe(originalListId);
+  });
+
+  /**
+   * Regression: tapping undo on the canvas showed "Saving…" but the strokes
+   * didn't visually update. Cause: `Resource.undo()` modified the Loro doc
+   * and cache but never fired `LocalChange`, so React consumers stayed on
+   * the pre-undo cache. `undo()` / `redo()` must emit a wildcard
+   * `LocalChange` so listeners reload from the cache.
+   */
+  it('undo and redo emit a LocalChange event so UI re-reads', async ({
+    expect,
+  }) => {
+    const { Resource: ResourceClass, ResourceEvents } =
+      await import('./resource.js');
+    const r = new ResourceClass('https://example.com/undo-event');
+    // Materialise the Loro doc, then create the UndoManager so it observes
+    // subsequent ops as undoable checkpoints (mirrors how CanvasPage wires
+    // it up: `ensureUndoManager()` runs once the resource is loaded, then
+    // user input produces undoable ops).
+    r.getLoroDoc();
+    r.ensureUndoManager();
+    await r.set('https://atomicdata.dev/properties/name', 'two', false);
+    // Force the doc to commit the pending op so the UndoManager records a
+    // checkpoint. In real use this happens via pushListItem/save.
+    r.getLoroDoc()?.commit();
+
+    const undoEvents: unknown[] = [];
+    const off = r.on(ResourceEvents.LocalChange, (prop, value) =>
+      undoEvents.push({ prop, value }),
+    );
+
+    expect(r.undo()).toBe(true);
+    expect(undoEvents.length).toBeGreaterThan(0);
+
+    off();
+
+    const redoEvents: unknown[] = [];
+    const off2 = r.on(ResourceEvents.LocalChange, (prop, value) =>
+      redoEvents.push({ prop, value }),
+    );
+    expect(r.redo()).toBe(true);
+    expect(redoEvents.length).toBeGreaterThan(0);
+    off2();
+  });
+
+  /**
    * Regression: the resource history page used to read only `getMap('properties')`,
    * so a Document's body content (which loro-prosemirror writes into a separate
    * top-level `doc` container) never showed up — only title/metadata edits did.

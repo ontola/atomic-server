@@ -1408,8 +1408,8 @@
   },
   {
     "@id": "https://atomicdata.dev/ontology/canvas/strokeData",
-    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
-    "https://atomicdata.dev/properties/description": "JSON-serialized array of stroke objects, each containing color (int), width (float), and path (array of [x, y] coordinate pairs).",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/jsonArray",
+    "https://atomicdata.dev/properties/description": "Array of stroke objects, each containing color (int), width (float), and path (array of [x, y] coordinate pairs). Stored as a LoroList of LoroMaps so concurrent strokes from multiple devices merge per-element.",
     "https://atomicdata.dev/properties/isA": [
       "https://atomicdata.dev/classes/Property"
     ],

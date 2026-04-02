@@ -1,4 +1,9 @@
-import type { LoroDoc, LoroList, VersionVector } from 'loro-crdt';
+import type {
+  LoroDoc,
+  LoroList,
+  UndoManager as LoroUndoManager,
+  VersionVector,
+} from 'loro-crdt';
 import { enableLoro, LoroLoader } from './loro-loader.js';
 import { decodeB64 } from './base64.js';
 import { EventManager } from './EventManager.js';
@@ -104,6 +109,8 @@ export class Resource<C extends OptionalClass = any> {
   /** The "properties" map inside the LoroDoc. Typed as any because the LoroMap generic causes issues with set(). */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private _loroMap?: any;
+  /** Loro UndoManager for undo/redo support. Lazily initialized. */
+  private _loroUndoManager?: LoroUndoManager;
   /** Version vector at the time of last save, used to export deltas */
   private _loroVersionAtLastSave?: VersionVector;
 
@@ -579,6 +586,7 @@ export class Resource<C extends OptionalClass = any> {
   private resetLoroState(): void {
     this._loroDoc = undefined;
     this._loroMap = undefined;
+    this._loroUndoManager = undefined;
     this._loroVersionAtLastSave = undefined;
   }
 
@@ -1488,6 +1496,90 @@ export class Resource<C extends OptionalClass = any> {
     );
   }
 
+  /**
+   * Replace every item in a Loro list property atomically.
+   *
+   * Deletes all current items and pushes the new ones in a single
+   * `LoroDoc.commit()`, so the `UndoManager` records the replacement as
+   * **one** undo checkpoint (not N). Used by the canvas history-scrub
+   * gesture: on release we want one undo to take the user back to the
+   * pre-scrub state, not N undos for N strokes.
+   *
+   * Object items become `LoroMap` containers (per-field CRDT merging on
+   * future edits); primitives are pushed directly — same semantics as
+   * `pushListItem`, just batched.
+   */
+  public replaceListItems(propUrl: string, items: JSONArray): void {
+    this._cache[propUrl] = [...items];
+    this._cacheDirty = true;
+    this._dirty = true;
+
+    const map = this.getLoroMap();
+
+    if (!map) {
+      return;
+    }
+
+    const { LoroList, LoroMap } = LoroLoader.Loro;
+    const existing = map.get(propUrl);
+
+    let list: LoroList;
+
+    if (existing && typeof existing === 'object' && 'delete' in existing) {
+      list = existing as LoroList;
+      // Drain in-place rather than `setContainer(new LoroList())`. Replacing
+      // the container resets its identity, so cross-device merges of writes
+      // that target the *old* list would silently drop. Deleting + pushing
+      // keeps the same container ID.
+      if (list.length > 0) {
+        list.delete(0, list.length);
+      }
+    } else {
+      list = map.setContainer(propUrl, new LoroList());
+    }
+
+    for (const item of items) {
+      if (item !== null && typeof item === 'object' && !Array.isArray(item)) {
+        const itemMap = list.pushContainer(new LoroMap());
+        this.writeJsonToLoroMap(itemMap, item as JSONObject);
+      } else {
+        list.push(item);
+      }
+    }
+
+    // Single commit at end → single UndoManager checkpoint for the whole
+    // replacement.
+    this._loroDoc?.commit();
+    this.eventManager.emit(
+      ResourceEvents.LocalChange,
+      propUrl,
+      this._cache[propUrl],
+    );
+  }
+
+  /** Remove an item from a Loro list property by index. Used for canvas stroke deletion. */
+  public removeListItem(propUrl: string, index: number): void {
+    const map = this.getLoroMap();
+    if (!map) return;
+
+    const existing = map.get(propUrl);
+    if (!existing || typeof existing !== 'object' || !('delete' in existing)) {
+      return;
+    }
+
+    const list = existing as LoroList;
+    list.delete(index, 1);
+    this._loroDoc?.commit();
+    this.rebuildCacheFromLoro();
+    this._cacheDirty = false;
+    this._dirty = true;
+    this.eventManager.emit(
+      ResourceEvents.LocalChange,
+      propUrl,
+      this._cache[propUrl],
+    );
+  }
+
   private writeJsonToLoroMap(
     map: InstanceType<typeof LoroLoader.Loro.LoroMap>,
     obj: JSONObject,
@@ -1529,6 +1621,64 @@ export class Resource<C extends OptionalClass = any> {
         list.push(item);
       }
     }
+  }
+
+  /** Initialize the Loro UndoManager for undo/redo support. Call after the doc is ready. */
+  public ensureUndoManager(): void {
+    const doc = this.getLoroDoc();
+    if (!doc || this._loroUndoManager) return;
+    const { UndoManager } = LoroLoader.Loro;
+    const um = new UndoManager(doc, {
+      maxUndoSteps: 200,
+      mergeInterval: 0,
+    });
+    this._loroUndoManager = um;
+  }
+
+  /** Undo last local operation. Returns true if something was undone. */
+  public undo(): boolean {
+    if (!this._loroUndoManager) return false;
+    if (!this._loroUndoManager.canUndo()) return false;
+    this._loroUndoManager.undo();
+    this._loroDoc?.commit();
+    this.rebuildCacheFromLoro();
+    this._cacheDirty = false;
+    this._dirty = true;
+    // Reset saved version so next save exports full snapshot
+    this._loroVersionAtLastSave = undefined;
+    // Undo can change any number of properties; emit a wildcard
+    // `LocalChange` so consumers (canvas page, useValue hooks, etc.) know
+    // to re-read the cache. Without this the Loro state is correct but
+    // React UI keeps painting the pre-undo strokes — the symptom is
+    // "tapping undo shows Saving… but nothing visually changes".
+    this.eventManager.emit(ResourceEvents.LocalChange, '', undefined);
+    return true;
+  }
+
+  /** Redo last undone operation. Returns true if something was redone. */
+  public redo(): boolean {
+    if (!this._loroUndoManager) return false;
+    if (!this._loroUndoManager.canRedo()) return false;
+    this._loroUndoManager.redo();
+    this._loroDoc?.commit();
+    this.rebuildCacheFromLoro();
+    this._cacheDirty = false;
+    this._dirty = true;
+    // Reset saved version so next save exports full snapshot
+    this._loroVersionAtLastSave = undefined;
+    // See `undo()` — wildcard `LocalChange` so React consumers reload.
+    this.eventManager.emit(ResourceEvents.LocalChange, '', undefined);
+    return true;
+  }
+
+  /** Whether undo is available. */
+  public canUndo(): boolean {
+    return this._loroUndoManager?.canUndo() ?? false;
+  }
+
+  /** Whether redo is available. */
+  public canRedo(): boolean {
+    return this._loroUndoManager?.canRedo() ?? false;
   }
 
   /** Removes a property value combination from the resource */

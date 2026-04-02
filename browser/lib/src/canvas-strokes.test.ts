@@ -20,9 +20,20 @@ describe('canvas-strokes', () => {
     expect(strokes[0].path).toHaveLength(2);
   });
 
-  it('parses legacy JSON string strokeData', ({ expect }) => {
-    const json = JSON.stringify([{ color: 1, width: 2, path: [[1, 2]] }]);
-    expect(parseCanvasStrokes(json)).toHaveLength(1);
+  it('returns empty for a legacy JSON-string payload (datatype migrated to jsonArray)', ({
+    expect,
+  }) => {
+    // `strokeData`'s declared datatype is now `jsonArray`. A property value
+    // that is still a string indicates a pre-migration canvas; treat it as
+    // empty rather than silently re-parsing — those resources need a rewrite.
+    const legacy = JSON.stringify([{ color: 1, width: 2, path: [[1, 2]] }]);
+    expect(parseCanvasStrokes(legacy)).toEqual([]);
+  });
+
+  it('returns empty for undefined / null / non-array inputs', ({ expect }) => {
+    expect(parseCanvasStrokes(undefined)).toEqual([]);
+    expect(parseCanvasStrokes(null as unknown as undefined)).toEqual([]);
+    expect(parseCanvasStrokes({} as unknown as undefined)).toEqual([]);
   });
 
   it('round-trips strokeToJson', ({ expect }) => {
