@@ -182,6 +182,42 @@ describe('resource.ts', () => {
    * the pre-undo cache. `undo()` / `redo()` must emit a wildcard
    * `LocalChange` so listeners reload from the cache.
    */
+  /**
+   * Regression: tap-undo "didn't undo" because each save() wrote bookkeeping
+   * commits to the Loro doc (datatype-tag mirroring, `lastCommit` pointer)
+   * that the UndoManager faithfully recorded as undo steps. So the user's
+   * first undo press silently reverted the *housekeeping* commit instead
+   * of their last visible edit — the symptom is "Saving… shows, but the
+   * stroke doesn't disappear". The fix tags those system commits with
+   * `SYSTEM_COMMIT_ORIGIN` and excludes that prefix from the UndoManager.
+   * One user-visible push = one undo step.
+   */
+  it('one push + save consumes exactly one undo step', async ({ expect }) => {
+    const { Resource: ResourceClass } = await import('./resource.js');
+    const r = new ResourceClass('https://example.com/one-undo');
+    r.getLoroDoc();
+    r.ensureUndoManager();
+
+    const prop = 'https://atomicdata.dev/ontology/canvas/strokeData';
+    r.pushListItem(prop, { color: 1, width: 2, path: [[0, 0]] });
+    r.getLoroDoc()?.commit();
+
+    // Mimic the housekeeping write that real `save()` performs on the
+    // server ack — this is the exact call that previously polluted the
+    // undo history with a phantom step. `writeDatatypeTags` would also
+    // qualify but needs a store to read property definitions; this
+    // setLastCommitValue path is enough to exercise the bug and the fix.
+    r.setLastCommitValue('did:ad:commit:fake-server-ack');
+
+    expect((r.get(prop) as unknown[]).length).toBe(1);
+    expect(r.canUndo()).toBe(true);
+
+    // Single undo press → stroke removed, no further undo available.
+    expect(r.undo()).toBe(true);
+    expect((r.get(prop) as unknown[] | undefined) ?? []).toHaveLength(0);
+    expect(r.canUndo()).toBe(false);
+  });
+
   it('undo and redo emit a LocalChange event so UI re-reads', async ({
     expect,
   }) => {
