@@ -80,6 +80,7 @@ pub mod dht;
 pub mod endpoints;
 pub mod errors;
 pub mod hierarchy;
+pub mod loro;
 pub mod mapping;
 pub mod metrics;
 pub mod parse;

@@ -3,8 +3,8 @@ import { StarterKit } from '@tiptap/starter-kit';
 import { Link } from '@tiptap/extension-link';
 import { Placeholder } from '@tiptap/extension-placeholder';
 import { Typography } from '@tiptap/extension-typography';
-import Collaboration from '@tiptap/extension-collaboration';
-import CollaborationCaret from '@tiptap/extension-collaboration-caret';
+import { Extension } from '@tiptap/core';
+import { LoroSyncPlugin, LoroUndoPlugin, LoroEphemeralCursorPlugin, CursorEphemeralStore, type LoroDocType } from 'loro-prosemirror';
 import { TaskList, TaskItem } from '@tiptap/extension-list';
 import DragHandle from '@tiptap/extension-drag-handle-react';
 import {
@@ -20,7 +20,7 @@ import {
   buildResourceSuggestion,
 } from './ResourceExtension/ResourceExtention';
 import { ExtendedImage } from './ImagePicker';
-import * as Y from 'yjs';
+import type { LoroDoc } from 'loro-crdt';
 import {
   dataBrowser,
   useCanWrite,
@@ -32,7 +32,7 @@ import {
   type Server,
 } from '@tomic/react';
 import { EditorEvents } from './EditorEvents';
-import { useYSync } from './useYSync';
+import { useLoroSync } from './useLoroSync';
 import { randomItem } from '@helpers/randomItem';
 import { EditorWrapperBase } from './EditorWrapperBase';
 import styled, { useTheme } from 'styled-components';
@@ -60,7 +60,7 @@ import { useCustomBodyColor } from '@hooks/useCustomBodyColor';
 
 export type CollaborativeEditorProps = {
   placeholder?: string;
-  doc: Y.Doc;
+  doc: LoroDoc;
   resource: Resource;
   property: string;
   id?: string;
@@ -84,7 +84,7 @@ export default function CollaborativeEditor({
   const { agent, drive } = useSettings();
   const agentResource = useResource<Core.Agent>(agent?.subject);
   const { upload } = useUpload(resource);
-  const awareness = useYSync(resource, property, doc);
+  const ephemeralStore = useLoroSync(resource, doc);
   const canWrite = useCanWrite(resource);
 
   const theme = useTheme();
@@ -220,22 +220,25 @@ export default function CollaborativeEditor({
         ResourceNodeInline.configure({
           store,
         }),
-        Collaboration.configure({
-          document: doc,
-          field: 'content',
+        Extension.create({
+          name: 'loroSync',
+          addProseMirrorPlugins() {
+            return [
+              LoroSyncPlugin({ doc: doc as unknown as LoroDocType }),
+              LoroUndoPlugin({ doc: doc as unknown as LoroDocType }),
+              ...(canWrite && ephemeralStore
+                ? [
+                    LoroEphemeralCursorPlugin(ephemeralStore, {
+                      user: {
+                        name: agentResource.title,
+                        color,
+                      },
+                    }),
+                  ]
+                : []),
+            ];
+          },
         }),
-        ...addIf(
-          canWrite,
-          CollaborationCaret.configure({
-            provider: {
-              awareness,
-            },
-            user: {
-              name: agentResource.title,
-              color,
-            },
-          }),
-        ),
         TaskList,
         TaskItem.configure({
           nested: true,
@@ -306,13 +309,15 @@ export default function CollaborativeEditor({
   );
 
   useEffect(() => {
-    if (agentResource) {
-      editor.commands.updateUser?.({
-        name: agentResource.props.name ?? 'Untitled Agent',
-        color,
+    if (agentResource && ephemeralStore) {
+      ephemeralStore.setLocal({
+        user: {
+          name: agentResource.props.name ?? 'Untitled Agent',
+          color,
+        },
       });
     }
-  }, [agentResource, editor.commands, color, canWrite]);
+  }, [agentResource, ephemeralStore, color]);
 
   return (
     <IsInRTEContex value={true}>

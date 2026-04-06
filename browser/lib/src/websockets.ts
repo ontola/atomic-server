@@ -274,35 +274,48 @@ export class WSClient {
     this.ws.send('UNSUBSCRIBE ' + subject);
   }
 
-  public subscribeYSync(subject: string, property: string): void {
+  public subscribeLoroSync(subject: string): void {
     if (this.readyState !== WebSocket.OPEN) {
-      console.warn('WebSocket is not open, cannot subscribe to YSync');
+      console.warn('WebSocket is not open, cannot subscribe to LoroSync');
 
       return;
     }
 
-    this.ws.send('Y_SYNC_SUBSCRIBE ' + JSON.stringify({ subject, property }));
+    this.ws.send('LORO_SYNC_SUBSCRIBE ' + JSON.stringify({ subject }));
   }
 
-  public unsubscribeYSync(subject: string, property: string): void {
+  public unsubscribeLoroSync(subject: string): void {
     if (this.readyState !== WebSocket.OPEN) {
-      console.warn('WebSocket is not open, cannot unsubscribe from YSync');
+      console.warn('WebSocket is not open, cannot unsubscribe from LoroSync');
 
       return;
     }
 
-    this.ws.send('Y_SYNC_UNSUBSCRIBE ' + JSON.stringify({ subject, property }));
+    this.ws.send('LORO_SYNC_UNSUBSCRIBE ' + JSON.stringify({ subject }));
   }
 
-  public sendYSyncUpdate(message: string): void {
+  public sendLoroSyncUpdate(message: string): void {
     if (this.readyState !== WebSocket.OPEN) {
-      console.warn('WebSocket is not open, cannot send YSync update');
+      console.warn('WebSocket is not open, cannot send LoroSync update');
 
       return;
     }
 
-    this.ws.send('Y_SYNC_UPDATE ' + message);
+    this.ws.send('LORO_SYNC_UPDATE ' + message);
   }
+
+  public sendLoroEphemeralUpdate(message: string): void {
+    if (this.readyState !== WebSocket.OPEN) {
+      console.warn(
+        'WebSocket is not open, cannot send Loro ephemeral update',
+      );
+
+      return;
+    }
+
+    this.ws.send('LORO_EPHEMERAL_UPDATE ' + message);
+  }
+
   /** Sends a GET message for some resource over websockets. */
   public async fetch(subject: string): Promise<Resource> {
     // If we are authenticating we do not want to fetch any resources yet.
@@ -378,9 +391,12 @@ export class WSClient {
     } else if (ev.data.startsWith('RESOURCE ')) {
       const resources = parseResourceMessage(ev);
       this.store.addResources(resources);
-    } else if (ev.data.startsWith('Y_SYNC_UPDATE ')) {
-      const update = ev.data.slice(14);
-      this.store.__handleAwarenessUpdateMessage(update);
+    } else if (ev.data.startsWith('LORO_SYNC_UPDATE ')) {
+      const update = ev.data.slice(17);
+      this.store.__handleLoroSyncMessage(update);
+    } else if (ev.data.startsWith('LORO_EPHEMERAL_UPDATE ')) {
+      const update = ev.data.slice(21);
+      this.store.__handleLoroEphemeralMessage(update);
     } else if (ev.data.startsWith('AUTHENTICATED')) {
       // Do nothing, handled by the authenticate() method
     } else {

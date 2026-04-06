@@ -20,12 +20,12 @@ use atomic_lib::{
 use std::time::{Duration, Instant};
 
 use crate::{
-    actor_messages::{CommitMessage, YSubscriptionJSON, YSyncUpdate},
+    actor_messages::CommitMessage,
     appstate::AppState,
     commit_monitor::CommitMonitor,
     errors::AtomicServerResult,
     helpers::get_auth_headers,
-    y_sync_broadcaster::YSyncBroadcaster,
+    loro_sync_broadcaster::LoroSyncBroadcaster,
 };
 
 /// Get an HTTP request, upgrade it to a Websocket connection
@@ -53,7 +53,7 @@ pub async fn web_socket_handler(
     let result = WsResponseBuilder::new(
         WebSocketConnection::new(
             appstate.commit_monitor.clone(),
-            appstate.y_sync_broadcaster.clone(),
+            appstate.loro_sync_broadcaster.clone(),
             for_agent,
             // We need to make sure this is easily clone-able
             store,
@@ -79,7 +79,7 @@ pub struct WebSocketConnection {
     subscribed: std::collections::HashSet<atomic_lib::Subject>,
     /// The CommitMonitor Actor that receives and sends messages for Commits
     commit_monitor_addr: Addr<CommitMonitor>,
-    y_sync_broadcaster_addr: Addr<YSyncBroadcaster>,
+    loro_sync_broadcaster_addr: Addr<LoroSyncBroadcaster>,
     /// The Agent who is connected.
     /// If it's not specified, it's the Public Agent.
     agent: ForAgent,
@@ -243,55 +243,47 @@ fn handle_ws_message_sync(
                 Err("UNSUBSCRIBE needs a subject".into())
             }
         }
-        s if s.starts_with("Y_SYNC_SUBSCRIBE ") => {
-            let mut parts = s.split("Y_SYNC_SUBSCRIBE ");
-
-            let Some(json) = parts.nth(1) else {
-                return Err("Y_SYNC_SUBSCRIBE needs a JSON object".into());
-            };
-
-            let message: YSubscriptionJSON = serde_json::from_str(json)?;
-
-            conn.y_sync_broadcaster_addr
-                .do_send(crate::actor_messages::SubscribeYSync {
+        s if s.starts_with("LORO_SYNC_SUBSCRIBE ") => {
+            let json = &s[20..];
+            let message: crate::actor_messages::LoroSubscriptionJSON =
+                serde_json::from_str(json)
+                    .map_err(|e| format!("Invalid LORO_SYNC_SUBSCRIBE JSON: {e}"))?;
+            conn.loro_sync_broadcaster_addr
+                .do_send(crate::actor_messages::SubscribeLoroSync {
                     addr: ctx.address(),
                     subject: message.subject,
-                    property: message.property.to_string(),
                     agent: conn.agent.to_string(),
                 });
             Ok(())
         }
-        s if s.starts_with("Y_SYNC_UNSUBSCRIBE ") => {
-            let mut parts = s.split("Y_SYNC_UNSUBSCRIBE ");
-
-            let Some(json) = parts.nth(1) else {
-                return Err("Y_SYNC_UNSUBSCRIBE needs a JSON object".into());
-            };
-
-            let message: YSubscriptionJSON = serde_json::from_str(json)?;
-
-            conn.y_sync_broadcaster_addr
-                .do_send(crate::actor_messages::UnsubscribeYSync {
+        s if s.starts_with("LORO_SYNC_UNSUBSCRIBE ") => {
+            let json = &s[22..];
+            let message: crate::actor_messages::LoroSubscriptionJSON =
+                serde_json::from_str(json)
+                    .map_err(|e| format!("Invalid LORO_SYNC_UNSUBSCRIBE JSON: {e}"))?;
+            conn.loro_sync_broadcaster_addr
+                .do_send(crate::actor_messages::UnsubscribeLoroSync {
                     addr: ctx.address(),
                     subject: message.subject,
-                    property: message.property.to_string(),
                 });
-
             Ok(())
         }
-        s if s.starts_with("Y_SYNC_UPDATE ") => {
-            let mut parts = s.split("Y_SYNC_UPDATE ");
-            let Some(json) = parts.nth(1) else {
-                return Err("Y_SYNC_UPDATE needs a JSON object".into());
-            };
-
-            let mut update: YSyncUpdate = match serde_json::from_str(json) {
-                Ok(update) => update,
-                Err(err) => return Err(format!("Invalid Y_SYNC_UPDATE JSON: {}", err).into()),
-            };
-
+        s if s.starts_with("LORO_SYNC_UPDATE ") => {
+            let json = &s[17..];
+            let mut update: crate::actor_messages::LoroSyncUpdate =
+                serde_json::from_str(json)
+                    .map_err(|e| format!("Invalid LORO_SYNC_UPDATE JSON: {e}"))?;
             update.addr = Some(ctx.address());
-            conn.y_sync_broadcaster_addr.do_send(update);
+            conn.loro_sync_broadcaster_addr.do_send(update);
+            Ok(())
+        }
+        s if s.starts_with("LORO_EPHEMERAL_UPDATE ") => {
+            let json = &s[21..];
+            let mut update: crate::actor_messages::LoroEphemeralUpdate =
+                serde_json::from_str(json)
+                    .map_err(|e| format!("Invalid LORO_EPHEMERAL_UPDATE JSON: {e}"))?;
+            update.addr = Some(ctx.address());
+            conn.loro_sync_broadcaster_addr.do_send(update);
             Ok(())
         }
         other => {
@@ -304,7 +296,7 @@ fn handle_ws_message_sync(
 impl WebSocketConnection {
     fn new(
         commit_monitor_addr: Addr<CommitMonitor>,
-        y_sync_broadcaster_addr: Addr<YSyncBroadcaster>,
+        loro_sync_broadcaster_addr: Addr<LoroSyncBroadcaster>,
         agent: ForAgent,
         store: Db,
         origin: String,
@@ -322,7 +314,7 @@ impl WebSocketConnection {
             // Maybe this should be stored only in the CommitMonitor, and not here.
             subscribed: std::collections::HashSet::new(),
             commit_monitor_addr,
-            y_sync_broadcaster_addr,
+            loro_sync_broadcaster_addr,
             agent,
             store,
             origin,
@@ -367,13 +359,33 @@ impl Handler<CommitMessage> for WebSocketConnection {
     }
 }
 
-impl Handler<YSyncUpdate> for WebSocketConnection {
+impl Handler<crate::actor_messages::LoroSyncUpdate> for WebSocketConnection {
     type Result = ();
 
-    #[tracing::instrument(name = "handle_y_awareness_update", skip_all)]
-    fn handle(&mut self, msg: YSyncUpdate, ctx: &mut ws::WebsocketContext<Self>) {
+    #[tracing::instrument(name = "handle_loro_sync_update", skip_all)]
+    fn handle(
+        &mut self,
+        msg: crate::actor_messages::LoroSyncUpdate,
+        ctx: &mut ws::WebsocketContext<Self>,
+    ) {
         ctx.text(format!(
-            "Y_SYNC_UPDATE {}",
+            "LORO_SYNC_UPDATE {}",
+            serde_json::to_string(&msg).unwrap()
+        ));
+    }
+}
+
+impl Handler<crate::actor_messages::LoroEphemeralUpdate> for WebSocketConnection {
+    type Result = ();
+
+    #[tracing::instrument(name = "handle_loro_ephemeral_update", skip_all)]
+    fn handle(
+        &mut self,
+        msg: crate::actor_messages::LoroEphemeralUpdate,
+        ctx: &mut ws::WebsocketContext<Self>,
+    ) {
+        ctx.text(format!(
+            "LORO_EPHEMERAL_UPDATE {}",
             serde_json::to_string(&msg).unwrap()
         ));
     }

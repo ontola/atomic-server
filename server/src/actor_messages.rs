@@ -13,29 +13,6 @@ pub struct Subscribe {
     pub agent: String,
 }
 
-#[derive(Deserialize, Serialize)]
-pub struct YSubscriptionJSON {
-    pub subject: atomic_lib::Subject,
-    pub property: String,
-}
-
-#[derive(Message)]
-#[rtype(result = "()")]
-pub struct SubscribeYSync {
-    pub addr: Addr<crate::handlers::web_sockets::WebSocketConnection>,
-    pub subject: atomic_lib::Subject,
-    pub property: String,
-    pub agent: String,
-}
-
-#[derive(Message)]
-#[rtype(result = "()")]
-pub struct UnsubscribeYSync {
-    pub addr: Addr<crate::handlers::web_sockets::WebSocketConnection>,
-    pub subject: atomic_lib::Subject,
-    pub property: String,
-}
-
 /// A message containing a Resource, which should be sent to subscribers
 #[derive(Message, Clone, Debug)]
 #[rtype(result = "()")]
@@ -44,15 +21,44 @@ pub struct CommitMessage {
     pub commit_response: atomic_lib::commit::CommitResponse,
 }
 
-/// A message that can contain both a Yjs Doc update or a Yjs Awareness update.
-/// It is used to enable live collaboration on Yjs Docs and does not store these updates on the server.
+// === Loro CRDT Sync Messages ===
+
+#[derive(Deserialize, Serialize)]
+pub struct LoroSubscriptionJSON {
+    pub subject: atomic_lib::Subject,
+}
+
+#[derive(Message)]
+#[rtype(result = "()")]
+pub struct SubscribeLoroSync {
+    pub addr: Addr<crate::handlers::web_sockets::WebSocketConnection>,
+    pub subject: atomic_lib::Subject,
+    pub agent: String,
+}
+
+#[derive(Message)]
+#[rtype(result = "()")]
+pub struct UnsubscribeLoroSync {
+    pub addr: Addr<crate::handlers::web_sockets::WebSocketConnection>,
+    pub subject: atomic_lib::Subject,
+}
+
+/// A Loro CRDT document update for real-time sync (not persisted).
 #[derive(Message, Clone, Debug, Serialize, Deserialize)]
 #[rtype(result = "()")]
-pub struct YSyncUpdate {
+pub struct LoroSyncUpdate {
     pub subject: atomic_lib::Subject,
-    pub property: String,
-    pub awareness_update: Option<String>,
-    pub doc_update: Option<String>,
+    pub update: String,
+    #[serde(skip)]
+    pub addr: Option<Addr<crate::handlers::web_sockets::WebSocketConnection>>,
+}
+
+/// A Loro ephemeral update (cursors, presence) — not persisted.
+#[derive(Message, Clone, Debug, Serialize, Deserialize)]
+#[rtype(result = "()")]
+pub struct LoroEphemeralUpdate {
+    pub subject: atomic_lib::Subject,
+    pub update: String,
     #[serde(skip)]
     pub addr: Option<Addr<crate::handlers::web_sockets::WebSocketConnection>>,
 }

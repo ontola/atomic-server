@@ -2,13 +2,11 @@ import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import {
   Client,
   core,
-  isYDoc,
   server,
   urls,
   useCurrentAgent,
   useResource,
   useStore,
-  YLoader,
   type JSONArray,
   type JSONValue,
   type PropVals,
@@ -522,8 +520,9 @@ function resourceToUIPluginResource(resource: Resource): UIPluginResource {
 function propvalsToJSONRecord(propvals: PropVals): Record<string, JSONValue> {
   return Object.fromEntries(
     propvals.entries().map(([key, value]) => {
-      if (isYDoc(value)) {
-        return [key, YLoader.Y.encodeStateAsUpdateV2(value)];
+      // Skip binary values (Loro docs) in JSON serialization for plugins
+      if (value instanceof Uint8Array) {
+        return [key, undefined];
       }
 
       return [key, value];

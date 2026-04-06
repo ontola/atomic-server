@@ -2870,14 +2870,17 @@ msgstr "La fila está incompleta o tiene datos no válidos"
 msgid "Add another property..."
 msgstr "Añadir otra propiedad..."
 
+#: src/components/LoroDocValue.tsx
 #: src/components/YDocValue.tsx
 msgid "Empty"
 msgstr "Vacío"
 
+#: src/components/LoroDocValue.tsx
 #: src/components/YDocValue.tsx
 msgid "Show encoded state"
 msgstr "Mostrar estado codificado"
 
+#: src/components/LoroDocValue.tsx
 #: src/components/YDocValue.tsx
 msgid "Hide encoded state"
 msgstr "Ocultar estado codificado"
@@ -4691,4 +4694,9 @@ msgid ""
 "<0>Feature complete by default</0>: rights, history,\n"
 "search, invites, realtime sync, collaboration, and AI chat\n"
 "built in."
+msgstr ""
+
+#. placeholder {0}: value.byteLength
+#: src/components/LoroDocValue.tsx
+msgid "Loro document ({0} bytes)"
 msgstr ""

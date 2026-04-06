@@ -46,7 +46,7 @@ pub async fn single_page(
         ))
         .insert_header((
             "Content-Security-Policy",
-            format!("script-src 'nonce-{}'; worker-src 'self'", csp_nonce),
+            format!("script-src 'nonce-{}' 'wasm-unsafe-eval'; worker-src 'self'", csp_nonce),
         ))
         .body(body);
 

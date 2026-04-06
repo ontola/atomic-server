@@ -1,5 +1,5 @@
 import { EditableTitle } from '@components/EditableTitle';
-import { dataBrowser, useYDoc } from '@tomic/react';
+import { dataBrowser, useLoroDoc } from '@tomic/react';
 import type { ResourcePageProps } from '@views/ResourcePage';
 import { lazy, Suspense } from 'react';
 import styled from 'styled-components';
@@ -27,7 +27,7 @@ const customMenuItems = [
 export const DocumentV2FullPage: React.FC<ResourcePageProps> = ({
   resource,
 }) => {
-  const doc = useYDoc(resource, dataBrowser.properties.documentContent);
+  const doc = useLoroDoc(resource);
 
   useCustomContextItems(customMenuItems);
 

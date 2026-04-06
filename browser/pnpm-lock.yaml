@@ -141,12 +141,6 @@ importers:
       '@tiptap/core':
         specifier: ^3.11.0
         version: 3.11.0(@tiptap/pm@3.11.0)
-      '@tiptap/extension-collaboration':
-        specifier: ^3.11.0
-        version: 3.11.0(@tiptap/core@3.11.0(@tiptap/pm@3.11.0))(@tiptap/pm@3.11.0)(@tiptap/y-tiptap@3.0.1(prosemirror-model@1.25.4)(prosemirror-state@1.4.4)(prosemirror-view@1.41.3)(y-protocols@1.0.6(yjs@13.6.27))(yjs@13.6.27))(yjs@13.6.27)
-      '@tiptap/extension-collaboration-caret':
-        specifier: ^3.11.0
-        version: 3.11.0(@tiptap/core@3.11.0(@tiptap/pm@3.11.0))(@tiptap/pm@3.11.0)(@tiptap/y-tiptap@3.0.1(prosemirror-model@1.25.4)(prosemirror-state@1.4.4)(prosemirror-view@1.41.3)(y-protocols@1.0.6(yjs@13.6.27))(yjs@13.6.27))
       '@tiptap/extension-drag-handle':
         specifier: ^3.11.0
         version: 3.11.0(@tiptap/core@3.11.0(@tiptap/pm@3.11.0))(@tiptap/extension-collaboration@3.11.0(@tiptap/core@3.11.0(@tiptap/pm@3.11.0))(@tiptap/pm@3.11.0)(@tiptap/y-tiptap@3.0.1(prosemirror-model@1.25.4)(prosemirror-state@1.4.4)(prosemirror-view@1.41.3)(y-protocols@1.0.6(yjs@13.6.27))(yjs@13.6.27))(yjs@13.6.27))(@tiptap/extension-node-range@3.11.0(@tiptap/core@3.11.0(@tiptap/pm@3.11.0))(@tiptap/pm@3.11.0))(@tiptap/pm@3.11.0)(@tiptap/y-tiptap@3.0.1(prosemirror-model@1.25.4)(prosemirror-state@1.4.4)(prosemirror-view@1.41.3)(y-protocols@1.0.6(yjs@13.6.27))(yjs@13.6.27))
@@ -201,9 +195,6 @@ importers:
       '@tiptap/suggestion':
         specifier: ^3.11.0
         version: 3.11.0(@tiptap/core@3.11.0(@tiptap/pm@3.11.0))(@tiptap/pm@3.11.0)
-      '@tiptap/y-tiptap':
-        specifier: ^3.0.1
-        version: 3.0.1(prosemirror-model@1.25.4)(prosemirror-state@1.4.4)(prosemirror-view@1.41.3)(y-protocols@1.0.6(yjs@13.6.27))(yjs@13.6.27)
       '@tomic/lib':
         specifier: workspace:*
         version: link:../lib
@@ -249,6 +240,9 @@ importers:
       idb-keyval:
         specifier: ^6.2.2
         version: 6.2.2
+      loro-crdt:
+        specifier: ^1.10.8
+        version: 1.10.8
       ollama-ai-provider-v2:
         specifier: ^1.5.5
         version: 1.5.5(zod@4.1.13)
@@ -312,15 +306,12 @@ importers:
       stylis:
         specifier: 4.3.0
         version: 4.3.0
+      vite-plugin-wasm:
+        specifier: ^3.6.0
+        version: 3.6.0(vite@8.0.0(@types/node@25.3.1)(esbuild@0.27.3)(jiti@2.6.1)(terser@5.44.1)(yaml@2.8.2))
       wuchale:
         specifier: ^0.19.4
         version: 0.19.4
-      y-protocols:
-        specifier: ^1.0.6
-        version: 1.0.6(yjs@13.6.27)
-      yjs:
-        specifier: ^13.6.27
-        version: 13.6.27
       zod:
         specifier: ^4.1.13
         version: 4.1.13
@@ -358,6 +349,9 @@ importers:
       lint-staged:
         specifier: ^10.5.4
         version: 10.5.4
+      loro-prosemirror:
+        specifier: ^0.4.3
+        version: 0.4.3(loro-crdt@1.10.8)
       types-wm:
         specifier: ^1.1.0
         version: 1.1.0
@@ -406,9 +400,6 @@ importers:
       ulidx:
         specifier: ^2.4.1
         version: 2.4.1
-      yjs:
-        specifier: ^13.6.27
-        version: 13.6.27
     devDependencies:
       '@arethetypeswrong/cli':
         specifier: ^0.17.0
@@ -422,6 +413,9 @@ importers:
       '@types/fast-json-stable-stringify':
         specifier: ^2.1.2
         version: 2.1.2
+      loro-crdt:
+        specifier: ^1.4.6
+        version: 1.10.8
       oxfmt:
         specifier: ^0.42.0
         version: 0.42.0
@@ -471,6 +465,9 @@ importers:
       '@tomic/lib':
         specifier: workspace:*
         version: link:../lib
+      loro-crdt:
+        specifier: ^1.10.8
+        version: 1.10.8
       react:
         specifier: ^19.2.0
         version: 19.2.0
@@ -4065,13 +4062,6 @@ packages:
     peerDependencies:
       '@tiptap/core': ^3.11.0
 
-  '@tiptap/extension-collaboration-caret@3.11.0':
-    resolution: {integrity: sha512-5LBWkECCUvdVgsq410UjdalLJ5Pa80uPJZ+iGIRzZ2+/pbIjlfKFhnysd1b1WjSJQyt6wZ0fk1F19ZezDw+foQ==}
-    peerDependencies:
-      '@tiptap/core': ^3.11.0
-      '@tiptap/pm': ^3.11.0
-      '@tiptap/y-tiptap': ^3.0.0
-
   '@tiptap/extension-collaboration@3.11.0':
     resolution: {integrity: sha512-2eEHHJNycY1B7+siyUtjgZdYm/MTGhFjmhS64au41nHCkvMqO8JwNGP/p5fBMZ08zYlzxYR5yjjI+Li7k8dyYg==}
     peerDependencies:
@@ -7416,6 +7406,14 @@ packages:
     resolution: {integrity: sha512-lyuxPGr/Wfhrlem2CL/UcnUc1zcqKAImBDzukY7Y5F/yQiNdko6+fRLevlw1HgMySw7f611UIY408EtxRSoK3Q==}
     hasBin: true
 
+  loro-crdt@1.10.8:
+    resolution: {integrity: sha512-GvH8fSJST1VDHRGzlQml80pBYoFbIP4ULeV1S8fD4ffmA8m+icoPORyVUW2AkJBY3dxKIcMMn0WqaJmpCmnbkQ==}
+
+  loro-prosemirror@0.4.3:
+    resolution: {integrity: sha512-stAWIWs54LfXx0mvCzXF02XpEv9AKgrhSBPt44eT4SsrBEWZaq0jTFuzs8EyBmipBBcuC2ooRRX4NQjwSeQl9Q==}
+    peerDependencies:
+      loro-crdt: ^1.10.2
+
   loupe@3.1.2:
     resolution: {integrity: sha512-23I4pFZHmAemUnz8WZXbYRSKYj801VDaNv9ETuMh7IrMc7VuVVSo+Z9iLE3ni30+U48iDWfi30d3twAXBYmnCg==}
 
@@ -10108,6 +10106,11 @@ packages:
     peerDependenciesMeta:
       '@vite-pwa/assets-generator':
         optional: true
+
+  vite-plugin-wasm@3.6.0:
+    resolution: {integrity: sha512-mL/QPziiIA4RAA6DkaZZzOstdwbW5jO4Vz7Zenj0wieKWBlNvIvX5L5ljum9lcUX0ShNfBgCNLKTjNkRVVqcsw==}
+    peerDependencies:
+      vite: ^2 || ^3 || ^4 || ^5 || ^6 || ^7 || ^8
 
   vite-plugin-webfont-dl@3.11.1:
     resolution: {integrity: sha512-5eQaMn3mJ0qNnL64R6wZouh0I4zkvK8aS+GsoCDLY4WYfWCYvNpf6TyauxEsMlbwwfznkKjXTd1DNBGs4fKAhQ==}
@@ -14053,12 +14056,6 @@ snapshots:
     dependencies:
       '@tiptap/core': 3.11.0(@tiptap/pm@3.11.0)
 
-  '@tiptap/extension-collaboration-caret@3.11.0(@tiptap/core@3.11.0(@tiptap/pm@3.11.0))(@tiptap/pm@3.11.0)(@tiptap/y-tiptap@3.0.1(prosemirror-model@1.25.4)(prosemirror-state@1.4.4)(prosemirror-view@1.41.3)(y-protocols@1.0.6(yjs@13.6.27))(yjs@13.6.27))':
-    dependencies:
-      '@tiptap/core': 3.11.0(@tiptap/pm@3.11.0)
-      '@tiptap/pm': 3.11.0
-      '@tiptap/y-tiptap': 3.0.1(prosemirror-model@1.25.4)(prosemirror-state@1.4.4)(prosemirror-view@1.41.3)(y-protocols@1.0.6(yjs@13.6.27))(yjs@13.6.27)
-
   '@tiptap/extension-collaboration@3.11.0(@tiptap/core@3.11.0(@tiptap/pm@3.11.0))(@tiptap/pm@3.11.0)(@tiptap/y-tiptap@3.0.1(prosemirror-model@1.25.4)(prosemirror-state@1.4.4)(prosemirror-view@1.41.3)(y-protocols@1.0.6(yjs@13.6.27))(yjs@13.6.27))(yjs@13.6.27)':
     dependencies:
       '@tiptap/core': 3.11.0(@tiptap/pm@3.11.0)
@@ -17872,6 +17869,16 @@ snapshots:
     dependencies:
       js-tokens: 4.0.0
 
+  loro-crdt@1.10.8: {}
+
+  loro-prosemirror@0.4.3(loro-crdt@1.10.8):
+    dependencies:
+      lib0: 0.2.114
+      loro-crdt: 1.10.8
+      prosemirror-model: 1.25.4
+      prosemirror-state: 1.4.4
+      prosemirror-view: 1.41.3
+
   loupe@3.1.2: {}
 
   lowercase-keys@3.0.0: {}
@@ -21104,6 +21111,10 @@ snapshots:
       workbox-window: 7.1.0
     transitivePeerDependencies:
       - supports-color
+
+  vite-plugin-wasm@3.6.0(vite@8.0.0(@types/node@25.3.1)(esbuild@0.27.3)(jiti@2.6.1)(terser@5.44.1)(yaml@2.8.2)):
+    dependencies:
+      vite: 8.0.0(@types/node@25.3.1)(esbuild@0.27.3)(jiti@2.6.1)(terser@5.44.1)(yaml@2.8.2)
 
   vite-plugin-webfont-dl@3.11.1(vite@8.0.0(@types/node@25.3.1)(esbuild@0.27.3)(jiti@2.6.1)(terser@5.44.1)(yaml@2.8.2)):
     dependencies:

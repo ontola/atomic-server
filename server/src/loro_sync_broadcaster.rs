@@ -1,5 +1,5 @@
 use crate::{
-    actor_messages::{SubscribeYSync, UnsubscribeYSync, YSyncUpdate},
+    actor_messages::{LoroEphemeralUpdate, LoroSyncUpdate, SubscribeLoroSync, UnsubscribeLoroSync},
     handlers::web_sockets::WebSocketConnection,
 };
 
@@ -16,25 +16,28 @@ struct Subscription {
     can_write: bool,
 }
 
-/// Yjs updates that do not need to be persisted (e.g. cursor positions and selections)
-/// The Yjs updates that do need persistence are handled by Commits.
-pub struct YSyncBroadcaster {
-    subscriptions: HashMap<(atomic_lib::Subject, String), HashSet<Subscription>>,
+/// Loro CRDT sync broadcaster.
+/// Handles real-time document sync updates and ephemeral updates (cursors, presence).
+/// Persistent changes go through Commits with loroUpdate — this broadcaster handles
+/// only the fast, non-persisted real-time channel.
+pub struct LoroSyncBroadcaster {
+    /// Subscriptions keyed by resource subject (not per-property — Loro is per-document)
+    subscriptions: HashMap<atomic_lib::Subject, HashSet<Subscription>>,
     store: Db,
 }
 
-impl Actor for YSyncBroadcaster {
+impl Actor for LoroSyncBroadcaster {
     type Context = Context<Self>;
 
     fn started(&mut self, _ctx: &mut Context<Self>) {
-        tracing::debug!("YAwarenessBroadcaster started");
+        tracing::debug!("LoroSyncBroadcaster started");
     }
 }
 
-impl Handler<SubscribeYSync> for YSyncBroadcaster {
+impl Handler<SubscribeLoroSync> for LoroSyncBroadcaster {
     type Result = ResponseActFuture<Self, ()>;
 
-    fn handle(&mut self, msg: SubscribeYSync, _ctx: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: SubscribeLoroSync, _ctx: &mut Context<Self>) -> Self::Result {
         let store = self.store.clone();
         Box::pin(
             async move {
@@ -42,13 +45,12 @@ impl Handler<SubscribeYSync> for YSyncBroadcaster {
                     tracing::warn!("can't subscribe to external resource: {}", msg.subject);
                     return None;
                 }
-                let key = (msg.subject.clone(), msg.property.clone());
 
                 let resource = match store.get_resource(&msg.subject).await {
                     Ok(resource) => resource,
                     Err(e) => {
                         tracing::debug!(
-                            "Subscribe failed for {} by {}: {}",
+                            "LoroSync subscribe failed for {} by {}: {}",
                             &msg.subject,
                             msg.agent,
                             e
@@ -59,7 +61,6 @@ impl Handler<SubscribeYSync> for YSyncBroadcaster {
 
                 let mut can_write = false;
 
-                // First check if the agent has write rights, if not, check for read rights, if not, don't subscribe.
                 match atomic_lib::hierarchy::check_write(
                     &store,
                     &resource,
@@ -81,7 +82,7 @@ impl Handler<SubscribeYSync> for YSyncBroadcaster {
                             Ok(_) => {}
                             Err(unauthorized_err) => {
                                 tracing::debug!(
-                                    "Not allowed {} to subscribe to {}: {}",
+                                    "Not allowed {} to subscribe to LoroSync for {}: {}",
                                     &msg.agent,
                                     &msg.subject,
                                     unauthorized_err
@@ -91,73 +92,90 @@ impl Handler<SubscribeYSync> for YSyncBroadcaster {
                         }
                     }
                 }
-                Some((key, msg.addr, can_write, msg.subject))
+                Some((msg.subject.clone(), msg.addr, can_write))
             }
             .into_actor(self)
             .map(|res, actor, _ctx| {
-                if let Some((key, addr, can_write, subject)) = res {
-                    let mut set = actor
+                if let Some((subject, addr, can_write)) = res {
+                    let set = actor
                         .subscriptions
-                        .get(&key)
-                        .unwrap_or(&HashSet::new())
-                        .clone();
-
+                        .entry(subject.clone())
+                        .or_insert_with(HashSet::new);
                     set.insert(Subscription { addr, can_write });
-                    tracing::debug!("handle subscribe {} ", subject);
-                    actor.subscriptions.insert(key, set);
+                    tracing::debug!("LoroSync subscribed to {}", subject);
                 }
             }),
         )
     }
 }
 
-impl Handler<UnsubscribeYSync> for YSyncBroadcaster {
+impl Handler<UnsubscribeLoroSync> for LoroSyncBroadcaster {
     type Result = ();
 
-    fn handle(&mut self, msg: UnsubscribeYSync, _ctx: &mut Context<Self>) {
-        let key = (msg.subject.clone(), msg.property.clone());
+    fn handle(&mut self, msg: UnsubscribeLoroSync, _ctx: &mut Context<Self>) {
+        if let Some(subscribers) = self.subscriptions.get_mut(&msg.subject) {
+            subscribers.retain(|s| s.addr != msg.addr);
 
-        let Some(subscriber) = self.subscriptions.get(&key) else {
-            tracing::warn!("no subscribers for {}", msg.subject);
-            return;
-        };
-
-        let mut new_subscriber = subscriber.clone();
-        new_subscriber.retain(|s| s.addr != msg.addr);
-        self.subscriptions.insert(key.clone(), new_subscriber);
+            if subscribers.is_empty() {
+                self.subscriptions.remove(&msg.subject);
+            }
+        }
     }
 }
 
-impl Handler<YSyncUpdate> for YSyncBroadcaster {
+impl Handler<LoroSyncUpdate> for LoroSyncBroadcaster {
     type Result = ();
 
-    fn handle(&mut self, msg: YSyncUpdate, _ctx: &mut Context<Self>) {
-        let key = (msg.subject.clone(), msg.property.clone());
-
-        let Some(subscribers) = self.subscriptions.get(&key) else {
-            tracing::warn!("no subscribers for {}", msg.subject);
+    fn handle(&mut self, msg: LoroSyncUpdate, _ctx: &mut Context<Self>) {
+        let Some(subscribers) = self.subscriptions.get(&msg.subject) else {
             return;
         };
 
-        // Check if msg.addr is in the subscibers and has write rights, if not, don't send the update.
         let Some(addr) = &msg.addr else {
-            tracing::warn!("no addr in update for {}", msg.subject);
+            tracing::warn!("no addr in LoroSync update for {}", msg.subject);
             return;
         };
 
         if !subscribers.iter().any(|s| s.addr == *addr && s.can_write) {
-            tracing::warn!("not allowed to send update to {}", msg.subject);
+            tracing::warn!("not allowed to send LoroSync update to {}", msg.subject);
             return;
         }
 
+        // Broadcast to all subscribers except the sender
         for subscriber in subscribers {
+            if subscriber.addr == *addr {
+                continue;
+            }
+
             subscriber.addr.do_send(msg.clone());
         }
     }
 }
 
-pub fn create_y_sync_broadcaster(store: Db) -> Addr<YSyncBroadcaster> {
-    YSyncBroadcaster::create(|_ctx: &mut Context<YSyncBroadcaster>| YSyncBroadcaster {
+impl Handler<LoroEphemeralUpdate> for LoroSyncBroadcaster {
+    type Result = ();
+
+    fn handle(&mut self, msg: LoroEphemeralUpdate, _ctx: &mut Context<Self>) {
+        let Some(subscribers) = self.subscriptions.get(&msg.subject) else {
+            return;
+        };
+
+        let sender = msg.addr.as_ref();
+
+        // Broadcast to all subscribers except the sender
+        for subscriber in subscribers {
+            if let Some(sender_addr) = sender {
+                if subscriber.addr == *sender_addr {
+                    continue;
+                }
+            }
+            subscriber.addr.do_send(msg.clone());
+        }
+    }
+}
+
+pub fn create_loro_sync_broadcaster(store: Db) -> Addr<LoroSyncBroadcaster> {
+    LoroSyncBroadcaster::create(|_ctx: &mut Context<LoroSyncBroadcaster>| LoroSyncBroadcaster {
         subscriptions: HashMap::new(),
         store,
     })

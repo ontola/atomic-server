@@ -51,7 +51,6 @@ tracing-log = "0.2"
 ureq = "2"
 urlencoding = "2"
 ring = "0.17.14"
-yrs = "0.24.0"
 wasmtime = { version = "39.0.1", optional = true, features = ["component-model"] }
 wasmtime-wasi = { version = "39.0.1", optional = true, features = ["p2"] }
 wasmtime-wasi-http = { version = "39.0.1", optional = true }
@@ -165,6 +164,11 @@ mainline = "6"
 reqwest = { version = "0.13", default-features = false, features = ["rustls", "json"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
+portpicker = "0.1"
+atomic_lib = { path = "../lib", features = ["ws"] }
+tokio-tungstenite = { version = "0.26", features = ["native-tls"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+futures-util = "0.3"
 
 [features]
 default = ["https", "telemetry", "img", "wasm-plugins"]

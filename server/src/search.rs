@@ -6,7 +6,6 @@ use crate::errors::AtomicServerResult;
 use atomic_lib::Db;
 use atomic_lib::Resource;
 use atomic_lib::Storelike;
-use regex::Regex;
 use tantivy::schema::Facet;
 use tantivy::schema::Field;
 use tantivy::schema::STORED;
@@ -15,11 +14,6 @@ use tantivy::Index;
 use tantivy::IndexWriter;
 use tantivy::ReloadPolicy;
 
-use yrs::updates::decoder::Decode;
-use yrs::GetString;
-use yrs::WriteTxn;
-use yrs::XmlFragment;
-use yrs::{Transact, Update};
 /// The actual Schema used for search.
 /// It mimics a single Atom (or Triple).
 #[derive(Debug)]
@@ -139,21 +133,16 @@ impl SearchState {
             doc.add_text(fields.description, description);
         };
 
-        // If the resource has a document-content property, we extract the plain text and use that as the description instead.
-        // This way, documents can be indexed by search.
-        if let Ok(atomic_lib::Value::YDoc(state)) = resource.get(atomic_lib::urls::DOCUMENT_CONTENT)
+        // If the resource has Loro document content, extract the text for search indexing.
+        if let Ok(atomic_lib::Value::LoroDoc(snapshot)) =
+            resource.get(atomic_lib::urls::DOCUMENT_CONTENT)
         {
-            let ydoc = yrs::Doc::new();
-            let mut txn = ydoc.transact_mut();
-            txn.apply_update(
-                Update::decode_v2(state)
-                    .map_err(|e| format!("Failed to decode YDoc update: {}", e))?,
-            )
-            .map_err(|e| format!("Failed to apply YDoc update: {}", e))?;
-
-            let xml_content = txn.get_or_insert_xml_fragment("content");
-            let content = extract_plain_text(&xml_content, &txn);
-            doc.add_text(fields.description, content);
+            if let Ok(loro_doc) = atomic_lib::loro::AtomicLoroDoc::from_snapshot(snapshot) {
+                if let Some(text) = loro_doc.get_string_property(atomic_lib::urls::DOCUMENT_CONTENT)
+                {
+                    doc.add_text(fields.description, text);
+                }
+            }
         }
 
         let hierarchy = resource_to_facet(resource, store).await.map_err(|e| {
@@ -303,26 +292,6 @@ fn get_resource_title(resource: &Resource) -> String {
     }
 }
 
-/// Recursively traverses the Yjs XmlFragment structure using a TreeWalker
-/// and extracts all nested plain text content.
-///
-/// This function requires a Transaction to read the text data correctly.
-fn extract_plain_text(fragment: &yrs::XmlFragmentRef, txn: &yrs::TransactionMut) -> String {
-    let mut text_content = String::new();
-
-    for node in fragment.successors(txn) {
-        if let yrs::types::xml::XmlOut::Text(text) = node {
-            text_content.push_str(&text.get_string(txn));
-        }
-    }
-
-    // Remove XML tags using regex
-    let xml_tag_regex = Regex::new(r"<[^>]*>").unwrap();
-    let clean_text = xml_tag_regex.replace_all(&text_content, " ");
-
-    // Clean up leading/trailing whitespace and return
-    clean_text.trim().to_string()
-}
 
 #[cfg(test)]
 mod tests {

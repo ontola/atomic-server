@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import webfontDownload from 'vite-plugin-webfont-dl';
 import prismjs from 'vite-plugin-prismjs';
+import wasm from 'vite-plugin-wasm';
 import { wuchale } from '@wuchale/vite-plugin';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -27,6 +28,7 @@ export default defineConfig({
     },
   },
   plugins: [
+    wasm(),
     webfontDownload(),
     wuchale(),
     react({
@@ -96,6 +98,8 @@ export default defineConfig({
       workbox: {
         // See https://github.com/atomicdata-dev/atomic-data-browser/issues/294
         globIgnores: ['**/index.html'],
+        // Increased for loro-crdt WASM binary
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,

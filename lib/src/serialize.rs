@@ -102,6 +102,9 @@ pub fn val_to_serde(value: Value, origin: &str, resolve_subjects: bool) -> Atomi
             );
             obj.into()
         }
+        Value::LoroDoc(val) => {
+            SerdeValue::String(general_purpose::STANDARD.encode(val))
+        }
     };
     Ok(json_val)
 }

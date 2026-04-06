@@ -52,6 +52,7 @@ fn on_after_commit(
             commit,
             resource,
             is_new: _,
+            changed_props: _,
         } = context;
 
         if commit.destroy != Some(true) {

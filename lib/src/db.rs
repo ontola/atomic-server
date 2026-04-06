@@ -1267,6 +1267,7 @@ impl Storelike for Db {
                         commit: &commit_response.commit,
                         resource,
                         is_new: commit_response.resource_old.is_none(),
+                        changed_props: &commit_response.changed_props,
                     });
                     fut.await?;
                 }
@@ -1368,6 +1369,7 @@ impl Storelike for Db {
                         commit: &commit_response.commit,
                         resource,
                         is_new: commit_response.resource_old.is_none(),
+                        changed_props: &commit_response.changed_props,
                     });
                     fut.await?;
                 }

@@ -20,7 +20,7 @@ mod jsonerrors;
 pub mod plugins;
 pub mod routes;
 pub mod serve;
-mod y_sync_broadcaster;
+mod loro_sync_broadcaster;
 // #[cfg(feature = "search")]
 mod search;
 #[cfg(test)]

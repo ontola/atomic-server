@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@tomic/lib": "workspace:*",
+    "loro-crdt": "^1.10.8",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },

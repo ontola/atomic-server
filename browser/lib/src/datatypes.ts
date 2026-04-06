@@ -1,6 +1,6 @@
 /** Each possible Atomic Datatype. See https://atomicdata.dev/collections/datatype */
 
-import { Client, YLoader } from './index.js';
+import { Client } from './index.js';
 import type { AtomicValue } from './value.js';
 
 // TODO: use strings from `./urls`, requires TS fix: https://github.com/microsoft/TypeScript/issues/40793
@@ -27,7 +27,7 @@ export enum Datatype {
   JSON = 'https://atomicdata.dev/datatypes/json',
   /** URI */
   URI = 'https://atomicdata.dev/datatypes/uri',
-  YDOC = 'https://atomicdata.dev/datatypes/ydoc',
+  LORODOC = 'https://atomicdata.dev/datatypes/lorodoc',
   UNKNOWN = 'unknown-datatype',
 }
 
@@ -195,18 +195,9 @@ export const validateDatatype = (
       break;
     }
 
-    case Datatype.YDOC: {
-      if (!YLoader.isLoaded()) {
-        console.warn(
-          'Cannot validate YDoc because Yjs is not loaded. passing as valid',
-        );
-        break;
-      }
-
-      const Y = YLoader.Y;
-
-      if (!(value instanceof Y.Doc)) {
-        err = 'Not a Yjs Doc';
+    case Datatype.LORODOC: {
+      if (!(value instanceof Uint8Array)) {
+        err = 'Not a Loro document (expected Uint8Array)';
         break;
       }
 
@@ -244,6 +235,6 @@ export const reverseDatatypeMapping = {
   [Datatype.TIMESTAMP]: 'Timestamp',
   [Datatype.ATOMIC_URL]: 'Resource',
   [Datatype.RESOURCEARRAY]: 'ResourceArray',
-  [Datatype.YDOC]: 'YDoc',
+  [Datatype.LORODOC]: 'LoroDoc',
   [Datatype.UNKNOWN]: 'Unknown',
 };

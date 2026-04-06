@@ -2889,14 +2889,17 @@ msgstr "Dezimalstellen"
 msgid "Add another property..."
 msgstr "Weitere Eigenschaft hinzufügen..."
 
+#: src/components/LoroDocValue.tsx
 #: src/components/YDocValue.tsx
 msgid "Empty"
 msgstr "Leer"
 
+#: src/components/LoroDocValue.tsx
 #: src/components/YDocValue.tsx
 msgid "Show encoded state"
 msgstr "Kodierten Status anzeigen"
 
+#: src/components/LoroDocValue.tsx
 #: src/components/YDocValue.tsx
 msgid "Hide encoded state"
 msgstr "Verstecke den kodierten Status"
@@ -4705,4 +4708,9 @@ msgid ""
 "<0>Feature complete by default</0>: rights, history,\n"
 "search, invites, realtime sync, collaboration, and AI chat\n"
 "built in."
+msgstr ""
+
+#. placeholder {0}: value.byteLength
+#: src/components/LoroDocValue.tsx
+msgid "Loro document ({0} bytes)"
 msgstr ""

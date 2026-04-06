@@ -2735,14 +2735,17 @@ msgstr "subject"
 msgid "{0} at {1}"
 msgstr "{0} at {1}"
 
+#: src/components/LoroDocValue.tsx
 #: src/components/YDocValue.tsx
 msgid "Empty"
 msgstr "Empty"
 
+#: src/components/LoroDocValue.tsx
 #: src/components/YDocValue.tsx
 msgid "Hide encoded state"
 msgstr "Hide encoded state"
 
+#: src/components/LoroDocValue.tsx
 #: src/components/YDocValue.tsx
 msgid "Show encoded state"
 msgstr "Show encoded state"
@@ -4666,3 +4669,8 @@ msgstr ""
 "<0>Feature complete by default</0>: rights, history,\n"
 "search, invites, realtime sync, collaboration, and AI chat\n"
 "built in."
+
+#. placeholder {0}: value.byteLength
+#: src/components/LoroDocValue.tsx
+msgid "Loro document ({0} bytes)"
+msgstr "Loro document ({0} bytes)"

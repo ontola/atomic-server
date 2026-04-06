@@ -20,6 +20,8 @@ pub struct CommitExtenderContext<'a> {
     pub commit: &'a Commit,
     pub resource: &'a Resource,
     pub is_new: bool,
+    /// The property URLs changed by this commit's Loro update.
+    pub changed_props: &'a std::collections::HashSet<String>,
 }
 
 pub type ResourceGetHandler = Arc<
