@@ -150,7 +150,7 @@ pub async fn construct_version(
     let mut version = Resource::new(subject.into());
     for commit in commits {
         if let Some(current_commit) = commit.url.clone() {
-            let applied = commit.apply_changes(version, store).await?;
+            let applied = commit.apply_changes(version).await?;
             version = applied.resource_new;
             // Stop iterating when the target commit has been applied.
             if current_commit == commit_url {
