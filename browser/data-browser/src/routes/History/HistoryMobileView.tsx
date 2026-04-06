@@ -1,10 +1,9 @@
 import { useCallback } from 'react';
-import { HistoryViewProps } from './HistoryViewProps';
+import type { HistoryViewProps } from './HistoryViewProps';
 import { styled } from 'styled-components';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Column } from '../../components/Row';
-import { ResourceCardDefault } from '../../views/Card/ResourceCard';
 import { VersionTitle } from './VersionTitle';
 import { VersionScroller } from './VersionScroller';
 import {
@@ -14,7 +13,7 @@ import {
   DialogTitle,
   useDialog,
 } from '../../components/Dialog';
-import { Version } from '@tomic/react';
+import type { Version } from '@tomic/react';
 
 export function HistoryMobileView({
   resource,
@@ -45,11 +44,22 @@ export function HistoryMobileView({
         </DialogTitle>
         <DialogContent>
           <Column fullHeight>
-            {selectedVersion && selectedVersion?.resource && (
+            {selectedVersion && (
               <>
                 <VersionTitle version={selectedVersion} />
                 <StyledCard>
-                  <ResourceCardDefault resource={selectedVersion.resource} />
+                  <PropertiesList>
+                    {[...selectedVersion.propvals.entries()]
+                      .filter(([key]) => !key.includes('loroUpdate'))
+                      .map(([key, value]) => (
+                        <div key={key}>
+                          <strong>{key.split('/').pop()}: </strong>
+                          {typeof value === 'string'
+                            ? value
+                            : JSON.stringify(value)}
+                        </div>
+                      ))}
+                  </PropertiesList>
                 </StyledCard>
               </>
             )}
@@ -59,7 +69,7 @@ export function HistoryMobileView({
           <Button onClick={() => closeDialog(false)} subtle>
             Cancel
           </Button>
-          <Button onClick={onVersionAccept}>Make current version</Button>
+          <Button onClick={onVersionAccept}>Restore this version</Button>
         </DialogActions>
       </Dialog>
     </>
@@ -68,6 +78,13 @@ export function HistoryMobileView({
 
 const StyledCard = styled(Card)`
   overflow: auto;
+`;
+
+const PropertiesList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem;
 `;
 
 const CenteredScroller = styled(VersionScroller)`

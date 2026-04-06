@@ -1705,16 +1705,15 @@ msgstr "Datei(en) hochladen..."
 msgid "Uploading..."
 msgstr "Wird hochgeladen..."
 
-#: src/routes/History/HistoryRoute.tsx
-msgid "Resource version updated"
-msgstr "Ressourcenversion aktualisiert"
+#~ msgid "Resource version updated"
+#~ msgstr "Ressourcenversion aktualisiert"
+
+#~ msgid "Building history of {0}"
+#~ msgstr "Versionsgeschichte von {0} wird erstellt"
 
 #. placeholder {0}: resource.title
-#: src/routes/History/HistoryRoute.tsx
-msgid "Building history of {0}"
-msgstr "Versionsgeschichte von {0} wird erstellt"
-
 #. placeholder {0}: resource.title
+#: src/routes/History/HistoryDesktopView.tsx
 #: src/routes/History/HistoryMobileView.tsx
 msgid "History of {0}"
 msgstr "Verlauf von {0}"
@@ -1723,15 +1722,11 @@ msgstr "Verlauf von {0}"
 msgid "Version"
 msgstr "Version"
 
-#: src/routes/History/HistoryDesktopView.tsx
-#: src/routes/History/HistoryMobileView.tsx
-msgid "Make current version"
-msgstr "Aktuelle Version erstellen"
+#~ msgid "Make current version"
+#~ msgstr "Aktuelle Version erstellen"
 
-#. placeholder {0}: ' '
-#: src/routes/History/VersionTitle.tsx
-msgid "Editted <0/> by{0} <1/>"
-msgstr "Bearbeitet <0/> von{0} <1/>"
+#~ msgid "Editted <0/> by{0} <1/>"
+#~ msgstr "Bearbeitet <0/> von{0} <1/>"
 
 #: src/routes/NewResource/BaseButtons.tsx
 msgid "Base classes"
@@ -1916,13 +1911,11 @@ msgstr "Keine Ressourcen"
 msgid "History of"
 msgstr "Verlauf von"
 
-#: src/routes/History/HistoryDesktopView.tsx
-msgid "Show Commit"
-msgstr "Commit anzeigen"
+#~ msgid "Show Commit"
+#~ msgstr "Commit anzeigen"
 
-#: src/routes/History/HistoryDesktopView.tsx
-msgid "Versions"
-msgstr "Versionen"
+#~ msgid "Versions"
+#~ msgstr "Versionen"
 
 #: src/views/CodeUsage/PropSelector.tsx
 msgid "None"
@@ -4713,4 +4706,33 @@ msgstr ""
 #. placeholder {0}: value.byteLength
 #: src/components/LoroDocValue.tsx
 msgid "Loro document ({0} bytes)"
+msgstr ""
+
+#: src/routes/History/HistoryDesktopView.tsx
+#: src/routes/History/HistoryMobileView.tsx
+msgid "Restore this version"
+msgstr ""
+
+#: src/routes/History/HistoryRoute.tsx
+msgid "Version restore not yet implemented for Loro"
+msgstr ""
+
+#. placeholder {0}: resource.title
+#: src/routes/History/HistoryRoute.tsx
+msgid "Loading history of {0}..."
+msgstr ""
+
+#: src/routes/History/HistoryRoute.tsx
+msgid "No history available for this resource."
+msgstr ""
+
+#. placeholder {0}: version.peer.slice(0, 8)
+#: src/routes/History/VersionTitle.tsx
+msgid "by peer {0}..."
+msgstr ""
+
+#. placeholder {0}: version.peer && <> by peer {version.peer.slice(0, 8)}...</>
+#. placeholder {1}: version.message && <> — {version.message}</>
+#: src/routes/History/VersionTitle.tsx
+msgid "Edited <0/> {0} {1}"
 msgstr ""

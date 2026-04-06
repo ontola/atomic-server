@@ -704,49 +704,87 @@ export class Resource<C extends OptionalClass = any> {
       .buildAndFetch();
   }
 
-  /** builds all versions using the Commits */
-  public async getHistory(
-    progressCallback?: (percentage: number) => void,
-  ): Promise<Version[]> {
-    const commitsCollection = await this.store.fetchResourceFromServer(
-      this.getCommitsCollectionSubject(),
-    );
-    const commitList = (commitsCollection.get(collections.properties.members) ??
-      []) as string[];
+  /**
+   * Get the history of this resource from its Loro OpLog.
+   * Returns an array of Versions, each with materialized property values
+   * at that point in time. Uses Loro's `checkout()` for instant time-travel
+   * — no network round-trips needed.
+   */
+  public getLoroHistory(): Version[] {
+    const doc = this.getLoroDoc();
 
-    const builtVersions: Version[] = [];
+    if (!doc) {
+      return [];
+    }
 
-    let previousResource = new Resource(this.subject);
+    // Get all changes from the OpLog, grouped by peer
+    const allChanges = doc.getAllChanges();
 
-    for (let i = 0; i < commitList.length; i++) {
-      // Commits are immutable; skip WebSocket subscription and fetch via HTTP.
-      const commitResource = await this.store.fetchResourceFromServer(
-        commitList[i],
-        { noWebSocket: true },
-      );
-      const parsedCommit = parseCommitResource(commitResource);
-      const builtResource = applyCommitToResource(
-        previousResource.clone(),
-        parsedCommit,
-      );
+    // Flatten into a single chronological list
+    type ChangeEntry = {
+      peer: string;
+      counter: number;
+      timestamp: number;
+      message: string | undefined;
+      length: number;
+    };
+    const flatChanges: ChangeEntry[] = [];
 
-      builtResource.setStore(this.store);
-
-      builtVersions.push({
-        commit: parsedCommit,
-        resource: builtResource,
-      });
-
-      previousResource = builtResource;
-
-      // Every 30 cycles we report the progress
-      if (progressCallback && i % 30 === 0) {
-        progressCallback(Math.round((i / commitList.length) * 100));
-        await WaitForImmediate();
+    for (const [peer, changes] of allChanges.entries()) {
+      for (const change of changes) {
+        flatChanges.push({
+          peer,
+          counter: change.counter + change.length - 1,
+          timestamp: change.timestamp,
+          message: change.message,
+          length: change.length,
+        });
       }
     }
 
-    return builtVersions;
+    // Sort by timestamp (oldest first)
+    flatChanges.sort((a, b) => a.timestamp - b.timestamp);
+
+    // Build versions by checking out each point in time
+    const versions: Version[] = [];
+
+    for (const change of flatChanges) {
+      const frontiers = [{ peer: change.peer as `${number}`, counter: change.counter }];
+
+      try {
+        doc.checkout(frontiers);
+
+        // Read the properties map at this version
+        const propsMap = doc.getMap('properties');
+        const propvals = new Map<string, JSONValue>();
+
+        if (propsMap) {
+          const json = propsMap.toJSON();
+
+          if (json && typeof json === 'object') {
+            for (const [key, value] of Object.entries(json)) {
+              propvals.set(key, value as JSONValue);
+            }
+          }
+        }
+
+        versions.push({
+          peer: change.peer,
+          timestamp: change.timestamp * 1000, // Loro uses seconds, we use ms
+          frontiers,
+          message: change.message,
+          propvals,
+        });
+      } catch {
+        // Some frontiers might not be valid for checkout, skip
+        continue;
+      }
+    }
+
+    // Restore to latest version
+    doc.checkoutToLatest();
+
+    return versions;
   }
 
   /**
@@ -754,22 +792,16 @@ export class Resource<C extends OptionalClass = any> {
    * @param version The version to set the resource to, you can get this using `resource.getHistory()`
    */
   public async setVersion(version: Version): Promise<void> {
-    const versionPropvals = version.resource.getPropVals();
-
-    // Remove any prop that doesn't exist in the version
+    // Remove any prop that doesn't exist in this version
     for (const prop of this.propvals.keys()) {
-      if (!versionPropvals.has(prop)) {
+      if (!version.propvals.has(prop)) {
         this.remove(prop);
       }
     }
 
-    for (const [key, value] of versionPropvals.entries()) {
-      // Skip binary blobs (Loro snapshots) — version restore for CRDT
-      // properties will be handled via Loro checkout in the future.
-      if (value instanceof Uint8Array) {
-        continue;
-      }
-
+    // Set all properties from the version
+    for (const [key, value] of version.propvals.entries()) {
+      if (value === undefined) continue;
       await this.set(key, value);
     }
 
@@ -1356,7 +1388,23 @@ export interface Right {
   type: RightType;
 }
 
+/** A point in the resource's history, derived from the Loro OpLog. */
 export interface Version {
+  /** Peer that authored this change */
+  peer: string;
+  /** Timestamp in milliseconds */
+  timestamp: number;
+  /** Loro frontiers — pass to doc.checkout() to materialize this version */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  frontiers: any[];
+  /** Human-readable commit message, if set */
+  message?: string;
+  /** Materialized property values at this version */
+  propvals: Map<string, JSONValue>;
+}
+
+/** @deprecated Use Version instead. Kept for backward compat during migration. */
+export interface LegacyVersion {
   commit: Commit;
   resource: Resource;
 }

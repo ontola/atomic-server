@@ -1584,14 +1584,11 @@ msgstr "Aún no hay etiquetas."
 #~ msgid "Add tags"
 #~ msgstr "Añadir etiquetas"
 
-#: src/routes/History/HistoryRoute.tsx
-msgid "Resource version updated"
-msgstr "Versión del recurso actualizada"
+#~ msgid "Resource version updated"
+#~ msgstr "Versión del recurso actualizada"
 
-#. placeholder {0}: resource.title
-#: src/routes/History/HistoryRoute.tsx
-msgid "Building history of {0}"
-msgstr "Construyendo el historial de {0}"
+#~ msgid "Building history of {0}"
+#~ msgstr "Construyendo el historial de {0}"
 
 #: src/routes/History/VersionScroller.tsx
 msgid "Previous item"
@@ -1605,12 +1602,12 @@ msgstr "Elemento siguiente"
 msgid "All versions <0/>"
 msgstr "Todas las versiones <0/>"
 
-#. placeholder {0}: ' '
-#: src/routes/History/VersionTitle.tsx
-msgid "Editted <0/> by{0} <1/>"
-msgstr "Editado <0/> por{0} <1/>"
+#~ msgid "Editted <0/> by{0} <1/>"
+#~ msgstr "Editado <0/> por{0} <1/>"
 
 #. placeholder {0}: resource.title
+#. placeholder {0}: resource.title
+#: src/routes/History/HistoryDesktopView.tsx
 #: src/routes/History/HistoryMobileView.tsx
 msgid "History of {0}"
 msgstr "Historial de {0}"
@@ -1619,10 +1616,8 @@ msgstr "Historial de {0}"
 msgid "Version"
 msgstr "Versión"
 
-#: src/routes/History/HistoryDesktopView.tsx
-#: src/routes/History/HistoryMobileView.tsx
-msgid "Make current version"
-msgstr "Convertir en la versión actual"
+#~ msgid "Make current version"
+#~ msgstr "Convertir en la versión actual"
 
 #: src/routes/Search/SearchRoute.tsx
 msgid "Enter a search query"
@@ -1682,13 +1677,11 @@ msgstr "Editar {0}"
 msgid "History of"
 msgstr "Historial de"
 
-#: src/routes/History/HistoryDesktopView.tsx
-msgid "Show Commit"
-msgstr "Mostrar Commit"
+#~ msgid "Show Commit"
+#~ msgstr "Mostrar Commit"
 
-#: src/routes/History/HistoryDesktopView.tsx
-msgid "Versions"
-msgstr "Versiones"
+#~ msgid "Versions"
+#~ msgstr "Versiones"
 
 #: src/components/forms/Field.tsx
 msgid "Required field"
@@ -4699,4 +4692,33 @@ msgstr ""
 #. placeholder {0}: value.byteLength
 #: src/components/LoroDocValue.tsx
 msgid "Loro document ({0} bytes)"
+msgstr ""
+
+#: src/routes/History/HistoryDesktopView.tsx
+#: src/routes/History/HistoryMobileView.tsx
+msgid "Restore this version"
+msgstr ""
+
+#: src/routes/History/HistoryRoute.tsx
+msgid "Version restore not yet implemented for Loro"
+msgstr ""
+
+#. placeholder {0}: resource.title
+#: src/routes/History/HistoryRoute.tsx
+msgid "Loading history of {0}..."
+msgstr ""
+
+#: src/routes/History/HistoryRoute.tsx
+msgid "No history available for this resource."
+msgstr ""
+
+#. placeholder {0}: version.peer.slice(0, 8)
+#: src/routes/History/VersionTitle.tsx
+msgid "by peer {0}..."
+msgstr ""
+
+#. placeholder {0}: version.peer && <> by peer {version.peer.slice(0, 8)}...</>
+#. placeholder {1}: version.message && <> — {version.message}</>
+#: src/routes/History/VersionTitle.tsx
+msgid "Edited <0/> {0} {1}"
 msgstr ""
