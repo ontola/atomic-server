@@ -33,17 +33,17 @@ pub async fn post_commit(
 
     let incoming_commit_resource = parse_json_ad_commit_resource(&body, store).await?;
     let incoming_commit = Commit::from_resource(incoming_commit_resource)?;
-    let is_internal = incoming_commit.subject.starts_with("internal:");
-    let is_did = incoming_commit.subject.starts_with("did:ad:");
+    let is_internal = incoming_commit.subject.is_internal();
+    let is_did = incoming_commit.subject.is_did();
     let matches_base = if let Some(base) = store.get_base_domain() {
-        incoming_commit.subject.contains(&base)
+        incoming_commit.subject.as_str().contains(&base)
     } else {
         false
     };
 
     // Fallback: if it's a local path like http://localhost/ or https://atomicdata.dev/
     // and it matches the current request's Host, we should also allow it.
-    let is_local_path = !is_did && !is_internal && incoming_commit.subject.ends_with('/');
+    let is_local_path = !is_did && !is_internal && incoming_commit.subject.as_str().ends_with('/');
 
     if !is_internal && !is_did && !matches_base && !is_local_path {
         return Err(
@@ -64,19 +64,16 @@ pub async fn post_commit(
         update_index: true,
     };
 
-    let _subject = atomic_lib::Subject::from_raw(&incoming_commit.subject, None);
-
-    let signer = incoming_commit.signer.clone();
-    let signer_subject = atomic_lib::Subject::from_raw(&signer, None);
-    let signer_pure = signer_subject.pure_id();
+    let signer = &incoming_commit.signer;
+    let signer_pure = signer.pure_id();
 
     // Ensure the agent exists before applying the commit.
     // This is important because the commit might be editing the agent itself.
-    if signer_subject.is_agent_did() && store.get_resource(&signer_subject).await.is_err() {
+    if signer.is_agent_did() && store.get_resource(signer).await.is_err() {
         let mut new_agent =
             atomic_lib::Resource::new_instance(atomic_lib::urls::AGENT, store).await?;
         new_agent.set_subject(signer_pure.clone());
-        if let Some(pk) = signer.strip_prefix("did:ad:agent:") {
+        if let Some(pk) = signer.as_str().strip_prefix("did:ad:agent:") {
             new_agent
                 .set_string(atomic_lib::urls::PUBLIC_KEY.into(), pk, store)
                 .await?;

@@ -290,7 +290,7 @@ fn on_before_commit(
                     &plugins_dir,
                     &plugin_cache_dir,
                     &uploads_dir,
-                    &commit.signer,
+                    commit.signer.as_str(),
                 )
                 .await?;
             }

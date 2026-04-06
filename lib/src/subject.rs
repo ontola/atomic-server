@@ -14,7 +14,7 @@ pub const DID_AD_COMMIT_PREFIX: &str = "did:ad:commit:";
 /// - `internal:` for resources hosted on this server.
 /// - `http:` or `https:` for resources on other servers.
 /// - `did:` for Decentralized Identifiers (specifically commit signatures).
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug)]
 pub enum Subject {
     /// Internal representation for local data.
     /// Format: `internal:/path` (root) or `internal:sub:/path` (tenant).
@@ -31,6 +31,22 @@ pub enum Subject {
         url: Url,
         drive_hint: Option<String>,
     },
+}
+
+/// Equality is based on the URL string only — `drive_hint` and `subdomain` are routing
+/// metadata and do not affect identity.
+impl PartialEq for Subject {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_str() == other.as_str()
+    }
+}
+
+impl Eq for Subject {}
+
+impl std::hash::Hash for Subject {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.as_str().hash(state);
+    }
 }
 
 impl Subject {

@@ -126,7 +126,7 @@ pub fn after_apply_commit_message<'a>(
             // We use the ChatRoom only for its `last_commit`
             let chat_room = store.get_resource(&parent_subject.clone().into()).await?;
 
-            let mut commit_builder = CommitBuilder::new(parent_subject);
+            let mut commit_builder = CommitBuilder::new(parent_subject.into());
 
             commit_builder.push_propval(
                 urls::MESSAGES,
@@ -185,7 +185,7 @@ async fn test_ws_push_chatroom() {
 
     let mut chatroom = atomic_lib::Resource::new("http://localhost/chat".into());
     chatroom.set_class(urls::CHATROOM);
-    let mut chatroom_builder = CommitBuilder::new(chatroom.get_subject().to_string());
+    let mut chatroom_builder = CommitBuilder::new(chatroom.get_subject().clone());
     chatroom_builder
         .push_propval(urls::IS_A, SubResource::Subject(urls::CHATROOM.into()))
         .unwrap();
@@ -213,7 +213,7 @@ async fn test_ws_push_chatroom() {
         Value::AtomicUrl("http://localhost/chat".into()),
     );
 
-    let mut message_builder = CommitBuilder::new(message.get_subject().to_string());
+    let mut message_builder = CommitBuilder::new(message.get_subject().clone());
     message_builder
         .push_propval(urls::IS_A, SubResource::Subject(urls::MESSAGE.into()))
         .unwrap();

@@ -178,7 +178,7 @@ fn should_sign_request(url: &str, agent: &Agent) -> bool {
 /// Posts a Commit to the endpoint of the Subject from the Commit
 pub async fn post_commit(commit: &crate::Commit, store: &impl Storelike) -> AtomicResult<()> {
     let subject_str = commit.get_subject();
-    let subject = Subject::from_raw(subject_str, store.get_base_domain().as_deref());
+    let subject = Subject::from_raw(subject_str.as_str(), store.get_base_domain().as_deref());
     let server_url = if subject.is_did() {
         let mut url = store.get_server_url().to_string();
         if !url.ends_with('/') {
@@ -186,7 +186,7 @@ pub async fn post_commit(commit: &crate::Commit, store: &impl Storelike) -> Atom
         }
         url
     } else {
-        crate::utils::server_url(subject_str)?
+        crate::utils::server_url(subject_str.as_str())?
     };
     // Default Commit endpoint is `https://example.com/commit`
     let endpoint = format!("{}commit", server_url);

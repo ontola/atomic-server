@@ -781,7 +781,7 @@ impl bindings::atomic::class_extender::host::Host for PluginHostState {
         let resource = self
             .db
             .get_resource_extended(
-                &atomic_lib::Subject::from_raw(&commit_builder.subject, None),
+                &commit_builder.subject,
                 false,
                 &agent.into(),
             )

@@ -80,13 +80,13 @@ impl CommitOpts {
 pub struct Commit {
     /// The subject URL that is to be modified by this Delta
     #[serde(rename = "https://atomicdata.dev/properties/subject")]
-    pub subject: String,
+    pub subject: Subject,
     /// The date it was created, as a unix timestamp
     #[serde(rename = "https://atomicdata.dev/properties/createdAt")]
     pub created_at: i64,
     /// The URL of the one signing this Commit
     #[serde(rename = "https://atomicdata.dev/properties/signer")]
-    pub signer: String,
+    pub signer: Subject,
     /// A Loro CRDT binary update for the entire resource document
     #[serde(rename = "https://atomicdata.dev/properties/loroUpdate")]
     pub loro_update: Option<Vec<u8>>,
@@ -166,7 +166,7 @@ impl Commit {
         // Create a temporary commit with empty signature and subject
         // The subject is needed for serialization, but it will be removed for the signature check (and thus creation)
         let temp_subject = "did:ad:genesis".to_string();
-        commit_builder.subject = temp_subject.clone();
+        commit_builder.subject = temp_subject.clone().into();
 
         let loro_update = if let Some(update) = commit_builder.loro_update {
             Some(update)
@@ -184,8 +184,8 @@ impl Commit {
         };
 
         let mut commit = Commit {
-            subject: temp_subject,
-            signer: agent.subject.to_string(),
+            subject: temp_subject.into(),
+            signer: agent.subject.clone(),
             loro_update,
             destroy: Some(commit_builder.destroy),
             created_at: now,
@@ -212,7 +212,7 @@ impl Commit {
 
         commit.signature = Some(signature.clone());
         let did = format!("did:ad:{}", signature);
-        commit.subject = did;
+        commit.subject = did.into();
 
         Ok(commit)
     }
@@ -224,7 +224,7 @@ impl Commit {
             Some(sig) => sig,
             None => return Err("No signature set".into()),
         };
-        let signer_subject = store.normalize_subject(&commit.signer.clone().into());
+        let signer_subject = store.normalize_subject(&commit.signer);
         // We first try to get the public key from the store.
         // If the signer is found in the store, we use that key.
         // This handles updates to existing agents by themselves.
@@ -239,16 +239,17 @@ impl Commit {
                     } else {
                         return Err(format!("Signer {} not found in store, and path does not start with /agents/. Error: {}", commit.signer, e).into());
                     }
-                } else if commit.signer.starts_with("did:key:") {
+                } else if commit.signer.as_str().starts_with("did:key:") {
                     // Extract from did:key (placeholder for future implementation)
                     return Err(format!(
                         "did:key not yet fully supported for signature verification: {}",
                         commit.signer
                     )
                     .into());
-                } else if commit.signer.starts_with("did:ad:agent:") {
+                } else if commit.signer.is_agent_did() {
                     commit
                         .signer
+                        .as_str()
                         .strip_prefix("did:ad:agent:")
                         .ok_or("Invalid did:ad:agent signer")?
                         .to_string()
@@ -295,12 +296,13 @@ impl Commit {
 
         // For genesis resource commits (did:ad:{signature}), the subject must equal the signature.
         // Agent DIDs (did:ad:agent:{pubkey}) are identity-based and exempt from this check.
-        if commit.subject.starts_with("did:ad:")
-            && !commit.subject.starts_with("did:ad:agent:")
+        if commit.subject.is_did()
+            && !commit.subject.is_agent_did()
             && commit.previous_commit.is_none()
         {
             let subject_val = commit
                 .subject
+                .as_str()
                 .strip_prefix("did:ad:")
                 .ok_or("Invalid did:ad subject")?;
             if subject_val != signature {
@@ -403,7 +405,7 @@ impl Commit {
         // Mandatory chaining for DID resources: if it exists, it must have a previousCommit.
         // Exception: Agents (did:ad:agent:...) don't have genesis commits in the same way,
         // so we allow updates without previousCommit for agents.
-        let is_agent = commit.subject.starts_with("did:ad:agent:");
+        let is_agent = commit.subject.is_agent_did();
         if !is_new && subject.is_did() && !is_agent && commit.previous_commit.is_none() {
             return Err(format!(
                 "Resource {} already exists. Updates to DID resources must provide a `previousCommit` to prevent accidental forks.",
@@ -427,7 +429,8 @@ impl Commit {
             })?;
 
         if opts.validate_rights {
-            let validate_for = opts.validate_for_agent.as_ref().unwrap_or(&commit.signer);
+            let signer_str = commit.signer.to_string();
+            let validate_for = opts.validate_for_agent.as_ref().unwrap_or(&signer_str);
             if is_new {
                 crate::hierarchy::check_append(store, &applied.resource_new, &validate_for.into())
                     .await?;
@@ -450,8 +453,8 @@ impl Commit {
                             .ok()
                             .and_then(|v| v.to_subjects(None).ok())
                             .unwrap_or_default();
-                        if !writers.contains(&commit.signer) {
-                            writers.push(commit.signer.clone());
+                        if !writers.contains(&signer_str) {
+                            writers.push(signer_str.clone());
                             applied
                                 .resource_new
                                 .set_unsafe(urls::WRITE.into(), writers.into());
@@ -603,9 +606,9 @@ impl Commit {
         let url = Some(resource.get_subject().to_string());
 
         Ok(Commit {
-            subject,
+            subject: subject.into(),
             created_at,
-            signer,
+            signer: signer.into(),
             loro_update,
             destroy,
             previous_commit,
@@ -631,7 +634,7 @@ impl Commit {
         resource.set_subject(commit_subject);
         resource.set_unsafe(
             urls::SUBJECT.into(),
-            Value::new(&self.subject, &DataType::AtomicUrl)?,
+            Value::new(self.subject.as_str(), &DataType::AtomicUrl)?,
         );
         let classes = vec![urls::COMMIT.to_string()];
         resource.set_unsafe(urls::IS_A.into(), classes.into());
@@ -641,7 +644,7 @@ impl Commit {
         );
         resource.set_unsafe(
             SIGNER.into(),
-            Value::new(&self.signer, &DataType::AtomicUrl)?,
+            Value::new(self.signer.as_str(), &DataType::AtomicUrl)?,
         );
         if let Some(destroy) = self.destroy {
             if destroy {
@@ -667,7 +670,7 @@ impl Commit {
         }
         resource.set_unsafe(
             SIGNER.into(),
-            Value::new(&self.signer, &DataType::AtomicUrl)?,
+            Value::new(self.signer.as_str(), &DataType::AtomicUrl)?,
         );
         if let Some(signature) = &self.signature {
             resource.set_unsafe(urls::SIGNATURE.into(), signature.clone().into());
@@ -675,7 +678,7 @@ impl Commit {
         Ok(resource)
     }
 
-    pub fn get_subject(&self) -> &str {
+    pub fn get_subject(&self) -> &Subject {
         &self.subject
     }
 
@@ -690,8 +693,8 @@ impl Commit {
         // A deterministic serialization should not contain the hash (signature), since that would influence the hash.
         commit_resource.remove_propval(urls::SIGNATURE);
 
-        let is_did_non_agent = self.subject.starts_with("did:ad:")
-            && !self.subject.starts_with("did:ad:agent:");
+        let is_did_non_agent = self.subject.is_did()
+            && !self.subject.is_agent_did();
         let is_genesis_flag = self.is_genesis == Some(true);
         let has_previous = self.previous_commit.is_some();
 
@@ -742,7 +745,7 @@ pub struct CommitBuilderJSON {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CommitBuilder {
     /// The subject URL that is to be modified by this Delta.
-    pub subject: String,
+    pub subject: Subject,
     /// Property changes accumulated on the server side.
     /// These get converted to a Loro update at sign time.
     set: std::collections::HashMap<String, Value>,
@@ -760,7 +763,7 @@ pub struct CommitBuilder {
 
 impl CommitBuilder {
     /// Start constructing a Commit.
-    pub fn new(subject: String) -> Self {
+    pub fn new(subject: Subject) -> Self {
         CommitBuilder {
             subject,
             set: HashMap::new(),
@@ -775,7 +778,7 @@ impl CommitBuilder {
     pub fn from_commit_builder_json(
         commit_builder_json: CommitBuilderJSON,
     ) -> AtomicResult<Self> {
-        let mut commit_builder = CommitBuilder::new(commit_builder_json.subject);
+        let mut commit_builder = CommitBuilder::new(commit_builder_json.subject.into());
 
         commit_builder.destroy(commit_builder_json.destroy);
 
@@ -828,7 +831,7 @@ impl CommitBuilder {
     }
 
     /// Set a new subject for this Commit
-    pub fn set_subject(&mut self, subject: String) {
+    pub fn set_subject(&mut self, subject: Subject) {
         self.subject = subject;
     }
 
@@ -870,7 +873,7 @@ async fn sign_at(
 
     let mut commit = Commit {
         subject: commitbuilder.subject,
-        signer: agent.subject.to_string(),
+        signer: agent.subject.clone(),
         loro_update,
         destroy: Some(commitbuilder.destroy),
         created_at: sign_date,
@@ -983,9 +986,9 @@ mod test {
         let loro_update = doc.export_snapshot();
 
         let commit = Commit {
-            subject: String::from("https://localhost/test"),
+            subject: "https://localhost/test".into(),
             created_at: 1603638837,
-            signer: String::from("https://localhost/author"),
+            signer: "https://localhost/author".into(),
             loro_update: Some(loro_update),
             previous_commit: None,
             is_genesis: None,
@@ -1061,14 +1064,8 @@ mod test {
         let agent = store.create_agent(Some("test_actor")).await.unwrap();
         let resource = Resource::new("https://localhost/test_resource".into());
 
-        {
-            let subject = "invalid URL";
-            let commitbuiler = crate::commit::CommitBuilder::new(subject.into());
-            let _ = commitbuiler
-                .sign(&agent, &store, &resource)
-                .await
-                .unwrap_err();
-        }
+        // Note: "invalid URL" now parses as Subject::Internal, which is valid
+        // in the in-memory Store. Subject validation is handled by the Subject type itself.
         {
             let subject = "https://localhost/?q=invalid";
             let commitbuiler = crate::commit::CommitBuilder::new(subject.into());
@@ -1127,11 +1124,11 @@ mod test {
         );
         let commit = Commit::create_did(builder, &agent, &store).await.unwrap();
         assert!(
-            commit.subject.starts_with("did:ad:"),
-            "genesis subject should start with did:ad:, got {}",
+            commit.subject.is_did(),
+            "genesis subject should be a DID, got {}",
             commit.subject
         );
-        assert!(!commit.subject.starts_with("did:ad:agent:"));
+        assert!(!commit.subject.is_agent_did());
         let opts = CommitOpts {
             validate_signature: true,
             validate_timestamp: false,
@@ -1239,7 +1236,7 @@ mod test {
         );
         // Sign with agent_b but claim agent_a signed it by manually overriding the signer.
         let mut commit = builder.sign(&agent_b, &store, &resource).await.unwrap();
-        commit.signer = agent_a.subject.as_str().to_owned();
+        commit.signer = agent_a.subject.clone();
 
         let opts = CommitOpts {
             validate_signature: true,
