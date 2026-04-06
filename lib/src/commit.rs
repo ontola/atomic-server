@@ -282,11 +282,19 @@ impl Commit {
         };
         let agent_pubkey = decode_base64(&pubkey_b64)?;
         let stringified_commit = commit.serialize_deterministically_json_ad(store).await?;
-        let peer_public_key =
-            ring::signature::UnparsedPublicKey::new(&ring::signature::ED25519, agent_pubkey);
+        let pubkey_bytes: [u8; 32] = agent_pubkey
+            .try_into()
+            .map_err(|_| "Ed25519 public key must be 32 bytes")?;
+        let verifying_key = ed25519_dalek::VerifyingKey::from_bytes(&pubkey_bytes)
+            .map_err(|e| format!("Invalid public key: {}", e))?;
         let signature_bytes = decode_base64(signature)?;
-        peer_public_key
-            .verify(stringified_commit.as_bytes(), &signature_bytes)
+        let sig_bytes: [u8; 64] = signature_bytes
+            .try_into()
+            .map_err(|_| "Ed25519 signature must be 64 bytes")?;
+        let sig = ed25519_dalek::Signature::from_bytes(&sig_bytes);
+        use ed25519_dalek::Verifier;
+        verifying_key
+            .verify(stringified_commit.as_bytes(), &sig)
             .map_err(|_e| {
                 format!(
                     "Incorrect signature for Commit. This could be due to an error during signing or serialization of the commit. Compare this to the serialized commit in the server: {}",
@@ -903,14 +911,19 @@ pub fn sign_message(message: &str, private_key: &str, public_key: &str) -> Atomi
         .map_err(|e| format!("Failed decoding private key {}: {}", private_key, e))?;
     let public_key_bytes = decode_base64(public_key)
         .map_err(|e| format!("Failed decoding public key {}: {}", public_key, e))?;
-    let key_pair = ring::signature::Ed25519KeyPair::from_seed_and_public_key(
-        &private_key_bytes,
-        &public_key_bytes,
-    )
-    .map_err(|_| "Can't create Ed25519 keypair from Agent's Private Key.")?;
+    let seed: [u8; 32] = private_key_bytes
+        .try_into()
+        .map_err(|_| "Ed25519 private key must be 32 bytes")?;
+    let signing_key = ed25519_dalek::SigningKey::from_bytes(&seed);
+    // Verify the public key matches
+    let derived_public = signing_key.verifying_key();
+    if derived_public.as_bytes() != public_key_bytes.as_slice() {
+        return Err("Public key does not match private key".into());
+    }
+    use ed25519_dalek::Signer;
     let message_bytes = message.as_bytes();
-    let signature = key_pair.sign(message_bytes);
-    Ok(encode_base64(signature.as_ref()))
+    let signature = signing_key.sign(message_bytes);
+    Ok(encode_base64(&signature.to_bytes()))
 }
 
 /// The amount of milliseconds that a Commit signature is valid for.

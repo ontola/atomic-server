@@ -18,7 +18,7 @@ directories = { version = ">= 2, < 5", optional = true }
 rand = { version = "0.8" }
 regex = "1"
 hex = "0.4"
-ring = "0.17.14"
+ed25519-dalek = { version = "2", features = ["rand_core"] }
 rio_api = { version = "0.8", optional = true }
 rio_turtle = { version = "0.8", optional = true }
 serde = { version = "1", features = ["derive"] }

@@ -194,31 +194,30 @@ pub struct Pair {
 
 /// Returns a new random keypair.
 fn generate_keypair() -> AtomicResult<Pair> {
-    use ring::signature::KeyPair;
-    let rng = ring::rand::SystemRandom::new();
-    const SEED_LEN: usize = 32;
-    let seed: [u8; SEED_LEN] = ring::rand::generate(&rng)
-        .map_err(|e| format!("Error generating random seed: {}", e))?
-        .expose();
-    let key_pair = ring::signature::Ed25519KeyPair::from_seed_unchecked(&seed)
-        .map_err(|e| format!("Error generating keypair: {}", e))
-        .unwrap();
+    use ed25519_dalek::SigningKey;
+    use rand::rngs::OsRng;
+
+    let signing_key = SigningKey::generate(&mut OsRng);
+    let public_key = signing_key.verifying_key();
     Ok(Pair {
-        private: encode_base64(&seed),
-        public: encode_base64(key_pair.public_key().as_ref()),
+        private: encode_base64(signing_key.as_bytes()),
+        public: encode_base64(public_key.as_bytes()),
     })
 }
 
 /// Returns a Key Pair (including public key) from a private key, base64 encoded.
 pub fn generate_public_key(private_key: &str) -> Pair {
-    use ring::signature::KeyPair;
+    use ed25519_dalek::SigningKey;
+
     let private_key_bytes = decode_base64(private_key).unwrap();
-    let key_pair = ring::signature::Ed25519KeyPair::from_seed_unchecked(private_key_bytes.as_ref())
-        .map_err(|e| format!("Error generating keypair: {e}"))
-        .unwrap();
+    let seed: [u8; 32] = private_key_bytes
+        .try_into()
+        .expect("Ed25519 private key must be 32 bytes");
+    let signing_key = SigningKey::from_bytes(&seed);
+    let public_key = signing_key.verifying_key();
     Pair {
-        private: encode_base64(&private_key_bytes),
-        public: encode_base64(key_pair.public_key().as_ref()),
+        private: encode_base64(signing_key.as_bytes()),
+        public: encode_base64(public_key.as_bytes()),
     }
 }
 
@@ -235,11 +234,15 @@ pub fn encode_base64(bytes: &[u8]) -> String {
 
 /// Signs a message using the private key.
 pub fn sign_message(message: &[u8], private_key: &str) -> AtomicResult<String> {
+    use ed25519_dalek::{Signer, SigningKey};
+
     let private_key_bytes = decode_base64(private_key)?;
-    let key_pair = ring::signature::Ed25519KeyPair::from_seed_unchecked(&private_key_bytes)
-        .map_err(|e| format!("Error generating keypair: {}", e))?;
-    let signature = key_pair.sign(message);
-    Ok(encode_base64(signature.as_ref()))
+    let seed: [u8; 32] = private_key_bytes
+        .try_into()
+        .map_err(|_| "Ed25519 private key must be 32 bytes")?;
+    let signing_key = SigningKey::from_bytes(&seed);
+    let signature = signing_key.sign(message);
+    Ok(encode_base64(&signature.to_bytes()))
 }
 
 /// Checks if the public key is a valid ED25519 base64 key.
