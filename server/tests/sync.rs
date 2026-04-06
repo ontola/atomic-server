@@ -77,23 +77,21 @@ async fn two_clients_sync() -> AtomicResult<()> {
     let agent_a = client_a.new_agent("Alice").await?;
     tracing::info!("Agent A: {}", agent_a.subject);
 
-    let drive_a = client_a.new_drive(&agent_a, "Alice's Drive").await?;
+    // Create a public drive so Agent B can subscribe
+    let drive_a = client_a.new_public_drive(&agent_a, "Alice's Drive").await?;
     tracing::info!("Drive A: {}", drive_a);
 
     let mut resource = client_a.new_resource(&drive_a);
-    resource.set_name("Hello from Alice")?;
-    resource.set_string(atomic_lib::urls::SHORTNAME, "test-resource")?;
-    resource.set_string(
-        atomic_lib::urls::DESCRIPTION,
-        "A test resource for sync",
-    )?;
-    resource.set(
-        atomic_lib::urls::IS_A,
-        &atomic_lib::Value::ResourceArray(vec![
+    resource.set_name("Hello from Alice");
+    resource.set_unsafe(atomic_lib::urls::SHORTNAME.into(), atomic_lib::Value::Slug("test-resource".into()));
+    resource.set_unsafe(atomic_lib::urls::DESCRIPTION.into(), atomic_lib::Value::String("A test resource for sync".into()));
+    resource.set_unsafe(
+        atomic_lib::urls::IS_A.into(),
+        atomic_lib::Value::ResourceArray(vec![
             atomic_lib::urls::CLASS.into(),
         ]),
-    )?;
-    let subject = resource.save(&client_a, &agent_a).await?;
+    );
+    let subject = resource.save_remote(client_a.store()).await?;
     tracing::info!("Created resource: {}", subject);
 
     // --- Client B: connect via WebSocket, subscribe ---
@@ -101,10 +99,15 @@ async fn two_clients_sync() -> AtomicResult<()> {
     let agent_b = client_b.new_agent("Bob").await?;
     tracing::info!("Agent B: {}", agent_b.subject);
 
+    tracing::info!("Agent B connecting to WS at {}", ws_url);
     let ws_b = WsClient::connect(&ws_url).await?;
+    tracing::info!("Agent B WS connected");
     ws_b.authenticate(&agent_b).await?;
+    tracing::info!("Agent B authenticated");
     ws_b.subscribe_resource(&subject).await?;
     tracing::info!("Agent B subscribed to {}", subject);
+    // Give the server time to process the subscription
+    tokio::time::sleep(Duration::from_secs(1)).await;
 
     let mut rx = ws_b.subscribe();
 
@@ -112,8 +115,8 @@ async fn two_clients_sync() -> AtomicResult<()> {
     tokio::time::sleep(Duration::from_millis(300)).await;
 
     // --- Client A: edit the resource ---
-    resource.set_name("Updated by Alice")?;
-    resource.save(&client_a, &agent_a).await?;
+    resource.set_name("Updated by Alice");
+    resource.save_remote(client_a.store()).await?;
     tracing::info!("Agent A saved edit");
 
     // --- Client B: should receive a COMMIT ---
