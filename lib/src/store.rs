@@ -119,7 +119,8 @@ impl Store {
     }
 }
 
-#[async_trait]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 impl Storelike for Store {
     async fn add_atoms(&self, atoms: Vec<Atom>) -> AtomicResult<()> {
         // Start with a nested HashMap, containing only strings.
@@ -427,7 +428,10 @@ mod test {
 
     #[test]
     fn get_external_resource() {
-        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
         runtime.block_on(async {
             let store = Store::init().await.unwrap();
             store.populate().await.unwrap();

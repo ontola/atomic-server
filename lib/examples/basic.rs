@@ -7,7 +7,7 @@
 use atomic_lib::client::connected::Client;
 use atomic_lib::errors::AtomicResult;
 
-#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 async fn main() -> AtomicResult<()> {
     let client = Client::new("http://localhost:9883").await?;
     let agent = client.new_agent("Alice").await?;

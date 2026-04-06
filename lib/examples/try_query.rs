@@ -1,7 +1,7 @@
 use atomic_lib::errors::AtomicResult;
 use atomic_lib::{storelike::Query, Store, Storelike};
 
-#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 async fn main() -> AtomicResult<()> {
     // Initialize a new store
     let store = Store::init().await?;

@@ -27,7 +27,7 @@ See the [Atomic Data Docs](https://docs.atomicdata.dev) for more information.
 // Import the `Storelike` trait to get access to most functions
 use atomic_lib::Storelike;
 
-tokio::runtime::Runtime::new().unwrap().block_on(async {
+tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap().block_on(async {
     // Start with initializing the in-memory store
     let store = atomic_lib::Store::init().await.unwrap();
     store.set_base_url("http://localhost");

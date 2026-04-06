@@ -727,7 +727,10 @@ mod test {
         };
 
         // Serialize twice — must produce identical output
-        let rt = tokio::runtime::Runtime::new().unwrap();
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
         let store = rt.block_on(async { crate::Store::init().await.unwrap() });
         let s1 = rt.block_on(commit.serialize_deterministically_json_ad(&store)).unwrap();
         let s2 = rt.block_on(commit.serialize_deterministically_json_ad(&store)).unwrap();

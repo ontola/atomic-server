@@ -115,8 +115,10 @@ pub async fn fetch_body(
         return Err(format!("Could not fetch url '{}', must start with http.", url).into());
     }
 
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
+    let mut builder = reqwest::Client::builder();
+    #[cfg(not(target_arch = "wasm32"))]
+    { builder = builder.timeout(std::time::Duration::from_secs(10)); }
+    let client = builder
         .build()
         .map_err(|e| format!("Could not build HTTP client: {}", e))?;
 
@@ -208,8 +210,10 @@ async fn post_commit_custom_endpoint(
     }
     let json = serde_json::to_string(&json_val)?;
 
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
+    let mut builder = reqwest::Client::builder();
+    #[cfg(not(target_arch = "wasm32"))]
+    { builder = builder.timeout(std::time::Duration::from_secs(10)); }
+    let client = builder
         .build()
         .map_err(|e| format!("Could not build HTTP client: {}", e))?;
 
