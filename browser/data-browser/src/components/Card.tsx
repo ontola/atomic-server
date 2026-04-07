@@ -14,7 +14,6 @@ type CardProps = {
 
 /** A Card with a border. */
 export const Card = styled.div.attrs<CardProps>(p => ({
-  // When we render a lot of cards it is more performant to use styles instead of classes when each card has a unique style
   style: getTransitionStyle(RESOURCE_PAGE_TRANSITION_TAG, p.about),
 }))`
   background-color: ${p => p.theme.colors.bg};

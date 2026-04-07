@@ -9,3 +9,4 @@ artifact
 server/assets_tmp
 .netlify
 scratchpad
+.claude

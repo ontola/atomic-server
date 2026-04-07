@@ -664,16 +664,9 @@ export class Resource<C extends OptionalClass = any> {
     );
   }
 
-  /** Returns true if the resource has unsaved changes. */
+  /** Returns true if the resource has unsaved local changes. */
   public hasUnsavedChanges(): boolean {
-    if (this._dirty || this.commitBuilder.hasUnsavedChanges()) {
-      return true;
-    }
-
-    // Check if the Loro doc has changes not yet exported
-    const delta = this.exportLoroDelta();
-
-    return delta !== undefined;
+    return this._dirty || this.commitBuilder.hasUnsavedChanges();
   }
 
   public getCommitsCollectionSubject(): string {

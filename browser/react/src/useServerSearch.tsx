@@ -36,8 +36,11 @@ export function useServerSearch(
   const [loading, setLoading] = useState(false);
   const debouncedQuery = useDebounce(query, debounce) ?? '';
 
-  // Memoize searchOpts to prevent unnecessary effect re-runs
-  const memoizedSearchOpts = useMemo(() => searchOpts, [searchOpts]);
+  // Memoize searchOpts by content, not reference. searchOpts is a new object
+  // every render (destructured from the caller's inline object literal).
+  const searchOptsKey = JSON.stringify(searchOpts);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const memoizedSearchOpts = useMemo(() => searchOpts, [searchOptsKey]);
 
   useOnValueChange(() => {
     if (debouncedQuery) {
@@ -53,7 +56,7 @@ export function useServerSearch(
   const updateResults = useEffectEvent(
     (r: string[], relevantQuery: string, relevantOpts: SearchOpts) => {
       // If the query became empty since the last fetch, don't update the results
-      if (relevantQuery !== debouncedQuery || relevantOpts !== searchOpts) {
+      if (relevantQuery !== debouncedQuery || relevantOpts !== memoizedSearchOpts) {
         return;
       }
 

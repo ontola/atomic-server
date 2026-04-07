@@ -33,6 +33,31 @@ pub async fn post_commit(
 
     let incoming_commit_resource = parse_json_ad_commit_resource(&body, store).await?;
     let incoming_commit = Commit::from_resource(incoming_commit_resource)?;
+
+    // Log incoming commit details for debugging
+    if let Some(loro_bytes) = &incoming_commit.loro_update {
+        let doc = atomic_lib::loro::AtomicLoroDoc::new();
+        if doc.import_update(loro_bytes).is_ok() {
+            let props = doc.get_all_properties();
+            let prop_summary: Vec<String> = props.keys().map(|k| {
+                k.rsplit('/').next().unwrap_or(k).to_string()
+            }).collect();
+            tracing::info!(
+                subject = %incoming_commit.subject,
+                signer = %incoming_commit.signer,
+                properties = ?prop_summary,
+                loro_bytes = loro_bytes.len(),
+                "Incoming commit"
+            );
+        }
+    } else {
+        tracing::info!(
+            subject = %incoming_commit.subject,
+            destroy = ?incoming_commit.destroy,
+            "Incoming commit (no loroUpdate)"
+        );
+    }
+
     let is_internal = incoming_commit.subject.is_internal();
     let is_did = incoming_commit.subject.is_did();
     let matches_base = if let Some(base) = store.get_base_domain() {
