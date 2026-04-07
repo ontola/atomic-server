@@ -39,7 +39,12 @@ pub async fn handle_get_resource(
             } else {
                 format!("?{}", req.query_string())
             };
-            format!("/{}{}", subj_end_string, querystring)
+            // DID subjects should be used as-is, not prefixed with /
+            if subj_end_string.starts_with("did:") {
+                format!("{}{}", subj_end_string, querystring)
+            } else {
+                format!("/{}{}", subj_end_string, querystring)
+            }
         }
     } else {
         "/".to_string()
@@ -56,8 +61,12 @@ pub async fn handle_get_resource(
         .map(|h| h.split(':').next().unwrap_or(h))
         .unwrap_or("localhost");
 
-    let for_agent =
-        get_client_agent(headers, &appstate, &format!("{}{}", origin, subject_string)).await?;
+    let full_url = if subject_string.starts_with('/') {
+        format!("{}{}", origin, subject_string)
+    } else {
+        format!("{}/{}", origin, subject_string)
+    };
+    let for_agent = get_client_agent(headers, &appstate, &full_url).await?;
     timer.add("get_agent");
 
     let resolved: ResolvedTarget = appstate

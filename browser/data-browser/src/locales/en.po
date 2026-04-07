@@ -4696,3 +4696,11 @@ msgstr "by peer {0}..."
 #: src/routes/History/VersionTitle.tsx
 msgid "Edited <0/> {0} {1}"
 msgstr "Edited <0/> {0} {1}"
+
+#: src/components/Share/ShareDialog.tsx
+msgid "Link copied to clipboard"
+msgstr "Link copied to clipboard"
+
+#: src/components/Share/ShareDialog.tsx
+msgid "<0/> Copy link"
+msgstr "<0/> Copy link"

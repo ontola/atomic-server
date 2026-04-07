@@ -286,6 +286,19 @@ fn handle_ws_message_sync(
             conn.loro_sync_broadcaster_addr.do_send(update);
             Ok(())
         }
+        s if s.starts_with("SUBSCRIBE_QUERY ") => {
+            let json = &s[16..];
+            let query: crate::actor_messages::QuerySubscriptionJSON =
+                serde_json::from_str(json)
+                    .map_err(|e| format!("Invalid SUBSCRIBE_QUERY JSON: {e}"))?;
+            conn.commit_monitor_addr
+                .do_send(crate::actor_messages::SubscribeQuery {
+                    addr: ctx.address(),
+                    query,
+                    agent: conn.agent.to_string(),
+                });
+            Ok(())
+        }
         other => {
             tracing::warn!("Unknown websocket message: {}", other);
             Err(format!("Unknown message: {}", other).into())
@@ -386,6 +399,22 @@ impl Handler<crate::actor_messages::LoroEphemeralUpdate> for WebSocketConnection
     ) {
         ctx.text(format!(
             "LORO_EPHEMERAL_UPDATE {}",
+            serde_json::to_string(&msg).unwrap()
+        ));
+    }
+}
+
+impl Handler<crate::actor_messages::QueryUpdate> for WebSocketConnection {
+    type Result = ();
+
+    #[tracing::instrument(name = "handle_query_update", skip_all)]
+    fn handle(
+        &mut self,
+        msg: crate::actor_messages::QueryUpdate,
+        ctx: &mut ws::WebsocketContext<Self>,
+    ) {
+        ctx.text(format!(
+            "QUERY_UPDATE {}",
             serde_json::to_string(&msg).unwrap()
         ));
     }

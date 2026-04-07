@@ -226,42 +226,13 @@ export class WSClient {
     return;
   }
 
-  public subscribeResource(subject: string): void {
-    if (this.readyState !== WebSocket.OPEN) {
-      return;
-    }
-
-    if (subject.startsWith('did:ad:commit:')) {
-      return;
-    }
-
-    try {
-      const url = new URL(subject);
-
-      // For HTTP(S) URLs, check origin matches and it's not an immutable commit
-      if (url.protocol === 'http:' || url.protocol === 'https:') {
-        if (
-          url.origin !== this.serverOrigin ||
-          url.pathname.startsWith('/commits/')
-        ) {
-          return;
-        }
-      }
-    } catch {
-      // DID subjects are not valid URLs but should still be subscribed to
-      // (immutable did:ad:commit: subjects are already filtered above)
-      if (!subject.startsWith('did:')) {
-        return;
-      }
-    }
-
-    this.authPromise
-      .catch(() => {
-        // We don't want to log the error here, as it's already handled in the authenticate() method
-      })
-      .finally(() => {
-        this.ws.send('SUBSCRIBE ' + subject);
-      });
+  /**
+   * @deprecated Individual resource subscriptions are replaced by drive-wide SUBSCRIBE_QUERY.
+   * Kept as a no-op for backward compatibility with callers.
+   */
+  public subscribeResource(_subject: string): void {
+    // No-op: we use drive-wide SUBSCRIBE_QUERY instead of per-resource SUBSCRIBE.
+    // The drive subscription is set up in handleOpen().
   }
 
   public unsubscribeResource(subject: string): void {
@@ -372,9 +343,12 @@ export class WSClient {
     // Make sure user is authenticated before sending any messages
     this.authenticate()
       .then(() => {
-        // Subscribe to all existing subjects (subscribeResource filters commits and external origins)
-        for (const subject of this.store.subscribers.keys()) {
-          this.subscribeResource(subject);
+        // Subscribe to all changes in the current drive
+        const drive = this.store.getDrive();
+
+        if (drive) {
+          const query = JSON.stringify({ drive });
+          this.ws.send('SUBSCRIBE_QUERY ' + query);
         }
       })
       .catch(e => {
@@ -397,6 +371,25 @@ export class WSClient {
     } else if (ev.data.startsWith('LORO_EPHEMERAL_UPDATE ')) {
       const update = ev.data.slice(21);
       this.store.__handleLoroEphemeralMessage(update);
+    } else if (ev.data.startsWith('QUERY_UPDATE ')) {
+      const json = ev.data.slice(13);
+
+      try {
+        const update = JSON.parse(json);
+        const subjects: string[] = [
+          ...(update.added ?? []),
+          ...(update.removed ?? []),
+        ];
+
+        // Refetch affected resources so the store/UI updates
+        for (const subject of subjects) {
+          this.store.fetchResourceFromServer(subject).catch(() => {
+            // Resource might have been deleted, that's fine
+          });
+        }
+      } catch (e) {
+        console.warn('Invalid QUERY_UPDATE:', e);
+      }
     } else if (ev.data.startsWith('AUTHENTICATED')) {
       // Do nothing, handled by the authenticate() method
     } else {

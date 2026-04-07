@@ -27,6 +27,13 @@ pub enum WsMessage {
     LoroSyncUpdate { subject: String, update: Vec<u8> },
     /// A Loro ephemeral update (cursors/presence). Contains `{ subject, update }` JSON.
     LoroEphemeralUpdate { subject: String, update: Vec<u8> },
+    /// A query's results changed. Contains added/removed subjects.
+    QueryUpdate {
+        property: Option<String>,
+        value: Option<String>,
+        added: Vec<String>,
+        removed: Vec<String>,
+    },
     /// Server confirmed authentication.
     Authenticated,
     /// Server sent an error.
@@ -249,6 +256,23 @@ fn parse_server_message(text: &str) -> WsMessage {
                 WsMessage::LoroEphemeralUpdate { subject, update }
             }
             Err(_) => WsMessage::Error(format!("Invalid LORO_EPHEMERAL_UPDATE: {}", text)),
+        }
+    } else if text.starts_with("QUERY_UPDATE ") {
+        match serde_json::from_str::<serde_json::Value>(&text[13..]) {
+            Ok(v) => {
+                let property = v["property"].as_str().map(|s| s.to_string());
+                let value = v["value"].as_str().map(|s| s.to_string());
+                let added = v["added"]
+                    .as_array()
+                    .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                    .unwrap_or_default();
+                let removed = v["removed"]
+                    .as_array()
+                    .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                    .unwrap_or_default();
+                WsMessage::QueryUpdate { property, value, added, removed }
+            }
+            Err(_) => WsMessage::Error(format!("Invalid QUERY_UPDATE: {}", text)),
         }
     } else if text.starts_with("AUTHENTICATED") {
         WsMessage::Authenticated

@@ -4722,3 +4722,11 @@ msgstr ""
 #: src/routes/History/VersionTitle.tsx
 msgid "Edited <0/> {0} {1}"
 msgstr ""
+
+#: src/components/Share/ShareDialog.tsx
+msgid "Link copied to clipboard"
+msgstr ""
+
+#: src/components/Share/ShareDialog.tsx
+msgid "<0/> Copy link"
+msgstr ""

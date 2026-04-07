@@ -272,6 +272,11 @@ export class Resource<C extends OptionalClass = any> {
     this._store = store;
   }
 
+  /** Returns true if a LoroDoc has been initialized for this resource. */
+  public hasLoroDoc(): boolean {
+    return this._loroDoc !== undefined;
+  }
+
   /**
    * Returns the LoroDoc backing this resource, creating one if needed.
    * Returns undefined if Loro is not loaded.
@@ -667,6 +672,13 @@ export class Resource<C extends OptionalClass = any> {
   /** Returns true if the resource has unsaved local changes. */
   public hasUnsavedChanges(): boolean {
     return this._dirty || this.commitBuilder.hasUnsavedChanges();
+  }
+
+  /** Mark the resource as having unsaved local changes.
+   *  Use this when external code (e.g. Loro editor plugins) modifies the
+   *  resource's LoroDoc directly without going through `set()`. */
+  public markDirty(): void {
+    this._dirty = true;
   }
 
   public getCommitsCollectionSubject(): string {
