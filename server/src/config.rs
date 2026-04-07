@@ -104,6 +104,18 @@ pub struct Opts {
     /// Use the GPU (if available) for processing vector search embeddings.
     #[clap(long, env = "ATOMIC_GPU_INDEXING")]
     pub gpu_indexing: bool,
+
+    /// OpenRouter API key for remote embeddings instead of local fastembed.
+    #[clap(long, env = "OPENROUTER_API_KEY")]
+    pub openrouter_api_key: Option<String>,
+
+    /// OpenRouter embedding model id (required when `OPENROUTER_API_KEY` is set).
+    #[clap(long, env = "OPENROUTER_EMBEDDING_MODEL")]
+    pub openrouter_embedding_model: Option<String>,
+
+    /// Optional embedding vector dimensions for OpenRouter (JSON `dimensions` field; not all models honor it). Empty string is treated as unset.
+    #[clap(long, env = "OPENROUTER_EMBEDDING_DIMENSIONS")]
+    pub openrouter_embedding_dimensions: Option<String>,
 }
 
 #[derive(clap::ValueEnum, Clone, Debug)]
@@ -216,6 +228,13 @@ pub struct Config {
     pub initialize: bool,
     /// Use the GPU (if available) for processing vector search embeddings.
     pub gpu_indexing: bool,
+
+    /// OpenRouter API key for remote embeddings (empty strings are treated as unset).
+    pub openrouter_api_key: Option<String>,
+    /// OpenRouter embedding model id (required when `openrouter_api_key` is set).
+    pub openrouter_embedding_model: Option<String>,
+    /// Optional embedding dimensions for OpenRouter.
+    pub openrouter_embedding_dimensions: Option<u32>,
 }
 
 /// Parse .env and CLI options
@@ -320,9 +339,34 @@ pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
 
     let gpu_indexing = opts.gpu_indexing;
 
+    let openrouter_api_key = opts
+        .openrouter_api_key
+        .clone()
+        .filter(|s| !s.is_empty());
+    let openrouter_embedding_model = opts
+        .openrouter_embedding_model
+        .clone()
+        .filter(|s| !s.is_empty());
+    let openrouter_embedding_dimensions = match opts.openrouter_embedding_dimensions.as_deref() {
+        None | Some("") => None,
+        Some(s) => {
+            let t = s.trim();
+            if t.is_empty() {
+                None
+            } else {
+                Some(t.parse().map_err(|_| {
+                    "OPENROUTER_EMBEDDING_DIMENSIONS must be a non-negative integer if set"
+                })?)
+            }
+        }
+    };
+
     Ok(Config {
         initialize,
         gpu_indexing,
+        openrouter_api_key,
+        openrouter_embedding_model,
+        openrouter_embedding_dimensions,
         opts,
         cert_path,
         config_dir,

@@ -1,8 +1,11 @@
 //! App state, which is accessible from handlers
+use std::sync::Arc;
+
 use crate::{
     commit_monitor::CommitMonitor,
     config::Config,
     errors::AtomicServerResult,
+    handlers::web_sockets::IndexStatusBroadcast,
     plugins,
     search::SearchState,
     y_sync_broadcaster::{self, YSyncBroadcaster},
@@ -32,6 +35,7 @@ pub struct AppState {
     pub y_sync_broadcaster: actix::Addr<YSyncBroadcaster>,
     pub search_state: SearchState,
     pub vector_search_state: crate::vector_search::VectorSearchState,
+    pub index_status_broadcast: Arc<IndexStatusBroadcast>,
 }
 
 impl AppState {
@@ -106,7 +110,19 @@ impl AppState {
         let search_state = SearchState::new(&config)
             .map_err(|e| format!("Failed to start search service: {}", e))?;
 
-        let vector_search_state = crate::vector_search::VectorSearchState::new(&config).await
+        let index_status_broadcast = Arc::new(IndexStatusBroadcast::new());
+        let index_notifier: Arc<dyn Fn(&str, bool) + Send + Sync> = {
+            let b = index_status_broadcast.clone();
+            Arc::new(move |drive: &str, indexing: bool| {
+                b.notify(drive, indexing);
+            })
+        };
+
+        let vector_search_state = crate::vector_search::VectorSearchState::new(
+            &config,
+            Some(index_notifier),
+        )
+        .await
             .map_err(|e| format!("Failed to start vector search service: {}", e))?;
 
         // Initialize commit monitor, which watches commits and sends these to the commit_monitor actor
@@ -159,6 +175,7 @@ impl AppState {
             y_sync_broadcaster,
             search_state,
             vector_search_state,
+            index_status_broadcast,
         })
     }
 

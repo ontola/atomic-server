@@ -7,7 +7,8 @@ This keeps track of the Agent and handles messages.
 For information about the protocol, see https://docs.atomicdata.dev/websockets.html
  */
 use actix::{
-    Actor, ActorContext, ActorFutureExt, Addr, AsyncContext, Handler, StreamHandler, WrapFuture,
+    Actor, ActorContext, ActorFutureExt, Addr, AsyncContext, Handler, Message, Running,
+    StreamHandler, WrapFuture,
 };
 use actix_web::{web, HttpRequest, HttpResponse};
 use actix_web_actors::ws::{self, WsResponseBuilder};
@@ -17,6 +18,7 @@ use atomic_lib::{
     errors::AtomicResult,
     Db, Storelike,
 };
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::{
@@ -26,6 +28,7 @@ use crate::{
     errors::AtomicServerResult,
     helpers::get_auth_headers,
     y_sync_broadcaster::YSyncBroadcaster,
+    vector_search::VectorSearchState,
 };
 
 /// Get an HTTP request, upgrade it to a Websocket connection
@@ -51,6 +54,8 @@ pub async fn web_socket_handler(
             for_agent,
             // We need to make sure this is easily clone-able
             appstate.store.clone(),
+            appstate.vector_search_state.clone(),
+            appstate.index_status_broadcast.clone(),
         ),
         &req,
         stream,
@@ -77,6 +82,61 @@ pub struct WebSocketConnection {
     /// If it's not specified, it's the Public Agent.
     agent: ForAgent,
     store: Db,
+    vector_search_state: VectorSearchState,
+    index_status_broadcast: Arc<IndexStatusBroadcast>,
+    index_status_subscribed: std::collections::HashSet<String>,
+}
+
+#[derive(Message)]
+#[rtype(result = "()")]
+pub struct IndexStatusPush {
+    pub drive: String,
+    pub indexing: bool,
+}
+
+/// Fan-out for `INDEX_STATUS` websocket messages (per subscribed drive).
+pub struct IndexStatusBroadcast {
+    inner: Arc<Mutex<std::collections::HashMap<String, Vec<Addr<WebSocketConnection>>>>>,
+}
+
+impl IndexStatusBroadcast {
+    pub fn new() -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(std::collections::HashMap::new())),
+        }
+    }
+
+    pub fn subscribe(&self, drive: String, addr: Addr<WebSocketConnection>) {
+        let mut g = self.inner.lock().expect("index status broadcast mutex");
+        g.entry(drive).or_default().push(addr);
+    }
+
+    pub fn unsubscribe_drive(&self, drive: &str, addr: &Addr<WebSocketConnection>) {
+        let mut g = self.inner.lock().expect("index status broadcast mutex");
+        if let Some(v) = g.get_mut(drive) {
+            v.retain(|a| a != addr);
+        }
+    }
+
+    pub fn unsubscribe_all_for_addr(&self, addr: &Addr<WebSocketConnection>) {
+        let mut g = self.inner.lock().expect("index status broadcast mutex");
+        for v in g.values_mut() {
+            v.retain(|a| a != addr);
+        }
+    }
+
+    pub fn notify(&self, drive: &str, indexing: bool) {
+        let addrs = {
+            let g = self.inner.lock().expect("index status broadcast mutex");
+            g.get(drive).cloned().unwrap_or_default()
+        };
+        for addr in addrs {
+            let _ = addr.do_send(IndexStatusPush {
+                drive: drive.to_string(),
+                indexing,
+            });
+        }
+    }
 }
 
 impl Actor for WebSocketConnection {
@@ -84,6 +144,12 @@ impl Actor for WebSocketConnection {
 
     fn started(&mut self, ctx: &mut Self::Context) {
         self.hb(ctx);
+    }
+
+    fn stopping(&mut self, ctx: &mut Self::Context) -> Running {
+        self.index_status_broadcast
+            .unsubscribe_all_for_addr(&ctx.address());
+        Running::Stop
     }
 }
 
@@ -193,6 +259,39 @@ fn handle_ws_message_sync(
     ctx: &mut ws::WebsocketContext<WebSocketConnection>,
     conn: &mut WebSocketConnection,
 ) -> AtomicResult<()> {
+    if let Some(json) = text.strip_prefix("SUBSCRIBE_INDEX_STATUS ") {
+        let v: serde_json::Value =
+            serde_json::from_str(json).map_err(|e| format!("Invalid SUBSCRIBE_INDEX_STATUS JSON: {}", e))?;
+        let drive = v
+            .get("drive")
+            .and_then(|d| d.as_str())
+            .ok_or("SUBSCRIBE_INDEX_STATUS needs a drive string")?;
+        let addr = ctx.address();
+        conn.index_status_broadcast
+            .subscribe(drive.to_string(), addr.clone());
+        conn.index_status_subscribed.insert(drive.to_string());
+        let indexing = conn.vector_search_state.is_drive_indexing(drive);
+        let payload = serde_json::json!({ "drive": drive, "indexing": indexing });
+        ctx.text(format!(
+            "INDEX_STATUS {}",
+            serde_json::to_string(&payload).map_err(|e| e.to_string())?
+        ));
+        return Ok(());
+    }
+
+    if let Some(json) = text.strip_prefix("UNSUBSCRIBE_INDEX_STATUS ") {
+        let v: serde_json::Value = serde_json::from_str(json)
+            .map_err(|e| format!("Invalid UNSUBSCRIBE_INDEX_STATUS JSON: {}", e))?;
+        let drive = v
+            .get("drive")
+            .and_then(|d| d.as_str())
+            .ok_or("UNSUBSCRIBE_INDEX_STATUS needs a drive string")?;
+        conn.index_status_broadcast
+            .unsubscribe_drive(drive, &ctx.address());
+        conn.index_status_subscribed.remove(drive);
+        return Ok(());
+    }
+
     match text.as_str() {
         s if s.starts_with("SUBSCRIBE ") => {
             let mut parts = s.split("SUBSCRIBE ");
@@ -282,6 +381,8 @@ impl WebSocketConnection {
         y_sync_broadcaster_addr: Addr<YSyncBroadcaster>,
         agent: ForAgent,
         store: Db,
+        vector_search_state: VectorSearchState,
+        index_status_broadcast: Arc<IndexStatusBroadcast>,
     ) -> Self {
         let size = std::mem::size_of::<Db>();
         if size > 10000 {
@@ -299,6 +400,9 @@ impl WebSocketConnection {
             y_sync_broadcaster_addr,
             agent,
             store,
+            vector_search_state,
+            index_status_broadcast,
+            index_status_subscribed: std::collections::HashSet::new(),
         }
     }
 
@@ -344,5 +448,19 @@ impl Handler<YSyncUpdate> for WebSocketConnection {
             "Y_SYNC_UPDATE {}",
             serde_json::to_string(&msg).unwrap()
         ));
+    }
+}
+
+impl Handler<IndexStatusPush> for WebSocketConnection {
+    type Result = ();
+
+    fn handle(&mut self, msg: IndexStatusPush, ctx: &mut ws::WebsocketContext<Self>) {
+        let payload = serde_json::json!({
+            "drive": msg.drive,
+            "indexing": msg.indexing,
+        });
+        if let Ok(s) = serde_json::to_string(&payload) {
+            ctx.text(format!("INDEX_STATUS {}", s));
+        }
     }
 }

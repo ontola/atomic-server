@@ -66,22 +66,11 @@ pub async fn vector_search_query(
 
     if let Some(q) = &params.q {
         timer.add("embed_query");
-        let embeddings = {
-            let mut model = appstate.vector_search_state.model.lock().await;
-
-            #[cfg(target_os = "macos")]
-            {
-                objc::rc::autoreleasepool(|| model.embed(vec![q], None))
-                    .map_err(|e| format!("Error embedding query: {}", e))?
-            }
-
-            #[cfg(not(target_os = "macos"))]
-            {
-                model
-                    .embed(vec![q], None)
-                    .map_err(|e| format!("Error embedding query: {}", e))?
-            }
-        };
+        let embeddings = appstate
+            .vector_search_state
+            .embed_chunks(&[q.clone()])
+            .await
+            .map_err(|e| format!("Error embedding query: {}", e))?;
 
         if let Some(query_embedding) = embeddings.into_iter().next() {
             timer.add("search_lancedb");
