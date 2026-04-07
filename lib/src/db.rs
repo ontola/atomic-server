@@ -4,22 +4,27 @@
 pub mod btreemap_store;
 mod encoding;
 pub mod kv_store;
+#[cfg(feature = "db-redb")]
+pub mod redb_store;
+#[cfg(feature = "db-sled")]
 mod migrations;
 pub mod plugin_meta;
 mod prop_val_sub_index;
 mod query_index;
 pub use query_index::drive_prefix_from_subject;
+#[cfg(feature = "db-sled")]
 pub mod sled_store;
 #[cfg(test)]
 pub mod test;
 pub mod trees;
+#[cfg(feature = "db-sled")]
 mod v1_types;
+#[cfg(feature = "db-sled")]
 mod v2_types;
 mod val_prop_sub_index;
 
 use std::{
     collections::{HashMap, HashSet},
-    fs,
     sync::{Arc, Mutex, RwLock},
     vec,
 };
@@ -52,7 +57,6 @@ use trees::{Method, Operation, Transaction, Tree};
 
 use self::{
     kv_store::KvStore,
-    migrations::migrate_maybe,
     prop_val_sub_index::{add_atom_to_prop_val_sub_index, find_in_prop_val_sub_index},
     query_index::{
         check_if_atom_matches_watched_query_filters, query_sorted_indexed, should_include_resource,
@@ -105,13 +109,15 @@ pub struct Db {
 impl Db {
     /// Creates a new store at the specified path, or opens the store if it already exists.
     /// Uses sled as the storage backend.
+    #[cfg(feature = "db-sled")]
     pub async fn init(path: &std::path::Path, base_domain: Option<String>) -> AtomicResult<Db> {
         tracing::info!("Opening database at {:?}", path);
 
         let sled_store = sled_store::SledStore::open(path)?;
 
         // Run migrations before wrapping in Arc (migrations need direct sled access)
-        migrate_maybe(&sled_store).map(|e| format!("Error during migration of database: {:?}", e))?;
+        migrations::migrate_maybe(&sled_store)
+            .map(|e| format!("Error during migration of database: {:?}", e))?;
 
         let store = Db {
             path: path.into(),
@@ -156,6 +162,32 @@ impl Db {
         Ok(store)
     }
 
+    /// Creates a Db backed by redb with an in-memory backend.
+    /// Useful for WASM targets where redb provides proper B-tree indexing.
+    /// Can be upgraded to OPFS persistence in the future.
+    #[cfg(feature = "db-redb")]
+    pub async fn init_redb(base_domain: Option<String>) -> AtomicResult<Db> {
+        let redb_store = redb_store::RedbStore::new_memory()?;
+
+        let store = Db {
+            path: std::path::PathBuf::new(),
+            kv: Arc::new(redb_store),
+            default_agent: Arc::new(Mutex::new(None)),
+            endpoints: vec![],
+            class_extenders: Arc::new(RwLock::new(vec![])),
+            dht: Arc::new(None),
+            on_commit: None,
+            base_domain,
+        };
+
+        store.add_class_extender(crate::collections::get_collection_class_extender())?;
+
+        crate::populate::bootstrap(&store)
+            .await
+            .map_err(|e| format!("Failed to populate base models. {}", e))?;
+        Ok(store)
+    }
+
     /// Creates a clone of the store with a different base_domain.
     /// This is useful for multi-tenant applications.
     /// Cloning is very cheap, as it only clones Arc pointers.
@@ -167,6 +199,7 @@ impl Db {
 
     /// Create a temporary Db in `.temp/db/{id}`. Useful for testing.
     /// Populates the database, creates a default agent, and sets the server_url to "http://localhost/".
+    #[cfg(feature = "db-sled")]
     pub async fn init_temp(id: &str) -> AtomicResult<Db> {
         let tmp_dir_path = format!(".temp/db/{}", id);
         let _try_remove_existing = std::fs::remove_dir_all(&tmp_dir_path);
@@ -598,11 +631,11 @@ impl Db {
 
     /// Removes the DB and all content from disk.
     /// WARNING: This is irreversible.
+    #[cfg(feature = "db-sled")]
     pub fn clear_all_danger(self) -> AtomicResult<()> {
-        // self.clear_index()?;
         let path = self.path.clone();
         drop(self);
-        fs::remove_dir_all(path)?;
+        std::fs::remove_dir_all(path)?;
         Ok(())
     }
 

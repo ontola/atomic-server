@@ -23,6 +23,12 @@ import { WSClient } from './websockets.js';
 import { endpoints } from './urls.js';
 import { initOntologies } from './ontologies/index.js';
 import { decodeB64, encodeB64 } from './base64.js';
+import type {
+  ClientDbWorker,
+  ClientDbQueryOpts,
+  ClientDbQueryResult,
+} from './client-db.js';
+import { LocalSearch } from './local-search.js';
 
 /** Function called when a resource is updated or removed */
 type ResourceCallback<C extends OptionalClass = UnknownClass> = (
@@ -154,6 +160,11 @@ export class Store {
   /** Mapped from origin to websocket */
   private webSockets: Map<string, WSClient>;
 
+  /** Optional WASM-backed client-side database running in a Web Worker. */
+  private clientDb?: ClientDbWorker;
+  /** Client-side full-text search index (MiniSearch). */
+  private localSearch = new LocalSearch();
+
   private eventManager = new EventManager<StoreEvents, StoreEventHandlers>();
 
   private client: Client;
@@ -193,6 +204,38 @@ export class Store {
   public injectFetch(fetchOverride: Fetch) {
     this.injectedFetch = fetchOverride;
     this.client.setFetch(fetchOverride);
+  }
+
+  /**
+   * Set a ClientDbWorker for local indexed queries and resource caching.
+   * The worker runs the WASM ClientDb in a background thread.
+   * Call this after constructing the Store — the worker initializes lazily.
+   */
+  public setClientDb(clientDb: ClientDbWorker): void {
+    this.clientDb = clientDb;
+  }
+
+  /** Returns the ClientDbWorker if one has been set and is ready. */
+  public getClientDb(): ClientDbWorker | undefined {
+    return this.clientDb?.isReady ? this.clientDb : undefined;
+  }
+
+  /**
+   * Query the local WASM database. Returns null if no ClientDb is available.
+   * This runs in a Web Worker and does not block the main thread.
+   */
+  public async queryLocalDb(
+    opts: ClientDbQueryOpts,
+  ): Promise<ClientDbQueryResult | null> {
+    if (!this.clientDb?.isReady) return null;
+
+    try {
+      return await this.clientDb.query(opts);
+    } catch (e) {
+      console.warn('[ClientDb] query failed:', e);
+
+      return null;
+    }
   }
 
   /**
@@ -318,6 +361,32 @@ export class Store {
       this.resources.set(subject, resource.__internalObject);
       this.notify(resource.__internalObject);
     }
+
+    // Update local full-text search index.
+    if (!resource.loading && !resource.new) {
+      this.localSearch.addResource(resource);
+    }
+
+    // Forward to WASM DB in the background (non-blocking).
+    // Don't forward loading/new/incomplete resources.
+    if (
+      this.clientDb?.isReady &&
+      !resource.loading &&
+      !resource.new &&
+      !resource.get(core.properties.incomplete)
+    ) {
+      try {
+        const jsonAd = resourceToJsonAd(resource);
+
+        if (jsonAd) {
+          this.clientDb.putResource(jsonAd).catch(() => {
+            // Silently ignore — the in-memory store is the source of truth
+          });
+        }
+      } catch {
+        // Serialization errors are not critical
+      }
+    }
   }
 
   /**
@@ -396,6 +465,17 @@ export class Store {
   }
 
   public async search(query: string, opts: SearchOpts = {}): Promise<string[]> {
+    // Try local search first if the index has content and no filters are set.
+    // Filters (property-value constraints) require server-side Tantivy for now.
+    if (this.localSearch.size > 0 && !opts.filters && !opts.parents) {
+      const local = this.localSearch.search(query, opts.limit ?? 30);
+
+      if (local.subjects.length > 0) {
+        return local.subjects;
+      }
+    }
+
+    // Fall back to server search (Tantivy)
     const searchSubject = buildSearchSubject(this.serverUrl, query, opts);
     const searchResource = await this.fetchResourceFromServer(searchSubject, {
       noWebSocket: true,
@@ -453,6 +533,47 @@ export class Store {
   /** Creates a random HTTP subject, optionally nested under a parent URL. */
   public createSubject(parent?: string): string {
     return this.createHTTPSubject(parent ?? this.serverUrl);
+  }
+
+  /**
+   * Try the local WASM DB first, then fall back to server.
+   * If the WASM DB has the resource, it's used immediately (and a background
+   * server fetch can refresh it later). This keeps the UI fast while the
+   * network catches up.
+   */
+  private async fetchResourceWithLocalFallback(
+    subject: string,
+    opts: FetchOpts = {},
+  ): Promise<void> {
+    if (this.clientDb?.isReady) {
+      try {
+        const jsonAd = await this.clientDb.getResource(subject);
+
+        if (jsonAd) {
+          const parsed = JSON.parse(jsonAd);
+          const resource = new Resource(subject);
+
+          for (const [key, value] of Object.entries(parsed)) {
+            if (key === '@id') continue;
+            resource.setUnsafe(key, value as JSONValue);
+          }
+
+          resource.loading = false;
+          this.addResources(resource, { alias: subject });
+
+          // Still fetch from server in the background to get the latest version
+          this.fetchResourceFromServer(subject, opts).catch(() => {
+            // If server fetch fails, we already have the local version
+          });
+
+          return;
+        }
+      } catch {
+        // Fall through to server fetch
+      }
+    }
+
+    this.fetchResourceFromServer(subject, opts);
   }
 
   /**
@@ -656,7 +777,7 @@ export class Store {
       this.addResources(resource, { alias: normalized });
 
       if (!opts.newResource && !isTemporarySubject) {
-        this.fetchResourceFromServer(normalized, opts);
+        this.fetchResourceWithLocalFallback(normalized, opts);
       }
 
       return resource;
@@ -887,6 +1008,7 @@ export class Store {
 
     if (resource) {
       this.resources.delete(resolved);
+      this.localSearch.removeResource(resolved);
 
       if (shouldNotify) {
         this.eventManager.emit(StoreEvents.ResourceRemoved, subjectRaw);
@@ -1512,4 +1634,19 @@ export interface FetchOpts {
    * local resource.
    */
   newResource?: boolean;
+}
+
+/** Convert a Resource to a JSON-AD string for storage in the WASM DB. */
+function resourceToJsonAd(resource: Resource): string | null {
+  const propvals = resource.getPropVals();
+
+  if (propvals.size === 0) return null;
+
+  const obj: Record<string, unknown> = { '@id': resource.subject };
+
+  for (const [key, value] of propvals) {
+    obj[key] = value;
+  }
+
+  return JSON.stringify(obj);
 }

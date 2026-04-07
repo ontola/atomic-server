@@ -189,10 +189,24 @@ pub async fn serve(config: crate::config::Config) -> AtomicServerResult<()> {
     } else {
         config.opts.port
     };
-    let message = format!(
-        "{}\n\nVisit {}://{}:{}\n\n",
+    let mut message = format!(
+        "{}\n\nVisit {}://{}:{}\n",
         BANNER, protocol, config.opts.domain, port
     );
+
+    if config.opts.ip.is_unspecified() {
+        message.push_str("\nAlso available on your local network at:\n");
+        if let Ok(network_interfaces) = local_ip_address::list_afinet_netifas() {
+            for (name, ip) in network_interfaces.iter() {
+                if ip.is_ipv4() && !ip.is_loopback() {
+                    message.push_str(&format!("- {}://{}:{} ({})\n", protocol, ip, port, name));
+                }
+            }
+        }
+        message.push_str("\n");
+    } else {
+        message.push_str("\n");
+    }
 
     if config.opts.https {
         if cfg!(feature = "https") {

@@ -299,6 +299,27 @@ fn handle_ws_message_sync(
                 });
             Ok(())
         }
+        s if s.starts_with("SYNC_DRIVE ") => {
+            let json = &s[11..];
+            let request: SyncDriveRequest =
+                serde_json::from_str(json)
+                    .map_err(|e| format!("Invalid SYNC_DRIVE JSON: {e}"))?;
+            let store = conn.store.clone();
+            let agent = conn.agent.clone();
+            let origin = conn.origin.clone();
+            ctx.spawn(
+                async move {
+                    handle_sync_drive(request, store, agent, origin).await
+                }
+                .into_actor(conn)
+                .map(|messages, _actor, ctx| {
+                    for msg in messages {
+                        ctx.text(msg);
+                    }
+                }),
+            );
+            Ok(())
+        }
         other => {
             tracing::warn!("Unknown websocket message: {}", other);
             Err(format!("Unknown message: {}", other).into())
@@ -418,4 +439,121 @@ impl Handler<crate::actor_messages::QueryUpdate> for WebSocketConnection {
             serde_json::to_string(&msg).unwrap()
         ));
     }
+}
+
+// === Drive Sync ===
+
+#[derive(serde::Deserialize)]
+struct SyncDriveRequest {
+    /// The drive subject to sync (e.g. "did:ad:xyz" or "https://server/drive/abc")
+    drive: String,
+    /// Optional timestamp (unix millis). If provided, only resources modified after this time are sent.
+    since: Option<i64>,
+}
+
+#[derive(serde::Serialize)]
+struct SyncDoneMessage {
+    drive: String,
+    /// Current server timestamp (unix millis). Client should store this for future SYNC_DRIVE with `since`.
+    timestamp: i64,
+    /// Number of resources sent in this sync batch.
+    count: usize,
+}
+
+/// Handles a SYNC_DRIVE request by collecting all resources in the drive
+/// and returning them as a list of text messages to send over the WS connection.
+async fn handle_sync_drive(
+    request: SyncDriveRequest,
+    store: Db,
+    agent: ForAgent,
+    origin: String,
+) -> Vec<String> {
+    let mut messages = Vec::new();
+    let now = atomic_lib::utils::now();
+    let drive_subject = atomic_lib::Subject::from_raw(
+        &request.drive,
+        store.get_base_domain().as_deref(),
+    );
+
+    // Query for all resources that have this drive as parent (recursively).
+    // We use the PropValSub index: find all resources where parent = drive_subject.
+    // Then for each, also find their children, etc.
+    // For simplicity and performance, we iterate ALL resources and filter by drive prefix.
+    let mut count = 0;
+
+    for resource in store.all_resources(false) {
+        let subject = resource.get_subject();
+
+        // Check if this resource belongs to the requested drive.
+        // For URL-based subjects, check prefix match.
+        // For DID subjects, check parent hierarchy (expensive, so we check the drive mapping).
+        let belongs_to_drive = if subject.is_did() {
+            // DID resources: check if parent chain leads to the drive
+            resource
+                .get(atomic_lib::urls::PARENT)
+                .ok()
+                .map(|v| v.to_string() == drive_subject.as_str().to_string())
+                .unwrap_or(false)
+        } else {
+            // URL resources: prefix match
+            subject.as_str().starts_with(drive_subject.as_str())
+        };
+
+        if !belongs_to_drive {
+            continue;
+        }
+
+        // If `since` is specified, only send resources modified after that timestamp
+        if let Some(since) = request.since {
+            if let Ok(last_commit_val) = resource.get(atomic_lib::urls::LAST_COMMIT) {
+                let commit_subject = last_commit_val.to_string();
+                if let Ok(commit_resource) = store
+                    .get_resource(&commit_subject.into())
+                    .await
+                {
+                    if let Ok(created_at) = commit_resource.get(atomic_lib::urls::CREATED_AT) {
+                        if let Ok(ts) = created_at.to_int() {
+                            if ts <= since {
+                                continue;
+                            }
+                        }
+                    }
+                }
+            } else {
+                // No lastCommit — this resource hasn't been modified, skip if doing delta sync
+                continue;
+            }
+        }
+
+        // Check read permission
+        if atomic_lib::hierarchy::check_read(&store, &resource, &agent)
+            .await
+            .is_err()
+        {
+            continue;
+        }
+
+        match resource.to_json_ad(Some(&origin)) {
+            Ok(json_ad) => {
+                messages.push(format!("RESOURCE {json_ad}"));
+                count += 1;
+            }
+            Err(e) => {
+                tracing::warn!("Failed to serialize resource {} during sync: {}", subject, e);
+            }
+        }
+    }
+
+    let done = SyncDoneMessage {
+        drive: request.drive,
+        timestamp: now,
+        count,
+    };
+    messages.push(format!(
+        "SYNC_DONE {}",
+        serde_json::to_string(&done).unwrap()
+    ));
+
+    tracing::info!("SYNC_DRIVE completed: sent {} resources", count);
+    messages
 }

@@ -3,11 +3,21 @@ use crate::{Resource, Storelike, Value, urls, Subject, Db};
 #[cfg(not(feature = "db"))]
 use crate::{Resource, Storelike, Value, urls, Subject};
 
-/// Creates a populated Store with an agent (testman) and one test resource (_:test)
-#[cfg(feature = "db")]
+/// Creates a populated Store with an agent, backed by sled on disk.
+#[cfg(feature = "db-sled")]
 pub async fn init_store() -> Db {
     let id = format!("init_store_{}", crate::utils::random_string(10));
     let store = Db::init_temp(&id).await.unwrap();
+    store.populate().await.unwrap();
+    let agent = store.create_agent(None).await.unwrap();
+    store.set_default_agent(agent);
+    store
+}
+
+/// Creates a populated Store with an agent, backed by in-memory BTreeMap.
+#[cfg(all(feature = "db", not(feature = "db-sled")))]
+pub async fn init_store() -> Db {
+    let store = Db::init_memory(Some("https://localhost".into())).await.unwrap();
     store.populate().await.unwrap();
     let agent = store.create_agent(None).await.unwrap();
     store.set_default_agent(agent);
@@ -40,7 +50,7 @@ pub async fn create_test_drive(store: &impl Storelike) -> crate::errors::AtomicR
 }
 
 /// Sets up a full environment for testing, including a drive and collections.
-#[cfg(feature = "db")]
+#[cfg(feature = "db-sled")]
 pub async fn setup_test_env(store: &Db) -> crate::errors::AtomicResult<()> {
     store.populate().await?;
     let drive_did = create_test_drive(store).await?;

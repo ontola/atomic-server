@@ -253,7 +253,7 @@ impl From<Infallible> for AtomicError {
     }
 }
 
-#[cfg(feature = "db")]
+#[cfg(feature = "db-sled")]
 impl From<sled::Error> for AtomicError {
     fn from(error: sled::Error) -> Self {
         AtomicError {

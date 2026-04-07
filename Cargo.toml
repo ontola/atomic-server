@@ -4,6 +4,7 @@ members = [
   "server",
   "cli",
   "lib",
+  "wasm",
   "plugin-examples/random-folder-extender",
   "plugin-examples/test-plugin",
   "atomic-plugin",

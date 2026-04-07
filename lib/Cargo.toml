@@ -25,6 +25,7 @@ serde = { version = "1", features = ["derive"] }
 serde_jcs = "0.1.0"
 serde_json = "1"
 sled = { version = "0.34", optional = true, features = ["no_logs"] }
+redb = { version = "4.0", optional = true }
 toml = { version = "0.8", optional = true }
 tracing = "0.1"
 reqwest = { version = "0.13.1", default-features = false, features = ["rustls", "json"] }
@@ -43,6 +44,10 @@ async-trait = "0.1.89"
 futures = "0.3.31"
 tokio-tungstenite = { version = "0.26", features = ["native-tls"], optional = true }
 
+# For WASM: enable JS-backed randomness via feature unification
+getrandom = { version = "0.2", optional = true }
+getrandom03 = { package = "getrandom", version = "0.3", optional = true }
+
 [dev-dependencies]
 criterion = { version = "0.5", features = ["async_tokio"] }
 iai = "0.1"
@@ -55,8 +60,17 @@ version = "0.31"
 
 [features]
 config = ["directories", "toml"]
-db = ["sled", "rmp-serde", "bincode1"]
+## Core Db with encoding support (BTreeMapStore included).
+## Does NOT pull in sled — works in WASM.
+db = ["rmp-serde"]
+## Db with redb backend (works in WASM with InMemoryBackend, future OPFS).
+db-redb = ["db", "redb"]
+## Full Db with sled backend and migrations. Implies `db`.
+## Does NOT work in WASM.
+db-sled = ["db", "sled", "bincode1"]
 dht = ["mainline", "sha1"]
 ws = ["tokio-tungstenite"]
 rdf = ["rio_api", "rio_turtle"]
 telemetry = ["opentelemetry"]
+## Enable JS-backed randomness for WASM targets.
+wasm = ["getrandom/js", "getrandom03/wasm_js", "getrandom", "getrandom03"]

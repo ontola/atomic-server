@@ -349,6 +349,22 @@ export class WSClient {
         if (drive) {
           const query = JSON.stringify({ drive });
           this.ws.send('SUBSCRIBE_QUERY ' + query);
+
+          // If a ClientDb is available, request a drive sync.
+          // Use the stored sync timestamp if available for delta sync.
+          const clientDb = this.store.getClientDb();
+
+          if (clientDb) {
+            const syncKey = `sync_timestamp_${drive}`;
+            const since =
+              typeof localStorage !== 'undefined'
+                ? localStorage.getItem(syncKey)
+                : null;
+            const syncRequest = since
+              ? JSON.stringify({ drive, since: Number(since) })
+              : JSON.stringify({ drive });
+            this.ws.send('SYNC_DRIVE ' + syncRequest);
+          }
         }
       })
       .catch(e => {
@@ -360,6 +376,15 @@ export class WSClient {
     if (ev.data.startsWith('COMMIT ')) {
       const commit = ev.data.slice(7);
       parseAndApplyCommit(commit, this.store);
+
+      // Forward to WASM DB for efficient incremental index update (Loro diff path)
+      const clientDb = this.store.getClientDb();
+
+      if (clientDb) {
+        clientDb.applyCommit(commit).catch(() => {
+          // Non-critical — in-memory store is the source of truth
+        });
+      }
     } else if (ev.data.startsWith('ERROR ')) {
       this.store.notifyError(ev.data.slice(6));
     } else if (ev.data.startsWith('RESOURCE ')) {
@@ -389,6 +414,25 @@ export class WSClient {
         }
       } catch (e) {
         console.warn('Invalid QUERY_UPDATE:', e);
+      }
+    } else if (ev.data.startsWith('SYNC_DONE ')) {
+      const json = ev.data.slice(10);
+
+      try {
+        const done = JSON.parse(json);
+
+        if (done.drive && done.timestamp && typeof localStorage !== 'undefined') {
+          localStorage.setItem(
+            `sync_timestamp_${done.drive}`,
+            String(done.timestamp),
+          );
+        }
+
+        console.info(
+          `[Sync] Drive sync complete: ${done.count} resources for ${done.drive}`,
+        );
+      } catch (e) {
+        console.warn('Invalid SYNC_DONE:', e);
       }
     } else if (ev.data.startsWith('AUTHENTICATED')) {
       // Do nothing, handled by the authenticate() method
