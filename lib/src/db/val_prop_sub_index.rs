@@ -50,10 +50,15 @@ pub fn find_in_val_prop_sub_index(store: &Db, val: &Value, prop: Option<&str>) -
         prefix.extend(prop.as_bytes());
         prefix.extend([SEPARATION_BIT]);
     }
-    Box::new(store.reference_index.scan_prefix(prefix).map(|kv| {
-        let (key, _value) = kv?;
-        key_to_index_atom(&key)
-    }))
+    Box::new(
+        store
+            .kv
+            .scan_prefix(Tree::ValPropSub, &prefix)
+            .map(|kv| {
+                let (key, _value) = kv?;
+                key_to_index_atom(&key)
+            }),
+    )
 }
 
 /// Parses a Value index key string, converts it into an atom.

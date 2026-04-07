@@ -812,8 +812,15 @@ impl CommitBuilder {
             self.previous_commit = Some(last.to_string());
         }
 
+        // Pass the resource's existing Loro snapshot so sign_at can build
+        // incremental updates on top of it instead of creating a detached doc.
+        let existing_snapshot = match resource.get(urls::LORO_UPDATE) {
+            Ok(Value::LoroDoc(snapshot)) => Some(snapshot.clone()),
+            _ => None,
+        };
+
         let now = crate::utils::now();
-        sign_at(self, agent, now, store).await
+        sign_at(self, agent, now, store, existing_snapshot.as_deref()).await
     }
 
     /// Set a property value. On sign, this gets converted to a Loro update.
@@ -854,25 +861,38 @@ impl CommitBuilder {
 }
 
 /// Signs a CommitBuilder at a specific unix timestamp.
-#[tracing::instrument(skip(store))]
+/// `existing_loro_snapshot` is the resource's current Loro state, if any.
+/// When provided, the set/remove operations are applied on top of it and
+/// an incremental update is exported. Without it, a full snapshot is created
+/// (appropriate for genesis commits or when no prior state exists).
+#[tracing::instrument(skip(store, existing_loro_snapshot))]
 async fn sign_at(
     commitbuilder: CommitBuilder,
     agent: &crate::agents::Agent,
     sign_date: i64,
     store: &impl Storelike,
+    existing_loro_snapshot: Option<&[u8]>,
 ) -> AtomicResult<Commit> {
     // If no Loro update was provided (i.e. server-side commit), convert
     // the accumulated set/remove operations into a Loro update.
     let loro_update = if let Some(update) = commitbuilder.loro_update {
         Some(update)
     } else if !commitbuilder.set.is_empty() || !commitbuilder.remove.is_empty() {
-        let doc = crate::loro::AtomicLoroDoc::new();
+        // Build on top of existing state if available, so the Loro CRDT
+        // correctly tracks causality and the update merges deterministically.
+        let doc = if let Some(snapshot) = existing_loro_snapshot {
+            crate::loro::AtomicLoroDoc::from_snapshot(snapshot)?
+        } else {
+            crate::loro::AtomicLoroDoc::new()
+        };
         for (prop, val) in &commitbuilder.set {
             doc.set_property(prop, val)?;
         }
         for prop in &commitbuilder.remove {
             doc.remove_property(prop)?;
         }
+        // Always export a full snapshot — the receiver's apply_changes will
+        // import it into its own doc and compute the diff.
         Some(doc.export_snapshot())
     } else {
         None
@@ -1045,7 +1065,7 @@ mod test {
         let property2 = crate::urls::SHORTNAME;
         let value2 = Value::new("someval", &DataType::String).unwrap();
         commitbuilder.set(property2.into(), value2);
-        let commit = sign_at(commitbuilder, &agent, 0, &store).await.unwrap();
+        let commit = sign_at(commitbuilder, &agent, 0, &store, None).await.unwrap();
         let serialized = commit
             .serialize_deterministically_json_ad(&store)
             .await

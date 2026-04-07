@@ -43,7 +43,9 @@ impl QueryFilter {
 
         let query_filter_bin = self.encode()?;
 
-        store.watched_queries.insert(query_filter_bin, b"")?;
+        store
+            .kv
+            .insert(Tree::WatchedQueries, &query_filter_bin, b"")?;
         Ok(())
     }
 
@@ -52,8 +54,8 @@ impl QueryFilter {
         let query_filter_bin = self.encode().expect("Failed to encode QueryFilter");
 
         store
-            .watched_queries
-            .contains_key(&query_filter_bin)
+            .kv
+            .contains_key(Tree::WatchedQueries, &query_filter_bin)
             .unwrap_or(false)
     }
 }
@@ -105,13 +107,9 @@ pub async fn query_sorted_indexed(
     let start_key = create_query_index_key(q_filter, Some(&start.to_sortable_string()), None)?;
     let end_key = create_query_index_key(q_filter, Some(&end.to_sortable_string()), None)?;
 
-    let iter: Box<
-        dyn Iterator<Item = std::result::Result<(sled::IVec, sled::IVec), sled::Error>> + Send,
-    > = if q.sort_desc {
-        Box::new(store.query_index.range(start_key..end_key).rev())
-    } else {
-        Box::new(store.query_index.range(start_key..end_key))
-    };
+    let iter = store
+        .kv
+        .range(Tree::QueryMembers, start_key, end_key, q.sort_desc);
 
     let mut subjects: Vec<Subject> = vec![];
     let mut resources: Vec<Resource> = vec![];
@@ -127,7 +125,7 @@ pub async fn query_sorted_indexed(
         // The users minimum starting distance (offset) has been reached
         let in_selection = subjects.len() < limit && i >= q.offset;
         if in_selection {
-            let (k, _v) = kv.map_err(|_e| "Unable to parse query_cached")?;
+            let (k, _v) = kv?;
             let (_q_filter, _val, subject_str) = parse_collection_members_key(&k)?;
 
             let subject = Subject::from_raw(subject_str, base_domain.as_deref());
@@ -281,7 +279,7 @@ pub fn check_if_atom_matches_watched_query_filters(
     resource: &Resource,
     transaction: &mut Transaction,
 ) -> AtomicResult<()> {
-    for query in store.watched_queries.iter() {
+    for query in store.kv.iter_tree(Tree::WatchedQueries) {
         // The keys store all the data
         if let Ok((k, _v)) = query {
             let q_filter: QueryFilter = QueryFilter::from_bytes(&k)?;
