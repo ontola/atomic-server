@@ -21,11 +21,24 @@ pub struct ClientDb {
 
 #[wasm_bindgen]
 impl ClientDb {
-    /// Create a new in-memory ClientDb.
+    /// Create a new ClientDb with OPFS persistence.
+    /// Data survives page reloads. Falls back to in-memory if OPFS is unavailable.
     /// `base_url` is the server URL, e.g. "https://myserver.com".
     #[wasm_bindgen(constructor)]
     pub async fn new(base_url: Option<String>) -> Result<ClientDb, JsError> {
-        let db = Db::init_redb(base_url).await.map_err(to_js_err)?;
+        // Try OPFS first (persistent), fall back to in-memory
+        let db = match Db::init_redb_opfs(base_url.clone(), "atomic_data.redb").await {
+            Ok(db) => {
+                web_sys::console::log_1(&"[ClientDb] Using OPFS persistent storage".into());
+                db
+            }
+            Err(e) => {
+                web_sys::console::warn_1(
+                    &format!("[ClientDb] OPFS unavailable ({e}), using in-memory").into(),
+                );
+                Db::init_redb(base_url).await.map_err(to_js_err)?
+            }
+        };
         Ok(ClientDb { db })
     }
 
@@ -145,6 +158,59 @@ impl ClientDb {
     /// (classes, properties, datatypes).
     pub async fn populate(&self) -> Result<(), JsError> {
         self.db.populate().await.map_err(to_js_err)
+    }
+
+    /// Export all resources as a JSON array of JSON-AD objects.
+    /// Used to snapshot the DB to IndexedDB for persistence across page reloads.
+    #[wasm_bindgen(js_name = "exportAllResources")]
+    pub fn export_all_resources(&self) -> Result<String, JsError> {
+        let mut resources = Vec::new();
+
+        for resource in self.db.all_resources(true) {
+            if let Ok(json_ad) = resource.to_json_ad(None) {
+                resources.push(json_ad);
+            }
+        }
+
+        Ok(format!("[{}]", resources.join(",")))
+    }
+
+    /// Import resources from a JSON array of JSON-AD objects.
+    /// Used to restore a snapshot from IndexedDB on init.
+    /// Skips indexing during import and builds the index once at the end.
+    #[wasm_bindgen(js_name = "importAllResources")]
+    pub async fn import_all_resources(&self, json_array: &str) -> Result<u32, JsError> {
+        let items: Vec<serde_json::Value> =
+            serde_json::from_str(json_array).map_err(to_js_err)?;
+
+        let mut count: u32 = 0;
+
+        for item in &items {
+            let json_str = item.to_string();
+
+            if let Ok(resource) = atomic_lib::parse::parse_json_ad_resource(
+                &json_str,
+                &self.db,
+                &ParseOpts::default(),
+            )
+            .await
+            {
+                // Store without indexing — we build the index once at the end
+                if self
+                    .db
+                    .add_resource_opts(&resource, false, false, true)
+                    .await
+                    .is_ok()
+                {
+                    count += 1;
+                }
+            }
+        }
+
+        // Build the full index once
+        self.db.build_index(true).map_err(to_js_err)?;
+
+        Ok(count)
     }
 }
 

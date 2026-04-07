@@ -98,8 +98,8 @@ export default defineConfig({
       workbox: {
         // See https://github.com/atomicdata-dev/atomic-data-browser/issues/294
         globIgnores: ['**/index.html'],
-        // Increased for loro-crdt WASM binary
-        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+        // Increased for WASM binaries (loro-crdt + atomic-wasm)
+        maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,

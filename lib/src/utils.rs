@@ -50,11 +50,18 @@ pub fn check_valid_json(json: &str) -> AtomicResult<()> {
 }
 
 /// Returns the current timestamp in milliseconds since UNIX epoch
+#[cfg(not(target_arch = "wasm32"))]
 pub fn now() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .expect("You're a time traveler")
         .as_millis() as i64
+}
+
+/// Returns the current timestamp in milliseconds since UNIX epoch (WASM version)
+#[cfg(target_arch = "wasm32")]
+pub fn now() -> i64 {
+    js_sys::Date::now() as i64
 }
 
 /// Generates a relatively short random string of n length

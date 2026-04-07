@@ -175,6 +175,48 @@ export class Collection {
   }
 
   private async fetchPage(page: number): Promise<void> {
+    // Try the local WASM DB first for instant results
+    if (await this.fetchPageFromLocalDb(page)) {
+      // Background refresh from server to pick up any new data
+      this.fetchPageFromServer(page).catch(() => {
+        // Server might be unreachable — local data is still valid
+      });
+
+      return;
+    }
+
+    await this.fetchPageFromServer(page);
+  }
+
+  /** Try to resolve a page from the local WASM DB. Returns true if successful. */
+  private async fetchPageFromLocalDb(page: number): Promise<boolean> {
+    const result = await this.store.queryLocalDb({
+      property: this.params.property,
+      value: this.params.value,
+      sortBy: this.params.sort_by,
+      sortDesc: this.params.sort_desc,
+      limit: parseInt(this.params.page_size, 10),
+      offset: page * parseInt(this.params.page_size, 10),
+    });
+
+    if (!result || result.count === 0) {
+      return false;
+    }
+
+    // Build a synthetic collection resource from the query result
+    const resource = new Resource<Collections.Collection>(
+      this.buildSubject(page),
+    );
+    resource.setUnsafe(collections.properties.members, result.subjects);
+    resource.setUnsafe(collections.properties.totalMembers, result.count);
+
+    this.pages.set(page, resource);
+    this._totalMembers = result.count;
+
+    return true;
+  }
+
+  private async fetchPageFromServer(page: number): Promise<void> {
     const subject = this.buildSubject(page);
     const resource =
       await this.store.fetchResourceFromServer<Collections.Collection>(subject);

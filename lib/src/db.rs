@@ -6,6 +6,8 @@ mod encoding;
 pub mod kv_store;
 #[cfg(feature = "db-redb")]
 pub mod redb_store;
+#[cfg(all(feature = "db-redb", target_arch = "wasm32"))]
+pub mod opfs_backend;
 #[cfg(feature = "db-sled")]
 mod migrations;
 pub mod plugin_meta;
@@ -168,6 +170,34 @@ impl Db {
     #[cfg(feature = "db-redb")]
     pub async fn init_redb(base_domain: Option<String>) -> AtomicResult<Db> {
         let redb_store = redb_store::RedbStore::new_memory()?;
+
+        let store = Db {
+            path: std::path::PathBuf::new(),
+            kv: Arc::new(redb_store),
+            default_agent: Arc::new(Mutex::new(None)),
+            endpoints: vec![],
+            class_extenders: Arc::new(RwLock::new(vec![])),
+            dht: Arc::new(None),
+            on_commit: None,
+            base_domain,
+        };
+
+        store.add_class_extender(crate::collections::get_collection_class_extender())?;
+
+        crate::populate::bootstrap(&store)
+            .await
+            .map_err(|e| format!("Failed to populate base models. {}", e))?;
+        Ok(store)
+    }
+
+    /// Creates a Db backed by redb with OPFS persistent storage.
+    /// Only available in WASM Workers. Data survives page reloads.
+    #[cfg(all(feature = "db-redb", target_arch = "wasm32"))]
+    pub async fn init_redb_opfs(
+        base_domain: Option<String>,
+        filename: &str,
+    ) -> AtomicResult<Db> {
+        let redb_store = redb_store::RedbStore::new_opfs(filename).await?;
 
         let store = Db {
             path: std::path::PathBuf::new(),
