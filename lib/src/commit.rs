@@ -1178,6 +1178,68 @@ mod test {
             "created resource subject should be a did:ad: DID, got: {}",
             new_subject
         );
+
+        // Verify the resource is actually retrievable from the store
+        let stored = store.get_resource(&new_subject.as_str().into()).await
+            .expect("DID resource should be retrievable after genesis commit");
+        assert_eq!(
+            stored.get(crate::urls::DESCRIPTION).unwrap().to_string(),
+            "hello",
+            "Stored resource should have the description from the commit"
+        );
+    }
+
+    /// Loro-only genesis commit (empty set map, only loroUpdate) — mimics browser behavior.
+    /// The resource should be stored and retrievable with materialized properties.
+    #[tokio::test]
+    async fn did_loro_only_genesis_commit_stores_resource() {
+        let (store, agent) = store_with_known_agent().await;
+
+        // Build a Loro doc with properties (mimics browser-side Loro)
+        let loro_doc = crate::loro::AtomicLoroDoc::new();
+        loro_doc.set_property(crate::urls::NAME, &Value::String("My Table".into())).unwrap();
+        loro_doc.set_property(crate::urls::DESCRIPTION, &Value::String("A test table".into())).unwrap();
+        loro_doc.set_property(crate::urls::PUBLIC_KEY, &Value::String(agent.public_key.clone())).unwrap();
+
+        // Export as update from empty (this is what the browser sends)
+        let empty_version = crate::loro::AtomicLoroDoc::new();
+        let snapshot = loro_doc.export_snapshot();
+
+        // Create a CommitBuilder with ONLY loroUpdate (no set map)
+        let mut builder = CommitBuilder::new("placeholder".into());
+        builder.set_loro_update(snapshot);
+
+        let commit = Commit::create_did(builder, &agent, &store).await.unwrap();
+        let did_subject = commit.subject.clone();
+
+        assert!(commit.loro_update.is_some(), "commit should have loroUpdate");
+
+        let opts = CommitOpts {
+            validate_signature: true,
+            validate_timestamp: false,
+            validate_previous_commit: false,
+            validate_rights: false,
+            update_index: true,
+            ..CommitOpts::no_validations_no_index()
+        };
+
+        let result = store.apply_commit(commit, &opts).await.unwrap();
+        assert!(result.resource_new.is_some(), "should have resource_new");
+
+        // THE KEY TEST: verify the resource is retrievable from the store
+        let stored = store.get_resource(&did_subject.as_str().into()).await
+            .expect("Loro-only DID resource should be retrievable after commit");
+
+        assert_eq!(
+            stored.get(crate::urls::NAME).unwrap().to_string(),
+            "My Table",
+            "Name should be materialized from Loro"
+        );
+        assert_eq!(
+            stored.get(crate::urls::DESCRIPTION).unwrap().to_string(),
+            "A test table",
+            "Description should be materialized from Loro"
+        );
     }
 
     /// A follow-up commit to a `did:ad:` resource (after genesis) should

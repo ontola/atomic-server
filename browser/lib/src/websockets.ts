@@ -104,11 +104,17 @@ export class WSClient {
           return;
         }
 
+        this.store.setServerConnected(false);
+
         return console.error('websocket error:', e);
+      });
+      ws.addEventListener('close', () => {
+        this.store.setServerConnected(false);
       });
       this.openPromise = new Promise(resolve => {
         ws.addEventListener('open', () => {
           resolve();
+          this.store.setServerConnected(true);
           this.handleOpen();
         });
       });
@@ -367,10 +373,7 @@ export class WSClient {
           }
         }
 
-        // Sync any resources that were edited offline
-        this.store.syncDirtyResources().catch(e => {
-          console.warn('[Sync] Failed to sync dirty resources:', e);
-        });
+        // Sync is now triggered by store.setServerConnected(true) in the open handler.
       })
       .catch(e => {
         console.error('Error handling open:', e);

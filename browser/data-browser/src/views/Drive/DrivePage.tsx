@@ -2,10 +2,8 @@ import {
   Datatype,
   core,
   server,
-  dataBrowser,
   useProperty,
   useCanWrite,
-  useArray,
   useResource,
   useStore,
   type Resource,
@@ -33,6 +31,7 @@ import { FaXmark } from 'react-icons/fa6';
 import { QuickCreateRow } from '@components/NewInstanceButton';
 import { ResourceSideBar } from '@components/SideBar/ResourceSideBar/ResourceSideBar';
 import { ScrollArea } from '@components/ScrollArea';
+import { useChildren } from '@components/SideBar/useChildren';
 
 const NewPluginButton = lazy(() => import('@chunks/Plugins/NewPluginButton'));
 
@@ -40,10 +39,7 @@ const NewPluginButton = lazy(() => import('@chunks/Plugins/NewPluginButton'));
 function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
   const { drive: baseURL, setDrive: setBaseURL } = useSettings();
   const store = useStore();
-  const [subResources] = useArray(
-    resource,
-    dataBrowser.properties.subResources,
-  );
+  const subResources = useChildren(resource.subject);
   const [ancestry, setAncestry] = useState<string[]>([]);
 
   useEffect(() => {

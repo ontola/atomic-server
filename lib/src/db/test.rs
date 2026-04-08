@@ -816,3 +816,57 @@ async fn query_after_json_ad_import() {
         result.count
     );
 }
+
+/// Test that a Loro-only DID genesis commit (mimicking browser behavior)
+/// stores and indexes the resource correctly in a sled-backed Db.
+#[tokio::test]
+async fn did_loro_only_commit_sled() {
+    use crate::commit::{Commit, CommitBuilder, CommitOpts};
+    use crate::agents::Agent;
+
+    let store = Db::init_temp("did_loro_commit").await.unwrap();
+    store.populate().await.unwrap();
+
+    // Create an agent
+    let private_key = "CapMWIhFUT+w7ANv9oCPqrHrwZpkP2JhzF9JnyT6WcI=";
+    let agent = Agent::new_from_private_key(None, private_key).unwrap();
+    store.add_resource(&agent.to_resource().unwrap()).await.unwrap();
+
+    // Build a Loro doc with properties (mimics browser-side)
+    let loro_doc = crate::loro::AtomicLoroDoc::new();
+    loro_doc.set_property(urls::NAME, &Value::String("My Property".into())).unwrap();
+    loro_doc.set_property(urls::DESCRIPTION, &Value::String("A test property".into())).unwrap();
+    loro_doc.set_property(urls::PUBLIC_KEY, &Value::String(agent.public_key.clone())).unwrap();
+
+    let snapshot = loro_doc.export_snapshot();
+
+    // Create commit with ONLY loroUpdate (empty set map — browser behavior)
+    let mut builder = CommitBuilder::new("placeholder".into());
+    builder.set_loro_update(snapshot);
+    let commit = Commit::create_did(builder, &agent, &store).await.unwrap();
+    let did_subject = commit.subject.clone();
+
+    // Use the same opts as the real server handler (validate_rights + validate_schema)
+    let opts = CommitOpts {
+        validate_signature: true,
+        validate_timestamp: false,
+        validate_previous_commit: false,
+        validate_rights: true,
+        validate_schema: true,
+        update_index: true,
+        validate_for_agent: Some(agent.subject.to_string()),
+    };
+
+    let result = store.apply_commit(commit, &opts).await.unwrap();
+    assert!(result.resource_new.is_some(), "should have resource_new");
+
+    // Verify the resource is retrievable from the sled-backed store
+    let stored = store.get_resource(&did_subject.as_str().into()).await
+        .expect("Loro-only DID resource should be retrievable from sled store");
+
+    assert_eq!(
+        stored.get(urls::NAME).unwrap().to_string(),
+        "My Property",
+        "Name should be materialized from Loro in sled store"
+    );
+}

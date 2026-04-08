@@ -1,11 +1,10 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   useResource,
-  useArray,
   useCanWrite,
-  dataBrowser,
   unknownSubject,
 } from '@tomic/react';
+import { useChildren } from '../useChildren';
 import { useCurrentSubject } from '../../../helpers/useCurrentSubject';
 import { SideBarItem } from '../SideBarItem';
 import { AtomicLink } from '../../AtomicLink';
@@ -47,10 +46,7 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = ({
   const active = currentUrl === subject;
   const [open, setOpen] = useState(active);
 
-  const [subResources] = useArray(
-    resource,
-    dataBrowser.properties.subResources,
-  );
+  const subResources = useChildren(subject);
 
   const dragData: SideBarDragData = {
     renderedUnder: renderedHierarchy.at(-1)!,
