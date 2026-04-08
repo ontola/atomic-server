@@ -28,6 +28,11 @@ import {
 } from 'react-icons/fa6';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import { constructOpenURL } from '@helpers/navigation';
+import { FanOverlay } from './FanOverlay';
+import {
+  hoveredColor as resolveHoveredColor,
+  hoveredWidth as resolveHoveredWidth,
+} from './fan-helpers';
 
 /**
  * Pixels of horizontal pointer travel that map to scrubbing through the
@@ -77,8 +82,35 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [penColor, setPenColor] = useState(PEN_COLORS[0]);
+  const [prevColor, setPrevColor] = useState(PEN_COLORS[1]);
   const [penWidth, setPenWidth] = useState(DEFAULT_STROKE_WIDTH);
+  const [prevWidth, setPrevWidth] = useState(3);
   const [eraserMode, setEraserMode] = useState(false);
+
+  // Fan state — populated while the user holds + drags the colour or
+  // width button. `fanType` null means no fan is open. The overlay reads
+  // these refs through React state to render previews.
+  const [fanType, setFanType] = useState<'color' | 'width' | null>(null);
+  const [fanButtonCenter, setFanButtonCenter] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+  const [fanDragOffset, setFanDragOffset] = useState<{ x: number; y: number }>({
+    x: 0,
+    y: 0,
+  });
+  const [fanHoveredColor, setFanHoveredColor] = useState<number | null>(null);
+  const [fanHoveredWidth, setFanHoveredWidth] = useState<number | null>(null);
+  const [fanPeek, setFanPeek] = useState(false);
+  // Pointer-ID owning the open fan gesture, plus whether the drag has
+  // crossed the tap-vs-drag threshold.
+  const fanGestureRef = useRef<{
+    pointerId: number;
+    type: 'color' | 'width';
+    buttonCenter: { x: number; y: number };
+    dragged: boolean;
+  } | null>(null);
+
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | undefined>();
   const [canUndo, setCanUndo] = useState(false);
@@ -669,19 +701,140 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     }
   }, [resource, store, navigate]);
 
-  /** Color: temporary cycle through PEN_COLORS. D2 replaces this with the fan. */
-  const handleColorClick = useCallback(() => {
-    const idx = PEN_COLORS.indexOf(penColor);
-    const next = PEN_COLORS[(idx + 1) % PEN_COLORS.length];
-    setPenColor(next);
-  }, [penColor]);
+  // ──────────────── Color & Width fans (Flutter parity) ───────────────────
+  //
+  // Press-and-hold the Color (or Width) button: a fan of swatches sprouts
+  // from the button centre (32 colours in 4 rings, 7 widths on a single
+  // semicircle). Drag toward a swatch to snap-select it; release to commit
+  // (swap prev ↔ current, current ← picked). A plain release without drag
+  // = tap = swap prev ↔ current.
+  //
+  // The button owns the pointer capture; the FanOverlay is render-only.
 
-  /** Width: temporary cycle through PEN_WIDTHS. D2 replaces this with the fan. */
-  const handleWidthClick = useCallback(() => {
-    const idx = PEN_WIDTHS.indexOf(penWidth);
-    const next = PEN_WIDTHS[(idx === -1 ? 3 : idx + 1) % PEN_WIDTHS.length];
-    setPenWidth(next);
-  }, [penWidth]);
+  const openFanFromButton = useCallback(
+    (
+      e: React.PointerEvent<HTMLButtonElement>,
+      type: 'color' | 'width',
+    ): void => {
+      e.preventDefault();
+      const target = e.currentTarget;
+      target.setPointerCapture(e.pointerId);
+      const rect = target.getBoundingClientRect();
+      const centre = {
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2,
+      };
+      fanGestureRef.current = {
+        pointerId: e.pointerId,
+        type,
+        buttonCenter: centre,
+        dragged: false,
+      };
+      setFanType(type);
+      setFanButtonCenter(centre);
+      setFanDragOffset({ x: 0, y: 0 });
+      setFanHoveredColor(null);
+      setFanHoveredWidth(null);
+      setFanPeek(true);
+    },
+    [],
+  );
+
+  const updateFanFromButton = useCallback(
+    (e: React.PointerEvent<HTMLButtonElement>): void => {
+      const g = fanGestureRef.current;
+      if (!g || g.pointerId !== e.pointerId) return;
+
+      const dx = e.clientX - g.buttonCenter.x;
+      const dy = e.clientY - g.buttonCenter.y;
+      const dragLen = Math.hypot(dx, dy);
+
+      if (!g.dragged && dragLen >= SCRUB_DRAG_THRESHOLD) {
+        g.dragged = true;
+        setFanPeek(false);
+      }
+
+      setFanDragOffset({ x: dx, y: dy });
+      if (g.type === 'color') {
+        const hit = resolveHoveredColor({ x: dx, y: dy });
+        setFanHoveredColor(hit?.color ?? null);
+      } else {
+        setFanHoveredWidth(resolveHoveredWidth({ x: dx, y: dy }));
+      }
+    },
+    [],
+  );
+
+  const closeFanFromButton = useCallback(
+    (e: React.PointerEvent<HTMLButtonElement>): void => {
+      const g = fanGestureRef.current;
+      if (!g || g.pointerId !== e.pointerId) return;
+      (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+
+      const dragged = g.dragged;
+      const type = g.type;
+      fanGestureRef.current = null;
+
+      // Snapshot hover before clearing state (state setters won't have
+      // committed by the time we read).
+      const pickedColor = fanHoveredColor;
+      const pickedWidth = fanHoveredWidth;
+
+      setFanType(null);
+      setFanButtonCenter(null);
+      setFanDragOffset({ x: 0, y: 0 });
+      setFanHoveredColor(null);
+      setFanHoveredWidth(null);
+      setFanPeek(false);
+
+      if (!dragged) {
+        // Tap → swap prev ↔ current.
+        if (type === 'color') {
+          setPenColor(prevColor);
+          setPrevColor(penColor);
+        } else {
+          setPenWidth(prevWidth);
+          setPrevWidth(penWidth);
+        }
+
+        return;
+      }
+
+      // Drag-release: if a swatch is hovered, commit it (prev ← current,
+      // current ← picked). If the user landed in the dead-zone, the
+      // gesture is a no-op — same as Flutter.
+      if (type === 'color' && pickedColor !== null) {
+        setPrevColor(penColor);
+        setPenColor(pickedColor);
+      } else if (type === 'width' && pickedWidth !== null) {
+        setPrevWidth(penWidth);
+        setPenWidth(pickedWidth);
+      }
+    },
+    [
+      fanHoveredColor,
+      fanHoveredWidth,
+      penColor,
+      penWidth,
+      prevColor,
+      prevWidth,
+    ],
+  );
+
+  const cancelFanFromButton = useCallback(
+    (e: React.PointerEvent<HTMLButtonElement>): void => {
+      const g = fanGestureRef.current;
+      if (!g || g.pointerId !== e.pointerId) return;
+      fanGestureRef.current = null;
+      setFanType(null);
+      setFanButtonCenter(null);
+      setFanDragOffset({ x: 0, y: 0 });
+      setFanHoveredColor(null);
+      setFanHoveredWidth(null);
+      setFanPeek(false);
+    },
+    [],
+  );
 
   const handleEraserToggle = useCallback(() => setEraserMode(m => !m), []);
 
@@ -795,15 +948,21 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
           </CircleButton>
           <ColorCircleButton
             type='button'
-            title='Pen color (tap to cycle)'
+            title='Pen color (tap to swap with previous, drag to pick from fan)'
             $color={penColor}
-            onClick={handleColorClick}
+            onPointerDown={e => openFanFromButton(e, 'color')}
+            onPointerMove={updateFanFromButton}
+            onPointerUp={closeFanFromButton}
+            onPointerCancel={cancelFanFromButton}
             aria-label='Pen color'
           />
           <WidthCircleButton
             type='button'
-            title={`Stroke width: ${penWidth} (tap to cycle)`}
-            onClick={handleWidthClick}
+            title={`Stroke width: ${penWidth} (tap to swap with previous, drag to pick from fan)`}
+            onPointerDown={e => openFanFromButton(e, 'width')}
+            onPointerMove={updateFanFromButton}
+            onPointerUp={closeFanFromButton}
+            onPointerCancel={cancelFanFromButton}
             aria-label='Stroke width'
           >
             <WidthDot $size={widthDotPx} />
@@ -837,6 +996,17 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
           </CircleButton>
         </BottomToolbar>
       </CanvasArea>
+      {fanType && fanButtonCenter && (
+        <FanOverlay
+          type={fanType}
+          buttonCenter={fanButtonCenter}
+          dragOffset={fanDragOffset}
+          hoveredColor={fanHoveredColor}
+          hoveredWidth={fanHoveredWidth}
+          peek={fanPeek}
+          darkMode={darkMode}
+        />
+      )}
     </Page>
   );
 };
