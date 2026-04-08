@@ -55,6 +55,7 @@ async function handleMessage(msg) {
         msg.limit ?? null,
         msg.offset ?? null,
         msg.includeResources ?? null,
+        msg.drive ?? null,
       );
 
     case 'allSubjects':

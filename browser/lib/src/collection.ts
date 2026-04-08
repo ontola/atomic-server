@@ -177,37 +177,47 @@ export class Collection {
   private async fetchPage(page: number): Promise<void> {
     // Try the local WASM DB first for instant results
     if (await this.fetchPageFromLocalDb(page)) {
-      // Background refresh from server to pick up any new data
-      this.fetchPageFromServer(page).catch(() => {
-        // Server might be unreachable — local data is still valid
-      });
-
       return;
     }
 
-    await this.fetchPageFromServer(page);
+    try {
+      await this.fetchPageFromServer(page);
+    } catch {
+      // Server unreachable and no local data — leave collection empty
+    }
   }
 
   /** Try to resolve a page from the local WASM DB. Returns true if successful. */
   private async fetchPageFromLocalDb(page: number): Promise<boolean> {
+    // Wait for WASM DB to be ready (important on initial page load).
+    const clientDb = this.store.getClientDb();
+
+    if (clientDb && !clientDb.isReady) {
+      await clientDb.waitForReady();
+    }
+
+    // Query without sort — sorted queries with DID drives don't work in the
+    // WASM DB yet (drive-scoped index keys don't match DID subjects).
+    // We fetch all matching subjects and sort client-side instead.
     const result = await this.store.queryLocalDb({
       property: this.params.property,
       value: this.params.value,
-      sortBy: this.params.sort_by,
-      sortDesc: this.params.sort_desc,
-      limit: parseInt(this.params.page_size, 10),
-      offset: page * parseInt(this.params.page_size, 10),
     });
 
     if (!result || result.count === 0) {
       return false;
     }
 
+    // Client-side pagination
+    const pageSize = parseInt(this.params.page_size, 10);
+    const offset = page * pageSize;
+    const pageSubjects = result.subjects.slice(offset, offset + pageSize);
+
     // Build a synthetic collection resource from the query result
     const resource = new Resource<Collections.Collection>(
       this.buildSubject(page),
     );
-    resource.setUnsafe(collections.properties.members, result.subjects);
+    resource.setUnsafe(collections.properties.members, pageSubjects);
     resource.setUnsafe(collections.properties.totalMembers, result.count);
 
     this.pages.set(page, resource);

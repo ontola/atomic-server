@@ -122,6 +122,7 @@ impl ClientDb {
         limit: Option<usize>,
         offset: Option<usize>,
         include_resources: Option<bool>,
+        drive: Option<String>,
     ) -> Result<JsValue, JsError> {
         let q = Query {
             property,
@@ -135,7 +136,7 @@ impl ClientDb {
             include_external: false,
             include_nested: include_resources.unwrap_or(false),
             for_agent: atomic_lib::agents::ForAgent::Sudo,
-            drive: None,
+            drive: drive.map(Subject::from),
         };
 
         let result = self.db.query(&q).await.map_err(to_js_err)?;
