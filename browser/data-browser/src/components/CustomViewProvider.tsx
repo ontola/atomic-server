@@ -101,11 +101,17 @@ export function CustomViewProvider({ children }: PropsWithChildren) {
   };
 
   useEffect(() => {
-    fetchPluginList(serverUrl, drive).then(([views, manifests]) => {
-      setCustomViews(views);
-      setUIPluginDataMap(manifests);
-      setLoading(false);
-    });
+    fetchPluginList(serverUrl, drive)
+      .then(([views, manifests]) => {
+        setCustomViews(views);
+        setUIPluginDataMap(manifests);
+      })
+      .catch(() => {
+        // Server unreachable — continue without plugins
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   }, [serverUrl, drive]);
 
   return (
