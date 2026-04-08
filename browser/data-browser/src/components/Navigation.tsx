@@ -10,7 +10,7 @@ import { AISidebarContainer } from './AI/AISidebarContainer';
 import { HideInPrint } from './HideInPrint';
 import { MAIN_CONTAINER } from '@helpers/containers';
 import { useCurrentSubject } from '../helpers/useCurrentSubject';
-import { useResource, type Resource } from '@tomic/react';
+import { useResource } from '@tomic/react';
 import NavBarContent from './NavBar';
 import { useLocation } from '@tanstack/react-router';
 import { useSettings } from '../helpers/AppSettings';
@@ -50,11 +50,11 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
     [subject, search],
   );
 
-  const resource = useResource(contextualSubject);
-
   return (
     <AISidebarContextProvider>
-      {!hideGlobalChrome && <TopBar resource={resource} top={navbarTop} />}
+      {!hideGlobalChrome && (
+        <TopBar subject={contextualSubject} top={navbarTop} />
+      )}
       <SideBarWrapper top={navbarTop} fullViewportContent={hideGlobalChrome}>
         {!hideGlobalChrome && <SideBar />}
         <Content>{children}</Content>
@@ -78,19 +78,21 @@ const Content = styled.div<ContentProps>`
 `;
 
 /** Persistently shown navigation bar */
-function TopBar({
-  resource,
+const TopBar = React.memo(function TopBar({
+  subject,
   top,
 }: {
-  resource: Resource;
+  subject: string | undefined;
   top: boolean;
 }): JSX.Element {
+  const resource = useResource(subject);
+
   return (
     <NavBarStyled aria-label='navigation' top={top}>
       <NavBarContent resource={resource} />
     </NavBarStyled>
   );
-}
+});
 
 const NavBarStyled = styled.div<{ top: boolean }>`
   position: fixed;

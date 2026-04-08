@@ -57,11 +57,23 @@ export function useResource<C extends OptionalClass = never>(
 
   const memoizedOpts = useMemoizedOpts(fetchOpts);
 
+  // Store track in a ref so the subscribe callback can read it without
+  // being in the dependency array (which causes infinite loops).
+  const trackRef = useRef(track);
+  trackRef.current = track;
+
   // When a component mounts or the subject changes, it needs to let the store know that it will subscribe to changes to that resource.
   useEffect(() => {
     setResource(proxyResource(store.getResourceLoading(subject, memoizedOpts)));
 
     return store.subscribe(subject, (updated: Resource<C>) => {
+      // If track is set, this component only cares about specific properties.
+      // Skip the re-render from notify() — the LocalChange listener below
+      // handles per-property updates instead.
+      if (trackRef.current !== undefined) {
+        return;
+      }
+
       setResource(proxyResource(updated));
     });
 
@@ -69,8 +81,14 @@ export function useResource<C extends OptionalClass = never>(
   }, [store, subject, memoizedOpts]);
 
   useEffect(() => {
+    // Only listen to LocalChange when track is explicitly set.
+    // Components that need per-property reactivity should use `track`.
+    // Components using useValue/useString/useTitle get updates through
+    // those hooks' own state — they don't need LocalChange re-renders.
+    if (track === undefined) return;
+
     return resource.stable.on(ResourceEvents.LocalChange, prop => {
-      if (track === undefined || track.includes(prop)) {
+      if (track.includes(prop)) {
         setResource(proxyResource(resource.stable));
       }
     });

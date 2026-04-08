@@ -1096,7 +1096,6 @@ export class Resource<C extends OptionalClass = any> {
       return lastCommitId;
     } catch (e) {
       this.commitError = e;
-      this.store.addResources(this, { skipCommitCompare: true });
       throw e;
     }
   }
@@ -1200,19 +1199,15 @@ export class Resource<C extends OptionalClass = any> {
     } catch (e) {
       // Network error (server unreachable) — apply locally and queue for sync.
       if (isNetworkError(e)) {
-        console.info(
-          `[Offline] Server unreachable, saving ${this.subject} locally`,
-        );
-
         // Apply pending commits to the WASM DB so they're persisted in OPFS.
         await this.applyPendingCommitsLocally();
 
         // Mark this resource as needing sync when the server comes back.
         this.store.markDirtyForSync(this.subject);
 
+        // Clear the error that pushCommits set — the save succeeded locally.
+        this.commitError = undefined;
         this.loading = false;
-        this.store.addResources(this, { skipCommitCompare: true });
-        this.store.notifyResourceSaved(this);
         reportDone();
 
         return undefined;
