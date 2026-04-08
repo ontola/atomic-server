@@ -164,6 +164,8 @@ export class Store {
   private clientDb?: ClientDbWorker;
   /** Client-side full-text search index (MiniSearch). */
   private localSearch = new LocalSearch();
+  /** Resources with local changes that haven't been synced to the server yet. */
+  private dirtyForSync: Set<string> = new Set();
 
   private eventManager = new EventManager<StoreEvents, StoreEventHandlers>();
 
@@ -189,6 +191,21 @@ export class Store {
     }
 
     this.client = new Client(this.injectedFetch);
+
+    // Restore dirty-for-sync set from localStorage
+    if (typeof localStorage !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('atomic.dirtyForSync');
+
+        if (stored) {
+          for (const s of JSON.parse(stored)) {
+            this.dirtyForSync.add(s);
+          }
+        }
+      } catch (e) {
+        this.notifyError(e);
+      }
+    }
 
     // We need to bind this method because it is passed down by other functions
     this.getAgent = this.getAgent.bind(this);
@@ -218,6 +235,83 @@ export class Store {
   /** Returns the ClientDbWorker if one has been set (may still be initializing). */
   public getClientDb(): ClientDbWorker | undefined {
     return this.clientDb;
+  }
+
+  /**
+   * Mark a resource as having local changes that need to be synced to the server.
+   * Called when a save fails due to the server being unreachable.
+   */
+  public markDirtyForSync(subject: string): void {
+    this.dirtyForSync.add(subject);
+
+    // Persist to localStorage so it survives page reloads
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(
+        'atomic.dirtyForSync',
+        JSON.stringify([...this.dirtyForSync]),
+      );
+    }
+  }
+
+  /**
+   * Sync all dirty resources to the server.
+   * For each dirty resource, creates a fresh commit from the current state
+   * (Loro snapshot has all accumulated changes) and POSTs it.
+   * Called on WebSocket reconnect.
+   */
+  public async syncDirtyResources(): Promise<void> {
+    if (this.dirtyForSync.size === 0) return;
+
+    const agent = this.getAgent();
+
+    if (!agent) return;
+
+    const subjects = [...this.dirtyForSync];
+    console.info(`[Sync] Syncing ${subjects.length} dirty resources...`);
+
+    for (const subject of subjects) {
+      const resource = this.resources.get(subject);
+
+      if (!resource) {
+        this.dirtyForSync.delete(subject);
+        continue;
+      }
+
+      try {
+        // The resource already has its changes in propvals + Loro doc.
+        // signChanges + pushCommits will create a fresh commit and POST it.
+        if (resource.hasUnsavedChanges()) {
+          await resource.save();
+        } else {
+          // Changes were already signed but push failed — retry push.
+          await resource.pushCommits();
+        }
+
+        this.dirtyForSync.delete(subject);
+
+        // Clean up offline localStorage entry
+        if (typeof localStorage !== 'undefined') {
+          localStorage.removeItem(`atomic.offline.${subject}`);
+        }
+
+        console.info(`[Sync] Synced ${subject}`);
+      } catch (e) {
+        console.warn(`[Sync] Failed to sync ${subject}:`, e);
+        // Leave in dirty set for next attempt
+      }
+    }
+
+    // Update persisted dirty set
+    if (typeof localStorage !== 'undefined') {
+      if (this.dirtyForSync.size === 0) {
+        localStorage.removeItem('atomic.dirtyForSync');
+      } else {
+        localStorage.setItem(
+          'atomic.dirtyForSync',
+          JSON.stringify([...this.dirtyForSync]),
+        );
+      }
+    }
   }
 
   /**
@@ -269,10 +363,7 @@ export class Store {
     }
 
     // HTTP URLs are normalized
-    if (
-      subject.startsWith('http://') ||
-      subject.startsWith('https://')
-    ) {
+    if (subject.startsWith('http://') || subject.startsWith('https://')) {
       try {
         const url = new URL(subject);
 
@@ -569,22 +660,34 @@ export class Store {
       await this.clientDb.waitForReady();
     }
 
-    // Try the WASM DB first
-    if (this.clientDb?.isReady) {
+    // Check localStorage first for offline-saved resources (these preserve
+    // loroUpdate snapshots that the WASM DB parser might drop).
+    if (typeof localStorage !== 'undefined') {
+      const offlineJson = localStorage.getItem(`atomic.offline.${subject}`);
+
+      if (offlineJson) {
+        try {
+          hasLocalData = this.hydrateResourceFromJson(
+            subject,
+            JSON.parse(offlineJson),
+          );
+        } catch {
+          // Corrupted — remove it
+          localStorage.removeItem(`atomic.offline.${subject}`);
+        }
+      }
+    }
+
+    // Try the WASM DB if localStorage didn't have it
+    if (!hasLocalData && this.clientDb?.isReady) {
       try {
         const jsonAd = await this.clientDb.getResource(subject);
+
         if (jsonAd) {
-          const parsed = JSON.parse(jsonAd);
-          const resource = new Resource(subject);
-
-          for (const [key, value] of Object.entries(parsed)) {
-            if (key === '@id') continue;
-            resource.setUnsafe(key, value as JSONValue);
-          }
-
-          resource.loading = false;
-          hasLocalData = true;
-          this.addResources(resource, { alias: subject });
+          hasLocalData = this.hydrateResourceFromJson(
+            subject,
+            JSON.parse(jsonAd),
+          );
         }
       } catch {
         // WASM DB failed — continue to server
@@ -611,11 +714,31 @@ export class Store {
 
         if (resource) {
           resource.loading = false;
-          resource.setError(new Error('Offline: resource not available locally'));
+          resource.setError(
+            new Error('Offline: resource not available locally'),
+          );
           this.notify(resource);
         }
       }
     }
+  }
+
+  /** Hydrate a Resource from a parsed JSON-AD object and add it to the store. Returns true if successful. */
+  private hydrateResourceFromJson(
+    subject: string,
+    parsed: Record<string, unknown>,
+  ): boolean {
+    const resource = new Resource(subject);
+
+    for (const [key, value] of Object.entries(parsed)) {
+      if (key === '@id') continue;
+      resource.setUnsafe(key, value as JSONValue);
+    }
+
+    resource.loading = false;
+    this.addResources(resource, { alias: subject });
+
+    return true;
   }
 
   /**
@@ -1274,10 +1397,7 @@ export class Store {
    * Broadcast a Loro document update to all peers via WebSocket.
    * These are non-persistent real-time updates. For persistence, use commits with loroUpdate.
    */
-  public broadcastLoroSyncUpdate(
-    subject: string,
-    update: Uint8Array,
-  ): void {
+  public broadcastLoroSyncUpdate(subject: string, update: Uint8Array): void {
     const ws = this.getWebSocketForSubject(subject);
 
     const messageBody = {

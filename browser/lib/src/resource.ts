@@ -1,6 +1,6 @@
 import type { LoroDoc, VersionVector } from 'loro-crdt';
 import { LoroLoader } from './loro-loader.js';
-import { decodeB64 } from './base64.js';
+import { decodeB64, encodeB64 } from './base64.js';
 import { EventManager } from './EventManager.js';
 import type { Agent } from './agent.js';
 import { Client } from './client.js';
@@ -1198,6 +1198,26 @@ export class Resource<C extends OptionalClass = any> {
 
       return result;
     } catch (e) {
+      // Network error (server unreachable) — apply locally and queue for sync.
+      if (isNetworkError(e)) {
+        console.info(
+          `[Offline] Server unreachable, saving ${this.subject} locally`,
+        );
+
+        // Apply pending commits to the WASM DB so they're persisted in OPFS.
+        await this.applyPendingCommitsLocally();
+
+        // Mark this resource as needing sync when the server comes back.
+        this.store.markDirtyForSync(this.subject);
+
+        this.loading = false;
+        this.store.addResources(this, { skipCommitCompare: true });
+        this.store.notifyResourceSaved(this);
+        reportDone();
+
+        return undefined;
+      }
+
       // Logic for handling error if the previousCommit is wrong.
       if (e.message?.includes('previousCommit')) {
         if (this.errorRetries > 3) {
@@ -1240,6 +1260,56 @@ export class Resource<C extends OptionalClass = any> {
       reportDone();
       throw e;
     }
+  }
+
+  /**
+   * Persist the current resource state locally.
+   * Uses a simple JSON blob in localStorage — bypasses the WASM DB parser
+   * which can silently drop binary properties like loroUpdate.
+   * On reconnect, a fresh commit will be created from the Loro snapshot.
+   */
+  private async applyPendingCommitsLocally(): Promise<void> {
+    // Build a JSON-AD representation with proper serialization.
+    const obj: Record<string, unknown> = { '@id': this.subject };
+
+    for (const [key, value] of this.propvals) {
+      if (value instanceof Uint8Array) {
+        obj[key] = encodeB64(value);
+      } else {
+        obj[key] = value;
+      }
+    }
+
+    // Export the live Loro doc snapshot (contains document content).
+    if (this._loroDoc) {
+      const snapshot = this._loroDoc.export({ mode: 'snapshot' });
+      obj[commits.properties.loroUpdate] = encodeB64(snapshot);
+    }
+
+    // Store in localStorage under a known prefix.
+    // This is simple, reliable, and survives page reload.
+    const storageKey = `atomic.offline.${this.subject}`;
+
+    try {
+      const json = JSON.stringify(obj);
+
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(storageKey, json);
+      }
+    } catch (e) {
+      console.error('[Offline] Failed to persist resource:', e);
+    }
+
+    // Also forward to WASM DB for indexing (best-effort, may lose loroUpdate).
+    const clientDb = this.store.getClientDb();
+
+    if (clientDb) {
+      clientDb.putResource(JSON.stringify(obj)).catch(() => {});
+    }
+
+    // Clear pending commits — they've been incorporated into the resource state.
+    this._pendingCommits = [];
+    this._lastLocalSignature = undefined;
   }
 
   /**
@@ -1426,3 +1496,25 @@ export function proxyResource<C extends OptionalClass = any>(
 }
 
 const WaitForImmediate = () => new Promise(resolve => setTimeout(resolve));
+
+/** Returns true if the error is a network/fetch failure (server unreachable). */
+function isNetworkError(e: unknown): boolean {
+  if (e instanceof TypeError && e.message.includes('Failed to fetch')) {
+    return true;
+  }
+
+  if (e instanceof Error && e.message.includes('Failed to fetch')) {
+    return true;
+  }
+
+  // AtomicError wrapping a fetch failure
+  if (
+    e instanceof Error &&
+    e.message.includes('Posting Commit') &&
+    e.message.includes('Failed to fetch')
+  ) {
+    return true;
+  }
+
+  return false;
+}
