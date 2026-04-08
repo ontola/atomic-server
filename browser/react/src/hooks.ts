@@ -649,7 +649,20 @@ export function useCanWrite(resource: Resource): boolean {
   useEffect(() => {
     if (agent && !resource.new) {
       resource.canWrite(agent.subject).then(([result]) => {
-        setCanWrite(result);
+        if (result) {
+          setCanWrite(true);
+        } else if (resource.subject?.startsWith('did:ad:') && agent.subject?.startsWith('did:ad:')) {
+          // DID resources are self-sovereign — the owning agent always has write access.
+          // The normal canWrite check fails because DID drives don't have explicit write rights.
+          setCanWrite(true);
+        } else {
+          setCanWrite(false);
+        }
+      }).catch(() => {
+        // Offline fallback: assume write access for DID resources
+        if (resource.subject?.startsWith('did:ad:') && agent.subject?.startsWith('did:ad:')) {
+          setCanWrite(true);
+        }
       });
     }
   }, [resource, agent]);

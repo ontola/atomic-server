@@ -10,6 +10,7 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 - New navbar design. Always access to important features & hierarchy.
 - New onboarding UX for new users & drives.
 - Switch to OxLint
+- Client persistence & indexing with wasm #1175
 - Add `drive` to Store. This used to be a React API, but it's useful in far more contexts.
 - #1163 New settings page design with search
 - #1160 Switch to Oxlint + Oxfmt

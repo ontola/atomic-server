@@ -44,14 +44,36 @@ impl OpfsBackend {
                 .await?
                 .unchecked_into();
 
-        let sync_handle: web_sys::FileSystemSyncAccessHandle =
-            JsFuture::from(file_handle.create_sync_access_handle())
-                .await?
-                .unchecked_into();
+        // Retry createSyncAccessHandle a few times — in dev (HMR), a previous
+        // worker may still hold the lock briefly before being GC'd.
+        let mut last_err = JsValue::NULL;
+        for attempt in 0..5 {
+            match JsFuture::from(file_handle.create_sync_access_handle()).await {
+                Ok(handle) => {
+                    return Ok(OpfsBackend {
+                        handle: handle.unchecked_into(),
+                    });
+                }
+                Err(e) => {
+                    last_err = e;
+                    if attempt < 4 {
+                        // Wait 200ms before retrying
+                        let promise = js_sys::Promise::new(&mut |resolve, _| {
+                            let global: web_sys::WorkerGlobalScope =
+                                js_sys::global().unchecked_into();
+                            global
+                                .set_timeout_with_callback_and_timeout_and_arguments_0(
+                                    &resolve, 200,
+                                )
+                                .unwrap();
+                        });
+                        JsFuture::from(promise).await.unwrap();
+                    }
+                }
+            }
+        }
 
-        Ok(OpfsBackend {
-            handle: sync_handle,
-        })
+        Err(last_err)
     }
 }
 

@@ -90,6 +90,7 @@ pub fn handle_post<'a>(
             // not the one performing the import, because we don't have their private key.
             signer: Some(store.get_default_agent()?),
             save: parse::SaveOpts::Commit,
+            ..Default::default()
         };
 
         if let Some(json_string) = json {

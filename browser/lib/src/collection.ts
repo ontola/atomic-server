@@ -204,6 +204,8 @@ export class Collection {
       value: this.params.value,
     });
 
+    console.debug(`[Collection] local query: property=${this.params.property?.slice(-20)}, value=${this.params.value?.slice(0, 40)}, result=${result?.count ?? 'null'}`);
+
     if (!result || result.count === 0) {
       return false;
     }

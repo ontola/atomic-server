@@ -481,8 +481,18 @@ export class Store {
         const jsonAd = resourceToJsonAd(resource);
 
         if (jsonAd) {
-          this.clientDb.putResource(jsonAd).catch(() => {
-            // Silently ignore — the in-memory store is the source of truth
+          this.clientDb.putResource(jsonAd).then(() => {
+            // Verify it was actually stored (debug)
+            if (resource.get(core.properties.parent)) {
+              this.clientDb!.getResource(resource.subject).then(stored => {
+                if (!stored) {
+                  console.error(`[ClientDb] PUT succeeded but resource NOT found: ${resource.subject.slice(0, 50)}`);
+                  console.error(`[ClientDb] JSON was: ${jsonAd.slice(0, 200)}`);
+                }
+              });
+            }
+          }).catch(e => {
+            console.warn(`[ClientDb] putResource failed for ${resource.subject.slice(0, 50)}:`, e);
           });
         }
       } catch {
