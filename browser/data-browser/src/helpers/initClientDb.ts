@@ -111,6 +111,9 @@ export function initClientDb(store: Store): void {
     }
   });
 
+  // Tell the clientDb to wait for seeding before reporting as ready.
+  clientDb.setSeedPromise(initPromise);
+
   // Attach to store right after init() is called (worker exists now).
   // This lets addResource() forward to the worker even during init.
   store.setClientDb(clientDb);

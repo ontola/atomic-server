@@ -25,6 +25,7 @@ import { SidebarItemTitle } from './ResourceSideBar/SidebarItemTitle';
 import { DropEdge } from './ResourceSideBar/DropEdge';
 import { createPortal } from 'react-dom';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
+import { LoaderInline } from '../Loader';
 import { SkeletonButton } from '../SkeletonButton';
 import { QuickCreateRow } from '../NewInstanceButton';
 import { SideBarPanel } from './SideBarPanel';
@@ -54,7 +55,8 @@ export function SideBarDrive({
   const driveResource = useResource(drive);
   const agentResource = useResource(agent?.subject);
   const [sharedWithMe] = useArray(agentResource, core.properties.sharedWithMe);
-  const subResources = useChildren(drive);
+  const { subjects: subResources, loading: childrenLoading } =
+    useChildren(drive);
   const [title] = useTitle(driveResource);
   const navigate = useNavigateWithTransition();
   const agentCanWrite = useCanWrite(driveResource);
@@ -108,19 +110,26 @@ export function SideBarDrive({
           <ListWrapper>
             <DropEdge parentHierarchy={[drive]} position={0} />
             {driveResource.isReady() ? (
-              subResources.map((child, index) => {
-                return (
-                  <Fragment key={child}>
-                    <ResourceSideBar
-                      subject={child}
-                      renderedHierarchy={[drive]}
-                      ancestry={ancestry}
-                      onClick={onItemClick}
-                    />
-                    <DropEdge parentHierarchy={[drive]} position={index + 1} />
-                  </Fragment>
-                );
-              })
+              childrenLoading ? (
+                <SideBarLoader />
+              ) : (
+                subResources.map((child, index) => {
+                  return (
+                    <Fragment key={child}>
+                      <ResourceSideBar
+                        subject={child}
+                        renderedHierarchy={[drive]}
+                        ancestry={ancestry}
+                        onClick={onItemClick}
+                      />
+                      <DropEdge
+                        parentHierarchy={[drive]}
+                        position={index + 1}
+                      />
+                    </Fragment>
+                  );
+                })
+              )
             ) : driveResource.loading ? null : (
               <SideBarErr>
                 {driveResource.error &&
@@ -219,6 +228,12 @@ const HeadingButtonWrapper = styled(Row)`
 
 const StyledScrollArea = styled(ScrollArea)`
   overflow: hidden;
+`;
+
+const SideBarLoader = styled(LoaderInline)`
+  display: block;
+  height: 1.5rem;
+  margin-block: 0.3rem;
 `;
 
 const NewResourceRow = styled(Row)`
