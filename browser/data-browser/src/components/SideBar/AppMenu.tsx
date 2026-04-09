@@ -19,6 +19,7 @@ import {
   useCurrentAgent,
   useResource,
 } from '@tomic/react';
+import { SyncMenuItem } from './SyncMenuItem';
 
 // Non standard event type so we have to type it ourselfs for now.
 type BeforeInstallPromptEvent = {
@@ -80,6 +81,7 @@ export function AppMenu({ onItemClick }: AppMenuProps): JSX.Element {
         path={paths.appSettings}
         onClick={onItemClick}
       />
+      <SyncMenuItem onClick={onItemClick} />
       <SideBarMenuItem
         icon={<FaInfo />}
         label='About'
