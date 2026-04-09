@@ -213,6 +213,31 @@ export class Collection {
       return false;
     }
 
+    // Client-side sorting
+    const sortBy = this.params.sort_by;
+
+    if (sortBy) {
+      const sortDesc = !!this.params.sort_desc;
+
+      result.subjects.sort((a, b) => {
+        const resA = this.store.resources.get(a);
+        const resB = this.store.resources.get(b);
+        const valA = resA?.get(sortBy);
+        const valB = resB?.get(sortBy);
+
+        if (valA == null && valB == null) return 0;
+        if (valA == null) return 1;
+        if (valB == null) return -1;
+
+        const cmp =
+          typeof valA === 'number' && typeof valB === 'number'
+            ? valA - valB
+            : String(valA).localeCompare(String(valB));
+
+        return sortDesc ? -cmp : cmp;
+      });
+    }
+
     // Client-side pagination
     const pageSize = parseInt(this.params.page_size, 10);
     const offset = page * pageSize;
