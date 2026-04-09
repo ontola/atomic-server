@@ -679,6 +679,7 @@ export class Resource<C extends OptionalClass = any> {
    *  resource's LoroDoc directly without going through `set()`. */
   public markDirty(): void {
     this._dirty = true;
+    this.eventManager.emit(ResourceEvents.LocalChange, undefined, undefined);
   }
 
   public getCommitsCollectionSubject(): string {
@@ -1300,6 +1301,12 @@ export class Resource<C extends OptionalClass = any> {
     if (this._loroDoc) {
       const snapshot = this._loroDoc.export({ mode: 'snapshot' });
       obj[commits.properties.loroUpdate] = encodeB64(snapshot);
+    }
+
+    // Persist the last local signature so followup saves after reload
+    // can chain correctly (without it, every reload triggers a new DID genesis).
+    if (this._lastLocalSignature) {
+      obj['_lastLocalSignature'] = this._lastLocalSignature;
     }
 
     // Store in localStorage under a known prefix.

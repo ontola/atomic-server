@@ -1,7 +1,9 @@
-import { ClientDbWorker, type Store } from '@tomic/lib';
+import { ClientDbWorker, Resource, type Store } from '@tomic/lib';
+import type { JSONValue } from '@tomic/lib';
 
 // Track the current worker so we can terminate it on HMR reload.
 let currentWorker: ClientDbWorker | undefined;
+let offlineRestored = false;
 
 /**
  * Initialize the WASM ClientDb in a Web Worker and attach it to the Store.
@@ -9,6 +11,14 @@ let currentWorker: ClientDbWorker | undefined;
  * Falls back to in-memory if OPFS is unavailable.
  */
 export function initClientDb(store: Store): void {
+  // Restore offline-saved resources from localStorage FIRST (synchronous).
+  // These contain Loro snapshots that the WASM DB can't store.
+  // Only run once — HMR re-runs must not overwrite in-memory state.
+  if (!offlineRestored) {
+    offlineRestored = true;
+    restoreOfflineResources(store);
+  }
+
   if (typeof Worker === 'undefined') return;
 
   // Terminate previous worker (important for Vite HMR — releases OPFS lock).
@@ -85,6 +95,17 @@ export function initClientDb(store: Store): void {
     console.info(
       `[ClientDb] WASM database ready, seeded ${properties.length} properties + ${otherPromises.length} resources`,
     );
+
+    // Debug: check if any loroUpdate was lost during seeding
+    for (const key of Object.keys(localStorage)) {
+      if (!key.startsWith('atomic.offline.')) continue;
+      const subject = key.slice('atomic.offline.'.length);
+      const resource = store.resources.get(subject);
+
+      if (resource && !resource.get('https://atomicdata.dev/properties/loroUpdate')) {
+        console.error(`[ClientDb] loroUpdate LOST after seeding for ${subject.slice(0, 40)}`);
+      }
+    }
   });
 
   // Attach to store right after init() is called (worker exists now).
@@ -101,5 +122,71 @@ export function initClientDb(store: Store): void {
       currentWorker?.destroy();
       currentWorker = undefined;
     });
+  }
+}
+
+/**
+ * Synchronously restore resources that were saved offline (via localStorage).
+ * These contain full Loro snapshots that the WASM DB can't store.
+ * Must run before React renders so components see the full resource state.
+ */
+function restoreOfflineResources(store: Store): void {
+  if (typeof localStorage === 'undefined') return;
+
+  const prefix = 'atomic.offline.';
+  const keys: string[] = [];
+
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+
+    if (key?.startsWith(prefix)) {
+      keys.push(key);
+    }
+  }
+
+  if (keys.length === 0) return;
+
+  let restored = 0;
+
+  for (const key of keys) {
+    try {
+      const json = localStorage.getItem(key);
+
+      if (!json) continue;
+
+      const parsed = JSON.parse(json);
+      const subject: string = parsed['@id'] ?? key.slice(prefix.length);
+      const hasLoro = !!parsed['https://atomicdata.dev/properties/loroUpdate'];
+
+      console.info(`[Offline] Restoring ${subject.slice(0, 40)} (${(json.length / 1024).toFixed(1)}KB, loro=${hasLoro}) key="${store.normalizeSubject(subject).slice(0, 50)}"`);
+
+      const res = new Resource(subject);
+
+      for (const [k, v] of Object.entries(parsed)) {
+        if (k === '@id' || k === '_lastLocalSignature') continue;
+        res.setUnsafe(k, v as JSONValue);
+      }
+
+      res.loading = false;
+      store.addResources(res, { alias: subject, skipCommitCompare: true });
+
+      // Restore commit chain state so followup saves don't trigger new genesis
+      if (parsed['_lastLocalSignature']) {
+        const stored = store.resources.get(subject);
+
+        if (stored) {
+          (stored as any)._lastLocalSignature =
+            parsed['_lastLocalSignature'];
+        }
+      }
+
+      restored++;
+    } catch {
+      // Skip corrupted entries
+    }
+  }
+
+  if (restored > 0) {
+    console.info(`[Offline] Restored ${restored} resources from localStorage`);
   }
 }

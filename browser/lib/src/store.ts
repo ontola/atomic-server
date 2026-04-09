@@ -466,6 +466,9 @@ export class Store {
       storeResource.merge(resource.__internalObject);
       this.notify(storeResource);
     } else {
+      // Debug: detect when a DID resource is being stored for the first time
+      // (should have been found if restoreOfflineResources ran)
+
       this.resources.set(subject, resource.__internalObject);
       this.notify(resource.__internalObject);
     }
@@ -744,6 +747,17 @@ export class Store {
     subject: string,
     parsed: Record<string, unknown>,
   ): boolean {
+    // Don't overwrite a resource that has a Loro snapshot with one that doesn't.
+    const existing = this.resources.get(this.normalizeSubject(subject));
+
+    if (
+      existing &&
+      existing.get(commits.properties.loroUpdate) &&
+      !parsed[commits.properties.loroUpdate]
+    ) {
+      return true;
+    }
+
     const resource = new Resource(subject);
 
     for (const [key, value] of Object.entries(parsed)) {
@@ -962,7 +976,9 @@ export class Store {
       }
 
       return resource;
-    } else if (!opts.allowIncomplete && resource.loading === false) {
+    }
+
+    if (!opts.allowIncomplete && resource.loading === false) {
       // In many cases, a user will always need a complete resource.
       // This checks if the resource is incomplete and fetches it if it is.
       if (resource.get(core.properties.incomplete)) {
@@ -1365,6 +1381,8 @@ export class Store {
   }
 
   public subscribeWebSocket(subject: string): void {
+    if (!this._serverConnected) return;
+
     const normalized = this.normalizeSubject(subject);
 
     if (normalized === unknownSubject) {
@@ -1381,8 +1399,6 @@ export class Store {
 
     try {
       const ws = this.getWebSocketForSubject(subject);
-
-      // Only subscribe if there's a websocket. When it's opened, all subject will be iterated and subscribed
       ws?.subscribeResource(subject);
     } catch (e) {
       console.error(e);
@@ -1409,8 +1425,6 @@ export class Store {
     subject: string,
     callback: LoroSyncCallback,
   ): () => void {
-    const ws = this.getWebSocketForSubject(subject);
-
     const unsub = () => {
       const subscribers = this.loroSyncSubscribers.get(subject);
 
@@ -1419,7 +1433,10 @@ export class Store {
 
         if (afterUnsub.length === 0) {
           this.loroSyncSubscribers.delete(subject);
-          ws?.unsubscribeLoroSync(subject);
+
+          if (this._serverConnected) {
+            this.getWebSocketForSubject(subject)?.unsubscribeLoroSync(subject);
+          }
         } else {
           this.loroSyncSubscribers.set(subject, afterUnsub);
         }
@@ -1435,7 +1452,10 @@ export class Store {
     }
 
     this.loroSyncSubscribers.set(subject, [callback]);
-    ws?.subscribeLoroSync(subject);
+
+    if (this._serverConnected) {
+      this.getWebSocketForSubject(subject)?.subscribeLoroSync(subject);
+    }
 
     return unsub;
   }
@@ -1445,6 +1465,8 @@ export class Store {
    * These are non-persistent real-time updates. For persistence, use commits with loroUpdate.
    */
   public broadcastLoroSyncUpdate(subject: string, update: Uint8Array): void {
+    if (!this._serverConnected) return;
+
     const ws = this.getWebSocketForSubject(subject);
 
     const messageBody = {
@@ -1497,6 +1519,8 @@ export class Store {
     subject: string,
     update: Uint8Array,
   ): void {
+    if (!this._serverConnected) return;
+
     const ws = this.getWebSocketForSubject(subject);
 
     const messageBody = {
