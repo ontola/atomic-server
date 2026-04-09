@@ -70,7 +70,10 @@ export function SideBarDrive({
     store.getResourceAncestry(currentResource).then(result => {
       setAncestry(result);
     });
-  }, [store, currentResource]);
+    // Use currentSubject (string) instead of currentResource (proxy) to avoid
+    // recalculating ancestry on every resource property change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store, currentSubject]);
 
   const driveName = driveResource.isUnauthorized()
     ? 'Unauthorized'

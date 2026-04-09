@@ -1,4 +1,4 @@
-import { forwardRef } from 'react';
+import { forwardRef, memo } from 'react';
 import { styled, css, keyframes } from 'styled-components';
 import { SideBarItem } from '../SideBarItem';
 import { FloatingActions, floatingHoverStyles } from './FloatingActions';
@@ -36,7 +36,7 @@ const NavResourceLink = styled(StyledLink)`
   align-self: stretch;
 `;
 
-export const SidebarItemTitle = forwardRef<
+export const SidebarItemTitle = memo(forwardRef<
   HTMLAnchorElement,
   SidebarItemTitleProps
 >(
@@ -195,7 +195,7 @@ export const SidebarItemTitle = forwardRef<
       </ActionWrapper>
     );
   },
-);
+));
 
 SidebarItemTitle.displayName = 'SidebarItemTitle';
 
