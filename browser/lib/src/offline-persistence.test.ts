@@ -1,5 +1,5 @@
 import { describe, it, beforeEach } from 'vitest';
-import { Agent, Store, core, JSCryptoProvider, Resource, CollectionBuilder } from './index.js';
+import { Agent, Store, core, commits, JSCryptoProvider } from './index.js';
 
 /** Creates a fresh Store with the given agent, restoring any offline data. */
 function freshStore(agent: Agent): Store {
@@ -71,6 +71,23 @@ describe('Offline persistence across reloads', () => {
     const storeFinal = freshStore(agent);
     const rFinal = storeFinal.getResourceLoading(subject);
     expect(rFinal.get(core.properties.name)).toBe('v4');
+  });
+
+  it('offline save sets createdAt for sorting', async ({ expect }) => {
+    const store = freshStore(agent);
+    const drive = await store.createDrive('Timestamp Test');
+
+    const child = await store.newResource({
+      parent: drive.subject,
+      propVals: { [core.properties.name]: 'Test' },
+    });
+    await child.save();
+
+    // createdAt should be set automatically by the offline save path
+    const createdAt = child.get(commits.properties.createdAt);
+    expect(createdAt).toBeDefined();
+    expect(typeof createdAt).toBe('number');
+    expect(createdAt).toBeGreaterThan(0);
   });
 
   it('children are sorted by name', async ({ expect }) => {

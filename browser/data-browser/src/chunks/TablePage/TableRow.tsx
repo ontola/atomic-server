@@ -138,6 +138,8 @@ export function TableNewRow({
   useEffect(() => {
     let cancelled = false;
 
+    console.debug(`[TableNewRow] Creating new row resource for parent=${parent.subject.slice(0, 40)} index=${index}`);
+
     store
       .newResource({
         parent: parent.subject,
@@ -145,6 +147,8 @@ export function TableNewRow({
       })
       .then(row => {
         if (cancelled) {
+          console.debug(`[TableNewRow] Cancelled row creation (unmounted)`);
+
           return;
         }
 
