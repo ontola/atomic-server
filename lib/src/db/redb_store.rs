@@ -24,6 +24,7 @@ const TABLE_WATCHED_QUERIES: TableDefinition<&[u8], &[u8]> =
 const TABLE_PLUGIN_META: TableDefinition<&[u8], &[u8]> = TableDefinition::new("plugin_meta");
 const TABLE_DRIVE_MAPPING: TableDefinition<&[u8], &[u8]> = TableDefinition::new("drive_mapping");
 const TABLE_DID_MAPPING: TableDefinition<&[u8], &[u8]> = TableDefinition::new("did_mapping");
+const TABLE_LORO_SNAPSHOTS: TableDefinition<&[u8], &[u8]> = TableDefinition::new("loro_snapshots");
 
 fn table_def(tree: Tree) -> TableDefinition<'static, &'static [u8], &'static [u8]> {
     match tree {
@@ -35,6 +36,7 @@ fn table_def(tree: Tree) -> TableDefinition<'static, &'static [u8], &'static [u8
         Tree::PluginMeta => TABLE_PLUGIN_META,
         Tree::DriveMapping => TABLE_DRIVE_MAPPING,
         Tree::DidMapping => TABLE_DID_MAPPING,
+        Tree::LoroSnapshots => TABLE_LORO_SNAPSHOTS,
     }
 }
 
@@ -67,6 +69,7 @@ impl RedbStore {
             let _ = tx.open_table(TABLE_PLUGIN_META);
             let _ = tx.open_table(TABLE_DRIVE_MAPPING);
             let _ = tx.open_table(TABLE_DID_MAPPING);
+            let _ = tx.open_table(TABLE_LORO_SNAPSHOTS);
             tx.commit()
                 .map_err(|e| format!("Failed to commit initial tables: {e}"))?;
         }
@@ -99,6 +102,7 @@ impl RedbStore {
             let _ = tx.open_table(TABLE_PLUGIN_META);
             let _ = tx.open_table(TABLE_DRIVE_MAPPING);
             let _ = tx.open_table(TABLE_DID_MAPPING);
+            let _ = tx.open_table(TABLE_LORO_SNAPSHOTS);
             tx.commit()
                 .map_err(|e| format!("Failed to commit initial tables: {e}"))?;
         }

@@ -10,6 +10,7 @@ import {
   CommitBuilder,
   Commit,
   applyCommitToResource,
+  commitToJsonADObject,
   parseCommitResource,
 } from './commit.js';
 import { validateDatatype } from './datatypes.js';
@@ -291,13 +292,17 @@ export class Resource<C extends OptionalClass = any> {
       this._loroDoc = new LoroDocClass();
 
       // If the resource has a persisted Loro snapshot, import it.
-      const existingSnapshot = this.propvals.get(
-        commits.properties.loroUpdate,
-      );
+      const existingSnapshot = this.propvals.get(commits.properties.loroUpdate);
 
-      if (existingSnapshot instanceof Uint8Array && existingSnapshot.length > 0) {
+      if (
+        existingSnapshot instanceof Uint8Array &&
+        existingSnapshot.length > 0
+      ) {
         this._loroDoc.import(existingSnapshot);
-      } else if (typeof existingSnapshot === 'string' && existingSnapshot.length > 0) {
+      } else if (
+        typeof existingSnapshot === 'string' &&
+        existingSnapshot.length > 0
+      ) {
         // May arrive as a base64 string from JSON-AD parsing
         this._loroDoc.import(decodeB64(existingSnapshot));
       }
@@ -755,7 +760,9 @@ export class Resource<C extends OptionalClass = any> {
     const versions: Version[] = [];
 
     for (const change of flatChanges) {
-      const frontiers = [{ peer: change.peer as `${number}`, counter: change.counter }];
+      const frontiers = [
+        { peer: change.peer as `${number}`, counter: change.counter },
+      ];
 
       try {
         doc.checkout(frontiers);
@@ -1046,7 +1053,10 @@ export class Resource<C extends OptionalClass = any> {
         // which emits events that trigger cascading fetches (sideBarHandler etc.)
         this.store.resources.delete(oldSubject);
         // Keep an alias so children that reference the old _new: subject can still find it.
-        this.store.addResources(this, { skipCommitCompare: true, alias: oldSubject });
+        this.store.addResources(this, {
+          skipCommitCompare: true,
+          alias: oldSubject,
+        });
       }
     }
 
@@ -1300,52 +1310,60 @@ export class Resource<C extends OptionalClass = any> {
       this.propvals.set(commits.properties.createdAt, Date.now());
     }
 
-    // Build a JSON-AD representation with proper serialization.
-    const obj: Record<string, unknown> = { '@id': this.subject };
+    // Store each pending commit as a Resource in the Store so that
+    // CommitDetail can render author/date even while offline.
+    let lastCommitSubject: string | undefined;
 
-    for (const [key, value] of this.propvals) {
-      if (value instanceof Uint8Array) {
-        obj[key] = encodeB64(value);
-      } else {
-        obj[key] = value;
+    for (const commit of this._pendingCommits) {
+      const commitSubject = `did:ad:commit:${commit.signature}`;
+      lastCommitSubject = commitSubject;
+
+      const jsonAd = commitToJsonADObject(commit);
+      const commitResource = new Resource(commitSubject);
+
+      for (const [key, value] of Object.entries(jsonAd)) {
+        commitResource.setUnsafe(key, value);
       }
+
+      commitResource.loading = false;
+      commitResource.new = false;
+      // addResources will forward to the WASM DB for OPFS persistence.
+      this.store.addResources(commitResource, { skipCommitCompare: true });
     }
 
-    // Export the live Loro doc snapshot (contains document content).
-    if (this._loroDoc) {
-      const snapshot = this._loroDoc.export({ mode: 'snapshot' });
-      obj[commits.properties.loroUpdate] = encodeB64(snapshot);
+    // Set lastCommit on the resource so the UI can find the latest commit.
+    if (lastCommitSubject) {
+      this.propvals.set(properties.commit.lastCommit, lastCommitSubject);
+      this._lastCommit = lastCommitSubject;
     }
 
-    // Persist the last local signature so followup saves after reload
-    // can chain correctly (without it, every reload triggers a new DID genesis).
-    if (this._lastLocalSignature) {
-      obj['_lastLocalSignature'] = this._lastLocalSignature;
-    }
-
-    // Store in localStorage under a known prefix.
-    // This is simple, reliable, and survives page reload.
-    const storageKey = `atomic.offline.${this.subject}`;
-
-    try {
-      const json = JSON.stringify(obj);
-
-      if (typeof localStorage !== 'undefined') {
-        localStorage.setItem(storageKey, json);
-      }
-    } catch (e) {
-      console.error('[Offline] Failed to persist resource:', e);
-    }
-
-    // Also forward to WASM DB for indexing (best-effort, may lose loroUpdate).
     const clientDb = this.store.getClientDb();
 
+    // Export the Loro snapshot and persist it to the WASM DB (OPFS).
+    if (this._loroDoc && clientDb) {
+      const snapshot = this._loroDoc.export({ mode: 'snapshot' });
+      clientDb.putLoroSnapshot(this.subject, snapshot).catch(e => {
+        console.error('[Offline] Failed to persist Loro snapshot:', e);
+      });
+    }
+
+    // Persist resource to WASM DB (OPFS) for indexing.
+    // Loro snapshots are stored separately — skip Uint8Array values here.
     if (clientDb) {
+      const obj: Record<string, unknown> = { '@id': this.subject };
+
+      for (const [key, value] of this.propvals) {
+        if (value instanceof Uint8Array) continue;
+        obj[key] = value;
+      }
+
       clientDb.putResource(JSON.stringify(obj)).catch(() => {});
     }
 
+    // Also update the in-memory store so the UI reflects changes immediately.
+    this.store.addResources(this, { skipCommitCompare: true });
+
     // Clear pending commits — they've been incorporated into the resource state.
-    // Keep _lastLocalSignature so followup commits can chain correctly.
     this._pendingCommits = [];
   }
 
@@ -1368,10 +1386,10 @@ export class Resource<C extends OptionalClass = any> {
      */
     validate = true,
   ): Promise<void> {
-    if (this.store.isOffline() && validate) {
-      console.warn('Offline, not validating');
-      validate = false;
-    }
+    // if (this.store.isOffline() && validate) {
+    //   console.warn('Offline, not validating');
+    //   validate = false;
+    // }
 
     // Binary values (e.g. Loro updates) must go through setUnsafe, not set.
     if (value instanceof Uint8Array) {
@@ -1404,7 +1422,11 @@ export class Resource<C extends OptionalClass = any> {
     this.propvals.set(prop, value);
     this.loroSetProperty(prop, value as JSONValue);
     this._dirty = true;
-    this.eventManager.emit(ResourceEvents.LocalChange, prop, value as JSONValue);
+    this.eventManager.emit(
+      ResourceEvents.LocalChange,
+      prop,
+      value as JSONValue,
+    );
   }
 
   /**
@@ -1479,7 +1501,6 @@ export class Resource<C extends OptionalClass = any> {
 
     return parent.new;
   }
-
 }
 
 /** Type of Rights (e.g. read or write) */

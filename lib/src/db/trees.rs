@@ -22,6 +22,9 @@ pub enum Tree {
     DriveMapping,
     /// Maps DID pure IDs to their best known routing hint (e.g. drive DID).
     DidMapping,
+    /// Stores Loro CRDT snapshots as raw bytes, keyed by resource subject.
+    /// Kept separate from Resources because binary data doesn't round-trip through JSON-AD.
+    LoroSnapshots,
 }
 
 const RESOURCES: &str = "resources_v3";
@@ -32,6 +35,7 @@ const QUERIES_WATCHED: &str = "watched_queries_v2";
 const PLUGIN_META: &str = "plugin_meta";
 const DRIVE_MAPPING: &str = "drive_mapping";
 const DID_MAPPING: &str = "did_mapping";
+const LORO_SNAPSHOTS: &str = "loro_snapshots";
 
 impl std::fmt::Display for Tree {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -44,6 +48,7 @@ impl std::fmt::Display for Tree {
             Tree::PluginMeta => f.write_str(PLUGIN_META),
             Tree::DriveMapping => f.write_str(DRIVE_MAPPING),
             Tree::DidMapping => f.write_str(DID_MAPPING),
+            Tree::LoroSnapshots => f.write_str(LORO_SNAPSHOTS),
         }
     }
 }
@@ -60,6 +65,7 @@ impl AsRef<[u8]> for Tree {
             Tree::PluginMeta => PLUGIN_META.as_bytes(),
             Tree::DriveMapping => DRIVE_MAPPING.as_bytes(),
             Tree::DidMapping => DID_MAPPING.as_bytes(),
+            Tree::LoroSnapshots => LORO_SNAPSHOTS.as_bytes(),
         }
     }
 }

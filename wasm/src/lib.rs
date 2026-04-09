@@ -147,6 +147,27 @@ impl ClientDb {
         serde_wasm_bindgen::to_value(&response).map_err(|e| JsError::new(&e.to_string()))
     }
 
+    /// Store a Loro CRDT snapshot (raw bytes) for a resource subject.
+    #[wasm_bindgen(js_name = "putLoroSnapshot")]
+    pub fn put_loro_snapshot(&self, subject: &str, data: &[u8]) -> Result<(), JsError> {
+        use atomic_lib::db::trees::Tree;
+        self.db
+            .kv
+            .insert(Tree::LoroSnapshots, subject.as_bytes(), data)
+            .map_err(to_js_err)
+    }
+
+    /// Retrieve a Loro CRDT snapshot for a resource subject. Returns null if not found.
+    #[wasm_bindgen(js_name = "getLoroSnapshot")]
+    pub fn get_loro_snapshot(&self, subject: &str) -> Result<JsValue, JsError> {
+        use atomic_lib::db::trees::Tree;
+        match self.db.kv.get(Tree::LoroSnapshots, subject.as_bytes()) {
+            Ok(Some(data)) => Ok(js_sys::Uint8Array::from(data.as_slice()).into()),
+            Ok(None) => Ok(JsValue::NULL),
+            Err(e) => Err(to_js_err(e)),
+        }
+    }
+
     /// Get all subjects in the database.
     #[wasm_bindgen(js_name = "allSubjects")]
     pub fn all_subjects(&self) -> Result<JsValue, JsError> {

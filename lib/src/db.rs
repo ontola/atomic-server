@@ -92,7 +92,7 @@ pub type PropSubjectMap = HashMap<String, HashSet<String>>;
 pub struct Db {
     /// The key-value store backend. Abstracted behind a trait so different
     /// backends (sled, BTreeMap, etc.) can be used interchangeably.
-    pub(crate) kv: Arc<dyn KvStore>,
+    pub kv: Arc<dyn KvStore>,
     default_agent: Arc<Mutex<Option<crate::agents::Agent>>>,
     /// Endpoints are checked whenever a resource is requested. They calculate (some properties of) the resource and return it.
     endpoints: Vec<Endpoint>,

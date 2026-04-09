@@ -163,6 +163,18 @@ export class ClientDbWorker {
     return result as number;
   }
 
+  /** Store a Loro CRDT snapshot for a resource subject. */
+  async putLoroSnapshot(subject: string, data: Uint8Array): Promise<void> {
+    await this.send({ type: 'putLoroSnapshot', subject, data });
+  }
+
+  /** Retrieve a Loro CRDT snapshot for a resource subject. Returns null if not found. */
+  async getLoroSnapshot(subject: string): Promise<Uint8Array | null> {
+    const result = await this.send({ type: 'getLoroSnapshot', subject });
+
+    return (result as Uint8Array | null) ?? null;
+  }
+
   /** Whether the worker has been initialized and seeded. */
   get isReady(): boolean {
     return this.ready && this.seeded;

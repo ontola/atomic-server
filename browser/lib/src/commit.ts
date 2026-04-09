@@ -330,7 +330,7 @@ const serializeMap = {
 };
 
 /** Replaces the keys of a Commit object with their respective json-ad key */
-function commitToJsonADObject(
+export function commitToJsonADObject(
   commit: UnsignedCommit | Commit,
   origin?: string,
 ): JSONADObject {

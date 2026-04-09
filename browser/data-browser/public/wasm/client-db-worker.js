@@ -67,6 +67,23 @@ async function handleMessage(msg) {
       await db.populate();
       return;
 
+    case 'exportAllResources':
+      await ensureInit();
+      return db.exportAllResources();
+
+    case 'importAllResources':
+      await ensureInit();
+      return db.importAllResources(msg.jsonArray);
+
+    case 'putLoroSnapshot':
+      await ensureInit();
+      db.putLoroSnapshot(msg.subject, msg.data);
+      return;
+
+    case 'getLoroSnapshot':
+      await ensureInit();
+      return db.getLoroSnapshot(msg.subject);
+
     default:
       throw new Error(`Unknown message type: ${msg.type}`);
   }

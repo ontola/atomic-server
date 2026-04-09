@@ -2,7 +2,6 @@ import { ClientDbWorker, type Store } from '@tomic/lib';
 
 // Track the current worker so we can terminate it on HMR reload.
 let currentWorker: ClientDbWorker | undefined;
-let offlineRestored = false;
 
 /**
  * Initialize the WASM ClientDb in a Web Worker and attach it to the Store.
@@ -10,18 +9,6 @@ let offlineRestored = false;
  * Falls back to in-memory if OPFS is unavailable.
  */
 export function initClientDb(store: Store): void {
-  // Restore offline-saved resources from localStorage FIRST (synchronous).
-  // These contain Loro snapshots that the WASM DB can't store.
-  // Only run once — HMR re-runs must not overwrite in-memory state.
-  if (!offlineRestored) {
-    offlineRestored = true;
-    const count = store.restoreOfflineResources();
-
-    if (count > 0) {
-      console.info(`[Offline] Restored ${count} resources from localStorage`);
-    }
-  }
-
   if (typeof Worker === 'undefined') return;
 
   // Terminate previous worker (important for Vite HMR — releases OPFS lock).
@@ -98,17 +85,6 @@ export function initClientDb(store: Store): void {
     console.info(
       `[ClientDb] WASM database ready, seeded ${properties.length} properties + ${otherPromises.length} resources`,
     );
-
-    // Debug: check if any loroUpdate was lost during seeding
-    for (const key of Object.keys(localStorage)) {
-      if (!key.startsWith('atomic.offline.')) continue;
-      const subject = key.slice('atomic.offline.'.length);
-      const resource = store.resources.get(subject);
-
-      if (resource && !resource.get('https://atomicdata.dev/properties/loroUpdate')) {
-        console.error(`[ClientDb] loroUpdate LOST after seeding for ${subject.slice(0, 40)}`);
-      }
-    }
   });
 
   // Tell the clientDb to wait for seeding before reporting as ready.
