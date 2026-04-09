@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  dataBrowser,
   useResource,
   useCanWrite,
   unknownSubject,
@@ -40,13 +41,29 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = ({
     throw new Error('renderedHierarchy should not be empty');
   }
 
+  // Prevent infinite recursion: stop if we've already rendered this subject
+  // in the hierarchy, or if we're too deep.
+  const MAX_DEPTH = 10;
+
+  if (renderedHierarchy.includes(subject) || renderedHierarchy.length > MAX_DEPTH) {
+    return null;
+  }
+
   const resource = useResource(subject, { allowIncomplete: true });
   const [currentUrl] = useCurrentSubject();
   const canWrite = useCanWrite(resource);
   const active = currentUrl === subject;
   const [open, setOpen] = useState(active);
 
-  const { subjects: subResources } = useChildren(subject);
+  // Tables and chatrooms display children in their own UI — skip them entirely.
+  const classes = resource.getClasses();
+  const hideChildren =
+    classes.includes(dataBrowser.classes.table) ||
+    classes.includes(dataBrowser.classes.chatroom);
+
+  const { subjects: subResources } = useChildren(
+    hideChildren ? undefined : subject,
+  );
 
   const dragData: SideBarDragData = {
     renderedUnder: renderedHierarchy.at(-1)!,
