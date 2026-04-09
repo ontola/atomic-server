@@ -4056,9 +4056,11 @@ msgid "Open tag page"
 msgstr ""
 
 #: src/views/ChatRoomPage.tsx
+#: src/views/ChatRoomPage.tsx
 msgid "No messages yet"
 msgstr ""
 
+#: src/views/ChatRoomPage.tsx
 #: src/views/ChatRoomPage.tsx
 msgid "Be the first to say something"
 msgstr ""
@@ -4739,4 +4741,8 @@ msgstr ""
 
 #: src/components/Share/ShareDialog.tsx
 msgid "<0/> Copy link"
+msgstr ""
+
+#: src/views/ChatRoomPage.tsx
+msgid "Loading messages..."
 msgstr ""

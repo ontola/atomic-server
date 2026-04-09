@@ -3,8 +3,9 @@ import {
   core,
   dataBrowser,
   getTimestampNow,
-  useArray,
+  StoreEvents,
   useCanWrite,
+  useCollection,
   useResource,
   useStore,
   useString,
@@ -28,6 +29,7 @@ import { CommitDetail } from '../components/CommitDetail';
 import Markdown from '../components/datatypes/Markdown';
 import { Detail } from '../components/Detail';
 import { EditableTitle } from '../components/EditableTitle';
+import { LoaderInline } from '../components/Loader';
 import { editURL } from '../helpers/navigation';
 import { ResourceInline } from './ResourceInline';
 import { ResourcePageProps } from './ResourcePage';
@@ -35,9 +37,13 @@ import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 
 import { Column } from '../components/Row';
 
+const CHAT_PAGE_SIZE = 50;
+
 /** Full page ChatRoom that shows a message list and a form to add Messages. */
 export function ChatRoomPage({ resource }: ResourcePageProps) {
-  const [messages] = useArray(resource, dataBrowser.properties.messages);
+  const { messages, loading: messagesLoading, invalidate } = useChatMessages(
+    resource.subject,
+  );
   const [newMessageVal, setNewMessage] = useState('');
   const store = useStore();
   const [isReplyTo, setReplyTo] = useState<string | undefined>(undefined);
@@ -65,12 +71,12 @@ export function ChatRoomPage({ resource }: ResourcePageProps) {
 
   /** Creates a message using the internal state */
   const sendMessage = async (e?: React.SyntheticEvent) => {
+    e?.preventDefault();
     const messageBackup = newMessageVal;
 
     try {
       scrollToBottom();
       setNewMessage('');
-      e?.preventDefault();
 
       if (!disableSend) {
         const msgResource = await store.newResource({
@@ -86,6 +92,8 @@ export function ChatRoomPage({ resource }: ResourcePageProps) {
         });
 
         await msgResource.save();
+        store.notifyResourceManuallyCreated(msgResource);
+        invalidate();
         setReplyTo(undefined);
       }
     } catch (err) {
@@ -176,7 +184,25 @@ export function ChatRoomPage({ resource }: ResourcePageProps) {
           onCommit={() => inputRef.current?.focus()}
         />
         <ScrollingContent ref={scrollRef} onScroll={handleScroll}>
-          <MessagesPage subject={resource.subject} setReplyTo={handleReply} />
+          <div>
+            {messagesLoading ? (
+              <LoaderInline>Loading messages...</LoaderInline>
+            ) : messages.length === 0 ? (
+              <EmptyChatState>
+                <FaMessage />
+                <p>No messages yet</p>
+                <span>Be the first to say something</span>
+              </EmptyChatState>
+            ) : (
+              messages.map(message => (
+                <Message
+                  key={message}
+                  subject={message}
+                  setReplyTo={handleReply}
+                />
+              ))
+            )}
+          </div>
         </ScrollingContent>
         {isReplyTo && (
           <Detail>
@@ -454,41 +480,64 @@ const ScrollingContent = styled.div`
   flex: 1;
 `;
 
-interface MessagesPageProps {
-  subject: string;
-  setReplyTo: SetReplyToType;
-}
+/**
+ * Fetches messages (children) of a chatroom using the Collection system.
+ * Sorts by createdAt ascending (oldest first) with pagination.
+ */
+function useChatMessages(chatSubject: string) {
+  const store = useStore();
+  const [messages, setMessages] = useState<string[]>([]);
 
-/** Shows Messages for this page. Recursively fetches the next page, if in view */
-function MessagesPage({ subject, setReplyTo }: MessagesPageProps) {
-  const resource = useResource(subject);
-  const [messages] = useArray(resource, dataBrowser.properties.messages);
-  const [nextPage] = useString(resource, dataBrowser.properties.nextPage);
-
-  if (!resource.isReady()) {
-    return <>loading...</>;
-  }
-
-  if (messages.length === 0 && !nextPage) {
-    return (
-      <EmptyChatState>
-        <FaMessage />
-        <p>No messages yet</p>
-        <span>Be the first to say something</span>
-      </EmptyChatState>
-    );
-  }
-
-  return (
-    <div>
-      {nextPage && <MessagesPage subject={nextPage} setReplyTo={setReplyTo} />}
-      {messages.map(message => (
-        <Message
-          key={'message' + message}
-          subject={message}
-          setReplyTo={setReplyTo}
-        />
-      ))}
-    </div>
+  const { collection, ready, invalidateCollection } = useCollection(
+    {
+      property: core.properties.parent,
+      value: chatSubject,
+      sort_by: commits.properties.createdAt,
+      sort_desc: false,
+    },
+    { pageSize: CHAT_PAGE_SIZE },
   );
+
+  useEffect(() => {
+    const extractMembers = async () => {
+      await collection.waitForReady();
+      const members: string[] = [];
+
+      for (let i = 0; i < collection.totalMembers; i++) {
+        const member = await collection.getMemberWithIndex(i);
+
+        if (member) {
+          members.push(member);
+        }
+      }
+
+      setMessages(members);
+    };
+
+    extractMembers();
+  }, [collection]);
+
+  // Refresh when a resource is created under this chatroom
+  const invalidateRef = useRef(invalidateCollection);
+  invalidateRef.current = invalidateCollection;
+
+  const chatRef = useRef(chatSubject);
+  chatRef.current = chatSubject;
+
+  useEffect(() => {
+    const unsub = store.on(StoreEvents.ResourceManuallyCreated, resource => {
+      if (resource.get(core.properties.parent) === chatRef.current) {
+        invalidateRef.current();
+      }
+    });
+
+    return unsub;
+  }, [store]);
+
+  return {
+    messages,
+    loading: !ready,
+    invalidate: invalidateCollection,
+  };
 }
+

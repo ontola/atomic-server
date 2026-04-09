@@ -1105,7 +1105,6 @@ msgstr "<0/> Apply template"
 #: src/chunks/TablePage/PropertyForm/NumberPropertyForm.tsx
 #: src/views/BookmarkPage/BookmarkPreview.tsx
 #: src/views/ChatRoomPage.tsx
-#: src/views/ChatRoomPage.tsx
 msgid "loading..."
 msgstr "loading..."
 
@@ -4704,3 +4703,7 @@ msgstr "Link copied to clipboard"
 #: src/components/Share/ShareDialog.tsx
 msgid "<0/> Copy link"
 msgstr "<0/> Copy link"
+
+#: src/views/ChatRoomPage.tsx
+msgid "Loading messages..."
+msgstr "Loading messages..."
