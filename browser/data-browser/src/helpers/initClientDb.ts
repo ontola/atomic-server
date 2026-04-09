@@ -1,5 +1,4 @@
-import { ClientDbWorker, Resource, type Store } from '@tomic/lib';
-import type { JSONValue } from '@tomic/lib';
+import { ClientDbWorker, type Store } from '@tomic/lib';
 
 // Track the current worker so we can terminate it on HMR reload.
 let currentWorker: ClientDbWorker | undefined;
@@ -16,7 +15,11 @@ export function initClientDb(store: Store): void {
   // Only run once — HMR re-runs must not overwrite in-memory state.
   if (!offlineRestored) {
     offlineRestored = true;
-    restoreOfflineResources(store);
+    const count = store.restoreOfflineResources();
+
+    if (count > 0) {
+      console.info(`[Offline] Restored ${count} resources from localStorage`);
+    }
   }
 
   if (typeof Worker === 'undefined') return;
@@ -125,68 +128,3 @@ export function initClientDb(store: Store): void {
   }
 }
 
-/**
- * Synchronously restore resources that were saved offline (via localStorage).
- * These contain full Loro snapshots that the WASM DB can't store.
- * Must run before React renders so components see the full resource state.
- */
-function restoreOfflineResources(store: Store): void {
-  if (typeof localStorage === 'undefined') return;
-
-  const prefix = 'atomic.offline.';
-  const keys: string[] = [];
-
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-
-    if (key?.startsWith(prefix)) {
-      keys.push(key);
-    }
-  }
-
-  if (keys.length === 0) return;
-
-  let restored = 0;
-
-  for (const key of keys) {
-    try {
-      const json = localStorage.getItem(key);
-
-      if (!json) continue;
-
-      const parsed = JSON.parse(json);
-      const subject: string = parsed['@id'] ?? key.slice(prefix.length);
-      const hasLoro = !!parsed['https://atomicdata.dev/properties/loroUpdate'];
-
-      console.info(`[Offline] Restoring ${subject.slice(0, 40)} (${(json.length / 1024).toFixed(1)}KB, loro=${hasLoro}) key="${store.normalizeSubject(subject).slice(0, 50)}"`);
-
-      const res = new Resource(subject);
-
-      for (const [k, v] of Object.entries(parsed)) {
-        if (k === '@id' || k === '_lastLocalSignature') continue;
-        res.setUnsafe(k, v as JSONValue);
-      }
-
-      res.loading = false;
-      store.addResources(res, { alias: subject, skipCommitCompare: true });
-
-      // Restore commit chain state so followup saves don't trigger new genesis
-      if (parsed['_lastLocalSignature']) {
-        const stored = store.resources.get(subject);
-
-        if (stored) {
-          (stored as any)._lastLocalSignature =
-            parsed['_lastLocalSignature'];
-        }
-      }
-
-      restored++;
-    } catch {
-      // Skip corrupted entries
-    }
-  }
-
-  if (restored > 0) {
-    console.info(`[Offline] Restored ${restored} resources from localStorage`);
-  }
-}

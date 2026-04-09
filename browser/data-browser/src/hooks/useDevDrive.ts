@@ -1,4 +1,4 @@
-import { Agent, JSCryptoProvider, core, server, useStore } from '@tomic/react';
+import { Agent, JSCryptoProvider, useStore } from '@tomic/react';
 import { useCallback, useState } from 'react';
 import { useSettings } from '../helpers/AppSettings';
 import { saveAgentToIDB } from '../helpers/agentStorage';
@@ -36,27 +36,10 @@ export function useDevDrive() {
 
       store.setAgent(newAgent);
 
-      const driveResource = await store.newResource({
-        isA: server.classes.drive,
-        noParent: true,
-        propVals: {
-          [core.properties.name]: DEV_DRIVE_DISPLAY_NAME,
-          [core.properties.description]:
-            `Created via \`/app/dev-drive\` for local development and E2E. You can remove these with Prune test data on \`/app/prunetests\`. \n\n${DEV_DRIVE_PRUNE_MARKER}`,
-          [core.properties.write]: [agentDID],
-          [core.properties.read]: [agentDID],
-        },
-      });
-
-      await driveResource.save();
-
-      const agentResource = await store.getResource(agentDID);
-      await agentResource.set(
-        core.properties.personalDrive,
-        driveResource.subject,
+      const driveResource = await store.createDrive(
+        DEV_DRIVE_DISPLAY_NAME,
+        `Created via \`/app/dev-drive\` for local development and E2E. You can remove these with Prune test data on \`/app/prunetests\`. \n\n${DEV_DRIVE_PRUNE_MARKER}`,
       );
-      agentResource.push(server.properties.drives, [driveResource.subject]);
-      await agentResource.save();
 
       const finalSecret = Agent.buildSecret(
         agentKeys.privateKey,

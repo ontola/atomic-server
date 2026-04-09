@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Agent, JSCryptoProvider, core, server, useStore } from '@tomic/react';
+import { Agent, JSCryptoProvider, core, useStore } from '@tomic/react';
 import { fetchPersonalDriveSubject } from '../helpers/personalDrive';
 import { useSettings } from '../helpers/AppSettings';
 import { saveAgentToIDB } from '../helpers/agentStorage';
@@ -128,32 +128,18 @@ export function NewIdentitySection({
         throw new Error('No agent set');
       }
 
-      const agentResource = await store.getResource(identity.agentSubject);
+      // Set the display name on the agent resource
       if (username) {
+        const agentResource = await store.getResource(identity.agentSubject);
         await agentResource.set(core.properties.name, username);
       }
 
       const driveName = username ? `${username}'s Drive` : 'Personal';
 
-      const resource = await store.newResource({
-        isA: server.classes.drive,
-        noParent: true,
-        propVals: {
-          [core.properties.name]: driveName,
-          [core.properties.description]:
-            'Your private space on this server. Only you can read and write here.',
-          [core.properties.write]: [agent.subject],
-          [core.properties.read]: [agent.subject],
-        },
-      });
-
-      // Save the drive first, then persist the pointer on the Agent resource.
-      // (Avoids races where the Agent commit is written before the Drive exists.)
-      await resource.save();
-
-      await agentResource.set(core.properties.personalDrive, resource.subject);
-      agentResource.push(server.properties.drives, [resource.subject]);
-      await agentResource.save();
+      const resource = await store.createDrive(
+        driveName,
+        'Your private space on this server. Only you can read and write here.',
+      );
 
       const finalSecret = Agent.buildSecret(
         identity.privateKey,

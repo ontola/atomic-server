@@ -1015,7 +1015,15 @@ export class Resource<C extends OptionalClass = any> {
 
     // Auto-detect genesis: no previousCommit means this is a new resource.
     // The server requires is_genesis=true for DID resources without a previous commit.
-    if (!this.commitBuilder.previousCommit && !this._lastLocalSignature) {
+    // Only for DID-eligible subjects (_new: or did:ad:) — HTTP URLs use server-assigned subjects.
+    const isDIDEligible =
+      this.subject.startsWith('_new:') || this.subject.startsWith('did:ad:');
+
+    if (
+      isDIDEligible &&
+      !this.commitBuilder.previousCommit &&
+      !this._lastLocalSignature
+    ) {
       this.commitBuilder.setIsGenesis(true);
     }
 
