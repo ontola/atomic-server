@@ -17,6 +17,7 @@ import {
   FaQuestion,
   FaCircleExclamation,
 } from 'react-icons/fa6';
+import { Button } from '../components/Button';
 import { ContainerNarrow } from '../components/Containers';
 import { Main } from '../components/Main';
 import { Card } from '../components/Card';
@@ -39,7 +40,7 @@ function deriveNodeStatuses(status: StoreSyncStatus): {
   server: NodeStatus;
   line: NodeStatus;
 } {
-  const local: NodeStatus = status.clientDbReady ? 'synced' : 'unknown';
+  const local: NodeStatus = 'synced';
 
   if (!status.serverConnected) {
     return {
@@ -139,23 +140,16 @@ function SyncPage() {
 
         {/* Visual sync diagram */}
         <SyncDiagram>
-          <SyncNode $status={nodes.local}>
-            <NodeIcon $status={nodes.local}>
+          <SyncNode $status='synced'>
+            <NodeIcon $status='synced'>
               <FaLaptop />
             </NodeIcon>
             <NodeLabel>This device</NodeLabel>
-            <NodeStatusBadge $status={nodes.local}>
-              <StatusIcon status={nodes.local} />
-              {statusLabel(nodes.local)}
-            </NodeStatusBadge>
           </SyncNode>
 
           <SyncLine $status={nodes.line}>
             <LineTrack />
             {nodes.line === 'syncing' && <LinePulse />}
-            {status.pendingDirtyCount > 0 && (
-              <PendingBadge>{status.pendingDirtyCount} pending</PendingBadge>
-            )}
           </SyncLine>
 
           <SyncNode $status={nodes.server}>
@@ -173,6 +167,14 @@ function SyncPage() {
             </NodeStatusBadge>
           </SyncNode>
         </SyncDiagram>
+
+        {!status.serverConnected && (
+          <ReconnectRow>
+            <Button onClick={() => store.reconnect()}>
+              Reconnect
+            </Button>
+          </ReconnectRow>
+        )}
 
         {/* Details accordion */}
         <Section>
@@ -221,9 +223,26 @@ function SyncPage() {
           </DetailsGrid>
         </Section>
 
-        {/* Activity log */}
+        {/* Commit log */}
         <Section>
-          <SectionTitle>Activity</SectionTitle>
+          <SectionTitle>
+            Commit Log
+            {status.pendingDirtyCount > 0 && (
+              <PendingCount>
+                {status.pendingDirtyCount} unsynced
+              </PendingCount>
+            )}
+          </SectionTitle>
+          {status.pendingDirtySubjects.length > 0 && (
+            <PendingList>
+              {status.pendingDirtySubjects.map(subject => (
+                <PendingItem key={subject}>
+                  <PendingDot />
+                  <ResourceInline subject={subject} />
+                </PendingItem>
+              ))}
+            </PendingList>
+          )}
           {commitLog.length > 0 ? (
             <LogList>
               {commitLog.map(entry => (
@@ -340,6 +359,12 @@ const SectionTitle = styled.h2`
   margin-bottom: 0.8rem;
 `;
 
+const ReconnectRow = styled.div`
+  display: flex;
+  justify-content: center;
+  margin-bottom: 1.5rem;
+`;
+
 const Muted = styled.p`
   color: ${p => p.theme.colors.textLight};
 `;
@@ -447,13 +472,36 @@ const LinePulse = styled.div`
   animation: ${pulseAnim} 1.2s ease-in-out infinite;
 `;
 
-const PendingBadge = styled.span`
-  position: absolute;
-  top: -1.4rem;
-  font-size: 0.75rem;
-  color: ${p => p.theme.colors.warning};
-  white-space: nowrap;
+const PendingList = styled.div`
+  display: grid;
+  gap: 0.3rem;
+  margin-bottom: 1rem;
+`;
+
+const PendingItem = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: ${p => p.theme.radius};
+  background: ${p => p.theme.colors.warning}10;
+  border: 1px solid ${p => p.theme.colors.warning}30;
+  font-size: 0.9rem;
+`;
+
+const PendingDot = styled.div`
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: ${p => p.theme.colors.warning};
+  flex-shrink: 0;
+`;
+
+const PendingCount = styled.span`
+  font-size: 0.8rem;
   font-weight: 600;
+  color: ${p => p.theme.colors.warning};
+  margin-left: 0.5rem;
 `;
 
 // --- Details ---

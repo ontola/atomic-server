@@ -1,34 +1,206 @@
-{{#title Atomic Data Websockets - live synchronization}}
-# WebSockets in Atomic Data
+{{#title Atomic Data WebSocket Protocol — sync, real-time collaboration, and offline-first}}
+# WebSocket Protocol
 
-WebSockets are a very fast and efficient way to have a client and server communicate in an asynchronous fashion.
-They are used in Atomic Data to allow real-time updates, which makes it possible to create things like collaborative applications and multiplayer games.
-These have been implemented in `atomic-server` and `atomic-data-browser` (powered by `@tomic/lib`).
+The WebSocket protocol is the primary communication channel between Atomic Data clients and servers. It handles authentication, real-time updates, collaborative editing, and drive synchronization.
 
-## Initializing a WebSocket connection
+This same protocol is designed to work over other transports (e.g. Reticulum mesh) in the future.
 
-Send an HTTP `GET` request to the `/ws` endpoint of an `atomic-server`. The Server should update that request to a secure WebSocket (`wss`) connection.
-Use `x-atomic` [authentication headers (read more here)](./authentication.md) and use `ws` as a subject when signing.
-The `WebSocket-Protocol` is `AtomicData`.
+## Connection
 
-## Client to server messages
+Connect to the `/ws` endpoint of an `atomic-server`. The server upgrades the HTTP request to a WebSocket connection.
 
-- `SUBSCRIBE ${subject}` tells the Server that you'd like to receive Commits about this Subject.
-- `UNSUBSCRIBE ${subject}` tells the Server that you'd like to stop receiving Commits about this Subject.
-- `GET ${subject}` fetch an individual resource.
-- `AUTHENTICATE ${authenticationResource}` to set a user session for this websocket and allow authorized messages. The `authenticationResource` is a JSON-AD resource containing the signature and more, see [Authentication](../src/authentication.md).
+- **Protocol**: `atomicdata-ws.v0.1`
+- **Transport**: `wss://` (secure) or `ws://` for local development
+- **Authentication**: sent as the first message after connection (see below)
 
-## Server to client messages
+## Message format
 
-- `COMMIT ${CommitBody}` an entire [Commit](../src/commits/concepts.md) for a resource that you're subscribed to.
-- `RESOURCE ${Resource}` a JSON-AD Resource or array of JSON-AD Resources as a response to a `GET` message. If there is something wrong with this request (e.g. 404), return a `Error` Resource with the requested subject, similar to how the HTTP protocol server does this.`
-- `ERROR ${ErrorBody}` an Error resource is sent whenever something goes wrong. The `ErrorBody` is a plaintext, typically English description of what went wrong.
+All messages are UTF-8 text frames. Each message starts with a type keyword followed by a space and a payload (usually JSON):
 
-## Considerations
+```
+TYPE payload
+```
 
-- For many messages, there is no response to give if things are processed correctly. If a message is unknown or there is a different problem, return an `ERROR`.
+## Authentication
 
-## Example implementations
+Before sending any other messages, the client authenticates:
 
-- [Example client implementation in Typescript (@tomic/lib).](https://github.com/atomicdata-dev/atomic-data-browser/blob/main/lib/src/websockets.ts)
-- [Example server implementation in Rust using Actix-Web](https://github.com/atomicdata-dev/atomic-server/blob/master/server/src/handlers/web_sockets.rs)
+```
+-> AUTHENTICATE {"https://atomicdata.dev/properties/auth/agent":"did:ad:agent:...", ...}
+<- AUTHENTICATED
+```
+
+The authentication payload is a JSON-AD object containing the agent DID, a signed timestamp, and the public key. See [Authentication](./authentication.md) for details.
+
+If authentication fails, the server responds with `ERROR`. Unauthenticated connections can only access public resources.
+
+## Resource fetching
+
+```
+-> GET <subject>
+<- RESOURCE <json-ad>
+```
+
+Fetches a single resource by its subject URL or DID. The response is a JSON-AD object. If the resource is not found or unauthorized, the server returns an Error resource with the requested subject as `@id`.
+
+## Subscriptions
+
+### Resource subscriptions (legacy)
+
+```
+-> SUBSCRIBE <subject>
+-> UNSUBSCRIBE <subject>
+<- COMMIT <commit-json-ad>
+```
+
+Subscribe to changes on a specific resource. The server sends `COMMIT` messages whenever the resource is modified.
+
+### Query subscriptions
+
+```
+-> SUBSCRIBE_QUERY {"drive":"<drive-subject>"}
+<- QUERY_UPDATE {"added":["<subject>",...],"removed":["<subject>",...]}
+```
+
+Subscribe to all changes within a drive. The server sends `QUERY_UPDATE` messages when resources are added, removed, or modified within the drive's scope. The client can then fetch individual resources as needed.
+
+## Drive synchronization
+
+Drive sync ensures a client and server (or two peers) have the same set of resources with the same state. The protocol uses Loro CRDT version vectors for efficient diffing.
+
+### Version vector exchange
+
+```
+-> SYNC_VV {
+     "drive": "<drive-subject>",
+     "driveHash": "<sha256-hex>",
+     "peers": ["<peer-id-1>", "<peer-id-2>"],
+     "resources": {
+       "<subject>": [<counter-for-peer-1>, <counter-for-peer-2>],
+       ...
+     }
+   }
+```
+
+The client sends its version vector list for all resources in the drive. Each resource's Loro `oplogVersion()` is represented as an array of counters indexed by the `peers` array (deduplicated peer IDs across all resources).
+
+The server compares with its own version vectors and responds with one of:
+
+**Fast path** — everything is in sync:
+
+```
+<- SYNC_OK {"drive":"<drive-subject>"}
+```
+
+**Slow path** — differences found:
+
+```
+<- SYNC_DIFF {
+     "drive": "<drive-subject>",
+     "pull": ["<subject>", ...],
+     "push": ["<subject>", ...]
+   }
+```
+
+- `pull`: subjects the server needs from the client (client-ahead or unknown to server)
+- `push`: subjects the server will send to the client (server-ahead or unknown to client)
+
+### Delta exchange
+
+After a `SYNC_DIFF`, both sides exchange Loro deltas:
+
+```
+-> SYNC_DELTAS {
+     "drive": "<drive-subject>",
+     "deltas": {
+       "<subject>": "<base64-encoded-loro-bytes>",
+       ...
+     }
+   }
+```
+
+```
+<- SYNC_DELTAS {
+     "drive": "<drive-subject>",
+     "deltas": {
+       "<subject>": "<base64-encoded-loro-bytes>",
+       ...
+     }
+   }
+```
+
+The bytes are Loro snapshots (for new resources) or deltas (for resources both sides have). The receiver imports them into its local Loro doc, materializes properties, and updates indexes.
+
+### Legacy drive sync
+
+For backward compatibility, the older timestamp-based sync is still supported:
+
+```
+-> SYNC_DRIVE {"drive":"<drive-subject>", "since": <unix-millis>}
+<- RESOURCE <json-ad>
+   ... (one per resource)
+<- SYNC_DONE {"drive":"<drive-subject>", "timestamp": <unix-millis>, "count": <n>}
+```
+
+## Real-time collaborative editing (Loro sync)
+
+For live collaboration on a single resource (e.g. a document being edited by multiple users), the protocol supports streaming Loro updates:
+
+```
+-> LORO_SYNC_SUBSCRIBE {"subject":"<subject>"}
+-> LORO_SYNC_UNSUBSCRIBE {"subject":"<subject>"}
+-> LORO_SYNC_UPDATE <json>
+<- LORO_SYNC_UPDATE <json>
+```
+
+Subscribers receive real-time Loro CRDT updates as other users edit the resource. Updates are binary Loro deltas, base64-encoded in the JSON payload.
+
+### Ephemeral updates (cursors, presence)
+
+```
+-> LORO_EPHEMERAL_UPDATE <json>
+<- LORO_EPHEMERAL_UPDATE <json>
+```
+
+Ephemeral updates carry transient state like cursor positions and user presence. They are broadcast to all subscribers of the resource but are never persisted.
+
+## Error handling
+
+```
+<- ERROR <message>
+```
+
+Sent by the server when a message is malformed, unauthorized, or otherwise fails. The message is a plaintext description.
+
+## Typical connection flow
+
+```
+Client                              Server
+  |                                    |
+  |-- AUTHENTICATE {agent, sig, ...} ->|
+  |<------------- AUTHENTICATED -------|
+  |                                    |
+  |-- SUBSCRIBE_QUERY {drive} -------->|
+  |                                    |
+  |-- SYNC_VV {drive, peers, vvs} ---->|
+  |<----------- SYNC_DIFF {pull,push} -|
+  |<----------- SYNC_DELTAS {deltas} --|
+  |-- SYNC_DELTAS {deltas} ----------->|
+  |                                    |
+  |<----------- COMMIT {commit} -------|  (subscription update)
+  |<----------- QUERY_UPDATE {added} --|  (drive change)
+  |                                    |
+  |-- GET <subject> ------------------>|
+  |<----------- RESOURCE <json-ad> ----|
+  |                                    |
+  |-- LORO_SYNC_SUBSCRIBE {subject} -->|
+  |<--- LORO_SYNC_UPDATE {delta} ------|  (real-time collab)
+  |-- LORO_SYNC_UPDATE {delta} ------->|
+  |<--- LORO_EPHEMERAL_UPDATE {cursor}>|  (presence)
+```
+
+## Implementation
+
+- [Client implementation (TypeScript)](https://github.com/atomicdata-dev/atomic-server/blob/master/browser/lib/src/websockets.ts)
+- [Server implementation (Rust/Actix)](https://github.com/atomicdata-dev/atomic-server/blob/master/server/src/handlers/web_sockets.rs)
+- [Sync protocol design](https://github.com/atomicdata-dev/atomic-server/blob/master/docs/design/unified-data-layer.md#sync-protocol)

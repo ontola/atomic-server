@@ -136,6 +136,11 @@ export class WSClient {
     return this.ws.readyState;
   }
 
+  /** Close the WebSocket connection. */
+  public close(): void {
+    this.ws.close();
+  }
+
   public get protocolVersion(): string {
     return this.version;
   }
