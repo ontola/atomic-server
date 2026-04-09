@@ -13,12 +13,7 @@ Therefore, we need migrations to convert the old schema to the new one.
  */
 
 use crate::{
-    db::{
-        kv_store::KvStore,
-        sled_store::SledStore,
-        trees::Tree,
-        v1_types::propvals_v1_to_v2,
-    },
+    db::{kv_store::KvStore, sled_store::SledStore, trees::Tree, v1_types::propvals_v1_to_v2},
     errors::AtomicResult,
 };
 

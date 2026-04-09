@@ -528,7 +528,8 @@ mod tests {
         // Regression test: full HTTP URL with query params must be preserved
         // when converted to an Internal subject (e.g. WS GET for /query endpoint).
         let origin = "http://localhost:9883";
-        let raw = "http://localhost:9883/query?page_size=30&property=https%3A%2F%2Fexample.com%2Fprop";
+        let raw =
+            "http://localhost:9883/query?page_size=30&property=https%3A%2F%2Fexample.com%2Fprop";
         let subject = Subject::from_raw(raw, Some("localhost:9883"));
         assert!(
             matches!(subject, Subject::Internal { .. }),

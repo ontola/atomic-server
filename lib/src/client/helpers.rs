@@ -117,7 +117,9 @@ pub async fn fetch_body(
 
     let mut builder = reqwest::Client::builder();
     #[cfg(not(target_arch = "wasm32"))]
-    { builder = builder.timeout(std::time::Duration::from_secs(10)); }
+    {
+        builder = builder.timeout(std::time::Duration::from_secs(10));
+    }
     let client = builder
         .build()
         .map_err(|e| format!("Could not build HTTP client: {}", e))?;
@@ -212,7 +214,9 @@ async fn post_commit_custom_endpoint(
 
     let mut builder = reqwest::Client::builder();
     #[cfg(not(target_arch = "wasm32"))]
-    { builder = builder.timeout(std::time::Duration::from_secs(10)); }
+    {
+        builder = builder.timeout(std::time::Duration::from_secs(10));
+    }
     let client = builder
         .build()
         .map_err(|e| format!("Could not build HTTP client: {}", e))?;

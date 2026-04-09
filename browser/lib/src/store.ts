@@ -42,6 +42,9 @@ type SubjectCallback = (subject: string) => void;
 /** Callback called when the stores agent changes */
 type AgentCallback = (agent: Agent | undefined) => void;
 type ErrorCallback = (e: Error) => void;
+type ConnectionStateCallback = (connected: boolean) => void;
+type SyncStatusCallback = (status: StoreSyncStatus) => void;
+type CommitLogCallback = (entries: CommitLogEntry[]) => void;
 
 type ServerURLCallback = (serverURL: string) => void;
 type DriveCallback = (drive: string) => void;
@@ -69,6 +72,55 @@ export interface StoreOpts {
   agent?: Agent;
 }
 
+export interface StoreSyncStatus {
+  serverConnected: boolean;
+  driveSyncInProgress: boolean;
+  dirtySyncInProgress: boolean;
+  syncInProgress: boolean;
+  pendingDirtyCount: number;
+  serverUrl: string;
+  drive: string;
+  websocketReadyState?: number;
+  websocketProtocol?: string;
+  clientDbReady: boolean;
+  lastDriveSync?: {
+    drive: string;
+    count: number;
+    timestamp: number;
+  };
+}
+
+/** Compact representation of all Loro version vectors in a drive, for sync comparison. */
+export interface DriveSyncState {
+  drive: string;
+  driveHash: string;
+  /** Unique peer IDs across all resources, sorted. Counter arrays are indexed by this. */
+  peers: string[];
+  /** subject → counter array (indexed by `peers`). */
+  resources: Record<string, number[]>;
+}
+
+export interface CommitLogPropertySummary {
+  property: string;
+  value: JSONValue;
+}
+
+export interface CommitLogEntry {
+  id: string;
+  timestamp: number;
+  direction: 'outgoing' | 'incoming';
+  status: 'sent' | 'failed' | 'received';
+  subject: string;
+  signer?: string;
+  previousCommit?: string;
+  commitId?: string;
+  hasLoroUpdate: boolean;
+  destroy: boolean;
+  summary: string;
+  propertySummaries?: CommitLogPropertySummary[];
+  error?: string;
+}
+
 /** These Events trigger certain Handlers */
 export enum StoreEvents {
   /**
@@ -89,6 +141,11 @@ export enum StoreEvents {
   ServerURLChanged = 'server-url-changed',
   /** Event that gets called whenever the drive changes */
   DriveChanged = 'drive-changed',
+  /** Event that gets called whenever the websocket/server connection changes */
+  ConnectionChanged = 'connection-changed',
+  /** Event that gets called whenever sync/debug status changes */
+  SyncStatusChanged = 'sync-status-changed',
+  CommitLogChanged = 'commit-log-changed',
   /** Event that gets called whenever the store encounters an error */
   Error = 'error',
 }
@@ -117,6 +174,9 @@ type StoreEventHandlers = {
   [StoreEvents.AgentChanged]: AgentCallback;
   [StoreEvents.ServerURLChanged]: ServerURLCallback;
   [StoreEvents.DriveChanged]: DriveCallback;
+  [StoreEvents.ConnectionChanged]: ConnectionStateCallback;
+  [StoreEvents.SyncStatusChanged]: SyncStatusCallback;
+  [StoreEvents.CommitLogChanged]: CommitLogCallback;
   [StoreEvents.Error]: ErrorCallback;
 };
 
@@ -172,6 +232,14 @@ export class Store {
    * locally and synced when the connection is restored.
    */
   private _serverConnected = false;
+  private _driveSyncInProgress = false;
+  private _dirtySyncInProgress = false;
+  private _lastDriveSync?: {
+    drive: string;
+    count: number;
+    timestamp: number;
+  };
+  private _commitLog: CommitLogEntry[] = [];
 
   private eventManager = new EventManager<StoreEvents, StoreEventHandlers>();
 
@@ -236,11 +304,16 @@ export class Store {
    */
   public setClientDb(clientDb: ClientDbWorker): void {
     this.clientDb = clientDb;
+    this.emitSyncStatus();
   }
 
   /** Returns the ClientDbWorker if one has been set (may still be initializing). */
   public getClientDb(): ClientDbWorker | undefined {
     return this.clientDb;
+  }
+
+  public getCommitLog(): CommitLogEntry[] {
+    return [...this._commitLog];
   }
 
   /**
@@ -257,6 +330,8 @@ export class Store {
         JSON.stringify([...this.dirtyForSync]),
       );
     }
+
+    this.emitSyncStatus();
   }
 
   /**
@@ -265,14 +340,71 @@ export class Store {
    * (Loro snapshot has all accumulated changes) and POSTs it.
    * Called on WebSocket reconnect.
    */
+  /**
+   * Sort dirty resources by dependency order so that the server receives
+   * them in a valid sequence: agents first, then drives, then children
+   * sorted by parent depth (shallowest first).
+   */
+  private sortDirtyForSync(subjects: string[]): string[] {
+    const getPriority = (subject: string): number => {
+      // Agents must exist before anything else
+      if (subject.startsWith('did:ad:agent:')) return 0;
+
+      // The current drive must exist before its children
+      if (subject === this.drive) return 1;
+
+      // Everything else is a child resource
+      return 2;
+    };
+
+    const getDepth = (subject: string): number => {
+      let depth = 0;
+      let current = subject;
+
+      // Walk up the parent chain (max 20 to avoid infinite loops)
+      while (depth < 20) {
+        const resource = this.resources.get(current);
+
+        if (!resource) break;
+
+        const parent = resource.get(core.properties.parent) as
+          | string
+          | undefined;
+
+        if (!parent || parent === current) break;
+
+        depth++;
+        current = parent;
+      }
+
+      return depth;
+    };
+
+    return subjects.sort((a, b) => {
+      const pa = getPriority(a);
+      const pb = getPriority(b);
+
+      if (pa !== pb) return pa - pb;
+
+      // Within same priority, sort by parent depth (shallow first)
+      return getDepth(a) - getDepth(b);
+    });
+  }
+
   public async syncDirtyResources(): Promise<void> {
     if (this.dirtyForSync.size === 0) return;
 
+    this.setDirtySyncInProgress(true);
+
     const agent = this.getAgent();
 
-    if (!agent) return;
+    if (!agent) {
+      this.setDirtySyncInProgress(false);
 
-    const subjects = [...this.dirtyForSync];
+      return;
+    }
+
+    const subjects = this.sortDirtyForSync([...this.dirtyForSync]);
     console.info(`[Sync] Syncing ${subjects.length} dirty resources...`);
 
     for (const subject of subjects) {
@@ -280,6 +412,7 @@ export class Store {
 
       if (!resource) {
         this.dirtyForSync.delete(subject);
+        this.emitSyncStatus();
         continue;
       }
 
@@ -294,6 +427,7 @@ export class Store {
         }
 
         this.dirtyForSync.delete(subject);
+        this.emitSyncStatus();
 
         // Clean up offline localStorage entry
         if (typeof localStorage !== 'undefined') {
@@ -307,17 +441,142 @@ export class Store {
       }
     }
 
-    // Update persisted dirty set
-    if (typeof localStorage !== 'undefined') {
-      if (this.dirtyForSync.size === 0) {
-        localStorage.removeItem('atomic.dirtyForSync');
-      } else {
-        localStorage.setItem(
-          'atomic.dirtyForSync',
-          JSON.stringify([...this.dirtyForSync]),
-        );
+    try {
+      // Update persisted dirty set
+      if (typeof localStorage !== 'undefined') {
+        if (this.dirtyForSync.size === 0) {
+          localStorage.removeItem('atomic.dirtyForSync');
+        } else {
+          localStorage.setItem(
+            'atomic.dirtyForSync',
+            JSON.stringify([...this.dirtyForSync]),
+          );
+        }
+      }
+    } finally {
+      this.setDirtySyncInProgress(false);
+    }
+  }
+
+  /**
+   * Compute the drive sync state: a hash summarizing all resources' Loro
+   * version vectors, plus the individual VV data for diff computation.
+   * Used by the sync protocol to determine what needs syncing.
+   */
+  public async computeDriveSyncState(drive: string): Promise<DriveSyncState> {
+    // Collect VVs from WASM DB (persisted snapshots)
+    let allVVs: Record<string, Record<string, number>> = {};
+
+    if (this.clientDb) {
+      try {
+        allVVs = await this.clientDb.getAllVersionVectors();
+      } catch {
+        // WASM DB may not be ready yet
       }
     }
+
+    // Also collect from in-memory resources that belong to this drive.
+    // Covers freshly created resources not yet persisted to the WASM DB.
+    let matchedDrive = 0;
+    let hadDoc = 0;
+
+    for (const [subject, resource] of this.resources) {
+      if (allVVs[subject]) continue;
+
+      // Only include resources belonging to this drive
+      const parent = resource.get(core.properties.parent) as
+        | string
+        | undefined;
+
+      if (subject !== drive && parent !== drive) continue;
+      matchedDrive++;
+
+      const doc = resource.getLoroDoc?.();
+
+      if (!doc) continue;
+      hadDoc++;
+
+      // Debug: inspect the VV
+      try {
+        const vv = doc.oplogVersion?.();
+
+        // VersionVector from loro-crdt has toJSON() → Map<PeerID, number>
+        if (vv && typeof vv.toJSON === 'function') {
+          const vvMap: Record<string, number> = {};
+          const jsonMap = vv.toJSON() as Map<string, number>;
+
+          for (const [peerId, counter] of jsonMap) {
+            vvMap[String(peerId)] = Number(counter);
+          }
+
+          if (Object.keys(vvMap).length > 0) {
+            allVVs[subject] = vvMap;
+          }
+        }
+      } catch {
+        // Loro doc may not be fully initialized
+      }
+
+      // If VV is empty but resource exists and isn't new, include it with
+      // an empty VV so the server knows we have it (even if we can't diff).
+      // This happens when Loro state was clobbered by a merge from server
+      // JSON-AD that doesn't include the snapshot.
+      if (!allVVs[subject] && !resource.new) {
+        allVVs[subject] = {};
+      }
+    }
+
+    if (Object.keys(allVVs).length === 0) {
+      console.warn(
+        `[Sync] No VVs found for drive ${drive.slice(0, 40)}... (${matchedDrive} matched, ${hadDoc} had LoroDoc)`,
+      );
+    }
+
+    // Collect unique peer IDs across all resources
+    const peerSet = new Set<string>();
+
+    for (const vv of Object.values(allVVs)) {
+      for (const peerId of Object.keys(vv)) {
+        peerSet.add(peerId);
+      }
+    }
+
+    const peers = [...peerSet].sort();
+    const peerIndex = new Map(peers.map((p, i) => [p, i]));
+
+    // Build compact resource VV list (counters indexed by peers array)
+    const resources: Record<string, number[]> = {};
+
+    for (const [subject, vv] of Object.entries(allVVs)) {
+      const counters = new Array(peers.length).fill(0);
+
+      for (const [peerId, counter] of Object.entries(vv)) {
+        const idx = peerIndex.get(peerId);
+
+        if (idx !== undefined) {
+          counters[idx] = counter;
+        }
+      }
+
+      resources[subject] = counters;
+    }
+
+    // Compute drive hash: SHA-256 of sorted (subject + VV bytes)
+    const sortedEntries = Object.entries(resources).sort(([a], [b]) =>
+      a.localeCompare(b),
+    );
+    const hashInput = sortedEntries
+      .map(([s, c]) => `${s}:${c.join(',')}`)
+      .join('|');
+    const hashBuffer = await crypto.subtle.digest(
+      'SHA-256',
+      new TextEncoder().encode(hashInput),
+    );
+    const driveHash = Array.from(new Uint8Array(hashBuffer))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+
+    return { drive, driveHash, peers, resources };
   }
 
   /**
@@ -368,12 +627,15 @@ export class Store {
       const parsed = JSON.parse(jsonAd);
       const resource = new Resource(subject);
 
-      for (const [key, value] of Object.entries(parsed)) {
-        if (key === '@id') continue;
-        resource.setUnsafe(key, value as JSONValue);
-      }
+      resource.applyHydratedValues(
+        Object.entries(parsed).filter(([key]) => key !== '@id') as [string, JSONValue][],
+      );
+
+      resource.getLoroDoc();
 
       resource.loading = false;
+      resource.source = 'client-db';
+      resource.sourceTimestamp = Date.now();
       this.addResources(resource, { skipCommitCompare: true });
 
       return resource;
@@ -777,10 +1039,7 @@ export class Store {
             const resource = this.resources.get(subject);
 
             if (resource) {
-              resource.setUnsafe(
-                commits.properties.loroUpdate,
-                snapshot,
-              );
+              resource.importLoroUpdate(snapshot);
             }
           }
         }
@@ -837,12 +1096,15 @@ export class Store {
 
     const resource = new Resource(subject);
 
-    for (const [key, value] of Object.entries(parsed)) {
-      if (key === '@id') continue;
-      resource.setUnsafe(key, value as JSONValue);
-    }
+    resource.applyHydratedValues(
+      Object.entries(parsed).filter(([key]) => key !== '@id') as [string, JSONValue][],
+    );
+
+    resource.getLoroDoc();
 
     resource.loading = false;
+    resource.source = 'client-db';
+    resource.sourceTimestamp = Date.now();
     this.addResources(resource, { alias: subject });
 
     return true;
@@ -935,6 +1197,8 @@ export class Store {
         });
 
       // The client already returns the requested top-level resource as `resource`.
+      resource.source = 'server-http';
+      resource.sourceTimestamp = Date.now();
       this.addResources(resource, {
         alias: subject,
         // POST endpoint responses can reuse the same @id as an already loaded GET
@@ -948,6 +1212,8 @@ export class Store {
           this.normalizeSubject(r.subject) !==
           this.normalizeSubject(resource.subject)
         ) {
+          r.source = 'server-http';
+          r.sourceTimestamp = Date.now();
           this.addResources(r);
         }
       });
@@ -1044,6 +1310,9 @@ export class Store {
       // New resources don't have to load, they are just created.
       if (!opts.newResource && !isTemporarySubject) {
         resource.loading = true;
+      } else {
+        resource.source = 'created';
+        resource.sourceTimestamp = Date.now();
       }
 
       this.addResources(resource, { alias: normalized });
@@ -1165,7 +1434,7 @@ export class Store {
 
     if (datatypeUrl === undefined) {
       throw Error(
-        `Property ${subject} has no datatype: ${resource.getPropVals()}`,
+        `Property ${subject} has no datatype: ${resource.debugValueSummary()}`,
       );
     }
 
@@ -1173,7 +1442,7 @@ export class Store {
 
     if (shortname === undefined) {
       throw Error(
-        `Property ${subject} has no shortname: ${resource.getPropVals()}`,
+        `Property ${subject} has no shortname: ${resource.debugValueSummary()}`,
       );
     }
 
@@ -1181,7 +1450,7 @@ export class Store {
 
     if (description === undefined) {
       throw Error(
-        `Property ${subject} has no description: ${resource.getPropVals()}`,
+        `Property ${subject} has no description: ${resource.debugValueSummary()}`,
       );
     }
 
@@ -1230,7 +1499,12 @@ export class Store {
     if (this._serverConnected === connected) return;
 
     this._serverConnected = connected;
+    if (!connected) {
+      this._driveSyncInProgress = false;
+    }
     console.info(`[Store] Server ${connected ? 'connected' : 'disconnected'}`);
+    this.eventManager.emit(StoreEvents.ConnectionChanged, connected);
+    this.emitSyncStatus();
 
     if (connected) {
       this.syncDirtyResources().catch(e => {
@@ -1244,6 +1518,40 @@ export class Store {
    */
   public isOffline(): boolean {
     return !this._serverConnected;
+  }
+
+  public startDriveSync(drive: string): void {
+    this._driveSyncInProgress = true;
+    console.info(`[Sync] Starting drive sync for ${drive}`);
+    this.emitSyncStatus();
+  }
+
+  public finishDriveSync(
+    drive: string,
+    count: number,
+    timestamp: number,
+  ): void {
+    this._driveSyncInProgress = false;
+    this._lastDriveSync = { drive, count, timestamp };
+    this.emitSyncStatus();
+  }
+
+  public getSyncStatus(): StoreSyncStatus {
+    const ws = this.getDefaultWebSocket();
+
+    return {
+      serverConnected: this._serverConnected,
+      driveSyncInProgress: this._driveSyncInProgress,
+      dirtySyncInProgress: this._dirtySyncInProgress,
+      syncInProgress: this._driveSyncInProgress || this._dirtySyncInProgress,
+      pendingDirtyCount: this.dirtyForSync.size,
+      serverUrl: this.serverUrl,
+      drive: this.drive,
+      websocketReadyState: ws?.readyState,
+      websocketProtocol: ws?.protocolVersion,
+      clientDbReady: this.clientDb?.isReady ?? false,
+      lastDriveSync: this._lastDriveSync,
+    };
   }
 
   public async notifyResourceSaved(resource: Resource): Promise<void> {
@@ -1420,6 +1728,17 @@ export class Store {
     }
 
     this.eventManager.emit(StoreEvents.DriveChanged, drive);
+  }
+
+  /** Waits for all open WebSocket connections to finish authenticating. */
+  public async waitForWebSocketAuth(): Promise<void> {
+    const promises: Promise<void>[] = [];
+
+    this.webSockets.forEach(ws => {
+      promises.push(ws.authenticate());
+    });
+
+    await Promise.all(promises);
   }
 
   /** Opens a WebSocket for this Atomic Server URL */
@@ -1671,6 +1990,89 @@ export class Store {
     return this.eventManager.register(event, callback);
   }
 
+  private setDirtySyncInProgress(syncing: boolean): void {
+    if (this._dirtySyncInProgress === syncing) return;
+    this._dirtySyncInProgress = syncing;
+    this.emitSyncStatus();
+  }
+
+  private emitSyncStatus(): void {
+    this.eventManager.emit(StoreEvents.SyncStatusChanged, this.getSyncStatus());
+  }
+
+  private pushCommitLog(entry: Omit<CommitLogEntry, 'id'>): void {
+    this._commitLog = [
+      {
+        ...entry,
+        id: ulid(),
+      },
+      ...this._commitLog,
+    ].slice(0, 50);
+    this.eventManager.emit(StoreEvents.CommitLogChanged, this.getCommitLog());
+  }
+
+  private summarizeCommit(commit: Commit): string {
+    const parts: string[] = [];
+
+    if (commit.destroy) {
+      parts.push('destroy');
+    } else if (!commit.previousCommit) {
+      parts.push('created');
+    } else {
+      parts.push('updated');
+    }
+
+    if (commit.loroUpdate) {
+      parts.push('(loro)');
+    }
+
+    return parts.join(' ');
+  }
+
+  private summarizeCommitProperties(
+    commit: Commit,
+  ): CommitLogPropertySummary[] | undefined {
+    if (!commit.loroUpdate) {
+      return undefined;
+    }
+
+    try {
+      const materialized = new Resource(commit.subject);
+      materialized.importLoroUpdate(commit.loroUpdate);
+
+      const properties = Array.from(materialized.getPropVals().entries())
+        .filter(
+          ([prop]) =>
+            prop !== commits.properties.loroUpdate &&
+            prop !== commits.properties.lastCommit,
+        )
+        .map(([prop, value]) => ({ property: prop, value: value as JSONValue }))
+        .slice(0, 12);
+
+      return properties.length > 0 ? properties : undefined;
+    } catch (e) {
+      console.warn('[summarizeCommitProperties] failed:', e);
+
+      return undefined;
+    }
+  }
+
+  public logIncomingCommit(commit: Commit): void {
+    this.pushCommitLog({
+      timestamp: Date.now(),
+      direction: 'incoming',
+      status: 'received',
+      subject: commit.subject,
+      signer: commit.signer,
+      previousCommit: commit.previousCommit,
+      commitId: commit.signature ? `did:ad:commit:${commit.signature}` : undefined,
+      hasLoroUpdate: !!commit.loroUpdate,
+      destroy: !!commit.destroy,
+      summary: this.summarizeCommit(commit),
+      propertySummaries: this.summarizeCommitProperties(commit),
+    });
+  }
+
   /** Uploads files to atomic server and create resources for them, then returns the subjects.
    * If using this in Node.js and it does not work, try injecting node-fetch using `Store.injectFetch()` Some versions of Node create mallformed FormData when using the build-in fetch.
    */
@@ -1698,7 +2100,41 @@ export class Store {
 
   /** Posts a Commit to some endpoint. Returns the Commit created by the server. */
   public async postCommit(commit: Commit, endpoint: string): Promise<Commit> {
-    return this.client.postCommit(commit, endpoint);
+    try {
+      const created = await this.client.postCommit(commit, endpoint);
+      this.pushCommitLog({
+        timestamp: Date.now(),
+        direction: 'outgoing',
+        status: 'sent',
+        subject: commit.subject,
+        signer: commit.signer,
+        previousCommit: commit.previousCommit,
+        commitId:
+          (created.id as string | undefined) ??
+          (created.signature ? `did:ad:commit:${created.signature}` : undefined),
+        hasLoroUpdate: !!commit.loroUpdate,
+        destroy: !!commit.destroy,
+        summary: this.summarizeCommit(commit),
+        propertySummaries: this.summarizeCommitProperties(commit),
+      });
+
+      return created;
+    } catch (e) {
+      this.pushCommitLog({
+        timestamp: Date.now(),
+        direction: 'outgoing',
+        status: 'failed',
+        subject: commit.subject,
+        signer: commit.signer,
+        previousCommit: commit.previousCommit,
+        hasLoroUpdate: !!commit.loroUpdate,
+        destroy: !!commit.destroy,
+        summary: this.summarizeCommit(commit),
+        propertySummaries: this.summarizeCommitProperties(commit),
+        error: e instanceof Error ? e.message : String(e),
+      });
+      throw e;
+    }
   }
 
   /**
@@ -1956,19 +2392,7 @@ export interface FetchOpts {
 
 /** Convert a Resource to a JSON-AD string for storage in the WASM DB. */
 function resourceToJsonAd(resource: Resource): string | null {
-  const propvals = resource.getPropVals();
+  const obj = resource.toObject({ includeBinary: false });
 
-  if (propvals.size === 0) return null;
-
-  const obj: Record<string, unknown> = { '@id': resource.subject };
-
-  for (const [key, value] of propvals) {
-    // Skip Uint8Array values (Loro snapshots) — JSON.stringify turns them
-    // into huge {"0":98,"1":71,...} objects that block the main thread.
-    // These are persisted separately in the LoroSnapshots table in OPFS.
-    if (value instanceof Uint8Array) continue;
-    obj[key] = value;
-  }
-
-  return JSON.stringify(obj);
+  return obj ? JSON.stringify(obj) : null;
 }

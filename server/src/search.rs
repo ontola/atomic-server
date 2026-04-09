@@ -79,9 +79,13 @@ impl SearchState {
     pub async fn add_all_resources(&self, store: &Db) -> AtomicServerResult<()> {
         tracing::info!("Building search index");
 
-        let resources = store
-            .all_resources(true)
-            .filter(|resource| !resource.get_subject().as_str().contains("/commits/") && !resource.get_subject().as_str().starts_with("did:ad:commit:"));
+        let resources = store.all_resources(true).filter(|resource| {
+            !resource.get_subject().as_str().contains("/commits/")
+                && !resource
+                    .get_subject()
+                    .as_str()
+                    .starts_with("did:ad:commit:")
+        });
 
         for resource in resources {
             self.add_resource(&resource, store).await.map_err(|e| {
@@ -292,7 +296,6 @@ fn get_resource_title(resource: &Resource) -> String {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -342,7 +345,9 @@ mod tests {
             .expect("failed init config");
 
         let store = atomic_lib::Db::init_temp(&unique_string).await.unwrap();
-        atomic_lib::test_utils::setup_test_env(&store).await.unwrap();
+        atomic_lib::test_utils::setup_test_env(&store)
+            .await
+            .unwrap();
 
         let search_state = SearchState::new(&config).unwrap();
         let fields = search_state.get_schema_fields().unwrap();

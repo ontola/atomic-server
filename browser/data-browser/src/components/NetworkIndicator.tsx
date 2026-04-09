@@ -1,37 +1,42 @@
-import { useEffect, useState } from 'react';
-import { styled, keyframes } from 'styled-components';
-import { MdSignalWifiOff } from 'react-icons/md';
+import { useEffect, useRef, useState } from 'react';
+import { styled, keyframes, css } from 'styled-components';
+import { MdSignalWifiOff, MdCloudOff } from 'react-icons/md';
 import { useOnline } from '../hooks/useOnline';
 import { lighten } from 'polished';
 import toast from 'react-hot-toast';
-import { useStore } from '@tomic/react';
+import { StoreEvents, useStore } from '@tomic/react';
 
-/** Returns false when the WebSocket has definitively closed (server unreachable). */
-function useWebSocketConnected(): boolean {
+/** Tracks WebSocket connection state and whether the server was ever reached. */
+function useServerConnection() {
   const store = useStore();
-  const [connected, setConnected] = useState(true);
+  const [connected, setConnected] = useState(store.serverConnected);
+  const wasEverConnected = useRef(store.serverConnected);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      const ws = store.getDefaultWebSocket();
-      // CLOSED means the connection failed or dropped — CONNECTING means still trying
-      setConnected(ws?.readyState !== WebSocket.CLOSED);
-    }, 1000);
+    const unsub = store.on(StoreEvents.ConnectionChanged, (isConnected: boolean) => {
+      setConnected(isConnected);
 
-    return () => clearInterval(interval);
+      if (isConnected) {
+        wasEverConnected.current = true;
+      }
+    });
+
+    return unsub;
   }, [store]);
 
-  return connected;
+  return { connected, wasEverConnected: wasEverConnected.current };
 }
 
 export function NetworkIndicator() {
   const isOnline = useOnline();
-  const isWSConnected = useWebSocketConnected();
+  const { connected: isWSConnected, wasEverConnected } = useServerConnection();
   const isConnected = isOnline && isWSConnected;
 
   const label = !isOnline
     ? 'No internet connection'
-    : 'Server connection lost — reconnecting…';
+    : wasEverConnected
+      ? 'Server connection lost — reconnecting…'
+      : 'Running in offline mode';
 
   useEffect(() => {
     if (!isOnline) {
@@ -40,14 +45,16 @@ export function NetworkIndicator() {
   }, [isOnline]);
 
   useEffect(() => {
-    if (!isWSConnected) {
+    if (!isWSConnected && wasEverConnected) {
       toast.error('Connection to server lost, reconnecting...');
     }
-  }, [isWSConnected]);
+  }, [isWSConnected, wasEverConnected]);
+
+  const Icon = wasEverConnected ? MdSignalWifiOff : MdCloudOff;
 
   return (
-    <Wrapper shown={!isConnected} aria-hidden={isConnected} aria-label={label}>
-      <MdSignalWifiOff aria-hidden />
+    <Wrapper shown={!isConnected} $neverConnected={!wasEverConnected} aria-hidden={isConnected} aria-label={label}>
+      <Icon aria-hidden />
       <Label>{label}</Label>
     </Wrapper>
   );
@@ -82,14 +89,18 @@ const Label = styled.span`
   margin-left: 0;
 `;
 
-const Wrapper = styled.div<WrapperProps>`
-  --shadow-color: ${p => lighten(0.15, p.theme.colors.alert)};
+interface WrapperAllProps extends WrapperProps {
+  $neverConnected?: boolean;
+}
+
+const Wrapper = styled.div<WrapperAllProps>`
+  --shadow-color: ${p => lighten(0.15, p.$neverConnected ? p.theme.colors.textLight : p.theme.colors.alert)};
   position: fixed;
   bottom: 1.2rem;
   right: 2rem;
   z-index: ${({ theme }) => theme.zIndex.networkIndicator};
   font-size: 1.5rem;
-  color: ${p => p.theme.colors.alert};
+  color: ${p => p.$neverConnected ? p.theme.colors.textLight : p.theme.colors.alert};
   pointer-events: ${p => (p.shown ? 'auto' : 'none')};
   transition:
     opacity 0.1s ease-in-out,
@@ -98,7 +109,7 @@ const Wrapper = styled.div<WrapperProps>`
   opacity: ${p => (p.shown ? 1 : 0)};
 
   background-color: ${p => p.theme.colors.bg};
-  border: 1px solid ${p => p.theme.colors.alert};
+  border: 1px solid ${p => p.$neverConnected ? p.theme.colors.bg2 : p.theme.colors.alert};
   border-radius: 2rem;
   display: flex;
   align-items: center;
@@ -108,7 +119,7 @@ const Wrapper = styled.div<WrapperProps>`
 
   svg {
     flex-shrink: 0;
-    animation: ${pulse} 1.5s alternate ease-in-out infinite;
+    animation: ${p => p.$neverConnected ? 'none' : css`${pulse} 1.5s alternate ease-in-out infinite`};
     animation-play-state: ${p => (p.shown ? 'running' : 'paused')};
   }
 

@@ -12,15 +12,15 @@ pub mod context;
 mod errors;
 mod handlers;
 mod helpers;
-mod metrics;
 #[cfg(feature = "https")]
 mod https;
 pub mod invite_token;
 mod jsonerrors;
+mod loro_sync_broadcaster;
+mod metrics;
 pub mod plugins;
 pub mod routes;
 pub mod serve;
-mod loro_sync_broadcaster;
 // #[cfg(feature = "search")]
 mod search;
 #[cfg(test)]

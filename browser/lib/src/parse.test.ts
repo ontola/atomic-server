@@ -1,5 +1,9 @@
 import { describe, it } from 'vitest';
+import { encodeB64 } from './base64.js';
+import { commits } from './ontologies/commits.js';
 import { JSONADParser } from './parse.js';
+import { core } from './ontologies/core.js';
+import { Resource } from './resource.js';
 
 const EXAMPLE_SUBJECT = 'http://example.com/1';
 const EXAMPLE_SUBJECT2 = 'http://example.com/2';
@@ -62,5 +66,40 @@ describe('parse.ts', () => {
 
     expect(resource.get(STRING_PROPERTY)).toBe('Hoi');
     expect(resource.subject).toBe('my-new-id');
+  });
+
+  it('heals missing parent and isA from hydrated JSON when the loro snapshot is stale', async ({
+    expect,
+  }) => {
+    const legacy = new Resource(EXAMPLE_SUBJECT);
+    await legacy.set(STRING_PROPERTY, 'Hoi', false);
+    const snapshot = (legacy as any)._loroDoc.export({
+      mode: 'snapshot',
+    }) as Uint8Array;
+
+    const parser = new JSONADParser();
+    const [resource] = parser.parse({
+      '@id': EXAMPLE_SUBJECT,
+      [STRING_PROPERTY]: 'Hoi',
+      [core.properties.parent]: 'did:ad:test-drive',
+      [core.properties.isA]: ['https://atomicdata.dev/classes/Document'],
+      [core.properties.name]: 'Test doc',
+      [commits.properties.loroUpdate]: {
+        type: 'lorodoc',
+        data: encodeB64(snapshot),
+      },
+    });
+
+    expect(resource.get(core.properties.parent)).toBe('did:ad:test-drive');
+    expect(resource.get(core.properties.isA)).toEqual([
+      'https://atomicdata.dev/classes/Document',
+    ]);
+    expect(resource.hasUnsavedChanges()).toBe(false);
+
+    const loroJson = (resource as any)._loroDoc.getMap('properties').toJSON();
+    expect(loroJson[core.properties.parent]).toBe('did:ad:test-drive');
+    expect(loroJson[core.properties.isA]).toBe(
+      JSON.stringify(['https://atomicdata.dev/classes/Document']),
+    );
   });
 });

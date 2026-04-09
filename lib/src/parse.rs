@@ -581,8 +581,7 @@ async fn parse_json_ad_map_to_resource(
             continue;
         }
 
-        let result =
-            parse_propval(&prop, &val, subject.as_deref(), store, parse_opts).await;
+        let result = parse_propval(&prop, &val, subject.as_deref(), store, parse_opts).await;
 
         match result {
             Ok((new_key, atomic_val)) => {

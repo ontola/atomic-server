@@ -34,10 +34,8 @@ fn start_server() -> u16 {
         &format!("./.temp/sync_{}/config", unique),
     ]);
 
-    let mut config =
-        atomic_server::config::build_config(opts).expect("config failed");
-    config.search_index_path =
-        format!("./.temp/sync_{}/search", unique).into();
+    let mut config = atomic_server::config::build_config(opts).expect("config failed");
+    config.search_index_path = format!("./.temp/sync_{}/search", unique).into();
 
     // Run server in a separate thread with its own actix runtime
     std::thread::spawn(move || {
@@ -83,13 +81,17 @@ async fn two_clients_sync() -> AtomicResult<()> {
 
     let mut resource = client_a.new_resource(&drive_a);
     resource.set_name("Hello from Alice");
-    resource.set_unsafe(atomic_lib::urls::SHORTNAME.into(), atomic_lib::Value::Slug("test-resource".into()));
-    resource.set_unsafe(atomic_lib::urls::DESCRIPTION.into(), atomic_lib::Value::String("A test resource for sync".into()));
+    resource.set_unsafe(
+        atomic_lib::urls::SHORTNAME.into(),
+        atomic_lib::Value::Slug("test-resource".into()),
+    );
+    resource.set_unsafe(
+        atomic_lib::urls::DESCRIPTION.into(),
+        atomic_lib::Value::String("A test resource for sync".into()),
+    );
     resource.set_unsafe(
         atomic_lib::urls::IS_A.into(),
-        atomic_lib::Value::ResourceArray(vec![
-            atomic_lib::urls::CLASS.into(),
-        ]),
+        atomic_lib::Value::ResourceArray(vec![atomic_lib::urls::CLASS.into()]),
     );
     let subject = resource.save_remote(client_a.store()).await?;
     tracing::info!("Created resource: {}", subject);

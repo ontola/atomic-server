@@ -101,7 +101,16 @@ const SettingsAgent: React.FunctionComponent = () => {
   return (
     <Main>
       <ContainerNarrow>
-        {effectiveAgent ? (
+        {showCreate ? (
+          <>
+            <h1>Create account</h1>
+            <NewIdentitySection
+              autoStart
+              verifySecret
+              onDone={() => setShowCreate(false)}
+            />
+          </>
+        ) : effectiveAgent ? (
           <>
             <h1>User Settings</h1>
             <Column>
@@ -144,15 +153,6 @@ const SettingsAgent: React.FunctionComponent = () => {
                 onDriveSelect={handleSetDrive}
               />
             </Column>
-          </>
-        ) : showCreate ? (
-          <>
-            <h1>Create account</h1>
-            <NewIdentitySection
-              autoStart
-              verifySecret
-              onDone={() => setShowCreate(false)}
-            />
           </>
         ) : (
           <LoggedOutCenter>

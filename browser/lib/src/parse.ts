@@ -5,6 +5,7 @@ import { Resource, unknownSubject } from './resource.js';
 import {
   type JSONObject,
   type JSONValue,
+  type AtomicValue,
   isJSONObject,
 } from './value.js';
 import { decodeB64 } from './base64.js';
@@ -36,6 +37,8 @@ export class JSONADParser {
     const resource = new Resource(subject ?? unknownSubject);
 
     try {
+      const hydratedValues: [string, AtomicValue][] = [];
+
       for (const [key, value] of Object.entries(json)) {
         if (key === '@id') {
           if (typeof value !== 'string') {
@@ -61,14 +64,17 @@ export class JSONADParser {
         // Handle serialized binary values (LoroDoc or legacy YDoc)
         if (isJSONObject(value) && typeof value.type === 'string' && typeof value.data === 'string') {
           if (value.type === 'lorodoc' || value.type === 'ydoc') {
-            // Store as raw binary Uint8Array
-            resource.setUnsafe(key, decodeB64(value.data));
+            hydratedValues.push([key, decodeB64(value.data)]);
             continue;
           }
         }
 
-        resource.setUnsafe(key, value);
+        hydratedValues.push([key, value]);
       }
+
+      resource.applyHydratedValues(hydratedValues);
+
+      resource.getLoroDoc();
 
       if (resource.hasClasses(server.classes.error)) {
         resource.error = AtomicError.fromResource(resource);

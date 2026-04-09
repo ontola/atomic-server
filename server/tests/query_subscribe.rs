@@ -34,10 +34,8 @@ fn start_server() -> u16 {
         &format!("./.temp/qsub_{}/config", unique),
     ]);
 
-    let mut config =
-        atomic_server::config::build_config(opts).expect("config failed");
-    config.search_index_path =
-        format!("./.temp/qsub_{}/search", unique).into();
+    let mut config = atomic_server::config::build_config(opts).expect("config failed");
+    config.search_index_path = format!("./.temp/qsub_{}/search", unique).into();
 
     std::thread::spawn(move || {
         let rt = actix_web::rt::System::new();
@@ -101,7 +99,8 @@ async fn query_subscribe_receives_new_child() -> AtomicResult<()> {
         "property": atomic_lib::urls::PARENT,
         "value": parent_subject,
     });
-    ws_b.send_raw(&format!("SUBSCRIBE_QUERY {}", query_json)).await?;
+    ws_b.send_raw(&format!("SUBSCRIBE_QUERY {}", query_json))
+        .await?;
 
     let mut rx = ws_b.subscribe();
 
@@ -129,17 +128,23 @@ async fn query_subscribe_receives_new_child() -> AtomicResult<()> {
     let received = tokio::time::timeout(Duration::from_secs(5), async {
         loop {
             match rx.recv().await {
-                Ok(WsMessage::QueryUpdate { property, value, added, removed }) => {
+                Ok(WsMessage::QueryUpdate {
+                    property,
+                    value,
+                    added,
+                    removed,
+                }) => {
                     if added.contains(&child_subject) {
-                        return Ok::<(Option<String>, Option<String>, Vec<String>, Vec<String>), atomic_lib::errors::AtomicError>(
-                            (property, value, added, removed)
-                        );
+                        return Ok::<
+                            (Option<String>, Option<String>, Vec<String>, Vec<String>),
+                            atomic_lib::errors::AtomicError,
+                        >((property, value, added, removed));
                     }
                 }
                 Ok(WsMessage::Error(e)) => {
                     tracing::warn!("WS error: {}", e);
                 }
-                Ok(_) => continue,  // Skip other messages (COMMIT, etc.)
+                Ok(_) => continue, // Skip other messages (COMMIT, etc.)
                 Err(e) => {
                     return Err(format!("WS channel error: {}", e).into());
                 }
@@ -196,7 +201,8 @@ async fn drive_wide_subscription_receives_any_change() -> AtomicResult<()> {
     let query_json = serde_json::json!({
         "drive": drive,
     });
-    ws_b.send_raw(&format!("SUBSCRIBE_QUERY {}", query_json)).await?;
+    ws_b.send_raw(&format!("SUBSCRIBE_QUERY {}", query_json))
+        .await?;
 
     let mut rx = ws_b.subscribe();
     tokio::time::sleep(Duration::from_secs(1)).await;
@@ -240,7 +246,10 @@ async fn drive_wide_subscription_receives_any_change() -> AtomicResult<()> {
     .await
     .map_err(|_| "Timeout: Agent B did not receive drive-wide QUERY_UPDATE within 5 seconds")??;
 
-    assert!(received, "Should have received the resource in a drive-wide update");
+    assert!(
+        received,
+        "Should have received the resource in a drive-wide update"
+    );
 
     Ok(())
 }

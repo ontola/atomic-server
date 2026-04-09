@@ -7,7 +7,7 @@ Functions for fetching data from an instance of AtomicServer.
 
 pub mod helpers;
 pub use helpers::*;
-pub mod search;
 pub mod connected;
+pub mod search;
 #[cfg(feature = "ws")]
 pub mod ws;

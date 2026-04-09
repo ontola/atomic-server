@@ -28,7 +28,7 @@ test.describe('onboarding', () => {
 
     // Secret step — the secret includes the drive URL
     await expect(
-      page.getByRole('heading', { name: 'Your new identity is ready' }),
+      page.getByRole('heading', { name: 'Safely store your secret' }),
     ).toBeVisible({ timeout: 10000 });
 
     // Get the secret from the code block BEFORE signing out
@@ -85,12 +85,14 @@ test.describe('onboarding', () => {
     ).toBeVisible({ timeout: 10000 });
 
     // Navigate to the agent's profile edit page to verify the name was saved
-    // Use the subject from the decoded secret directly
-    await page2.goto(`${FRONTEND_URL}/${decodedSecret.subject}/edit`);
+    await page2.goto(
+      `${FRONTEND_URL}/app/edit?subject=${encodeURIComponent(decodedSecret.subject)}`,
+    );
 
-    // The profile name "Test User" should be visible somewhere on the page
-    // This verifies that the profile name was actually persisted to the server
-    await expect(page2.getByText('Test User')).toBeVisible({ timeout: 5000 });
+    // The profile name should be loaded into the edit form from the server.
+    await expect(page2.getByLabel('Name')).toHaveValue('Test User', {
+      timeout: 5000,
+    });
 
     await context2.close();
   });

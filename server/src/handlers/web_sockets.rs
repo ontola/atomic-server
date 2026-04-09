@@ -17,14 +17,12 @@ use atomic_lib::{
     errors::AtomicResult,
     Db, Storelike,
 };
+use base64::Engine as _;
 use std::time::{Duration, Instant};
 
 use crate::{
-    actor_messages::CommitMessage,
-    appstate::AppState,
-    commit_monitor::CommitMonitor,
-    errors::AtomicServerResult,
-    helpers::get_auth_headers,
+    actor_messages::CommitMessage, appstate::AppState, commit_monitor::CommitMonitor,
+    errors::AtomicServerResult, helpers::get_auth_headers,
     loro_sync_broadcaster::LoroSyncBroadcaster,
 };
 
@@ -130,22 +128,24 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WebSocketConnecti
                                 )
                             }
                             .into_actor(self)
-                            .map(|(res, subject_str, origin), _actor, ctx| match res {
-                                Ok(r) => {
-                                    let serialized = r
-                                        .to_json_ad(Some(&origin))
-                                        .expect("Can't serialize Resource to JSON-AD");
-                                    ctx.text(format!("RESOURCE {serialized}"));
-                                    crate::metrics::resource_fetched_ws();
-                                }
-                                Err(e) => {
-                                    let r = e.into_resource(subject_str);
-                                    let serialized_err = r
-                                        .to_json_ad(Some(&origin))
-                                        .expect("Can't serialize Resource to JSON-AD");
-                                    ctx.text(format!("RESOURCE {serialized_err}"));
-                                }
-                            }),
+                            .map(
+                                |(res, subject_str, origin), _actor, ctx| match res {
+                                    Ok(r) => {
+                                        let serialized = r
+                                            .to_json_ad(Some(&origin))
+                                            .expect("Can't serialize Resource to JSON-AD");
+                                        ctx.text(format!("RESOURCE {serialized}"));
+                                        crate::metrics::resource_fetched_ws();
+                                    }
+                                    Err(e) => {
+                                        let r = e.into_resource(subject_str);
+                                        let serialized_err = r
+                                            .to_json_ad(Some(&origin))
+                                            .expect("Can't serialize Resource to JSON-AD");
+                                        ctx.text(format!("RESOURCE {serialized_err}"));
+                                    }
+                                },
+                            ),
                         );
                     } else {
                         ctx.text("ERROR GET needs a subject");
@@ -210,7 +210,6 @@ fn handle_ws_message_sync(
 ) -> AtomicResult<()> {
     tracing::debug!("WebSocket message {}", text);
     match text.as_str() {
-
         s if s.starts_with("SUBSCRIBE ") => {
             let mut parts = s.split("SUBSCRIBE ");
             if let Some(subject_str) = parts.nth(1) {
@@ -270,27 +269,24 @@ fn handle_ws_message_sync(
         }
         s if s.starts_with("LORO_SYNC_UPDATE ") => {
             let json = &s[17..];
-            let mut update: crate::actor_messages::LoroSyncUpdate =
-                serde_json::from_str(json)
-                    .map_err(|e| format!("Invalid LORO_SYNC_UPDATE JSON: {e}"))?;
+            let mut update: crate::actor_messages::LoroSyncUpdate = serde_json::from_str(json)
+                .map_err(|e| format!("Invalid LORO_SYNC_UPDATE JSON: {e}"))?;
             update.addr = Some(ctx.address());
             conn.loro_sync_broadcaster_addr.do_send(update);
             Ok(())
         }
         s if s.starts_with("LORO_EPHEMERAL_UPDATE ") => {
             let json = &s[21..];
-            let mut update: crate::actor_messages::LoroEphemeralUpdate =
-                serde_json::from_str(json)
-                    .map_err(|e| format!("Invalid LORO_EPHEMERAL_UPDATE JSON: {e}"))?;
+            let mut update: crate::actor_messages::LoroEphemeralUpdate = serde_json::from_str(json)
+                .map_err(|e| format!("Invalid LORO_EPHEMERAL_UPDATE JSON: {e}"))?;
             update.addr = Some(ctx.address());
             conn.loro_sync_broadcaster_addr.do_send(update);
             Ok(())
         }
         s if s.starts_with("SUBSCRIBE_QUERY ") => {
             let json = &s[16..];
-            let query: crate::actor_messages::QuerySubscriptionJSON =
-                serde_json::from_str(json)
-                    .map_err(|e| format!("Invalid SUBSCRIBE_QUERY JSON: {e}"))?;
+            let query: crate::actor_messages::QuerySubscriptionJSON = serde_json::from_str(json)
+                .map_err(|e| format!("Invalid SUBSCRIBE_QUERY JSON: {e}"))?;
             conn.commit_monitor_addr
                 .do_send(crate::actor_messages::SubscribeQuery {
                     addr: ctx.address(),
@@ -299,24 +295,56 @@ fn handle_ws_message_sync(
                 });
             Ok(())
         }
-        s if s.starts_with("SYNC_DRIVE ") => {
-            let json = &s[11..];
-            let request: SyncDriveRequest =
-                serde_json::from_str(json)
-                    .map_err(|e| format!("Invalid SYNC_DRIVE JSON: {e}"))?;
+        s if s.starts_with("SYNC_VV ") => {
+            let json = &s[8..];
+            let request: SyncVVRequest =
+                serde_json::from_str(json).map_err(|e| format!("Invalid SYNC_VV JSON: {e}"))?;
             let store = conn.store.clone();
             let agent = conn.agent.clone();
             let origin = conn.origin.clone();
             ctx.spawn(
-                async move {
-                    handle_sync_drive(request, store, agent, origin).await
-                }
-                .into_actor(conn)
-                .map(|messages, _actor, ctx| {
-                    for msg in messages {
-                        ctx.text(msg);
-                    }
-                }),
+                async move { handle_sync_vv(request, store, agent, origin).await }
+                    .into_actor(conn)
+                    .map(|messages, _actor, ctx| {
+                        for msg in messages {
+                            ctx.text(msg);
+                        }
+                    }),
+            );
+            Ok(())
+        }
+        s if s.starts_with("SYNC_DELTAS ") => {
+            let json = &s[12..];
+            let request: SyncDeltasRequest =
+                serde_json::from_str(json).map_err(|e| format!("Invalid SYNC_DELTAS JSON: {e}"))?;
+            let store = conn.store.clone();
+            let agent = conn.agent.clone();
+            ctx.spawn(
+                async move { handle_sync_deltas(request, store, agent).await }
+                    .into_actor(conn)
+                    .map(|messages, _actor, ctx| {
+                        for msg in messages {
+                            ctx.text(msg);
+                        }
+                    }),
+            );
+            Ok(())
+        }
+        s if s.starts_with("SYNC_DRIVE ") => {
+            let json = &s[11..];
+            let request: SyncDriveRequest =
+                serde_json::from_str(json).map_err(|e| format!("Invalid SYNC_DRIVE JSON: {e}"))?;
+            let store = conn.store.clone();
+            let agent = conn.agent.clone();
+            let origin = conn.origin.clone();
+            ctx.spawn(
+                async move { handle_sync_drive(request, store, agent, origin).await }
+                    .into_actor(conn)
+                    .map(|messages, _actor, ctx| {
+                        for msg in messages {
+                            ctx.text(msg);
+                        }
+                    }),
             );
             Ok(())
         }
@@ -470,47 +498,25 @@ async fn handle_sync_drive(
 ) -> Vec<String> {
     let mut messages = Vec::new();
     let now = atomic_lib::utils::now();
-    let drive_subject = atomic_lib::Subject::from_raw(
-        &request.drive,
-        store.get_base_domain().as_deref(),
-    );
+    let drive_subject =
+        atomic_lib::Subject::from_raw(&request.drive, store.get_base_domain().as_deref());
 
-    // Query for all resources that have this drive as parent (recursively).
-    // We use the PropValSub index: find all resources where parent = drive_subject.
-    // Then for each, also find their children, etc.
-    // For simplicity and performance, we iterate ALL resources and filter by drive prefix.
+    let drive_subjects = collect_drive_subjects(&store, &drive_subject);
+
     let mut count = 0;
 
-    for resource in store.all_resources(false) {
-        let subject = resource.get_subject();
-
-        // Check if this resource belongs to the requested drive.
-        // For URL-based subjects, check prefix match.
-        // For DID subjects, check parent hierarchy (expensive, so we check the drive mapping).
-        let belongs_to_drive = if subject.is_did() {
-            // DID resources: check if parent chain leads to the drive
-            resource
-                .get(atomic_lib::urls::PARENT)
-                .ok()
-                .map(|v| v.to_string() == drive_subject.as_str().to_string())
-                .unwrap_or(false)
-        } else {
-            // URL resources: prefix match
-            subject.as_str().starts_with(drive_subject.as_str())
+    for subject_str in &drive_subjects {
+        let subject = atomic_lib::Subject::from_raw(subject_str, store.get_base_domain().as_deref());
+        let resource = match store.get_resource(&subject).await {
+            Ok(r) => r,
+            Err(_) => continue,
         };
-
-        if !belongs_to_drive {
-            continue;
-        }
 
         // If `since` is specified, only send resources modified after that timestamp
         if let Some(since) = request.since {
             if let Ok(last_commit_val) = resource.get(atomic_lib::urls::LAST_COMMIT) {
                 let commit_subject = last_commit_val.to_string();
-                if let Ok(commit_resource) = store
-                    .get_resource(&commit_subject.into())
-                    .await
-                {
+                if let Ok(commit_resource) = store.get_resource(&commit_subject.into()).await {
                     if let Ok(created_at) = commit_resource.get(atomic_lib::urls::CREATED_AT) {
                         if let Ok(ts) = created_at.to_int() {
                             if ts <= since {
@@ -539,7 +545,11 @@ async fn handle_sync_drive(
                 count += 1;
             }
             Err(e) => {
-                tracing::warn!("Failed to serialize resource {} during sync: {}", subject, e);
+                tracing::warn!(
+                    "Failed to serialize resource {} during sync: {}",
+                    subject_str,
+                    e
+                );
             }
         }
     }
@@ -556,4 +566,325 @@ async fn handle_sync_drive(
 
     tracing::info!("SYNC_DRIVE completed: sent {} resources", count);
     messages
+}
+
+// --- Version-vector based sync protocol ---
+
+#[derive(serde::Deserialize)]
+struct SyncVVRequest {
+    drive: String,
+    #[serde(rename = "driveHash")]
+    drive_hash: String,
+    peers: Vec<String>,
+    resources: std::collections::HashMap<String, Vec<i32>>,
+}
+
+#[derive(serde::Deserialize)]
+struct SyncDeltasRequest {
+    drive: String,
+    deltas: std::collections::HashMap<String, String>, // subject → base64 Loro bytes
+}
+
+#[derive(serde::Serialize)]
+struct SyncDiffMessage {
+    drive: String,
+    /// Subjects the server needs from the client (client-ahead or unknown to server)
+    pull: Vec<String>,
+    /// Subjects the server will push deltas for (server-ahead)
+    push: Vec<String>,
+}
+
+#[derive(serde::Serialize)]
+struct SyncDeltasMessage {
+    drive: String,
+    /// subject → base64-encoded Loro delta/snapshot bytes
+    deltas: std::collections::HashMap<String, String>,
+}
+
+/// Handle SYNC_VV: compare client's version vectors with server's, determine diff.
+async fn handle_sync_vv(
+    request: SyncVVRequest,
+    store: Db,
+    agent: ForAgent,
+    origin: String,
+) -> Vec<String> {
+    use atomic_lib::db::trees::Tree;
+    use atomic_lib::loro::AtomicLoroDoc;
+
+    let mut messages = Vec::new();
+    let drive_subject =
+        atomic_lib::Subject::from_raw(&request.drive, store.get_base_domain().as_deref());
+
+    // Collect server-side VVs for all resources in this drive
+    let drive_subjects = collect_drive_subjects(&store, &drive_subject);
+
+    // Build server VV map: subject → { peer_id_str → counter }
+    let mut server_vvs: std::collections::HashMap<String, std::collections::HashMap<String, i32>> =
+        std::collections::HashMap::new();
+
+    for subject_str in &drive_subjects {
+        if let Ok(Some(snapshot_bytes)) = store.kv.get(Tree::LoroSnapshots, subject_str.as_bytes())
+        {
+            if let Ok(doc) = AtomicLoroDoc::from_snapshot(&snapshot_bytes) {
+                server_vvs.insert(subject_str.clone(), doc.oplog_vv_map());
+            }
+        }
+    }
+
+    // Compare VVs to compute diff
+    // Reconstruct client VVs from compact format
+    let mut client_vvs: std::collections::HashMap<String, std::collections::HashMap<String, i32>> =
+        std::collections::HashMap::new();
+
+    for (subject, counters) in &request.resources {
+        let mut vv = std::collections::HashMap::new();
+
+        for (i, &counter) in counters.iter().enumerate() {
+            if counter != 0 {
+                if let Some(peer_id) = request.peers.get(i) {
+                    vv.insert(peer_id.clone(), counter);
+                }
+            }
+        }
+
+        client_vvs.insert(subject.clone(), vv);
+    }
+
+    let mut pull: Vec<String> = Vec::new(); // server needs from client
+    let mut push: Vec<String> = Vec::new(); // server will push to client
+    let mut push_deltas: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
+
+    // Check each server resource against client
+    for (subject, server_vv) in &server_vvs {
+        // Check read permission before sending
+        if let Ok(resource) = store
+            .get_resource(&atomic_lib::Subject::from_raw(
+                subject,
+                store.get_base_domain().as_deref(),
+            ))
+            .await
+        {
+            if atomic_lib::hierarchy::check_read(&store, &resource, &agent)
+                .await
+                .is_err()
+            {
+                continue;
+            }
+        }
+
+        if let Some(client_vv) = client_vvs.get(subject) {
+            // Both sides have it — check if they differ
+            let server_ahead = server_vv
+                .iter()
+                .any(|(p, &sc)| client_vv.get(p).copied().unwrap_or(0) < sc);
+            let client_ahead = client_vv
+                .iter()
+                .any(|(p, &cc)| server_vv.get(p).copied().unwrap_or(0) < cc);
+
+            if server_ahead {
+                // Compute delta from client's version to server's version
+                if let Ok(Some(snapshot_bytes)) =
+                    store.kv.get(Tree::LoroSnapshots, subject.as_bytes())
+                {
+                    if let Ok(doc) = AtomicLoroDoc::from_snapshot(&snapshot_bytes) {
+                        // Build a VersionVector from client's VV for this resource
+                        let client_loro_vv = AtomicLoroDoc::vv_from_map(client_vv);
+                        let delta = doc.export_updates_since(&client_loro_vv);
+
+                        if !delta.is_empty() {
+                            push_deltas.insert(
+                                subject.clone(),
+                                base64::engine::general_purpose::STANDARD.encode(&delta),
+                            );
+                        }
+                    }
+                }
+
+                push.push(subject.clone());
+            }
+
+            if client_ahead {
+                pull.push(subject.clone());
+            }
+        } else {
+            // Server has it, client doesn't — push full snapshot
+            if let Ok(Some(snapshot_bytes)) =
+                store.kv.get(Tree::LoroSnapshots, subject.as_bytes())
+            {
+                push_deltas.insert(
+                    subject.clone(),
+                    base64::engine::general_purpose::STANDARD.encode(&snapshot_bytes),
+                );
+                push.push(subject.clone());
+            }
+        }
+    }
+
+    // Check for resources client has that server doesn't
+    for subject in client_vvs.keys() {
+        if !server_vvs.contains_key(subject) {
+            pull.push(subject.clone());
+        }
+    }
+
+    // Send diff message
+    let diff = SyncDiffMessage {
+        drive: request.drive.clone(),
+        pull,
+        push: push.clone(),
+    };
+    messages.push(format!(
+        "SYNC_DIFF {}",
+        serde_json::to_string(&diff).unwrap()
+    ));
+
+    // Send server-ahead deltas
+    if !push_deltas.is_empty() {
+        let deltas_msg = SyncDeltasMessage {
+            drive: request.drive.clone(),
+            deltas: push_deltas,
+        };
+        messages.push(format!(
+            "SYNC_DELTAS {}",
+            serde_json::to_string(&deltas_msg).unwrap()
+        ));
+    }
+
+    tracing::info!(
+        "SYNC_VV: drive {} — {} to push, {} to pull",
+        request.drive,
+        push.len(),
+        diff.pull.len()
+    );
+
+    messages
+}
+
+/// Handle SYNC_DELTAS from client: import Loro deltas into server resources.
+async fn handle_sync_deltas(
+    request: SyncDeltasRequest,
+    store: Db,
+    _agent: ForAgent,
+) -> Vec<String> {
+    use atomic_lib::db::trees::Tree;
+    use atomic_lib::loro::AtomicLoroDoc;
+
+    let mut count = 0;
+
+    for (subject_str, delta_b64) in &request.deltas {
+        // Decode base64
+        let delta_bytes = match base64::engine::general_purpose::STANDARD.decode(delta_b64) {
+            Ok(b) => b,
+            Err(e) => {
+                tracing::warn!("SYNC_DELTAS: failed to decode base64 for {}: {}", subject_str, e);
+                continue;
+            }
+        };
+
+        // Load or create Loro doc and import the delta
+        let doc = if let Ok(Some(existing)) =
+            store.kv.get(Tree::LoroSnapshots, subject_str.as_bytes())
+        {
+            match AtomicLoroDoc::from_snapshot(&existing) {
+                Ok(d) => d,
+                Err(_) => AtomicLoroDoc::new(),
+            }
+        } else {
+            AtomicLoroDoc::new()
+        };
+
+        if let Err(e) = doc.import_update(&delta_bytes) {
+            tracing::warn!("SYNC_DELTAS: failed to import for {}: {}", subject_str, e);
+            continue;
+        }
+
+        // Save Loro snapshot to dedicated table
+        let new_snapshot = doc.export_snapshot();
+        if let Err(e) = store
+            .kv
+            .insert(Tree::LoroSnapshots, subject_str.as_bytes(), &new_snapshot)
+        {
+            tracing::warn!("SYNC_DELTAS: failed to save snapshot for {}: {}", subject_str, e);
+            continue;
+        }
+
+        // Materialize resource propvals from Loro state and store in main table
+        let subject =
+            atomic_lib::Subject::from_raw(subject_str, store.get_base_domain().as_deref());
+        let mut resource = store
+            .get_resource(&subject)
+            .await
+            .unwrap_or_else(|_| atomic_lib::Resource::new(subject.to_string().into()));
+
+        if let Err(e) = resource.replace_state_from_loro_doc(doc) {
+            tracing::warn!("SYNC_DELTAS: failed to materialize {}: {}", subject_str, e);
+            continue;
+        }
+
+        if let Err(e) = store.add_resource_opts(&resource, false, true, true).await {
+            tracing::warn!("SYNC_DELTAS: failed to store {}: {}", subject_str, e);
+            continue;
+        }
+
+        count += 1;
+    }
+
+    tracing::info!(
+        "SYNC_DELTAS: imported {} resources for drive {}",
+        count,
+        request.drive
+    );
+    Vec::new()
+}
+
+/// Collect all subjects belonging to a drive (reused by both SYNC_DRIVE and SYNC_VV).
+fn collect_drive_subjects(
+    store: &Db,
+    drive_subject: &atomic_lib::Subject,
+) -> std::collections::HashSet<String> {
+    let drive_str = drive_subject.as_str().to_string();
+    let mut drive_subjects: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    // Always include the drive resource itself.
+    drive_subjects.insert(drive_str.clone());
+
+    let is_did_drive = drive_subject.is_did();
+
+    if is_did_drive {
+        let mut parent_to_children: std::collections::HashMap<String, Vec<String>> =
+            std::collections::HashMap::new();
+
+        for resource in store.all_resources(false) {
+            if let Ok(parent_val) = resource.get(atomic_lib::urls::PARENT) {
+                let parent = parent_val.to_string();
+                parent_to_children
+                    .entry(parent)
+                    .or_default()
+                    .push(resource.get_subject().as_str().to_string());
+            }
+        }
+
+        let mut queue = vec![drive_str];
+
+        while let Some(current) = queue.pop() {
+            if let Some(children) = parent_to_children.get(&current) {
+                for child in children {
+                    if drive_subjects.insert(child.clone()) {
+                        queue.push(child.clone());
+                    }
+                }
+            }
+        }
+    } else {
+        for resource in store.all_resources(false) {
+            let subject = resource.get_subject();
+
+            if subject.as_str().starts_with(drive_subject.as_str()) {
+                drive_subjects.insert(subject.as_str().to_string());
+            }
+        }
+    }
+
+    drive_subjects
 }

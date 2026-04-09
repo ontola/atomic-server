@@ -64,7 +64,10 @@
       "Bash(node -e ':*)",
       "Bash(pnpm build:wasm)",
       "Bash(node -e \"const {dataBrowser} = require\\('./lib/dist/index.js'\\); console.log\\(dataBrowser.classes.table, dataBrowser.classes.chatroom\\);\")",
-      "Bash(node --input-type=module -e \"import {dataBrowser} from './lib/dist/index.js'; console.log\\(dataBrowser.classes.table, dataBrowser.classes.chatroom\\);\")"
+      "Bash(node --input-type=module -e \"import {dataBrowser} from './lib/dist/index.js'; console.log\\(dataBrowser.classes.table, dataBrowser.classes.chatroom\\);\")",
+      "Bash(npx tsx -e ':*)",
+      "Bash(node --experimental-vm-modules src/loro-size-test.mjs)",
+      "Bash(grep -E \"^-.*tsx$\")"
     ]
   }
 }

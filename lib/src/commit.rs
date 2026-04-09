@@ -76,7 +76,7 @@ impl CommitOpts {
 
 /// A Commit is a set of changes to a Resource.
 /// Use CommitBuilder if you're programmatically constructing a Delta.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Serialize)]
 pub struct Commit {
     /// The subject URL that is to be modified by this Delta
     #[serde(rename = "https://atomicdata.dev/properties/subject")]
@@ -106,17 +106,35 @@ pub struct Commit {
     pub url: Option<String>,
 }
 
+impl std::fmt::Debug for Commit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Commit")
+            .field("subject", &self.subject)
+            .field("created_at", &self.created_at)
+            .field("signer", &self.signer)
+            .field(
+                "loro_update",
+                &self.loro_update.as_ref().map(|v| format!("<{} bytes>", v.len())),
+            )
+            .field("destroy", &self.destroy)
+            .field("signature", &self.signature)
+            .field("previous_commit", &self.previous_commit)
+            .field("is_genesis", &self.is_genesis)
+            .field("url", &self.url)
+            .finish()
+    }
+}
+
 impl Commit {
     /// Throws an error if the parent is set to itself
     pub fn check_for_circular_parents(&self) -> AtomicResult<()> {
         // Check if the Loro update contains a parent property that matches the subject.
         if let Some(loro_bytes) = &self.loro_update {
-            let doc = crate::loro::AtomicLoroDoc::from_snapshot(loro_bytes)
-                .or_else(|_| {
-                    let doc = crate::loro::AtomicLoroDoc::new();
-                    doc.import_update(loro_bytes)?;
-                    Ok::<_, crate::errors::AtomicError>(doc)
-                })?;
+            let doc = crate::loro::AtomicLoroDoc::from_snapshot(loro_bytes).or_else(|_| {
+                let doc = crate::loro::AtomicLoroDoc::new();
+                doc.import_update(loro_bytes)?;
+                Ok::<_, crate::errors::AtomicError>(doc)
+            })?;
             if let Some(parent) = doc.get_string_property(urls::PARENT) {
                 if parent == self.subject {
                     return Err("Circular parent reference".into());
@@ -261,16 +279,20 @@ impl Commit {
                     }
                     // Extract public key from the Loro update
                     if let Some(loro_bytes) = &commit.loro_update {
-                        let doc = crate::loro::AtomicLoroDoc::from_snapshot(loro_bytes)
-                            .or_else(|_| {
+                        let doc = crate::loro::AtomicLoroDoc::from_snapshot(loro_bytes).or_else(
+                            |_| {
                                 let doc = crate::loro::AtomicLoroDoc::new();
                                 doc.import_update(loro_bytes)?;
                                 Ok::<_, crate::errors::AtomicError>(doc)
-                            })?;
+                            },
+                        )?;
                         if let Some(pk) = doc.get_string_property(urls::PUBLIC_KEY) {
                             pk
                         } else {
-                            return Err("Self-signed genesis commit must contain public key in Loro update".into());
+                            return Err(
+                                "Self-signed genesis commit must contain public key in Loro update"
+                                    .into(),
+                            );
                         }
                     } else {
                         return Err("Self-signed genesis commit must contain a Loro update".into());
@@ -521,10 +543,7 @@ impl Commit {
     /// Applies the Loro CRDT update and/or destroy to the Resource.
     /// Returns the diff as atoms for index updates, plus the set of changed property URLs.
     #[tracing::instrument]
-    pub async fn apply_changes(
-        &self,
-        mut resource: Resource,
-    ) -> AtomicResult<CommitApplied> {
+    pub async fn apply_changes(&self, mut resource: Resource) -> AtomicResult<CommitApplied> {
         let resource_unedited = resource.clone();
 
         let mut remove_atoms: Vec<Atom> = Vec::new();
@@ -532,19 +551,13 @@ impl Commit {
         let mut changed_props: HashSet<String> = HashSet::new();
 
         if let Some(loro_update_bytes) = &self.loro_update {
-            // Load existing Loro snapshot from the resource, or create a new doc
-            let loro_doc = match resource.get(urls::LORO_UPDATE) {
-                Ok(Value::LoroDoc(existing_snapshot)) => {
-                    crate::loro::AtomicLoroDoc::from_snapshot(existing_snapshot)?
-                }
-                _ => crate::loro::AtomicLoroDoc::new(),
-            };
+            // Seed from the current resource state when no snapshot exists yet so
+            // older resources can still apply snapshot/delta updates correctly.
+            let loro_doc = resource.build_loro_doc_from_state()?;
 
             // Import the update and compute the property-level diff for indexing
-            let diff = loro_doc.import_update_with_diff(
-                loro_update_bytes,
-                &resource.get_subject().to_string(),
-            )?;
+            let diff = loro_doc
+                .import_update_with_diff(loro_update_bytes, &resource.get_subject().to_string())?;
 
             // Track which properties changed
             for atom in &diff.add_atoms {
@@ -557,17 +570,9 @@ impl Commit {
             add_atoms.extend(diff.add_atoms);
             remove_atoms.extend(diff.remove_atoms);
 
-            // Materialize changed Loro properties into the Resource's propvals
-            let properties = loro_doc.get_all_properties();
-            for (prop, loro_val) in &properties {
-                if let Some(atomic_val) = crate::loro::loro_value_to_atomic_value(loro_val) {
-                    resource.set_unsafe(prop.into(), atomic_val);
-                }
-            }
-
-            // Store the updated Loro snapshot on the resource for future merges
-            let snapshot = loro_doc.export_snapshot();
-            resource.set_unsafe(urls::LORO_UPDATE.into(), Value::LoroDoc(snapshot));
+            // Rebuild the materialized resource state from the merged Loro doc so
+            // deleted properties disappear from propvals as well.
+            resource.replace_state_from_loro_doc(loro_doc)?;
         }
 
         // Remove all atoms from index if destroy
@@ -700,8 +705,7 @@ impl Commit {
         // A deterministic serialization should not contain the hash (signature), since that would influence the hash.
         commit_resource.remove_propval(urls::SIGNATURE);
 
-        let is_did_non_agent = self.subject.is_did()
-            && !self.subject.is_agent_did();
+        let is_did_non_agent = self.subject.is_did() && !self.subject.is_agent_did();
         let is_genesis_flag = self.is_genesis == Some(true);
         let has_previous = self.previous_commit.is_some();
 
@@ -782,9 +786,7 @@ impl CommitBuilder {
         }
     }
 
-    pub fn from_commit_builder_json(
-        commit_builder_json: CommitBuilderJSON,
-    ) -> AtomicResult<Self> {
+    pub fn from_commit_builder_json(commit_builder_json: CommitBuilderJSON) -> AtomicResult<Self> {
         let mut commit_builder = CommitBuilder::new(commit_builder_json.subject.into());
 
         commit_builder.destroy(commit_builder_json.destroy);
@@ -905,7 +907,11 @@ async fn sign_at(
         destroy: Some(commitbuilder.destroy),
         created_at: sign_date,
         previous_commit: commitbuilder.previous_commit,
-        is_genesis: if commitbuilder.is_genesis { Some(true) } else { None },
+        is_genesis: if commitbuilder.is_genesis {
+            Some(true)
+        } else {
+            None
+        },
         signature: None,
         url: None,
     };
@@ -1065,15 +1071,24 @@ mod test {
         let property2 = crate::urls::SHORTNAME;
         let value2 = Value::new("someval", &DataType::String).unwrap();
         commitbuilder.set(property2.into(), value2);
-        let commit = sign_at(commitbuilder, &agent, 0, &store, None).await.unwrap();
+        let commit = sign_at(commitbuilder, &agent, 0, &store, None)
+            .await
+            .unwrap();
         let serialized = commit
             .serialize_deterministically_json_ad(&store)
             .await
             .unwrap();
 
         // Commits now use loroUpdate instead of set
-        assert!(serialized.contains("loroUpdate"), "Commit should contain loroUpdate, got: {}", serialized);
-        assert!(!serialized.contains("\"set\""), "Commit should not contain legacy set field");
+        assert!(
+            serialized.contains("loroUpdate"),
+            "Commit should contain loroUpdate, got: {}",
+            serialized
+        );
+        assert!(
+            !serialized.contains("\"set\""),
+            "Commit should not contain legacy set field"
+        );
         // Verify signature is valid
         commit.validate_signature(&store).await.unwrap();
     }
@@ -1169,7 +1184,8 @@ mod test {
             ..CommitOpts::no_validations_no_index()
         };
         let result = store.apply_commit(commit, &opts).await.unwrap();
-        let new_subject = result.resource_new
+        let new_subject = result
+            .resource_new
             .as_ref()
             .map(|r| r.get_subject().to_string())
             .unwrap_or_default();
@@ -1180,7 +1196,9 @@ mod test {
         );
 
         // Verify the resource is actually retrievable from the store
-        let stored = store.get_resource(&new_subject.as_str().into()).await
+        let stored = store
+            .get_resource(&new_subject.as_str().into())
+            .await
             .expect("DID resource should be retrievable after genesis commit");
         assert_eq!(
             stored.get(crate::urls::DESCRIPTION).unwrap().to_string(),
@@ -1197,9 +1215,21 @@ mod test {
 
         // Build a Loro doc with properties (mimics browser-side Loro)
         let loro_doc = crate::loro::AtomicLoroDoc::new();
-        loro_doc.set_property(crate::urls::NAME, &Value::String("My Table".into())).unwrap();
-        loro_doc.set_property(crate::urls::DESCRIPTION, &Value::String("A test table".into())).unwrap();
-        loro_doc.set_property(crate::urls::PUBLIC_KEY, &Value::String(agent.public_key.clone())).unwrap();
+        loro_doc
+            .set_property(crate::urls::NAME, &Value::String("My Table".into()))
+            .unwrap();
+        loro_doc
+            .set_property(
+                crate::urls::DESCRIPTION,
+                &Value::String("A test table".into()),
+            )
+            .unwrap();
+        loro_doc
+            .set_property(
+                crate::urls::PUBLIC_KEY,
+                &Value::String(agent.public_key.clone()),
+            )
+            .unwrap();
 
         // Export as update from empty (this is what the browser sends)
         let empty_version = crate::loro::AtomicLoroDoc::new();
@@ -1212,7 +1242,10 @@ mod test {
         let commit = Commit::create_did(builder, &agent, &store).await.unwrap();
         let did_subject = commit.subject.clone();
 
-        assert!(commit.loro_update.is_some(), "commit should have loroUpdate");
+        assert!(
+            commit.loro_update.is_some(),
+            "commit should have loroUpdate"
+        );
 
         let opts = CommitOpts {
             validate_signature: true,
@@ -1227,7 +1260,9 @@ mod test {
         assert!(result.resource_new.is_some(), "should have resource_new");
 
         // THE KEY TEST: verify the resource is retrievable from the store
-        let stored = store.get_resource(&did_subject.as_str().into()).await
+        let stored = store
+            .get_resource(&did_subject.as_str().into())
+            .await
             .expect("Loro-only DID resource should be retrievable after commit");
 
         assert_eq!(
@@ -1265,19 +1300,155 @@ mod test {
         store.apply_commit(genesis, &opts_no_rights).await.unwrap();
 
         // Load the existing resource and edit on top of its Loro state
-        let mut resource = store.get_resource(&did_subject.as_str().into()).await.unwrap();
+        let mut resource = store
+            .get_resource(&did_subject.as_str().into())
+            .await
+            .unwrap();
         resource.set_unsafe(
             crate::urls::DESCRIPTION.into(),
             Value::new("v2", &DataType::Markdown).unwrap(),
         );
-        let update = resource.get_commit_builder().clone()
-            .sign(&agent, &store, &resource).await.unwrap();
+        let update = resource
+            .get_commit_builder()
+            .clone()
+            .sign(&agent, &store, &resource)
+            .await
+            .unwrap();
         store.apply_commit(update, &opts_no_rights).await.unwrap();
 
-        let updated = store.get_resource(&did_subject.as_str().into()).await.unwrap();
+        let updated = store
+            .get_resource(&did_subject.as_str().into())
+            .await
+            .unwrap();
         assert_eq!(
             updated.get(crate::urls::DESCRIPTION).unwrap().to_string(),
             "v2"
+        );
+    }
+
+    #[tokio::test]
+    async fn loro_update_without_stored_snapshot_seeds_from_propvals_and_removes_deleted_props() {
+        let (store, agent) = store_with_known_agent().await;
+        let subject = "https://localhost/loro_seeded_resource";
+
+        let mut existing = Resource::new(subject.into());
+        existing.set_unsafe(
+            crate::urls::NAME.into(),
+            Value::String("Before delete".into()),
+        );
+        existing.set_unsafe(
+            crate::urls::DESCRIPTION.into(),
+            Value::String("Delete me".into()),
+        );
+
+        let base_doc = crate::loro::AtomicLoroDoc::new();
+        base_doc
+            .set_property(crate::urls::NAME, &Value::String("Before delete".into()))
+            .unwrap();
+        base_doc
+            .set_property(crate::urls::DESCRIPTION, &Value::String("Delete me".into()))
+            .unwrap();
+
+        let client_doc =
+            crate::loro::AtomicLoroDoc::from_snapshot(&base_doc.export_snapshot()).unwrap();
+        client_doc.remove_property(crate::urls::DESCRIPTION).unwrap();
+        client_doc
+            .set_property(crate::urls::NAME, &Value::String("After delete".into()))
+            .unwrap();
+
+        let mut builder = CommitBuilder::new(subject.into());
+        builder.set_loro_update(client_doc.export_snapshot());
+        let commit = builder.sign(&agent, &store, &existing).await.unwrap();
+
+        let applied = commit.apply_changes(existing).await.unwrap();
+        let updated = applied.resource_new;
+
+        assert_eq!(updated.get(crate::urls::NAME).unwrap().to_string(), "After delete");
+        assert!(
+            updated.get(crate::urls::DESCRIPTION).is_err(),
+            "deleted properties should be removed from materialized propvals"
+        );
+        assert!(
+            matches!(
+                updated.get(crate::urls::LORO_UPDATE),
+                Ok(Value::LoroDoc(snapshot)) if !snapshot.is_empty()
+            ),
+            "updated resource should keep a persisted Loro snapshot"
+        );
+    }
+
+    #[tokio::test]
+    async fn did_child_keeps_parent_and_can_be_edited_with_inherited_write_rights() {
+        let (store, agent) = store_with_known_agent().await;
+
+        let drive_subject = "did:ad:test-drive";
+        let mut drive = Resource::new(drive_subject.into());
+        drive.set_unsafe(
+            crate::urls::IS_A.into(),
+            Value::ResourceArray(vec![crate::urls::DRIVE.to_string().into()]),
+        );
+        drive.set_unsafe(
+            crate::urls::WRITE.into(),
+            Value::ResourceArray(vec![agent.subject.to_string().into()]),
+        );
+        store.add_resource(&drive).await.unwrap();
+
+        let mut builder = CommitBuilder::new("placeholder".into());
+        builder.set(
+            crate::urls::PARENT.into(),
+            Value::AtomicUrl(drive_subject.into()),
+        );
+        builder.set(
+            crate::urls::NAME.into(),
+            Value::String("First version".into()),
+        );
+
+        let genesis = Commit::create_did(builder, &agent, &store).await.unwrap();
+        let did_subject = genesis.subject.clone();
+
+        let opts_with_rights = CommitOpts {
+            validate_signature: true,
+            validate_timestamp: false,
+            validate_previous_commit: true,
+            validate_rights: true,
+            validate_for_agent: Some(agent.subject.to_string()),
+            update_index: true,
+            ..CommitOpts::no_validations_no_index()
+        };
+
+        store
+            .apply_commit(genesis, &opts_with_rights)
+            .await
+            .unwrap();
+
+        let created = store.get_resource(&did_subject).await.unwrap();
+        assert_eq!(
+            created.get(crate::urls::PARENT).unwrap().to_string(),
+            drive_subject
+        );
+
+        let mut updated_resource = created.clone();
+        updated_resource.set_unsafe(
+            crate::urls::DESCRIPTION.into(),
+            Value::String("Second version".into()),
+        );
+        let update = updated_resource
+            .get_commit_builder()
+            .clone()
+            .sign(&agent, &store, &updated_resource)
+            .await
+            .unwrap();
+
+        store
+            .apply_commit(update, &opts_with_rights)
+            .await
+            .unwrap();
+
+        let updated = store.get_resource(&did_subject).await.unwrap();
+        assert_eq!(updated.get(crate::urls::PARENT).unwrap().to_string(), drive_subject);
+        assert_eq!(
+            updated.get(crate::urls::DESCRIPTION).unwrap().to_string(),
+            "Second version"
         );
     }
 
@@ -1378,8 +1549,7 @@ mod test {
         "#;
 
         let commit_builder_json: CommitBuilderJSON = serde_json::from_str(json).unwrap();
-        let commit_builder = CommitBuilder::from_commit_builder_json(commit_builder_json)
-            .unwrap();
+        let commit_builder = CommitBuilder::from_commit_builder_json(commit_builder_json).unwrap();
 
         assert_eq!(commit_builder.subject, "https://localhost/test");
         assert!(commit_builder.loro_update.is_some());

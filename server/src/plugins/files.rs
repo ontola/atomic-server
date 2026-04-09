@@ -4,7 +4,7 @@ use atomic_lib::{
     class_extender::{BoxFuture, ClassExtender, CommitExtenderContext},
     endpoints::Endpoint,
     errors::AtomicResult,
-    urls, AtomicError, Value, Storelike,
+    urls, AtomicError, Storelike, Value,
 };
 
 pub fn upload_endpoint() -> Endpoint {

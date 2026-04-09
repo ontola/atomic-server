@@ -175,6 +175,15 @@ export class ClientDbWorker {
     return (result as Uint8Array | null) ?? null;
   }
 
+  /** Get version vectors for all Loro snapshots. Returns { [subject]: { [peerId]: counter } } */
+  async getAllVersionVectors(): Promise<
+    Record<string, Record<string, number>>
+  > {
+    const result = await this.send({ type: 'getAllVersionVectors' });
+
+    return (result as Record<string, Record<string, number>>) ?? {};
+  }
+
   /** Whether the worker has been initialized and seeded. */
   get isReady(): boolean {
     return this.ready && this.seeded;

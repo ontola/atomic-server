@@ -1,0 +1,30 @@
+/* tslint:disable */
+/* eslint-disable */
+export const memory: WebAssembly.Memory;
+export const __wbg_clientdb_free: (a: number, b: number) => void;
+export const clientdb_allSubjects: (a: number) => [number, number, number];
+export const clientdb_applyCommit: (a: number, b: number, c: number) => any;
+export const clientdb_exportAllResources: (a: number) => [number, number, number, number];
+export const clientdb_getAllVersionVectors: (a: number) => [number, number, number];
+export const clientdb_getLoroSnapshot: (a: number, b: number, c: number) => [number, number, number];
+export const clientdb_getResource: (a: number, b: number, c: number) => any;
+export const clientdb_importAllResources: (a: number, b: number, c: number) => any;
+export const clientdb_new: (a: number, b: number) => any;
+export const clientdb_populate: (a: number) => any;
+export const clientdb_putLoroSnapshot: (a: number, b: number, c: number, d: number, e: number) => [number, number];
+export const clientdb_putResource: (a: number, b: number, c: number) => any;
+export const clientdb_query: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number) => any;
+export const clientdb_removeResource: (a: number, b: number, c: number) => any;
+export const init: () => void;
+export const __wbindgen_malloc: (a: number, b: number) => number;
+export const __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
+export const __wbindgen_exn_store: (a: number) => void;
+export const __externref_table_alloc: () => number;
+export const __wbindgen_export_4: WebAssembly.Table;
+export const __wbindgen_free: (a: number, b: number, c: number) => void;
+export const __wbindgen_export_6: WebAssembly.Table;
+export const __externref_table_dealloc: (a: number) => void;
+export const _dyn_core__ops__function__FnMut_____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__h4e4489ce70a531f2: (a: number, b: number) => void;
+export const closure2200_externref_shim: (a: number, b: number, c: any) => void;
+export const closure2263_externref_shim: (a: number, b: number, c: any, d: any) => void;
+export const __wbindgen_start: () => void;

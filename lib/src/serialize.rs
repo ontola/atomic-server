@@ -22,12 +22,8 @@ pub fn resources_to_json_ad(
         } else {
             r.get_subject().to_string()
         };
-        let res = propvals_to_json_ad_map(
-            r.get_propvals(),
-            Some(subject),
-            origin,
-            resolve_subjects,
-        )?;
+        let res =
+            propvals_to_json_ad_map(r.get_propvals(), Some(subject), origin, resolve_subjects)?;
         strings.push(serde_json::to_string(&res)?);
     }
     let str = strings.join(",");
@@ -36,7 +32,11 @@ pub fn resources_to_json_ad(
 }
 
 /// Converts an Atomic Value to a Serde Value.
-pub fn val_to_serde(value: Value, origin: &str, resolve_subjects: bool) -> AtomicResult<SerdeValue> {
+pub fn val_to_serde(
+    value: Value,
+    origin: &str,
+    resolve_subjects: bool,
+) -> AtomicResult<SerdeValue> {
     let json_val: SerdeValue = match value {
         Value::AtomicUrl(val) => {
             if resolve_subjects {
@@ -102,9 +102,7 @@ pub fn val_to_serde(value: Value, origin: &str, resolve_subjects: bool) -> Atomi
             );
             obj.into()
         }
-        Value::LoroDoc(val) => {
-            SerdeValue::String(general_purpose::STANDARD.encode(val))
-        }
+        Value::LoroDoc(val) => SerdeValue::String(general_purpose::STANDARD.encode(val)),
     };
     Ok(json_val)
 }

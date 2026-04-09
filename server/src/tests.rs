@@ -6,13 +6,13 @@ use crate::{appstate::AppState, config::Opts};
 
 use super::*;
 use actix_web::{
+    App,
     body::MessageBody,
     dev::ServiceResponse,
     test::{self, TestRequest},
     web::Data,
-    App,
 };
-use atomic_lib::{urls, Storelike};
+use atomic_lib::{Storelike, urls};
 use base64::Engine;
 
 /// Returns the request with signed headers. Also adds a json-ad accept header - overwrite this if you need something else.
@@ -143,6 +143,42 @@ async fn server_tests() {
     if !body.contains("\"@id\"") {
         panic!("response should be json-ad. Body: {}", body);
     }
+
+    // Resources with server-side Loro state should expose their snapshot in JSON-AD
+    let mut loro_resource = atomic_lib::Resource::new("/loro-sync-test".into());
+    loro_resource.set_unsafe(
+        urls::READ.into(),
+        vec![appstate.store.get_default_agent().unwrap().subject.clone()].into(),
+    );
+    loro_resource.set_unsafe(
+        urls::WRITE.into(),
+        vec![appstate.store.get_default_agent().unwrap().subject.clone()].into(),
+    );
+    loro_resource.set_unsafe(urls::NAME.into(), "Loro Sync Test".to_string().into());
+    loro_resource
+        .set_loro(
+            urls::DESCRIPTION,
+            &atomic_lib::Value::String("Synced through Loro".into()),
+        )
+        .unwrap();
+    store
+        .add_resource_opts(&loro_resource, false, true, true)
+        .await
+        .unwrap();
+
+    let req = build_request_authenticated("/loro-sync-test", &appstate);
+    let resp = test::call_service(&app, req.to_request()).await;
+    assert!(
+        resp.status().is_success(),
+        "loro resource fetch should succeed"
+    );
+    let body = get_body(resp);
+    assert!(
+        body.as_str()
+            .contains("\"https://atomicdata.dev/properties/loroUpdate\""),
+        "resource fetch should include loroUpdate when server has a Loro snapshot: {}",
+        body.as_str()
+    );
 
     // Get JSON-LD
     let req = build_request_authenticated("/", &appstate)
@@ -285,7 +321,7 @@ async fn server_tests() {
 
 #[actix_rt::test]
 async fn test_did_agent_edit() {
-    use atomic_lib::{agents::Agent, commit::CommitBuilder, urls, Resource, Value};
+    use atomic_lib::{Resource, Value, agents::Agent, commit::CommitBuilder, urls};
     let unique_string = atomic_lib::utils::random_string(10);
     use clap::Parser;
     let opts = Opts::parse_from([
@@ -392,6 +428,88 @@ async fn test_did_agent_edit() {
     assert!(
         body.contains("Updated Name"),
         "Body does not contain 'Updated Name'. Body: {}",
+        body
+    );
+}
+
+#[actix_rt::test]
+async fn self_signed_agent_commit_keeps_name() {
+    let unique_string = atomic_lib::utils::random_string(10);
+    use clap::Parser;
+    let opts = Opts::parse_from([
+        "atomic-server",
+        "--initialize",
+        "--data-dir",
+        &format!("./.temp/{}/db", unique_string),
+        "--config-dir",
+        &format!("./.temp/{}/config", unique_string),
+    ]);
+
+    let mut config = config::build_config(opts)
+        .map_err(|e| format!("Initialization failed: {}", e))
+        .expect("failed init config");
+    config.search_index_path = format!("./.temp/{}/search_index", unique_string).into();
+
+    let appstate = crate::appstate::AppState::init(config.clone())
+        .await
+        .expect("failed init appstate");
+
+    let data = Data::new(appstate.clone());
+    let app = test::init_service(
+        App::new()
+            .app_data(data)
+            .configure(crate::routes::config_routes),
+    )
+    .await;
+
+    let agent = atomic_lib::agents::Agent::new(None).unwrap();
+    let agent_did = agent.subject.pure_id();
+    let empty = atomic_lib::Resource::new(agent_did.clone().into());
+
+    let mut builder = atomic_lib::commit::CommitBuilder::new(agent_did.clone().into());
+    builder.is_genesis = true;
+    builder.set(
+        urls::IS_A.into(),
+        atomic_lib::Value::ResourceArray(vec![urls::AGENT.to_string().into()]),
+    );
+    builder.set(urls::NAME.into(), atomic_lib::Value::String("Test User".into()));
+
+    let commit = builder.sign(&agent, &appstate.store, &empty).await.unwrap();
+    let body = commit
+        .into_resource(&appstate.store)
+        .await
+        .unwrap()
+        .to_json_ad(Some(&appstate.config.get_origin()))
+        .unwrap();
+
+    let req = TestRequest::post()
+        .uri("/commit")
+        .insert_header(("Content-Type", "application/ad+json"))
+        .set_payload(body)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(
+        resp.status().is_success(),
+        "commit post failed with status {:?}: {}",
+        resp.status(),
+        get_body(resp)
+    );
+
+    let req = test::TestRequest::get()
+        .uri(&format!("/did?subject={}", urlencoding::encode(&agent_did)))
+        .insert_header(("Accept", "application/ad+json"))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(
+        resp.status().is_success(),
+        "Fetch failed with status: {:?}",
+        resp.status()
+    );
+
+    let body = get_body(resp);
+    assert!(
+        body.contains("Test User"),
+        "Body does not contain persisted agent name. Body: {}",
         body
     );
 }

@@ -84,6 +84,10 @@ async function handleMessage(msg) {
       await ensureInit();
       return db.getLoroSnapshot(msg.subject);
 
+    case 'getAllVersionVectors':
+      await ensureInit();
+      return db.getAllVersionVectors();
+
     default:
       throw new Error(`Unknown message type: ${msg.type}`);
   }

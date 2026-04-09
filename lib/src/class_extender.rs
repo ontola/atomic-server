@@ -236,9 +236,7 @@ impl ClassExtender {
 
                 Ok((true, Some(rs)))
             }
-            ClassExtenderScope::Global => {
-                Ok((true, cached_root))
-            }
+            ClassExtenderScope::Global => Ok((true, cached_root)),
         }
     }
 

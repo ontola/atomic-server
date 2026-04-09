@@ -175,8 +175,10 @@ impl Handler<LoroEphemeralUpdate> for LoroSyncBroadcaster {
 }
 
 pub fn create_loro_sync_broadcaster(store: Db) -> Addr<LoroSyncBroadcaster> {
-    LoroSyncBroadcaster::create(|_ctx: &mut Context<LoroSyncBroadcaster>| LoroSyncBroadcaster {
-        subscriptions: HashMap::new(),
-        store,
-    })
+    LoroSyncBroadcaster::create(
+        |_ctx: &mut Context<LoroSyncBroadcaster>| LoroSyncBroadcaster {
+            subscriptions: HashMap::new(),
+            store,
+        },
+    )
 }
