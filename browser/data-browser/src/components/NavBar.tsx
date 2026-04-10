@@ -137,11 +137,15 @@ function DriveMismatch({ subject }: { subject: string }) {
   return null;
 }
 
-/** Direct parent breadcrumb only */
-function DirectParent({ subject }: { subject: string }): JSX.Element {
+/** Direct parent breadcrumb only. Hidden if the parent is unauthorized. */
+function DirectParent({ subject }: { subject: string }): JSX.Element | null {
   const resource = useResource(subject, { allowIncomplete: true });
   const [title] = useTitle(resource);
   const navigate = useNavigateWithTransition();
+
+  if (resource.error || resource.isUnauthorized()) {
+    return null;
+  }
 
   const handleClick: React.MouseEventHandler<HTMLAnchorElement> = e => {
     e.preventDefault();

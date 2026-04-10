@@ -62,7 +62,11 @@ export class JSONADParser {
         }
 
         // Handle serialized binary values (LoroDoc or legacy YDoc)
-        if (isJSONObject(value) && typeof value.type === 'string' && typeof value.data === 'string') {
+        if (
+          isJSONObject(value) &&
+          typeof value.type === 'string' &&
+          typeof value.data === 'string'
+        ) {
           if (value.type === 'lorodoc' || value.type === 'ydoc') {
             hydratedValues.push([key, decodeB64(value.data)]);
             continue;

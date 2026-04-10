@@ -55,7 +55,7 @@ export function InviteForm({ target }: InviteFormProps) {
       );
 
       const baseUrl = store.getServerUrl();
-      const finalUrl = `${baseUrl}/invites?token=${encodeURIComponent(
+      const finalUrl = `${baseUrl}/app/invite?token=${encodeURIComponent(
         tokenBase64,
       )}`;
 

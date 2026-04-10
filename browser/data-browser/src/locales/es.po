@@ -215,7 +215,6 @@ msgstr "Copiar"
 
 #: src/components/LoggedOutAgentPanel.tsx
 #: src/components/SignInButton.tsx
-#: src/views/InvitePage.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Sign in"
@@ -696,10 +695,8 @@ msgstr "Ontología predeterminada"
 msgid "Error: {0}"
 msgstr "Error: {0}"
 
-#. placeholder {0}: write ? 'edit' : 'view'
-#: src/views/InvitePage.tsx
-msgid "Invite to {0}"
-msgstr "Invitar a {0}"
+#~ msgid "Invite to {0}"
+#~ msgstr "Invitar a {0}"
 
 #~ msgid "Sorry, this Invite has no usages left. Ask for a new one."
 #~ msgstr "Lo sentimos, esta invitación no tiene usos restantes. Solicita una nueva."
@@ -709,9 +706,8 @@ msgstr "Invitar a {0}"
 msgid "Accept as {0}"
 msgstr "Aceptar como {0}"
 
-#: src/views/InvitePage.tsx
-msgid "Accept as new user"
-msgstr "Aceptar como nuevo usuario"
+#~ msgid "Accept as new user"
+#~ msgstr "Aceptar como nuevo usuario"
 
 #~ msgid "({0} usages left)"
 #~ msgstr "({0} usos restantes)"
@@ -4344,6 +4340,7 @@ msgstr ""
 #~ msgid "Welcome{0}"
 #~ msgstr ""
 
+#: src/views/InvitePage.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "AtomicServer"
 msgstr ""
@@ -4977,4 +4974,43 @@ msgstr ""
 
 #: src/components/Share/ShareDialog.tsx
 msgid "<0><0/> Back</0> Create Invite"
+msgstr ""
+
+#: src/routes/InviteRoute.tsx
+msgid "No invite token provided."
+msgstr ""
+
+#~ msgid "You've been invited"
+#~ msgstr ""
+
+#~ msgid "You've been invited to {0}{1} <0/>"
+#~ msgstr ""
+
+#~ msgid "You've been invited to {0} a resource"
+#~ msgstr ""
+
+#: src/views/InvitePage.tsx
+msgid "Create account and accept"
+msgstr ""
+
+#: src/views/InvitePage.tsx
+msgid "I already have an account"
+msgstr ""
+
+#~ msgid "What is AtomicServer?"
+#~ msgstr ""
+
+#~ msgid "<0>All-in-one workspace</0>: documents, tables, files, and APIs in one place."
+#~ msgstr ""
+
+#~ msgid "<0>Real-time collaboration</0>: edit together with instant sync."
+#~ msgstr ""
+
+#~ msgid "<0>Open source</0>: inspect, fork, and self-host. Keep control of your data."
+#~ msgstr ""
+
+#. placeholder {0}: write ? 'edit' : 'view'
+#. placeholder {1}: resourceName ? ` "${resourceName}"` : ''
+#: src/views/InvitePage.tsx
+msgid "You've been invited to {0} {1}"
 msgstr ""

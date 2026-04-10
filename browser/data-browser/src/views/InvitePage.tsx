@@ -23,12 +23,8 @@ import { ResourcePageProps } from './ResourcePage';
 import { paths } from '../routes/paths';
 import { Column } from '../components/Row';
 import { useWelcomeLayoutEffect } from '../hooks/useWelcomeLayoutEffect';
-import {
-  Shell,
-  Card,
-  CardTitle,
-  CtaButton,
-} from './getting-started/GettingStartedFlow';
+import { Shell, Card, CardTitle, CtaButton } from './getting-started/GettingStartedFlow';
+import atomicServerLogoUrl from '../../../../logo.svg?url';
 
 import { useId, useState, type JSX } from 'react';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
@@ -40,7 +36,6 @@ import { CodeBlock } from '@components/CodeBlock';
 import { styled } from 'styled-components';
 import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
 import Field from '@components/forms/Field';
-import Markdown from 'react-markdown';
 
 /** A View that opens an invite */
 function InvitePage({ resource }: ResourcePageProps): JSX.Element {
@@ -296,18 +291,21 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
 
   useWelcomeLayoutEffect();
 
+  // Extract the resource name from the server-generated description
+  // Format: "Stateless invite to edit/view the resource: ResourceName"
+  const resourceName = description?.split(': ').pop();
+
   return (
     <>
       <Shell>
         <Card>
+          <LogoWrap>
+            <img src={atomicServerLogoUrl} alt='AtomicServer' width={180} />
+          </LogoWrap>
           <CardTitle>
-            Invite to {write ? 'edit' : 'view'}
+            You've been invited to {write ? 'edit' : 'view'}
+            {resourceName ? ` "${resourceName}"` : ''}
           </CardTitle>
-          {description && (
-            <DescriptionWrap>
-              <Markdown>{description}</Markdown>
-            </DescriptionWrap>
-          )}
           {usagesLeft === 0 ? (
             <DescriptionWrap>
               Sorry, this invite has no usages left. Ask for a new one.
@@ -324,14 +322,14 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
               ) : (
                 <>
                   <CtaButton data-test='accept-new' onClick={handleNew}>
-                    Accept as new user
+                    Create account and accept
                   </CtaButton>
                   <CtaButton
                     data-test='accept-sign-in'
                     onClick={() => navigate(paths.agentSettings)}
                     subtle
                   >
-                    Sign in
+                    I already have an account
                   </CtaButton>
                 </>
               )}
@@ -389,6 +387,11 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
 }
 
 export default InvitePage;
+
+const LogoWrap = styled.div`
+  text-align: center;
+  margin-bottom: ${p => p.theme.size(4)};
+`;
 
 const DescriptionWrap = styled.div`
   color: ${p => p.theme.colors.textLight};
