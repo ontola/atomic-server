@@ -1701,11 +1701,13 @@ export class Resource<C extends OptionalClass = any> {
   }
 
   public importLoroUpdate(loroUpdate: Uint8Array): void {
-    this.applyRawValue(commits.properties.loroUpdate, loroUpdate);
-
+    // Ensure the LoroDoc exists, then import the update into it.
     const doc = this.getLoroDoc();
 
     if (!doc) {
+      // Loro WASM not loaded — store bytes for later initialization
+      this._loroSnapshotBytes = loroUpdate;
+
       return;
     }
 

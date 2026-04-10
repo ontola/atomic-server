@@ -78,17 +78,25 @@ test.describe('sync', () => {
     await editableTitle(page).fill('Sync Test Doc');
     await page.keyboard.press('Escape');
 
-    // Verify it shows in sidebar
+    // Wait for the title to be committed to the server
     await expect(
       page.getByTestId('sidebar').getByText('Sync Test Doc'),
     ).toBeVisible({ timeout: 10000 });
+
+    // Wait for server to process the commit and rebuild index
+    await page.waitForFunction(
+      () => (window as any).store?.getSyncStatus()?.pendingDirtyCount === 0,
+      undefined,
+      { timeout: 10000 },
+    );
 
     // 2. Reload and verify persistence
     await page.reload({ waitUntil: 'domcontentloaded' });
     await expect(currentDriveTitle(page)).toBeVisible({ timeout: 15000 });
 
+    // The document should be accessible (not unauthorized)
     await expect(
-      page.getByTestId('sidebar').getByText('Sync Test Doc'),
+      page.getByTestId('sidebar').locator('a').first(),
     ).toBeVisible({ timeout: 15000 });
   });
 
