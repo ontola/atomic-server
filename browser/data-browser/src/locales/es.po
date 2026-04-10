@@ -701,9 +701,8 @@ msgstr "Error: {0}"
 msgid "Invite to {0}"
 msgstr "Invitar a {0}"
 
-#: src/views/InvitePage.tsx
-msgid "Sorry, this Invite has no usages left. Ask for a new one."
-msgstr "Lo sentimos, esta invitación no tiene usos restantes. Solicita una nueva."
+#~ msgid "Sorry, this Invite has no usages left. Ask for a new one."
+#~ msgstr "Lo sentimos, esta invitación no tiene usos restantes. Solicita una nueva."
 
 #. placeholder {0}: agentTitle
 #: src/views/InvitePage.tsx
@@ -714,10 +713,8 @@ msgstr "Aceptar como {0}"
 msgid "Accept as new user"
 msgstr "Aceptar como nuevo usuario"
 
-#. placeholder {0}: usagesLeft
-#: src/views/InvitePage.tsx
-msgid "({0} usages left)"
-msgstr "({0} usos restantes)"
+#~ msgid "({0} usages left)"
+#~ msgstr "({0} usos restantes)"
 
 #: src/chunks/CodeEditor/AsyncJSONEditor.tsx
 msgid "Enter valid JSON..."
@@ -1865,14 +1862,11 @@ msgstr "<0/> Crear invitación"
 msgid "Permissions set here:"
 msgstr "Permisos establecidos aquí:"
 
-#: src/components/Share/ShareDialog.tsx
 #: src/routes/Share/ShareRoute.tsx
 msgid "Inherited permissions:"
 msgstr "Permisos heredados:"
 
 #. placeholder {0}: ' '
-#. placeholder {0}: ' '
-#: src/components/Share/ShareDialog.tsx
 #: src/routes/Share/ShareRoute.tsx
 msgid "Read more about permissions in the{0} <0>Atomic Data Docs</0>"
 msgstr "Lee más sobre los permisos en la{0} <0>Documentación de Atomic Data</0>"
@@ -4964,4 +4958,23 @@ msgstr ""
 #. placeholder {0}: status.pendingDirtyCount > 0 && ( <PendingCount> {status.pendingDirtyCount} unsynced </PendingCount> )
 #: src/routes/SyncRoute.tsx
 msgid "Commit Log {0}"
+msgstr ""
+
+#: src/views/InvitePage.tsx
+msgid "Sorry, this invite has no usages left. Ask for a new one."
+msgstr ""
+
+#~ msgid "{0} usages left"
+#~ msgstr ""
+
+#. placeholder {0}: showInherited ? <FaChevronDown /> : <FaChevronRight />
+#: src/components/Share/ShareDialog.tsx
+msgid "{0} Inherited permissions"
+msgstr ""
+
+#~ msgid "Create Invite"
+#~ msgstr ""
+
+#: src/components/Share/ShareDialog.tsx
+msgid "<0><0/> Back</0> Create Invite"
 msgstr ""

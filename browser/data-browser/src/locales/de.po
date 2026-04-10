@@ -751,9 +751,8 @@ msgstr "Standard-Ontologie"
 msgid "Invite to {0}"
 msgstr "Einladung zu {0}"
 
-#: src/views/InvitePage.tsx
-msgid "Sorry, this Invite has no usages left. Ask for a new one."
-msgstr "Diese Einladung hat leider keine Nutzungen mehr. Bitte fordern Sie eine neue an."
+#~ msgid "Sorry, this Invite has no usages left. Ask for a new one."
+#~ msgstr "Diese Einladung hat leider keine Nutzungen mehr. Bitte fordern Sie eine neue an."
 
 #. placeholder {0}: agentTitle
 #: src/views/InvitePage.tsx
@@ -764,10 +763,8 @@ msgstr "Akzeptieren als {0}"
 msgid "Accept as new user"
 msgstr "Als neuer Benutzer akzeptieren"
 
-#. placeholder {0}: usagesLeft
-#: src/views/InvitePage.tsx
-msgid "({0} usages left)"
-msgstr "({0} Nutzungen übrig)"
+#~ msgid "({0} usages left)"
+#~ msgstr "({0} Nutzungen übrig)"
 
 #. placeholder {0}: JSON.stringify(error)
 #. placeholder {0}: searchError.message
@@ -2379,14 +2376,11 @@ msgstr "<0/> Einladung erstellen"
 msgid "Permissions set here:"
 msgstr "Hier festgelegte Berechtigungen:"
 
-#: src/components/Share/ShareDialog.tsx
 #: src/routes/Share/ShareRoute.tsx
 msgid "Inherited permissions:"
 msgstr "Geerbte Berechtigungen:"
 
 #. placeholder {0}: ' '
-#. placeholder {0}: ' '
-#: src/components/Share/ShareDialog.tsx
 #: src/routes/Share/ShareRoute.tsx
 msgid "Read more about permissions in the{0} <0>Atomic Data Docs</0>"
 msgstr "Weitere Informationen zu Berechtigungen findest du in den{0} <0>Atomic Data Docs</0>"
@@ -4978,4 +4972,23 @@ msgstr ""
 #. placeholder {0}: status.pendingDirtyCount > 0 && ( <PendingCount> {status.pendingDirtyCount} unsynced </PendingCount> )
 #: src/routes/SyncRoute.tsx
 msgid "Commit Log {0}"
+msgstr ""
+
+#: src/views/InvitePage.tsx
+msgid "Sorry, this invite has no usages left. Ask for a new one."
+msgstr ""
+
+#~ msgid "{0} usages left"
+#~ msgstr ""
+
+#. placeholder {0}: showInherited ? <FaChevronDown /> : <FaChevronRight />
+#: src/components/Share/ShareDialog.tsx
+msgid "{0} Inherited permissions"
+msgstr ""
+
+#~ msgid "Create Invite"
+#~ msgstr ""
+
+#: src/components/Share/ShareDialog.tsx
+msgid "<0><0/> Back</0> Create Invite"
 msgstr ""

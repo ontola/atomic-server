@@ -711,9 +711,8 @@ msgstr "Invite accepted, but no destination was returned."
 msgid "Invite to {0}"
 msgstr "Invite to {0}"
 
-#: src/views/InvitePage.tsx
-msgid "Sorry, this Invite has no usages left. Ask for a new one."
-msgstr "Sorry, this Invite has no usages left. Ask for a new one."
+#~ msgid "Sorry, this Invite has no usages left. Ask for a new one."
+#~ msgstr "Sorry, this Invite has no usages left. Ask for a new one."
 
 #. placeholder {0}: agentTitle
 #: src/views/InvitePage.tsx
@@ -732,10 +731,8 @@ msgstr "Accept as new user"
 msgid "Sign in"
 msgstr "Sign in"
 
-#. placeholder {0}: usagesLeft
-#: src/views/InvitePage.tsx
-msgid "({0} usages left)"
-msgstr "({0} usages left)"
+#~ msgid "({0} usages left)"
+#~ msgstr "({0} usages left)"
 
 #: src/views/InvitePage.tsx
 msgid "Agent created!"
@@ -1193,14 +1190,11 @@ msgstr "<0/> Create Invite"
 msgid "Permissions set here:"
 msgstr "Permissions set here:"
 
-#: src/components/Share/ShareDialog.tsx
 #: src/routes/Share/ShareRoute.tsx
 msgid "Inherited permissions:"
 msgstr "Inherited permissions:"
 
 #. placeholder {0}: ' '
-#. placeholder {0}: ' '
-#: src/components/Share/ShareDialog.tsx
 #: src/routes/Share/ShareRoute.tsx
 msgid "Read more about permissions in the{0} <0>Atomic Data Docs</0>"
 msgstr "Read more about permissions in the{0} <0>Atomic Data Docs</0>"
@@ -4943,3 +4937,22 @@ msgstr "{0} unsynced"
 #: src/routes/SyncRoute.tsx
 msgid "Commit Log {0}"
 msgstr "Commit Log {0}"
+
+#: src/views/InvitePage.tsx
+msgid "Sorry, this invite has no usages left. Ask for a new one."
+msgstr "Sorry, this invite has no usages left. Ask for a new one."
+
+#~ msgid "{0} usages left"
+#~ msgstr "{0} usages left"
+
+#. placeholder {0}: showInherited ? <FaChevronDown /> : <FaChevronRight />
+#: src/components/Share/ShareDialog.tsx
+msgid "{0} Inherited permissions"
+msgstr "{0} Inherited permissions"
+
+#~ msgid "Create Invite"
+#~ msgstr "Create Invite"
+
+#: src/components/Share/ShareDialog.tsx
+msgid "<0><0/> Back</0> Create Invite"
+msgstr "<0><0/> Back</0> Create Invite"

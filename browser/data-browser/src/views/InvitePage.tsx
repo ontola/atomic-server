@@ -16,13 +16,19 @@ import {
   Resource,
 } from '@tomic/react';
 
-import { ContainerNarrow } from '../components/Containers';
 import { Button } from '../components/Button';
 import { constructOpenURL } from '../helpers/navigation';
 import { useSettings } from '../helpers/AppSettings';
 import { ResourcePageProps } from './ResourcePage';
 import { paths } from '../routes/paths';
-import { Row } from '../components/Row';
+import { Column } from '../components/Row';
+import { useWelcomeLayoutEffect } from '../hooks/useWelcomeLayoutEffect';
+import {
+  Shell,
+  Card,
+  CardTitle,
+  CtaButton,
+} from './getting-started/GettingStartedFlow';
 
 import { useId, useState, type JSX } from 'react';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
@@ -288,42 +294,51 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
 
   const agentSubject = agent?.subject;
 
+  useWelcomeLayoutEffect();
+
   return (
     <>
-      <ContainerNarrow>
-        <h1>Invite to {write ? 'edit' : 'view'}</h1>
-        {description && <Markdown>{description}</Markdown>}
-        {usagesLeft === 0 ? (
-          <em>Sorry, this Invite has no usages left. Ask for a new one.</em>
-        ) : (
-          <Row>
-            {agentSubject ? (
-              <>
-                <Button
+      <Shell>
+        <Card>
+          <CardTitle>
+            Invite to {write ? 'edit' : 'view'}
+          </CardTitle>
+          {description && (
+            <DescriptionWrap>
+              <Markdown>{description}</Markdown>
+            </DescriptionWrap>
+          )}
+          {usagesLeft === 0 ? (
+            <DescriptionWrap>
+              Sorry, this invite has no usages left. Ask for a new one.
+            </DescriptionWrap>
+          ) : (
+            <Column gap='0.75rem'>
+              {agentSubject ? (
+                <CtaButton
                   data-test='accept-existing'
                   onClick={() => handleAccept()}
                 >
                   Accept as {agentTitle}
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button data-test='accept-new' onClick={handleNew}>
-                  Accept as new user
-                </Button>
-                <Button
-                  data-test='accept-sign-in'
-                  onClick={() => navigate(paths.agentSettings)}
-                  subtle
-                >
-                  Sign in
-                </Button>
-              </>
-            )}
-            {usagesLeft !== undefined && <p>({usagesLeft} usages left)</p>}
-          </Row>
-        )}
-      </ContainerNarrow>
+                </CtaButton>
+              ) : (
+                <>
+                  <CtaButton data-test='accept-new' onClick={handleNew}>
+                    Accept as new user
+                  </CtaButton>
+                  <CtaButton
+                    data-test='accept-sign-in'
+                    onClick={() => navigate(paths.agentSettings)}
+                    subtle
+                  >
+                    Sign in
+                  </CtaButton>
+                </>
+              )}
+            </Column>
+          )}
+        </Card>
+      </Shell>
       <Dialog {...dialogProps} disableLightDismiss>
         <Dialog.Title>
           <h1>Agent created!</h1>
@@ -374,6 +389,12 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
 }
 
 export default InvitePage;
+
+const DescriptionWrap = styled.div`
+  color: ${p => p.theme.colors.textLight};
+  text-align: center;
+  margin-bottom: ${p => p.theme.size(5)};
+`;
 
 const StyledCodeBlock = styled(CodeBlock)`
   word-break: break-word;

@@ -1,9 +1,4 @@
-import {
-  createRootRoute,
-  createRoute,
-  Outlet,
-  useLocation,
-} from '@tanstack/react-router';
+import { createRootRoute, createRoute, Outlet, useLocation } from '@tanstack/react-router';
 import { pathNames } from './paths';
 // import { TanStackRouterDevtools } from '@tanstack/router-devtools';
 import { Providers } from '../Providers';
@@ -29,7 +24,7 @@ export const rootRoute = createRootRoute({
 });
 
 const TopRouteComponent: React.FC = () => {
-  const { pathname, searchStr } = useLocation();
+  const { pathname } = useLocation();
   const { baseURL } = useSettings();
 
   // In dev, the UI is often on :5173 while JSON-AD is served from the Atomic
@@ -38,8 +33,9 @@ const TopRouteComponent: React.FC = () => {
   const origin =
     isDev() && baseURL ? new URL(baseURL).origin : window.location.origin;
 
-  // Pathname + search from the router; origin from the Atomic server in dev.
-  const subject = `${origin}${pathname}${searchStr}`;
+  // Use window.location.search to preserve the full query string.
+  // Tanstack router's searchStr may strip unknown params (like invite tokens).
+  const subject = `${origin}${pathname}${window.location.search}`;
 
   return <ResourcePage subject={subject} key={subject} />;
 };
