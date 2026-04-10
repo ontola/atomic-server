@@ -60,7 +60,7 @@ export function initClientDb(store: Store): void {
       const obj: Record<string, unknown> = { '@id': resource.subject };
       let hasProps = false;
 
-      for (const [key, value] of resource.getPropVals()) {
+      for (const [key, value] of resource.getEntries()) {
         if (value instanceof Uint8Array) continue;
         obj[key] = value;
         hasProps = true;

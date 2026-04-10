@@ -2047,7 +2047,7 @@ export class Store {
       const materialized = new Resource(commit.subject);
       materialized.importLoroUpdate(commit.loroUpdate);
 
-      const properties = Array.from(materialized.getPropVals().entries())
+      const properties = materialized.getEntries()
         .filter(
           ([prop]) =>
             prop !== commits.properties.loroUpdate &&

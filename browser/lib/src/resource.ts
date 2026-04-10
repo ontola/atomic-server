@@ -31,9 +31,6 @@ import {
   type AtomicValue,
 } from './value.js';
 
-/** Contains the PropertyURL / Value combinations */
-export type PropVals = Map<string, AtomicValue>;
-
 /** Debug info: where a resource was loaded from */
 export type ResourceSource =
   | 'created'
@@ -224,7 +221,7 @@ export class Resource<C extends OptionalClass = any> {
       }
 
       // Check if any known property on the resource matches the requested name.
-      for (const [key] of this.getPropValsArray()) {
+      for (const [key] of this.getEntries()) {
         const propName = getKnownNameBySubject(key);
 
         if (propName === name) {
@@ -397,7 +394,8 @@ export class Resource<C extends OptionalClass = any> {
     }
   }
 
-  private getPropValsArray(): [string, AtomicValue][] {
+  /** Returns all property entries (cache + binary aux values) as a flat array. */
+  public getEntries(): [string, AtomicValue][] {
     if (this._cacheDirty && this._loroDoc) {
       this.rebuildCacheFromLoro();
       this._cacheDirty = false;
@@ -590,8 +588,8 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     if (
-      JSON.stringify(this.getPropValsArray()) !==
-      JSON.stringify(resourceB.getPropValsArray())
+      JSON.stringify(this.getEntries()) !==
+      JSON.stringify(resourceB.getEntries())
     ) {
       return false;
     }
@@ -1014,7 +1012,7 @@ export class Resource<C extends OptionalClass = any> {
    */
   public async setVersion(version: Version): Promise<void> {
     // Remove any prop that doesn't exist in this version
-    for (const [prop] of this.getPropValsArray()) {
+    for (const [prop] of this.getEntries()) {
       if (!version.propvals.has(prop)) {
         this.remove(prop);
       }
@@ -1049,11 +1047,6 @@ export class Resource<C extends OptionalClass = any> {
     return url.origin + url.pathname;
   }
 
-  /** Returns the internal property values as a compatibility Map view. */
-  public getPropVals(): PropVals {
-    return new Map(this.getPropValsArray());
-  }
-
   /** Applies a batch of non-validating values during hydration or derived updates. */
   public applyHydratedValues(values: Iterable<[string, AtomicValue]>): void {
     for (const [key, value] of values) {
@@ -1069,7 +1062,7 @@ export class Resource<C extends OptionalClass = any> {
     const obj: Record<string, unknown> = { '@id': this.subject };
     let count = 0;
 
-    for (const [key, value] of this.getPropValsArray()) {
+    for (const [key, value] of this.getEntries()) {
       if (!includeBinary && value instanceof Uint8Array) {
         continue;
       }
@@ -1615,7 +1608,7 @@ export class Resource<C extends OptionalClass = any> {
     if (clientDb) {
       const obj: Record<string, unknown> = { '@id': this.subject };
 
-      for (const [key, value] of this.getPropValsArray()) {
+      for (const [key, value] of this.getEntries()) {
         if (value instanceof Uint8Array) continue;
         obj[key] = value;
       }

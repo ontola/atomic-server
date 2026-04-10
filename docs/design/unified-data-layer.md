@@ -419,22 +419,15 @@ The mapping between commits and Loro versions:
 ## Migration Path
 
 ### Phase 1: Drop propvals, Loro is the only store (client)
-- Remove `propvals` Map from Resource
-- `resource.get()` reads from Loro map
-- `resource.set()` writes to Loro map only
-- Every resource gets a Loro doc on hydration (not lazy)
+- ~~Remove `propvals` Map from Resource~~ (done — `PropVals` type and `getPropVals()` removed, replaced by `getEntries()`)
+- ~~`resource.get()` reads from Loro map~~ (done — reads from `_cache` derived from Loro)
+- ~~`resource.set()` writes to Loro map only~~ (done)
+- ~~Every resource gets a Loro doc on hydration (not lazy)~~ (done)
 - ~~Use native `LoroList` for arrays~~ (done — browser + Rust)
 - ~~Remove `setUnsafe()`, `execSetCommit`, `execRemoveCommit`, `execPushCommit`~~ (done — all removed)
-- JSON-AD from server/WASM DB is imported into a Loro doc on arrival
+- ~~JSON-AD from server/WASM DB is imported into a Loro doc on arrival~~ (done)
 
-**Status**
-- In progress.
-- `Resource` no longer uses `propvals` as the primary browser-side read path. It now reads from a derived cache object plus a small aux map for binary values.
-- Hydration paths (`parse.ts`, `store.ts`) now initialize the Loro doc when available, so fetched resources are no longer "Loro-less until first edit".
-- The browser runtime no longer applies legacy `set` / `push` / `remove` commit payloads when ingesting commits. The hot path is now `loroUpdate` plus destroy.
-- Native `LoroList` is now used for arrays on both browser and Rust sides, enabling per-element CRDT merge.
-- `setUnsafe()` still exists as a migration helper for binary values and some compatibility paths, so the client is not yet fully "Loro only".
-- `propvals` is still the canonical Rust-side resource store. The full "drop propvals" milestone has only been reached partially in the browser client.
+**Status: Complete** (browser side). Rust `propvals` is still the server-side canonical store.
 
 ### Phase 2: Loro-native transport
 - Server sends Loro snapshots/deltas over WebSocket instead of JSON-AD
