@@ -71,7 +71,8 @@
       "Bash(ls browser/e2e/tests/*.spec.ts)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:9883/)",
       "Bash(curl -s -H \"Accept: application/ad+json\" \"http://localhost:9883/invites?token=eyJodHRwczovL2F0b21pY2RhdGEuZGV2L3Byb3BlcnRpZXMvaW52aXRlL3RhcmdldCI6ImRpZDphZDoyTzUwVmVqK1BSUStyYnU4blE5R2QxQ0xUa0VQaTR5UjgxOTR5MzVhaC9SNlZMUjM4QzlMUkFMbkUzYlM3enNZNFNoSUlnTWFEMS9LSHE4cGhwaVJCZz09IiwiaHR0cHM6Ly9hdG9taWNkYXRhLmRldi9wcm9wZXJ0aWVzL2ludml0ZS93cml0ZSI6dHJ1ZSwiaHR0cHM6Ly9hdG9taWNkYXRhLmRldi9wcm9wZXJ0aWVzL2ludml0ZS9leHBpcmVzQXQiOjE3Nzg0Mjc3Mjk4NzAsImh0dHBzOi8vYXRvbWljZGF0YS5kZXYvcHJvcGVydGllcy9zaWduZXIiOiJkaWQ6YWQ6YWdlbnQ6cmFkNDIrdHZMK09PMEF4UG9Sc0ZKQTBKSkxWbnRVc0JWaU8wZXBDQlF4VT0iLCJodHRwczovL2F0b21pY2RhdGEuZGV2L3Byb3BlcnRpZXMvc2lnbmF0dXJlIjoiNW43TkRSbHo3LzZ6dlpWOUVVcFlCTEhNTzlZUTFza0JydGVjaVhabE1KNGZVb1UvVWlaQmJkL0x3MFU3eU43ZzA3UWFNWFIzZW1mQTJnL2x2azd0QVE9PSJ9\")",
-      "Bash(python3 -m json.tool)"
+      "Bash(python3 -m json.tool)",
+      "Bash(echo \"Checking types...\" ls /Users/joep/dev/github/atomicdata-dev/atomic-server/browser/node_modules/loro-crdt/dist/*.d.ts)"
     ]
   }
 }
