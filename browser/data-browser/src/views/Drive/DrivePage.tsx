@@ -31,7 +31,7 @@ import { FaXmark } from 'react-icons/fa6';
 import { QuickCreateRow } from '@components/NewInstanceButton';
 import { ResourceSideBar } from '@components/SideBar/ResourceSideBar/ResourceSideBar';
 import { ScrollArea } from '@components/ScrollArea';
-import { useChildren } from '@components/SideBar/useChildren';
+import { useChildren } from '@tomic/react';
 
 const NewPluginButton = lazy(() => import('@chunks/Plugins/NewPluginButton'));
 

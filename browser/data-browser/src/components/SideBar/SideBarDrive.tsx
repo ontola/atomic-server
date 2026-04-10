@@ -2,12 +2,12 @@ import {
   core,
   useArray,
   useCanWrite,
+  useChildren,
   useResource,
   useStore,
   useTitle,
 } from '@tomic/react';
 import { Fragment, useEffect, useState, type JSX } from 'react';
-import { useChildren } from './useChildren';
 import { styled } from 'styled-components';
 import { useSettings } from '../../helpers/AppSettings';
 import { constructOpenURL } from '../../helpers/navigation';
