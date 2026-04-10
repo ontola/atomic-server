@@ -18,21 +18,28 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
 import { drawCanvasStrokes, screenToCanvas } from './canvas-draw';
 import {
+  FaCircleInfo,
   FaEraser,
   FaExpand,
   FaPen,
   FaPlus,
   FaRotateLeft,
   FaRotateRight,
-  FaTableCellsLarge,
 } from 'react-icons/fa6';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import { constructOpenURL } from '@helpers/navigation';
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  useDialog,
+} from '@components/Dialog';
 import { FanOverlay } from './FanOverlay';
 import {
   hoveredColor as resolveHoveredColor,
   hoveredWidth as resolveHoveredWidth,
 } from './fan-helpers';
+import { currentWheelSessionStartedAt } from '@helpers/wheelSession';
 
 /**
  * Pixels of horizontal pointer travel that map to scrubbing through the
@@ -46,6 +53,50 @@ const SCRUB_DRAG_THRESHOLD = 5;
  * canvas scale. Matches Flutter's `_onZoomScrubDelta` ratio.
  */
 const ZOOM_SCRUB_PX_PER_2X = 150;
+
+/**
+ * Maximum number of undo / redo snapshots retained per canvas. Each entry
+ * is a JSON-serialised stroke list (a `CanvasStroke[]`), so the cap also
+ * bounds `localStorage` use.
+ */
+const UNDO_STACK_LIMIT = 200;
+
+type UndoState = { undo: CanvasStroke[][]; redo: CanvasStroke[][] };
+
+const undoStorageKey = (subject: string) => `canvas-undo:${subject}`;
+
+function loadUndoState(subject: string): UndoState {
+  try {
+    const raw = localStorage.getItem(undoStorageKey(subject));
+    if (!raw) return { undo: [], redo: [] };
+    const parsed = JSON.parse(raw) as UndoState;
+
+    return {
+      undo: Array.isArray(parsed.undo) ? parsed.undo : [],
+      redo: Array.isArray(parsed.redo) ? parsed.redo : [],
+    };
+  } catch {
+    return { undo: [], redo: [] };
+  }
+}
+
+function saveUndoState(subject: string, state: UndoState): void {
+  try {
+    localStorage.setItem(undoStorageKey(subject), JSON.stringify(state));
+  } catch {
+    // Disabled / quota exceeded — undo simply doesn't persist this session.
+  }
+}
+
+/** Shallow clone of a stroke list — paths copied so future mutations of
+ *  the live array don't bleed into the snapshot. */
+function cloneStrokes(strokes: CanvasStroke[]): CanvasStroke[] {
+  return strokes.map(s => ({
+    color: s.color,
+    width: s.width,
+    path: s.path.map(p => [p[0], p[1]] as [number, number]),
+  }));
+}
 
 /**
  * Pen-color swatches and stroke widths — match Flutter `fan_helpers.dart` so
@@ -92,6 +143,31 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   const [penWidth, setPenWidth] = useState(DEFAULT_STROKE_WIDTH);
   const [prevWidth, setPrevWidth] = useState(3);
   const [eraserMode, setEraserMode] = useState(false);
+
+  // Wheel events (pan AND zoom) are ignored if the current wheel session
+  // started before the canvas was mounted — that's how we detect macOS
+  // momentum-scroll tails carried over from the previous view. See
+  // `helpers/wheelSession.ts`. Reset on resource change (= canvas-to-canvas
+  // navigation) so each canvas starts gated.
+  const canvasMountedAtRef = useRef(performance.now());
+
+  // Custom cursor preview: a circle the size of the next stroke at the
+  // current zoom (`penWidth × scale`). Null while not hovering, or while
+  // drawing / erasing / panning (those have their own visual feedback).
+  // Position is relative to the canvas container.
+  const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(
+    null,
+  );
+
+  // Persistent undo / redo stacks (per-canvas, localStorage-backed).
+  // Loro's `UndoManager` is session-scoped — once the page reloads it
+  // starts empty and the undo button greys out even with prior strokes
+  // present. Instead, store snapshots of `strokeData` before each user
+  // edit and persist them. On mount we either load from `localStorage` or
+  // bootstrap from `getLoroHistory()` so a canvas you've never opened on
+  // this device still has its full pre-existing history available.
+  const undoStackRef = useRef<CanvasStroke[][]>([]);
+  const redoStackRef = useRef<CanvasStroke[][]>([]);
 
   // Fan state — populated while the user holds + drags the colour or
   // width button. `fanType` null means no fan is open. The overlay reads
@@ -190,11 +266,49 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     setStrokes(parseCanvasStrokes(res.get(canvas.properties.strokeData)));
   }, []);
 
+  /** Persist the current undo / redo stacks under the canvas subject. */
+  const persistUndoState = useCallback(() => {
+    saveUndoState(resource.subject, {
+      undo: undoStackRef.current,
+      redo: redoStackRef.current,
+    });
+  }, [resource.subject]);
+
   useEffect(() => {
+    // Reset the wheel-session gate baseline on mount and on canvas-to-
+    // canvas navigation, so we can detect "this wheel session began
+    // before this canvas was visible".
+    canvasMountedAtRef.current = performance.now();
+
     reloadStrokesFromResource(resource);
-    resource.ensureUndoManager();
-    setCanUndo(resource.canUndo());
-    setCanRedo(resource.canRedo());
+
+    // Load (or bootstrap) the persistent undo state for THIS canvas. The
+    // bootstrap walks `getLoroHistory()` — every prior version except the
+    // latest becomes an undo step, so a freshly-loaded canvas with N
+    // historical commits exposes N-1 undo steps immediately.
+    const stored = loadUndoState(resource.subject);
+
+    if (stored.undo.length === 0 && stored.redo.length === 0) {
+      const versions = resource.getLoroHistory();
+      const reconstructed: CanvasStroke[][] = [];
+
+      for (let i = 0; i < versions.length - 1; i++) {
+        reconstructed.push(
+          parseCanvasStrokes(
+            versions[i].propvals.get(canvas.properties.strokeData),
+          ),
+        );
+      }
+
+      undoStackRef.current = reconstructed.slice(-UNDO_STACK_LIMIT);
+      redoStackRef.current = [];
+    } else {
+      undoStackRef.current = stored.undo;
+      redoStackRef.current = stored.redo;
+    }
+
+    setCanUndo(undoStackRef.current.length > 0);
+    setCanRedo(redoStackRef.current.length > 0);
 
     const unsub = resource.on(ResourceEvents.LocalChange, prop => {
       if (
@@ -203,8 +317,6 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
         prop === undefined
       ) {
         reloadStrokesFromResource(resource);
-        setCanUndo(resource.canUndo());
-        setCanRedo(resource.canRedo());
       }
     });
 
@@ -276,33 +388,79 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   // (one undo checkpoint). See `planning/canvas-undo-consolidation.md` for
   // the design.
 
+  /** Snapshot the current strokes onto the undo stack. Called before every
+   *  user-visible edit (push stroke, erase). Truncates the redo stack
+   *  since the user is on a new forward branch. */
+  const pushUndoSnapshot = useCallback(
+    (preEditStrokes: CanvasStroke[]) => {
+      undoStackRef.current.push(cloneStrokes(preEditStrokes));
+
+      if (undoStackRef.current.length > UNDO_STACK_LIMIT) {
+        undoStackRef.current.shift();
+      }
+
+      redoStackRef.current = [];
+      persistUndoState();
+      setCanUndo(true);
+      setCanRedo(false);
+    },
+    [persistUndoState],
+  );
+
+  const applyHistoricalStrokes = useCallback(
+    async (target: CanvasStroke[]) => {
+      setSaving(true);
+      setSaveError(undefined);
+
+      try {
+        await enableLoro();
+        resource.replaceListItems(
+          canvas.properties.strokeData,
+          target.map(strokeToJson),
+        );
+        await resource.save();
+      } catch (e) {
+        setSaveError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setSaving(false);
+      }
+    },
+    [resource],
+  );
+
   const handleUndo = useCallback(async () => {
-    if (!resource.undo()) return;
-    setCanUndo(resource.canUndo());
-    setCanRedo(resource.canRedo());
-    setSaving(true);
-    try {
-      await resource.save();
-    } catch (e) {
-      setSaveError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setSaving(false);
+    if (undoStackRef.current.length === 0) return;
+
+    const target = undoStackRef.current.pop()!;
+    redoStackRef.current.push(cloneStrokes(strokesRef.current));
+
+    if (redoStackRef.current.length > UNDO_STACK_LIMIT) {
+      redoStackRef.current.shift();
     }
-  }, [resource]);
+
+    persistUndoState();
+    setCanUndo(undoStackRef.current.length > 0);
+    setCanRedo(true);
+
+    await applyHistoricalStrokes(target);
+  }, [applyHistoricalStrokes, persistUndoState]);
 
   const handleRedo = useCallback(async () => {
-    if (!resource.redo()) return;
-    setCanUndo(resource.canUndo());
-    setCanRedo(resource.canRedo());
-    setSaving(true);
-    try {
-      await resource.save();
-    } catch (e) {
-      setSaveError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setSaving(false);
+    if (redoStackRef.current.length === 0) return;
+
+    const target = redoStackRef.current.pop()!;
+    undoStackRef.current.push(cloneStrokes(strokesRef.current));
+
+    if (undoStackRef.current.length > UNDO_STACK_LIMIT) {
+      undoStackRef.current.shift();
     }
-  }, [resource]);
+
+    persistUndoState();
+    setCanUndo(true);
+    setCanRedo(redoStackRef.current.length > 0);
+
+    await applyHistoricalStrokes(target);
+  }, [applyHistoricalStrokes, persistUndoState]);
 
   const onUndoPointerDown = useCallback(
     (e: React.PointerEvent) => {
@@ -367,25 +525,14 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       const historicalStrokes = parseCanvasStrokes(
         target?.propvals.get(canvas.properties.strokeData),
       );
-      const itemsForLoro = historicalStrokes.map(strokeToJson);
 
-      setSaving(true);
-      setSaveError(undefined);
+      // Scrub-release commits a historical state — record the pre-scrub
+      // strokes as an undoable step so a plain undo press unwinds it.
+      pushUndoSnapshot(strokesRef.current);
 
-      try {
-        await enableLoro();
-        resource.replaceListItems(canvas.properties.strokeData, itemsForLoro);
-        await resource.save();
-      } catch (err) {
-        setSaveError(err instanceof Error ? err.message : String(err));
-      } finally {
-        setSaving(false);
-      }
-
-      setCanUndo(resource.canUndo());
-      setCanRedo(resource.canRedo());
+      await applyHistoricalStrokes(historicalStrokes);
     },
-    [handleUndo, resource],
+    [applyHistoricalStrokes, handleUndo, pushUndoSnapshot],
   );
 
   const onUndoPointerCancel = useCallback((e: React.PointerEvent) => {
@@ -397,7 +544,11 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
 
   // ──────────────── Save / draw the actual stroke ──────────────────────────
 
-  const pushStrokeToServer = async (stroke: CanvasStroke) => {
+  const pushStrokeToServer = async (
+    stroke: CanvasStroke,
+    preEditStrokes: CanvasStroke[],
+  ) => {
+    pushUndoSnapshot(preEditStrokes);
     setSaving(true);
     setSaveError(undefined);
 
@@ -410,9 +561,6 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     } finally {
       setSaving(false);
     }
-
-    setCanUndo(resource.canUndo());
-    setCanRedo(resource.canRedo());
   };
 
   // ──────────────── Eraser: drag across strokes deletes them ───────────────
@@ -453,14 +601,18 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   const finishErase = useCallback(async () => {
     if (erasedIndicesRef.current.size === 0) {
       setPreviewStrokes(null);
+
       return;
     }
 
-    const remaining = strokesRef.current.filter(
+    const preEdit = strokesRef.current;
+    const remaining = preEdit.filter(
       (_, i) => !erasedIndicesRef.current.has(i),
     );
     erasedIndicesRef.current = new Set();
     setPreviewStrokes(null);
+
+    pushUndoSnapshot(preEdit);
 
     setSaving(true);
     setSaveError(undefined);
@@ -477,14 +629,40 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     } finally {
       setSaving(false);
     }
-
-    setCanUndo(resource.canUndo());
-    setCanRedo(resource.canRedo());
-  }, [resource]);
+  }, [pushUndoSnapshot, resource]);
 
   // ──────────────── Pointer flow: pan / draw / erase ───────────────────────
 
+  /**
+   * Update / clear the cursor preview. Called from both pointerenter and
+   * pointermove so the preview appears the moment the cursor enters the
+   * canvas, not only after the first move.
+   */
+  const trackCursorForPreview = useCallback((e: React.PointerEvent) => {
+    if (
+      isPanningRef.current ||
+      drawingPointerRef.current !== null ||
+      erasingPointerRef.current !== null ||
+      eraserModeRef.current
+    ) {
+      setCursorPos(null);
+
+      return;
+    }
+
+    const container = containerRef.current;
+
+    if (!container) return;
+
+    const rect = container.getBoundingClientRect();
+    setCursorPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+  }, []);
+
   const onPointerDown = (e: React.PointerEvent) => {
+    // Drawing / erasing starts — hide the hover preview; the stroke itself
+    // is the feedback.
+    setCursorPos(null);
+
     const el = canvasRef.current;
 
     if (!el) {
@@ -537,6 +715,8 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
+    trackCursorForPreview(e);
+
     if (isPanningRef.current && panStartRef.current) {
       const dx = e.clientX - panStartRef.current.x;
       const dy = e.clientY - panStartRef.current.y;
@@ -622,33 +802,98 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       return;
     }
 
+    // Snapshot pre-edit strokes BEFORE adding the new one — the undo
+    // target should restore to *before* this stroke.
+    const preEditStrokes = strokesRef.current;
     setStrokes(prev => [...prev, stroke]);
     setCurrentStroke(null);
-    void pushStrokeToServer(stroke);
+    void pushStrokeToServer(stroke, preEditStrokes);
   };
 
-  const onWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    const el = canvasRef.current;
+  // Wheel handling: attached natively with `{ passive: false }` so we can
+  // actually `preventDefault()`. React's synthetic `onWheel` is passive by
+  // default and silently drops `preventDefault()` calls, which means
+  // Ctrl-/Cmd-wheel and trackpad pinch end up zooming the whole browser
+  // page instead of just the canvas.
+  useEffect(() => {
+    const container = containerRef.current;
 
-    if (!el) {
-      return;
-    }
+    if (!container) return;
 
-    const rect = el.getBoundingClientRect();
-    const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
-    const nextScale = Math.min(30, Math.max(0.05, scaleRef.current * factor));
-    const mx = e.clientX - rect.left;
-    const my = e.clientY - rect.top;
-    const worldX = (mx - offsetRef.current.x) / scaleRef.current;
-    const worldY = (my - offsetRef.current.y) / scaleRef.current;
+    const handleWheel = (e: WheelEvent) => {
+      // Suppress the browser's default for every wheel inside the canvas:
+      // plain wheel would scroll the page, Ctrl/Cmd-wheel and trackpad
+      // pinch would zoom the whole browser UI.
+      e.preventDefault();
 
-    setScale(nextScale);
-    setOffset({
-      x: mx - worldX * nextScale,
-      y: my - worldY * nextScale,
-    });
-  };
+      const el = canvasRef.current;
+
+      if (!el) return;
+
+      // Ignore wheel events that belong to a scroll session that *started*
+      // before this canvas became visible. That session is a macOS
+      // momentum-scroll tail carried over from the previous view; the user
+      // didn't initiate scrolling here. Once a new wheel session begins
+      // (gap > WHEEL_SESSION_GAP_MS, set in `helpers/wheelSession.ts`),
+      // its events count normally. See that file for the rationale.
+      if (currentWheelSessionStartedAt() < canvasMountedAtRef.current) {
+        return;
+      }
+
+      // Match Flutter's `_onPointerSignal` (infinite_canvas.dart:747-768):
+      //
+      // * Plain wheel  → pan the canvas by the scroll delta.
+      // * Ctrl / Cmd wheel  → zoom toward the cursor.
+      //
+      // The Ctrl-modified branch also covers macOS / Windows trackpad pinch,
+      // which the browser surfaces as `wheel` events with `ctrlKey === true`.
+      if (e.ctrlKey || e.metaKey) {
+        const rect = el.getBoundingClientRect();
+
+        // A discrete scrollwheel notch arrives as a single big `deltaY`
+        // (typically ±100), so a fixed 10 % step per event is the right
+        // feel. A macOS trackpad pinch arrives as a *stream* of small
+        // `deltaY` values (often ±2 to ±15); applying that same 10 % step
+        // to every event makes the canvas zoom 10×+ per pinch. Switch on
+        // magnitude: small deltas → continuous exponential scaling
+        // proportional to motion; large deltas → discrete notch.
+        const isCoarseNotch = Math.abs(e.deltaY) >= 50;
+        const factor = isCoarseNotch
+          ? e.deltaY < 0
+            ? 1.1
+            : 1 / 1.1
+          : Math.exp(-e.deltaY * 0.005);
+        const nextScale = Math.min(
+          30,
+          Math.max(0.05, scaleRef.current * factor),
+        );
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        const worldX = (mx - offsetRef.current.x) / scaleRef.current;
+        const worldY = (my - offsetRef.current.y) / scaleRef.current;
+
+        setScale(nextScale);
+        setOffset({
+          x: mx - worldX * nextScale,
+          y: my - worldY * nextScale,
+        });
+
+        return;
+      }
+
+      // Plain wheel → pan. Negative-delta = subtract from offset so the
+      // content scrolls in the natural direction. macOS "natural scrolling"
+      // already inverts the sign at the OS layer.
+      setOffset({
+        x: offsetRef.current.x - e.deltaX,
+        y: offsetRef.current.y - e.deltaY,
+      });
+    };
+
+    container.addEventListener('wheel', handleWheel, { passive: false });
+
+    return () => container.removeEventListener('wheel', handleWheel);
+  }, []);
 
   // ──────────────── Toolbar button handlers ────────────────────────────────
 
@@ -671,14 +916,10 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [handleUndo, handleRedo]);
 
-  /** Gallery: navigate to this canvas's parent (the drive or folder). */
-  const handleGallery = useCallback(() => {
-    const parent = resource.get(PARENT_PROP);
-
-    if (typeof parent === 'string' && parent) {
-      navigate(constructOpenURL(parent));
-    }
-  }, [resource, navigate]);
+  // Help dialog — shows the keyboard / gesture cheat-sheet that used to
+  // live in an always-visible footer hint. Triggered by the info button at
+  // the start of the bottom toolbar.
+  const [helpDialogProps, showHelp, , isHelpOpen] = useDialog();
 
   /** New canvas: create one in the same parent and navigate to it. */
   const handleNewCanvas = useCallback(async () => {
@@ -1012,30 +1253,41 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       )}
       <CanvasArea
         ref={containerRef}
-        onWheel={onWheel}
         $dark={darkMode}
         $panMode={panMode}
         $eraser={eraserMode}
+        $previewCursor={cursorPos !== null}
       >
         <DrawCanvas
           ref={canvasRef}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
+          onPointerEnter={trackCursorForPreview}
+          onPointerLeave={() => setCursorPos(null)}
           onPointerUp={finishStroke}
           onPointerCancel={finishStroke}
         />
-        <Hint>
-          {eraserMode
-            ? 'Drag across a stroke to erase it · Tap eraser again to draw'
-            : 'Draw with left click · Pan with Space+drag or middle mouse · Drag the undo button to scrub history'}
-        </Hint>
+        {cursorPos && (
+          <CursorPreview
+            style={{
+              // Diameter clamped so a hairline stroke is still visible and
+              // a huge zoomed-in brush stays on screen. Centred on the
+              // pointer via the `translate(-50%, -50%)` in CursorPreview.
+              width: Math.max(4, penWidth * scale),
+              height: Math.max(4, penWidth * scale),
+              transform: `translate(${cursorPos.x}px, ${cursorPos.y}px) translate(-50%, -50%)`,
+              background: colorIntToHex(penColor),
+            }}
+          />
+        )}
         <BottomToolbar>
           <CircleButton
             type='button'
-            title='Back to gallery'
-            onClick={handleGallery}
+            title='Canvas help'
+            onClick={showHelp}
+            aria-label='Show canvas help'
           >
-            <FaTableCellsLarge />
+            <FaCircleInfo />
           </CircleButton>
           <CircleButton
             type='button'
@@ -1116,6 +1368,49 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
           darkMode={darkMode}
         />
       )}
+      <Dialog {...helpDialogProps}>
+        {isHelpOpen && (
+          <>
+            <DialogTitle>
+              <h1>Canvas controls</h1>
+            </DialogTitle>
+            <DialogContent>
+              <HelpList>
+                <li>
+                  <kbd>Left click</kbd> &amp; drag — draw a stroke
+                </li>
+                <li>
+                  <kbd>Scroll</kbd> · <kbd>Space</kbd>+drag · middle-mouse drag
+                  — pan the canvas
+                </li>
+                <li>
+                  <kbd>Ctrl</kbd>+<kbd>scroll</kbd> · trackpad pinch — zoom
+                  toward the cursor
+                </li>
+                <li>
+                  Tap the eraser button, then drag across strokes to remove them
+                </li>
+                <li>
+                  Tap the colour or width button to swap with the previous
+                  choice; press &amp; drag to open the picker fan
+                </li>
+                <li>
+                  Tap <kbd>Undo</kbd> / <kbd>Redo</kbd> to step through edits;
+                  drag the undo button left/right to scrub the full history
+                </li>
+                <li>
+                  Tap the zoom button to fit all strokes; drag left/right to
+                  zoom continuously
+                </li>
+                <li>
+                  <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo · <kbd>Ctrl</kbd>+
+                  <kbd>Shift</kbd>+<kbd>Z</kbd> redo
+                </li>
+              </HelpList>
+            </DialogContent>
+          </>
+        )}
+      </Dialog>
     </Page>
   );
 };
@@ -1162,6 +1457,7 @@ const CanvasArea = styled.div<{
   $dark: boolean;
   $panMode: string;
   $eraser: boolean;
+  $previewCursor: boolean;
 }>`
   position: relative;
   flex: 1;
@@ -1176,7 +1472,33 @@ const CanvasArea = styled.div<{
         ? 'grabbing'
         : p.$eraser
           ? 'cell'
-          : 'crosshair'};
+          : // Hide the OS cursor only when the in-canvas preview circle is
+            // showing — otherwise crosshair stays so the user isn't left
+            // with no pointer at all when the cursor is outside the
+            // canvas area but `eraser` / `pan` modes are inactive.
+            p.$previewCursor
+            ? 'none'
+            : 'crosshair'};
+`;
+
+/**
+ * Pen-tip preview that follows the cursor: a circle sized exactly to the
+ * stroke that would land if the user pressed and dragged (`penWidth ×
+ * scale` in screen pixels) and filled with the current pen colour. The
+ * thin outline keeps the preview visible against same-colour patches of
+ * canvas. `pointer-events: none` so it never steals the gesture.
+ */
+const CursorPreview = styled.div`
+  position: absolute;
+  top: 0;
+  left: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 2;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4);
+  /* The toolbar pill sits above this (z-index 3) so hovering near the
+     bottom of the canvas doesn't paint the preview over a button. */
 `;
 
 const DrawCanvas = styled.canvas`
@@ -1185,18 +1507,22 @@ const DrawCanvas = styled.canvas`
   height: 100%;
 `;
 
-const Hint = styled.p`
-  position: absolute;
-  bottom: 6.5rem; /* clear of the bottom toolbar */
-  left: 50%;
-  transform: translateX(-50%);
+const HelpList = styled.ul`
   margin: 0;
-  font-size: 0.75rem;
-  color: ${p => p.theme.colors.textLight};
-  pointer-events: none;
-  opacity: 0.8;
-  text-align: center;
-  white-space: nowrap;
+  padding-left: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  color: ${p => p.theme.colors.text};
+
+  & kbd {
+    background: ${p => p.theme.colors.bg1};
+    border: 1px solid ${p => p.theme.colors.bg2};
+    border-radius: 4px;
+    padding: 0 0.35em;
+    font-size: 0.85em;
+    font-family: inherit;
+  }
 `;
 
 /**
