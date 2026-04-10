@@ -931,6 +931,11 @@ export class Store {
       }
     }
 
+    // When offline, return local results (even if empty) — don't hit the server.
+    if (!this._serverConnected) {
+      return [];
+    }
+
     // Fall back to server search (Tantivy)
     const searchSubject = buildSearchSubject(this.serverUrl, query, opts);
     const searchResource = await this.fetchResourceFromServer(searchSubject, {

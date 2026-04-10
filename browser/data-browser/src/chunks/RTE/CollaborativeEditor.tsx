@@ -80,7 +80,7 @@ export default function CollaborativeEditor({
   const store = useStore();
   const [color] = useState(randomItem(COLORS));
   const showNewResourceUI = useNewResourceUI();
-  const [save] = useDebouncedSave(resource, 2000);
+  const [save] = useDebouncedSave(resource, 500);
   const { agent, drive } = useSettings();
   const agentResource = useResource<Core.Agent>(agent?.subject);
   const { upload } = useUpload(resource);
