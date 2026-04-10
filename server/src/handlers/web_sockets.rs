@@ -573,8 +573,9 @@ async fn handle_sync_drive(
 #[derive(serde::Deserialize)]
 struct SyncVVRequest {
     drive: String,
+    /// TODO: implement fast-path hash comparison (skip VV diff when hashes match)
     #[serde(rename = "driveHash")]
-    drive_hash: String,
+    _drive_hash: String,
     peers: Vec<String>,
     resources: std::collections::HashMap<String, Vec<i32>>,
 }
@@ -606,7 +607,7 @@ async fn handle_sync_vv(
     request: SyncVVRequest,
     store: Db,
     agent: ForAgent,
-    origin: String,
+    _origin: String,
 ) -> Vec<String> {
     use atomic_lib::db::trees::Tree;
     use atomic_lib::loro::AtomicLoroDoc;

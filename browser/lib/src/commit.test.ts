@@ -240,6 +240,61 @@ describe('Commit signing and keys', () => {
     ).toBe('https://atomicdata.dev/display-styles/list');
   });
 
+  it('drive genesis commit includes write and read arrays', async ({
+    expect,
+  }) => {
+    const store = new Store({ serverUrl: 'https://example.com' });
+    store.setServerConnected(true);
+    const agentKeys = await Agent.generateKeyPair();
+    const agentDID = `did:ad:agent:${agentKeys.publicKey}`;
+    const signingAgent = new Agent(
+      new JSCryptoProvider(agentKeys.privateKey),
+      agentDID,
+    );
+    store.setAgent(signingAgent);
+
+    const postCommitSpy = vi
+      .spyOn(store, 'postCommit')
+      .mockImplementation(async commit => {
+        return {
+          ...commit,
+          id: `https://example.com/commits/${commit.signature}`,
+        } as Commit;
+      });
+
+    // Simulate createDrive: set properties manually to avoid validation
+    const resource = new Resource('_new:test-drive');
+    resource.setStore(store);
+    resource.new = true;
+    await resource.set(core.properties.isA, ['https://atomicdata.dev/classes/Drive'], false);
+    await resource.set('https://atomicdata.dev/properties/name', 'Test Drive', false);
+    await resource.set('https://atomicdata.dev/properties/write', [agentDID], false);
+    await resource.set('https://atomicdata.dev/properties/read', [agentDID], false);
+
+    resource.markNextCommitAsGenesis();
+    const drive = resource;
+
+    await drive.save();
+
+    const genesisCommit = postCommitSpy.mock.calls[0][0];
+    expect(genesisCommit.loroUpdate).toBeDefined();
+
+    // Materialize: import the Loro update into a fresh resource
+    const materialized = new Resource(genesisCommit.subject);
+    materialized.importLoroUpdate(genesisCommit.loroUpdate!);
+
+    // The critical check: write and read arrays must be in the Loro delta
+    expect(materialized.get('https://atomicdata.dev/properties/write')).toEqual([
+      agentDID,
+    ]);
+    expect(materialized.get('https://atomicdata.dev/properties/read')).toEqual([
+      agentDID,
+    ]);
+    expect(materialized.get('https://atomicdata.dev/properties/name')).toBe(
+      'Test Drive',
+    );
+  });
+
   it('derives did:ad subject from temporary _new subject', async ({
     expect,
   }) => {

@@ -1233,6 +1233,16 @@ impl Storelike for Db {
 
         if let Some(new) = &commit_response.resource_new {
             self.add_resource_tx(new, &mut transaction)?;
+
+            // Persist the Loro snapshot so VV-based sync can find it.
+            if let Some(snapshot) = new.get_loro_snapshot() {
+                transaction.push(trees::Operation {
+                    tree: trees::Tree::LoroSnapshots,
+                    method: trees::Method::Insert,
+                    key: new.get_subject().pure_id().as_bytes().to_vec(),
+                    val: Some(snapshot),
+                });
+            }
         }
 
         if opts.update_index {
