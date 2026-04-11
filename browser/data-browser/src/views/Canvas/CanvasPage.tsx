@@ -1,4 +1,3 @@
-import { EditableTitle } from '@components/EditableTitle';
 import { useDarkMode } from '@helpers/useDarkMode';
 import {
   canvas,
@@ -1243,9 +1242,6 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
 
   return (
     <Page>
-      <FloatingTitle>
-        <EditableTitle resource={resource} />
-      </FloatingTitle>
       {(saving || saveError) && (
         <SaveStatus $error={!!saveError}>
           {saveError ? `Save failed: ${saveError}` : 'Saving…'}
@@ -1424,19 +1420,6 @@ const Page = styled.div`
   min-height: ${p => p.theme.heights.fullPage};
   background: ${p => p.theme.colors.bg};
   position: relative;
-`;
-
-const FloatingTitle = styled.div`
-  position: absolute;
-  top: ${p => p.theme.size()};
-  left: ${p => p.theme.size(2)};
-  z-index: 2;
-  /* Subtle backdrop so the title reads against any stroke colors. */
-  background: ${p => p.theme.colors.bg};
-  border: 1px solid ${p => p.theme.colors.bg2};
-  border-radius: ${p => p.theme.radius};
-  padding: 4px 10px;
-  max-width: 60%;
 `;
 
 const SaveStatus = styled.span<{ $error?: boolean }>`
