@@ -1,72 +1,31 @@
 import { createAuthentication } from './authentication.js';
-import { parseCommitJSON } from './commit.js';
-import { parseAndApplyCommit } from './index.js';
-import { JSONADParser } from './parse.js';
 import type { Resource } from './resource.js';
-import {
-  recordServerVersionFromWsProtocol,
-  shouldSkipDidAuthForLegacyServer,
-  warnDidAuthCompatibility,
-} from './serverCapabilities.js';
+import { recordServerVersionFromWsProtocol } from './serverCapabilities.js';
 import type { Store } from './store.js';
 import { AtomicError, ErrorType } from './error.js';
-import { classes } from './urls.js';
-import { decodeB64 } from './base64.js';
+import {
+  Tag,
+  Flags,
+  encodeAuth,
+  encodeGet,
+  encodeSub,
+  encodeUnsub,
+  decodeUpdate,
+  decodeError,
+  decodeSyncOk,
+  decodeSyncDiff,
+  decodeSyncPush,
+  debugFrame,
+} from './ws-v2.js';
 
 const REQUEST_TIMEOUT = 5000;
-
-enum WS_Version {
-  LEGACY = 'legacy',
-  V1 = 'atomicdata-ws.v0.1',
-}
-
-function parseResourceMessage(ev: MessageEvent): Resource[] {
-  const resourceJSON: string = ev.data.slice(9);
-  const parsed = JSON.parse(resourceJSON);
-  const parser = new JSONADParser();
-  const resources = parser.parse(parsed);
-
-  return resources;
-}
-
-/** Sends a GET message for some resource over websockets. */
-export async function fetchWebSocket(
-  client: WebSocket,
-  subject: string,
-): Promise<Resource> {
-  return new Promise((resolve, reject) => {
-    const listener = (ev: MessageEvent) => {
-      if (ev.data.startsWith('RESOURCE ')) {
-        parseResourceMessage(ev).forEach(resource => {
-          // if it is the requested subject, return the resource
-          if (resource.subject === subject) {
-            clearTimeout(timeoutId);
-            client.removeEventListener('message', listener);
-            resolve(resource);
-          }
-        });
-      }
-    };
-
-    const timeoutId = setTimeout(() => {
-      client.removeEventListener('message', listener);
-      reject(
-        new Error(
-          `Request for subject "${subject}" timed out after ${REQUEST_TIMEOUT}ms.`,
-        ),
-      );
-    }, REQUEST_TIMEOUT);
-
-    client.addEventListener('message', listener);
-    client.send('GET ' + subject);
-  });
-}
+const WS_PROTOCOL = 'atomicdata-ws.v2';
 
 /**
- * A client that does authentication and message handling for a single WebSocket connection.
+ * A WebSocket client using the v2 binary protocol.
+ * All messages are binary frames — no JSON-AD parsing on the hot path.
  */
 export class WSClient {
-  // private url: string;
   private ws: WebSocket;
   private store: Store;
   private authPromise: Promise<void>;
@@ -75,10 +34,26 @@ export class WSClient {
   private authenticatedWith: string | undefined;
   private isAuthenticating = false;
 
-  private retryingOldVersion = false;
   private _closed = false;
   private _retryDelay = 1000;
-  private _retryTimer?: ReturnType<typeof setTimeout>;
+  private _retryTimer: ReturnType<typeof setTimeout> | undefined;
+
+  /** When true, all WS frames are logged to the console in human-readable form. */
+  public debug =
+    typeof localStorage !== 'undefined' &&
+    localStorage.getItem('ws-debug') === '1';
+
+  /** Pending GET requests awaiting a response, keyed by request_id. */
+  private pendingGets = new Map<
+    number,
+    {
+      subject: string;
+      resolve: (r: Resource) => void;
+      reject: (e: Error) => void;
+      timer: ReturnType<typeof setTimeout>;
+    }
+  >();
+  private nextRequestId = 1;
 
   constructor(url: string, store: Store) {
     this.store = store;
@@ -86,47 +61,31 @@ export class WSClient {
     this.handleOpen = this.handleOpen.bind(this);
 
     const wsURL = new URL(url);
-
-    // Default to a secure WSS connection, but allow WS for unsecured server connections
-    if (wsURL.protocol === 'http:') {
-      wsURL.protocol = 'ws';
-    } else {
-      wsURL.protocol = 'wss';
-    }
-
+    wsURL.protocol = wsURL.protocol === 'http:' ? 'ws' : 'wss';
     wsURL.pathname = '/ws';
 
     this.authPromise = Promise.resolve();
 
-    const createSocket = (protocols?: string[]) => {
-      const ws = new WebSocket(wsURL.toString(), protocols);
+    const createSocket = () => {
+      const ws = new WebSocket(wsURL.toString(), [WS_PROTOCOL]);
+      ws.binaryType = 'arraybuffer';
       let opened = false;
+
       ws.addEventListener('message', this.handleMessage);
-      ws.addEventListener('error', e => {
-        const triedV1 = protocols?.includes(WS_Version.V1) ?? false;
-
-        // Only fall back to the legacy websocket protocol if the initial
-        // V1 handshake itself fails before the socket ever opens.
-        if (!opened && triedV1 && !this.retryingOldVersion) {
-          this.retryingOldVersion = true;
-          createSocket();
-
-          return;
+      ws.addEventListener('error', () => {
+        if (!opened) {
+          console.warn('[WS] Connection failed');
         }
 
         this.store.setServerConnected(false);
-
-        return console.error('websocket error:', e);
       });
       ws.addEventListener('close', () => {
         this.store.setServerConnected(false);
 
-        // Auto-reconnect with exponential backoff unless explicitly closed
         if (!this._closed) {
           this._retryTimer = setTimeout(() => {
-            console.info(`[WS] Reconnecting (delay: ${this._retryDelay}ms)...`);
             this.authenticatedWith = undefined;
-            createSocket([WS_Version.V1]);
+            createSocket();
           }, this._retryDelay);
           this._retryDelay = Math.min(this._retryDelay * 2, 30000);
         }
@@ -134,7 +93,7 @@ export class WSClient {
       this.openPromise = new Promise(resolve => {
         ws.addEventListener('open', () => {
           opened = true;
-          this._retryDelay = 1000; // Reset backoff on successful connect
+          this._retryDelay = 1000;
           resolve();
           this.store.setServerConnected(true);
           this.handleOpen();
@@ -144,14 +103,13 @@ export class WSClient {
       this.ws = ws;
     };
 
-    createSocket([WS_Version.V1]);
+    createSocket();
   }
 
   public get readyState(): number {
     return this.ws.readyState;
   }
 
-  /** Close the WebSocket connection permanently (no auto-reconnect). */
   public close(): void {
     this._closed = true;
 
@@ -162,134 +120,383 @@ export class WSClient {
     this.ws.close();
   }
 
-  public get protocolVersion(): string {
-    return this.version;
-  }
+  // ---- Authentication ----
 
-  private get version(): string {
-    return this.ws.protocol || WS_Version.LEGACY;
-  }
-
-  private get serverOrigin(): string {
-    const wsUrl = new URL(this.ws.url);
-    const protocol = wsUrl.protocol === 'wss:' ? 'https:' : 'http:';
-
-    return `${protocol}//${wsUrl.host}`;
-  }
-
-  /**
-   * Authenticates current Agent over current WebSocket. Doesn't do anything if
-   * there is no agent
-   */
-  public async authenticate(fetchAll = false): Promise<void> {
+  public async authenticate(fetchAll?: boolean): Promise<void> {
     const agent = this.store.getAgent();
 
-    if (!agent || !agent.subject) {
-      return;
-    }
-
-    if (
-      !this.ws.url.startsWith('ws://localhost') &&
-      agent?.subject?.startsWith('http://localhost')
-    ) {
-      console.warn(
-        `Can't authenticate localhost Agent over websocket with remote server ${this.ws.url} because the server will not be able to retrieve your Agent and verify your public key.`,
-      );
-
-      return;
-    }
-
-    // If already authenticating, wait for the in-progress attempt.
+    if (!agent?.subject) return;
+    if (this.authenticatedWith === agent.subject && !fetchAll) return;
     if (this.isAuthenticating) {
-      try {
-        await this.authPromise;
-      } catch (e) {
-        // Authentication failed, continue as public agent.
-      }
+      await this.authPromise;
 
-      return;
-    }
-
-    if (this.authenticatedWith === agent.subject) {
       return;
     }
 
     this.isAuthenticating = true;
 
-    // Gate authPromise immediately so that any ws.fetch() calls issued during
-    // the async setup (recordServerVersionFromWsProtocol, createAuthentication, etc.)
-    // block until the server has actually confirmed authentication.
-    let releaseGate!: () => void;
-    let rejectGate!: (e: unknown) => void;
-    this.authPromise = new Promise<void>((resolve, reject) => {
-      releaseGate = resolve;
-      rejectGate = reject;
-    });
+    this.authPromise = (async () => {
+      try {
+        await this.openPromise;
+        const json = await createAuthentication(
+          this.serverOrigin,
+          agent,
+        );
 
-    try {
-      await this.openPromise;
+        this.sendBinary(encodeAuth(JSON.stringify(json)));
 
-      recordServerVersionFromWsProtocol(this.version, this.serverOrigin);
+        // Wait for AUTH_OK
+        await this.waitForTag(Tag.AUTH_OK, REQUEST_TIMEOUT);
 
-      if (shouldSkipDidAuthForLegacyServer(this.ws.url, agent.subject)) {
-        warnDidAuthCompatibility(this.ws.url);
-        releaseGate();
+        this.authenticatedWith = agent.subject;
+        recordServerVersionFromWsProtocol(
+          this.serverOrigin,
+          this.ws.protocol || WS_PROTOCOL,
+        );
 
-        return;
-      }
+        // Re-subscribe to drive queries
+        const drive = this.store.getDrive();
 
-      const json = await createAuthentication(this.ws.url, agent);
-      this.ws.send('AUTHENTICATE ' + JSON.stringify(json));
+        if (drive) {
+          this.sendBinary(encodeSub(drive));
+        }
 
-      if (this.version === WS_Version.LEGACY) {
-        // Legacy servers don't send AUTHENTICATED back; release immediately.
-        releaseGate();
-      } else {
-        // Wait for AUTHENTICATED confirmation, then release the gate.
-        await this.waitForMessage('AUTHENTICATED');
-        releaseGate();
-      }
-
-      this.authenticatedWith = agent?.subject;
-
-      if (fetchAll) {
-        this.store.resources.forEach(r => {
-          if (r.isUnauthorized() || r.loading) {
-            this.store.fetchResourceFromServer(r.subject);
+        // Refetch resources that had 401 errors
+        if (fetchAll) {
+          for (const resource of this.store.resources.values()) {
+            if (resource.isUnauthorized()) {
+              this.fetch(resource.subject).catch(() => {});
+            }
           }
-        });
+        }
+      } finally {
+        this.isAuthenticating = false;
       }
-    } catch (e) {
-      rejectGate(e);
-      throw e;
-    } finally {
-      this.isAuthenticating = false;
-    }
+    })();
 
-    return;
+    return this.authPromise;
   }
 
-  /**
-   * @deprecated Individual resource subscriptions are replaced by drive-wide SUBSCRIBE_QUERY.
-   * Kept as a no-op for backward compatibility with callers.
-   */
+  // ---- Resource operations ----
+
+  /** @deprecated Use drive-level subscriptions. */
   public subscribeResource(_subject: string): void {
-    // No-op: we use drive-wide SUBSCRIBE_QUERY instead of per-resource SUBSCRIBE.
-    // The drive subscription is set up in handleOpen().
+    // No-op — v2 uses drive-level subscriptions only.
   }
 
   public unsubscribeResource(subject: string): void {
-    if (this.readyState !== WebSocket.OPEN) {
-      console.warn('WebSocket is not open, cannot unsubscribe from resource');
-
-      return;
-    }
-
-    this.ws.send('UNSUBSCRIBE ' + subject);
+    this.sendBinary(encodeUnsub(subject));
   }
 
+  /** Fetch a resource over WebSocket. Returns a promise that resolves when the UPDATE arrives. */
+  public async fetch(subject: string): Promise<Resource> {
+    await this.authPromise;
 
-  /** Start a VV-based sync for a drive. Falls back to legacy SYNC_DRIVE on error. */
+    if (this.readyState !== WebSocket.OPEN) {
+      throw new AtomicError(
+        `WebSocket not open, cannot fetch ${subject}`,
+        ErrorType.Server,
+      );
+    }
+
+    const requestId = this.nextRequestId++;
+
+    if (this.nextRequestId > 0xffff) {
+      this.nextRequestId = 1;
+    }
+
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingGets.delete(requestId);
+        reject(
+          new Error(
+            `GET "${subject}" timed out after ${REQUEST_TIMEOUT}ms.`,
+          ),
+        );
+      }, REQUEST_TIMEOUT);
+
+      this.pendingGets.set(requestId, { subject, resolve, reject, timer });
+      this.sendBinary(encodeGet(requestId, subject));
+    });
+  }
+
+  // ---- Loro sync (real-time collaboration) ----
+
+  public subscribeLoroSync(subject: string): void {
+    // Still uses text for now — low-frequency, will migrate later
+    if (this.readyState === WebSocket.OPEN) {
+      this.ws.send(
+        new TextEncoder().encode(
+          'LORO_SYNC_SUBSCRIBE ' + JSON.stringify({ subject }),
+        ),
+      );
+    }
+  }
+
+  public unsubscribeLoroSync(subject: string): void {
+    if (this.readyState === WebSocket.OPEN) {
+      this.ws.send(
+        new TextEncoder().encode(
+          'LORO_SYNC_UNSUBSCRIBE ' + JSON.stringify({ subject }),
+        ),
+      );
+    }
+  }
+
+  public sendLoroSyncUpdate(message: string): void {
+    if (this.readyState === WebSocket.OPEN) {
+      this.ws.send(
+        new TextEncoder().encode('LORO_SYNC_UPDATE ' + message),
+      );
+    }
+  }
+
+  public sendLoroEphemeralUpdate(message: string): void {
+    if (this.readyState === WebSocket.OPEN) {
+      this.ws.send(
+        new TextEncoder().encode('LORO_EPHEMERAL_UPDATE ' + message),
+      );
+    }
+  }
+
+  /** Send a binary frame, logging it in debug mode. */
+  private sendBinary(frame: Uint8Array) {
+    if (this.debug) {
+      console.log(`%c${debugFrame(frame, '→')}`, 'color: #9bf');
+    }
+
+    this.ws.send(frame);
+  }
+
+  // ---- Private: message handling ----
+
+  private get serverOrigin(): string {
+    const url = new URL(this.ws.url);
+    url.protocol = url.protocol === 'ws:' ? 'http:' : 'https:';
+
+    return url.origin;
+  }
+
+  private handleMessage(ev: MessageEvent) {
+    if (ev.data instanceof ArrayBuffer) {
+      this.handleBinary(new Uint8Array(ev.data));
+    } else if (typeof ev.data === 'string') {
+      // Legacy text messages (Loro sync, query updates) — handle minimally
+      this.handleText(ev.data);
+    }
+  }
+
+  private handleBinary(data: Uint8Array) {
+    if (data.length === 0) return;
+
+    if (this.debug) {
+      console.log(`%c${debugFrame(data, '←')}`, 'color: #6b9');
+    }
+
+    const tag = data[0];
+    const payload = data.subarray(1);
+
+    switch (tag) {
+      case Tag.AUTH_OK:
+        // Resolved by waitForTag
+        break;
+
+      case Tag.ERROR: {
+        const msg = decodeError(payload);
+
+        if (msg && msg.requestId) {
+          const pending = this.pendingGets.get(msg.requestId);
+
+          if (pending) {
+            clearTimeout(pending.timer);
+            this.pendingGets.delete(msg.requestId);
+            pending.reject(new AtomicError(msg.message, ErrorType.Server));
+          }
+        } else if (msg) {
+          this.store.notifyError(msg.message);
+        }
+
+        break;
+      }
+
+      case Tag.UPDATE: {
+        const msg = decodeUpdate(payload);
+
+        if (!msg) break;
+
+        // Is this a response to a pending GET?
+        if (msg.requestId && this.pendingGets.has(msg.requestId)) {
+          const pending = this.pendingGets.get(msg.requestId)!;
+          clearTimeout(pending.timer);
+          this.pendingGets.delete(msg.requestId);
+
+          const resource = this.store.getResourceLoading(msg.subject);
+          resource.importLoroUpdate(msg.loroBytes);
+
+          if (msg.commitId) {
+            resource.setLastCommitValue(msg.commitId);
+          }
+
+          resource.source = 'server-ws';
+          resource.sourceTimestamp = Date.now();
+          resource.loading = false;
+          this.store.addResources(resource, { skipCommitCompare: true });
+          pending.resolve(resource);
+
+          break;
+        }
+
+        // Subscription push
+        let resource = this.store.resources.get(msg.subject);
+
+        if (resource) {
+          resource.importLoroUpdate(msg.loroBytes);
+        } else {
+          resource = this.store.getResourceLoading(msg.subject);
+          resource.importLoroUpdate(msg.loroBytes);
+          resource.loading = false;
+        }
+
+        if (msg.commitId) {
+          resource.setLastCommitValue(msg.commitId);
+        }
+
+        resource.source =
+          msg.flags & Flags.PUSH ? 'ws-commit' : 'server-ws';
+        resource.sourceTimestamp = Date.now();
+        this.store.addResources(resource, { skipCommitCompare: true });
+        this.persistToClientDb(msg.subject, resource);
+
+        break;
+      }
+
+      case Tag.DESTROY: {
+        const subject = new TextDecoder().decode(payload.subarray(2));
+
+        if (subject) {
+          this.store.removeResource(subject);
+        }
+
+        break;
+      }
+
+      case Tag.SYNC_OK: {
+        const msg = decodeSyncOk(payload);
+
+        if (msg) {
+          this.store.finishDriveSync(msg.drive, 0, Date.now());
+        }
+
+        break;
+      }
+
+      case Tag.SYNC_DIFF: {
+        const msg = decodeSyncDiff(payload);
+
+        if (msg) {
+          this.handleSyncDiff(msg);
+        }
+
+        break;
+      }
+
+      case Tag.SYNC_PUSH: {
+        const msg = decodeSyncPush(payload);
+
+        if (msg) {
+          for (const { subject, loroBytes } of msg.entries) {
+            let resource = this.store.resources.get(subject);
+
+            if (resource) {
+              resource.importLoroUpdate(loroBytes);
+            } else {
+              resource = this.store.getResourceLoading(subject);
+              resource.importLoroUpdate(loroBytes);
+              resource.loading = false;
+            }
+
+            resource.source = 'server-ws';
+            resource.sourceTimestamp = Date.now();
+            this.store.addResources(resource, {
+              skipCommitCompare: true,
+            });
+            this.persistToClientDb(subject, resource);
+          }
+
+          this.store.finishDriveSync(
+            msg.drive,
+            msg.entries.length,
+            Date.now(),
+          );
+        }
+
+        break;
+      }
+
+      default:
+        break;
+    }
+
+    // Emit raw tag for waitForTag listeners
+    this.tagListeners.forEach((cb, t) => {
+      if (t === tag) {
+        cb();
+        this.tagListeners.delete(t);
+      }
+    });
+  }
+
+  /** Handle legacy text messages that haven't been migrated to binary yet. */
+  private handleText(text: string) {
+    if (text.startsWith('LORO_SYNC_UPDATE ')) {
+      this.store.__handleLoroSyncMessage(text.slice(17));
+    } else if (text.startsWith('LORO_EPHEMERAL_UPDATE ')) {
+      this.store.__handleLoroEphemeralMessage(text.slice(21));
+    } else if (text.startsWith('QUERY_UPDATE ')) {
+      try {
+        const update = JSON.parse(text.slice(13));
+        const subjects: string[] = [
+          ...(update.added ?? []),
+          ...(update.removed ?? []),
+        ];
+
+        for (const s of subjects) {
+          this.store.fetchResourceFromServer(s).catch(() => {});
+        }
+      } catch {
+        // ignore
+      }
+    } else if (text === 'AUTHENTICATED') {
+      // Legacy auth response — handled for backward compat
+    }
+  }
+
+  // ---- Private: connection lifecycle ----
+
+  private handleOpen() {
+    const agent = this.store.getAgent();
+    const drive = this.store.getDrive();
+
+    const doSync = async () => {
+      try {
+        await this.store
+          .syncDirtyResources()
+          .then(() => this.startVVSync(drive))
+          .catch(() => this.startVVSync(drive));
+      } catch {
+        // Non-fatal
+      }
+    };
+
+    if (agent?.subject) {
+      this.authenticate()
+        .then(doSync)
+        .catch(e => console.error('Auth error:', e));
+    } else {
+      doSync().catch(() => {});
+    }
+  }
+
   private async startVVSync(drive: string): Promise<void> {
     if (this.readyState !== WebSocket.OPEN) return;
 
@@ -297,483 +504,90 @@ export class WSClient {
 
     try {
       const syncState = await this.store.computeDriveSyncState(drive);
+      // Still sending as text SYNC_VV — will migrate to binary SYNC later
       this.ws.send('SYNC_VV ' + JSON.stringify(syncState));
     } catch (e) {
-      console.warn('[WS] VV sync failed, falling back to legacy:', e);
-      const syncKey = `sync_timestamp_${drive}`;
-      const since =
-        typeof localStorage !== 'undefined'
-          ? localStorage.getItem(syncKey)
-          : null;
-      const syncRequest = since
-        ? JSON.stringify({ drive, since: Number(since) })
-        : JSON.stringify({ drive });
-      this.ws.send('SYNC_DRIVE ' + syncRequest);
-    }
-  }
-
-  public subscribeLoroSync(subject: string): void {
-    if (this.readyState !== WebSocket.OPEN) {
-      console.warn('WebSocket is not open, cannot subscribe to LoroSync');
-
-      return;
-    }
-
-    this.ws.send('LORO_SYNC_SUBSCRIBE ' + JSON.stringify({ subject }));
-  }
-
-  public unsubscribeLoroSync(subject: string): void {
-    if (this.readyState !== WebSocket.OPEN) {
-      console.warn('WebSocket is not open, cannot unsubscribe from LoroSync');
-
-      return;
-    }
-
-    this.ws.send('LORO_SYNC_UNSUBSCRIBE ' + JSON.stringify({ subject }));
-  }
-
-  public sendLoroSyncUpdate(message: string): void {
-    if (this.readyState !== WebSocket.OPEN) {
-      console.warn('WebSocket is not open, cannot send LoroSync update');
-
-      return;
-    }
-
-    this.ws.send('LORO_SYNC_UPDATE ' + message);
-  }
-
-  public sendLoroEphemeralUpdate(message: string): void {
-    if (this.readyState !== WebSocket.OPEN) {
-      console.warn(
-        'WebSocket is not open, cannot send Loro ephemeral update',
-      );
-
-      return;
-    }
-
-    this.ws.send('LORO_EPHEMERAL_UPDATE ' + message);
-  }
-
-  /** Sends a GET message for some resource over websockets. */
-  public async fetch(subject: string): Promise<Resource> {
-    // If we are authenticating we do not want to fetch any resources yet.
-    try {
-      await this.authPromise;
-    } catch (e) {
-      // Authentication failed, continue as public agent.
-    }
-
-    const promise = this.waitForMessage('RESOURCE ', (ev: MessageEvent) => {
-      for (const resource of parseResourceMessage(ev)) {
-        if (resource.subject === subject) {
-          return resource;
-        }
-
-        // Server sends error resources with the requested subject's URL as the
-        // resource subject when a GET fails (e.g. resource not found / deleted).
-        // Detect these and reject immediately rather than waiting for timeout.
-        const isA: string[] = resource.get(
-          'https://atomicdata.dev/properties/isA',
-        ) as string[];
-
-        if (
-          Array.isArray(isA) &&
-          isA.includes(classes.error) &&
-          resource.subject === subject
-        ) {
-          const description =
-            (resource.get(
-              'https://atomicdata.dev/properties/description',
-            ) as string) ?? 'Resource not found';
-          throw new AtomicError(description, ErrorType.NotFound);
-        }
-      }
-
-      return false;
-    }).catch(e => {
-      if (e instanceof AtomicError) {
-        throw e;
-      }
-
-      throw new Error(
-        `WS GET timed out for subject "${subject}" on ${this.ws.url}`,
-        { cause: e },
-      );
-    });
-
-    this.ws.send('GET ' + subject);
-
-    return await promise;
-  }
-
-  private handleOpen() {
-    // Make sure user is authenticated before sending any messages
-    this.authenticate()
-      .then(async () => {
-        // Subscribe to all changes in the current drive
-        const drive = this.store.getDrive();
-
-        if (drive) {
-          const query = JSON.stringify({ drive });
-          this.ws.send('SUBSCRIBE_QUERY ' + query);
-
-          // Wait for dirty sync to complete before VV sync.
-          // Dirty resources are pushed via HTTP commits first — VV sync
-          // should only run after those are accepted by the server.
-          const clientDb = this.store.getClientDb();
-
-          if (clientDb?.isReady) {
-            this.store
-              .syncDirtyResources()
-              .then(() => this.startVVSync(drive))
-              .catch(() => this.startVVSync(drive));
-          } else if (clientDb) {
-            // Wait for DB to be ready before syncing
-            clientDb.waitForReady().then(() => {
-              this.store
-                .syncDirtyResources()
-                .then(() => this.startVVSync(drive))
-                .catch(() => this.startVVSync(drive));
-            });
-          }
-          // If no clientDb at all, skip VV sync — we can't track versions
-          // without persistent storage. HTTP commits handle sync instead.
-        }
-      })
-      .catch(e => {
-        console.error('Error handling open:', e);
-      });
-  }
-
-  private handleMessage(ev: MessageEvent) {
-    if (ev.data.startsWith('COMMIT_LORO ')) {
-      // Compact Loro-native commit: just the delta bytes + metadata.
-      // Much smaller than full JSON-AD commit resource.
-      try {
-        const json = JSON.parse(ev.data.slice(12));
-        const { subject, commitId, loroUpdate, destroy } = json as {
-          subject: string;
-          commitId: string;
-          loroUpdate: string;
-          destroy: boolean;
-        };
-
-        if (destroy) {
-          this.store.removeResource(subject);
-        } else if (loroUpdate) {
-          const bytes = decodeB64(loroUpdate);
-          let resource = this.store.resources.get(subject);
-
-          if (resource) {
-            resource.importLoroUpdate(bytes);
-          } else {
-            resource = this.store.getResourceLoading(subject);
-            resource.importLoroUpdate(bytes);
-            resource.loading = false;
-          }
-
-          if (commitId) {
-            resource.setLastCommitValue(commitId);
-          }
-
-          resource.source = 'ws-commit';
-          resource.sourceTimestamp = Date.now();
-          this.store.addResources(resource, { skipCommitCompare: true });
-
-          // Persist to WASM DB
-          const clientDb = this.store.getClientDb();
-
-          if (clientDb) {
-            const doc = resource.getLoroDoc?.();
-
-            if (doc) {
-              const snapshot = doc.export({ mode: 'snapshot' });
-              clientDb
-                .putLoroSnapshot(subject, snapshot)
-                .catch(() => {});
-            }
-          }
-        }
-      } catch (e) {
-        console.warn('Invalid COMMIT_LORO:', e);
-      }
-    } else if (ev.data.startsWith('COMMIT ')) {
-      // Legacy full JSON-AD commit (fallback for non-Loro commits)
-      const commit = ev.data.slice(7);
-      try {
-        this.store.logIncomingCommit(parseCommitJSON(commit));
-      } catch {
-        // Keep runtime commit application resilient even if logging fails.
-      }
-      parseAndApplyCommit(commit, this.store);
-
-      const clientDb = this.store.getClientDb();
-
-      if (clientDb) {
-        clientDb.applyCommit(commit).catch(() => {});
-      }
-    } else if (ev.data.startsWith('ERROR ')) {
-      this.store.notifyError(ev.data.slice(6));
-    } else if (ev.data.startsWith('RESOURCE ')) {
-      const resources = parseResourceMessage(ev);
-
-      for (const r of Array.isArray(resources) ? resources : [resources]) {
-        r.source = 'server-ws';
-        r.sourceTimestamp = Date.now();
-      }
-
-      this.store.addResources(resources);
-    } else if (ev.data.startsWith('LORO_SYNC_UPDATE ')) {
-      const update = ev.data.slice(17);
-      this.store.__handleLoroSyncMessage(update);
-    } else if (ev.data.startsWith('LORO_EPHEMERAL_UPDATE ')) {
-      const update = ev.data.slice(21);
-      this.store.__handleLoroEphemeralMessage(update);
-    } else if (ev.data.startsWith('QUERY_UPDATE ')) {
-      const json = ev.data.slice(13);
-
-      try {
-        const update = JSON.parse(json);
-        const subjects: string[] = [
-          ...(update.added ?? []),
-          ...(update.removed ?? []),
-        ];
-
-        // Refetch affected resources so the store/UI updates
-        for (const subject of subjects) {
-          this.store.fetchResourceFromServer(subject).catch(() => {
-            // Resource might have been deleted, that's fine
-          });
-        }
-      } catch (e) {
-        console.warn('Invalid QUERY_UPDATE:', e);
-      }
-    } else if (ev.data.startsWith('SYNC_DONE ')) {
-      const json = ev.data.slice(10);
-
-      try {
-        const done = JSON.parse(json);
-
-        if (done.drive && done.timestamp && typeof localStorage !== 'undefined') {
-          localStorage.setItem(
-            `sync_timestamp_${done.drive}`,
-            String(done.timestamp),
-          );
-        }
-
-        this.store.finishDriveSync(
-          done.drive,
-          done.count ?? 0,
-          done.timestamp ?? Date.now(),
-        );
-
-        console.info(
-          `[Sync] Drive sync complete: ${done.count} resources for ${done.drive}`,
-        );
-      } catch (e) {
-        console.warn('Invalid SYNC_DONE:', e);
-      }
-    } else if (ev.data.startsWith('SYNC_OK ')) {
-      // Fast path: drive hashes match, nothing to sync
-      const json = ev.data.slice(8);
-
-      try {
-        const msg = JSON.parse(json);
-        console.info(`[Sync] Drive in sync: ${msg.drive}`);
-        this.store.finishDriveSync(msg.drive, 0, Date.now());
-      } catch (e) {
-        console.warn('Invalid SYNC_OK:', e);
-      }
-    } else if (ev.data.startsWith('SYNC_DIFF ')) {
-      // Slow path: server tells us what differs
-      const json = ev.data.slice(10);
-
-      try {
-        const diff = JSON.parse(json);
-        this.handleSyncDiff(diff);
-      } catch (e) {
-        console.warn('Invalid SYNC_DIFF:', e);
-      }
-    } else if (ev.data.startsWith('SYNC_DELTAS ')) {
-      // Server pushing Loro deltas for server-ahead resources
-      const json = ev.data.slice(12);
-
-      try {
-        const msg = JSON.parse(json);
-        this.handleSyncDeltas(msg);
-      } catch (e) {
-        console.warn('Invalid SYNC_DELTAS:', e);
-      }
-    } else if (ev.data.startsWith('AUTHENTICATED')) {
-      // Do nothing, handled by the authenticate() method
-    } else {
-      console.warn('Unknown websocket message:', ev);
+      console.warn('[WS] VV sync failed:', e);
     }
   }
 
   /**
-   * Handle SYNC_DIFF: server tells us which resources need syncing.
-   * - `pull`: subjects the server needs from us (client-ahead or unknown)
-   * - `push`: subjects the server will send deltas for (server-ahead)
+   * Handle SYNC_DIFF: server tells us which resources differ.
+   * We send Loro deltas for resources the server needs (pull list).
    */
   private async handleSyncDiff(diff: {
     drive: string;
     pull: string[];
     push: string[];
-  }): Promise<void> {
-    console.info(
-      `[Sync] Diff for ${diff.drive}: pull ${diff.pull.length}, push ${diff.push.length}`,
-    );
+  }) {
+    const deltas: Record<string, string> = {};
 
-    // Send Loro snapshots/deltas for resources the server needs
-    if (diff.pull.length > 0) {
-      const deltas: Record<string, string> = {};
-      const clientDb = this.store.getClientDb();
+    for (const subject of diff.pull) {
+      const resource = this.store.resources.get(subject);
+      const doc = resource?.getLoroDoc?.();
 
-      for (const subject of diff.pull) {
-        let snapshot: Uint8Array | null = null;
-
-        // Try WASM DB first (persisted snapshots)
-        if (clientDb) {
-          snapshot = await clientDb.getLoroSnapshot(subject);
+      if (doc) {
+        try {
+          const snapshot = doc.export({ mode: 'snapshot' });
+          // Base64 encode for SYNC_DELTAS text message (will be binary later)
+          deltas[subject] = btoa(
+            String.fromCharCode(...new Uint8Array(snapshot)),
+          );
+        } catch {
+          // skip
         }
-
-        // Fall back to in-memory LoroDoc
-        if (!snapshot) {
-          const resource = this.store.resources.get(subject);
-          const doc = resource?.getLoroDoc?.();
-
-          if (doc) {
-            snapshot = doc.export({ mode: 'snapshot' });
-          }
-        }
-
-        if (snapshot && snapshot.length > 0) {
-          const binary = Array.from(snapshot)
-            .map(b => String.fromCharCode(b))
-            .join('');
-          deltas[subject] = btoa(binary);
-        }
-      }
-
-      if (Object.keys(deltas).length > 0) {
-        this.ws.send(
-          'SYNC_DELTAS ' + JSON.stringify({ drive: diff.drive, deltas }),
-        );
       }
     }
 
-    // If there's nothing to push from server, finish the sync now.
-    // Otherwise, finishDriveSync is called when SYNC_DELTAS arrives.
+    if (Object.keys(deltas).length > 0) {
+      this.ws.send(
+        'SYNC_DELTAS ' + JSON.stringify({ drive: diff.drive, deltas }),
+      );
+    }
+
+    // If server has nothing to push, sync is done
     if (diff.push.length === 0) {
-      this.store.finishDriveSync(diff.drive, diff.pull.length, Date.now());
+      this.store.finishDriveSync(
+        diff.drive,
+        Object.keys(deltas).length,
+        Date.now(),
+      );
     }
   }
 
-  /**
-   * Handle SYNC_DELTAS: import Loro deltas from the server into local resources.
-   */
-  private async handleSyncDeltas(msg: {
-    drive: string;
-    deltas: Record<string, string>;
-  }): Promise<void> {
+  // ---- Private: helpers ----
+
+  private persistToClientDb(subject: string, resource: Resource) {
     const clientDb = this.store.getClientDb();
-    let count = 0;
 
-    for (const [subject, deltaB64] of Object.entries(msg.deltas)) {
-      try {
-        // Decode base64 to Uint8Array
-        const binary = atob(deltaB64);
-        const bytes = new Uint8Array(binary.length);
+    if (clientDb) {
+      const doc = resource.getLoroDoc?.();
 
-        for (let i = 0; i < binary.length; i++)
-          bytes[i] = binary.charCodeAt(i);
-
-        // Get or create the resource
-        let resource = this.store.resources.get(subject);
-
-        if (resource) {
-          // Import delta into existing Loro doc
-          resource.importLoroUpdate(bytes);
-        } else {
-          // New resource from server - create and import
-          const { Resource } = await import('./resource.js');
-          resource = new Resource(subject);
-          resource.importLoroUpdate(bytes);
-          resource.loading = false;
-          resource.source = 'server-ws';
-          resource.sourceTimestamp = Date.now();
-        }
-
-        this.store.addResources(resource, { skipCommitCompare: true });
-
-        // Persist updated snapshot to WASM DB
-        if (clientDb) {
-          const doc = resource.getLoroDoc?.();
-
-          if (doc) {
-            const snapshot = doc.export({ mode: 'snapshot' });
-            clientDb
-              .putLoroSnapshot(subject, snapshot)
-              .catch(() => {});
-          }
-        }
-
-        count++;
-      } catch (e) {
-        console.warn(`[Sync] Failed to import delta for ${subject}:`, e);
+      if (doc) {
+        const snapshot = doc.export({ mode: 'snapshot' });
+        clientDb.putLoroSnapshot(subject, snapshot).catch(() => {});
       }
     }
-
-    console.info(
-      `[Sync] Imported ${count} deltas for ${msg.drive}`,
-    );
-    this.store.finishDriveSync(msg.drive, count, Date.now());
   }
 
-  private waitForMessage(message: string): Promise<void>;
-  private waitForMessage<T>(
-    message: string,
-    condition: (ev: MessageEvent) => T | false,
-  ): Promise<T>;
-  private waitForMessage<T>(
-    message: string,
-    condition?: (ev: MessageEvent) => T | false,
-  ): Promise<T | void> {
+  private tagListeners = new Map<number, () => void>();
+
+  private waitForTag(tag: number, timeout: number): Promise<void> {
     return new Promise((resolve, reject) => {
-      let timeoutId: NodeJS.Timeout;
+      const timer = setTimeout(() => {
+        this.tagListeners.delete(tag);
+        reject(new Error(`Timeout waiting for tag 0x${tag.toString(16)}`));
+      }, timeout);
 
-      const listener = (ev: MessageEvent) => {
-        if (!ev.data.startsWith(message)) {
-          return;
-        }
-
-        if (!condition) {
-          clearTimeout(timeoutId);
-          this.ws.removeEventListener('message', listener);
-
-          return resolve();
-        }
-
-        let result = condition(ev);
-
-        if (result !== false) {
-          clearTimeout(timeoutId);
-          this.ws.removeEventListener('message', listener);
-          resolve(result);
-        }
-      };
-
-      timeoutId = setTimeout(() => {
-        this.ws.removeEventListener('message', listener);
-        reject(
-          new Error(
-            `WS Request with message '${message}' timed out after ${REQUEST_TIMEOUT}ms. on ${this.ws.url}, message: ${message}`,
-          ),
-        );
-      }, REQUEST_TIMEOUT);
-
-      this.ws.addEventListener('message', listener);
+      this.tagListeners.set(tag, () => {
+        clearTimeout(timer);
+        resolve();
+      });
     });
   }
+}
+
+/** Check if a browser context supports WebSockets */
+export function supportsWebSockets(): boolean {
+  return typeof WebSocket !== 'undefined';
 }

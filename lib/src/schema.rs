@@ -132,7 +132,7 @@ impl Class {
         if !self.requires.is_empty() {
             resource.set_unsafe(urls::REQUIRES.into(), Value::from(self.requires.clone()));
         }
-        if !self.requires.is_empty() {
+        if !self.recommends.is_empty() {
             resource.set_unsafe(
                 urls::RECOMMENDS.into(),
                 Value::from(self.recommends.clone()),

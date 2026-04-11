@@ -243,64 +243,26 @@ impl Commit {
             None => return Err("No signature set".into()),
         };
         let signer_subject = store.normalize_subject(&commit.signer);
-        // We first try to get the public key from the store.
-        // If the signer is found in the store, we use that key.
-        // This handles updates to existing agents by themselves.
-        let pubkey_b64 = match store.get_resource(&signer_subject).await {
-            Ok(resource) => resource.get(urls::PUBLIC_KEY)?.to_string(),
-            Err(e) => {
-                // If the signer is not found in the store, we might be able to extract the public key from the URL.
-                if let crate::Subject::Internal { url, .. } = &signer_subject {
-                    let path = url.path();
-                    if path.starts_with("/agents/") {
-                        path.strip_prefix("/agents/").unwrap().to_string()
-                    } else {
-                        return Err(format!("Signer {} not found in store, and path does not start with /agents/. Error: {}", commit.signer, e).into());
-                    }
-                } else if commit.signer.as_str().starts_with("did:key:") {
-                    // Extract from did:key (placeholder for future implementation)
-                    return Err(format!(
-                        "did:key not yet fully supported for signature verification: {}",
-                        commit.signer
-                    )
-                    .into());
-                } else if commit.signer.is_agent_did() {
-                    commit
-                        .signer
-                        .as_str()
-                        .strip_prefix("did:ad:agent:")
-                        .ok_or("Invalid did:ad:agent signer")?
-                        .to_string()
-                } else if commit.signer == commit.subject && commit.previous_commit.is_none() {
-                    // If the signer is not found in the store AND signer == subject,
-                    // it's likely a self-signed genesis commit (e.g. creating a new DID/agent).
-                    if commit.destroy.unwrap_or(false) {
-                        return Err("Cannot verify signature for self-signed destroy commit".into());
-                    }
-                    // Extract public key from the Loro update
-                    if let Some(loro_bytes) = &commit.loro_update {
-                        let doc = crate::loro::AtomicLoroDoc::from_snapshot(loro_bytes).or_else(
-                            |_| {
-                                let doc = crate::loro::AtomicLoroDoc::new();
-                                doc.import_update(loro_bytes)?;
-                                Ok::<_, crate::errors::AtomicError>(doc)
-                            },
-                        )?;
-                        if let Some(pk) = doc.get_string_property(urls::PUBLIC_KEY) {
-                            pk
-                        } else {
-                            return Err(
-                                "Self-signed genesis commit must contain public key in Loro update"
-                                    .into(),
-                            );
-                        }
-                    } else {
-                        return Err("Self-signed genesis commit must contain a Loro update".into());
-                    }
-                } else {
-                    return Err(format!("Signer {} not found in store, and this is not a self-signed genesis commit or extractable URL. Error: {}", commit.signer, e).into());
-                }
+        // For agent DIDs, the public key IS the DID — extract directly.
+        let pubkey_b64 = if commit.signer.is_agent_did() {
+            commit
+                .signer
+                .as_str()
+                .strip_prefix("did:ad:agent:")
+                .ok_or("Invalid did:ad:agent signer")?
+                .to_string()
+        } else if let Ok(resource) = store.get_resource(&signer_subject).await {
+            resource.get(urls::PUBLIC_KEY)?.to_string()
+        } else if let crate::Subject::Internal { url, .. } = &signer_subject {
+            // Legacy HTTP agents: extract key from URL path
+            let path = url.path();
+            if path.starts_with("/agents/") {
+                path.strip_prefix("/agents/").unwrap().to_string()
+            } else {
+                return Err(format!("Signer {} not found in store", commit.signer).into());
             }
+        } else {
+            return Err(format!("Signer {} not found and cannot extract public key", commit.signer).into());
         };
         let agent_pubkey = decode_base64(&pubkey_b64)?;
         let stringified_commit = commit.serialize_deterministically_json_ad(store).await?;

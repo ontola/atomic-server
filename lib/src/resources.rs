@@ -91,7 +91,7 @@ impl Resource {
         propvals
     }
 
-    pub(crate) fn build_loro_doc_from_state(&self) -> AtomicResult<crate::loro::AtomicLoroDoc> {
+    pub fn build_loro_doc_from_state(&self) -> AtomicResult<crate::loro::AtomicLoroDoc> {
         if let Some(doc) = &self.loro {
             return crate::loro::AtomicLoroDoc::from_snapshot(&doc.export_snapshot());
         }

@@ -35,11 +35,6 @@ counter!(
     "Resources fetched via HTTP GET"
 );
 counter!(
-    resource_fetched_ws,
-    "resources.fetched.ws",
-    "Resources fetched via WebSocket GET"
-);
-counter!(
     search_performed,
     "search.queries",
     "Full-text search queries performed"

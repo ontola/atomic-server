@@ -4992,3 +4992,15 @@ msgstr "I already have an account"
 #: src/views/InvitePage.tsx
 msgid "You've been invited to {0} {1}"
 msgstr "You've been invited to {0} {1}"
+
+#: src/routes/SyncRoute.tsx
+msgid "WS debug"
+msgstr "WS debug"
+
+#: src/routes/SyncRoute.tsx
+msgid "Logging to console"
+msgstr "Logging to console"
+
+#: src/routes/SyncRoute.tsx
+msgid "Off"
+msgstr "Off"
