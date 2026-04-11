@@ -86,9 +86,20 @@ export function useCollection(
   const store = useStore();
   const queryFilterMemo = useQueryFilterMemo(queryFilter);
 
-  const [collection, setCollection] = useState(() =>
-    buildCollection(store, server, queryFilterMemo, pageSize, includeNested),
-  );
+  // Build collection once, reuse on remount. Only rebuild when query params change.
+  const collectionRef = useRef<Collection | null>(null);
+  const [collection, setCollection] = useState(() => {
+    const col = buildCollection(
+      store,
+      server,
+      queryFilterMemo,
+      pageSize,
+      includeNested,
+    );
+    collectionRef.current = col.__internalObject;
+
+    return col;
+  });
   const [ready, setReady] = useState(false);
 
   const mapAll = useCallback(
@@ -105,22 +116,32 @@ export function useCollection(
   );
 
   useEffect(() => {
-    const col = buildCollection(
-      store,
-      server,
-      queryFilterMemo,
-      pageSize,
-      includeNested,
-    );
+    // Reuse the collection from useState if it matches (first mount).
+    // Only create a new one if the query params actually changed.
+    let col = collectionRef.current;
+
+    if (
+      !col ||
+      col.property !== queryFilterMemo.property ||
+      col.value !== queryFilterMemo.value
+    ) {
+      const built = buildCollection(
+        store,
+        server,
+        queryFilterMemo,
+        pageSize,
+        includeNested,
+      );
+      col = built.__internalObject;
+      collectionRef.current = col;
+    }
 
     let cancelled = false;
-
-    setReady(false);
 
     col.waitForReady().then(() => {
       if (cancelled) return;
 
-      setCollection(proxyCollection(col.__internalObject));
+      setCollection(proxyCollection(col!));
       setReady(true);
     });
 
