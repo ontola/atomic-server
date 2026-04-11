@@ -91,6 +91,8 @@ pub mod schema;
 pub mod serialize;
 pub mod store;
 pub mod storelike;
+#[cfg(feature = "db")]
+pub mod sync;
 pub mod subject;
 pub mod test_utils;
 pub mod urls;

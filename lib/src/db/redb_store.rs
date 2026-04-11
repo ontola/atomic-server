@@ -51,6 +51,33 @@ pub struct RedbStore {
 }
 
 impl RedbStore {
+    /// Create a RedbStore backed by a file on disk.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn new_file(path: &std::path::Path) -> AtomicResult<Self> {
+        let db = Database::create(path)
+            .map_err(|e| format!("Failed to create redb at {}: {e}", path.display()))?;
+
+        // Create all tables upfront
+        {
+            let tx = db
+                .begin_write()
+                .map_err(|e| format!("Failed to begin write tx: {e}"))?;
+            let _ = tx.open_table(TABLE_RESOURCES);
+            let _ = tx.open_table(TABLE_PROP_VAL_SUB);
+            let _ = tx.open_table(TABLE_VAL_PROP_SUB);
+            let _ = tx.open_table(TABLE_QUERY_MEMBERS);
+            let _ = tx.open_table(TABLE_WATCHED_QUERIES);
+            let _ = tx.open_table(TABLE_PLUGIN_META);
+            let _ = tx.open_table(TABLE_DRIVE_MAPPING);
+            let _ = tx.open_table(TABLE_DID_MAPPING);
+            let _ = tx.open_table(TABLE_LORO_SNAPSHOTS);
+            tx.commit()
+                .map_err(|e| format!("Failed to commit initial tables: {e}"))?;
+        }
+
+        Ok(RedbStore { db: Arc::new(db) })
+    }
+
     /// Create a new in-memory RedbStore.
     pub fn new_memory() -> AtomicResult<Self> {
         let backend = InMemoryBackend::new();

@@ -25,6 +25,7 @@ mod search;
 #[cfg(test)]
 mod tests;
 mod trace;
+mod iroh_transport;
 
 #[actix_web::main]
 async fn main() -> () {

@@ -18,6 +18,10 @@ directories = { version = ">= 2, < 5", optional = true }
 rand = { version = "0.8" }
 regex = "1"
 hex = "0.4"
+ring = { version = "0.17", optional = true }
+iroh = { version = "0.35", optional = true }
+anyhow = { version = "1", optional = true }
+futures = "0.3"
 ed25519-dalek = { version = "2", features = ["rand_core"] }
 rio_api = { version = "0.8", optional = true }
 rio_turtle = { version = "0.8", optional = true }
@@ -41,7 +45,6 @@ tokio = { version = "1", features = [
   "sync",
 ] }
 async-trait = "0.1.89"
-futures = "0.3.31"
 tokio-tungstenite = { version = "0.26", features = ["native-tls"], optional = true }
 
 # For WASM: enable JS-backed randomness via feature unification
@@ -82,6 +85,7 @@ db-redb = ["db", "redb"]
 ## Does NOT work in WASM.
 db-sled = ["db", "sled", "bincode1"]
 dht = ["mainline", "sha1"]
+iroh = ["dep:iroh", "anyhow"]
 ws = ["tokio-tungstenite"]
 rdf = ["rio_api", "rio_turtle"]
 telemetry = ["opentelemetry"]

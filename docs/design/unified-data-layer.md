@@ -460,14 +460,14 @@ The mapping between commits and Loro versions:
 **Status**
 - Not started.
 
-### Phase 5: Mesh transport
-- Add a Reticulum/WebRTC Backend implementation
-- Same protocol, same subscription model
-- Peer discovery and routing are transport-specific details hidden behind the Backend interface
-- Loro deltas as the wire format — compact, deduplicatable, order-independent
+### Phase 5: Iroh peer-to-peer transport
+- Add `iroh-net` as a transport backend — zero-config NAT traversal, no port forwarding
+- Same binary v2 protocol frames, running over QUIC streams instead of WebSocket
+- Server publishes a NodeID (public key) that clients connect to directly
+- Browser clients still use WebSocket; native/desktop clients can use Iroh directly
 
 **Status**
-- Not started.
+- Not started. Design below.
 
 ## Implementation Analysis: Current Loro Integration
 
@@ -619,105 +619,261 @@ This means the server is already Loro-primary for writes. The client is the one 
 | `server/src/handlers/get_resource.rs` | No direct handler change was needed, but the read path now benefits from fresher `Resource` serialization. |
 | `browser/data-browser/src/helpers/initClientDb.ts` | Still needs cleanup so seeding and local persistence align with a Loro-primary model rather than propval-first JSON blobs. |
 
-## Unifying the Rust stores
+## One Rust Crate, Every Target
 
-### The problem: three different store APIs
+### The problem
 
-The Rust side has three store implementations that should be one:
+Today we have three separate Rust implementations of the same thing:
 
-**`Store` (lib/src/store.rs)** — in-memory HashMap
-- Implements `Storelike`
-- No persistence, no indexing
-- Used for tests and simple use cases
-- ~300 lines
+| Crate | Compiles to | DB backend | Has validation? | Has auth? | Has queries? | Has sync? |
+|-------|-------------|------------|-----------------|-----------|--------------|-----------|
+| `atomic-lib` Db | native only | Sled | yes | yes | yes | no |
+| `wasm/` ClientDb | WASM only | ReDB | no | no | partial | no |
+| `atomic-server` | native only | (uses lib) | (uses lib) | (uses lib) | (uses lib) | yes (WS) |
 
-**`Db` (lib/src/db.rs)** — KV-backed (sled/redb)
-- Implements `Storelike`
-- Full indexing (prop-val-sub, val-prop-sub, query members)
-- Endpoints, class extenders, commit handling
-- Drive mappings, DID resolution
-- ~1600 lines
+The WASM client reimplements a subset of Db without validation, auth, or full queries. The sync protocol lives in the server, not the lib. Desktop/mobile apps embed the full HTTP server just to get a local database.
 
-**`ClientDb` (wasm/src/lib.rs)** — JS-facing wrapper around `Db`
-- Does NOT implement `Storelike`
-- Re-invents its own API: `getResource`, `putResource`, `query`, `putLoroSnapshot`
-- The JS `ClientDbWorker` class wraps this with ANOTHER message-passing layer
-- ~250 lines
+### The goal
 
-The JS browser `Store` (browser/lib/src/store.ts) then has custom code for each backend:
-- `fetchResourceFromServer()` — HTTP to the Rust server's `Storelike`
-- `fetchResourceFromClientDb()` — worker message to `ClientDb`
-- `queryLocalDb()` — worker message to `ClientDb.query()`
-- `fetchResourceWithLocalFallback()` — tries WASM DB, then server
-
-Each path has its own serialization, error handling, and response parsing.
-
-### The goal: one interface everywhere
+One crate (`atomic-lib`) that compiles everywhere and does everything:
 
 ```
-Storelike (Rust trait)
-├── Db (sled/redb, server-side)
-├── Db (redb/OPFS, client-side WASM)     ← same code!
-└── Store (in-memory, tests)
+atomic-lib (compiles to native + WASM)
+├── Db (ReDB everywhere — works native, WASM, mobile)
+├── Commits with Loro CRDT
+├── Validation, authorization, hierarchy
+├── Full query indexing
+├── Sync protocol (v2 binary frames, transport-agnostic)
+├── Iroh transport (native only — p2p sync, NAT traversal)
+├── DHT node discovery (native only — find peers without a server)
+├── Class extenders + built-in plugins (chatroom, invite, etc.)
+├── WASM plugin runtime (native only, wasmtime, optional)
+└── Search (Tantivy on native, simple substring on WASM)
 
-JS Store ←→ Storelike (via worker messages or HTTP)
+atomic-server (thin HTTP shell, native only)
+├── HTTP endpoints (Actix)
+├── WebSocket transport → lib sync
+├── ACME/TLS, static files
+└── Server config
+
+atomic-wasm (thin shell, WASM only)
+├── wasm-bindgen exports for Db
+└── Worker message bridge
+
+desktop / mobile (Tauri, native)
+├── No HTTP server
+└── Tauri commands → lib Db directly
 ```
 
-The WASM `ClientDb` should expose `Storelike` methods directly, not a custom API. The worker message types should mirror `Storelike`:
+### The key change: ReDB everywhere
 
-| Storelike method | Worker message | HTTP equivalent |
-|-----------------|----------------|-----------------|
-| `get_resource(subject)` | `GET_RESOURCE subject` | `GET /resource?subject=X` |
-| `query(q)` | `QUERY property value ...` | `GET /query?property=X&value=Y` |
-| `add_resource(resource)` | `PUT_RESOURCE json-ad` | (via commit) |
-| `apply_commit(commit)` | `APPLY_COMMIT json-ad` | `POST /commit` |
-| `remove_resource(subject)` | `REMOVE_RESOURCE subject` | (via commit with destroy) |
+The blocker today is that `Db` uses Sled, which doesn't compile to WASM. ReDB does — we already use it in the WASM client. If we switch the server from Sled to ReDB:
 
-The JS `Store` doesn't need separate code paths for "talk to WASM DB" vs "talk to server". It talks to a `Backend` that implements the same interface, regardless of whether it's backed by a worker or HTTP.
+- **One `Db` implementation** works on server, desktop, mobile, and WASM
+- **The `wasm/` crate's ClientDb becomes unnecessary** — it's just `atomic-lib::Db` with wasm-bindgen
+- **Desktop/mobile don't need the HTTP server** — they use `Db` directly + Iroh for sync
 
-### What changes
+### Sync, Iroh, and DHT move to the lib
 
-**wasm/src/lib.rs**: Instead of custom methods, expose `Storelike` methods directly. The `ClientDb` wrapper becomes almost trivial — it's just `Db` with wasm-bindgen annotations. The `putLoroSnapshot`/`getLoroSnapshot` can stay as additional methods (they're storage-specific, not part of the query/resource interface).
+Today the sync protocol lives in `server/src/handlers/web_sockets.rs`, Iroh in `server/src/iroh_transport.rs`, and DHT in server config. All three are peer capabilities — any device with data should be able to sync, connect via Iroh, and discover peers via DHT. They belong in `atomic-lib`, gated by feature flags.
 
-**browser/lib/src/client-db.worker.ts + client-db.ts**: The worker message types align with `Storelike`. No more custom `putResource`/`getResource` that differ from the server API.
+```rust
+// In atomic-lib — transport-agnostic sync engine
+pub struct SyncEngine {
+    db: Db,
+}
 
-**browser/lib/src/store.ts**: Replace `fetchResourceFromServer`, `fetchResourceFromClientDb`, `fetchResourceWithLocalFallback`, `queryLocalDb` with a single `backend.getResource()` / `backend.query()` that tries local first, then remote.
+impl SyncEngine {
+    /// Process an incoming v2 binary frame, return response frames.
+    pub async fn handle_frame(&self, frame: &[u8]) -> Vec<Vec<u8>> { ... }
 
-### The `Storelike` trait itself
+    /// Compute drive sync state for outgoing SYNC request.
+    pub fn compute_drive_state(&self, drive: &str) -> DriveSyncState { ... }
 
-The current `Storelike` trait (lib/src/storelike.rs) has some baggage:
-- `add_atoms()` — atom-level API, could be removed in favor of resource-level
-- `get_path()` — path traversal, more of a utility than a store operation
-- `search()` — full-text search, implementation-specific
-- `export()` / `import()` — bulk operations
-- `fetch_resource()` — HTTP fetch, shouldn't be on the store trait
+    /// Import sync deltas from a peer.
+    pub async fn import_deltas(&self, deltas: &[SyncDelta]) -> Result<()> { ... }
+}
 
-A cleaned-up `Storelike` for the unified model:
+// In atomic-lib — Iroh peer node (feature = "iroh", native only)
+pub struct PeerNode {
+    db: Db,
+    sync_engine: SyncEngine,
+    endpoint: iroh::Endpoint,
+}
+
+impl PeerNode {
+    /// Start listening for incoming peer connections.
+    pub async fn start(&self) -> Result<NodeId> { ... }
+
+    /// Connect to another peer and sync a drive.
+    pub async fn sync_with(&self, peer: NodeId, drive: &str) -> Result<()> { ... }
+}
+```
+
+Every target uses the same `SyncEngine`. The transport is just plumbing:
+
+```rust
+// atomic-server: WebSocket → SyncEngine
+fn handle_ws_binary(frame: &[u8], ctx: &mut WsContext) {
+    for r in self.sync_engine.handle_frame(frame).await {
+        ctx.binary(r);
+    }
+}
+
+// atomic-lib PeerNode: Iroh QUIC stream → SyncEngine (same code!)
+async fn handle_iroh_stream(stream: BiStream, engine: &SyncEngine) {
+    loop {
+        let frame = read_frame(&mut stream).await?;
+        for r in engine.handle_frame(&frame).await {
+            write_frame(&mut stream, &r).await?;
+        }
+    }
+}
+```
+
+DHT discovery is also a lib feature — any native `PeerNode` can announce itself and find other peers. The server doesn't need special DHT code; it just uses the lib's `PeerNode` like any other device.
+
+### The `Storelike` trait, cleaned up
 
 ```rust
 trait Storelike {
-    // Core CRUD
     async fn get_resource(&self, subject: &Subject) -> AtomicResult<Resource>;
     async fn add_resource(&self, resource: &Resource) -> AtomicResult<()>;
     async fn remove_resource(&self, subject: &Subject) -> AtomicResult<()>;
-    
-    // Queries
     async fn query(&self, q: &Query) -> AtomicResult<QueryResult>;
-    
-    // Commits (the write path)
-    async fn apply_commit(&self, commit: Commit, opts: &CommitOpts) -> AtomicResult<()>;
-    
-    // Subscriptions (for live queries and real-time updates)
-    fn subscribe(&self, subject: &Subject) -> Stream<Resource>;
-    fn subscribe_query(&self, q: &Query) -> Stream<QueryResult>;
-    
-    // Metadata
+    async fn apply_commit(&self, commit: Commit, opts: &CommitOpts) -> AtomicResult<CommitResponse>;
     fn get_base_domain(&self) -> Option<String>;
     fn get_default_agent(&self) -> AtomicResult<Agent>;
 }
 ```
 
-The HTTP-specific stuff (`fetch_resource`, `post_resource`) moves to a `RemoteBackend` implementation. The WASM-specific stuff (`putLoroSnapshot`) stays on `Db` directly. The trait is clean and backend-agnostic.
+Remove from the trait: `add_atoms`, `get_path`, `search` (implementation-specific), `fetch_resource` (network, not storage), `export`/`import` (bulk ops).
+
+### Migration path
+
+1. **Switch server from Sled to ReDB** — ReDB is faster for reads, supports transactions, and compiles to WASM. This is the enabling change.
+2. **Move WASM ClientDb logic into `atomic-lib` Db** — the ClientDb becomes `Db` with ReDB backend. Validation, auth, queries all come for free.
+3. **Move sync protocol into `atomic-lib`** — extract `SyncEngine` from `web_sockets.rs`. Server and desktop both use it.
+4. **Desktop app drops HTTP server** — uses `Db` directly + Iroh via `SyncEngine`. Tauri commands talk to `Db`, not HTTP.
+5. **Clean up `Storelike`** — remove network/HTTP methods, keep it pure storage.
+
+### What this enables
+
+- **Desktop app is 10x smaller** — no Actix, no HTTP server, no Sled
+- **Mobile app gets full validation and auth** — same code as server
+- **Browser WASM DB gets full queries** — same indexing as server
+- **One test suite** — tests run on native and WASM, same behavior guaranteed
+- **Sync works everywhere** — `SyncEngine` doesn't care if bytes come from WebSocket, Iroh, or a pipe
+- **Any language can use it** — via FFI, any app (Flutter, Swift, Kotlin, C++) gets the full Atomic Data stack
+
+## Developer SDK: atomic-lib as a library
+
+### The vision
+
+`atomic-lib` is not just an internal implementation detail — it's the **developer SDK** for building apps with Atomic Data. Any app, in any language, should be able to:
+
+```
+1. Create a local database
+2. Create an agent (identity)
+3. Create a drive
+4. Create resources, edit them, query them
+5. Sync with other peers — no server setup required
+```
+
+The Flutter/Dart canvas app (`atomiccanvas_flutter`) is the reference consumer. It should validate that the API is intuitive and complete. If a Flutter developer can't do something simple in 3 lines of code, the API needs work.
+
+### FFI bindings (Flutter, Swift, Kotlin, C++)
+
+`atomic-lib` compiles to a native shared library (`.so` / `.dylib` / `.dll`). Language bindings expose it via FFI:
+
+```
+atomic-lib (Rust)
+├── atomic-ffi (C ABI via cbindgen / flutter_rust_bridge)
+│   ├── Flutter/Dart — dart:ffi
+│   ├── Swift — direct C interop
+│   ├── Kotlin/JNI — Android NDK
+│   └── C/C++ — direct linking
+└── atomic-wasm (wasm-bindgen)
+    └── Browser JS/TS
+```
+
+### The API surface
+
+The SDK should feel like a local database with superpowers. No HTTP, no URLs, no server config — just data:
+
+```dart
+// Flutter example — the API we're designing for
+
+// 1. Open a local database
+final db = AtomicDb.open('~/my-app/data');
+
+// 2. Create an identity
+final agent = db.createAgent(name: 'Alice');
+
+// 3. Create a drive (a container for resources)
+final drive = db.createDrive(name: 'My Canvas', agent: agent);
+
+// 4. Create and edit resources
+final doc = drive.createResource(
+  class: 'https://atomicdata.dev/classes/DocumentV2',
+  props: {'name': 'Sketch 1'},
+);
+doc.set('description', 'A quick sketch');
+await doc.save();
+
+// 5. Query
+final sketches = db.query(
+  parent: drive.subject,
+  class: 'DocumentV2',
+  sortBy: 'createdAt',
+);
+
+// 6. Sync with a peer — that's it, no server setup
+final peer = db.startPeer(); // starts Iroh
+print('Share this ID: ${peer.nodeId}');
+await peer.syncWith(otherNodeId, drive: drive.subject);
+
+// 7. Sync with a server (if you have one)
+await db.syncWithServer('https://my-server.com', drive: drive.subject);
+```
+
+### What the Flutter app validates
+
+The `atomiccanvas_flutter` app is the proving ground. Every friction point in that app reveals an API gap:
+
+- **Agent creation** — should be one call, not a multi-step process
+- **Drive creation** — should auto-configure permissions for the creating agent
+- **Resource CRUD** — get/set/save should be obvious, typed when possible
+- **Real-time sync** — start Iroh, share a NodeID, done
+- **Offline-first** — everything works without a server; sync is opt-in
+- **Conflict resolution** — Loro handles it; the developer never sees merge conflicts
+- **Schema validation** — create a Property, create a Class, resources validate automatically
+
+### Implementation: `atomic-ffi` crate
+
+A new crate in the workspace:
+
+```
+atomic-ffi/
+├── Cargo.toml          # depends on atomic-lib with features = ["db-redb", "iroh"]
+├── src/
+│   └── lib.rs          # C-ABI functions wrapping atomic-lib
+└── bridge/
+    └── flutter/        # flutter_rust_bridge generated bindings
+```
+
+The FFI layer is thin — it wraps `Db`, `SyncEngine`, `PeerNode` with C-compatible types and handles memory management. `flutter_rust_bridge` auto-generates the Dart bindings from the Rust types.
+
+### Why not WASM for Flutter?
+
+Flutter can use WASM, but native FFI is better:
+
+- **Performance** — no WASM interpreter overhead, direct memory access
+- **Iroh works** — QUIC/UDP sockets are available natively, not in WASM
+- **File I/O** — ReDB can use the real filesystem, not a virtual one
+- **Threading** — real OS threads for sync, not WASM single-threaded
+
+WASM is for the browser. Everything else uses native FFI.
 
 ## Sync Protocol
 
@@ -881,6 +1037,112 @@ This adds round trips (O(log n)) but avoids sending the full list. For most driv
 - **Agent persistence**: fixed — the server's "just-in-time" agent fallback in `get_resource()` no longer interferes with genesis commit processing. Agent properties (personalDrive, sharedWithMe, drives, name) now survive server restart.
 - **Drive hash comparison**: not implemented. Currently skips straight to VV exchange.
 - **Merkle tree**: not implemented.
+
+## Iroh: Zero-Config Peer-to-Peer
+
+### The problem with self-hosting
+
+Running an Atomic Server today requires a public IP, a domain name, TLS certificates, DNS configuration, and port forwarding. This is a significant barrier for self-hosters. The entire point of local-first is that your data lives on your devices — requiring server infrastructure to sync between them defeats the purpose.
+
+### What Iroh provides
+
+[Iroh](https://iroh.computer) (`iroh-net`) is a Rust library that provides:
+
+- **QUIC connections between any two nodes**, regardless of NAT/firewall. It uses relay servers for initial handshake, then upgrades to direct connections via hole punching.
+- **NodeID** — each node gets a public key identity. No DNS, no IP addresses, no ports. You connect to a NodeID and Iroh figures out the routing.
+- **Works everywhere** — the same code runs on servers, desktops, phones, and in WASM (with limitations).
+
+### How it fits
+
+The v2 binary protocol was designed to be transport-agnostic. Every message is a `[tag: u8] [payload...]` byte frame. These frames currently travel over WebSocket. With Iroh, they travel over QUIC streams instead — same encoder/decoder, different transport.
+
+```
+Browser client  ──WebSocket──►  Atomic Server
+Desktop client  ──Iroh QUIC──►  Atomic Server
+Phone app       ──Iroh QUIC──►  Atomic Server
+Atomic Server   ──Iroh QUIC──►  Atomic Server  (federation)
+```
+
+### Server-side integration
+
+The server starts an Iroh `Endpoint` alongside the HTTP listener:
+
+```rust
+// Simplified
+let endpoint = iroh::Endpoint::builder()
+    .discovery_n0()       // Use n0's relay network for NAT traversal
+    .bind().await?;
+
+let node_id = endpoint.node_id();
+println!("Iroh NodeID: {node_id}");
+
+// Accept incoming connections
+while let Some(conn) = endpoint.accept().await {
+    let conn = conn.await?;
+    // Open a bidirectional QUIC stream
+    let (send, recv) = conn.accept_bi().await?;
+    // Reuse the same binary frame handler as WebSocket
+    handle_v2_stream(send, recv, store.clone()).await;
+}
+```
+
+The `handle_v2_stream` function reads binary frames from the QUIC stream and dispatches them using the same `ws_v2::decode_*` / `ws_v2::encode_*` functions. No new protocol — just a new transport.
+
+### Client-side integration
+
+A native/desktop Atomic Data client connects via Iroh:
+
+```rust
+let endpoint = iroh::Endpoint::builder().bind().await?;
+let node_id: NodeId = "...".parse()?;
+let conn = endpoint.connect(node_id, ATOMIC_ALPN).await?;
+let (send, recv) = conn.open_bi().await?;
+// Send binary v2 frames
+send.write_all(&ws_v2::encode_get(1, "did:ad:my-drive")).await?;
+// Read binary v2 frames
+let response = read_frame(&mut recv).await?;
+```
+
+Browser clients can't use Iroh directly (no raw QUIC in browsers). They continue using WebSocket. But the server can bridge: a browser connects to a server via WebSocket, and that server syncs with other servers/peers via Iroh.
+
+### The NodeID as server address
+
+Today, users add a server by URL: `https://my-server.com`. With Iroh, they add by NodeID: `iroh:z6Mk...`. The sync page's "Add server" field accepts both formats.
+
+The NodeID is stable — it's derived from the server's private key. Moving the server to a different machine, IP, or network doesn't change the NodeID. No DNS updates, no certificate renewals.
+
+### Federation via Iroh
+
+Two Atomic Servers can sync drives with each other over Iroh. This is the same VV-based sync protocol used between client and server, but server-to-server:
+
+1. Server A connects to Server B via Iroh NodeID
+2. They exchange drive version vectors
+3. They exchange Loro deltas for differing resources
+4. Both servers now have the same state
+
+This enables:
+- **Multi-server redundancy** — your data exists on multiple servers
+- **Geographic distribution** — a server in each region, syncing via Iroh
+- **Offline servers** — a home server syncs when it comes online, like a phone
+
+### Desktop app as a peer
+
+A desktop Atomic Data app is just another Iroh node. It can:
+- Sync directly with other desktop apps on the same LAN (Iroh discovers local peers)
+- Sync with a server for backup and sharing
+- Work fully offline and sync later
+
+No server required for two devices on the same network to sync.
+
+### Implementation plan
+
+1. **Add `iroh-net` dependency** to `atomic-server`
+2. **Start an Iroh endpoint** alongside the HTTP server in `main.rs`
+3. **Accept connections** on the Iroh endpoint, create a bidirectional stream per client
+4. **Reuse `ws_v2` encode/decode** — the stream handler reads frames and dispatches the same way the WebSocket handler does
+5. **Display NodeID** on the sync page and in server logs
+6. **Accept `iroh:` addresses** in the client's "Add server" field
+7. **Test**: two servers syncing a drive over Iroh without any port forwarding
 
 ## Open Questions
 

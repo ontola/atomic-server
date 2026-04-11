@@ -17,7 +17,6 @@ use atomic_lib::{
     authentication::{get_agent_from_auth_values_and_check, AuthValues},
     Db, Storelike,
 };
-use base64::Engine as _;
 use std::time::{Duration, Instant};
 
 use crate::{
@@ -377,275 +376,29 @@ struct SyncDeltasRequest {
     deltas: std::collections::HashMap<String, String>,
 }
 
-/// Compare client VVs with server VVs, return binary SYNC_OK/SYNC_DIFF/SYNC_PUSH frames.
+/// Delegate to atomic_lib sync engine.
 async fn handle_sync_vv(
     request: SyncVVRequest,
     store: Db,
     agent: ForAgent,
 ) -> Vec<Vec<u8>> {
-    use atomic_lib::db::trees::Tree;
-    use atomic_lib::loro::AtomicLoroDoc;
-
-    let drive_subject = atomic_lib::Subject::from_raw(&request.drive, store.get_base_domain().as_deref());
-    let drive_subjects = collect_drive_subjects(&store, &drive_subject);
-
-    // Build server VVs
-    let mut server_vvs: std::collections::HashMap<String, std::collections::HashMap<String, i32>> =
-        std::collections::HashMap::new();
-
-    for subject_str in &drive_subjects {
-        if let Ok(Some(snapshot_bytes)) = store.kv.get(Tree::LoroSnapshots, subject_str.as_bytes()) {
-            if let Ok(doc) = AtomicLoroDoc::from_snapshot(&snapshot_bytes) {
-                server_vvs.insert(subject_str.clone(), doc.oplog_vv_map());
-            }
-        }
-    }
-
-    // Fast path: hash match
-    if !request.drive_hash.is_empty() {
-        let server_hash = compute_drive_hash(&server_vvs);
-
-        if server_hash == request.drive_hash {
-            tracing::info!("SYNC_VV: drive {} — hashes match, in sync", request.drive);
-
-            return vec![ws_v2::encode_sync_ok(&request.drive)];
-        }
-    }
-
-    // Reconstruct client VVs from compact format
-    let mut client_vvs: std::collections::HashMap<String, std::collections::HashMap<String, i32>> =
-        std::collections::HashMap::new();
-
-    for (subject, counters) in &request.resources {
-        let mut vv = std::collections::HashMap::new();
-
-        for (i, &counter) in counters.iter().enumerate() {
-            if counter != 0 {
-                if let Some(peer_id) = request.peers.get(i) {
-                    vv.insert(peer_id.clone(), counter);
-                }
-            }
-        }
-
-        client_vvs.insert(subject.clone(), vv);
-    }
-
-    let mut pull: Vec<String> = Vec::new();
-    let mut push_entries: Vec<(String, Vec<u8>)> = Vec::new();
-
-    // Compare server resources against client
-    for (subject, server_vv) in &server_vvs {
-        // Check read permission
-        if let Ok(resource) = store
-            .get_resource(&atomic_lib::Subject::from_raw(subject, store.get_base_domain().as_deref()))
-            .await
-        {
-            if atomic_lib::hierarchy::check_read(&store, &resource, &agent).await.is_err() {
-                continue;
-            }
-        }
-
-        if let Some(client_vv) = client_vvs.get(subject) {
-            let server_ahead = server_vv.iter().any(|(p, &sc)| client_vv.get(p).copied().unwrap_or(0) < sc);
-            let client_ahead = client_vv.iter().any(|(p, &cc)| server_vv.get(p).copied().unwrap_or(0) < cc);
-
-            if server_ahead {
-                if let Ok(Some(snapshot_bytes)) = store.kv.get(Tree::LoroSnapshots, subject.as_bytes()) {
-                    if let Ok(doc) = AtomicLoroDoc::from_snapshot(&snapshot_bytes) {
-                        let client_loro_vv = AtomicLoroDoc::vv_from_map(client_vv);
-                        let delta = doc.export_updates_since(&client_loro_vv);
-
-                        if !delta.is_empty() {
-                            push_entries.push((subject.clone(), delta));
-                        }
-                    }
-                }
-            }
-
-            if client_ahead {
-                pull.push(subject.clone());
-            }
-        } else {
-            // Server has it, client doesn't — push full snapshot
-            if let Ok(Some(snapshot_bytes)) = store.kv.get(Tree::LoroSnapshots, subject.as_bytes()) {
-                push_entries.push((subject.clone(), snapshot_bytes));
-            }
-        }
-    }
-
-    // Client resources not on server
-    for subject in client_vvs.keys() {
-        if !server_vvs.contains_key(subject) {
-            pull.push(subject.clone());
-        }
-    }
-
-    let push_subjects: Vec<String> = push_entries.iter().map(|(s, _)| s.clone()).collect();
-
-    tracing::info!(
-        "SYNC_VV: drive {} — {} to push, {} to pull",
-        request.drive,
-        push_subjects.len(),
-        pull.len(),
-    );
-
-    let mut frames = Vec::new();
-
-    // SYNC_DIFF
-    frames.push(ws_v2::encode_sync_diff(&request.drive, &pull, &push_subjects));
-
-    // SYNC_PUSH with raw Loro bytes (no base64!)
-    if !push_entries.is_empty() {
-        let entries: Vec<(&str, &[u8])> = push_entries
-            .iter()
-            .map(|(s, b)| (s.as_str(), b.as_slice()))
-            .collect();
-        frames.push(ws_v2::encode_sync_push(&request.drive, &entries));
-    }
-
-    frames
+    atomic_lib::sync::engine::handle_sync_vv(
+        &request.drive,
+        &request.drive_hash,
+        &request.peers,
+        &request.resources,
+        &store,
+        &agent,
+    )
+    .await
 }
 
-/// Import Loro deltas from client into server resources.
+/// Delegate to atomic_lib sync engine.
 async fn handle_sync_deltas(request: SyncDeltasRequest, store: Db, _agent: ForAgent) {
-    use atomic_lib::db::trees::Tree;
-    use atomic_lib::loro::AtomicLoroDoc;
-
-    let mut count = 0;
-
-    for (subject_str, delta_b64) in &request.deltas {
-        let Ok(delta_bytes) = base64::engine::general_purpose::STANDARD.decode(delta_b64) else {
-            tracing::warn!("SYNC_DELTAS: bad base64 for {}", subject_str);
-            continue;
-        };
-
-        // Load or create Loro doc
-        let doc = if let Ok(Some(snapshot)) = store.kv.get(Tree::LoroSnapshots, subject_str.as_bytes()) {
-            match AtomicLoroDoc::from_snapshot(&snapshot) {
-                Ok(d) => d,
-                Err(_) => AtomicLoroDoc::new(),
-            }
-        } else {
-            AtomicLoroDoc::new()
-        };
-
-        if doc.import_update(&delta_bytes).is_err() {
-            tracing::warn!("SYNC_DELTAS: import failed for {}", subject_str);
-            continue;
-        }
-
-        // Persist snapshot
-        let new_snapshot = doc.export_snapshot();
-
-        if store.kv.insert(Tree::LoroSnapshots, subject_str.as_bytes(), &new_snapshot).is_err() {
-            continue;
-        }
-
-        // Materialize into resource
-        let subject = atomic_lib::Subject::from_raw(subject_str, store.get_base_domain().as_deref());
-        let mut resource = store.get_resource(&subject).await
-            .unwrap_or_else(|_| atomic_lib::Resource::new(subject.to_string().into()));
-
-        if resource.replace_state_from_loro_doc(doc).is_err() {
-            continue;
-        }
-
-        let _ = store.add_resource_opts(&resource, false, true, true).await;
-        count += 1;
-    }
-
-    tracing::info!("SYNC_DELTAS: imported {} resources for drive {}", count, request.drive);
-}
-
-// ---- Helpers ----
-
-/// Collect all subjects belonging to a drive via BFS on parent relationships.
-fn collect_drive_subjects(store: &Db, drive_subject: &atomic_lib::Subject) -> std::collections::HashSet<String> {
-    let drive_str = drive_subject.as_str().to_string();
-    let mut result = std::collections::HashSet::new();
-    result.insert(drive_str.clone());
-
-    if drive_subject.is_did() {
-        // DID drives: BFS through parent→children
-        let mut parent_to_children: std::collections::HashMap<String, Vec<String>> =
-            std::collections::HashMap::new();
-
-        for resource in store.all_resources(false) {
-            if let Ok(parent_val) = resource.get(atomic_lib::urls::PARENT) {
-                parent_to_children
-                    .entry(parent_val.to_string())
-                    .or_default()
-                    .push(resource.get_subject().as_str().to_string());
-            }
-        }
-
-        let mut queue = vec![drive_str];
-
-        while let Some(current) = queue.pop() {
-            if let Some(children) = parent_to_children.get(&current) {
-                for child in children {
-                    if result.insert(child.clone()) {
-                        queue.push(child.clone());
-                    }
-                }
-            }
-        }
-    } else {
-        // URL drives: prefix match
-        for resource in store.all_resources(false) {
-            let subject = resource.get_subject();
-
-            if subject.as_str().starts_with(drive_subject.as_str()) {
-                result.insert(subject.as_str().to_string());
-            }
-        }
-    }
-
-    result
-}
-
-/// Compute SHA-256 drive hash matching the client's algorithm.
-fn compute_drive_hash(
-    vvs: &std::collections::HashMap<String, std::collections::HashMap<String, i32>>,
-) -> String {
-    let mut peer_set = std::collections::BTreeSet::new();
-
-    for vv in vvs.values() {
-        for peer_id in vv.keys() {
-            peer_set.insert(peer_id.clone());
-        }
-    }
-
-    let peers: Vec<String> = peer_set.into_iter().collect();
-    let peer_index: std::collections::HashMap<&str, usize> =
-        peers.iter().enumerate().map(|(i, p)| (p.as_str(), i)).collect();
-
-    let mut entries: Vec<(String, Vec<i32>)> = vvs
-        .iter()
-        .map(|(subject, vv)| {
-            let mut counters = vec![0i32; peers.len()];
-
-            for (peer_id, &counter) in vv {
-                if let Some(&idx) = peer_index.get(peer_id.as_str()) {
-                    counters[idx] = counter;
-                }
-            }
-
-            (subject.clone(), counters)
-        })
-        .collect();
-
-    entries.sort_by(|(a, _), (b, _)| a.cmp(b));
-
-    let hash_input: String = entries
-        .iter()
-        .map(|(s, c)| {
-            let counters = c.iter().map(|n| n.to_string()).collect::<Vec<_>>().join(",");
-            format!("{s}:{counters}")
-        })
-        .collect::<Vec<_>>()
-        .join("|");
-
-    let digest = ring::digest::digest(&ring::digest::SHA256, hash_input.as_bytes());
-    hex::encode(digest.as_ref())
+    atomic_lib::sync::engine::handle_sync_deltas(
+        &request.drive,
+        &request.deltas,
+        &store,
+    )
+    .await;
 }

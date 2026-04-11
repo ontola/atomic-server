@@ -2477,6 +2477,7 @@ msgid "Copied error to clipboard"
 msgstr "Copied error to clipboard"
 
 #: src/components/Toaster.tsx
+#: src/routes/SyncRoute.tsx
 msgid "Copy"
 msgstr "Copy"
 
@@ -5019,3 +5020,7 @@ msgstr "Server settings have moved to the{0} <0>Sync page</0>."
 #: src/routes/SyncRoute.tsx
 msgid "How to run your own server"
 msgstr "How to run your own server"
+
+#: src/routes/SyncRoute.tsx
+msgid "Peer ID"
+msgstr "Peer ID"

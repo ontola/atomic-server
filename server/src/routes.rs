@@ -14,6 +14,18 @@ const ANY: &str = "{tail:.*}";
 // See build.rs for more info.
 include!(concat!(env!("OUT_DIR"), "/generated.rs"));
 
+async fn iroh_node_id_handler() -> actix_web::HttpResponse {
+    if let Some(node_id) = crate::iroh_transport::get_node_id() {
+        return actix_web::HttpResponse::Ok()
+            .content_type("application/json")
+            .body(format!(r#"{{"nodeId":"iroh:{node_id}"}}"#));
+    }
+
+    actix_web::HttpResponse::Ok()
+        .content_type("application/json")
+        .body(r#"{"nodeId":null}"#)
+}
+
 /// Set up the Actix server routes. This defines which paths are used.
 // Keep in mind that the order of these matters. An early, greedy route will take
 // precedence over a later route.
@@ -24,6 +36,7 @@ pub fn config_routes(app: &mut actix_web::web::ServiceConfig) {
             .to(handlers::post_resource::handle_post_resource),
     )
     .service(web::resource("/ws").to(handlers::web_sockets::web_socket_handler))
+    .service(web::resource("/iroh-node-id").to(iroh_node_id_handler))
     .service(web::resource("/download/{path:[^{}]+}").to(handlers::download::handle_download))
     .service(web::resource("/export").to(handlers::export::handle_export))
     .service(web::resource("/plugin-ui").to(handlers::plugin_ui::handle_plugin_ui))

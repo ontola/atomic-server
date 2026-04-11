@@ -160,6 +160,21 @@ pub async fn serve(config: crate::config::Config) -> AtomicServerResult<()> {
     // Start discovery / announcement services
     spawn_dht_announcer(appstate.clone());
 
+    // Start Iroh peer-to-peer transport
+    let _iroh_router = {
+        let store = appstate.store.clone();
+        match crate::iroh_transport::start(store).await {
+            Ok((node_id, router)) => {
+                tracing::info!("Iroh transport ready. Connect with: iroh:{node_id}");
+                Some(router)
+            }
+            Err(e) => {
+                tracing::warn!("Failed to start Iroh transport: {e}");
+                None
+            }
+        }
+    };
+
     let server = HttpServer::new(move || {
         let cors = Cors::permissive().expose_headers([SERVER_VERSION_HEADER]);
 

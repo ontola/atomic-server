@@ -210,6 +210,7 @@ msgid "Clear"
 msgstr "Effacer"
 
 #: src/components/Toaster.tsx
+#: src/routes/SyncRoute.tsx
 msgid "Copy"
 msgstr "Copier"
 
@@ -5050,4 +5051,8 @@ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "How to run your own server"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Peer ID"
 msgstr ""
