@@ -18,6 +18,7 @@ import {
   FaCircleExclamation,
 } from 'react-icons/fa6';
 import { Button } from '../components/Button';
+import { Row } from '../components/Row';
 import { ContainerNarrow } from '../components/Containers';
 import { Main } from '../components/Main';
 import { Card } from '../components/Card';
@@ -26,6 +27,8 @@ import { AtomicLink } from '../components/AtomicLink';
 import { formatTimeAgo } from '../helpers/formatTimeAgo';
 import { appRoute } from './RootRoutes';
 import { pathNames } from './paths';
+import { useSettings } from '../helpers/AppSettings';
+import { serverURLStorage } from '../helpers/serverURLStorage';
 
 export const SyncRoute = createRoute({
   path: pathNames.sync,
@@ -108,6 +111,10 @@ function SyncPage() {
   const [wsDebug, setWsDebug] = useState(
     () => localStorage.getItem('ws-debug') === '1',
   );
+  const { setServer, baseURL } = useSettings();
+  const knownServers = serverURLStorage.getKnownServers();
+  const [serverInput, setServerInput] = useState('');
+  const [showAddServer, setShowAddServer] = useState(false);
 
   useEffect(() => {
     const refresh = () => setStatus(store.getSyncStatus());
@@ -151,8 +158,11 @@ function SyncPage() {
           </SyncNode>
 
           <SyncLine $status={nodes.line}>
-            <LineTrack />
+            <LineTrack $offline={nodes.line === 'offline'} />
             {nodes.line === 'syncing' && <LinePulse />}
+            {(nodes.line === 'synced' || nodes.line === 'unsynced') && (
+              <HeartbeatDot $status={nodes.line} />
+            )}
           </SyncLine>
 
           <SyncNode $status={nodes.server}>
@@ -168,16 +178,18 @@ function SyncPage() {
               <StatusIcon status={nodes.server} />
               {statusLabel(nodes.server)}
             </NodeStatusBadge>
+            {status.serverConnected ? (
+              <NodeAction onClick={() => store.disconnect()}>
+                Disconnect
+              </NodeAction>
+            ) : (
+              <NodeAction onClick={() => store.reconnect()}>
+                Reconnect
+              </NodeAction>
+            )}
           </SyncNode>
         </SyncDiagram>
 
-        {!status.serverConnected && (
-          <ReconnectRow>
-            <Button onClick={() => store.reconnect()}>
-              Reconnect
-            </Button>
-          </ReconnectRow>
-        )}
 
         {/* Details accordion */}
         <Section>
@@ -195,17 +207,59 @@ function SyncPage() {
             </DetailItem>
             <DetailItem>
               <DetailLabel>Server</DetailLabel>
-              <DetailValue>{status.serverUrl || 'not set'}</DetailValue>
-            </DetailItem>
-            <DetailItem>
-              <DetailLabel>Connection</DetailLabel>
               <DetailValue>
-                {status.serverConnected ? 'Connected' : 'Offline'}
-                {status.websocketProtocol
-                  ? ` (${status.websocketProtocol})`
-                  : ''}
+                <ServerSelect
+                  value={baseURL ?? ''}
+                  onChange={e => setServer(e.target.value)}
+                >
+                  {knownServers.map(s => (
+                    <option key={s} value={s}>
+                      {new URL(s).hostname}
+                    </option>
+                  ))}
+                </ServerSelect>
+                {!showAddServer && (
+                  <NodeAction onClick={() => setShowAddServer(true)}>
+                    + Add
+                  </NodeAction>
+                )}
               </DetailValue>
             </DetailItem>
+            {showAddServer && (
+              <DetailItem>
+                <DetailLabel />
+                <DetailValue>
+                  <AddServerRow
+                    onSubmit={e => {
+                      e.preventDefault();
+
+                      if (serverInput.trim()) {
+                        setServer(serverInput.trim());
+                        setServerInput('');
+                        setShowAddServer(false);
+                      }
+                    }}
+                  >
+                    <ServerInput
+                      autoFocus
+                      placeholder='https://my-server.com'
+                      value={serverInput}
+                      onChange={e => setServerInput(e.target.value)}
+                    />
+                    <Button type='submit' subtle>
+                      Add
+                    </Button>
+                  </AddServerRow>
+                  <DocsLink
+                    href='https://docs.atomicdata.dev/atomicserver/installation.html'
+                    target='_blank'
+                    rel='noopener'
+                  >
+                    How to run your own server
+                  </DocsLink>
+                </DetailValue>
+              </DetailItem>
+            )}
             <DetailItem>
               <DetailLabel>Local storage</DetailLabel>
               <DetailValue>
@@ -376,10 +430,17 @@ const SectionTitle = styled.h2`
   margin-bottom: 0.8rem;
 `;
 
-const ReconnectRow = styled.div`
-  display: flex;
-  justify-content: center;
-  margin-bottom: 1.5rem;
+const NodeAction = styled.button`
+  background: none;
+  border: none;
+  color: ${p => p.theme.colors.main};
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 0.2rem 0;
+
+  &:hover {
+    text-decoration: underline;
+  }
 `;
 
 const Muted = styled.p`
@@ -467,11 +528,14 @@ const SyncLine = styled.div<{ $status: NodeStatus }>`
   justify-content: center;
 `;
 
-const LineTrack = styled.div`
+const LineTrack = styled.div<{ $offline: boolean }>`
   position: absolute;
-  inset: 0;
-  background: ${p => p.theme.colors.bg2};
-  border-radius: 1px;
+  left: 0;
+  right: 0;
+  height: 0;
+  top: 50%;
+  border-top: 2px ${p => (p.$offline ? 'dashed' : 'solid')}
+    ${p => p.theme.colors.bg2};
 `;
 
 const pulseAnim = keyframes`
@@ -487,6 +551,22 @@ const LinePulse = styled.div`
   background: ${p => p.theme.colors.main};
   border-radius: 1px;
   animation: ${pulseAnim} 1.2s ease-in-out infinite;
+`;
+
+const heartbeat = keyframes`
+  0% { left: 0%; }
+  100% { left: calc(100% - 6px); }
+`;
+
+const HeartbeatDot = styled.div<{ $status: NodeStatus }>`
+  position: absolute;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 50%;
+  background: ${p => statusColor(p.$status, p.theme)};
+  animation: ${heartbeat} 2s linear infinite alternate;
 `;
 
 const PendingList = styled.div`
@@ -681,4 +761,36 @@ const ErrorText = styled.div`
 const DebugToggle = styled.input`
   margin-right: 0.5rem;
   cursor: pointer;
+`;
+
+const ServerSelect = styled.select`
+  border: 1px solid ${p => p.theme.colors.bg2};
+  border-radius: ${p => p.theme.radius};
+  padding: 0.3rem 0.5rem;
+  font-size: 0.9rem;
+  background: ${p => p.theme.colors.bg};
+  color: ${p => p.theme.colors.text};
+  cursor: pointer;
+`;
+
+const AddServerRow = styled.form`
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+`;
+
+const DocsLink = styled.a`
+  font-size: 0.8rem;
+  color: ${p => p.theme.colors.textLight};
+`;
+
+const ServerInput = styled.input`
+  border: 1px solid ${p => p.theme.colors.bg2};
+  border-radius: ${p => p.theme.radius};
+  padding: 0.3rem 0.5rem;
+  font-size: 0.85rem;
+  background: ${p => p.theme.colors.bg};
+  color: ${p => p.theme.colors.text};
+  flex: 1;
+  min-width: 0;
 `;

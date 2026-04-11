@@ -94,9 +94,14 @@ export function initClientDb(store: Store): void {
   // This lets addResource() forward to the worker even during init.
   store.setClientDb(clientDb);
 
-  initPromise.catch(err => {
-    console.warn('[ClientDb] Failed to initialize:', err);
-  });
+  initPromise
+    .then(() => {
+      // Re-emit so the sync page picks up clientDbReady: true.
+      store.setClientDb(clientDb);
+    })
+    .catch(err => {
+      console.warn('[ClientDb] Failed to initialize:', err);
+    });
 
   // Vite HMR: accept updates and re-initialize cleanly.
   if (import.meta.hot) {

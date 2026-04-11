@@ -1160,13 +1160,11 @@ export class Store {
       this.addResources(newR, { skipCommitCompare: true });
     }
 
-    // Resolve relative subjects to full URLs
     const fetchSubject =
       subject.startsWith('http') || subject.startsWith('did:ad:')
         ? subject
         : new URL(subject, this.serverUrl).toString();
 
-    // Use WebSocket if available, else use HTTP(S)
     const ws = this.getWebSocketForSubject(fetchSubject);
 
     if (
@@ -1175,11 +1173,8 @@ export class Store {
       supportsWebSockets() &&
       ws?.readyState === WebSocket.OPEN
     ) {
-      // Use WebSocket
       await ws.fetch(fetchSubject);
-      // Resource should now have been added to the store by the websocket client.
     } else {
-      // Use HTTPS
       const signInfo = this.agent
         ? { agent: this.agent, serverURL: this.getServerUrl() }
         : undefined;
@@ -1190,22 +1185,16 @@ export class Store {
           method: opts.method,
           body: opts.body,
           signInfo,
-          // Always pass serverURL so DID subjects can be resolved via the
-          // correct backend URL even when the agent hasn't loaded from IDB yet.
           serverURL: this.getServerUrl(),
         });
 
-      // The client already returns the requested top-level resource as `resource`.
       resource.source = 'server-http';
       resource.sourceTimestamp = Date.now();
       this.addResources(resource, {
         alias: subject,
-        // POST endpoint responses can reuse the same @id as an already loaded GET
-        // resource (e.g. invite preview -> invite accept redirect). Force merge.
         skipCommitCompare: opts.method === 'POST',
       });
 
-      // Any other resources that were returned (e.g. linked resources)
       createdResources.forEach(r => {
         if (
           this.normalizeSubject(r.subject) !==
@@ -1218,7 +1207,7 @@ export class Store {
       });
     }
 
-    return this.resources.get(this.normalizeSubject(subject))!;
+    return this.resources.get(normalizedSubject)!;
   }
 
   public getAllSubjects(): string[] {
@@ -1717,9 +1706,14 @@ export class Store {
     this.serverUrl = url;
     this.eventManager.emit(StoreEvents.ServerURLChanged, url);
 
-    // TODO This is not the right place
     if (supportsWebSockets()) {
-      this.openWebSocket(url);
+      const userDisconnected =
+        typeof localStorage !== 'undefined' &&
+        localStorage.getItem('ws-disconnected') === '1';
+
+      if (!userDisconnected) {
+        this.openWebSocket(url);
+      }
     }
   }
 
@@ -1773,8 +1767,25 @@ export class Store {
       this.webSockets.delete(url);
     }
 
-    // Open a fresh one
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem('ws-disconnected');
+    }
+
     this.openWebSocket(url);
+  }
+
+  /** Close the WebSocket connection. Persists across refresh until reconnect(). */
+  public disconnect(): void {
+    const existing = this.webSockets.get(this.serverUrl);
+
+    if (existing) {
+      existing.close();
+      this.webSockets.delete(this.serverUrl);
+    }
+
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('ws-disconnected', '1');
+    }
   }
 
   /**
