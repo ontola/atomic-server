@@ -1483,5 +1483,15 @@
       "https://atomicdata.dev/properties/name"
     ],
     "https://atomicdata.dev/properties/shortname": "display-style"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/sortOrder",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/float",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/description": "Fractional sort key used to order a resource among its siblings under the same parent. Lower values come first. On reorder, set the dragged item's sortOrder to the midpoint between its new neighbors' sortOrders (or the surrounding values' `createdAt` if a neighbor has none yet) so existing siblings never need to be renumbered.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "sort-order"
   }
 ]

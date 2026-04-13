@@ -54,6 +54,7 @@ export const dataBrowser = {
     replyTo: 'https://atomicdata.dev/properties/replyTo',
     resources:
       'https://atomicdata.dev/ontology/data-browser/property/resources',
+    sortOrder: 'https://atomicdata.dev/properties/sortOrder',
     subResources: 'https://atomicdata.dev/properties/subresources',
     tableColumnWidths: 'https://atomicdata.dev/properties/tableColumnWidths',
     tags: 'https://atomicdata.dev/properties/tags',

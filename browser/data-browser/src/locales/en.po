@@ -934,12 +934,8 @@ msgstr "Keyboard support for drag and drop is disabled. Enable it in the setting
 msgid "Picked up {0}"
 msgstr "Picked up {0}"
 
-#. placeholder {0}: dragResource.title
-#. placeholder {1}: dropResource.title
-#. placeholder {2}: pos + 1
-#: src/components/SideBar/useSidebarDnd.ts
-msgid "Draggable item {0} was moved over droppable area in {1} at position {2}"
-msgstr "Draggable item {0} was moved over droppable area in {1} at position {2}"
+#~ msgid "Draggable item {0} was moved over droppable area in {1} at position {2}"
+#~ msgstr "Draggable item {0} was moved over droppable area in {1} at position {2}"
 
 #: src/components/SideBar/useSidebarDnd.ts
 #: src/components/SideBar/useSidebarDnd.ts
@@ -4368,3 +4364,9 @@ msgstr "Tap the eraser button, then drag across strokes to remove them"
 #: src/components/NavBar.tsx
 msgid "Click to rename"
 msgstr "Click to rename"
+
+#. placeholder {0}: dragResource.title
+#. placeholder {1}: dropResource.title
+#: src/components/SideBar/useSidebarDnd.ts
+msgid "Draggable item {0} was moved over droppable area in {1}"
+msgstr "Draggable item {0} was moved over droppable area in {1}"

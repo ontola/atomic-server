@@ -1435,12 +1435,8 @@ msgstr "La prise en charge du clavier pour le glisser-déposer est désactivée.
 msgid "Picked up {0}"
 msgstr "Pris {0}"
 
-#. placeholder {0}: dragResource.title
-#. placeholder {1}: dropResource.title
-#. placeholder {2}: pos + 1
-#: src/components/SideBar/useSidebarDnd.ts
-msgid "Draggable item {0} was moved over droppable area in {1} at position {2}"
-msgstr "L'élément déplaçable {0} a été déplacé sur la zone de dépôt dans {1} à la position {2}"
+#~ msgid "Draggable item {0} was moved over droppable area in {1} at position {2}"
+#~ msgstr "L'élément déplaçable {0} a été déplacé sur la zone de dépôt dans {1} à la position {2}"
 
 #: src/components/SideBar/useSidebarDnd.ts
 #: src/components/SideBar/useSidebarDnd.ts
@@ -4344,4 +4340,10 @@ msgstr ""
 
 #: src/components/NavBar.tsx
 msgid "Click to rename"
+msgstr ""
+
+#. placeholder {0}: dragResource.title
+#. placeholder {1}: dropResource.title
+#: src/components/SideBar/useSidebarDnd.ts
+msgid "Draggable item {0} was moved over droppable area in {1}"
 msgstr ""

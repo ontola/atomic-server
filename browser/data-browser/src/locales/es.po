@@ -1422,12 +1422,8 @@ msgstr "El soporte del teclado para arrastrar y soltar está deshabilitado. Habi
 msgid "Picked up {0}"
 msgstr "Recogido {0}"
 
-#. placeholder {0}: dragResource.title
-#. placeholder {1}: dropResource.title
-#. placeholder {2}: pos + 1
-#: src/components/SideBar/useSidebarDnd.ts
-msgid "Draggable item {0} was moved over droppable area in {1} at position {2}"
-msgstr "El elemento arrastrable {0} se movió sobre el área de colocación en {1} en la posición {2}"
+#~ msgid "Draggable item {0} was moved over droppable area in {1} at position {2}"
+#~ msgstr "El elemento arrastrable {0} se movió sobre el área de colocación en {1} en la posición {2}"
 
 #: src/components/SideBar/useSidebarDnd.ts
 #: src/components/SideBar/useSidebarDnd.ts
@@ -4331,4 +4327,10 @@ msgstr ""
 
 #: src/components/NavBar.tsx
 msgid "Click to rename"
+msgstr ""
+
+#. placeholder {0}: dragResource.title
+#. placeholder {1}: dropResource.title
+#: src/components/SideBar/useSidebarDnd.ts
+msgid "Draggable item {0} was moved over droppable area in {1}"
 msgstr ""

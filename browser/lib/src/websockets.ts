@@ -38,6 +38,28 @@ import { perfMark, perfSpan } from './perf-trace.js';
 const REQUEST_TIMEOUT = 10000;
 const WS_PROTOCOL = 'atomicdata-ws.v2';
 
+/**
+ * Chunked base64 encoder. `btoa(String.fromCharCode(...arr))` blows up
+ * on large arrays — argument-spread is bounded to ~65k items by every
+ * engine. Loro snapshots are routinely larger (a chat room oplog can
+ * be hundreds of KB). Process in 32k-byte slabs to stay well below the
+ * spread limit while still amortising the `apply` overhead.
+ */
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  const slab = 0x8000;
+
+  for (let i = 0; i < bytes.length; i += slab) {
+    binary += String.fromCharCode.apply(
+      null,
+      // `subarray` is a view, no copy; `apply` accepts the typed array.
+      bytes.subarray(i, i + slab) as unknown as number[],
+    );
+  }
+
+  return btoa(binary);
+}
+
 const connectionFailedMessage = (url: URL): string =>
   `Could not connect to ${url.origin}. Check that the server is running and reachable.`;
 
@@ -1003,6 +1025,14 @@ export class WSClient {
   /**
    * Handle SYNC_DIFF: server tells us which resources differ.
    * We send Loro deltas for resources the server needs (pull list).
+   *
+   * For each `pull` subject we try the in-memory `Resource` first, then
+   * fall back to the on-disk ClientDb snapshot. The fallback breaks the
+   * "stale VV" stalemate where server thinks the client is ahead but
+   * the client has only just opened the WS — none of those resources
+   * are in `store.resources` yet, so the old in-memory-only loop sent
+   * an empty SYNC_DELTAS, the server stayed behind, and the next
+   * reconnect re-issued the same diff forever.
    */
   private async handleSyncDiff(diff: {
     drive: string;
@@ -1015,18 +1045,33 @@ export class WSClient {
     }
 
     const deltas: Record<string, string> = {};
+    const clientDb = this.store.getClientDb();
 
     for (const subject of diff.pull) {
-      const resource = this.store.resources.get(subject);
-      const doc = resource?.getLoroDoc?.();
+      let snapshot: Uint8Array | undefined;
 
-      if (doc) {
+      const memDoc = this.store.resources.get(subject)?.getLoroDoc?.();
+
+      if (memDoc) {
         try {
-          const snapshot = doc.export({ mode: 'snapshot' });
-          // Base64 encode for SYNC_DELTAS text message (will be binary later)
-          deltas[subject] = btoa(
-            String.fromCharCode(...new Uint8Array(snapshot)),
-          );
+          snapshot = memDoc.export({ mode: 'snapshot' });
+        } catch {
+          // Fall through to ClientDb.
+        }
+      }
+
+      if ((!snapshot || snapshot.length === 0) && clientDb) {
+        try {
+          const stored = await clientDb.getLoroSnapshot(subject);
+          if (stored && stored.length > 0) snapshot = stored;
+        } catch {
+          // skip — leave snapshot undefined
+        }
+      }
+
+      if (snapshot && snapshot.length > 0) {
+        try {
+          deltas[subject] = bytesToBase64(snapshot);
         } catch {
           // skip
         }

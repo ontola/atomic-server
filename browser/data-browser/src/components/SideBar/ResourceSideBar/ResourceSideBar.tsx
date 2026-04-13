@@ -21,11 +21,11 @@ import { Details } from '../../Details';
 import { errorLookStyle } from '../../ErrorLook';
 import { LoaderInline } from '../../Loader';
 import { FaTriangleExclamation } from 'react-icons/fa6';
-import { useDraggable } from '@dnd-kit/core';
+import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { SidebarItemTitle } from './SidebarItemTitle';
 import { TextWrapper } from './shared';
 import { DropEdge } from './DropEdge';
-import { SideBarDragData } from '../useSidebarDnd';
+import { SideBarDragData, SideBarDropData } from '../useSidebarDnd';
 import { transparentize } from 'polished';
 import { transition } from '../../../helpers/transition';
 
@@ -87,6 +87,37 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(
       disabled: !canWrite,
     });
 
+    // "Drop onto folder" target: the whole row accepts drops, setting
+    // this resource as the dragged item's parent. The drop sits at the
+    // *end* of this folder's children — `prevSubject = last child` so
+    // the handler computes `sortOrder = lastSibling.sortOrder + 1`.
+    //
+    // Disable when this row IS the dragged item (drop-on-self) or when an
+    // ancestor of this row is being dragged (would create a cycle).
+    const draggedId = draggingNode?.id as string | undefined;
+    const dropDisabled =
+      !canWrite ||
+      (!!draggedId &&
+        (draggedId === subject || renderedHierarchy.includes(draggedId)));
+    const dropData: SideBarDropData = {
+      parent: subject,
+      prevSubject: subResources.at(-1),
+      nextSubject: undefined,
+    };
+    const { setNodeRef: setDropNodeRef } = useDroppable({
+      id: `${subject}-into`,
+      data: dropData,
+      disabled: dropDisabled,
+    });
+
+    const setItemRef = useCallback(
+      (node: HTMLAnchorElement | null) => {
+        setNodeRef(node);
+        setDropNodeRef(node);
+      },
+      [setNodeRef, setDropNodeRef],
+    );
+
     const hasSubResources = subResources.length > 0;
 
     const toggleExpanded = useCallback(() => setOpen(prev => !prev), []);
@@ -97,7 +128,7 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(
           subject={subject}
           active={active}
           onClick={onClick}
-          ref={setNodeRef}
+          ref={setItemRef}
           listeners={canWrite ? listeners : undefined}
           attributes={canWrite ? attributes : undefined}
           expandable={hasSubResources}
@@ -112,7 +143,7 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(
         listeners,
         attributes,
         canWrite,
-        setNodeRef,
+        setItemRef,
         hasSubResources,
         open,
         toggleExpanded,
@@ -179,22 +210,32 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(
           summaryCaret={false}
           title={TitleComp}
         >
-          <DropEdge parentHierarchy={hierarchyWithItself} position={0} />
-          {hasSubResources &&
-            subResources.map((child, index) => (
-              <Fragment key={child}>
-                <ResourceSideBar
-                  subject={child}
-                  renderedHierarchy={hierarchyWithItself}
-                  ancestry={ancestry}
-                  onClick={onClick}
-                />
-                <DropEdge
-                  parentHierarchy={hierarchyWithItself}
-                  position={index + 1}
-                />
-              </Fragment>
-            ))}
+          {hasSubResources && (
+            <>
+              <DropEdge
+                parentHierarchy={hierarchyWithItself}
+                index={0}
+                prevSubject={undefined}
+                nextSubject={subResources[0]}
+              />
+              {subResources.map((child, idx) => (
+                <Fragment key={child}>
+                  <ResourceSideBar
+                    subject={child}
+                    renderedHierarchy={hierarchyWithItself}
+                    ancestry={ancestry}
+                    onClick={onClick}
+                  />
+                  <DropEdge
+                    parentHierarchy={hierarchyWithItself}
+                    index={idx + 1}
+                    prevSubject={child}
+                    nextSubject={subResources[idx + 1]}
+                  />
+                </Fragment>
+              ))}
+            </>
+          )}
         </Details>
       </Wrapper>
     );

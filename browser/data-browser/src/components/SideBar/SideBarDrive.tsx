@@ -20,7 +20,7 @@ import { Row } from '../Row';
 import { useCurrentSubject } from '../../helpers/useCurrentSubject';
 import { ScrollArea } from '../ScrollArea';
 import { useSidebarDnd } from './useSidebarDnd';
-import { DndContext, DragOverlay } from '@dnd-kit/core';
+import { closestCenter, DndContext, DragOverlay } from '@dnd-kit/core';
 import { SidebarItemTitle } from './ResourceSideBar/SidebarItemTitle';
 import { DropEdge } from './ResourceSideBar/DropEdge';
 import { createPortal } from 'react-dom';
@@ -100,6 +100,12 @@ export function SideBarDrive({
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
         sensors={sensors}
+        // `closestCenter` lets the 3-pixel `DropEdge` strips between
+        // siblings win over the much-taller "drop onto folder row"
+        // targets when the dragged item is over a sibling gap. With the
+        // default `rectIntersection` the bigger row always swallowed
+        // every drop and inter-sibling reordering became unreachable.
+        collisionDetection={closestCenter}
         accessibility={{
           announcements,
           screenReaderInstructions: {
@@ -109,7 +115,12 @@ export function SideBarDrive({
       >
         <StyledScrollArea>
           <ListWrapper>
-            <DropEdge parentHierarchy={[drive]} position={0} />
+            <DropEdge
+              parentHierarchy={[drive]}
+              index={0}
+              prevSubject={undefined}
+              nextSubject={subResources[0]}
+            />
             {driveResource.isReady() ? (
               childrenLoading ? (
                 <SideBarLoader />
@@ -125,7 +136,9 @@ export function SideBarDrive({
                       />
                       <DropEdge
                         parentHierarchy={[drive]}
-                        position={index + 1}
+                        index={index + 1}
+                        prevSubject={child}
+                        nextSubject={subResources[index + 1]}
                       />
                     </Fragment>
                   );
