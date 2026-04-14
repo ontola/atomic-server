@@ -9,6 +9,8 @@ import {
   LoroUndoPlugin,
   LoroEphemeralCursorPlugin,
   CursorEphemeralStore,
+  redo as loroRedo,
+  undo as loroUndo,
   type LoroDocType,
 } from 'loro-prosemirror';
 import { TaskList, TaskItem } from '@tiptap/extension-list';
@@ -243,6 +245,25 @@ export default function CollaborativeEditor({
                   ]
                 : []),
             ];
+          },
+          // `LoroUndoPlugin` exposes the undo manager + ProseMirror
+          // `undo` / `redo` commands but does NOT register any
+          // keybindings. With `StarterKit`'s `undoRedo: false` above (we
+          // disable it because Loro is supposed to own undo history),
+          // `Mod-z` / `Mod-Shift-z` end up unhandled and the browser's
+          // native page-undo fires instead. Wire the commands here.
+          addKeyboardShortcuts() {
+            const exec =
+              (cmd: typeof loroUndo) =>
+              ({ editor: e }: { editor: Editor }) =>
+                cmd(e.state, e.view.dispatch.bind(e.view));
+
+            return {
+              'Mod-z': exec(loroUndo),
+              'Mod-Shift-z': exec(loroRedo),
+              // Common Windows redo binding kept in sync.
+              'Mod-y': exec(loroRedo),
+            };
           },
         }),
         TaskList,
