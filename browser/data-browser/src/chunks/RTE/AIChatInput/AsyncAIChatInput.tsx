@@ -75,11 +75,13 @@ const SerializableMention = Mention.extend({
 interface AsyncAIChatInputProps {
   hasFiles: boolean;
   disabled?: boolean;
+  disableSubmit?: boolean;
   large?: boolean;
   onMentionUpdate: (mentions: MentionItem[]) => void;
   onChange: (markdown: string) => void;
   onSubmit: () => void;
   onFileAdded?: (files: File[]) => void;
+  rightAlignedChildren?: React.ReactNode;
 }
 
 const AsyncAIChatInput: React.FC<
@@ -87,22 +89,25 @@ const AsyncAIChatInput: React.FC<
 > = ({
   children,
   hasFiles,
-  disabled,
-  large,
+  disabled = false,
+  disableSubmit = false,
+  large = false,
   onMentionUpdate,
   onChange,
   onSubmit,
   onFileAdded,
+  rightAlignedChildren,
 }) => {
   const store = useStore();
   const { drive } = useSettings();
   const { mcpServers } = useAISettings();
   const [markdown, setMarkdown] = useState('');
-
   const markdownRef = useRef(markdown);
   const onSubmitRef = useRef(onSubmit);
+  const disableSubmitRef = useRef(disableSubmit);
   markdownRef.current = markdown;
   onSubmitRef.current = onSubmit;
+  disableSubmitRef.current = disableSubmit;
 
   const { serversWithResources, searchResourcesOfServer } = useMcpServers();
 
@@ -121,6 +126,10 @@ const AsyncAIChatInput: React.FC<
                 // Check if the cursor is in a code block, if so allow the user to press enter.
                 // Pressing shift + enter will exit the code block.
                 if ('language' in this.editor.getAttributes('codeBlock')) {
+                  return false;
+                }
+
+                if (disableSubmitRef.current) {
                   return false;
                 }
 
@@ -208,18 +217,23 @@ const AsyncAIChatInput: React.FC<
       </EditorWrapper>
       <Row justify='space-between'>
         {children}
-        <IconButton
-          disabled={disabled || (markdown.length === 0 && !hasFiles)}
-          onClick={() => {
-            onSubmit();
-            setMarkdown('');
-            editor?.commands.clearContent();
-          }}
-          title='Send'
-          variant={IconButtonVariant.Fill}
-        >
-          <FaArrowRight />
-        </IconButton>
+        <Row center>
+          {rightAlignedChildren}
+          <IconButton
+            disabled={
+              disabled || disableSubmit || (markdown.length === 0 && !hasFiles)
+            }
+            onClick={() => {
+              onSubmit();
+              setMarkdown('');
+              editor?.commands.clearContent();
+            }}
+            title='Send'
+            variant={IconButtonVariant.Fill}
+          >
+            <FaArrowRight />
+          </IconButton>
+        </Row>
       </Row>
     </>
   );

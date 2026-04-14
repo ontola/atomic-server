@@ -39,6 +39,15 @@ import {
 /** Contains the PropertyURL / Value combinations */
 export type PropVals = Map<string, AtomicValue>;
 
+export interface MergeOptions {
+  replaceYDocs?: boolean;
+  /**
+   * Property keys to skip when merging: keep local values and do not delete them
+   * when missing from the remote resource.
+   */
+  omitKeysFromMerge?: string[];
+}
+
 /**
  * If a resource has no subject, it will have this subject. This means that the
  * Resource is not saved or fetched.
@@ -48,11 +57,13 @@ export const unknownSubject = 'unknown-subject';
 export enum ResourceEvents {
   LocalChange = 'local-change',
   LoadingChange = 'loading-change',
+  ResourceSaved = 'resource-saved',
 }
 
 type ResourceEventHandlers = {
   [ResourceEvents.LocalChange]: (prop: string, value: JSONValue) => void;
   [ResourceEvents.LoadingChange]: (loading: boolean) => void;
+  [ResourceEvents.ResourceSaved]: () => void;
 };
 
 /**
@@ -371,8 +382,13 @@ export class Resource<C extends OptionalClass = any> {
 
   /** Merges a resource into this resource. If this resource has uncommited changes those changes will be applied on top of the new propvals.
    * Any unsaved changes on the incoming resource will not be merged.
+   * @param options.replaceYDocs When true, each local Y.Doc is updated to match the remote document state (authoritative replace). When false (default), remote updates are CRDT-merged into the local doc.
+   * @param options.omitKeysFromMerge Keys to skip so local values are kept (including when absent on the remote resource).
    */
-  public merge(resourceB: Resource): void {
+  public merge(resourceB: Resource, options: MergeOptions = {}): void {
+    const replaceYDocs = options.replaceYDocs ?? false;
+    const omitKeysFromMerge = options.omitKeysFromMerge ?? [];
+
     if (this.subject !== resourceB.subject) {
       throw new Error('Cannot merge resources with different subjects');
     }
@@ -382,12 +398,20 @@ export class Resource<C extends OptionalClass = any> {
     // Remove any propvals that are not present in the remote resource.
     for (const [key] of this.propvals.entries()) {
       if (!remoteProps.has(key)) {
+        if (omitKeysFromMerge.includes(key)) {
+          continue;
+        }
+
         this.propvals.delete(key);
       }
     }
 
     // Merge the remote propvals into this resource.
     for (const [key, value] of remoteProps.entries()) {
+      if (omitKeysFromMerge.includes(key)) {
+        continue;
+      }
+
       // We handle YDoc instances separately because they need to be stable references.
       if (YLoader.isLoaded() && isYDoc(value)) {
         const Y = YLoader.Y;
@@ -395,6 +419,11 @@ export class Resource<C extends OptionalClass = any> {
 
         if (!localDoc) {
           this.setUnsafe(key, value);
+        } else if (replaceYDocs) {
+          const targetClone = new Y.Doc();
+          Y.applyUpdateV2(targetClone, Y.encodeStateAsUpdateV2(value));
+          const undoUpdate = this.createUndoUpdateFromVersion(key, targetClone);
+          Y.applyUpdateV2(localDoc, undoUpdate);
         } else {
           const remoteState = Y.encodeStateAsUpdateV2(value);
           Y.applyUpdateV2(localDoc, remoteState);
@@ -858,6 +887,7 @@ export class Resource<C extends OptionalClass = any> {
       // Let all subscribers know that the commit has been applied
       // store.addResources(this);
       this.store.notifyResourceSaved(this);
+      this.eventManager.emit(ResourceEvents.ResourceSaved);
 
       if (wasNew) {
         // The first `SUBSCRIBE` message will not have worked, because the resource didn't exist yet.
@@ -1001,10 +1031,16 @@ export class Resource<C extends OptionalClass = any> {
 
   /** Refetches the resource from the server. Will reset all changes to the latest saved version */
   public async refresh(): Promise<void> {
+    // Reset the commit builder so our changes don't get merged with the server version.
+    this.commitBuilder = new CommitBuilder(this.subject);
+
     await this.store.fetchResourceFromServer(this.subject, {
       noWebSocket: true,
       forceOverride: true,
     });
+
+    // Y.Doc updates during merge may repopulate the commit builder via local transactions.
+    this.commitBuilder = new CommitBuilder(this.subject);
   }
 
   private isParentNew() {

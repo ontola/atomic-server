@@ -1,16 +1,23 @@
 import ReactMarkdown, { Components } from 'react-markdown';
 import { styled } from 'styled-components';
 import remarkGFM from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
 import { Button } from '@components/Button';
 import { truncateMarkdown } from '@helpers/markdown';
 import { FC, useState } from 'react';
 import { AtomicLink, AtomicLinkProps } from '@components/AtomicLink';
-import { remarkMention, Mention } from './MarkdownMention';
-import { addFieldsIf } from '@helpers/addIf';
+import { remarkMention, Mention } from './markdown/MarkdownMention';
+import { addFieldsIf, addIf } from '@helpers/addIf';
+import { diffComponents, remarkDiff } from './markdown/MarkdownDiff';
 
 type Props = {
   text: string;
   renderGFM?: boolean;
+  /**
+   * Treat single newlines inside paragraphs as hard breaks (like GitHub).
+   * Use for diff output so line breaks match the source.
+   */
+  preserveLineBreaks?: boolean;
   /**
    * If this is set, and the markdown is more characters than this number, the
    * text will be truncated and a button will be shown
@@ -36,6 +43,7 @@ const ExternalLinkComponent = ({
 const Markdown: FC<Props> = ({
   text,
   renderGFM = true,
+  preserveLineBreaks = false,
   maxLength = 5000,
   className,
   nestedInLink = false,
@@ -50,7 +58,12 @@ const Markdown: FC<Props> = ({
   return (
     <MarkdownWrapper className={className}>
       <ReactMarkdown
-        remarkPlugins={renderGFM ? [remarkGFM, remarkMention] : [remarkMention]}
+        remarkPlugins={[
+          ...addIf(renderGFM, remarkGFM),
+          ...addIf(preserveLineBreaks, remarkBreaks),
+          remarkMention,
+          remarkDiff,
+        ]}
         disallowedElements={nestedInLink ? disableElementsInLink : undefined}
         components={
           {
@@ -58,6 +71,7 @@ const Markdown: FC<Props> = ({
             ...addFieldsIf(markExternalLinks, {
               a: ExternalLinkComponent,
             }),
+            ...diffComponents,
             // ReactMarkdowns typing only allows existing html elements but our plugin creates a new type. It works fine, the types are just too strict.
           } as unknown as Components
         }
@@ -82,6 +96,11 @@ const MarkdownWrapper = styled.div`
 
   * {
     white-space: unset;
+  }
+
+  ins,
+  del {
+    white-space: pre-wrap;
   }
 
   p,
@@ -146,6 +165,12 @@ const MarkdownWrapper = styled.div`
 
   a {
     word-break: break-word;
+  }
+
+  ins,
+  del {
+    /* Ensure they don't break lines unless the text does */
+    display: inline;
   }
 `;
 

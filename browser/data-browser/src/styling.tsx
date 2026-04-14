@@ -135,6 +135,12 @@ export const buildTheme = (darkMode: boolean, mainIn: string): DefaultTheme => {
       alert: '#cf5b5b',
       alertLight: '#e66f6f',
       warning: '#f5a623',
+      diff: {
+        addedBg: '#e4ffe4',
+        addedFg: '#003500',
+        removedBg: '#ffcdcd',
+        removedFg: '#2d0000',
+      },
     },
     animation: {
       duration: `${animationDuration}ms`,
@@ -232,6 +238,12 @@ declare module 'styled-components' {
       alert: string;
       alertLight: string;
       warning: string;
+      diff: {
+        addedBg: string;
+        addedFg: string;
+        removedBg: string;
+        removedFg: string;
+      };
     };
     animation: {
       duration: string;

@@ -23,6 +23,7 @@ import { LocaleProvider } from '@components/LocaleContext';
 import { CustomContextItemsProvider } from './components/ResourceContextMenu';
 import { LazyMCPProvider } from '@components/AI/MCP/LazyMCPProvider';
 import { CustomViewProvider } from '@components/CustomViewProvider';
+import { AIChangesProvider } from '@components/AIChangesContext';
 
 // Setup bugsnag for error handling, but only if there's an API key
 const ErrBoundary = window.bugsnagApiKey
@@ -73,8 +74,10 @@ export const Providers: React.FC<React.PropsWithChildren> = ({ children }) => {
                                   <DropdownContainer>
                                     <CustomContextItemsProvider>
                                       <NewResourceUIProvider>
-                                        <SkipNav />
-                                        <NavWrapper>{children}</NavWrapper>
+                                        <AIChangesProvider>
+                                          <SkipNav />
+                                          <NavWrapper>{children}</NavWrapper>
+                                        </AIChangesProvider>
                                       </NewResourceUIProvider>
                                     </CustomContextItemsProvider>
                                   </DropdownContainer>

@@ -43,10 +43,15 @@ type AgentCallback = (agent: Agent | undefined) => void;
 type ErrorCallback = (e: Error) => void;
 
 type ServerURLCallback = (serverURL: string) => void;
+
+/** Called when the server reports vector index activity for a drive (via websocket). */
+export type IndexingStatusCallback = (indexing: boolean) => void;
 type Fetch = typeof fetch;
 
 type AddResourcesOpts = {
   skipCommitCompare?: boolean;
+  /** When true, Y.Docs are replaced to match the remote state instead of CRDT-merging (used with refresh / forceOverride). */
+  replaceYDocsFromRemote?: boolean;
 };
 
 type CreateResourceOptions = {
@@ -96,6 +101,11 @@ export enum StoreEvents {
   ServerURLChanged = 'server-url-changed',
   /** Event that gets called whenever the store encounters an error */
   Error = 'error',
+  /**
+   * Vector search indexing for a drive root (from websocket `INDEX_STATUS`).
+   * Use `store.on(StoreEvents.Indexing, driveSubject, callback)`.
+   */
+  Indexing = 'indexing',
 }
 
 export interface ImportJsonADOptions {
@@ -115,6 +125,8 @@ type StoreEventHandlers = {
   [StoreEvents.AgentChanged]: AgentCallback;
   [StoreEvents.ServerURLChanged]: ServerURLCallback;
   [StoreEvents.Error]: ErrorCallback;
+  /** Only used via `on(Indexing, drive, cb)`; not emitted through EventManager. */
+  [StoreEvents.Indexing]: IndexingStatusCallback;
 };
 
 export interface ResourceTreeTemplate {
@@ -153,6 +165,11 @@ export class Store {
   private webSockets: Map<string, WSClient>;
 
   private eventManager = new EventManager<StoreEvents, StoreEventHandlers>();
+
+  private vectorIndexingSubscribers = new Map<
+    string,
+    Set<IndexingStatusCallback>
+  >();
 
   private client: Client;
 
@@ -200,7 +217,7 @@ export class Store {
    */
   public addResource(
     resource: Resource,
-    { skipCommitCompare }: AddResourcesOpts,
+    { skipCommitCompare, replaceYDocsFromRemote }: AddResourcesOpts,
   ): void {
     // The resource might be new and not have a store yet. We set it here.
     resource.setStore(this);
@@ -233,7 +250,9 @@ export class Store {
 
     // If the resource is already in the store, we merge it so code that depends on the resource will get the new values.
     if (storeResource) {
-      storeResource.merge(resource.__internalObject);
+      storeResource.merge(resource.__internalObject, {
+        replaceYDocs: replaceYDocsFromRemote,
+      });
       this.notify(storeResource);
     } else {
       this.resources.set(resource.subject, resource.__internalObject);
@@ -431,6 +450,7 @@ export class Store {
 
       this.addResources(createdResources, {
         skipCommitCompare: !!opts.forceOverride,
+        replaceYDocsFromRemote: !!opts.forceOverride,
       });
     }
 
@@ -868,6 +888,44 @@ export class Store {
   }
 
   /**
+   * Subscribe to vector index activity for a drive: registers `callback` for
+   * {@link StoreEvents.Indexing} and opens the websocket subscription
+   * (`SUBSCRIBE_INDEX_STATUS`). The server sends an immediate `INDEX_STATUS`.
+   * The returned function removes both the listener and the websocket subscription.
+   */
+  public subscribeIndexStatus(
+    driveSubject: string,
+    callback: IndexingStatusCallback,
+  ): () => void {
+    if (driveSubject === unknownSubject) {
+      return () => {};
+    }
+
+    const unsubEvent = this.on(StoreEvents.Indexing, driveSubject, callback);
+
+    try {
+      const ws =
+        this.getDefaultWebSocket() ?? this.getWebSocketForSubject(driveSubject);
+      ws?.subscribeIndexStatus(driveSubject);
+    } catch (e) {
+      console.error(e);
+    }
+
+    return () => {
+      unsubEvent();
+
+      try {
+        const ws =
+          this.getDefaultWebSocket() ??
+          this.getWebSocketForSubject(driveSubject);
+        ws?.unsubscribeIndexStatus(driveSubject);
+      } catch (e) {
+        console.error(e);
+      }
+    };
+  }
+
+  /**
    * Subscribe to Yjs Sync messages send over the websocket connection.
    * These sync messages can be used for realtime collaboration and are not persisted on the server.
    * For regular updates to normal values an ydocs use `store.subscribe()` instead.
@@ -991,8 +1049,65 @@ export class Store {
     }
   }
 
-  public on<T extends StoreEvents>(event: T, callback: StoreEventHandlers[T]) {
-    return this.eventManager.register(event, callback);
+  /**
+   * Notifies listeners registered with `on(StoreEvents.Indexing, drive, ...)`.
+   * Used when a websocket `INDEX_STATUS` message is received.
+   */
+  public __notifyIndexingStatus(drive: string, indexing: boolean): void {
+    const set = this.vectorIndexingSubscribers.get(drive);
+
+    if (!set) {
+      return;
+    }
+
+    for (const cb of set) {
+      try {
+        cb(indexing);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }
+
+  public on(
+    event: StoreEvents.Indexing,
+    drive: string,
+    callback: IndexingStatusCallback,
+  ): () => void;
+  public on<T extends Exclude<StoreEvents, StoreEvents.Indexing>>(
+    event: T,
+    callback: StoreEventHandlers[T],
+  ): () => void;
+  public on(
+    event: StoreEvents,
+    arg2: string | StoreEventHandlers[StoreEvents],
+    arg3?: IndexingStatusCallback,
+  ): () => void {
+    if (event === StoreEvents.Indexing && typeof arg2 === 'string' && arg3) {
+      const drive = arg2;
+      const callback = arg3;
+      let set = this.vectorIndexingSubscribers.get(drive);
+
+      if (!set) {
+        set = new Set();
+        this.vectorIndexingSubscribers.set(drive, set);
+      }
+
+      set.add(callback);
+
+      return () => {
+        set!.delete(callback);
+
+        if (set!.size === 0) {
+          this.vectorIndexingSubscribers.delete(drive);
+        }
+      };
+    }
+
+    return this.eventManager.register(
+      event as StoreEvents,
+      arg2 as StoreEventHandlers[StoreEvents],
+    );
   }
 
   /** Uploads files to atomic server and create resources for them, then returns the subjects.

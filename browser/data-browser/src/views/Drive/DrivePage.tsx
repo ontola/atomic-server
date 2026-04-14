@@ -19,10 +19,13 @@ import { WarningBlock } from '@components/WarningBlock';
 
 import { type JSX } from 'react';
 import { PluginList } from './PluginList';
+import { useVectorIndexStatus } from '@hooks/useVectorIndexStatus';
+import { VectorIndexingIndicator } from '@components/VectorIndexingIndicator';
 
 /** A View for Drives, which function similar to a homepage or dashboard. */
 function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
   const { drive: baseURL, setDrive: setBaseURL } = useSettings();
+  const vectorIndexing = useVectorIndexStatus();
 
   const defaultOntologyProp = useProperty(server.properties.defaultOntology);
   const canEdit = useCanWrite(resource);
@@ -34,8 +37,9 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
   return (
     <ContainerNarrow>
       <Column gap='2rem'>
-        <Row>
+        <Row align='center' gap='0.45rem'>
           <EditableTitle resource={resource} />
+          {vectorIndexing && <VectorIndexingIndicator />}
           {baseURL !== resource.subject && (
             <Button onClick={() => setBaseURL(resource.subject)}>
               Set as current drive

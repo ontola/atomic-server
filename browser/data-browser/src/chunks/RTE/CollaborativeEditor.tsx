@@ -1,18 +1,8 @@
 import { EditorContent, useEditor, type Editor } from '@tiptap/react';
-import { StarterKit } from '@tiptap/starter-kit';
-import { Link } from '@tiptap/extension-link';
 import { Placeholder } from '@tiptap/extension-placeholder';
-import { Typography } from '@tiptap/extension-typography';
 import Collaboration from '@tiptap/extension-collaboration';
 import CollaborationCaret from '@tiptap/extension-collaboration-caret';
-import TextAlign from '@tiptap/extension-text-align';
-import { TaskList, TaskItem } from '@tiptap/extension-list';
 import DragHandle from '@tiptap/extension-drag-handle-react';
-import {
-  Color,
-  BackgroundColor,
-  TextStyle,
-} from '@tiptap/extension-text-style';
 import { useEffect, useState } from 'react';
 import { TiptapContextProvider } from './TiptapContext';
 import { SlashCommands, buildSuggestion } from './SlashMenu/CommandsExtension';
@@ -20,7 +10,6 @@ import {
   ResourceCommands,
   buildResourceSuggestion,
 } from './ResourceExtension/ResourceExtention';
-import { ExtendedImage } from './ImagePicker';
 import * as Y from 'yjs';
 import {
   dataBrowser,
@@ -39,10 +28,6 @@ import { EditorWrapperBase } from './EditorWrapperBase';
 import styled, { useTheme } from 'styled-components';
 import { useSettings } from '@helpers/AppSettings';
 import { FullBubbleMenu } from './FullBubbleMenu';
-import {
-  ResourceNode,
-  ResourceNodeInline,
-} from './ResourceExtension/ResourceNode';
 import { IsInRTEContex } from '@hooks/useIsInRTE';
 import { FaCircleInfo, FaGripVertical, FaLink, FaTable } from 'react-icons/fa6';
 import { useUpload } from '@hooks/useUpload';
@@ -54,10 +39,17 @@ import { addIf } from '@helpers/addIf';
 import toast from 'react-hot-toast';
 import { Row } from '@components/Row';
 import { Button } from '@components/Button';
-import { Note } from './NoteExtention/NoteExtention';
 import { FloatingHint } from './FloatingHint';
-import { TableKit } from '@tiptap/extension-table';
 import { useCustomBodyColor } from '@hooks/useCustomBodyColor';
+import {
+  getDocumentCollaborationCoreExtensions,
+  getDocumentCollaborationResourceAndFormattingExtensions,
+} from './documentCollaborationExtensions';
+import { useAIChanges } from '@components/AIChangesContext';
+import { ComparePlugin } from './comparePlugin';
+import { useOnValueChange } from '@helpers/useOnValueChange';
+import { getProsemirrorObjFromYDoc } from './prosemirrorObjFromYDoc';
+import { registerCollaborativeDocumentEditor } from './collaborativeDocumentEditorRegistry';
 
 export type CollaborativeEditorProps = {
   placeholder?: string;
@@ -87,6 +79,10 @@ export default function CollaborativeEditor({
   const { upload } = useUpload(resource);
   const awareness = useYSync(resource, property, doc);
   const canWrite = useCanWrite(resource);
+  const [editorReady, setEditorReady] = useState(false);
+
+  const { oldResources, hasAIChanges } = useAIChanges();
+  const oldResource = oldResources[resource.subject] as Resource | undefined;
 
   const theme = useTheme();
   useCustomBodyColor(theme.colors.bg);
@@ -110,60 +106,21 @@ export default function CollaborativeEditor({
 
   const editor = useEditor(
     {
+      onCreate() {
+        setEditorReady(true);
+      },
       extensions: [
-        StarterKit.configure({
-          undoRedo: false,
-          link: false,
-          codeBlock: {
-            enableTabIndentation: true,
-          },
-        }),
-        Note,
-        Typography,
-        Link.extend({
-          parseHTML: () => [
-            {
-              tag: 'a[href]',
-              getAttrs: node => {
-                // Links with a data-type are custom nodes that should be ignored by the link extension
-                if (node.getAttribute('data-type')) {
-                  return false;
-                }
-
-                // Default link parsing
-                return {
-                  href: node.getAttribute('href'),
-                  target: node.getAttribute('target'),
-                };
-              },
-            },
-          ],
-        }).configure({
-          autolink: true,
-          openOnClick: true,
-          protocols: [
-            'http',
-            'https',
-            'mailto',
-            {
-              scheme: 'tel',
-              optionalSlashes: true,
-            },
-          ],
-          HTMLAttributes: {
-            class: 'tiptap-link',
-            rel: 'noopener noreferrer',
-            target: '_blank',
-          },
-        }),
-        ExtendedImage.configure({
+        ...getDocumentCollaborationCoreExtensions({
           uploadImage: upload,
-          HTMLAttributes: {
-            class: 'tiptap-image',
-          },
         }),
         Placeholder.configure({
           placeholder: placeholder ?? 'Start typing...',
+        }),
+        ComparePlugin.configure({
+          comparisonContent: '',
+          classAdded: 'diff-added',
+          classRemoved: 'diff-removed',
+          classRemovedNode: 'diff-removed-node',
         }),
         SlashCommands.configure({
           suggestion: buildSuggestion(document.body, [
@@ -215,12 +172,7 @@ export default function CollaborativeEditor({
         ResourceCommands.configure({
           suggestion: buildResourceSuggestion(document.body, store, drive),
         }),
-        ResourceNode.configure({
-          store,
-        }),
-        ResourceNodeInline.configure({
-          store,
-        }),
+        ...getDocumentCollaborationResourceAndFormattingExtensions(store),
         Collaboration.configure({
           document: doc,
           field: 'content',
@@ -237,17 +189,6 @@ export default function CollaborativeEditor({
             },
           }),
         ),
-        TextAlign.configure({
-          types: ['heading', 'paragraph'],
-        }),
-        TaskList,
-        TaskItem.configure({
-          nested: true,
-        }),
-        TextStyle,
-        TableKit,
-        Color,
-        BackgroundColor,
         FileHandler.configure({
           allowedMimeTypes: Array.from(supportedImageTypes),
           onDrop: (currentEditor, files, pos) => {
@@ -310,6 +251,14 @@ export default function CollaborativeEditor({
   );
 
   useEffect(() => {
+    if (!editor || !editorReady) {
+      return;
+    }
+
+    return registerCollaborativeDocumentEditor(resource.subject, editor);
+  }, [editor, editorReady, resource.subject]);
+
+  useEffect(() => {
     if (agentResource) {
       editor.commands.updateUser?.({
         name: agentResource.props.name ?? 'Untitled Agent',
@@ -317,6 +266,25 @@ export default function CollaborativeEditor({
       });
     }
   }, [agentResource, editor.commands, color, canWrite]);
+
+  useOnValueChange(
+    () => {
+      if (!editorReady) return;
+
+      if (hasAIChanges(resource.subject)) {
+        if (!oldResource) return;
+
+        const oldYDoc = oldResource.get(dataBrowser.properties.documentContent);
+        const oldDoc = getProsemirrorObjFromYDoc(oldYDoc, editor.schema);
+
+        editor.commands.setComparisonContent(oldDoc);
+      } else {
+        editor.commands.setComparisonContent('');
+      }
+    },
+    [hasAIChanges(resource.subject), editorReady, oldResource],
+    true,
+  );
 
   return (
     <IsInRTEContex value={true}>
@@ -330,7 +298,10 @@ export default function CollaborativeEditor({
               Type &apos;/&apos; for options or &apos;@&apos; for resources
             </FloatingHint>
             <FullBubbleMenu />
-            <EditorEvents onChange={save} />
+            <EditorEvents
+              onChange={save}
+              disable={hasAIChanges(resource.subject)}
+            />
           </EditorContent>
           <ClickUnderHandler onClick={() => editor?.commands.focus('end')} />
         </StyledEditorWrapper>
@@ -359,6 +330,18 @@ export const StyledEditorWrapper = styled(EditorWrapperBase)`
     width: 100%;
     ::spelling-error {
       text-decoration: wavy red underline;
+    }
+
+    .diff-added {
+      background-color: ${p => p.theme.colors.diff.addedBg};
+      color: ${p => p.theme.colors.diff.addedFg};
+    }
+
+    .diff-removed,
+    .diff-removed-node {
+      background-color: ${p => p.theme.colors.diff.removedBg};
+      color: ${p => p.theme.colors.diff.removedFg};
+      text-decoration: line-through;
     }
   }
   .drag-handle {

@@ -1,6 +1,6 @@
 import { visit } from 'unist-util-visit';
 import { useMemo, FC } from 'react';
-import { AtomicLink } from '../AtomicLink';
+import { AtomicLink } from '../../AtomicLink';
 import { useResource } from '@tomic/react';
 import { styled } from 'styled-components';
 

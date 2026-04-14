@@ -477,7 +477,6 @@ msgstr "Kein Subjekt übergeben"
 msgid "Loading {0}..."
 msgstr "{0} wird geladen..."
 
-#: src/chunks/AI/RealAIChat.tsx
 #: src/routes/DataRoute.tsx
 msgid "Accept"
 msgstr "Akzeptieren"
@@ -685,14 +684,6 @@ msgstr "Sie haben keinen Zugriff darauf, versuchen Sie sich anzumelden:"
 #: src/views/ErrorPage.tsx
 msgid "Could not open {0}"
 msgstr "Konnte {0} nicht öffnen"
-
-#: src/views/ErrorPage.tsx
-msgid "Hard reset"
-msgstr "Hard Reset"
-
-#: src/views/ErrorPage.tsx
-msgid "Clear all local data & refresh page"
-msgstr "Alle lokalen Daten löschen und Seite neu laden"
 
 #: src/views/ErrorPage.tsx
 msgid "Use proxy"
@@ -955,10 +946,6 @@ msgstr "Generiere"
 #: src/chunks/AI/RealAIChat.tsx
 msgid "Stop generating"
 msgstr "Generierung stoppen"
-
-#: src/chunks/AI/RealAIChat.tsx
-msgid "Unsaved changes"
-msgstr "Nicht gespeicherte Änderungen"
 
 #: src/chunks/AI/RealAIChat.tsx
 msgid "Remove file"
@@ -1230,6 +1217,8 @@ msgid "Edit permissions and create invites."
 msgstr "Berechtigungen bearbeiten und Einladungen erstellen."
 
 #: src/components/ResourceContextMenu/index.tsx
+#: src/routes/History/HistoryDesktopView.tsx
+#: src/routes/History/HistoryMobileView.tsx
 msgid "History"
 msgstr "Verlauf"
 
@@ -2097,11 +2086,6 @@ msgstr "Tag bearbeiten"
 msgid "Attached File"
 msgstr "Angehängte Datei"
 
-#. placeholder {0}: ' '
-#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
-msgid "Fetching{0} <0/>"
-msgstr "Abrufen{0} <0/>"
-
 #. placeholder {0}: propertyResource.title
 #. placeholder {1}: resource.title
 #: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
@@ -2508,6 +2492,8 @@ msgstr "Die Kennung der Ressource. Dies bestimmt standardmäßig auch, wo die Re
 
 #: src/chunks/RTE/CollaborativeEditor.tsx
 #: src/components/forms/NewForm/NewFormTitle.tsx
+#: src/routes/History/HistoryDesktopView.tsx
+#: src/routes/History/HistoryMobileView.tsx
 #: src/views/Plugin/AssignRights.tsx
 msgid "Resource"
 msgstr "Ressource"
@@ -3245,11 +3231,8 @@ msgstr "Installieren"
 msgid "Failed to create message resource"
 msgstr "Nachrichtenressource konnte nicht erstellt werden"
 
-#: src/chunks/AI/RealAIChat.tsx
-msgid "Changes Saved!"
-msgstr "Änderungen gespeichert!"
-
-#: src/chunks/AI/RealAIChat.tsx
+#: src/components/AIChangesContext.tsx
+#: src/components/Parent.tsx
 msgid "Failed to save changes"
 msgstr "Änderungen konnten nicht gespeichert werden."
 
@@ -3445,3 +3428,82 @@ msgstr "Verwendete Tokens: {0} Eingabe,{1} {2} Ausgabe"
 #: src/components/SideBar/AIPanel.tsx
 msgid "Untitled Chat"
 msgstr "Unbenannter Chat"
+
+#: src/routes/History/HistoryDesktopView.tsx
+#: src/routes/History/HistoryMobileView.tsx
+msgid "1 Change"
+msgid_plural "# Changes"
+msgstr[0] "1 Änderung"
+msgstr[1] "# Änderungen"
+
+#: src/components/ResourceDiff/ResourceDiff.tsx
+#: src/components/ResourceDiff/ResourceDiff.tsx
+#: src/components/ResourceDiff/ResourceDiff.tsx
+#: src/components/ResourceDiff/ResourceDiff.tsx
+#: src/components/ResourceDiff/ResourceDiff.tsx
+#: src/components/ResourceDiff/ResourceDiff.tsx
+msgid "unset"
+msgstr "nicht gesetzt"
+
+#: src/components/AIChangesContext.tsx
+msgid "Review Edits"
+msgstr "Änderungen überprüfen"
+
+#: src/components/Parent.tsx
+msgid "Revert"
+msgstr "Rückgängig machen"
+
+#: src/components/AIChangesContext.tsx
+msgid "Revert Changes"
+msgstr "Änderungen rückgängig machen"
+
+#: src/components/AIChangesContext.tsx
+msgid "Confirm Changes"
+msgstr "Änderungen bestätigen"
+
+#: src/components/VectorIndexingIndicator.tsx
+#: src/components/VectorIndexingIndicator.tsx
+msgid "Indexing vector data for this drive. AI search may be briefly out of date."
+msgstr "Vektordaten werden für dieses Laufwerk indiziert. Die KI-Suche ist möglicherweise kurzzeitig nicht aktuell."
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Indexing"
+msgstr "Indizierung"
+
+#: src/components/Parent.tsx
+msgid "Accept Changes"
+msgstr "Änderungen akzeptieren"
+
+#. placeholder {0}: resource.title
+#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
+msgid "Editing {0}"
+msgstr "„{0}“ wird bearbeitet"
+
+#: src/components/AIChangesContext.tsx
+msgid "edit"
+msgid_plural "edits"
+msgstr[0] "Bearbeitung"
+msgstr[1] "Bearbeitungen"
+
+#. placeholder {0}: editCount
+#. placeholder {1}: plural(editCount, ['edit', 'edits'])
+#: src/components/AIChangesContext.tsx
+msgid "Review {0} {1}"
+msgstr "Überprüfe {0} {1}"
+
+#: src/chunks/RTE/comparePlugin.ts
+msgid "No alt text"
+msgstr "Kein Alternativtext"
+
+#: src/chunks/RTE/applyPatchedJsonToYDocCollaborative.ts
+msgid "Editor was destroyed before it finished initializing"
+msgstr "Der Editor wurde zerstört, bevor er die Initialisierung abgeschlossen hat."
+
+#. placeholder {0}: ' '
+#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
+msgid "Reading{0} <0/>"
+msgstr "Lese{0} <0/>"
+
+#: src/routes/History/HistoryRoute.tsx
+msgid "No version history for this resource."
+msgstr "Keine Versionshistorie für diese Ressource."

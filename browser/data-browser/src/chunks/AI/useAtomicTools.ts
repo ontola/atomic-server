@@ -14,6 +14,7 @@ import { useSettings } from '@helpers/AppSettings';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import { constructOpenURL } from '@helpers/navigation';
 import { toClassObject, toClassString } from './atomicSchemaHelpers';
+import { useDocumentEditAgent } from './documentEditAgent';
 
 export const TOOL_NAMES = {
   SEMANTIC_SEARCH: 'semantic_search',
@@ -22,6 +23,7 @@ export const TOOL_NAMES = {
   READ_FILE_RESOURCE: 'read_file_resource',
   GET_SCHEMA: 'get_schema',
   EDIT_ATOMIC_RESOURCE: 'edit_atomic_resource',
+  EDIT_DOCUMENT_RESOURCE: 'edit_document_resource',
   CHANGE_THEME: 'change_theme',
   NAVIGATE_TO_RESOURCE: 'navigate_to_resource',
   CREATE_RESOURCE: 'create_resource',
@@ -67,7 +69,7 @@ async function getClassesOnDrive(
 }
 
 interface UseAtomicMCPToolsProps {
-  onResourceEdited?: (subject: string) => void;
+  onResourceEdited?: (originalResource: Resource) => void;
 }
 
 export function useAtomicMCPTools({
@@ -76,6 +78,7 @@ export function useAtomicMCPTools({
   const store = useStore();
   const navigate = useNavigateWithTransition();
   const { drive } = useSettings();
+  const runDocumentEdit = useDocumentEditAgent();
 
   const tools = {
     read: {
@@ -93,7 +96,7 @@ export function useAtomicMCPTools({
           description: z
             .string()
             .describe(
-              'A short one sentence description of the query to tell the user what you are doing. For example: "Looking at your todo\'s" or "Searching for data about x',
+              'A short one sentence description of the query to tell the user what you are doing. For example: "Looking at your todo\'s" or "Searching for x',
             ),
           limit: z
             .number()
@@ -102,7 +105,7 @@ export function useAtomicMCPTools({
           parents: z
             .array(z.string())
             .describe(
-              "A list of subjects of resources to scope the search to. This should be a list of ancestors of the resources you're looking for.",
+              "A list of subjects of resources to scope the search to. This should be a list of ancestors of the resources you're looking for. Only use this parameter if you are looking in a specific drive or folder.",
             )
             .optional(),
         }),
@@ -113,7 +116,7 @@ export function useAtomicMCPTools({
 
           const results = await store.semanticSearch(query, {
             limit,
-            parents: parents ?? [drive],
+            parents: parents && parents.length !== 0 ? parents : [drive],
             text_query,
           });
 
@@ -349,16 +352,78 @@ export function useAtomicMCPTools({
         }),
         execute: async ({ subject, property, value }) => {
           const resource = await store.getResource(subject);
+          const originalResource = resource.clone();
 
           try {
             await resource.set(property, value as JSONValue);
 
             // Notify parent component about the edited resource
-            onResourceEdited?.(subject);
+            onResourceEdited?.(originalResource);
 
             return `Changed property ${property} on resource ${subject} to ${value}`;
           } catch (error) {
             return `Error changing property ${property} on resource ${subject}: ${error}`;
+          }
+        },
+        strict: true,
+      }),
+      [TOOL_NAMES.EDIT_DOCUMENT_RESOURCE]: tool({
+        description: `Use this tool to instruct edits to a document-v2 resource.
+
+A simple model will use it to apply the edit to the document. You should make it clear what the edit is but still make sure not to write too much unchanged text.
+The edit should be specified using an XML like syntax: include context in a \`<unchanged-text>\` tag, and the change in an \`<edit>\` tag.
+
+For example:
+
+\`\`\`xml
+<unchanged-text>
+The following points need addressing:
+  - No more breaks longer than 20 minutes.
+</unchanged-text>
+<edit type="block">
+  - Add a new section on the topic of "Remote work".
+</edit>
+\`\`\`
+
+If you are editing text in multiple places you can add multiple \`<edit>\` elements but each edit element should always be preceded by a \`<unchanged-text>\` element that contains the unchanged text.
+When you are appending something to a line use the \`type="inline"\` attribute on the \`<edit>\` element, otherwise use \`type="block"\`.
+Try to repeat as few lines of the unchanged text as possible to convey the change.
+However there should be enough unchanged text to help the smaller model figure out where the edit should be applied.
+NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` element to indicate their absence. If you do, the smaller model may delete these lines.`,
+        inputSchema: z.object({
+          subject: z
+            .string()
+            .describe('The subject of the document resource to edit'),
+          instruction: z
+            .string()
+            .describe(
+              "A single sentence instruction describing what you are going to do for the sketched edit. This is used to assist the less intelligent model in applying the edit. Please use the first person to describe what I am going to do. Don't repeat what I have said previously in normal messages. And use it to disambiguate uncertainty in the edit.",
+            ),
+          edit: z
+            .string()
+            .describe(
+              'Specify ONLY the precise lines of text that you wish to edit. **NEVER specify or write out unchanged text**. Instead, represent all unchanged text using the `<unchanged-text>` element.',
+            ),
+        }),
+        execute: async ({ subject, instruction, edit }) => {
+          const resource = await store.getResource(subject);
+          const originalResource = resource.clone();
+
+          try {
+            const result = await runDocumentEdit(
+              subject,
+              instruction,
+              edit,
+              () => onResourceEdited?.(originalResource),
+            );
+
+            if (result.startsWith('Error:')) {
+              return result;
+            }
+
+            return result;
+          } catch (error) {
+            return `Error editing document ${subject}: ${error}`;
           }
         },
         strict: true,

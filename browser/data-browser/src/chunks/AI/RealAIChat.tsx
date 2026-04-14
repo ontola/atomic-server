@@ -1,6 +1,5 @@
 import React, { useRef, useState } from 'react';
 import { Column, Row } from '@components/Row';
-import toast from 'react-hot-toast';
 import { useAtomicMCPTools } from './useAtomicTools';
 import { AIChatMessage } from './AIChatMessage';
 import { type FileUIPart } from 'ai';
@@ -15,11 +14,10 @@ import {
   FaXmark,
   FaPaperclip,
   FaFile,
-  FaCheck,
   FaGlobe,
 } from 'react-icons/fa6';
 import { ChatMessagesContainer } from './ChatMessagesContainer';
-import { useStore } from '@tomic/react';
+import { useStore, type Resource } from '@tomic/react';
 import { AIProvider } from '@components/AI/aiContstants';
 import {
   AIAgent,
@@ -30,7 +28,6 @@ import {
   type AtomicUIMessage,
 } from './types';
 import { AgentConfig, useAIAgentConfig } from './AgentConfig';
-import { Button } from '@components/Button';
 import { MessageContextItem } from './MessageContextItem';
 import { useProcessMessages } from './useProcessMessages';
 import { NoKeyOverlay } from './NoKeyOverlay';
@@ -45,6 +42,9 @@ import UsesMCPServers from '@components/AI/MCP/UsesMCPServers';
 import { useRAG } from './useRAG';
 import { useOnValueChange } from '@helpers/useOnValueChange';
 import { transition } from '@helpers/transition';
+import { useAIChanges } from '@components/AIChangesContext';
+import { useVectorIndexStatus } from '@hooks/useVectorIndexStatus';
+import { Spinner } from '@components/Spinner';
 
 const AIChatInput = React.lazy(
   () => import('@chunks/RTE/AIChatInput/AsyncAIChatInput'),
@@ -119,13 +119,22 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [userInput, setUserInput] = useState('');
-  const [editedResources, setEditedResources] = useState<string[]>([]);
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<AIAgent>(
     getInitialAgent(!chatSubject, chatSubject),
   );
 
-  const canSubmit =
+  const vectorIndexing = useVectorIndexStatus();
+
+  // The user should be blocked from posting if the indexes are updating while using an agent that is dependent on those indexes.
+  const disableSubmit =
+    vectorIndexing &&
+    (autoAgentSelectEnabled ||
+      selectedAgent.canReadAtomicData ||
+      selectedAgent.ragEnabled);
+
+  const { reportAIEdit } = useAIChanges();
+  const canUseInput =
     autoAgentSelectEnabled || isProviderEnabled(selectedAgent.model.provider);
 
   const [userSelectedContextItems, setUserSelectedContextItems] = useState<
@@ -140,14 +149,8 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     selectedAgent.model.provider === AIProvider.OpenRouter;
 
   const { tools: atomicTools } = useAtomicMCPTools({
-    onResourceEdited: (subject: string) => {
-      setEditedResources(prev => {
-        if (!prev.includes(subject)) {
-          return [...prev, subject];
-        }
-
-        return prev;
-      });
+    onResourceEdited: (originalResource: Resource) => {
+      reportAIEdit(originalResource);
     },
   });
 
@@ -231,23 +234,6 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     });
 
     setUserSelectedContextItems(newContextItems);
-  };
-
-  const handleAcceptChanges = async () => {
-    try {
-      // Save all edited resources
-      await Promise.all(
-        editedResources.map(subject =>
-          store.getResource(subject).then(resource => resource.save()),
-        ),
-      );
-      // Clear the edited resources list after saving
-      setEditedResources([]);
-      toast.success('Changes Saved!');
-    } catch (error) {
-      console.error('Error saving changes:', error);
-      toast.error('Failed to save changes');
-    }
   };
 
   const checkModelSupportsImageInput = (model: AIModelIdentifier) => {
@@ -388,17 +374,6 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
             <ChatInputWrapper>
               <Column fullWidth gap='none' style={{ position: 'relative' }}>
                 <FloatingChatWidgetsContainer>
-                  {editedResources.length > 0 && (
-                    <UnsavedChangesIndicator>
-                      <Row center gap='1ch' justify='flex-end'>
-                        <span>Unsaved changes</span>
-                        <AcceptButton onClick={handleAcceptChanges}>
-                          <FaCheck />
-                          <span>Accept</span>
-                        </AcceptButton>
-                      </Row>
-                    </UnsavedChangesIndicator>
-                  )}
                   {attachedFiles.length > 0 && (
                     <Row gap='1ch' wrapItems>
                       {attachedFiles.map(file => (
@@ -449,7 +424,8 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                 )}
                 <AIChatInput
                   large={isEmptyChat && fullView}
-                  disabled={!canSubmit}
+                  disabled={!canUseInput}
+                  disableSubmit={disableSubmit}
                   hasFiles={!!attachedFiles}
                   onMentionUpdate={handleMentionUpdate}
                   onChange={setUserInput}
@@ -458,6 +434,14 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                     checkModelSupportsImageInput(selectedAgent.model)
                       ? handleFileUpload
                       : undefined
+                  }
+                  rightAlignedChildren={
+                    vectorIndexing && (
+                      <IndexingIndicator center gap='0.5rem'>
+                        <Spinner size='1.1rem' inheritColor />
+                        <span>Indexing</span>
+                      </IndexingIndicator>
+                    )
                   }
                 >
                   <Row gap='0.5rem'>
@@ -627,19 +611,6 @@ const SubtleButton = styled.button`
   }
 `;
 
-// New styled components for the Unsaved Changes indicator
-const UnsavedChangesIndicator = styled.div`
-  color: ${p => p.theme.colors.text};
-  padding: ${p => p.theme.size(1)} ${p => p.theme.size(2)};
-  border-radius: ${p => p.theme.radius};
-  font-size: 0.85rem;
-`;
-
-const AcceptButton = styled(Button)`
-  padding: ${p => p.theme.size(1)} ${p => p.theme.size(2)};
-  font-size: 0.75rem;
-`;
-
 const FloatingChatWidgetsContainer = styled.div`
   display: flex;
   flex-direction: column;
@@ -655,4 +626,8 @@ const FloatingChatWidgetsContainer = styled.div`
 
 const ContextItemRow = styled(Row)`
   padding-inline: ${p => p.theme.size(2)};
+`;
+
+const IndexingIndicator = styled(Row)`
+  color: ${p => p.theme.colors.textLight};
 `;

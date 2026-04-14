@@ -2,8 +2,8 @@ import { getStaticToolName, type ToolUIPart } from 'ai';
 import { styled } from 'styled-components';
 import { Row } from '@components/Row';
 import {
-  FaAtom,
   FaBook,
+  FaEye,
   FaMagnifyingGlass,
   FaPencil,
   FaWrench,
@@ -59,10 +59,11 @@ const getIcon = (toolName: string) => {
     case TOOL_NAMES.QUERY:
       return FaMagnifyingGlass;
     case TOOL_NAMES.GET_ATOMIC_RESOURCE:
-      return FaAtom;
+      return FaEye;
     case TOOL_NAMES.GET_SCHEMA:
       return FaBook;
     case TOOL_NAMES.EDIT_ATOMIC_RESOURCE:
+    case TOOL_NAMES.EDIT_DOCUMENT_RESOURCE:
       return FaPencil;
     default:
       return FaWrench;
@@ -90,6 +91,13 @@ const ToolTitle = ({
     return <EditTitle property={args.property} subject={args.subject} />;
   }
 
+  if (
+    toolName === TOOL_NAMES.EDIT_DOCUMENT_RESOURCE &&
+    isEditDocumentArgs(args)
+  ) {
+    return <EditDocumentTitle subject={args.subject} />;
+  }
+
   if (toolName === TOOL_NAMES.QUERY && isQueryArgs(args)) {
     return <span>{args.description}</span>;
   }
@@ -112,7 +120,7 @@ const ToolTitle = ({
 const FetchResourceTitle = ({ subjects }: { subjects: string[] }) => {
   return (
     <span>
-      Fetching{' '}
+      Reading{' '}
       <InlineFormattedResourceList
         subjects={subjects}
         RenderComp={ResourceTitle}
@@ -149,6 +157,12 @@ const EditTitle = ({
   );
 };
 
+const EditDocumentTitle = ({ subject }: { subject: string }) => {
+  const resource = useResource(subject);
+
+  return <span>Editing {resource.title}</span>;
+};
+
 function isVectorSearchArgs(
   args: unknown,
 ): args is { query: string; description: string } {
@@ -177,6 +191,18 @@ function isEditArgs(
     'subject' in args &&
     'property' in args &&
     'value' in args
+  );
+}
+
+function isEditDocumentArgs(
+  args: unknown,
+): args is { subject: string; instruction: string; edit: string } {
+  return (
+    typeof args === 'object' &&
+    args !== null &&
+    'subject' in args &&
+    'instruction' in args &&
+    'edit' in args
   );
 }
 

@@ -14,6 +14,11 @@ export const LazyMCPContext = createContext<LazyMCPContextType>({
   isLoaded: false,
 });
 
+/**
+ * Provider wrapper for the MCPServersProvider.
+ * Because MCP logic uses severel larger libraries we want to defer loading the provider until it is needed by an AI chat.
+ * Therefore any AI entrypoint component should call the load function to start loading the provider.
+ */
 export const LazyMCPProvider: React.FC<React.PropsWithChildren> = ({
   children,
 }) => {

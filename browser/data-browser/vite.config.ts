@@ -157,7 +157,8 @@ export default defineConfig({
       },
     }),
     prismjs({
-      languages: ['typescript'],
+      languages: ['typescript', 'json', 'diff'],
+      plugins: ['diff-highlight'],
       css: true,
       theme: 'default',
     }),

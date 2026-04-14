@@ -8,7 +8,7 @@ import { useSettings } from '../helpers/AppSettings';
 import { ResourcePageProps } from './ResourcePage';
 import { Column, Row } from '../components/Row';
 import CrashPage from './CrashPage';
-import { clearAllLocalData } from '../helpers/clearData';
+// import { clearAllLocalData } from '../helpers/clearData';
 
 import type { JSX } from 'react';
 
@@ -64,12 +64,12 @@ function ErrorPage({ resource }: ResourcePageProps): JSX.Element {
           >
             Retry
           </Button>
-          <Button
+          {/* <Button
             title='Clear all local data & refresh page'
             onClick={clearAllLocalData}
           >
             Hard reset
-          </Button>
+          </Button> */}
           <Button
             onClick={() =>
               store.fetchResourceFromServer(resource.subject, {

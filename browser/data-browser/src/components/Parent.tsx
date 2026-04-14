@@ -21,6 +21,8 @@ import type { JSX } from 'react';
 import { useAISidebar } from './AI/AISidebarContext';
 import { AIIcon } from './AI/AIIcon';
 import { useAISettings } from './AI/AISettingsContext';
+import { useAIChanges } from './AIChangesContext';
+import toast from 'react-hot-toast';
 
 type ParentProps = {
   resource: Resource;
@@ -29,8 +31,20 @@ type ParentProps = {
 /** Breadcrumb list. Recursively renders parents. */
 function Parent({ resource }: ParentProps): JSX.Element {
   const [parent] = useString(resource, core.properties.parent);
+  const { changes, revertResource } = useAIChanges();
   const { enableAI } = useAISettings();
   const { setIsOpen } = useAISidebar();
+
+  const hasAiChanges = changes.includes(resource.subject);
+
+  const handleAcceptChanges = async () => {
+    try {
+      await resource.save();
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to save changes');
+    }
+  };
 
   return (
     <ParentWrapper aria-label='Breadcrumbs'>
@@ -41,6 +55,16 @@ function Parent({ resource }: ParentProps): JSX.Element {
       </BreadcrumbRow>
       <Spacer />
       <ButtonArea>
+        {hasAiChanges && (
+          <Row gap='0.5rem' center>
+            <SmallButton clean onClick={() => revertResource(resource.subject)}>
+              Revert
+            </SmallButton>
+            <SmallButton onClick={handleAcceptChanges}>
+              Accept Changes
+            </SmallButton>
+          </Row>
+        )}
         {enableAI && (
           <IconButton
             title='Toggle AI panel'
@@ -197,7 +221,14 @@ const Spacer = styled.span`
 const ButtonArea = styled.div`
   display: flex;
   justify-self: flex-end;
+  align-items: center;
   color: ${p => p.theme.colors.textLight};
 `;
 
 export default Parent;
+
+const SmallButton = styled(Button)`
+  font-size: 0.7rem;
+  padding: 0.1rem 0.5rem;
+  height: 1.5rem;
+`;

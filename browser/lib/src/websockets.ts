@@ -217,6 +217,33 @@ export class WSClient {
     this.ws.send('UNSUBSCRIBE ' + subject);
   }
 
+  /** Subscribe to vector index status updates for a drive root (see server `SUBSCRIBE_INDEX_STATUS`). */
+  public subscribeIndexStatus(drive: string): void {
+    this.authPromise
+      .catch(() => {
+        // Authentication errors are handled in authenticate()
+      })
+      .finally(() => {
+        if (this.readyState !== WebSocket.OPEN) {
+          console.warn(
+            'WebSocket is not open, cannot subscribe to index status',
+          );
+
+          return;
+        }
+
+        this.ws.send('SUBSCRIBE_INDEX_STATUS ' + JSON.stringify({ drive }));
+      });
+  }
+
+  public unsubscribeIndexStatus(drive: string): void {
+    if (this.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    this.ws.send('UNSUBSCRIBE_INDEX_STATUS ' + JSON.stringify({ drive }));
+  }
+
   public subscribeYSync(subject: string, property: string): void {
     if (this.readyState !== WebSocket.OPEN) {
       console.warn('WebSocket is not open, cannot subscribe to YSync');
@@ -300,6 +327,15 @@ export class WSClient {
       this.store.__handleAwarenessUpdateMessage(update);
     } else if (ev.data.startsWith('AUTHENTICATED')) {
       // Do nothing, handled by the authenticate() method
+    } else if (ev.data.startsWith('INDEX_STATUS ')) {
+      const json = ev.data.slice('INDEX_STATUS '.length);
+
+      try {
+        const parsed = JSON.parse(json) as { drive: string; indexing: boolean };
+        this.store.__notifyIndexingStatus(parsed.drive, parsed.indexing);
+      } catch {
+        console.warn('Invalid INDEX_STATUS message:', json);
+      }
     } else {
       console.warn('Unknown websocket message:', ev);
     }

@@ -4,29 +4,7 @@ import {
   type DataBrowser,
   type Resource,
 } from '@tomic/react';
-import * as Y from 'yjs';
-
-const extractText = (doc: Y.Doc, maxLength?: number) => {
-  const fragment = doc.getXmlFragment('content');
-  let text = '';
-
-  for (const node of fragment.createTreeWalker(() => true)) {
-    if (node instanceof Y.XmlText) {
-      text += node.toString().replace(/<[^>]*>?/g, '');
-    }
-
-    if (node instanceof Y.XmlElement) {
-      text += ' ';
-    }
-
-    if (maxLength !== undefined && text.length > maxLength) {
-      text += '...';
-      break;
-    }
-  }
-
-  return text.trim();
-};
+import { extractPlainTextFromYDoc } from '@chunks/RTE/extractPlainTextFromYDoc';
 
 /**
  * Extracts plain text from the yDoc in a document-v2 resource.
@@ -42,5 +20,5 @@ export function useDocumentText(
     return null;
   }
 
-  return extractText(doc, maxLength);
+  return extractPlainTextFromYDoc(doc, maxLength);
 }

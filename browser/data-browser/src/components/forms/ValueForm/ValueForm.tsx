@@ -12,6 +12,11 @@ import {
 import ValueComp from '../../ValueComp';
 import { useSettings } from '../../../helpers/AppSettings';
 import { ValueFormEdit } from './ValueFormEdit';
+import { useAIChanges } from '@components/AIChangesContext';
+import {
+  ChangeSwitcher,
+  isPropEqual,
+} from '@components/ResourceDiff/ResourceDiff';
 
 interface ValueFormProps {
   // Maybe pass Value instead of Resource?
@@ -29,6 +34,14 @@ interface ValueFormProps {
  * on a button to turn it into an input.
  */
 export function ValueForm({ resource, propertyURL, datatype }: ValueFormProps) {
+  const { changes, oldResources } = useAIChanges();
+  const hasAiChanges = changes.includes(resource.subject);
+  const oldResource = oldResources[resource.subject];
+  const valueChangedByAi =
+    hasAiChanges &&
+    oldResource !== undefined &&
+    !isPropEqual(oldResource.get(propertyURL), resource.get(propertyURL));
+
   const [editMode, setEditMode] = useState(false);
   const property = useProperty(propertyURL);
   const [value] = useValue(resource, propertyURL);
@@ -60,7 +73,16 @@ export function ValueForm({ resource, propertyURL, datatype }: ValueFormProps) {
   if (!editMode) {
     return (
       <ValueFormWrapper>
-        <ValueComp value={value} datatype={datatype || property.datatype} />
+        {valueChangedByAi ? (
+          <ChangeSwitcher
+            showFullValue
+            property={property}
+            oldResource={oldResource}
+            newResource={resource}
+          />
+        ) : (
+          <ValueComp value={value} datatype={datatype || property.datatype} />
+        )}
         {shouldShowEditButton && (
           <EditButton title='Edit value'>
             <FaPencil onClick={() => setEditMode(!editMode)} />
