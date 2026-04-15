@@ -27,31 +27,46 @@ export const EditorWrapperBase = styled.div<{ hideEditor: boolean }>`
       height: auto;
     }
 
-    /* Give a remote user a caret */
-    .collaboration-carets__caret {
-      border-left: 1px solid #0d0d0d;
-      border-right: 1px solid #0d0d0d;
+    /* Remote-peer caret + name label. The Loro ProseMirror plugin (replacing
+     * the old TipTap Collaboration / Yjs setup) emits a wrapping span with
+     * class \`ProseMirror-loro-cursor\` and an inline \`border-color\` set to the
+     * peer's color — but without \`border-style\` / \`border-width\` the caret
+     * is invisible. The inner \`<div>\` carries the peer's name with an inline
+     * \`background-color\`, and needs positioning to float above the caret.
+     * \`.loro-selection\` highlights the peer's text selection range. */
+    .ProseMirror-loro-cursor {
+      border-left-style: solid;
+      border-right-style: solid;
+      border-left-width: 1px;
+      border-right-width: 1px;
       margin-left: -1px;
       margin-right: -1px;
       pointer-events: none;
       position: relative;
       word-break: normal;
+
+      > div {
+        position: absolute;
+        top: -1.4em;
+        left: -1px;
+        border-radius: 3px 3px 3px 0;
+        color: #0d0d0d;
+        font-size: 12px;
+        font-style: normal;
+        font-weight: 600;
+        line-height: normal;
+        padding: 0.1rem 0.3rem;
+        user-select: none;
+        white-space: nowrap;
+        pointer-events: none;
+      }
     }
 
-    /* Render the username above the caret */
-    .collaboration-carets__label {
-      border-radius: 3px 3px 3px 0;
-      color: #0d0d0d;
-      font-size: 12px;
-      font-style: normal;
-      font-weight: 600;
-      left: -1px;
-      line-height: normal;
-      padding: 0.1rem 0.3rem;
-      position: absolute;
-      top: -1.4em;
-      user-select: none;
-      white-space: nowrap;
+    .loro-selection {
+      /* Plugin sets a hardcoded yellow background inline; allow the caret
+       * color to bleed through a touch on top so the selection feels
+       * peer-attached. */
+      mix-blend-mode: multiply;
     }
 
     pre {

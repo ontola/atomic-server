@@ -234,7 +234,23 @@ export default function CollaborativeEditor({
             return [
               LoroSyncPlugin({ doc: doc as unknown as LoroDocType }),
               LoroUndoPlugin({ doc: doc as unknown as LoroDocType }),
-              ...(canWrite && ephemeralStore
+              // Cursor presence plugin: installed for everyone — readers
+              // broadcasting their caret is the same useful "who's
+              // looking where" signal the old Yjs awareness gave us, and
+              // the server's `LoroEphemeralUpdate` handler has no
+              // can-write check (only `LoroSyncUpdate` gates writes), so
+              // a reader sharing their cursor is harmless.
+              //
+              // The earlier `canWrite && ephemeralStore` gate looked
+              // safe but interacted badly with the `[drive, doc]` deps
+              // on `useEditor` above: `canWrite` is `false` on first
+              // render (async permission probe still pending) and the
+              // editor is built ONCE, so by the time canWrite resolves
+              // to true the plugin set is already frozen and the cursor
+              // plugin is silently absent. The visible symptom: zero
+              // `LORO_EPHEMERAL_UPDATE` frames on the wire, doc sync
+              // works fine, no remote carets ever render.
+              ...(ephemeralStore
                 ? [
                     LoroEphemeralCursorPlugin(ephemeralStore, {
                       user: {
