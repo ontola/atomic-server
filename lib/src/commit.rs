@@ -544,8 +544,27 @@ impl Commit {
                 // stored state (e.g. a UI flow calls `set(x, v)` with the
                 // current `v`, then saves). New ops, but no real change —
                 // accept rather than reject.
+                //
+                // `lastCommit` and `createdAt` are SERVER-MANAGED in the
+                // client snapshot: the client's `setLastCommitValue` writes
+                // its own view of the latest commit (whichever commit it
+                // last received via WS). With concurrent peers (e.g. two
+                // tabs on the same agent), the server's `lastCommit`
+                // races ahead of the client's between Tab A's save landing
+                // and Tab B's snapshot export. Comparing those values is
+                // guaranteed to mismatch under concurrent writes and
+                // produce a spurious reject — the client never *intended*
+                // to write that value, it's just a side-effect of how
+                // `applyIncoming` stores commit metadata in the Loro doc.
+                // Skip both in the all-match check; only user-controlled
+                // properties need to round-trip cleanly for the guard to
+                // mean what its name claims.
+                let server_managed: &[&str] = &[crate::urls::LAST_COMMIT, crate::urls::CREATED_AT];
                 let all_match = !incoming_intent.is_empty()
                     && incoming_intent.iter().all(|(key, incoming_val)| {
+                        if server_managed.contains(&key.as_str()) {
+                            return true;
+                        }
                         merged_state.get(key).is_some_and(|mv| mv == incoming_val)
                     });
 
