@@ -127,7 +127,7 @@ impl iroh::protocol::ProtocolHandler for AtomicHandler {
             tracing::info!("[accept] incoming connection from {remote}");
 
             // Auto-add to known peers
-            add_known_peer(&store, &remote_str);
+            add_known_peer(&store, &remote_str, "");
 
             loop {
                 let (send, recv) = match connection.accept_bi().await {
@@ -434,10 +434,17 @@ pub async fn sync_drive_with_peer_using(
 
 // ── Known peers (persisted in DB) ────────────────────────────────────────
 
-const KNOWN_PEERS_KEY: &[u8] = b"_iroh_known_peers";
+const KNOWN_PEERS_KEY: &[u8] = b"_iroh_known_peers_v2";
 
-/// Get all known peer NodeIDs from the DB.
-pub fn get_known_peers(store: &Db) -> Vec<String> {
+/// A known peer with optional device name.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct KnownPeer {
+    pub node_id: String,
+    pub name: String,
+}
+
+/// Get all known peers from the DB.
+pub fn get_known_peers(store: &Db) -> Vec<KnownPeer> {
     if let Ok(Some(bytes)) = store.kv.get(crate::db::trees::Tree::PluginMeta, KNOWN_PEERS_KEY) {
         serde_json::from_slice(&bytes).unwrap_or_default()
     } else {
@@ -445,25 +452,30 @@ pub fn get_known_peers(store: &Db) -> Vec<String> {
     }
 }
 
-/// Add a peer NodeID to the known peers list. Returns true if newly added.
-pub fn add_known_peer(store: &Db, node_id: &str) -> bool {
+/// Add a peer to the known peers list. Updates name if already known.
+pub fn add_known_peer(store: &Db, node_id: &str, name: &str) {
     let mut peers = get_known_peers(store);
-    if peers.iter().any(|p| p == node_id) {
-        return false;
+    if let Some(existing) = peers.iter_mut().find(|p| p.node_id == node_id) {
+        if !name.is_empty() {
+            existing.name = name.to_string();
+        }
+    } else {
+        peers.push(KnownPeer {
+            node_id: node_id.to_string(),
+            name: name.to_string(),
+        });
     }
-    peers.push(node_id.to_string());
     let _ = store.kv.insert(
         crate::db::trees::Tree::PluginMeta,
         KNOWN_PEERS_KEY,
         &serde_json::to_vec(&peers).unwrap_or_default(),
     );
-    true
 }
 
-/// Remove a peer NodeID from the known peers list.
+/// Remove a peer from the known peers list.
 pub fn remove_known_peer(store: &Db, node_id: &str) {
     let mut peers = get_known_peers(store);
-    peers.retain(|p| p != node_id);
+    peers.retain(|p| p.node_id != node_id);
     let _ = store.kv.insert(
         crate::db::trees::Tree::PluginMeta,
         KNOWN_PEERS_KEY,

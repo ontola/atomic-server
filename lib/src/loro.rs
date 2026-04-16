@@ -250,6 +250,22 @@ impl AtomicLoroDoc {
                         .map_err(|e| format!("Loro list push error: {e}"))?;
                 }
             }
+            Value::Json(json_val) => {
+                root.insert(property, json_val.to_string().as_str())
+                    .map_err(|e| format!("Loro set error: {e}"))?;
+            }
+            Value::JsonArray(arr) => {
+                // LoroList of LoroMaps — each element merges independently via CRDT.
+                let list = root
+                    .insert_container(property, loro::LoroList::new())
+                    .map_err(|e| format!("Loro insert_container error: {e}"))?;
+                for item in arr {
+                    let map = list
+                        .push_container(loro::LoroMap::new())
+                        .map_err(|e| format!("Loro push_container error: {e}"))?;
+                    json_value_to_loro_map(item, &map)?;
+                }
+            }
             _ => {
                 // For other complex types, serialize the display string.
                 root.insert(property, value.to_string().as_str())
@@ -388,24 +404,159 @@ pub fn loro_value_to_atomic_value(lv: &loro::LoroValue) -> Option<Value> {
         loro::LoroValue::Bool(b) => Some(Value::Boolean(*b)),
         loro::LoroValue::Null => None,
         loro::LoroValue::List(items) => {
-            // Native LoroList — convert to ResourceArray
-            let subjects: Vec<crate::values::SubResource> = items
-                .iter()
-                .filter_map(|item| match item {
-                    loro::LoroValue::String(s) => Some(s.to_string().into()),
-                    _ => None,
-                })
-                .collect();
+            if items.is_empty() {
+                return None;
+            }
 
-            if subjects.is_empty() {
-                None
-            } else {
-                Some(Value::ResourceArray(subjects))
+            // Check the first item to determine list type:
+            // - Map items → JsonArray (native LoroMap elements)
+            // - String items → ResourceArray or legacy JsonArray
+            match &items[0] {
+                loro::LoroValue::Map(_) => {
+                    // Native LoroMaps → JsonArray
+                    let json_items: Vec<serde_json::Value> = items
+                        .iter()
+                        .map(|item| loro_value_to_json(item))
+                        .collect();
+                    Some(Value::JsonArray(json_items))
+                }
+                loro::LoroValue::String(first_s) => {
+                    let first = first_s.to_string();
+                    let trimmed = first.trim_start();
+                    if trimmed.starts_with('{') || trimmed.starts_with('[') {
+                        // Legacy: JSON strings in list → JsonArray
+                        let json_items: Vec<serde_json::Value> = items
+                            .iter()
+                            .filter_map(|item| match item {
+                                loro::LoroValue::String(s) => serde_json::from_str(s.as_ref()).ok(),
+                                _ => None,
+                            })
+                            .collect();
+                        if json_items.is_empty() { None } else { Some(Value::JsonArray(json_items)) }
+                    } else {
+                        // ResourceArray: plain URL strings
+                        let subjects: Vec<crate::values::SubResource> = items
+                            .iter()
+                            .filter_map(|item| match item {
+                                loro::LoroValue::String(s) => Some(s.to_string().into()),
+                                _ => None,
+                            })
+                            .collect();
+                        if subjects.is_empty() { None } else { Some(Value::ResourceArray(subjects)) }
+                    }
+                }
+                _ => None,
             }
         }
-        // Container types (Map, Text, etc.) — serialize to placeholder string for now
-        loro::LoroValue::Map(_m) => Some(Value::String("{}".to_string())),
+        loro::LoroValue::Map(m) => {
+            // Single map → JSON object
+            Some(Value::Json(loro_value_to_json(&loro::LoroValue::Map(m.clone()))))
+        }
         _ => None,
+    }
+}
+
+/// Write a serde_json::Value into a LoroMap. Handles nested objects and arrays.
+fn json_value_to_loro_map(
+    json: &serde_json::Value,
+    map: &loro::LoroMap,
+) -> AtomicResult<()> {
+    if let serde_json::Value::Object(obj) = json {
+        for (key, val) in obj {
+            match val {
+                serde_json::Value::String(s) => {
+                    map.insert(key, s.as_str())
+                        .map_err(|e| format!("Loro map insert error: {e}"))?;
+                }
+                serde_json::Value::Number(n) => {
+                    if let Some(i) = n.as_i64() {
+                        map.insert(key, i)
+                            .map_err(|e| format!("Loro map insert error: {e}"))?;
+                    } else if let Some(f) = n.as_f64() {
+                        map.insert(key, f)
+                            .map_err(|e| format!("Loro map insert error: {e}"))?;
+                    }
+                }
+                serde_json::Value::Bool(b) => {
+                    map.insert(key, *b)
+                        .map_err(|e| format!("Loro map insert error: {e}"))?;
+                }
+                serde_json::Value::Array(arr) => {
+                    let list = map
+                        .insert_container(key, loro::LoroList::new())
+                        .map_err(|e| format!("Loro insert_container error: {e}"))?;
+                    for item in arr {
+                        json_value_to_loro_list_item(item, &list)?;
+                    }
+                }
+                serde_json::Value::Object(_) => {
+                    let nested = map
+                        .insert_container(key, loro::LoroMap::new())
+                        .map_err(|e| format!("Loro insert_container error: {e}"))?;
+                    json_value_to_loro_map(val, &nested)?;
+                }
+                serde_json::Value::Null => {}
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Push a JSON value into a LoroList.
+fn json_value_to_loro_list_item(
+    json: &serde_json::Value,
+    list: &loro::LoroList,
+) -> AtomicResult<()> {
+    match json {
+        serde_json::Value::String(s) => {
+            list.push(s.as_str()).map_err(|e| format!("Loro list push error: {e}"))?;
+        }
+        serde_json::Value::Number(n) => {
+            if let Some(f) = n.as_f64() {
+                list.push(f).map_err(|e| format!("Loro list push error: {e}"))?;
+            }
+        }
+        serde_json::Value::Bool(b) => {
+            list.push(*b).map_err(|e| format!("Loro list push error: {e}"))?;
+        }
+        serde_json::Value::Array(arr) => {
+            let nested = list
+                .push_container(loro::LoroList::new())
+                .map_err(|e| format!("Loro push_container error: {e}"))?;
+            for item in arr {
+                json_value_to_loro_list_item(item, &nested)?;
+            }
+        }
+        serde_json::Value::Object(_) => {
+            let nested = list
+                .push_container(loro::LoroMap::new())
+                .map_err(|e| format!("Loro push_container error: {e}"))?;
+            json_value_to_loro_map(json, &nested)?;
+        }
+        serde_json::Value::Null => {}
+    }
+    Ok(())
+}
+
+/// Convert a LoroValue back to serde_json::Value.
+fn loro_value_to_json(lv: &loro::LoroValue) -> serde_json::Value {
+    match lv {
+        loro::LoroValue::String(s) => serde_json::Value::String(s.to_string()),
+        loro::LoroValue::I64(i) => serde_json::json!(*i),
+        loro::LoroValue::Double(f) => serde_json::json!(*f),
+        loro::LoroValue::Bool(b) => serde_json::Value::Bool(*b),
+        loro::LoroValue::Null => serde_json::Value::Null,
+        loro::LoroValue::List(items) => {
+            serde_json::Value::Array(items.iter().map(loro_value_to_json).collect())
+        }
+        loro::LoroValue::Map(map) => {
+            let obj: serde_json::Map<String, serde_json::Value> = map
+                .iter()
+                .map(|(k, v)| (k.to_string(), loro_value_to_json(v)))
+                .collect();
+            serde_json::Value::Object(obj)
+        }
+        _ => serde_json::Value::Null,
     }
 }
 

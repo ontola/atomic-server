@@ -30,6 +30,9 @@ pub enum Value {
     Boolean(bool),
     Uri(String),
     Json(serde_json::Value),
+    /// Ordered list of JSON objects — maps to LoroList for per-element CRDT merge.
+    /// Unlike ResourceArray (list of URLs), items are structured JSON data.
+    JsonArray(Vec<serde_json::Value>),
     YDoc(Vec<u8>),
     /// Loro CRDT document binary (snapshot or update)
     LoroDoc(Vec<u8>),
@@ -122,6 +125,7 @@ impl Value {
             Value::Boolean(_) => DataType::Boolean,
             Value::Uri(_) => DataType::Uri,
             Value::Json(_) => DataType::Json,
+            Value::JsonArray(_) => DataType::JsonArray,
             Value::YDoc(_) => DataType::YDoc,
             Value::LoroDoc(_) => DataType::LoroDoc,
             Value::Unsupported(s) => DataType::Unsupported(s.datatype.clone()),
@@ -217,6 +221,11 @@ impl Value {
                     .decode(value)
                     .map_err(|e| format!("Not a valid Base64 string: {}. {}", value, e))?;
                 Ok(Value::LoroDoc(bin))
+            }
+            DataType::JsonArray => {
+                let arr: Vec<serde_json::Value> = serde_json::from_str(value)
+                    .map_err(|e| format!("Not a valid JSON array: {}. {}", value, e))?;
+                Ok(Value::JsonArray(arr))
             }
         }
     }
@@ -421,6 +430,7 @@ impl fmt::Display for Value {
             Value::Boolean(b) => write!(f, "{}", b),
             Value::Uri(s) => write!(f, "{}", s),
             Value::Json(s) => write!(f, "{}", s),
+            Value::JsonArray(arr) => write!(f, "{}", serde_json::to_string(arr).unwrap_or_default()),
             Value::YDoc(s) => write!(f, "{}", general_purpose::STANDARD.encode(s)),
             Value::LoroDoc(s) => write!(f, "{}", general_purpose::STANDARD.encode(s)),
             Value::Unsupported(u) => write!(f, "{}", u.value),

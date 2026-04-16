@@ -476,6 +476,15 @@ pub async fn import_sync_push(
             continue;
         }
 
+        // Log what properties arrived
+        let has_strokes = resource.get("https://atomicdata.dev/ontology/canvas/strokeData").is_ok();
+        tracing::info!(
+            "  sync imported {}: {} props, has_strokes={}",
+            &entry.subject[..entry.subject.len().min(30)],
+            resource.get_propvals().len(),
+            has_strokes,
+        );
+
         let _ = store.add_resource_opts(&resource, false, true, true).await;
         count += 1;
     }
@@ -485,6 +494,13 @@ pub async fn import_sync_push(
         count,
         push.drive
     );
+    for entry in &push.entries {
+        tracing::info!(
+            "  imported: {} ({} bytes)",
+            &entry.subject[..entry.subject.len().min(30)],
+            entry.loro_bytes.len()
+        );
+    }
     count
 }
 
