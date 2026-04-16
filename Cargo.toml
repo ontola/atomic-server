@@ -9,5 +9,8 @@ members = [
   "plugin-examples/test-plugin",
   "atomic-plugin",
 ]
+exclude = [
+  "flutter/rust",
+]
 
 # Tauri build is deprecated, see

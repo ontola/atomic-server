@@ -173,13 +173,25 @@ pub trait Storelike: Sized + Send + Sync {
     fn set_base_url(&self, _url: &str) {}
 
     /// Returns the full server URL, e.g. "http://localhost:9883" or "https://atomicdata.dev".
-    /// Used by client helpers to route DID resolution requests through the server's `/did` endpoint.
+    /// Used by client helpers to route DID resolution requests through the server's \`/did\` endpoint.
     fn get_server_url(&self) -> String {
         self.get_base_domain()
             .unwrap_or_else(|| "http://localhost".to_string())
     }
 
-    /// Normalizes a subject: if it matches the server's base domain, it becomes an Internal subject.
+    /// Get the active drive subject, if one is set.
+    fn get_active_drive(&self) -> Option<String> {
+        None
+    }
+
+    /// Set the active drive subject.
+    fn set_active_drive(&self, _drive: &str) -> AtomicResult<()> {
+        Err("set_active_drive not implemented for this store".into())
+    }
+
+    /// Clear the default agent.
+    fn clear_default_agent(&self) {}
+
     fn normalize_subject(&self, subject: &Subject) -> Subject {
         Subject::from_raw(subject.as_str(), self.get_base_domain().as_deref())
     }
@@ -389,7 +401,7 @@ pub trait Storelike: Sized + Send + Sync {
     }
 
     /// Fetches a property by URL, returns a Property instance
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip_all)]
     async fn get_property(&self, subject: &str) -> AtomicResult<Property> {
         let prop = self
             .get_resource(&subject.into())

@@ -33,11 +33,12 @@ In E2E tests, most specs use `test.beforeEach(before)` from `test-utils.ts`, whi
 Atomic Server is a graph database with real-time sync, built on **Loro CRDT** for conflict-free collaborative editing.
 
 ### Crates
-- **`atomic_lib`** (`lib/`) — Core library. WASM-compatible (no `ring`, no `rt-multi-thread`). Contains Resource, Commit, Store, Loro integration, WS client, connected Client API.
-- **`atomic-server`** (`server/`) — Actix-web HTTP/WS server. Uses `atomic_lib` + sled DB + search (tantivy).
+- **`atomic_lib`** (`lib/`) — Core library. WASM-compatible (no `ring`, no `rt-multi-thread`). Contains Resource, Commit, Store, Loro integration, Iroh P2P sync, WS client, connected Client API.
+- **`atomic-server`** (`server/`) — Actix-web HTTP/WS server. Uses `atomic_lib` + redb + search (tantivy).
 - **`@tomic/lib`** (`browser/lib/`) — TypeScript client library.
 - **`@tomic/react`** (`browser/react/`) — React hooks.
 - **`data-browser`** (`browser/data-browser/`) — The web app (React + TipTap + Loro).
+- **`flutter/`** — Cross-platform canvas app (Android/iOS/Web). Uses `flutter_rust_bridge` to call `atomic_lib`. See `flutter/README.md` and `flutter/AGENTS.md`.
 
 ### Data model
 - **Resource** = property-value pairs with a Subject URL, backed by a Loro CRDT document.
@@ -139,12 +140,41 @@ Real-time: `useLoroSync` hook → `LORO_SYNC_UPDATE` WebSocket.
 
 Loro OpLog time-travel: `doc.getAllChanges()` → sort → `doc.checkout(frontiers)` per version. Instant, no network round-trips.
 
+## Iroh P2P Sync
+
+Devices sync via [Iroh](https://iroh.computer) QUIC connections. The transport is in `lib/src/sync/`:
+
+- **`peer.rs`** — Iroh endpoint, Router (must stay alive for incoming connections), persistent NodeID (secret key stored in redb), known peers list.
+- **`engine.rs`** — Transport-agnostic sync engine. Compares Loro version vectors, computes diffs, imports snapshots. Used by both WS and Iroh.
+- **`protocol.rs`** — Binary frame encoding: AUTH, SYNC, SYNC_DIFF, SYNC_PUSH, SYNC_OK, GET, UPDATE.
+
+### Sync flow (QR pairing)
+1. Both devices start Iroh (`peer::start()`) → get persistent NodeID, connect to n0 relay
+2. Device A shows QR code containing `did:ad:node:<nodeId>`
+3. Device B scans QR → calls `peer_sync(nodeId)` → `sync_drive_with_peer()`
+4. B→A: AUTH, SYNC (with B's version vectors)
+5. A→B: SYNC_DIFF (what to push/pull), SYNC_PUSH (A's data)
+6. B→A: SYNC_PUSH (B's data for A's pull list)
+7. Both devices now have each other's data
+
+### Key details
+- The `Router` must be kept alive globally (`ROUTER` static) — dropping it stops incoming connections.
+- After sending the final SYNC_PUSH, call `send.finish()` + short delay so the server processes it before the connection drops.
+- Loro snapshots are stored in `Tree::LoroSnapshots` keyed by `Subject::pure_id()` (strips query params/drive hints).
+- `collect_drive_subjects()` and `build_drive_vvs()` must use `pure_id()` consistently to match snapshot keys.
+
+### Node identity
+- `did:ad:node:<hex>` — URI format for Iroh NodeIDs, used in QR codes and UI.
+- NodeIDs are persistent — derived from a secret key stored in redb (`Tree::PluginMeta`).
+- Known peers are also stored in `Tree::PluginMeta` as a JSON array.
+
 ## Testing
 
 ```
 cargo test -p atomic_lib --no-default-features  # 76 tests
 cargo test -p atomic-server --lib               # 23 tests
 cargo test -p atomic-server --test sync          # E2E: real server, 2 agents, WS sync
+cargo test -p atomic_lib --features "iroh,discovery,db-redb" --lib -- sync::tests  # Iroh sync tests
 cd browser/lib && pnpm test                      # 29 JS tests
 cd browser && pnpm run -r build                  # Full workspace build
 ```
@@ -157,3 +187,6 @@ cd browser && pnpm run -r build                  # Full workspace build
 4. **CSP**: Includes `'wasm-unsafe-eval'` for Loro WASM in browser.
 5. **`build.rs`**: Watches `lib/src`, `react/src`, `data-browser/src`. Delete `server/assets_tmp` to force JS rebuild.
 6. **`CommitBuilder.push_propval`**: Starts from empty, not from resource's existing value. Load current value first if appending.
+7. **`flutter/rust/`** is excluded from the Cargo workspace (`Cargo.toml` `exclude`). It has its own `Cargo.toml` with a path dep to `../../lib`.
+8. **NDK 27 `llvm-strip`** corrupts large `.so` files. Debug builds use `doNotStrip '**/*.so'` in both `app/build.gradle` and `rust_builder/android/build.gradle`.
+9. **Iroh Router lifetime**: `peer::start()` returns a Router that must be kept alive. Dropping it silently stops incoming connections — no error, just "failed connecting to remote endpoint" on the other side.

@@ -75,7 +75,8 @@ pub mod config;
 pub mod datatype;
 #[cfg(feature = "db")]
 pub mod db;
-pub mod dht;
+#[cfg(feature = "discovery")]
+pub mod discovery;
 #[cfg(feature = "db")]
 pub mod endpoints;
 pub mod errors;
@@ -103,7 +104,7 @@ pub mod values;
 pub use atoms::Atom;
 pub use commit::Commit;
 #[cfg(feature = "db")]
-pub use db::Db;
+pub use db::{AgentLoadResult, Db, DriveInfo};
 pub use errors::AtomicError;
 pub use errors::AtomicErrorType;
 pub use resources::Resource;

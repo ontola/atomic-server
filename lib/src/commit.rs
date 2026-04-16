@@ -524,7 +524,7 @@ impl Commit {
 
     /// Applies the Loro CRDT update and/or destroy to the Resource.
     /// Returns the diff as atoms for index updates, plus the set of changed property URLs.
-    #[tracing::instrument]
+    #[tracing::instrument(skip_all)]
     pub async fn apply_changes(&self, mut resource: Resource) -> AtomicResult<CommitApplied> {
         let resource_unedited = resource.clone();
 
@@ -615,7 +615,7 @@ impl Commit {
     /// Converts the Commit into a Resource with Atomic Values.
     /// Creates an identifier using the server_url
     /// Works for both Signed and Unsigned Commits
-    #[tracing::instrument(skip(store))]
+    #[tracing::instrument(skip_all)]
     pub async fn into_resource(&self, store: &impl Storelike) -> AtomicResult<Resource> {
         let commit_subject = match self.signature.as_ref() {
             Some(sig) => format!("did:ad:commit:{}", sig),
@@ -678,7 +678,7 @@ impl Commit {
 
     /// Generates a deterministic serialized JSON-AD representation of the Commit.
     /// Removes the signature from the object before serializing, since this function is used to check if the signature is correct.
-    #[tracing::instrument(skip(store))]
+    #[tracing::instrument(skip_all)]
     pub async fn serialize_deterministically_json_ad(
         &self,
         store: &impl Storelike,
@@ -849,7 +849,7 @@ impl CommitBuilder {
 /// When provided, the set/remove operations are applied on top of it and
 /// an incremental update is exported. Without it, a full snapshot is created
 /// (appropriate for genesis commits or when no prior state exists).
-#[tracing::instrument(skip(store, existing_loro_snapshot))]
+#[tracing::instrument(skip_all)]
 async fn sign_at(
     commitbuilder: CommitBuilder,
     agent: &crate::agents::Agent,
@@ -913,7 +913,7 @@ async fn sign_at(
 }
 
 /// Signs a string using a base64 encoded ed25519 private key. Outputs a base64 encoded ed25519 signature.
-#[tracing::instrument]
+#[tracing::instrument(skip_all)]
 pub fn sign_message(message: &str, private_key: &str, public_key: &str) -> AtomicResult<String> {
     let private_key_bytes = decode_base64(private_key)
         .map_err(|e| format!("Failed decoding private key {}: {}", private_key, e))?;

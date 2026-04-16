@@ -7,3 +7,5 @@ pub mod engine;
 #[cfg(feature = "iroh")]
 pub mod peer;
 pub mod protocol;
+#[cfg(test)]
+mod tests;

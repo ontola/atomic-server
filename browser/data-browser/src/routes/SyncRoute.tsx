@@ -116,12 +116,31 @@ function SyncPage() {
   const [serverInput, setServerInput] = useState('');
   const [showAddServer, setShowAddServer] = useState(false);
   const [irohNodeId, setIrohNodeId] = useState<string | null>(null);
+  const [peerInput, setPeerInput] = useState('');
+  const [peerSyncing, setPeerSyncing] = useState(false);
+  const [peerSyncResult, setPeerSyncResult] = useState<string | null>(null);
+  const [showAddPeer, setShowAddPeer] = useState(false);
+  const [knownPeers, setKnownPeers] = useState<
+    { nodeId: string; label: string; lastSync?: string }[]
+  >(() => {
+    try {
+      return JSON.parse(localStorage.getItem('atomic-peers') ?? '[]');
+    } catch {
+      return [];
+    }
+  });
 
   useEffect(() => {
     fetch('/iroh-node-id')
       .then(r => r.json())
       .then(data => {
-        if (data.nodeId) setIrohNodeId(data.nodeId);
+        if (data.nodeId) {
+          // Strip iroh: prefix if present, store raw hex
+          const raw = data.nodeId.startsWith('iroh:')
+            ? data.nodeId.slice(5)
+            : data.nodeId;
+          setIrohNodeId(raw);
+        }
       })
       .catch(() => {});
   }, []);
@@ -148,6 +167,67 @@ function SyncPage() {
   }, [store]);
 
   const nodes = deriveNodeStatuses(status);
+
+  function savePeers(
+    peers: { nodeId: string; label: string; lastSync?: string }[],
+  ) {
+    setKnownPeers(peers);
+    localStorage.setItem('atomic-peers', JSON.stringify(peers));
+  }
+
+  async function syncWithPeer(nodeId: string) {
+    if (!nodeId || !status.drive) return;
+
+    setPeerSyncing(true);
+    setPeerSyncResult(null);
+
+    try {
+      const res = await fetch('/iroh-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nodeId, drive: status.drive }),
+      });
+      const data = await res.json();
+
+      if (data.error) {
+        setPeerSyncResult(`Error: ${data.error}`);
+      } else {
+        const msg = `Synced ${data.count} resource${data.count !== 1 ? 's' : ''}`;
+        setPeerSyncResult(msg);
+
+        // Save/update peer — strip any prefix to get raw hex
+        let cleaned = nodeId;
+        if (cleaned.startsWith('did:ad:node:'))
+          cleaned = cleaned.slice('did:ad:node:'.length);
+        else if (cleaned.startsWith('iroh:')) cleaned = cleaned.slice(5);
+        const existing = knownPeers.findIndex(p => p.nodeId === cleaned);
+        const entry = {
+          nodeId: cleaned,
+          label: `did:ad:node:${cleaned.slice(0, 8)}...`,
+          lastSync: new Date().toISOString(),
+        };
+
+        if (existing >= 0) {
+          const updated = [...knownPeers];
+          updated[existing] = entry;
+          savePeers(updated);
+        } else {
+          savePeers([...knownPeers, entry]);
+        }
+
+        setPeerInput('');
+        setShowAddPeer(false);
+      }
+    } catch (e) {
+      setPeerSyncResult(`Error: ${e}`);
+    }
+
+    setPeerSyncing(false);
+  }
+
+  function removePeer(nodeId: string) {
+    savePeers(knownPeers.filter(p => p.nodeId !== nodeId));
+  }
 
   return (
     <Main>
@@ -274,15 +354,17 @@ function SyncPage() {
             )}
             {irohNodeId && (
               <DetailItem>
-                <DetailLabel>Peer ID</DetailLabel>
+                <DetailLabel>Node DID</DetailLabel>
                 <DetailValue>
                   <PeerIdRow>
-                    <PeerIdText title={irohNodeId}>
-                      {irohNodeId.slice(0, 20)}...
+                    <PeerIdText title={`did:ad:node:${irohNodeId}`}>
+                      did:ad:node:{irohNodeId.slice(0, 12)}...
                     </PeerIdText>
                     <NodeAction
                       onClick={() => {
-                        navigator.clipboard.writeText(irohNodeId);
+                        navigator.clipboard.writeText(
+                          `did:ad:node:${irohNodeId}`,
+                        );
                       }}
                     >
                       Copy
@@ -291,6 +373,71 @@ function SyncPage() {
                 </DetailValue>
               </DetailItem>
             )}
+            <DetailItem>
+              <DetailLabel>Peers</DetailLabel>
+              <DetailValue>
+                {knownPeers.length === 0 && !showAddPeer && (
+                  <Muted style={{ margin: 0, fontSize: '0.85rem' }}>
+                    No peers connected
+                  </Muted>
+                )}
+                {knownPeers.map(peer => (
+                  <PeerRow key={peer.nodeId}>
+                    <PeerIdText title={peer.nodeId}>
+                      {peer.label}
+                    </PeerIdText>
+                    {peer.lastSync && (
+                      <PeerLastSync>
+                        {formatTimeAgo(new Date(peer.lastSync)) ?? 'just now'}
+                      </PeerLastSync>
+                    )}
+                    <NodeAction
+                      onClick={() => syncWithPeer(peer.nodeId)}
+                      disabled={peerSyncing}
+                    >
+                      {peerSyncing ? '...' : 'Sync'}
+                    </NodeAction>
+                    <NodeAction onClick={() => removePeer(peer.nodeId)}>
+                      &times;
+                    </NodeAction>
+                  </PeerRow>
+                ))}
+                {showAddPeer ? (
+                  <AddServerRow
+                    onSubmit={e => {
+                      e.preventDefault();
+                      syncWithPeer(peerInput.trim());
+                    }}
+                  >
+                    <ServerInput
+                      autoFocus
+                      placeholder='Paste did:ad:node:...'
+                      value={peerInput}
+                      onChange={e => setPeerInput(e.target.value)}
+                      disabled={peerSyncing}
+                    />
+                    <Button
+                      type='submit'
+                      subtle
+                      disabled={peerSyncing || !peerInput.trim()}
+                    >
+                      {peerSyncing ? 'Syncing...' : 'Sync'}
+                    </Button>
+                  </AddServerRow>
+                ) : (
+                  <NodeAction onClick={() => setShowAddPeer(true)}>
+                    + Add
+                  </NodeAction>
+                )}
+                {peerSyncResult && (
+                  <PeerSyncResult
+                    $error={peerSyncResult.startsWith('Error')}
+                  >
+                    {peerSyncResult}
+                  </PeerSyncResult>
+                )}
+              </DetailValue>
+            </DetailItem>
             <DetailItem>
               <DetailLabel>Local storage</DetailLabel>
               <DetailValue>
@@ -824,6 +971,24 @@ const PeerIdText = styled.code`
 const DocsLink = styled.a`
   font-size: 0.8rem;
   color: ${p => p.theme.colors.textLight};
+`;
+
+const PeerRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0;
+`;
+
+const PeerLastSync = styled.span`
+  font-size: 0.75rem;
+  color: ${p => p.theme.colors.textLight};
+`;
+
+const PeerSyncResult = styled.div<{ $error: boolean }>`
+  font-size: 0.8rem;
+  margin-top: 0.3rem;
+  color: ${p => (p.$error ? p.theme.colors.warning : p.theme.colors.main)};
 `;
 
 const ServerInput = styled.input`

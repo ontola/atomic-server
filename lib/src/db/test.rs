@@ -638,6 +638,7 @@ async fn test_collection_update_value(
     );
 }
 
+#[cfg(feature = "db-sled")]
 #[tokio::test]
 async fn test_migration_v2_to_v3() {
     let tmp_dir_path = ".temp/db/migration_v2_v3";

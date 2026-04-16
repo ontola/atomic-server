@@ -33,6 +33,28 @@ pub mod flags {
 
 // ---- Encoding ----
 
+/// Encode an AUTH frame: [0x01] [json AuthValues]
+/// The agent signs `requested_subject timestamp` with its private key.
+pub fn encode_auth(agent: &crate::agents::Agent, requested_subject: &str) -> crate::errors::AtomicResult<Vec<u8>> {
+    let timestamp = crate::utils::now();
+    let message = format!("{} {}", requested_subject, timestamp);
+    let signature = crate::agents::sign_message(message.as_bytes(), agent.private_key.as_ref().ok_or("Agent has no private key")?)?;
+
+    let auth = serde_json::json!({
+        "https://atomicdata.dev/properties/auth/publicKey": agent.public_key,
+        "https://atomicdata.dev/properties/auth/timestamp": timestamp,
+        "https://atomicdata.dev/properties/auth/signature": signature,
+        "https://atomicdata.dev/properties/auth/requestedSubject": requested_subject,
+        "https://atomicdata.dev/properties/auth/agent": agent.subject.to_string(),
+    });
+
+    let json_bytes = serde_json::to_vec(&auth).map_err(|e| format!("Failed to encode auth: {e}"))?;
+    let mut buf = Vec::with_capacity(1 + json_bytes.len());
+    buf.push(tag::AUTH);
+    buf.extend_from_slice(&json_bytes);
+    Ok(buf)
+}
+
 /// Encode an UPDATE message.
 pub fn encode_update(
     flag_bits: u8,
@@ -154,6 +176,159 @@ pub fn decode_get(data: &[u8]) -> Option<DecodedGet<'_>> {
     let request_id = u16::from_be_bytes([data[0], data[1]]);
     let subject = std::str::from_utf8(&data[2..]).ok()?;
     Some(DecodedGet { request_id, subject })
+}
+
+/// Encode SYNC (client → server): [0x30] [drive_len: u16] [drive] [hash_len: u16] [hash] [json{peers, resources}]
+pub fn encode_sync(
+    drive: &str,
+    drive_hash: &str,
+    peers: &[String],
+    resources: &std::collections::HashMap<String, Vec<i32>>,
+) -> Vec<u8> {
+    let drive_bytes = drive.as_bytes();
+    let hash_bytes = drive_hash.as_bytes();
+    let json = serde_json::json!({ "peers": peers, "resources": resources });
+    let json_bytes = serde_json::to_vec(&json).unwrap_or_default();
+
+    let mut buf = Vec::with_capacity(
+        1 + 2 + drive_bytes.len() + 2 + hash_bytes.len() + json_bytes.len(),
+    );
+    buf.push(tag::SYNC);
+    buf.extend_from_slice(&(drive_bytes.len() as u16).to_be_bytes());
+    buf.extend_from_slice(drive_bytes);
+    buf.extend_from_slice(&(hash_bytes.len() as u16).to_be_bytes());
+    buf.extend_from_slice(hash_bytes);
+    buf.extend_from_slice(&json_bytes);
+    buf
+}
+
+/// Decoded SYNC message.
+pub struct DecodedSync {
+    pub drive: String,
+    pub drive_hash: String,
+    pub peers: Vec<String>,
+    pub resources: std::collections::HashMap<String, Vec<i32>>,
+}
+
+/// Decode a SYNC message (after the type tag).
+pub fn decode_sync(data: &[u8]) -> Option<DecodedSync> {
+    if data.len() < 4 {
+        return None;
+    }
+    let drive_len = u16::from_be_bytes([data[0], data[1]]) as usize;
+    let drive = std::str::from_utf8(data.get(2..2 + drive_len)?).ok()?;
+    let rest = data.get(2 + drive_len..)?;
+
+    if rest.len() < 2 {
+        return None;
+    }
+    let hash_len = u16::from_be_bytes([rest[0], rest[1]]) as usize;
+    let hash = std::str::from_utf8(rest.get(2..2 + hash_len)?).ok()?;
+    let json_bytes = rest.get(2 + hash_len..)?;
+
+    #[derive(serde::Deserialize)]
+    struct SyncJson {
+        peers: Vec<String>,
+        resources: std::collections::HashMap<String, Vec<i32>>,
+    }
+
+    let parsed: SyncJson = serde_json::from_slice(json_bytes).ok()?;
+
+    Some(DecodedSync {
+        drive: drive.to_string(),
+        drive_hash: hash.to_string(),
+        peers: parsed.peers,
+        resources: parsed.resources,
+    })
+}
+
+/// Decoded SYNC_DIFF message.
+pub struct DecodedSyncDiff {
+    pub drive: String,
+    pub pull: Vec<String>,
+    pub push: Vec<String>,
+}
+
+/// Decode a SYNC_DIFF message (after the type tag).
+pub fn decode_sync_diff(data: &[u8]) -> Option<DecodedSyncDiff> {
+    if data.len() < 2 {
+        return None;
+    }
+    let drive_len = u16::from_be_bytes([data[0], data[1]]) as usize;
+    let drive = std::str::from_utf8(data.get(2..2 + drive_len)?).ok()?;
+    let json_bytes = data.get(2 + drive_len..)?;
+
+    #[derive(serde::Deserialize)]
+    struct DiffJson {
+        pull: Vec<String>,
+        push: Vec<String>,
+    }
+
+    let parsed: DiffJson = serde_json::from_slice(json_bytes).ok()?;
+
+    Some(DecodedSyncDiff {
+        drive: drive.to_string(),
+        pull: parsed.pull,
+        push: parsed.push,
+    })
+}
+
+/// A single entry in a SYNC_PUSH message.
+pub struct SyncPushEntry {
+    pub subject: String,
+    pub loro_bytes: Vec<u8>,
+}
+
+/// Decoded SYNC_PUSH message.
+pub struct DecodedSyncPush {
+    pub drive: String,
+    pub entries: Vec<SyncPushEntry>,
+}
+
+/// Decode a SYNC_PUSH message (after the type tag).
+pub fn decode_sync_push(data: &[u8]) -> Option<DecodedSyncPush> {
+    if data.len() < 4 {
+        return None;
+    }
+    let drive_len = u16::from_be_bytes([data[0], data[1]]) as usize;
+    let drive = std::str::from_utf8(data.get(2..2 + drive_len)?).ok()?;
+    let rest = data.get(2 + drive_len..)?;
+
+    if rest.len() < 2 {
+        return None;
+    }
+    let count = u16::from_be_bytes([rest[0], rest[1]]) as usize;
+    let mut pos = 2;
+    let mut entries = Vec::with_capacity(count);
+
+    for _ in 0..count {
+        if pos + 2 > rest.len() {
+            break;
+        }
+        let subj_len = u16::from_be_bytes([rest[pos], rest[pos + 1]]) as usize;
+        pos += 2;
+        let subject = std::str::from_utf8(rest.get(pos..pos + subj_len)?).ok()?;
+        pos += subj_len;
+
+        if pos + 4 > rest.len() {
+            break;
+        }
+        let bytes_len =
+            u32::from_be_bytes([rest[pos], rest[pos + 1], rest[pos + 2], rest[pos + 3]]) as usize;
+        pos += 4;
+        let loro_bytes = rest.get(pos..pos + bytes_len)?.to_vec();
+        pos += bytes_len;
+
+        entries.push(SyncPushEntry {
+            subject: subject.to_string(),
+            loro_bytes,
+        });
+    }
+
+    Some(DecodedSyncPush {
+        drive: drive.to_string(),
+        entries,
+    })
 }
 
 #[cfg(test)]

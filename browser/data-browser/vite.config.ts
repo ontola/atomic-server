@@ -213,5 +213,9 @@ export default defineConfig({
   server: {
     strictPort: true,
     host: true,
+    proxy: {
+      '/iroh-node-id': 'http://localhost:9883',
+      '/iroh-sync': 'http://localhost:9883',
+    },
   },
 });

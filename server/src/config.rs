@@ -103,9 +103,6 @@ pub struct Opts {
     #[clap(long, env = "ATOMIC_BASE_DOMAIN")]
     pub base_domain: Option<String>,
 
-    /// Enable the Mainline DHT for Drive discovery.
-    #[clap(long, env = "ATOMIC_MAINLINE_DHT")]
-    pub mainline_dht: bool,
 }
 
 #[derive(clap::ValueEnum, Clone, Debug)]
