@@ -1367,9 +1367,6 @@ msgstr "Die Tastaturunterstützung für Drag & Drop ist deaktiviert. Aktivieren 
 msgid "Picked up {0}"
 msgstr "{0} aufgenommen"
 
-#~ msgid "Draggable item {0} was moved over droppable area in {1} at position {2}"
-#~ msgstr "Das ziehbare Element {0} wurde über den Ablagebereich in {1} an Position {2} bewegt"
-
 #: src/components/SideBar/useSidebarDnd.ts
 #: src/components/SideBar/useSidebarDnd.ts
 msgid "Dragging canceled"
@@ -4164,9 +4161,6 @@ msgstr ""
 msgid "Pen color"
 msgstr ""
 
-#~ msgid "Width <0/>"
-#~ msgstr ""
-
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Saving…"
 msgstr ""
@@ -4193,14 +4187,6 @@ msgstr ""
 msgid "Space"
 msgstr ""
 
-#~ msgid ""
-#~ "Draw with left click · Pan with Space+drag or middle mouse · Scroll to\n"
-#~ "zoom"
-#~ msgstr ""
-
-#~ msgid "Undo (Ctrl+Z)"
-#~ msgstr ""
-
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Redo (Ctrl+Shift+Z)"
 msgstr ""
@@ -4209,24 +4195,10 @@ msgstr ""
 msgid "Undo (Ctrl+Z) — drag horizontally to scrub history"
 msgstr ""
 
-#~ msgid ""
-#~ "Draw with left click · Pan with Space+drag or middle mouse · Scroll to\n"
-#~ "zoom · Drag the undo button to scrub history"
-#~ msgstr ""
-
 #. placeholder {0}: saveError
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Save failed: {0}"
 msgstr ""
-
-#~ msgid "Drag across a stroke to erase it · Tap eraser again to draw"
-#~ msgstr ""
-
-#~ msgid "Draw with left click · Pan with Space+drag or middle mouse · Drag the undo button to scrub history"
-#~ msgstr ""
-
-#~ msgid "Back to gallery"
-#~ msgstr ""
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "New canvas"
@@ -4240,18 +4212,9 @@ msgstr ""
 msgid "Eraser"
 msgstr ""
 
-#~ msgid "Pen color (tap to cycle)"
-#~ msgstr ""
-
-#~ msgid "Stroke width: {0} (tap to cycle)"
-#~ msgstr ""
-
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Stroke width"
 msgstr ""
-
-#~ msgid "Zoom to fit"
-#~ msgstr ""
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Pen color (tap to swap with previous, drag to pick from fan)"
@@ -4265,12 +4228,6 @@ msgstr ""
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Zoom to fit (tap) — drag horizontally to zoom-scrub"
 msgstr ""
-
-#~ msgid "Draw with left click · Pan with scroll, Space+drag, or middle mouse · Ctrl+scroll or trackpad pinch to zoom · Drag the undo button to scrub history"
-#~ msgstr ""
-
-#~ msgid "Draw with left click · Pan with scroll, Space+drag, or middle mouse · Ctrl+scroll or pinch to zoom · Drag the undo button to scrub history"
-#~ msgstr ""
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Canvas help"
@@ -4299,11 +4256,6 @@ msgid ""
 "<0>Ctrl</0>+<1>scroll</1> · trackpad pinch — zoom\n"
 "toward the cursor"
 msgstr ""
-
-#~ msgid ""
-#~ "Tap the eraser button, then drag across strokes to remove\n"
-#~ "them"
-#~ msgstr ""
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid ""
@@ -4351,4 +4303,12 @@ msgstr ""
 
 #: src/chunks/RTE/CollaborativeEditor.tsx
 msgid "Mod-y"
+msgstr ""
+
+#: src/hooks/useDevDrive.ts
+msgid "Dev agent created — secret copied to clipboard"
+msgstr ""
+
+#: src/hooks/useDevDrive.ts
+msgid "Dev agent created — secret available in localStorage (clipboard write blocked)"
 msgstr ""

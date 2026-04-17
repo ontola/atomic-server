@@ -1393,12 +1393,28 @@ export class Resource<C extends OptionalClass = any> {
     this._lastCommit = lastCommit;
     this.applyRawValue(properties.commit.lastCommit, lastCommit);
     this._loroDoc?.commit({ origin: SYSTEM_COMMIT_ORIGIN });
+    // Housekeeping write: this lastCommit value already lives in the
+    // server's stored state for this resource (it IS the commit id the
+    // server just told us about). Advance `_loroVersionAtLastSave` past
+    // this op so `exportLoroDelta()` doesn't carry it into the next
+    // save. Otherwise a `update` event on the receiver tab (TipTap's
+    // `LoroSyncPlugin` dispatches one for the import) drives
+    // `useDebouncedSave` → `save()` → a delta whose only op is this
+    // system write, and the server rejects the commit as a no-op
+    // ("writes silently dropped by LWW against stored state"). The same
+    // trap surfaced after every successful local save where the post-
+    // ack `setLastCommitValue` at line 1927 used to leave an unsaved op
+    // behind.
+    this.markLoroSaved();
   }
 
   /** Same system-origin treatment as `setLastCommitValue` for `createdAt`. */
   public setCreatedAtValue(createdAt: number): void {
     this.applyRawValue(commits.properties.createdAt, createdAt);
     this._loroDoc?.commit({ origin: SYSTEM_COMMIT_ORIGIN });
+    // See `setLastCommitValue` for the rationale — `createdAt` is also a
+    // server-derived housekeeping value, never the user's intent.
+    this.markLoroSaved();
   }
 
   /**

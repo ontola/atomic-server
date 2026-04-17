@@ -31,8 +31,41 @@ test.describe('search', async () => {
     await sidebarNewResourceButton(page).click();
     await page.locator('button:has-text("folder")').click();
     await setTitle(page, targetName);
+    const folderSubject = await getCurrentSubject(page);
 
-    await waitForSearchIndex(page);
+    // Don't rely on a fixed 6.5s sleep — under parallel load the index can
+    // lag noticeably longer. Poll the real search endpoint until the new
+    // folder appears. Pass `parents: drive` so we hit the same server path
+    // the overlay uses (without it, `store.search` short-circuits to the
+    // local MiniSearch index, which can be stale relative to the server).
+    await page.waitForFunction(
+      async (args: { query: string; subject: string; drive: string }) => {
+        const store = (
+          window as {
+            store?: { search(q: string, o: object): Promise<string[]> };
+          }
+        ).store;
+
+        if (!store) return false;
+
+        try {
+          // Match the overlay's exact params (include/limit) so the
+          // server's response is built from the same Tantivy query —
+          // a different URL serves a different cache key.
+          const results = await store.search(args.query, {
+            parents: args.drive,
+            include: true,
+            limit: 10,
+          });
+
+          return results.includes(args.subject);
+        } catch {
+          return false;
+        }
+      },
+      { query: unique, subject: folderSubject, drive: driveSubject },
+      { timeout: 30000, polling: 1000 },
+    );
 
     // Go somewhere else so navigation via search is observable.
     await openSubject(page, driveSubject);
@@ -54,6 +87,7 @@ test.describe('search', async () => {
       .getByRole('button', { name: 'New Document' })
       .click();
     await editTitle('Avocado Salad', page);
+    const avocadoSaladSubject = await getCurrentSubject(page);
 
     // Create folder called 'Cake folder' at root
     await openSubject(page, driveSubject);
@@ -104,6 +138,14 @@ test.describe('search', async () => {
 
     // Set search scope to 'Cake folder'
     await page.reload();
+    // Wait for the navbar's resource to actually be Cake Folder before
+    // opening the context menu. The menu's `subject` prop comes from the
+    // navbar resource, which falls back to the drive while the real one
+    // is still loading — clicking `scope` then sets the scope to the drive
+    // instead of Cake Folder and the assertion sees the wrong result set.
+    await expect(
+      page.locator(`main[about="${cakeFolderSubject}"]`).first(),
+    ).toBeVisible({ timeout: 20000 });
     await contextMenuClick('scope', page);
 
     // Scoped-only results: Avocado Cake is under Cake folder; Avocado Salad is not.
@@ -120,6 +162,47 @@ test.describe('search', async () => {
     // clear-scope chip, so reopen the current subject without `queryscope`.
     await page.keyboard.press('Escape');
     await openSubject(page, cakeFolderSubject);
+
+    // Salad doc was indexed for an earlier scoped query (different `parents`)
+    // so the un-scoped server index doesn't necessarily contain it yet.
+    // Poll the drive-scoped search (matching the overlay's `parents: drive`
+    // default) until both docs are returned — without this, a slow indexer
+    // under parallel load races the assertion.
+    await page.waitForFunction(
+      async (args: {
+        cakeSubject: string;
+        saladSubject: string;
+        drive: string;
+      }) => {
+        const store = (
+          window as {
+            store?: { search(q: string, o: object): Promise<string[]> };
+          }
+        ).store;
+
+        if (!store) return false;
+
+        try {
+          const results = await store.search('Avocado', {
+            parents: args.drive,
+          });
+
+          return (
+            results.includes(args.cakeSubject) &&
+            results.includes(args.saladSubject)
+          );
+        } catch {
+          return false;
+        }
+      },
+      {
+        cakeSubject: avocadoCakeSubject,
+        saladSubject: avocadoSaladSubject,
+        drive: driveSubject,
+      },
+      { timeout: 30000, polling: 1000 },
+    );
+
     await typeInSearch(page, 'Avocado');
     await expect(
       searchResults.filter({ hasText: 'Avocado Cake' }).first(),

@@ -319,11 +319,25 @@ export class WSClient {
         // rejectAllPending sees an empty Map and is a no-op.
         this.rejectAllPending('WebSocket error before response arrived');
       });
-      ws.addEventListener('close', () => {
+      ws.addEventListener('close', (ev: CloseEvent) => {
+        // Surface CloseEvent metadata so an unexplained reconnect loop
+        // names its own cause: code 1000=normal, 1001=going away,
+        // 1006=abnormal (no close frame seen — usually network drop or
+        // TCP RST), 1009=message too big, 1011=server unexpected
+        // condition. `reason` is whatever the server sent; `wasClean`
+        // tells us if the closing handshake completed. Without this the
+        // user-visible "Connection ... closed" line gives no signal of
+        // what actually killed the connection.
+        if (!this._closed) {
+          console.warn(
+            `[WS] close code=${ev.code} reason=${JSON.stringify(ev.reason)} wasClean=${ev.wasClean} opened=${opened}`,
+          );
+        }
+
         const error = this._closed
           ? undefined
           : opened
-            ? `Connection to ${wsURL.origin} closed.`
+            ? `Connection to ${wsURL.origin} closed (code=${ev.code}${ev.reason ? `, reason=${ev.reason}` : ''}).`
             : connectionFailedMessage(wsURL);
 
         this.store.setServerConnected(false, error);

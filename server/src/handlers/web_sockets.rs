@@ -72,6 +72,19 @@ pub async fn web_socket_handler(
         stream,
     )
     .protocols(&["atomicdata-ws.v2"])
+    // actix-web-actors defaults `max_size` to 65 536 bytes (64 KiB). Real
+    // Loro snapshots and `SYNC_DELTAS` payloads — especially for documents
+    // with editing history or canvases with many strokes — routinely exceed
+    // that, and base64 + JSON wrapping adds another ~40% on top of the raw
+    // bytes. A frame over the limit causes actix to drop the TCP socket
+    // without sending a Close control frame, which the browser sees as a
+    // CloseEvent `code=1006, wasClean=false`: an unexplained reconnect
+    // every second when the client tries to ship a doc's snapshot back as
+    // part of `SYNC_DELTAS`. 16 MiB is well above realistic doc sizes
+    // (Loro's own snapshot benchmarks top out in the low MBs even for
+    // multi-megabyte texts) and still far below the ~4 GiB WebSocket frame
+    // ceiling, so we don't risk silently truncating legitimate payloads.
+    .frame_size(16 * 1024 * 1024)
     .start()?;
 
     Ok(result)
