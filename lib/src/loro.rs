@@ -275,6 +275,43 @@ impl AtomicLoroDoc {
         Ok(())
     }
 
+    /// Push an item to a JsonArray property's LoroList.
+    /// Creates the list if it doesn't exist. Does NOT replace existing items.
+    pub fn push_to_json_array(&self, property: &str, item: &serde_json::Value) -> AtomicResult<()> {
+        let root = self.doc.get_map("properties");
+
+        // Get or create the LoroList for this property
+        let list = match root.get(property) {
+            Some(loro::ValueOrContainer::Container(c)) => {
+                c.into_list().map_err(|_| format!("{property} is not a list"))?
+            }
+            _ => {
+                root.insert_container(property, loro::LoroList::new())
+                    .map_err(|e| format!("Loro insert_container error: {e}"))?
+            }
+        };
+
+        let map = list
+            .push_container(loro::LoroMap::new())
+            .map_err(|e| format!("Loro push_container error: {e}"))?;
+        json_value_to_loro_map(item, &map)?;
+        Ok(())
+    }
+
+    /// Clear all items from a JsonArray property's LoroList.
+    pub fn clear_json_array(&self, property: &str) -> AtomicResult<()> {
+        let root = self.doc.get_map("properties");
+        if let Some(loro::ValueOrContainer::Container(c)) = root.get(property) {
+            if let Ok(list) = c.into_list() {
+                let len = list.len();
+                if len > 0 {
+                    list.delete(0, len).map_err(|e| format!("Loro list delete error: {e}"))?;
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Remove a property from the root map.
     pub fn remove_property(&self, property: &str) -> AtomicResult<()> {
         let root = self.doc.get_map("properties");
@@ -1565,5 +1602,65 @@ mod test {
             doc.get_string_property("https://atomicdata.dev/properties/name"),
             Some("v2".into())
         );
+    }
+
+    /// Test that two independent docs pushing to a JsonArray merge correctly.
+    /// This simulates two devices drawing strokes independently.
+    #[test]
+    fn json_array_concurrent_push_merges() {
+        let stroke_prop = "https://atomicdata.dev/ontology/canvas/strokeData";
+
+        // Create base doc with initial state
+        let base = AtomicLoroDoc::new();
+        base.set_property("name", &Value::String("Canvas".into())).unwrap();
+        base.set_property(stroke_prop, &Value::JsonArray(vec![
+            serde_json::json!({"color": 1, "path": [[0, 0]]}),
+        ])).unwrap();
+        base.doc().commit();
+        let base_snapshot = base.export_snapshot();
+
+        // Device A: fork from base, push stroke A
+        let doc_a = AtomicLoroDoc::from_snapshot(&base_snapshot).unwrap();
+        doc_a.push_to_json_array(stroke_prop, &serde_json::json!({"color": 2, "path": [[10, 10]]})).unwrap();
+        doc_a.doc().commit();
+        let snapshot_a = doc_a.export_snapshot();
+
+        // Device B: fork from same base, push stroke B
+        let doc_b = AtomicLoroDoc::from_snapshot(&base_snapshot).unwrap();
+        doc_b.push_to_json_array(stroke_prop, &serde_json::json!({"color": 3, "path": [[20, 20]]})).unwrap();
+        doc_b.doc().commit();
+        let snapshot_b = doc_b.export_snapshot();
+
+        // Merge: B imports A's snapshot
+        doc_b.import_update(&snapshot_a).unwrap();
+        let merged = doc_b.get_all_properties();
+        let merged_val = loro_value_to_atomic_value(merged.get(stroke_prop).unwrap()).unwrap();
+
+        match merged_val {
+            Value::JsonArray(arr) => {
+                println!("Merged array has {} items: {:?}", arr.len(), arr);
+                // Should have 3 strokes: base + A + B
+                assert_eq!(arr.len(), 3, "Expected 3 strokes after merge, got {}", arr.len());
+                // All colors should be present
+                let colors: Vec<i64> = arr.iter().map(|s| s["color"].as_i64().unwrap()).collect();
+                assert!(colors.contains(&1), "Missing base stroke");
+                assert!(colors.contains(&2), "Missing A's stroke");
+                assert!(colors.contains(&3), "Missing B's stroke");
+            }
+            other => panic!("Expected JsonArray, got {:?}", other),
+        }
+
+        // Also verify A importing B works the same way
+        doc_a.import_update(&snapshot_b).unwrap();
+        let merged_a = doc_a.get_all_properties();
+        let merged_a_val = loro_value_to_atomic_value(merged_a.get(stroke_prop).unwrap()).unwrap();
+        match merged_a_val {
+            Value::JsonArray(arr) => {
+                assert_eq!(arr.len(), 3, "A should also have 3 strokes after merge");
+            }
+            _ => panic!("Expected JsonArray"),
+        }
+
+        println!("TEST PASSED: concurrent JsonArray pushes merge correctly");
     }
 }

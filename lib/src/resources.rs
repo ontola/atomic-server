@@ -490,6 +490,60 @@ impl Resource {
         Ok(self)
     }
 
+    /// Push a JSON item to a JsonArray property. CRDT-friendly — appends to the
+    /// existing LoroList instead of replacing it. Use this instead of `set_unsafe`
+    /// for list properties that need to merge across devices.
+    /// Push a JSON item to a JsonArray property. CRDT-friendly — appends to the
+    /// existing LoroList instead of replacing it. Use this instead of `set_unsafe`
+    /// for list properties that need to merge across devices.
+    pub fn push_json_item(
+        &mut self,
+        property: &str,
+        item: serde_json::Value,
+    ) -> crate::errors::AtomicResult<()> {
+        // Update propvals cache
+        match self.propvals.get_mut(property) {
+            Some(Value::JsonArray(arr)) => {
+                arr.push(item.clone());
+            }
+            _ => {
+                self.propvals.insert(property.into(), Value::JsonArray(vec![item.clone()]));
+            }
+        };
+
+        // Ensure Loro doc is initialized
+        if self.loro.is_none() {
+            let doc = self.build_loro_doc_from_state()?;
+            self.loro = Some(doc);
+        }
+
+        // Push to live Loro doc (incremental, not replace)
+        let doc = self.loro.as_ref().unwrap();
+        doc.push_to_json_array(property, &item)?;
+
+        // Set the Loro snapshot directly on the commit builder so sign_at
+        // uses the live doc's state (with incremental pushes) instead of
+        // rebuilding from set operations (which would replace the list).
+        self.commit.set_loro_update(doc.export_snapshot());
+
+        Ok(())
+    }
+
+    /// Clear all items from a JsonArray property. Clears the LoroList too.
+    pub fn clear_json_array(&mut self, property: &str) -> crate::errors::AtomicResult<()> {
+        self.propvals.insert(property.into(), Value::JsonArray(vec![]));
+
+        if self.loro.is_none() {
+            let doc = self.build_loro_doc_from_state()?;
+            self.loro = Some(doc);
+        }
+        let doc = self.loro.as_ref().unwrap();
+        doc.clear_json_array(property)?;
+        self.commit.set_loro_update(doc.export_snapshot());
+
+        Ok(())
+    }
+
     /// Remove a propval from a resource by property URL.
     pub fn remove_propval(&mut self, property_url: &str) {
         self.propvals.remove_entry(property_url);
