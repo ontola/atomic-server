@@ -1241,6 +1241,61 @@ No server required for two devices on the same network to sync.
 6. **Accept `iroh:` addresses** in the client's "Add server" field
 7. **Test**: two servers syncing a drive over Iroh without any port forwarding
 
+## Desktop (Tauri)
+
+### What it is today
+
+`desktop/` is a thin Tauri 2 shell that embeds `atomic-server` and runs it on a background `actix-rt` thread. The browser bundle in `dist/` connects to `ws://localhost:9883` like it would to any remote server. Iroh is enabled (`atomic_lib` with the `iroh` feature), so the same binary is already a peer node. HTTPS is off — nothing external reaches the embedded server.
+
+See §Iroh → "Desktop app as a peer" for the peering role. This section covers storage and transport architecture.
+
+### Where data lives
+
+One place: the embedded server's `Db` (ReDB). That's the canonical store — Loro snapshots, materialized props, indexes, commits, agent keys.
+
+Not: OPFS, not the browser WASM DB, not localStorage, not JS-side persistence. The browser view holds Loro docs in memory for rendering and rehydrates from `Db` via the same v2 protocol any remote browser would use.
+
+### Why not three storage tiers
+
+In a client-server deployment there are conceptually three copies of resource data:
+
+1. Server `Db` (authoritative)
+2. Browser WASM DB (offline cache)
+3. JS Store / Loro docs (render cache, ephemeral)
+
+On desktop, all three are on the same machine. The WASM DB exists to cache reads that would otherwise cross the network. With a loopback server answering in sub-millisecond, the cache buys nothing and wastes OPFS writes. Drop it.
+
+### How JS reads resources
+
+Via the same WebSocket the browser uses for remote servers: `ws://localhost:9883` → embedded server → `Db`. Loopback adds ~50µs per frame for kernel transit; v2 binary frames serialize and deserialize identically. This preserves byte-identical behavior between "browser talking to a remote server" and "browser inside desktop talking to its embedded server" — no code fork.
+
+Tradeoff: you pay serialization you could skip by going through Tauri IPC directly. That optimization is available later (v2 frames are transport-agnostic), but loopback WS overhead is measured in microseconds, not milliseconds. Don't pay the refactor cost until profiling demands it.
+
+### When to skip the WASM DB
+
+Not as a Tauri-specific branch. As a Store configuration: *"my primary backend is local and instant, so skip the OPFS cache layer."* Browsers pointed at a remote server still get WASM DB + offline. Desktops (and any future in-process binding — FFI, Tauri IPC) just don't need it.
+
+```ts
+new Store({
+  serverUrl: 'ws://localhost:9883',
+  useClientDb: false,  // local backend is already instant
+});
+```
+
+One flag, no branching code paths.
+
+### Migration size
+
+Two scales:
+
+**Minimum viable — drop the WASM DB on desktop (~20 lines).** One config flag threaded through `Store`, default `false` under `isTauri()`. The existing `clientDb?.whatever()` null-checks already handle the missing-backend case. Zero Store refactor, ships today.
+
+**Full cleanup — Backend abstraction (Phase 4).** Today the Store has explicit `clientDb` branches across ~8 files (~56 references in `store.ts`, `resource.ts`, `collection.ts`, `websockets.ts`, and data-browser helpers). A `Backend` interface and `BackendManager` that routes subscribe/query/commit generically would eliminate these branches and be the natural home for future transports (FFI, mesh, Iroh-from-browser-via-bridge). Do this when a second in-process binding forces the shape — not speculatively.
+
+### Deferred: HTTP server removal
+
+The §One Rust Crate, Every Target section argues desktop should "drop the HTTP server" entirely. That's aspirational. HTTP plays a small role today — WebSocket is the hot path, and loopback WS is cheap. The real win from that migration is dropping the Actix dependency, which matters mostly for mobile / constrained targets. For desktop specifically, the embedded server stays.
+
 ## Open Questions
 
 - **Schema bootstrap**: The WASM DB needs property definitions to parse resources and build indexes. How do we bootstrap — ship a built-in vocabulary snapshot?

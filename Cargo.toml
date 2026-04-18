@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
   "server",
+  "desktop",
   "cli",
   "lib",
   "wasm",
@@ -9,8 +10,6 @@ members = [
   "plugin-examples/test-plugin",
   "atomic-plugin",
 ]
-exclude = [
-  "flutter/rust",
-]
+exclude = ["flutter/rust"]
 
 # Tauri build is deprecated, see
