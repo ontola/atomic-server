@@ -87,7 +87,8 @@
       "Bash(find /Users/joep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/simple-dns-0.9.3/ -name \"*.rs\" -exec grep -l \"enum RData\" {} \\\\;)",
       "Bash(cargo test *)",
       "WebFetch(domain:docs.iroh.computer)",
-      "Bash(grep -v \"^W/atomic\\\\|^$\")"
+      "Bash(grep -v \"^W/atomic\\\\|^$\")",
+      "Bash(kill 85810 85821)"
     ]
   }
 }

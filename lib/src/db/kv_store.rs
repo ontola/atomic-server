@@ -48,6 +48,15 @@ pub trait KvStore: Send + Sync {
     /// Flush all pending writes to durable storage. No-op for in-memory backends.
     fn flush(&self) -> AtomicResult<()>;
 
+    /// Start buffering writes. All `insert`, `remove`, and `apply_batch` calls
+    /// will be accumulated until `commit_batch()` is called.
+    fn begin_batch(&self) {}
+
+    /// Commit all buffered writes in a single transaction. No-op if not batching.
+    fn commit_batch(&self) -> AtomicResult<()> {
+        Ok(())
+    }
+
     /// Return the number of entries in a tree.
     fn len(&self, tree: Tree) -> AtomicResult<usize>;
 }

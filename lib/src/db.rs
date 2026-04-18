@@ -919,16 +919,6 @@ impl Db {
         Ok(())
     }
 
-    /// Internal method for fetching Resource data.
-    #[instrument(skip_all)]
-    fn set_propvals(&self, subject: &str, propvals: &PropVals) -> AtomicResult<()> {
-        let resource_bin = encode_propvals(propvals)?;
-
-        self.kv
-            .insert(Tree::Resources, subject.as_bytes(), &resource_bin)?;
-        Ok(())
-    }
-
     /// Sets a function that is called whenever a [Commit::apply] is called.
     /// This can be used to listen to events.
     pub fn set_handle_commit(&mut self, on_commit: HandleCommit) {
@@ -1429,9 +1419,10 @@ impl Storelike for Db {
         if check_required_props {
             resource.check_required_props(self).await?;
         }
-        if update_index {
-            let mut transaction = Transaction::new();
+        // Build a single transaction for index updates + resource persistence
+        let mut transaction = Transaction::new();
 
+        if update_index {
             // Persist DID routing hint if available
             if let Subject::Did {
                 drive_hint: Some(hint),
@@ -1449,7 +1440,6 @@ impl Storelike for Db {
             if let Some(pv) = existing {
                 let subject = resource.get_subject();
                 for (prop, val) in pv.iter() {
-                    // Possible performance hit - these clones can be replaced by modifying remove_atom_from_index
                     let remove_atom = crate::Atom::new(subject.clone(), prop.into(), val.clone());
                     self.remove_atom_from_index(&remove_atom, resource, &mut transaction)
                         .map_err(|e| {
@@ -1461,9 +1451,16 @@ impl Storelike for Db {
                 self.add_atom_to_index(&a, resource, &mut transaction)
                     .map_err(|e| format!("Failed to add atom to index {}. {}", a, e))?;
             }
-            self.apply_transaction(&mut transaction)?;
         }
-        self.set_propvals(&subject_str, resource.get_propvals())?;
+        // Persist the resource data in the same transaction
+        let resource_bin = encode_propvals(resource.get_propvals())?;
+        transaction.push(Operation {
+            tree: Tree::Resources,
+            method: Method::Insert,
+            key: subject_str.as_bytes().to_vec(),
+            val: Some(resource_bin),
+        });
+        self.apply_transaction(&mut transaction)?;
         let _ = self.db_events.send(DbEvent::Changed {
             subject: resource.get_subject().without_params(),
             delta: None,
@@ -1992,6 +1989,14 @@ impl Storelike for Db {
 
     fn set_default_agent(&self, agent: crate::agents::Agent) {
         self.default_agent.lock().unwrap().replace(agent);
+    }
+
+    fn begin_batch(&self) {
+        self.kv.begin_batch();
+    }
+
+    fn commit_batch(&self) -> AtomicResult<()> {
+        self.kv.commit_batch()
     }
 }
 

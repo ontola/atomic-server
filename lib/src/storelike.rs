@@ -586,6 +586,14 @@ pub trait Storelike: Sized + Send + Sync {
     async fn validate(&self) -> crate::validate::ValidationReport {
         crate::validate::validate_store(self, false).await
     }
+
+    /// Start buffering writes for a single batched transaction.
+    fn begin_batch(&self) {}
+
+    /// Commit all buffered writes. No-op if not batching.
+    fn commit_batch(&self) -> AtomicResult<()> {
+        Ok(())
+    }
 }
 
 /// Use this to construct a list of Resources
