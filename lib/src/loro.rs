@@ -56,6 +56,8 @@ pub struct VersionMetadata {
 /// Atomic Data property/value pairs and Loro containers.
 pub struct AtomicLoroDoc {
     doc: LoroDoc,
+    /// Lazily initialized undo manager. Only created when undo/redo is needed.
+    undo_manager: std::sync::Mutex<Option<loro::UndoManager>>,
 }
 
 impl std::fmt::Debug for AtomicLoroDoc {
@@ -79,7 +81,10 @@ impl AtomicLoroDoc {
         let doc = LoroDoc::new();
         // Enable timestamps for history scrubbing
         doc.set_record_timestamp(true);
-        Self { doc }
+        Self {
+            doc,
+            undo_manager: std::sync::Mutex::new(None),
+        }
     }
 
     /// Create from an existing snapshot (e.g. loaded from the database).
@@ -88,7 +93,10 @@ impl AtomicLoroDoc {
         doc.set_record_timestamp(true);
         doc.import(snapshot)
             .map_err(|e| format!("Failed to import Loro snapshot: {e}"))?;
-        Ok(Self { doc })
+        Ok(Self {
+            doc,
+            undo_manager: std::sync::Mutex::new(None),
+        })
     }
 
     /// Import a binary update (from a commit's loroUpdate field).
@@ -310,6 +318,126 @@ impl AtomicLoroDoc {
             }
         }
         Ok(())
+    }
+
+    /// Insert a JSON item at a specific index in a JsonArray property's LoroList.
+    pub fn insert_into_json_array(
+        &self,
+        property: &str,
+        index: usize,
+        item: &serde_json::Value,
+    ) -> AtomicResult<()> {
+        let root = self.doc.get_map("properties");
+        match root.get(property) {
+            Some(loro::ValueOrContainer::Container(c)) => {
+                let list = c
+                    .into_list()
+                    .map_err(|_| format!("{property} is not a list"))?;
+                if index > list.len() {
+                    return Err(format!(
+                        "Index {index} out of bounds for {property} (len {})",
+                        list.len()
+                    )
+                    .into());
+                }
+                let map = list
+                    .insert_container(index, loro::LoroMap::new())
+                    .map_err(|e| format!("Loro insert_container error: {e}"))?;
+                json_value_to_loro_map(item, &map)?;
+                Ok(())
+            }
+            _ => Err(format!("{property} is not a list container").into()),
+        }
+    }
+
+    /// Delete an item at a specific index from a JsonArray property's LoroList.
+    pub fn delete_from_json_array(&self, property: &str, index: usize) -> AtomicResult<()> {
+        let root = self.doc.get_map("properties");
+        match root.get(property) {
+            Some(loro::ValueOrContainer::Container(c)) => {
+                let list = c
+                    .into_list()
+                    .map_err(|_| format!("{property} is not a list"))?;
+                if index >= list.len() {
+                    return Err(format!(
+                        "Index {index} out of bounds for {property} (len {})",
+                        list.len()
+                    )
+                    .into());
+                }
+                list.delete(index, 1)
+                    .map_err(|e| format!("Loro list delete error: {e}"))?;
+                Ok(())
+            }
+            _ => Err(format!("{property} is not a list container").into()),
+        }
+    }
+
+    /// Ensure the UndoManager is initialized. Call before mutations that
+    /// should be undoable. Subsequent calls are no-ops.
+    pub fn ensure_undo_manager(&self) {
+        let mut guard = self.undo_manager.lock().unwrap();
+        if guard.is_none() {
+            let mut um = loro::UndoManager::new(&self.doc);
+            um.set_max_undo_steps(200);
+            // Each top-level operation (push_stroke, delete_stroke) is its own
+            // undo step — don't merge based on time.
+            um.set_merge_interval(0);
+            *guard = Some(um);
+        }
+    }
+
+    /// Record a checkpoint so that subsequent operations form a new undo group.
+    pub fn checkpoint(&self) -> AtomicResult<()> {
+        self.ensure_undo_manager();
+        let mut guard = self.undo_manager.lock().unwrap();
+        if let Some(um) = guard.as_mut() {
+            um.record_new_checkpoint()
+                .map_err(|e| format!("Loro checkpoint error: {e}"))?;
+        }
+        Ok(())
+    }
+
+    /// Undo the last local operation. Returns true if something was undone.
+    pub fn undo(&self) -> AtomicResult<bool> {
+        self.ensure_undo_manager();
+        let mut guard = self.undo_manager.lock().unwrap();
+        match guard.as_mut() {
+            Some(um) if um.can_undo() => um
+                .undo()
+                .map_err(|e| format!("Loro undo error: {e}").into()),
+            _ => Ok(false),
+        }
+    }
+
+    /// Redo the last undone operation. Returns true if something was redone.
+    pub fn redo(&self) -> AtomicResult<bool> {
+        self.ensure_undo_manager();
+        let mut guard = self.undo_manager.lock().unwrap();
+        match guard.as_mut() {
+            Some(um) if um.can_redo() => um
+                .redo()
+                .map_err(|e| format!("Loro redo error: {e}").into()),
+            _ => Ok(false),
+        }
+    }
+
+    /// Whether undo is available.
+    pub fn can_undo(&self) -> bool {
+        self.undo_manager
+            .lock()
+            .ok()
+            .and_then(|g| g.as_ref().map(|um| um.can_undo()))
+            .unwrap_or(false)
+    }
+
+    /// Whether redo is available.
+    pub fn can_redo(&self) -> bool {
+        self.undo_manager
+            .lock()
+            .ok()
+            .and_then(|g| g.as_ref().map(|um| um.can_redo()))
+            .unwrap_or(false)
     }
 
     /// Remove a property from the root map.
@@ -1662,5 +1790,131 @@ mod test {
         }
 
         println!("TEST PASSED: concurrent JsonArray pushes merge correctly");
+    }
+
+    #[test]
+    fn delete_from_json_array() {
+        let prop = "https://atomicdata.dev/ontology/canvas/strokeData";
+        let doc = AtomicLoroDoc::new();
+        doc.set_property(
+            prop,
+            &Value::JsonArray(vec![
+                serde_json::json!({"color": 1}),
+                serde_json::json!({"color": 2}),
+                serde_json::json!({"color": 3}),
+            ]),
+        )
+        .unwrap();
+        doc.doc().commit();
+
+        // Delete the middle item (index 1)
+        doc.delete_from_json_array(prop, 1).unwrap();
+        doc.doc().commit();
+
+        let props = doc.get_all_properties();
+        let val = loro_value_to_atomic_value(props.get(prop).unwrap()).unwrap();
+        match val {
+            Value::JsonArray(arr) => {
+                assert_eq!(arr.len(), 2);
+                assert_eq!(arr[0]["color"], 1);
+                assert_eq!(arr[1]["color"], 3);
+            }
+            _ => panic!("Expected JsonArray"),
+        }
+
+        // Out of bounds should error
+        assert!(doc.delete_from_json_array(prop, 10).is_err());
+    }
+
+    #[test]
+    fn undo_redo_json_array() {
+        let prop = "https://atomicdata.dev/ontology/canvas/strokeData";
+        let doc = AtomicLoroDoc::new();
+        doc.set_property(prop, &Value::JsonArray(vec![])).unwrap();
+        doc.doc().commit();
+
+        // Initialize undo manager before making changes
+        doc.ensure_undo_manager();
+
+        // Push stroke 1
+        doc.push_to_json_array(prop, &serde_json::json!({"color": 1}))
+            .unwrap();
+        doc.doc().commit();
+        doc.checkpoint().unwrap();
+
+        // Push stroke 2
+        doc.push_to_json_array(prop, &serde_json::json!({"color": 2}))
+            .unwrap();
+        doc.doc().commit();
+        doc.checkpoint().unwrap();
+
+        // Should have 2 strokes
+        let count = |d: &AtomicLoroDoc| -> usize {
+            match d.get_all_properties().get(prop) {
+                Some(val) => match loro_value_to_atomic_value(val) {
+                    Some(Value::JsonArray(arr)) => arr.len(),
+                    _ => 0,
+                },
+                None => 0,
+            }
+        };
+        assert_eq!(count(&doc), 2);
+
+        // Undo stroke 2
+        assert!(doc.undo().unwrap());
+        assert_eq!(count(&doc), 1);
+
+        // Undo stroke 1
+        assert!(doc.undo().unwrap());
+        assert_eq!(count(&doc), 0);
+
+        // Redo stroke 1
+        assert!(doc.redo().unwrap());
+        assert_eq!(count(&doc), 1);
+
+        // Redo stroke 2
+        assert!(doc.redo().unwrap());
+        assert_eq!(count(&doc), 2);
+    }
+
+    #[test]
+    fn undo_delete_restores_item() {
+        let prop = "https://atomicdata.dev/ontology/canvas/strokeData";
+        let doc = AtomicLoroDoc::new();
+        doc.set_property(
+            prop,
+            &Value::JsonArray(vec![
+                serde_json::json!({"color": 1}),
+                serde_json::json!({"color": 2}),
+            ]),
+        )
+        .unwrap();
+        doc.doc().commit();
+
+        // Initialize undo manager
+        doc.ensure_undo_manager();
+        doc.checkpoint().unwrap();
+
+        // Delete item at index 0
+        doc.delete_from_json_array(prop, 0).unwrap();
+        doc.doc().commit();
+
+        let props = doc.get_all_properties();
+        let val = loro_value_to_atomic_value(props.get(prop).unwrap()).unwrap();
+        match &val {
+            Value::JsonArray(arr) => assert_eq!(arr.len(), 1),
+            _ => panic!("Expected JsonArray"),
+        }
+
+        // Undo the delete — item should come back
+        assert!(doc.undo().unwrap());
+        let props = doc.get_all_properties();
+        let val = loro_value_to_atomic_value(props.get(prop).unwrap()).unwrap();
+        match val {
+            Value::JsonArray(arr) => {
+                assert_eq!(arr.len(), 2, "Undo should restore the deleted item");
+            }
+            _ => panic!("Expected JsonArray"),
+        }
     }
 }

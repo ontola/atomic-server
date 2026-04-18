@@ -1040,51 +1040,100 @@ This adds round trips (O(log n)) but avoids sending the full list. For most driv
 - **Live sync**: implemented but **unauthenticated**. Pushes raw Loro snapshots, not signed commits. Works for single-agent multi-device but not for shared drives or relay scenarios.
 - **Merkle tree**: not implemented.
 
-### Live sync architecture (current)
+### Live sync architecture
 
-The Flutter canvas app implements real-time P2P sync via Iroh QUIC:
+Real-time P2P sync via Iroh QUIC. Two phases: initial sync (VV handshake) then live mode (persistent bi-directional stream).
 
-1. **Initial sync**: VV-based handshake (AUTH → SYNC → SYNC_DIFF → SYNC_PUSH) establishes baseline state
-2. **Live mode**: the same bi-directional QUIC stream transitions to a push-based channel after initial sync
-3. **Push loop**: watches `resource_changed` broadcast on the local DB, sends UPDATE frames (raw Loro snapshots) to all connected peers
-4. **Receive loop**: imports incoming UPDATE frames via Loro CRDT merge, materializes propvals, updates indexes
-5. **Auto-connect**: on startup, the device with the smaller NodeID initiates connection to known peers; retries every 5s on failure, checks every 30s for disconnects
-6. **Reactive UI**: `watchResource` and `watchChildren` bridge commands block in Rust on a `tokio::sync::broadcast` channel until matching changes arrive — no polling
+**Transport:**
+1. **Initial sync**: AUTH → SYNC → SYNC_DIFF → SYNC_PUSH establishes baseline state
+2. **Live mode**: same QUIC stream transitions to push-based channel. No reconnect needed per change.
+3. **Auto-connect**: on startup, device with smaller NodeID initiates. Retries every 5s. Checks every 30s for disconnects.
+4. **Reactive UI**: `watchResource` and `watchChildren` block in Rust on `tokio::sync::broadcast` until changes arrive — no polling.
 
-**Known limitations:**
+**Critical design decision: deltas, not snapshots.**
 
-- No authentication on live UPDATE frames — anyone on the QUIC connection can push arbitrary state
-- Deletions don't sync (no destroy commit propagation)
-- No commit history transfer — peers get state but not the audit trail
-- Snapshot-based push (full Loro snapshot per change) is bandwidth-inefficient for large resources
+The live push loop must send **Loro deltas** (`doc.export_updates_since(peer_vv)`), not full snapshots. This is essential because:
 
-### Authenticated live sync (design — not yet implemented)
+- **Deletions**: When a stroke is deleted from a LoroList, the delete operation is in the delta. If we send a full snapshot instead, the receiver's Loro doc merges the snapshot with its own state — and deleted items reappear from the other side's copy. Deltas include the delete operation, so the receiver applies it correctly.
+- **Bandwidth**: Deltas are typically < 1KB. Snapshots are 8-20KB+ and grow with history.
+- **Branching**: The full Loro oplog (including "undone" operations) is preserved in deltas. Snapshots flatten the state.
 
-The current live sync sends raw Loro snapshots. The proper design uses **signed commits** for live push and **signed snapshot attestations** for catch-up:
+Each peer tracks the other's version vector so it can compute the minimal delta. On reconnect after a gap, fall back to a full snapshot exchange (the VV handshake handles this).
 
-**Two message types for sync:**
+### Loro as the undo/history engine
 
-- **COMMIT** (live, real-time): a signed delta. Created locally when a change happens. Streamed to connected peers. The receiver runs `apply_commit` which validates the signature and checks write permissions. Small (just the delta), fast (no round trip). Multiple concurrent commits from different peers merge via Loro CRDT — the commit DAG is a graph, not a chain.
+**Don't build a custom undo system on top of Loro.** Loro IS the undo system.
 
-- **SIGNED UPDATE** (catch-up, reconnection): a signed snapshot attestation. When peers reconnect after a gap, they exchange full Loro snapshots signed by someone with write access. The receiver verifies the signature and imports the snapshot. No need to replay intermediate commits.
+The current Flutter canvas has a custom `_allActions` / `HistoryAction` list for undo/redo and a `DiscardedBranch` system for branching. This fights with Loro's oplog. The refactor:
 
-**Relay-safe:** If device B receives a commit from device A and forwards it to device C, C can verify A's signature directly. B can't tamper with the commit without invalidating the signature. This enables mesh-style relay without trusting intermediaries.
+- **Drawing a stroke** → `resource.push_list_item(prop, stroke)` → Loro list append
+- **Erasing a stroke** → `resource.delete_list_item(prop, index)` → Loro list delete
+- **Undo** → `resource.undo()` → Loro reverses the last operation (adds a counter-op to the oplog)
+- **Redo** → `resource.redo()` → Loro re-applies the reversed operation
+- **Branching** → save current Loro frontiers, checkout a previous version, continue from there. Both branches exist in the same Loro doc as divergent paths in the operation DAG.
+- **Branch preview** → `resource.view_at(frontier)` → read-only snapshot of that branch
+- **Branch restore** → checkout that frontier, continue editing from there
 
-**History as a separate concern:**
+The Loro doc keeps ALL operations forever (including undone ones). "Undo" is not deleting history — it's adding new operations that reverse the effect. "Branch" is just a different frontier in the DAG.
 
-Commits serve dual purpose: transport (sync) and audit (history). These can be separated:
+### Resource API for list mutations
 
-- **State** (always synced): the Loro snapshot — the current merged state. Every peer has this.
-- **Recent commits** (live): streamed between connected peers. Useful for undo and real-time collaboration. Kept in memory or short-term storage.
-- **Full commit history** (on-demand): the complete signed audit trail from genesis to now. Stored by nodes that care about accountability. Fetchable via `GET_HISTORY` request.
-- **Loro internal history** (always available): the Loro oplog inside each snapshot contains the full operational history — who changed what, when. This is not the same as signed commits (no signature verification possible) but sufficient for undo/time-travel.
+`atomic_lib` wraps Loro with a thin Resource API:
 
-Nodes choose their own retention policy:
-- Canvas app (personal): transit-only — import the Loro delta, discard the commit envelope
-- Business app: keep every commit — full cryptographic audit trail
-- Relay node: forward commits, don't store them
+```rust
+// List operations (CRDT-safe, generates delta ops)
+resource.push_list_item(property, value)       // append to LoroList
+resource.delete_list_item(property, index)     // delete from LoroList
+resource.insert_list_item(property, index, value) // insert at position
 
-**Open design question:** Should `previous_commit` still be required? For P2P sync, it creates ordering problems (which "previous" commit when two peers edited concurrently?). Loro's version vectors already capture causality. The commit could just be `{ subject, signer, loro_update, signature, timestamp }` — no chain, no ordering. The Loro doc handles merge semantics.
+// Undo/redo (delegates to Loro)
+resource.undo()                                // reverse last operation
+resource.redo()                                // re-apply reversed operation
+
+// Branching (delegates to Loro frontiers)
+resource.get_current_version() -> VersionID
+resource.checkout(version: VersionID)
+resource.view_at(version: VersionID) -> Resource  // read-only snapshot
+
+// Save (exports delta, creates commit, persists)
+resource.save_locally(store)                   // export delta → commit → sign → persist
+```
+
+SDK users work with resources and properties. Loro handles CRDT merging, undo, branching, and history underneath.
+
+### Commits and sync
+
+**Commits carry Loro deltas, not snapshots.** A commit is:
+
+```
+{ subject, signer, loro_update (delta bytes), signature, timestamp }
+```
+
+No `previous_commit` chain. Loro's version vectors capture causality. Concurrent commits from different peers are independent operations that Loro merges.
+
+**Two sync modes:**
+
+- **COMMIT** (live, real-time): signed delta, streamed to connected peers. Small, fast, relay-safe (B can forward A's signed commit to C — C verifies A's signature directly).
+- **Snapshot exchange** (catch-up): full VV handshake on reconnect. Both sides send Loro deltas/snapshots for divergent resources.
+
+**History retention is per-node policy:**
+
+- Transit-only: import delta, discard commit envelope (canvas app, personal use)
+- Full audit: keep every signed commit (business app, compliance)
+- Relay: forward commits, don't store
+
+Peers can request full commit history via `GET_HISTORY` if needed.
+
+### The snapshot-vs-delta problem (current bug)
+
+The current implementation sends full Loro snapshots on every change. This causes a critical bug:
+
+1. Device A has strokes `[a, b, c]`. User erases stroke `b`. Loro records a delete operation. A's doc has `[a, c]`.
+2. Device B has strokes `[a, b, c]` (from before the erase).
+3. A sends its full snapshot to B. B does `doc.import(snapshot)` — this MERGES. Loro sees B's `b` and A's delete of `b`. The delete should win, but because A sent a snapshot (which is a separate doc lineage), Loro treats it as concurrent state and keeps both.
+4. Result: `b` reappears on A after the next sync. Erase is undone.
+
+**Fix:** Send `doc.export_updates_since(peer_version_vector)` — a delta that includes the delete operation. B imports the delta, applies the delete, gets `[a, c]`. Correct.
 
 ## Iroh: Zero-Config Peer-to-Peer
 
@@ -1194,44 +1243,47 @@ No server required for two devices on the same network to sync.
 
 ## Open Questions
 
-- **Local push notifications**: Resolved — the `resource_changed` broadcast channel notifies both local UI and the sync push loop. Local writes and remote writes trigger the same reactive path.
-- **Schema bootstrap**: The WASM DB needs property definitions to parse resources and build indexes. Currently seeded from the in-memory Store. With Loro-primary, the schema (properties, classes) would also be Loro docs. How do we bootstrap — ship a built-in vocabulary snapshot?
-- **Mesh peer discovery**: Partially resolved. QR code pairing (`did:ad:node:<nodeId>`) handles manual discovery. Pkarr relay (agent → NodeID mapping) exists but has limitations for shared drives (only maps agent public key, not drive DID). For shared drives, a server or relay is needed as a rendezvous point.
-- **Freshness**: Show local data immediately, update when server/peer responds. But what if local data is weeks old and the server has a much newer version? Should there be a staleness indicator?
-- **Loro version compatibility**: What happens when peers run different Loro versions? Snapshots and deltas need to be compatible across versions. This may require versioning the wire format.
-- **Large resources**: Loro snapshots grow with edit history. For long-lived documents, snapshots could be megabytes. The current live sync sends full snapshots on every change — this is wasteful. Should switch to deltas for live push, snapshots for catch-up only.
-- **Query indexing from Loro**: Partially resolved. `add_resource_opts` updates the query index (including watched queries) when synced resources are imported. `JsonArray` type maps to native LoroList for CRDT-friendly list operations.
-- **Deletion sync**: Not implemented. Requires a signed destroy commit to be propagated through the sync protocol. The current live sync only handles updates, not deletions.
-- **`previous_commit` in P2P**: The linear commit chain (`previous_commit`) doesn't work well with concurrent edits from multiple peers. Should this become optional? Loro's version vectors already capture causality. Commits could be standalone signed attestations without requiring chain ordering.
-- **Snapshot vs delta efficiency**: The live sync currently sends full Loro snapshots (~8-20KB per change). For real-time drawing (many strokes per second), this is too much bandwidth. Should switch to Loro deltas for live push (typically < 1KB) and full snapshots only for catch-up sync.
-- **NDK 27 llvm-strip corruption**: The NDK 27 `llvm-strip` tool corrupts large debug `.so` files. Currently worked around by disabling the `stripDebugDebugSymbols` Gradle task. Needs a proper fix (upgrade NDK, use Rust-level stripping, or file a bug).
+- **Schema bootstrap**: The WASM DB needs property definitions to parse resources and build indexes. How do we bootstrap — ship a built-in vocabulary snapshot?
+- **Mesh peer discovery for shared drives**: QR pairing works for personal devices. For shared drives (multiple agents), a server or relay is needed as a rendezvous point. Pkarr relay only maps agent public key → NodeID, not drive → NodeIDs.
+- **Loro version compatibility**: What happens when peers run different Loro versions? May require versioning the wire format.
+- **Loro oplog compaction**: Loro docs grow with every operation. For long-lived resources with thousands of edits, the oplog becomes large. Loro supports shallow snapshots (trim old history) — when should this happen? How does it interact with branching (which needs the full oplog)?
+- **Custom undo system removal**: The Flutter canvas currently has its own undo system (`_allActions`, `HistoryAction`, `DiscardedBranch`) that duplicates and conflicts with Loro's oplog. Needs migration to Loro-native undo/redo/branching.
 
-# Temporal Data Architecture Implementation
+## Persistence Model
 
-## The Two-Tree Persistence Model
-To balance the requirements of high-speed queries and collaborative CRDT power, the database maintains two distinct representations of every resource:
+Two trees per resource:
 
-1. **`Tree::Resources` (Materialized View / Read Cache)**
-   - **Data:** Flat Property-Value pairs (no history).
-   - **Format:** MessagePack.
-   - **Path:** Standard reads, search indexing, TPF queries.
-   - **Performance:** Instant lookup; no Loro VM initialization required.
+1. **`Tree::Resources`** — materialized propvals (flat key-value, MessagePack). Used for reads, queries, indexing. Instant lookup, no Loro initialization needed.
+2. **`Tree::LoroSnapshots`** — full Loro binary (operation DAG). Used for sync, undo/redo, branching, history. Loaded lazily.
 
-2. **`Tree::LoroSnapshots` (Canonical Store / History)**
-   - **Data:** Full Loro binary snapshot (Operation DAG).
-   - **Format:** Loro Binary.
-   - **Path:** Background sync (Iroh/WebSockets), History Scrubbing, Undo/Redo.
-   - **Performance:** Loaded lazily into memory only when a temporal operation is requested.
+Every mutation flows through Loro first, then materializes into propvals. The Loro doc is the source of truth. Propvals are the read cache.
 
-## Temporal Resource API (Rust/Dart)
-The SDK exposes a "temporal-ready" Resource object.
+## Refactor: delta-based sync + Loro-native undo
 
-- **Lazy Loading ("Warming"):** A Resource instance initializes its internal Loro document from bytes only when history or editing is needed.
-- **In-Memory Scrubbing:** Jumps between historical versions are pure CPU pointer moves in the Loro DAG, requiring zero database I/O once the doc is warmed.
-- **Detached Views:** `resource.view_at(version)` returns a new, read-only Resource instance representing the state at that moment.
+### What needs to change
 
-## Synchronization Protocol
-Sync is primarily Loro-native. 
-1. Peers exchange **Version Vectors (VV)**.
-2. The sender calculates the binary delta from its `LoroSnapshots` tree.
-3. The receiver imports the delta, merges it locally, and then **re-materializes** the result into its `Resources` tree to update the UI and indexes.
+**1. Live sync: deltas instead of snapshots**
+
+The push loop must track each peer's version vector and send `doc.export_updates_since(peer_vv)` instead of the full snapshot. This fixes deletion sync, reduces bandwidth, and preserves the full oplog (including undo history) across devices.
+
+```rust
+// Push loop (per peer):
+let delta = doc.export_updates_since(&peer_version_vector);
+send_update_frame(peer, subject, delta);
+peer_version_vector = doc.oplog_version(); // update after send
+```
+
+**2. Resource API: list mutation methods**
+
+Add `delete_list_item`, `undo`, `redo`, `checkout` to `Resource`. These delegate to Loro and generate deltas for the commit.
+
+**3. Canvas: replace custom undo with Loro undo**
+
+Remove `_allActions`, `HistoryAction`, `_actionIndex`. Replace with:
+- `resource.undo()` / `resource.redo()` for undo/redo
+- `resource.get_current_version()` / `resource.checkout(version)` for branching
+- `resource.view_at(version)` for branch preview
+
+**4. Commits: drop `previous_commit` requirement for P2P**
+
+Commits become standalone signed attestations: `{ subject, signer, loro_update (delta), signature, timestamp }`. Loro version vectors handle causality. No chain ordering needed.
