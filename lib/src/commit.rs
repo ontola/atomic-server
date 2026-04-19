@@ -472,20 +472,61 @@ impl Commit {
             && applied.add_atoms.is_empty()
             && applied.remove_atoms.is_empty()
         {
-            tracing::warn!(
-                "[causality-guard] rejecting commit with non-trivial loroUpdate that produced \
-                 no state changes (silent LWW loss): subject={}, loro_bytes={}",
-                commit.subject,
-                commit.loro_update.as_ref().map(|b| b.len()).unwrap_or(0),
-            );
-            return Err(format!(
-                "Commit's Loro update produced no state changes — its writes were \
-                 silently dropped by LWW against stored state. The client's Loro doc \
-                 wasn't seeded from the server's current state. Refetch the resource \
-                 and retry the commit. subject={}",
-                commit.subject
-            )
-            .into());
+            // Decode the incoming update in isolation to see what the client
+            // INTENDED to write. Works cleanly when the client sends snapshots;
+            // may be empty for pure deltas.
+            let incoming_intent = commit
+                .loro_update
+                .as_ref()
+                .map(|bytes| {
+                    let doc = crate::loro::AtomicLoroDoc::new();
+                    let _ = doc.import_update(bytes);
+                    doc.get_all_properties()
+                })
+                .unwrap_or_default();
+            let merged_doc = applied.resource_new.build_loro_doc_from_state()?;
+            let merged_state = merged_doc.get_all_properties();
+
+            // Idempotent replay check: if every property the client tried to
+            // write already matches the merged state exactly, the commit is a
+            // no-op, not a silent drop. Let it through — the client simply
+            // re-sent state that was already correct (common pattern when an
+            // UI flow calls `resource.set(x, v)` with the same v that's
+            // already stored, then saves).
+            let all_match = !incoming_intent.is_empty()
+                && incoming_intent.iter().all(|(key, incoming_val)| {
+                    merged_state.get(key).is_some_and(|mv| mv == incoming_val)
+                });
+
+            if all_match {
+                tracing::debug!(
+                    subject = %commit.subject,
+                    keys = ?incoming_intent.keys().collect::<Vec<_>>(),
+                    "[causality-guard] accepting idempotent no-op commit (values match stored state)"
+                );
+            } else {
+                tracing::warn!(
+                    subject = %commit.subject,
+                    loro_bytes = commit.loro_update.as_ref().map(|b| b.len()).unwrap_or(0),
+                    incoming_intent = ?incoming_intent,
+                    merged_state = ?merged_state,
+                    "[causality-guard] rejecting commit with non-trivial loroUpdate that produced no state changes (silent LWW loss)"
+                );
+
+                return Err(format!(
+                    "Commit's Loro update produced no state changes — its writes were \
+                     silently dropped by LWW against stored state. The client's Loro doc \
+                     wasn't seeded from the server's current state. Refetch the resource \
+                     and retry the commit. subject={} incoming_intent={:?} merged_state_keys={:?}",
+                    commit.subject,
+                    incoming_intent
+                        .iter()
+                        .map(|(k, v)| format!("{k} = {v:?}"))
+                        .collect::<Vec<_>>(),
+                    merged_state.keys().collect::<Vec<_>>(),
+                )
+                .into());
+            }
         }
 
         if opts.validate_rights {
