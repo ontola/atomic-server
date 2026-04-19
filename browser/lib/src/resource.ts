@@ -1657,8 +1657,11 @@ export class Resource<C extends OptionalClass = any> {
     // Also update the in-memory store so the UI reflects changes immediately.
     this.store.addResources(this, { skipCommitCompare: true });
 
-    // Clear pending commits — they've been incorporated into the resource state.
-    this._pendingCommits = [];
+    // Intentionally DO NOT clear `_pendingCommits` here. They've been applied
+    // locally for the UI, but the server hasn't seen them yet. On reconnect,
+    // `syncDirtyResources` calls `pushCommits()` which drains this queue and
+    // POSTs each commit. Clearing here previously caused offline-created
+    // resources to be "marked synced" without ever reaching the server.
   }
 
   /**
