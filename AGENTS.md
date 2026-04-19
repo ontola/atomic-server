@@ -28,6 +28,20 @@ In E2E tests, most specs use `test.beforeEach(before)` from `test-utils.ts`, whi
 - Is there a signed-in agent?
 - Run `devDrive(page)` to reset to a clean state.
 
+## DevTools Console Helpers
+
+In dev mode, `window.devtools` exposes diagnostics for inspecting a resource across every persistence layer. Run `devtools.help()` for the list. Most useful:
+
+| call | what it does |
+|---|---|
+| `devtools.inspect(subject?)` | JS store + WASM/OPFS + server HTTP GET, side-by-side. Defaults to the URL's `?subject=` (or current drive). |
+| `devtools.opfsList(prefix?)` | Subjects in the WASM DB (default prefix `did:ad:`) |
+| `devtools.wsLog(n?)` | `console.table` of the last N commit log entries |
+| `devtools.problems()` | Resources currently loading, errored, or new |
+| `devtools.forcePut(subject)` | Re-serialize a JS-store resource into OPFS with round-trip verification |
+
+Source: `browser/data-browser/src/helpers/devtools.ts`.
+
 ## Architecture Overview
 
 Atomic Server is a graph database with real-time sync, built on **Loro CRDT** for conflict-free collaborative editing.

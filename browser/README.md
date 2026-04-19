@@ -63,6 +63,20 @@ React library with many useful hooks for rendering and editing Atomic Data.
 
 [→ Read more](react/README.md)
 
+## DevTools Console Helpers
+
+In dev mode, `window.devtools` exposes diagnostics for inspecting state across persistence layers. Run `devtools.help()` in the browser console for the list.
+
+| call | what it does |
+|---|---|
+| `devtools.inspect(subject?)` | JS store + WASM/OPFS + server HTTP GET, side-by-side. Defaults to the URL's `?subject=` (or current drive). |
+| `devtools.opfsList(prefix?)` | Subjects in the WASM DB (default prefix `did:ad:`) |
+| `devtools.wsLog(n?)` | `console.table` of the last N commit log entries |
+| `devtools.problems()` | Resources currently loading, errored, or new |
+| `devtools.forcePut(subject)` | Re-serialize a JS-store resource into OPFS with round-trip verification |
+
+Source: `data-browser/src/helpers/devtools.ts`.
+
 ## Also check out
 
 - [atomic-data-rust](https://github.com/atomicdata-dev/atomic-data-rs), a rust [**library**](https://crates.io/crates/atomic-lib), [**server**](https://crates.io/crates/atomic-server) and [**cli**](https://crates.io/crates/atomic-cli) for Atomic Data.

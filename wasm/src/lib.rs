@@ -22,23 +22,25 @@ pub struct ClientDb {
 #[wasm_bindgen]
 impl ClientDb {
     /// Create a new ClientDb with OPFS persistence.
-    /// Data survives page reloads. Falls back to in-memory if OPFS is unavailable.
     /// `base_url` is the server URL, e.g. "https://myserver.com".
+    ///
+    /// Hard-fails if OPFS is unavailable. A silent in-memory fallback was
+    /// masking real bugs — resources appeared to persist (PUTs succeeded
+    /// against RAM) but vanished on reload, producing "Offline: resource
+    /// not available locally" with no indication why. The most common cause
+    /// is another tab holding the exclusive OPFS sync access handle; the
+    /// thrown error should say so.
     #[wasm_bindgen(constructor)]
     pub async fn new(base_url: Option<String>) -> Result<ClientDb, JsError> {
-        // Try OPFS first (persistent), fall back to in-memory
-        let db = match Db::init_redb_opfs(base_url.clone(), "atomic_data.redb").await {
-            Ok(db) => {
-                web_sys::console::log_1(&"[ClientDb] Using OPFS persistent storage".into());
-                db
-            }
-            Err(e) => {
-                web_sys::console::warn_1(
-                    &format!("[ClientDb] OPFS unavailable ({e}), using in-memory").into(),
-                );
-                Db::init_redb(base_url).await.map_err(to_js_err)?
-            }
-        };
+        let db = Db::init_redb_opfs(base_url, "atomic_data.redb")
+            .await
+            .map_err(|e| to_js_err(format!(
+                "OPFS unavailable ({e}). Another tab may be holding the \
+                 exclusive sync access handle on atomic_data.redb. Close \
+                 other tabs of this origin, or clear site data (DevTools → \
+                 Application → Storage), then reload.",
+            )))?;
+        web_sys::console::log_1(&"[ClientDb] Using OPFS persistent storage".into());
         Ok(ClientDb { db })
     }
 
