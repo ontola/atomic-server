@@ -46,6 +46,16 @@ export class ClientDbWorker {
   private seeded = true;
   private initPromise: Promise<void> | null = null;
   private seedPromise: Promise<void> | null = null;
+  private _initError: Error | undefined = undefined;
+
+  /**
+   * The error that caused init to fail, if any. Stable across retries until
+   * a fresh ClientDbWorker is created. Common cause: OPFS hard-fail when
+   * another tab of the origin holds the exclusive sync access handle.
+   */
+  get initError(): Error | undefined {
+    return this._initError;
+  }
 
   /**
    * @param wasmUrl - URL to the atomic_wasm.js glue module (e.g. '/wasm/atomic_wasm.js')
@@ -103,8 +113,13 @@ export class ClientDbWorker {
       console.error('[ClientDb Worker Error]', event.message);
     };
 
-    await this.send({ type: 'init', wasmUrl: this.wasmUrl, baseUrl });
-    this.ready = true;
+    try {
+      await this.send({ type: 'init', wasmUrl: this.wasmUrl, baseUrl });
+      this.ready = true;
+    } catch (e) {
+      this._initError = e instanceof Error ? e : new Error(String(e));
+      throw e;
+    }
   }
 
   /** Get a resource by subject. Returns JSON-AD string or null. */

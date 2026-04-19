@@ -420,6 +420,7 @@ msgstr "Kein Code-Verifizierer gefunden"
 #: src/components/forms/SearchBox/SearchBox.tsx
 #: src/routes/LinkOpenRouter.tsx
 #: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
 msgid "Error"
 msgstr "Fehler"
 
@@ -4910,13 +4911,11 @@ msgstr ""
 msgid "Connected"
 msgstr ""
 
-#: src/routes/SyncRoute.tsx
-msgid "Local storage"
-msgstr ""
+#~ msgid "Local storage"
+#~ msgstr ""
 
-#: src/routes/SyncRoute.tsx
-msgid "Ready"
-msgstr ""
+#~ msgid "Ready"
+#~ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Initializing..."
@@ -5129,10 +5128,20 @@ msgstr ""
 msgid "Local DB"
 msgstr ""
 
+#~ msgid "WASM + OPFS enabled"
+#~ msgstr ""
+
+#~ msgid "Disabled (server-only, reload to apply)"
+#~ msgstr ""
+
 #: src/routes/SyncRoute.tsx
-msgid "WASM + OPFS enabled"
+msgid "Disabled (server-only)"
 msgstr ""
 
 #: src/routes/SyncRoute.tsx
-msgid "Disabled (server-only, reload to apply)"
+msgid "Ready — WASM + OPFS"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Enable local WASM DB"
 msgstr ""
