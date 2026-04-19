@@ -49,8 +49,14 @@ export class ClientDbWorker {
 
   /**
    * @param wasmUrl - URL to the atomic_wasm.js glue module (e.g. '/wasm/atomic_wasm.js')
-   * @param workerUrl - URL to the compiled worker script. If not provided, the worker
-   *   will be created from a blob URL using the built-in worker code.
+   * @param workerUrl - URL to the worker script.
+   *
+   * Dedicated Worker (one per tab). OPFS sync access handles are exclusive
+   * per file across the origin, so a second tab will hard-fail on init with
+   * a clear NoModificationAllowedError message. We looked at SharedWorker
+   * (to share a single handle) but OPFS sync handles are only available in
+   * DedicatedWorkerGlobalScope, and Chrome's nested-worker pathway didn't
+   * work either. Single-tab is the pragmatic endpoint for now.
    */
   constructor(wasmUrl: string, workerUrl?: string) {
     this.wasmUrl = wasmUrl;
@@ -69,14 +75,14 @@ export class ClientDbWorker {
   }
 
   private async doInit(baseUrl?: string): Promise<void> {
-    if (this.workerUrl) {
-      this.worker = new Worker(this.workerUrl, { type: 'module' });
-    } else {
+    if (!this.workerUrl) {
       throw new Error(
         'ClientDbWorker requires a workerUrl. ' +
-          'Pass the URL to the compiled client-db.worker.js file.',
+          'Pass the URL to the client-db-worker.js file.',
       );
     }
+
+    this.worker = new Worker(this.workerUrl, { type: 'module' });
 
     this.worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
       const { id, type, ...rest } = event.data;

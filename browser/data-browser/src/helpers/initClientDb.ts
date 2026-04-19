@@ -4,14 +4,15 @@ import { ClientDbWorker, type Store } from '@tomic/lib';
 let currentWorker: ClientDbWorker | undefined;
 
 /**
- * Initialize the WASM ClientDb in a Web Worker and attach it to the Store.
+ * Initialize the WASM ClientDb in a dedicated Worker and attach it to the Store.
  * Uses OPFS for persistent storage — data survives page reloads.
- * Falls back to in-memory if OPFS is unavailable.
+ * Hard-fails on OPFS unavailable (e.g. second tab of the origin) — see
+ * wasm/src/lib.rs::ClientDb::new for the error message.
  */
 export function initClientDb(store: Store): void {
   if (typeof Worker === 'undefined') return;
 
-  // Terminate previous worker (important for Vite HMR — releases OPFS lock).
+  // Terminate previous worker (important for Vite HMR — releases OPFS handle).
   if (currentWorker) {
     currentWorker.destroy();
     currentWorker = undefined;
