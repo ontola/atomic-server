@@ -54,6 +54,17 @@ pub struct CommitOpts {
     /// Checks whether the previous Commit applied to the resource matches the one mentioned in the Commit/
     /// This makes sure that the Commit is not applied twice, or that the one creating it had a faulty state.
     pub validate_previous_commit: bool,
+    /// Detects commits whose Loro update's writes silently lost LWW against
+    /// the stored state — i.e. the client's Loro doc wasn't seeded from the
+    /// server's current state, so its ops are concurrent with stored ops and
+    /// get dropped by Loro's conflict resolution. When this happens, the
+    /// commit would "succeed" but the server-visible state wouldn't reflect
+    /// the client's intent. With this enabled, we reject such commits so the
+    /// client can refetch and retry.
+    ///
+    /// Turn off for true multi-peer sync (mesh/Iroh) where concurrent writes
+    /// are expected and LWW is the correct resolution.
+    pub validate_loro_causality: bool,
     /// Updates the indexes in the Store. Is a bit more costly.
     pub update_index: bool,
     /// For who the right checks will be perormed. If empty, the signer of the Commit will be used.
@@ -68,6 +79,7 @@ impl CommitOpts {
             validate_timestamp: false,
             validate_rights: false,
             validate_previous_commit: false,
+            validate_loro_causality: false,
             update_index: false,
             validate_for_agent: None,
         }
@@ -439,6 +451,42 @@ impl Commit {
                     commit.subject, e
                 )
             })?;
+
+        // Causality guard: a commit with a non-trivial loroUpdate that
+        // produces ZERO net state change means the incoming ops lost LWW
+        // against stored state — silent drop. Happens when the client's
+        // Loro doc isn't seeded from the server's state (fresh peer ID,
+        // concurrent writes). Reject so the silent data loss surfaces.
+        //
+        // Exemptions:
+        // - destroy commits (no Loro merge to evaluate).
+        // - tiny/empty loroUpdate (client didn't really try to write).
+        // - genesis commits (is_new): there is no stored state to lose to,
+        //   so an empty diff here just means the client's Loro ops didn't
+        //   translate into materialized atoms (e.g. raw container init
+        //   without value writes). Not the bug we're catching.
+        if opts.validate_loro_causality
+            && !is_new
+            && !commit.destroy.unwrap_or(false)
+            && commit.loro_update.as_ref().map(|b| b.len()).unwrap_or(0) > 16
+            && applied.add_atoms.is_empty()
+            && applied.remove_atoms.is_empty()
+        {
+            tracing::warn!(
+                "[causality-guard] rejecting commit with non-trivial loroUpdate that produced \
+                 no state changes (silent LWW loss): subject={}, loro_bytes={}",
+                commit.subject,
+                commit.loro_update.as_ref().map(|b| b.len()).unwrap_or(0),
+            );
+            return Err(format!(
+                "Commit's Loro update produced no state changes — its writes were \
+                 silently dropped by LWW against stored state. The client's Loro doc \
+                 wasn't seeded from the server's current state. Refetch the resource \
+                 and retry the commit. subject={}",
+                commit.subject
+            )
+            .into());
+        }
 
         if opts.validate_rights {
             let signer_str = commit.signer.to_string();
@@ -953,6 +1001,7 @@ mod test {
             validate_signature: true,
             validate_timestamp: true,
             validate_previous_commit: true,
+            validate_loro_causality: true,
             validate_rights: false,
             validate_for_agent: None,
             update_index: true,
@@ -1619,6 +1668,221 @@ mod test {
             !serialized.contains("@id"),
             "deterministic serialization must not contain @id, got: {}",
             serialized
+        );
+    }
+
+    /// Regression: renaming a resource with two sequential commits should
+    /// persist the SECOND name. Previously observed symptom: the client types
+    /// "New Drive" one character at a time, each keystroke sends a commit,
+    /// but only the first one sticks — the stored name remains "N".
+    ///
+    /// This exercises the real `store.apply_commit` path (not just
+    /// `apply_changes`) so persistence + rehydration are part of the test.
+    #[tokio::test]
+    async fn two_sequential_commits_both_land() {
+        let (store, agent) = store_with_known_agent().await;
+        let subject = "https://localhost/rename_target";
+
+        // Commit 1: create resource with name="N"
+        let client_doc = crate::loro::AtomicLoroDoc::new();
+        client_doc
+            .set_property(crate::urls::NAME, &Value::String("N".into()))
+            .unwrap();
+        client_doc
+            .set_property(
+                crate::urls::IS_A,
+                &Value::ResourceArray(vec![crate::urls::CLASS.to_string().into()]),
+            )
+            .unwrap();
+        client_doc
+            .set_property(
+                crate::urls::SHORTNAME,
+                &Value::String("n".into()),
+            )
+            .unwrap();
+        client_doc
+            .set_property(
+                crate::urls::DESCRIPTION,
+                &Value::String("desc".into()),
+            )
+            .unwrap();
+
+        let empty = Resource::new(subject.into());
+        let mut builder = CommitBuilder::new(subject.into());
+        builder.set_loro_update(client_doc.export_snapshot());
+        let commit1 = builder.sign(&agent, &store, &empty).await.unwrap();
+        store.apply_commit(commit1, &OPTS).await.unwrap();
+
+        let after_first = store.get_resource(&subject.into()).await.unwrap();
+        assert_eq!(
+            after_first.get(crate::urls::NAME).unwrap().to_string(),
+            "N",
+            "commit 1 should set name to N"
+        );
+
+        // Commit 2: rename to "Ne" — same Loro doc (incremental), so the
+        // exported snapshot represents one op of the same peer ID.
+        client_doc
+            .set_property(crate::urls::NAME, &Value::String("Ne".into()))
+            .unwrap();
+        let mut builder2 = CommitBuilder::new(subject.into());
+        builder2.set_loro_update(client_doc.export_snapshot());
+        // `sign()` auto-fills previous_commit from the resource's lastCommit.
+        let commit2 = builder2.sign(&agent, &store, &after_first).await.unwrap();
+        store.apply_commit(commit2, &OPTS).await.unwrap();
+
+        let after_second = store.get_resource(&subject.into()).await.unwrap();
+        assert_eq!(
+            after_second.get(crate::urls::NAME).unwrap().to_string(),
+            "Ne",
+            "commit 2 should rename name to Ne — if this fails, sequential commits aren't merging properly"
+        );
+    }
+
+    /// Same as above but each commit comes from a FRESH Loro doc seeded from
+    /// the server's previous snapshot — simulates a client that rebuilds its
+    /// Loro state between commits (or a peer that joins mid-session).
+    #[tokio::test]
+    async fn two_commits_with_fresh_doc_per_commit_both_land() {
+        let (store, agent) = store_with_known_agent().await;
+        let subject = "https://localhost/rename_fresh_doc";
+
+        // Commit 1: name="N" from a fresh doc.
+        let doc1 = crate::loro::AtomicLoroDoc::new();
+        doc1.set_property(crate::urls::NAME, &Value::String("N".into()))
+            .unwrap();
+        doc1.set_property(
+            crate::urls::IS_A,
+            &Value::ResourceArray(vec![crate::urls::CLASS.to_string().into()]),
+        )
+        .unwrap();
+        doc1.set_property(
+            crate::urls::SHORTNAME,
+            &Value::String("n".into()),
+        )
+        .unwrap();
+        doc1.set_property(
+            crate::urls::DESCRIPTION,
+            &Value::String("desc".into()),
+        )
+        .unwrap();
+
+        let empty = Resource::new(subject.into());
+        let mut builder = CommitBuilder::new(subject.into());
+        builder.set_loro_update(doc1.export_snapshot());
+        let commit1 = builder.sign(&agent, &store, &empty).await.unwrap();
+        store.apply_commit(commit1, &OPTS).await.unwrap();
+
+        let after_first = store.get_resource(&subject.into()).await.unwrap();
+        assert_eq!(
+            after_first.get(crate::urls::NAME).unwrap().to_string(),
+            "N"
+        );
+
+        // Commit 2: client rebuilds Loro doc from the server's stored state,
+        // then mutates. This models "fresh doc per commit" client behaviour.
+        let stored_snapshot = match after_first.get(crate::urls::LORO_UPDATE).unwrap() {
+            Value::LoroDoc(b) => b.clone(),
+            other => panic!("expected LoroDoc, got {:?}", other),
+        };
+        let doc2 = crate::loro::AtomicLoroDoc::from_snapshot(&stored_snapshot).unwrap();
+        doc2.set_property(crate::urls::NAME, &Value::String("Ne".into()))
+            .unwrap();
+
+        let mut builder2 = CommitBuilder::new(subject.into());
+        builder2.set_loro_update(doc2.export_snapshot());
+        let commit2 = builder2.sign(&agent, &store, &after_first).await.unwrap();
+        store.apply_commit(commit2, &OPTS).await.unwrap();
+
+        let after_second = store.get_resource(&subject.into()).await.unwrap();
+        assert_eq!(
+            after_second.get(crate::urls::NAME).unwrap().to_string(),
+            "Ne",
+            "fresh-doc-per-commit should still land the second rename"
+        );
+    }
+
+    /// Two commits where each commit comes from a FRESH Loro doc with a
+    /// different peer ID, NOT seeded from the server's state. Writes to the
+    /// same key are concurrent — whichever ordering Loro's LWW picks
+    /// determines the outcome. If this test is flaky / picks the first write,
+    /// it reproduces the observed rename bug.
+    #[tokio::test]
+    async fn two_commits_with_independent_docs_both_peers_same_key() {
+        let (store, agent) = store_with_known_agent().await;
+        let subject = "https://localhost/concurrent_peers";
+
+        // Commit 1: docA → name="A"
+        let doc_a = crate::loro::AtomicLoroDoc::new();
+        doc_a
+            .set_property(crate::urls::NAME, &Value::String("A".into()))
+            .unwrap();
+        doc_a
+            .set_property(
+                crate::urls::IS_A,
+                &Value::ResourceArray(vec![crate::urls::CLASS.to_string().into()]),
+            )
+            .unwrap();
+        doc_a
+            .set_property(
+                crate::urls::SHORTNAME,
+                &Value::String("a".into()),
+            )
+            .unwrap();
+        doc_a
+            .set_property(
+                crate::urls::DESCRIPTION,
+                &Value::String("desc".into()),
+            )
+            .unwrap();
+
+        let empty = Resource::new(subject.into());
+        let mut builder = CommitBuilder::new(subject.into());
+        builder.set_loro_update(doc_a.export_snapshot());
+        let commit1 = builder.sign(&agent, &store, &empty).await.unwrap();
+        store.apply_commit(commit1, &OPTS).await.unwrap();
+
+        // Commit 2: docB = FRESH, NOT seeded from server. Different peer ID.
+        let doc_b = crate::loro::AtomicLoroDoc::new();
+        doc_b
+            .set_property(crate::urls::NAME, &Value::String("B".into()))
+            .unwrap();
+        doc_b
+            .set_property(
+                crate::urls::IS_A,
+                &Value::ResourceArray(vec![crate::urls::CLASS.to_string().into()]),
+            )
+            .unwrap();
+        doc_b
+            .set_property(
+                crate::urls::SHORTNAME,
+                &Value::String("b".into()),
+            )
+            .unwrap();
+        doc_b
+            .set_property(
+                crate::urls::DESCRIPTION,
+                &Value::String("desc".into()),
+            )
+            .unwrap();
+
+        let after_first = store.get_resource(&subject.into()).await.unwrap();
+        let mut builder2 = CommitBuilder::new(subject.into());
+        builder2.set_loro_update(doc_b.export_snapshot());
+        let commit2 = builder2.sign(&agent, &store, &after_first).await.unwrap();
+        let err = store.apply_commit(commit2, &OPTS).await.unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("silently dropped"),
+            "expected silent-drop error from causality guard, got: {msg}"
+        );
+
+        // Stored state is unchanged; commit 2 was rejected.
+        let after_second = store.get_resource(&subject.into()).await.unwrap();
+        assert_eq!(
+            after_second.get(crate::urls::NAME).unwrap().to_string(),
+            "A",
+            "stored name should still be `A` since commit 2 was rejected"
         );
     }
 

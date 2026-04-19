@@ -25,6 +25,7 @@ import { Card } from '../components/Card';
 import { ResourceInline } from '../views/ResourceInline';
 import { AtomicLink } from '../components/AtomicLink';
 import { formatTimeAgo } from '../helpers/formatTimeAgo';
+import { isRunningInTauri } from '../helpers/tauri';
 import { appRoute } from './RootRoutes';
 import { pathNames } from './paths';
 import { useSettings } from '../helpers/AppSettings';
@@ -234,51 +235,68 @@ function SyncPage() {
       <ContainerNarrow>
         <h1>Sync</h1>
         <Lead>
-          Your data is stored locally on this device. When connected to a
-          server, changes sync automatically.
+          {isRunningInTauri()
+            ? 'Your data lives on this device. Add peers or a remote server to sync.'
+            : 'Your data is stored locally on this device. When connected to a server, changes sync automatically.'}
         </Lead>
 
-        {/* Visual sync diagram */}
-        <SyncDiagram>
-          <SyncNode $status='synced'>
+        {isRunningInTauri() ? (
+          <LocalDevice>
             <NodeIcon $status='synced'>
               <FaLaptop />
             </NodeIcon>
-            <NodeLabel>This device</NodeLabel>
-          </SyncNode>
+            <LocalDeviceBody>
+              <NodeLabel>This device</NodeLabel>
+              <Muted style={{ margin: 0, fontSize: '0.85rem' }}>
+                {status.lastDriveSync
+                  ? `${status.lastDriveSync.count} resources stored locally`
+                  : 'Local storage ready'}
+              </Muted>
+            </LocalDeviceBody>
+          </LocalDevice>
+        ) : (
+          /* Visual sync diagram (client-server) */
+          <SyncDiagram>
+            <SyncNode $status='synced'>
+              <NodeIcon $status='synced'>
+                <FaLaptop />
+              </NodeIcon>
+              <NodeLabel>This device</NodeLabel>
+            </SyncNode>
 
-          <SyncLine $status={nodes.line}>
-            <LineTrack $offline={nodes.line === 'offline'} />
-            {nodes.line === 'syncing' && <LinePulse />}
-            {(nodes.line === 'synced' || nodes.line === 'unsynced') && (
-              <HeartbeatDot $status={nodes.line} />
-            )}
-          </SyncLine>
+            <SyncLine $status={nodes.line}>
+              <LineTrack $offline={nodes.line === 'offline'} />
+              {nodes.line === 'syncing' && <LinePulse />}
+              {(nodes.line === 'synced' || nodes.line === 'unsynced') && (
+                <HeartbeatDot $status={nodes.line} />
+              )}
+            </SyncLine>
 
-          <SyncNode $status={nodes.server}>
-            <NodeIcon $status={nodes.server}>
-              <FaServer />
-            </NodeIcon>
-            <NodeLabel>
-              {status.serverUrl
-                ? new URL(status.serverUrl).hostname
-                : 'Server'}
-            </NodeLabel>
-            <NodeStatusBadge $status={nodes.server}>
-              <StatusIcon status={nodes.server} />
-              {statusLabel(nodes.server)}
-            </NodeStatusBadge>
-            {status.serverConnected ? (
-              <NodeAction onClick={() => store.disconnect()}>
-                Disconnect
-              </NodeAction>
-            ) : (
-              <NodeAction onClick={() => store.reconnect()}>
-                Reconnect
-              </NodeAction>
-            )}
-          </SyncNode>
-        </SyncDiagram>
+            <SyncNode $status={nodes.server}>
+              <NodeIcon $status={nodes.server}>
+                <FaServer />
+              </NodeIcon>
+              <NodeLabel>
+                {status.serverUrl
+                  ? new URL(status.serverUrl).hostname
+                  : 'Server'}
+              </NodeLabel>
+              <NodeStatusBadge $status={nodes.server}>
+                <StatusIcon status={nodes.server} />
+                {statusLabel(nodes.server)}
+              </NodeStatusBadge>
+              {status.serverConnected ? (
+                <NodeAction onClick={() => store.disconnect()}>
+                  Disconnect
+                </NodeAction>
+              ) : (
+                <NodeAction onClick={() => store.reconnect()}>
+                  Reconnect
+                </NodeAction>
+              )}
+            </SyncNode>
+          </SyncDiagram>
+        )}
 
 
         {/* Details accordion */}
@@ -296,7 +314,9 @@ function SyncPage() {
               </DetailValue>
             </DetailItem>
             <DetailItem>
-              <DetailLabel>Server</DetailLabel>
+              <DetailLabel>
+                {isRunningInTauri() ? 'Remote server' : 'Server'}
+              </DetailLabel>
               <DetailValue>
                 <ServerSelect
                   value={baseURL ?? ''}
@@ -306,7 +326,10 @@ function SyncPage() {
                     <option key={s} value={s}>
                       {s.startsWith('iroh:')
                         ? `iroh:${s.slice(5, 13)}...`
-                        : new URL(s).hostname}
+                        : isRunningInTauri() &&
+                            new URL(s).hostname === 'localhost'
+                          ? 'Embedded (local)'
+                          : new URL(s).hostname}
                     </option>
                   ))}
                 </ServerSelect>
@@ -438,12 +461,14 @@ function SyncPage() {
                 )}
               </DetailValue>
             </DetailItem>
-            <DetailItem>
-              <DetailLabel>Local storage</DetailLabel>
-              <DetailValue>
-                {status.clientDbReady ? 'Ready' : 'Initializing...'}
-              </DetailValue>
-            </DetailItem>
+            {!isRunningInTauri() && (
+              <DetailItem>
+                <DetailLabel>Local storage</DetailLabel>
+                <DetailValue>
+                  {status.clientDbReady ? 'Ready' : 'Initializing...'}
+                </DetailValue>
+              </DetailItem>
+            )}
             {status.lastDriveSync && (
               <DetailItem>
                 <DetailLabel>Last sync</DetailLabel>
@@ -649,6 +674,20 @@ const SyncDiagram = styled.div`
   gap: 0;
   padding: 2rem 1rem;
   margin-bottom: 2rem;
+`;
+
+const LocalDevice = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 2rem 1rem;
+  margin-bottom: 2rem;
+`;
+
+const LocalDeviceBody = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
 `;
 
 const SyncNode = styled.div<{ $status: NodeStatus }>`

@@ -261,10 +261,16 @@ export function GettingStartedFlow({
 }
 
 export const Shell = styled.div`
-  min-height: ${p => p.theme.heights.fullPage};
+  /* height, not min-height: the parent body has overflow:hidden, so Shell
+     owns the scroll on short windows. */
+  height: ${p => p.theme.heights.fullPage};
+  overflow-y: auto;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
+  /* 'safe center' keeps content centered when it fits but falls back to
+     flex-start when it overflows, so the top is reachable via scroll. */
+  justify-content: safe center;
   padding: ${p => p.theme.size(7)} ${p => p.theme.size(5)};
   box-sizing: border-box;
   ${welcomeBackgroundCss}

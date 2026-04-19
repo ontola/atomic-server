@@ -4,10 +4,10 @@
   "version": "0.36.0",
   "identifier": "com.atomicdata.dev",
   "build": {
-    "frontendDist": "dist",
-    "devUrl": "http://localhost:9883",
-    "beforeDevCommand": "",
-    "beforeBuildCommand": ""
+    "frontendDist": "../browser/data-browser/dist-tauri",
+    "devUrl": "http://localhost:5173",
+    "beforeDevCommand": "TAURI=1 pnpm -C browser/data-browser dev",
+    "beforeBuildCommand": "pnpm -C browser/data-browser build:tauri"
   },
   "app": {
     "windows": [
@@ -20,7 +20,8 @@
       }
     ],
     "security": {
-      "csp": "default-src blob: data: filesystem: ws: wss: http: https: tauri: 'unsafe-eval' 'unsafe-inline' 'self' img-src: 'self'"
+      "csp": null,
+      "dangerousDisableAssetCspModification": true
     },
     "trayIcon": {
       "iconPath": "icons/icon.png",

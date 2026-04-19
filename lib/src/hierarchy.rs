@@ -254,6 +254,7 @@ mod test {
             validate_timestamp: true,
             validate_rights: true,
             validate_previous_commit: false,
+            validate_loro_causality: false,
             update_index: true,
             validate_for_agent: Some(agent.subject.to_string()),
         };

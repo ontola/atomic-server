@@ -4841,14 +4841,14 @@ msgstr "Offline"
 msgid "Unknown"
 msgstr "Unknown"
 
-#: src/routes/SyncRoute.tsx
-msgid ""
-"Your data is stored locally on this device. When connected to a\n"
-"server, changes sync automatically."
-msgstr ""
-"Your data is stored locally on this device. When connected to a\n"
-"server, changes sync automatically."
+#~ msgid ""
+#~ "Your data is stored locally on this device. When connected to a\n"
+#~ "server, changes sync automatically."
+#~ msgstr ""
+#~ "Your data is stored locally on this device. When connected to a\n"
+#~ "server, changes sync automatically."
 
+#: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "This device"
 msgstr "This device"
@@ -5068,3 +5068,23 @@ msgstr "did:ad:node:{0}..."
 #: src/routes/SyncRoute.tsx
 msgid "Paste did:ad:node:..."
 msgstr "Paste did:ad:node:..."
+
+#: src/routes/SyncRoute.tsx
+msgid "Your data lives on this device. Add peers or a remote server to sync."
+msgstr "Your data lives on this device. Add peers or a remote server to sync."
+
+#: src/routes/SyncRoute.tsx
+msgid "Your data is stored locally on this device. When connected to a server, changes sync automatically."
+msgstr "Your data is stored locally on this device. When connected to a server, changes sync automatically."
+
+#: src/routes/SyncRoute.tsx
+msgid "Local storage ready"
+msgstr "Local storage ready"
+
+#: src/routes/SyncRoute.tsx
+msgid "Remote server"
+msgstr "Remote server"
+
+#: src/routes/SyncRoute.tsx
+msgid "Embedded (local)"
+msgstr "Embedded (local)"

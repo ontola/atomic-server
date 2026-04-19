@@ -441,6 +441,31 @@ The mapping between commits and Loro versions:
 - The server now serializes the freshest in-memory Loro snapshot into normal JSON-AD resource responses when Loro state is present, so clients can bootstrap from server-side Loro state more reliably.
 - The transport is still JSON-AD-first on normal reads and WebSocket resource updates. We have not yet introduced a snapshot-first or delta-first resource transport.
 
+**Transition state: JSON-AD carries `loroUpdate` alongside materialized props**
+
+Today the server's JSON-AD response for a resource with Loro state looks roughly like:
+
+```json
+{
+  "@id": "did:ad:...",
+  "name": "Folder",
+  "is-a": ["https://atomicdata.dev/classes/Folder"],
+  "parent": "did:ad:...",
+  "loro-update": "<base64 Loro snapshot>"
+}
+```
+
+This is intentional for the transition but is strictly redundant — the materialized props are a view of the same state the `loro-update` blob encodes. It buys Loro-aware clients a one-round-trip bootstrap: parse JSON-AD for rendering, feed the same payload's `loro-update` into their Loro doc for future edits.
+
+The redundancy is most visible in the debug data view (`data-browser/src/routes/DataRoute.tsx`), which fetches and displays the raw JSON-AD. It's not visible to most consumers since they read through `Resource` / `Store`, which just does the right thing.
+
+Target end state (Phase 2 complete):
+- HTTP JSON-AD responses drop `loroUpdate`. JSON-AD returns to being a pure materialized view, served to non-Loro-aware HTTP consumers (curl, external APIs).
+- Loro-aware clients receive snapshots / deltas as binary over WebSocket subscribe (and later Iroh QUIC / Tauri IPC for in-process bindings). No round-trip penalty because the snapshot arrives with the initial SUBSCRIBE response.
+- Commits still carry `loroUpdate` — that's the write path, separate from the serve/read path.
+
+Migration order: (1) add a binary snapshot channel over WS, (2) flip clients to prefer it, (3) drop `loroUpdate` from JSON-AD responses. Reversed order breaks bootstrap for clients mid-upgrade.
+
 ### Phase 3: Unify WASM DB and server communication
 - WASM DB worker speaks the same SUBSCRIBE/QUERY protocol as the server WebSocket
 - Store registers subscriptions on both WASM worker and server WebSocket
@@ -1245,13 +1270,13 @@ No server required for two devices on the same network to sync.
 
 ### What it is today
 
-`desktop/` is a thin Tauri 2 shell that embeds `atomic-server` and runs it on a background `actix-rt` thread. The browser bundle in `dist/` connects to `ws://localhost:9883` like it would to any remote server. Iroh is enabled (`atomic_lib` with the `iroh` feature), so the same binary is already a peer node. HTTPS is off — nothing external reaches the embedded server.
+`desktop/` is a thin Tauri 2 shell that embeds `atomic-server` and runs it on a background `actix-rt` thread. The Tauri webview loads a nonce-free frontend bundle (`browser/data-browser/dist-tauri/`), and the frontend connects to `ws://localhost:9883` — the embedded server in the same process. Iroh is enabled (`atomic_lib` with the `iroh` feature), so the same binary is already a peer node. HTTPS is off (`atomic-server` built with `default-features = false`) — nothing external reaches the embedded server.
 
-See §Iroh → "Desktop app as a peer" for the peering role. This section covers storage and transport architecture.
+See §Iroh → "Desktop app as a peer" for the peering role. This section covers storage, transport, and the Tauri-specific build pipeline.
 
 ### Where data lives
 
-One place: the embedded server's `Db` (ReDB). That's the canonical store — Loro snapshots, materialized props, indexes, commits, agent keys.
+One place: the embedded server's `Db` (ReDB), under `~/Library/Application Support/atomic-data/store/` on macOS (`directories::ProjectDirs::from("", "", "atomic-data")`). That's the canonical store — Loro snapshots, materialized props, indexes, commits, agent keys.
 
 Not: OPFS, not the browser WASM DB, not localStorage, not JS-side persistence. The browser view holds Loro docs in memory for rendering and rehydrates from `Db` via the same v2 protocol any remote browser would use.
 
@@ -1271,30 +1296,56 @@ Via the same WebSocket the browser uses for remote servers: `ws://localhost:9883
 
 Tradeoff: you pay serialization you could skip by going through Tauri IPC directly. That optimization is available later (v2 frames are transport-agnostic), but loopback WS overhead is measured in microseconds, not milliseconds. Don't pay the refactor cost until profiling demands it.
 
-### When to skip the WASM DB
+### Two frontend bundles — `dist/` vs `dist-tauri/`
 
-Not as a Tauri-specific branch. As a Store configuration: *"my primary backend is local and instant, so skip the OPFS cache layer."* Browsers pointed at a remote server still get WASM DB + offline. Desktops (and any future in-process binding — FFI, Tauri IPC) just don't need it.
+The server and the Tauri webview need *different* frontend bundles. They can't share one:
 
-```ts
-new Store({
-  serverUrl: 'ws://localhost:9883',
-  useClientDb: false,  // local backend is already instant
-});
-```
+| Bundle | Consumers | CSP model | Service worker | `ATOMICSERVER_NONCE` placeholders | Built by |
+|--------|-----------|-----------|-----------------|-----------------------------------|----------|
+| `browser/data-browser/dist/` | atomic-server (HTTP) | server replaces nonces per request | yes (PWA) | yes | `pnpm build` |
+| `browser/data-browser/dist-tauri/` | Tauri webview | static, no nonces | no | no | `TAURI=1 pnpm build:tauri` |
 
-One flag, no branching code paths.
+Why:
+- The server rewrites `ATOMICSERVER_NONCE` to a fresh random nonce on every HTTP response. Tauri serves the HTML verbatim via its custom protocol — no substitution happens, so the placeholder would remain and every `<style>` / `<script>` with `nonce="ATOMICSERVER_NONCE"` would be blocked by CSP.
+- Tauri 2 auto-injects its own nonces into `style-src` for IPC bootstrap. Per the CSP spec, a directive with any nonce source makes `'unsafe-inline'` inert — so styled-components' dynamic styles get blocked regardless of what we configure. The simplest fix is to disable Tauri's asset CSP modification entirely (`dangerousDisableAssetCspModification: true`) and set `csp: null`. Safe for a local desktop app where all JS is bundled and no third-party content is loaded.
+- `vite-plugin-pwa` registers a service worker, but `navigator.serviceWorker.register()` rejects the `tauri:` protocol — it requires HTTP(S).
 
-### Migration size
+`vite.config.ts` reads `process.env.TAURI === '1'` at build time and branches: skips the `VitePWA` plugin, sets `html.cspNonce` to `undefined`, sets `build.outDir` to `dist-tauri`. `tauri.conf.json` points `frontendDist` at `../browser/data-browser/dist-tauri`, and its `beforeBuildCommand` invokes `pnpm -C browser/data-browser build:tauri`.
 
-Two scales:
+### Avoiding the double JS rebuild
 
-**Minimum viable — drop the WASM DB on desktop (~20 lines).** One config flag threaded through `Store`, default `false` under `isTauri()`. The existing `clientDb?.whatever()` null-checks already handle the missing-backend case. Zero Store refactor, ships today.
+Because `desktop` depends on `atomic-server`, building the Tauri app transitively invokes `server/build.rs`, which watches JS sources and runs `pnpm build` if they've changed. That produces two parallel cargo invocations (`cargo build --bins --release` for the desktop binary and `cargo build --lib --release --target wasm32-unknown-unknown` from `wasm-pack`) contending for the same target-directory file lock — deadlock.
 
-**Full cleanup — Backend abstraction (Phase 4).** Today the Store has explicit `clientDb` branches across ~8 files (~56 references in `store.ts`, `resource.ts`, `collection.ts`, `websockets.ts`, and data-browser helpers). A `Backend` interface and `BackendManager` that routes subscribe/query/commit generically would eliminate these branches and be the natural home for future transports (FFI, mesh, Iroh-from-browser-via-bridge). Do this when a second in-process binding forces the shape — not speculatively.
+Fix: `desktop/.cargo/config.toml` sets `ATOMICSERVER_SKIP_JS_BUILD=true` for any cargo invoked from the desktop crate. `server/build.rs` already honors this env var (it skips the JS rebuild). The server's embedded assets may be stale as a result, but the Tauri webview doesn't serve them — it uses `dist-tauri/` via the custom protocol.
 
-### Deferred: HTTP server removal
+### Dev loop with HMR
 
-The §One Rust Crate, Every Target section argues desktop should "drop the HTTP server" entirely. That's aspirational. HTTP plays a small role today — WebSocket is the hot path, and loopback WS is cheap. The real win from that migration is dropping the Actix dependency, which matters mostly for mobile / constrained targets. For desktop specifically, the embedded server stays.
+`cargo tauri dev` starts Vite at `localhost:5173` via `beforeDevCommand: "TAURI=1 pnpm -C browser/data-browser dev"`, waits for the dev server to respond, then launches the Tauri binary. The webview loads from 5173 (not 9883) so HMR works on every `.tsx` save. The Store's `serverUrl` still resolves to `http://localhost:9883` — `App.tsx` checks `isRunningInTauri()` and hardcodes the embedded server's port, since `window.location.origin` in Tauri is `tauri://localhost`.
+
+### Tauri 2 runtime detection
+
+`window.__TAURI_METADATA__` was the v1 global; Tauri 2 renamed it to `__TAURI_INTERNALS__`. `isRunningInTauri()` now checks both, plus `window.location.protocol === 'tauri:'` as a protocol-level fallback. The check is used to branch `initClientDb`, the serverUrl default, and the SyncRoute layout.
+
+### Migration status
+
+Shipped:
+- Skip WASM ClientDb under Tauri — one guard in `App.tsx`
+- Force serverUrl to `http://localhost:9883` under Tauri — overrides the `tauri://localhost` origin
+- Separate `dist-tauri/` Vite build — no nonces, no PWA
+- `ATOMICSERVER_SKIP_JS_BUILD=true` in `desktop/.cargo/config.toml` — avoids the double-build deadlock
+- Devtools enabled in release builds via the `devtools` Tauri feature
+- Tauri-specific SyncRoute layout (single "this device" node, no client-server diagram) gated on `isRunningInTauri()`
+- Vite HMR available via `cargo tauri dev` (devUrl → 5173)
+
+Not yet:
+- `Backend` abstraction (design doc Phase 4) — deferred until a second in-process binding (FFI, Tauri IPC) lands
+- Dropping the embedded HTTP server — real win is shedding Actix for mobile, not desktop
+- Replacing loopback WS with Tauri IPC for zero-copy in-process calls — premature until profiling shows WS overhead matters
+
+### Known issues
+
+- **Resources can stall after webview reload.** After Cmd+R, some resource fetches show "loading" indefinitely. The embedded server's data on disk is intact; the JS Store's refetch path doesn't always complete. Likely a WebSocket reconnect / fetch-queue timing issue rather than missing data — worth instrumenting before fixing.
+- **First-attempt WebSocket failures on launch.** The server starts on a background thread while the webview loads in parallel, and the webview sometimes wins the race. The Store retries cover it, but the error surfaces in devtools.
 
 ## Open Questions
 

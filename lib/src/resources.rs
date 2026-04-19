@@ -745,6 +745,7 @@ impl Resource {
             validate_for_agent: Some(agent.subject.to_string()),
             // TODO: auto-merge should work before we enable this https://github.com/atomicdata-dev/atomic-server/issues/412
             validate_previous_commit: false,
+            validate_loro_causality: false,
             update_index: true,
         };
         let commit_response = store.apply_commit(commit, &opts).await?;
@@ -772,6 +773,7 @@ impl Resource {
             validate_for_agent: Some(agent.subject.to_string()),
             // https://github.com/atomicdata-dev/atomic-server/issues/412
             validate_previous_commit: false,
+            validate_loro_causality: false,
             update_index: true,
         };
         let commit_response = store.apply_commit(commit, &opts).await?;
@@ -815,6 +817,7 @@ impl Resource {
             validate_rights: false,
             validate_for_agent: Some(agent.subject.to_string()),
             validate_previous_commit: false,
+            validate_loro_causality: false,
             update_index: true,
         };
 
@@ -1316,6 +1319,7 @@ mod test {
                     validate_timestamp: true,
                     validate_rights: false,
                     validate_previous_commit: true,
+                    validate_loro_causality: false,
                     validate_for_agent: None,
                     update_index: true,
                 },

@@ -21,6 +21,7 @@ import { serverURLStorage } from './serverURLStorage';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { errorHandler } from '../handlers/errorHandler';
 import { isDev } from '../config';
+import { getLocalServerOrigin } from './tauri';
 
 interface ProviderProps {
   children: ReactNode;
@@ -71,9 +72,7 @@ export const AppSettingsContextProvider = (
     useLocalStorage('sidebarKeyboardDndEnabled', false);
 
   useEffect(() => {
-    const currentOrigin = isDev()
-      ? 'http://localhost:9883'
-      : window.location.origin;
+    const currentOrigin = isDev() ? 'http://localhost:9883' : getLocalServerOrigin();
 
     serverURLStorage.addKnownServer(currentOrigin);
   }, []);
