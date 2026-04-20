@@ -83,8 +83,11 @@ source of truth. Clients are offline-first **replicas**:
   authority over deletes.
 
 Same-agent multi-device needs **no share invite** for your own drive
-([`virtual-drive.md`](./virtual-drive.md)). Cross-agent sharing is a separate product
-([`sync.md`](./sync.md) handshake notes).
+([`virtual-drive.md`](./virtual-drive.md)). Cross-agent sharing is a separate
+product — primitives and trust model in
+[`authorization-sync.md`](./authorization-sync.md) (delegated A → B → C,
+volunteer replicas, indexers, paired-subtree DMs, constrained append-only
+inbox); UX/handshake notes in [`sync.md`](./sync.md).
 
 ### Two sync layers (do not conflate)
 

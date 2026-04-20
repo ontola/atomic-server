@@ -271,6 +271,16 @@ is derived from its genesis commit's signature; verifying a resource's identity
 requires the genesis commit's signed content. They are one per resource and
 tiny — retaining them is cheap and non-negotiable.
 
+**Cross-agent authorization extends the floor.** Once cross-agent grant-chain
+verification is in scope (see
+[`authorization-sync.md`](./authorization-sync.md)), the must-retain floor
+expands beyond genesis to include rights-changing commits (`read` / `write` /
+`append` / future group/capability), parent-changing commits, and destroy
+commits — collectively, the *authorization-critical* commits needed to
+explain why a given signer was allowed to write at a given point. A node
+configured `retention=none` keeps this expanded floor, not only genesis.
+Ordinary content commits remain discardable.
+
 ## DID genesis
 
 DID resource identity still derives from the genesis commit signature:
@@ -471,8 +481,17 @@ materialized state before commit retention can safely become optional.
 
 ## Open questions
 
-1. Should retention be per-node, per-drive, or per-resource? (Leaning
-   per-node, with a per-drive override for shared/audited drives.)
+1. **Retention scope.** Should retention be per-node, per-drive, or
+   per-resource? (Leaning per-node, with a per-drive override for
+   shared/audited drives.)
+   [`authorization-sync.md`](./authorization-sync.md#per-class-retention-preferences)
+   proposes a fourth axis — **per-class** retention preferences declared
+   in the ontology — which is orthogonal to the three above. The three
+   layers compose: node policy is the outer bound, per-class preference
+   is the hint inside it, and the cross-agent authorization-critical
+   floor (genesis + rights-changing + parent-changing + destroy) wins
+   over both. See
+   [`authorization-sync.md` § Relationship to node-level retention policy](./authorization-sync.md#relationship-to-node-level-retention-policy).
 2. Do audit feeds need a bounded mode with periodic signed checkpoints, so a
    feed survives `recent` eviction without keeping every commit?
 3. How should a node advertise its retention policy to clients and peers?
