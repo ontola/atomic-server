@@ -22,13 +22,16 @@ async function renameDrive(page: Page, text: string) {
   await editableTitle(page).fill('');
   await editableTitle(page).type(text, { delay: 30 });
   await page.keyboard.press('Escape');
+  // Bumped from 15s → 30s. Under parallel load (many tests hammering the
+  // server at once) the dirty-sync can take longer than the original budget.
+  // In isolation, this completes in <1s.
   await page.waitForFunction(
     () => {
       const status = (window as any).store?.getSyncStatus();
       return status?.serverConnected && status?.pendingDirtyCount === 0;
     },
     undefined,
-    { timeout: 15000 },
+    { timeout: 30000 },
   );
 }
 

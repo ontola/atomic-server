@@ -442,6 +442,25 @@ impl Commit {
             commit.validate_previous_commit(&resource_old, subject_url.as_str())?;
         };
 
+        // Reject commits that carry no Loro update and aren't a destroy.
+        // Loro is the single source of truth for all user data; a commit
+        // without it cannot change any searchable state. Previously, such
+        // commits (typically legacy `set`/`push` bodies from old client code)
+        // appeared to succeed but left the resource un-indexed — the search
+        // index read from propvals, which only get materialized when Loro
+        // imports fire. A destroy commit is the one exception.
+        let is_destroy = commit.destroy.unwrap_or(false);
+        if commit.loro_update.is_none() && !is_destroy {
+            return Err(format!(
+                "Commit for {} has no `loroUpdate` and is not a destroy. Loro \
+                 is required for all state-changing commits — legacy `set` / \
+                 `push` / `remove` maps are not applied. Please upgrade the \
+                 client to send Loro updates.",
+                commit.subject
+            )
+            .into());
+        }
+
         let mut applied = commit
             .apply_changes(resource_old.clone())
             .await
@@ -895,10 +914,30 @@ impl CommitBuilder {
 
         // Pass the resource's existing Loro snapshot so sign_at can build
         // incremental updates on top of it instead of creating a detached doc.
-        let existing_snapshot = match resource.get(urls::LORO_UPDATE) {
-            Ok(Value::LoroDoc(snapshot)) => Some(snapshot.clone()),
-            _ => None,
-        };
+        //
+        // We try three sources, in order:
+        //   1. the resource's `loroUpdate` propval (preferred — already a snapshot),
+        //   2. `resource.export_loro_snapshot()` if it has a live Loro doc,
+        //   3. build a Loro doc from the resource's propvals and snapshot that.
+        //
+        // Without (3), resources whose state lives only in propvals (e.g.
+        // legacy agent rows added via `set_unsafe`) would give `sign_at` no
+        // base snapshot, so it would build the commit's Loro update on a
+        // FRESH doc. That update then merges concurrently with the receiver's
+        // seeded-from-propvals doc; LWW tie-breaks by peer-id and often
+        // silently drops the incoming writes — the exact symptom seen in
+        // `test_did_agent_edit` where an agent name edit didn't persist.
+        let existing_snapshot: Option<Vec<u8>> =
+            match resource.get(urls::LORO_UPDATE) {
+                Ok(Value::LoroDoc(snapshot)) => Some(snapshot.clone()),
+                _ => resource.export_loro_snapshot().or_else(|| {
+                    // Fall back to seeding a doc from propvals.
+                    resource
+                        .build_loro_doc_from_state()
+                        .ok()
+                        .map(|doc| doc.export_snapshot())
+                }),
+            };
 
         let now = crate::utils::now();
         sign_at(self, agent, now, store, existing_snapshot.as_deref()).await
@@ -1191,18 +1230,28 @@ mod test {
         let agent = store.create_agent(Some("test_actor")).await.unwrap();
         let resource = Resource::new("https://localhost/test_resource".into());
 
+        // Helper — commits now must carry a loro_update (enforced by
+        // validate_and_build_response). Attach an empty-but-present Loro doc
+        // so the test exercises subject validation, not Loro absence.
+        let minimal_loro = || {
+            let doc = crate::loro::AtomicLoroDoc::new();
+            doc.export_snapshot()
+        };
+
         // Note: "invalid URL" now parses as Subject::Internal, which is valid
         // in the in-memory Store. Subject validation is handled by the Subject type itself.
         {
             let subject = "https://localhost/?q=invalid";
-            let commitbuiler = crate::commit::CommitBuilder::new(subject.into());
-            let commit = commitbuiler.sign(&agent, &store, &resource).await.unwrap();
+            let mut commitbuilder = crate::commit::CommitBuilder::new(subject.into());
+            commitbuilder.set_loro_update(minimal_loro());
+            let commit = commitbuilder.sign(&agent, &store, &resource).await.unwrap();
             store.apply_commit(commit, &OPTS).await.unwrap_err();
         }
         {
             let subject = "https://localhost/valid";
-            let commitbuiler = crate::commit::CommitBuilder::new(subject.into());
-            let commit = commitbuiler.sign(&agent, &store, &resource).await.unwrap();
+            let mut commitbuilder = crate::commit::CommitBuilder::new(subject.into());
+            commitbuilder.set_loro_update(minimal_loro());
+            let commit = commitbuilder.sign(&agent, &store, &resource).await.unwrap();
             store.apply_commit(commit, &OPTS).await.unwrap();
         }
         {
@@ -1213,6 +1262,7 @@ mod test {
             let subject = "did:ad:cbXxQGm7UBBS5JPvl/NR/p9RJNbSMUjvA7lRYQt9lZvKZrU1FBo6Icl5uctr7i1AMZ/mElWZ3X1dApo5ifzmBg==/subpath";
             let mut commitbuilder = crate::commit::CommitBuilder::new(subject.into());
             commitbuilder.is_genesis = true;
+            commitbuilder.set_loro_update(minimal_loro());
             let commit = commitbuilder.sign(&agent, &store, &resource).await.unwrap();
             let err = store.apply_commit(commit, &OPTS).await.unwrap_err();
             assert!(

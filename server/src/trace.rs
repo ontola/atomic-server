@@ -9,9 +9,18 @@ pub fn init_tracing(config: &crate::config::Config) -> Option<tracing_chrome::Fl
         crate::config::LogLevel::Debug => "debug",
         crate::config::LogLevel::Trace => "trace",
     };
-    // Only set RUST_LOG if not already set (allow .env to override)
+    // Only set RUST_LOG if not already set (allow .env to override).
+    // Third-party libraries kept at `warn` or higher to prevent log floods:
+    // - tantivy: normal indexing operations log at info, drowns our logs.
+    // - loro_internal: every snapshot export logs per-block-section counters.
+    // - pkarr / reqwest: chatty DHT/HTTP internals.
     if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", format!("{},tantivy=warn", log_level));
+        std::env::set_var(
+            "RUST_LOG",
+            format!(
+                "{log_level},tantivy=warn,loro_internal=warn,pkarr=warn,reqwest=warn"
+            ),
+        );
     }
     use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
     // Start tracing

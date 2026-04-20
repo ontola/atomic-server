@@ -84,13 +84,14 @@ pub async fn search_query(
     timer.add("execute_query");
     crate::metrics::search_performed();
     tracing::debug!(
-        "search_query: {} docs found for params: {:?}",
+        "search_query: tantivy returned {} docs for params={:?}",
         top_docs.len(),
         params
     );
     let subjects = docs_to_subjects(top_docs, &fields, &searcher)?;
     tracing::debug!(
-        "search_query: subjects after docs_to_subjects: {:?}",
+        "search_query: docs_to_subjects -> {} subjects: {:?}",
+        subjects.len(),
         subjects
     );
 
@@ -117,6 +118,11 @@ pub async fn search_query(
         limit,
     )
     .await?;
+    tracing::info!(
+        "search_query: after auth filter -> {} resources (was {} subjects)",
+        resources.len(),
+        subjects.len()
+    );
 
     // Convert the list of resources back into subjects.
     // We must resolve Internal subjects (e.g. "internal:/files/xxx") to full
