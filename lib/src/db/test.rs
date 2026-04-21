@@ -774,6 +774,118 @@ async fn query_by_parent_after_add_resource() {
     );
 }
 
+/// Production path: create a Drive via `store.create_drive`, add children
+/// via `apply_commit` (what WebSocket/HTTP commits do), then fetch them
+/// with a sorted query — the exact path the folder/table UI takes.
+/// Regression guard for "refreshing the table shows new rows / doesn't
+/// sort".
+#[tokio::test]
+async fn sorted_collection_after_apply_commit_is_stable() {
+    use crate::commit::{CommitBuilder, CommitOpts};
+
+    let store = Db::init_temp("collection_after_commit").await.unwrap();
+    let agent = store.create_agent(Some("test-agent")).await.unwrap();
+    store.set_default_agent(agent.clone());
+
+    let drive_did = store.create_drive("Test Drive").await.unwrap();
+
+    // Create children via DID-genesis commits — the frontend never picks
+    // its own subject; it signs a genesis commit and the server derives the
+    // DID from the signature. `Commit::create_did` is the same helper
+    // `store.create_drive` uses.
+    let opts = CommitOpts {
+        update_index: true,
+        ..CommitOpts::no_validations_no_index()
+    };
+    for name in &["alpha", "bravo", "charlie"] {
+        let mut b = CommitBuilder::new("placeholder".into());
+        b.set(urls::PARENT.into(), Value::AtomicUrl(drive_did.clone().into()));
+        b.set(urls::NAME.into(), Value::String((*name).to_string()));
+        let commit = crate::commit::Commit::create_did(b, &agent, &store)
+            .await
+            .unwrap();
+        store.apply_commit(commit, &opts).await.unwrap();
+    }
+
+    // Query via the same sorted path the UI uses.
+    let mut query = crate::storelike::Query::new_prop_val(urls::PARENT, &drive_did);
+    query.sort_by = Some(urls::NAME.to_string());
+    query.drive = Some(drive_did.clone().into());
+    query.limit = Some(100);
+
+    let first = store.query(&query).await.unwrap();
+    let second = store.query(&query).await.unwrap();
+
+    assert_eq!(
+        first.subjects, second.subjects,
+        "sorted query (post-commit) should be stable across calls. \
+         first={:?} second={:?}",
+        first.subjects, second.subjects
+    );
+    assert_eq!(
+        first.count, second.count,
+        "count should be stable across calls. first={} second={}",
+        first.count, second.count
+    );
+    assert_eq!(first.count, 3, "should find 3 children via commits");
+}
+
+/// Sorted query — the path folder/table UIs use. Routes through
+/// `query_complex`, which reads from `Tree::QueryMembers`, builds the index
+/// on first miss, and watches the filter. Regression guard for the
+/// "refreshing the table shows new rows / doesn't sort" symptom.
+#[tokio::test]
+async fn query_by_parent_sorted_is_stable_across_calls() {
+    let store = Db::init_temp("query_parent_sorted").await.unwrap();
+
+    let parent_subject = "https://localhost/parent-sorted";
+    let mut parent = crate::Resource::new(parent_subject.into());
+    parent.set_unsafe(urls::NAME.into(), Value::String("Parent".into()));
+    store
+        .add_resource_opts(&parent, false, true, true)
+        .await
+        .unwrap();
+
+    for name in &["alpha", "bravo", "charlie"] {
+        let subj = format!("https://localhost/sorted/{name}");
+        let mut r = crate::Resource::new(subj.into());
+        r.set_unsafe(
+            urls::PARENT.into(),
+            Value::AtomicUrl(parent_subject.into()),
+        );
+        r.set_unsafe(urls::NAME.into(), Value::String((*name).to_string()));
+        store.add_resource_opts(&r, false, true, true).await.unwrap();
+    }
+
+    let mut query = crate::storelike::Query::new_prop_val(urls::PARENT, parent_subject);
+    query.sort_by = Some(urls::NAME.to_string());
+    query.drive = Some("https://localhost".into());
+    query.limit = Some(100);
+
+    let first = store.query(&query).await.unwrap();
+    assert_eq!(
+        first.count, 3,
+        "first sorted query should find 3 children, got {}. Subjects: {:?}",
+        first.count, first.subjects
+    );
+
+    // The critical part: re-running the same query must return the SAME
+    // result. In the broken build, `is_watched` returns false on the second
+    // call and the index is rebuilt, which can yield duplicates or drifting
+    // ordering.
+    let second = store.query(&query).await.unwrap();
+    assert_eq!(
+        second.count, first.count,
+        "re-running the sorted query should return the same count. \
+         first={} second={}. Second subjects: {:?}",
+        first.count, second.count, second.subjects
+    );
+    assert_eq!(
+        second.subjects, first.subjects,
+        "sorted query results should be stable across calls, but they changed"
+    );
+}
+
 /// Same test but with DID subjects (the real-world pattern).
 #[tokio::test]
 async fn query_by_parent_did_subjects() {

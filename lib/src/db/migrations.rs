@@ -30,6 +30,10 @@ pub fn migrate_maybe(store: &SledStore) -> AtomicResult<()> {
             // QueryFilter gained a `drive` field — old entries are unreadable.
             // These are pure caches; dropping them causes a one-time rebuild on next query.
             "watched_queries" | "members_index" => query_index_v1_to_v2(store)?,
+            // QueryFilter key encoding changed to [drive_len][drive_bytes][msgpack rest]
+            // so per-atom matching can scan_prefix by drive instead of decoding
+            // every entry. Old v2 entries are unreadable with the new decoder.
+            "watched_queries_v2" | "members_index_v2" => query_index_v2_to_v3(store)?,
             _other => {}
         }
     }
@@ -181,6 +185,22 @@ fn query_index_v1_to_v2(store: &SledStore) -> AtomicResult<()> {
     );
     let _ = store.raw_db().drop_tree("watched_queries");
     let _ = store.raw_db().drop_tree("members_index");
+    Ok(())
+}
+
+/// QueryFilter key encoding changed to length-prefixed drive + msgpack rest,
+/// so `check_if_atom_matches_watched_query_filters` can `scan_prefix` by drive
+/// instead of decoding every watched query on every atom (which made bootstrap
+/// take 30s on servers with many accumulated watched queries).
+/// Old entries in the v2 trees are unreadable with the new decoder — and these
+/// are pure caches, so dropping them is the simplest migration.
+fn query_index_v2_to_v3(store: &SledStore) -> AtomicResult<()> {
+    tracing::warn!(
+        "Dropping query index v2 trees (QueryFilter key encoding changed — drive is now a key prefix). \
+        They will rebuild on next query."
+    );
+    let _ = store.raw_db().drop_tree("watched_queries_v2");
+    let _ = store.raw_db().drop_tree("members_index_v2");
     Ok(())
 }
 

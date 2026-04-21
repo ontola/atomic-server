@@ -90,13 +90,20 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
     });
   };
 
-  /** Persist agent after invite: personal drive, host drive bookmark, sharedWithMe. */
+  /**
+   * Persist agent after invite in a SINGLE commit: name, isA, personal drive,
+   * host drive bookmark, sharedWithMe. Don't split this into multiple saves —
+   * the personal-drive + sharedWithMe must land together, otherwise the
+   * sidebar sees an intermediate state with no `sharedWithMe` and the
+   * "Shared with me" panel never appears.
+   */
   const persistAgentAfterInvite = async (
     subject: string,
     destination: string | undefined,
     name?: string,
-  ) => {
+  ): Promise<string | undefined> => {
     const resourceToSave = store.getResourceLoading(subject);
+    let personalDriveSubject: string | undefined;
 
     try {
       if (name?.trim()) {
@@ -113,53 +120,44 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
         ]);
       }
 
+      const existingPersonal = resourceToSave.get(
+        core.properties.personalDrive,
+      ) as string | undefined;
+
+      if (existingPersonal) {
+        personalDriveSubject = existingPersonal;
+      } else {
+        const driveLabel = name?.trim()
+          ? `${name.trim()}'s Drive`
+          : 'Personal';
+        const pd = await store.newResource({
+          isA: server.classes.drive,
+          noParent: true,
+          propVals: {
+            [core.properties.name]: driveLabel,
+            [core.properties.description]:
+              'Your private space on this server. Only you can read and write here.',
+            [core.properties.write]: [subject],
+            [core.properties.read]: [subject],
+          },
+        });
+
+        await pd.save();
+        await resourceToSave.set(core.properties.personalDrive, pd.subject);
+        resourceToSave.push(server.properties.drives, [pd.subject], true);
+        personalDriveSubject = pd.subject;
+      }
+
       if (destination) {
-        try {
-          await store.fetchResourceFromServer(destination);
-          const target = store.getResourceLoading(destination);
-          const hostDrive = await getResourcesDrive(target, store);
+        await store.fetchResourceFromServer(destination);
+        const target = store.getResourceLoading(destination);
+        const hostDrive = await getResourcesDrive(target, store);
 
-          if (hostDrive) {
-            resourceToSave.push(server.properties.drives, [hostDrive], true);
-          }
-
-          const existingPersonal = resourceToSave.get(
-            core.properties.personalDrive,
-          ) as string | undefined;
-
-          if (!existingPersonal) {
-            const driveLabel = name?.trim()
-              ? `${name.trim()}'s Drive`
-              : 'Personal';
-            const pd = await store.newResource({
-              isA: server.classes.drive,
-              noParent: true,
-              propVals: {
-                [core.properties.name]: driveLabel,
-                [core.properties.description]:
-                  'Your private space on this server. Only you can read and write here.',
-                [core.properties.write]: [subject],
-                [core.properties.read]: [subject],
-              },
-            });
-
-            await pd.save();
-            await resourceToSave.set(core.properties.personalDrive, pd.subject);
-            resourceToSave.push(server.properties.drives, [pd.subject], true);
-          }
-
-          resourceToSave.push(
-            core.properties.sharedWithMe,
-            [destination],
-            true,
-          );
-        } catch (e) {
-          store.notifyError(
-            e instanceof Error
-              ? e
-              : new Error('Failed to update agent after invite'),
-          );
+        if (hostDrive && hostDrive !== personalDriveSubject) {
+          resourceToSave.push(server.properties.drives, [hostDrive], true);
         }
+
+        resourceToSave.push(core.properties.sharedWithMe, [destination], true);
       }
 
       await resourceToSave.save();
@@ -170,6 +168,8 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
           : new Error('Failed to persist agent after accepting invite'),
       );
     }
+
+    return personalDriveSubject;
   };
 
   const [dialogProps, show, hide] = useDialog({
@@ -183,7 +183,17 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
         return;
       }
 
-      await persistAgentAfterInvite(agentSubject, redirectURL, agentName);
+      const personalDrive = await persistAgentAfterInvite(
+        agentSubject,
+        redirectURL,
+        agentName,
+      );
+      // Point the sidebar at the new personal drive. Without this, the
+      // default `drive` in AppSettings is still `baseURL` (or whatever was
+      // active pre-invite) and the sidebar shows that instead.
+      if (personalDrive) {
+        setDrive(personalDrive);
+      }
       goToRedirect();
     },
   });
@@ -275,7 +285,16 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
       setIsNewAgent(false);
       setRedirectURL(destination);
       void (async () => {
-        await persistAgentAfterInvite(agentSubject!, destination, undefined);
+        const personalDrive = await persistAgentAfterInvite(
+          agentSubject!,
+          destination,
+          undefined,
+        );
+
+        if (personalDrive) {
+          setDrive(personalDrive);
+        }
+
         goToRedirect(destination);
       })();
 

@@ -152,16 +152,20 @@ impl WebSocketConnection {
                 let request_id = decoded.request_id;
                 let store = self.store.clone();
                 let agent = self.agent.clone();
+                let origin = self
+                    .store
+                    .get_base_domain()
+                    .unwrap_or_else(|| "http://localhost".to_string());
                 ctx.spawn(
                     async move {
                         let subject = atomic_lib::Subject::from_raw(
                             &subject_str,
                             store.get_base_domain().as_deref(),
                         );
-                        (store.get_resource_extended(&subject, false, &agent).await, request_id)
+                        (store.get_resource_extended(&subject, false, &agent).await, request_id, origin)
                     }
                     .into_actor(self)
-                    .map(|(res, rid), _actor, ctx| match res {
+                    .map(|(res, rid, origin), _actor, ctx| match res {
                         Ok(r) => {
                             let resource = r.to_single();
 
@@ -176,10 +180,14 @@ impl WebSocketConnection {
                             if snapshot.is_empty() {
                                 ctx.binary(ws_v2::encode_error(rid, "Cannot build resource state"));
                             } else {
+                                // Resolve `internal:/…` to the server origin — `internal:` is a
+                                // server-side concept and must not cross the wire; the client
+                                // keys its resource cache on whatever subject we emit.
+                                let subject_resolved = resource.get_subject().resolve(&origin);
                                 ctx.binary(ws_v2::encode_update(
                                     ws_v2::flags::SNAPSHOT,
                                     rid,
-                                    resource.get_subject().as_str(),
+                                    &subject_resolved,
                                     None,
                                     &snapshot,
                                 ));
@@ -321,16 +329,24 @@ impl Handler<CommitMessage> for WebSocketConnection {
         let commit = &msg.commit_response.commit;
         let commit_id = commit.url.as_deref().or(commit.signature.as_deref()).unwrap_or("");
 
+        // Resolve any `internal:/…` subject to the server's origin — the client
+        // only speaks HTTP URLs and DIDs; `internal:` is a server-only form.
+        let origin = self
+            .store
+            .get_base_domain()
+            .unwrap_or_else(|| "http://localhost".to_string());
+        let subject_resolved = commit.subject.resolve(&origin);
+
         if let Some(loro_update) = &commit.loro_update {
             ctx.binary(ws_v2::encode_update(
                 ws_v2::flags::HAS_COMMIT_ID | ws_v2::flags::PUSH,
                 0,
-                &commit.subject.to_string(),
+                &subject_resolved,
                 Some(commit_id),
                 loro_update,
             ));
         } else if commit.destroy.unwrap_or(false) {
-            ctx.binary(ws_v2::encode_destroy(0, &commit.subject.to_string()));
+            ctx.binary(ws_v2::encode_destroy(0, &subject_resolved));
         }
     }
 }

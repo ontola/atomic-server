@@ -630,8 +630,15 @@ export function useStore(): Store {
  */
 export function useCanWrite(resource: Resource): boolean {
   const store = useStore();
-  const [canWrite, setCanWrite] = useState<boolean>(false);
   const agent = store.getAgent();
+  // Initialize optimistically for brand-new local resources — they have no
+  // parent on the server yet, so `resource.canWrite()` would be skipped by
+  // the effect below. Without this, the ResourceForm shows "Agent does not
+  // have edit rights" on every new-resource page until the async permission
+  // check runs (which never runs for `.new` resources).
+  const [canWrite, setCanWrite] = useState<boolean>(
+    () => !!agent?.subject && !!resource.new,
+  );
 
   useOnValueChange(() => {
     if (agent?.subject === undefined) {

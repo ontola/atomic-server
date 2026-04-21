@@ -21,9 +21,11 @@ const TABLE_PROP_VAL_SUB: TableDefinition<&[u8], &[u8]> =
     TableDefinition::new("prop_val_sub_index");
 const TABLE_VAL_PROP_SUB: TableDefinition<&[u8], &[u8]> =
     TableDefinition::new("reference_index_v1");
-const TABLE_QUERY_MEMBERS: TableDefinition<&[u8], &[u8]> = TableDefinition::new("members_index_v2");
+// v3: QueryFilter key encoding changed to [drive_len][drive_bytes][msgpack rest].
+// Must stay in sync with `QUERY_MEMBERS` / `QUERIES_WATCHED` in db/trees.rs.
+const TABLE_QUERY_MEMBERS: TableDefinition<&[u8], &[u8]> = TableDefinition::new("members_index_v3");
 const TABLE_WATCHED_QUERIES: TableDefinition<&[u8], &[u8]> =
-    TableDefinition::new("watched_queries_v2");
+    TableDefinition::new("watched_queries_v3");
 const TABLE_PLUGIN_META: TableDefinition<&[u8], &[u8]> = TableDefinition::new("plugin_meta");
 const TABLE_DRIVE_MAPPING: TableDefinition<&[u8], &[u8]> = TableDefinition::new("drive_mapping");
 const TABLE_DID_MAPPING: TableDefinition<&[u8], &[u8]> = TableDefinition::new("did_mapping");

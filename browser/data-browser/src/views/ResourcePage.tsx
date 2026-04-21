@@ -1,4 +1,4 @@
-import { useEffect, lazy, Suspense } from 'react';
+import { useEffect, useState, lazy, Suspense } from 'react';
 import {
   useResource,
   Resource,
@@ -67,12 +67,47 @@ const ResourcePage: React.FC<Props> = ({ subject }) => {
     document.body.removeAttribute('inert');
   }, []);
 
-  if (resource.loading) {
+  // Guard against stuck `loading=true` placeholders. If the request orphans
+  // (e.g. the server responds under a different normalized subject), the
+  // `.loading` flag stays true forever. Surface a real error after 15s so the
+  // user isn't staring at a spinner indefinitely.
+  const [loadingExceeded, setLoadingExceeded] = useState(false);
+
+  useEffect(() => {
+    if (!resource.loading) {
+      setLoadingExceeded(false);
+
+      return;
+    }
+
+    const id = setTimeout(() => setLoadingExceeded(true), 15000);
+
+    return () => clearTimeout(id);
+  }, [resource.loading, subject]);
+
+  if (resource.loading && !loadingExceeded) {
     return (
       <Main subject={subject}>
         <ContainerNarrow>
           <p>Loading...</p>
           <Spinner />
+        </ContainerNarrow>
+      </Main>
+    );
+  }
+
+  if (resource.loading && loadingExceeded) {
+    return (
+      <Main subject={subject}>
+        <ContainerNarrow>
+          <h2>Still loading…</h2>
+          <p>
+            The resource at <code>{subject}</code> hasn't loaded after 15
+            seconds. It may not exist, or the server may be unreachable.
+          </p>
+          <p>
+            Check the browser console for details, or try navigating back.
+          </p>
         </ContainerNarrow>
       </Main>
     );

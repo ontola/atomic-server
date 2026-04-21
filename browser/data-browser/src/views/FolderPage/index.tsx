@@ -1,6 +1,7 @@
 import {
   classes,
   useCanWrite,
+  useChildren,
   useResources,
   type DataBrowser,
 } from '@tomic/react';
@@ -56,7 +57,11 @@ export function FolderPage({
     [displayStyle],
   );
 
-  const subResources = useResources(resource.props.subResources);
+  // Resources created under this folder set `parent` but don't get appended
+  // to the folder's `subResources` array, so reading `subResources` misses
+  // newly-created children. Query by parent instead, matching the sidebar.
+  const { subjects: childSubjects } = useChildren(resource.subject);
+  const subResources = useResources(childSubjects);
   const navigateToNewRoute = useNewRoute(resource.subject);
   const canEdit = useCanWrite(resource);
 

@@ -1,18 +1,21 @@
 /**
- * Dedicated Worker that hosts the WASM ClientDb.
+ * DedicatedWorker that hosts the WASM ClientDb.
  *
- * Must be a dedicated Worker (not SharedWorker) because
- * FileSystemFileHandle.createSyncAccessHandle() — which redb uses for OPFS
- * random I/O — is only available in DedicatedWorkerGlobalScope per spec.
+ * Owns the OPFS sync access handle directly. A dedicated worker per tab is
+ * the pragmatic endpoint: `FileSystemFileHandle.createSyncAccessHandle` is
+ * available in `DedicatedWorkerGlobalScope` in every evergreen browser, and
+ * this avoids the SharedWorker + nested-DedicatedWorker pattern that broke
+ * in Playwright (Chromium headless did not expose `Worker` inside
+ * SharedWorker scope) and earlier in Firefox/Safari (no sync access handle
+ * in SharedWorker).
  *
- * Consequence: OPFS is exclusive across tabs of the same origin. A second tab
- * will hard-fail on WASM init with a clear error (see wasm/src/lib.rs
- * ClientDb::new). We tried a SharedWorker→nested-dedicated-Worker pattern to
- * work around this, but Chrome blocked `new Worker(...)` inside the
- * SharedWorker with ReferenceError. Reverted to per-tab dedicated Worker.
+ * Consequence: OPFS is exclusive across tabs of the same origin. A second
+ * tab will hard-fail on WASM init with `NoModificationAllowedError`. The
+ * multi-tab case is the open follow-up; single-tab reliability here matters
+ * more for tests and day-to-day use.
  */
 
-console.log('[client-db-worker] module loading');
+console.log('[client-db-worker] dedicated worker loading');
 
 let db = null;
 let initPromise = null;

@@ -4137,9 +4137,8 @@ msgstr "Save & continue"
 #~ msgid "Set up your Agent and personal drive on <0/>."
 #~ msgstr "Set up your Agent and personal drive on <0/>."
 
-#: src/views/InvitePage.tsx
-msgid "Failed to update agent after invite"
-msgstr "Failed to update agent after invite"
+#~ msgid "Failed to update agent after invite"
+#~ msgstr "Failed to update agent after invite"
 
 #: src/components/SideBar/SideBarDrive.tsx
 msgid "Shared with me"
@@ -5109,3 +5108,28 @@ msgstr "Ready — WASM + OPFS"
 #: src/routes/SyncRoute.tsx
 msgid "Enable local WASM DB"
 msgstr "Enable local WASM DB"
+
+#: src/views/ResourcePage.tsx
+msgid "Still loading…"
+msgstr "Still loading…"
+
+#: src/views/ResourcePage.tsx
+msgid ""
+"The resource at <0/> hasn't loaded after 15\n"
+"seconds. It may not exist, or the server may be unreachable."
+msgstr ""
+"The resource at <0/> hasn't loaded after 15\n"
+"seconds. It may not exist, or the server may be unreachable."
+
+#: src/views/ResourcePage.tsx
+msgid "Check the browser console for details, or try navigating back."
+msgstr "Check the browser console for details, or try navigating back."
+
+#~ msgid "Failed to set agent identity after invite"
+#~ msgstr "Failed to set agent identity after invite"
+
+#~ msgid "Failed to create personal drive after invite"
+#~ msgstr "Failed to create personal drive after invite"
+
+#~ msgid "Failed to link shared resource after invite"
+#~ msgstr "Failed to link shared resource after invite"
