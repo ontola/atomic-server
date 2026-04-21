@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useMemo, useRef, useState } from 'react';
+import { forwardRef, useEffect, useMemo, useState } from 'react';
 import { createRoute } from '@tanstack/react-router';
 import toast from 'react-hot-toast';
 import {
@@ -113,7 +113,6 @@ function statusLabel(status: NodeStatus): string {
 
 function SyncPage() {
   const store = useStore();
-  const reconnectRequested = useRef(false);
   const [status, setStatus] = useState<StoreSyncStatus>(() =>
     store.getSyncStatus(),
   );
@@ -178,19 +177,6 @@ function SyncPage() {
       unsubServer();
     };
   }, [store]);
-
-  useEffect(() => {
-    if (status.serverConnected) {
-      reconnectRequested.current = false;
-
-      return;
-    }
-
-    if (reconnectRequested.current && status.serverConnectionError) {
-      toast.error(status.serverConnectionError);
-      reconnectRequested.current = false;
-    }
-  }, [status.serverConnected, status.serverConnectionError]);
 
   const nodes = deriveNodeStatuses(status);
 
@@ -323,8 +309,10 @@ function SyncPage() {
               ) : (
                 <NodeAction
                   onClick={() => {
-                    reconnectRequested.current = true;
-                    store.reconnect();
+                    // Failures surface through the global
+                    // `StoreEvents.Error` toast (see
+                    // `data-browser/src/handlers/errorHandler.ts`).
+                    store.reconnect().catch(e => store.notifyError(e));
                   }}
                 >
                   Reconnect
@@ -419,10 +407,15 @@ function SyncPage() {
                       did:ad:node:{irohNodeId.slice(0, 12)}...
                     </PeerIdText>
                     <NodeAction
-                      onClick={() => {
-                        navigator.clipboard.writeText(
-                          `did:ad:node:${irohNodeId}`,
-                        );
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(
+                            `did:ad:node:${irohNodeId}`,
+                          );
+                          toast.success('Node DID copied to clipboard');
+                        } catch (e) {
+                          store.notifyError(e as Error);
+                        }
                       }}
                     >
                       Copy
