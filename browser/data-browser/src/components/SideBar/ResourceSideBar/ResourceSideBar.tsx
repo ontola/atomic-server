@@ -7,6 +7,7 @@ import {
   useState,
 } from 'react';
 import {
+  core,
   dataBrowser,
   useResource,
   useCanWrite,
@@ -61,11 +62,16 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(
     const active = currentUrl === subject;
     const [open, setOpen] = useState(active);
 
-    // Tables and chatrooms display children in their own UI — skip them entirely.
+    // Classes that own their children's display in their own UI — skip the
+    // sidebar tree for them. Tables show rows in the grid view, chatrooms
+    // show messages in the timeline, ontologies show classes/properties in
+    // their dedicated panel. Listing those children again in the sidebar
+    // would be noisy and confuses drop targeting.
     const classes = resource.getClasses();
     const hideChildren =
       classes.includes(dataBrowser.classes.table) ||
-      classes.includes(dataBrowser.classes.chatroom);
+      classes.includes(dataBrowser.classes.chatroom) ||
+      classes.includes(core.classes.ontology);
 
     const { subjects: subResources } = useChildren(
       hideChildren ? undefined : subject,
@@ -92,11 +98,17 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(
     // *end* of this folder's children — `prevSubject = last child` so
     // the handler computes `sortOrder = lastSibling.sortOrder + 1`.
     //
-    // Disable when this row IS the dragged item (drop-on-self) or when an
-    // ancestor of this row is being dragged (would create a cycle).
+    // Disable when:
+    //  - the user can't write here,
+    //  - this row IS the dragged item (drop-on-self),
+    //  - an ancestor of this row is being dragged (would create a cycle),
+    //  - this row's class never renders children in the sidebar
+    //    (tables, chatrooms) — accepting a drop would silently reparent
+    //    the item under something that can't show it.
     const draggedId = draggingNode?.id as string | undefined;
     const dropDisabled =
       !canWrite ||
+      hideChildren ||
       (!!draggedId &&
         (draggedId === subject || renderedHierarchy.includes(draggedId)));
     const dropData: SideBarDropData = {
