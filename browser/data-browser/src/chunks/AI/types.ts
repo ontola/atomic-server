@@ -18,6 +18,7 @@ export interface AIAgent {
   canReadAtomicData: boolean;
   canWriteAtomicData: boolean;
   ragEnabled: boolean;
+  skillsEnabled: boolean;
   temperature?: number;
 }
 

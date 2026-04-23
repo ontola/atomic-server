@@ -14,7 +14,7 @@ const collection = {
     get: getRuntime,
     set: (/** @type {string} */ loadID, /** @type {import('wuchale/runtime').Runtime} */ runtime) => {
         store[loadID] = runtime // for when useEffect hasn't run yet
-        callbacks[loadID]?.forEach((cb) => {
+        callbacks[loadID]?.forEach(cb => {
             cb(runtime)
         })
     },

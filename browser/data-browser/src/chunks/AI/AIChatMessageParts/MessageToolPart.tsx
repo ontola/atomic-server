@@ -3,15 +3,19 @@ import { styled } from 'styled-components';
 import { Row } from '@components/Row';
 import {
   FaBook,
+  FaDatabase,
   FaEye,
+  FaGraduationCap,
   FaMagnifyingGlass,
   FaPencil,
+  FaPlus,
   FaWrench,
 } from 'react-icons/fa6';
 import { Details } from '@components/Details';
+import { SearchToolMessageContent } from './SearchToolMessageContent';
 import { TOOL_NAMES } from '../useAtomicTools';
 import { InlineFormattedResourceList } from '@components/InlineFormattedResourceList';
-import { useResource } from '@tomic/react';
+import { core, useResource } from '@tomic/react';
 
 interface ToolMessageProps {
   part: ToolUIPart;
@@ -36,7 +40,8 @@ export const MessageToolPart: React.FC<ToolMessageProps> = ({ part }) => {
   if (part.state === 'output-available') {
     return (
       <Details
-        title={
+        noIndent
+        titleButton={
           <ToolUseMessage>
             <TitleRow center gap='0.5ch'>
               <Icon />
@@ -45,7 +50,16 @@ export const MessageToolPart: React.FC<ToolMessageProps> = ({ part }) => {
           </ToolUseMessage>
         }
       >
-        <StyledPre>{JSON.stringify(part.output, null, 2)}</StyledPre>
+        {toolName === TOOL_NAMES.SEMANTIC_SEARCH ? (
+          <SearchToolMessageContent
+            output={part.output}
+            query={
+              isVectorSearchArgs(part.input) ? part.input.query : undefined
+            }
+          />
+        ) : (
+          <StyledPre>{JSON.stringify(part.output, null, 2)}</StyledPre>
+        )}
       </Details>
     );
   }
@@ -56,15 +70,22 @@ export const MessageToolPart: React.FC<ToolMessageProps> = ({ part }) => {
 const getIcon = (toolName: string) => {
   switch (toolName) {
     case TOOL_NAMES.SEMANTIC_SEARCH:
-    case TOOL_NAMES.QUERY:
       return FaMagnifyingGlass;
+    case TOOL_NAMES.QUERY:
+      return FaDatabase;
     case TOOL_NAMES.GET_ATOMIC_RESOURCE:
       return FaEye;
+    case TOOL_NAMES.READ_SKILL:
+    case TOOL_NAMES.READ_SKILL_REFERENCE:
+      return FaGraduationCap;
     case TOOL_NAMES.GET_SCHEMA:
+    case TOOL_NAMES.GET_USER_CLASSES:
       return FaBook;
     case TOOL_NAMES.EDIT_ATOMIC_RESOURCE:
     case TOOL_NAMES.EDIT_DOCUMENT_RESOURCE:
       return FaPencil;
+    case TOOL_NAMES.CREATE_RESOURCE:
+      return FaPlus;
     default:
       return FaWrench;
   }
@@ -114,6 +135,35 @@ const ToolTitle = ({
     return <span>Reading schema</span>;
   }
 
+  if (toolName === TOOL_NAMES.GET_USER_CLASSES) {
+    return <span>Listing user classes</span>;
+  }
+
+  if (toolName === TOOL_NAMES.CREATE_RESOURCE && isCreateResourceArgs(args)) {
+    return <CreateResourceTitle jsonAD={args.jsonAD} />;
+  }
+
+  if (toolName === TOOL_NAMES.READ_SKILL && isReadSkillArgs(args)) {
+    return (
+      <span>
+        Loading skill: <Name>{args.name.trim()}</Name>
+      </span>
+    );
+  }
+
+  if (
+    toolName === TOOL_NAMES.READ_SKILL_REFERENCE &&
+    isReadSkillReferenceArgs(args)
+  ) {
+    return (
+      <span>
+        Loading skill: <Name>{args.name.trim()}</Name>
+        {' · '}
+        <Name>{args.path.trim()}</Name>
+      </span>
+    );
+  }
+
   return <span>{toolName}</span>;
 };
 
@@ -133,9 +183,30 @@ const ResourceTitle = ({ subject }: { subject: string }) => {
   const resource = useResource(subject);
 
   return (
-    <span>
+    <Name>
       {resource.title.slice(0, 20)}
       {resource.title.length > 20 ? '...' : ''}
+    </Name>
+  );
+};
+
+const CreateResourceTitle = ({ jsonAD }: { jsonAD: string }) => {
+  let name = 'resource';
+
+  try {
+    const data = JSON.parse(jsonAD);
+
+    name =
+      data[core.properties.name] ??
+      data[core.properties.shortname] ??
+      'resource';
+  } catch (e) {
+    // Invalid JSON-AD, let the AI handle it.
+  }
+
+  return (
+    <span>
+      Creating <Name>{name}</Name>
     </span>
   );
 };
@@ -147,20 +218,21 @@ const EditTitle = ({
   property: string;
   subject: string;
 }) => {
-  const resource = useResource(subject);
   const propertyResource = useResource(property);
 
   return (
     <span>
-      Editing {propertyResource.title} on {resource.title}
+      Editing {propertyResource.title} on <ResourceTitle subject={subject} />
     </span>
   );
 };
 
 const EditDocumentTitle = ({ subject }: { subject: string }) => {
-  const resource = useResource(subject);
-
-  return <span>Editing {resource.title}</span>;
+  return (
+    <span>
+      Editing <ResourceTitle subject={subject} />
+    </span>
+  );
 };
 
 function isVectorSearchArgs(
@@ -219,6 +291,32 @@ function isFetchArgs(args: unknown): args is { subjects: string[] } {
   );
 }
 
+function isCreateResourceArgs(args: unknown): args is { jsonAD: string } {
+  return typeof args === 'object' && args !== null && 'jsonAD' in args;
+}
+
+function isReadSkillArgs(args: unknown): args is { name: string } {
+  return (
+    typeof args === 'object' &&
+    args !== null &&
+    'name' in args &&
+    typeof (args as { name: unknown }).name === 'string'
+  );
+}
+
+function isReadSkillReferenceArgs(
+  args: unknown,
+): args is { name: string; path: string } {
+  return (
+    typeof args === 'object' &&
+    args !== null &&
+    'name' in args &&
+    'path' in args &&
+    typeof (args as { name: unknown }).name === 'string' &&
+    typeof (args as { path: unknown }).path === 'string'
+  );
+}
+
 const ToolUseMessage = styled.div`
   background-color: var(--mainSelectedBg);
   padding: 0.5em;
@@ -244,4 +342,8 @@ const TitleRow = styled(Row)`
     flex-basis: 1em;
     min-width: 1em;
   }
+`;
+
+const Name = styled.span`
+  color: ${p => p.theme.colors.textLight};
 `;

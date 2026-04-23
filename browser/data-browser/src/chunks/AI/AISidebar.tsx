@@ -10,6 +10,7 @@ import { ParentPickerDialog } from '@components/ParentPicker/ParentPickerDialog'
 import { ai, core, useStore, type Ai } from '@tomic/react';
 import { useGenerativeData } from './useGenerativeData';
 import { uiMessageToResource } from './chatConversionUtils';
+import { useLocalStorage } from '@hooks/useLocalStorage';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import { constructOpenURL } from '@helpers/navigation';
 import { RealAIChat } from './RealAIChat';
@@ -20,7 +21,11 @@ const AISidebar: React.FC = () => {
   const [rerenderKey, updateRenderKey] = useReducer(prev => prev + 1, 0);
   const { shouldGenerateTitles } = useAISettings();
   const { isOpen, contextItems, setContextItems, setIsOpen } = useAISidebar();
-  const [messages, setMessages] = useState<AtomicUIMessage[]>([]);
+  const [messages, setMessages] = useLocalStorage<AtomicUIMessage[]>(
+    'atomic.aiSidebar.messages',
+    [],
+    window.sessionStorage,
+  );
   const [currentSubject] = useCurrentSubject();
   const [showParentPicker, setShowParentPicker] = useState(false);
   const titlePromiseRef = useRef<Promise<string | undefined> | undefined>(
@@ -38,7 +43,7 @@ const AISidebar: React.FC = () => {
       parent,
       isA: ai.classes.aiChat,
       propVals: {
-        [core.properties.name]: 'New Chat',
+        [core.properties.name]: 'Untitled Chat',
       },
     });
 
@@ -107,7 +112,7 @@ const AISidebar: React.FC = () => {
   }, [isOpen, currentSubject]);
 
   useEffect(() => {
-    if (messages.length > 2 && !titlePromiseRef.current) {
+    if (messages.length >= 2 && !titlePromiseRef.current) {
       if (!shouldGenerateTitles) {
         // Don't generate a title, just resolve the promise.
         titlePromiseRef.current = Promise.resolve(undefined);

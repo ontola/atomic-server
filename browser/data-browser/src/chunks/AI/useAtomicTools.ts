@@ -1,7 +1,9 @@
 // @wc-ignore-file
 import {
+  Client,
   commits,
   core,
+  dataBrowser,
   server,
   useStore,
   type JSONValue,
@@ -22,11 +24,15 @@ export const TOOL_NAMES = {
   GET_ATOMIC_RESOURCE: 'get_atomic_resource',
   READ_FILE_RESOURCE: 'read_file_resource',
   GET_SCHEMA: 'get_schema',
+  GET_USER_CLASSES: 'get_user_classes',
   EDIT_ATOMIC_RESOURCE: 'edit_atomic_resource',
   EDIT_DOCUMENT_RESOURCE: 'edit_document_resource',
   CHANGE_THEME: 'change_theme',
   NAVIGATE_TO_RESOURCE: 'navigate_to_resource',
   CREATE_RESOURCE: 'create_resource',
+  READ_SKILL: 'read_skill',
+  READ_SKILL_REFERENCE: 'read_skill_reference',
+  CREATE_SKILL: 'create_skill',
 } as const;
 
 const toResultObject = (resource: Resource, includeCommitData: boolean) => {
@@ -137,7 +143,7 @@ export function useAtomicMCPTools({
       }),
       [TOOL_NAMES.QUERY]: tool({
         description:
-          'Perform a query based on one or more properties. Use this to find resources with specific values for properties.',
+          'Perform a query based on one or more properties. Use this to find resources with specific values for properties. **NOTE**: The results are not sorted!',
         inputSchema: z.object({
           description: z
             .string()
@@ -151,9 +157,9 @@ export function useAtomicMCPTools({
             )
             .optional(),
           where: z
-            .record(z.string(), z.any())
+            .array(z.object({ property: z.string(), value: z.any() }))
             .describe(
-              'A record mapping property subjects to values to filter the results by. For example: {"https://atomicdata.dev/properties/name": "John Doe"} or {"https://atomicdata.dev/properties/isA": "https://atomicdata.dev/classes/Person"}',
+              'A list of query filters mapping property subjects to values to filter the results by. For example: [{property: "https://atomicdata.dev/properties/name", value: "John Doe"}] or [{property: "https://atomicdata.dev/properties/isA", value: "https://atomicdata.dev/classes/Person"}]',
             ),
           limit: z
             .number()
@@ -169,8 +175,22 @@ export function useAtomicMCPTools({
           where,
           limit,
         }) => {
+          for (const { property } of where) {
+            if (!Client.isValidSubject(property)) {
+              return `Error: Invalid property subject in where clause: '${property}'`;
+            }
+          }
+
+          const whereObj = where.reduce(
+            (acc, c) => ({
+              ...acc,
+              [c.property]: c.value,
+            }),
+            {},
+          );
+
           const results = await store.search('', {
-            filters: where,
+            filters: whereObj,
             limit,
             include: true,
           });
@@ -180,7 +200,7 @@ export function useAtomicMCPTools({
           );
 
           const props = Array.from(
-            new Set([...select, ...Object.values(where)]),
+            new Set([...select, ...where.map(qf => qf.property)]),
           );
 
           const result = resources.map(res => {
@@ -247,29 +267,31 @@ export function useAtomicMCPTools({
       }),
       [TOOL_NAMES.GET_SCHEMA]: tool({
         description:
-          'Get a specific class or all classes and properties on this AtomicServer. You can use this to get info about one or more classes. Useful when creating or editting resources and you need to know what properties to use.',
+          'Get the schema of a specific class on this AtomicServer, including its properties. Useful when creating or editting resources and you need to know what properties to use.',
         inputSchema: z.object({
           subject: z
             .string()
-            .optional()
-            .describe(
-              'The subject of the class to get the schema for. If not provided, all classes will be returned.',
-            ),
+            .describe('The subject of the class to get the schema for.'),
         }),
         execute: async ({ subject }) => {
-          const classes = [];
+          return await toClassObject(subject, store);
+        },
+        strict: true,
+      }),
+      [TOOL_NAMES.GET_USER_CLASSES]: tool({
+        description:
+          'List all classes defined on the current drive. Returns each class as `<shortname>: <subject>`. Use this to discover available classes, then call `get_schema` for details on a specific class.',
+        inputSchema: z.object({}),
+        execute: async () => {
+          const classSubjects = await getClassesOnDrive(drive, store);
 
-          if (subject) {
-            classes.push(subject);
-          } else {
-            classes.push(...(await getClassesOnDrive(drive, store)));
-          }
+          return await Promise.all(
+            classSubjects.map(async cls => {
+              const resource = await store.getResource(cls);
 
-          const classObjects = await Promise.all(
-            classes.map(async cls => toClassObject(cls, store)),
+              return { shortname: resource.title, subject: cls };
+            }),
           );
-
-          return classObjects;
         },
         strict: true,
       }),
@@ -464,6 +486,13 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
               throw new Error('Missing parent property');
             }
 
+            const parentResource = await store.getResource(parent);
+
+            if (parentResource.hasClasses(dataBrowser.classes.table)) {
+              // The parent is a table meaning the resource that is being created is a row. We should add a createdAt property to it.
+              propVals[commits.properties.createdAt] = Date.now();
+            }
+
             const resource = await store.newResource({
               parent,
               isA,
@@ -472,7 +501,13 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
 
             await resource.save();
 
-            await store.notifyResourceManuallyCreated(resource);
+            if (
+              !parentResource.hasClasses(core.classes.ontology) &&
+              !parentResource.hasClasses(dataBrowser.classes.table)
+            ) {
+              // Notify the store that we created a resource but not if the parent is an ontology or table as in that case we don't want them to show in the sidebar.
+              await store.notifyResourceManuallyCreated(resource);
+            }
 
             return `Created new resource with subject ${resource.subject}`;
           } catch (err) {

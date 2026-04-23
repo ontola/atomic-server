@@ -3,13 +3,8 @@ import { FaAsterisk, FaInfo, FaTrash } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import { Collapse } from '../Collapse';
 import { IconButton, IconButtonVariant } from '../IconButton/IconButton';
-import { Row } from '../Row';
-import {
-  ErrMessage,
-  FieldStyled,
-  LabelHelper,
-  LabelWrapper,
-} from './InputStyles';
+import { Flex, Row } from '../Row';
+import { ErrMessage } from './InputStyles';
 import { complement } from 'polished';
 
 interface FieldProps {
@@ -17,6 +12,8 @@ interface FieldProps {
   label?: string;
   /** Helper text / collapsible info */
   helper?: React.ReactNode;
+  /** If true the helper text will always be visible and no button to toggle it will be shown */
+  helperAlwaysVisible?: boolean;
   /** Here goes the input */
   children: React.ReactNode;
   /** If the field is requires. Shows an aterisk with hover text */
@@ -33,6 +30,7 @@ interface FieldProps {
    * This will make the component render a fieldset + legend instead of a label.
    */
   multiInput?: boolean;
+  className?: string;
   /**
    * This function will be called when the delete icon is clicked. This should
    * remove the item from any parent list
@@ -44,6 +42,7 @@ interface FieldProps {
 function Field({
   label,
   helper,
+  helperAlwaysVisible,
   children,
   error,
   handleDelete,
@@ -52,11 +51,12 @@ function Field({
   fieldId,
   labelId,
   multiInput,
+  className,
 }: FieldProps): JSX.Element {
   const [collapsedHelper, setCollapsed] = useState(true);
 
   return (
-    <FieldStyled as={multiInput ? 'fieldset' : undefined}>
+    <FieldStyled as={multiInput ? 'fieldset' : undefined} className={className}>
       <LabelWrapper>
         <Row gap='0.4rem' center>
           <FieldLabel
@@ -68,7 +68,7 @@ function Field({
             {label}
             {required && <Astrisk title='Required field' size='0.6em' />}
           </FieldLabel>
-          {helper && (
+          {!!helper && !helperAlwaysVisible && (
             <IconButton
               variant={IconButtonVariant.Outline}
               color='textLight'
@@ -93,14 +93,15 @@ function Field({
             </IconButton>
           )}
         </Row>
+        {!!helper && (
+          <FieldHelper>
+            <Collapse open={!collapsedHelper || helperAlwaysVisible}>
+              {helper}
+              {required && !helperAlwaysVisible && <div>Required field.</div>}
+            </Collapse>
+          </FieldHelper>
+        )}
       </LabelWrapper>
-
-      <LabelHelper>
-        <Collapse open={!collapsedHelper}>
-          {helper}
-          {required && <p>Required field.</p>}
-        </Collapse>
-      </LabelHelper>
       {children}
       {error && (
         <ErrMessage title={`Error: ${JSON.stringify(error)}`}>
@@ -111,6 +112,21 @@ function Field({
   );
 }
 
+const FieldStyled = styled.div`
+  padding: 0;
+  border: none;
+  background-color: none;
+
+  // Removes default 1px margin on fieldset.
+  &:is(fieldset) {
+    margin-inline: 0;
+  }
+
+  ${Flex} > & {
+    margin-bottom: 0;
+  }
+`;
+
 export const FieldLabel = styled.label`
   text-transform: capitalize;
   display: inline-flex;
@@ -119,9 +135,22 @@ export const FieldLabel = styled.label`
   font-weight: bold;
 `;
 
-export default Field;
+Field.Label = FieldLabel;
 
 const Astrisk = styled(FaAsterisk)`
   margin-bottom: 0.5em;
   color: ${p => complement(p.theme.colors.main)};
 `;
+
+export const FieldHelper = styled.div`
+  font-size: 0.9em;
+  color: ${props => props.theme.colors.textLight};
+`;
+
+Field.Helper = FieldHelper;
+
+const LabelWrapper = styled.div`
+  margin-bottom: ${p => p.theme.size(2)};
+`;
+
+export default Field;

@@ -2,7 +2,6 @@ import * as React from 'react';
 import { Column, Row } from '@components/Row';
 import { Checkbox, CheckboxLabel } from '@components/forms/Checkbox';
 import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
-import { MCPServersManager } from './MCP/MCPServersManager';
 import styled, { useTheme } from 'styled-components';
 import { transition } from '@helpers/transition';
 import { Suspense, useEffect, useState } from 'react';
@@ -41,8 +40,6 @@ const AISettings: React.FC = () => {
     setEnableAI,
     openRouterApiKey,
     setOpenRouterApiKey,
-    mcpServers,
-    setMcpServers,
     showTokenUsage,
     setShowTokenUsage,
     ollamaUrl,
@@ -227,8 +224,6 @@ const AISettings: React.FC = () => {
             />
           </Suspense>
         </Details>
-        <Heading as='h3'>MCP Servers</Heading>
-        <MCPServersManager servers={mcpServers} setServers={setMcpServers} />
       </ConditionalSettings>
     </>
   );

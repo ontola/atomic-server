@@ -634,17 +634,21 @@ export function useCanWrite(resource: Resource): boolean {
   const [canWrite, setCanWrite] = useState<boolean>(false);
   const agent = store.getAgent();
 
-  useOnValueChange(() => {
-    if (agent?.subject === undefined) {
-      setCanWrite(false);
+  useOnValueChange(
+    () => {
+      if (agent?.subject === undefined) {
+        setCanWrite(false);
 
-      return;
-    }
+        return;
+      }
 
-    if (resource.new) {
-      setCanWrite(true);
-    }
-  }, [resource, agent?.subject]);
+      if (resource.new) {
+        setCanWrite(true);
+      }
+    },
+    [resource, agent?.subject],
+    true,
+  );
 
   // If the subject changes, make sure to change the resource!
   useEffect(() => {

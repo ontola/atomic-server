@@ -2,6 +2,9 @@ import ReactMarkdown, { Components } from 'react-markdown';
 import { styled } from 'styled-components';
 import remarkGFM from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 import { Button } from '@components/Button';
 import { truncateMarkdown } from '@helpers/markdown';
 import { FC, useState } from 'react';
@@ -61,9 +64,11 @@ const Markdown: FC<Props> = ({
         remarkPlugins={[
           ...addIf(renderGFM, remarkGFM),
           ...addIf(preserveLineBreaks, remarkBreaks),
+          remarkMath,
           remarkMention,
           remarkDiff,
         ]}
+        rehypePlugins={[rehypeKatex]}
         disallowedElements={nestedInLink ? disableElementsInLink : undefined}
         components={
           {

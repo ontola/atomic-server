@@ -26,8 +26,16 @@ export const ReasoningMessage = ({
     );
   }
 
+  if (text === '[REDACTED]') {
+    return (
+      <Details titleButton={<Title>Thinking</Title>}>
+        <ReasoningMessageWrapper>{text}</ReasoningMessageWrapper>
+      </Details>
+    );
+  }
+
   return (
-    <Details title={<Title>Thinking</Title>}>
+    <Details subtle title={<Title>Thinking</Title>}>
       <ReasoningMessageWrapper>
         <Markdown text={text} maxLength={Infinity} />
       </ReasoningMessageWrapper>
@@ -37,4 +45,5 @@ export const ReasoningMessage = ({
 
 const Title = styled.span`
   font-size: 0.8em;
+  color: ${p => p.theme.colors.textLight};
 `;

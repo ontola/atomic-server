@@ -1,20 +1,14 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: \n"
-"Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-03-10T16:42:42.667Z\n"
-"PO-Revision-Date: 2026-03-10T16:42:42.667Z\n"
-"Last-Translator: \n"
-"Language: en\n"
-"Language-Team: \n"
-"Content-Type: text/plain; charset=utf-8\n"
-"Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=n == 1 ? 0 : 1;\n"
 "Source-Language: en\n"
+"Language: en\n"
 "MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
 
-#. placeholder {0}: resource.title
-#. placeholder {0}: resource.title
+#. 0: resource.title
+#. 0: resource.title
 #: src/routes/DataRoute.tsx
 #: src/routes/EditRoute.tsx
 msgid "Back to {0}"
@@ -118,10 +112,7 @@ msgstr "Results"
 msgid "Result"
 msgstr "Result"
 
-#. placeholder {0}: results.length
-#. placeholder {1}: ' '
-#. placeholder {2}: results.length > 1 ? 'Results' : 'Result'
-#. placeholder {3}: ' '
+#. 0: results.length; 1: ' '; 2: results.length > 1 ? 'Results' \\: 'Result'; 3: ' '
 #: src/routes/Search/SearchRoute.tsx
 msgid "{0}{1} {2} for{3} <0/>"
 msgstr "{0}{1} {2} for{3} <0/>"
@@ -129,16 +120,6 @@ msgstr "{0}{1} {2} for{3} <0/>"
 #: src/routes/Search/SearchRoute.tsx
 msgid "With Tags:"
 msgstr "With Tags:"
-
-#: src/routes/Search/SearchRoute.tsx
-msgid ""
-"Search matches on the names and descriptions of resources.\n"
-"Additionally you can search for resources with specific tags\n"
-"by adding <0/> to your search."
-msgstr ""
-"Search matches on the names and descriptions of resources.\n"
-"Additionally you can search for resources with specific tags\n"
-"by adding <0/> to your search."
 
 #: src/routes/SettingsServer/index.tsx
 msgid "Drive Configuration"
@@ -175,7 +156,7 @@ msgstr "Other"
 msgid "No subject passed"
 msgstr "No subject passed"
 
-#. placeholder {0}: subject
+#. 0: subject
 #: src/routes/DataRoute.tsx
 msgid "Loading {0}..."
 msgstr "Loading {0}..."
@@ -248,7 +229,7 @@ msgstr "Permissions set here:"
 msgid "Inherited permissions:"
 msgstr "Inherited permissions:"
 
-#. placeholder {0}: ' '
+#. 0: ' '
 #: src/routes/Share/ShareRoute.tsx
 msgid "Read more about permissions in the{0} <0>Atomic Data Docs</0>"
 msgstr "Read more about permissions in the{0} <0>Atomic Data Docs</0>"
@@ -267,7 +248,7 @@ msgstr "Write"
 msgid "Resource version updated"
 msgstr "Resource version updated"
 
-#. placeholder {0}: resource.title
+#. 0: resource.title
 #: src/routes/History/HistoryRoute.tsx
 msgid "Building history of {0}"
 msgstr "Building history of {0}"
@@ -280,7 +261,7 @@ msgstr "No `subject`, `path` or `href` passed to this AtomicLink."
 msgid "Bookmark URL"
 msgstr "Bookmark URL"
 
-#. placeholder {0}: ' '
+#. 0: ' '
 #: src/views/BookmarkPage/BookmarkPage.tsx
 msgid "Open site{0}"
 msgstr "Open site{0}"
@@ -303,7 +284,7 @@ msgstr "Retry"
 msgid "You don't have access to this, try signing in:"
 msgstr "You don't have access to this, try signing in:"
 
-#. placeholder {0}: resource.subject
+#. 0: resource.subject
 #: src/views/ErrorPage.tsx
 msgid "Could not open {0}"
 msgstr "Could not open {0}"
@@ -312,20 +293,20 @@ msgstr "Could not open {0}"
 msgid "Use proxy"
 msgstr "Use proxy"
 
-#. placeholder {0}: store.getServerUrl()
+#. 0: store.getServerUrl()
 #: src/views/ErrorPage.tsx
 msgid "Fetches the URL from your current Atomic-Server ({0}), instead of from the actual URL itself. Can be useful if the URL is down, but the resource is cached in your server."
 msgstr "Fetches the URL from your current Atomic-Server ({0}), instead of from the actual URL itself. Can be useful if the URL is down, but the resource is cached in your server."
 
-#. placeholder {0}: metadata.version
-#. placeholder {0}: resource.props.version
+#. 0: metadata.version
+#. 0: resource.props.version
 #: src/chunks/Plugins/NewPluginButton.tsx
 #: src/views/Plugin/PluginPage.tsx
 msgid "v{0}"
 msgstr "v{0}"
 
-#. placeholder {0}: metadata.author
-#. placeholder {0}: resource.props.pluginAuthor
+#. 0: metadata.author
+#. 0: resource.props.pluginAuthor
 #: src/chunks/Plugins/NewPluginButton.tsx
 #: src/views/Plugin/PluginPage.tsx
 msgid "by {0}"
@@ -372,7 +353,7 @@ msgstr "Plugin uninstalled"
 msgid "loading"
 msgstr "loading"
 
-#. placeholder {0}: subject
+#. 0: subject
 #: src/views/ResourceInline/ResourceInline.tsx
 msgid "{0} is not a valid subject."
 msgstr "{0} is not a valid subject."
@@ -498,7 +479,7 @@ msgstr "Import Atomic Data to this resource"
 msgid "Delete this resource."
 msgstr "Delete this resource."
 
-#. placeholder {0}: resource.title
+#. 0: resource.title
 #: src/components/ResourceContextMenu/index.tsx
 msgid "Open {0} menu"
 msgstr "Open {0} menu"
@@ -511,8 +492,7 @@ msgstr "Are you sure you want to delete <0/>"
 msgid "Delete resource"
 msgstr "Delete resource"
 
-#. placeholder {0}: classType ? classTypeTitle : 'new item'
-#. placeholder {1}: ' '
+#. 0: classType ? classTypeTitle \\: 'new item'; 1: ' '
 #: src/components/forms/ResourceSelector/DropdownInput.tsx
 msgid "Create {0}:{1} <0/>"
 msgstr "Create {0}:{1} <0/>"
@@ -522,6 +502,8 @@ msgid "No parent set"
 msgstr "No parent set"
 
 #: src/chunks/AI/AgentConfig.tsx
+#: src/chunks/AI/MCPConfigTab.tsx
+#: src/chunks/AI/SkillsConfigTab.tsx
 #: src/chunks/Plugins/NewPluginButton.tsx
 #: src/chunks/Plugins/UpdatePluginButton.tsx
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
@@ -562,7 +544,7 @@ msgstr "New resource"
 msgid "Property does not exist anymore"
 msgstr "Property does not exist anymore"
 
-#. placeholder {0}: truncated
+#. 0: truncated
 #: src/components/PropVal.tsx
 msgid "Loading {0}"
 msgstr "Loading {0}"
@@ -572,7 +554,7 @@ msgstr "Loading {0}"
 msgid "Invalid Resource"
 msgstr "Invalid Resource"
 
-#. placeholder {0}: subject
+#. 0: subject
 #: src/views/OntologyPage/Property/PropertyLineWrite.tsx
 msgid "This property does not exist any more ({0})"
 msgstr "This property does not exist any more ({0})"
@@ -594,7 +576,7 @@ msgstr "Property shortname"
 msgid "Property description"
 msgstr "Property description"
 
-#. placeholder {0}: resource.title
+#. 0: resource.title
 #: src/views/OntologyPage/Property/PropertyLineWrite.tsx
 msgid "Configure {0}"
 msgstr "Configure {0}"
@@ -652,9 +634,9 @@ msgstr "Could not load preview 😞"
 msgid "<0/> Resource with error"
 msgstr "<0/> Resource with error"
 
-#. placeholder {0}: JSON.stringify(error)
-#. placeholder {0}: searchError.message
-#. placeholder {0}: resource.error.message
+#. 0: JSON.stringify(error)
+#. 0: searchError.message
+#. 0: resource.error.message
 #: src/components/forms/Field.tsx
 #: src/components/forms/SearchBox/SearchBoxWindow.tsx
 #: src/views/ResourceLine.tsx
@@ -684,14 +666,6 @@ msgid "New Ontology"
 msgstr "New Ontology"
 
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
-msgid ""
-"An ontology is a collection of classes and properties that together\n"
-"describe a concept. Great for data models."
-msgstr ""
-"An ontology is a collection of classes and properties that together\n"
-"describe a concept. Great for data models."
-
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
 msgid "Shortname"
 msgstr "Shortname"
 
@@ -708,7 +682,7 @@ msgstr "Name your Collection"
 msgid "Set a value filter (optional)"
 msgstr "Set a value filter (optional)"
 
-#. placeholder {0}: name
+#. 0: name
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 msgid "Represents a row in the {0} table"
 msgstr "Represents a row in the {0} table"
@@ -719,6 +693,8 @@ msgid "New Table"
 msgstr "New Table"
 
 #: src/chunks/AI/AgentConfig.tsx
+#: src/chunks/AI/MCPConfigTab.tsx
+#: src/chunks/AI/SkillsConfigTab.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 msgid "Name"
@@ -728,7 +704,7 @@ msgstr "Name"
 msgid "<0/> Use existing class"
 msgstr "<0/> Use existing class"
 
-#. placeholder {0}: name
+#. 0: name
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 msgid "Default ontology for the {0} drive"
 msgstr "Default ontology for the {0} drive"
@@ -752,14 +728,6 @@ msgstr "New Article"
 #: src/views/FolderPage/ListView.tsx
 msgid "Title"
 msgstr "Title"
-
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
-msgid ""
-"Title is used to construct the subject, keep in mind that the\n"
-"subject cannot be changed later."
-msgstr ""
-"Title is used to construct the subject, keep in mind that the\n"
-"subject cannot be changed later."
 
 #: src/components/SideBar/AppMenu.tsx
 #: src/routes/AppSettings.tsx
@@ -815,7 +783,7 @@ msgstr "Main color"
 msgid "Templates"
 msgstr "Templates"
 
-#. placeholder {0}: ' '
+#. 0: ' '
 #: src/routes/AppSettings.tsx
 msgid "<0/>{0} Hide templates on new resource page."
 msgstr "<0/>{0} Hide templates on new resource page."
@@ -824,7 +792,7 @@ msgstr "<0/>{0} Hide templates on new resource page."
 msgid "Panels"
 msgstr "Panels"
 
-#. placeholder {0}: ' '
+#. 0: ' '
 #: src/routes/AppSettings.tsx
 msgid "<0/>{0} Enable Ontology panel"
 msgstr "<0/>{0} Enable Ontology panel"
@@ -833,17 +801,17 @@ msgstr "<0/>{0} Enable Ontology panel"
 msgid "Accessibility"
 msgstr "Accessibility"
 
-#. placeholder {0}: ' '
+#. 0: ' '
 #: src/routes/AppSettings.tsx
 msgid "<0/>{0} Disable page transition animations"
 msgstr "<0/>{0} Disable page transition animations"
 
-#. placeholder {0}: ' '
+#. 0: ' '
 #: src/routes/AppSettings.tsx
 msgid "<0/>{0} Enable keyboard drag & drop in sidebar"
 msgstr "<0/>{0} Enable keyboard drag & drop in sidebar"
 
-#. placeholder {0}: files.length
+#. 0: files.length
 #: src/routes/NewResource/NewRoute.tsx
 msgid "Uploaded {0} files."
 msgstr "Uploaded {0} files."
@@ -852,28 +820,19 @@ msgstr "Uploaded {0} files."
 msgid "under <0/>"
 msgstr "under <0/>"
 
-#. placeholder {0}: ' '
-#. placeholder {1}: calculatedParent && ( <> under <ResourceInline subject={calculatedParent} /> </> )
+#. 0: ' '; 1: calculatedParent && ( <> under <ResourceInline subject={calculatedParent} /> </> )
 #: src/routes/NewResource/NewRoute.tsx
 msgid "Create new resource{0} {1}"
 msgstr "Create new resource{0} {1}"
 
 #: src/routes/SettingsAgent.tsx
-msgid "Invalid secret."
-msgstr "Invalid secret."
+msgid "Invalid secret. "
+msgstr "Invalid secret. "
 
 #: src/components/SideBar/AppMenu.tsx
 #: src/routes/SettingsAgent.tsx
 msgid "User Settings"
 msgstr "User Settings"
-
-#: src/routes/SettingsAgent.tsx
-msgid ""
-"An Agent is a user, consisting of a Subject (its URL) and Private Key.\n"
-"Together, these can be used to edit data and sign Commits."
-msgstr ""
-"An Agent is a user, consisting of a Subject (its URL) and Private Key.\n"
-"Together, these can be used to edit data and sign Commits."
 
 #: src/routes/SettingsAgent.tsx
 msgid "Warning:"
@@ -883,7 +842,7 @@ msgstr "Warning:"
 msgid "You're using a local Agent, which cannot authenticate on other domains, because its URL does not resolve."
 msgstr "You're using a local Agent, which cannot authenticate on other domains, because its URL does not resolve."
 
-#. placeholder {0}: "'"
+#. 0: "'"
 #: src/routes/SettingsAgent.tsx
 msgid "<0/> You{0}re signed in as"
 msgstr "<0/> You{0}re signed in as"
@@ -900,16 +859,6 @@ msgstr "Sign Out"
 msgid "Sign out with current Agent and reset this form"
 msgstr "Sign out with current Agent and reset this form"
 
-#. placeholder {0}: ' '
-#. placeholder {1}: "'s"
-#: src/routes/SettingsAgent.tsx
-msgid ""
-"You can create your own Agent by hosting an{0} <0>atomic-server</0> . Alternatively, you can use an Invite to get a guest Agent on\n"
-"someone else{1} Atomic Server."
-msgstr ""
-"You can create your own Agent by hosting an{0} <0>atomic-server</0> . Alternatively, you can use an Invite to get a guest Agent on\n"
-"someone else{1} Atomic Server."
-
 #: src/routes/SettingsAgent.tsx
 #: src/views/InvitePage.tsx
 msgid "Agent Secret"
@@ -924,55 +873,10 @@ msgid "The Agent Secret is a long string of characters that encodes both the Sub
 msgstr "The Agent Secret is a long string of characters that encodes both the Subject and the Private Key. You can think of it as a combined username + password. Store it safely, and don't share it with others."
 
 #: src/routes/AboutRoute.tsx
-msgid ""
-"The easiest way to <0>create</0>, <1>share</1> and <2>model</2> linked\n"
-"data."
-msgstr ""
-"The easiest way to <0>create</0>, <1>share</1> and <2>model</2> linked\n"
-"data."
-
-#: src/routes/AboutRoute.tsx
-msgid ""
-"Atomic Data is a modular specification for sharing, modifying and\n"
-"modeling graph data. It combines the ease of use of JSON, the\n"
-"connectivity of RDF (linked data) and the reliability of type-safety."
-msgstr ""
-"Atomic Data is a modular specification for sharing, modifying and\n"
-"modeling graph data. It combines the ease of use of JSON, the\n"
-"connectivity of RDF (linked data) and the reliability of type-safety."
-
-#. placeholder {0}: ' '
-#. placeholder {1}: ' '
-#: src/routes/AboutRoute.tsx
-msgid ""
-"Atomic Data is especially suitable for knowledge graphs, distributed\n"
-"datasets, semantic data, p2p applications, decentralized apps, and data\n"
-"that is meant to be shared. It is designed to be highly extensible, easy\n"
-"to use, and to make the process of domain specific standardization as\n"
-"simple as possible. Check out{0} <0>the docs</0>{1} for more information about Atomic Data."
-msgstr ""
-"Atomic Data is especially suitable for knowledge graphs, distributed\n"
-"datasets, semantic data, p2p applications, decentralized apps, and data\n"
-"that is meant to be shared. It is designed to be highly extensible, easy\n"
-"to use, and to make the process of domain specific standardization as\n"
-"simple as possible. Check out{0} <0>the docs</0>{1} for more information about Atomic Data."
-
-#: src/routes/AboutRoute.tsx
 msgid "About this app"
 msgstr "About this app"
 
-#. placeholder {0}: ' '
-#: src/routes/AboutRoute.tsx
-msgid ""
-"You're looking at{0} <0>atomic-data-browser</0> , an open-source client for viewing and editing data. Please add an\n"
-"issue if you encouter problems or have a feature request. Expect bugs\n"
-"and issues, because this stuff is pretty beta."
-msgstr ""
-"You're looking at{0} <0>atomic-data-browser</0> , an open-source client for viewing and editing data. Please add an\n"
-"issue if you encouter problems or have a feature request. Expect bugs\n"
-"and issues, because this stuff is pretty beta."
-
-#. placeholder {0}: ' '
+#. 0: ' '
 #: src/routes/AboutRoute.tsx
 msgid "The back-end of this app is{0} <0>atomic-server</0> , which you can think of as an open source, web-native database."
 msgstr "The back-end of this app is{0} <0>atomic-server</0> , which you can think of as an open source, web-native database."
@@ -997,13 +901,12 @@ msgstr "List of Properties"
 msgid "Run your own server"
 msgstr "Run your own server"
 
-#. placeholder {0}: ' '
-#. placeholder {1}: ' '
+#. 0: ' '; 1: ' '
 #: src/routes/AboutRoute.tsx
 msgid "The easiest way to run an{0} <0>atomic-server</0>{1} is by using Docker:"
 msgstr "The easiest way to run an{0} <0>atomic-server</0>{1} is by using Docker:"
 
-#. placeholder {0}: ' '
+#. 0: ' '
 #: src/routes/AboutRoute.tsx
 msgid "...and visit{0} <0>localhost</0>."
 msgstr "...and visit{0} <0>localhost</0>."
@@ -1011,24 +914,6 @@ msgstr "...and visit{0} <0>localhost</0>."
 #: src/routes/AboutRoute.tsx
 msgid "Join the community"
 msgstr "Join the community"
-
-#. placeholder {0}: ' '
-#. placeholder {1}: ' '
-#. placeholder {2}: ' '
-#. placeholder {3}: "'"
-#: src/routes/AboutRoute.tsx
-msgid ""
-"Atomic Data is open and fully powered by volunteers. We're looking\n"
-"for people who want to help discuss various design challenges and work\n"
-"on implmenentations. If you have any questions, or want to help out,\n"
-"feel free to join our{0} <0>Discord</0>! Sign\n"
-"up to{1} <1>our newsletter</1>{2} if you{3}d like to get updated! ."
-msgstr ""
-"Atomic Data is open and fully powered by volunteers. We're looking\n"
-"for people who want to help discuss various design challenges and work\n"
-"on implmenentations. If you have any questions, or want to help out,\n"
-"feel free to join our{0} <0>Discord</0>! Sign\n"
-"up to{1} <1>our newsletter</1>{2} if you{3}d like to get updated! ."
 
 #: src/routes/UnavailableLazyRoute.tsx
 msgid "Unavailable"
@@ -1068,8 +953,8 @@ msgid "Signed out."
 msgstr "Signed out."
 
 #: src/helpers/AppSettings.tsx
-msgid "Agent setting failed:"
-msgstr "Agent setting failed:"
+msgid "Agent setting failed: "
+msgstr "Agent setting failed: "
 
 #: src/components/forms/ResourceForm.tsx
 msgid "Loading resource..."
@@ -1079,15 +964,6 @@ msgstr "Loading resource..."
 msgid "Loading class..."
 msgstr "Loading class..."
 
-#. placeholder {0}: classSubject
-#: src/components/forms/ResourceForm.tsx
-msgid ""
-"{0} is not a Class. Only resources with valid classes can be\n"
-"created or edited at this moment."
-msgstr ""
-"{0} is not a Class. Only resources with valid classes can be\n"
-"created or edited at this moment."
-
 #: src/components/forms/ResourceForm.tsx
 msgid "Invalid URL"
 msgstr "Invalid URL"
@@ -1096,20 +972,11 @@ msgstr "Invalid URL"
 msgid "That property already exists in this resource. It can only be added once."
 msgstr "That property already exists in this resource. It can only be added once."
 
-#. placeholder {0}: klass.error.message
-#: src/components/forms/ResourceForm.tsx
-msgid ""
-"Error in class, so this form could miss properties. You can\n"
-"still edit the resource, though. Error message: ` {0}`"
-msgstr ""
-"Error in class, so this form could miss properties. You can\n"
-"still edit the resource, though. Error message: ` {0}`"
-
 #: src/components/forms/ResourceForm.tsx
 msgid "Cannot save edits: Agent does not have edit rights"
 msgstr "Cannot save edits: Agent does not have edit rights"
 
-#. placeholder {0}: showAdvanced ? <FaCaretDown /> : <FaCaretRight />
+#. 0: showAdvanced ? <FaCaretDown /> \\: <FaCaretRight />
 #: src/components/forms/ResourceForm.tsx
 msgid "{0} Advanced"
 msgstr "{0} Advanced"
@@ -1146,7 +1013,7 @@ msgstr "Stack trace:"
 msgid "Nothing to show"
 msgstr "Nothing to show"
 
-#. placeholder {0}: resource.title
+#. 0: resource.title
 #: src/routes/History/HistoryMobileView.tsx
 msgid "History of {0}"
 msgstr "History of {0}"
@@ -1180,7 +1047,7 @@ msgstr "Imported!"
 msgid "Import to"
 msgstr "Import to"
 
-#. placeholder {0}: ' '
+#. 0: ' '
 #: src/views/ImporterPage.tsx
 msgid "Read more about how importing Atomic Data works{0} <0>in the docs</0> ."
 msgstr "Read more about how importing Atomic Data works{0} <0>in the docs</0> ."
@@ -1230,7 +1097,7 @@ msgstr "Delete this property"
 msgid "Required field."
 msgstr "Required field."
 
-#. placeholder {0}: ' '
+#. 0: ' '
 #: src/routes/Share/AgentRights.tsx
 msgid "<0/> Public (anyone){0}"
 msgstr "<0/> Public (anyone){0}"
@@ -1250,14 +1117,6 @@ msgstr "Write access. Toggle to remove access."
 #: src/routes/Share/AgentRights.tsx
 msgid "No write access. Toggle to give write access."
 msgstr "No write access. Toggle to give write access."
-
-#: src/components/AI/AISettings.tsx
-msgid ""
-"<0/> Enable AI\n"
-"Features"
-msgstr ""
-"<0/> Enable AI\n"
-"Features"
 
 #: src/components/AI/AISettings.tsx
 msgid "<0/> Show token usage in chats"
@@ -1283,24 +1142,10 @@ msgstr "<0/> or"
 msgid "Enter your OpenRouter API key"
 msgstr "Enter your OpenRouter API key"
 
-#. placeholder {0}: intl.format(creditUsage.used)
-#. placeholder {1}: ' '
-#. placeholder {2}: intl.format(creditUsage.total)
+#. 0: intl.format(creditUsage.used); 1: ' '; 2: intl.format(creditUsage.total)
 #: src/components/AI/AISettings.tsx
 msgid "Credits used: {0} /{1} {2}"
 msgstr "Credits used: {0} /{1} {2}"
-
-#: src/components/AI/AISettings.tsx
-msgid ""
-"OpenRouter provides a unified API that gives you access to\n"
-"hundreds of AI models from all major vendors, while\n"
-"automatically handling fallbacks and selecting the most\n"
-"cost-effective options."
-msgstr ""
-"OpenRouter provides a unified API that gives you access to\n"
-"hundreds of AI models from all major vendors, while\n"
-"automatically handling fallbacks and selecting the most\n"
-"cost-effective options."
 
 #: src/components/AI/AISettings.tsx
 msgid "OpenRouter"
@@ -1310,7 +1155,7 @@ msgstr "OpenRouter"
 msgid "Enable Ollama"
 msgstr "Enable Ollama"
 
-#. placeholder {0}: ' '
+#. 0: ' '
 #: src/components/AI/AISettings.tsx
 msgid "Host your own AI models locally using{0} <0>Ollama</0>"
 msgstr "Host your own AI models locally using{0} <0>Ollama</0>"
@@ -1355,7 +1200,7 @@ msgstr "(Tip) Choose a cheap and fast model"
 msgid "Change what model is used for generative features"
 msgstr "Change what model is used for generative features"
 
-#: src/components/AI/AISettings.tsx
+#: src/chunks/AI/MCPConfigTab.tsx
 msgid "MCP Servers"
 msgstr "MCP Servers"
 
@@ -1394,18 +1239,6 @@ msgid "Set as current drive"
 msgstr "Set as current drive"
 
 #: src/views/Drive/DrivePage.tsx
-msgid ""
-"You are running Atomic-Server on `localhost`, which means that it\n"
-"will not be available from any other machine than your current local\n"
-"device. If you want your Atomic-Server to be available from the web,\n"
-"you should set this up at a Domain on a server."
-msgstr ""
-"You are running Atomic-Server on `localhost`, which means that it\n"
-"will not be available from any other machine than your current local\n"
-"device. If you want your Atomic-Server to be available from the web,\n"
-"you should set this up at a Domain on a server."
-
-#: src/views/Drive/DrivePage.tsx
 msgid "Default Ontology"
 msgstr "Default Ontology"
 
@@ -1413,12 +1246,12 @@ msgstr "Default Ontology"
 msgid "CollectionDisplayStyle"
 msgstr "CollectionDisplayStyle"
 
-#. placeholder {0}: classTitle
+#. 0: classTitle
 #: src/views/CollectionPage.tsx
 msgid "Hide {0} info"
 msgstr "Hide {0} info"
 
-#. placeholder {0}: classTitle
+#. 0: classTitle
 #: src/views/CollectionPage.tsx
 msgid "Show {0} info"
 msgstr "Show {0} info"
@@ -1432,7 +1265,7 @@ msgstr "empty"
 msgid "This collection is empty"
 msgstr "This collection is empty"
 
-#. placeholder {0}: title
+#. 0: title
 #: src/views/EndpointPage.tsx
 msgid "{0} endpoint"
 msgstr "{0} endpoint"
@@ -1441,7 +1274,7 @@ msgstr "{0} endpoint"
 msgid "Go"
 msgstr "Go"
 
-#. placeholder {0}: write ? 'edit' : 'view'
+#. 0: write ? 'edit' \\: 'view'
 #: src/views/InvitePage.tsx
 msgid "Invite to {0}"
 msgstr "Invite to {0}"
@@ -1450,7 +1283,7 @@ msgstr "Invite to {0}"
 msgid "Sorry, this Invite has no usages left. Ask for a new one."
 msgstr "Sorry, this Invite has no usages left. Ask for a new one."
 
-#. placeholder {0}: agentTitle
+#. 0: agentTitle
 #: src/views/InvitePage.tsx
 msgid "Accept as {0}"
 msgstr "Accept as {0}"
@@ -1464,7 +1297,7 @@ msgstr "Accept as new user"
 msgid "Sign in"
 msgstr "Sign in"
 
-#. placeholder {0}: usagesLeft
+#. 0: usagesLeft
 #: src/views/InvitePage.tsx
 msgid "({0} usages left)"
 msgstr "({0} usages left)"
@@ -1482,30 +1315,12 @@ msgid "Agent Name"
 msgstr "Agent Name"
 
 #: src/views/InvitePage.tsx
-msgid ""
-"IMPORTANT! Below is your agent secret, you use this to login. Save\n"
-"it somewhere safe, the secret will not be show again and if you\n"
-"lose it you will not be able to access this user again."
-msgstr ""
-"IMPORTANT! Below is your agent secret, you use this to login. Save\n"
-"it somewhere safe, the secret will not be show again and if you\n"
-"lose it you will not be able to access this user again."
-
-#: src/views/InvitePage.tsx
 msgid "Continue"
 msgstr "Continue"
 
 #: src/views/InvitePage.tsx
 msgid "Copy secret to continue"
 msgstr "Copy secret to continue"
-
-#: src/views/DocumentPage.tsx
-msgid ""
-"<0/> This document needs to be updated to the new format in order to\n"
-"be edited."
-msgstr ""
-"<0/> This document needs to be updated to the new format in order to\n"
-"be edited."
 
 #: src/views/DocumentPage.tsx
 msgid "Update Document"
@@ -1590,7 +1405,7 @@ msgstr "Breadcrumbs"
 msgid "Set Drive"
 msgstr "Set Drive"
 
-#. placeholder {0}: title
+#. 0: title
 #: src/components/Parent.tsx
 msgid "Set {0} as current drive"
 msgstr "Set {0} as current drive"
@@ -1599,8 +1414,7 @@ msgstr "Set {0} as current drive"
 msgid "Set as drive"
 msgstr "Set as drive"
 
-#. placeholder {0}: e.message
-#. placeholder {1}: value?.toString()
+#. 0: e.message; 1: value?.toString()
 #: src/components/ValueComp.tsx
 msgid "{0} original value: {1}"
 msgstr "{0} original value: {1}"
@@ -1657,7 +1471,7 @@ msgstr "Required"
 msgid "Edit resource"
 msgstr "Edit resource"
 
-#. placeholder {0}: ' '
+#. 0: ' '
 #: src/routes/History/VersionTitle.tsx
 msgid "Editted <0/> by{0} <1/>"
 msgstr "Editted <0/> by{0} <1/>"
@@ -1684,49 +1498,15 @@ msgstr "Remove drive from list"
 msgid "Select"
 msgstr "Select"
 
-#: src/components/AI/MCP/MCPServersManager.tsx
-msgid "No MCP servers configured"
-msgstr "No MCP servers configured"
-
-#: src/components/AI/MCP/MCPServersManager.tsx
-msgid "Add Server"
-msgstr "Add Server"
-
-#: src/components/AI/MCP/MCPServersManager.tsx
-msgid "Server Name"
-msgstr "Server Name"
-
-#: src/components/AI/MCP/MCPServersManager.tsx
-msgid "Enter server name"
-msgstr "Enter server name"
-
-#: src/components/AI/MCP/MCPServersManager.tsx
-#: src/components/AI/MCP/ServerItem.tsx
-msgid "Server URL"
-msgstr "Server URL"
-
-#: src/components/AI/MCP/MCPServersManager.tsx
-msgid "Enter server URL"
-msgstr "Enter server URL"
-
-#: src/components/AI/MCP/MCPServersManager.tsx
-msgid "Type"
-msgstr "Type"
-
-#: src/components/AI/MCP/MCPServersManager.tsx
-#: src/components/AI/MCP/ServerItem.tsx
+#: src/chunks/AI/MCPConfigTab.tsx
 msgid "Select transport type"
 msgstr "Select transport type"
-
-#: src/components/AI/MCP/MCPServersManager.tsx
-msgid "Add server"
-msgstr "Add server"
 
 #: src/components/Template/ApplyTemplateDialog.tsx
 msgid "Template applied!"
 msgstr "Template applied!"
 
-#. placeholder {0}: template.title
+#. 0: template.title
 #: src/components/Template/ApplyTemplateDialog.tsx
 msgid "Apply {0} template"
 msgstr "Apply {0} template"
@@ -1759,7 +1539,7 @@ msgstr "The identifier of the resource. This also determines where the resource 
 msgid "Resource"
 msgstr "Resource"
 
-#. placeholder {0}: classSubject ? klassTitle : 'Resource'
+#. 0: classSubject ? klassTitle \\: 'Resource'
 #: src/components/forms/NewForm/NewFormTitle.tsx
 msgid "new {0}"
 msgstr "new {0}"
@@ -1768,7 +1548,7 @@ msgstr "new {0}"
 msgid "Toggle show Class details"
 msgstr "Toggle show Class details"
 
-#. placeholder {0}: shortcuts.sidebarToggle
+#. 0: shortcuts.sidebarToggle
 #: src/components/Navigation.tsx
 msgid "Show / hide sidebar ({0})"
 msgstr "Show / hide sidebar ({0})"
@@ -1867,8 +1647,8 @@ msgstr "Sandbox, test components in isolation"
 msgid "Add tags"
 msgstr "Add tags"
 
-#. placeholder {0}: displayFileSize(fileSize ?? 0)
-#. placeholder {0}: displayFileSize(fileSize ?? 0)
+#. 0: displayFileSize(fileSize ?? 0)
+#. 0: displayFileSize(fileSize ?? 0)
 #: src/views/File/DownloadButton.tsx
 #: src/views/File/DownloadButton.tsx
 msgid "Download file ({0})"
@@ -1904,13 +1684,12 @@ msgstr "Sorry, your browser doesn't support embedded videos."
 msgid "No preview available"
 msgstr "No preview available"
 
-#. placeholder {0}: ' '
-#. placeholder {1}: displayFileSize(fileSizeLimit)
+#. 0: ' '; 1: displayFileSize(fileSizeLimit)
 #: src/views/File/FilePreview.tsx
 msgid "Preview hidden because the file is larger than{0} {1}."
 msgstr "Preview hidden because the file is larger than{0} {1}."
 
-#. placeholder {0}: displayFileSize(bytes)
+#. 0: displayFileSize(bytes)
 #: src/views/File/FilePreview.tsx
 msgid "Load anyway ({0})"
 msgstr "Load anyway ({0})"
@@ -2022,8 +1801,8 @@ msgid "Possible values:"
 msgstr "Possible values:"
 
 #: src/components/datatypes/Markdown.tsx
-msgid "Read more"
-msgstr "Read more"
+msgid "Read more "
+msgstr "Read more "
 
 #: src/components/Table.tsx
 msgid "subject"
@@ -2041,8 +1820,7 @@ msgstr "No plugins installed"
 msgid "Edit value"
 msgstr "Edit value"
 
-#. placeholder {0}: ' '
-#. placeholder {1}: resource.title
+#. 0: ' '; 1: resource.title
 #: src/components/ResourceUsage/ReferenceUsage.tsx
 msgid "<0/> resources reference{0} {1}"
 msgstr "<0/> resources reference{0} {1}"
@@ -2051,20 +1829,17 @@ msgstr "<0/> resources reference{0} {1}"
 msgid "No usage of class found."
 msgstr "No usage of class found."
 
-#. placeholder {0}: ' '
-#. placeholder {1}: resource.title
+#. 0: ' '; 1: resource.title
 #: src/components/ResourceUsage/ClassUsage.tsx
 msgid "<0/> resources are an instance of{0} {1}"
 msgstr "<0/> resources are an instance of{0} {1}"
 
-#. placeholder {0}: resource.title
-#. placeholder {1}: ' '
+#. 0: resource.title; 1: ' '
 #: src/components/ResourceUsage/ClassUsage.tsx
 msgid "<0/> properties have {0}{1} as a classtype."
 msgstr "<0/> properties have {0}{1} as a classtype."
 
-#. placeholder {0}: resource.title
-#. placeholder {1}: ' '
+#. 0: resource.title; 1: ' '
 #: src/components/ResourceUsage/PropertyUsage.tsx
 msgid "<0/> resources have a {0}{1} property"
 msgstr "<0/> resources have a {0}{1} property"
@@ -2081,8 +1856,7 @@ msgstr "<0/> classes recommend this property"
 msgid "This resource has <0/> children"
 msgstr "This resource has <0/> children"
 
-#. placeholder {0}: date.toLocaleDateString()
-#. placeholder {1}: date.toLocaleTimeString()
+#. 0: date.toLocaleDateString(); 1: date.toLocaleTimeString()
 #: src/components/datatypes/DateTime.tsx
 msgid "{0} at {1}"
 msgstr "{0} at {1}"
@@ -2099,7 +1873,7 @@ msgstr "Hide encoded state"
 msgid "Show encoded state"
 msgstr "Show encoded state"
 
-#. placeholder {0}: shortcuts.menu
+#. 0: shortcuts.menu
 #: src/components/ResourceContextMenu/MenuBarDropdownTrigger.tsx
 msgid "Open menu ({0})"
 msgstr "Open menu ({0})"
@@ -2125,9 +1899,9 @@ msgstr "DefaultTrigger"
 msgid "Use <0/> in code"
 msgstr "Use <0/> in code"
 
-#. placeholder {0}: prop.shortname
-#. placeholder {0}: prop.shortname
-#. placeholder {0}: title
+#. 0: prop.shortname
+#. 0: prop.shortname
+#. 0: title
 #: src/chunks/TablePage/EditorCells/JSONCell.tsx
 #: src/chunks/TablePage/EditorCells/MarkdownCell.tsx
 #: src/components/forms/EditFormDialog.tsx
@@ -2162,36 +1936,16 @@ msgstr "Websocket Closed"
 msgid "Websocket Connecting..."
 msgstr "Websocket Connecting..."
 
-#: src/components/AI/MCP/ServerItem.tsx
-msgid "Server name"
-msgstr "Server name"
-
-#: src/components/AI/MCP/ServerItem.tsx
-msgid "Save changes"
-msgstr "Save changes"
-
-#: src/components/AI/MCP/ServerItem.tsx
-msgid "Cancel edit"
-msgstr "Cancel edit"
-
-#. placeholder {0}: server.transport
-#: src/components/AI/MCP/ServerItem.tsx
+#. 0: server.transport
+#: src/chunks/AI/MCPConfigTab.tsx
 msgid "Transport: {0}"
 msgstr "Transport: {0}"
-
-#: src/components/AI/MCP/ServerItem.tsx
-msgid "Edit server"
-msgstr "Edit server"
-
-#: src/components/AI/MCP/ServerItem.tsx
-msgid "Remove server"
-msgstr "Remove server"
 
 #: src/components/Searchbar/Searchbar.tsx
 msgid "Start searching"
 msgstr "Start searching"
 
-#. placeholder {0}: title
+#. 0: title
 #: src/components/Searchbar/Searchbar.tsx
 msgid "in:{0}"
 msgstr "in:{0}"
@@ -2212,8 +1966,8 @@ msgstr "Enter an Atomic URL or search  (press \"/\")"
 msgid "Search"
 msgstr "Search"
 
-#. placeholder {0}: getTitle(resource)
-#. placeholder {0}: getTitle(resource)
+#. 0: getTitle(resource)
+#. 0: getTitle(resource)
 #: src/components/SideBar/DriveSwitcher.tsx
 #: src/components/SideBar/DriveSwitcher.tsx
 msgid "Switch to {0}"
@@ -2231,7 +1985,7 @@ msgstr "Load drives not displayed in this list."
 msgid "Create a new drive"
 msgstr "Create a new drive"
 
-#. placeholder {0}: resource.title
+#. 0: resource.title
 #: src/components/SideBar/ResourceSideBar/SidebarItemTitle.tsx
 msgid "Rearange {0}"
 msgstr "Rearange {0}"
@@ -2244,14 +1998,12 @@ msgstr "To rearange items, press space or enter to start dragging. While draggin
 msgid "Keyboard support for drag and drop is disabled. Enable it in the settings."
 msgstr "Keyboard support for drag and drop is disabled. Enable it in the settings."
 
-#. placeholder {0}: resource.title
+#. 0: resource.title
 #: src/components/SideBar/useSidebarDnd.ts
 msgid "Picked up {0}"
 msgstr "Picked up {0}"
 
-#. placeholder {0}: dragResource.title
-#. placeholder {1}: dropResource.title
-#. placeholder {2}: pos + 1
+#. 0: dragResource.title; 1: dropResource.title; 2: pos + 1
 #: src/components/SideBar/useSidebarDnd.ts
 msgid "Draggable item {0} was moved over droppable area in {1} at position {2}"
 msgstr "Draggable item {0} was moved over droppable area in {1} at position {2}"
@@ -2328,6 +2080,7 @@ msgid "Allows only:"
 msgstr "Allows only:"
 
 #: src/chunks/AI/AgentConfig.tsx
+#: src/chunks/AI/SkillsConfigTab.tsx
 #: src/views/OntologyPage/OntologyDescription.tsx
 msgid "Description"
 msgstr "Description"
@@ -2388,22 +2141,6 @@ msgid "Allow all writes done by this plugin"
 msgstr "Allow all writes done by this plugin"
 
 #: src/views/PluginView/useRequestPermissionDialog.tsx
-msgid ""
-"<0/> wants to read a resource that is not\n"
-"contained in the current scope."
-msgstr ""
-"<0/> wants to read a resource that is not\n"
-"contained in the current scope."
-
-#: src/views/PluginView/useRequestPermissionDialog.tsx
-msgid ""
-"<0/> wants to modify a resource that is not\n"
-"contained in the current scope."
-msgstr ""
-"<0/> wants to modify a resource that is not\n"
-"contained in the current scope."
-
-#: src/views/PluginView/useRequestPermissionDialog.tsx
 msgid "Deny"
 msgstr "Deny"
 
@@ -2415,7 +2152,7 @@ msgstr "Allow"
 msgid "Enter a subject"
 msgstr "Enter a subject"
 
-#. placeholder {0}: property.shortname
+#. 0: property.shortname
 #: src/components/forms/InputResourceArray.tsx
 msgid "Add an item to the {0} list"
 msgstr "Add an item to the {0} list"
@@ -2482,7 +2219,7 @@ msgstr "<0/> Typescript"
 msgid "You need to be logged in to create new things"
 msgstr "You need to be logged in to create new things"
 
-#. placeholder {0}: title
+#. 0: title
 #: src/components/NewInstanceButton/Base.tsx
 msgid "Create a new {0}"
 msgstr "Create a new {0}"
@@ -2491,7 +2228,7 @@ msgstr "Create a new {0}"
 msgid "No User set - sign in first"
 msgstr "No User set - sign in first"
 
-#. placeholder {0}: isA ? typeResource.title : 'resource'
+#. 0: isA ? typeResource.title \\: 'resource'
 #: src/components/forms/SearchBox/SearchBox.tsx
 msgid "Search for a {0} or enter a URL..."
 msgstr "Search for a {0} or enter a URL..."
@@ -2521,7 +2258,7 @@ msgstr "Search or enter a URL..."
 msgid "Upload"
 msgstr "Upload"
 
-#. placeholder {0}: resource.title
+#. 0: resource.title
 #: src/views/OntologyPage/Class/NewClassInstanceButton.tsx
 msgid "New instance of {0}"
 msgstr "New instance of {0}"
@@ -2554,25 +2291,22 @@ msgstr "<0/> Select File"
 msgid "None"
 msgstr "None"
 
-#. placeholder {0}: ' '
-#. placeholder {1}: ' '
+#. 0: ' '; 1: ' '
 #: src/views/CodeUsage/CodeUsage.tsx
 msgid "Read the{0} <0>@tomic/lib docs</0>{1} for more info."
 msgstr "Read the{0} <0>@tomic/lib docs</0>{1} for more info."
 
-#. placeholder {0}: ' '
-#. placeholder {1}: ' '
+#. 0: ' '; 1: ' '
 #: src/views/CodeUsage/CodeUsage.tsx
 msgid "Read the{0} <0>@tomic/react docs</0>{1} for more info."
 msgstr "Read the{0} <0>@tomic/react docs</0>{1} for more info."
 
-#. placeholder {0}: ' '
-#. placeholder {1}: ' '
+#. 0: ' '; 1: ' '
 #: src/views/CodeUsage/CodeUsage.tsx
 msgid "Read the{0} <0>@tomic/svelte docs</0>{1} for more info."
 msgstr "Read the{0} <0>@tomic/svelte docs</0>{1} for more info."
 
-#. placeholder {0}: ' '
+#. 0: ' '
 #: src/views/CodeUsage/CodeUsage.tsx
 msgid "Read more about generating schema's using{0} <0>@tomic/cli</0> ."
 msgstr "Read more about generating schema's using{0} <0>@tomic/cli</0> ."
@@ -2581,12 +2315,12 @@ msgstr "Read more about generating schema's using{0} <0>@tomic/cli</0> ."
 msgid "Start Searching"
 msgstr "Start Searching"
 
-#. placeholder {0}: ' '
+#. 0: ' '
 #: src/components/forms/SearchBox/SearchBoxWindow.tsx
 msgid "Create{0} <0/>"
 msgstr "Create{0} <0/>"
 
-#. placeholder {0}: classTitle ?? 'resource'
+#. 0: classTitle ?? 'resource'
 #: src/components/forms/SearchBox/SearchBoxWindow.tsx
 msgid "Create new {0}"
 msgstr "Create new {0}"
@@ -2649,10 +2383,6 @@ msgid "Install"
 msgstr "Install"
 
 #: src/chunks/AI/AISidebar.tsx
-msgid "New Chat"
-msgstr "New Chat"
-
-#: src/chunks/AI/AISidebar.tsx
 msgid "Reset"
 msgstr "Reset"
 
@@ -2690,10 +2420,6 @@ msgid "Remove file"
 msgstr "Remove file"
 
 #: src/chunks/AI/RealAIChat.tsx
-msgid "Automatic"
-msgstr "Automatic"
-
-#: src/chunks/AI/RealAIChat.tsx
 msgid "Toggle web search"
 msgstr "Toggle web search"
 
@@ -2714,22 +2440,6 @@ msgid "Regenerate response"
 msgstr "Regenerate response"
 
 #: src/chunks/AI/AgentConfig.tsx
-msgid "Select AI Agents"
-msgstr "Select AI Agents"
-
-#: src/chunks/AI/AgentConfig.tsx
-msgid "Automatic Agent Selection"
-msgstr "Automatic Agent Selection"
-
-#: src/chunks/AI/AgentConfig.tsx
-msgid ""
-"Pick best agent for the job based on name, description and\n"
-"available tools"
-msgstr ""
-"Pick best agent for the job based on name, description and\n"
-"available tools"
-
-#: src/chunks/AI/AgentConfig.tsx
 msgid "AI Agents"
 msgstr "AI Agents"
 
@@ -2742,6 +2452,8 @@ msgid "Create Agent"
 msgstr "Create Agent"
 
 #: src/chunks/AI/AgentConfig.tsx
+#: src/chunks/AI/MCPConfigTab.tsx
+#: src/chunks/AI/SkillsConfigTab.tsx
 msgid "Save Changes"
 msgstr "Save Changes"
 
@@ -2802,24 +2514,16 @@ msgstr "<0/> Settings"
 msgid "No AI provider configured."
 msgstr "No AI provider configured."
 
-#. placeholder {0}: agent.id
-#. placeholder {1}: agent.name
-#. placeholder {2}: agent.description
-#. placeholder {3}: agent.availableTools.map(t => mcpServers.find(s => s.id === t)?.name).join(', ')
-#: src/chunks/AI/useAgentAutoSelect.ts
-msgid "ID: {0} Name: {1} Description: {2} Tools: {3}"
-msgstr "ID: {0} Name: {1} Description: {2} Tools: {3}"
-
 #: src/chunks/AI/AIChatMessageParts/UserMessage.tsx
 msgid "You"
 msgstr "You"
 
-#. placeholder {0}: ' '
+#. 0: ' '
 #: src/chunks/AI/ModelSelect/ModelSelect.tsx
 msgid "OpenRouter API key is not configured. Go to{0} <0>Settings</0>."
 msgstr "OpenRouter API key is not configured. Go to{0} <0>Settings</0>."
 
-#. placeholder {0}: ' '
+#. 0: ' '
 #: src/chunks/AI/ModelSelect/ModelSelect.tsx
 msgid "Ollama URL is not configured. Go to{0} <0>Settings</0>."
 msgstr "Ollama URL is not configured. Go to{0} <0>Settings</0>."
@@ -2832,7 +2536,7 @@ msgstr "Provider"
 msgid "Default agent"
 msgstr "Default agent"
 
-#. placeholder {0}: agent.name
+#. 0: agent.name
 #: src/chunks/AI/AgentConfigItem.tsx
 msgid "Set {0} as default"
 msgstr "Set {0} as default"
@@ -2845,16 +2549,11 @@ msgstr "Provider not enabled"
 msgid "Attached File"
 msgstr "Attached File"
 
-#. placeholder {0}: propertyResource.title
-#. placeholder {1}: resource.title
-#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
-msgid "Editing {0} on {1}"
-msgstr "Editing {0} on {1}"
-
 #: src/chunks/AI/AIChatMessageParts/ReasoningMessage.tsx
 msgid "Thinking..."
 msgstr "Thinking..."
 
+#: src/chunks/AI/AIChatMessageParts/ReasoningMessage.tsx
 #: src/chunks/AI/AIChatMessageParts/ReasoningMessage.tsx
 msgid "Thinking"
 msgstr "Thinking"
@@ -2863,8 +2562,8 @@ msgstr "Thinking"
 msgid "OpenRouter is not enabled"
 msgstr "OpenRouter is not enabled"
 
-#. placeholder {0}: models.length
-#. placeholder {0}: modelList.length
+#. 0: models.length
+#. 0: modelList.length
 #: src/chunks/AI/ModelSelect/OllamaModelSelector.tsx
 #: src/chunks/AI/ModelSelect/OpenRouterModelSelector.tsx
 msgid "{0} Models"
@@ -2874,21 +2573,12 @@ msgstr "{0} Models"
 msgid "<0/> The selected model does not support tool use."
 msgstr "<0/> The selected model does not support tool use."
 
-#. placeholder {0}: formatter.format(selectedModel?.pricing.prompt * 1000000)
-#: src/chunks/AI/ModelSelect/OpenRouterModelSelector.tsx
-msgid ""
-"{0}/M\n"
-"input tokens"
-msgstr ""
-"{0}/M\n"
-"input tokens"
-
-#. placeholder {0}: formatter.format(selectedModel?.pricing.completion * 1000000)
+#. 0: formatter.format(selectedModel?.pricing.completion * 1000000)
 #: src/chunks/AI/ModelSelect/OpenRouterModelSelector.tsx
 msgid "{0} /M output tokens"
 msgstr "{0} /M output tokens"
 
-#. placeholder {0}: formatter.format(selectedModel?.pricing.web_search * 1000)
+#. 0: formatter.format(selectedModel?.pricing.web_search * 1000)
 #: src/chunks/AI/ModelSelect/OpenRouterModelSelector.tsx
 msgid "{0} /1K web search results"
 msgstr "{0} /1K web search results"
@@ -2940,14 +2630,6 @@ msgstr "No result"
 #: src/routes/PruneTestsRoute.tsx
 msgid "Prune Test Data"
 msgstr "Prune Test Data"
-
-#: src/routes/PruneTestsRoute.tsx
-msgid ""
-"Pruning test data will delete all drives on the server that have\n"
-"’testdrive’ in their name."
-msgstr ""
-"Pruning test data will delete all drives on the server that have\n"
-"’testdrive’ in their name."
 
 #: src/routes/PruneTestsRoute.tsx
 msgid "Prune"
@@ -3164,15 +2846,6 @@ msgstr "Data Table"
 msgid "Rich Text Editor"
 msgstr "Rich Text Editor"
 
-#. placeholder {0}: ' '
-#: src/chunks/RTE/CollaborativeEditor.tsx
-msgid ""
-"There was an error in the editor, please refresh the page to\n"
-"continue.{0} <0>Refresh</0>"
-msgstr ""
-"There was an error in the editor, please refresh the page to\n"
-"continue.{0} <0>Refresh</0>"
-
 #: src/chunks/RTE/CollaborativeEditor.tsx
 msgid "Untitled Agent"
 msgstr "Untitled Agent"
@@ -3218,7 +2891,7 @@ msgstr "Drag column"
 msgid "View"
 msgstr "View"
 
-#. placeholder {0}: ' '
+#. 0: ' '
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 msgid "Remove <0/> from{0} <1/>"
 msgstr "Remove <0/> from{0} <1/>"
@@ -3247,7 +2920,7 @@ msgstr "Row is incomplete or has invalid data"
 msgid "Export table as CSV"
 msgstr "Export table as CSV"
 
-#. placeholder {0}: ' '
+#. 0: ' '
 #: src/chunks/TablePage/TableExportDialog.tsx
 msgid "<0/>{0} Reference resources by subject instead of name."
 msgstr "<0/>{0} Reference resources by subject instead of name."
@@ -3264,8 +2937,8 @@ msgstr "Quote"
 msgid "Image"
 msgstr "Image"
 
-#. placeholder {0}: classType.title
-#. placeholder {0}: classType.title
+#. 0: classType.title
+#. 0: classType.title
 #: src/chunks/TablePage/EditorCells/AtomicURLCell.tsx
 #: src/chunks/TablePage/EditorCells/MultiRelationCell.tsx
 msgid "Search {0}"
@@ -3414,7 +3087,7 @@ msgstr "<0/> Provide relevant context from your knowledge base to the Agent."
 msgid "Gathering context"
 msgstr "Gathering context"
 
-#. placeholder {0}: ' '
+#. 0: ' '
 #: src/routes/AppSettings.tsx
 msgid "<0/>{0} Enable AIChats panel"
 msgstr "<0/>{0} Enable AIChats panel"
@@ -3435,13 +3108,12 @@ msgstr "Reading <0/> schema"
 msgid "Reading schema"
 msgstr "Reading schema"
 
-#. placeholder {0}: nummberFormatter.format(usage.input)
-#. placeholder {1}: ' '
-#. placeholder {2}: nummberFormatter.format(usage.output)
+#. 0: nummberFormatter.format(usage.input); 1: ' '; 2: nummberFormatter.format(usage.output)
 #: src/chunks/AI/RealAIChat.tsx
 msgid "Tokens used: {0} input,{1} {2} output"
 msgstr "Tokens used: {0} input,{1} {2} output"
 
+#: src/chunks/AI/AISidebar.tsx
 #: src/components/SideBar/AIPanel.tsx
 msgid "Untitled Chat"
 msgstr "Untitled Chat"
@@ -3453,12 +3125,12 @@ msgid_plural "# Changes"
 msgstr[0] "1 Change"
 msgstr[1] "# Changes"
 
-#: src/components/ResourceDiff/ResourceDiff.tsx
-#: src/components/ResourceDiff/ResourceDiff.tsx
-#: src/components/ResourceDiff/ResourceDiff.tsx
-#: src/components/ResourceDiff/ResourceDiff.tsx
-#: src/components/ResourceDiff/ResourceDiff.tsx
-#: src/components/ResourceDiff/ResourceDiff.tsx
+#: src/chunks/ResourceDiff/ResourceDiff.tsx
+#: src/chunks/ResourceDiff/ResourceDiff.tsx
+#: src/chunks/ResourceDiff/ResourceDiff.tsx
+#: src/chunks/ResourceDiff/ResourceDiff.tsx
+#: src/chunks/ResourceDiff/ResourceDiff.tsx
+#: src/chunks/ResourceDiff/ResourceDiff.tsx
 msgid "unset"
 msgstr "unset"
 
@@ -3491,19 +3163,13 @@ msgstr "Indexing"
 msgid "Accept Changes"
 msgstr "Accept Changes"
 
-#. placeholder {0}: resource.title
-#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
-msgid "Editing {0}"
-msgstr "Editing {0}"
-
 #: src/components/AIChangesContext.tsx
 msgid "edit"
 msgid_plural "edits"
 msgstr[0] "edit"
 msgstr[1] "edits"
 
-#. placeholder {0}: editCount
-#. placeholder {1}: plural(editCount, ['edit', 'edits'])
+#. 0: editCount; 1: plural(editCount, ['edit', 'edits'])
 #: src/components/AIChangesContext.tsx
 msgid "Review {0} {1}"
 msgstr "Review {0} {1}"
@@ -3516,7 +3182,7 @@ msgstr "No alt text"
 msgid "Editor was destroyed before it finished initializing"
 msgstr "Editor was destroyed before it finished initializing"
 
-#. placeholder {0}: ' '
+#. 0: ' '
 #: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
 msgid "Reading{0} <0/>"
 msgstr "Reading{0} <0/>"
@@ -3524,3 +3190,269 @@ msgstr "Reading{0} <0/>"
 #: src/routes/History/HistoryRoute.tsx
 msgid "No version history for this resource."
 msgstr "No version history for this resource."
+
+#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
+msgid "Loading skill: <0/>"
+msgstr "Loading skill: <0/>"
+
+#. 0: propertyResource.title
+#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
+msgid "Editing {0} on <0/>"
+msgstr "Editing {0} on <0/>"
+
+#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
+msgid "Editing <0/>"
+msgstr "Editing <0/>"
+
+#. 0: ' · '
+#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
+msgid "Loading skill: <0/> {0} <1/>"
+msgstr "Loading skill: <0/> {0} <1/>"
+
+#: src/chunks/AI/AIChatMessageParts/SearchToolMessageContent.tsx
+msgid "No matching results."
+msgstr "No matching results."
+
+#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
+msgid "Creating <0/>"
+msgstr "Creating <0/>"
+
+#: src/chunks/AI/AISettingsDialog.tsx
+msgid "AI Settings"
+msgstr "AI Settings"
+
+#: src/chunks/AI/AISettingsDialog.tsx
+msgid "AI Settings Tabs"
+msgstr "AI Settings Tabs"
+
+#: src/chunks/AI/AISettingsDialog.tsx
+msgid "Agents"
+msgstr "Agents"
+
+#: src/chunks/AI/AISettingsDialog.tsx
+#: src/chunks/AI/AgentConfig.tsx
+msgid "Skills"
+msgstr "Skills"
+
+#: src/chunks/AI/SkillsConfigTab.tsx
+msgid "Create Skill"
+msgstr "Create Skill"
+
+#: src/chunks/AI/SkillsConfigTab.tsx
+msgid "Edit Skill"
+msgstr "Edit Skill"
+
+#: src/chunks/AI/SkillsConfigTab.tsx
+msgid "Delete Skill"
+msgstr "Delete Skill"
+
+#: src/chunks/AI/SkillsConfigTab.tsx
+msgid "No custom skills created yet."
+msgstr "No custom skills created yet."
+
+#: src/chunks/AI/SkillsConfigTab.tsx
+msgid "AI Skills"
+msgstr "AI Skills"
+
+#: src/chunks/AI/SkillsConfigTab.tsx
+msgid "<0/> Create New Skill"
+msgstr "<0/> Create New Skill"
+
+#: src/chunks/AI/SkillsConfigTab.tsx
+msgid "Use this skill when..."
+msgstr "Use this skill when..."
+
+#: src/chunks/AI/SkillsConfigTab.tsx
+msgid "Write the markdown documentation for the skill here..."
+msgstr "Write the markdown documentation for the skill here..."
+
+#: src/chunks/AI/SkillsConfigTab.tsx
+msgid "Path"
+msgstr "Path"
+
+#: src/chunks/AI/SkillsConfigTab.tsx
+msgid "Remove Reference"
+msgstr "Remove Reference"
+
+#: src/chunks/AI/SkillsConfigTab.tsx
+#: src/chunks/AI/SkillsConfigTab.tsx
+msgid "Content"
+msgstr "Content"
+
+#: src/chunks/AI/SkillsConfigTab.tsx
+msgid "Markdown content for this reference..."
+msgstr "Markdown content for this reference..."
+
+#: src/chunks/AI/SkillsConfigTab.tsx
+msgid "<0/> Add Reference"
+msgstr "<0/> Add Reference"
+
+#: src/chunks/AI/SkillsConfigTab.tsx
+msgid "The Agent will see this name"
+msgstr "The Agent will see this name"
+
+#: src/chunks/AI/SkillsConfigTab.tsx
+msgid "Tells the agent when to activate this skill"
+msgstr "Tells the agent when to activate this skill"
+
+#: src/chunks/AI/SkillsConfigTab.tsx
+msgid "References"
+msgstr "References"
+
+#: src/routes/Search/SearchRoute.tsx
+msgid "Search matches on the names and descriptions of resources. Additionally you can search for resources with specific tags by adding <0/> to your search."
+msgstr "Search matches on the names and descriptions of resources. Additionally you can search for resources with specific tags by adding <0/> to your search."
+
+#: src/routes/AboutRoute.tsx
+msgid "The easiest way to <0>create</0>, <1>share</1> and <2>model</2> linked data."
+msgstr "The easiest way to <0>create</0>, <1>share</1> and <2>model</2> linked data."
+
+#: src/routes/AboutRoute.tsx
+msgid "Atomic Data is a modular specification for sharing, modifying and modeling graph data. It combines the ease of use of JSON, the connectivity of RDF (linked data) and the reliability of type-safety."
+msgstr "Atomic Data is a modular specification for sharing, modifying and modeling graph data. It combines the ease of use of JSON, the connectivity of RDF (linked data) and the reliability of type-safety."
+
+#. 0: ' '; 1: ' '
+#: src/routes/AboutRoute.tsx
+msgid "Atomic Data is especially suitable for knowledge graphs, distributed datasets, semantic data, p2p applications, decentralized apps, and data that is meant to be shared. It is designed to be highly extensible, easy to use, and to make the process of domain specific standardization as simple as possible. Check out{0} <0>the docs</0>{1} for more information about Atomic Data."
+msgstr "Atomic Data is especially suitable for knowledge graphs, distributed datasets, semantic data, p2p applications, decentralized apps, and data that is meant to be shared. It is designed to be highly extensible, easy to use, and to make the process of domain specific standardization as simple as possible. Check out{0} <0>the docs</0>{1} for more information about Atomic Data."
+
+#. 0: ' '
+#: src/routes/AboutRoute.tsx
+msgid "You're looking at{0} <0>atomic-data-browser</0> , an open-source client for viewing and editing data. Please add an issue if you encouter problems or have a feature request. Expect bugs and issues, because this stuff is pretty beta."
+msgstr "You're looking at{0} <0>atomic-data-browser</0> , an open-source client for viewing and editing data. Please add an issue if you encouter problems or have a feature request. Expect bugs and issues, because this stuff is pretty beta."
+
+#. 0: ' '; 1: ' '; 2: ' '; 3: "'"
+#: src/routes/AboutRoute.tsx
+msgid "Atomic Data is open and fully powered by volunteers. We're looking for people who want to help discuss various design challenges and work on implmenentations. If you have any questions, or want to help out, feel free to join our{0} <0>Discord</0>! Sign up to{1} <1>our newsletter</1>{2} if you{3}d like to get updated! ."
+msgstr "Atomic Data is open and fully powered by volunteers. We're looking for people who want to help discuss various design challenges and work on implmenentations. If you have any questions, or want to help out, feel free to join our{0} <0>Discord</0>! Sign up to{1} <1>our newsletter</1>{2} if you{3}d like to get updated! ."
+
+#: src/routes/SettingsAgent.tsx
+msgid "An Agent is a user, consisting of a Subject (its URL) and Private Key. Together, these can be used to edit data and sign Commits."
+msgstr "An Agent is a user, consisting of a Subject (its URL) and Private Key. Together, these can be used to edit data and sign Commits."
+
+#. 0: ' '; 1: "'s"
+#: src/routes/SettingsAgent.tsx
+msgid "You can create your own Agent by hosting an{0} <0>atomic-server</0> . Alternatively, you can use an Invite to get a guest Agent on someone else{1} Atomic Server."
+msgstr "You can create your own Agent by hosting an{0} <0>atomic-server</0> . Alternatively, you can use an Invite to get a guest Agent on someone else{1} Atomic Server."
+
+#: src/components/AI/AISettings.tsx
+msgid "<0/> Enable AI Features"
+msgstr "<0/> Enable AI Features"
+
+#: src/components/AI/AISettings.tsx
+msgid "OpenRouter provides a unified API that gives you access to hundreds of AI models from all major vendors, while automatically handling fallbacks and selecting the most cost-effective options."
+msgstr "OpenRouter provides a unified API that gives you access to hundreds of AI models from all major vendors, while automatically handling fallbacks and selecting the most cost-effective options."
+
+#. 0: classSubject
+#: src/components/forms/ResourceForm.tsx
+msgid "{0} is not a Class. Only resources with valid classes can be created or edited at this moment."
+msgstr "{0} is not a Class. Only resources with valid classes can be created or edited at this moment."
+
+#. 0: klass.error.message
+#: src/components/forms/ResourceForm.tsx
+msgid "Error in class, so this form could miss properties. You can still edit the resource, though. Error message: ` {0}`"
+msgstr "Error in class, so this form could miss properties. You can still edit the resource, though. Error message: ` {0}`"
+
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
+msgid "An ontology is a collection of classes and properties that together describe a concept. Great for data models."
+msgstr "An ontology is a collection of classes and properties that together describe a concept. Great for data models."
+
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
+msgid "Title is used to construct the subject, keep in mind that the subject cannot be changed later."
+msgstr "Title is used to construct the subject, keep in mind that the subject cannot be changed later."
+
+#: src/views/InvitePage.tsx
+msgid "IMPORTANT! Below is your agent secret, you use this to login. Save it somewhere safe, the secret will not be show again and if you lose it you will not be able to access this user again."
+msgstr "IMPORTANT! Below is your agent secret, you use this to login. Save it somewhere safe, the secret will not be show again and if you lose it you will not be able to access this user again."
+
+#: src/views/DocumentPage.tsx
+msgid "<0/> This document needs to be updated to the new format in order to be edited."
+msgstr "<0/> This document needs to be updated to the new format in order to be edited."
+
+#: src/views/Drive/DrivePage.tsx
+msgid "You are running Atomic-Server on `localhost`, which means that it will not be available from any other machine than your current local device. If you want your Atomic-Server to be available from the web, you should set this up at a Domain on a server."
+msgstr "You are running Atomic-Server on `localhost`, which means that it will not be available from any other machine than your current local device. If you want your Atomic-Server to be available from the web, you should set this up at a Domain on a server."
+
+#: src/views/PluginView/useRequestPermissionDialog.tsx
+msgid "<0/> wants to read a resource that is not contained in the current scope."
+msgstr "<0/> wants to read a resource that is not contained in the current scope."
+
+#: src/views/PluginView/useRequestPermissionDialog.tsx
+msgid "<0/> wants to modify a resource that is not contained in the current scope."
+msgstr "<0/> wants to modify a resource that is not contained in the current scope."
+
+#. 0: formatter.format(selectedModel?.pricing.prompt * 1000000)
+#: src/chunks/AI/ModelSelect/OpenRouterModelSelector.tsx
+msgid "{0}/M input tokens"
+msgstr "{0}/M input tokens"
+
+#. 0: ' '
+#: src/chunks/RTE/CollaborativeEditor.tsx
+msgid "There was an error in the editor, please refresh the page to continue.{0} <0>Refresh</0>"
+msgstr "There was an error in the editor, please refresh the page to continue.{0} <0>Refresh</0>"
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "Trade accuracy for creativity"
+msgstr "Trade accuracy for creativity"
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "Create Server"
+msgstr "Create Server"
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "Edit Server"
+msgstr "Edit Server"
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "Delete Server"
+msgstr "Delete Server"
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "No MCP servers configured yet."
+msgstr "No MCP servers configured yet."
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "<0/> Add New Server"
+msgstr "<0/> Add New Server"
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "A friendly name for this MCP server"
+msgstr "A friendly name for this MCP server"
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "The URL where the MCP server can be reached"
+msgstr "The URL where the MCP server can be reached"
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "Transport"
+msgstr "Transport"
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "The transport protocol used to communicate with the server"
+msgstr "The transport protocol used to communicate with the server"
+
+#: src/chunks/AI/SkillsConfigTab.tsx
+msgid ""
+"Additional context. Reference these in your main content for\n"
+"            additional instructions/processes that are not always needed when\n"
+"            using this skill."
+msgstr ""
+"Additional context. Reference these in your main content for\n"
+"            additional instructions/processes that are not always needed when\n"
+"            using this skill."
+
+#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
+msgid "Listing user classes"
+msgstr "Listing user classes"
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "<0/> Enable skills"
+msgstr "<0/> Enable skills"
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "Give the agent access to skills that provide domain-specific knowledge and guidance. A list of skills will be added to the end of the system prompt."
+msgstr "Give the agent access to skills that provide domain-specific knowledge and guidance. A list of skills will be added to the end of the system prompt."
+
+#: src/routes/PruneTestsRoute.tsx
+msgid "Pruning test data will delete all drives on the server that have ’testdrive’ in their name."
+msgstr "Pruning test data will delete all drives on the server that have ’testdrive’ in their name."

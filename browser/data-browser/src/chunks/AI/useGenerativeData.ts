@@ -5,19 +5,12 @@ import z from 'zod';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import { useGetModel } from './useModel';
 
-const generateTitleSystemPrompt = (
-  conversation: string,
-) => `You are part of a well oiled machine that responds to user input.
-It is your job to think of a short title that fits the given conversation.
-The user will provide a JSON object containing the conversation.
+const titleSystemPrompt = `You a specialized AI system that generates titles for AI conversations.
+You will given the first part of a conversion between the user and an AI assistatn.
+Think of a short title that fits the given conversation. This title will be shown in the UI as the title of the conversation.
 
 ALWAYS USE THE SAME LANGUAGE AS THE USER!
 ONLY RESPOND WITH JUST THE TITLE, NOTHING ELSE! NO FORMATTING OR EXTRA TEXT!
-
-Here follows the conversation as a JSON object:
-\`\`\`json
-${conversation}
-\`\`\`
 `;
 
 const generateFollowUpQuestionsSystemPrompt = (
@@ -68,8 +61,11 @@ export const useGenerativeData = () => {
 
     const { text } = await generateText({
       model,
-      // Google/gemma-3-4b-it:free doesn't support system prompts so we have to do it this way
-      prompt: generateTitleSystemPrompt(convoString),
+      system: titleSystemPrompt,
+      prompt: `\`\`\`json
+${convoString}
+\`\`\`
+`,
     });
 
     const cleaned = text.trim();
@@ -115,7 +111,7 @@ function removeFilesAndImages(
   return conversation.map(message => {
     return {
       ...message,
-      parts: message.parts.filter(part => part.type !== 'file'),
+      parts: message.parts.filter(part => part.type === 'text'),
     };
   });
 }

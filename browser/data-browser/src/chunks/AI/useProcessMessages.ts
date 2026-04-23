@@ -5,7 +5,7 @@ import { toClassString } from './atomicSchemaHelpers';
 import {
   useMcpServers,
   type ReadMCPResource,
-} from '@components/AI/MCP/useMcpServers';
+} from '@components/AI/MCP/McpServersContext';
 
 /**
  * A hook that processes AI chat messages by applying context.

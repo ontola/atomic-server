@@ -4,32 +4,48 @@ import {
   useEffect,
   useState,
   type JSX,
+  type ReactNode,
 } from 'react';
 import { styled } from 'styled-components';
 import { FaCaretRight } from 'react-icons/fa6';
 import { Collapse } from './Collapse';
 import { IconButton } from './IconButton/IconButton';
 
-export interface DetailsProps {
+export type DetailsPropsBase = {
   open?: boolean;
   initialState?: boolean;
-  title: React.ReactElement | string;
   disabled?: boolean;
   /** Event that fires when a user opens or closes the details */
   onStateToggle?: (state: boolean) => void;
   noIndent?: boolean;
-}
+  subtle?: boolean;
+};
+
+type DetailsPropsWithTitle = DetailsPropsBase & {
+  title: ReactNode;
+  titleButton?: never;
+};
+
+type DetailsPropsWithTitleButton = DetailsPropsBase & {
+  /** Label that toggles open/closed; omit the caret row. */
+  titleButton: ReactNode;
+  title?: never;
+};
+
+type DetailsProps = DetailsPropsWithTitle | DetailsPropsWithTitleButton;
 
 /** A collapsible item with a title. Similar to the <details> HTML element. */
-export function Details({
-  open = false,
-  initialState,
-  children,
-  title,
-  disabled,
-  noIndent,
-  onStateToggle,
-}: PropsWithChildren<DetailsProps>): JSX.Element {
+export function Details(props: PropsWithChildren<DetailsProps>): JSX.Element {
+  const {
+    open = false,
+    subtle = false,
+    initialState,
+    children,
+    disabled,
+    noIndent,
+    onStateToggle,
+  } = props;
+
   const [isOpen, setIsOpen] = useState(initialState);
 
   useEffect(() => {
@@ -51,16 +67,30 @@ export function Details({
   return (
     <>
       <SummaryWrapper>
-        <StyledIconButton
-          type='button'
-          title={isOpen ? 'collapse' : 'expand'}
-          onClick={toggleOpen}
-          hide={!!disabled}
-          aria-label={isOpen ? 'collapse' : 'expand'}
-        >
-          <Icon $turn={!!isOpen} />
-        </StyledIconButton>
-        <TitleWrapper>{title}</TitleWrapper>
+        {'titleButton' in props ? (
+          <TitleAsButton
+            type='button'
+            $subtle={subtle}
+            onClick={toggleOpen}
+            disabled={!!disabled}
+            aria-expanded={isOpen}
+          >
+            {props.titleButton}
+          </TitleAsButton>
+        ) : (
+          <>
+            <StyledIconButton
+              type='button'
+              title={isOpen ? 'collapse' : 'expand'}
+              onClick={toggleOpen}
+              hide={!!disabled}
+              aria-label={isOpen ? 'collapse' : 'expand'}
+            >
+              <Icon $turn={!!isOpen} subtle={subtle} />
+            </StyledIconButton>
+            <TitleWrapper>{props.title}</TitleWrapper>
+          </>
+        )}
       </SummaryWrapper>
       <StyledCollapse open={!!isOpen} noIndent={noIndent}>
         {children}
@@ -84,8 +114,36 @@ const TitleWrapper = styled.div`
   }
 `;
 
-const Icon = styled(FaCaretRight)<{ $turn: boolean }>`
-  color: ${({ theme }) => theme.colors.main};
+const TitleAsButton = styled.button<{ $subtle: boolean }>`
+  flex: 1;
+  width: 1px;
+  text-align: left;
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: ${({ theme, $subtle }) =>
+    $subtle ? theme.colors.textLight : 'inherit'};
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.6;
+  }
+
+  * {
+    user-select: none;
+    cursor: inherit;
+  }
+`;
+
+const Icon = styled(FaCaretRight)<{ $turn: boolean; subtle: boolean }>`
+  color: ${({ theme, subtle }) =>
+    subtle ? theme.colors.textLight : theme.colors.main};
   margin-top: auto;
   cursor: pointer;
   * {

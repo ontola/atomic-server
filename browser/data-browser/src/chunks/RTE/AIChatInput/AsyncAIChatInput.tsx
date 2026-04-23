@@ -13,7 +13,7 @@ import { useStore } from '@tomic/react';
 import { useSettings } from '../../../helpers/AppSettings';
 import type { Node } from '@tiptap/pm/model';
 import Placeholder from '@tiptap/extension-placeholder';
-import { useMcpServers } from '../../../components/AI/MCP/useMcpServers';
+import { useMcpServers } from '@components/AI/MCP/McpServersContext';
 import type {
   AtomicResourceSuggestion,
   MCPResourceSuggestion,

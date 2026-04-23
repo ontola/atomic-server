@@ -48,6 +48,17 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
   const addNewMessage = async (message: AtomicUIMessage) => {
     setMessages(prev => [...prev, message]);
 
+    const newMessages = [...messages, message];
+
+    // When there are only two messages and the title is still the default name, generate a title from the conversation.
+    if (
+      newMessages.length === 2 &&
+      title === DEFAULT_AICHAT_NAME &&
+      shouldGenerateTitles
+    ) {
+      generateTitleFromConversation(newMessages).then(setTitle);
+    }
+
     try {
       const messageResource = await uiMessageToResource(
         message,
@@ -143,17 +154,6 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
       setLoading(false);
     });
   }, []);
-
-  // When there are only two messages and the title is still the default name, generate a title from the conversation.
-  useEffect(() => {
-    if (
-      messages.length === 2 &&
-      title === DEFAULT_AICHAT_NAME &&
-      shouldGenerateTitles
-    ) {
-      generateTitleFromConversation(messages).then(setTitle);
-    }
-  }, [messages, title]);
 
   if (loading) {
     return <div>Loading...</div>;

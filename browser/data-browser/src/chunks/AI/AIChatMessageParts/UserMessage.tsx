@@ -53,7 +53,7 @@ const UserMessageWrapper = styled(MessageWrapper)`
   padding: ${p => p.theme.size()};
   background-color: ${p => p.theme.colors.bg};
   align-self: flex-end;
-  box-shadow: ${p => p.theme.boxShadow};
+  border: solid 1px ${p => p.theme.colors.bg2};
 `;
 
 const SenderName = styled.span`

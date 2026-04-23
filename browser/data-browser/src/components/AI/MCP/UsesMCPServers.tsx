@@ -1,12 +1,9 @@
 import { useContext, useEffect } from 'react';
 import { LazyMCPContext } from './LazyMCPProvider';
 
-/**
- * A component that makes sure the MCPServersProvider is loaded before rendering the children.
- * Do not use this component in any main bundle component.
- */
+/** Loads the lazy MCP runtime before rendering children. Not for use in the main bundle entry. */
 export default function UsesMCPServers({ children }: React.PropsWithChildren) {
-  const { load, isLoaded } = useContext(LazyMCPContext);
+  const { load, isLoaded, isRuntimeReady } = useContext(LazyMCPContext);
 
   useEffect(() => {
     if (!isLoaded) {
@@ -14,5 +11,5 @@ export default function UsesMCPServers({ children }: React.PropsWithChildren) {
     }
   }, [isLoaded, load]);
 
-  return isLoaded ? children : null;
+  return isLoaded && isRuntimeReady ? children : null;
 }

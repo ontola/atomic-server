@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { Column, Row } from '@components/Row';
 import { useAtomicMCPTools } from './useAtomicTools';
+import { skillTools, getSkillsSystemPromptPart } from './skills/skill';
 import { AIChatMessage } from './AIChatMessage';
 import { type FileUIPart } from 'ai';
 import { useTools } from './useTools';
@@ -10,12 +11,7 @@ import {
   IconButton,
   IconButtonVariant,
 } from '@components/IconButton/IconButton';
-import {
-  FaXmark,
-  FaPaperclip,
-  FaFile,
-  FaGlobe,
-} from 'react-icons/fa6';
+import { FaXmark, FaPaperclip, FaFile, FaGlobe } from 'react-icons/fa6';
 import { ChatMessagesContainer } from './ChatMessagesContainer';
 import { useStore, type Resource } from '@tomic/react';
 import { AIProvider } from '@components/AI/aiContstants';
@@ -27,7 +23,8 @@ import {
   type AIModelIdentifier,
   type AtomicUIMessage,
 } from './types';
-import { AgentConfig, useAIAgentConfig } from './AgentConfig';
+import { useAIAgentConfig } from './AgentConfig';
+import { AISettingsDialog } from './AISettingsDialog';
 import { MessageContextItem } from './MessageContextItem';
 import { useProcessMessages } from './useProcessMessages';
 import { NoKeyOverlay } from './NoKeyOverlay';
@@ -100,12 +97,8 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   const showFollowUpPromptsRef = useRef(showFollowUpPrompts);
   showFollowUpPromptsRef.current = showFollowUpPrompts;
 
-  const {
-    autoAgentSelectEnabled,
-    getInitialAgent,
-    setLastUsedAgentForChat,
-    setLastUsedSidebarAgent,
-  } = useAIAgentConfig();
+  const { getInitialAgent, setLastUsedAgentForChat, setLastUsedSidebarAgent } =
+    useAIAgentConfig();
   const addContextToMessages = useProcessMessages();
   const getToolsForAgent = useTools();
   const {
@@ -129,13 +122,10 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   // The user should be blocked from posting if the indexes are updating while using an agent that is dependent on those indexes.
   const disableSubmit =
     vectorIndexing &&
-    (autoAgentSelectEnabled ||
-      selectedAgent.canReadAtomicData ||
-      selectedAgent.ragEnabled);
+    (selectedAgent.canReadAtomicData || selectedAgent.ragEnabled);
 
   const { reportAIEdit } = useAIChanges();
-  const canUseInput =
-    autoAgentSelectEnabled || isProviderEnabled(selectedAgent.model.provider);
+  const canUseInput = isProviderEnabled(selectedAgent.model.provider);
 
   const [userSelectedContextItems, setUserSelectedContextItems] = useState<
     AIMessageContext[]
@@ -158,12 +148,15 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     openRouterAPIKey: openRouterApiKey,
     ollamaURL: ollamaUrl,
     selectedAgent,
+    additionalSystemPrompt: selectedAgent.skillsEnabled
+      ? getSkillsSystemPromptPart()
+      : undefined,
     tools: {
       ...(selectedAgent.canReadAtomicData ? atomicTools.read : {}),
       ...(selectedAgent.canWriteAtomicData ? atomicTools.write : {}),
+      ...(selectedAgent.skillsEnabled ? skillTools : {}),
       ...getToolsForAgent(selectedAgent),
     },
-    autoSelectAgent: autoAgentSelectEnabled,
     webSearchEnabled,
     resolveOutputModalities: getOutputModalities,
     resolveParameterSupport: checkORModelSupport,
@@ -446,9 +439,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                 >
                   <Row gap='0.5rem'>
                     <SubtleButton onClick={() => setAgentConfigOpen(true)}>
-                      {autoAgentSelectEnabled
-                        ? 'Automatic'
-                        : selectedAgent.name}
+                      {selectedAgent.name}
                     </SubtleButton>
                     {webSearchSupported && (
                       <IconButton
@@ -499,7 +490,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
           </>
         )}
       </Column>
-      <AgentConfig
+      <AISettingsDialog
         open={agentConfigOpen}
         onOpenChange={setAgentConfigOpen}
         selectedAgent={selectedAgent}
@@ -576,7 +567,7 @@ const ChatWindow = styled.div<{ fullView?: boolean; empty?: boolean }>`
   grid-template-rows: ${p =>
     p.empty && p.fullView ? 'auto 1fr auto 1fr' : 'auto 1fr auto'};
   height: ${p => (p.fullView ? '90vh' : '100%')};
-  width: min(100%, 40rem);
+  width: min(100%, 70rem);
   margin-inline: auto;
   gap: 1rem;
 
