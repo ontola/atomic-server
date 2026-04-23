@@ -50,6 +50,21 @@ A connection is established over a WebSocket (typically to a responder's `/ws` e
 | `0x36` | `QUERY_UPDATE`  | Resp → Init | `[property_len: u16] [property] [value_len: u16] [value] [added_count: u16] entries... [removed_count: u16] entries...`             |
 | `0x40` | `EPHEMERAL`     | either      | (Protocol-specific transient data)                                                                                                  |
 
+## UPDATE (0x11) Payload Layout and Flags
+
+The `UPDATE` message payload (after the `0x11` type tag) is laid out as follows:
+
+1. **`flags: u8`** - A bitfield containing options:
+   - **`0x01` (`SNAPSHOT`)**: The update contains a full Loro snapshot. If `0`, it is a Loro delta (incremental update).
+   - **`0x02` (`HAS_COMMIT_ID`)**: A commit ID is present on the wire.
+   - **`0x04` (`PUSH`)**: The update is a subscription-driven push from the server, not a response to a `GET` request.
+2. **`request_id: u16`** - Network request ID (in big-endian).
+3. **`subject_len: u16`** - Length of the subject string (in big-endian).
+4. **`subject: UTF-8 String`** - The subject of the resource being updated.
+5. **`commit_id_len: u16`** (Conditional) - Only present if the `HAS_COMMIT_ID (0x02)` flag bit is set. The length of the commit ID string (in big-endian).
+6. **`commit_id: UTF-8 String`** (Conditional) - Only present if the `HAS_COMMIT_ID (0x02)` flag bit is set. The subject of the commit that produced this update.
+7. **`loro_bytes: Binary`** - The remaining bytes of the payload contain the raw Loro snapshot or delta bytes.
+
 ## Authentication
 
 Before sending any other messages, the initiator must authenticate:
