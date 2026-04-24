@@ -4137,167 +4137,177 @@ msgstr "Revisa la consola del navegador para más detalles, o intenta navegar ha
 #. placeholder {0}: e instanceof Error ? e.message : String(e)
 #: src/routes/History/HistoryRoute.tsx
 msgid "Could not restore version: {0}"
-msgstr ""
+msgstr "No se pudo restaurar la versión: {0}"
 
 #: src/routes/SettingsServer/index.tsx
 msgid "Server settings have moved to the <0>Sync page</0>."
-msgstr ""
+msgstr "La configuración del servidor se ha movido a la <0>página de Sincronización</0>."
 
 #: src/routes/SyncRoute.tsx
 msgid "Open Drive Settings"
-msgstr ""
+msgstr "Abrir la configuración de Drive"
 
 #: src/routes/SyncRoute.tsx
 msgid "DriveDetailTrigger"
-msgstr ""
+msgstr "Activador de detalles de Drive"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Pen color"
-msgstr ""
+msgstr "Color del bolígrafo"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Saving…"
-msgstr ""
+msgstr "Guardando…"
 
 #: src/views/Drive/DrivePage.tsx
 msgid "Resources"
-msgstr ""
+msgstr "Recursos"
 
 #: src/routes/History/VersionContent.tsx
 msgid "Document body"
-msgstr ""
+msgstr "Cuerpo del documento"
 
 #: src/routes/History/VersionContent.tsx
 msgid "(empty)"
-msgstr ""
+msgstr "(vacío)"
 
 #: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Canvas"
-msgstr ""
+msgstr "Lienzo"
 
 #: src/views/Canvas/CanvasPage.tsx
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Space"
-msgstr ""
+msgstr "Espacio"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Redo (Ctrl+Shift+Z)"
-msgstr ""
+msgstr "Rehacer (Ctrl+Shift+Z)"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Undo (Ctrl+Z) — drag horizontally to scrub history"
-msgstr ""
+msgstr "Deshacer (Ctrl+Z) — arrastra horizontalmente para revisar el historial"
 
 #. placeholder {0}: saveError
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Save failed: {0}"
-msgstr ""
+msgstr "Error al guardar: {0}"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "New canvas"
-msgstr ""
+msgstr "Nuevo lienzo"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Switch to draw"
-msgstr ""
+msgstr "Cambiar a dibujar"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Eraser"
-msgstr ""
+msgstr "Borrador"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Stroke width"
-msgstr ""
+msgstr "Grosor del trazo"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Pen color (tap to swap with previous, drag to pick from fan)"
-msgstr ""
+msgstr "Color del bolígrafo (toca para cambiar con el anterior, arrastra para elegir del abanico)"
 
 #. placeholder {0}: penWidth
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Stroke width: {0} (tap to swap with previous, drag to pick from fan)"
-msgstr ""
+msgstr "Grosor del trazo: {0} (toca para cambiar con el anterior, arrastra para elegir del abanico)"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Zoom to fit (tap) — drag horizontally to zoom-scrub"
-msgstr ""
+msgstr "Zoom para ajustar (toca) — arrastra horizontalmente para ajustar el zoom"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Canvas help"
-msgstr ""
+msgstr "Ayuda del lienzo"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Show canvas help"
-msgstr ""
+msgstr "Mostrar ayuda del lienzo"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Canvas controls"
-msgstr ""
+msgstr "Controles del lienzo"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "<0>Left click</0> & drag — draw a stroke"
-msgstr ""
+msgstr "<0>Clic izquierdo</0> y arrastrar — dibujar un trazo"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid ""
 "<0>Scroll</0> · <1>Space</1>+drag · middle-mouse drag\n"
 "— pan the canvas"
 msgstr ""
+"<0>Desplazamiento</0> · <1>Espacio</1>+arrastrar · arrastrar con el botón central del ratón\n"
+"— desplazar el lienzo"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid ""
 "<0>Ctrl</0>+<1>scroll</1> · trackpad pinch — zoom\n"
 "toward the cursor"
 msgstr ""
+"<0>Ctrl</0>+<1>desplazamiento</1> · pellizco en el trackpad — acercar el zoom\n"
+"hacia el cursor"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid ""
 "Tap the colour or width button to swap with the previous\n"
 "choice; press & drag to open the picker fan"
 msgstr ""
+"Toca el botón de color o grosor para cambiar con la opción\n"
+"anterior; presiona y arrastra para abrir el selector de abanico"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid ""
 "Tap <0>Undo</0> / <1>Redo</1> to step through edits;\n"
 "drag the undo button left/right to scrub the full history"
 msgstr ""
+"Toca <0>Deshacer</0> / <1>Rehacer</1> para avanzar o retroceder en las ediciones;\n"
+"arrastra el botón de deshacer a izquierda/derecha para revisar todo el historial"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid ""
 "Tap the zoom button to fit all strokes; drag left/right to\n"
 "zoom continuously"
 msgstr ""
+"Toca el botón de zoom para ajustar todos los trazos; arrastra a izquierda/derecha para\n"
+"hacer zoom continuamente"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "<0>Ctrl</0>+<1/> undo · <2>Ctrl</2>+ <3>Shift</3>+<4/> redo"
-msgstr ""
+msgstr "<0>Ctrl</0>+<1/> deshacer · <2>Ctrl</2>+ <3>Mayús</3>+<4/> rehacer"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Tap the eraser button, then drag across strokes to remove them"
-msgstr ""
+msgstr "Toca el botón del borrador, luego arrastra sobre los trazos para eliminarlos"
 
 #: src/components/NavBar.tsx
 msgid "Click to rename"
-msgstr ""
+msgstr "Haz clic para renombrar"
 
 #. placeholder {0}: dragResource.title
 #. placeholder {1}: dropResource.title
 #: src/components/SideBar/useSidebarDnd.ts
 msgid "Draggable item {0} was moved over droppable area in {1}"
-msgstr ""
+msgstr "El elemento arrastrable {0} se movió sobre el área soltable en {1}"
 
 #: src/chunks/RTE/CollaborativeEditor.tsx
 msgid "Mod-z"
-msgstr ""
+msgstr "Mod-z"
 
 #: src/chunks/RTE/CollaborativeEditor.tsx
 msgid "Mod-Shift-z"
-msgstr ""
+msgstr "Mod-Shift-z"
 
 #: src/chunks/RTE/CollaborativeEditor.tsx
 msgid "Mod-y"
-msgstr ""
+msgstr "Mod-y"
 
 #: src/hooks/useDevDrive.ts
 msgid "Dev agent created — secret copied to clipboard"

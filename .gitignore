@@ -5,7 +5,6 @@ trace-*.json
 dev-drive-trace-*.json
 **/.temp
 .DS_Store
-.cargo
 artifact
 server/assets_tmp
 .netlify
@@ -24,3 +23,9 @@ scratchpad
 # Merge-tool backup files (*.orig, *.rej)
 *.orig
 *.rej
+
+# Ignore .cargo but not the config.
+.cargo/*
+!.cargo/config.toml
+
+.bin/
