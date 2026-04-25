@@ -102,6 +102,12 @@ pub struct Opts {
     /// If set, the server will allow serving subdomains of this domain (e.g. *.atomicserver.eu).
     #[clap(long, env = "ATOMIC_BASE_DOMAIN")]
     pub base_domain: Option<String>,
+
+    /// Friendly display name exchanged with other Atomic nodes on peer sync
+    /// (`HELLO` frame). Pure display — never used for authorization. Defaults
+    /// to the OS hostname if unset, then to "Unknown" if that fails.
+    #[clap(long, env = "ATOMIC_DEVICE_NAME")]
+    pub device_name: Option<String>,
 }
 
 #[derive(clap::ValueEnum, Clone, Debug)]

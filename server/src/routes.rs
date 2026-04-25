@@ -3,9 +3,9 @@
 
 use crate::{content_types, handlers};
 use actix_web::{
-    guard,
-    http::{header, Method},
-    web, HttpRequest, HttpResponse,
+    HttpRequest, HttpResponse, guard,
+    http::{Method, header},
+    web,
 };
 use actix_web_static_files::ResourceFiles;
 use std::collections::HashMap;
@@ -83,7 +83,7 @@ async fn iroh_node_id_handler() -> actix_web::HttpResponse {
     if let Some(node_id) = crate::iroh_transport::get_node_id() {
         return actix_web::HttpResponse::Ok()
             .content_type("application/json")
-            .body(format!(r#"{{"nodeId":"iroh:{node_id}"}}"#));
+            .body(format!(r#"{{"nodeId":"did:ad:node:{node_id}"}}"#));
     }
 
     actix_web::HttpResponse::Ok()
@@ -91,17 +91,35 @@ async fn iroh_node_id_handler() -> actix_web::HttpResponse {
         .body(r#"{"nodeId":null}"#)
 }
 
-/// POST /iroh-sync { "nodeId": "...", "drive": "..." }
-/// Triggers an Iroh peer sync from the server to the given NodeID.
+fn node_id_from_did(node_did: &str) -> Result<&str, &'static str> {
+    let Some(rest) = node_did.strip_prefix("did:ad:node:") else {
+        return Err("Expected nodeId to use did:ad:node:<node-id>");
+    };
+    let node_id = rest.split(':').next().unwrap_or(rest);
+    if node_id.is_empty() {
+        return Err("Expected nodeId to include a node id");
+    }
+    if node_id.len() != 64 || !node_id.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err("Expected nodeId to include a 64-character hex node id");
+    }
+
+    Ok(node_id)
+}
+
+/// POST /iroh-sync { "nodeId": "did:ad:node:<node-id>", "drive": "..." }
+/// Triggers an Iroh peer sync from the server to the given Node DID.
 async fn iroh_sync_handler(
     body: web::Json<serde_json::Value>,
     appstate: web::Data<crate::appstate::AppState>,
 ) -> actix_web::HttpResponse {
     let node_id = match body.get("nodeId").and_then(|v| v.as_str()) {
-        Some(id) => id
-            .strip_prefix("did:ad:node:")
-            .or_else(|| id.strip_prefix("iroh:"))
-            .unwrap_or(id),
+        Some(id) => match node_id_from_did(id) {
+            Ok(node_id) => node_id,
+            Err(error) => {
+                return actix_web::HttpResponse::BadRequest()
+                    .json(serde_json::json!({"error": error}));
+            }
+        },
         None => {
             return actix_web::HttpResponse::BadRequest()
                 .json(serde_json::json!({"error": "Missing nodeId"}));
@@ -115,12 +133,57 @@ async fn iroh_sync_handler(
         }
     };
 
-    match atomic_lib::sync::peer::sync_drive_with_peer(node_id, drive, &appstate.store).await {
-        Ok(count) => {
-            actix_web::HttpResponse::Ok().json(serde_json::json!({"count": count, "status": "ok"}))
-        }
+    match atomic_lib::sync::peer::sync_drive_with_peer_outcome(node_id, drive, &appstate.store)
+        .await
+    {
+        Ok(outcome) => actix_web::HttpResponse::Ok().json(serde_json::json!({
+            "count": outcome.count,
+            // `peerName` is the remote's self-reported `HELLO` label.
+            // Older peers that don't speak HELLO yet send `null`; the UI
+            // falls back to a truncated Node DID in that case.
+            "peerName": outcome.peer_name,
+            "status": "ok",
+        })),
         Err(e) => actix_web::HttpResponse::InternalServerError()
             .json(serde_json::json!({"error": e.to_string()})),
+    }
+}
+
+#[cfg(test)]
+mod node_id_tests {
+    use super::node_id_from_did;
+
+    #[test]
+    fn accepts_node_did() {
+        let node_id = "a".repeat(64);
+        assert_eq!(
+            node_id_from_did(&format!("did:ad:node:{node_id}")).unwrap(),
+            node_id
+        );
+    }
+
+    #[test]
+    fn accepts_node_did_with_label_suffix() {
+        let node_id = "a".repeat(64);
+        assert_eq!(
+            node_id_from_did(&format!("did:ad:node:{node_id}:Joe%27s%20Tablet")).unwrap(),
+            node_id
+        );
+    }
+
+    #[test]
+    fn rejects_iroh_prefix() {
+        assert!(node_id_from_did("iroh:abcdef").is_err());
+    }
+
+    #[test]
+    fn rejects_raw_node_id() {
+        assert!(node_id_from_did(&"a".repeat(64)).is_err());
+    }
+
+    #[test]
+    fn rejects_invalid_node_id() {
+        assert!(node_id_from_did("did:ad:node:not-a-node").is_err());
     }
 }
 

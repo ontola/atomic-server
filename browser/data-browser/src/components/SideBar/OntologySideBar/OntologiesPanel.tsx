@@ -5,6 +5,7 @@ import {
   unknownSubject,
   useResource,
   useStore,
+  useTitle,
 } from '@tomic/react';
 import { SideBarMenuRow } from '../SideBarMenuItem';
 import { Row } from '../../Row';
@@ -73,6 +74,10 @@ interface ItemProps {
 
 function Item({ subject }: ItemProps): JSX.Element {
   const resource = useResource(subject);
+  // Reactive title — see SidebarItemTitle for the same fix rationale.
+  // `resource.title` is a non-reactive getter; renames wouldn't show up
+  // until something else forced a re-render.
+  const [title] = useTitle(resource);
 
   const Icon = getIconForClass(core.classes.ontology);
 
@@ -93,7 +98,7 @@ function Item({ subject }: ItemProps): JSX.Element {
       <SideBarMenuRow>
         <OntologyItemRow gap='1ch' center>
           <Icon />
-          <OntologyTitle>{resource.title}</OntologyTitle>
+          <OntologyTitle>{title}</OntologyTitle>
         </OntologyItemRow>
       </SideBarMenuRow>
     </StyledLink>

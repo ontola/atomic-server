@@ -95,7 +95,7 @@ The LoroDoc has two sibling root maps:
   (strings, numbers, booleans); arrays as native `LoroList`s; objects as JSON strings.
 - **`datatypes`** — sparse `property URL → tag`, recording the datatype only
   where a bare primitive is ambiguous in a load-bearing way. Tags: `atomicUrl`,
-  `resourceArray`, `jsonArray`, `json`, `resource`. Scalars and plain/cosmetic
+  `resourceArray`, `json`, `resource`. Scalars and plain/cosmetic
   strings carry no entry. Written by `set_property` (Rust) and
   `Resource.writeDatatypeTags` at sign time (TS).
 

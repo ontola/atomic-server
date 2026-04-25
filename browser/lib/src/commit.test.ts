@@ -392,6 +392,7 @@ describe('Commit signing and keys', () => {
     materialized.importLoroUpdate(firstCommit.loroUpdate!);
     // Then import the delta
     materialized.importLoroUpdate(secondCommit.loroUpdate!);
+    
     const importedDoc = materialized.getLoroDoc();
     const importedDocMap = importedDoc!.getMap('doc');
     expect(importedDocMap.toJSON()).toHaveProperty('content', 'Hello world');

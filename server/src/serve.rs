@@ -1,8 +1,9 @@
 use actix_cors::Cors;
 use actix_web::{
+    Error, HttpServer,
     body::MessageBody,
     dev::{ServiceRequest, ServiceResponse},
-    middleware, web, Error, HttpServer,
+    middleware, web,
 };
 use atomic_lib::Storelike;
 use tracing_actix_web::{DefaultRootSpanBuilder, RootSpanBuilder};
@@ -157,7 +158,10 @@ const SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Start the server
 pub async fn serve(config: crate::config::Config) -> AtomicServerResult<()> {
-    println!("Atomic-server {} \nUse --help for instructions. Visit https://docs.atomicdata.dev and https://github.com/atomicdata-dev/atomic-server for more info.", env!("CARGO_PKG_VERSION"));
+    println!(
+        "Atomic-server {} \nUse --help for instructions. Visit https://docs.atomicdata.dev and https://github.com/atomicdata-dev/atomic-server for more info.",
+        env!("CARGO_PKG_VERSION")
+    );
     let tracing_chrome_flush_guard = crate::trace::init_tracing(&config);
 
     // Setup the database and more
@@ -171,12 +175,29 @@ pub async fn serve(config: crate::config::Config) -> AtomicServerResult<()> {
         clear_remote_cache(&appstate).await?;
     }
 
+    // Persist a configured device name so peers see something friendly in
+    // their `HELLO` frames. Mirrors what the flutter app sets via its UI —
+    // same DB key, same accessor — but driven from CLI/env so server
+    // operators don't need a separate tool to brand a node.
+    if let Some(name) = config
+        .opts
+        .device_name
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        atomic_lib::sync::peer::set_device_name(&appstate.store, name);
+    }
+
     // Start Iroh peer-to-peer transport
     let _iroh_router = {
         let store = appstate.store.clone();
-        match crate::iroh_transport::start(store).await {
+        match crate::iroh_transport::start(store.clone()).await {
             Ok((node_id, router)) => {
-                tracing::info!("Iroh transport ready. Connect with: iroh:{node_id}");
+                tracing::info!(
+                    "Iroh transport ready as \"{}\". Connect with: did:ad:node:{node_id}",
+                    atomic_lib::sync::peer::effective_device_name(&store)
+                );
 
                 // Announce this server's NodeID via pkarr relay, one record per
                 // drive (see `announce_drives_pkarr`).

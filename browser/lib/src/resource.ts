@@ -391,7 +391,9 @@ export class Resource<C extends OptionalClass = any> {
         this._loroDoc.import(stored);
       } else {
         for (const [key, value] of Object.entries(this._cache)) {
-          this.loroSetProperty(key, value);
+          if (key !== properties.commit.lastCommit && key !== commits.properties.createdAt) {
+            this.loroSetProperty(key, value);
+          }
         }
       }
 
@@ -409,8 +411,10 @@ export class Resource<C extends OptionalClass = any> {
       // behaviour is unchanged.
       if (initializedFromSnapshot && this._loroMap) {
         for (const [key, value] of Object.entries(this._cache)) {
-          if (this._loroMap.get(key) === undefined) {
-            this.loroSetProperty(key, value);
+          if (key !== properties.commit.lastCommit && key !== commits.properties.createdAt) {
+            if (this._loroMap.get(key) === undefined) {
+              this.loroSetProperty(key, value);
+            }
           }
         }
       }
@@ -447,6 +451,16 @@ export class Resource<C extends OptionalClass = any> {
   }
 
   private applyRawValue(prop: string, val: AtomicValue): void {
+    if (prop === properties.commit.lastCommit || prop === commits.properties.createdAt) {
+      if (val === undefined) {
+        delete this._cache[prop];
+      } else {
+        this._cache[prop] = val as JSONValue;
+      }
+
+      return;
+    }
+
     if (prop === commits.properties.loroUpdate) {
       // For a Commit resource (`did:ad:commit:<sig>`), `loroUpdate` is a
       // BINARY PROPERTY OF THE COMMIT — the snapshot bytes for the
@@ -558,6 +572,14 @@ export class Resource<C extends OptionalClass = any> {
     if (json && typeof json === 'object') {
       for (const [key, value] of Object.entries(json)) {
         nextCache[key] = normalizeLoroValue(value);
+      }
+    }
+
+    // Preserve server-managed/housekeeping properties in the cache
+    const serverManaged = [properties.commit.lastCommit, commits.properties.createdAt];
+    for (const key of serverManaged) {
+      if (this._cache[key] !== undefined && nextCache[key] === undefined) {
+        nextCache[key] = this._cache[key];
       }
     }
 
@@ -687,17 +709,11 @@ export class Resource<C extends OptionalClass = any> {
   /**
    * Export the Loro state to attach to the next outgoing commit.
    *
-   * We export a full snapshot rather than a delta. Snapshots are
-   * self-contained and their LWW merge semantics are robust: the server
-   * applies the incoming snapshot on top of stored state and LWW picks the
-   * locally-latest value. Deltas depend on the client's Lamport clock being
-   * correctly advanced past stored state — and any edge case that leaves the
-   * client's delta ops at a lower Lamport than stored (e.g. a stale
-   * `_loroVersionAtLastSave`) silently loses the write. The size cost of
-   * sending a full snapshot per commit is trivial for a single resource,
-   * and the correctness is worth far more.
+   * We export a delta (incremental update) if a previous baseline version exists,
+   * otherwise we export a full snapshot (e.g. for genesis commits).
+   * Loro merges both snapshots and deltas seamlessly.
    *
-   * Returns undefined if there are no Loro changes or Loro isn't loaded.
+   * Returns undefined if there are no Loro changes since the last save.
    */
   /**
    * Export Loro bytes for WS drive-sync pull responses.
@@ -741,31 +757,37 @@ export class Resource<C extends OptionalClass = any> {
     return bytes.length > 4 ? bytes : undefined;
   }
 
-  private exportLoroDelta(): Uint8Array | undefined {
+  private exportLoroDelta(isFirstCommit: boolean): Uint8Array | undefined {
     if (!this._loroDoc) {
       return undefined;
     }
 
-    const snapshot = this._loroDoc.export({ mode: 'snapshot' });
+    // Force commit any pending transaction in Loro so that oplog version is advanced.
+    this._loroDoc.commit();
 
-    // A header-only snapshot (no ops) means "no changes worth sending".
-    if (snapshot.length <= 4) {
+    // If it's the first commit, we must export a full snapshot.
+    if (isFirstCommit || !this._loroVersionAtLastSave) {
+      const snapshot = this._loroDoc.export({ mode: 'snapshot' });
+
+      // A header-only snapshot (no ops) means "no changes worth sending".
+      if (snapshot.length <= 4) {
+        return undefined;
+      }
+
+      return snapshot;
+    }
+
+    // Otherwise, export the incremental updates since the last save (the delta).
+    const delta = this._loroDoc.export({
+      mode: 'update',
+      from: this._loroVersionAtLastSave,
+    });
+
+    if (delta.length <= 4) {
       return undefined;
     }
 
-    // If we have a baseline, check there were actual new ops since.
-    if (this._loroVersionAtLastSave) {
-      const deltaProbe = this._loroDoc.export({
-        mode: 'update',
-        from: this._loroVersionAtLastSave,
-      });
-
-      if (deltaProbe.length <= 4) {
-        return undefined;
-      }
-    }
-
-    return snapshot;
+    return delta;
   }
 
   /**
@@ -1446,29 +1468,11 @@ export class Resource<C extends OptionalClass = any> {
   public setLastCommitValue(lastCommit: string): void {
     this._lastCommit = lastCommit;
     this.applyRawValue(properties.commit.lastCommit, lastCommit);
-    this._loroDoc?.commit({ origin: SYSTEM_COMMIT_ORIGIN });
-    // Housekeeping write: this lastCommit value already lives in the
-    // server's stored state for this resource (it IS the commit id the
-    // server just told us about). Advance `_loroVersionAtLastSave` past
-    // this op so `exportLoroDelta()` doesn't carry it into the next
-    // save. Otherwise a `update` event on the receiver tab (TipTap's
-    // `LoroSyncPlugin` dispatches one for the import) drives
-    // `useDebouncedSave` → `save()` → a delta whose only op is this
-    // system write, and the server rejects the commit as a no-op
-    // ("writes silently dropped by LWW against stored state"). The same
-    // trap surfaced after every successful local save where the post-
-    // ack `setLastCommitValue` at line 1927 used to leave an unsaved op
-    // behind.
-    this.markLoroSaved();
   }
 
   /** Same system-origin treatment as `setLastCommitValue` for `createdAt`. */
   public setCreatedAtValue(createdAt: number): void {
     this.applyRawValue(commits.properties.createdAt, createdAt);
-    this._loroDoc?.commit({ origin: SYSTEM_COMMIT_ORIGIN });
-    // See `setLastCommitValue` for the rationale — `createdAt` is also a
-    // server-derived housekeeping value, never the user's intent.
-    this.markLoroSaved();
   }
 
   /**
@@ -1872,7 +1876,8 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     // Export Loro delta — this is the sole carrier of property changes.
-    const loroDelta = this.exportLoroDelta();
+    const isFirstCommit = !this.commitBuilder.previousCommit;
+    const loroDelta = this.exportLoroDelta(isFirstCommit);
 
     if (!this.commitBuilder.hasUnsavedChanges() && !loroDelta) {
       this._dirty = false;
@@ -2355,6 +2360,12 @@ export class Resource<C extends OptionalClass = any> {
     if (prop === commits.properties.loroUpdate) {
       this._loroSnapshotBytes = undefined;
       this.resetLoroState();
+
+      return;
+    }
+
+    if (prop === properties.commit.lastCommit || prop === commits.properties.createdAt) {
+      delete this._cache[prop];
 
       return;
     }

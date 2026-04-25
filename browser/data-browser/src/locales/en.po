@@ -964,7 +964,7 @@ msgstr "Configure"
 msgid "Load drives not displayed in this list."
 msgstr "Load drives not displayed in this list."
 
-#. placeholder {0}: resource.title
+#. placeholder {0}: title
 #: src/components/SideBar/ResourceSideBar/SidebarItemTitle.tsx
 msgid "Rearange {0}"
 msgstr "Rearange {0}"
@@ -3686,7 +3686,7 @@ msgstr "Collapse folder"
 msgid "Expand folder"
 msgstr "Expand folder"
 
-#. placeholder {0}: resource.title
+#. placeholder {0}: title
 #: src/components/SideBar/ResourceSideBar/SidebarItemTitle.tsx
 msgid "Rearrange {0}"
 msgstr "Rearrange {0}"
@@ -4093,7 +4093,7 @@ msgstr "No peers connected"
 msgid "Node DID"
 msgstr "Node DID"
 
-#. placeholder {0}: irohNodeId.slice(0, 12)
+#. placeholder {0}: localNodeId.slice(0, 12)
 #: src/routes/SyncRoute.tsx
 msgid "did:ad:node:{0}..."
 msgstr "did:ad:node:{0}..."
@@ -4340,3 +4340,15 @@ msgstr "Dev agent created — secret available in localStorage (clipboard write 
 #: src/routes/SyncRoute.tsx
 msgid "Node DID copied to clipboard"
 msgstr "Node DID copied to clipboard"
+
+#. placeholder {0}: NODE_DID_PREFIX
+#: src/routes/SyncRoute.tsx
+msgid "Error: Expected {0}<node-id>"
+msgstr "Error: Expected {0}<node-id>"
+
+#. placeholder {0}: data.count
+#. placeholder {1}: data.count !== 1 ? 's' : ''
+#. placeholder {2}: peerName
+#: src/routes/SyncRoute.tsx
+msgid "Synced {0} resource{1} with {2}"
+msgstr "Synced {0} resource{1} with {2}"

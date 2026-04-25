@@ -306,7 +306,7 @@ pub async fn create_canvas_with_folder(
     let mut props = vec![
         (
             CANVAS_STROKE_DATA,
-            atomic_lib::Value::JsonArray(vec![]),
+            atomic_lib::Value::Json(serde_json::Value::Array(vec![])),
         ),
         (CANVAS_DATE_EDITED, atomic_lib::Value::Timestamp(now_ms())),
     ];
@@ -492,8 +492,8 @@ pub async fn load_canvas_strokes(subject: String) -> Result<String, String> {
         .await
         .map_err(err)?;
     let result = match resource.get(CANVAS_STROKE_DATA) {
-        Ok(atomic_lib::Value::JsonArray(arr)) => {
-            serde_json::to_string(arr).unwrap_or_else(|_| "[]".into())
+        Ok(atomic_lib::Value::Json(val)) => {
+            serde_json::to_string(val).unwrap_or_else(|_| "[]".into())
         }
         Ok(v) => v.to_string(),
         _ => "[]".into(),
@@ -645,7 +645,7 @@ pub async fn undo_canvas(subject: String) -> Result<i32, String> {
         save_and_push(resource, store.as_ref()).await?;
     }
     let count = match resource.get(CANVAS_STROKE_DATA) {
-        Ok(atomic_lib::Value::JsonArray(arr)) => arr.len() as i32,
+        Ok(atomic_lib::Value::Json(serde_json::Value::Array(arr))) => arr.len() as i32,
         _ => 0,
     };
     Ok(count)
@@ -672,7 +672,7 @@ pub async fn redo_canvas(subject: String) -> Result<i32, String> {
         save_and_push(resource, store.as_ref()).await?;
     }
     let count = match resource.get(CANVAS_STROKE_DATA) {
-        Ok(atomic_lib::Value::JsonArray(arr)) => arr.len() as i32,
+        Ok(atomic_lib::Value::Json(serde_json::Value::Array(arr))) => arr.len() as i32,
         _ => 0,
     };
     Ok(count)
