@@ -541,6 +541,23 @@ const TAG_NAMES: Record<number, string> = {
 };
 
 /**
+ * Compact byte-count formatter for debug headlines. `1584 → "1.5kb"`,
+ * `4527 → "4.4kb"`, `500 → "500b"`. Lowercase `kb`/`mb` for readability
+ * at a glance (these are debug logs, not user-facing capacity strings —
+ * SI-correctness is not the bar).
+ */
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n}b`;
+  const kb = n / 1024;
+
+  if (kb < 1024) return kb < 10 ? `${kb.toFixed(1)}kb` : `${Math.round(kb)}kb`;
+
+  const mb = kb / 1024;
+
+  return mb < 10 ? `${mb.toFixed(1)}mb` : `${Math.round(mb)}mb`;
+}
+
+/**
  * Decoded payload for an inspectable frame. The `details` field is meant for
  * `console.debug`-level inspection (browsers hide debug logs unless the
  * "Verbose" log level is enabled, so this is opt-in noise).
@@ -573,7 +590,7 @@ export function debugFrameInfo(
   switch (tag) {
     case Tag.AUTH:
       return {
-        headline: `${direction} AUTH (${payload.length}B)`,
+        headline: `${direction} AUTH (${formatBytes(payload.length)})`,
         details: () => ({ payloadBytes: payload.length }),
       };
 
@@ -586,7 +603,7 @@ export function debugFrameInfo(
       return {
         headline: msg
           ? `${direction} ERROR #${msg.requestId}: ${msg.message}`
-          : `${direction} ERROR (${payload.length}B)`,
+          : `${direction} ERROR (${formatBytes(payload.length)})`,
         details: () => msg ?? { rawBytes: payload.length },
       };
     }
@@ -597,7 +614,7 @@ export function debugFrameInfo(
       return {
         headline: msg
           ? `${direction} GET #${msg.requestId} ${msg.subject}`
-          : `${direction} GET (${payload.length}B)`,
+          : `${direction} GET (${formatBytes(payload.length)})`,
         details: () => msg ?? { rawBytes: payload.length },
       };
     }
@@ -609,8 +626,8 @@ export function debugFrameInfo(
 
       return {
         headline: msg
-          ? `${direction} ${name} #${msg.requestId} (${msg.commitJson.length}B)`
-          : `${direction} ${name} (${payload.length}B)`,
+          ? `${direction} ${name} #${msg.requestId} (${formatBytes(msg.commitJson.length)})`
+          : `${direction} ${name} (${formatBytes(payload.length)})`,
         details: () => msg ?? { rawBytes: payload.length },
       };
     }
@@ -620,7 +637,7 @@ export function debugFrameInfo(
 
       if (!msg) {
         return {
-          headline: `${direction} UPDATE (${payload.length}B)`,
+          headline: `${direction} UPDATE (${formatBytes(payload.length)})`,
           details: () => ({ rawBytes: payload.length }),
         };
       }
@@ -632,7 +649,7 @@ export function debugFrameInfo(
       if (msg.commitId) flags.push(`commit=${msg.commitId.slice(0, 20)}…`);
 
       return {
-        headline: `${direction} UPDATE ${msg.subject} [${flags.join(', ')}] (${msg.loroBytes.length}B)`,
+        headline: `${direction} UPDATE ${msg.subject} [${flags.join(', ')}] (${formatBytes(msg.loroBytes.length)})`,
         details: () => ({
           subject: msg.subject,
           flags: msg.flags,
@@ -679,7 +696,7 @@ export function debugFrameInfo(
       return {
         headline: msg
           ? `${direction} SYNC_DIFF ${msg.drive} (pull=${msg.pull.length}, push=${msg.push.length})`
-          : `${direction} SYNC_DIFF (${payload.length}B)`,
+          : `${direction} SYNC_DIFF (${formatBytes(payload.length)})`,
         details: () => msg ?? { rawBytes: payload.length },
       };
     }
@@ -689,27 +706,27 @@ export function debugFrameInfo(
 
       return {
         headline: msg
-          ? `${direction} SYNC_PUSH ${msg.drive} (${msg.entries.length} resources${msg.last ? ', last' : ''}, ${payload.length}B)`
-          : `${direction} SYNC_PUSH (${payload.length}B)`,
+          ? `${direction} SYNC_PUSH ${msg.drive} (${msg.entries.length} resources${msg.last ? ', last' : ''}, ${formatBytes(payload.length)})`
+          : `${direction} SYNC_PUSH (${formatBytes(payload.length)})`,
         details: () => msg ?? { rawBytes: payload.length },
       };
     }
 
     case Tag.BLOB_REQUEST:
       return {
-        headline: `${direction} BLOB_REQUEST (${payload.length}B)`,
+        headline: `${direction} BLOB_REQUEST (${formatBytes(payload.length)})`,
         details: () => ({ rawBytes: payload.length }),
       };
 
     case Tag.BLOB_RESPONSE:
       return {
-        headline: `${direction} BLOB_RESPONSE (${payload.length}B)`,
+        headline: `${direction} BLOB_RESPONSE (${formatBytes(payload.length)})`,
         details: () => ({ rawBytes: payload.length }),
       };
 
     default:
       return {
-        headline: `${direction} ${name} (${payload.length}B)`,
+        headline: `${direction} ${name} (${formatBytes(payload.length)})`,
         details: () => ({ tag, rawBytes: payload.length }),
       };
   }
@@ -725,7 +742,7 @@ export function debugFrame(data: Uint8Array, direction: '→' | '←'): string {
 
   switch (tag) {
     case Tag.AUTH:
-      return `${direction} AUTH (${payload.length}B)`;
+      return `${direction} AUTH (${formatBytes(payload.length)})`;
 
     case Tag.AUTH_OK:
       return `${direction} AUTH_OK`;
@@ -735,7 +752,7 @@ export function debugFrame(data: Uint8Array, direction: '→' | '←'): string {
 
       return msg
         ? `${direction} ERROR #${msg.requestId}: ${msg.message}`
-        : `${direction} ERROR (${payload.length}B)`;
+        : `${direction} ERROR (${formatBytes(payload.length)})`;
     }
 
     case Tag.GET: {
@@ -743,7 +760,7 @@ export function debugFrame(data: Uint8Array, direction: '→' | '←'): string {
 
       return msg
         ? `${direction} GET #${msg.requestId} ${msg.subject}`
-        : `${direction} GET (${payload.length}B)`;
+        : `${direction} GET (${formatBytes(payload.length)})`;
     }
 
     case Tag.COMMIT:
@@ -752,14 +769,14 @@ export function debugFrame(data: Uint8Array, direction: '→' | '←'): string {
       const msg = decodeCommit(payload);
 
       return msg
-        ? `${direction} ${name} #${msg.requestId} (${msg.commitJson.length}B)`
-        : `${direction} ${name} (${payload.length}B)`;
+        ? `${direction} ${name} #${msg.requestId} (${formatBytes(msg.commitJson.length)})`
+        : `${direction} ${name} (${formatBytes(payload.length)})`;
     }
 
     case Tag.UPDATE: {
       const msg = decodeUpdate(payload);
 
-      if (!msg) return `${direction} UPDATE (${payload.length}B)`;
+      if (!msg) return `${direction} UPDATE (${formatBytes(payload.length)})`;
 
       const flags = [];
 
@@ -767,7 +784,7 @@ export function debugFrame(data: Uint8Array, direction: '→' | '←'): string {
       if (msg.flags & Flags.PUSH) flags.push('push');
       if (msg.commitId) flags.push(`commit=${msg.commitId.slice(0, 20)}…`);
 
-      return `${direction} UPDATE ${msg.subject} [${flags.join(', ')}] (${msg.loroBytes.length}B)`;
+      return `${direction} UPDATE ${msg.subject} [${flags.join(', ')}] (${formatBytes(msg.loroBytes.length)})`;
     }
 
     case Tag.DESTROY:
@@ -788,24 +805,24 @@ export function debugFrame(data: Uint8Array, direction: '→' | '←'): string {
 
       return msg
         ? `${direction} SYNC_DIFF ${msg.drive} (pull=${msg.pull.length}, push=${msg.push.length})`
-        : `${direction} SYNC_DIFF (${payload.length}B)`;
+        : `${direction} SYNC_DIFF (${formatBytes(payload.length)})`;
     }
 
     case Tag.SYNC_PUSH: {
       const msg = decodeSyncPush(payload);
 
       return msg
-        ? `${direction} SYNC_PUSH ${msg.drive} (${msg.entries.length} resources${msg.last ? ', last' : ''}, ${payload.length}B)`
-        : `${direction} SYNC_PUSH (${payload.length}B)`;
+        ? `${direction} SYNC_PUSH ${msg.drive} (${msg.entries.length} resources${msg.last ? ', last' : ''}, ${formatBytes(payload.length)})`
+        : `${direction} SYNC_PUSH (${formatBytes(payload.length)})`;
     }
 
     case Tag.BLOB_REQUEST:
-      return `${direction} BLOB_REQUEST (${payload.length}B)`;
+      return `${direction} BLOB_REQUEST (${formatBytes(payload.length)})`;
 
     case Tag.BLOB_RESPONSE:
-      return `${direction} BLOB_RESPONSE (${payload.length}B)`;
+      return `${direction} BLOB_RESPONSE (${formatBytes(payload.length)})`;
 
     default:
-      return `${direction} ${name} (${payload.length}B)`;
+      return `${direction} ${name} (${formatBytes(payload.length)})`;
   }
 }
