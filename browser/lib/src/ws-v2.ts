@@ -541,20 +541,13 @@ const TAG_NAMES: Record<number, string> = {
 };
 
 /**
- * Compact byte-count formatter for debug headlines. `1584 → "1.5kb"`,
- * `4527 → "4.4kb"`, `500 → "500b"`. Lowercase `kb`/`mb` for readability
- * at a glance (these are debug logs, not user-facing capacity strings —
- * SI-correctness is not the bar).
+ * Format bytes to kb for debug headlines. e.g. `128 -> "0.13kb"`, `2048 -> "2kb"`.
  */
 function formatBytes(n: number): string {
-  if (n < 1024) return `${n}b`;
   const kb = n / 1024;
-
-  if (kb < 1024) return kb < 10 ? `${kb.toFixed(1)}kb` : `${Math.round(kb)}kb`;
-
-  const mb = kb / 1024;
-
-  return mb < 10 ? `${mb.toFixed(1)}mb` : `${Math.round(mb)}mb`;
+  if (kb === 0) return '0kb';
+  const formatted = kb < 0.1 ? kb.toFixed(3) : (kb < 10 ? kb.toFixed(2) : kb.toFixed(1));
+  return `${formatted.replace(/\.?0+$/, '')}kb`;
 }
 
 /**
