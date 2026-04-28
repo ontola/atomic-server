@@ -5,6 +5,13 @@
 //!
 //! Addressing (relay URL, direct addresses) is handled by Iroh's `discovery_n0()`.
 //! Peer discovery (agent → NodeID) is handled by pkarr in `discovery.rs`.
+//!
+//! Wire format is the same v2 protocol used over WebSocket; see
+//! `docs/src/websockets.md` (canonical spec) and [`super::protocol`] for
+//! tags / encoders. The one extension peer streams add on top of the
+//! browser-WS subset is the `HELLO (0x37)` device-name handshake sent
+//! immediately after `AUTH_OK` — see `encode_hello` / `decode_hello` in
+//! [`super::protocol`].
 
 use crate::{Db, Storelike, agents::ForAgent};
 use iroh::{Endpoint, NodeId, protocol::Router};

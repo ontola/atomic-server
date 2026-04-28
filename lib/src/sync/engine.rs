@@ -4,6 +4,12 @@
 //! The engine processes v2 binary frames and produces response frames.
 //! The transport (WebSocket, Iroh QUIC, etc.) is responsible for
 //! sending/receiving the raw bytes.
+//!
+//! Wire format for `SYNC`, `SYNC_DIFF`, `SYNC_PUSH`, and the resource
+//! `UPDATE` frames this engine emits is documented in
+//! `docs/src/websockets.md` (canonical spec). Frame encoders/decoders live
+//! in [`super::protocol`]; matching TypeScript helpers in
+//! `browser/lib/src/ws-v2.ts`.
 
 use crate::db::trees::Tree;
 use crate::loro::AtomicLoroDoc;

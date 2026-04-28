@@ -25,6 +25,7 @@ superseded at the top.
 | [`SDK-API-design.md`](./SDK-API-design.md) | SDK / developer-experience direction for app builders and LLM agents. |
 | [`rust-dependency-upgrade-audit.md`](./rust-dependency-upgrade-audit.md) | Audit notes for the Rust dependency upgrade pass. |
 | [`cleanup-update-encoding.md`](./cleanup-update-encoding.md) | **Active:** Refactor UPDATE frame encoding/decoding, unify parser, and remove magic numbers. |
+| [`fix-canvas-genesis-save.md`](./fix-canvas-genesis-save.md) | **Active:** Fix canvas genesis save error by passing lastCommit ID in WebSocket GET snapshot responses. |
 
 Protocol reference lives in the public docs: [`docs/src/websockets.md`](../docs/src/websockets.md).
 Planning documents may discuss how that protocol is used internally, but should

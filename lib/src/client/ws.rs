@@ -4,6 +4,12 @@
 //! (`sync::protocol`); legacy collaboration and query messages are still
 //! text frames (`LORO_SYNC_*`, `LORO_EPHEMERAL_UPDATE`, `SUBSCRIBE_QUERY`,
 //! `QUERY_UPDATE`, `SYNC_VV` / `SYNC_DELTAS`).
+//!
+//! **Canonical wire-format spec:** `docs/src/websockets.md`. Frame
+//! encode/decode lives in [`crate::sync::protocol`]; the TypeScript client
+//! counterpart is `browser/lib/src/websockets.ts` (with low-level helpers in
+//! `browser/lib/src/ws-v2.ts`). Update all four together when changing the
+//! protocol.
 
 use crate::{
     agents::Agent,

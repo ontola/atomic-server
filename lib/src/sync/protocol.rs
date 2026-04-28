@@ -2,6 +2,17 @@
 //!
 //! Frame format: `[type: u8] [payload...]`
 //! All frames are binary WebSocket frames. No base64, no JSON for Loro bytes.
+//!
+//! **Canonical wire-format spec:** `docs/src/websockets.md`. This module is
+//! the Rust source of truth for tag bytes, flag bits, and encode/decode of
+//! every frame; when you change anything here, update that doc and the
+//! TypeScript counterpart (`browser/lib/src/ws-v2.ts`) in the same change.
+//!
+//! Used by:
+//! - `server/src/handlers/web_sockets.rs` — browser-facing WS handler
+//! - `lib/src/sync/engine.rs` — transport-agnostic drive sync (SYNC*)
+//! - `lib/src/sync/peer.rs` — Iroh QUIC peer transport (adds HELLO)
+//! - `lib/src/client/ws.rs` — Rust WS client
 
 /// Message type tags
 #[allow(dead_code)]

@@ -3,6 +3,10 @@
  *
  * Frame format: [type: u8] [payload...]
  * All frames are binary WebSocket frames. No base64, no JSON for Loro bytes.
+ *
+ * **Canonical wire-format spec:** `docs/src/websockets.md`. When tags, flag
+ * bits, or payload layouts change here, update that doc and the matching
+ * Rust module (`lib/src/sync/protocol.rs`) in the same change.
  */
 
 // ---- Message type tags ----
