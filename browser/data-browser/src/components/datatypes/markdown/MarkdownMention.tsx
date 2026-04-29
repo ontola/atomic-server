@@ -11,6 +11,7 @@ interface MentionNode {
     hProperties: {
       id: string;
       label: string;
+      variant?: 'skill';
     };
   };
 }
@@ -24,6 +25,19 @@ interface ParentNode {
   children: (TextNode | MentionNode)[];
 }
 
+const parseMentionAttributes = (attributes: string) => {
+  const parsed: Record<string, string> = {};
+  const attrRegex = /([\w-]+)="([^"]*)"/g;
+  let match;
+
+  while ((match = attrRegex.exec(attributes)) !== null) {
+    const [, key, value] = match;
+    parsed[key] = value;
+  }
+
+  return parsed;
+};
+
 /**
  * A remark plugin that parses mentions like [@id="..." label="..."]
  */
@@ -34,13 +48,20 @@ export const remarkMention = () => {
       tree as any,
       'text',
       (node: TextNode, index: number | undefined, parent: ParentNode) => {
-        const regex = /\[@\s*id="([^"]+)"\s+label="([^"]+)"(?:\s+[^\]]*)?\]/g;
+        const regex =
+          /\[([@/])\s*([^\]]*id="[^"]+"[^\]]*label="[^"]+"[^\]]*)\]/g;
         const children: (TextNode | MentionNode)[] = [];
         let lastIndex = 0;
         let match;
 
         while ((match = regex.exec(node.value)) !== null) {
-          const [fullMatch, id, label] = match;
+          const [fullMatch, prefix, attrs] = match;
+          const {
+            id,
+            label,
+            type,
+            'data-type': dataType,
+          } = parseMentionAttributes(attrs);
           const startIndex = match.index;
 
           if (startIndex > lastIndex) {
@@ -57,6 +78,10 @@ export const remarkMention = () => {
               hProperties: {
                 id,
                 label,
+                variant:
+                  prefix === '/' || type === 'skill' || dataType === 'skill'
+                    ? 'skill'
+                    : undefined,
               },
             },
           });
@@ -82,13 +107,15 @@ export const remarkMention = () => {
 export interface MentionProps {
   id: string;
   label: string;
+  variant?: 'skill';
 }
 
 /**
  * Component for rendering resource mentions in markdown. These mentions are primarily used by the AI chat.
  */
-export const Mention: FC<MentionProps> = ({ id, label }) => {
-  const isAtomic = id.startsWith('http');
+export const Mention: FC<MentionProps> = ({ id, label, variant }) => {
+  const isSkill = variant === 'skill';
+  const isAtomic = !isSkill && id.startsWith('http');
   const resource = useResource(isAtomic ? id : '');
 
   const displayLabel = useMemo(() => {
@@ -98,6 +125,10 @@ export const Mention: FC<MentionProps> = ({ id, label }) => {
 
     return label;
   }, [isAtomic, resource.title, label]);
+
+  if (isSkill) {
+    return <SkillMentionText>/{label}</SkillMentionText>;
+  }
 
   if (isAtomic) {
     return (
@@ -128,4 +159,8 @@ const MentionBadge = styled.span`
     background-color: ${p => p.theme.colors.mainSelectedBg} !important;
     filter: brightness(1.1);
   }
+`;
+
+const SkillMentionText = styled.span`
+  color: ${p => p.theme.colors.main};
 `;

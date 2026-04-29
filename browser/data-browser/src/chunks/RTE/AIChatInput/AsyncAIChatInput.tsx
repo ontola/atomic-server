@@ -6,18 +6,19 @@ import FileHandler from '@tiptap/extension-file-handler';
 import { TiptapContextProvider } from '../TiptapContext';
 import { EditorWrapperBase } from '../EditorWrapperBase';
 import { searchSuggestionBuilder } from './mcpSuggestions';
+import { skillSuggestionBuilder } from './skillSuggestions';
 import { useRef, useState } from 'react';
 import { EditorEvents } from '../EditorEvents';
 import { Markdown } from '@tiptap/markdown';
 import { useStore } from '@tomic/react';
 import { useSettings } from '../../../helpers/AppSettings';
-import type { Node } from '@tiptap/pm/model';
 import Placeholder from '@tiptap/extension-placeholder';
 import { useMcpServers } from '@components/AI/MCP/McpServersContext';
 import type {
   AtomicResourceSuggestion,
   MCPResourceSuggestion,
   MentionItem,
+  SkillSuggestion,
 } from './types';
 import { Row } from '../../../components/Row';
 import {
@@ -46,19 +47,16 @@ const createAttribute = (propName: string, dataName: string) => {
   };
 };
 
-// Modify the Mention extension to allow serializing to markdown.
+const escapeMentionAttribute = (value: unknown): string => {
+  return String(value ?? '').replaceAll('"', '&quot;');
+};
+
 const SerializableMention = Mention.extend({
-  addStorage() {
-    return {
-      markdown: {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        serialize(state: any, node: Node) {
-          state.write('@' + (node.attrs.label || ''));
-          state.renderContent(node);
-          state.flushClose(1);
-        },
-      },
-    };
+  renderMarkdown(node: JSONContent) {
+    const id = escapeMentionAttribute(node.attrs?.id);
+    const label = escapeMentionAttribute(node.attrs?.label);
+
+    return `[@ id="${id}" label="${label}"]`;
   },
   addAttributes() {
     return {
@@ -68,6 +66,26 @@ const SerializableMention = Mention.extend({
       ...createAttribute('id', 'data-id'),
       ...createAttribute('label', 'data-label'),
       ...createAttribute('isA', 'data-is-a'),
+    };
+  },
+});
+
+// A second Mention extension for skill slash-commands. Uses a distinct node
+// name so it can coexist with `SerializableMention`.
+const SkillMention = Mention.extend({
+  name: 'skillMention',
+  renderMarkdown(node: JSONContent) {
+    const id = escapeMentionAttribute(node.attrs?.id);
+    const label = escapeMentionAttribute(node.attrs?.label);
+
+    return `[@ id="${id}" label="${label}" type="skill"]`;
+  },
+  addAttributes() {
+    return {
+      ...createAttribute('type', 'data-type'),
+      ...createAttribute('id', 'data-id'),
+      ...createAttribute('label', 'data-label'),
+      ...createAttribute('description', 'data-description'),
     };
   },
 });
@@ -169,6 +187,18 @@ const AsyncAIChatInput: React.FC<
             return `${options.suggestion.char}bla${node.attrs.title}`;
           },
         }),
+        SkillMention.configure({
+          HTMLAttributes: {
+            class: 'ai-chat-skill-mention',
+          },
+          suggestion: {
+            char: '/',
+            ...skillSuggestionBuilder(),
+          },
+          renderText({ node }) {
+            return `/${node.attrs.label ?? ''}`;
+          },
+        }),
         Placeholder.configure({
           placeholder: 'Ask me anything...',
         }),
@@ -253,13 +283,19 @@ const EditorWrapper = styled(EditorWrapperBase)<{ $large?: boolean }>`
     border-radius: 5px;
     padding-inline: ${p => p.theme.size(1)};
   }
+
+  .ai-chat-skill-mention {
+    color: ${p => p.theme.colors.main};
+  }
 `;
 
-function digForMentions(
-  data: JSONContent,
-): Array<MCPResourceSuggestion | AtomicResourceSuggestion> {
+function digForMentions(data: JSONContent): MentionItem[] {
   if (data.type === 'mention') {
     return [data.attrs as MCPResourceSuggestion | AtomicResourceSuggestion];
+  }
+
+  if (data.type === 'skillMention') {
+    return [{ ...(data.attrs as SkillSuggestion), type: 'skill' }];
   }
 
   if (data.content) {

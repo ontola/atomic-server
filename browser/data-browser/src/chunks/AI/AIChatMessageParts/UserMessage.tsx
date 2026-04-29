@@ -11,13 +11,14 @@ interface UserMessageProps {
 
 export const UserMessage: React.FC<UserMessageProps> = ({ message }) => {
   const context = message.metadata?.userContext;
+  const visibleContext = context?.filter(item => item.type !== 'skill');
 
   return (
     <UserMessageWrapper>
       <SenderName>You</SenderName>
-      {context && (
+      {visibleContext && visibleContext.length > 0 && (
         <ContextItemRow wrapItems center gap='1ch'>
-          {context.map(item => (
+          {visibleContext.map(item => (
             <MessageContextItem key={item.id} contextItem={item} />
           ))}
         </ContextItemRow>

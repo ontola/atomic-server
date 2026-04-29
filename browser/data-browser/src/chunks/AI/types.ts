@@ -44,9 +44,16 @@ export type AIMCPResourceMessageContext = {
   serverId: string;
 };
 
+export type AISkillMessageContext = {
+  type: 'skill';
+  id: string;
+  name: string;
+};
+
 export type AIMessageContext =
   | AIAtomicResourceMessageContext
-  | AIMCPResourceMessageContext;
+  | AIMCPResourceMessageContext
+  | AISkillMessageContext;
 
 export type MessageMetadata = {
   userContext?: AIMessageContext[];
@@ -68,6 +75,12 @@ export function isAtomicResourceContext(
   context: AIMessageContext,
 ): context is AIAtomicResourceMessageContext {
   return context.type === 'atomic-resource';
+}
+
+export function isSkillContext(
+  context: AIMessageContext,
+): context is AISkillMessageContext {
+  return context.type === 'skill';
 }
 
 export type AIModelIdentifier = {

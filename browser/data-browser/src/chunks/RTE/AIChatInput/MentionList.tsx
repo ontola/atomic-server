@@ -2,12 +2,13 @@ import { forwardRef, useImperativeHandle } from 'react';
 import styled from 'styled-components';
 import { getIconForClass } from '../../../helpers/iconMap';
 import { useSelectedIndex } from '../../../hooks/useSelectedIndex';
-import { FaAtom, FaServer } from 'react-icons/fa6';
+import { FaAtom, FaServer, FaWandMagicSparkles } from 'react-icons/fa6';
 import type {
   CategorySuggestion,
   AtomicResourceSuggestion,
   SearchSuggestion,
   MCPResourceSuggestion,
+  SkillSuggestion,
 } from './types';
 
 export interface MentionListProps {
@@ -80,6 +81,10 @@ export const MentionList = forwardRef<MentionListRef, MentionListProps>(
               return (
                 <MCPResourceItem key={item.id} item={item} {...commonProps} />
               );
+            }
+
+            if (isSkillSuggestion(item)) {
+              return <SkillItem key={item.id} item={item} {...commonProps} />;
             }
 
             throw new Error(`Unknown suggestion type`);
@@ -161,6 +166,29 @@ const MCPResourceItem: React.FC<DropdownItemProps<MCPResourceSuggestion>> = ({
   );
 };
 
+const SkillItem: React.FC<DropdownItemProps<SkillSuggestion>> = ({
+  item,
+  selected,
+  onClick,
+  onMouseOver,
+}) => {
+  return (
+    <button
+      className={selected ? 'is-selected' : ''}
+      onClick={onClick}
+      // Focus is handled by selectedIndex
+      // eslint-disable-next-line jsx-a11y/mouse-events-have-key-events
+      onMouseOver={onMouseOver}
+    >
+      <FaWandMagicSparkles />
+      <SkillItemContent>
+        <span>{item.label}</span>
+        <SkillDescription>{item.description}</SkillDescription>
+      </SkillItemContent>
+    </button>
+  );
+};
+
 const isAtomicResourceSuggestion = (
   item: SearchSuggestion,
 ): item is AtomicResourceSuggestion => {
@@ -179,6 +207,10 @@ const isMCPResourceSuggestion = (
   return item.type === 'mcp-resource';
 };
 
+const isSkillSuggestion = (item: SearchSuggestion): item is SkillSuggestion => {
+  return item.type === 'skill';
+};
+
 const DropdownMenu = styled.div`
   background: ${p => p.theme.colors.bg};
   border-radius: 0.7rem;
@@ -189,6 +221,7 @@ const DropdownMenu = styled.div`
   overflow: auto;
   padding: 0.4rem;
   position: relative;
+  max-height: min(50dvh, 20rem);
 
   button {
     background: transparent;
@@ -207,5 +240,27 @@ const DropdownMenu = styled.div`
       background-color: ${p => p.theme.colors.mainSelectedBg};
       color: ${p => p.theme.colors.mainSelectedFg};
     }
+  }
+`;
+
+const SkillItemContent = styled.span`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  overflow: hidden;
+`;
+
+const SkillDescription = styled.span`
+  font-size: 0.8rem;
+  color: ${p => p.theme.colors.textLight};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 40ch;
+
+  button.is-selected & {
+    color: ${p => p.theme.colors.mainSelectedFg};
+    opacity: 0.8;
   }
 `;

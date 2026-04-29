@@ -1,9 +1,13 @@
 export type SearchSuggestion =
   | AtomicResourceSuggestion
   | CategorySuggestion
-  | MCPResourceSuggestion;
+  | MCPResourceSuggestion
+  | SkillSuggestion;
 
-export type MentionItem = AtomicResourceSuggestion | MCPResourceSuggestion;
+export type MentionItem =
+  | AtomicResourceSuggestion
+  | MCPResourceSuggestion
+  | SkillSuggestion;
 
 export type AtomicResourceSuggestion = {
   type: 'atomic-resource';
@@ -23,4 +27,11 @@ export type MCPResourceSuggestion = {
   label: string;
   id: string;
   mimeType?: string;
+};
+
+export type SkillSuggestion = {
+  type: 'skill';
+  id: string;
+  label: string;
+  description: string;
 };

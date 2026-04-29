@@ -21,6 +21,7 @@ import {
   type AIMCPResourceMessageContext,
   type AIMessageContext,
   type AIModelIdentifier,
+  type AISkillMessageContext,
   type AtomicUIMessage,
 } from './types';
 import { useAIAgentConfig } from './AgentConfig';
@@ -221,6 +222,12 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
           name: mention.label,
           serverId: mention.serverId,
         } as AIMCPResourceMessageContext;
+      } else if (mention.type === 'skill') {
+        return {
+          type: 'skill',
+          id: crypto.randomUUID(),
+          name: mention.label,
+        } as AISkillMessageContext;
       }
 
       throw new Error('Invalid mention type');
@@ -243,6 +250,9 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     ...externalContextItems,
     ...userSelectedContextItems,
   ];
+  const visibleContextItems = allContextItems.filter(
+    item => item.type !== 'skill',
+  );
 
   const handleSubmit = async (inputOverride?: string) => {
     const text = inputOverride || userInput;
@@ -387,9 +397,9 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                     </Row>
                   )}
                 </FloatingChatWidgetsContainer>
-                {allContextItems.length > 0 && (
+                {visibleContextItems.length > 0 && (
                   <ContextItemRow wrapItems center gap='1ch'>
-                    {allContextItems.map(item => (
+                    {visibleContextItems.map(item => (
                       <MessageContextItem
                         key={item.id}
                         contextItem={item}

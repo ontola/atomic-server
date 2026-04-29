@@ -80,9 +80,7 @@ function formatSkillsMeta(skills: AgentSkill[]): string {
 }
 
 export const getSkillsSystemPromptPart = () => {
-  const allSkills = [...atomicSkills, ...getUserSkills()].filter(
-    s => !s.meta.disabled,
-  );
+  const allSkills = getAllEnabledSkills();
 
   return `
 There are a few skills available to use if needed.
@@ -107,13 +105,18 @@ function getUserSkills(): AgentSkill[] {
   return [];
 }
 
-function findSkillByName(name: string): AgentSkill | undefined {
-  const trimmed = name.trim();
-  const allSkills = [...atomicSkills, ...getUserSkills()].filter(
-    s => !s.meta.disabled,
-  );
+export function getAllEnabledSkills(): AgentSkill[] {
+  return [...atomicSkills, ...getUserSkills()].filter(s => !s.meta.disabled);
+}
 
-  return allSkills.find(s => s.meta.name === trimmed);
+export function getAllSkills(): AgentSkill[] {
+  return [...getUserSkills(), ...atomicSkills];
+}
+
+export function findSkillByName(name: string): AgentSkill | undefined {
+  const trimmed = name.trim();
+
+  return getAllEnabledSkills().find(s => s.meta.name === trimmed);
 }
 
 function isBundledSkillName(normalizedName: string): boolean {

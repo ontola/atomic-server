@@ -57,8 +57,11 @@ export const uiMessageToResource = async (
   const context = message.metadata?.userContext;
 
   if (context && context.length > 0) {
+    // Skill context is ephemeral (already inlined into the outgoing message)
+    // and has no persisted resource counterpart, so skip it here.
+    const persistableContext = context.filter(c => c.type !== 'skill');
     const subjects = await Promise.all(
-      context.map(c => contextToResource(c, messageResource, store)),
+      persistableContext.map(c => contextToResource(c, messageResource, store)),
     );
 
     messageResource.props.providedContext = subjects;
@@ -107,6 +110,10 @@ const contextToResource = async (
 ): Promise<string> => {
   if (isAtomicResourceContext(context)) {
     return context.subject;
+  }
+
+  if (context.type !== 'mcp-resource') {
+    throw new Error(`Cannot persist context of type: ${context.type}`);
   }
 
   const contextResource = await store.newResource<Ai.AiMessage>({

@@ -6,6 +6,7 @@ import {
   useMcpServers,
   type ReadMCPResource,
 } from '@components/AI/MCP/McpServersContext';
+import { findSkillByName } from './skills/skill';
 
 /**
  * A hook that processes AI chat messages by applying context.
@@ -99,6 +100,34 @@ ${JSON.stringify(toResultObject(r, true), null, 2)}
 };
 
 /**
+ * Processes skills from context by inlining the main SKILL.md body.
+ * References are left out and can still be loaded via the `read_skill_reference` tool.
+ */
+const processSkills = (context: AIMessageContext[]): string => {
+  const skillContext = context.filter(x => x.type === 'skill');
+
+  if (skillContext.length === 0) {
+    return '';
+  }
+
+  return skillContext
+    .map(ctx => {
+      const skill = findSkillByName(ctx.name);
+
+      if (!skill) {
+        return `<skill-context name="${ctx.name}">\nSkill not found.\n</skill-context>`;
+      }
+
+      return `<skill-context name="${skill.meta.name}">
+<skill-main>
+${skill.content}
+</skill-main>
+</skill-context>`;
+    })
+    .join('\n');
+};
+
+/**
  * Processes MCP resources from context
  */
 const processMCPResources = async (
@@ -173,6 +202,13 @@ const addContextToMessage = async (
     // Add MCP context if we have any MCP resources
     if (mcpContent) {
       messageWithContext += `\n<context provided-by="user">\n${mcpContent}\n</context>`;
+    }
+
+    // Add skill context if the user mentioned any skills with the slash menu
+    const skillContent = processSkills(userContext);
+
+    if (skillContent) {
+      messageWithContext += `\n${skillContent}`;
     }
   }
 
