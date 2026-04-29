@@ -32,6 +32,7 @@ function resolveDevServer(): string {
   const origin = window.location.origin;
   // Vite dev server runs on :5173 by default — that's not an atomic-server.
   if (/:5173$/.test(origin)) return DEV_SERVER;
+
   return origin;
 }
 
@@ -87,6 +88,7 @@ export function useDevDrive() {
       // failure is non-fatal — the secret is still in localStorage and
       // surfaced via the toast either way.
       let copied = false;
+
       try {
         await navigator.clipboard.writeText(finalSecret);
         copied = true;

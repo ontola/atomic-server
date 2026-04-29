@@ -42,11 +42,13 @@ function summarizeResource(r: Resource | undefined): InspectResult['jsStore'] {
   if (!r) return { present: false };
   const props: Record<string, unknown> = {};
   let count = 0;
+
   for (const [k, v] of r.getEntries()) {
     // Binary (loroUpdate) shown as length, not payload — too noisy otherwise.
     props[k] = v instanceof Uint8Array ? `<Uint8Array ${v.byteLength}b>` : v;
     count++;
   }
+
   return {
     present: true,
     loading: r.loading,
@@ -66,6 +68,7 @@ async function fetchFromServer(
 ): Promise<InspectResult['server']> {
   const connected = store.getSyncStatus().serverConnected;
   if (!connected) return { connected: false };
+
   // Only HTTP(S) subjects can be hit with fetch. did:/internal: live on the
   // server by logical subject lookup, not URL fetch — skip them.
   if (!/^https?:/.test(subject)) {
@@ -74,17 +77,20 @@ async function fetchFromServer(
       error: `not fetchable (scheme in ${subject.slice(0, 20)}…)`,
     };
   }
+
   try {
     const res = await fetch(subject, {
       headers: { Accept: 'application/ad+json' },
     });
     const body = await res.text();
     let parsed: unknown = body;
+
     try {
       parsed = JSON.parse(body);
     } catch {
       /* leave as string */
     }
+
     return { connected: true, httpStatus: res.status, jsonAd: parsed };
   } catch (e) {
     return {
@@ -104,6 +110,7 @@ async function inspectWasm(
     hasClientDb: true,
     ready: clientDb.isReady,
   };
+
   try {
     const jsonAd = await clientDb.getResource(subject);
     out.jsonAd = jsonAd;
@@ -114,6 +121,7 @@ async function inspectWasm(
   } catch (e) {
     out.threw = e instanceof Error ? e.message : String(e);
   }
+
   return out;
 }
 
@@ -129,9 +137,11 @@ function currentSubject(store: Store): string {
   const params = new URLSearchParams(window.location.search);
   const q = params.get('subject');
   if (q) return q;
+
   if (!window.location.pathname.startsWith('/app/')) {
     return window.location.href;
   }
+
   return store.getDrive() ?? store.getServerUrl();
 }
 
@@ -159,6 +169,7 @@ export async function inspect(
   server:  ${serverSummary}`,
     result,
   );
+
   return result;
 }
 
@@ -168,16 +179,20 @@ export async function opfsList(
   prefix = 'did:ad:',
 ): Promise<string[]> {
   const clientDb = store.getClientDb();
+
   if (!clientDb) {
     console.warn('[devtools.opfsList] no clientDb');
+
     return [];
   }
+
   const all = await clientDb.allSubjects();
   const filtered = all.filter(s => s.startsWith(prefix));
   console.log(
     `[devtools.opfsList] ${filtered.length}/${all.length} subjects matching "${prefix}"`,
     filtered,
   );
+
   return filtered;
 }
 
@@ -196,12 +211,14 @@ export function wsLog(store: Store, n = 20): CommitLogEntry[] {
       summary: e.summary,
     })),
   );
+
   return log;
 }
 
 /** Dump every resource in the JS store that is loading, errored, or new. */
 export function problems(store: Store): unknown[] {
   const out: unknown[] = [];
+
   for (const [subject, r] of store.resources.entries()) {
     if (r.loading || r.error || r.new) {
       out.push({
@@ -212,7 +229,9 @@ export function problems(store: Store): unknown[] {
       });
     }
   }
+
   console.table(out);
+
   return out;
 }
 
@@ -223,10 +242,12 @@ export async function forcePut(store: Store, subject: string): Promise<void> {
   const r = store.resources.get(subject);
   if (!r) throw new Error(`not in js store: ${subject}`);
   const obj: Record<string, unknown> = { '@id': subject };
+
   for (const [k, v] of r.getEntries()) {
     if (v instanceof Uint8Array) continue;
     obj[k] = v;
   }
+
   const jsonAd = JSON.stringify(obj);
   console.log(`[devtools.forcePut] putting ${subject.slice(0, 60)}`, {
     chars: jsonAd.length,

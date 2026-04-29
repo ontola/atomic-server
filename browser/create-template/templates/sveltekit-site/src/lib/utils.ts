@@ -8,10 +8,13 @@ export const throttle = <Func extends (...args: any[]) => void | Promise<void>>(
 	wait: number
 ) => {
 	let prevTime = 0;
+
 	return (...args: Parameters<Func>) => {
 		const currentTime = Date.now();
+
 		if (currentTime - prevTime > wait) {
 			prevTime = currentTime;
+
 			return fn.apply(this, args);
 		}
 	};

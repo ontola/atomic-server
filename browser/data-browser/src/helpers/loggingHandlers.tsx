@@ -22,6 +22,7 @@ export function initBugsnag(apiKey: string): BugsnagErrorBoundary {
   });
 
   const plugin = Bugsnag.getPlugin('react')!;
+
   return plugin.createErrorBoundary(
     React as unknown as Parameters<typeof plugin.createErrorBoundary>[0],
   );

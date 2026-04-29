@@ -134,6 +134,7 @@ export function hoveredColor(dragOffset: {
     for (let h = 0; h < FAN_HUES; h++) {
       const { x, y } = fanColorCenter(h, d);
       const dist = Math.hypot(x - dragOffset.x, y - dragOffset.y);
+
       if (dist < closest) {
         closest = dist;
         best = { color: fanColorInt(h, d), hueIndex: h, distIndex: d };
@@ -159,6 +160,7 @@ export function hoveredWidth(dragOffset: {
   for (let i = 0; i < FAN_WIDTHS.length; i++) {
     const { x, y } = fanWidthCenter(i);
     const dist = Math.hypot(x - dragOffset.x, y - dragOffset.y);
+
     if (dist < closest) {
       closest = dist;
       best = FAN_WIDTHS[i];

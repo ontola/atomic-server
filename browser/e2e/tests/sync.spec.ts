@@ -10,7 +10,7 @@ import {
 /** Wait for the WASM ClientDb to be initialized and seeded. */
 async function waitForClientDb(page: import('@playwright/test').Page) {
   await page.waitForFunction(
-    () => (window as any).store?.getClientDb()?.isReady === true,
+    () => window.store.getClientDb()?.isReady === true,
     undefined,
     { timeout: 30000 },
   );
@@ -19,7 +19,7 @@ async function waitForClientDb(page: import('@playwright/test').Page) {
 /** Wait for the store to be connected to the server. */
 async function waitForConnected(page: import('@playwright/test').Page) {
   await page.waitForFunction(
-    () => (window as any).store?.getSyncStatus()?.serverConnected === true,
+    () => window.store.getSyncStatus().serverConnected === true,
     undefined,
     { timeout: 30000 },
   );
@@ -30,8 +30,9 @@ async function waitForSynced(page: import('@playwright/test').Page) {
   try {
     await page.waitForFunction(
       () => {
-        const status = (window as any).store?.getSyncStatus();
-        return status?.serverConnected && status?.pendingDirtyCount === 0;
+        const status = window.store.getSyncStatus();
+
+        return status.serverConnected && status.pendingDirtyCount === 0;
       },
       undefined,
       { timeout: 30000 },
@@ -42,21 +43,19 @@ async function waitForSynced(page: import('@playwright/test').Page) {
     // the server's rejection reason, which is otherwise invisible.
     const diag = await page
       .evaluate(() => {
-        const store = (window as any).store;
-        const status = store?.getSyncStatus();
-        const entries = (store?.outbox?.pending?.() ?? []).map(
-          (entry: any) => ({
-            subject: entry.subject,
-            commitCount: entry.commits?.length,
-            commits: (entry.commits ?? []).map((c: any) => ({
-              signature: c.signature,
-              previousCommit: c.previousCommit,
-              setKeys: c.set ? Object.keys(c.set) : undefined,
-              destroy: c.destroy,
-            })),
-            lastAttemptError: entry.lastAttemptError,
-          }),
-        );
+        const store = window.store;
+        const status = store.getSyncStatus();
+        const entries = store.outbox.pending().map(entry => ({
+          subject: entry.subject,
+          commitCount: entry.commits?.length,
+          commits: (entry.commits ?? []).map(c => ({
+            signature: c.signature,
+            previousCommit: c.previousCommit,
+            setKeys: c.set ? Object.keys(c.set) : undefined,
+            destroy: c.destroy,
+          })),
+          lastAttemptError: entry.lastAttemptError,
+        }));
 
         return { status, entries };
       })
@@ -74,10 +73,11 @@ async function waitForSearchable(
 ) {
   await page.waitForFunction(
     async (q: string) => {
-      const store = (window as any).store;
-      if (!store) return false;
+      if (!window.store) return false;
+
       try {
-        const results = await store.search(q);
+        const results = await window.store.search(q);
+
         return results.length > 0;
       } catch {
         return false;
@@ -115,7 +115,7 @@ test.describe('sync', () => {
 
     // Wait for server to process the commit and rebuild index
     await page.waitForFunction(
-      () => (window as any).store?.getSyncStatus()?.pendingDirtyCount === 0,
+      () => window.store.getSyncStatus().pendingDirtyCount === 0,
       undefined,
       { timeout: 10000 },
     );
@@ -172,13 +172,12 @@ test.describe('sync', () => {
 
     // 2. Go offline
     await page.evaluate(() => {
-      const store = (window as any).store;
-      store?.getDefaultWebSocket()?.close();
+      window.store.getDefaultWebSocket()?.close();
     });
 
     // Wait until the store notices the disconnect
     await page.waitForFunction(
-      () => (window as any).store?.getSyncStatus()?.serverConnected === false,
+      () => window.store.getSyncStatus().serverConnected === false,
       undefined,
       { timeout: 10000 },
     );
@@ -191,7 +190,7 @@ test.describe('sync', () => {
 
     // Wait for the edit to be saved locally
     await page.waitForFunction(
-      () => (window as any).store?.getSyncStatus()?.pendingDirtyCount > 0,
+      () => window.store.getSyncStatus().pendingDirtyCount > 0,
       undefined,
       { timeout: 10000 },
     );
@@ -257,6 +256,7 @@ test.describe('sync', () => {
     // Get the resource subject for later verification
     const resourceSubject = await page.evaluate(() => {
       const main = document.querySelector('main[about]');
+
       return main?.getAttribute('about');
     });
 
@@ -280,13 +280,12 @@ test.describe('sync', () => {
     // (close() sets `_closed=true`) so the backoff doesn't pile up.
     await context.setOffline(true);
     await page.evaluate(() => {
-      const store = (window as any).store;
-      store?.getDefaultWebSocket()?.close();
+      window.store.getDefaultWebSocket()?.close();
     });
 
     // Wait for the store to detect the disconnect
     await page.waitForFunction(
-      () => (window as any).store?.getSyncStatus()?.serverConnected === false,
+      () => window.store.getSyncStatus().serverConnected === false,
       undefined,
       { timeout: 15000 },
     );
@@ -299,7 +298,7 @@ test.describe('sync', () => {
 
     // Wait for dirty count to increase
     await page.waitForFunction(
-      () => (window as any).store?.getSyncStatus()?.pendingDirtyCount > 0,
+      () => window.store.getSyncStatus().pendingDirtyCount > 0,
       undefined,
       { timeout: 10000 },
     );

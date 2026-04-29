@@ -28,10 +28,12 @@ test.describe('query GETs after refresh', () => {
 
     const isBad = (url: string) => {
       if (!url.includes('/query?')) return false;
+
       try {
         const u = new URL(url, 'http://placeholder');
         const drive = u.searchParams.get('drive');
         if (!drive) return false;
+
         // Valid: did:ad:... DID. Invalid: any HTTP(S) URL string.
         return !drive.startsWith('did:ad:');
       } catch {
@@ -49,6 +51,7 @@ test.describe('query GETs after refresh', () => {
         // WS v2 frames are text — `GET <url>` for a fetch. The full URL
         // appears verbatim; scan each whitespace-separated token.
         const payload = frame.payload?.toString() ?? '';
+
         for (const word of payload.split(/\s+/)) {
           if (isBad(word)) badRequests.push('WS ' + word);
         }
@@ -60,7 +63,7 @@ test.describe('query GETs after refresh', () => {
     await page.reload({ waitUntil: 'domcontentloaded' });
 
     await page.waitForFunction(
-      () => (window as any).store?.getSyncStatus()?.serverConnected === true,
+      () => window.store.getSyncStatus().serverConnected === true,
       undefined,
       { timeout: 30000 },
     );
@@ -109,13 +112,9 @@ test.describe('query GETs after refresh', () => {
     // the data, the post-reload server queries are legitimate (cold
     // load), not the bug we're testing.
     await page.waitForFunction(
-      () => {
-        const w = window as any;
-        return (
-          w.store?.getSyncStatus?.()?.pendingDirtyCount === 0 &&
-          w.store?.getClientDb?.()?.isReady === true
-        );
-      },
+      () =>
+        window.store.getSyncStatus().pendingDirtyCount === 0 &&
+        window.store.getClientDb()?.isReady === true,
       undefined,
       { timeout: 30000 },
     );
@@ -138,6 +137,7 @@ test.describe('query GETs after refresh', () => {
         // Buffer in Node, ArrayBuffer / string in browser context.
         let firstByte: number | undefined;
         let asString: string;
+
         if (typeof raw === 'string') {
           firstByte = raw.charCodeAt(0);
           asString = raw;
@@ -148,6 +148,7 @@ test.describe('query GETs after refresh', () => {
           firstByte = b[0];
           asString = b.toString('utf8');
         }
+
         if (firstByte === WS_TAG_GET) {
           // Skip tag + 2-byte requestId; subject is the rest as UTF-8.
           wsGetFrames.push(asString.slice(3, 253));
@@ -161,13 +162,9 @@ test.describe('query GETs after refresh', () => {
     // OPFS bootstrap-fingerprint check has completed (logged as
     // "skipping seed" when the fingerprint matches).
     await page.waitForFunction(
-      () => {
-        const w = window as any;
-        return (
-          w.store?.getSyncStatus?.()?.serverConnected === true &&
-          w.store?.getClientDb?.()?.isReady === true
-        );
-      },
+      () =>
+        window.store.getSyncStatus().serverConnected === true &&
+        window.store.getClientDb()?.isReady === true,
       undefined,
       { timeout: 30000 },
     );

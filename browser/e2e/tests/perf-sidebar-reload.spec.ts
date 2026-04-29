@@ -1,3 +1,4 @@
+// oxlint-disable no-await-in-loop
 /**
  * Probe for the dagger flake pattern "sidebar text/link not visible
  * within 15s after reload".
@@ -21,6 +22,7 @@
 import { test, expect } from '@playwright/test';
 import { before, editableTitle, setTitle } from './test-utils';
 import { attachPerfSnapshot, resetPerfTrace } from './perf-attach';
+import { CollectionBuilder } from '@tomic/lib';
 
 test.describe('perf: sidebar after reload', () => {
   test.beforeEach(before);
@@ -65,18 +67,22 @@ test.describe('perf: sidebar after reload', () => {
     // point shows nothing, but if the text appears at e.g. t+12s after
     // a 10s assertion budget, that's just slowness, not deadlock.
     const phaseC_start = Date.now();
+
     const sidebarText = await page.evaluate(async () => {
       const target = 'Perf Probe Doc';
       const sidebar = document.querySelector('[data-testid="sidebar"]');
       const start = performance.now();
       const samples: { ms: number; hasText: boolean }[] = [];
+
       while (performance.now() - start < 16000) {
         const has = !!sidebar?.textContent?.includes(target);
         samples.push({
           ms: Math.round(performance.now() - start),
           hasText: has,
         });
+
         if (has) break;
+
         await new Promise(r => setTimeout(r, 200));
       }
 
@@ -95,14 +101,13 @@ test.describe('perf: sidebar after reload', () => {
       // Always attach the perf snapshot first — without this, the throw
       // below skips it and we lose the diagnostic data we came for.
       await attachPerfSnapshot(page, testInfo, 'perf-sidebar-stuck');
+
       const dump = await page.evaluate(async () => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const w = window as any;
-        const store = w.store;
-        const drive = store?.getDrive?.();
+        const drive = window.store.getDrive();
         // The drive's children query — same params as `useChildren(drive)`.
         const childrenInStore: string[] = [];
-        const resources = store?.resources;
+        const resources = window.store.resources;
+
         if (resources && drive) {
           for (const [subject, r] of resources) {
             if (
@@ -116,20 +121,23 @@ test.describe('perf: sidebar after reload', () => {
         // Also do a fresh collection query — same params useChildren
         // uses — to see if the collection layer reports the doc.
         let freshCollectionMembers: string[] | string = 'no-collection-builder';
+
         try {
-          const CollectionBuilder = w.CollectionBuilder;
           if (CollectionBuilder && drive) {
-            const c = new CollectionBuilder(store, drive)
+            const c = new CollectionBuilder(window.store, drive)
               .setProperty('https://atomicdata.dev/properties/parent')
               .setValue(drive)
               .build();
             await c.waitForReady();
             const total = c.totalMembers;
             const members: string[] = [];
+
             for (let i = 0; i < total; i++) {
               const m = await c.getMemberWithIndex(i);
+
               if (m) members.push(m);
             }
+
             freshCollectionMembers = members;
           }
         } catch (e) {
@@ -143,12 +151,13 @@ test.describe('perf: sidebar after reload', () => {
           inMemoryChildren: childrenInStore,
           freshCollectionMembers,
           sidebarText: sidebar?.textContent?.slice(0, 600),
-          syncStatus: store?.getSyncStatus?.(),
+          syncStatus: window.store.getSyncStatus(),
         };
       });
       // eslint-disable-next-line no-console
       console.log('[perf] failure state:', JSON.stringify(dump, null, 2));
     }
+
     expect(firstHit, 'sidebar text never appeared').toBeTruthy();
 
     // eslint-disable-next-line no-console
@@ -161,9 +170,7 @@ test.describe('perf: sidebar after reload', () => {
     // Wait for the commit to actually reach the server. Reloading
     // before this means the next session has nothing to sync.
     await page.waitForFunction(
-      () =>
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (window as any).store?.getSyncStatus?.()?.pendingDirtyCount === 0,
+      () => window.store.getSyncStatus().pendingDirtyCount === 0,
       undefined,
       { timeout: 10000 },
     );
@@ -179,9 +186,7 @@ test.describe('perf: sidebar after reload', () => {
     //   - serverConnected: WS handshake + auth roundtrip done
     //   - sidebar item visible: drive resource + child collection populated
     await page.waitForFunction(
-      () =>
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (window as any).store?.getSyncStatus?.()?.serverConnected === true,
+      () => window.store.getSyncStatus().serverConnected === true,
       undefined,
       { timeout: 15000 },
     );

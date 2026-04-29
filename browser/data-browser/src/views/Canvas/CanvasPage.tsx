@@ -105,8 +105,6 @@ function cloneStrokes(strokes: CanvasStroke[]): CanvasStroke[] {
 const PEN_COLORS = [
   0xff000000, 0xffe63946, 0xfff4a261, 0xff2a9d8f, 0xff457b9d, 0xff9b5de5,
 ];
-const PEN_WIDTHS = [1, 2, 5, 10, 18, 30, 46];
-
 /**
  * Eraser hit-radius in screen pixels — multiplied by `1 / scale` at the
  * call site so the visual radius is constant regardless of zoom.
@@ -511,6 +509,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       // No drag → tap = single-step undo.
       if (!s.dragged) {
         await handleUndo();
+
         return;
       }
 
@@ -579,6 +578,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       if (erased.has(i)) continue;
       const stroke = strokesNow[i];
       const radius = hitRadius + stroke.width / 2 / scaleRef.current;
+
       for (const [px, py] of stroke.path) {
         if (Math.hypot(canvasX - px, canvasY - py) < radius) {
           erased.add(i);
@@ -1001,6 +1001,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       }
 
       setFanDragOffset({ x: dx, y: dy });
+
       if (g.type === 'color') {
         const hit = resolveHoveredColor({ x: dx, y: dy });
         setFanHoveredColor(hit?.color ?? null);

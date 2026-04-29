@@ -41,16 +41,19 @@ export const LoroDocValue: React.FC<LoroDocValueProps> = ({
   const value = useMemo(() => {
     if (!rawValue) return undefined;
     if (rawValue instanceof Uint8Array) return rawValue;
+
     if (typeof rawValue === 'string') {
       try {
         const binary = atob(rawValue);
         const bytes = new Uint8Array(binary.length);
         for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
         return bytes;
       } catch {
         return undefined;
       }
     }
+
     return undefined;
   }, [rawValue]);
 

@@ -151,6 +151,7 @@ export function NewPropertyDialog({
   useEffect(() => {
     if (!showDialog) {
       setPropertyResource(null);
+
       return;
     }
 

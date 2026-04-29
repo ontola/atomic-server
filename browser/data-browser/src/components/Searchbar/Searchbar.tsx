@@ -35,6 +35,7 @@ export function Searchbar(): JSX.Element {
       if (inputRef.current) {
         inputRef.current.innerText = '';
       }
+
       inputRef.current?.focus();
 
       return;

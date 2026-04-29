@@ -100,6 +100,7 @@ export function useResources(
   const getSnapshot = useCallback((): Map<string, Resource> => {
     const snaps = subjects.map(s => store.getResourceSnapshot(s, memoizedOpts));
     const cached = cacheRef.current;
+
     if (
       cached &&
       cached.snapshots.length === snaps.length &&
@@ -107,6 +108,7 @@ export function useResources(
     ) {
       return cached.map;
     }
+
     const map = new Map<string, Resource>();
     subjects.forEach((s, i) => map.set(s, snaps[i].resource));
     cacheRef.current = { map, snapshots: snaps };
@@ -290,6 +292,7 @@ export function useValue(
 
         return;
       }
+
       try {
         await resource.__internalObject.set(propertyURL, newVal, validate);
         saveResource();
@@ -602,6 +605,7 @@ export function useCanWrite(resource: Resource): boolean {
       .canWrite(agent.subject)
       .then(([result]) => {
         if (cancelled) return;
+
         if (result) {
           setCanWrite(true);
         } else if (
@@ -617,6 +621,7 @@ export function useCanWrite(resource: Resource): boolean {
       })
       .catch(() => {
         if (cancelled) return;
+
         // Offline fallback: assume write access for DID resources
         if (
           resource.subject?.startsWith('did:ad:') &&
@@ -625,6 +630,7 @@ export function useCanWrite(resource: Resource): boolean {
           setCanWrite(true);
         }
       });
+
     return () => {
       cancelled = true;
     };

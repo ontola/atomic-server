@@ -1,4 +1,4 @@
-import { test, expect, Browser } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import { FRONTEND_URL } from './test-utils';
 
 test.describe('onboarding', () => {

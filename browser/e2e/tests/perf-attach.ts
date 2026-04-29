@@ -75,11 +75,13 @@ export async function attachPerfSnapshot(
   lines.push(
     `[perf] ${name}: window=${snap.windowMs.toFixed(0)}ms events=${snap.count}`,
   );
+
   for (const row of snap.rollup.slice(0, 12)) {
     lines.push(
       `  ${row.name.padEnd(38)} n=${String(row.count).padStart(3)}  total=${String(row.totalMs.toFixed(1)).padStart(7)}ms  max=${String(row.maxMs.toFixed(1)).padStart(7)}ms  avg=${row.avgMs.toFixed(1)}ms`,
     );
   }
+
   // eslint-disable-next-line no-console
   console.log(lines.join('\n'));
 
@@ -121,12 +123,14 @@ export async function attachPerfOnFailure(testInfo: TestInfo): Promise<void> {
   const active = (testInfo as unknown as { _perfPages?: Page[] })._perfPages;
   if (!active || active.length === 0) return;
   let i = 0;
+
   for (const page of active) {
     try {
       await attachPerfSnapshot(page, testInfo, `perf-trace-${i}`);
     } catch {
       // closed page / nav in flight — ignore
     }
+
     i++;
   }
 }

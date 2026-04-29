@@ -69,6 +69,7 @@ const store = new Store({
 });
 
 const initialDrive = driveStorage.get();
+
 if (initialDrive) {
   store.setDrive(initialDrive);
 }
@@ -82,6 +83,7 @@ bootstrap(store);
 // user explicitly opted out via the Sync page toggle.
 import { initClientDb } from './helpers/initClientDb';
 import { isClientDbEnabled } from './helpers/clientDbMode';
+
 if (isClientDbEnabled()) {
   initClientDb(store);
 }

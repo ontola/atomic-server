@@ -171,6 +171,7 @@ export function SearchOverlay(): JSX.Element | null {
     if (isOpen && inputRef.current) {
       // Small delay to let animation start first
       const timer = setTimeout(() => inputRef.current?.focus(), 50);
+
       return () => clearTimeout(timer);
     }
   }, [isOpen, inputRef.current]);
@@ -239,6 +240,7 @@ function SearchOverlayContent({
 
   const handleSelectResult = () => {
     const selectedSubject = results[selectedIndex];
+
     if (selectedSubject) {
       (document.activeElement as HTMLInputElement | null)?.blur();
       const openURL = constructOpenURL(selectedSubject);

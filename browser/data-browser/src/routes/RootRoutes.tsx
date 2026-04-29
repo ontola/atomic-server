@@ -51,11 +51,13 @@ const TopRouteComponent: React.FC = () => {
   useEffect(() => {
     if (!isRoot) {
       setResolvingRoot(false);
+
       return;
     }
 
     if (!agent) {
       navigate({ to: paths.welcome, replace: true });
+
       return;
     }
 
@@ -64,6 +66,7 @@ const TopRouteComponent: React.FC = () => {
     // that's the subject we're specifically trying to avoid landing on.
     if (drive && drive !== baseURL) {
       navigate(constructOpenURL(drive));
+
       return;
     }
 

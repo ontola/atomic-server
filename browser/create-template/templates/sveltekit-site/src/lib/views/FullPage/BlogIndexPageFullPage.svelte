@@ -30,6 +30,7 @@
 	const search = throttle(async (searchValue: string) => {
 		if (searchValue === '') {
 			results = allItems;
+
 			return;
 		}
 

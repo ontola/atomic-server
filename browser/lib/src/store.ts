@@ -5,14 +5,8 @@ import {
   setCookieAuthentication,
 } from './authentication.js';
 import { Client, type FileOrFileLike } from './client.js';
-import {
-  commitIdOf,
-  commitToJsonADObject,
-  parseCommitJSON,
-  type Commit,
-} from './commit.js';
+import { commitIdOf, commitToJsonADObject, type Commit } from './commit.js';
 import { datatypeFromUrl, type Datatype } from './datatypes.js';
-import { AtomicError, ErrorType } from './error.js';
 import { EventManager } from './EventManager.js';
 import { hasBrowserAPI } from './hasBrowserAPI.js';
 import { collections } from './ontologies/collections.js';
@@ -391,8 +385,10 @@ export class Store {
     // `setServerUrl` above already absorbed the origin, and an
     // accidental URL-as-drive is exactly what we're avoiding.
     let storedDrive: string | undefined = undefined;
+
     if (typeof window !== 'undefined') {
       const raw = localStorage.getItem('drive');
+
       if (raw) {
         try {
           storedDrive = JSON.parse(raw);
@@ -401,6 +397,7 @@ export class Store {
         }
       }
     }
+
     if (
       storedDrive &&
       !storedDrive.startsWith('http://') &&
@@ -620,6 +617,7 @@ export class Store {
     if (this.outbox.size === 0 || !this.getAgent()) return;
     perfMark('store.syncDirtyResources.subjects', { count: this.outbox.size });
     this.emitSyncStatus();
+
     try {
       await this.outbox.drain({
         sort: this.sortOutboxEntries,
@@ -696,21 +694,25 @@ export class Store {
     // sign them into commits first so they ride along with the
     // outbox-stored ones.
     const resource = this.resources.get(entry.subject);
+
     if (resource?.hasUnsavedChanges()) {
       await resource.save();
       // `save()` will have posted everything it could; if it
       // re-queued anything to the outbox the drain will iterate it.
       this.emitSyncStatus();
+
       return;
     }
+
     const endpoint = new URL('/commit', this.serverUrl).toString();
     // Re-posting a commit the server already applied is safe: the server
     // detects the idempotent replay (the commit's Loro ops are already in
     // the resource's oplog) and accepts it. Only a genuine causality
     // failure throws — and that must propagate, not be swallowed.
-    for (const commit of entry.commits) {
-      await this.postCommit(commit, endpoint);
-    }
+    await Promise.all(
+      entry.commits.map(commit => this.postCommit(commit, endpoint)),
+    );
+
     // Mirror Resource.pushCommits' post-ack blob push. When an upload
     // races a network outage the commit POST fails, bytes land in the
     // local ClientDb, the commit is queued in the outbox. On reconnect
@@ -722,6 +724,7 @@ export class Store {
     if (resource) {
       await this.maybePushBlobForResource(resource).catch(() => undefined);
     }
+
     this.emitSyncStatus();
   };
 
@@ -876,6 +879,7 @@ export class Store {
     try {
       const jsonAd = await this.clientDb.getResource(subject);
       if (!jsonAd) return null;
+
       return this.hydrateOfflineReplay(subject, JSON.parse(jsonAd));
     } catch {
       return null;
@@ -904,6 +908,7 @@ export class Store {
       resource,
       source: 'offline-replay',
     });
+
     return resource;
   }
 
@@ -915,6 +920,7 @@ export class Store {
    *  canonical key (the one used in the resources Map). */
   private resolveSubject(subject: string): string {
     const normalized = this.normalizeSubject(subject);
+
     return this.aliases.get(normalized) ?? normalized;
   }
 
@@ -1091,6 +1097,7 @@ export class Store {
     } else {
       this.resources.set(subject, resource.__internalObject);
     }
+
     const emitResource = storeResource ?? resource.__internalObject;
 
     // Update local full-text search index, partitioned by the resource's
@@ -1122,6 +1129,7 @@ export class Store {
     ) {
       try {
         const jsonAd = resourceToJsonAd(resource);
+
         if (jsonAd) {
           const doc = resource.getLoroDoc?.();
           const snapshot = doc?.export({ mode: 'snapshot' });
@@ -1282,10 +1290,12 @@ export class Store {
       false,
     );
     agentResource.push(server.properties.drives, [drive.subject], true);
+
     if (agentName) {
       await agentResource.set(core.properties.name, agentName, false);
       const currentIsA = (agentResource.get(core.properties.isA) ??
         []) as string[];
+
       if (!currentIsA.includes(core.classes.agent)) {
         await agentResource.set(
           core.properties.isA,
@@ -1294,6 +1304,7 @@ export class Store {
         );
       }
     }
+
     await agentResource.save();
 
     return drive;
@@ -1639,11 +1650,14 @@ export class Store {
       !opts.setLoading &&
       !normalizedSubject.startsWith('_new:') &&
       !normalizedSubject.startsWith('_local:');
+
     if (canDedup) {
       const inflight = this._inFlightFetches.get(normalizedSubject);
       if (inflight) return inflight as Promise<Resource<C>>;
     }
+
     const work = this._fetchResourceFromServerImpl<C>(subject, opts);
+
     if (canDedup) {
       const tracked = work.finally(() => {
         // Only clear if we're still the owner of the slot — a
@@ -1654,8 +1668,10 @@ export class Store {
         }
       });
       this._inFlightFetches.set(normalizedSubject, tracked);
+
       return tracked as Promise<Resource<C>>;
     }
+
     return work;
   }
 
@@ -1841,6 +1857,7 @@ export class Store {
       let resource = this.resources.get(unknownSubject) as
         | Resource<C>
         | undefined;
+
       if (!resource) {
         resource = new Resource<C>(unknownSubject, opts.newResource);
         resource.setStore(this);
@@ -1871,6 +1888,7 @@ export class Store {
       if (!isNew) resource.loading = true;
       this.addResource(resource, { alias: normalized });
       if (!isNew) this.fetchResourceWithLocalFallback(normalized, opts);
+
       return resource;
     }
 
@@ -2049,6 +2067,7 @@ export class Store {
     if (!connected) {
       this._driveSyncInProgress = false;
     }
+
     console.info(`[Store] Server ${connected ? 'connected' : 'disconnected'}`);
     this.eventManager.emit(StoreEvents.ConnectionChanged, connected);
     this.emitSyncStatus();
@@ -2090,6 +2109,7 @@ export class Store {
       // applyIncoming path handles success.
       this.fetchResourceFromServer(subject).catch(e => {
         const r = this.resources.get(subject);
+
         if (r) {
           r.loading = false;
           r.setError(e instanceof Error ? e : new Error(String(e)));
@@ -2150,9 +2170,11 @@ export class Store {
     // creations accumulate forever — small leak in practice but
     // visible under fuzzing/bulk-creation tests.
     const cutoff = now - 10_000;
+
     for (const [subject, ts] of this.recentlyCreatedSubjects) {
       if (ts < cutoff) this.recentlyCreatedSubjects.delete(subject);
     }
+
     this.recentlyCreatedSubjects.set(resource.subject, now);
     await this.eventManager.emit(StoreEvents.ResourceManuallyCreated, resource);
   }
@@ -2168,6 +2190,7 @@ export class Store {
     const ts = this.recentlyCreatedSubjects.get(subject);
     if (ts === undefined) return false;
     this.recentlyCreatedSubjects.delete(subject);
+
     return Date.now() - ts <= windowMs;
   }
 
@@ -2226,6 +2249,7 @@ export class Store {
     url.searchParams.set('include_external', 'true');
     url.searchParams.set('include_nested', 'true');
     url.searchParams.set('page_size', '999');
+
     return url.toString();
   }
 
@@ -2243,6 +2267,7 @@ export class Store {
 
     if (this.resources.delete(resolved)) {
       this.localSearch.removeResource(resolved);
+
       if (shouldNotify) {
         this.eventManager.emit(StoreEvents.ResourceRemoved, subjectRaw);
       }
@@ -2467,7 +2492,9 @@ export class Store {
     if (subject === undefined) {
       throw Error('Cannot subscribe to undefined subject');
     }
+
     const normalized = this.normalizeSubject(subject);
+
     return this.addLoroSubscriber(this.subscribers, normalized, callback, () =>
       this.subscribeWebSocket(normalized),
     );
@@ -2483,6 +2510,7 @@ export class Store {
   public subscribeWebSocket(subject: string): void {
     if (!this._serverConnected) return;
     const normalized = this.normalizeSubject(subject);
+
     if (
       normalized === unknownSubject ||
       normalized.includes('/commits/') ||
@@ -2490,6 +2518,7 @@ export class Store {
     ) {
       return;
     }
+
     try {
       this.getWebSocketForSubject(subject);
     } catch (e) {
@@ -2512,16 +2541,19 @@ export class Store {
     onLastRemove?: () => void,
   ): () => void {
     const existing = map.get(subject);
+
     if (existing) {
       existing.push(callback);
     } else {
       map.set(subject, [callback]);
       onFirstAdd?.();
     }
+
     return () => {
       const subs = map.get(subject);
       if (!subs) return;
       const filtered = subs.filter(c => c !== callback);
+
       if (filtered.length === 0) {
         map.delete(subject);
         onLastRemove?.();
@@ -2537,6 +2569,7 @@ export class Store {
   ): void {
     let subject: string;
     let update: string;
+
     try {
       const parsed = JSON.parse(message) as {
         subject: string;
@@ -2551,8 +2584,10 @@ export class Store {
       // the WS message pump). Bytes are dropped; the CRDT keeps
       // its own state and re-syncs on next exchange.
       console.warn('[Loro] dispatch parse failed:', e);
+
       return;
     }
+
     const subs = map.get(subject);
     if (!subs) return;
     const bytes = decodeB64(update);
@@ -2688,6 +2723,7 @@ export class Store {
         50,
       );
     }
+
     this.eventManager.emit(StoreEvents.CommitLogChanged, this.getCommitLog());
   }
 
@@ -2771,6 +2807,7 @@ export class Store {
       materialized.importLoroUpdate(commit.loroUpdate);
 
       const currentEntries = new Map<string, JSONValue>();
+
       for (const [prop, value] of materialized.getEntries()) {
         if (
           prop === commits.properties.loroUpdate ||
@@ -2789,6 +2826,7 @@ export class Store {
         try {
           const prior = new Resource(commit.subject);
           prior.importLoroUpdate(priorBytes);
+
           for (const [prop, value] of prior.getEntries()) {
             if (
               prop === commits.properties.loroUpdate ||
@@ -2808,6 +2846,7 @@ export class Store {
 
       for (const [prop, value] of currentEntries) {
         const before = priorEntries.get(prop);
+
         if (!commitLogValuesEqual(before, value)) {
           summaries.push({ property: prop, value, changeType: 'changed' });
         }
@@ -2858,19 +2897,23 @@ export class Store {
     const hashHex = blobValue.slice(prefix.length);
 
     let hashBytes: Uint8Array;
+
     try {
       hashBytes = hexToBytes(hashHex);
     } catch {
       return;
     }
+
     if (hashBytes.length !== 32) return;
 
     let bytes: Uint8Array | null = null;
+
     try {
       bytes = await this.clientDb.getBlob(hashBytes);
     } catch {
       return;
     }
+
     if (!bytes) return;
 
     // HTTP PUT is the source of truth for blob delivery. Storage is content-
@@ -2928,10 +2971,12 @@ export class Store {
       );
       for (const r of resources) this.addResource(r);
       const subjects: string[] = [];
+
       for (const r of resources) {
         await this.notifyResourceManuallyCreated(r);
         subjects.push(r.subject);
       }
+
       return subjects;
     }
 
@@ -2999,6 +3044,7 @@ export class Store {
     const close = perfSpan('store.postCommit', {
       genesis: commit.previousCommit === undefined,
     });
+
     try {
       const created = await this.sendCommit(commit, endpoint);
       close('ok');
@@ -3016,6 +3062,7 @@ export class Store {
       // path used to skip it, which produced the `GET did:ad:commit:*`
       // visible in the network log right after posting a chat message.
       this.materializeCommitLocally(created);
+
       return created;
     } catch (e) {
       const errMsg = e instanceof Error ? e.message : String(e);
@@ -3060,6 +3107,7 @@ export class Store {
   private getWebSocketForEndpoint(endpoint: string): WSClient | undefined {
     try {
       const origin = new URL(endpoint).origin;
+
       return this.webSockets.get(origin);
     } catch {
       return this.getDefaultWebSocket();
@@ -3295,6 +3343,7 @@ export class Store {
     const r = this.getResourceLoading(subject, opts);
     const key = this.normalizeSubject(r.subject);
     let snap = this.snapshots.get(key);
+
     if (!snap || snap.resource !== r.__internalObject) {
       snap = { resource: r.__internalObject };
       this.snapshots.set(key, snap);

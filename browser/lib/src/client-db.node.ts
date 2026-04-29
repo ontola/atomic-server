@@ -81,6 +81,7 @@ export class NodeClientDb {
   async waitForReady(): Promise<boolean> {
     if (this.ready && this.seeded) return true;
     if (!this.initPromise) return false;
+
     try {
       await this.initPromise;
       if (this.seedPromise) await this.seedPromise;
@@ -101,6 +102,7 @@ export class NodeClientDb {
   async waitForInit(): Promise<boolean> {
     if (this.ready) return true;
     if (!this.initPromise) return false;
+
     try {
       await this.initPromise;
 
@@ -166,6 +168,7 @@ export class NodeClientDb {
   async putResources(jsonAds: string[]): Promise<void> {
     if (jsonAds.length === 0) return;
     const db = this.requireDb();
+
     for (const jsonAd of jsonAds) {
       await db.putResource(jsonAd);
     }

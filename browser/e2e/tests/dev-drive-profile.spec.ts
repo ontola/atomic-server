@@ -24,7 +24,7 @@ test.skip(
   !process.env.PROFILE_PERF,
   'perf-instrumentation only; run with PROFILE_PERF=1 and --headed',
 );
-test('dev-drive CDP trace', async ({ page, browser }) => {
+test('dev-drive CDP trace', async ({ page }) => {
   const throttle = envCpuThrottle();
   if (throttle) await applyCpuThrottle(page, throttle);
 
@@ -53,6 +53,7 @@ test('dev-drive CDP trace', async ({ page, browser }) => {
     client.on('Tracing.tracingComplete', async (event: { stream?: string }) => {
       if (!event.stream) return reject(new Error('No trace stream returned'));
       const chunks: string[] = [];
+
       while (true) {
         const { data, eof } = await client.send('IO.read', {
           handle: event.stream,
@@ -60,6 +61,7 @@ test('dev-drive CDP trace', async ({ page, browser }) => {
         chunks.push(data);
         if (eof) break;
       }
+
       await client.send('IO.close', { handle: event.stream });
       resolve(chunks.join(''));
     });

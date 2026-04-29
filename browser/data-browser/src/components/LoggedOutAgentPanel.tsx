@@ -42,6 +42,7 @@ export function LoggedOutAgentPanel({
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     const trimmed = secret.trim();
+
     if (!trimmed) {
       return;
     }

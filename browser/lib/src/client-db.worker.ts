@@ -114,6 +114,7 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
       // ordering-sensitive caller (properties seeded before others)
       // can keep its current sequencing.
       await ensureInit();
+
       for (const jsonAd of msg.jsonAds) {
         await db!.putResource(jsonAd);
       }

@@ -32,7 +32,7 @@ test.describe('perf budgets', () => {
   }, testInfo) => {
     // `before` already navigated us; capture what happened.
     await page.waitForFunction(
-      () => (window as any).store?.getSyncStatus?.()?.serverConnected === true,
+      () => window.store.getSyncStatus().serverConnected === true,
       undefined,
       { timeout: 15000 },
     );
@@ -41,7 +41,7 @@ test.describe('perf budgets', () => {
 
   test('reconnect: close WS + drive sync', async ({ page }, testInfo) => {
     await page.waitForFunction(
-      () => (window as any).store?.getSyncStatus?.()?.serverConnected === true,
+      () => window.store.getSyncStatus().serverConnected === true,
       undefined,
       { timeout: 15000 },
     );
@@ -54,12 +54,10 @@ test.describe('perf budgets', () => {
     // retry loop never re-fires, so the test would just hang waiting
     // for `serverConnected===true`.
     await page.evaluate(() => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const store = (window as any).store;
-      store?.reconnect();
+      window.store.reconnect();
     });
     await page.waitForFunction(
-      () => (window as any).store?.getSyncStatus?.()?.serverConnected === true,
+      () => window.store.getSyncStatus().serverConnected === true,
       undefined,
       { timeout: 15000 },
     );
@@ -73,7 +71,7 @@ test.describe('perf budgets', () => {
     page,
   }, testInfo) => {
     await page.waitForFunction(
-      () => (window as any).store?.getSyncStatus?.()?.serverConnected === true,
+      () => window.store.getSyncStatus().serverConnected === true,
       undefined,
       { timeout: 15000 },
     );
@@ -85,14 +83,16 @@ test.describe('perf budgets', () => {
     // they're a very close mirror of the failure shape we see in CI's
     // chatroom / tables / table-refresh tests.
     const N = 5;
+
     for (let i = 0; i < N; i++) {
       await newResource('folder', page);
       await page.waitForFunction(
-        () => (window as any).store?.getSyncStatus?.()?.pendingDirtyCount === 0,
+        () => window.store.getSyncStatus().pendingDirtyCount === 0,
         undefined,
         { timeout: 10000 },
       );
     }
+
     // Reference `expect` to avoid an unused-import warning when this
     // probe is later trimmed; actual assertion is implicit (must not
     // throw within timeouts).

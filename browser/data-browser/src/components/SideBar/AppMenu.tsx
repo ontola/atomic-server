@@ -1,13 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
 import { styled } from 'styled-components';
-import {
-  FaGear,
-  FaInfo,
-  FaKeyboard,
-  FaCirclePlus,
-  FaUser,
-  FaCode,
-} from 'react-icons/fa6';
+import { FaGear, FaInfo, FaCirclePlus, FaUser, FaCode } from 'react-icons/fa6';
 import { isDev } from '../../config';
 import { constructOpenURL } from '../../helpers/navigation';
 import { useCurrentSubject } from '../../helpers/useCurrentSubject';

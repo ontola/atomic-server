@@ -8,5 +8,5 @@
     "outDir": "./dist",
     "strictNullChecks": true
   },
-  "include": ["./tests", "playwright.config.ts"]
+  "include": ["./tests", "playwright.config.ts", "./global.d.ts"]
 }

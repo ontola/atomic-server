@@ -195,6 +195,7 @@ export class Resource<C extends OptionalClass = any> {
    */
   public get loading(): boolean {
     if (this._loading) return true;
+
     // A resource with buffered Loro snapshot bytes but no doc CAN be readable
     // if the cache has propvals already (typical post-`parseMetaTags`: the
     // JSON-AD-initial meta tag flattens propvals into `_cache` and the
@@ -207,6 +208,7 @@ export class Resource<C extends OptionalClass = any> {
       const hasBuffered =
         (buf instanceof Uint8Array && buf.length > 0) ||
         (typeof buf === 'string' && buf.length > 0);
+
       if (hasBuffered) {
         // Object.create(null)-style _cache → use Object.keys to count
         // own props. Hot path; cheap.
@@ -214,6 +216,7 @@ export class Resource<C extends OptionalClass = any> {
         if (!hasCache) return true;
       }
     }
+
     return false;
   }
 
@@ -313,8 +316,8 @@ export class Resource<C extends OptionalClass = any> {
    * when a hydrated resource needs its offline-persisted commit queue
    * re-attached after a page reload.
    */
-  public setPendingCommits(commits: Commit[]): void {
-    this._pendingCommits = [...commits];
+  public setPendingCommits(pending: Commit[]): void {
+    this._pendingCommits = [...pending];
   }
 
   private get store(): Store {
@@ -463,11 +466,14 @@ export class Resource<C extends OptionalClass = any> {
         } else if (typeof val === 'string') {
           this._auxValues.set(prop, decodeB64(val));
         }
+
         return;
       }
+
       if (val === undefined) {
         this._loroSnapshotBytes = undefined;
         this.resetLoroState();
+
         return;
       }
 
@@ -485,6 +491,7 @@ export class Resource<C extends OptionalClass = any> {
       if (this._loroDoc) {
         const bytes =
           val instanceof Uint8Array ? val : decodeB64(val as string);
+
         try {
           this._loroDoc.import(bytes);
           this.rebuildCacheFromLoro();
@@ -504,6 +511,7 @@ export class Resource<C extends OptionalClass = any> {
     // Binary values go to auxValues (Loro can't store raw Uint8Array)
     if (val instanceof Uint8Array) {
       this._auxValues.set(prop, val);
+
       return;
     }
 
@@ -736,6 +744,7 @@ export class Resource<C extends OptionalClass = any> {
   ): Uint8Array | undefined {
     if (bytes instanceof Uint8Array && bytes.length > 0) return bytes;
     if (typeof bytes === 'string' && bytes.length > 0) return decodeB64(bytes);
+
     return undefined;
   }
 
@@ -843,6 +852,7 @@ export class Resource<C extends OptionalClass = any> {
     // Cycle detection: any ancestor we've already visited in this chain.
     // Catches both immediate (A↔B) and longer (A→B→C→A) cycles.
     const visited = seen ?? new Set<string>();
+
     if (visited.has(parentSubject)) {
       console.warn(
         'Circular parent chain at',
@@ -850,8 +860,10 @@ export class Resource<C extends OptionalClass = any> {
         '→',
         parentSubject,
       );
+
       return [true, `Circular parent chain at ${this.subject}`];
     }
+
     visited.add(this.subject);
 
     const parent: Resource = await this.store.getResource(parentSubject);
@@ -1423,20 +1435,25 @@ export class Resource<C extends OptionalClass = any> {
    */
   public async getRights(): Promise<Right[]> {
     const rights: Right[] = [];
+
     const collect = (prop: string, type: RightType) => {
       for (const subject of this.getSubjects(prop)) {
         rights.push({ for: subject, type, setIn: this.subject });
       }
     };
+
     collect(properties.write, RightType.WRITE);
     collect(properties.read, RightType.READ);
 
     const parentSubject = this.get(properties.parent) as string;
+
     if (parentSubject) {
       if (parentSubject === this.subject) {
         console.warn('Circular parent', parentSubject);
+
         return rights;
       }
+
       const parent = await this.store.getResource(parentSubject);
       rights.push(...(await parent.getRights()));
     }
@@ -1578,6 +1595,7 @@ export class Resource<C extends OptionalClass = any> {
 
     if (existing && typeof existing === 'object' && 'delete' in existing) {
       list = existing as LoroList;
+
       // Drain in-place rather than `setContainer(new LoroList())`. Replacing
       // the container resets its identity, so cross-device merges of writes
       // that target the *old* list would silently drop. Deleting + pushing
@@ -1614,6 +1632,7 @@ export class Resource<C extends OptionalClass = any> {
     if (!map) return;
 
     const existing = map.get(propUrl);
+
     if (!existing || typeof existing !== 'object' || !('delete' in existing)) {
       return;
     }
@@ -1716,6 +1735,7 @@ export class Resource<C extends OptionalClass = any> {
     // React UI keeps painting the pre-undo strokes — the symptom is
     // "tapping undo shows Saving… but nothing visually changes".
     this.eventManager.emit(ResourceEvents.LocalChange, '', undefined);
+
     return true;
   }
 
@@ -1732,6 +1752,7 @@ export class Resource<C extends OptionalClass = any> {
     this._loroVersionAtLastSave = undefined;
     // See `undo()` — wildcard `LocalChange` so React consumers reload.
     this.eventManager.emit(ResourceEvents.LocalChange, '', undefined);
+
     return true;
   }
 
@@ -1909,6 +1930,7 @@ export class Resource<C extends OptionalClass = any> {
 
     const drain = this._drainPendingCommits();
     this.inProgressPush = drain;
+
     try {
       return await drain;
     } finally {
@@ -2157,6 +2179,7 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     let lastCommitSubject: string | undefined;
+
     for (const commit of this._pendingCommits) {
       const commitSubject = `did:ad:commit:${commit.signature}`;
       lastCommitSubject = commitSubject;
@@ -2172,15 +2195,20 @@ export class Resource<C extends OptionalClass = any> {
         source: 'offline-replay',
       });
     }
+
     if (lastCommitSubject) this.setLastCommitValue(lastCommitSubject);
 
     const clientDb = this.store.getClientDb();
+
     if (clientDb) {
       const obj: Record<string, unknown> = { '@id': this.subject };
+
       for (const [k, v] of this.getEntries()) {
         if (!(v instanceof Uint8Array)) obj[k] = v;
       }
+
       const snapshot = this._loroDoc?.export({ mode: 'snapshot' });
+
       // `await` the OPFS write — the caller (`save()`) treats this
       // method as durable: when it returns, the edit MUST survive a
       // reload. Without the await, `save()` resolved while the OPFS
@@ -2233,6 +2261,7 @@ export class Resource<C extends OptionalClass = any> {
 
     if (validate) {
       let fullProp;
+
       try {
         fullProp = await this.store.getProperty(prop);
       } catch (e) {
@@ -2247,6 +2276,7 @@ export class Resource<C extends OptionalClass = any> {
         );
         fullProp = undefined;
       }
+
       if (fullProp) {
         try {
           validateDatatype(value, fullProp.datatype);
@@ -2254,6 +2284,7 @@ export class Resource<C extends OptionalClass = any> {
           if (e instanceof Error) {
             e.message = `Error validating ${fullProp.shortname} with value ${value} for ${this.subject}: ${e.message}`;
           }
+
           throw e;
         }
       }

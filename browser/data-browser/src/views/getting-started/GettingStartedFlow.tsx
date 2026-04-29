@@ -36,7 +36,6 @@ const swapIn = keyframes`
 `;
 
 export function GettingStartedFlow({
-  subject,
   initialStep = 'welcome',
 }: Props): React.JSX.Element {
   useWelcomeLayoutEffect();

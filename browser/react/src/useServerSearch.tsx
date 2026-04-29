@@ -62,6 +62,7 @@ export function useServerSearch(
       ) {
         return;
       }
+
       setResults(r);
     },
   );

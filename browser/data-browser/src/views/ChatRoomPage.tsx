@@ -3,7 +3,6 @@ import {
   core,
   dataBrowser,
   getTimestampNow,
-  StoreEvents,
   useCanWrite,
   useCollection,
   useResource,
@@ -496,7 +495,6 @@ const ScrollingContent = styled.div`
  * Sorts by createdAt ascending (oldest first) with pagination.
  */
 function useChatMessages(chatSubject: string) {
-  const store = useStore();
   const [messages, setMessages] = useState<string[]>([]);
 
   const { collection, ready, invalidateCollection } = useCollection(

@@ -162,6 +162,7 @@ function FancyTableInner<T>({
       // `aria-rowindex`. Drop the listitem role so the TableRow's
       // `role='row'` is not overridden when the spread reaches it.
       const { role: _role, ...gridAria } = ariaAttributes;
+
       return (
         <TableRow
           {...gridAria}

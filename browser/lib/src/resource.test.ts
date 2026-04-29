@@ -52,9 +52,9 @@ describe('resource.ts', () => {
 
     const base = new Resource(subject);
     await base.set(name, 'Base', false);
-    const baseSnapshot = (base as any)._loroDoc.export({
+    const baseSnapshot = base.getLoroDoc()!.export({
       mode: 'snapshot',
-    }) as Uint8Array;
+    });
 
     const local = new Resource(subject);
     local.importLoroUpdate(baseSnapshot);
@@ -63,9 +63,9 @@ describe('resource.ts', () => {
     const remoteSource = new Resource(subject);
     remoteSource.importLoroUpdate(baseSnapshot);
     await remoteSource.set(name, 'Remote update', false);
-    const remoteSnapshot = (remoteSource as any)._loroDoc.export({
+    const remoteSnapshot = remoteSource.getLoroDoc()!.export({
       mode: 'snapshot',
-    }) as Uint8Array;
+    });
 
     const remote = new Resource(subject);
     remote.importLoroUpdate(remoteSnapshot);
@@ -106,6 +106,7 @@ describe('resource.ts', () => {
     doc!.commit();
 
     const timestamps: number[] = [];
+
     for (const changes of doc!.getAllChanges().values()) {
       for (const change of changes) {
         if (change.timestamp > 0) {
@@ -115,6 +116,7 @@ describe('resource.ts', () => {
     }
 
     expect(timestamps.length).toBeGreaterThan(0);
+
     for (const ts of timestamps) {
       expect(ts).toBeLessThan(1_000_000_000_000);
     }
@@ -129,14 +131,13 @@ describe('resource.ts', () => {
 
     const resource = new Resource(subject);
     await resource.set(name, '1', false);
-    const peerBefore = (resource as any)._loroDoc.peerIdStr as string;
-    const serverSnapshot = (resource as any)._loroDoc.export({
-      mode: 'snapshot',
-    }) as Uint8Array;
+    const doc = resource.getLoroDoc()!;
+    const peerBefore = doc.peerIdStr;
+    const serverSnapshot = doc.export({ mode: 'snapshot' });
 
-    (resource as any).applyRawValue(loroUpdate, serverSnapshot);
+    resource.applyHydratedValues([[loroUpdate, serverSnapshot]]);
 
-    const peerAfter = (resource as any)._loroDoc.peerIdStr as string;
+    const peerAfter = resource.getLoroDoc()!.peerIdStr;
     expect(peerAfter).toBe(peerBefore);
   });
 

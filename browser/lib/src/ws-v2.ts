@@ -435,6 +435,7 @@ export function decodeQueryUpdate(
     if (pos + len > data.length) return undefined;
     const s = decoder.decode(data.subarray(pos, pos + len));
     pos += len;
+
     return s;
   };
 
@@ -447,6 +448,7 @@ export function decodeQueryUpdate(
   const addedCount = view.getUint16(pos, false);
   pos += 2;
   const added: string[] = [];
+
   for (let i = 0; i < addedCount; i++) {
     const s = readStr();
     if (s === undefined) return undefined;
@@ -457,6 +459,7 @@ export function decodeQueryUpdate(
   const removedCount = view.getUint16(pos, false);
   pos += 2;
   const removed: string[] = [];
+
   for (let i = 0; i < removedCount; i++) {
     const s = readStr();
     if (s === undefined) return undefined;
@@ -557,6 +560,7 @@ export function debugFrameInfo(
     }
 
     case Tag.COMMIT:
+
     case Tag.COMMIT_OK: {
       const msg = decodeCommit(payload);
 
@@ -607,6 +611,7 @@ export function debugFrameInfo(
     }
 
     case Tag.SUB:
+
     case Tag.UNSUB: {
       const subject = decoder.decode(payload);
 
@@ -699,6 +704,7 @@ export function debugFrame(data: Uint8Array, direction: '→' | '←'): string {
     }
 
     case Tag.COMMIT:
+
     case Tag.COMMIT_OK: {
       const msg = decodeCommit(payload);
 

@@ -14,6 +14,7 @@ async function timeIt<T>(
 ): Promise<{ label: string; ms: number; result: T }> {
   const start = Date.now();
   const result = await fn();
+
   return { label, ms: Date.now() - start, result };
 }
 
@@ -59,9 +60,11 @@ test.describe('dev-drive timing', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return (window as any).__atomicPerf?.snapshot?.() ?? null;
     });
+
     if (perf?.rollup) {
       // eslint-disable-next-line no-console
       console.log(`[perf rollup] ${perf.count} events in ${perf.windowMs}ms`);
+
       for (const r of perf.rollup.slice(0, 10)) {
         // eslint-disable-next-line no-console
         console.log(

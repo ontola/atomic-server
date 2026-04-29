@@ -1,3 +1,4 @@
+// oxlint-disable no-await-in-loop
 import { test, expect } from '@playwright/test';
 import { before, editableTitle, FRONTEND_URL, newResource } from './test-utils';
 
@@ -53,12 +54,14 @@ test.describe('table refresh', () => {
           .catch(() => false);
         if (titleVisible) break;
         const retryBtn = page.getByRole('button', { name: 'Retry' });
+
         if (await retryBtn.isVisible({ timeout: 500 }).catch(() => false)) {
           await retryBtn.click();
         } else {
           break;
         }
       }
+
       await expect(editableTitle(page)).toBeVisible({ timeout: 15000 });
       // The regression is monotonic ROW GROWTH; under-render mid-mount is a
       // separate concern. Wait for the count to land at-or-below the
@@ -97,23 +100,31 @@ test.describe('table refresh', () => {
       () =>
         new Promise<string>(resolve => {
           const start = Date.now();
+
           const tick = () => {
-            const store = (window as any).store;
-            const db = store?.getClientDb?.();
+            const db = window.store.getClientDb();
+
             if (db?.isReady) {
               resolve('ready');
+
               return;
             }
+
             if (db?.initError) {
               resolve('error:' + db.initError.message);
+
               return;
             }
+
             if (Date.now() - start > 20000) {
               resolve(`timeout: db=${!!db} isReady=${db?.isReady}`);
+
               return;
             }
+
             setTimeout(tick, 200);
           };
+
           tick();
         }),
     );
@@ -147,8 +158,7 @@ test.describe('table refresh', () => {
     // 0 once the commit has been ack'd — that's the actual saved-and-
     // visible-on-reload signal we want the row count to reflect.
     await page.waitForFunction(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      () => (window as any).store?.getSyncStatus?.().pendingDirtyCount === 0,
+      () => window.store.getSyncStatus().pendingDirtyCount === 0,
       undefined,
       { timeout: 10000 },
     );
@@ -158,6 +168,7 @@ test.describe('table refresh', () => {
     console.log(`after typing: row count = ${afterTypeCount}`);
 
     const counts: number[] = [afterTypeCount];
+
     for (let i = 0; i < 8; i++) {
       await page.reload({ waitUntil: 'domcontentloaded' });
       await expect(editableTitle(page)).toBeVisible({ timeout: 15000 });
@@ -173,27 +184,26 @@ test.describe('table refresh', () => {
         () => {
           const w = window as unknown as {
             __lastTableCountSample?: { count: number; ts: number };
-            store?: {
-              getSyncStatus: () => {
-                pendingDirtyCount: number;
-                syncInProgress: boolean;
-              };
-            };
           };
           const count = document.querySelectorAll('[aria-rowindex]').length;
-          const status = w.store?.getSyncStatus?.();
-          if (!status) return false;
+          const status = window.store.getSyncStatus();
+
           // Don't trust the count while we're still pushing/pulling.
           if (status.pendingDirtyCount > 0 || status.syncInProgress) {
             w.__lastTableCountSample = undefined;
+
             return false;
           }
+
           const prev = w.__lastTableCountSample;
           const now = performance.now();
+
           if (!prev || prev.count !== count) {
             w.__lastTableCountSample = { count, ts: now };
+
             return false;
           }
+
           // Two consecutive observations of the same count, separated
           // by ≥250 ms, with no sync in flight.
           return now - prev.ts >= 250;
@@ -208,16 +218,17 @@ test.describe('table refresh', () => {
       const currentTableSubject = await page.evaluate(() => {
         const path = window.location.pathname + window.location.search;
         const m = /subject=([^&]+)/.exec(window.location.search);
+
         return m ? decodeURIComponent(m[1]) : path;
       });
       const dump = await page.evaluate(async parentSubject => {
-        const store = (window as any).store;
-        const clientDb = store?.getClientDb?.();
+        const clientDb = window.store.getClientDb();
         if (!clientDb) return { count: 0, subjects: [] };
         const r = await clientDb.query({
           property: 'https://atomicdata.dev/properties/parent',
           value: parentSubject,
         });
+
         return { count: r?.count ?? 0, subjects: r?.subjects ?? [] };
       }, currentTableSubject);
       const domRows = await page.locator('[aria-rowindex]').count();
@@ -229,12 +240,14 @@ test.describe('table refresh', () => {
       );
       counts.push(nowCount);
     }
+
     console.log('all counts across reloads:', counts);
 
     // The count may legitimately settle 1 higher than `afterTypeCount` on
     // reload #1 (the new-row placeholder may render later than our
     // measurement). But it should STABILISE — no monotonic growth.
     const firstReloadCount = counts[1];
+
     for (let i = 2; i < counts.length; i++) {
       expect(
         counts[i],
@@ -301,20 +314,25 @@ test.describe('table refresh', () => {
           .catch(() => false);
         if (titleVisible) break;
         const retryBtn = page.getByRole('button', { name: 'Retry' });
+
         if (await retryBtn.isVisible({ timeout: 500 }).catch(() => false)) {
           await retryBtn.click();
           continue;
         }
+
         const stillLoading = await page
           .getByRole('heading', { name: /Still loading/i })
           .isVisible({ timeout: 500 })
           .catch(() => false);
+
         if (stillLoading) {
           await page.reload({ waitUntil: 'domcontentloaded' });
           continue;
         }
+
         break;
       }
+
       await expect(editableTitle(page)).toBeVisible({ timeout: 25000 });
       await expect(rows).toHaveCount(initialCount, { timeout: 15000 });
 

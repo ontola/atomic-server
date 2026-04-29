@@ -25,6 +25,7 @@ export function CreateInstanceButton({ ontology }: CreateInstanceButtonProps) {
       // The card uses IntersectionObserver to defer expensive content; if it
       // never enters the viewport its title stays as a raw DID placeholder.
       let attempts = 0;
+
       const tryScroll = () => {
         const el = document.querySelector(
           `[about="${createdInstanceSubject}"]`,
@@ -42,6 +43,7 @@ export function CreateInstanceButton({ ontology }: CreateInstanceButtonProps) {
           requestAnimationFrame(tryScroll);
         }
       };
+
       requestAnimationFrame(tryScroll);
     },
   });

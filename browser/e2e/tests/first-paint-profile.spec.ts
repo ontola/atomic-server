@@ -25,6 +25,7 @@ test('first paint — phase breakdown', async ({ page }) => {
     const longTasks: any[] = [];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (globalThis as any).__longTasks = longTasks;
+
     try {
       const obs = new PerformanceObserver(list => {
         for (const e of list.getEntries()) {

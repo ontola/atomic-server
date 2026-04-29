@@ -8,7 +8,6 @@ import {
   LoroSyncPlugin,
   LoroUndoPlugin,
   LoroEphemeralCursorPlugin,
-  CursorEphemeralStore,
   redo as loroRedo,
   undo as loroUndo,
   type LoroDocType,
@@ -57,7 +56,6 @@ import FileHandler from '@tiptap/extension-file-handler';
 import { supportedImageTypes } from '@views/File/fileTypeUtils';
 import type { SuggestionItem } from './types';
 import { useNewResourceUI } from '@components/forms/NewForm/useNewResourceUI';
-import { addIf } from '@helpers/addIf';
 import toast from 'react-hot-toast';
 import { Row } from '@components/Row';
 import { Button } from '@components/Button';
@@ -80,7 +78,6 @@ const COLORS = ['#70d6ff', '#ff70a6', '#ff9770', '#ffd670', '#e9ff70'];
 export default function CollaborativeEditor({
   placeholder,
   doc,
-  property,
   id,
   resource,
   onBlur,

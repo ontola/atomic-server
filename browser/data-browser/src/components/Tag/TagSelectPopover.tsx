@@ -62,9 +62,9 @@ export const TagSelectPopover: React.FC<TagSelectPopoverProps> = ({
     .filter(tag => tag.title.includes(filterValue))
     .map(t => t.subject);
 
-  const updateSelectedTags = (tags: string[]) => {
-    selectedTagsRef.current = tags;
-    setSelectedTags(tags);
+  const updateSelectedTags = (nextTags: string[]) => {
+    selectedTagsRef.current = nextTags;
+    setSelectedTags(nextTags);
   };
 
   const modifyTags = (add: boolean, tag: string) => {
@@ -108,6 +108,7 @@ export const TagSelectPopover: React.FC<TagSelectPopoverProps> = ({
 
   const handleOpenChange = (open: boolean) => {
     setPopoverOpen(open);
+
     if (open) {
       reset();
     }

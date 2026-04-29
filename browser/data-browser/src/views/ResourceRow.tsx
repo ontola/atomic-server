@@ -1,4 +1,4 @@
-import { urls, useString, useResource, useTitle, core } from '@tomic/react';
+import { urls, useString, useResource, useTitle } from '@tomic/react';
 import { ResourceInline } from './ResourceInline/ResourceInline';
 import { ErrorLook } from '../components/ErrorLook';
 import { styled } from 'styled-components';
@@ -24,12 +24,7 @@ const RootDiv = styled.div<{ $clickable?: boolean }>`
 `;
 
 /** Renders a Resource in a single row. Each row is clickable. Used in search preview and various cards showing multiple resources. */
-function ResourceRow({
-  subject,
-  clickable,
-  className,
-  selected,
-}: Props): JSX.Element {
+function ResourceRow({ subject, clickable, className }: Props): JSX.Element {
   const resource = useResource(subject);
   const [title] = useTitle(resource);
   let [description] = useString(resource, urls.properties.description);

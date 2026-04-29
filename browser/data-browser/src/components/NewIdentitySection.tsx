@@ -124,6 +124,7 @@ export function NewIdentitySection({
 
     try {
       const agent = store.getAgent();
+
       if (!agent || agent.subject === undefined) {
         throw new Error('No agent set');
       }
@@ -482,6 +483,7 @@ function VerifyStep({
             onChange={e => {
               const val = e.target.value;
               setInput(val);
+
               if (val.trim() === secret) {
                 onVerify(val.trim());
               }

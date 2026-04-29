@@ -9,6 +9,7 @@ declare global {
 
 export function isRunningInTauri(): boolean {
   if (typeof window === 'undefined') return false;
+
   // Tauri 2 exposes __TAURI_INTERNALS__; Tauri 1 exposed __TAURI_METADATA__.
   // The tauri: protocol fallback covers cases where the global isn't set yet
   // (e.g. top-level module evaluation before the runtime injects it).
@@ -31,5 +32,6 @@ export function getLocalServerOrigin(): string {
   if (isRunningInTauri()) {
     return 'http://localhost:9883';
   }
+
   return window.location.origin;
 }

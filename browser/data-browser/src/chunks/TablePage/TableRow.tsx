@@ -3,7 +3,6 @@ import {
   useEffect,
   useEffectEvent,
   useMemo,
-  useRef,
   useState,
   type JSX,
 } from 'react';

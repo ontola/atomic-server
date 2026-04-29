@@ -172,17 +172,20 @@ test.describe('Plugins', () => {
         // well under the outer test.slow() timeout so the test doesn't
         // burn its full budget here on a hung loop.
         const deadline = Date.now() + 30000;
+
         while (Date.now() < deadline) {
           if (
             await resultLocator.isVisible({ timeout: 1500 }).catch(() => false)
           ) {
             break;
           }
+
           // Retype to retrigger the search — covers cases where the
           // SearchBox cached an earlier empty result.
           await searchInput.fill('');
           await searchInput.fill('My');
         }
+
         await expect(resultLocator).toBeVisible({ timeout: 5000 });
         await pickOption('My Problem');
         await closeWith('Confirm');

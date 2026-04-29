@@ -212,12 +212,14 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
         redirectURL,
         agentName,
       );
+
       // Point the sidebar at the new personal drive. Without this, the
       // default `drive` in AppSettings is still `baseURL` (or whatever was
       // active pre-invite) and the sidebar shows that instead.
       if (personalDrive) {
         setDrive(personalDrive);
       }
+
       goToRedirect();
     },
   });
@@ -308,6 +310,7 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
     } else {
       setIsNewAgent(false);
       setRedirectURL(destination);
+
       void (async () => {
         const personalDrive = await persistAgentAfterInvite(
           agentSubject!,

@@ -10,7 +10,6 @@ import { ContainerWide } from '../../components/Containers';
 import { Column, Row } from '../../components/Row';
 import { useDriveHistory } from '../../hooks/useDriveHistory';
 import { DrivesCard } from './DrivesCard';
-import { ServersCard } from './ServersCard';
 import { styled } from 'styled-components';
 import { useSavedDrives } from '../../hooks/useSavedDrives';
 import { constructOpenURL } from '../../helpers/navigation';
@@ -20,8 +19,6 @@ import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition
 import { createRoute } from '@tanstack/react-router';
 import { pathNames } from '../paths';
 import { appRoute } from '../RootRoutes';
-import { serverURLStorage } from '../../helpers/serverURLStorage';
-import { isURL } from '../../helpers/isURL';
 
 export const ServerSettingsRoute = createRoute({
   path: pathNames.serverSettings,
@@ -31,22 +28,13 @@ export const ServerSettingsRoute = createRoute({
 
 function SettingsServer(): JSX.Element {
   const currentDriveId = useId();
-  const currentServerId = useId();
-  const { drive, setDrive, baseURL, setServer } = useSettings();
+  const { drive, setDrive } = useSettings();
   const navigate = useNavigateWithTransition();
-
-  const isHttpDrive = isURL(drive);
 
   const [driveInput, setDriveInput] = useState<string>(drive);
   const [driveErr, setDriveErr] = useState<Error | undefined>();
 
-  const [serverInput, setServerInput] = useState<string>(baseURL);
-  const [serverErr, setServerErr] = useState<Error | undefined>();
-
   const [savedDrives] = useSavedDrives();
-  const [knownServers, setKnownServers] = useState<string[]>(
-    serverURLStorage.getKnownServers(),
-  );
 
   const [history, addDriveToHistory, removeFromHistory] =
     useDriveHistory(savedDrives);
@@ -60,21 +48,6 @@ function SettingsServer(): JSX.Element {
     } catch (e) {
       setDriveErr(e);
     }
-  }
-
-  function handleSetServer(url: string) {
-    try {
-      setServer(url);
-      setServerInput(url);
-      setKnownServers(serverURLStorage.getKnownServers());
-    } catch (e) {
-      setServerErr(e);
-    }
-  }
-
-  function handleRemoveServer(url: string) {
-    serverURLStorage.removeKnownServer(url);
-    setKnownServers(serverURLStorage.getKnownServers());
   }
 
   return (

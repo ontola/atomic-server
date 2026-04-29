@@ -1,3 +1,4 @@
+// oxlint-disable no-await-in-loop
 /**
  * Offline chatroom: messages must survive a disconnect → reconnect → reload
  * round trip with the original ordering and no duplicates.
@@ -34,11 +35,9 @@ const MESSAGES = [
 async function waitForReady(page: Page) {
   await page.waitForFunction(
     () => {
-      const s = (window as any).store;
-
       return (
-        s?.getClientDb()?.isReady === true &&
-        s?.getSyncStatus()?.serverConnected === true
+        window.store.getClientDb()?.isReady === true &&
+        window.store.getSyncStatus().serverConnected === true
       );
     },
     undefined,
@@ -47,23 +46,24 @@ async function waitForReady(page: Page) {
 }
 
 async function disconnect(page: Page) {
-  await page.evaluate(() => (window as any).store.disconnect());
+  await page.evaluate(() => window.store.disconnect());
   // syncStatus updates fire on the next event-loop tick after the WS close;
   // under suite-wide load that can run past the default 5s budget.
   await page.waitForFunction(
-    () => (window as any).store.getSyncStatus().serverConnected === false,
+    () => window.store.getSyncStatus().serverConnected === false,
     undefined,
     { timeout: 15000 },
   );
 }
 
 async function reconnectAndDrain(page: Page) {
-  await page.evaluate(() => (window as any).store.reconnect());
+  await page.evaluate(() => window.store.reconnect());
   await page.waitForFunction(
     () => {
-      const s = (window as any).store.getSyncStatus();
-
-      return s.serverConnected === true && s.pendingDirtyCount === 0;
+      return (
+        window.store.getSyncStatus().serverConnected === true &&
+        window.store.getSyncStatus().pendingDirtyCount === 0
+      );
     },
     undefined,
     { timeout: 30000 },
@@ -119,7 +119,7 @@ test.describe('offline chatroom', () => {
     // chatroom + each message before we go online. If this is 0 we're not
     // actually offline-creating anything (the test would silently pass).
     const pendingBeforeReconnect = await page.evaluate(
-      () => (window as any).store.getSyncStatus().pendingDirtyCount,
+      () => window.store.getSyncStatus().pendingDirtyCount,
     );
     expect(pendingBeforeReconnect).toBeGreaterThan(0);
 
@@ -132,7 +132,7 @@ test.describe('offline chatroom', () => {
       `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(chatSubject)}`,
     );
     await page.waitForFunction(
-      () => (window as any).store?.getSyncStatus()?.serverConnected === true,
+      () => window.store.getSyncStatus().serverConnected === true,
       undefined,
       { timeout: 15000 },
     );
