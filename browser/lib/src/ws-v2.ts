@@ -28,7 +28,12 @@ export const Tag = {
   SYNC_PUSH: 0x33,
   BLOB_REQUEST: 0x34,
   BLOB_RESPONSE: 0x35,
-  QUERY_UPDATE: 0x36,
+  /**
+   * Reserved (do not reuse). Previously `QUERY_UPDATE` — retired in
+   * `planning/drop-query-update.md`. Drive-wide membership signals now
+   * arrive as plain `UPDATE` (0x11) / `DESTROY` (0x12) frames.
+   */
+  QUERY_UPDATE_RESERVED: 0x36,
   EPHEMERAL: 0x40,
 } as const;
 
@@ -456,71 +461,6 @@ export function decodeSubject(data: Uint8Array): string {
   return decoder.decode(data);
 }
 
-export interface DecodedQueryUpdate {
-  property?: string;
-  value?: string;
-  added: string[];
-  removed: string[];
-}
-
-/**
- * Wire format (after type tag):
- *   [property_len: u16][property][value_len: u16][value]
- *   [added_count: u16] {[subject_len: u16][subject]}
- *   [removed_count: u16] {[subject_len: u16][subject]}
- */
-export function decodeQueryUpdate(
-  data: Uint8Array,
-): DecodedQueryUpdate | undefined {
-  let pos = 0;
-  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
-
-  const readStr = (): string | undefined => {
-    if (pos + 2 > data.length) return undefined;
-    const len = view.getUint16(pos, false);
-    pos += 2;
-    if (pos + len > data.length) return undefined;
-    const s = decoder.decode(data.subarray(pos, pos + len));
-    pos += len;
-
-    return s;
-  };
-
-  const property = readStr();
-  const value = readStr();
-
-  if (property === undefined || value === undefined) return undefined;
-
-  if (pos + 2 > data.length) return undefined;
-  const addedCount = view.getUint16(pos, false);
-  pos += 2;
-  const added: string[] = [];
-
-  for (let i = 0; i < addedCount; i++) {
-    const s = readStr();
-    if (s === undefined) return undefined;
-    added.push(s);
-  }
-
-  if (pos + 2 > data.length) return undefined;
-  const removedCount = view.getUint16(pos, false);
-  pos += 2;
-  const removed: string[] = [];
-
-  for (let i = 0; i < removedCount; i++) {
-    const s = readStr();
-    if (s === undefined) return undefined;
-    removed.push(s);
-  }
-
-  return {
-    property: property === '' ? undefined : property,
-    value: value === '' ? undefined : value,
-    added,
-    removed,
-  };
-}
-
 // ---- Debug logging ----
 
 const TAG_NAMES: Record<number, string> = {
@@ -538,7 +478,6 @@ const TAG_NAMES: Record<number, string> = {
   [Tag.SYNC_OK]: 'SYNC_OK',
   [Tag.SYNC_DIFF]: 'SYNC_DIFF',
   [Tag.SYNC_PUSH]: 'SYNC_PUSH',
-  [Tag.QUERY_UPDATE]: 'QUERY_UPDATE',
   [Tag.BLOB_REQUEST]: 'BLOB_REQUEST',
   [Tag.BLOB_RESPONSE]: 'BLOB_RESPONSE',
   [Tag.EPHEMERAL]: 'EPHEMERAL',

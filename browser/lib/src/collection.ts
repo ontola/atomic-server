@@ -288,7 +288,7 @@ export class Collection {
    *   - `'member-added'` — resource is new and matches the filter; we
    *     surgically append it to the last loaded page. The server already
    *     confirmed the resource exists (we got the actual resource object
-   *     here, fetched in response to a `QUERY_UPDATE` push). Trusting that
+   *     here, delivered as a drive-wide `UPDATE` push). Trusting that
    *     authority avoids the race where the server's `/query` index hasn't
    *     yet caught up with the just-applied commit — refresh would return
    *     stale state and the new row would never appear in the UI without
@@ -511,7 +511,7 @@ export class Collection {
     // and chatrooms that render children in their own UI) would fall
     // through to a server fetch that returns *every* resource with the
     // given property — wasted bandwidth and a real source of WS-storm
-    // refetches from `QUERY_UPDATE` events.
+    // refetches triggered by drive-wide UPDATE pushes.
     if (!this.params.property || !this.params.value) {
       return;
     }

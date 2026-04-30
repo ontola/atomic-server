@@ -1,10 +1,4 @@
-import {
-  core,
-  unknownSubject,
-  useResource,
-  useString,
-  useTitle,
-} from '@tomic/react';
+import { core, useResource, useString, useTitle } from '@tomic/react';
 
 import { useSettings } from '../helpers/AppSettings';
 import { useCurrentSubject } from '../helpers/useCurrentSubject';
@@ -17,12 +11,21 @@ export function MetaSetter(): JSX.Element {
   const [subject] = useCurrentSubject();
   const resource = useResource(subject);
   const [title] = useTitle(resource);
+  const [name] = useString(resource, core.properties.name);
   const [description] = useString(resource, core.properties.description);
-  const hasResource = resource.isReady() && resource.subject !== unknownSubject;
 
-  const displayTitle = hasResource && title ? title : 'Atomic Data';
+  // `resource.isReady()` is a method call on the mutable Resource proxy.
+  // React Compiler memoizes its result on the proxy's reference identity,
+  // and the proxy is reused across renders while its internal loading/error
+  // state mutates — so the cached value locks in `false` from the first
+  // render and the title stays "Atomic Data" forever. `name`, by contrast,
+  // is reactive (`useString` → `useSyncExternalStore`), so use its
+  // presence as the "have data" signal. See
+  // `memory/react-compiler-resource-proxy-pitfall.md`.
+  const hasName = name !== undefined && name !== '';
+  const displayTitle = hasName ? title : 'Atomic Data';
   const displayDescription =
-    hasResource && description
+    hasName && description
       ? description
       : 'The easiest way to create and share linked data.';
 

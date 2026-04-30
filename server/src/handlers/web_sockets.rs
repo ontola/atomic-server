@@ -241,11 +241,26 @@ impl WebSocketConnection {
                                 // server-side concept and must not cross the wire; the client
                                 // keys its resource cache on whatever subject we emit.
                                 let subject_resolved = resource.get_subject().resolve(&origin);
+                                // Include `lastCommit` so the recipient can set
+                                // `previousCommit` correctly on its next save. Without it,
+                                // a client that learned this resource purely from WS would
+                                // sign its next commit with `isGenesis: true` and the
+                                // server would reject it as duplicate creation. See
+                                // `planning/fix-canvas-genesis-save.md`.
+                                let last_commit = resource
+                                    .get(atomic_lib::urls::LAST_COMMIT)
+                                    .ok()
+                                    .map(|v| v.to_string())
+                                    .filter(|s| !s.is_empty());
+                                let mut flags = ws_v2::flags::SNAPSHOT;
+                                if last_commit.is_some() {
+                                    flags |= ws_v2::flags::HAS_COMMIT_ID;
+                                }
                                 ctx.binary(ws_v2::encode_update(
-                                    ws_v2::flags::SNAPSHOT,
+                                    flags,
                                     rid,
                                     &subject_resolved,
-                                    None,
+                                    last_commit.as_deref(),
                                     &snapshot,
                                 ));
                             }
@@ -296,20 +311,21 @@ impl WebSocketConnection {
                         subject_str,
                         self.store.get_base_domain().as_deref(),
                     );
-                    // Subscribe to drive-level query updates
+                    // Drive-wide fanout: every commit under this drive lands
+                    // on the connection as `CommitMessage` (encoded as UPDATE
+                    // or DESTROY). Replaces the old SubscribeQuery /
+                    // QUERY_UPDATE pair — see `planning/drop-query-update.md`.
                     self.commit_monitor_addr
-                        .do_send(crate::actor_messages::SubscribeQuery {
+                        .do_send(crate::actor_messages::SubscribeDrive {
                             addr: ctx.address(),
-                            query: crate::actor_messages::QuerySubscriptionJSON {
-                                property: None,
-                                value: None,
-                                sort_by: None,
-                                drive: Some(subject_str.to_string()),
-                            },
+                            drive: subject_str.to_string(),
                             agent: self.agent.to_string(),
                             source_id: self.connection_id.clone(),
                         });
-                    // Also subscribe to resource-level commits on the drive itself
+                    // Also subscribe to commits targeting the drive resource
+                    // itself (renames, ACL edits) so we receive those even
+                    // when the drive subject is a DID that wouldn't
+                    // prefix-match the commit subject above.
                     self.commit_monitor_addr
                         .do_send(crate::actor_messages::Subscribe {
                             addr: ctx.address(),
@@ -396,6 +412,11 @@ impl WebSocketConnection {
                 self.loro_sync_broadcaster_addr.do_send(update);
             }
         } else if let Some(json) = text.strip_prefix("SUBSCRIBE_QUERY ") {
+            // Filter subscription: `{property,value,drive[,sort_by]}`.
+            // Membership changes for this filter arrive as plain
+            // `UPDATE` / `DESTROY` frames via `MembershipNotification`
+            // — see `Handler<MembershipNotification>` below and
+            // `planning/drop-query-update.md`.
             if let Ok(query) =
                 serde_json::from_str::<crate::actor_messages::QuerySubscriptionJSON>(json)
             {
@@ -526,20 +547,51 @@ impl Handler<crate::actor_messages::LoroEphemeralUpdate> for WebSocketConnection
     }
 }
 
-impl Handler<crate::actor_messages::QueryUpdate> for WebSocketConnection {
+impl Handler<crate::actor_messages::MembershipNotification> for WebSocketConnection {
     type Result = ();
 
+    /// A subject entered or left one of this connection's filter
+    /// subscriptions. Encode as `UPDATE` (for `added`, using the
+    /// pre-fetched snapshot + commit_id — saves the client an extra
+    /// round-trip GET) or `DESTROY` (for removed). This is the same
+    /// wire shape as drive-wide / per-resource events; only the
+    /// trigger differs (membership change vs. direct commit).
     fn handle(
         &mut self,
-        msg: crate::actor_messages::QueryUpdate,
+        msg: crate::actor_messages::MembershipNotification,
         ctx: &mut ws::WebsocketContext<Self>,
     ) {
-        ctx.binary(ws_v2::encode_query_update(
-            msg.property.as_deref(),
-            msg.value.as_deref(),
-            &msg.added,
-            &msg.removed,
-        ));
+        let origin = self
+            .store
+            .get_base_domain()
+            .unwrap_or_else(|| "http://localhost".to_string());
+        let subject_resolved = atomic_lib::Subject::from_raw(
+            &msg.subject,
+            self.store.get_base_domain().as_deref(),
+        )
+        .resolve(&origin);
+
+        if msg.added {
+            let Some(snapshot) = msg.loro_snapshot.filter(|b| !b.is_empty()) else {
+                // Pre-fetch missed (resource gone, permission lost
+                // between listener queue and dispatch, etc.). Skip
+                // the emission — the client can still GET on demand.
+                return;
+            };
+            let mut flags = ws_v2::flags::SNAPSHOT | ws_v2::flags::PUSH;
+            if msg.commit_id.is_some() {
+                flags |= ws_v2::flags::HAS_COMMIT_ID;
+            }
+            ctx.binary(ws_v2::encode_update(
+                flags,
+                0,
+                &subject_resolved,
+                msg.commit_id.as_deref(),
+                &snapshot,
+            ));
+        } else {
+            ctx.binary(ws_v2::encode_destroy(0, &subject_resolved));
+        }
     }
 }
 

@@ -47,7 +47,7 @@ A connection is established over a WebSocket (typically to a responder's `/ws` e
 | `0x33` | `SYNC_PUSH`     | either      | `[drive_len: u16] [drive] [flags: u8] [count: u16] entries...` (chunked; bit 0 = LAST)                                              |
 | `0x34` | `BLOB_REQUEST`  | either      | `[blake3_hash: 32 bytes]`                                                                                                           |
 | `0x35` | `BLOB_RESPONSE` | either      | `[blake3_hash: 32 bytes] [bytes...]`                                                                                                |
-| `0x36` | `QUERY_UPDATE`  | Resp → Init | `[property_len: u16] [property] [value_len: u16] [value] [added_count: u16] entries... [removed_count: u16] entries...`             |
+| `0x36` | *reserved*      | —           | Previously `QUERY_UPDATE`. Retired in `planning/drop-query-update.md`; the `SUBSCRIBE_QUERY` text-frame registrar is still supported, but membership changes are now delivered as plain `UPDATE` (0x11) / `DESTROY` (0x12) frames. |
 | `0x37` | `HELLO`         | either      | `[name_len: u16] [name_utf8]` — peer-stream only (Iroh / QUIC). Browser WS connections do not use this frame.                        |
 | `0x40` | `EPHEMERAL`     | either      | (Protocol-specific transient data)                                                                                                  |
 
@@ -127,37 +127,49 @@ today (JSON-AD `did:ad:commit:<sig>`). On failure, the responder emits
 `ERROR (0x03)` with the matching `request_id`.
 
 Each WebSocket connection has a per-process identifier. The responder tags the
-emitted database events with that id and skips broadcasting follow-up `UPDATE`,
-`DESTROY`, or `QUERY_UPDATE` frames back to the connection that originated the
-commit — the client never sees its own change return as a subscription push.
-Other subscribers, including additional tabs/devices owned by the same agent,
-do receive the update on their own connections.
+emitted database events with that id and skips broadcasting follow-up `UPDATE`
+or `DESTROY` frames back to the connection that originated the commit — the
+client never sees its own change return as a subscription push. Other
+subscribers, including additional tabs/devices owned by the same agent, do
+receive the update on their own connections.
 
 HTTP `POST /commit` continues to work and remains the fallback path; HTTP
 commits have no connection id and are broadcast to every matching subscriber.
 
 ## Subscriptions
 
-Two subscription shapes exist, sharing the same notification path on the server:
+The server offers three subscription shapes, all delivered through the
+same response channel (`UPDATE (0x11)` / `DESTROY (0x12)`):
 
-- **Drive-wide** — `SUB (0x20)` with a drive subject. Every change in that drive produces a `QUERY_UPDATE (0x36)` (and, for resource-level subscribers, an `UPDATE (0x11)` for the changed resource itself).
-- **Filter** — registered via the text frame `SUBSCRIBE_QUERY <json>` carrying `{ property, value, drive }`. The server registers the filter in `Tree::WatchedQueries`; whenever a resource enters or leaves the result set, the server emits `QUERY_UPDATE (0x36)` carrying the property/value the client subscribed with so it can dispatch.
+- **`SUB (0x20)` on a drive subject.** Every commit on a resource that
+  lives under that drive is delivered to the subscriber as `UPDATE`
+  (with full snapshot + commit id) or `DESTROY`. Carries creates, edits,
+  and destroys. Drive subscribers are a strict superset of resource
+  subscribers (which still exist for finer-grained subscriptions on
+  individual subjects).
+- **`SUBSCRIBE <subject>` (text frame).** Per-resource subscription —
+  receive `UPDATE` / `DESTROY` only for commits targeting that exact
+  subject.
+- **`SUBSCRIBE_QUERY <json>` (text frame).** Filter subscription —
+  receive `UPDATE` / `DESTROY` whenever a resource enters or leaves the
+  result set of a watched filter. JSON shape:
+  `{ property, value, drive, sort_by? }`; the property+value pair and
+  the drive scope are required. When a resource joins the filter the
+  subscriber gets an `UPDATE` carrying the full snapshot; when it leaves
+  (or is destroyed) the subscriber gets a `DESTROY`. Useful for table /
+  collection views that watch "all resources where `parent` = X" or
+  similar without binding to a whole drive.
 
-Both subscription kinds require an authorized drive — the server runs `check_read` on the drive at registration time and rejects subscriptions whose filter doesn't name a drive the agent can read.
+All three require authorization at registration time — `check_read` on
+the drive (for `SUB` and `SUBSCRIBE_QUERY`) or on the resource (for
+`SUBSCRIBE`).
 
-## Query Update Notifications
-
-`QUERY_UPDATE (0x36)` carries a list of subjects added to or removed from a watched query's result set:
-
-```
-[0x36]
-[property_len: u16] [property]    ← may be empty (drive-wide subscription)
-[value_len: u16] [value]          ← may be empty (drive-wide subscription)
-[added_count: u16] {[subject_len: u16] [subject]}*
-[removed_count: u16] {[subject_len: u16] [subject]}*
-```
-
-Empty `property` and `value` signal a drive-wide notification. The client follows up with `GET (0x10)` (or relies on a parallel `SUB`-driven `UPDATE` push) to fetch the bytes for newly-added subjects.
+> Historical: an earlier protocol revision included a dedicated
+> `QUERY_UPDATE (0x36)` membership-notification frame carrying just the
+> subject string, requiring the client to follow up with a `GET`. Retired
+> in `planning/drop-query-update.md` because the same information arrives
+> with one fewer round-trip as a regular `UPDATE` carrying the snapshot.
+> Tag `0x36` is reserved.
 
 ## Drive Synchronization
 
@@ -179,9 +191,9 @@ After the drive subject, the payload is UTF-8 JSON:
 - **`push`**: Subjects the *responder* will send via `SYNC_PUSH` (initiator is behind or missing data).
 - **`remove`**: Subjects the *initiator* should delete locally. The responder destroyed these (or has tombstoned them) and they are absent from its version vectors; without `remove`, bulk sync could resurrect deleted resources.
 
-`remove` is optional for backward compatibility (`[]` if omitted). Receivers apply removals the same way as `DESTROY (0x12)` or `QUERY_UPDATE` `removed` entries.
+`remove` is optional for backward compatibility (`[]` if omitted). Receivers apply removals the same way as `DESTROY (0x12)` frames.
 
-**Live deletes** still use `COMMIT` (destroy) → `DESTROY` / `QUERY_UPDATE` subscriptions; `remove` is for **bulk reconcile** after offline or Iroh pairing.
+**Live deletes** use `COMMIT` (destroy) → `DESTROY` to each subscriber of the destroyed subject and to each drive-wide subscriber of the drive it lived under; `remove` is for **bulk reconcile** after offline or Iroh pairing.
 
 ## Content-Addressed Blob Syncing
 
@@ -198,12 +210,11 @@ This allows binary files to sync across the mesh network independently of the Lo
 
 A few low-volume or registration-side messages still use text frames (prefixed by keyword) during the transition to v2:
 
-- `SUBSCRIBE_QUERY <json>` (Init → Resp): register a filter subscription. JSON shape: `{ property, value, drive, sort_by? }`. Drive is required.
+- `SUBSCRIBE <subject>`: per-resource subscription (resource subs are surfaced as `UPDATE` / `DESTROY` on the binary path).
+- `SUBSCRIBE_QUERY <json>`: filter subscription — `{ property, value, drive, sort_by? }`. Property + value + drive are required. Membership changes arrive as `UPDATE` / `DESTROY` (no dedicated response frame); see Subscriptions above.
 - `LORO_SYNC_SUBSCRIBE <json>` / `LORO_SYNC_UNSUBSCRIBE <json>`: register/unregister live collaborative-editing fanout for a Loro subject.
 - `LORO_SYNC_UPDATE <json>`: Collaborative editing deltas.
 - `LORO_EPHEMERAL_UPDATE <json>`: Cursors and presence.
-
-`QUERY_UPDATE` was a text frame in earlier drafts; it now ships as binary tag `0x36` (see above).
 
 ## Typical Session Flow
 

@@ -33,9 +33,11 @@ pub mod tag {
     pub const SYNC_PUSH: u8 = 0x33;
     pub const BLOB_REQUEST: u8 = 0x34;
     pub const BLOB_RESPONSE: u8 = 0x35;
-    /// Server → client: a watched query's result set changed. Replaces the
-    /// legacy text `QUERY_UPDATE <json>` frame.
-    pub const QUERY_UPDATE: u8 = 0x36;
+    /// Reserved (do not reuse). Previously `QUERY_UPDATE` — retired in
+    /// `planning/drop-query-update.md`. Drive-wide and resource-level
+    /// commits now travel exclusively as `UPDATE` (0x11) and `DESTROY`
+    /// (0x12) frames carrying the full snapshot + commit_id.
+    pub const QUERY_UPDATE_RESERVED: u8 = 0x36;
     /// Self-reported display name swap on peer-sync streams. Sent by both
     /// sides after `AUTH_OK`, before `SYNC_VV`. Display only; never used for
     /// authorization (the authenticated agent + Iroh NodeId are).
@@ -365,112 +367,6 @@ pub fn encode_blob_response(hash: &[u8; 32], bytes: &[u8]) -> Vec<u8> {
     buf.extend_from_slice(hash);
     buf.extend_from_slice(bytes);
     buf
-}
-
-/// Encode a QUERY_UPDATE message:
-/// `[0x36] [property_len: u16] [property] [value_len: u16] [value]
-///  [added_count: u16] {[subject_len: u16] [subject]}
-///  [removed_count: u16] {[subject_len: u16] [subject]}`
-///
-/// `property` and `value` may be empty (`len = 0`); they identify *which*
-/// query subscription this update is for, mirroring the legacy text-format
-/// payload so clients can dispatch by the same key they subscribed with.
-pub fn encode_query_update(
-    property: Option<&str>,
-    value: Option<&str>,
-    added: &[String],
-    removed: &[String],
-) -> Vec<u8> {
-    let property_bytes = property.unwrap_or("").as_bytes();
-    let value_bytes = value.unwrap_or("").as_bytes();
-
-    let added_total: usize = added.iter().map(|s| 2 + s.len()).sum();
-    let removed_total: usize = removed.iter().map(|s| 2 + s.len()).sum();
-    let mut buf = Vec::with_capacity(
-        1 + 2 + property_bytes.len() + 2 + value_bytes.len() + 2 + added_total + 2 + removed_total,
-    );
-
-    buf.push(tag::QUERY_UPDATE);
-    buf.extend_from_slice(&(property_bytes.len() as u16).to_be_bytes());
-    buf.extend_from_slice(property_bytes);
-    buf.extend_from_slice(&(value_bytes.len() as u16).to_be_bytes());
-    buf.extend_from_slice(value_bytes);
-
-    buf.extend_from_slice(&(added.len() as u16).to_be_bytes());
-    for s in added {
-        let b = s.as_bytes();
-        buf.extend_from_slice(&(b.len() as u16).to_be_bytes());
-        buf.extend_from_slice(b);
-    }
-    buf.extend_from_slice(&(removed.len() as u16).to_be_bytes());
-    for s in removed {
-        let b = s.as_bytes();
-        buf.extend_from_slice(&(b.len() as u16).to_be_bytes());
-        buf.extend_from_slice(b);
-    }
-    buf
-}
-
-/// Decoded QUERY_UPDATE message.
-pub struct DecodedQueryUpdate {
-    pub property: Option<String>,
-    pub value: Option<String>,
-    pub added: Vec<String>,
-    pub removed: Vec<String>,
-}
-
-/// Decode a QUERY_UPDATE payload (after the type tag).
-pub fn decode_query_update(data: &[u8]) -> Option<DecodedQueryUpdate> {
-    fn read_str(buf: &[u8], pos: &mut usize) -> Option<String> {
-        if buf.len() < *pos + 2 {
-            return None;
-        }
-        let len = u16::from_be_bytes([buf[*pos], buf[*pos + 1]]) as usize;
-        *pos += 2;
-        if buf.len() < *pos + len {
-            return None;
-        }
-        let s = std::str::from_utf8(&buf[*pos..*pos + len])
-            .ok()?
-            .to_string();
-        *pos += len;
-        Some(s)
-    }
-
-    let mut pos = 0;
-    let property = read_str(data, &mut pos)?;
-    let value = read_str(data, &mut pos)?;
-
-    if data.len() < pos + 2 {
-        return None;
-    }
-    let added_count = u16::from_be_bytes([data[pos], data[pos + 1]]) as usize;
-    pos += 2;
-    let mut added = Vec::with_capacity(added_count);
-    for _ in 0..added_count {
-        added.push(read_str(data, &mut pos)?);
-    }
-
-    if data.len() < pos + 2 {
-        return None;
-    }
-    let removed_count = u16::from_be_bytes([data[pos], data[pos + 1]]) as usize;
-    pos += 2;
-    let mut removed = Vec::with_capacity(removed_count);
-    for _ in 0..removed_count {
-        removed.push(read_str(data, &mut pos)?);
-    }
-
-    Some(DecodedQueryUpdate {
-        property: if property.is_empty() {
-            None
-        } else {
-            Some(property)
-        },
-        value: if value.is_empty() { None } else { Some(value) },
-        added,
-        removed,
-    })
 }
 
 /// Decoded UPDATE message.

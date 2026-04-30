@@ -61,6 +61,7 @@ export type { ClientDbQueryOpts, ClientDbQueryResult } from './client-db.js';
 export { LocalSearch } from './local-search.js';
 export {
   LocalOutbox,
+  isTerminalCommitErrorMessage,
   type OutboxEntry,
   type OutboxDrainContext,
 } from './local-outbox.js';
