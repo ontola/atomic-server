@@ -3079,9 +3079,8 @@ msgstr "Long"
 msgid "Relative"
 msgstr "Relative"
 
-#: src/chunks/AI/AgentConfig.tsx
-msgid "<0/> Provide relevant context from your knowledge base to the Agent."
-msgstr "<0/> Provide relevant context from your knowledge base to the Agent."
+#~ msgid "<0/> Provide relevant context from your knowledge base to the Agent."
+#~ msgstr "<0/> Provide relevant context from your knowledge base to the Agent."
 
 #: src/chunks/AI/RealAIChat.tsx
 msgid "Gathering context"
@@ -3456,3 +3455,22 @@ msgstr "Give the agent access to skills that provide domain-specific knowledge a
 #: src/routes/PruneTestsRoute.tsx
 msgid "Pruning test data will delete all drives on the server that have ’testdrive’ in their name."
 msgstr "Pruning test data will delete all drives on the server that have ’testdrive’ in their name."
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "<0/> RAG, Automatically provide context from your knowledge base based on your prompt."
+msgstr "<0/> RAG, Automatically provide context from your knowledge base based on your prompt."
+
+#: src/chunks/AI/AgentConfigItem.tsx
+msgid "Duplicate"
+msgstr "Duplicate"
+
+#: src/chunks/AI/ClientOnlyTransport.ts
+msgid "No custom classes found on the current drive."
+msgstr "No custom classes found on the current drive."
+
+#~ msgid "The system prompt that defines how the agent behaves. You can use the following placeholders: {{timestamp}} - The current date and time, {{drive}} - Subject of the current drive, {{drive-structure}} - A tree of resources on the drive, {{custom-classes}} - A list of classes defined on the current drive."
+#~ msgstr "The system prompt that defines how the agent behaves. You can use the following placeholders: {{timestamp}} - The current date and time, {{drive}} - Subject of the current drive, {{drive-structure}} - A tree of resources on the drive, {{custom-classes}} - A list of classes defined on the current drive."
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "The system prompt that defines how the agent behaves. You can use the following placeholders: {{timestamp}} - the current date and time, {{drive}} - subject of the current drive, {{drive-structure}} - a tree of resources on the drive, {{custom-classes}} - a list of classes defined on the current drive."
+msgstr "The system prompt that defines how the agent behaves. You can use the following placeholders: {{timestamp}} - the current date and time, {{drive}} - subject of the current drive, {{drive-structure}} - a tree of resources on the drive, {{custom-classes}} - a list of classes defined on the current drive."

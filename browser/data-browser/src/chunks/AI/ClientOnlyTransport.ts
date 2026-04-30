@@ -15,6 +15,7 @@ import { createOllama } from 'ollama-ai-provider-v2';
 import { addFieldsIf } from '@helpers/addIf';
 import { stringifyTree, useGetDriveStructure } from './useGetDriveStructure';
 import { useSettings } from '@helpers/AppSettings';
+import { getClassesOnDrive } from './atomicSchemaHelpers';
 
 export type Modalities = 'text' | 'image';
 
@@ -173,6 +174,10 @@ export const useClientOnlyTransport = (options: ClientOnlyTransportOptions) => {
   const { drive } = useSettings();
   const getDriveTree = useGetDriveStructure();
 
+  /**
+   * Prepares the system prompt by replacing the placeholders with the actual values.
+   * If you add any new placeholder, be sure to update the helper text in the {@link AgentConfig} component.
+   */
   const prepareSystemPrompt = async (systemPrompt: string) => {
     let modifiedSystemPrompt = systemPrompt;
 
@@ -188,6 +193,24 @@ export const useClientOnlyTransport = (options: ClientOnlyTransportOptions) => {
       modifiedSystemPrompt = modifiedSystemPrompt.replaceAll(
         '{{drive-structure}}',
         stringifyTree(driveTree),
+      );
+    }
+
+    if (systemPrompt.includes('{{custom-classes}}')) {
+      const classSubjects = await getClassesOnDrive(drive, store);
+      const customClasses = await Promise.all(
+        classSubjects.map(async cls => {
+          const resource = await store.getResource(cls);
+
+          return `${resource.title}: ${cls}`;
+        }),
+      );
+
+      modifiedSystemPrompt = modifiedSystemPrompt.replaceAll(
+        '{{custom-classes}}',
+        customClasses.length === 0
+          ? 'No custom classes found on the current drive.'
+          : customClasses.join('\n'),
       );
     }
 

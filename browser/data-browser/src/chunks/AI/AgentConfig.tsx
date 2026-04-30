@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { styled } from 'styled-components';
 import { Row, Column } from '@components/Row';
 import { FaPlus } from 'react-icons/fa6';
@@ -19,6 +20,7 @@ import { useAISettings } from '@components/AI/AISettingsContext';
 import { AgentConfigItem } from './AgentConfigItem';
 import atomicAgentPrompt from './system-prompts/atomic-agent.md?raw';
 import Field from '@components/forms/Field';
+import Markdown from '@components/datatypes/Markdown';
 
 // Add this formatter at the top of the file, after imports
 const temperatureFormatter = new Intl.NumberFormat(undefined, {
@@ -34,6 +36,8 @@ const generateId = () => {
 interface AgentConfigTabProps {
   selectedAgent: AIAgent;
   onSelectAgent: (agent: AIAgent) => void;
+  actionPortalElement: HTMLElement | null;
+  onActionsVisibleChange: (visible: boolean) => void;
 }
 
 const defaultNewAgent: Omit<AIAgent, 'id'> = {
@@ -42,7 +46,7 @@ const defaultNewAgent: Omit<AIAgent, 'id'> = {
   systemPrompt: '',
   availableTools: [],
   model: {
-    id: 'google/gemini-3-flash-preview',
+    id: '~google/gemini-flash-latest',
     provider: AIProvider.OpenRouter,
   },
   canReadAtomicData: false,
@@ -61,7 +65,7 @@ const defaultAgents: AIAgent[] = [
     systemPrompt: atomicAgentPrompt,
     availableTools: [],
     model: {
-      id: 'google/gemini-3-flash-preview',
+      id: '~google/gemini-flash-latest',
       provider: AIProvider.OpenRouter,
     },
     canReadAtomicData: true,
@@ -77,7 +81,7 @@ const defaultAgents: AIAgent[] = [
     systemPrompt: `The current date is {{timestamp}}`,
     availableTools: [],
     model: {
-      id: 'google/gemini-3-flash-preview',
+      id: '~google/gemini-flash-latest',
       provider: AIProvider.OpenRouter,
     },
     canReadAtomicData: false,
@@ -88,11 +92,30 @@ const defaultAgents: AIAgent[] = [
   },
 ];
 
+const getDefaultAgent = (agentId: string) =>
+  defaultAgents.find(agent => agent.id === agentId);
+
+const mergeDefaultAgentFields = (agent: AIAgent): AIAgent => {
+  const defaultAgent = getDefaultAgent(agent.id);
+
+  if (!defaultAgent) {
+    return agent;
+  }
+
+  return {
+    ...agent,
+    name: defaultAgent.name,
+    description: defaultAgent.description,
+    systemPrompt: defaultAgent.systemPrompt,
+  };
+};
+
 export const useAIAgentConfig = () => {
-  const [agents, setAgents] = useLocalStorage<AIAgent[]>(
+  const [storedAgents, setAgents] = useLocalStorage<AIAgent[]>(
     'atomic.ai.agents',
     defaultAgents,
   );
+  const agents = storedAgents.map(mergeDefaultAgentFields);
   const [defaultAgentId, setDefaultAgentId] = useLocalStorage<string>(
     'atomic.ai.defaultAgentId',
     agents[0]?.id || '',
@@ -112,7 +135,7 @@ export const useAIAgentConfig = () => {
 
   // Save agents to settings
   const saveAgents = (newAgents: AIAgent[]) => {
-    setAgents(newAgents);
+    setAgents(newAgents.map(mergeDefaultAgentFields));
   };
 
   const getInitialAgent = (sideBar: boolean, chatSubject?: string) => {
@@ -145,35 +168,43 @@ export const useAIAgentConfig = () => {
 export const AgentConfigTab = ({
   selectedAgent,
   onSelectAgent,
+  actionPortalElement,
+  onActionsVisibleChange,
 }: AgentConfigTabProps) => {
   const { agents, saveAgents } = useAIAgentConfig();
   const [editingAgent, setEditingAgent] = useState<AIAgent | null>(null);
   const [isCreating, setIsCreating] = useState(false);
 
+  useEffect(() => {
+    return () => onActionsVisibleChange(false);
+  }, [onActionsVisibleChange]);
+
   const handleSaveAgent = () => {
     if (!editingAgent) return;
 
+    const savedAgent = mergeDefaultAgentFields(editingAgent);
     const newAgents = isCreating
-      ? [...agents, editingAgent]
+      ? [...agents, savedAgent]
       : agents.map((agent: AIAgent) =>
           // Use ID to identify which agent we're editing
-          agent.id === editingAgent.id ? editingAgent : agent,
+          agent.id === savedAgent.id ? savedAgent : agent,
         );
 
     saveAgents(newAgents);
 
     // If we're editing the currently selected agent or creating a new one, update selection
-    if (selectedAgent.id === editingAgent.id || isCreating) {
-      onSelectAgent(editingAgent);
+    if (selectedAgent.id === savedAgent.id || isCreating) {
+      onSelectAgent(savedAgent);
     }
 
     setEditingAgent(null);
     setIsCreating(false);
+    onActionsVisibleChange(false);
   };
 
   const handleDeleteAgent = (agentToDelete: AIAgent) => {
-    if (agents.length <= 1) {
-      // Prevent deleting the last agent
+    if (agents.length <= 1 || getDefaultAgent(agentToDelete.id)) {
+      // Prevent deleting the last agent or built-in defaults.
       return;
     }
 
@@ -188,37 +219,49 @@ export const AgentConfigTab = ({
     }
   };
 
+  const handleDuplicateAgent = (agentToDuplicate: AIAgent) => {
+    const duplicatedAgent: AIAgent = {
+      ...agentToDuplicate,
+      id: generateId(),
+      name: `${agentToDuplicate.name} - Copy`,
+      availableTools: [...agentToDuplicate.availableTools],
+      model: { ...agentToDuplicate.model },
+    };
+
+    saveAgents([...agents, duplicatedAgent]);
+    onSelectAgent(duplicatedAgent);
+  };
+
   const handleCreateNewAgent = () => {
     setEditingAgent({
       ...defaultNewAgent,
       id: generateId(),
     });
     setIsCreating(true);
+    onActionsVisibleChange(true);
   };
 
   const handleEditAgent = (agent: AIAgent) => {
     setEditingAgent({ ...agent });
     setIsCreating(false);
+    onActionsVisibleChange(true);
   };
 
   const handleCancel = () => {
     setEditingAgent(null);
     setIsCreating(false);
+    onActionsVisibleChange(false);
   };
 
   return (
     <>
       {editingAgent ? (
         <Column>
-          <AgentForm agent={editingAgent} onChange={setEditingAgent} />
-          <Row justify='flex-end' style={{ marginTop: '1rem' }}>
-            <Button subtle onClick={handleCancel}>
-              Cancel
-            </Button>
-            <Button onClick={handleSaveAgent}>
-              {isCreating ? 'Create Agent' : 'Save Changes'}
-            </Button>
-          </Row>
+          <AgentForm
+            agent={editingAgent}
+            isDefaultAgent={!!getDefaultAgent(editingAgent.id)}
+            onChange={setEditingAgent}
+          />
         </Column>
       ) : (
         <Column>
@@ -231,6 +274,8 @@ export const AgentConfigTab = ({
                 onSelect={onSelectAgent}
                 onEdit={handleEditAgent}
                 onDelete={handleDeleteAgent}
+                onDuplicate={handleDuplicateAgent}
+                canDelete={!getDefaultAgent(agent.id)}
               />
             ))}
           </AgentsList>
@@ -240,16 +285,30 @@ export const AgentConfigTab = ({
           </CreateButton>
         </Column>
       )}
+      {editingAgent &&
+        actionPortalElement &&
+        createPortal(
+          <>
+            <Button subtle onClick={handleCancel}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveAgent}>
+              {isCreating ? 'Create Agent' : 'Save Changes'}
+            </Button>
+          </>,
+          actionPortalElement,
+        )}
     </>
   );
 };
 
 interface AgentFormProps {
   agent: AIAgent;
+  isDefaultAgent: boolean;
   onChange: (agent: AIAgent) => void;
 }
 
-const AgentForm = ({ agent, onChange }: AgentFormProps) => {
+const AgentForm = ({ agent, isDefaultAgent, onChange }: AgentFormProps) => {
   const { mcpServers } = useAISettings();
 
   const handleChange = (
@@ -284,7 +343,7 @@ const AgentForm = ({ agent, onChange }: AgentFormProps) => {
         availableTools: tools,
       });
     }
-  }, [mcpServers]);
+  }, [agent, mcpServers, onChange]);
 
   const enforceToolSupport =
     agent.availableTools.length > 0 ||
@@ -298,6 +357,7 @@ const AgentForm = ({ agent, onChange }: AgentFormProps) => {
           id='agent-name'
           required
           max={50}
+          readOnly={isDefaultAgent}
           value={agent.name}
           onChange={e => handleChange('name', e.target.value)}
           placeholder='Agent name'
@@ -307,20 +367,31 @@ const AgentForm = ({ agent, onChange }: AgentFormProps) => {
       <StyledField label='Description' fieldId='agent-description'>
         <Input
           id='agent-description'
+          readOnly={isDefaultAgent}
           value={agent.description}
           onChange={e => handleChange('description', e.target.value)}
           placeholder='Agent description'
         />
       </StyledField>
 
-      <StyledField label='System Prompt' fieldId='agent-system-prompt'>
-        <MarkdownInput
-          key={agent.id}
-          id='agent-system-prompt'
-          initialContent={agent.systemPrompt}
-          onChange={content => handleChange('systemPrompt', content)}
-          placeholder='System prompt that defines how the agent behaves'
-        />
+      <StyledField
+        label='System Prompt'
+        fieldId='agent-system-prompt'
+        helper='The system prompt that defines how the agent behaves. You can use the following placeholders: {{timestamp}} - the current date and time, {{drive}} - subject of the current drive, {{drive-structure}} - a tree of resources on the drive, {{custom-classes}} - a list of classes defined on the current drive.'
+      >
+        {isDefaultAgent ? (
+          <SystemPromptPreview id='agent-system-prompt'>
+            <Markdown text={agent.systemPrompt} maxLength={Infinity} />
+          </SystemPromptPreview>
+        ) : (
+          <MarkdownInput
+            key={agent.id}
+            id='agent-system-prompt'
+            initialContent={agent.systemPrompt}
+            onChange={content => handleChange('systemPrompt', content)}
+            placeholder='System prompt that defines how the agent behaves'
+          />
+        )}
       </StyledField>
 
       <StyledField label='Atomic Data Access' multiInput>
@@ -343,7 +414,8 @@ const AgentForm = ({ agent, onChange }: AgentFormProps) => {
             checked={agent.ragEnabled}
             onChange={checked => handleChange('ragEnabled', checked)}
           />
-          Provide relevant context from your knowledge base to the Agent.
+          RAG, Automatically provide context from your knowledge base based on
+          your prompt.
         </CheckboxLabel>
       </StyledField>
       <StyledField label='Tools' multiInput>
@@ -452,6 +524,17 @@ const StyledField = styled(Field)`
     font-size: 0.875rem;
   }
 `;
+
+const SystemPromptPreview = styled.div`
+  background-color: ${p => p.theme.colors.bg};
+  border-radius: ${p => p.theme.radius};
+  box-shadow: 0 0 0 1px ${p => p.theme.colors.bg2};
+  max-height: 30rem;
+  overflow: auto;
+  padding: ${p => p.theme.margin}rem;
+  width: min(100%, 75ch);
+`;
+
 const ToolList = styled.ul`
   list-style: none;
   padding: 0;

@@ -3079,9 +3079,8 @@ msgstr "Largo"
 msgid "Relative"
 msgstr "Relativo"
 
-#: src/chunks/AI/AgentConfig.tsx
-msgid "<0/> Provide relevant context from your knowledge base to the Agent."
-msgstr "<0/> Proporcione contexto relevante de su base de conocimientos al Agente."
+#~ msgid "<0/> Provide relevant context from your knowledge base to the Agent."
+#~ msgstr "<0/> Proporcione contexto relevante de su base de conocimientos al Agente."
 
 #: src/chunks/AI/RealAIChat.tsx
 msgid "Gathering context"
@@ -3453,3 +3452,22 @@ msgstr "Dé al agente acceso a habilidades que proporcionan conocimiento y orien
 #: src/routes/PruneTestsRoute.tsx
 msgid "Pruning test data will delete all drives on the server that have ’testdrive’ in their name."
 msgstr "La depuración de datos de prueba eliminará todas las unidades del servidor que tengan 'testdrive' en su nombre."
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "<0/> RAG, Automatically provide context from your knowledge base based on your prompt."
+msgstr "<0/> RAG, proporciona contexto automáticamente desde tu base de conocimientos según tu prompt."
+
+#: src/chunks/AI/AgentConfigItem.tsx
+msgid "Duplicate"
+msgstr "Duplicar"
+
+#: src/chunks/AI/ClientOnlyTransport.ts
+msgid "No custom classes found on the current drive."
+msgstr "No se encontraron clases personalizadas en la unidad actual."
+
+#~ msgid "The system prompt that defines how the agent behaves. You can use the following placeholders: {{timestamp}} - The current date and time, {{drive}} - Subject of the current drive, {{drive-structure}} - A tree of resources on the drive, {{custom-classes}} - A list of classes defined on the current drive."
+#~ msgstr "La instrucción del sistema que define cómo se comporta el agente. Puede utilizar los siguientes marcadores de posición: {{timestamp}} - La fecha y hora actuales, {{drive}} - El tema de la unidad actual, {{drive-structure}} - Un árbol de recursos en la unidad, {{custom-classes}} - Una lista de clases definidas en la unidad actual."
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "The system prompt that defines how the agent behaves. You can use the following placeholders: {{timestamp}} - the current date and time, {{drive}} - subject of the current drive, {{drive-structure}} - a tree of resources on the drive, {{custom-classes}} - a list of classes defined on the current drive."
+msgstr "La instrucción del sistema que define cómo se comporta el agente. Puedes usar los siguientes marcadores de posición: {{timestamp}} - la fecha y hora actuales, {{drive}} - el tema de la unidad actual, {{drive-structure}} - un árbol de recursos en la unidad, {{custom-classes}} - una lista de clases definidas en la unidad actual."

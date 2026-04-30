@@ -3079,9 +3079,8 @@ msgstr "Long"
 msgid "Relative"
 msgstr "Relatif"
 
-#: src/chunks/AI/AgentConfig.tsx
-msgid "<0/> Provide relevant context from your knowledge base to the Agent."
-msgstr "<0/> Fournissez un contexte pertinent de votre base de connaissances à l'Agent."
+#~ msgid "<0/> Provide relevant context from your knowledge base to the Agent."
+#~ msgstr "<0/> Fournissez un contexte pertinent de votre base de connaissances à l'Agent."
 
 #: src/chunks/AI/RealAIChat.tsx
 msgid "Gathering context"
@@ -3453,3 +3452,22 @@ msgstr "Donnez à l'agent l'accès à des compétences qui fournissent des conna
 #: src/routes/PruneTestsRoute.tsx
 msgid "Pruning test data will delete all drives on the server that have ’testdrive’ in their name."
 msgstr "La suppression des données de test supprimera tous les lecteurs du serveur dont le nom contient « testdrive »."
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "<0/> RAG, Automatically provide context from your knowledge base based on your prompt."
+msgstr "<0/> RAG, fournit automatiquement le contexte à partir de votre base de connaissances en fonction de votre invite."
+
+#: src/chunks/AI/AgentConfigItem.tsx
+msgid "Duplicate"
+msgstr "Dupliquer"
+
+#: src/chunks/AI/ClientOnlyTransport.ts
+msgid "No custom classes found on the current drive."
+msgstr "Aucune classe personnalisée trouvée sur le lecteur actuel."
+
+#~ msgid "The system prompt that defines how the agent behaves. You can use the following placeholders: {{timestamp}} - The current date and time, {{drive}} - Subject of the current drive, {{drive-structure}} - A tree of resources on the drive, {{custom-classes}} - A list of classes defined on the current drive."
+#~ msgstr "L'invite système qui définit le comportement de l'agent. Vous pouvez utiliser les espaces réservés suivants : {{timestamp}} - La date et l'heure actuelles, {{drive}} - Le sujet du lecteur actuel, {{drive-structure}} - Une arborescence des ressources sur le lecteur, {{custom-classes}} - Une liste des classes définies sur le lecteur actuel."
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "The system prompt that defines how the agent behaves. You can use the following placeholders: {{timestamp}} - the current date and time, {{drive}} - subject of the current drive, {{drive-structure}} - a tree of resources on the drive, {{custom-classes}} - a list of classes defined on the current drive."
+msgstr "L'invite système qui définit le comportement de l'agent. Vous pouvez utiliser les espaces réservés suivants : {{timestamp}} - la date et l'heure actuelles, {{drive}} - le sujet du disque actuel, {{drive-structure}} - une arborescence des ressources sur le disque, {{custom-classes}} - une liste des classes définies sur le disque actuel."

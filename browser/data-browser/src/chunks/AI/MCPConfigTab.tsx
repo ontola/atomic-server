@@ -1,4 +1,5 @@
-import { useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { styled } from 'styled-components';
 import { Row, Column } from '@components/Row';
 import { FaPlus, FaPen, FaTrash } from 'react-icons/fa6';
@@ -20,10 +21,22 @@ const defaultNewServer: MCPServer = {
   transport: 'http',
 };
 
-export const MCPConfigTab = () => {
+interface MCPConfigTabProps {
+  actionPortalElement: HTMLElement | null;
+  onActionsVisibleChange: (visible: boolean) => void;
+}
+
+export const MCPConfigTab = ({
+  actionPortalElement,
+  onActionsVisibleChange,
+}: MCPConfigTabProps) => {
   const { mcpServers, setMcpServers } = useAISettings();
   const [editingServer, setEditingServer] = useState<MCPServer | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+
+  useEffect(() => {
+    return () => onActionsVisibleChange(false);
+  }, [onActionsVisibleChange]);
 
   const handleSaveServer = () => {
     if (!editingServer) return;
@@ -43,6 +56,7 @@ export const MCPConfigTab = () => {
     setMcpServers(newServers);
     setEditingServer(null);
     setIsCreating(false);
+    onActionsVisibleChange(false);
   };
 
   const handleDeleteServer = (serverToDelete: MCPServer) => {
@@ -52,16 +66,19 @@ export const MCPConfigTab = () => {
   const handleCreateNewServer = () => {
     setEditingServer({ ...defaultNewServer, id: generateId() });
     setIsCreating(true);
+    onActionsVisibleChange(true);
   };
 
   const handleEditServer = (server: MCPServer) => {
     setEditingServer({ ...server });
     setIsCreating(false);
+    onActionsVisibleChange(true);
   };
 
   const handleCancel = () => {
     setEditingServer(null);
     setIsCreating(false);
+    onActionsVisibleChange(false);
   };
 
   return (
@@ -69,17 +86,6 @@ export const MCPConfigTab = () => {
       {editingServer ? (
         <Column>
           <ServerForm server={editingServer} onChange={setEditingServer} />
-          <Row justify='flex-end' style={{ marginTop: '1rem' }}>
-            <Button subtle onClick={handleCancel}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSaveServer}
-              disabled={!editingServer.name.trim() || !editingServer.url.trim()}
-            >
-              {isCreating ? 'Create Server' : 'Save Changes'}
-            </Button>
-          </Row>
         </Column>
       ) : (
         <Column>
@@ -118,6 +124,22 @@ export const MCPConfigTab = () => {
           </CreateButton>
         </Column>
       )}
+      {editingServer &&
+        actionPortalElement &&
+        createPortal(
+          <>
+            <Button subtle onClick={handleCancel}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveServer}
+              disabled={!editingServer.name.trim() || !editingServer.url.trim()}
+            >
+              {isCreating ? 'Create Server' : 'Save Changes'}
+            </Button>
+          </>,
+          actionPortalElement,
+        )}
     </>
   );
 };

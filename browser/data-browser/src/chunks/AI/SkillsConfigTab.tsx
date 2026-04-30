@@ -1,4 +1,5 @@
-import { useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { styled } from 'styled-components';
 import { Row, Column } from '@components/Row';
 import { FaPlus, FaPen, FaTrash } from 'react-icons/fa6';
@@ -10,6 +11,7 @@ import { Checkbox } from '@components/forms/Checkbox';
 import { AgentSkill, useSkillsConfig } from './skills/skill';
 import Field from '@components/forms/Field';
 import { Input } from '@components/forms/InputStyles';
+import { stringToSlug } from '@helpers/stringToSlug';
 
 // Helper function to generate a unique ID
 const generateId = () => {
@@ -26,10 +28,22 @@ const defaultNewSkill: AgentSkill = {
   references: [],
 };
 
-export const SkillsConfigTab = () => {
+interface SkillsConfigTabProps {
+  actionPortalElement: HTMLElement | null;
+  onActionsVisibleChange: (visible: boolean) => void;
+}
+
+export const SkillsConfigTab = ({
+  actionPortalElement,
+  onActionsVisibleChange,
+}: SkillsConfigTabProps) => {
   const { userSkills, saveUserSkills } = useSkillsConfig();
   const [editingSkill, setEditingSkill] = useState<AgentSkill | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+
+  useEffect(() => {
+    return () => onActionsVisibleChange(false);
+  }, [onActionsVisibleChange]);
 
   const handleSaveSkill = () => {
     if (!editingSkill) return;
@@ -37,7 +51,7 @@ export const SkillsConfigTab = () => {
     // ensure name is a valid string, perhaps replace spaces with dashes
     const newMeta = {
       ...editingSkill.meta,
-      name: editingSkill.meta.name.trim().replace(/\s+/g, '-'),
+      name: stringToSlug(editingSkill.meta.name.trim()),
     };
     const skillToSave = { ...editingSkill, meta: newMeta };
 
@@ -50,6 +64,7 @@ export const SkillsConfigTab = () => {
     saveUserSkills(newSkills);
     setEditingSkill(null);
     setIsCreating(false);
+    onActionsVisibleChange(false);
   };
 
   const handleDeleteSkill = (skillToDelete: AgentSkill) => {
@@ -68,16 +83,19 @@ export const SkillsConfigTab = () => {
       },
     });
     setIsCreating(true);
+    onActionsVisibleChange(true);
   };
 
   const handleEditSkill = (skill: AgentSkill) => {
     setEditingSkill({ ...skill });
     setIsCreating(false);
+    onActionsVisibleChange(true);
   };
 
   const handleCancel = () => {
     setEditingSkill(null);
     setIsCreating(false);
+    onActionsVisibleChange(false);
   };
 
   return (
@@ -85,14 +103,6 @@ export const SkillsConfigTab = () => {
       {editingSkill ? (
         <Column>
           <SkillForm skill={editingSkill} onChange={setEditingSkill} />
-          <Row justify='flex-end' style={{ marginTop: '1rem' }}>
-            <Button subtle onClick={handleCancel}>
-              Cancel
-            </Button>
-            <Button onClick={handleSaveSkill}>
-              {isCreating ? 'Create Skill' : 'Save Changes'}
-            </Button>
-          </Row>
         </Column>
       ) : (
         <Column>
@@ -143,6 +153,19 @@ export const SkillsConfigTab = () => {
           </CreateButton>
         </Column>
       )}
+      {editingSkill &&
+        actionPortalElement &&
+        createPortal(
+          <>
+            <Button subtle onClick={handleCancel}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveSkill}>
+              {isCreating ? 'Create Skill' : 'Save Changes'}
+            </Button>
+          </>,
+          actionPortalElement,
+        )}
     </>
   );
 };
@@ -180,7 +203,12 @@ const SkillForm = ({ skill, onChange }: SkillFormProps) => {
           required
           max={50}
           value={skill.meta.name}
-          onChange={e => handleChangeMeta('name', e.target.value)}
+          onChange={e =>
+            handleChangeMeta(
+              'name',
+              e.target.value.toLowerCase().replace(/\s+/g, '-'),
+            )
+          }
           placeholder='e.g., custom-table-helper'
           id={nameId}
         />

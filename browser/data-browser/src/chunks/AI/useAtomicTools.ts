@@ -15,7 +15,11 @@ import { z } from 'zod';
 import { useSettings } from '@helpers/AppSettings';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import { constructOpenURL } from '@helpers/navigation';
-import { toClassObject, toClassString } from './atomicSchemaHelpers';
+import {
+  getClassesOnDrive,
+  toClassObject,
+  toClassString,
+} from './atomicSchemaHelpers';
 import { useDocumentEditAgent } from './documentEditAgent';
 import * as Y from 'yjs';
 
@@ -71,20 +75,6 @@ const getClassesString = async (
 
   return classes.join(', ');
 };
-
-async function getClassesOnDrive(
-  drive: string,
-  store: Store,
-): Promise<string[]> {
-  return store.search('', {
-    filters: {
-      [core.properties.isA]: core.classes.class,
-    },
-    parents: [drive],
-    include: true,
-    limit: 1000,
-  });
-}
 
 interface UseAtomicMCPToolsProps {
   onResourceEdited?: (originalResource: Resource) => void;

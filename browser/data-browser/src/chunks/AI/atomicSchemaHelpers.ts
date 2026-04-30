@@ -1,5 +1,5 @@
 // @wc-ignore-file
-import { type Core, type Store } from '@tomic/react';
+import { core, type Core, type Store } from '@tomic/react';
 
 export const toClassString = async (subject: string, store: Store) => {
   const resource = await store.getResource<Core.Class>(subject);
@@ -60,6 +60,20 @@ export async function toClassObject(subject: string, store: Store) {
       ),
     ),
   };
+}
+
+export async function getClassesOnDrive(
+  drive: string,
+  store: Store,
+): Promise<string[]> {
+  return store.search('', {
+    filters: {
+      [core.properties.isA]: core.classes.class,
+    },
+    parents: [drive],
+    include: true,
+    limit: 1000,
+  });
 }
 
 async function toPropertyObject(subject: string, store: Store) {

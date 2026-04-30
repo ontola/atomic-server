@@ -1,10 +1,5 @@
-import { useEffect, useEffectEvent } from 'react';
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  useDialog,
-} from '@components/Dialog';
+import { useEffect, useEffectEvent, useState } from 'react';
+import { Dialog, useDialog } from '@components/Dialog';
 import { Tabs } from '@components/Tabs';
 import { AgentConfigTab } from './AgentConfig';
 import { SkillsConfigTab } from './SkillsConfigTab';
@@ -27,6 +22,9 @@ export const AISettingsDialog = ({
   const [dialogProps, show, _close, isOpen] = useDialog({
     bindShow: onOpenChange,
   });
+  const [hasActions, setHasActions] = useState(false);
+  const [actionPortalElement, setActionPortalElement] =
+    useState<HTMLDivElement | null>(null);
 
   const showEffect = useEffectEvent(show);
 
@@ -40,10 +38,10 @@ export const AISettingsDialog = ({
     <Dialog {...dialogProps} width='600px'>
       {isOpen && (
         <>
-          <DialogTitle>
+          <Dialog.Title>
             <h1>AI Settings</h1>
-          </DialogTitle>
-          <DialogContent>
+          </Dialog.Title>
+          <Dialog.Content>
             <Tabs
               label='AI Settings Tabs'
               tabs={[
@@ -56,16 +54,32 @@ export const AISettingsDialog = ({
                 <AgentConfigTab
                   selectedAgent={selectedAgent}
                   onSelectAgent={onSelectAgent}
+                  actionPortalElement={actionPortalElement}
+                  onActionsVisibleChange={setHasActions}
                 />
               </Tabs.Panel>
               <Tabs.Panel value='skills'>
-                <SkillsConfigTab />
+                <SkillsConfigTab
+                  actionPortalElement={actionPortalElement}
+                  onActionsVisibleChange={setHasActions}
+                />
               </Tabs.Panel>
               <Tabs.Panel value='mcp'>
-                <MCPConfigTab />
+                <MCPConfigTab
+                  actionPortalElement={actionPortalElement}
+                  onActionsVisibleChange={setHasActions}
+                />
               </Tabs.Panel>
             </Tabs>
-          </DialogContent>
+          </Dialog.Content>
+          {hasActions && (
+            <Dialog.Actions>
+              <div
+                ref={setActionPortalElement}
+                style={{ display: 'contents' }}
+              />
+            </Dialog.Actions>
+          )}
         </>
       )}
     </Dialog>
