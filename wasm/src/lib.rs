@@ -38,6 +38,15 @@ impl ClientDb {
         Ok(ClientDb { db })
     }
 
+    /// Create a non-persistent in-memory ClientDb. Used in environments
+    /// without OPFS — Node integration tests, headless harnesses. Data is
+    /// lost when the process exits.
+    #[wasm_bindgen(js_name = "newInMemory")]
+    pub async fn new_in_memory(base_url: Option<String>) -> Result<ClientDb, JsError> {
+        let db = Db::init_redb(base_url).await.map_err(to_js_err)?;
+        Ok(ClientDb { db })
+    }
+
     /// Get a resource by its subject URL. Returns JSON-AD string or null.
     #[wasm_bindgen(js_name = "getResource")]
     pub async fn get_resource(&self, subject: &str) -> Result<JsValue, JsError> {
@@ -166,6 +175,36 @@ impl ClientDb {
             Ok(None) => Ok(JsValue::NULL),
             Err(e) => Err(to_js_err(e)),
         }
+    }
+
+    /// Store a binary blob keyed by its BLAKE3 hash.
+    #[wasm_bindgen(js_name = "putBlob")]
+    pub fn put_blob(&self, hash: &[u8], data: &[u8]) -> Result<(), JsError> {
+        use atomic_lib::db::trees::Tree;
+        if hash.len() != 32 {
+            return Err(to_js_err("Hash must be 32 bytes"));
+        }
+        self.db.kv.insert(Tree::Blobs, hash, data).map_err(to_js_err)
+    }
+
+    /// Retrieve a binary blob by its BLAKE3 hash. Returns null if not found.
+    #[wasm_bindgen(js_name = "getBlob")]
+    pub fn get_blob(&self, hash: &[u8]) -> Result<JsValue, JsError> {
+        use atomic_lib::db::trees::Tree;
+        if hash.len() != 32 {
+            return Err(to_js_err("Hash must be 32 bytes"));
+        }
+        match self.db.kv.get(Tree::Blobs, hash) {
+            Ok(Some(data)) => Ok(js_sys::Uint8Array::from(data.as_slice()).into()),
+            Ok(None) => Ok(JsValue::NULL),
+            Err(e) => Err(to_js_err(e)),
+        }
+    }
+
+    /// Compute a BLAKE3 hash of the given data.
+    #[wasm_bindgen(js_name = "blake3Hash")]
+    pub fn blake3_hash(&self, data: &[u8]) -> Vec<u8> {
+        blake3::hash(data).as_bytes().to_vec()
     }
 
     /// Get version vectors for all Loro snapshots in the database.

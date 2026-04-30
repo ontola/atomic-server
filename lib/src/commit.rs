@@ -1895,16 +1895,19 @@ mod test {
 
     /// Two commits where each commit comes from a FRESH Loro doc with a
     /// different peer ID, NOT seeded from the server's state. Writes to the
-    /// same key are concurrent — whichever ordering Loro's LWW picks
-    /// determines the outcome. If this test is flaky / picks the first write,
-    /// it reproduces the observed rename bug.
+    /// same key are concurrent — Loro's LWW tiebreak by peer ID decides which
+    /// one wins. We pin the peer IDs so docA always wins LWW: docB's writes
+    /// are guaranteed to be silently dropped against the merged state, which
+    /// is exactly the case the causality guard exists to catch.
     #[tokio::test]
     async fn two_commits_with_independent_docs_both_peers_same_key() {
         let (store, agent) = store_with_known_agent().await;
         let subject = "https://localhost/concurrent_peers";
 
-        // Commit 1: docA → name="A"
+        // Commit 1: docA → name="A". Pin peer ID high so this peer wins LWW
+        // tiebreaks against docB.
         let doc_a = crate::loro::AtomicLoroDoc::new();
+        doc_a.set_peer_id(u64::MAX - 1).unwrap();
         doc_a
             .set_property(crate::urls::NAME, &Value::String("A".into()))
             .unwrap();
@@ -1933,8 +1936,10 @@ mod test {
         let commit1 = builder.sign(&agent, &store, &empty).await.unwrap();
         store.apply_commit(commit1, &OPTS).await.unwrap();
 
-        // Commit 2: docB = FRESH, NOT seeded from server. Different peer ID.
+        // Commit 2: docB = FRESH, NOT seeded from server. Pin peer ID low so
+        // this peer always loses LWW tiebreaks against docA.
         let doc_b = crate::loro::AtomicLoroDoc::new();
+        doc_b.set_peer_id(1).unwrap();
         doc_b
             .set_property(crate::urls::NAME, &Value::String("B".into()))
             .unwrap();

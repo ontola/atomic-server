@@ -107,3 +107,26 @@ pub struct QueryUpdate {
     /// Subjects removed from the query results
     pub removed: Vec<String>,
 }
+
+/// Forwarded into `CommitMonitor` by the `DbEvent::QueryMembershipChanged`
+/// listener task. Routed to subscribers whose registered filter encodes to
+/// the same `filter_bytes`.
+#[derive(Message, Clone, Debug)]
+#[rtype(result = "()")]
+pub struct MembershipNotification {
+    pub filter_bytes: Vec<u8>,
+    pub subject: String,
+    pub added: bool,
+}
+
+/// Forwarded into `CommitMonitor` by the listener task on every
+/// `DbEvent::Changed` / `DbEvent::Destroyed`. Routed to drive-wide
+/// subscribers whose registered drive matches the subject's prefix (or
+/// to all drive-wide subscribers when the subject is a DID, since DID
+/// subjects can't be prefix-matched to a drive).
+#[derive(Message, Clone, Debug)]
+#[rtype(result = "()")]
+pub struct DriveNotification {
+    pub subject: String,
+    pub removed: bool,
+}

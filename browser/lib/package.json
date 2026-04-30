@@ -60,7 +60,8 @@
       "types": "./dist/src/ontologies/*.d.ts",
       "import": "./dist/ontologies/*.js",
       "require": "./dist/ontologies/*.cjs"
-    }
+    },
+    "./client-db.worker.js": "./dist/client-db.worker.js"
   },
   "main-dev": "src/index.ts",
   "publishConfig": {
@@ -78,6 +79,7 @@
     "start": "pnpm watch",
     "coverage": "vitest run --coverage",
     "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
     "typecheck": "pnpm exec tsc --noEmit",
     "watch": "pnpm exec tsup --watch",
     "publint": "pnpm dlx publint",

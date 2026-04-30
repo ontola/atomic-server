@@ -1342,6 +1342,12 @@ export class Resource<C extends OptionalClass = any> {
     this.loading = false;
     this.new = false;
 
+    // Surface the queued commit in the Sync page's commit log immediately,
+    // so users can see what's pending without waiting for the push. The same
+    // log entry transitions in place to `sent` / `failed` when pushCommits
+    // resolves.
+    this.store.logPendingCommit(commit);
+
     return commit;
   }
 
@@ -1396,6 +1402,15 @@ export class Resource<C extends OptionalClass = any> {
       // resource is on the server but never lands in OPFS — so the user
       // sees "Offline: resource not available locally" on reload.
       this.store.addResources(this, { skipCommitCompare: true });
+
+      // If this resource references a locally-stored blob, push the bytes to
+      // the server. Hooked here (not in uploadFiles) so the offline → online
+      // path also covers it: pending commits queued offline get flushed by
+      // `syncDirtyResources` on reconnect, which calls back through this
+      // success path, which then pushes the blob.
+      this.store.maybePushBlobForResource(this).catch(() => {
+        // Non-fatal — server can request the blob lazily via BLOB_REQUEST.
+      });
 
       if (wasNew) {
         // The first `SUBSCRIBE` message will not have worked, because the resource didn't exist yet.

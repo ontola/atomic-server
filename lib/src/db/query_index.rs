@@ -6,6 +6,7 @@ use crate::{
     utils::truncate_string, values::SortableValue, Atom, Db, Resource, Storelike, Subject, Value,
 };
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 use super::trees::{self, Operation, Transaction, Tree};
 
@@ -36,17 +37,15 @@ impl QueryFilter {
     #[tracing::instrument(skip_all)]
     /// Adds the QueryFilter to the `watched_queries` of the store.
     /// This means that whenever the store is updated (when a [Commit](crate::Commit) is added), the QueryFilter is checked.
+    ///
+    /// Routes through `Db::register_watched_query` so the in-memory
+    /// `watched_queries_by_drive` map stays in sync. Repeated `watch()`
+    /// calls for the same filter are idempotent.
     pub fn watch(&self, store: &Db) -> AtomicResult<()> {
         if self.property.is_none() && self.value.is_none() {
             return Err("Cannot watch a query without a property or value. These types of queries are not implemented. See https://github.com/atomicdata-dev/atomic-server/issues/548 ".into());
         };
-
-        let query_filter_bin = self.encode()?;
-
-        store
-            .kv
-            .insert(Tree::WatchedQueries, &query_filter_bin, b"")?;
-        Ok(())
+        store.register_watched_query(self.clone())
     }
 
     /// Check if this [QueryFilter] is being indexed
@@ -270,13 +269,15 @@ pub fn should_update_property<'a>(
 /// Updates the index accordingly.
 /// We need both the `index_atom` and the full `atom`.
 ///
-/// Performance: for URL subjects we `scan_prefix` the WatchedQueries tree by
-/// the atom's drive prefix, so we only read and decode watched queries for
-/// that specific drive. On a long-lived server with many accumulated watched
-/// queries across drives (the old behaviour decoded every watched query on
-/// every atom), this turns a per-atom O(total_watched) into O(watched_for_this_drive).
-/// DID subjects are drive-agnostic and still fall back to iterating the whole
-/// tree.
+/// Reads from the in-memory `watched_queries_by_drive` map populated by
+/// `Db::populate_watched_queries_cache` at open and kept in sync by
+/// `Db::register_watched_query`. The KV `Tree::WatchedQueries` is the
+/// persistence layer; this hot path doesn't touch msgpack at all.
+///
+/// For URL-drive atoms we look up by drive prefix — O(1) HashMap lookup
+/// → iterate only that drive's filters. DID-subject atoms can't be
+/// prefix-matched to a single drive, so they iterate every filter in the
+/// map (matches the prior `iter_tree` fallback).
 #[tracing::instrument(level = "trace", skip_all)]
 pub fn check_if_atom_matches_watched_query_filters(
     store: &Db,
@@ -288,52 +289,21 @@ pub fn check_if_atom_matches_watched_query_filters(
 ) -> AtomicResult<()> {
     let subject_str = index_atom.subject.as_str();
 
-    let iter: Box<dyn Iterator<Item = AtomicResult<(Vec<u8>, Vec<u8>)>> + Send> =
-        if subject_str.starts_with("did:") {
-            // DID subjects aren't scoped to a URL drive — any watched filter
-            // might match, so iterate the whole tree.
-            store.kv.iter_tree(Tree::WatchedQueries)
-        } else {
-            let drive_prefix = drive_prefix_from_subject(&index_atom.subject);
-            let scan_prefix = QueryFilter::drive_scan_prefix(drive_prefix.as_str());
-            store
-                .kv
-                .scan_prefix(Tree::WatchedQueries, &scan_prefix)
-        };
+    let filters: Vec<Arc<QueryFilter>> = if subject_str.starts_with("did:") {
+        store.all_watched_queries()
+    } else {
+        let drive_prefix = drive_prefix_from_subject(&index_atom.subject);
+        store.watched_queries_for_drive(drive_prefix.as_str())
+    };
 
-    for item in iter {
-        let (k, _v) = match item {
-            Ok(pair) => pair,
-            Err(e) => {
-                tracing::error!("Can't read watched_queries entry: {:?}", e);
-                break;
-            }
-        };
-        // Stale / malformed entries must not abort the whole index update.
-        // WatchedQueries is a pure cache (rebuilds on next query), so a bad
-        // key is an inconvenience, not a correctness threat. Old-encoding
-        // entries lingering from before the drive-prefix migration fall here
-        // too. Log with the key bytes so we can trace the source, then skip.
-        let q_filter: QueryFilter = match QueryFilter::from_bytes(&k) {
-            Ok(qf) => qf,
-            Err(e) => {
-                tracing::warn!(
-                    "Skipping undecodable watched_queries entry ({} bytes, first 32 = {:?}): {}",
-                    k.len(),
-                    &k[..k.len().min(32)],
-                    e
-                );
-                continue;
-            }
-        };
-
-        if let Some(prop) = should_update_property(&q_filter, index_atom, resource) {
+    for q_filter in &filters {
+        if let Some(prop) = should_update_property(q_filter, index_atom, resource) {
             let update_val = match resource.get(prop) {
                 Ok(val) => val.to_sortable_string(),
                 Err(_e) => NO_VALUE.to_string(),
             };
             update_indexed_member(
-                &q_filter,
+                q_filter,
                 index_atom.subject.as_str(),
                 &update_val,
                 delete,

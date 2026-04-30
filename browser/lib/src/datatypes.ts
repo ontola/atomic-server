@@ -1,6 +1,6 @@
 /** Each possible Atomic Datatype. See https://atomicdata.dev/collections/datatype */
 
-import { Client } from './index.js';
+import { Client } from './client.js';
 import type { AtomicValue } from './value.js';
 
 // TODO: use strings from `./urls`, requires TS fix: https://github.com/microsoft/TypeScript/issues/40793
@@ -114,7 +114,10 @@ export const validateDatatype = (
         try {
           Client.tryValidSubject(item as string);
         } catch (e) {
-          const arrError: ArrayError = new Error(`Invalid URL`);
+          const cause = e instanceof Error ? e.message : String(e);
+          const arrError: ArrayError = new Error(
+            `Invalid URL at [${index}] (${JSON.stringify(item)}): ${cause}`,
+          );
           arrError.index = index;
           throw arrError;
         }

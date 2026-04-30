@@ -3,7 +3,10 @@
 //! and to update the Search index.
 
 use crate::{
-    actor_messages::{CommitMessage, QueryUpdate, Subscribe, SubscribeQuery, UnsubscribeQuery},
+    actor_messages::{
+        CommitMessage, DriveNotification, MembershipNotification, QueryUpdate, Subscribe,
+        SubscribeQuery, UnsubscribeQuery,
+    },
     errors::AtomicServerResult,
     handlers::web_sockets::WebSocketConnection,
     search::SearchState,
@@ -12,27 +15,36 @@ use actix::{
     prelude::{Actor, AsyncContext, Context, Handler},
     ActorFutureExt, Addr, ResponseActFuture, WrapFuture,
 };
-use atomic_lib::{agents::ForAgent, Db, Storelike};
+use atomic_lib::{agents::ForAgent, db::QueryFilter, Db, DbEvent, Storelike, Value};
 use chrono::Local;
 use std::collections::{HashMap, HashSet};
 
 /// The Commit Monitor is an Actor that manages subscriptions for subjects and sends Commits to listeners.
-/// It's also responsible for checking whether the rights are present
+/// It's also responsible for checking whether the rights are present.
+///
+/// Every query subscription requires a drive (auth boundary). Two
+/// dispatch shapes follow from the filter shape:
+///
+/// - **Filter subscriptions** (`query_subscriptions`): property + value +
+///   drive. Encoded as a [`QueryFilter`], registered in
+///   `Tree::WatchedQueries`. Membership changes surface as
+///   [`DbEvent::QueryMembershipChanged`] events; the listener task in
+///   [`Actor::started`] forwards them as [`MembershipNotification`].
+/// - **Drive subscriptions** (`drive_subscriptions`): drive only, no
+///   property/value. Match every change in that drive. Notifications come
+///   from `DbEvent::Changed` / `Destroyed` events forwarded as
+///   [`DriveNotification`].
+///
+/// Both flow through the same `db_events` listener; the actor's
+/// `CommitMessage` handler no longer scans subscriptions itself.
 #[allow(clippy::mutable_key_type)]
-
-/// A query subscription entry: the filter + connections watching it.
-struct QuerySubscription {
-    property: Option<String>,
-    value: Option<String>,
-    drive: Option<String>,
-    connections: HashSet<Addr<WebSocketConnection>>,
-}
-
 pub struct CommitMonitor {
     /// Maintains a list of all the resources that are being subscribed to, and maps these to websocket connections.
     subscriptions: HashMap<atomic_lib::Subject, HashSet<Addr<WebSocketConnection>>>,
-    /// Query subscriptions: clients watching for new/removed resources matching a filter.
-    query_subscriptions: Vec<QuerySubscription>,
+    /// Filter subscriptions: keyed by encoded `QueryFilter` bytes.
+    query_subscriptions: HashMap<Vec<u8>, HashSet<Addr<WebSocketConnection>>>,
+    /// Drive-wide subscriptions: keyed by drive subject string.
+    drive_subscriptions: HashMap<String, HashSet<Addr<WebSocketConnection>>>,
     store: Db,
     search_state: SearchState,
     last_search_commit: chrono::DateTime<Local>,
@@ -51,6 +63,44 @@ impl Actor for CommitMonitor {
         if tokio::runtime::Handle::try_current().is_ok() {
             ctx.run_interval(REBUILD_INDEX_TIME, |actor, ctx| {
                 actor.tick(ctx);
+            });
+
+            // Bridge DbEvents to actor messages. All query-subscription
+            // notifications flow through this listener:
+            // - `QueryMembershipChanged` → `MembershipNotification` for
+            //   filter subscriptions (property+value+drive).
+            // - `Changed` / `Destroyed` → `DriveNotification` for drive-wide
+            //   subscriptions.
+            let mut events_rx = self.store.subscribe_events();
+            let addr = ctx.address();
+            tokio::spawn(async move {
+                while let Ok(event) = events_rx.recv().await {
+                    match event {
+                        DbEvent::QueryMembershipChanged {
+                            filter_bytes,
+                            subject,
+                            added,
+                        } => {
+                            addr.do_send(MembershipNotification {
+                                filter_bytes,
+                                subject,
+                                added,
+                            });
+                        }
+                        DbEvent::Changed { subject, .. } => {
+                            addr.do_send(DriveNotification {
+                                subject: subject.to_string(),
+                                removed: false,
+                            });
+                        }
+                        DbEvent::Destroyed { subject } => {
+                            addr.do_send(DriveNotification {
+                                subject: subject.to_string(),
+                                removed: true,
+                            });
+                        }
+                    }
+                }
             });
         } else {
             tracing::warn!("No Tokio runtime available; skipping CommitMonitor interval");
@@ -125,36 +175,75 @@ impl Handler<Subscribe> for CommitMonitor {
 }
 
 impl Handler<SubscribeQuery> for CommitMonitor {
-    type Result = ();
+    type Result = ResponseActFuture<Self, ()>;
 
-    fn handle(&mut self, msg: SubscribeQuery, _ctx: &mut Context<Self>) {
+    /// Auth gate: the filter must name a drive, and the requesting agent
+    /// must have read access on that drive. Without this, any authenticated
+    /// agent could receive `QUERY_UPDATE`s for resources they can't read —
+    /// see `server/tests/query_subscribe.rs::query_subscribe_requires_read_permission`.
+    fn handle(&mut self, msg: SubscribeQuery, _ctx: &mut Context<Self>) -> Self::Result {
         tracing::info!(
             property = ?msg.query.property,
             value = ?msg.query.value,
             drive = ?msg.query.drive,
             agent = %msg.agent,
-            "Query subscription registered"
+            "Query subscription requested"
         );
 
-        // Check if a subscription with the same filter already exists
-        for sub in &mut self.query_subscriptions {
-            if sub.property == msg.query.property
-                && sub.value == msg.query.value
-                && sub.drive == msg.query.drive
-            {
-                sub.connections.insert(msg.addr);
-                return;
-            }
-        }
+        let store = self.store.clone();
+        let agent = msg.agent.clone();
+        let drive_opt = msg.query.drive.clone();
 
-        let mut connections = HashSet::new();
-        connections.insert(msg.addr);
-        self.query_subscriptions.push(QuerySubscription {
-            property: msg.query.property,
-            value: msg.query.value,
-            drive: msg.query.drive,
-            connections,
-        });
+        Box::pin(
+            async move {
+                let drive_str = match drive_opt {
+                    Some(s) => s,
+                    None => {
+                        tracing::debug!(
+                            "Rejecting query subscription: filter has no drive scope (agent={agent})"
+                        );
+                        return None;
+                    }
+                };
+                let drive_subject = atomic_lib::Subject::from_raw(
+                    &drive_str,
+                    store.get_base_domain().as_deref(),
+                );
+                let resource = match store.get_resource(&drive_subject).await {
+                    Ok(r) => r,
+                    Err(e) => {
+                        tracing::debug!(
+                            "Rejecting query subscription: drive {drive_subject} not found: {e}"
+                        );
+                        return None;
+                    }
+                };
+                match atomic_lib::hierarchy::check_read(
+                    &store,
+                    &resource,
+                    &ForAgent::AgentSubject(agent.clone().into()),
+                )
+                .await
+                {
+                    Ok(_) => Some(msg),
+                    Err(e) => {
+                        tracing::debug!(
+                            "Rejecting query subscription: {agent} cannot read drive {drive_subject}: {e}"
+                        );
+                        None
+                    }
+                }
+            }
+            .into_actor(self)
+            .map(|maybe_msg, actor, _ctx| {
+                #[allow(clippy::mutable_key_type)]
+                if let Some(msg) = maybe_msg {
+                    let registered_agent = msg.agent.clone();
+                    actor.register_subscription(msg);
+                    tracing::debug!("Query subscription registered for {registered_agent}");
+                }
+            }),
+        )
     }
 }
 
@@ -162,16 +251,163 @@ impl Handler<UnsubscribeQuery> for CommitMonitor {
     type Result = ();
 
     fn handle(&mut self, msg: UnsubscribeQuery, _ctx: &mut Context<Self>) {
-        for sub in &mut self.query_subscriptions {
-            sub.connections.remove(&msg.addr);
+        for conns in self.query_subscriptions.values_mut() {
+            conns.remove(&msg.addr);
         }
-        // Clean up empty subscriptions
+        for conns in self.drive_subscriptions.values_mut() {
+            conns.remove(&msg.addr);
+        }
         self.query_subscriptions
-            .retain(|sub| !sub.connections.is_empty());
+            .retain(|_, conns| !conns.is_empty());
+        self.drive_subscriptions
+            .retain(|_, conns| !conns.is_empty());
+    }
+}
+
+/// `DbEvent::Changed` / `Destroyed` arriving via the listener task. Match
+/// the subject's drive prefix against drive-wide subscriptions and push.
+/// DID-form subjects can't be prefix-matched to a drive, so they fan out to
+/// every drive-wide subscription (matches the prior text-protocol behavior).
+impl Handler<DriveNotification> for CommitMonitor {
+    type Result = ();
+
+    fn handle(&mut self, msg: DriveNotification, _ctx: &mut Context<Self>) {
+        if self.drive_subscriptions.is_empty() {
+            return;
+        }
+        let is_did = msg.subject.starts_with("did:");
+        for (drive, subscribers) in &self.drive_subscriptions {
+            if !is_did && !msg.subject.starts_with(drive.as_str()) {
+                continue;
+            }
+            let update = QueryUpdate {
+                property: None,
+                value: None,
+                added: if !msg.removed {
+                    vec![msg.subject.clone()]
+                } else {
+                    vec![]
+                },
+                removed: if msg.removed {
+                    vec![msg.subject.clone()]
+                } else {
+                    vec![]
+                },
+            };
+            for addr in subscribers {
+                addr.do_send(update.clone());
+            }
+        }
+    }
+}
+
+/// `DbEvent::QueryMembershipChanged` arriving via the listener task. Look up
+/// listener-path subscribers by `filter_bytes`, decode the filter for the
+/// outbound payload, and push to each subscriber as a `QueryUpdate`.
+impl Handler<MembershipNotification> for CommitMonitor {
+    type Result = ();
+
+    fn handle(&mut self, msg: MembershipNotification, _ctx: &mut Context<Self>) {
+        let Some(subscribers) = self.query_subscriptions.get(&msg.filter_bytes) else {
+            return;
+        };
+        if subscribers.is_empty() {
+            return;
+        }
+
+        // Decode the filter so the wire payload carries the (property, value)
+        // the client subscribed with. Subjects with no encoded value flow
+        // through as `None`.
+        let (property, value) = match QueryFilter::from_bytes(&msg.filter_bytes) {
+            Ok(qf) => {
+                let v: Option<String> = qf.value.map(|v: Value| format!("{v}"));
+                (qf.property, v)
+            }
+            Err(e) => {
+                tracing::debug!("MembershipNotification: skip un-decodable filter: {e}");
+                return;
+            }
+        };
+
+        let (added, removed) = if msg.added {
+            (vec![msg.subject], vec![])
+        } else {
+            (vec![], vec![msg.subject])
+        };
+        let update = QueryUpdate {
+            property,
+            value,
+            added,
+            removed,
+        };
+        for addr in subscribers {
+            addr.do_send(update.clone());
+        }
     }
 }
 
 impl CommitMonitor {
+    /// Dispatch a passed-auth subscription into the right map based on
+    /// filter shape. Drive is guaranteed to be set by the auth gate above.
+    fn register_subscription(&mut self, msg: SubscribeQuery) {
+        let SubscribeQuery {
+            addr, query, agent: _,
+        } = msg;
+
+        let drive_str = match query.drive.as_ref() {
+            Some(d) => d.clone(),
+            None => {
+                tracing::debug!("register_subscription: drive missing, dropping");
+                return;
+            }
+        };
+
+        // Filter subscription: property + value + drive → encode as
+        // QueryFilter and watch in Tree::WatchedQueries.
+        if let (Some(prop), Some(val_str)) = (query.property.as_ref(), query.value.as_ref()) {
+            let drive_subject = atomic_lib::Subject::from_raw(
+                &drive_str,
+                self.store.get_base_domain().as_deref(),
+            );
+            let q_filter = QueryFilter {
+                property: Some(prop.clone()),
+                value: Some(Value::String(val_str.clone())),
+                sort_by: query.sort_by.clone(),
+                drive: drive_subject,
+            };
+            match q_filter.encode() {
+                Ok(filter_bytes) => {
+                    if let Err(e) = q_filter.watch(&self.store) {
+                        tracing::warn!(
+                            "Failed to register filter in Tree::WatchedQueries: {e}"
+                        );
+                    }
+                    #[allow(clippy::mutable_key_type)]
+                    let entry = self
+                        .query_subscriptions
+                        .entry(filter_bytes)
+                        .or_insert_with(HashSet::new);
+                    entry.insert(addr);
+                    return;
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "Failed to encode QueryFilter, dropping subscription: {e}"
+                    );
+                    return;
+                }
+            }
+        }
+
+        // Drive-wide subscription: drive only (no property/value).
+        #[allow(clippy::mutable_key_type)]
+        let entry = self
+            .drive_subscriptions
+            .entry(drive_str)
+            .or_insert_with(HashSet::new);
+        entry.insert(addr);
+    }
+
     /// Runs every X seconds to perform expensive operations.
     fn tick(&mut self, _ctx: &mut Context<Self>) {
         if self.run_expensive_next_tick {
@@ -219,89 +455,9 @@ impl Handler<CommitMessage> for CommitMonitor {
             tracing::debug!("No subscribers for {}", target_subject);
         }
 
-        // Check if any query subscriptions match the commit's atoms.
-        if !self.query_subscriptions.is_empty() {
-            let commit_subject = msg.commit_response.commit.subject.to_string();
-
-            for sub in &self.query_subscriptions {
-                // Drive scope check
-                if let Some(drive) = &sub.drive {
-                    if !commit_subject.starts_with(drive.as_str())
-                        && !commit_subject.starts_with("did:")
-                    {
-                        continue;
-                    }
-                }
-
-                let mut matched_add = false;
-                let mut matched_remove = false;
-
-                // If no property/value filter, match everything in the drive (drive-wide subscription)
-                if sub.property.is_none() && sub.value.is_none() {
-                    if sub.drive.is_some() {
-                        // Drive-wide: any commit in this drive is a match
-                        matched_add = !msg.commit_response.add_atoms.is_empty();
-                        matched_remove = !msg.commit_response.remove_atoms.is_empty();
-                    }
-                } else {
-                    // Check added atoms
-                    for atom in &msg.commit_response.add_atoms {
-                        let prop_matches = sub
-                            .property
-                            .as_ref()
-                            .map(|p| p == &atom.property)
-                            .unwrap_or(true);
-                        let val_matches = sub
-                            .value
-                            .as_ref()
-                            .map(|v| v == &atom.value.to_string())
-                            .unwrap_or(true);
-                        if prop_matches && val_matches {
-                            matched_add = true;
-                            break;
-                        }
-                    }
-
-                    // Check removed atoms
-                    for atom in &msg.commit_response.remove_atoms {
-                        let prop_matches = sub
-                            .property
-                            .as_ref()
-                            .map(|p| p == &atom.property)
-                            .unwrap_or(true);
-                        let val_matches = sub
-                            .value
-                            .as_ref()
-                            .map(|v| v == &atom.value.to_string())
-                            .unwrap_or(true);
-                        if prop_matches && val_matches {
-                            matched_remove = true;
-                            break;
-                        }
-                    }
-                }
-
-                if matched_add || matched_remove {
-                    let update = QueryUpdate {
-                        property: sub.property.clone(),
-                        value: sub.value.clone(),
-                        added: if matched_add {
-                            vec![commit_subject.clone()]
-                        } else {
-                            vec![]
-                        },
-                        removed: if matched_remove {
-                            vec![commit_subject.clone()]
-                        } else {
-                            vec![]
-                        },
-                    };
-                    for conn in &sub.connections {
-                        conn.do_send(update.clone());
-                    }
-                }
-            }
-        }
+        // Query-subscription notifications now flow through the DbEvents
+        // listener task spawned in `started()`, not from this handler.
+        // See `Handler<MembershipNotification>` and `Handler<DriveNotification>`.
 
         let store = self.store.clone();
         let search_state = self.search_state.clone();
@@ -365,7 +521,8 @@ pub fn create_commit_monitor(store: Db, search_state: SearchState) -> Addr<Commi
     crate::commit_monitor::CommitMonitor::create(|_ctx: &mut Context<CommitMonitor>| {
         CommitMonitor {
             subscriptions: HashMap::new(),
-            query_subscriptions: Vec::new(),
+            query_subscriptions: HashMap::new(),
+            drive_subscriptions: HashMap::new(),
             store,
             search_state,
             run_expensive_next_tick: false,

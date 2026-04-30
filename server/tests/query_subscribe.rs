@@ -94,10 +94,12 @@ async fn query_subscribe_receives_new_child() -> AtomicResult<()> {
     let ws_b = WsClient::connect(&ws_url).await?;
     ws_b.authenticate(&agent_b).await?;
 
-    // Subscribe to the query
+    // Subscribe to the query. `drive` is required — it's the auth boundary
+    // for the subscription (see commit_monitor.rs::SubscribeQuery handler).
     let query_json = serde_json::json!({
         "property": atomic_lib::urls::PARENT,
         "value": parent_subject,
+        "drive": drive,
     });
     ws_b.send_raw(&format!("SUBSCRIBE_QUERY {}", query_json))
         .await?;
@@ -179,6 +181,93 @@ async fn query_subscribe_receives_new_child() -> AtomicResult<()> {
     Ok(())
 }
 
+/// Listener-path coverage: a filter with property + value + drive registers
+/// in `Tree::WatchedQueries`, the persisted index emits
+/// `DbEvent::QueryMembershipChanged`, the CommitMonitor's listener task
+/// forwards it as `MembershipNotification`, and the subscriber receives a
+/// binary `QUERY_UPDATE` (0x36) via WsClient.
+#[tokio::test]
+async fn query_subscribe_listener_path_receives_update() -> AtomicResult<()> {
+    let port = start_server();
+    wait_for_server(port).await;
+    let server_url = format!("http://localhost:{}", port);
+    let ws_url = format!("ws://localhost:{}/ws", port);
+
+    let client_a = Client::new(&server_url).await?;
+    let agent_a = client_a.new_agent("Alice").await?;
+    let drive = client_a.new_public_drive(&agent_a, "Listener Drive").await?;
+
+    let mut parent = client_a.new_resource(&drive);
+    parent.set_name("Listener Parent");
+    parent.set_unsafe(
+        atomic_lib::urls::IS_A.into(),
+        atomic_lib::Value::ResourceArray(vec![atomic_lib::urls::CLASS.into()]),
+    );
+    parent.set_unsafe(
+        atomic_lib::urls::SHORTNAME.into(),
+        atomic_lib::Value::Slug("listener-parent".into()),
+    );
+    parent.set_unsafe(
+        atomic_lib::urls::DESCRIPTION.into(),
+        atomic_lib::Value::String("Listener-path parent".into()),
+    );
+    let parent_subject = parent.save_remote(client_a.store()).await?;
+
+    let client_b = Client::new(&server_url).await?;
+    let agent_b = client_b.new_agent("Bob").await?;
+    let ws_b = WsClient::connect(&ws_url).await?;
+    ws_b.authenticate(&agent_b).await?;
+
+    // Filter has property + value + drive — exercises the listener path.
+    let query_json = serde_json::json!({
+        "property": atomic_lib::urls::PARENT,
+        "value": parent_subject,
+        "drive": drive,
+    });
+    ws_b.send_raw(&format!("SUBSCRIBE_QUERY {}", query_json))
+        .await?;
+    let mut rx = ws_b.subscribe();
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
+    let mut child = client_a.new_resource(&parent_subject);
+    child.set_name("Listener Child");
+    child.set_unsafe(
+        atomic_lib::urls::IS_A.into(),
+        atomic_lib::Value::ResourceArray(vec![atomic_lib::urls::CLASS.into()]),
+    );
+    child.set_unsafe(
+        atomic_lib::urls::SHORTNAME.into(),
+        atomic_lib::Value::Slug("listener-child".into()),
+    );
+    child.set_unsafe(
+        atomic_lib::urls::DESCRIPTION.into(),
+        atomic_lib::Value::String("Listener-path child".into()),
+    );
+    let child_subject = child.save_remote(client_a.store()).await?;
+
+    let received = tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            match rx.recv().await {
+                Ok(WsMessage::QueryUpdate { added, .. }) => {
+                    if added.contains(&child_subject) {
+                        return Ok::<(), atomic_lib::errors::AtomicError>(());
+                    }
+                }
+                Ok(WsMessage::Error(e)) => {
+                    tracing::warn!("WS error: {}", e);
+                }
+                Ok(_) => continue,
+                Err(e) => return Err(format!("WS channel error: {}", e).into()),
+            }
+        }
+    })
+    .await
+    .map_err(|_| "Timeout: listener path did not emit QUERY_UPDATE within 5s")??;
+
+    let _ = received;
+    Ok(())
+}
+
 #[tokio::test]
 async fn drive_wide_subscription_receives_any_change() -> AtomicResult<()> {
     let port = start_server();
@@ -249,6 +338,89 @@ async fn drive_wide_subscription_receives_any_change() -> AtomicResult<()> {
     assert!(
         received,
         "Should have received the resource in a drive-wide update"
+    );
+
+    Ok(())
+}
+
+/// Security regression test: a query subscription must be authorized.
+///
+/// Alice owns a *private* drive (read access for Alice only). Bob is an
+/// authenticated agent with no permission on the drive. Bob subscribes to
+/// the drive via SUBSCRIBE_QUERY and Alice then creates a child resource.
+///
+/// Bob must NOT receive a QUERY_UPDATE — the subject of the new resource
+/// (and the fact that *something* changed in the drive) is information he
+/// has no right to. The `SubscribeQuery` handler in `commit_monitor.rs`
+/// runs `hierarchy::check_read` against the drive before registering, so
+/// Bob's subscription is silently dropped and no notifications follow.
+#[tokio::test]
+async fn query_subscribe_requires_read_permission() -> AtomicResult<()> {
+    let port = start_server();
+    wait_for_server(port).await;
+    let server_url = format!("http://localhost:{}", port);
+    let ws_url = format!("ws://localhost:{}/ws", port);
+
+    // --- Agent A: create a PRIVATE drive (read access only for Alice) ---
+    let client_a = Client::new(&server_url).await?;
+    let agent_a = client_a.new_agent("Alice").await?;
+    let private_drive = client_a.new_drive(&agent_a, "Alice's Private Drive").await?;
+
+    // --- Agent B: authenticated, but has no permission on Alice's drive ---
+    let client_b = Client::new(&server_url).await?;
+    let agent_b = client_b.new_agent("Bob").await?;
+
+    let ws_b = WsClient::connect(&ws_url).await?;
+    ws_b.authenticate(&agent_b).await?;
+
+    // Bob subscribes to Alice's private drive. The server should refuse,
+    // since Bob cannot read it.
+    let query_json = serde_json::json!({
+        "drive": private_drive,
+    });
+    ws_b.send_raw(&format!("SUBSCRIBE_QUERY {}", query_json))
+        .await?;
+
+    let mut rx = ws_b.subscribe();
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
+    // --- Agent A: create a child resource inside the private drive ---
+    let mut secret = client_a.new_resource(&private_drive);
+    secret.set_name("Top Secret");
+    secret.set_unsafe(
+        atomic_lib::urls::IS_A.into(),
+        atomic_lib::Value::ResourceArray(vec![atomic_lib::urls::CLASS.into()]),
+    );
+    secret.set_unsafe(
+        atomic_lib::urls::SHORTNAME.into(),
+        atomic_lib::Value::Slug("top-secret".into()),
+    );
+    secret.set_unsafe(
+        atomic_lib::urls::DESCRIPTION.into(),
+        atomic_lib::Value::String("Bob must not learn this exists".into()),
+    );
+    let secret_subject = secret.save_remote(client_a.store()).await?;
+
+    // --- Agent B: must NOT receive a QUERY_UPDATE referencing the secret ---
+    let leaked = tokio::time::timeout(Duration::from_secs(3), async {
+        loop {
+            match rx.recv().await {
+                Ok(WsMessage::QueryUpdate { added, removed, .. }) => {
+                    if added.contains(&secret_subject) || removed.contains(&secret_subject) {
+                        return true;
+                    }
+                }
+                Ok(_) => continue,
+                Err(_) => return false,
+            }
+        }
+    })
+    .await;
+
+    assert!(
+        leaked.is_err(),
+        "Bob received a QUERY_UPDATE for a resource in a private drive he cannot read — \
+         SubscribeQuery is missing an authorization check"
     );
 
     Ok(())

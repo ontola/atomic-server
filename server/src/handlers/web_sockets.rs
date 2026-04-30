@@ -237,6 +237,23 @@ impl WebSocketConnection {
                 }
             }
 
+            ws_v2::tag::SYNC | ws_v2::tag::SYNC_PUSH | ws_v2::tag::BLOB_REQUEST | ws_v2::tag::BLOB_RESPONSE => {
+                let store = self.store.clone();
+                let mut agent = self.agent.clone();
+                let bin_vec = bin.to_vec();
+                ctx.spawn(
+                    async move {
+                        atomic_lib::sync::engine::handle_frame(&bin_vec, &store, &mut agent).await
+                    }
+                    .into_actor(self)
+                    .map(|responses, _actor, ctx| {
+                        for response in responses {
+                            ctx.binary(response);
+                        }
+                    }),
+                );
+            }
+
             _ => {
                 tracing::debug!("Unhandled binary tag: 0x{:02x}", bin[0]);
             }
@@ -371,7 +388,12 @@ impl Handler<crate::actor_messages::QueryUpdate> for WebSocketConnection {
     type Result = ();
 
     fn handle(&mut self, msg: crate::actor_messages::QueryUpdate, ctx: &mut ws::WebsocketContext<Self>) {
-        ctx.text(format!("QUERY_UPDATE {}", serde_json::to_string(&msg).unwrap()));
+        ctx.binary(ws_v2::encode_query_update(
+            msg.property.as_deref(),
+            msg.value.as_deref(),
+            &msg.added,
+            &msg.removed,
+        ));
     }
 }
 

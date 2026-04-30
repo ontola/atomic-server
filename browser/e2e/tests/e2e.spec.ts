@@ -215,8 +215,13 @@ test.describe('data-browser', async () => {
     await input.fill('https://ontola.io');
     await page.locator(currentDialogOkButton).click();
 
+    // Verify the bookmark imported page content. Use a substring + role
+    // pairing that the live site is unlikely to change in casing or layout
+    // (the `:text-is("Full-service")` strict match was already brittle and
+    // fails now that the site uses "full-service" inline rather than as its
+    // own element).
     await expect(
-      page.locator(':text-is("Full-service")'),
+      page.getByRole('heading', { name: /software development/i }).first(),
       'Page contents not properly imported',
     ).toBeVisible();
   });
@@ -380,30 +385,62 @@ test.describe('data-browser', async () => {
     const d0 = 'depth0';
     await setTitle(page, d0);
 
-    await page.getByTestId('new-resource-folder').click();
-    await page.click(`button:has-text("${klass}")`);
+    // Create a child folder via the FolderPage's quick-create row — the old
+    // `new-resource-folder` testid + class-picker dialog were replaced by
+    // direct icon buttons in the QuickCreateRow.
+    const depth0Url = page.url();
+    await page
+      .getByRole('main')
+      .getByRole('button', { name: 'New Folder' })
+      .first()
+      .click();
+    // QuickCreateRow's onClick fires createNewResource without awaiting, so
+    // navigation happens after the click returns. Wait for the URL to change
+    // before editing — otherwise editTitle would edit depth0's title.
+    await page.waitForURL(url => url.toString() !== depth0Url, {
+      timeout: 10000,
+    });
     const d1 = 'depth1';
 
-    await setTitle(page, d1);
+    // editTitle (not setTitle) — newly-created resources auto-enter edit mode,
+    // and setTitle's `waitForCommitOnCurrentResource` would still see
+    // depth0's subject if it ran before the navigation settled.
+    await editTitle(d1, page);
 
     await expect(
       page.getByTestId('sidebar').getByText(d0),
       "Sidebar doesn't show updated parent resource title",
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 10000 });
     await expect(
       page.getByTestId('sidebar').getByText(d1),
       "Sidebar doesn't show child resource title",
-    ).toBeVisible();
-    await page.waitForTimeout(500);
+    ).toBeVisible({ timeout: 10000 });
+    // Wait for all pending commits to be acked by the server before reloading.
+    // A naked waitForTimeout(500) is racy: the page can tear down its in-memory
+    // store before the depth1 commit reaches the server, then on reload the
+    // sidebar query doesn't see depth1 as a child of depth0.
+    await page.waitForFunction(
+      () =>
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (window as any).store?.getSyncStatus?.().pendingDirtyCount === 0,
+      undefined,
+      { timeout: 10000 },
+    );
     await page.reload();
-    await expect(
-      page.getByTestId('sidebar').getByText(d1),
-      "Sidebar doesn't show parent resource resource title after refresh",
-    ).toBeVisible();
+    // After reload the sidebar collapses parent folders by default — depth1
+    // is in the tree but not in the DOM until depth0 is expanded.
     await expect(
       page.getByTestId('sidebar').getByText(d0),
+      "Sidebar doesn't show parent resource title after refresh",
+    ).toBeVisible({ timeout: 10000 });
+    await page
+      .getByTestId('sidebar')
+      .getByRole('button', { name: 'Expand folder' })
+      .click();
+    await expect(
+      page.getByTestId('sidebar').getByText(d1),
       "Sidebar doesn't show child resource title after refresh",
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 10000 });
   });
 
   test('import', async ({ page }) => {

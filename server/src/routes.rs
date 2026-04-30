@@ -63,6 +63,17 @@ async fn iroh_sync_handler(
 // precedence over a later route.
 pub fn config_routes(app: &mut actix_web::web::ServiceConfig) {
     app.service(
+        web::resource("/upload")
+            .guard(guard::Method(Method::POST))
+            .to(handlers::upload::upload_handler),
+    )
+    .service(
+        web::resource("/commit")
+            .guard(guard::Method(Method::POST))
+            .to(handlers::commit::post_commit),
+    )
+    .service(web::resource("/download/{path:[^{}]+}").to(handlers::download::handle_download))
+    .service(
         web::resource("/setup")
             .guard(guard::Method(Method::POST))
             .to(handlers::post_resource::handle_post_resource),
@@ -70,7 +81,6 @@ pub fn config_routes(app: &mut actix_web::web::ServiceConfig) {
     .service(web::resource("/ws").to(handlers::web_sockets::web_socket_handler))
     .service(web::resource("/iroh-node-id").to(iroh_node_id_handler))
     .service(web::resource("/iroh-sync").to(iroh_sync_handler))
-    .service(web::resource("/download/{path:[^{}]+}").to(handlers::download::handle_download))
     .service(web::resource("/export").to(handlers::export::handle_export))
     .service(web::resource("/plugin-ui").to(handlers::plugin_ui::handle_plugin_ui))
     .service(web::resource("/plugin-list").to(handlers::plugin_ui::handle_plugin_list))
@@ -89,16 +99,6 @@ pub fn config_routes(app: &mut actix_web::web::ServiceConfig) {
                     == content_types::ContentType::Html
             }))
             .to(handlers::single_page_app::single_page),
-    )
-    .service(
-        web::resource("/upload")
-            .guard(guard::Method(Method::POST))
-            .to(handlers::upload::upload_handler),
-    )
-    .service(
-        web::resource("/commit")
-            .guard(guard::Method(Method::POST))
-            .to(handlers::commit::post_commit),
     )
     .service(
         web::resource("/search")

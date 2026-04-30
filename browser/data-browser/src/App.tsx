@@ -83,9 +83,10 @@ registerCustomCreateActions();
 // Register global event handlers.
 registerHandlers(store);
 
+// Make the Store available globally for debugging
+window.store = store;
+
 if (isDev()) {
-  // You can access the Store from your console in dev mode!
-  window.store = store;
   const { attachDevtools } = await import('./helpers/devtools');
   attachDevtools(store);
 }

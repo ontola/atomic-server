@@ -476,6 +476,19 @@ async fn resources_all() {
 }
 
 #[tokio::test]
+async fn blobs_storage() {
+    let store = Db::init_temp("blobs_storage").await.unwrap();
+    let data = b"some binary data";
+    let hash = blake3::hash(data);
+    let hash_bytes = hash.as_bytes();
+
+    store.kv.insert(Tree::Blobs, hash_bytes, data).unwrap();
+    let retrieved = store.kv.get(Tree::Blobs, hash_bytes).unwrap().unwrap();
+
+    assert_eq!(data.to_vec(), retrieved);
+}
+
+#[tokio::test]
 /// Changing these values actually correctly updates the index.
 async fn invalidate_cache() {
     let store_owned = Db::init_temp("invalidate_cache").await.unwrap();

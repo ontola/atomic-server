@@ -7,13 +7,20 @@ pub const DID_AD_AGENT_PREFIX: &str = "did:ad:agent:";
 /// The prefix for Commit DIDs: `did:ad:commit:`
 pub const DID_AD_COMMIT_PREFIX: &str = "did:ad:commit:";
 
+/// The prefix for Blob DIDs: `did:ad:blob:`. The remainder is the
+/// 32-byte BLAKE3 hash of the bytes, hex-encoded (64 chars).
+pub const DID_AD_BLOB_PREFIX: &str = "did:ad:blob:";
+
 /// The Subject of a Resource.
 ///
 /// In Atomic Data, every subject is a URI.
 /// They are differentiated by their scheme:
 /// - `internal:` for resources hosted on this server.
 /// - `http:` or `https:` for resources on other servers.
-/// - `did:` for Decentralized Identifiers (specifically commit signatures).
+/// - `did:` for Decentralized Identifiers. Four `did:ad:` forms exist:
+///   `did:ad:agent:{publicKey}`, `did:ad:commit:{signature}`,
+///   `did:ad:blob:{blake3-hex}`, and the default `did:ad:{genesis}` for
+///   Resources. See `docs/src/did.md`.
 #[derive(Clone, Debug)]
 pub enum Subject {
     /// Internal representation for local data.
@@ -25,8 +32,8 @@ pub enum Subject {
     },
     /// External resource identifier (usually over HTTP).
     External(Url),
-    /// Decentralized Identifier (typically did:ad:{genesis}).
-    /// Contains an optional drive identifier (DID or alias) for routing.
+    /// Decentralized Identifier (any `did:ad:*` form: agent, commit, blob,
+    /// or genesis-resource). Contains an optional drive routing hint.
     Did {
         url: Url,
         drive_hint: Option<String>,
@@ -182,6 +189,52 @@ impl Subject {
         match self {
             Subject::Did { url, .. } => url.as_str().starts_with(DID_AD_COMMIT_PREFIX),
             _ => false,
+        }
+    }
+
+    /// Returns true if this is a DID Blob subject (did:ad:blob:).
+    pub fn is_blob_did(&self) -> bool {
+        match self {
+            Subject::Did { url, .. } => url.as_str().starts_with(DID_AD_BLOB_PREFIX),
+            _ => false,
+        }
+    }
+
+    /// If this is a `did:ad:blob:` subject, returns the hex-encoded BLAKE3
+    /// hash (the part after the prefix, with any `?drive=` hint stripped).
+    /// Returns `None` for any other variant.
+    pub fn blob_hash_hex(&self) -> Option<&str> {
+        match self {
+            Subject::Did { url, .. } => {
+                // url.path() includes the part after `did:`, e.g. `ad:blob:abc...`
+                // Use as_str() and slice past the prefix to keep it simple.
+                let s = url.as_str();
+                let rest = s.strip_prefix(DID_AD_BLOB_PREFIX)?;
+                // Drop query (`?drive=...`) / fragment if present.
+                let end = rest
+                    .find(|c: char| c == '?' || c == '#')
+                    .unwrap_or(rest.len());
+                Some(&rest[..end])
+            }
+            _ => None,
+        }
+    }
+
+    /// Construct a `did:ad:blob:` subject from a 32-byte BLAKE3 hash.
+    /// Used on the receiving end of `BLOB_REQUEST`/`BLOB_RESPONSE` frames,
+    /// which carry the raw bytes rather than the DID form.
+    pub fn from_blob_hash(hash: &[u8; 32]) -> Self {
+        let mut hex = String::with_capacity(DID_AD_BLOB_PREFIX.len() + 64);
+        hex.push_str(DID_AD_BLOB_PREFIX);
+        for byte in hash {
+            // Inline lowercase-hex; avoids pulling in the `hex` crate just for this.
+            hex.push(char::from_digit((byte >> 4) as u32, 16).unwrap());
+            hex.push(char::from_digit((byte & 0xf) as u32, 16).unwrap());
+        }
+        // Url::parse on a `did:ad:blob:<hex>` always succeeds (hex is RFC-3986 safe).
+        Subject::Did {
+            url: Url::parse(&hex).expect("valid did:ad:blob: URL"),
+            drive_hint: None,
         }
     }
 
@@ -494,6 +547,44 @@ mod tests {
             "as_str() must preserve + and = without percent-encoding"
         );
         assert!(subject.is_agent_did());
+    }
+
+    #[test]
+    fn test_blob_did_parsing() {
+        let blob_did =
+            "did:ad:blob:af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262";
+        let subject = Subject::from_raw(blob_did, None);
+
+        assert!(matches!(subject, Subject::Did { .. }));
+        assert!(subject.is_blob_did());
+        assert!(!subject.is_agent_did());
+        assert!(!subject.is_commit_did());
+        assert_eq!(
+            subject.blob_hash_hex(),
+            Some("af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262")
+        );
+
+        // Roundtrip via raw bytes.
+        let mut bytes = [0u8; 32];
+        for (i, byte) in bytes.iter_mut().enumerate() {
+            *byte = i as u8;
+        }
+        let from_bytes = Subject::from_blob_hash(&bytes);
+        assert!(from_bytes.is_blob_did());
+        assert_eq!(
+            from_bytes.blob_hash_hex(),
+            Some("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
+        );
+
+        // Drive hint is preserved on a blob DID, hash extraction strips it.
+        let with_drive = format!("{}?drive=did:ad:abc", blob_did);
+        let routed = Subject::from_raw(&with_drive, None);
+        assert!(routed.is_blob_did());
+        assert_eq!(routed.drive_hint(), Some("did:ad:abc"));
+        assert_eq!(
+            routed.blob_hash_hex(),
+            Some("af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262")
+        );
     }
 
     #[test]

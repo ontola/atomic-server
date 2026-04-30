@@ -23,22 +23,31 @@ pub enum PathReturn {
 pub enum ResourceResponse {
     Resource(Resource),
     ResourceWithReferenced(Resource, Vec<Resource>),
+    /// A redirect to another subject. Used for resolving DIDs to their
+    /// location-specific HTTP aliases (e.g. `did:ad:blob:` to `/download/files/`).
+    Redirect(String),
 }
 
 impl ResourceResponse {
     /// Only take the main resource, discard any referenced resources.
+    /// Panics if this is a Redirect.
     pub fn to_single(&self) -> Resource {
         match self {
             ResourceResponse::Resource(resource) => resource.clone(),
             ResourceResponse::ResourceWithReferenced(resource, _) => resource.clone(),
+            ResourceResponse::Redirect(s) => {
+                panic!("Cannot convert Redirect ({}) to Resource", s)
+            }
         }
     }
 
     /// Get the subject of the main resource.
-    pub fn get_subject(&self) -> &Subject {
+    /// Returns None for Redirects.
+    pub fn get_subject(&self) -> Option<&Subject> {
         match self {
-            ResourceResponse::Resource(resource) => resource.get_subject(),
-            ResourceResponse::ResourceWithReferenced(resource, _) => resource.get_subject(),
+            ResourceResponse::Resource(resource) => Some(resource.get_subject()),
+            ResourceResponse::ResourceWithReferenced(resource, _) => Some(resource.get_subject()),
+            ResourceResponse::Redirect(_) => None,
         }
     }
 
@@ -49,6 +58,9 @@ impl ResourceResponse {
                 let mut list = references.clone();
                 list.push(resource.clone());
                 Ok(Resource::vec_to_json_ad(&list, origin)?)
+            }
+            ResourceResponse::Redirect(s) => {
+                Err(format!("Cannot convert Redirect ({}) to JSON-AD", s).into())
             }
         }
     }
@@ -65,6 +77,9 @@ impl ResourceResponse {
                 list.push(resource.clone());
                 Ok(Resource::vec_to_json(&list, store, origin).await?)
             }
+            ResourceResponse::Redirect(s) => {
+                Err(format!("Cannot convert Redirect ({}) to JSON", s).into())
+            }
         }
     }
 
@@ -80,6 +95,9 @@ impl ResourceResponse {
                 list.push(resource.clone());
                 Ok(Resource::vec_to_json_ld(&list, store, origin).await?)
             }
+            ResourceResponse::Redirect(s) => {
+                Err(format!("Cannot convert Redirect ({}) to JSON-LD", s).into())
+            }
         }
     }
 
@@ -91,6 +109,7 @@ impl ResourceResponse {
                 list.push(resource.clone());
                 Resource::vec_to_atoms(&list)
             }
+            ResourceResponse::Redirect(_) => Vec::new(),
         }
     }
 
@@ -102,6 +121,9 @@ impl ResourceResponse {
                 let mut list = references.clone();
                 list.push(resource.clone());
                 Ok(Resource::vec_to_n_triples(&list, store).await?)
+            }
+            ResourceResponse::Redirect(s) => {
+                Err(format!("Cannot convert Redirect ({}) to N-Triples", s).into())
             }
         }
     }
@@ -323,6 +345,10 @@ pub trait Storelike: Sized + Send + Sync {
 
                 Ok(resource)
             }
+            ResourceResponse::Redirect(target) => Err(AtomicError::not_found(format!(
+                "Resource {} redirected to {}",
+                subject, target
+            ))),
         }
     }
 

@@ -115,7 +115,17 @@ test.describe('tables', async () => {
     const tableName = 'Made up music genres';
     await page.getByPlaceholder('New Table').fill(tableName);
     await page.locator('dialog[open] button:has-text("Create")').click();
-    await expect(page.locator(`h1:has-text("${tableName}")`)).toBeVisible();
+    // Newly-created resources auto-enter edit mode, so the title renders as
+    // an input. Match either form.
+    await expect(
+      page
+        .getByTestId('editable-title')
+        .and(page.locator(`:text-is("${tableName}"), [value="${tableName}"]`))
+        .first(),
+    ).toBeVisible();
+    // Exit edit mode so subsequent keyboard actions (Tab to move into the
+    // grid) don't get swallowed by the title input.
+    await page.keyboard.press('Escape');
 
     const dateColumnName = 'Existed since';
     await newColumn('Date');

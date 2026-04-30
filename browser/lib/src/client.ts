@@ -8,12 +8,16 @@ import {
   signRequest,
 } from './authentication.js';
 import { AtomicError, ErrorType } from './error.js';
+// Import directly from the modules to avoid a circular dep through `./index.js`
+// — under some bundlers the re-exported binding lands as `undefined` at runtime
+// (TypeError: serializeDeterministically is not a function), which surfaces in
+// the upload-roundtrip integration test.
+import type { Agent } from './agents.js';
 import {
-  type Agent,
   type Commit,
   serializeDeterministically,
   parseCommitJSON,
-} from './index.js';
+} from './commit.js';
 import { JSONADParser } from './parse.js';
 import { Resource } from './resource.js';
 import {

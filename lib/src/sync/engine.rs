@@ -106,10 +106,32 @@ pub async fn handle_frame(
 
         protocol::tag::SYNC_PUSH => {
             if let Some(push) = protocol::decode_sync_push(payload) {
-                import_sync_push(&push, store, agent).await;
-                vec![protocol::encode_sync_ok(&push.drive)]
+                let (_count, mut blob_requests) = import_sync_push(&push, store, agent).await;
+                let mut responses = vec![protocol::encode_sync_ok(&push.drive)];
+                responses.append(&mut blob_requests);
+                responses
             } else {
                 vec![protocol::encode_error(0, "Invalid SYNC_PUSH frame")]
+            }
+        }
+
+        protocol::tag::BLOB_REQUEST => {
+            if let Some(hash) = protocol::decode_blob_request(payload) {
+                match store.kv.get(Tree::Blobs, &hash) {
+                    Ok(Some(bytes)) => vec![protocol::encode_blob_response(&hash, &bytes)],
+                    _ => vec![protocol::encode_error(0, "Blob not found")],
+                }
+            } else {
+                vec![protocol::encode_error(0, "Invalid BLOB_REQUEST frame")]
+            }
+        }
+
+        protocol::tag::BLOB_RESPONSE => {
+            if let Some(resp) = protocol::decode_blob_response(payload) {
+                let _ = store.kv.insert(Tree::Blobs, &resp.hash, &resp.bytes);
+                vec![]
+            } else {
+                vec![protocol::encode_error(0, "Invalid BLOB_RESPONSE frame")]
             }
         }
 
@@ -307,20 +329,24 @@ pub async fn handle_sync_vv(
 
     for (subject, server_vv) in &server_vvs {
         // Check read permission
-        if let Ok(resource) = store
+        let resource = match store
             .get_resource(&crate::Subject::from_raw(
                 subject,
                 store.get_base_domain().as_deref(),
             ))
             .await
         {
-            if crate::hierarchy::check_read(store, &resource, agent)
-                .await
-                .is_err()
-            {
-                continue;
+            Ok(r) => {
+                if crate::hierarchy::check_read(store, &r, agent)
+                    .await
+                    .is_err()
+                {
+                    continue;
+                }
+                r
             }
-        }
+            Err(_) => continue,
+        };
 
         if let Some(client_vv) = client_vvs.get(subject) {
             let server_ahead = server_vv
@@ -347,6 +373,26 @@ pub async fn handle_sync_vv(
 
             if client_ahead {
                 pull.push(subject.clone());
+            }
+
+            // New logic: even if VVs match (or server is ahead), if the server is missing the blob, we must pull it.
+            // This handles the case where metadata was pushed via HTTP POST /commit but the blob is still on the client.
+            if let Ok(blob_val) = resource.get(crate::urls::BLOB) {
+                let blob_did = blob_val.to_string();
+                if let Some(hash_hex) = crate::Subject::from_raw(&blob_did, None).blob_hash_hex() {
+                    if let Ok(hash_bytes) = hex::decode(&hash_hex) {
+                        if hash_bytes.len() == 32 {
+                            let mut hash = [0u8; 32];
+                            hash.copy_from_slice(&hash_bytes);
+                            if !store.kv.contains_key(Tree::Blobs, &hash).unwrap_or(false) {
+                                // If we don't have the blob, add to pull so the server requests it
+                                if !pull.contains(subject) {
+                                    pull.push(subject.clone());
+                                }
+                            }
+                        }
+                    }
+                }
             }
         } else {
             if let Ok(Some(snapshot_bytes)) =
@@ -381,7 +427,12 @@ pub async fn handle_sync_vv(
             .iter()
             .map(|(s, b)| (s.as_str(), b.as_slice()))
             .collect();
-        frames.push(protocol::encode_sync_push(drive, &entries));
+        // `encode_sync_push_chunks` splits by entry count + byte budget and
+        // marks the final frame LAST. Each frame is independent on the wire;
+        // the receiver loops reading SYNC_PUSH until it sees LAST.
+        for chunk in protocol::encode_sync_push_chunks(drive, &entries) {
+            frames.push(chunk);
+        }
     }
 
     frames
@@ -394,28 +445,27 @@ pub async fn import_sync_push(
     push: &protocol::DecodedSyncPush,
     store: &Db,
     for_agent: &crate::agents::ForAgent,
-) -> usize {
+) -> (usize, Vec<Vec<u8>>) {
     // Check write access to the drive
-    if !matches!(for_agent, crate::agents::ForAgent::Sudo) {
-        let drive_subject =
-            crate::Subject::from_raw(&push.drive, store.get_base_domain().as_deref());
-        if let Ok(drive_resource) = store.get_resource(&drive_subject).await {
-            if crate::hierarchy::check_write(store, &drive_resource, for_agent)
-                .await
-                .is_err()
-            {
-                tracing::warn!(
-                    "import_sync_push: agent {:?} has no write access to drive {}",
-                    for_agent,
-                    push.drive
-                );
-                return 0;
-            }
+    let drive_subject =
+        crate::Subject::from_raw(&push.drive, store.get_base_domain().as_deref());
+    if let Ok(drive_resource) = store.get_resource(&drive_subject).await {
+        if crate::hierarchy::check_write(store, &drive_resource, for_agent)
+            .await
+            .is_err()
+        {
+            tracing::warn!(
+                "import_sync_push: agent {:?} has no write access to drive {}",
+                for_agent,
+                push.drive
+            );
+            return (0, vec![]);
         }
-        // If drive doesn't exist yet, allow import (bootstrap case — new drive arriving)
     }
+    // If drive doesn't exist yet, allow import (bootstrap case — new drive arriving)
 
     let mut count = 0;
+    let mut blob_requests = Vec::new();
 
     for entry in &push.entries {
         // Load existing doc or create new
@@ -487,6 +537,22 @@ pub async fn import_sync_push(
 
         let _ = store.add_resource_opts(&resource, false, true, true).await;
         count += 1;
+
+        // Check for missing blobs
+        if let Ok(blob_val) = resource.get(crate::urls::BLOB) {
+            let blob_did = blob_val.to_string();
+            if let Some(hash_hex) = crate::Subject::from_raw(&blob_did, None).blob_hash_hex() {
+                if let Ok(hash_bytes) = hex::decode(&hash_hex) {
+                    if hash_bytes.len() == 32 {
+                        let mut hash = [0u8; 32];
+                        hash.copy_from_slice(&hash_bytes);
+                        if !store.kv.contains_key(Tree::Blobs, &hash).unwrap_or(false) {
+                            blob_requests.push(protocol::encode_blob_request(&hash));
+                        }
+                    }
+                }
+            }
+        }
     }
 
     tracing::info!(
@@ -501,7 +567,7 @@ pub async fn import_sync_push(
             entry.loro_bytes.len()
         );
     }
-    count
+    (count, blob_requests)
 }
 
 /// Import Loro deltas from a peer into server resources.

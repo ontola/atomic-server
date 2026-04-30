@@ -1,9 +1,9 @@
-use std::{ffi::OsStr, io::Write, path::Path};
+use std::{ffi::OsStr, path::Path};
 
 use actix_multipart::{Field, Multipart};
 use actix_web::{web, HttpResponse};
 use atomic_lib::{
-    hierarchy::check_write, urls, utils::now, Db, Resource, Storelike, Subject, Value,
+    hierarchy::check_write, urls, Db, Resource, Storelike, Subject, Value,
 };
 use futures::{StreamExt, TryStreamExt};
 #[cfg(feature = "img")]
@@ -64,7 +64,7 @@ pub async fn upload_handler(
 
 async fn save_file_and_create_resource(
     mut field: Field,
-    appstate: &web::Data<AppState>,
+    _appstate: &web::Data<AppState>,
     parent: &str,
     store: &Db,
     // The full origin URL (e.g., "https://example.com") for constructing resource subjects
@@ -73,36 +73,31 @@ async fn save_file_and_create_resource(
     let content_type = field.content_disposition().clone();
     let filename = content_type.get_filename().ok_or("Filename is missing")?;
 
-    std::fs::create_dir_all(&appstate.config.uploads_path)?;
-
-    let file_id = format!(
-        "{}-{}",
-        now(),
-        sanitize_filename::sanitize(filename)
-            // Spacebars lead to very annoying bugs in browsers
-            .replace(' ', "-")
-    );
-
-    let mut file_path = appstate.config.uploads_path.clone();
-    file_path.push(&file_id);
-
-    let mut file = std::fs::File::create(&file_path)?;
+    let mut hasher = blake3::Hasher::new();
+    let mut buffer = Vec::new();
 
     // Field in turn is stream of *Bytes* object
     while let Some(chunk) = field.next().await {
         let data = chunk.map_err(|e| format!("Error while reading multipart data. {}", e))?;
-        // TODO: Update a SHA256 hash here for checksum
-        file.write_all(&data)?;
+        hasher.update(&data);
+        buffer.extend_from_slice(&data);
     }
 
-    let byte_count: i64 = file
-        .metadata()?
-        .len()
-        .try_into()
-        .map_err(|_e| "Too large")?;
+    let hash = hasher.finalize();
+    let hash_str = hash.to_hex().to_string();
+    let hash_bytes = hash.as_bytes();
+
+    // Bytes are stored content-addressed in Tree::Blobs. The capability to
+    // fetch them is the hash itself; no filesystem copy is needed. See
+    // docs/src/files.md.
+    store
+        .kv
+        .insert(atomic_lib::db::trees::Tree::Blobs, hash_bytes, &buffer)?;
+
+    let byte_count: i64 = buffer.len() as i64;
 
     let mimetype = guess_mime_for_filename(filename);
-    let subject_path = format!("files/{}", urlencoding::encode(&file_id));
+    let subject_path = format!("files/{}", urlencoding::encode(&hash_str));
     // Build a proper Internal subject using Subject::new_local so that
     // Resource::save correctly identifies this as a local resource and applies
     // the commit in-process (instead of POSTing via HTTP, which fails with
@@ -115,7 +110,9 @@ async fn save_file_and_create_resource(
         .set_subject(subject.to_string())
         .set_string(urls::PARENT.into(), parent, store)
         .await?
-        .set_string(urls::INTERNAL_ID.into(), &file_id, store)
+        .set_string(urls::INTERNAL_ID.into(), &hash_str, store)
+        .await?
+        .set(urls::BLOB.into(), Value::AtomicUrl(format!("did:ad:blob:{}", hash_str).into()), store)
         .await?
         .set(urls::FILESIZE.into(), Value::Integer(byte_count), store)
         .await?
@@ -128,7 +125,7 @@ async fn save_file_and_create_resource(
 
     #[cfg(feature = "img")]
     if mimetype.starts_with("image/") {
-        if let Ok(img) = image::ImageReader::open(&file_path)?.decode() {
+        if let Ok(img) = image::load_from_memory(&buffer) {
             let (width, height) = img.dimensions();
             resource
                 .set(

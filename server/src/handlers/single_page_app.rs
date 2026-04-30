@@ -85,6 +85,12 @@ impl MetaTags {
 
                 tags
             }
+            ResourceResponse::Redirect(target) => MetaTags {
+                description: format!("Redirecting to {}", target),
+                title: "Redirecting...".into(),
+                image: "".into(),
+                json: None,
+            },
         }
     }
 }

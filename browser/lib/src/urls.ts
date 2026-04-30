@@ -43,6 +43,9 @@ export const classes = {
   ontology: 'https://atomicdata.dev/class/ontology',
 };
 
+export const BLOB = 'https://atomicdata.dev/properties/blob';
+export const INTERNAL_ID = 'https://atomicdata.dev/properties/internalId';
+
 /**
  *  @deprecated These have been move to their respective onotlogies e.g. core, server, collections, etc.
  */
@@ -125,6 +128,7 @@ export const properties = {
     downloadUrl: 'https://atomicdata.dev/properties/downloadURL',
     mimetype: 'https://atomicdata.dev/properties/mimetype',
     attachments: 'https://atomicdata.dev/properties/attachments',
+    blob: 'https://atomicdata.dev/properties/blob',
   },
   chatRoom: {
     messages: 'https://atomicdata.dev/properties/messages',

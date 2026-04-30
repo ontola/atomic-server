@@ -13,7 +13,7 @@ mod prop_val_sub_index;
 mod query_index;
 #[cfg(feature = "db-redb")]
 pub mod redb_store;
-pub use query_index::drive_prefix_from_subject;
+pub use query_index::{drive_prefix_from_subject, QueryFilter};
 #[cfg(feature = "db-sled")]
 pub mod sled_store;
 #[cfg(test)]
@@ -61,7 +61,7 @@ use self::{
     prop_val_sub_index::{add_atom_to_prop_val_sub_index, find_in_prop_val_sub_index},
     query_index::{
         check_if_atom_matches_watched_query_filters, query_sorted_indexed, should_include_resource,
-        update_indexed_member, IndexIterator, QueryFilter,
+        update_indexed_member, IndexIterator,
     },
     val_prop_sub_index::add_atom_to_valpropsub_index,
 };
@@ -81,6 +81,21 @@ pub enum DbEvent {
     /// Resource destroyed.
     Destroyed {
         subject: Subject,
+    },
+    /// A resource entered or left the result set of a watched query. Emitted
+    /// from `apply_transaction` after a successful write that touches
+    /// `Tree::QueryMembers`. `filter_bytes` is the encoded `QueryFilter`
+    /// (the same key used in `Tree::WatchedQueries`).
+    ///
+    /// Note: a sort-key change on an already-matching resource produces a
+    /// (Removed, Added) pair for the same `(filter_bytes, subject)` within a
+    /// single commit. Consumers that want true add/remove semantics should
+    /// dedup; consumers that want every membership-touching event (the
+    /// current text `QUERY_UPDATE` model) can pass them through.
+    QueryMembershipChanged {
+        filter_bytes: Vec<u8>,
+        subject: String,
+        added: bool,
     },
 }
 
@@ -131,6 +146,15 @@ pub struct Db {
     on_commit: Option<Arc<HandleCommit>>,
     /// Broadcast channel for all resource mutations.
     db_events: tokio::sync::broadcast::Sender<DbEvent>,
+    /// In-memory authoritative map of watched query filters, keyed by drive
+    /// prefix (e.g. `"https://example.com"` for HTTP drives, the DID for
+    /// DID-form drives). The KV `Tree::WatchedQueries` is the persistence
+    /// layer; this map is the runtime lookup. Populated from the KV at Db
+    /// open, kept in sync by `Db::register_watched_query`. The hot path in
+    /// `check_if_atom_matches_watched_query_filters` reads from here and
+    /// never touches msgpack on a commit.
+    watched_queries_by_drive:
+        Arc<RwLock<HashMap<String, Vec<Arc<query_index::QueryFilter>>>>>,
     /// Where the DB is stored on disk.
     #[allow(dead_code)]
     path: std::path::PathBuf,
@@ -160,10 +184,16 @@ impl Db {
 
             on_commit: None,
             db_events: tokio::sync::broadcast::channel(64).0,
+            watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
             base_domain,
         };
 
         store.add_class_extender(crate::collections::get_collection_class_extender())?;
+
+        // Load persisted watched-queries (if any) into the in-memory map
+        // before bootstrap, so any filter-matching commits during bootstrap
+        // see the right state.
+        store.populate_watched_queries_cache()?;
 
         // Re-run on every startup so new vocabulary (properties, classes) added
         // to default_store.json is available without a manual `populate` command.
@@ -185,11 +215,13 @@ impl Db {
 
             on_commit: None,
             db_events: tokio::sync::broadcast::channel(64).0,
+            watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
             base_domain,
         };
 
         store.add_class_extender(crate::collections::get_collection_class_extender())?;
 
+        store.populate_watched_queries_cache()?;
         crate::populate::bootstrap(&store)
             .await
             .map_err(|e| format!("Failed to populate base models. {}", e))?;
@@ -212,11 +244,13 @@ impl Db {
 
             on_commit: None,
             db_events: tokio::sync::broadcast::channel(64).0,
+            watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
             base_domain,
         };
 
         store.add_class_extender(crate::collections::get_collection_class_extender())?;
 
+        store.populate_watched_queries_cache()?;
         crate::populate::bootstrap(&store)
             .await
             .map_err(|e| format!("Failed to populate base models. {}", e))?;
@@ -229,6 +263,7 @@ impl Db {
     pub async fn init_redb_file(
         path: &std::path::Path,
         base_domain: Option<String>,
+        uploads_path: &std::path::Path,
     ) -> AtomicResult<Db> {
         tracing::info!("Opening ReDB database at {:?}", path);
 
@@ -236,6 +271,22 @@ impl Db {
             .map_err(|e| format!("Failed to create database directory {}: {e}", path.display()))?;
 
         let redb_path = path.join("atomic.redb");
+
+        // Migration logic: if sled exists but redb doesn't, migrate
+        #[cfg(feature = "db-sled")]
+        if !redb_path.exists() {
+            let sled_path = path.join("sled");
+            if sled_path.exists() {
+                Self::migrate_from_sled(&sled_path, &redb_path, uploads_path, base_domain.as_deref())
+                    .await?;
+            }
+        } else {
+            let _ = uploads_path;
+        }
+
+        #[cfg(not(feature = "db-sled"))]
+        let _ = uploads_path;
+
         let redb_store = redb_store::RedbStore::new_file(&redb_path)?;
 
         let store = Db {
@@ -247,15 +298,112 @@ impl Db {
 
             on_commit: None,
             db_events: tokio::sync::broadcast::channel(64).0,
+            watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
             base_domain,
         };
 
         store.add_class_extender(crate::collections::get_collection_class_extender())?;
 
+        store.populate_watched_queries_cache()?;
         crate::populate::bootstrap(&store)
             .await
             .map_err(|e| format!("Failed to populate base models. {}", e))?;
         Ok(store)
+    }
+
+    #[cfg(all(feature = "db-redb", feature = "db-sled", not(target_arch = "wasm32")))]
+    async fn migrate_from_sled(
+        sled_path: &std::path::Path,
+        redb_path: &std::path::Path,
+        uploads_path: &std::path::Path,
+        base_domain: Option<&str>,
+    ) -> AtomicResult<()> {
+        tracing::warn!("Migrating data from Sled to ReDB and files to CAS...");
+
+        let sled_store = sled_store::SledStore::open(sled_path)?;
+        let redb_store = redb_store::RedbStore::new_file(redb_path)?;
+
+        let mut count_resources = 0;
+        let mut count_snapshots = 0;
+        let mut count_blobs = 0;
+
+        // Migrate Resources
+        for item in sled_store.iter_tree(Tree::Resources) {
+            let (subject_bytes, propvals_bin) = item?;
+            let subject_str = String::from_utf8_lossy(&subject_bytes).to_string();
+
+            // Try to decode with various versions
+            let mut propvals = if let Ok(pv) = rmp_serde::from_slice::<PropVals>(&propvals_bin) {
+                pv
+            } else if let Ok(pv_v2) = rmp_serde::from_slice::<v2_types::PropValsV2>(&propvals_bin) {
+                v2_types::propvals_v2_to_v3(pv_v2, base_domain.unwrap_or("localhost"))
+            } else if let Ok(pv_v1) = bincode1::deserialize::<v1_types::PropValsV1>(&propvals_bin) {
+                v1_types::propvals_v1_to_v2(pv_v1)
+            } else {
+                tracing::error!("Failed to migrate resource: {}", subject_str);
+                continue;
+            };
+
+            // Migrate File resources to CAS
+            let is_file = propvals
+                .get(urls::IS_A)
+                .map(|v| v.to_string().contains(urls::FILE))
+                .unwrap_or(false);
+
+            if is_file && !propvals.contains_key(urls::BLOB) {
+                if let Some(internal_id) = propvals.get(urls::INTERNAL_ID).map(|v| v.to_string()) {
+                    let file_path = uploads_path.join(&internal_id);
+                    if file_path.exists() {
+                        if let Ok(bytes) = std::fs::read(&file_path) {
+                            let hash = blake3::hash(&bytes);
+                            let hash_hex = hash.to_hex().to_string();
+                            let hash_bytes = hash.as_bytes();
+
+                            redb_store.insert(Tree::Blobs, hash_bytes, &bytes)?;
+                            propvals.insert(urls::BLOB.to_string(), Value::AtomicUrl(format!("did:ad:blob:{}", hash_hex.clone())));
+                            propvals.insert(urls::INTERNAL_ID.to_string(), Value::String(hash_hex));
+                            count_blobs += 1;
+                        }
+                    }
+                }
+            }
+
+            redb_store.insert(Tree::Resources, &subject_bytes, &rmp_serde::to_vec(&propvals).unwrap())?;
+            count_resources += 1;
+        }
+
+        // Migrate LoroSnapshots
+        for item in sled_store.iter_tree(Tree::LoroSnapshots) {
+            let (key, val) = item?;
+            redb_store.insert(Tree::LoroSnapshots, &key, &val)?;
+            count_snapshots += 1;
+        }
+
+        // Migrate other metadata trees
+        for tree in [
+            Tree::PluginMeta,
+            Tree::DriveMapping,
+            Tree::DidMapping,
+        ] {
+            for item in sled_store.iter_tree(tree.clone()) {
+                let (key, val) = item?;
+                redb_store.insert(tree.clone(), &key, &val)?;
+            }
+        }
+
+        tracing::info!(
+            "Migration complete: {} resources, {} snapshots, {} blobs migrated.",
+            count_resources,
+            count_snapshots,
+            count_blobs
+        );
+
+        // Optionally rename old sled dir
+        let mut backup_path = sled_path.to_path_buf();
+        backup_path.set_extension("bak");
+        let _ = std::fs::rename(sled_path, backup_path);
+
+        Ok(())
     }
 
     /// Creates a Db backed by redb with OPFS persistent storage.
@@ -273,11 +421,13 @@ impl Db {
 
             on_commit: None,
             db_events: tokio::sync::broadcast::channel(64).0,
+            watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
             base_domain,
         };
 
         store.add_class_extender(crate::collections::get_collection_class_extender())?;
 
+        store.populate_watched_queries_cache()?;
         crate::populate::bootstrap(&store)
             .await
             .map_err(|e| format!("Failed to populate base models. {}", e))?;
@@ -295,7 +445,7 @@ impl Db {
 
     /// Create a temporary Db in `.temp/db/{id}`. Useful for testing.
     /// Populates the database, creates a default agent, and sets the server_url to "http://localhost/".
-    #[cfg(feature = "db-sled")]
+    #[cfg(all(feature = "db-sled", not(feature = "db-redb")))]
     pub async fn init_temp(id: &str) -> AtomicResult<Db> {
         let tmp_dir_path = format!(".temp/db/{}", id);
         let _try_remove_existing = std::fs::remove_dir_all(&tmp_dir_path);
@@ -311,15 +461,17 @@ impl Db {
     }
 
     /// Create a temporary Db backed by ReDB. Useful for testing.
-    #[cfg(all(feature = "db-redb", not(feature = "db-sled"), not(target_arch = "wasm32")))]
+    #[cfg(all(feature = "db-redb", not(target_arch = "wasm32")))]
     pub async fn init_temp(id: &str) -> AtomicResult<Db> {
         let tmp_dir_path = format!(".temp/db/{}", id);
+        let uploads_path = format!(".temp/db/{}/uploads", id);
         let _try_remove_existing = std::fs::remove_dir_all(&tmp_dir_path);
-        std::fs::create_dir_all(&tmp_dir_path)
+        std::fs::create_dir_all(&uploads_path)
             .map_err(|e| format!("Failed to create temp dir: {e}"))?;
         let store = Db::init_redb_file(
             std::path::Path::new(&tmp_dir_path),
             Some("https://localhost".into()),
+            std::path::Path::new(&uploads_path),
         )
         .await?;
         let agent = store.create_agent(None).await?;
@@ -668,6 +820,13 @@ impl Db {
         origin: &str,
         for_agent: &ForAgent,
     ) -> AtomicResult<ResourceResponse> {
+        if subject.is_blob_did() {
+            if let Some(hash) = subject.blob_hash_hex() {
+                let target = format!("{}/download/files/{}", origin.trim_end_matches('/'), hash);
+                return Ok(ResourceResponse::Redirect(target));
+            }
+        }
+
         let store = self.clone_with_url(origin.to_string());
 
         store.get_resource_extended(subject, false, for_agent).await
@@ -1054,10 +1213,139 @@ impl Db {
         }
     }
 
+    /// Register a filter to be watched. Persists to `Tree::WatchedQueries`
+    /// (idempotent — same filter encodes to the same bytes) and pushes into
+    /// the in-memory `watched_queries_by_drive` map. The KV `contains_key`
+    /// short-circuit keeps the in-memory Vec from growing on duplicate
+    /// `watch()` calls (e.g. when a client reconnects and re-watches a
+    /// filter that's already persisted).
+    pub(crate) fn register_watched_query(
+        &self,
+        filter: query_index::QueryFilter,
+    ) -> AtomicResult<()> {
+        let filter_bytes = filter.encode()?;
+        // Skip if already persisted — avoids growing the in-memory Vec on
+        // re-watches. The KV is authoritative for "what filters exist"; the
+        // in-memory map is just a decoded mirror.
+        if self
+            .kv
+            .contains_key(crate::db::trees::Tree::WatchedQueries, &filter_bytes)
+            .unwrap_or(false)
+        {
+            return Ok(());
+        }
+        self.kv
+            .insert(crate::db::trees::Tree::WatchedQueries, &filter_bytes, b"")?;
+        let drive_key = filter.drive.as_str().to_string();
+        if let Ok(mut map) = self.watched_queries_by_drive.write() {
+            map.entry(drive_key).or_insert_with(Vec::new).push(Arc::new(filter));
+        }
+        Ok(())
+    }
+
+    /// Rebuild the in-memory watched-queries map from `Tree::WatchedQueries`.
+    /// Called once at Db open (after KV/migrations are ready) so the map is
+    /// authoritative on first commit. Subsequent `register_watched_query`
+    /// calls keep both stores in sync.
+    pub(crate) fn populate_watched_queries_cache(&self) -> AtomicResult<()> {
+        let mut new_map: HashMap<String, Vec<Arc<query_index::QueryFilter>>> = HashMap::new();
+        for entry in self.kv.iter_tree(crate::db::trees::Tree::WatchedQueries) {
+            let (k, _v) = match entry {
+                Ok(pair) => pair,
+                Err(e) => {
+                    tracing::warn!("populate_watched_queries_cache: skipping bad entry: {e}");
+                    continue;
+                }
+            };
+            let qf = match query_index::QueryFilter::from_bytes(&k) {
+                Ok(qf) => qf,
+                Err(e) => {
+                    tracing::warn!(
+                        "populate_watched_queries_cache: skipping undecodable entry ({} bytes): {e}",
+                        k.len()
+                    );
+                    continue;
+                }
+            };
+            let drive_key = qf.drive.as_str().to_string();
+            new_map.entry(drive_key).or_insert_with(Vec::new).push(Arc::new(qf));
+        }
+        if let Ok(mut map) = self.watched_queries_by_drive.write() {
+            *map = new_map;
+        }
+        Ok(())
+    }
+
+    /// Look up the watched filters for a given drive prefix string. Returns
+    /// a cheap-cloned `Vec<Arc<QueryFilter>>`; iterating it doesn't hold the
+    /// map lock.
+    pub(crate) fn watched_queries_for_drive(
+        &self,
+        drive_key: &str,
+    ) -> Vec<Arc<query_index::QueryFilter>> {
+        self.watched_queries_by_drive
+            .read()
+            .ok()
+            .and_then(|m| m.get(drive_key).cloned())
+            .unwrap_or_default()
+    }
+
+    /// All watched filters across every drive. Used as a fallback for
+    /// DID-subject atoms whose drive prefix can't be derived (their
+    /// `drive_prefix_from_subject` returns the subject itself, which won't
+    /// match an HTTP-drive filter's bucket).
+    pub(crate) fn all_watched_queries(&self) -> Vec<Arc<query_index::QueryFilter>> {
+        self.watched_queries_by_drive
+            .read()
+            .map(|m| m.values().flat_map(|v| v.iter().cloned()).collect())
+            .unwrap_or_default()
+    }
+
     /// Apply made changes to the store.
+    ///
+    /// After a successful KV apply, scans the transaction for writes to
+    /// `Tree::QueryMembers` and broadcasts a `DbEvent::QueryMembershipChanged`
+    /// for each one. Subscribers (e.g. `CommitMonitor`'s listener task) use
+    /// these to push live `QUERY_UPDATE` notifications without re-deriving
+    /// membership from the raw atom stream.
     #[instrument(level = "trace", skip_all)]
     fn apply_transaction(&self, transaction: &mut Transaction) -> AtomicResult<()> {
-        self.kv.apply_batch(transaction)
+        self.kv.apply_batch(transaction)?;
+
+        for op in transaction.iter() {
+            if op.tree != Tree::QueryMembers {
+                continue;
+            }
+            // Op key layout: `[encoded_filter] || 0xff || [sortable_value] || 0xff || [subject]`.
+            // We need filter_bytes (raw) and subject — skip the value entirely.
+            // Splitting on 0xff (SEPARATION_BIT) is safe because the encoded
+            // filter prefix never contains 0xff in practice (drive URL bytes are
+            // ASCII/UTF-8, drive_len LE-bytes for sub-16M lengths have a 0x00
+            // high byte, msgpack output for the QueryFilterRest fields doesn't
+            // hit 0xff for typical Option<String>/Option<Value> contents).
+            // Same invariant `parse_collection_members_key` already relies on.
+            let mut iter = op.key.split(|b| b == &query_index::SEPARATION_BIT);
+            let filter_bytes = match iter.next() {
+                Some(b) if !b.is_empty() => b.to_vec(),
+                _ => continue,
+            };
+            let _value = iter.next();
+            let subject_bytes = match iter.next() {
+                Some(b) => b,
+                None => continue,
+            };
+            let subject = match std::str::from_utf8(subject_bytes) {
+                Ok(s) => s.to_string(),
+                Err(_) => continue,
+            };
+            let added = matches!(op.method, crate::db::trees::Method::Insert);
+            let _ = self.db_events.send(DbEvent::QueryMembershipChanged {
+                filter_bytes,
+                subject,
+                added,
+            });
+        }
+        Ok(())
     }
 
     async fn query_basic(&self, q: &Query) -> AtomicResult<QueryResult> {
@@ -1242,6 +1530,9 @@ impl Db {
                         return Ok(ResourceResponse::ResourceWithReferenced(
                             resource, references,
                         ));
+                    }
+                    ResourceResponse::Redirect(target) => {
+                        return Ok(ResourceResponse::Redirect(target));
                     }
                 }
             }
@@ -1876,6 +2167,9 @@ impl Storelike for Db {
                                 return Ok(ResourceResponse::ResourceWithReferenced(
                                     resource, referenced,
                                 ));
+                            }
+                            ResourceResponse::Redirect(target) => {
+                                return Ok(ResourceResponse::Redirect(target));
                             }
                         }
                     }

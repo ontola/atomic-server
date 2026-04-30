@@ -354,6 +354,9 @@ fn register_live_peer(
     store: Db,
 ) {
     let (tx, mut rx) = tokio::sync::mpsc::channel::<Vec<u8>>(64);
+    // Cloned for the read loop so it can send responses (e.g. BLOB_RESPONSE
+    // back to the requester) through the same write loop.
+    let tx_for_read = tx.clone();
 
     // Add to peer map — replace if already connected (incoming may supersede outgoing)
     {
@@ -502,6 +505,27 @@ fn register_live_peer(
 
                     IMPORTING.store(false, std::sync::atomic::Ordering::Relaxed);
                     tracing::trace!("[live] imported update for {} from {}", &subject[..subject.len().min(20)], &read_peer_id[..read_peer_id.len().min(12)]);
+                }
+                continue;
+            }
+
+            // Fallback: any unhandled tag (BLOB_REQUEST, BLOB_RESPONSE, future
+            // additions) is dispatched through the sync engine, mirroring the
+            // WS handler at server/src/handlers/web_sockets.rs. Live mode and
+            // handshake mode share the same protocol surface; the read loop
+            // shouldn't be selective about which tags it understands.
+            let mut agent = crate::agents::ForAgent::Public;
+            let responses = super::engine::handle_frame(&buf, &store, &mut agent).await;
+            for response in responses {
+                let mut framed = Vec::with_capacity(4 + response.len());
+                framed.extend_from_slice(&(response.len() as u32).to_be_bytes());
+                framed.extend_from_slice(&response);
+                if tx_for_read.send(framed).await.is_err() {
+                    tracing::warn!(
+                        "[live] response channel closed for {}, dropping responses",
+                        &read_peer_id[..read_peer_id.len().min(12)]
+                    );
+                    break;
                 }
             }
         }
@@ -772,9 +796,12 @@ pub async fn sync_drive_with_peer_using(
                             if !entries.is_empty() {
                                 let refs: Vec<(&str, &[u8])> =
                                     entries.iter().map(|(s, b)| (*s, b.as_slice())).collect();
-                                let push_frame = super::protocol::encode_sync_push(drive, &refs);
-                                send.write_u32(push_frame.len() as u32).await.map_err(io_err)?;
-                                send.write_all(&push_frame).await.map_err(io_err)?;
+                                for chunk in
+                                    super::protocol::encode_sync_push_chunks(drive, &refs)
+                                {
+                                    send.write_u32(chunk.len() as u32).await.map_err(io_err)?;
+                                    send.write_all(&chunk).await.map_err(io_err)?;
+                                }
                                 tracing::info!("Pushed {} resources to peer", entries.len());
                             }
                         }
@@ -784,11 +811,23 @@ pub async fn sync_drive_with_peer_using(
                 }
             }
             super::protocol::tag::SYNC_PUSH => {
+                let mut last_chunk = false;
                 if let Some(push) = super::protocol::decode_sync_push(payload) {
-                    let count = super::engine::import_sync_push(&push, store, &crate::agents::ForAgent::Sudo).await;
+                    last_chunk = push.last;
+                    let (count, blob_requests) = super::engine::import_sync_push(&push, store, &crate::agents::ForAgent::Sudo).await;
                     total_imported += count;
+
+                    // Send blob requests if any
+                    for req_frame in blob_requests {
+                        send.write_u32(req_frame.len() as u32).await.map_err(io_err)?;
+                        send.write_all(&req_frame).await.map_err(io_err)?;
+                    }
                 }
-                // After receiving push, send our deltas for subjects the peer needs
+                // SYNC_PUSH is chunked: keep reading until the LAST flag fires.
+                // Only after that do we send our pushback and exit the loop.
+                if !last_chunk {
+                    continue;
+                }
                 if !pull_subjects.is_empty() {
                     let mut entries: Vec<(&str, Vec<u8>)> = Vec::new();
                     for subject in &pull_subjects {
@@ -802,9 +841,10 @@ pub async fn sync_drive_with_peer_using(
                     if !entries.is_empty() {
                         let refs: Vec<(&str, &[u8])> =
                             entries.iter().map(|(s, b)| (*s, b.as_slice())).collect();
-                        let push_frame = super::protocol::encode_sync_push(drive, &refs);
-                        send.write_u32(push_frame.len() as u32).await.map_err(io_err)?;
-                        send.write_all(&push_frame).await.map_err(io_err)?;
+                        for chunk in super::protocol::encode_sync_push_chunks(drive, &refs) {
+                            send.write_u32(chunk.len() as u32).await.map_err(io_err)?;
+                            send.write_all(&chunk).await.map_err(io_err)?;
+                        }
                         tracing::info!("Pushed {} resources back to peer", entries.len());
                     }
                 }

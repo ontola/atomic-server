@@ -88,7 +88,13 @@
       "Bash(cargo test *)",
       "WebFetch(domain:docs.iroh.computer)",
       "Bash(grep -v \"^W/atomic\\\\|^$\")",
-      "Bash(kill 85810 85821)"
+      "Bash(kill 85810 85821)",
+      "Bash(pnpm --filter '@tomic/lib' typecheck)",
+      "Bash(git stash *)",
+      "Bash(pnpm test:integration -- upload-roundtrip)",
+      "Bash(awk '/^---- tests::self_signed_agent_commit_keeps_name stdout ----$/,/^----|^failures:$/' /private/tmp/claude-502/-Users-joep-dev-github-atomicdata-dev-atomic-server/715e6296-155a-424c-a608-8852584f3d2f/tasks/bybw2kl4e.output)",
+      "Bash(lsof -iTCP:5173 -sTCP:LISTEN)",
+      "Bash(lsof -iTCP:9883 -sTCP:LISTEN)"
     ]
   }
 }

@@ -4,6 +4,7 @@ import {
   proxyCollection,
   QueryFilter,
   Store,
+  StoreEvents,
 } from '@tomic/lib';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from './hooks.js';
@@ -154,6 +155,21 @@ export function useCollection(
     await collection.__internalObject.refresh();
     setCollection(proxyCollection(collection.__internalObject));
   }, [collection.__internalObject]);
+
+  // Live-query bridge: when a drive-wide query subscription reports membership
+  // changes (a child added/removed/edited from the server side), recompute
+  // this collection's members. The current QUERY_UPDATE doesn't carry per-
+  // filter routing info, so we always invalidate — wasteful but correct, and
+  // collections are cheap to recompute (the underlying refresh hits the
+  // already-warm WASM DB / store cache).
+  const invalidateRef = useRef(invalidateCollection);
+  invalidateRef.current = invalidateCollection;
+
+  useEffect(() => {
+    return store.on(StoreEvents.QueryMembershipChanged, () => {
+      invalidateRef.current();
+    });
+  }, [store]);
 
   return { collection, ready, invalidateCollection, mapAll };
 }

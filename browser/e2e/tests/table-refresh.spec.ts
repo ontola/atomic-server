@@ -25,20 +25,19 @@ test.describe('table refresh', () => {
 
     // Wait for the table to render.
     await expect(editableTitle(page)).toBeVisible({ timeout: 15000 });
-    await page.waitForTimeout(1000);
 
-    // Initial row count — with the new-row affordance always present, we
-    // expect exactly 2 rows: the header + 1 empty "new row" placeholder.
+    // Wait for the new-row placeholder to render (otherwise the count race
+    // produces 1, 2 or 3 depending on render order). The bug being tested is
+    // monotonic GROWTH — so we settle on the post-render baseline first.
     const rows = page.locator('[aria-rowindex]');
+    await expect(rows).toHaveCount(2, { timeout: 15000 });
     const initialCount = await rows.count();
-    expect(initialCount).toBeGreaterThanOrEqual(2);
-    expect(initialCount).toBeLessThanOrEqual(3);
 
-    // Reload many times and assert the count never grows.
+    // Reload many times and assert the count doesn't grow beyond baseline.
     for (let i = 0; i < 10; i++) {
       await page.reload({ waitUntil: 'domcontentloaded' });
       await expect(editableTitle(page)).toBeVisible({ timeout: 15000 });
-      await page.waitForTimeout(1500);
+      await expect(rows).toHaveCount(initialCount, { timeout: 15000 });
 
       const nowCount = await rows.count();
       console.log(`reload #${i + 1}: row count = ${nowCount}`);

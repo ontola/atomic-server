@@ -15,8 +15,14 @@ import {
   decodeSyncOk,
   decodeSyncDiff,
   decodeSyncPush,
+  decodeBlobRequest,
+  decodeBlobResponse,
+  encodeBlobResponse,
+  encodeBlobRequest,
   debugFrame,
 } from './ws-v2.js';
+import { BLOB } from './urls.js';
+import { hexToBytes, bytesToHex } from './value.js';
 
 const REQUEST_TIMEOUT = 5000;
 const WS_PROTOCOL = 'atomicdata-ws.v2';
@@ -138,10 +144,7 @@ export class WSClient {
     this.authPromise = (async () => {
       try {
         await this.openPromise;
-        const json = await createAuthentication(
-          this.serverOrigin,
-          agent,
-        );
+        const json = await createAuthentication(this.serverOrigin, agent);
 
         this.sendBinary(encodeAuth(JSON.stringify(json)));
 
@@ -209,9 +212,7 @@ export class WSClient {
       const timer = setTimeout(() => {
         this.pendingGets.delete(requestId);
         reject(
-          new Error(
-            `GET "${subject}" timed out after ${REQUEST_TIMEOUT}ms.`,
-          ),
+          new Error(`GET "${subject}" timed out after ${REQUEST_TIMEOUT}ms.`),
         );
       }, REQUEST_TIMEOUT);
 
@@ -245,9 +246,7 @@ export class WSClient {
 
   public sendLoroSyncUpdate(message: string): void {
     if (this.readyState === WebSocket.OPEN) {
-      this.ws.send(
-        new TextEncoder().encode('LORO_SYNC_UPDATE ' + message),
-      );
+      this.ws.send(new TextEncoder().encode('LORO_SYNC_UPDATE ' + message));
     }
   }
 
@@ -266,6 +265,21 @@ export class WSClient {
     }
 
     this.ws.send(frame);
+  }
+
+  /**
+   * Push a blob to the server proactively. The server's BLOB_RESPONSE handler
+   * stores it in `Tree::Blobs` and serves it from `/download/files/<hash>`.
+   *
+   * Used by {@link Store.uploadFiles} after committing a File resource so the
+   * server has the bytes without waiting for a sync round to fire BLOB_REQUEST.
+   * No-op if the WS isn't open.
+   */
+  public sendBlob(hash: Uint8Array, bytes: Uint8Array): void {
+    if (this.readyState !== WebSocket.OPEN) {
+      return;
+    }
+    this.sendBinary(encodeBlobResponse(hash, bytes));
   }
 
   // ---- Private: message handling ----
@@ -361,11 +375,11 @@ export class WSClient {
           resource.setLastCommitValue(msg.commitId);
         }
 
-        resource.source =
-          msg.flags & Flags.PUSH ? 'ws-commit' : 'server-ws';
+        resource.source = msg.flags & Flags.PUSH ? 'ws-commit' : 'server-ws';
         resource.sourceTimestamp = Date.now();
         this.store.addResources(resource, { skipCommitCompare: true });
         this.persistToClientDb(msg.subject, resource);
+        this.checkForMissingBlobs(resource);
 
         break;
       }
@@ -421,13 +435,51 @@ export class WSClient {
               skipCommitCompare: true,
             });
             this.persistToClientDb(subject, resource);
+            this.checkForMissingBlobs(resource);
           }
 
-          this.store.finishDriveSync(
-            msg.drive,
-            msg.entries.length,
-            Date.now(),
-          );
+          // Only mark the drive sync as finished on the final chunk —
+          // SYNC_PUSH is chunked and intermediate chunks shouldn't trigger
+          // the "done" UI state.
+          if (msg.last) {
+            this.store.finishDriveSync(
+              msg.drive,
+              msg.entries.length,
+              Date.now(),
+            );
+          }
+        }
+
+        break;
+      }
+
+      case Tag.BLOB_REQUEST: {
+        const hash = decodeBlobRequest(payload);
+
+        if (hash) {
+          const clientDb = this.store.getClientDb();
+
+          if (clientDb) {
+            clientDb.getBlob(hash).then(bytes => {
+              if (bytes) {
+                this.sendBinary(encodeBlobResponse(hash, bytes));
+              }
+            });
+          }
+        }
+
+        break;
+      }
+
+      case Tag.BLOB_RESPONSE: {
+        const resp = decodeBlobResponse(payload);
+
+        if (resp) {
+          const clientDb = this.store.getClientDb();
+
+          if (clientDb) {
+            clientDb.putBlob(resp.hash, resp.bytes);
+          }
         }
 
         break;
@@ -455,14 +507,26 @@ export class WSClient {
     } else if (text.startsWith('QUERY_UPDATE ')) {
       try {
         const update = JSON.parse(text.slice(13));
-        const subjects: string[] = [
-          ...(update.added ?? []),
-          ...(update.removed ?? []),
-        ];
+        const added: string[] = update.added ?? [];
+        const removed: string[] = update.removed ?? [];
 
-        for (const s of subjects) {
+        // Refetch the affected subjects so the store has fresh data when
+        // consumers re-query in response to the membership change event.
+        for (const s of [...added, ...removed]) {
           this.store.fetchResourceFromServer(s).catch(() => {});
         }
+
+        // Bridge to the in-process event bus so consumers (useCollection,
+        // useChildren, etc.) can react to remote changes — this is the
+        // "live query" path. Without it, drive-wide subscriptions land
+        // resources in the store but the UI never knows to recompute.
+        this.store.notifyQueryMembershipChanged({
+          property: update.property ?? undefined,
+          value: update.value ?? undefined,
+          drive: update.drive ?? undefined,
+          added,
+          removed,
+        });
       } catch {
         // ignore
       }
@@ -556,6 +620,28 @@ export class WSClient {
   }
 
   // ---- Private: helpers ----
+
+  private async checkForMissingBlobs(resource: Resource) {
+    const blobDid = resource.get(BLOB) as string | undefined;
+
+    if (!blobDid) return;
+
+    // Extract the hash from did:ad:blob:{hash}
+    const hashStr = blobDid.startsWith('did:ad:blob:')
+      ? blobDid.substring(12)
+      : blobDid;
+
+    const clientDb = this.store.getClientDb();
+
+    if (clientDb) {
+      const hash = hexToBytes(hashStr);
+      const exists = await clientDb.getBlob(hash);
+
+      if (!exists) {
+        this.sendBinary(encodeBlobRequest(hash));
+      }
+    }
+  }
 
   private persistToClientDb(subject: string, resource: Resource) {
     const clientDb = this.store.getClientDb();

@@ -36,6 +36,9 @@ export type WorkerRequest =
   | { id: number; type: 'importAllResources'; jsonArray: string }
   | { id: number; type: 'putLoroSnapshot'; subject: string; data: Uint8Array }
   | { id: number; type: 'getLoroSnapshot'; subject: string }
+  | { id: number; type: 'putBlob'; hash: Uint8Array; data: Uint8Array }
+  | { id: number; type: 'getBlob'; hash: Uint8Array }
+  | { id: number; type: 'blake3Hash'; data: Uint8Array }
   | { id: number; type: 'getAllVersionVectors' };
 
 /** Message types sent from worker back to main thread */
@@ -136,6 +139,25 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
       await ensureInit();
 
       return db!.getLoroSnapshot(msg.subject);
+    }
+
+    case 'putBlob': {
+      await ensureInit();
+      db!.putBlob(msg.hash, msg.data);
+
+      return;
+    }
+
+    case 'getBlob': {
+      await ensureInit();
+
+      return db!.getBlob(msg.hash);
+    }
+
+    case 'blake3Hash': {
+      await ensureInit();
+
+      return db!.blake3Hash(msg.data);
     }
 
     case 'getAllVersionVectors': {

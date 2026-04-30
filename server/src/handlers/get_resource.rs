@@ -78,18 +78,23 @@ pub async fn handle_get_resource(
         .fetch_resource_with_did_fallback(&resolved.subject, &origin, &for_agent)
         .await?;
 
-    let mut builder = HttpResponse::Ok();
-    if let atomic_lib::Subject::Did { .. } = resource_response.get_subject() {
-        builder.append_header((
-            "Link",
-            format!(
-                "<{}>; rel=\"canonical\"",
-                resource_response.get_subject().as_str()
-            ),
-        ));
+    if let atomic_lib::storelike::ResourceResponse::Redirect(target) = resource_response {
+        return Ok(HttpResponse::SeeOther()
+            .append_header(("Location", target))
+            .finish());
     }
 
-    let mut resource = resource_response.to_single().clone();
+    let mut builder = HttpResponse::Ok();
+    if let Some(resp_subject) = resource_response.get_subject() {
+        if let atomic_lib::Subject::Did { .. } = resp_subject {
+            builder.append_header((
+                "Link",
+                format!("<{}>; rel=\"canonical\"", resp_subject.as_str()),
+            ));
+        }
+    }
+
+    let mut resource = resource_response.to_single();
 
     if let Some(redirect) = resolved.alias_subject {
         let old_subject: &str = resource.get_subject().as_str();

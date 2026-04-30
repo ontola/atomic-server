@@ -114,9 +114,12 @@ async fn test_ws_push_chatroom() {
     use atomic_lib::commit::CommitOpts;
     use atomic_lib::{commit::CommitBuilder, urls, values::SubResource, Db, Storelike, Value};
 
+    let test_dir = std::env::temp_dir().join("atomic-test-db-chat");
+    let uploads_dir = test_dir.join("uploads");
     let mut db = Db::init_redb_file(
-        &std::env::temp_dir().join("atomic-test-db-chat"),
+        &test_dir,
         Some("http://localhost".into()),
+        &uploads_dir,
     )
     .await
     .unwrap();

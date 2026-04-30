@@ -1,5 +1,6 @@
 import { describe, it, bench } from 'vitest';
 import { enableLoro } from './loro-loader.js';
+import type { LoroDoc as LoroDocType } from 'loro-crdt';
 
 await enableLoro();
 
@@ -79,7 +80,7 @@ describe('Loro vs Map performance', () => {
   });
 
   // Benchmark: reading all props from 200 docs
-  const docs: LoroDoc[] = [];
+  const docs: LoroDocType[] = [];
 
   for (let i = 0; i < 200; i++) {
     const d = new LoroDoc();
