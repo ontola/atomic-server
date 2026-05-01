@@ -345,6 +345,8 @@ pub async fn handle_sync_vv(
     }
 
     let mut pull: Vec<String> = Vec::new();
+    let mut pull_from: std::collections::HashMap<String, std::collections::HashMap<String, i32>> =
+        std::collections::HashMap::new();
     let mut remove: Vec<String> = Vec::new();
     let mut push_entries: Vec<(String, Vec<u8>)> = Vec::new();
 
@@ -394,6 +396,7 @@ pub async fn handle_sync_vv(
 
             if client_ahead {
                 pull.push(subject.clone());
+                pull_from.insert(subject.clone(), server_vv.clone());
             }
 
             // New logic: even if VVs match (or server is ahead), if the server is missing the blob, we must pull it.
@@ -409,6 +412,7 @@ pub async fn handle_sync_vv(
                                 // If we don't have the blob, add to pull so the server requests it
                                 if !pull.contains(subject) {
                                     pull.push(subject.clone());
+                                    pull_from.insert(subject.clone(), server_vv.clone());
                                 }
                             }
                         }
@@ -430,6 +434,9 @@ pub async fn handle_sync_vv(
                 remove.push(subject.clone());
             } else {
                 pull.push(subject.clone());
+                pull_from
+                    .entry(subject.clone())
+                    .or_insert_with(std::collections::HashMap::new);
             }
         }
     }
@@ -450,6 +457,7 @@ pub async fn handle_sync_vv(
         &pull,
         &push_subjects,
         &remove,
+        &pull_from,
     ));
 
     if !push_entries.is_empty() {

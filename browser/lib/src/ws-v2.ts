@@ -146,26 +146,26 @@ export function encodeUpdate(
   const commitIdBytes = commitId ? encoder.encode(commitId) : undefined;
   const commitIdLen = commitIdBytes ? 2 + commitIdBytes.length : 0;
 
-  const buf = new Uint8Array(
+  const buffer = new Uint8Array(
     1 + 1 + 2 + 2 + subjectBytes.length + commitIdLen + loroBytes.length,
   );
-  let off = 0;
-  buf[off++] = Tag.UPDATE;
-  buf[off++] = flags;
-  off = writeU16(buf, off, requestId);
-  off = writeU16(buf, off, subjectBytes.length);
-  buf.set(subjectBytes, off);
-  off += subjectBytes.length;
+  let offset = 0;
+  buffer[offset++] = Tag.UPDATE;
+  buffer[offset++] = flags;
+  offset = writeU16(buffer, offset, requestId);
+  offset = writeU16(buffer, offset, subjectBytes.length);
+  buffer.set(subjectBytes, offset);
+  offset += subjectBytes.length;
 
   if (commitIdBytes) {
-    off = writeU16(buf, off, commitIdBytes.length);
-    buf.set(commitIdBytes, off);
-    off += commitIdBytes.length;
+    offset = writeU16(buffer, offset, commitIdBytes.length);
+    buffer.set(commitIdBytes, offset);
+    offset += commitIdBytes.length;
   }
 
-  buf.set(loroBytes, off);
+  buffer.set(loroBytes, offset);
 
-  return buf;
+  return buffer;
 }
 
 export function encodeSub(driveSubject: string): Uint8Array {
@@ -287,6 +287,8 @@ export interface DecodedSyncDiff {
   pull: string[];
   push: string[];
   remove: string[];
+  /** Server oplog VV per pull subject — export updates since this. */
+  pullFrom: Record<string, Record<string, number>>;
 }
 
 export interface DecodedSyncPushEntry {
@@ -361,12 +363,53 @@ export function decodeSyncDiff(data: Uint8Array): DecodedSyncDiff | undefined {
   const json = decoder.decode(data.subarray(off));
 
   try {
-    const { pull, push, remove = [] } = JSON.parse(json);
+    const { pull, push, remove = [], pullFrom = {} } = JSON.parse(json);
 
-    return { drive, pull, push, remove };
+    return { drive, pull, push, remove, pullFrom };
   } catch {
     return undefined;
   }
+}
+
+/** Chunking thresholds — keep each WS frame under legacy 64 KiB limits. */
+const SYNC_PUSH_MAX_ENTRIES = 100;
+const SYNC_PUSH_MAX_BYTES = 48 * 1024;
+
+/** Split entries into multiple SYNC_PUSH frames (last chunk flagged). */
+export function encodeSyncPushChunks(
+  driveSubject: string,
+  entries: Array<{ subject: string; loroBytes: Uint8Array }>,
+): Uint8Array[] {
+  if (entries.length === 0) {
+    return [encodeSyncPush(driveSubject, [], true)];
+  }
+
+  const chunks: Uint8Array[] = [];
+  let start = 0;
+
+  while (start < entries.length) {
+    let end = start;
+    let bytesAcc = 0;
+
+    while (end < entries.length && end - start < SYNC_PUSH_MAX_ENTRIES) {
+      const e = entries[end];
+      const entryBytes =
+        2 + encoder.encode(e.subject).length + 4 + e.loroBytes.length;
+
+      if (end > start && bytesAcc + entryBytes > SYNC_PUSH_MAX_BYTES) {
+        break;
+      }
+
+      bytesAcc += entryBytes;
+      end += 1;
+    }
+
+    const last = end >= entries.length;
+    chunks.push(encodeSyncPush(driveSubject, entries.slice(start, end), last));
+    start = end;
+  }
+
+  return chunks;
 }
 
 export function decodeSyncPush(data: Uint8Array): DecodedSyncPush | undefined {

@@ -75,26 +75,31 @@ async fn test_multi_client_gallery_sync() -> AtomicResult<()> {
     // Start WS session for Tablet (Device A)
     let ws_a = WsClient::connect(&ws_url).await?;
     ws_a.authenticate(&agent).await?;
-    ws_a.subscribe_query(atomic_lib::urls::PARENT, &drive_subject, "internal:/")
-        .await?;
+    ws_a.subscribe_query(
+        atomic_lib::urls::PARENT,
+        &drive_subject,
+        drive_subject.as_str(),
+    )
+    .await?;
 
     // Start WS session for Phone (Device B)
     let ws_b = WsClient::connect(&ws_url).await?;
     ws_b.authenticate(&agent).await?;
-    ws_b.subscribe_query(atomic_lib::urls::PARENT, &drive_subject, "internal:/")
-        .await?;
+    ws_b.subscribe_query(
+        atomic_lib::urls::PARENT,
+        &drive_subject,
+        drive_subject.as_str(),
+    )
+    .await?;
+
+    // Listen before the commit — broadcast receivers miss messages sent earlier.
+    let mut rx_b = ws_b.subscribe();
 
     // ENSURE SUBSCRIPTION IS REGISTERED
     tokio::time::sleep(Duration::from_millis(1000)).await;
 
-    // 1. Tablet creates a canvas with a server-owned subject
-    let canvas_subject_str = format!(
-        "{}/paragraph/{}",
-        server_url,
-        atomic_lib::utils::random_string(10)
-    );
-    let canvas_subject: atomic_lib::Subject = canvas_subject_str.clone().into();
-    let mut canvas_res = atomic_lib::Resource::new(canvas_subject_str);
+    // 1. Tablet creates a DID canvas (same pattern as Flutter gallery / ws_sync).
+    let mut canvas_res = atomic_lib::Resource::new("did:ad:placeholder".into());
     canvas_res.set_unsafe(
         atomic_lib::urls::IS_A.into(),
         vec![atomic_lib::urls::PARAGRAPH].into(),
@@ -108,14 +113,14 @@ async fn test_multi_client_gallery_sync() -> AtomicResult<()> {
         atomic_lib::urls::DESCRIPTION.into(),
         atomic_lib::Value::String("A test canvas".into()),
     )?;
-    let response = canvas_res.save_locally(&db_a).await?;
+    let response = canvas_res.save_as_genesis(&db_a).await?;
+    let canvas_subject = response.commit.subject.clone();
 
     // Push commit to server
     let commit_json = atomic_lib::client::commit_to_wire_json(&response.commit, &db_a).await?;
     ws_a.post_commit(1, &commit_json).await?;
 
     // 2. Phone should see the canvas via QUERY_UPDATE
-    let mut rx_b = ws_b.subscribe();
     let received_query_update = tokio::time::timeout(Duration::from_secs(10), async {
         while let Ok(msg) = rx_b.recv().await {
             if let atomic_lib::client::ws::WsMessage::QueryUpdate { .. } = msg {
@@ -148,7 +153,7 @@ async fn test_multi_client_gallery_sync() -> AtomicResult<()> {
     let received_update = tokio::time::timeout(Duration::from_secs(10), async {
         while let Ok(msg) = rx_b.recv().await {
             if let atomic_lib::client::ws::WsMessage::Update { subject, .. } = msg {
-                if subject.ends_with(&canvas_subject.as_str()[10..]) {
+                if subject == canvas_subject.as_str() {
                     return true;
                 }
             }

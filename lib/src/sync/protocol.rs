@@ -194,9 +194,15 @@ pub fn encode_sync_diff(
     pull: &[String],
     push: &[String],
     remove: &[String],
+    pull_from: &std::collections::HashMap<String, std::collections::HashMap<String, i32>>,
 ) -> Vec<u8> {
     let drive_bytes = drive.as_bytes();
-    let diff = serde_json::json!({ "pull": pull, "push": push, "remove": remove });
+    let diff = serde_json::json!({
+        "pull": pull,
+        "push": push,
+        "remove": remove,
+        "pullFrom": pull_from,
+    });
     let diff_bytes = serde_json::to_vec(&diff).unwrap_or_default();
 
     let mut buf = Vec::with_capacity(3 + drive_bytes.len() + diff_bytes.len());
@@ -536,6 +542,8 @@ pub struct DecodedSyncDiff {
     pub push: Vec<String>,
     /// Subjects the client should delete (destroyed on the server).
     pub remove: Vec<String>,
+    /// Server oplog VV per `pull` subject — client exports updates since this.
+    pub pull_from: std::collections::HashMap<String, std::collections::HashMap<String, i32>>,
 }
 
 /// Decode a SYNC_DIFF message (after the type tag).
@@ -553,6 +561,8 @@ pub fn decode_sync_diff(data: &[u8]) -> Option<DecodedSyncDiff> {
         push: Vec<String>,
         #[serde(default)]
         remove: Vec<String>,
+        #[serde(default, rename = "pullFrom")]
+        pull_from: std::collections::HashMap<String, std::collections::HashMap<String, i32>>,
     }
 
     let parsed: DiffJson = serde_json::from_slice(json_bytes).ok()?;
@@ -562,6 +572,7 @@ pub fn decode_sync_diff(data: &[u8]) -> Option<DecodedSyncDiff> {
         pull: parsed.pull,
         push: parsed.push,
         remove: parsed.remove,
+        pull_from: parsed.pull_from,
     })
 }
 
