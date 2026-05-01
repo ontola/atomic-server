@@ -32,5 +32,5 @@ The easiest way to run an [atomic-server](https://github.com/atomicdata-dev/atom
 Join the community
 ------------------
 
-Atomic Data is open and fully powered by volunteers. We're looking for people who want to help discuss various design challenges and work on implmenentations. If you have any questions, or want to help out, feel free to join our [Discord](https://discord.gg/a72Rv2P).
+Atomic Data is open and fully powered by volunteers. We're looking for people who want to help discuss various design challenges and work on implementations. If you have any questions, or want to help out, feel free to join our [Discord](https://discord.gg/a72Rv2P).
 Sign up to [our newsletter](https://docs.atomicdata.dev/newsletter.html) if you'd like to get updated.
