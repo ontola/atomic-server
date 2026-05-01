@@ -1299,11 +1299,21 @@ export class Resource<C extends OptionalClass = any> {
     // Auto-detect genesis: no previousCommit means this is a new resource.
     // The server requires is_genesis=true for DID resources without a previous commit.
     // Only for DID-eligible subjects (_new: or did:ad:) — HTTP URLs use server-assigned subjects.
+    // Agents are excluded: their identity is fixed by their public key
+    // (did:ad:agent:<pubkey>), not derived from a genesis-commit signature.
+    // Marking an agent commit as genesis triggers `delete subject` below,
+    // which makes the server's parser derive the resource subject as
+    // `did:ad:<signature>` and silently store the agent's data under a
+    // commit-id key instead of the agent DID — subsequent fetches of the
+    // agent then 404 in `get_propvals` and fall through to a synthetic
+    // 4-property view (createdAt, isA, publicKey, read).
     const isDIDEligible =
       this.subject.startsWith('_new:') || this.subject.startsWith('did:ad:');
+    const isAgent = this.subject.startsWith('did:ad:agent:');
 
     if (
       isDIDEligible &&
+      !isAgent &&
       !this.commitBuilder.previousCommit &&
       !this._lastLocalSignature
     ) {

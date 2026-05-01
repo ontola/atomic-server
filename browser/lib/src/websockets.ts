@@ -193,7 +193,18 @@ export class WSClient {
 
   /** Fetch a resource over WebSocket. Returns a promise that resolves when the UPDATE arrives. */
   public async fetch(subject: string): Promise<Resource> {
-    await this.authPromise;
+    // Ensure auth has been kicked off before sending the GET. `authPromise`
+    // starts as a resolved promise (not undefined), so `await this.authPromise`
+    // alone is a no-op when nobody has called `authenticate()` yet — that
+    // races with `handleOpen` and `setAgent`. The server then returns a
+    // PublicAgent view of permissioned resources (typically just `description`,
+    // `isA`, `lastCommit`, `loroUpdate` — `name`/`read`/`write` are filtered
+    // out), the resource gets cached as `loading=false, name=undefined`, and
+    // the UI never recovers because nothing flags it as unauthorized to
+    // refetch on the next `setAgent`. `authenticate()` is idempotent: it
+    // returns immediately if there's no agent or we've already authenticated
+    // as the current one, and reuses the in-flight promise otherwise.
+    await this.authenticate();
 
     if (this.readyState !== WebSocket.OPEN) {
       throw new AtomicError(

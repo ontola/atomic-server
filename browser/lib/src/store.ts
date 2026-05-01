@@ -990,8 +990,19 @@ export class Store {
 
     await drive.save();
 
-    // Link the drive to the Agent resource
-    const agentResource = this.getResourceLoading(agent.subject);
+    // Link the drive to the Agent resource. We MUST force a fresh fetch
+    // from the server here. The agent may already be in the store (from a
+    // stale clientDb cache or a previous partial load) with `loading=false`,
+    // in which case `getResource()` short-circuits and returns the cached
+    // stub. Then `set/push/save` would commit a Loro snapshot that only
+    // carries the locally-set properties (personalDrive, drives) — the
+    // server-side state (isA, publicKey, read, etc.) was never merged into
+    // the local Loro doc, so it isn't part of the outgoing snapshot, and
+    // isn't written to clientDb. On reload the SPA reads the partial cache
+    // and the agent's edit form errors with "<class> is not a Class"
+    // because `isA` is missing. Forcing a fetch seeds the local resource
+    // with the full server state before we layer the new properties on top.
+    const agentResource = await this.fetchResourceFromServer(agent.subject);
     await agentResource.set(
       core.properties.personalDrive,
       drive.subject,

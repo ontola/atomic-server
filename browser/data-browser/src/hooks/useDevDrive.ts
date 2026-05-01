@@ -5,6 +5,11 @@ import { saveAgentToIDB } from '../helpers/agentStorage';
 import { constructOpenURL } from '../helpers/navigation';
 import { useNavigateWithTransition } from './useNavigateWithTransition';
 
+/** Default dev server. Used as a fallback when the page wasn't loaded from
+ *  an atomic-server origin (e.g. when developing the data-browser via Vite
+ *  on localhost:5173). When the SPA is being served by an atomic-server
+ *  directly — production, dagger CI, or any non-Vite host — we use the
+ *  page's own origin so dev-drive talks to the server it came from. */
 export const DEV_SERVER = 'http://localhost:9883';
 export const DEV_DRIVE_TESTID = 'dev-drive-button';
 
@@ -13,9 +18,21 @@ export const DEV_DRIVE_PRUNE_MARKER = '[atomic-data:dev-drive]';
 
 const DEV_DRIVE_DISPLAY_NAME = 'Dev drive';
 
+/** Resolve the atomic-server URL the dev drive should target. If the SPA
+ *  is served by atomic-server itself (any non-Vite origin), use the same
+ *  origin. Vite-served pages fall back to the hardcoded default. */
+function resolveDevServer(): string {
+  if (typeof window === 'undefined') return DEV_SERVER;
+  const origin = window.location.origin;
+  // Vite dev server runs on :5173 by default — that's not an atomic-server.
+  if (/:5173$/.test(origin)) return DEV_SERVER;
+  return origin;
+}
+
 /**
- * Creates a fresh agent and drive on the local dev server (localhost:9883) and
- * switches to it. Only intended for development / E2E-test use.
+ * Creates a fresh agent and drive on the current atomic-server (page origin
+ * unless we're loaded from the Vite dev server, in which case localhost:9883)
+ * and switches to it. Only intended for development / E2E-test use.
  */
 export function useDevDrive() {
   const store = useStore();
@@ -27,7 +44,7 @@ export function useDevDrive() {
     setLoading(true);
 
     try {
-      setServer(DEV_SERVER);
+      setServer(resolveDevServer());
 
       const agentKeys = await Agent.generateKeyPair();
       const agentDID = `did:ad:agent:${agentKeys.publicKey}`;
