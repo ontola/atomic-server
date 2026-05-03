@@ -173,4 +173,46 @@ describe('Store', () => {
 
     expect(results).toContain(subject);
   });
+
+  it('only rehydrates local search once when setClientDb is called with the same worker', async ({
+    expect,
+  }) => {
+    // `initClientDb.ts` calls `setClientDb(worker)` three times per page
+    // load to refresh sync status (eager, post-init, post-init-error).
+    // Each call used to retrigger a full OPFS → MiniSearch rebuild,
+    // wasting CPU and producing duplicate entries. The fix gates
+    // rehydrate on the worker reference actually changing.
+    // See planning/opfs-double-rehydrate.md.
+    const store = new Store({ serverUrl: 'https://atomicdata.dev' });
+    let exportCallCount = 0;
+    const fakeClientDb = {
+      isReady: true,
+      isInitialized: true,
+      initError: undefined,
+      waitForReady: async () => true,
+      exportAllResources: async () => {
+        exportCallCount++;
+
+        return JSON.stringify([]);
+      },
+    };
+
+    store.setClientDb(
+      fakeClientDb as unknown as Parameters<Store['setClientDb']>[0],
+    );
+    store.setClientDb(
+      fakeClientDb as unknown as Parameters<Store['setClientDb']>[0],
+    );
+    store.setClientDb(
+      fakeClientDb as unknown as Parameters<Store['setClientDb']>[0],
+    );
+
+    // Let the background rehydrate finish — `setClientDb` schedules it
+    // via `void`, so we need a tick to let the awaited chain run.
+    for (let i = 0; i < 50 && exportCallCount === 0; i++) {
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+
+    expect(exportCallCount).toBe(1);
+  });
 });

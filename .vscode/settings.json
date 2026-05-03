@@ -4,6 +4,11 @@
   "editor.formatOnSaveMode": "file",
   "editor.defaultFormatter": "oxc.oxc-vscode",
   "rust-analyzer.checkOnSave.command": "clippy",
+  // Use a separate target dir so rust-analyzer's background check doesn't
+  // hold the workspace `target/` lock while we run `cargo run` / `cargo test`
+  // from the terminal. See planning/dev-cargo-lock-contention.md.
+  "rust-analyzer.cargo.targetDir": "target/rust-analyzer",
+  "rust-analyzer.check.targetDir": "target/rust-analyzer",
   "search.exclude": {
     "**/.git": true,
     "**/node_modules": true,

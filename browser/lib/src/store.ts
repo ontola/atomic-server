@@ -446,8 +446,18 @@ export class Store {
    * Call this after constructing the Store — the worker initializes lazily.
    */
   public setClientDb(clientDb: ClientDbWorker): void {
+    // `initClientDb` calls this three times per page load (eager,
+    // post-init, post-init-error) to refresh sync status. Only the
+    // first call introduces a new worker; the others just want
+    // `emitSyncStatus`. Rehydrate is expensive (walks the whole
+    // OPFS-backed corpus and indexes each entry into MiniSearch),
+    // so gate it on the worker actually changing.
+    const isNew = this.clientDb !== clientDb;
     this.clientDb = clientDb;
     this.emitSyncStatus();
+
+    if (!isNew) return;
+
     // Rebuild the in-memory local search index from the persistent
     // ClientDb. `LocalSearch` (MiniSearch) lives only in memory, so every
     // page load starts it empty — without this, offline search after a
