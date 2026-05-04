@@ -6,6 +6,7 @@ export interface MCPServer {
   url: string;
   id: string;
   transport: 'http' | 'sse';
+  headers?: Record<string, string>;
 }
 
 export interface AIAgent {

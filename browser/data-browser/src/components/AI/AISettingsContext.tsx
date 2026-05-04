@@ -2,6 +2,10 @@ import { createContext, ReactNode, useContext, type JSX } from 'react';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
 import { AIProvider } from './aiContstants';
 import type { AIModelIdentifier, MCPServer } from '@chunks/AI/types';
+import {
+  defaultMCPServers,
+  mergeDefaultMCPServers,
+} from '@chunks/AI/defaultMCPServers';
 
 interface AISettingsContextType {
   /** Enable all AI features in the app */
@@ -39,7 +43,7 @@ interface ProviderProps {
 const initialState: AISettingsContextType = {
   enableAI: true,
   setEnableAI: () => undefined,
-  mcpServers: [],
+  mcpServers: defaultMCPServers,
   setMcpServers: () => undefined,
   showTokenUsage: true,
   setShowTokenUsage: () => undefined,
@@ -73,9 +77,9 @@ export const AISettingsContextProvider = (
   props: ProviderProps,
 ): JSX.Element => {
   const [enableAI, setEnableAI] = useLocalStorage('atomic.ai.enabled', true);
-  const [mcpServers, setMcpServers] = useLocalStorage<MCPServer[]>(
+  const [storedMcpServers, setStoredMcpServers] = useLocalStorage<MCPServer[]>(
     'atomic.ai.mcpServers',
-    [],
+    defaultMCPServers,
   );
   const [ollamaUrl, setOllamaUrl] = useLocalStorage<string | undefined>(
     'atomic.ai.ollama-url',
@@ -111,6 +115,10 @@ export const AISettingsContextProvider = (
 
   const isProviderEnabled = (provider: AIProvider) =>
     enabledProviders.includes(provider);
+
+  const mcpServers = mergeDefaultMCPServers(storedMcpServers);
+  const setMcpServers = (servers: MCPServer[]) =>
+    setStoredMcpServers(mergeDefaultMCPServers(servers));
 
   const setIsProviderEnabled = (provider: AIProvider, enabled: boolean) =>
     setEnabledProviders(prev =>

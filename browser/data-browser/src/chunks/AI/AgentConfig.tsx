@@ -63,7 +63,7 @@ const defaultAgents: AIAgent[] = [
     description:
       "An agent that is specialized in helping you use AtomicServer. It takes context from what you're doing.",
     systemPrompt: atomicAgentPrompt,
-    availableTools: [],
+    availableTools: ['dev.atomicdata.mcp.exa'],
     model: {
       id: '~google/gemini-flash-latest',
       provider: AIProvider.OpenRouter,
@@ -79,7 +79,7 @@ const defaultAgents: AIAgent[] = [
     id: 'dev.atomicdata.general-agent',
     description: "A basic agent that doesn't have any special purpose.",
     systemPrompt: `The current date is {{timestamp}}`,
-    availableTools: [],
+    availableTools: ['dev.atomicdata.mcp.exa'],
     model: {
       id: '~google/gemini-flash-latest',
       provider: AIProvider.OpenRouter,

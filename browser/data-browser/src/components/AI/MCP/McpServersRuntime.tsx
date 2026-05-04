@@ -12,12 +12,20 @@ import type {
 } from './McpServersContext';
 
 const createTransport = (server: MCPServer) => {
+  const options = server.headers
+    ? {
+        requestInit: {
+          headers: server.headers,
+        },
+      }
+    : undefined;
+
   if (server.transport === 'sse') {
-    return new SSEClientTransport(new URL(server.url), {});
+    return new SSEClientTransport(new URL(server.url), options);
   }
 
   if (server.transport === 'http') {
-    return new StreamableHTTPClientTransport(new URL(server.url));
+    return new StreamableHTTPClientTransport(new URL(server.url), options);
   }
 
   throw new Error(`Unknown transport: ${server.transport}`);

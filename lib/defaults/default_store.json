@@ -846,6 +846,16 @@
         "https://atomicdata.dev/properties/shortname": "write"
     },
     {
+        "@id": "https://atomicdata.dev/properties/llm-txt",
+        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/markdown",
+        "https://atomicdata.dev/properties/description": "Information for an AI agent about a drive. This could include things like common patterns or where to find important resources.",
+        "https://atomicdata.dev/properties/isA": [
+            "https://atomicdata.dev/classes/Property"
+        ],
+        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+        "https://atomicdata.dev/properties/shortname": "llm-txt"
+    },
+    {
         "@id": "https://atomicdata.dev/classes/Article",
         "https://atomicdata.dev/properties/description": "A written article / blogpost / blog. \n\nUse the `name` as a Title, and the `description` for the content of the Blogpost (in markdown).",
         "https://atomicdata.dev/properties/isA": [
@@ -946,7 +956,8 @@
             "https://atomicdata.dev/properties/children",
             "https://atomicdata.dev/properties/description",
             "https://atomicdata.dev/properties/subresources",
-            "https://atomicdata.dev/properties/write"
+            "https://atomicdata.dev/properties/write",
+            "https://atomicdata.dev/properties/llm-txt"
         ],
         "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
         "https://atomicdata.dev/properties/shortname": "drive"

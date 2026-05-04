@@ -22,6 +22,7 @@ const ModelSelect = React.lazy(
 const intl = new Intl.NumberFormat('default', {
   style: 'currency',
   currency: 'USD',
+  currencyDisplay: 'narrowSymbol',
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
@@ -63,8 +64,6 @@ const AISettings: React.FC = () => {
 
   useEffect(() => {
     if (!openRouterApiKey) {
-      setCreditUsage(undefined);
-
       return;
     }
 
@@ -79,6 +78,14 @@ const AISettings: React.FC = () => {
       });
     });
   }, [openRouterApiKey]);
+
+  const handleSetOpenRouterKey = (key: string | undefined) => {
+    if (!key) {
+      setCreditUsage(undefined);
+    }
+
+    setOpenRouterApiKey(key);
+  };
 
   return (
     <>
@@ -122,7 +129,7 @@ const AISettings: React.FC = () => {
                   type='password'
                   value={openRouterApiKey || ''}
                   onChange={e =>
-                    setOpenRouterApiKey(e.target.value || undefined)
+                    handleSetOpenRouterKey(e.target.value || undefined)
                   }
                   placeholder='Enter your OpenRouter API key'
                 />

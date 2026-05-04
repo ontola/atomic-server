@@ -3079,9 +3079,6 @@ msgstr "Lang"
 msgid "Relative"
 msgstr "Relativ"
 
-#~ msgid "<0/> Provide relevant context from your knowledge base to the Agent."
-#~ msgstr "<0/> Stellen Sie dem Agenten relevante Informationen aus Ihrer Wissensdatenbank zur Verfügung."
-
 #: src/chunks/AI/RealAIChat.tsx
 msgid "Gathering context"
 msgstr "Kontext wird gesammelt"
@@ -3465,9 +3462,65 @@ msgstr "Duplizieren"
 msgid "No custom classes found on the current drive."
 msgstr "Keine benutzerdefinierten Klassen auf dem aktuellen Laufwerk gefunden."
 
-#~ msgid "The system prompt that defines how the agent behaves. You can use the following placeholders: {{timestamp}} - The current date and time, {{drive}} - Subject of the current drive, {{drive-structure}} - A tree of resources on the drive, {{custom-classes}} - A list of classes defined on the current drive."
-#~ msgstr "Die Systemaufforderung, die definiert, wie sich der Agent verhält. Sie können die folgenden Platzhalter verwenden: {{timestamp}} – Aktuelles Datum und Uhrzeit, {{drive}} – Betreff des aktuellen Laufwerks, {{drive-structure}} – Eine Struktur der Ressourcen auf dem Laufwerk, {{custom-classes}} – Eine Liste der auf dem aktuellen Laufwerk definierten Klassen."
-
 #: src/chunks/AI/AgentConfig.tsx
 msgid "The system prompt that defines how the agent behaves. You can use the following placeholders: {{timestamp}} - the current date and time, {{drive}} - subject of the current drive, {{drive-structure}} - a tree of resources on the drive, {{custom-classes}} - a list of classes defined on the current drive."
 msgstr "Die Systemaufforderung, die definiert, wie sich der Agent verhält. Sie können die folgenden Platzhalter verwenden: {{timestamp}} – das aktuelle Datum und die Uhrzeit, {{drive}} – das Thema des aktuellen Laufwerks, {{drive-structure}} – ein Baum von Ressourcen auf dem Laufwerk, {{custom-classes}} – eine Liste der auf dem aktuellen Laufwerk definierten Klassen."
+
+#. 0: headerCount; 1: headerCount === 1 ? '' \\: 's'
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "{0} custom header {1}"
+msgstr "{0} benutzerdefinierter Header {1}"
+
+#. 0: index + 1
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "Header {0} key"
+msgstr "Header {0}-Schlüssel"
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "Header key"
+msgstr "Header-Schlüssel"
+
+#. 0: index + 1
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "Header {0} value"
+msgstr "Header {0}-Wert"
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "Header value"
+msgstr "Header-Wert"
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "Remove header"
+msgstr "Header entfernen"
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "No custom headers configured."
+msgstr "Keine benutzerdefinierten Header konfiguriert."
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "<0/> Add header"
+msgstr "<0/> Header hinzufügen"
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "Headers"
+msgstr "Header"
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "Optional HTTP headers to send when connecting to this MCP server"
+msgstr "Optionale HTTP-Header, die beim Herstellen einer Verbindung mit diesem MCP-Server gesendet werden sollen"
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "Default server"
+msgstr "Standardserver"
+
+#: src/views/Drive/DrivePage.tsx
+msgid "Add description"
+msgstr "Beschreibung hinzufügen"
+
+#: src/views/Drive/DrivePage.tsx
+msgid "Add LLM instructions"
+msgstr "LLM-Anweisungen hinzufügen"
+
+#: src/views/Drive/DrivePage.tsx
+msgid "LLM Instructions"
+msgstr "LLM-Anweisungen"

@@ -7,13 +7,20 @@ import {
   type ReadMCPResource,
 } from '@components/AI/MCP/McpServersContext';
 import { findSkillByName } from './skills/skill';
+import { useSettings } from '@helpers/AppSettings';
+import { getDriveInstructionsContext } from './driveInstructionsContext';
 
 /**
  * A hook that processes AI chat messages by applying context.
  */
-export function useProcessMessages() {
+export function useProcessMessages({
+  includeDriveInstructions,
+}: {
+  includeDriveInstructions: boolean;
+}) {
   const store = useStore();
   const { readMCPResource } = useMcpServers();
+  const { drive } = useSettings();
 
   return async (messages: AtomicUIMessage[]): Promise<AtomicUIMessage[]> => {
     const map = async (message: AtomicUIMessage) => {
@@ -41,9 +48,46 @@ export function useProcessMessages() {
       return message;
     };
 
-    return Promise.all(messages.map(map)) as Promise<AtomicUIMessage[]>;
+    const processedMessages = (await Promise.all(
+      messages.map(map),
+    )) as AtomicUIMessage[];
+    const driveInstructionsContext = includeDriveInstructions
+      ? await getDriveInstructionsContext(drive, store)
+      : '';
+
+    if (!driveInstructionsContext) {
+      return processedMessages;
+    }
+
+    const lastUserMessageIndex = findLastUserMessageIndex(processedMessages);
+
+    if (lastUserMessageIndex === -1) {
+      return processedMessages;
+    }
+
+    return processedMessages.map((message, index) =>
+      index === lastUserMessageIndex
+        ? {
+            ...message,
+            parts: [
+              ...message.parts,
+              { type: 'text', text: driveInstructionsContext },
+            ],
+          }
+        : message,
+    );
   };
 }
+
+const findLastUserMessageIndex = (messages: AtomicUIMessage[]): number => {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (messages[index].role === 'user') {
+      return index;
+    }
+  }
+
+  return -1;
+};
 
 /**
  * Converts an Atomic Resource into a plain object representation

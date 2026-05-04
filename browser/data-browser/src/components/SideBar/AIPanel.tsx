@@ -88,12 +88,12 @@ export function AIChatsPanel(): JSX.Element | null {
 
 const Wrapper = styled.div`
   padding-top: 0;
-  max-height: 10rem;
+  max-height: 20rem;
   overflow: hidden;
 `;
 
 const StyledScrollArea = styled(ScrollArea)`
-  height: 10rem;
+  height: 20rem;
   overflow: hidden;
 `;
 

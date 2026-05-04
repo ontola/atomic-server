@@ -27,13 +27,22 @@ interface ValueFormProps {
    * also override it manually
    */
   datatype?: Datatype;
+  /** Whether the form should start in edit mode when mounted. */
+  defaultEditState?: boolean;
+  onStateChange?: (editMode: boolean) => void;
 }
 
 /**
  * A form for a single Value. Presents a normal value, but let's the user click
  * on a button to turn it into an input.
  */
-export function ValueForm({ resource, propertyURL, datatype }: ValueFormProps) {
+export function ValueForm({
+  resource,
+  propertyURL,
+  datatype,
+  defaultEditState = false,
+  onStateChange,
+}: ValueFormProps) {
   const { changes, oldResources } = useAIChanges();
   const hasAiChanges = changes.includes(resource.subject);
   const oldResource = oldResources[resource.subject];
@@ -42,16 +51,21 @@ export function ValueForm({ resource, propertyURL, datatype }: ValueFormProps) {
     oldResource !== undefined &&
     !isPropEqual(oldResource.get(propertyURL), resource.get(propertyURL));
 
-  const [editMode, setEditMode] = useState(false);
+  const [editMode, setEditMode] = useState(defaultEditState);
   const property = useProperty(propertyURL);
   const [value] = useValue(resource, propertyURL);
   const { agent } = useSettings();
   const canWrite = useCanWrite(resource);
 
+  const handleEditModeChange = (state: boolean) => {
+    setEditMode(state);
+    onStateChange?.(state);
+  };
+
   useHotkeys(
     'esc',
     () => {
-      setEditMode(false);
+      handleEditModeChange(false);
     },
     {
       enableOnTags: ['INPUT', 'TEXTAREA', 'SELECT'],
@@ -62,12 +76,12 @@ export function ValueForm({ resource, propertyURL, datatype }: ValueFormProps) {
 
   const shouldShowEditButton = hasAgent && canWrite && !property.isDynamic;
 
-  if (value === undefined) {
-    return null;
-  }
-
   if (!property && !datatype) {
     return <span title={`loading ${propertyURL}...`}>...</span>;
+  }
+
+  if (value === undefined && !editMode) {
+    return null;
   }
 
   if (!editMode) {
@@ -85,7 +99,7 @@ export function ValueForm({ resource, propertyURL, datatype }: ValueFormProps) {
         )}
         {shouldShowEditButton && (
           <EditButton title='Edit value'>
-            <FaPencil onClick={() => setEditMode(!editMode)} />
+            <FaPencil onClick={() => handleEditModeChange(!editMode)} />
           </EditButton>
         )}
       </ValueFormWrapper>
@@ -96,7 +110,7 @@ export function ValueForm({ resource, propertyURL, datatype }: ValueFormProps) {
     <ValueFormEdit
       resource={resource}
       property={property}
-      onClose={() => setEditMode(false)}
+      onClose={() => handleEditModeChange(false)}
     />
   );
 }

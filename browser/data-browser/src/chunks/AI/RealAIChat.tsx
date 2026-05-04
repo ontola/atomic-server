@@ -100,7 +100,6 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
 
   const { getInitialAgent, setLastUsedAgentForChat, setLastUsedSidebarAgent } =
     useAIAgentConfig();
-  const addContextToMessages = useProcessMessages();
   const getToolsForAgent = useTools();
   const {
     checkORModelSupportsImageInput,
@@ -117,6 +116,9 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   const [selectedAgent, setSelectedAgent] = useState<AIAgent>(
     getInitialAgent(!chatSubject, chatSubject),
   );
+  const addContextToMessages = useProcessMessages({
+    includeDriveInstructions: selectedAgent.canReadAtomicData,
+  });
 
   const vectorIndexing = useVectorIndexStatus();
 

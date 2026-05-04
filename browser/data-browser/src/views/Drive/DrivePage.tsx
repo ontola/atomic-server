@@ -7,7 +7,6 @@ import {
   type Server,
 } from '@tomic/react';
 import { ContainerNarrow } from '@components/Containers';
-import { ValueForm } from '@components/forms/ValueForm';
 import { Button } from '@components/Button';
 import { useSettings } from '@helpers/AppSettings';
 import { ResourcePageProps } from '../ResourcePage';
@@ -21,6 +20,7 @@ import { type JSX } from 'react';
 import { PluginList } from './PluginList';
 import { useVectorIndexStatus } from '@hooks/useVectorIndexStatus';
 import { VectorIndexingIndicator } from '@components/VectorIndexingIndicator';
+import { ValueFormAddButton } from '@components/forms/ValueForm/ValueFormAddButton';
 
 /** A View for Drives, which function similar to a homepage or dashboard. */
 function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
@@ -54,10 +54,11 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
             you should set this up at a Domain on a server.
           </WarningBlock>
         )}
-        <ValueForm
+        <ValueFormAddButton
           resource={resource}
           propertyURL={core.properties.description}
           datatype={Datatype.MARKDOWN}
+          buttonLabel='Add description'
         />
         <div>
           <Heading>Default Ontology</Heading>
@@ -69,6 +70,16 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
           />
         </div>
         <PluginList drive={resource} />
+        <Column gap='1rem'>
+          <ValueFormAddButton
+            resource={resource}
+            propertyURL={server.properties.llmTxt}
+            datatype={Datatype.MARKDOWN}
+            buttonLabel='Add LLM instructions'
+          >
+            <Heading>LLM Instructions</Heading>
+          </ValueFormAddButton>
+        </Column>
       </Column>
     </ContainerNarrow>
   );

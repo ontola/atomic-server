@@ -3079,9 +3079,6 @@ msgstr "Long"
 msgid "Relative"
 msgstr "Relative"
 
-#~ msgid "<0/> Provide relevant context from your knowledge base to the Agent."
-#~ msgstr "<0/> Provide relevant context from your knowledge base to the Agent."
-
 #: src/chunks/AI/RealAIChat.tsx
 msgid "Gathering context"
 msgstr "Gathering context"
@@ -3468,9 +3465,65 @@ msgstr "Duplicate"
 msgid "No custom classes found on the current drive."
 msgstr "No custom classes found on the current drive."
 
-#~ msgid "The system prompt that defines how the agent behaves. You can use the following placeholders: {{timestamp}} - The current date and time, {{drive}} - Subject of the current drive, {{drive-structure}} - A tree of resources on the drive, {{custom-classes}} - A list of classes defined on the current drive."
-#~ msgstr "The system prompt that defines how the agent behaves. You can use the following placeholders: {{timestamp}} - The current date and time, {{drive}} - Subject of the current drive, {{drive-structure}} - A tree of resources on the drive, {{custom-classes}} - A list of classes defined on the current drive."
-
 #: src/chunks/AI/AgentConfig.tsx
 msgid "The system prompt that defines how the agent behaves. You can use the following placeholders: {{timestamp}} - the current date and time, {{drive}} - subject of the current drive, {{drive-structure}} - a tree of resources on the drive, {{custom-classes}} - a list of classes defined on the current drive."
 msgstr "The system prompt that defines how the agent behaves. You can use the following placeholders: {{timestamp}} - the current date and time, {{drive}} - subject of the current drive, {{drive-structure}} - a tree of resources on the drive, {{custom-classes}} - a list of classes defined on the current drive."
+
+#. 0: headerCount; 1: headerCount === 1 ? '' \\: 's'
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "{0} custom header {1}"
+msgstr "{0} custom header {1}"
+
+#. 0: index + 1
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "Header {0} key"
+msgstr "Header {0} key"
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "Header key"
+msgstr "Header key"
+
+#. 0: index + 1
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "Header {0} value"
+msgstr "Header {0} value"
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "Header value"
+msgstr "Header value"
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "Remove header"
+msgstr "Remove header"
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "No custom headers configured."
+msgstr "No custom headers configured."
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "<0/> Add header"
+msgstr "<0/> Add header"
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "Headers"
+msgstr "Headers"
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "Optional HTTP headers to send when connecting to this MCP server"
+msgstr "Optional HTTP headers to send when connecting to this MCP server"
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "Default server"
+msgstr "Default server"
+
+#: src/views/Drive/DrivePage.tsx
+msgid "Add description"
+msgstr "Add description"
+
+#: src/views/Drive/DrivePage.tsx
+msgid "Add LLM instructions"
+msgstr "Add LLM instructions"
+
+#: src/views/Drive/DrivePage.tsx
+msgid "LLM Instructions"
+msgstr "LLM Instructions"
