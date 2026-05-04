@@ -45,11 +45,16 @@ function History(): JSX.Element {
   }, [versions]);
 
   const setResourceToCurrentVersion = async () => {
-    if (selectedVersion && subject) {
-      // TODO: Implement version restore with Loro checkout
-      // This would checkout the Loro doc to the selected frontiers,
-      // export the state, and save it as a new commit.
-      toast.error('Version restore not yet implemented for Loro');
+    if (!selectedVersion || !subject) return;
+
+    try {
+      await resource.setVersion(selectedVersion);
+      toast.success('Resource version updated');
+      navigate(constructOpenURL(subject));
+    } catch (e) {
+      toast.error(
+        `Could not restore version: ${e instanceof Error ? e.message : String(e)}`,
+      );
     }
   };
 

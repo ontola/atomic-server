@@ -1703,8 +1703,9 @@ msgstr "Datei(en) hochladen..."
 msgid "Uploading..."
 msgstr "Wird hochgeladen..."
 
-#~ msgid "Resource version updated"
-#~ msgstr "Ressourcenversion aktualisiert"
+#: src/routes/History/HistoryRoute.tsx
+msgid "Resource version updated"
+msgstr "Ressourcenversion aktualisiert"
 
 #~ msgid "Building history of {0}"
 #~ msgstr "Versionsgeschichte von {0} wird erstellt"
@@ -4719,9 +4720,8 @@ msgstr ""
 msgid "Restore this version"
 msgstr "Diese Version wiederherstellen"
 
-#: src/routes/History/HistoryRoute.tsx
-msgid "Version restore not yet implemented for Loro"
-msgstr "Wiederherstellung der Version für Loro noch nicht implementiert"
+#~ msgid "Version restore not yet implemented for Loro"
+#~ msgstr "Wiederherstellung der Version für Loro noch nicht implementiert"
 
 #. placeholder {0}: resource.title
 #: src/routes/History/HistoryRoute.tsx
@@ -5198,3 +5198,8 @@ msgstr "Überprüfen Sie die Browserkonsole für Details, oder versuchen Sie, zu
 
 #~ msgid "Failed to link shared resource after invite"
 #~ msgstr ""
+
+#. placeholder {0}: e instanceof Error ? e.message : String(e)
+#: src/routes/History/HistoryRoute.tsx
+msgid "Could not restore version: {0}"
+msgstr ""

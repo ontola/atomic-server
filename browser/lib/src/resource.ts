@@ -164,7 +164,26 @@ export class Resource<C extends OptionalClass = any> {
    * Use `resource.on(ResourceEvents.LoadingChange, (loading) => {})` to listen for changes.
    */
   public get loading(): boolean {
-    return this._loading;
+    if (this._loading) return true;
+    // A resource with buffered Loro snapshot bytes but no doc isn't actually
+    // readable yet — `get(prop)` returns undefined until Loro WASM hydrates
+    // the buffer. Treat that as still loading so consumers (e.g. useTitle)
+    // show a loading indicator instead of falling back to a truncated DID.
+    // This window is short (typically <1s on cold reloads, when SYNC_PUSH
+    // beats the Loro WASM init) but visible. The flag flips back to false
+    // automatically — `getLoroDoc()` lazily imports the buffer the first
+    // time anything reads through, after which `_loroSnapshotBytes` is
+    // moved into the doc and this getter falls through to `_loading`.
+    if (!this._loroDoc) {
+      const buf = this._loroSnapshotBytes;
+      if (
+        (buf instanceof Uint8Array && buf.length > 0) ||
+        (typeof buf === 'string' && buf.length > 0)
+      ) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /** The subject URL of the resource */
@@ -258,6 +277,15 @@ export class Resource<C extends OptionalClass = any> {
     return this._pendingCommits.length > 0;
   }
 
+  /**
+   * Restore previously-signed commits onto this resource — used by the store
+   * when a hydrated resource needs its offline-persisted commit queue
+   * re-attached after a page reload.
+   */
+  public setPendingCommits(commits: Commit[]): void {
+    this._pendingCommits = [...commits];
+  }
+
   private get store(): Store {
     if (!this._store) {
       console.error(`Resource ${this.subject} has no store`);
@@ -333,6 +361,16 @@ export class Resource<C extends OptionalClass = any> {
         initializedFromSnapshot || (!this.new && !this._dirty)
           ? this._loroDoc.oplogVersion()
           : undefined;
+
+      // Drained the buffer — `loading` getter now returns false (assuming
+      // `_loading` was false). Emit `LoadingChange(false)` so subscribers
+      // (useResource → useTitle, etc.) re-render and pick up the
+      // freshly-materialized data. Without this, a resource that arrived
+      // via SYNC_PUSH before Loro was ready would stay stuck on its
+      // loading indicator until some other event happens to fire.
+      if (initializedFromSnapshot && !this._loading) {
+        this.eventManager.emit(ResourceEvents.LoadingChange, false);
+      }
     }
 
     return this._loroDoc;
@@ -964,71 +1002,134 @@ export class Resource<C extends OptionalClass = any> {
       return [];
     }
 
-    // Get all changes from the OpLog, grouped by peer
-    const allChanges = doc.getAllChanges();
-
-    // Flatten into a single chronological list
-    type ChangeEntry = {
+    // Loro merges sequential same-peer ops into a single Change whose
+    // `length` is the operation count. Iterating only over Changes therefore
+    // collapses every edit between commits into one version. To recover one
+    // version per *commit* we walk every op counter inside each Change and
+    // group by `lastCommit` — the property the runtime writes when a commit
+    // applies. The state captured for each lastCommit is the **last** op
+    // counter that carried it, i.e. the state right before the next commit
+    // overwrote `lastCommit`. That's the snapshot that was actually saved.
+    type Step = {
       peer: string;
       counter: number;
       timestamp: number;
       message: string | undefined;
-      length: number;
     };
-    const flatChanges: ChangeEntry[] = [];
+    const steps: Step[] = [];
 
-    for (const [peer, changes] of allChanges.entries()) {
+    for (const [peer, changes] of doc.getAllChanges().entries()) {
       for (const change of changes) {
-        flatChanges.push({
-          peer,
-          counter: change.counter + change.length - 1,
-          timestamp: change.timestamp,
-          message: change.message,
-          length: change.length,
-        });
+        for (let i = 0; i < change.length; i++) {
+          steps.push({
+            peer,
+            counter: change.counter + i,
+            timestamp: change.timestamp,
+            message: change.message,
+          });
+        }
       }
     }
 
-    // Sort by timestamp (oldest first)
-    flatChanges.sort((a, b) => a.timestamp - b.timestamp);
+    // Sort by timestamp (oldest first), then by counter. Loro often reports
+    // timestamp=0 for offline edits, so the counter tiebreaker keeps things
+    // monotonic per peer — but cross-peer order is best-effort.
+    steps.sort(
+      (a, b) => a.timestamp - b.timestamp || a.counter - b.counter,
+    );
 
-    // Build versions by checking out each point in time
-    const versions: Version[] = [];
+    const lastCommitProp = 'https://atomicdata.dev/properties/lastCommit';
+    type GroupedVersion = {
+      lastCommitKey: string;
+      contentKey: string;
+      step: Step;
+      propvals: Map<string, JSONValue>;
+    };
+    const grouped: GroupedVersion[] = [];
 
-    for (const change of flatChanges) {
+    /** Stable signature of the propvals minus `lastCommit`, used to detect
+     *  versions that represent the same observable state arrived at from
+     *  different peers (e.g. the same snapshot reimported during sync). */
+    const contentSignature = (pv: Map<string, JSONValue>): string => {
+      const entries = Array.from(pv.entries())
+        .filter(([k]) => k !== lastCommitProp)
+        .sort(([a], [b]) => a.localeCompare(b));
+
+      return JSON.stringify(entries);
+    };
+
+    for (const step of steps) {
       const frontiers = [
-        { peer: change.peer as `${number}`, counter: change.counter },
+        { peer: step.peer as `${number}`, counter: step.counter },
       ];
 
       try {
         doc.checkout(frontiers);
-
-        // Read the properties map at this version
-        const propsMap = doc.getMap('properties');
-        const propvals = new Map<string, JSONValue>();
-
-        if (propsMap) {
-          const json = propsMap.toJSON();
-
-          if (json && typeof json === 'object') {
-            for (const [key, value] of Object.entries(json)) {
-              propvals.set(key, value as JSONValue);
-            }
-          }
-        }
-
-        versions.push({
-          peer: change.peer,
-          timestamp: change.timestamp * 1000, // Loro uses seconds, we use ms
-          frontiers,
-          message: change.message,
-          propvals,
-        });
       } catch {
-        // Some frontiers might not be valid for checkout, skip
         continue;
       }
+
+      const propsMap = doc.getMap('properties');
+      const propvals = new Map<string, JSONValue>();
+
+      if (propsMap) {
+        const json = propsMap.toJSON();
+
+        if (json && typeof json === 'object') {
+          for (const [key, value] of Object.entries(json)) {
+            propvals.set(key, value as JSONValue);
+          }
+        }
+      }
+
+      // Bucket by lastCommit. An empty lastCommit (pre-genesis) is its own
+      // bucket. The latest entry per bucket wins — that's the final saved
+      // state under that commit.
+      const lastCommitKey = String(propvals.get(lastCommitProp) ?? '');
+      const cKey = contentSignature(propvals);
+
+      const existing = grouped.find(g => g.lastCommitKey === lastCommitKey);
+
+      if (existing) {
+        existing.step = step;
+        existing.propvals = propvals;
+        existing.contentKey = cKey;
+      } else {
+        grouped.push({
+          lastCommitKey,
+          contentKey: cKey,
+          step,
+          propvals,
+        });
+      }
     }
+
+    // Drop earlier buckets whose content signature matches a later one — they
+    // represent the same observable state, just under a different lastCommit
+    // (e.g. a snapshot reimported from a peer). Keeping only the freshest
+    // entry per content gives one version per real saved state.
+    const seenContent = new Set<string>();
+    const dedupedReverse: GroupedVersion[] = [];
+
+    for (let i = grouped.length - 1; i >= 0; i--) {
+      const g = grouped[i];
+
+      if (seenContent.has(g.contentKey)) continue;
+      seenContent.add(g.contentKey);
+      dedupedReverse.push(g);
+    }
+
+    const deduped = dedupedReverse.reverse();
+
+    const versions: Version[] = deduped.map(g => ({
+      peer: g.step.peer,
+      timestamp: g.step.timestamp * 1000, // Loro uses seconds, we use ms
+      frontiers: [
+        { peer: g.step.peer as `${number}`, counter: g.step.counter },
+      ],
+      message: g.step.message,
+      propvals: g.propvals,
+    }));
 
     // Restore to latest version
     doc.checkoutToLatest();
@@ -1682,6 +1783,23 @@ export class Resource<C extends OptionalClass = any> {
     // Also update the in-memory store so the UI reflects changes immediately.
     this.store.addResources(this, { skipCommitCompare: true });
 
+    // Persist the queue to localStorage so it survives page reloads. Without
+    // this the in-memory _pendingCommits array would be lost on navigation,
+    // syncDirtyResources would call pushCommits on a fresh hydrated instance
+    // with no commits, log "Synced", clear the dirty subject, and the server
+    // would never receive the resource — exactly the offline-create-then-
+    // online failure mode the dirty queue is supposed to prevent.
+    if (typeof localStorage !== 'undefined' && this._pendingCommits.length) {
+      try {
+        localStorage.setItem(
+          `atomic.offline.${this.subject}`,
+          JSON.stringify(this._pendingCommits.map(c => commitToJsonADObject(c))),
+        );
+      } catch (e) {
+        console.warn('[Offline] failed to persist pending commits:', e);
+      }
+    }
+
     // Intentionally DO NOT clear `_pendingCommits` here. They've been applied
     // locally for the UI, but the server hasn't seen them yet. On reconnect,
     // `syncDirtyResources` calls `pushCommits()` which drains this queue and
@@ -1778,7 +1896,10 @@ export class Resource<C extends OptionalClass = any> {
     const doc = this.getLoroDoc();
 
     if (!doc) {
-      // Loro WASM not loaded — store bytes for later initialization
+      // Loro WASM not loaded — buffer the bytes for `getLoroDoc()` to
+      // import once Loro initializes. The `loading` getter sees the
+      // buffered bytes and keeps reporting `true` until then, so
+      // consumers don't fall back to the truncated DID.
       this._loroSnapshotBytes = loroUpdate;
 
       return;

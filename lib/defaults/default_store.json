@@ -302,6 +302,16 @@
     "https://atomicdata.dev/properties/shortname": "blake3"
   },
   {
+    "@id": "https://atomicdata.dev/properties/blob",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "Content-addressed reference to the file's bytes. Always a `did:ad:blob:{blake3-hex}` subject; the server (or any peer) resolves it to the raw bytes via `/download/files/{hash}` or the `BLOB_REQUEST`/`BLOB_RESPONSE` sync frames.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "blob"
+  },
+  {
     "@id": "https://atomicdata.dev/properties/filename",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
     "https://atomicdata.dev/properties/description": "A filename does not contain strings, and ends with a dot and a file extension.",
@@ -1089,6 +1099,7 @@
       "https://atomicdata.dev/properties/filename",
       "https://atomicdata.dev/properties/checksum",
       "https://atomicdata.dev/properties/blake3",
+      "https://atomicdata.dev/properties/blob",
       "https://atomicdata.dev/properties/mimetype",
       "https://atomicdata.dev/properties/internalId"
     ],

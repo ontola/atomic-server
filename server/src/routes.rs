@@ -74,6 +74,11 @@ pub fn config_routes(app: &mut actix_web::web::ServiceConfig) {
     )
     .service(web::resource("/download/{path:[^{}]+}").to(handlers::download::handle_download))
     .service(
+        web::resource("/blob/{hash}")
+            .guard(guard::Method(Method::PUT))
+            .to(handlers::blob::put_blob),
+    )
+    .service(
         web::resource("/setup")
             .guard(guard::Method(Method::POST))
             .to(handlers::post_resource::handle_post_resource),

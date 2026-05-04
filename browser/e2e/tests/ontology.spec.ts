@@ -7,6 +7,7 @@ import {
   REBUILD_INDEX_TIME,
   inDialog,
   DIALOG_CLOSE_BUTTON,
+  SEARCHBOX_PROPERTY_PLACEHOLDER,
 } from './test-utils';
 
 test.describe('Ontology', async () => {
@@ -76,7 +77,7 @@ test.describe('Ontology', async () => {
     await page.getByText('Change me').fill('Thumbnail of a youtube video');
     await page.getByRole('button', { name: 'add required property' }).click();
     await page
-      .getByPlaceholder('Search for a property or enter a URL')
+      .getByPlaceholder(SEARCHBOX_PROPERTY_PLACEHOLDER)
       .fill('arrows');
 
     await page.keyboard.press('ArrowDown');
@@ -130,7 +131,9 @@ test.describe('Ontology', async () => {
       .nth(1)
       .click();
 
-    await page.getByPlaceholder('Search for a property').fill('arrow-kind');
+    await page
+      .getByPlaceholder(SEARCHBOX_PROPERTY_PLACEHOLDER)
+      .fill('arrow-kind');
 
     await page.keyboard.press('ArrowDown');
     await page.keyboard.press('Enter');
@@ -171,7 +174,9 @@ test.describe('Ontology', async () => {
 
     // add line-type property to arrow-kind
     await arrowKindCard.getByTitle('add recommended property').click();
-    await page.getByPlaceholder('Search for a property').fill('line-type');
+    await page
+      .getByPlaceholder(SEARCHBOX_PROPERTY_PLACEHOLDER)
+      .fill('line-type');
 
     await expect(page.getByText('Create line-type')).toBeVisible();
 

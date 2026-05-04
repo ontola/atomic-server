@@ -5,7 +5,7 @@ import {
   setCookieAuthentication,
 } from './authentication.js';
 import { Client, type FileOrFileLike } from './client.js';
-import type { Commit } from './commit.js';
+import { parseCommitJSON, type Commit } from './commit.js';
 import { datatypeFromUrl, type Datatype } from './datatypes.js';
 import { EventManager } from './EventManager.js';
 import { hasBrowserAPI } from './hasBrowserAPI.js';
@@ -1233,6 +1233,34 @@ export class Store {
       return true;
     }
 
+    // Offline-created resources keep their genesis commit in `_pendingCommits`
+    // until the next reconnect, when `syncDirtyResources` drains it via
+    // `pushCommits`. Replacing the in-memory instance with a fresh one from
+    // clientDb wipes the queue — so the dirty subject gets "Synced" with an
+    // empty queue, no /commit POST fires, the server never sees the resource,
+    // and `/download/files/<hash>` keeps returning 404 even after reconnect.
+    if (existing && existing.hasPendingCommits) {
+      return true;
+    }
+
+    // Same problem after a page reload: the in-memory queue is gone, but
+    // `applyPendingCommitsLocally` persisted it under `atomic.offline.<subject>`.
+    // Re-attach it to the freshly hydrated instance so the next sync can push.
+    let restoredCommits: Commit[] | undefined;
+    if (typeof localStorage !== 'undefined') {
+      try {
+        const stored = localStorage.getItem(`atomic.offline.${subject}`);
+        if (stored) {
+          const parsed = JSON.parse(stored) as unknown[];
+          restoredCommits = parsed.map(obj =>
+            parseCommitJSON(JSON.stringify(obj)),
+          );
+        }
+      } catch {
+        // bad JSON — ignore, the worst case is the original 404 behavior
+      }
+    }
+
     const resource = new Resource(subject);
 
     resource.applyHydratedValues(
@@ -1248,6 +1276,16 @@ export class Store {
     resource.source = 'client-db';
     resource.sourceTimestamp = Date.now();
     this.addResources(resource, { alias: subject });
+
+    // Re-attach restored commits AFTER addResources because addResources may
+    // merge the new instance into an existing placeholder (created by
+    // getResourceLoading); merge() carries Loro/cache state but not
+    // `_pendingCommits`, so writing them on the just-created `resource`
+    // wouldn't survive. Pull the canonical instance back out and patch it.
+    if (restoredCommits?.length) {
+      const stored = this.resources.get(this.normalizeSubject(subject));
+      stored?.setPendingCommits(restoredCommits);
+    }
 
     return true;
   }
@@ -2348,9 +2386,14 @@ export class Store {
 
   /**
    * If the resource carries a `blob` reference, push the locally-stored bytes
-   * to the server via a `BLOB_RESPONSE` frame. No-op if there's no clientDb
-   * (HTTP `/upload` already wrote the bytes server-side), no WS connection
-   * (we'll retry next time this is called), or no local copy of the bytes.
+   * to the server. Prefers the WS `BLOB_RESPONSE` fast path; falls back to
+   * `PUT /blob/<hash>` over HTTP when the WS isn't open. Without the HTTP
+   * fallback the server keeps the resource but never receives the bytes, so
+   * `/download/files/<hash>` returns 404 — matching {@link postCommit}'s
+   * transport (also HTTP) keeps both halves of an upload reliable.
+   *
+   * No-op if there's no clientDb (HTTP `/upload` already wrote the bytes
+   * server-side) or no local copy of the bytes.
    *
    * Called from {@link Resource.pushCommits} on every successful commit push,
    * so the bytes get sent both on initial save AND after `syncDirtyResources`
@@ -2358,8 +2401,6 @@ export class Store {
    */
   public async maybePushBlobForResource(resource: Resource): Promise<void> {
     if (!this.clientDb) return;
-    const ws = this.getDefaultWebSocket();
-    if (!ws) return;
 
     const blobValue = resource.get(BLOB);
     if (typeof blobValue !== 'string') return;
@@ -2383,7 +2424,21 @@ export class Store {
     }
     if (!bytes) return;
 
-    ws.sendBlob(hashBytes, bytes);
+    const ws = this.getDefaultWebSocket();
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.sendBlob(hashBytes, bytes);
+      return;
+    }
+
+    // WS unavailable — durable HTTP upload. Hash is verified server-side.
+    // Cast: TS lib.dom marks Uint8Array<SharedArrayBuffer> incompatible with
+    // BodyInit/BlobPart; at runtime our bytes are ArrayBuffer-backed.
+    const url = `${this.getServerUrl()}/blob/${hashHex}`;
+    await fetch(url, {
+      method: 'PUT',
+      body: bytes as unknown as BodyInit,
+      headers: { 'Content-Type': 'application/octet-stream' },
+    });
   }
 
   public logIncomingCommit(commit: Commit): void {

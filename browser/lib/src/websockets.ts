@@ -437,6 +437,12 @@ export class WSClient {
             } else {
               resource = this.store.getResourceLoading(subject);
               resource.importLoroUpdate(loroBytes);
+              // Setting `loading = false` here is safe even when Loro
+              // hasn't loaded yet: the `loading` getter checks for
+              // buffered `_loroSnapshotBytes` and keeps reporting `true`
+              // until `getLoroDoc()` hydrates the buffer. So consumers
+              // (useTitle, etc.) keep seeing a loading state for the
+              // brief window where bytes are buffered but unreadable.
               resource.loading = false;
             }
 
