@@ -1,6 +1,11 @@
 # Subject types end-to-end
 
-> Status: planned 2026-05-28. Correctness. Invasive.
+> Status: first step landed 2026-05-28 in
+> `browser/lib/src/subject.ts` (brand type + `asSubject` /
+> `tryAsSubject` / `isValidSubject` / `isDidSubject` / `isHttpSubject`
+> + `InvalidSubjectError`; 8 passing tests). The brand is exported but
+> no consumer signatures have been migrated yet — that's the next
+> phase. Correctness. Invasive (migration phase).
 
 ## Problem
 

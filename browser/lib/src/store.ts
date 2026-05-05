@@ -2175,11 +2175,22 @@ export class Store {
   }
 
   public getSyncStatus(): StoreSyncStatus {
+    // Saves that succeed first-try go straight to the server — they
+    // never touch the outbox, so `outbox.size` alone misses them.
+    // Without this, an editor that debounces its save and then exits
+    // (Escape/blur) can return to a caller before the in-flight POST
+    // completes; the next interaction races the previous commit.
+    // Repro: rename-regression "two sequential renames".
+    let inFlightSaves = 0;
+    for (const r of this.resources.values()) {
+      if (r.isSaving) inFlightSaves++;
+    }
+
     return {
       serverConnected: this._serverConnected,
       serverConnectionError: this._serverConnectionError,
-      syncInProgress: this._driveSyncInProgress || this.outbox.isDraining,
-      pendingDirtyCount: this.outbox.size,
+      syncInProgress: this._driveSyncInProgress || this.outbox.isDraining || inFlightSaves > 0,
+      pendingDirtyCount: this.outbox.size + inFlightSaves,
       serverUrl: this.serverUrl,
       drive: this.drive,
       clientDbReady: this.clientDb?.isReady ?? false,

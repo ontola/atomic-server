@@ -155,14 +155,29 @@ export class LocalOutbox {
 
       try {
         await ctx.postEntry(live);
-        // If new commits arrived during the post, keep the unposted
-        // tail; otherwise clear the entry.
+        // Remove only the commits we actually posted. Compare by
+        // signature, not array length, because `setEntry` REPLACES
+        // the queue rather than appending: if new commits arrived
+        // during the post and happened to land at the same total
+        // length as `live` (e.g. typing one letter while the previous
+        // letter's commit was in flight), a length-based check
+        // silently dropped the new ones. Repro: e2e
+        // `quick-edit text typing ux` and `rename-regression`.
         const after = this.entries.get(entry.subject);
 
-        if (after && after.commits.length === live.commits.length) {
-          this.entries.delete(entry.subject);
-        } else if (after) {
-          after.commits = after.commits.slice(live.commits.length);
+        if (after) {
+          const postedSigs = new Set(
+            live.commits.map(c => c.signature).filter((s): s is string => !!s),
+          );
+          const remaining = after.commits.filter(
+            c => !c.signature || !postedSigs.has(c.signature),
+          );
+
+          if (remaining.length === 0) {
+            this.entries.delete(entry.subject);
+          } else {
+            after.commits = remaining;
+          }
         }
       } catch (e) {
         live.lastAttemptError = e instanceof Error ? e.message : String(e);

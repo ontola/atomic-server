@@ -131,11 +131,25 @@ pub struct UnsubscribeQuery {
 /// actor (`CommitMonitor`, `LoroSyncBroadcaster`). Each handler walks
 /// its maps and removes every entry whose `Addr` matches. Without this,
 /// stale entries accumulate over the server's lifetime and every fanout
-/// pass pays for dead `Addr`s. See `planning/connection-close-cleanup.md`.
+/// pass pays for dead `Addr`s.
 #[derive(Message)]
 #[rtype(result = "()")]
 pub struct UnsubscribeAll {
     pub addr: Addr<crate::handlers::web_sockets::WebSocketConnection>,
+}
+
+/// Pre-encoded wire frame (`UPDATE` or `DESTROY`) ready for `ctx.binary`.
+///
+/// Sent by `CommitMonitor`'s fanout: the frame is encoded **once** from
+/// the `CommitMessage`, wrapped in an `Arc`, then dispatched to every
+/// subscriber. Each `do_send` clones only the `Arc` pointer (O(1))
+/// instead of cloning the full `CommitMessage` (which would re-clone the
+/// Loro update bytes per subscriber). See
+/// `planning/arc-actor-message-payloads.md` for the perf rationale.
+#[derive(Message, Clone)]
+#[rtype(result = "()")]
+pub struct SendFrame {
+    pub frame: Arc<[u8]>,
 }
 
 /// Forwarded into `CommitMonitor` by the `DbEvent::QueryMembershipChanged`

@@ -1142,6 +1142,25 @@ impl Db {
         Ok(())
     }
 
+    /// Reset the watched-query registry (`Tree::WatchedQueries` + the
+    /// in-memory `watched_queries_by_drive` map). Called on server
+    /// startup: every restart drops every WS connection, so any
+    /// previously-registered filter is now an orphan with no live
+    /// subscriber. Without this, e2e suites leak filters across runs
+    /// (each test's drive is unique, so each filter is unique), and
+    /// `check_if_atom_matches_watched_query_filters` iterates a growing
+    /// pile of dead entries on every commit — observed to reach 13k+
+    /// filters, slowing rapid-save tests past their timeout. Active
+    /// subscribers re-register their filters on reconnect, so the
+    /// map repopulates organically without surprising anyone.
+    pub fn clear_watched_queries(&self) -> AtomicResult<()> {
+        self.kv.clear_tree(Tree::WatchedQueries)?;
+        if let Ok(mut map) = self.watched_queries_by_drive.write() {
+            map.clear();
+        }
+        Ok(())
+    }
+
     /// Flushes the current state to disk.
     pub fn flush(&self) -> AtomicResult<()> {
         self.kv.flush()

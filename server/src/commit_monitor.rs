@@ -4,10 +4,10 @@
 
 use crate::{
     actor_messages::{
-        CommitMessage, MembershipNotification, Subscribe, SubscribeDrive, SubscribeQuery,
-        UnsubscribeAll, UnsubscribeQuery,
+        CommitMessage, MembershipNotification, SendFrame, Subscribe, SubscribeDrive,
+        SubscribeQuery, UnsubscribeAll, UnsubscribeQuery,
     },
-    handlers::web_sockets::WebSocketConnection,
+    handlers::{web_sockets::WebSocketConnection, ws_v2},
     search::SearchState,
 };
 use actix::{
@@ -30,9 +30,9 @@ use std::sync::Arc;
 /// - **Drive subscriptions** (`drive_subscriptions`): drive only.
 ///   Match every commit on resources whose subject is under that drive
 ///   (HTTP subjects by prefix; DIDs fan out to every drive subscriber
-///   because they can't be prefix-matched). Both kinds receive the
-///   full `CommitMessage`, which the `WebSocketConnection::Handler` then
-///   encodes as `UPDATE` (with snapshot + commit_id) or `DESTROY`.
+///   because they can't be prefix-matched). Both kinds receive a
+///   `SendFrame` carrying the pre-encoded `UPDATE` / `DESTROY` wire
+///   bytes, encoded once at the fanout site and Arc-shared.
 /// - **Filter subscriptions** (`query_subscriptions`): keyed by encoded
 ///   `QueryFilter` bytes — registered via the `SUBSCRIBE_QUERY` text
 ///   frame. When a resource enters / leaves the filter set,
@@ -529,49 +529,54 @@ impl Handler<CommitMessage> for CommitMonitor {
             self.store.get_base_domain().as_deref(),
         );
 
-        // Notify websocket listeners
         let event_source = msg.commit_response.source_id.as_deref();
-        if let Some(subscribers) = self.subscriptions.get(&target_subject) {
-            tracing::debug!(
-                "Sending commit {} to {} subscribers",
-                target_subject,
-                subscribers.len()
-            );
-            for (connection, sub_source) in subscribers {
-                if skip_same_source(event_source, sub_source) {
-                    continue;
-                }
-                connection.do_send(msg.clone());
-            }
-        } else {
-            tracing::debug!("No subscribers for {}", target_subject);
-        }
 
-        // Drive-wide subscribers receive every commit for a resource that
-        // lives under their drive. The v2 client only sends a single
-        // `SUB <drive>`; without this fan-out a second tab viewing any
-        // child resource (canvas, document, folder…) never saw edits made
-        // elsewhere. This same path carries creates and destroys — the
-        // legacy QUERY_UPDATE notification channel was retired in
-        // `planning/drop-query-update.md` (the subject string it carried
-        // was already arriving here, with the full snapshot + commit_id).
-        // HTTP subjects prefix-match the drive URL exactly; DID-form
-        // subjects can't be prefix-matched so they fan out to every drive
-        // subscriber (the client's commit-id dedup in `applyIncoming`
-        // absorbs the noise). The connection-id source suppression still
-        // applies, so the originating tab doesn't get its own commit
-        // echoed back.
-        let subject_str = target_subject.to_string();
-        let is_did = subject_str.starts_with("did:");
-        for (drive, subscribers) in &self.drive_subscriptions {
-            if !is_did && !subject_str.starts_with(drive.as_str()) {
-                continue;
+        // Encode the wire frame ONCE up front, wrap in `Arc`. Each
+        // subscriber `do_send` then clones only the Arc pointer (O(1))
+        // instead of cloning the full `CommitMessage` and re-encoding
+        // per-connection.
+        let frame = encode_commit_frame(&self.store, &msg);
+
+        if let Some(frame) = frame.as_ref() {
+            // Per-resource subscribers
+            if let Some(subscribers) = self.subscriptions.get(&target_subject) {
+                tracing::debug!(
+                    "Sending commit {} to {} subscribers",
+                    target_subject,
+                    subscribers.len()
+                );
+                for (connection, sub_source) in subscribers {
+                    if skip_same_source(event_source, sub_source) {
+                        continue;
+                    }
+                    connection.do_send(SendFrame {
+                        frame: frame.clone(),
+                    });
+                }
+            } else {
+                tracing::debug!("No subscribers for {}", target_subject);
             }
-            for (connection, sub_source) in subscribers {
-                if skip_same_source(event_source, sub_source) {
+
+            // Drive-wide subscribers. HTTP subjects prefix-match the drive
+            // URL; DID subjects can't be prefix-matched so they fan out to
+            // every drive subscriber (the client's commit-id dedup
+            // absorbs the noise). The connection-id source suppression
+            // still applies, so the originating tab doesn't get its own
+            // commit echoed back.
+            let subject_str = target_subject.to_string();
+            let is_did = subject_str.starts_with("did:");
+            for (drive, subscribers) in &self.drive_subscriptions {
+                if !is_did && !subject_str.starts_with(drive.as_str()) {
                     continue;
                 }
-                connection.do_send(msg.clone());
+                for (connection, sub_source) in subscribers {
+                    if skip_same_source(event_source, sub_source) {
+                        continue;
+                    }
+                    connection.do_send(SendFrame {
+                        frame: frame.clone(),
+                    });
+                }
             }
         }
 
@@ -631,6 +636,57 @@ impl Handler<CommitMessage> for CommitMonitor {
                     .store(true, Ordering::Release);
             }),
         )
+    }
+}
+
+/// Encode the wire frame (`UPDATE` or `DESTROY`) for a `CommitMessage`,
+/// wrapped in `Arc<[u8]>` for cheap fanout. Returns `None` when the
+/// commit produces no frame (neither a Loro update nor a destroy flag).
+///
+/// Mirrors the per-connection encoding that
+/// `WebSocketConnection::Handler<SendFrame>` used to do before this was
+/// hoisted up to the fanout site. Origin resolution uses the shared
+/// store's base domain — all connections on this server resolve
+/// `internal:/…` subjects the same way, so encoding once is correct.
+fn encode_commit_frame(store: &Db, msg: &CommitMessage) -> Option<Arc<[u8]>> {
+    let commit = &msg.commit_response.commit;
+    let origin = store
+        .get_base_domain()
+        .unwrap_or_else(|| "http://localhost".to_string());
+    let subject_resolved = commit.subject.resolve(&origin);
+
+    if let Some(loro_update) = &commit.loro_update {
+        // The wire `commit_id` becomes the client's `lastCommit`
+        // propval and, on its next commit, its `previousCommit`. The
+        // latter is parsed as an AtomicURL by the server's JSON-AD
+        // parser — a raw base64 signature isn't a URL and gets
+        // rejected. Always emit the full `did:ad:commit:{signature}`
+        // DID. (`commit.url` is never populated in practice, so the
+        // previous `or(signature)` fallback was always taken —
+        // silently dropping the prefix.)
+        let commit_id_owned = commit
+            .url
+            .clone()
+            .or_else(|| {
+                commit
+                    .signature
+                    .as_ref()
+                    .map(|s| format!("did:ad:commit:{}", s))
+            })
+            .unwrap_or_default();
+        let frame = ws_v2::encode_update(
+            ws_v2::flags::HAS_COMMIT_ID | ws_v2::flags::PUSH,
+            0,
+            &subject_resolved,
+            Some(commit_id_owned.as_str()),
+            loro_update,
+        );
+        Some(Arc::from(frame.into_boxed_slice()))
+    } else if commit.destroy.unwrap_or(false) {
+        let frame = ws_v2::encode_destroy(0, &subject_resolved);
+        Some(Arc::from(frame.into_boxed_slice()))
+    } else {
+        None
     }
 }
 

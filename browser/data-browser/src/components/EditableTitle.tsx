@@ -77,12 +77,29 @@ export function EditableTitle({
     ref.current?.select();
   }, [isEditing]);
 
+  // The keystroke debounce in `useValue` (`commitDebounce: 100ms`)
+  // means the commit for the last typed character is still parked in
+  // a `setTimeout` when the user exits the editor. The next interaction
+  // — back-to-back rename, route change, reload — can run before the
+  // timer fires, so a quick "type → Escape → type again" sequence ends
+  // up with the second value chained onto the wrong `previousCommit`
+  // and the server only keeping the first one. Force-flush on every
+  // exit path (Enter, Escape, blur) so the commit posts before the
+  // editor unmounts. `save()` is a no-op when there are no dirty
+  // changes, so the still-armed debounce timer that fires afterwards
+  // is harmless.
+  const flushPending = () => {
+    void resource.__internalObject.save().catch(() => undefined);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
+      flushPending();
       setIsEditing(false);
       onCommit?.();
     } else if (e.key === 'Escape') {
+      flushPending();
       setIsEditing(false);
     }
   };
@@ -99,6 +116,7 @@ export function EditableTitle({
       value={text || ''}
       onKeyDown={handleKeyDown}
       onBlur={() => {
+        flushPending();
         setIsEditing(false);
         onCommit?.();
       }}
