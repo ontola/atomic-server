@@ -41,12 +41,18 @@ export function useChildren(parentSubject: string | undefined): {
 
     const extractMembers = async () => {
       await collection.waitForReady();
+      const seen = new Set<string>();
       const members: string[] = [];
 
       for (let i = 0; i < collection.totalMembers; i++) {
         const member = await collection.getMemberWithIndex(i);
 
-        if (member) {
+        // Drop commit subjects: they leak into parent= queries when a resource
+        // is created/updated, but they're never tree-children. Also dedupe —
+        // collection refreshes can race, leaving the same subject indexed
+        // twice across pages.
+        if (member && !member.startsWith('did:ad:commit:') && !seen.has(member)) {
+          seen.add(member);
           members.push(member);
         }
       }

@@ -570,6 +570,15 @@ pub fn loro_value_to_atomic_value(lv: &loro::LoroValue) -> Option<Value> {
                 }
             }
 
+            // Loro stores URLs/DIDs as plain strings. Restore them as
+            // AtomicUrl so downstream consumers (extenders, validators)
+            // that pattern-match on `Value::AtomicUrl` see them correctly.
+            // Without this, e.g. plugin extender's `resource.get(parent)`
+            // returns `Value::String` and rejects the commit.
+            if s.starts_with("did:") || s.starts_with("http://") || s.starts_with("https://") {
+                return Some(Value::AtomicUrl(s.into()));
+            }
+
             Some(Value::String(s))
         }
         loro::LoroValue::I64(i) => Some(Value::Integer(*i)),
