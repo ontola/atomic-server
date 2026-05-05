@@ -17,6 +17,7 @@ import {
   decodeSyncPush,
   decodeBlobRequest,
   decodeBlobResponse,
+  decodeQueryUpdate,
   encodeBlobResponse,
   encodeBlobRequest,
   debugFrame,
@@ -466,6 +467,32 @@ export class WSClient {
             );
           }
         }
+
+        break;
+      }
+
+      case Tag.QUERY_UPDATE: {
+        const msg = decodeQueryUpdate(payload);
+
+        if (!msg) break;
+
+        // Refetch the affected subjects FIRST, then notify. Consumers like
+        // useCollection re-query the local WASM DB on QueryMembershipChanged;
+        // if we notified before the fetches landed, the local DB wouldn't
+        // yet contain the new resource and the collection would silently
+        // refetch the stale state.
+        Promise.all(
+          [...msg.added, ...msg.removed].map(s =>
+            this.store.fetchResourceFromServer(s).catch(() => undefined),
+          ),
+        ).then(() => {
+          this.store.notifyQueryMembershipChanged({
+            property: msg.property,
+            value: msg.value,
+            added: msg.added,
+            removed: msg.removed,
+          });
+        });
 
         break;
       }

@@ -273,11 +273,11 @@ test.describe('tables', async () => {
     await page.waitForURL(url => url.pathname.startsWith('/app/show'), {
       timeout: 15000,
     });
-    // The TablePage takes a moment to render after navigation; the heading
-    // is the most reliable signal that the table resource has loaded.
-    await expect(
-      page.getByRole('heading', { name: 'Fast Entry Test', level: 1 }),
-    ).toBeVisible({ timeout: 15000 });
+    // EditableTitle auto-enters edit mode on creation (renders an input);
+    // when not editing it renders an h1. Match either form by test-id.
+    await expect(page.getByTestId('editable-title').first()).toBeVisible({
+      timeout: 15000,
+    });
     // Exit edit mode so subsequent keyboard actions (Tab to move into the
     // grid) don't get swallowed by the title input.
     await page.keyboard.press('Escape');
@@ -318,9 +318,7 @@ test.describe('tables', async () => {
 
     // Refresh and wait for the page to reload
     await page.reload();
-    await expect(
-      page.getByRole('heading', { name: 'Fast Entry Test', level: 1 }),
-    ).toBeVisible();
+    await expect(page.getByTestId('editable-title').first()).toBeVisible();
     await page.waitForTimeout(REBUILD_INDEX_TIME);
 
     // Verify all values are still correct after refresh

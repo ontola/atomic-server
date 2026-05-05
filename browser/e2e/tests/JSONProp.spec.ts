@@ -32,10 +32,13 @@ test.describe('JSON prop', () => {
 
     await saveButton.click();
 
+    // After save, EditableTitle auto-enters edit mode (renders as a textbox);
+    // match either the input or the h1 form via the test-id.
     await expect(
-      page.getByRole('heading', {
-        name,
-      }),
+      page
+        .getByTestId('editable-title')
+        .and(page.locator(`:text-is("${name}"), [value="${name}"]`))
+        .first(),
     ).toBeVisible();
 
     await expect(page.getByText('{\n  "valid": true\n  }')).toHaveRole('code');

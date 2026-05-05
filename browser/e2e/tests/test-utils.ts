@@ -487,13 +487,20 @@ export async function newResource(klass: string, page: Page) {
     await waitForResourceForm();
   } else {
     await page.locator(`button:has-text("${klass}")`).click();
-    // Some classes (e.g. bookmark, table) open a dialog instead of navigating.
-    await Promise.race([
+    // Wait for any of: URL leaves /app/new (basic-instance handlers), a
+    // dialog opens (bookmark/table), or the in-place NewFormFullPage shows
+    // up (custom user classes — `/app/new?classSubject=...` keeps the path
+    // but renders the resource form).
+    await Promise.any([
       page.waitForURL(url => !url.pathname.endsWith('/app/new'), {
         timeout: 10000,
       }),
       page
         .locator('dialog[open]')
+        .waitFor({ state: 'visible', timeout: 10000 }),
+      page
+        .getByRole('button', { name: 'Save' })
+        .first()
         .waitFor({ state: 'visible', timeout: 10000 }),
     ]);
   }
@@ -576,8 +583,20 @@ export async function editTitle(title: string, page: Page) {
     }
     await page.waitForTimeout(100);
   }
-  await titleEl.fill(title);
+  // Watch for the commit BEFORE typing so we don't miss the response that
+  // fires during the debounced save.
+  const waiter = waitForCommitOnCurrentResource(page);
+  // Select-all + type rather than fill: fill replaces the input value via
+  // direct DOM mutation, but React's controlled input + useValue debounce
+  // sometimes drops the change. Per-character type events keep onChange firing
+  // on every keystroke and let the debounce settle naturally.
+  await titleEl.focus();
+  await page.keyboard.press(
+    process.platform === 'darwin' ? 'Meta+a' : 'Control+a',
+  );
+  await titleEl.type(title);
   await page.keyboard.press('Enter');
+  await waiter;
 }
 
 export async function clickSidebarItem(text: string, page: Page) {
