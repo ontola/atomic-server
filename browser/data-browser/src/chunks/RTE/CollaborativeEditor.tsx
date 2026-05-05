@@ -305,8 +305,20 @@ export default function CollaborativeEditor({
         );
       },
     },
-    [canWrite, drive],
+    // Keep canWrite OUT of the deps. useEditor with canWrite in deps will
+    // destroy + recreate the editor every time the permission check flips
+    // (initial false → async true). The destroy loses focus + cursor state,
+    // so a test that focuses → types → asserts text races the recreate and
+    // the typing lands on a stale editor that immediately unmounts. We use
+    // setEditable below to flip read-only on the SAME editor instance.
+    [drive],
   );
+
+  useEffect(() => {
+    if (editor && editor.isEditable !== canWrite) {
+      editor.setEditable(canWrite);
+    }
+  }, [editor, canWrite]);
 
   useEffect(() => {
     if (agentResource && ephemeralStore) {

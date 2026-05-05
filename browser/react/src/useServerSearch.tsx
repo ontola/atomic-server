@@ -59,7 +59,6 @@ export function useServerSearch(
       if (relevantQuery !== debouncedQuery || relevantOpts !== memoizedSearchOpts) {
         return;
       }
-
       setResults(r);
     },
   );

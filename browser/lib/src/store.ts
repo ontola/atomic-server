@@ -1230,9 +1230,11 @@ export class Store {
         // Online, no local data — server is our only source.
         await this.fetchResourceFromServer(subject, opts);
       }
-    } catch {
-      // Server failed and no local data — resource stays in loading state.
-      // This is better than showing an error when the user might come back online.
+    } catch (e) {
+      // Server fetch failed with no local data. Surface the actual server
+      // error (e.g. 401 Unauthorized) so callers (ErrorPage, GettingStartedFlow)
+      // can react correctly. Only fall back to a generic offline message when
+      // we have no other signal.
       if (!hasLocalData) {
         const resource = this.resources.get(
           this.aliases.get(subject) ?? subject,
@@ -1241,7 +1243,9 @@ export class Store {
         if (resource) {
           resource.loading = false;
           resource.setError(
-            new Error('Offline: resource not available locally'),
+            e instanceof Error
+              ? e
+              : new Error('Resource fetch failed'),
           );
           this.notify(resource);
         }

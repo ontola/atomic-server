@@ -185,6 +185,18 @@ export async function setTitle(page: Page, title: string) {
  * that by looking for a "Sign in" button that wasn't there.
  */
 export async function signIn(page: Page, secret: string = SECRET) {
+  // Wait for one of the three states to actually render. Without this, a
+  // freshly-navigated page may not yet have the welcome gate or sidebar
+  // mounted — visibility checks then time out and we wrongly assume
+  // already-signed-in (state 1) when really we just hit the page too early.
+  await page
+    .locator(
+      'button:has-text("Sign in"), a:has-text("Login / New User"), a:has-text("User Settings")',
+    )
+    .first()
+    .waitFor({ state: 'visible', timeout: 10_000 })
+    .catch(() => undefined);
+
   // State 2: welcome gate. The "Sign in" button (exact match, not "Sign in with Google" etc.)
   // is the fast check — if it's there, we're on the gate and need to sign in.
   const signInButton = page.getByRole('button', {
@@ -204,6 +216,14 @@ export async function signIn(page: Page, secret: string = SECRET) {
       .catch(() => {
         /* auto-submit raced us; keep going */
       });
+    // Wait for the signed-in sidebar to appear. Without this, callers
+    // (e.g. `openSubject`) may navigate before the auth cookie + localStorage
+    // are written, leaving the next page anonymous (the sidebar then renders
+    // a "Login / New User" link instead of "User Settings").
+    await page
+      .getByRole('link', { name: 'User Settings' })
+      .waitFor({ state: 'visible', timeout: 10_000 })
+      .catch(() => undefined);
     return;
   }
 
@@ -522,8 +542,14 @@ export async function openNewSubjectWindow(
     await signIn(page, secret);
   }
 
-  await openSubject(page, url);
-  // await page.setViewportSize({ width: 1000, height: 400 });
+  // Frontend route URLs (e.g. invite links pointing at /app/invite) need to
+  // be visited directly — wrapping them in /app/show?subject=... would treat
+  // them as resources to fetch and the server has no such resource.
+  if (url.includes('/app/')) {
+    await page.goto(url);
+  } else {
+    await openSubject(page, url);
+  }
 
   return page;
 }

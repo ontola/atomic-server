@@ -1521,7 +1521,13 @@ export class Resource<C extends OptionalClass = any> {
       // path also covers it: pending commits queued offline get flushed by
       // `syncDirtyResources` on reconnect, which calls back through this
       // success path, which then pushes the blob.
-      this.store.maybePushBlobForResource(this).catch(() => {
+      //
+      // Awaited (not fire-and-forget): callers like `createPlugin` save the
+      // file, then save a second resource that REFERENCES the blob (e.g. a
+      // Plugin pointing at the uploaded zip). The second commit's server-side
+      // extender reads the blob immediately — if the push hasn't landed yet,
+      // it sees "blob not found". Waiting here serializes the two paths.
+      await this.store.maybePushBlobForResource(this).catch(() => {
         // Non-fatal — server can request the blob lazily via BLOB_REQUEST.
       });
 

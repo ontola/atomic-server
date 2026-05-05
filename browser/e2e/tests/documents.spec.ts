@@ -46,8 +46,13 @@ test.describe('documents', async () => {
     const currentSubject = await getCurrentSubject(page);
     const page2 = await openNewSubjectWindow(browser, currentSubject!, secret);
 
-    // This should not be needed! We should change this, so set drive is done automatically on opening a subject like this.
-    await page2.getByRole('button', { name: 'Set Drive' }).click();
+    // "Set Drive" historically appeared when opening a foreign-drive subject;
+    // proper sign-in already sets the drive, so the button often isn't there.
+    // Click only when present, ignore otherwise.
+    const setDriveButton = page2.getByRole('button', { name: 'Set Drive' });
+    if (await setDriveButton.isVisible({ timeout: 1500 }).catch(() => false)) {
+      await setDriveButton.click();
+    }
     await expect(page2.getByText('loading...')).not.toBeVisible();
     await expect(
       page2.getByRole('heading', { name: teststring }),
