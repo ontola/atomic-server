@@ -134,10 +134,16 @@ export class WSClient {
 
     if (!agent?.subject) return;
     if (this.authenticatedWith === agent.subject && !fetchAll) return;
+    // An in-flight auth might be for a DIFFERENT (e.g. now-stale) agent. Wait
+    // for it to settle, then check whether we still need to authenticate as
+    // the current agent. Without this re-check, calling `setAgent(newAgent)`
+    // mid-flight (e.g. onboarding swapping the dev-drive agent for a freshly-
+    // created one) silently keeps the WS bound to the old agent, and the next
+    // `ws.fetch(newAgent.subject)` returns 401 because the old agent has no
+    // read rights on the new agent's resource.
     if (this.isAuthenticating) {
-      await this.authPromise;
-
-      return;
+      try { await this.authPromise; } catch {}
+      if (this.authenticatedWith === agent.subject && !fetchAll) return;
     }
 
     this.isAuthenticating = true;
