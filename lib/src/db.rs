@@ -1456,6 +1456,14 @@ impl Db {
             transaction.push(Operation::remove_resource(&subject_str));
             let mut children = resource.get_children(self).await?;
             for child in children.iter_mut() {
+                // Notify subscribers so clients evict the cascade-deleted
+                // child from their cache. The signed destroy commit only
+                // fires DbEvent::Destroyed for the top-level subject; without
+                // this, children remain in WASM-DB / store and the UI keeps
+                // rendering them.
+                let _ = self.db_events.send(DbEvent::Destroyed {
+                    subject: child.get_subject().without_params(),
+                });
                 // Because the function is async we need to box it to use recursion.
                 Box::pin(self.recursive_remove(child.get_subject(), transaction)).await?;
             }

@@ -7,6 +7,7 @@ import {
 import { Client, type FileOrFileLike } from './client.js';
 import { parseCommitJSON, type Commit } from './commit.js';
 import { datatypeFromUrl, type Datatype } from './datatypes.js';
+import { AtomicError, ErrorType } from './error.js';
 import { EventManager } from './EventManager.js';
 import { hasBrowserAPI } from './hasBrowserAPI.js';
 import { collections } from './ontologies/collections.js';
@@ -1193,7 +1194,38 @@ export class Store {
           }
         }
       } else if (hasLocalData) {
-        // Online with local data — background refresh will come via WS COMMIT.
+        // Online with local data — show local first, but background-verify
+        // with the server. If the resource was deleted while we were away
+        // (cascade delete, destroy commit while disconnected), the server
+        // will return 404 and we evict from local cache. WS COMMIT updates
+        // handle the live case; this handles the cold-load case.
+        void this.fetchResourceFromServer(subject, opts).catch(e => {
+          // Cover both HTTP 404 (ErrorType.NotFound) and WS error frames
+          // (ErrorType.Server with a "not found" message). When the
+          // resource is gone server-side, mark the local Resource with the
+          // server's error so subscribed UI re-renders into the
+          // "Resource not found" state instead of keeping stale data.
+          const message: string = e?.message ?? '';
+
+          if (
+            e instanceof AtomicError &&
+            (e.type === ErrorType.NotFound ||
+              /not found/i.test(message))
+          ) {
+            const resolved = this.aliases.get(subject) ?? subject;
+            const resource = this.resources.get(resolved);
+
+            if (resource) {
+              resource.setError(
+                new AtomicError(
+                  `Resource ${subject} not found on server`,
+                  ErrorType.NotFound,
+                ),
+              );
+              this.notify(resource);
+            }
+          }
+        });
       } else {
         // Online, no local data — server is our only source.
         await this.fetchResourceFromServer(subject, opts);
