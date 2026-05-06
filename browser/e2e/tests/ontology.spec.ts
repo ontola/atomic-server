@@ -273,9 +273,9 @@ test.describe('Ontology', async () => {
         .nth(1),
     );
 
-    expect(await page.getByText('Red arrow with circle').count()).toBe(3);
+    expect(await page.getByText('Red arrow with circle').count()).toBe(4);
     expect(await page.getByText('Green arrow with black border').count()).toBe(
-      3,
+      4,
     );
   });
 });

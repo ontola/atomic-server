@@ -114,6 +114,9 @@ test.describe('file upload + offline survival', () => {
       `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(subject)}`,
     );
 
+    // The store is set on window at module load; wait for it before the next eval.
+    await page.waitForFunction(() => !!(window as any).store);
+
     // Touch the resource so hydrateResourceFromJson fires for it.
     await page.evaluate(async (s: string) => {
       await (window as any).store.getResource(s);

@@ -30,7 +30,11 @@ export const TargetableCard = ({
 
 export const TargetableResourceCard = ({ subject }: TargetableCardProps) => {
   return (
-    <StyledResourceCard subject={subject} id={toAnchorId(subject ?? '')} />
+    <StyledResourceCard
+      subject={subject}
+      id={toAnchorId(subject ?? '')}
+      initialInView
+    />
   );
 };
 
