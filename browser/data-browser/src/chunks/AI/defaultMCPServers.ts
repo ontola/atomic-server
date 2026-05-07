@@ -1,5 +1,9 @@
 import type { MCPServer } from './types';
 
+export const MCP_TOOL_NAMES = {
+  EXA_WEB_SEARCH: 'web_search_exa',
+} as const;
+
 export const defaultMCPServers: MCPServer[] = [
   {
     id: 'dev.atomicdata.mcp.exa',

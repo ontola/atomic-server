@@ -3178,11 +3178,6 @@ msgstr "Pas de texte alternatif"
 msgid "Editor was destroyed before it finished initializing"
 msgstr "L'éditeur a été détruit avant la fin de son initialisation"
 
-#. 0: ' '
-#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
-msgid "Reading{0} <0/>"
-msgstr "Lecture{0} <0/>"
-
 #: src/routes/History/HistoryRoute.tsx
 msgid "No version history for this resource."
 msgstr "Aucun historique de version pour cette ressource."
@@ -3200,7 +3195,7 @@ msgstr "Modification de {0} sur <0/>"
 msgid "Editing <0/>"
 msgstr "Modification de <0/>"
 
-#. 0: ' · '
+#. 0: " · "
 #: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
 msgid "Loading skill: <0/> {0} <1/>"
 msgstr "Chargement de la compétence : <0/> {0} <1/>"
@@ -3524,3 +3519,11 @@ msgstr "Ajouter des instructions au LLM"
 #: src/views/Drive/DrivePage.tsx
 msgid "LLM Instructions"
 msgstr "Instructions LLM"
+
+#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
+msgid "Searching online"
+msgstr "Recherche en ligne"
+
+#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
+msgid "Reading <0/>"
+msgstr "Lecture <0/>"
