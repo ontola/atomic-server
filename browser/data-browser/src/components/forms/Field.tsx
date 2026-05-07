@@ -16,7 +16,7 @@ interface FieldProps {
   helperAlwaysVisible?: boolean;
   /** Here goes the input */
   children: React.ReactNode;
-  /** If the field is requires. Shows an aterisk with hover text */
+  /** If the field is required. Shows an asterisk with hover text */
   required?: boolean;
   disabled?: boolean;
   /** The error to be shown in the component */

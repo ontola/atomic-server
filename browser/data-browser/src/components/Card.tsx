@@ -16,7 +16,6 @@ const Content = styled.div`
   padding: ${p => p.theme.size()};
 `;
 
-/** A Card with a border. */
 const CardBase = styled.div.attrs<CardProps>(p => ({
   // When we render a lot of cards it is more performant to use styles instead of classes when each card has a unique style
   style: getTransitionStyle(RESOURCE_PAGE_TRANSITION_TAG, p.about),
@@ -36,6 +35,9 @@ const CardBase = styled.div.attrs<CardProps>(p => ({
   }
 `;
 
+/** A Card with a border.
+ * By default the Card has padding but if you use `Card.Content` inside the card, only the content will have padding.
+*/
 export const Card = Object.assign(CardBase, { Content });
 
 export interface CardRowProps {

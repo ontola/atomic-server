@@ -47,13 +47,14 @@ type DialogSlotComponent = React.FC<
  * Component to build a dialog. The content of this component are rendered in a
  * portal outside of the main tree. The children are rendered in slots. You can
  * use the following components or provide your own by using the {@link Slot}
- * component: `<Slot slot="title">` or {@link DialogTitle}, `<Slot
- * slot="content">` or {@link DialogContent}, `<Slot slot="actions">` or
- * {@link DialogActions}
+ * component: {@link Dialog.Title}, {@link Dialog.Content}, {@link Dialog.Actions}
  *
  * Example:
  *
  * ```jsx
+ * import { Dialog } from '@components/Dialog';
+ * import { useDialog } from '@components/Dialog/useDialog';
+ * ...
  * const { props, show, close } = useDialog();
  * return (
  * <button onClick={show}>Open</button>
