@@ -189,19 +189,29 @@ async function ensureInit(): Promise<void> {
   }
 }
 
-self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
-  const msg = event.data;
+// Serialize all message handling. Without this, an `async self.onmessage`
+// dispatcher invokes a fresh handler per incoming message, all running
+// concurrently — a `query` posted right after a burst of `putResource`
+// messages would race the puts and return empty results because the index
+// writes hadn't landed yet. Symptom: on initial drive-sync, every
+// `useCollection`/`useChildren` would do a redundant `/query` GET to the
+// server because the local DB query came back with 0 hits.
+let workQueue: Promise<void> = Promise.resolve();
 
-  try {
-    const data = await handleMessage(msg);
-    const response: WorkerResponse = { id: msg.id, type: 'ok', data };
-    self.postMessage(response);
-  } catch (e) {
-    const response: WorkerResponse = {
-      id: msg.id,
-      type: 'error',
-      message: e instanceof Error ? e.message : String(e),
-    };
-    self.postMessage(response);
-  }
+self.onmessage = (event: MessageEvent<WorkerRequest>) => {
+  const msg = event.data;
+  workQueue = workQueue.then(async () => {
+    try {
+      const data = await handleMessage(msg);
+      const response: WorkerResponse = { id: msg.id, type: 'ok', data };
+      self.postMessage(response);
+    } catch (e) {
+      const response: WorkerResponse = {
+        id: msg.id,
+        type: 'error',
+        message: e instanceof Error ? e.message : String(e),
+      };
+      self.postMessage(response);
+    }
+  });
 };

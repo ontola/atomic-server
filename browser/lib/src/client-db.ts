@@ -53,7 +53,17 @@ type PendingRequest = {
 const LEADER_LOCK = 'atomic-db-leader';
 const RPC_CHANNEL = 'atomic-db-rpc';
 
-type Role = 'initializing' | 'leader' | 'follower';
+/**
+ * `'failed'` means leader election timed out: the lock is held by a stale tab
+ * that isn't answering `leader-ping`, so we have no leader and aren't the
+ * leader either. We park here, fail RPCs fast, and recover automatically if
+ * the lock becomes acquirable later (`becomeLeader` flips us back to
+ * `'leader'`) or another tab's `leader-announce` reaches us (handler flips us
+ * to `'follower'`).
+ */
+type Role = 'initializing' | 'leader' | 'follower' | 'failed';
+
+const LEADERSHIP_TIMEOUT_MS = 5000;
 
 type BroadcastMessage =
   | { type: 'leader-ping' }
@@ -168,8 +178,28 @@ export class ClientDbWorker {
     // the case where we open AFTER the leader announced.
     this.bc.postMessage({ type: 'leader-ping' } satisfies BroadcastMessage);
 
-    // Wait until we either become leader or hear from one.
-    await Promise.race([this.leadershipGained, this.leaderObserved]);
+    // Wait until we either become leader, hear from one, or time out.
+    // The timeout matters when a previous tab on this origin is holding the
+    // OPFS lock without responding to `leader-ping` (e.g. its bundle was
+    // broken from a stale dev-server cache). Without the timeout, every
+    // `await initPromise` and `clientDb.send()` deadlocks the rest of the
+    // app — symptom: "Syncing…" / "Initializing" / resources stuck loading.
+    const winner = await Promise.race([
+      this.leadershipGained.then(() => 'leader' as const),
+      this.leaderObserved.then(() => 'follower' as const),
+      new Promise<'timeout'>(resolve =>
+        setTimeout(() => resolve('timeout'), LEADERSHIP_TIMEOUT_MS),
+      ),
+    ]);
+
+    if (winner === 'timeout') {
+      this.role = 'failed';
+      this._initError = new Error(
+        `ClientDb leadership election timed out after ${LEADERSHIP_TIMEOUT_MS}ms. A stale tab on this origin is holding the OPFS lock without responding to leader-ping. Close it (or all tabs of this origin) and reload.`,
+      );
+      console.warn('[ClientDb]', this._initError.message);
+      return;
+    }
 
     this.ready = true;
   }
@@ -203,6 +233,11 @@ export class ClientDbWorker {
     });
 
     this.role = 'leader';
+    // Recover from a prior `'failed'` (leadership-timeout) state if the lock
+    // finally became acquirable: clear the init error, mark ready, and let
+    // `waitForReady` resolve true on subsequent calls.
+    this._initError = undefined;
+    this.ready = true;
     this.onBecameLeader();
     this.bc?.postMessage({
       type: 'leader-announce',
@@ -221,6 +256,14 @@ export class ClientDbWorker {
 
       case 'leader-announce':
         if (this.role !== 'leader') {
+          // Recover from a prior `'failed'` state if a leader finally
+          // announces itself (the stale tab woke up, or a fresh tab took
+          // leadership). Clearing initError + ready=true lets cached
+          // `waitForReady` callers proceed.
+          if (this.role === 'failed') {
+            this._initError = undefined;
+            this.ready = true;
+          }
           this.role = 'follower';
           this.onObservedLeader();
         }
@@ -404,6 +447,15 @@ export class ClientDbWorker {
 
     if (this.role === 'follower') {
       return this.sendToLeader(msg);
+    }
+
+    if (this.role === 'failed') {
+      // Leadership election timed out and we're parked. Fail fast so callers
+      // like `computeDriveSyncState` and `useChildren` proceed in degraded
+      // mode (in-memory only) instead of awaiting forever.
+      throw new Error(
+        `ClientDb unavailable: ${this._initError?.message ?? 'init failed'}`,
+      );
     }
 
     throw new Error('ClientDbWorker send() called before init() completed');

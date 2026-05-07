@@ -637,6 +637,7 @@ async fn parse_json_ad_map_to_resource(
             r
         }
         SaveOpts::Commit => {
+            let mut is_new = false;
             let mut r = if let Ok(orig) = store.get_resource(&subj.as_str().into()).await {
                 // If the resource already exists, and overwrites outside are not permitted, and it does not have the importer as parent...
                 // Then we throw!
@@ -651,6 +652,7 @@ async fn parse_json_ad_map_to_resource(
                 };
                 orig
             } else {
+                is_new = true;
                 Resource::new(subj)
             };
             for (prop, val) in propvals {
@@ -660,11 +662,22 @@ async fn parse_json_ad_map_to_resource(
                 .signer
                 .clone()
                 .ok_or("No agent to sign Commit with. Either pass a `for_agent` or ")?;
-            let commit = r
-                .get_commit_builder()
-                .clone()
-                .sign(&signer, store, &r)
-                .await?;
+            let mut commit_builder = r.get_commit_builder().clone();
+            // For brand-new resources whose subject is a non-agent DID
+            // (`did:ad:<folder>/<localId>` is the importer pattern when the
+            // parent folder is itself DID-subjected), the signing path
+            // requires `is_genesis=true` because there's no `previous_commit`
+            // to anchor the chain. Without this flag, `sign()` rejects with
+            // "DID genesis commits must explicitly set is_genesis=true" and
+            // the import endpoint returns 500. Edits to existing resources
+            // already have a `previous_commit` and don't need the flag.
+            if is_new
+                && r.get_subject().is_did()
+                && !r.get_subject().is_agent_did()
+            {
+                commit_builder.is_genesis = true;
+            }
+            let commit = commit_builder.sign(&signer, store, &r).await?;
 
             let opts = CommitOpts {
                 validate_schema: true,

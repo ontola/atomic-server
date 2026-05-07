@@ -4,10 +4,11 @@ import {
   server,
   useProperty,
   useCanWrite,
-  useResource,
   useStore,
   type Resource,
   type Server,
+  useArray,
+  dataBrowser,
 } from '@tomic/react';
 import { ContainerNarrow } from '@components/Containers';
 import { ValueForm } from '@components/forms/ValueForm';
@@ -18,7 +19,6 @@ import { EditableTitle } from '@components/EditableTitle';
 import { Column, Row } from '@components/Row';
 import { styled } from 'styled-components';
 import InputSwitcher from '@components/forms/InputSwitcher';
-import { WarningBlock } from '@components/WarningBlock';
 import { SettingsGroup, SettingsSection } from '@components/Settings';
 
 import { lazy, Suspense, useEffect, useState, type JSX } from 'react';

@@ -64,7 +64,14 @@ impl Resource {
         self.loro = new.loro.as_ref().map(Self::clone_loro_state);
     }
 
-    fn seed_loro_doc_from_propvals(
+    /// Builds a Loro doc from propvals. Skips the `LORO_UPDATE` value because that
+    /// is the encoded snapshot itself; the rest are typed property values that need
+    /// to be inserted as ops on the new doc.
+    ///
+    /// Public so callers like the WS GET handler can build a fresh snapshot that
+    /// reflects extender-modified propvals rather than the persisted (pre-extender)
+    /// Loro state.
+    pub fn seed_loro_doc_from_propvals(
         doc: &crate::loro::AtomicLoroDoc,
         propvals: &PropVals,
     ) -> AtomicResult<()> {

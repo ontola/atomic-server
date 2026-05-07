@@ -50,9 +50,7 @@ describe('Offline persistence', () => {
 
     // Query children and sort like Collection does
     const children = store
-      .clientSideQuery(
-        r => r.get(core.properties.parent) === drive.subject,
-      )
+      .clientSideQuery(r => r.get(core.properties.parent) === drive.subject)
       .map(r => r.subject);
 
     // Sort ascending by name
@@ -67,8 +65,8 @@ describe('Offline persistence', () => {
       return String(valA).localeCompare(String(valB));
     });
 
-    const namesAsc = children.map(
-      s => store.resources.get(s)?.get(core.properties.name),
+    const namesAsc = children.map(s =>
+      store.resources.get(s)?.get(core.properties.name),
     );
     expect(namesAsc).toEqual(['Alpha', 'Bravo', 'Charlie']);
 
@@ -84,8 +82,8 @@ describe('Offline persistence', () => {
       return -String(valA).localeCompare(String(valB));
     });
 
-    const namesDesc = children.map(
-      s => store.resources.get(s)?.get(core.properties.name),
+    const namesDesc = children.map(s =>
+      store.resources.get(s)?.get(core.properties.name),
     );
     expect(namesDesc).toEqual(['Charlie', 'Bravo', 'Alpha']);
   });
