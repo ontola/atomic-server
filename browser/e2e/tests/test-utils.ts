@@ -231,9 +231,7 @@ export async function signIn(page: Page, secret: string = SECRET) {
   const loginLink = page.getByRole('link', { name: 'Login / New User' });
   if (await loginLink.isVisible({ timeout: 1500 }).catch(() => false)) {
     await loginLink.click();
-    await page
-      .getByRole('button', { name: 'Sign in', exact: true })
-      .click();
+    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
     await page.getByLabel('Agent secret').fill(secret);
     await page.getByRole('button', { name: 'Continue' }).click();
     await page.goBack();
@@ -311,7 +309,9 @@ export async function makeDrivePublic(page: Page) {
   // The permission toggle dirties the resource asynchronously (validation
   // fetch + LocalChange event), so wait for Save to enable instead of
   // racing the default 5s click timeout.
-  const saveBtn = page.locator('main').getByRole('button', { name: 'Save', exact: true });
+  const saveBtn = page
+    .locator('main')
+    .getByRole('button', { name: 'Save', exact: true });
   await expect(saveBtn).toBeEnabled({ timeout: 15000 });
   await saveBtn.click();
   await expect(page.locator('text="Share settings saved"')).toBeVisible();
@@ -321,7 +321,9 @@ export async function openSubject(page: Page, subject: string) {
   // Navigate via the SPA's /app/show route instead of typing into the old
   // address bar (which no longer exists — replaced by the search overlay,
   // and the overlay only resolves indexed resources, not arbitrary URLs).
-  await page.goto(`${FRONTEND_URL}/app/show?subject=${encodeURIComponent(subject)}`);
+  await page.goto(
+    `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(subject)}`,
+  );
   await expect(page.locator(`main[about="${subject}"]`).first()).toBeVisible();
 }
 
@@ -739,9 +741,7 @@ export async function inDialog(
 export async function acceptInvite(page: Page) {
   // InvitePage CTA now reads "Create account and accept" (it generates a new
   // DID agent on the fly); the old "Accept as new user" button is gone.
-  await page
-    .getByRole('button', { name: 'Create account and accept' })
-    .click();
+  await page.getByRole('button', { name: 'Create account and accept' }).click();
 
   await inDialog(page, async (dialog, closeDialog) => {
     await expect(

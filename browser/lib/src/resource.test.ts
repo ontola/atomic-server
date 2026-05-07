@@ -5,12 +5,20 @@ describe('resource.ts', () => {
   it('push propvals', ({ expect }) => {
     const resource = new Resource('test');
     const testsubject = 'https://example.com/testsubject';
-    resource.push('https://atomicdata.dev/properties/subresources', [testsubject], true);
-    resource.push('https://atomicdata.dev/properties/subresources', [testsubject], true);
+    resource.push(
+      'https://atomicdata.dev/properties/subresources',
+      [testsubject],
+      true,
+    );
+    resource.push(
+      'https://atomicdata.dev/properties/subresources',
+      [testsubject],
+      true,
+    );
 
-    expect(resource.get('https://atomicdata.dev/properties/subresources')).toStrictEqual([
-      testsubject,
-    ]);
+    expect(
+      resource.get('https://atomicdata.dev/properties/subresources'),
+    ).toStrictEqual([testsubject]);
 
     const testsubject2 = 'https://example.com/testsubject2';
 
@@ -20,19 +28,18 @@ describe('resource.ts', () => {
       true,
     );
 
-    expect(resource.get('https://atomicdata.dev/properties/subresources')).toStrictEqual([
-      testsubject,
-      testsubject2,
-    ]);
+    expect(
+      resource.get('https://atomicdata.dev/properties/subresources'),
+    ).toStrictEqual([testsubject, testsubject2]);
 
-    resource.push('https://atomicdata.dev/properties/subresources', [testsubject, testsubject]);
-
-    expect(resource.get('https://atomicdata.dev/properties/subresources')).toStrictEqual([
-      testsubject,
-      testsubject2,
+    resource.push('https://atomicdata.dev/properties/subresources', [
       testsubject,
       testsubject,
     ]);
+
+    expect(
+      resource.get('https://atomicdata.dev/properties/subresources'),
+    ).toStrictEqual([testsubject, testsubject2, testsubject, testsubject]);
   });
 
   it('merges remote state without dropping local unsaved loro edits', async ({
@@ -44,7 +51,9 @@ describe('resource.ts', () => {
 
     const base = new Resource(subject);
     await base.set(name, 'Base', false);
-    const baseSnapshot = (base as any)._loroDoc.export({ mode: 'snapshot' }) as Uint8Array;
+    const baseSnapshot = (base as any)._loroDoc.export({
+      mode: 'snapshot',
+    }) as Uint8Array;
 
     const local = new Resource(subject);
     local.importLoroUpdate(baseSnapshot);

@@ -354,6 +354,26 @@ export class Resource<C extends OptionalClass = any> {
         }
       }
 
+      // Heal: a Loro snapshot may be stale relative to the JSON-AD propvals
+      // that arrived alongside it (the server's index can include properties
+      // — e.g. `parent`, `isA` — that the resource's own snapshot was
+      // produced before, or that the snapshot author never wrote into Loro).
+      // Without this pass, those propvals get silently dropped when
+      // `rebuildCacheFromLoro` below overwrites `_cache` with the snapshot's
+      // contents only, and consumers see `resource.get(parent)` as
+      // `undefined` for resources whose hierarchy is fully discoverable from
+      // the JSON-AD payload. Write any cache key absent from the imported
+      // doc into Loro before the cache rebuild — only when we actually
+      // initialised from a snapshot, so the no-snapshot path's prior
+      // behaviour is unchanged.
+      if (initializedFromSnapshot && this._loroMap) {
+        for (const [key, value] of Object.entries(this._cache)) {
+          if (this._loroMap.get(key) === undefined) {
+            this.loroSetProperty(key, value);
+          }
+        }
+      }
+
       this.rebuildCacheFromLoro();
       this._cacheDirty = false;
       this._loroVersionAtLastSave =
@@ -1580,8 +1600,8 @@ export class Resource<C extends OptionalClass = any> {
     const hasChanges = this.hasUnsavedChanges();
 
     if (!hasChanges && this._pendingCommits.length === 0) {
-      console.warn(`No changes to ${this.subject}, not saving`);
-
+      // Save called on a clean resource (typical on blur with no edits) — not
+      // an error worth surfacing to the console.
       return undefined;
     }
 

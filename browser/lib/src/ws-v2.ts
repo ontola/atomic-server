@@ -459,6 +459,167 @@ const TAG_NAMES: Record<number, string> = {
   [Tag.EPHEMERAL]: 'EPHEMERAL',
 };
 
+/**
+ * Decoded payload for an inspectable frame. The `details` field is meant for
+ * `console.debug`-level inspection (browsers hide debug logs unless the
+ * "Verbose" log level is enabled, so this is opt-in noise).
+ *
+ * Lazy: `details` is a getter so we only pay the decode cost (e.g. building
+ * a Resource from a loro snapshot) when the user actually expands the group.
+ */
+export interface FrameDebugInfo {
+  headline: string;
+  details?: () => unknown;
+}
+
+/**
+ * Like {@link debugFrame} but returns both a headline and a lazy `details`
+ * function for inspecting the frame's payload contents (subject, decoded
+ * fields, snapshot byte length, etc.). UPDATE frames also expose the raw
+ * loro snapshot bytes so callers that want to materialize the resource
+ * (e.g. to show the contained propvals) can do so without re-decoding.
+ */
+export function debugFrameInfo(
+  data: Uint8Array,
+  direction: '→' | '←',
+): FrameDebugInfo {
+  if (data.length === 0) return { headline: `${direction} (empty)` };
+
+  const tag = data[0];
+  const name = TAG_NAMES[tag] ?? `0x${tag.toString(16)}`;
+  const payload = data.subarray(1);
+
+  switch (tag) {
+    case Tag.AUTH:
+      return {
+        headline: `${direction} AUTH (${payload.length}B)`,
+        details: () => ({ payloadBytes: payload.length }),
+      };
+
+    case Tag.AUTH_OK:
+      return { headline: `${direction} AUTH_OK` };
+
+    case Tag.ERROR: {
+      const msg = decodeError(payload);
+
+      return {
+        headline: msg
+          ? `${direction} ERROR #${msg.requestId}: ${msg.message}`
+          : `${direction} ERROR (${payload.length}B)`,
+        details: () => msg ?? { rawBytes: payload.length },
+      };
+    }
+
+    case Tag.GET: {
+      const msg = decodeGet(payload);
+
+      return {
+        headline: msg
+          ? `${direction} GET #${msg.requestId} ${msg.subject}`
+          : `${direction} GET (${payload.length}B)`,
+        details: () => msg ?? { rawBytes: payload.length },
+      };
+    }
+
+    case Tag.UPDATE: {
+      const msg = decodeUpdate(payload);
+
+      if (!msg) {
+        return {
+          headline: `${direction} UPDATE (${payload.length}B)`,
+          details: () => ({ rawBytes: payload.length }),
+        };
+      }
+
+      const flags: string[] = [];
+
+      if (msg.flags & Flags.SNAPSHOT) flags.push('snapshot');
+      if (msg.flags & Flags.PUSH) flags.push('push');
+      if (msg.commitId) flags.push(`commit=${msg.commitId.slice(0, 20)}…`);
+
+      return {
+        headline: `${direction} UPDATE ${msg.subject} [${flags.join(', ')}] (${msg.loroBytes.length}B)`,
+        details: () => ({
+          subject: msg.subject,
+          flags: msg.flags,
+          flagNames: flags,
+          commitId: msg.commitId,
+          loroBytes: msg.loroBytes.length,
+          loroSnapshot: msg.loroBytes,
+        }),
+      };
+    }
+
+    case Tag.DESTROY: {
+      const subject = decoder.decode(payload.subarray(2));
+
+      return {
+        headline: `${direction} DESTROY ${subject}`,
+        details: () => ({ subject }),
+      };
+    }
+
+    case Tag.SUB:
+    case Tag.UNSUB: {
+      const subject = decoder.decode(payload);
+
+      return {
+        headline: `${direction} ${name} ${subject}`,
+        details: () => ({ subject }),
+      };
+    }
+
+    case Tag.SYNC_OK: {
+      const msg = decodeSyncOk(payload);
+
+      return {
+        headline: `${direction} SYNC_OK ${msg?.drive ?? ''}`,
+        details: () => msg ?? { rawBytes: payload.length },
+      };
+    }
+
+    case Tag.SYNC_DIFF: {
+      const msg = decodeSyncDiff(payload);
+
+      return {
+        headline: msg
+          ? `${direction} SYNC_DIFF ${msg.drive} (pull=${msg.pull.length}, push=${msg.push.length})`
+          : `${direction} SYNC_DIFF (${payload.length}B)`,
+        details: () => msg ?? { rawBytes: payload.length },
+      };
+    }
+
+    case Tag.SYNC_PUSH: {
+      const msg = decodeSyncPush(payload);
+
+      return {
+        headline: msg
+          ? `${direction} SYNC_PUSH ${msg.drive} (${msg.entries.length} resources${msg.last ? ', last' : ''}, ${payload.length}B)`
+          : `${direction} SYNC_PUSH (${payload.length}B)`,
+        details: () => msg ?? { rawBytes: payload.length },
+      };
+    }
+
+    case Tag.BLOB_REQUEST:
+      return {
+        headline: `${direction} BLOB_REQUEST (${payload.length}B)`,
+        details: () => ({ rawBytes: payload.length }),
+      };
+
+    case Tag.BLOB_RESPONSE:
+      return {
+        headline: `${direction} BLOB_RESPONSE (${payload.length}B)`,
+        details: () => ({ rawBytes: payload.length }),
+      };
+
+    default:
+      return {
+        headline: `${direction} ${name} (${payload.length}B)`,
+        details: () => ({ tag, rawBytes: payload.length }),
+      };
+  }
+}
+
 /** Produce a human-readable summary of a binary frame for debugging. */
 export function debugFrame(data: Uint8Array, direction: '→' | '←'): string {
   if (data.length === 0) return `${direction} (empty)`;

@@ -42,6 +42,22 @@ const storedIsValid =
 const serverUrl = storedIsValid ? storedServerUrl! : defaultServerUrl;
 const initalAgent = await getAgentFromIDB();
 
+// Loro CRDT must be initialized BEFORE the Store opens its WebSocket. The
+// Store's constructor (`new Store(...)`) wires up `setServerUrl` →
+// `openWebSocket`, and the resulting WS can complete `AUTH` and start
+// receiving `SYNC_PUSH` frames within a few hundred milliseconds — long
+// before `await enableLoro()` would resolve if it ran later. When
+// `SYNC_PUSH` lands without Loro loaded, `Resource.importLoroUpdate`
+// buffers the bytes in `_loroSnapshotBytes` instead of materialising the
+// `_loroDoc`. The `resource.loading` getter then keeps reporting `true`
+// (it considers buffered-without-doc as still loading), which gates the
+// resource out of `clientDb.putResource(...)` in `addResource`. The WASM
+// index never sees those resources, so on initial page load every
+// `useChildren` / `useCollection` query for a synced parent returns 0
+// hits in the local DB and falls through to a `/query` GET against the
+// server — even though the data was just pushed.
+await enableLoro();
+
 // Initialize the store
 const store = new Store({
   agent: initalAgent,
@@ -65,8 +81,6 @@ import { isClientDbEnabled } from './helpers/clientDbMode';
 if (isClientDbEnabled()) {
   initClientDb(store);
 }
-
-await enableLoro();
 
 store.parseMetaTags();
 

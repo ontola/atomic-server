@@ -5,7 +5,7 @@ import type { LoroDoc as LoroDocType } from 'loro-crdt';
 await enableLoro();
 
 // Dynamic import since Loro needs to be loaded first
-const { LoroDoc } = (await import('loro-crdt'));
+const { LoroDoc } = await import('loro-crdt');
 
 describe('Loro vs Map performance', () => {
   const PROP_COUNT = 10;
@@ -136,7 +136,9 @@ describe('Loro vs Map performance', () => {
   });
 
   // The proposed approach: read from 200 cached plain objects
-  const cachedObjects = docs.map(d => d.getMap('properties').toJSON() as Record<string, unknown>);
+  const cachedObjects = docs.map(
+    d => d.getMap('properties').toJSON() as Record<string, unknown>,
+  );
 
   bench('Read 10 props from 200 cached objects (proposed)', () => {
     for (const obj of cachedObjects) {
@@ -152,7 +154,9 @@ describe('Loro vs Map performance', () => {
     const loroSnapshot = doc.export({ mode: 'snapshot' });
 
     // JSON-AD equivalent
-    const jsonAd: Record<string, unknown> = { '@id': 'https://example.com/resource' };
+    const jsonAd: Record<string, unknown> = {
+      '@id': 'https://example.com/resource',
+    };
     for (const [k, v] of props) {
       jsonAd[k] = v;
     }
@@ -162,56 +166,103 @@ describe('Loro vs Map performance', () => {
     console.log(`\n  Size comparison (${PROP_COUNT} properties):`);
     console.log(`    Loro snapshot:  ${loroSnapshot.byteLength} bytes`);
     console.log(`    JSON-AD string: ${jsonAdBytes.byteLength} bytes`);
-    console.log(`    Ratio:          ${(loroSnapshot.byteLength / jsonAdBytes.byteLength).toFixed(1)}x`);
+    console.log(
+      `    Ratio:          ${(loroSnapshot.byteLength / jsonAdBytes.byteLength).toFixed(1)}x`,
+    );
 
     // Also test with a more realistic resource (longer values, arrays)
     const realisticDoc = new LoroDoc();
     const rm = realisticDoc.getMap('properties');
     rm.set('https://atomicdata.dev/properties/name', 'My important document');
-    rm.set('https://atomicdata.dev/properties/description', 'This is a longer description that contains more text to simulate real content in a resource.');
-    rm.set('https://atomicdata.dev/properties/parent', 'did:ad:8ZEtla9eiLhfcPQQq42se35kyScsiUtvBMXdqqXrAubs8ReINwLkgx6M5LsSyGQoT/WrARH3NMxaneKKZ2iJCA==');
-    rm.set('https://atomicdata.dev/properties/isA', JSON.stringify(['https://atomicdata.dev/classes/Document']));
+    rm.set(
+      'https://atomicdata.dev/properties/description',
+      'This is a longer description that contains more text to simulate real content in a resource.',
+    );
+    rm.set(
+      'https://atomicdata.dev/properties/parent',
+      'did:ad:8ZEtla9eiLhfcPQQq42se35kyScsiUtvBMXdqqXrAubs8ReINwLkgx6M5LsSyGQoT/WrARH3NMxaneKKZ2iJCA==',
+    );
+    rm.set(
+      'https://atomicdata.dev/properties/isA',
+      JSON.stringify(['https://atomicdata.dev/classes/Document']),
+    );
     rm.set('https://atomicdata.dev/properties/createdAt', Date.now());
-    rm.set('https://atomicdata.dev/properties/lastCommit', 'did:ad:commit:abc123def456');
-    rm.set('https://atomicdata.dev/properties/write', JSON.stringify(['did:ad:agent:xyz']));
-    rm.set('https://atomicdata.dev/properties/read', JSON.stringify(['did:ad:agent:xyz', 'https://atomicdata.dev/agents/publicAgent']));
+    rm.set(
+      'https://atomicdata.dev/properties/lastCommit',
+      'did:ad:commit:abc123def456',
+    );
+    rm.set(
+      'https://atomicdata.dev/properties/write',
+      JSON.stringify(['did:ad:agent:xyz']),
+    );
+    rm.set(
+      'https://atomicdata.dev/properties/read',
+      JSON.stringify([
+        'did:ad:agent:xyz',
+        'https://atomicdata.dev/agents/publicAgent',
+      ]),
+    );
 
     const realisticSnapshot = realisticDoc.export({ mode: 'snapshot' });
     const realisticJson = JSON.stringify({
       '@id': 'did:ad:someresource',
       'https://atomicdata.dev/properties/name': 'My important document',
-      'https://atomicdata.dev/properties/description': 'This is a longer description that contains more text to simulate real content in a resource.',
-      'https://atomicdata.dev/properties/parent': 'did:ad:8ZEtla9eiLhfcPQQq42se35kyScsiUtvBMXdqqXrAubs8ReINwLkgx6M5LsSyGQoT/WrARH3NMxaneKKZ2iJCA==',
-      'https://atomicdata.dev/properties/isA': ['https://atomicdata.dev/classes/Document'],
+      'https://atomicdata.dev/properties/description':
+        'This is a longer description that contains more text to simulate real content in a resource.',
+      'https://atomicdata.dev/properties/parent':
+        'did:ad:8ZEtla9eiLhfcPQQq42se35kyScsiUtvBMXdqqXrAubs8ReINwLkgx6M5LsSyGQoT/WrARH3NMxaneKKZ2iJCA==',
+      'https://atomicdata.dev/properties/isA': [
+        'https://atomicdata.dev/classes/Document',
+      ],
       'https://atomicdata.dev/properties/createdAt': Date.now(),
-      'https://atomicdata.dev/properties/lastCommit': 'did:ad:commit:abc123def456',
+      'https://atomicdata.dev/properties/lastCommit':
+        'did:ad:commit:abc123def456',
       'https://atomicdata.dev/properties/write': ['did:ad:agent:xyz'],
-      'https://atomicdata.dev/properties/read': ['did:ad:agent:xyz', 'https://atomicdata.dev/agents/publicAgent'],
+      'https://atomicdata.dev/properties/read': [
+        'did:ad:agent:xyz',
+        'https://atomicdata.dev/agents/publicAgent',
+      ],
     });
     const realisticJsonBytes = new TextEncoder().encode(realisticJson);
 
     console.log(`\n  Realistic resource (8 properties):`);
     console.log(`    Loro snapshot:  ${realisticSnapshot.byteLength} bytes`);
     console.log(`    JSON-AD string: ${realisticJsonBytes.byteLength} bytes`);
-    console.log(`    Ratio:          ${(realisticSnapshot.byteLength / realisticJsonBytes.byteLength).toFixed(1)}x`);
+    console.log(
+      `    Ratio:          ${(realisticSnapshot.byteLength / realisticJsonBytes.byteLength).toFixed(1)}x`,
+    );
 
     // After 10 edits to the name
     for (let i = 0; i < 10; i++) {
-      rm.set('https://atomicdata.dev/properties/name', `My important document (edit ${i + 1})`);
+      rm.set(
+        'https://atomicdata.dev/properties/name',
+        `My important document (edit ${i + 1})`,
+      );
     }
     const afterEditsSnapshot = realisticDoc.export({ mode: 'snapshot' });
     console.log(`\n  After 10 edits to name:`);
     console.log(`    Loro snapshot:  ${afterEditsSnapshot.byteLength} bytes`);
-    console.log(`    Growth:         +${afterEditsSnapshot.byteLength - realisticSnapshot.byteLength} bytes from edits`);
+    console.log(
+      `    Growth:         +${afterEditsSnapshot.byteLength - realisticSnapshot.byteLength} bytes from edits`,
+    );
 
     // After 100 edits
     for (let i = 10; i < 100; i++) {
-      rm.set('https://atomicdata.dev/properties/name', `My important document (edit ${i + 1})`);
+      rm.set(
+        'https://atomicdata.dev/properties/name',
+        `My important document (edit ${i + 1})`,
+      );
     }
     const after100EditsSnapshot = realisticDoc.export({ mode: 'snapshot' });
     console.log(`\n  After 100 edits to name:`);
-    console.log(`    Loro snapshot:  ${after100EditsSnapshot.byteLength} bytes`);
-    console.log(`    JSON-AD:        ${realisticJsonBytes.byteLength} bytes (unchanged)`);
-    console.log(`    Ratio:          ${(after100EditsSnapshot.byteLength / realisticJsonBytes.byteLength).toFixed(1)}x`);
+    console.log(
+      `    Loro snapshot:  ${after100EditsSnapshot.byteLength} bytes`,
+    );
+    console.log(
+      `    JSON-AD:        ${realisticJsonBytes.byteLength} bytes (unchanged)`,
+    );
+    console.log(
+      `    Ratio:          ${(after100EditsSnapshot.byteLength / realisticJsonBytes.byteLength).toFixed(1)}x`,
+    );
   });
 });

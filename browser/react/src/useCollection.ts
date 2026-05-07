@@ -156,20 +156,47 @@ export function useCollection(
     setCollection(proxyCollection(collection.__internalObject));
   }, [collection.__internalObject]);
 
-  // Live-query bridge: when a drive-wide query subscription reports membership
-  // changes (a child added/removed/edited from the server side), recompute
-  // this collection's members. The current QUERY_UPDATE doesn't carry per-
-  // filter routing info, so we always invalidate — wasteful but correct, and
-  // collections are cheap to recompute (the underlying refresh hits the
-  // already-warm WASM DB / store cache).
+  // Live-membership bridge. Each store-level resource change runs through
+  // `applyResourceChange`, which either:
+  //   - decides the change is irrelevant to this filter (most events) →
+  //     unchanged, no work
+  //   - finds a member that no longer matches → strips it from the cached
+  //     page in place, no fetch
+  //   - sees a new-or-newly-matching subject → returns `'membership-stale'`
+  //     and we trigger a `/query` refresh so the server-authoritative count
+  //     and ordering land. Without that fall-back, locally tracking the
+  //     count drifts past the server's actual page count and the table
+  //     virtualizer asks for non-existent pages, flooding `/query` GETs.
+  // The storm reduction is preserved: only collections whose filter matches
+  // the change ever invalidate.
   const invalidateRef = useRef(invalidateCollection);
   invalidateRef.current = invalidateCollection;
 
   useEffect(() => {
-    return store.on(StoreEvents.QueryMembershipChanged, () => {
-      invalidateRef.current();
+    const col = collectionRef.current;
+    if (!col) return;
+
+    const unsubUpdated = store.on(StoreEvents.ResourceUpdated, resource => {
+      const result = col.applyResourceChange(resource.subject, resource);
+      if (result === 'membership-stale') {
+        invalidateRef.current();
+      } else if (result === 'member-removed') {
+        setCollection(proxyCollection(col));
+      }
     });
-  }, [store]);
+
+    const unsubRemoved = store.on(StoreEvents.ResourceRemoved, subject => {
+      const result = col.applyResourceChange(subject, undefined);
+      if (result === 'member-removed') {
+        setCollection(proxyCollection(col));
+      }
+    });
+
+    return () => {
+      unsubUpdated();
+      unsubRemoved();
+    };
+  }, [store, queryFilterMemo.property, queryFilterMemo.value]);
 
   return { collection, ready, invalidateCollection, mapAll };
 }

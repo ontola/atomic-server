@@ -15,16 +15,14 @@ export function NavStyleButton({
   floating,
   title,
 }: NavBarButtonProps): JSX.Element {
-  const { navbarTop, setNavbarTop, navbarFloating, setNavbarFloating } =
-    useSettings();
+  const { navbarTop, setNavbarTop } = useSettings();
 
   return (
     <NavStyleButtonStyling
       title={title}
-      current={navbarTop === top && navbarFloating === floating}
+      current={navbarTop === top}
       onClick={() => {
         setNavbarTop(top);
-        setNavbarFloating(floating);
       }}
     >
       <svg

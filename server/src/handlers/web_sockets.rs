@@ -169,7 +169,19 @@ impl WebSocketConnection {
                         Ok(r) => {
                             let resource = r.to_single();
 
-                            // Use stored Loro snapshot, or build one from propvals
+                            // KNOWN GAP: extender-modified state isn't reflected on the
+                            // wire. `get_resource_extended` runs `on_resource_get` and
+                            // updates propvals (e.g. plugin renames folder), but the
+                            // persisted Loro snapshot still encodes the unmodified state.
+                            // We send the stored snapshot here because rebuilding from
+                            // propvals would discard the CRDT history (Lamport timeline,
+                            // peer ids) that clients rely on for offline edits + merges.
+                            // The right long-term fix is for plugins to emit real commits
+                            // via `host.commit` so transformations land in the persisted
+                            // Loro state — read-side decoration is fundamentally
+                            // incompatible with content-addressed sync. See atomic-plugin
+                            // wit `on-install` (declared, not yet wired) for the install-
+                            // time fan-out hook.
                             let snapshot = resource.get_loro_snapshot().unwrap_or_else(|| {
                                 match resource.build_loro_doc_from_state() {
                                     Ok(doc) => doc.export_snapshot(),

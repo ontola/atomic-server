@@ -46,7 +46,6 @@ type ErrorCallback = (e: Error) => void;
 type ConnectionStateCallback = (connected: boolean) => void;
 type SyncStatusCallback = (status: StoreSyncStatus) => void;
 type CommitLogCallback = (entries: CommitLogEntry[]) => void;
-type QueryMembershipChangedCallback = (change: QueryMembershipChange) => void;
 
 type ServerURLCallback = (serverURL: string) => void;
 type DriveCallback = (drive: string) => void;
@@ -110,6 +109,12 @@ export interface DriveSyncState {
 export interface CommitLogPropertySummary {
   property: string;
   value: JSONValue;
+  /**
+   * `changed` — value differs from the prior commit (or this is the first
+   * commit we've logged for the subject).
+   * `removed` — present in the prior commit but absent now.
+   */
+  changeType: 'changed' | 'removed';
 }
 
 export interface CommitLogEntry {
@@ -160,27 +165,16 @@ export enum StoreEvents {
   SyncStatusChanged = 'sync-status-changed',
   CommitLogChanged = 'commit-log-changed',
   /**
-   * A drive-wide query subscription told us that some resources were added or
-   * removed from the drive. Fired AFTER the refetch of the affected subjects
-   * has been kicked off, so consumers (useCollection / useChildren) can call
-   * invalidate to recompute their member list against the now-fresh store.
+   * Fires every time a resource is added, merged, or replaced in the store —
+   * for both local commits and remote `UPDATE` pushes. This is the single
+   * signal that drives live collection membership: a `useCollection` listener
+   * checks if the changed resource matches its filter and updates the cached
+   * page in place, so a remote chat message no longer triggers a `/query`
+   * refetch storm across every visible collection.
    */
-  QueryMembershipChanged = 'query-membership-changed',
+  ResourceUpdated = 'resource-updated',
   /** Event that gets called whenever the store encounters an error */
   Error = 'error',
-}
-
-export interface QueryMembershipChange {
-  /** Property the subscription was filtered on, if any. */
-  property?: string;
-  /** Value the subscription was filtered on, if any. */
-  value?: string;
-  /** Drive scope of the subscription. */
-  drive?: string;
-  /** Subjects that joined the result set. */
-  added: string[];
-  /** Subjects that left the result set. */
-  removed: string[];
 }
 
 export interface ImportJsonADOptions {
@@ -210,7 +204,7 @@ type StoreEventHandlers = {
   [StoreEvents.ConnectionChanged]: ConnectionStateCallback;
   [StoreEvents.SyncStatusChanged]: SyncStatusCallback;
   [StoreEvents.CommitLogChanged]: CommitLogCallback;
-  [StoreEvents.QueryMembershipChanged]: QueryMembershipChangedCallback;
+  [StoreEvents.ResourceUpdated]: ResourceCallback;
   [StoreEvents.Error]: ErrorCallback;
 };
 
@@ -220,6 +214,29 @@ export interface ResourceTreeTemplate {
 
 /** Returns True if the client has WebSocket support */
 const supportsWebSockets = () => typeof WebSocket !== 'undefined';
+
+/**
+ * Cheap equality for commit-log property values. Strict `===` would always
+ * report arrays/objects as different even when their contents match, so the
+ * commit log would treat untouched array properties (e.g. `isA`) as
+ * "changed" on every commit. JSON-stringifying for the few rich values is a
+ * bounded cost — propvals are tiny and we only do this on log entry build.
+ */
+function commitLogValuesEqual(
+  a: unknown | undefined,
+  b: unknown | undefined,
+): boolean {
+  if (a === b) return true;
+  if (a === undefined || b === undefined) return false;
+  if (typeof a !== typeof b) return false;
+  if (typeof a !== 'object') return false;
+
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return false;
+  }
+}
 
 /**
  * An in memory store that has a bunch of usefful methods for retrieving Atomic
@@ -274,6 +291,15 @@ export class Store {
     timestamp: number;
   };
   private _commitLog: CommitLogEntry[] = [];
+  /**
+   * Per-subject prior Loro snapshot bytes, used by `summarizeCommitProperties`
+   * to diff against the new commit so the Sync page's commit log shows ONLY
+   * the properties this commit changed (rather than every property that
+   * happens to be present in the snapshot — `loroUpdate` is full state, not a
+   * delta, so without this tracking every entry looks identical regardless of
+   * what the user actually changed).
+   */
+  private _commitLogPriorSnapshots = new Map<string, Uint8Array>();
 
   private eventManager = new EventManager<StoreEvents, StoreEventHandlers>();
 
@@ -309,7 +335,11 @@ export class Store {
 
     this.client = new Client(this.injectedFetch);
 
-    // Restore dirty-for-sync set from localStorage
+    // Restore dirty-for-sync set from localStorage AND rehydrate the commit
+    // log from the persisted `atomic.offline.<subject>` blobs. Without this
+    // pass the Sync page shows "N unsynced" but "No activity recorded" on
+    // page reload — the in-memory `_commitLog` starts empty even though the
+    // pending commits themselves survived in localStorage.
     if (typeof localStorage !== 'undefined') {
       try {
         const stored = localStorage.getItem('atomic.dirtyForSync');
@@ -317,6 +347,7 @@ export class Store {
         if (stored) {
           for (const s of JSON.parse(stored)) {
             this.dirtyForSync.add(s);
+            this.hydrateCommitLogFromOffline(s);
           }
         }
       } catch (e) {
@@ -357,6 +388,59 @@ export class Store {
 
   public getCommitLog(): CommitLogEntry[] {
     return [...this._commitLog];
+  }
+
+  /**
+   * Reads the persisted offline pending commits for `subject` from
+   * `localStorage` and pushes them onto `_commitLog` as `pending` entries.
+   * Called once per dirty subject during construction so the Sync page
+   * shows what's actually queued, not just an "N unsynced" count with an
+   * empty log. No-op if nothing's persisted for the subject.
+   */
+  private hydrateCommitLogFromOffline(subject: string): void {
+    if (typeof localStorage === 'undefined') return;
+
+    let raw: string | null;
+    try {
+      raw = localStorage.getItem(`atomic.offline.${subject}`);
+    } catch {
+      return;
+    }
+    if (!raw) return;
+
+    let entries: unknown;
+    try {
+      entries = JSON.parse(raw);
+    } catch {
+      return;
+    }
+    if (!Array.isArray(entries)) return;
+
+    for (const entry of entries) {
+      let commit;
+      try {
+        commit = parseCommitJSON(JSON.stringify(entry));
+      } catch (e) {
+        console.warn('[hydrateCommitLogFromOffline] parse failed:', e);
+        continue;
+      }
+
+      this.pushCommitLog({
+        timestamp: Date.now(),
+        direction: 'outgoing',
+        status: 'pending',
+        subject: commit.subject,
+        signer: commit.signer,
+        previousCommit: commit.previousCommit,
+        commitId: commit.signature
+          ? `did:ad:commit:${commit.signature}`
+          : undefined,
+        hasLoroUpdate: !!commit.loroUpdate,
+        destroy: !!commit.destroy,
+        summary: this.summarizeCommit(commit),
+        propertySummaries: this.summarizeCommitProperties(commit),
+      });
+    }
   }
 
   /**
@@ -448,7 +532,6 @@ export class Store {
     }
 
     const subjects = this.sortDirtyForSync([...this.dirtyForSync]);
-    console.info(`[Sync] Syncing ${subjects.length} dirty resources...`);
 
     for (const subject of subjects) {
       const resource = this.resources.get(subject);
@@ -476,8 +559,6 @@ export class Store {
         if (typeof localStorage !== 'undefined') {
           localStorage.removeItem(`atomic.offline.${subject}`);
         }
-
-        console.info(`[Sync] Synced ${subject}`);
       } catch (e) {
         console.warn(`[Sync] Failed to sync ${subject}:`, e);
         // Leave in dirty set for next attempt
@@ -837,41 +918,30 @@ export class Store {
         const short = resource.subject.slice(0, 60);
 
         if (jsonAd) {
-          const isDid = resource.subject.startsWith('did:ad:');
-          if (isDid) {
-            console.info(
-              `[ClientDb] PUT start: ${short} (${jsonAd.length} chars)`,
-            );
-          }
           this.clientDb
             .putResource(jsonAd)
             .then(async () => {
-              // Verify every put round-trips. Previously only parent-having
-              // resources were checked, which hid silent drops for top-level
-              // DID resources (drives have no parent).
+              // Verify the put round-tripped. The previous version only
+              // checked resources with parents, which hid silent drops for
+              // top-level DIDs (drives have no parent). Stay quiet on the
+              // happy path — only log when verification fails.
               const stored = await this.clientDb!.getResource(
                 resource.subject,
               ).catch(() => null);
               if (!stored) {
                 console.error(
                   `[ClientDb] PUT succeeded but resource NOT found: ${short}`,
+                  `\n  JSON: ${jsonAd.slice(0, 300)}`,
                 );
-                console.error(`[ClientDb] JSON was: ${jsonAd.slice(0, 300)}`);
-              } else if (isDid) {
-                console.info(`[ClientDb] PUT verified: ${short}`);
               }
             })
             .catch(e => {
               console.error(
                 `[ClientDb] putResource THREW for ${short}:`,
                 e,
-                `\n  JSON was: ${jsonAd.slice(0, 300)}`,
+                `\n  JSON: ${jsonAd.slice(0, 300)}`,
               );
             });
-        } else {
-          console.warn(
-            `[ClientDb] PUT skipped (empty JSON-AD) for ${short} — resource has no serializable props yet`,
-          );
         }
       } catch (e) {
         console.error(
@@ -879,10 +949,6 @@ export class Store {
           e,
         );
       }
-    } else if (this.clientDb && resource.subject.startsWith('did:ad:')) {
-      console.info(
-        `[ClientDb] PUT skipped for ${resource.subject.slice(0, 60)} (loading=${resource.loading}, incomplete=${!!resource.get(core.properties.incomplete)})`,
-      );
     }
   }
 
@@ -1141,17 +1207,11 @@ export class Store {
     if (this.clientDb?.isReady) {
       try {
         const jsonAd = await this.clientDb.getResource(subject);
-        console.warn(
-          `[offline-trace] getResource("${subject}") → ${jsonAd ? `JSON-AD (${jsonAd.length} chars)` : 'null/undefined'}`,
-        );
 
         if (jsonAd) {
           hasLocalData = this.hydrateResourceFromJson(
             subject,
             JSON.parse(jsonAd),
-          );
-          console.warn(
-            `[offline-trace] hydrateResourceFromJson("${subject}") → ${hasLocalData}`,
           );
         }
 
@@ -1168,15 +1228,8 @@ export class Store {
           }
         }
       } catch (e) {
-        console.warn(
-          `[offline-trace] OPFS lookup/hydrate threw for "${subject}":`,
-          e,
-        );
+        console.warn(`[ClientDb] OPFS lookup failed for "${subject}":`, e);
       }
-    } else {
-      console.warn(
-        `[offline-trace] clientDb not ready: clientDb=${!!this.clientDb}, isReady=${this.clientDb?.isReady}`,
-      );
     }
 
     // Try the server if connected. Skip if we have local data and are offline
@@ -1217,8 +1270,7 @@ export class Store {
 
           if (
             e instanceof AtomicError &&
-            (e.type === ErrorType.NotFound ||
-              /not found/i.test(message))
+            (e.type === ErrorType.NotFound || /not found/i.test(message))
           ) {
             const resolved = this.aliases.get(subject) ?? subject;
             const resource = this.resources.get(resolved);
@@ -1251,9 +1303,7 @@ export class Store {
         if (resource) {
           resource.loading = false;
           resource.setError(
-            e instanceof Error
-              ? e
-              : new Error('Resource fetch failed'),
+            e instanceof Error ? e : new Error('Resource fetch failed'),
           );
           this.notify(resource);
         }
@@ -1262,6 +1312,21 @@ export class Store {
   }
 
   /** Hydrate a Resource from a parsed JSON-AD object and add it to the store. Returns true if successful. */
+  /**
+   * Parse a JSON-AD string from the local DB and hydrate it into the store.
+   * Used by collection page loads so members have their propvals available
+   * for client-side sorting before the consumer's individual fetches happen.
+   */
+  public hydrateResourceFromJsonAd(subject: string, jsonAd: string): boolean {
+    try {
+      const parsed = JSON.parse(jsonAd) as Record<string, unknown>;
+
+      return this.hydrateResourceFromJson(subject, parsed);
+    } catch {
+      return false;
+    }
+  }
+
   private hydrateResourceFromJson(
     subject: string,
     parsed: Record<string, unknown>,
@@ -1515,7 +1580,15 @@ export class Store {
     }
 
     const normalized = this.normalizeSubject(subjectRaw);
-    const resolved = this.aliases.get(normalized) ?? normalized;
+    // Commit DIDs identify the commit resource directly — they must never
+    // resolve through the alias map. Without this guard, an alias added by
+    // a prior fetch (e.g. `did:ad:commit:<sig>` accidentally aliased to the
+    // committed-to subject during signing/hydration) sends the user to the
+    // resource the commit edits instead of the commit itself.
+    const isCommitDid = normalized.startsWith('did:ad:commit:');
+    const resolved = isCommitDid
+      ? normalized
+      : (this.aliases.get(normalized) ?? normalized);
     const isTemporarySubject =
       normalized.startsWith('_new:') || normalized.startsWith('_local:');
 
@@ -1777,11 +1850,6 @@ export class Store {
       });
     }
 
-    if (subjectsToRetry.length > 0) {
-      console.info(
-        `[Store] Reconnected — refetching ${subjectsToRetry.length} resource(s) that errored or were stuck loading`,
-      );
-    }
   }
 
   /**
@@ -1791,9 +1859,8 @@ export class Store {
     return !this._serverConnected;
   }
 
-  public startDriveSync(drive: string): void {
+  public startDriveSync(_drive: string): void {
     this._driveSyncInProgress = true;
-    console.info(`[Sync] Starting drive sync for ${drive}`);
     this.emitSyncStatus();
   }
 
@@ -1805,7 +1872,29 @@ export class Store {
     this._driveSyncInProgress = false;
     this._lastDriveSync = { drive, count, timestamp };
     this.emitSyncStatus();
+    if (this._firstDriveSyncResolve) {
+      this._firstDriveSyncResolve();
+      this._firstDriveSyncResolve = undefined;
+    }
   }
+
+  /** Resolves once the WebSocket has run its first drive-sync handshake
+   * (`SYNC_DIFF` + `SYNC_PUSH` complete, `finishDriveSync` called). Used by
+   * collection fetches to defer the fallback `/query` GET until the local
+   * WASM DB has been populated by the sync — the index then satisfies the
+   * query locally and the server round-trip can be skipped entirely.
+   * Resolves immediately if a sync has already completed in this session. */
+  public waitForFirstDriveSync(): Promise<void> {
+    if (this._lastDriveSync) return Promise.resolve();
+    if (!this._firstDriveSyncPromise) {
+      this._firstDriveSyncPromise = new Promise<void>(resolve => {
+        this._firstDriveSyncResolve = resolve;
+      });
+    }
+    return this._firstDriveSyncPromise;
+  }
+  private _firstDriveSyncPromise: Promise<void> | undefined;
+  private _firstDriveSyncResolve: (() => void) | undefined;
 
   public getSyncStatus(): StoreSyncStatus {
     const ws = this.getDefaultWebSocket();
@@ -2327,6 +2416,18 @@ export class Store {
       ? this._commitLog.findIndex(e => e.commitId === entry.commitId)
       : -1;
 
+    // On a status transition we ran `summarizeCommitProperties` a second time
+    // for the same commit. The first call stored the snapshot as the prior
+    // baseline; the second call diffs the snapshot against itself → empty
+    // → undefined. Reuse the original summary so the empty diff doesn't
+    // overwrite the real one when we spread-merge below.
+    if (existingIdx >= 0) {
+      entry = {
+        ...entry,
+        propertySummaries: this._commitLog[existingIdx].propertySummaries,
+      };
+    }
+
     if (existingIdx >= 0) {
       const merged: CommitLogEntry = {
         ...this._commitLog[existingIdx],
@@ -2390,6 +2491,19 @@ export class Store {
     return parts.join(' ');
   }
 
+  /**
+   * Diff this commit's loro snapshot against the previous one we logged for
+   * the same subject. Only properties that differ — added, modified, removed
+   * — are emitted. Genesis commits (no prior) treat every property as
+   * `changed`. Returning an empty list is itself useful debug info: it means
+   * the commit's snapshot has identical contents to the previous one, which
+   * usually points to a duplicate-send or a UI that signed without a real
+   * change.
+   *
+   * `pushCommitLog` is responsible for not stomping a real summary on a
+   * status transition; this method always recomputes against the stored
+   * baseline.
+   */
   private summarizeCommitProperties(
     commit: Commit,
   ): CommitLogPropertySummary[] | undefined {
@@ -2401,31 +2515,67 @@ export class Store {
       const materialized = new Resource(commit.subject);
       materialized.importLoroUpdate(commit.loroUpdate);
 
-      const properties = materialized
-        .getEntries()
-        .filter(
-          ([prop]) =>
-            prop !== commits.properties.loroUpdate &&
-            prop !== commits.properties.lastCommit,
-        )
-        .map(([prop, value]) => ({ property: prop, value: value as JSONValue }))
-        .slice(0, 12);
+      const currentEntries = new Map<string, JSONValue>();
+      for (const [prop, value] of materialized.getEntries()) {
+        if (
+          prop === commits.properties.loroUpdate ||
+          prop === commits.properties.lastCommit
+        ) {
+          continue;
+        }
 
-      return properties.length > 0 ? properties : undefined;
+        currentEntries.set(prop, value as JSONValue);
+      }
+
+      const priorBytes = this._commitLogPriorSnapshots.get(commit.subject);
+      const priorEntries = new Map<string, JSONValue>();
+
+      if (priorBytes) {
+        try {
+          const prior = new Resource(commit.subject);
+          prior.importLoroUpdate(priorBytes);
+          for (const [prop, value] of prior.getEntries()) {
+            if (
+              prop === commits.properties.loroUpdate ||
+              prop === commits.properties.lastCommit
+            ) {
+              continue;
+            }
+
+            priorEntries.set(prop, value as JSONValue);
+          }
+        } catch (e) {
+          console.warn('[summarizeCommitProperties] prior decode failed:', e);
+        }
+      }
+
+      const summaries: CommitLogPropertySummary[] = [];
+
+      for (const [prop, value] of currentEntries) {
+        const before = priorEntries.get(prop);
+        if (!commitLogValuesEqual(before, value)) {
+          summaries.push({ property: prop, value, changeType: 'changed' });
+        }
+      }
+
+      for (const [prop] of priorEntries) {
+        if (!currentEntries.has(prop)) {
+          summaries.push({
+            property: prop,
+            value: null as unknown as JSONValue,
+            changeType: 'removed',
+          });
+        }
+      }
+
+      this._commitLogPriorSnapshots.set(commit.subject, commit.loroUpdate);
+
+      return summaries.length > 0 ? summaries.slice(0, 20) : undefined;
     } catch (e) {
       console.warn('[summarizeCommitProperties] failed:', e);
 
       return undefined;
     }
-  }
-
-  /**
-   * Notifies subscribers that a drive-wide query subscription reported a
-   * membership change. Called by {@link WSClient} after it parses a
-   * `QUERY_UPDATE` frame and kicks off refetches.
-   */
-  public notifyQueryMembershipChanged(change: QueryMembershipChange): void {
-    this.eventManager.emit(StoreEvents.QueryMembershipChanged, change);
   }
 
   /**
@@ -2468,18 +2618,19 @@ export class Store {
     }
     if (!bytes) return;
 
-    const ws = this.getDefaultWebSocket();
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.sendBlob(hashBytes, bytes);
-      return;
-    }
-
-    // WS unavailable — durable HTTP upload. Hash is verified server-side.
-    // Cast: TS lib.dom marks Uint8Array<SharedArrayBuffer> incompatible with
-    // BodyInit/BlobPart; at runtime our bytes are ArrayBuffer-backed.
+    // HTTP PUT is the source of truth for blob delivery. Storage is content-
+    // addressed and idempotent, so re-posting is a no-op. The WS BLOB_RESPONSE
+    // path can drop frames when the connection closes mid-flight (e.g. server
+    // heartbeat timeout right after `send()`), leaving the bytes "sent" from
+    // the client's POV but never landing on the server. Subsequent commits
+    // that depend on the blob (Plugin install reading the zip) then fail
+    // server-side. Use the durable HTTP path; awaiting completion serializes
+    // it with downstream commits.
     const url = `${this.getServerUrl()}/blob/${hashHex}`;
     await fetch(url, {
       method: 'PUT',
+      // Cast: TS lib.dom marks Uint8Array<SharedArrayBuffer> incompatible with
+      // BodyInit/BlobPart; at runtime our bytes are ArrayBuffer-backed.
       body: bytes as unknown as BodyInit,
       headers: { 'Content-Type': 'application/octet-stream' },
     });
@@ -2837,6 +2988,13 @@ export class Store {
   /** Lets subscribers know that a resource has been changed. Time to update your views.
    */
   private async notify(resource: Resource): Promise<void> {
+    // Global event for collection live-membership listeners. Fires for every
+    // resource that lands in the store via `addResource` — local commits and
+    // remote `UPDATE` pushes alike. Kept separate from the per-subject
+    // subscriber list because collections need to react to changes on
+    // resources they may not yet know about (e.g. a brand-new chat message).
+    this.eventManager.emit(StoreEvents.ResourceUpdated, resource);
+
     const subject = resource.subject;
     const callbacks = this.subscribers.get(subject);
 

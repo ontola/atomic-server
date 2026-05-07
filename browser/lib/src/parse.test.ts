@@ -98,8 +98,11 @@ describe('parse.ts', () => {
 
     const loroJson = (resource as any)._loroDoc.getMap('properties').toJSON();
     expect(loroJson[core.properties.parent]).toBe('did:ad:test-drive');
-    expect(loroJson[core.properties.isA]).toBe(
-      JSON.stringify(['https://atomicdata.dev/classes/Document']),
-    );
+    // Arrays are stored as a native `LoroList` (per-element CRDT merge), not
+    // as a JSON-stringified scalar — the original assertion predates that
+    // change. `toJSON()` round-trips lists back to plain JS arrays.
+    expect(loroJson[core.properties.isA]).toEqual([
+      'https://atomicdata.dev/classes/Document',
+    ]);
   });
 });

@@ -23,8 +23,9 @@ export function useChildren(parentSubject: string | undefined): {
   const { collection, ready, invalidateCollection } = useCollection(
     {
       property: core.properties.parent,
-      // When disabled, use a value that will never match anything.
-      value: parentSubject ?? '__disabled__',
+      // `Collection.fetchPage` short-circuits when value is undefined, so
+      // disabled hooks never hit the server. No sentinel needed.
+      value: parentSubject,
       sort_by: commits.properties.createdAt,
       sort_desc: false,
     },
