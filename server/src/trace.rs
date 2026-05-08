@@ -9,23 +9,22 @@ pub fn init_tracing(config: &crate::config::Config) -> Option<tracing_chrome::Fl
         crate::config::LogLevel::Debug => "debug",
         crate::config::LogLevel::Trace => "trace",
     };
-    // Only set RUST_LOG if not already set (allow .env to override).
+    // Build the tracing-subscriber filter directly. Don't pollute RUST_LOG —
+    // clap reads RUST_LOG into Config.log_level as a value_enum (warn/info/
+    // debug/trace) and chokes on the multi-spec format below. Tests that
+    // re-parse Config in the same process would fail after the first
+    // init_tracing call.
+    //
     // Third-party libraries kept at `warn` or higher to prevent log floods:
     // - tantivy: normal indexing operations log at info, drowns our logs.
     // - loro_internal: every snapshot export logs per-block-section counters.
     // - pkarr / reqwest: chatty DHT/HTTP internals.
-    if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var(
-            "RUST_LOG",
-            format!(
-                "{log_level},tantivy=warn,loro_internal=warn,pkarr=warn,reqwest=warn"
-            ),
-        );
-    }
     use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-    // Start tracing
-    // STDOUT log
-    let filter = tracing_subscriber::EnvFilter::from_default_env();
+    let filter = tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+        tracing_subscriber::EnvFilter::new(format!(
+            "{log_level},tantivy=warn,loro_internal=warn,pkarr=warn,reqwest=warn"
+        ))
+    });
     let tracing_registry = tracing_subscriber::registry().with(filter);
 
     match config.opts.trace {
@@ -37,7 +36,10 @@ pub fn init_tracing(config: &crate::config::Config) -> Option<tracing_chrome::Fl
             let (chrome_layer, flush_guard) = tracing_chrome::ChromeLayerBuilder::new()
                 .include_args(true)
                 .build();
-            tracing_registry.with(chrome_layer).init();
+            // try_init: parallel test runs with full server instances would
+            // otherwise panic the second-and-onwards instance with
+            // "global default trace dispatcher has already been set".
+            let _ = tracing_registry.with(chrome_layer).try_init();
             tracing::info!(
                 "Enabling tracing for Chrome. Saving file (after run) to ./trace-timestamp.json",
             );
@@ -112,11 +114,13 @@ pub fn init_tracing(config: &crate::config::Config) -> Option<tracing_chrome::Fl
                         &logger_provider,
                     );
                 let terminal_layer = tracing_subscriber::fmt::Layer::default();
-                tracing_registry
+                // try_init: see Chrome branch — keeps parallel server tests
+                // from panicking after the first one wins the global slot.
+                let _ = tracing_registry
                     .with(terminal_layer)
                     .with(otel_trace_layer)
                     .with(otel_log_layer)
-                    .init();
+                    .try_init();
 
                 opentelemetry::global::set_tracer_provider(tracer_provider);
                 opentelemetry::global::set_meter_provider(meter_provider);

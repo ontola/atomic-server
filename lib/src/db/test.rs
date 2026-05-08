@@ -162,13 +162,20 @@ async fn destroy_resource_and_check_collection_and_commits() {
     let clone = _res.resource_new.clone().unwrap();
     let resp = _res.resource_new.unwrap().destroy(&store).await.unwrap();
     assert!(resp.resource_new.is_none());
+    // Compare JSON-AD minus loroUpdate. Loro snapshots aren't byte-deterministic
+    // (peer-id allocation differs per run) — the logical state is what matters.
+    // Using the full to_json_ad here would compare the base64 of those snapshots
+    // and flake even when the logical state is identical.
+    fn json_ad_without_loro(r: &crate::Resource) -> String {
+        let mut json: serde_json::Value = serde_json::from_str(&r.to_json_ad(None).unwrap()).unwrap();
+        if let Some(obj) = json.as_object_mut() {
+            obj.remove(crate::urls::LORO_UPDATE);
+        }
+        serde_json::to_string(&json).unwrap()
+    }
     assert_eq!(
-        resp.resource_old
-            .as_ref()
-            .unwrap()
-            .to_json_ad(None)
-            .unwrap(),
-        clone.to_json_ad(None).unwrap(),
+        json_ad_without_loro(resp.resource_old.as_ref().unwrap()),
+        json_ad_without_loro(&clone),
         "JSON AD differs between removed resource and resource passed back from commit"
     );
     assert!(resp.resource_old.is_some());

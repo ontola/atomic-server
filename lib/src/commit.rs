@@ -894,6 +894,21 @@ impl CommitBuilder {
     /// Does not send it - see [atomic_lib::client::post_commit].
     /// Private key is the base64 encoded pkcs8 for the signer.
     /// Sets the `previousCommit` using the `lastCommit`.
+    /// Returns true if this builder has any pending change that would
+    /// produce a non-empty commit. Used by callers (`Resource::save`,
+    /// `Resource::save_locally`) to skip a sign+apply round-trip when
+    /// the caller asked to "save" a resource that hasn't been touched —
+    /// `apply_commit` would otherwise reject the resulting empty commit
+    /// with "no `loroUpdate` and is not a destroy", which surfaces as a
+    /// hard error from idiomatic test code like
+    /// `Resource::new_generate_subject(&store).save_locally(&store)`.
+    pub fn has_changes(&self) -> bool {
+        !self.set.is_empty()
+            || !self.remove.is_empty()
+            || self.loro_update.is_some()
+            || self.destroy
+    }
+
     pub async fn sign(
         mut self,
         agent: &crate::agents::Agent,

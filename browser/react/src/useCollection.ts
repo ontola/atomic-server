@@ -118,13 +118,17 @@ export function useCollection(
 
   useEffect(() => {
     // Reuse the collection from useState if it matches (first mount).
-    // Only create a new one if the query params actually changed.
+    // Rebuild when ANY query param changes — `sort_by` / `sort_desc` aren't
+    // mutable on a Collection (they're baked into the page subject the
+    // server returns), so a sort toggle has to construct a new one.
     let col = collectionRef.current;
 
     if (
       !col ||
       col.property !== queryFilterMemo.property ||
-      col.value !== queryFilterMemo.value
+      col.value !== queryFilterMemo.value ||
+      col.sortBy !== queryFilterMemo.sort_by ||
+      col.sortDesc !== !!queryFilterMemo.sort_desc
     ) {
       const built = buildCollection(
         store,
@@ -180,7 +184,7 @@ export function useCollection(
       const result = col.applyResourceChange(resource.subject, resource);
       if (result === 'membership-stale') {
         invalidateRef.current();
-      } else if (result === 'member-removed') {
+      } else if (result === 'member-removed' || result === 'member-added') {
         setCollection(proxyCollection(col));
       }
     });
@@ -196,7 +200,13 @@ export function useCollection(
       unsubUpdated();
       unsubRemoved();
     };
-  }, [store, queryFilterMemo.property, queryFilterMemo.value]);
+  }, [
+    store,
+    queryFilterMemo.property,
+    queryFilterMemo.value,
+    queryFilterMemo.sort_by,
+    queryFilterMemo.sort_desc,
+  ]);
 
   return { collection, ready, invalidateCollection, mapAll };
 }

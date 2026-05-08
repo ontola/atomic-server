@@ -1,0 +1,957 @@
+{
+  "messages": [
+    {
+      "level": "log",
+      "text": "### TEST: click first cell",
+      "timestamp": "2026-05-07T17:45:25.117Z"
+    },
+    {
+      "level": "log",
+      "text": "### TEST: enter alpha",
+      "timestamp": "2026-05-07T17:45:25.420Z"
+    },
+    {
+      "level": "log",
+      "text": "### TEST: enter bravo",
+      "timestamp": "2026-05-07T17:45:25.780Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c← QUERY_UPDATE (105B) color: #6b9",
+      "timestamp": "2026-05-07T17:45:25.927Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:25.927Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:25.927Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c→ GET #12 did:ad:k2l23/W8M19WOaNmuKHScBqh/pZRLTiA4eAxwFVcpZCIvfO7vcOHQZaQUz/mmZx+tdjgh661pHel1bRryimeDw== color: #9bf",
+      "timestamp": "2026-05-07T17:45:25.927Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:25.927Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:25.927Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c← QUERY_UPDATE (105B) color: #6b9",
+      "timestamp": "2026-05-07T17:45:25.928Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:25.928Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:25.928Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c→ GET #13 did:ad:k2l23/W8M19WOaNmuKHScBqh/pZRLTiA4eAxwFVcpZCIvfO7vcOHQZaQUz/mmZx+tdjgh661pHel1bRryimeDw== color: #9bf",
+      "timestamp": "2026-05-07T17:45:25.928Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:25.928Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:25.928Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c← UPDATE did:ad:k2l23/W8M19WOaNmuKHScBqh/pZRLTiA4eAxwFVcpZCIvfO7vcOHQZaQUz/mmZx+tdjgh661pHel1bRryimeDw== [snapshot] (832B) color: #6b9",
+      "timestamp": "2026-05-07T17:45:25.928Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:25.928Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:25.928Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c← UPDATE did:ad:k2l23/W8M19WOaNmuKHScBqh/pZRLTiA4eAxwFVcpZCIvfO7vcOHQZaQUz/mmZx+tdjgh661pHel1bRryimeDw== [snapshot] (832B) color: #6b9",
+      "timestamp": "2026-05-07T17:45:25.929Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:25.929Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:25.929Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c← QUERY_UPDATE (105B) color: #6b9",
+      "timestamp": "2026-05-07T17:45:25.992Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:25.992Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:25.992Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c→ GET #14 did:ad:k2l23/W8M19WOaNmuKHScBqh/pZRLTiA4eAxwFVcpZCIvfO7vcOHQZaQUz/mmZx+tdjgh661pHel1bRryimeDw== color: #9bf",
+      "timestamp": "2026-05-07T17:45:25.992Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:25.992Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:25.992Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c← QUERY_UPDATE (105B) color: #6b9",
+      "timestamp": "2026-05-07T17:45:25.996Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:25.996Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:25.996Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c→ GET #15 did:ad:k2l23/W8M19WOaNmuKHScBqh/pZRLTiA4eAxwFVcpZCIvfO7vcOHQZaQUz/mmZx+tdjgh661pHel1bRryimeDw== color: #9bf",
+      "timestamp": "2026-05-07T17:45:25.996Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:25.996Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:25.996Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c← UPDATE did:ad:k2l23/W8M19WOaNmuKHScBqh/pZRLTiA4eAxwFVcpZCIvfO7vcOHQZaQUz/mmZx+tdjgh661pHel1bRryimeDw== [snapshot] (912B) color: #6b9",
+      "timestamp": "2026-05-07T17:45:25.996Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:25.996Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:25.996Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c← UPDATE did:ad:k2l23/W8M19WOaNmuKHScBqh/pZRLTiA4eAxwFVcpZCIvfO7vcOHQZaQUz/mmZx+tdjgh661pHel1bRryimeDw== [snapshot] (912B) color: #6b9",
+      "timestamp": "2026-05-07T17:45:25.997Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:25.997Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:25.997Z"
+    },
+    {
+      "level": "log",
+      "text": "### TEST: enter charlie",
+      "timestamp": "2026-05-07T17:45:26.135Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c← QUERY_UPDATE (105B) color: #6b9",
+      "timestamp": "2026-05-07T17:45:26.267Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:26.267Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:26.267Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c→ GET #16 did:ad:eSQ8w2zQA+8JsYTNFtjBLmvfG2vh4G1X3CWkm+ejIDoyYYZsX4icmmh/Vj/Ao76kMByGSpoArmDDjHTKJmYjDg== color: #9bf",
+      "timestamp": "2026-05-07T17:45:26.267Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:26.267Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:26.267Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c← QUERY_UPDATE (105B) color: #6b9",
+      "timestamp": "2026-05-07T17:45:26.267Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:26.267Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:26.267Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c→ GET #17 did:ad:eSQ8w2zQA+8JsYTNFtjBLmvfG2vh4G1X3CWkm+ejIDoyYYZsX4icmmh/Vj/Ao76kMByGSpoArmDDjHTKJmYjDg== color: #9bf",
+      "timestamp": "2026-05-07T17:45:26.267Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:26.267Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:26.267Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c← UPDATE did:ad:eSQ8w2zQA+8JsYTNFtjBLmvfG2vh4G1X3CWkm+ejIDoyYYZsX4icmmh/Vj/Ao76kMByGSpoArmDDjHTKJmYjDg== [snapshot] (817B) color: #6b9",
+      "timestamp": "2026-05-07T17:45:26.267Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:26.267Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:26.267Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c← UPDATE did:ad:eSQ8w2zQA+8JsYTNFtjBLmvfG2vh4G1X3CWkm+ejIDoyYYZsX4icmmh/Vj/Ao76kMByGSpoArmDDjHTKJmYjDg== [snapshot] (817B) color: #6b9",
+      "timestamp": "2026-05-07T17:45:26.268Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:26.268Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:26.268Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c← QUERY_UPDATE (105B) color: #6b9",
+      "timestamp": "2026-05-07T17:45:26.322Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:26.322Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:26.322Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c→ GET #18 did:ad:eSQ8w2zQA+8JsYTNFtjBLmvfG2vh4G1X3CWkm+ejIDoyYYZsX4icmmh/Vj/Ao76kMByGSpoArmDDjHTKJmYjDg== color: #9bf",
+      "timestamp": "2026-05-07T17:45:26.323Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:26.323Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:26.323Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c← QUERY_UPDATE (105B) color: #6b9",
+      "timestamp": "2026-05-07T17:45:26.323Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:26.323Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:26.323Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c→ GET #19 did:ad:eSQ8w2zQA+8JsYTNFtjBLmvfG2vh4G1X3CWkm+ejIDoyYYZsX4icmmh/Vj/Ao76kMByGSpoArmDDjHTKJmYjDg== color: #9bf",
+      "timestamp": "2026-05-07T17:45:26.323Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:26.323Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:26.323Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c← UPDATE did:ad:eSQ8w2zQA+8JsYTNFtjBLmvfG2vh4G1X3CWkm+ejIDoyYYZsX4icmmh/Vj/Ao76kMByGSpoArmDDjHTKJmYjDg== [snapshot] (899B) color: #6b9",
+      "timestamp": "2026-05-07T17:45:26.323Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:26.323Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:26.324Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c← UPDATE did:ad:eSQ8w2zQA+8JsYTNFtjBLmvfG2vh4G1X3CWkm+ejIDoyYYZsX4icmmh/Vj/Ao76kMByGSpoArmDDjHTKJmYjDg== [snapshot] (899B) color: #6b9",
+      "timestamp": "2026-05-07T17:45:26.327Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:26.327Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:26.327Z"
+    },
+    {
+      "level": "log",
+      "text": "### TEST: enter delta",
+      "timestamp": "2026-05-07T17:45:26.492Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c← QUERY_UPDATE (105B) color: #6b9",
+      "timestamp": "2026-05-07T17:45:26.615Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:26.615Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:26.615Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c→ GET #20 did:ad:wBvBOMFbfFgkj5FqluIrUyCBLGuX8Al6y9PhlTdGy7HQwcIj9pr1yCC8oa5QDhQyKchZGXrGDNzfSalmnHjjBw== color: #9bf",
+      "timestamp": "2026-05-07T17:45:26.615Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:26.615Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:26.615Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c← QUERY_UPDATE (105B) color: #6b9",
+      "timestamp": "2026-05-07T17:45:26.616Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:26.616Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:26.616Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c→ GET #21 did:ad:wBvBOMFbfFgkj5FqluIrUyCBLGuX8Al6y9PhlTdGy7HQwcIj9pr1yCC8oa5QDhQyKchZGXrGDNzfSalmnHjjBw== color: #9bf",
+      "timestamp": "2026-05-07T17:45:26.616Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:26.616Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:26.616Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c← UPDATE did:ad:wBvBOMFbfFgkj5FqluIrUyCBLGuX8Al6y9PhlTdGy7HQwcIj9pr1yCC8oa5QDhQyKchZGXrGDNzfSalmnHjjBw== [snapshot] (832B) color: #6b9",
+      "timestamp": "2026-05-07T17:45:26.616Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:26.616Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:26.616Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c← UPDATE did:ad:wBvBOMFbfFgkj5FqluIrUyCBLGuX8Al6y9PhlTdGy7HQwcIj9pr1yCC8oa5QDhQyKchZGXrGDNzfSalmnHjjBw== [snapshot] (832B) color: #6b9",
+      "timestamp": "2026-05-07T17:45:26.621Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:26.621Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:26.621Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c← QUERY_UPDATE (105B) color: #6b9",
+      "timestamp": "2026-05-07T17:45:26.675Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:26.675Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:26.675Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c→ GET #22 did:ad:wBvBOMFbfFgkj5FqluIrUyCBLGuX8Al6y9PhlTdGy7HQwcIj9pr1yCC8oa5QDhQyKchZGXrGDNzfSalmnHjjBw== color: #9bf",
+      "timestamp": "2026-05-07T17:45:26.675Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:26.675Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:26.675Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c← QUERY_UPDATE (105B) color: #6b9",
+      "timestamp": "2026-05-07T17:45:26.675Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:26.675Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:26.675Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c→ GET #23 did:ad:wBvBOMFbfFgkj5FqluIrUyCBLGuX8Al6y9PhlTdGy7HQwcIj9pr1yCC8oa5QDhQyKchZGXrGDNzfSalmnHjjBw== color: #9bf",
+      "timestamp": "2026-05-07T17:45:26.675Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:26.675Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:26.675Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c← UPDATE did:ad:wBvBOMFbfFgkj5FqluIrUyCBLGuX8Al6y9PhlTdGy7HQwcIj9pr1yCC8oa5QDhQyKchZGXrGDNzfSalmnHjjBw== [snapshot] (916B) color: #6b9",
+      "timestamp": "2026-05-07T17:45:26.676Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:26.676Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:26.676Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c← UPDATE did:ad:wBvBOMFbfFgkj5FqluIrUyCBLGuX8Al6y9PhlTdGy7HQwcIj9pr1yCC8oa5QDhQyKchZGXrGDNzfSalmnHjjBw== [snapshot] (916B) color: #6b9",
+      "timestamp": "2026-05-07T17:45:26.681Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:26.681Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:26.681Z"
+    },
+    {
+      "level": "log",
+      "text": "### TEST: enter echo",
+      "timestamp": "2026-05-07T17:45:26.849Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c← QUERY_UPDATE (105B) color: #6b9",
+      "timestamp": "2026-05-07T17:45:26.958Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:26.958Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:26.958Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c→ GET #24 did:ad:bkCbul12npypVyEJv4EzBm6s//c0r+zXmts1Y4NYCBaqcIbP1cjpCxzP00lZLkwadDUbu5m7FWvuiXhZVo1tCg== color: #9bf",
+      "timestamp": "2026-05-07T17:45:26.958Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:26.958Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:26.958Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c← QUERY_UPDATE (105B) color: #6b9",
+      "timestamp": "2026-05-07T17:45:26.958Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:26.958Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:26.958Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c→ GET #25 did:ad:bkCbul12npypVyEJv4EzBm6s//c0r+zXmts1Y4NYCBaqcIbP1cjpCxzP00lZLkwadDUbu5m7FWvuiXhZVo1tCg== color: #9bf",
+      "timestamp": "2026-05-07T17:45:26.958Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:26.958Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:26.958Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c← UPDATE did:ad:bkCbul12npypVyEJv4EzBm6s//c0r+zXmts1Y4NYCBaqcIbP1cjpCxzP00lZLkwadDUbu5m7FWvuiXhZVo1tCg== [snapshot] (832B) color: #6b9",
+      "timestamp": "2026-05-07T17:45:26.958Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:26.958Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:26.958Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c← UPDATE did:ad:bkCbul12npypVyEJv4EzBm6s//c0r+zXmts1Y4NYCBaqcIbP1cjpCxzP00lZLkwadDUbu5m7FWvuiXhZVo1tCg== [snapshot] (832B) color: #6b9",
+      "timestamp": "2026-05-07T17:45:26.962Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:26.962Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:26.962Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c← QUERY_UPDATE (105B) color: #6b9",
+      "timestamp": "2026-05-07T17:45:27.013Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:27.013Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:27.013Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c→ GET #26 did:ad:bkCbul12npypVyEJv4EzBm6s//c0r+zXmts1Y4NYCBaqcIbP1cjpCxzP00lZLkwadDUbu5m7FWvuiXhZVo1tCg== color: #9bf",
+      "timestamp": "2026-05-07T17:45:27.013Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:27.013Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:27.013Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c← QUERY_UPDATE (105B) color: #6b9",
+      "timestamp": "2026-05-07T17:45:27.013Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:27.013Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:27.013Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c→ GET #27 did:ad:bkCbul12npypVyEJv4EzBm6s//c0r+zXmts1Y4NYCBaqcIbP1cjpCxzP00lZLkwadDUbu5m7FWvuiXhZVo1tCg== color: #9bf",
+      "timestamp": "2026-05-07T17:45:27.013Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:27.013Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:27.013Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c← UPDATE did:ad:bkCbul12npypVyEJv4EzBm6s//c0r+zXmts1Y4NYCBaqcIbP1cjpCxzP00lZLkwadDUbu5m7FWvuiXhZVo1tCg== [snapshot] (912B) color: #6b9",
+      "timestamp": "2026-05-07T17:45:27.014Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:27.014Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:27.014Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c← UPDATE did:ad:bkCbul12npypVyEJv4EzBm6s//c0r+zXmts1Y4NYCBaqcIbP1cjpCxzP00lZLkwadDUbu5m7FWvuiXhZVo1tCg== [snapshot] (912B) color: #6b9",
+      "timestamp": "2026-05-07T17:45:27.017Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:27.017Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:27.017Z"
+    },
+    {
+      "level": "log",
+      "text": "### TEST: wait 500ms",
+      "timestamp": "2026-05-07T17:45:27.204Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c← QUERY_UPDATE (105B) color: #6b9",
+      "timestamp": "2026-05-07T17:45:27.327Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:27.327Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:27.327Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c→ GET #28 did:ad:NkQ8twMQmC9dBGTq8i72w9UzRglWvh7ha8bqIviI4Kh0lfB127BTpuwBeV7+Wjj/L6xMg1U379PraNDg6YpXDQ== color: #9bf",
+      "timestamp": "2026-05-07T17:45:27.327Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:27.327Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:27.327Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c← QUERY_UPDATE (105B) color: #6b9",
+      "timestamp": "2026-05-07T17:45:27.327Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:27.327Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:27.327Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c→ GET #29 did:ad:NkQ8twMQmC9dBGTq8i72w9UzRglWvh7ha8bqIviI4Kh0lfB127BTpuwBeV7+Wjj/L6xMg1U379PraNDg6YpXDQ== color: #9bf",
+      "timestamp": "2026-05-07T17:45:27.327Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:27.327Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:27.327Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c← UPDATE did:ad:NkQ8twMQmC9dBGTq8i72w9UzRglWvh7ha8bqIviI4Kh0lfB127BTpuwBeV7+Wjj/L6xMg1U379PraNDg6YpXDQ== [snapshot] (826B) color: #6b9",
+      "timestamp": "2026-05-07T17:45:27.328Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:27.328Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:27.328Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c← UPDATE did:ad:NkQ8twMQmC9dBGTq8i72w9UzRglWvh7ha8bqIviI4Kh0lfB127BTpuwBeV7+Wjj/L6xMg1U379PraNDg6YpXDQ== [snapshot] (826B) color: #6b9",
+      "timestamp": "2026-05-07T17:45:27.331Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:27.331Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:27.331Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c← QUERY_UPDATE (105B) color: #6b9",
+      "timestamp": "2026-05-07T17:45:27.383Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:27.383Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:27.383Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c→ GET #30 did:ad:NkQ8twMQmC9dBGTq8i72w9UzRglWvh7ha8bqIviI4Kh0lfB127BTpuwBeV7+Wjj/L6xMg1U379PraNDg6YpXDQ== color: #9bf",
+      "timestamp": "2026-05-07T17:45:27.383Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:27.383Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:27.383Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c← QUERY_UPDATE (105B) color: #6b9",
+      "timestamp": "2026-05-07T17:45:27.383Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:27.383Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:27.383Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c→ GET #31 did:ad:NkQ8twMQmC9dBGTq8i72w9UzRglWvh7ha8bqIviI4Kh0lfB127BTpuwBeV7+Wjj/L6xMg1U379PraNDg6YpXDQ== color: #9bf",
+      "timestamp": "2026-05-07T17:45:27.383Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:27.383Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:27.383Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c← UPDATE did:ad:NkQ8twMQmC9dBGTq8i72w9UzRglWvh7ha8bqIviI4Kh0lfB127BTpuwBeV7+Wjj/L6xMg1U379PraNDg6YpXDQ== [snapshot] (906B) color: #6b9",
+      "timestamp": "2026-05-07T17:45:27.384Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:27.384Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:27.384Z"
+    },
+    {
+      "level": "startGroupCollapsed",
+      "text": "%c← UPDATE did:ad:NkQ8twMQmC9dBGTq8i72w9UzRglWvh7ha8bqIviI4Kh0lfB127BTpuwBeV7+Wjj/L6xMg1U379PraNDg6YpXDQ== [snapshot] (906B) color: #6b9",
+      "timestamp": "2026-05-07T17:45:27.387Z"
+    },
+    {
+      "level": "debug",
+      "text": "[object Object]",
+      "timestamp": "2026-05-07T17:45:27.387Z"
+    },
+    {
+      "level": "endGroup",
+      "text": "console.groupEnd",
+      "timestamp": "2026-05-07T17:45:27.387Z"
+    },
+    {
+      "level": "log",
+      "text": "### TEST: escape",
+      "timestamp": "2026-05-07T17:45:27.707Z"
+    },
+    {
+      "level": "log",
+      "text": "### TEST: wait 2000ms",
+      "timestamp": "2026-05-07T17:45:27.708Z"
+    },
+    {
+      "level": "log",
+      "text": "### TEST: done [\"alpha\",\"\",\"bravo\",\"\",\"charlie\",\"\",\"delta\",\"\",\"\",\"\"]",
+      "timestamp": "2026-05-07T17:45:29.711Z"
+    }
+  ],
+  "count": 190,
+  "level": "all",
+  "cleared": false
+}

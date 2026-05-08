@@ -495,11 +495,13 @@ async fn self_signed_agent_commit_keeps_name() {
         get_body(resp)
     );
 
-    let req = test::TestRequest::get()
-        .uri(&format!("/did?subject={}", urlencoding::encode(&agent_did)))
-        .insert_header(("Accept", "application/ad+json"))
-        .to_request();
-    let resp = test::call_service(&app, req).await;
+    // Authenticate the GET — the resource lives behind the default rights
+    // model, so unauthenticated reads return 401.
+    let req = build_request_authenticated(
+        &format!("/did?subject={}", urlencoding::encode(&agent_did)),
+        &appstate,
+    );
+    let resp = test::call_service(&app, req.to_request()).await;
     assert!(
         resp.status().is_success(),
         "Fetch failed with status: {:?}",
@@ -534,7 +536,11 @@ async fn upload_download_test() {
         &format!("./.temp/{}/config", unique_string),
     ]);
 
-    let config = config::build_config(opts).expect("failed init config");
+    let mut config = config::build_config(opts).expect("failed init config");
+    // Prevent folder access issues when running concurrent tests — the other
+    // server tests set this; without it, parallel runs share the default
+    // search-index dir and trip Tantivy's `LockBusy` on the second test.
+    config.search_index_path = format!("./.temp/{}/search_index", unique_string).into();
     let appstate = crate::appstate::AppState::init(config.clone())
         .await
         .expect("failed init appstate");
