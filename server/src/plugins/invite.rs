@@ -61,7 +61,11 @@ pub fn handle_invite_request<'a>(
         // OPFS, the resource never lands in the store, and the invite page
         // spins on "loading…" forever.
         invite
-            .set(urls::TARGET.into(), Value::AtomicUrl(token.target.clone()), store)
+            .set(
+                urls::TARGET.into(),
+                Value::AtomicUrl(token.target.clone()),
+                store,
+            )
             .await?;
         invite
             .set(urls::WRITE_BOOL.into(), Value::Boolean(token.write), store)

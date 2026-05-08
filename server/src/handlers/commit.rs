@@ -103,9 +103,7 @@ pub async fn post_commit(
     let is_self_creating_agent =
         incoming_commit.subject.is_agent_did() && incoming_commit.subject == *signer;
 
-    if signer.is_agent_did()
-        && !is_self_creating_agent
-        && store.get_resource(signer).await.is_err()
+    if signer.is_agent_did() && !is_self_creating_agent && store.get_resource(signer).await.is_err()
     {
         let mut new_agent =
             atomic_lib::Resource::new_instance(atomic_lib::urls::AGENT, store).await?;

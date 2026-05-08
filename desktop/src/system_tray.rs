@@ -36,7 +36,10 @@ pub fn setup(app: &mut App, config: &atomic_server_lib::config::Config) -> tauri
         app.shell().open(&config_dir, None).unwrap();
       }
       "docs" => {
-        app.shell().open("https://docs.atomicdata.dev", None).unwrap();
+        app
+          .shell()
+          .open("https://docs.atomicdata.dev", None)
+          .unwrap();
       }
       _ => {}
     })

@@ -33,7 +33,9 @@ const DEVICE_NAME_KEY: &[u8] = b"_device_name";
 
 /// Get the persisted device name.
 pub fn get_device_name(store: &Db) -> String {
-    store.kv.get(crate::db::trees::Tree::PluginMeta, DEVICE_NAME_KEY)
+    store
+        .kv
+        .get(crate::db::trees::Tree::PluginMeta, DEVICE_NAME_KEY)
         .ok()
         .flatten()
         .and_then(|b| String::from_utf8(b).ok())
@@ -52,7 +54,10 @@ pub fn set_device_name(store: &Db, name: &str) {
 /// Load or generate a persistent Iroh secret key.
 /// Stored in the DB so the NodeID survives app restarts.
 fn load_or_create_secret_key(store: &Db) -> iroh::SecretKey {
-    if let Ok(Some(bytes)) = store.kv.get(crate::db::trees::Tree::PluginMeta, IROH_SECRET_KEY) {
+    if let Ok(Some(bytes)) = store
+        .kv
+        .get(crate::db::trees::Tree::PluginMeta, IROH_SECRET_KEY)
+    {
         if bytes.len() == 32 {
             let mut arr = [0u8; 32];
             arr.copy_from_slice(&bytes);
@@ -89,10 +94,8 @@ pub async fn start(store: Db) -> anyhow::Result<(NodeId, Router)> {
     // Wait for relay connection so discovery_n0 can find us
     let relay = endpoint.home_relay();
     tracing::info!("Iroh NodeID: {node_id}, waiting for relay...");
-    let relay_url = tokio::time::timeout(
-        std::time::Duration::from_secs(10),
-        wait_for_relay(relay),
-    ).await;
+    let relay_url =
+        tokio::time::timeout(std::time::Duration::from_secs(10), wait_for_relay(relay)).await;
     match relay_url {
         Ok(Some(url)) => tracing::info!("Iroh relay connected: {url}"),
         Ok(None) => tracing::warn!("Iroh relay: none (direct connections only)"),
@@ -134,8 +137,12 @@ pub async fn start(store: Db) -> anyhow::Result<(NodeId, Router)> {
 
             let mut all_connected = true;
             for peer in &peers {
-                if peer.node_id == my_id { continue; }
-                if live_peer_ids().contains(&peer.node_id) { continue; }
+                if peer.node_id == my_id {
+                    continue;
+                }
+                if live_peer_ids().contains(&peer.node_id) {
+                    continue;
+                }
 
                 // Only the device with the smaller NodeID initiates.
                 // The other device waits for the incoming connection.
@@ -145,10 +152,15 @@ pub async fn start(store: Db) -> anyhow::Result<(NodeId, Router)> {
                 }
 
                 all_connected = false;
-                tracing::info!("[auto_connect] connecting to {}", &peer.node_id[..peer.node_id.len().min(12)]);
+                tracing::info!(
+                    "[auto_connect] connecting to {}",
+                    &peer.node_id[..peer.node_id.len().min(12)]
+                );
                 match sync_drive_with_peer(&peer.node_id, &drive, &auto_store).await {
                     Ok(count) => {
-                        tracing::info!("[auto_connect] synced {count} resources, live connection established");
+                        tracing::info!(
+                            "[auto_connect] synced {count} resources, live connection established"
+                        );
                     }
                     Err(e) => {
                         tracing::debug!("[auto_connect] failed: {e}");
@@ -241,8 +253,8 @@ static ROUTER: OnceLock<Router> = OnceLock::new();
 
 // ── Live sync (persistent connections) ──────────────────────────────────
 
-use std::sync::Mutex;
 use std::collections::HashMap;
+use std::sync::Mutex;
 
 /// Active outgoing send streams keyed by peer NodeID.
 /// Used to push UPDATE frames to connected peers.
@@ -283,11 +295,15 @@ fn start_live_sync(store: Db) {
     // Initialize globals
     {
         let mut map = LIVE_PEERS.lock().unwrap();
-        if map.is_none() { *map = Some(HashMap::new()); }
+        if map.is_none() {
+            *map = Some(HashMap::new());
+        }
     }
     {
         let mut conns = LIVE_CONNECTIONS.lock().unwrap();
-        if conns.is_none() { *conns = Some(Vec::new()); }
+        if conns.is_none() {
+            *conns = Some(Vec::new());
+        }
     }
 
     // Spawn the push loop: watches db_events, pushes deltas/destroys to live peers
@@ -306,10 +322,15 @@ fn start_live_sync(store: Db) {
                 }
             };
 
-            if IMPORTING.load(std::sync::atomic::Ordering::Relaxed) { continue; }
+            if IMPORTING.load(std::sync::atomic::Ordering::Relaxed) {
+                continue;
+            }
 
             let msg = match &event {
-                crate::DbEvent::Changed { subject, delta: Some(delta) } if !delta.is_empty() => {
+                crate::DbEvent::Changed {
+                    subject,
+                    delta: Some(delta),
+                } if !delta.is_empty() => {
                     let frame = super::protocol::encode_update(0, 0, subject.as_str(), None, delta);
                     let len = frame.len() as u32;
                     let mut msg = Vec::with_capacity(4 + frame.len());
@@ -334,10 +355,16 @@ fn start_live_sync(store: Db) {
                     match tx.try_send(msg.clone()) {
                         Ok(_) => {}
                         Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
-                            tracing::warn!("[live_sync] buffer full for {}", &peer_id[..peer_id.len().min(12)]);
+                            tracing::warn!(
+                                "[live_sync] buffer full for {}",
+                                &peer_id[..peer_id.len().min(12)]
+                            );
                         }
                         Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
-                            tracing::warn!("[live_sync] closed for {}", &peer_id[..peer_id.len().min(12)]);
+                            tracing::warn!(
+                                "[live_sync] closed for {}",
+                                &peer_id[..peer_id.len().min(12)]
+                            );
                         }
                     }
                 }
@@ -363,7 +390,10 @@ fn register_live_peer(
         let mut map = LIVE_PEERS.lock().unwrap();
         if let Some(m) = map.as_mut() {
             if m.contains_key(&peer_id) {
-                tracing::info!("[live] replacing existing connection to {}", &peer_id[..peer_id.len().min(12)]);
+                tracing::info!(
+                    "[live] replacing existing connection to {}",
+                    &peer_id[..peer_id.len().min(12)]
+                );
             }
             m.insert(peer_id.clone(), tx);
         }
@@ -376,33 +406,56 @@ fn register_live_peer(
     // Write loop: sends queued UPDATE frames to the peer
     let write_peer_id = peer_id.clone();
     tokio::spawn(async move {
-        tracing::info!("[live] write loop started for {}", &write_peer_id[..write_peer_id.len().min(12)]);
+        tracing::info!(
+            "[live] write loop started for {}",
+            &write_peer_id[..write_peer_id.len().min(12)]
+        );
         while let Some(msg) = rx.recv().await {
             match send.write_all(&msg).await {
                 Ok(_) => {
-                    tracing::trace!("[live] wrote {} bytes to {}", msg.len(), &write_peer_id[..write_peer_id.len().min(12)]);
+                    tracing::trace!(
+                        "[live] wrote {} bytes to {}",
+                        msg.len(),
+                        &write_peer_id[..write_peer_id.len().min(12)]
+                    );
                 }
                 Err(e) => {
-                    tracing::warn!("[live] write failed to {}: {e}", &write_peer_id[..write_peer_id.len().min(12)]);
+                    tracing::warn!(
+                        "[live] write failed to {}: {e}",
+                        &write_peer_id[..write_peer_id.len().min(12)]
+                    );
                     break;
                 }
             }
         }
-        tracing::info!("[live] write loop ended for {}", &write_peer_id[..write_peer_id.len().min(12)]);
+        tracing::info!(
+            "[live] write loop ended for {}",
+            &write_peer_id[..write_peer_id.len().min(12)]
+        );
     });
 
     // Read loop: receives UPDATE frames from the peer, imports them
     let read_peer_id = peer_id.clone();
     tokio::spawn(async move {
-        tracing::info!("[live] read loop started for {}", &read_peer_id[..read_peer_id.len().min(12)]);
+        tracing::info!(
+            "[live] read loop started for {}",
+            &read_peer_id[..read_peer_id.len().min(12)]
+        );
         loop {
             let len = match recv.read_u32().await {
                 Ok(n) => {
-                    tracing::trace!("[live] received frame {} bytes from {}", n, &read_peer_id[..read_peer_id.len().min(12)]);
+                    tracing::trace!(
+                        "[live] received frame {} bytes from {}",
+                        n,
+                        &read_peer_id[..read_peer_id.len().min(12)]
+                    );
                     n as usize
                 }
                 Err(e) => {
-                    tracing::info!("[live] read error from {}: {e}", &read_peer_id[..read_peer_id.len().min(12)]);
+                    tracing::info!(
+                        "[live] read error from {}: {e}",
+                        &read_peer_id[..read_peer_id.len().min(12)]
+                    );
                     break;
                 }
             };
@@ -422,12 +475,17 @@ fn register_live_peer(
             // Handle DESTROY frames
             if buf[0] == super::protocol::tag::DESTROY {
                 if buf.len() > 3 {
-                    let subject = std::str::from_utf8(&buf[3..]).unwrap_or_default().to_string();
+                    let subject = std::str::from_utf8(&buf[3..])
+                        .unwrap_or_default()
+                        .to_string();
                     if !subject.is_empty() {
                         IMPORTING.store(true, std::sync::atomic::Ordering::Relaxed);
-                        let subj = crate::Subject::from_raw(&subject, store.get_base_domain().as_deref());
+                        let subj =
+                            crate::Subject::from_raw(&subject, store.get_base_domain().as_deref());
                         let _ = store.remove_resource(&subj).await;
-                        let _ = store.kv.remove(crate::db::trees::Tree::LoroSnapshots, subject.as_bytes());
+                        let _ = store
+                            .kv
+                            .remove(crate::db::trees::Tree::LoroSnapshots, subject.as_bytes());
                         IMPORTING.store(false, std::sync::atomic::Ordering::Relaxed);
                         tracing::info!("[live] deleted {}", &subject[..subject.len().min(20)]);
                     }
@@ -456,20 +514,26 @@ fn register_live_peer(
                     IMPORTING.store(true, std::sync::atomic::Ordering::Relaxed);
 
                     // Import into local store
-                    let doc = if let Ok(Some(existing)) = store.kv.get(
-                        crate::db::trees::Tree::LoroSnapshots,
-                        subject.as_bytes(),
-                    ) {
+                    let doc = if let Ok(Some(existing)) = store
+                        .kv
+                        .get(crate::db::trees::Tree::LoroSnapshots, subject.as_bytes())
+                    {
                         match crate::loro::AtomicLoroDoc::from_snapshot(&existing) {
                             Ok(d) => {
                                 if let Err(e) = d.import_update(loro_bytes) {
-                                    tracing::warn!("[live] import_update failed for {}: {e}", &subject[..subject.len().min(20)]);
+                                    tracing::warn!(
+                                        "[live] import_update failed for {}: {e}",
+                                        &subject[..subject.len().min(20)]
+                                    );
                                 }
                                 d
                             }
                             Err(_) => match crate::loro::AtomicLoroDoc::from_snapshot(loro_bytes) {
                                 Ok(d) => d,
-                                Err(_) => { IMPORTING.store(false, std::sync::atomic::Ordering::Relaxed); continue; }
+                                Err(_) => {
+                                    IMPORTING.store(false, std::sync::atomic::Ordering::Relaxed);
+                                    continue;
+                                }
                             },
                         }
                     } else {
@@ -493,7 +557,8 @@ fn register_live_peer(
                         &snapshot,
                     );
 
-                    let subj = crate::Subject::from_raw(&subject, store.get_base_domain().as_deref());
+                    let subj =
+                        crate::Subject::from_raw(&subject, store.get_base_domain().as_deref());
                     let mut resource = store
                         .get_resource(&subj)
                         .await
@@ -504,7 +569,11 @@ fn register_live_peer(
                     }
 
                     IMPORTING.store(false, std::sync::atomic::Ordering::Relaxed);
-                    tracing::trace!("[live] imported update for {} from {}", &subject[..subject.len().min(20)], &read_peer_id[..read_peer_id.len().min(12)]);
+                    tracing::trace!(
+                        "[live] imported update for {} from {}",
+                        &subject[..subject.len().min(20)],
+                        &read_peer_id[..read_peer_id.len().min(12)]
+                    );
                 }
                 continue;
             }
@@ -537,7 +606,10 @@ fn register_live_peer(
                 m.remove(&read_peer_id);
             }
         }
-        tracing::info!("[live] peer {} disconnected", &read_peer_id[..read_peer_id.len().min(12)]);
+        tracing::info!(
+            "[live] peer {} disconnected",
+            &read_peer_id[..read_peer_id.len().min(12)]
+        );
         push_event(&read_peer_id, 0, "disconnected");
     });
 }
@@ -556,7 +628,9 @@ pub struct SyncEvent {
 }
 
 #[allow(dead_code)] // Used via #[serde(default = "...")] attribute above
-fn default_event_kind() -> String { "sync".into() }
+fn default_event_kind() -> String {
+    "sync".into()
+}
 
 static SYNC_EVENT_TX: OnceLock<tokio::sync::broadcast::Sender<SyncEvent>> = OnceLock::new();
 
@@ -609,12 +683,16 @@ pub async fn wait_for_peer_count_change(current: usize) -> usize {
     loop {
         // Check immediately
         let count = live_peer_count();
-        if count != current { return count; }
+        if count != current {
+            return count;
+        }
         // Wait for any event (connect/disconnect changes count)
         match tokio::time::timeout(std::time::Duration::from_secs(5), rx.recv()).await {
             Ok(Ok(_)) => {
                 let count = live_peer_count();
-                if count != current { return count; }
+                if count != current {
+                    return count;
+                }
             }
             Ok(Err(tokio::sync::broadcast::error::RecvError::Lagged(_))) => continue,
             Ok(Err(_)) => {
@@ -646,7 +724,6 @@ pub async fn sync_drive_with_peer_using(
     drive: &str,
     store: &Db,
 ) -> crate::errors::AtomicResult<usize> {
-
     let node_id: NodeId = remote_node_id
         .parse()
         .map_err(|e| format!("Invalid NodeID '{remote_node_id}': {e}"))?;
@@ -661,30 +738,29 @@ pub async fn sync_drive_with_peer_using(
         &drive[..drive.len().min(20)],
     );
 
-    let conn = endpoint
-        .connect(node_id, ATOMIC_ALPN)
-        .await
-        .map_err(|e| {
-            tracing::error!("[sync] connect failed to {}: {e}", &node_id.to_string()[..16]);
-            format!("Iroh connect to {} failed: {e}", &node_id.to_string()[..16])
-        })?;
+    let conn = endpoint.connect(node_id, ATOMIC_ALPN).await.map_err(|e| {
+        tracing::error!(
+            "[sync] connect failed to {}: {e}",
+            &node_id.to_string()[..16]
+        );
+        format!("Iroh connect to {} failed: {e}", &node_id.to_string()[..16])
+    })?;
 
     tracing::info!("[sync] connected! Opening bi stream...");
 
-    let (mut send, mut recv) = conn
-        .open_bi()
-        .await
-        .map_err(|e| {
-            tracing::error!("[sync] open_bi failed: {e}");
-            format!("Iroh open_bi failed: {e}")
-        })?;
+    let (mut send, mut recv) = conn.open_bi().await.map_err(|e| {
+        tracing::error!("[sync] open_bi failed: {e}");
+        format!("Iroh open_bi failed: {e}")
+    })?;
 
     tracing::info!("[sync] bi stream open, sending AUTH...");
 
     // Authenticate: send AUTH frame so the server knows who we are
     let agent = store.get_default_agent()?;
     let auth_frame = super::protocol::encode_auth(&agent, drive)?;
-    send.write_u32(auth_frame.len() as u32).await.map_err(io_err)?;
+    send.write_u32(auth_frame.len() as u32)
+        .await
+        .map_err(io_err)?;
     send.write_all(&auth_frame).await.map_err(io_err)?;
 
     // Read AUTH_OK or ERROR
@@ -705,8 +781,7 @@ pub async fn sync_drive_with_peer_using(
     tracing::info!("Authenticated with peer");
 
     // Build our local sync state
-    let drive_subject =
-        crate::Subject::from_raw(drive, store.get_base_domain().as_deref());
+    let drive_subject = crate::Subject::from_raw(drive, store.get_base_domain().as_deref());
     let drive_subjects = super::engine::collect_drive_subjects(store, &drive_subject);
     let vvs = super::engine::build_drive_vvs(store, &drive_subjects);
     let drive_hash = super::engine::compute_drive_hash(&vvs);
@@ -739,7 +814,9 @@ pub async fn sync_drive_with_peer_using(
 
     // Send SYNC frame
     let sync_frame = super::protocol::encode_sync(drive, &drive_hash, &peers, &resources);
-    send.write_u32(sync_frame.len() as u32).await.map_err(io_err)?;
+    send.write_u32(sync_frame.len() as u32)
+        .await
+        .map_err(io_err)?;
     send.write_all(&sync_frame).await.map_err(io_err)?;
 
     // Read response frames
@@ -796,8 +873,7 @@ pub async fn sync_drive_with_peer_using(
                             if !entries.is_empty() {
                                 let refs: Vec<(&str, &[u8])> =
                                     entries.iter().map(|(s, b)| (*s, b.as_slice())).collect();
-                                for chunk in
-                                    super::protocol::encode_sync_push_chunks(drive, &refs)
+                                for chunk in super::protocol::encode_sync_push_chunks(drive, &refs)
                                 {
                                     send.write_u32(chunk.len() as u32).await.map_err(io_err)?;
                                     send.write_all(&chunk).await.map_err(io_err)?;
@@ -814,12 +890,19 @@ pub async fn sync_drive_with_peer_using(
                 let mut last_chunk = false;
                 if let Some(push) = super::protocol::decode_sync_push(payload) {
                     last_chunk = push.last;
-                    let (count, blob_requests) = super::engine::import_sync_push(&push, store, &crate::agents::ForAgent::Sudo).await;
+                    let (count, blob_requests) = super::engine::import_sync_push(
+                        &push,
+                        store,
+                        &crate::agents::ForAgent::Sudo,
+                    )
+                    .await;
                     total_imported += count;
 
                     // Send blob requests if any
                     for req_frame in blob_requests {
-                        send.write_u32(req_frame.len() as u32).await.map_err(io_err)?;
+                        send.write_u32(req_frame.len() as u32)
+                            .await
+                            .map_err(io_err)?;
                         send.write_all(&req_frame).await.map_err(io_err)?;
                     }
                 }
@@ -861,15 +944,22 @@ pub async fn sync_drive_with_peer_using(
         }
     }
 
-    tracing::info!("sync_drive_with_peer: imported {total_imported} resources from {remote_node_id}");
+    tracing::info!(
+        "sync_drive_with_peer: imported {total_imported} resources from {remote_node_id}"
+    );
 
     // Transition to live mode: reuse the same bi stream for real-time updates.
     // Don't close it — the server's handle_stream will also transition after
     // the sync exchange completes.
-    tracing::info!("[live] transitioning to live mode with {}", &remote_node_id[..remote_node_id.len().min(12)]);
+    tracing::info!(
+        "[live] transitioning to live mode with {}",
+        &remote_node_id[..remote_node_id.len().min(12)]
+    );
     {
         let mut conns = LIVE_CONNECTIONS.lock().unwrap();
-        if let Some(v) = conns.as_mut() { v.push(conn); }
+        if let Some(v) = conns.as_mut() {
+            v.push(conn);
+        }
     }
     register_live_peer(remote_node_id.to_string(), send, recv, store.clone());
 
@@ -889,7 +979,10 @@ pub struct KnownPeer {
 
 /// Get all known peers from the DB.
 pub fn get_known_peers(store: &Db) -> Vec<KnownPeer> {
-    if let Ok(Some(bytes)) = store.kv.get(crate::db::trees::Tree::PluginMeta, KNOWN_PEERS_KEY) {
+    if let Ok(Some(bytes)) = store
+        .kv
+        .get(crate::db::trees::Tree::PluginMeta, KNOWN_PEERS_KEY)
+    {
         serde_json::from_slice(&bytes).unwrap_or_default()
     } else {
         vec![]
@@ -977,7 +1070,9 @@ async fn handle_stream(
         // Check if the client sent us a SYNC_PUSH (bidirectional data exchange complete)
         let client_pushed = !buf.is_empty() && buf[0] == super::protocol::tag::SYNC_PUSH;
         // Check if we responded with SYNC_OK (fast path — already in sync)
-        let sync_ok = responses.iter().any(|r| !r.is_empty() && r[0] == super::protocol::tag::SYNC_OK);
+        let sync_ok = responses
+            .iter()
+            .any(|r| !r.is_empty() && r[0] == super::protocol::tag::SYNC_OK);
 
         for response in responses {
             send.write_u32(response.len() as u32).await?;
@@ -988,7 +1083,10 @@ async fn handle_stream(
         // - SYNC_OK: no data to exchange, we're done
         // - Client's SYNC_PUSH: bidirectional exchange complete
         if sync_ok || client_pushed {
-            tracing::info!("[accept] sync complete, transitioning to live mode with {}", &remote_id[..remote_id.len().min(12)]);
+            tracing::info!(
+                "[accept] sync complete, transitioning to live mode with {}",
+                &remote_id[..remote_id.len().min(12)]
+            );
             register_live_peer(remote_id, send, recv, store);
             return Ok(total_imported);
         }

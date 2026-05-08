@@ -126,7 +126,10 @@ impl std::fmt::Debug for Commit {
             .field("signer", &self.signer)
             .field(
                 "loro_update",
-                &self.loro_update.as_ref().map(|v| format!("<{} bytes>", v.len())),
+                &self
+                    .loro_update
+                    .as_ref()
+                    .map(|v| format!("<{} bytes>", v.len())),
             )
             .field("destroy", &self.destroy)
             .field("signature", &self.signature)
@@ -274,7 +277,11 @@ impl Commit {
                 return Err(format!("Signer {} not found in store", commit.signer).into());
             }
         } else {
-            return Err(format!("Signer {} not found and cannot extract public key", commit.signer).into());
+            return Err(format!(
+                "Signer {} not found and cannot extract public key",
+                commit.signer
+            )
+            .into());
         };
         let agent_pubkey = decode_base64(&pubkey_b64)?;
         let stringified_commit = commit.serialize_deterministically_json_ad(store).await?;
@@ -382,8 +389,8 @@ impl Commit {
         let (resource_old, is_new) = match store.get_resource(&commit.subject.clone().into()).await
         {
             Ok(rs) => {
-                let is_synthetic_agent = commit.subject.is_agent_did()
-                    && rs.get(urls::LAST_COMMIT).is_err();
+                let is_synthetic_agent =
+                    commit.subject.is_agent_did() && rs.get(urls::LAST_COMMIT).is_err();
                 if is_synthetic_agent {
                     // Treat synthetic fallback agents as non-existent so genesis
                     // commits work and the Loro doc is built from scratch.
@@ -942,17 +949,16 @@ impl CommitBuilder {
         // seeded-from-propvals doc; LWW tie-breaks by peer-id and often
         // silently drops the incoming writes — the exact symptom seen in
         // `test_did_agent_edit` where an agent name edit didn't persist.
-        let existing_snapshot: Option<Vec<u8>> =
-            match resource.get(urls::LORO_UPDATE) {
-                Ok(Value::LoroDoc(snapshot)) => Some(snapshot.clone()),
-                _ => resource.export_loro_snapshot().or_else(|| {
-                    // Fall back to seeding a doc from propvals.
-                    resource
-                        .build_loro_doc_from_state()
-                        .ok()
-                        .map(|doc| doc.export_snapshot())
-                }),
-            };
+        let existing_snapshot: Option<Vec<u8>> = match resource.get(urls::LORO_UPDATE) {
+            Ok(Value::LoroDoc(snapshot)) => Some(snapshot.clone()),
+            _ => resource.export_loro_snapshot().or_else(|| {
+                // Fall back to seeding a doc from propvals.
+                resource
+                    .build_loro_doc_from_state()
+                    .ok()
+                    .map(|doc| doc.export_snapshot())
+            }),
+        };
 
         let now = crate::utils::now();
         sign_at(self, agent, now, store, existing_snapshot.as_deref()).await
@@ -1485,10 +1491,7 @@ mod test {
             .set_property(urls::PUBLIC_KEY, &Value::String(agent.public_key.clone()))
             .unwrap();
         loro_doc
-            .set_property(
-                urls::IS_A,
-                &Value::ResourceArray(vec![urls::AGENT.into()]),
-            )
+            .set_property(urls::IS_A, &Value::ResourceArray(vec![urls::AGENT.into()]))
             .unwrap();
         let genesis_snapshot = loro_doc.export_snapshot();
         let genesis_version = loro_doc.oplog_vv();
@@ -1511,7 +1514,10 @@ mod test {
 
         let result = store.apply_commit(genesis, &opts).await.unwrap();
         let genesis_commit_url = result.commit_resource.get_subject().to_string();
-        assert!(result.resource_new.is_some(), "genesis should produce resource_new");
+        assert!(
+            result.resource_new.is_some(),
+            "genesis should produce resource_new"
+        );
 
         // Verify the stored resource has a loroUpdate
         let stored = store.get_resource(&agent_subject).await.unwrap();
@@ -1526,7 +1532,9 @@ mod test {
 
         // Now create a follow-up commit that adds properties (mimics persistAgentAfterInvite)
         let loro_doc2 = crate::loro::AtomicLoroDoc::new();
-        loro_doc2.import_update(&loro_doc.export_snapshot()).unwrap();
+        loro_doc2
+            .import_update(&loro_doc.export_snapshot())
+            .unwrap();
         loro_doc2
             .set_property(urls::NAME, &Value::String("Test Agent".into()))
             .unwrap();
@@ -1590,7 +1598,9 @@ mod test {
 
         let client_doc =
             crate::loro::AtomicLoroDoc::from_snapshot(&base_doc.export_snapshot()).unwrap();
-        client_doc.remove_property(crate::urls::DESCRIPTION).unwrap();
+        client_doc
+            .remove_property(crate::urls::DESCRIPTION)
+            .unwrap();
         client_doc
             .set_property(crate::urls::NAME, &Value::String("After delete".into()))
             .unwrap();
@@ -1602,7 +1612,10 @@ mod test {
         let applied = commit.apply_changes(existing).await.unwrap();
         let updated = applied.resource_new;
 
-        assert_eq!(updated.get(crate::urls::NAME).unwrap().to_string(), "After delete");
+        assert_eq!(
+            updated.get(crate::urls::NAME).unwrap().to_string(),
+            "After delete"
+        );
         assert!(
             updated.get(crate::urls::DESCRIPTION).is_err(),
             "deleted properties should be removed from materialized propvals"
@@ -1678,13 +1691,13 @@ mod test {
             .await
             .unwrap();
 
-        store
-            .apply_commit(update, &opts_with_rights)
-            .await
-            .unwrap();
+        store.apply_commit(update, &opts_with_rights).await.unwrap();
 
         let updated = store.get_resource(&did_subject).await.unwrap();
-        assert_eq!(updated.get(crate::urls::PARENT).unwrap().to_string(), drive_subject);
+        assert_eq!(
+            updated.get(crate::urls::PARENT).unwrap().to_string(),
+            drive_subject
+        );
         assert_eq!(
             updated.get(crate::urls::DESCRIPTION).unwrap().to_string(),
             "Second version"
@@ -1801,16 +1814,10 @@ mod test {
             )
             .unwrap();
         client_doc
-            .set_property(
-                crate::urls::SHORTNAME,
-                &Value::String("n".into()),
-            )
+            .set_property(crate::urls::SHORTNAME, &Value::String("n".into()))
             .unwrap();
         client_doc
-            .set_property(
-                crate::urls::DESCRIPTION,
-                &Value::String("desc".into()),
-            )
+            .set_property(crate::urls::DESCRIPTION, &Value::String("desc".into()))
             .unwrap();
 
         let empty = Resource::new(subject.into());
@@ -1862,16 +1869,10 @@ mod test {
             &Value::ResourceArray(vec![crate::urls::CLASS.to_string().into()]),
         )
         .unwrap();
-        doc1.set_property(
-            crate::urls::SHORTNAME,
-            &Value::String("n".into()),
-        )
-        .unwrap();
-        doc1.set_property(
-            crate::urls::DESCRIPTION,
-            &Value::String("desc".into()),
-        )
-        .unwrap();
+        doc1.set_property(crate::urls::SHORTNAME, &Value::String("n".into()))
+            .unwrap();
+        doc1.set_property(crate::urls::DESCRIPTION, &Value::String("desc".into()))
+            .unwrap();
 
         let empty = Resource::new(subject.into());
         let mut builder = CommitBuilder::new(subject.into());
@@ -1880,10 +1881,7 @@ mod test {
         store.apply_commit(commit1, &OPTS).await.unwrap();
 
         let after_first = store.get_resource(&subject.into()).await.unwrap();
-        assert_eq!(
-            after_first.get(crate::urls::NAME).unwrap().to_string(),
-            "N"
-        );
+        assert_eq!(after_first.get(crate::urls::NAME).unwrap().to_string(), "N");
 
         // Commit 2: client rebuilds Loro doc from the server's stored state,
         // then mutates. This models "fresh doc per commit" client behaviour.
@@ -1933,16 +1931,10 @@ mod test {
             )
             .unwrap();
         doc_a
-            .set_property(
-                crate::urls::SHORTNAME,
-                &Value::String("a".into()),
-            )
+            .set_property(crate::urls::SHORTNAME, &Value::String("a".into()))
             .unwrap();
         doc_a
-            .set_property(
-                crate::urls::DESCRIPTION,
-                &Value::String("desc".into()),
-            )
+            .set_property(crate::urls::DESCRIPTION, &Value::String("desc".into()))
             .unwrap();
 
         let empty = Resource::new(subject.into());
@@ -1965,16 +1957,10 @@ mod test {
             )
             .unwrap();
         doc_b
-            .set_property(
-                crate::urls::SHORTNAME,
-                &Value::String("b".into()),
-            )
+            .set_property(crate::urls::SHORTNAME, &Value::String("b".into()))
             .unwrap();
         doc_b
-            .set_property(
-                crate::urls::DESCRIPTION,
-                &Value::String("desc".into()),
-            )
+            .set_property(crate::urls::DESCRIPTION, &Value::String("desc".into()))
             .unwrap();
 
         let after_first = store.get_resource(&subject.into()).await.unwrap();

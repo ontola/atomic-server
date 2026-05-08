@@ -78,10 +78,7 @@ pub async fn handle_download(
 
 /// Look up a blob by its hex-encoded BLAKE3 hash. Returns `None` if the input
 /// is not a 64-char hex string or no blob is stored under that hash.
-fn blob_by_hash_hex(
-    hash_hex: &str,
-    appstate: &AppState,
-) -> AtomicServerResult<Option<Vec<u8>>> {
+fn blob_by_hash_hex(hash_hex: &str, appstate: &AppState) -> AtomicServerResult<Option<Vec<u8>>> {
     if hash_hex.len() != 64 {
         return Ok(None);
     }

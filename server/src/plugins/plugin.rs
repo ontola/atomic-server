@@ -186,7 +186,10 @@ async fn do_install_plugin(
                 info!("Reading plugin from local file (legacy): {:?}", file_path);
                 return Err(AtomicError::from(format!(
                     "Failed to read plugin file locally: {}",
-                    std::fs::read(&file_path).err().map(|e| e.to_string()).unwrap_or_default()
+                    std::fs::read(&file_path)
+                        .err()
+                        .map(|e| e.to_string())
+                        .unwrap_or_default()
                 )));
             }
         };
@@ -196,10 +199,7 @@ async fn do_install_plugin(
             .get(atomic_lib::db::trees::Tree::Blobs, &hash_bytes)
         {
             Ok(Some(bytes)) => {
-                info!(
-                    "Reading plugin from kv blob store ({} bytes)",
-                    bytes.len()
-                );
+                info!("Reading plugin from kv blob store ({} bytes)", bytes.len());
                 bytes
             }
             Ok(None) => {

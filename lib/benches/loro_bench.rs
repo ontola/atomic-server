@@ -96,19 +96,15 @@ fn bench_delete_list_item(c: &mut Criterion) {
     let mut group = c.benchmark_group("delete_list_item");
 
     for &n in &[10, 50, 200] {
-        group.bench_with_input(
-            BenchmarkId::new("delete_middle", n),
-            &n,
-            |b, &n| {
-                b.iter_batched(
-                    || make_resource_with_strokes(n),
-                    |mut r| {
-                        r.delete_list_item(STROKE_PROP, n / 2).unwrap();
-                    },
-                    criterion::BatchSize::SmallInput,
-                );
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("delete_middle", n), &n, |b, &n| {
+            b.iter_batched(
+                || make_resource_with_strokes(n),
+                |mut r| {
+                    r.delete_list_item(STROKE_PROP, n / 2).unwrap();
+                },
+                criterion::BatchSize::SmallInput,
+            );
+        });
     }
 
     group.finish();
@@ -118,19 +114,16 @@ fn bench_insert_list_item(c: &mut Criterion) {
     let mut group = c.benchmark_group("insert_list_item");
 
     for &n in &[10, 50, 200] {
-        group.bench_with_input(
-            BenchmarkId::new("insert_middle", n),
-            &n,
-            |b, &n| {
-                b.iter_batched(
-                    || make_resource_with_strokes(n),
-                    |mut r| {
-                        r.insert_list_item(STROKE_PROP, n / 2, sample_stroke(9999)).unwrap();
-                    },
-                    criterion::BatchSize::SmallInput,
-                );
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("insert_middle", n), &n, |b, &n| {
+            b.iter_batched(
+                || make_resource_with_strokes(n),
+                |mut r| {
+                    r.insert_list_item(STROKE_PROP, n / 2, sample_stroke(9999))
+                        .unwrap();
+                },
+                criterion::BatchSize::SmallInput,
+            );
+        });
     }
 
     group.finish();
@@ -209,15 +202,11 @@ fn bench_view_at(c: &mut Criterion) {
         r.init_loro().unwrap();
         let version = r.get_current_version().unwrap();
 
-        group.bench_with_input(
-            BenchmarkId::new("view_at", n),
-            &version,
-            |b, v| {
-                b.iter(|| {
-                    r.view_at(v).unwrap();
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("view_at", n), &version, |b, v| {
+            b.iter(|| {
+                r.view_at(v).unwrap();
+            });
+        });
     }
 
     group.finish();

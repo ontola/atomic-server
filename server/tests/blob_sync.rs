@@ -8,10 +8,7 @@
 //! Run with: cargo test -p atomic-server --test blob_sync
 
 use atomic_lib::{
-    client::{
-        connected::Client,
-        ws::WsClient,
-    },
+    client::{connected::Client, ws::WsClient},
     errors::AtomicResult,
 };
 use std::time::Duration;
@@ -120,7 +117,9 @@ async fn ws_blob_roundtrip() -> AtomicResult<()> {
     // Alice creates a public drive and uploads a file via HTTP.
     let client_a = Client::new(&server_url).await?;
     let agent_a = client_a.new_agent("Alice").await?;
-    let drive = client_a.new_public_drive(&agent_a, "Blob Test Drive").await?;
+    let drive = client_a
+        .new_public_drive(&agent_a, "Blob Test Drive")
+        .await?;
 
     let file_bytes = b"hello blob world, this is a test payload".to_vec();
     let hash = blake3::hash(&file_bytes);

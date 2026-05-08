@@ -22,9 +22,9 @@ pub mod plugins;
 pub mod routes;
 pub mod serve;
 // #[cfg(feature = "search")]
+pub mod iroh_transport;
 mod search;
 #[cfg(test)]
 mod tests;
 mod trace;
-pub mod iroh_transport;
 // Force rebuild for blake3

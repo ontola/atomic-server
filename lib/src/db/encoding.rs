@@ -74,9 +74,7 @@ impl super::query_index::QueryFilter {
             return Err("QueryFilter bytes too short to contain drive length".into());
         }
         let drive_len = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as usize;
-        let end_drive = 4usize
-            .checked_add(drive_len)
-            .ok_or("drive_len overflow")?;
+        let end_drive = 4usize.checked_add(drive_len).ok_or("drive_len overflow")?;
         if bytes.len() < end_drive {
             return Err("QueryFilter bytes truncated before drive_bytes".into());
         }

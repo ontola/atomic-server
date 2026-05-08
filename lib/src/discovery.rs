@@ -41,7 +41,11 @@ pub async fn publish_node_id(drive_did: &str, iroh_node_id: &str) -> AtomicResul
         .map_err(|e| format!("Failed to serialize NodeID list: {e}"))?;
 
     let packet = pkarr::SignedPacket::builder()
-        .txt("_atomic_nodes".try_into().unwrap(), value.as_str().try_into().unwrap(), 300)
+        .txt(
+            "_atomic_nodes".try_into().unwrap(),
+            value.as_str().try_into().unwrap(),
+            300,
+        )
         .build(&keypair)
         .map_err(|e| format!("Failed to build signed packet: {e}"))?;
 
@@ -155,10 +159,9 @@ fn drive_did_to_pkarr_keypair(drive_did: &str) -> AtomicResult<pkarr::Keypair> {
     // lengths and semantics. Reject early rather than silently producing a
     // meaningless keypair.
     if raw.starts_with("agent:") || raw.starts_with("commit:") {
-        return Err(format!(
-            "drive_did_to_pkarr_keypair called with non-drive DID: {drive_did}"
-        )
-        .into());
+        return Err(
+            format!("drive_did_to_pkarr_keypair called with non-drive DID: {drive_did}").into(),
+        );
     }
     let genesis_b64 = raw.split('?').next().unwrap_or(raw);
     let sig = crate::agents::decode_base64(genesis_b64)
@@ -179,8 +182,12 @@ fn drive_did_to_pkarr_keypair(drive_did: &str) -> AtomicResult<pkarr::Keypair> {
 fn build_client() -> AtomicResult<pkarr::Client> {
     let mut builder = pkarr::Client::builder();
     builder.no_default_network();
-    builder.relays(&[RELAY_URL]).map_err(|e| format!("Invalid relay URL: {e}"))?;
-    let client = builder.build().map_err(|e| format!("Failed to build pkarr client: {e}"))?;
+    builder
+        .relays(&[RELAY_URL])
+        .map_err(|e| format!("Invalid relay URL: {e}"))?;
+    let client = builder
+        .build()
+        .map_err(|e| format!("Failed to build pkarr client: {e}"))?;
     Ok(client)
 }
 

@@ -6,13 +6,13 @@ use crate::{appstate::AppState, config::Opts};
 
 use super::*;
 use actix_web::{
-    App,
     body::MessageBody,
     dev::ServiceResponse,
     test::{self, TestRequest},
     web::Data,
+    App,
 };
-use atomic_lib::{Storelike, urls};
+use atomic_lib::{urls, Storelike};
 use base64::Engine;
 
 /// Returns the request with signed headers. Also adds a json-ad accept header - overwrite this if you need something else.
@@ -321,7 +321,7 @@ async fn server_tests() {
 
 #[actix_rt::test]
 async fn test_did_agent_edit() {
-    use atomic_lib::{Resource, Value, agents::Agent, commit::CommitBuilder, urls};
+    use atomic_lib::{agents::Agent, commit::CommitBuilder, urls, Resource, Value};
     let unique_string = atomic_lib::utils::random_string(10);
     use clap::Parser;
     let opts = Opts::parse_from([
@@ -472,7 +472,10 @@ async fn self_signed_agent_commit_keeps_name() {
         urls::IS_A.into(),
         atomic_lib::Value::ResourceArray(vec![urls::AGENT.to_string().into()]),
     );
-    builder.set(urls::NAME.into(), atomic_lib::Value::String("Test User".into()));
+    builder.set(
+        urls::NAME.into(),
+        atomic_lib::Value::String("Test User".into()),
+    );
 
     let commit = builder.sign(&agent, &appstate.store, &empty).await.unwrap();
     let body = commit
@@ -554,7 +557,9 @@ async fn upload_download_test() {
     .await;
 
     // Create a valid parent drive
-    let drive_did = atomic_lib::test_utils::create_test_drive(&appstate.store).await.unwrap();
+    let drive_did = atomic_lib::test_utils::create_test_drive(&appstate.store)
+        .await
+        .unwrap();
 
     let test_content = b"hello blake3 world";
     let expected_hash = blake3::hash(test_content).to_hex().to_string();
@@ -570,24 +575,36 @@ async fn upload_download_test() {
         String::from_utf8_lossy(test_content)
     );
 
-    let req = build_request_authenticated(&format!("/upload?parent={}", urlencoding::encode(drive_did.as_str())), &appstate)
-        .method(actix_web::http::Method::POST)
-        .insert_header((
-            "Content-Type",
-            format!("multipart/form-data; boundary={multipart_boundary}"),
-        ))
-        .set_payload(body)
-        .to_request();
+    let req = build_request_authenticated(
+        &format!("/upload?parent={}", urlencoding::encode(drive_did.as_str())),
+        &appstate,
+    )
+    .method(actix_web::http::Method::POST)
+    .insert_header((
+        "Content-Type",
+        format!("multipart/form-data; boundary={multipart_boundary}"),
+    ))
+    .set_payload(body)
+    .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_success(), "Upload failed: {:?}", resp.status());
+    assert!(
+        resp.status().is_success(),
+        "Upload failed: {:?}",
+        resp.status()
+    );
 
     let body_str = get_body(resp);
     assert!(body_str.contains(&expected_hash));
 
     // 2. Verify in DB
     let hash_bytes = blake3::hash(test_content);
-    let blob = appstate.store.kv.get(atomic_lib::db::trees::Tree::Blobs, hash_bytes.as_bytes()).unwrap().unwrap();
+    let blob = appstate
+        .store
+        .kv
+        .get(atomic_lib::db::trees::Tree::Blobs, hash_bytes.as_bytes())
+        .unwrap()
+        .unwrap();
     assert_eq!(blob, test_content);
 
     // 3. Download

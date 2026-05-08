@@ -34,9 +34,9 @@ async fn iroh_sync_handler(
 ) -> actix_web::HttpResponse {
     let node_id = match body.get("nodeId").and_then(|v| v.as_str()) {
         Some(id) => id
-                .strip_prefix("did:ad:node:")
-                .or_else(|| id.strip_prefix("iroh:"))
-                .unwrap_or(id),
+            .strip_prefix("did:ad:node:")
+            .or_else(|| id.strip_prefix("iroh:"))
+            .unwrap_or(id),
         None => {
             return actix_web::HttpResponse::BadRequest()
                 .json(serde_json::json!({"error": "Missing nodeId"}));
@@ -51,8 +51,9 @@ async fn iroh_sync_handler(
     };
 
     match atomic_lib::sync::peer::sync_drive_with_peer(node_id, drive, &appstate.store).await {
-        Ok(count) => actix_web::HttpResponse::Ok()
-            .json(serde_json::json!({"count": count, "status": "ok"})),
+        Ok(count) => {
+            actix_web::HttpResponse::Ok().json(serde_json::json!({"count": count, "status": "ok"}))
+        }
         Err(e) => actix_web::HttpResponse::InternalServerError()
             .json(serde_json::json!({"error": e.to_string()})),
     }

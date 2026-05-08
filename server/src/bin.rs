@@ -21,11 +21,11 @@ pub mod plugins;
 mod routes;
 pub mod serve;
 // #[cfg(feature = "search")]
+mod iroh_transport;
 mod search;
 #[cfg(test)]
 mod tests;
 mod trace;
-mod iroh_transport;
 
 #[actix_web::main]
 async fn main() -> () {

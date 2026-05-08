@@ -274,9 +274,7 @@ async fn try_to_subject(
     } else if let Some(importer) = &parse_opts.importer {
         if let Some(synth) = generate_id_from_local_id(importer, subject) {
             Ok(synth)
-        } else if let Some(found) =
-            find_existing_by_local_id(store, importer, subject).await?
-        {
+        } else if let Some(found) = find_existing_by_local_id(store, importer, subject).await? {
             Ok(found)
         } else {
             Err(AtomicError::parse_error(
@@ -561,16 +559,16 @@ pub fn parse_propval<'a>(
 
                 Value::new(data.as_str(), &DataType::LoroDoc)?
             }
-            DataType::JsonArray => {
-                match val {
-                    serde_json::Value::Array(arr) => Value::JsonArray(arr.clone()),
-                    _ => return Err(AtomicError::parse_error(
+            DataType::JsonArray => match val {
+                serde_json::Value::Array(arr) => Value::JsonArray(arr.clone()),
+                _ => {
+                    return Err(AtomicError::parse_error(
                         "Invalid value for JsonArray, must be a JSON array",
                         subject,
                         Some(&prop),
-                    )),
+                    ))
                 }
-            }
+            },
         };
 
         Ok((prop, atomic_val))
@@ -689,11 +687,7 @@ async fn parse_json_ad_map_to_resource(
     let r = match &parse_opts.save {
         SaveOpts::DontSave => {
             let subj = subject.ok_or_else(|| {
-                AtomicError::parse_error(
-                    "No @id or localId found in resource",
-                    None,
-                    None,
-                )
+                AtomicError::parse_error("No @id or localId found in resource", None, None)
             })?;
             let mut r = Resource::new(subj);
             r.set_propvals_unsafe(propvals);
@@ -701,11 +695,7 @@ async fn parse_json_ad_map_to_resource(
         }
         SaveOpts::Save => {
             let subj = subject.ok_or_else(|| {
-                AtomicError::parse_error(
-                    "No @id or localId found in resource",
-                    None,
-                    None,
-                )
+                AtomicError::parse_error("No @id or localId found in resource", None, None)
             })?;
             let mut r = Resource::new(subj);
             r.set_propvals_unsafe(propvals);
@@ -732,8 +722,7 @@ async fn parse_json_ad_map_to_resource(
                     .signature
                     .as_ref()
                     .ok_or("No signature generated for genesis commit")?;
-                let did_subject =
-                    crate::Subject::from_raw(&format!("did:ad:{}", signature), None);
+                let did_subject = crate::Subject::from_raw(&format!("did:ad:{}", signature), None);
                 r.set_subject(did_subject.to_string());
                 let mut final_commit = commit;
                 final_commit.subject = did_subject;
@@ -784,10 +773,7 @@ async fn parse_json_ad_map_to_resource(
             // "DID genesis commits must explicitly set is_genesis=true" and
             // the import endpoint returns 500. Edits to existing resources
             // already have a `previous_commit` and don't need the flag.
-            if is_new
-                && r.get_subject().is_did()
-                && !r.get_subject().is_agent_did()
-            {
+            if is_new && r.get_subject().is_did() && !r.get_subject().is_agent_did() {
                 commit_builder.is_genesis = true;
             }
             let commit = commit_builder.sign(&signer, store, &r).await?;
@@ -819,10 +805,7 @@ async fn parse_json_ad_map_to_resource(
 /// For DID parents this returns `None`: the import flow generates a fresh
 /// DID via genesis commit signing instead, and idempotency is achieved by
 /// looking up existing resources by (parent, localId) before signing.
-fn generate_id_from_local_id(
-    importer: &crate::Subject,
-    local_id: &str,
-) -> Option<String> {
+fn generate_id_from_local_id(importer: &crate::Subject, local_id: &str) -> Option<String> {
     if importer.is_did() {
         None
     } else {
@@ -1013,10 +996,7 @@ mod test {
 
         // localId is now preserved on the resource so re-imports under DID
         // parents can dedupe via (parent, localId) lookup.
-        assert_eq!(
-            found.get(urls::LOCAL_ID).unwrap().to_string(),
-            local_id
-        );
+        assert_eq!(found.get(urls::LOCAL_ID).unwrap().to_string(), local_id);
     }
     #[tokio::test]
     async fn import_resource_with_json() {
@@ -1063,10 +1043,7 @@ mod test {
             .unwrap();
         assert_eq!(found.get(urls::NAME).unwrap().to_string(), "My resource");
 
-        assert_eq!(
-            found.get(urls::LOCAL_ID).unwrap().to_string(),
-            local_id
-        );
+        assert_eq!(found.get(urls::LOCAL_ID).unwrap().to_string(), local_id);
     }
 
     #[tokio::test]

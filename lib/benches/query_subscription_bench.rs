@@ -64,12 +64,7 @@ async fn seed_distinct_parent_filters(store: &Db, drive: &Subject, count: usize)
 /// differing only in `sort_by` (so they encode to distinct keys in
 /// `Tree::WatchedQueries`). Tests the fan-out case where one commit
 /// matches every registered filter.
-async fn seed_same_target_filters(
-    store: &Db,
-    drive: &Subject,
-    target_parent: &str,
-    count: usize,
-) {
+async fn seed_same_target_filters(store: &Db, drive: &Subject, target_parent: &str, count: usize) {
     for i in 0..count {
         let f = QueryFilter {
             property: Some(urls::PARENT.to_string()),
@@ -132,31 +127,26 @@ fn bench_query_subscriptions(c: &mut Criterion) {
     // Expected: per-commit time grows linearly with N, with a steeper slope
     // than scenario 1 (more index writes + more events per commit).
     for &n in &[0usize, 100, 1_000, 10_000] {
-        group.bench_with_input(
-            BenchmarkId::new("fanout_same_target", n),
-            &n,
-            |b, &n| {
-                b.iter_custom(|iters| {
-                    rt.block_on(async {
-                        let store =
-                            Db::init_temp(&format!("qs_fan_n{n}_{}", random_string(4)))
-                                .await
-                                .unwrap();
-                        let (_agent, drive_str) = store.setup("Alice").await.unwrap();
-                        let drive = Subject::from(drive_str);
-                        let parent = "did:ad:bench:hot_parent";
+        group.bench_with_input(BenchmarkId::new("fanout_same_target", n), &n, |b, &n| {
+            b.iter_custom(|iters| {
+                rt.block_on(async {
+                    let store = Db::init_temp(&format!("qs_fan_n{n}_{}", random_string(4)))
+                        .await
+                        .unwrap();
+                    let (_agent, drive_str) = store.setup("Alice").await.unwrap();
+                    let drive = Subject::from(drive_str);
+                    let parent = "did:ad:bench:hot_parent";
 
-                        seed_same_target_filters(&store, &drive, parent, n).await;
+                    seed_same_target_filters(&store, &drive, parent, n).await;
 
-                        let start = std::time::Instant::now();
-                        for i in 0..iters {
-                            create_child(&store, parent, &format!("fan child {i}")).await;
-                        }
-                        start.elapsed()
-                    })
+                    let start = std::time::Instant::now();
+                    for i in 0..iters {
+                        create_child(&store, parent, &format!("fan child {i}")).await;
+                    }
+                    start.elapsed()
                 })
-            },
-        );
+            })
+        });
     }
 
     // Scenario 3: registration throughput. How fast can we add filter N+1
@@ -170,10 +160,9 @@ fn bench_query_subscriptions(c: &mut Criterion) {
             |b, &n| {
                 b.iter_custom(|iters| {
                     rt.block_on(async {
-                        let store =
-                            Db::init_temp(&format!("qs_reg_n{n}_{}", random_string(4)))
-                                .await
-                                .unwrap();
+                        let store = Db::init_temp(&format!("qs_reg_n{n}_{}", random_string(4)))
+                            .await
+                            .unwrap();
                         let (_agent, drive_str) = store.setup("Alice").await.unwrap();
                         let drive = Subject::from(drive_str);
 

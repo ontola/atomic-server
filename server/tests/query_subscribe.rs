@@ -195,7 +195,9 @@ async fn query_subscribe_listener_path_receives_update() -> AtomicResult<()> {
 
     let client_a = Client::new(&server_url).await?;
     let agent_a = client_a.new_agent("Alice").await?;
-    let drive = client_a.new_public_drive(&agent_a, "Listener Drive").await?;
+    let drive = client_a
+        .new_public_drive(&agent_a, "Listener Drive")
+        .await?;
 
     let mut parent = client_a.new_resource(&drive);
     parent.set_name("Listener Parent");
@@ -364,7 +366,9 @@ async fn query_subscribe_requires_read_permission() -> AtomicResult<()> {
     // --- Agent A: create a PRIVATE drive (read access only for Alice) ---
     let client_a = Client::new(&server_url).await?;
     let agent_a = client_a.new_agent("Alice").await?;
-    let private_drive = client_a.new_drive(&agent_a, "Alice's Private Drive").await?;
+    let private_drive = client_a
+        .new_drive(&agent_a, "Alice's Private Drive")
+        .await?;
 
     // --- Agent B: authenticated, but has no permission on Alice's drive ---
     let client_b = Client::new(&server_url).await?;
