@@ -121,9 +121,10 @@ test.describe('table refresh', () => {
     await nameInput.fill('TypedRefresh');
     await page.locator('dialog[open] button:has-text("Create")').click();
     await expect(editableTitle(page)).toBeVisible({ timeout: 15000 });
-    await page.waitForTimeout(1000);
 
-    // Type a value into row 2, column 2 (the first name cell).
+    // Type a value into row 2, column 2 (the first name cell). The cell
+    // visibility expectation below already polls for the row to mount —
+    // no separate sleep needed.
     const nameCell = page.locator('[aria-rowindex="2"] [aria-colindex="2"]');
     await expect(nameCell).toBeVisible({ timeout: 10000 });
     await nameCell.click();
@@ -134,7 +135,15 @@ test.describe('table refresh', () => {
     await expect(cellInput).toBeVisible({ timeout: 5000 });
     await cellInput.fill('row-1');
     await page.keyboard.press('Tab');
-    await page.waitForTimeout(2000);
+    // Wait for the cell save to drain into the server. The dirty queue is
+    // 0 once the commit has been ack'd — that's the actual saved-and-
+    // visible-on-reload signal we want the row count to reflect.
+    await page.waitForFunction(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      () => (window as any).store?.getSyncStatus?.().pendingDirtyCount === 0,
+      undefined,
+      { timeout: 10000 },
+    );
 
     const rows = page.locator('[aria-rowindex]');
     const afterTypeCount = await rows.count();
