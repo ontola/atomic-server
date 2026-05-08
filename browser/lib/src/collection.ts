@@ -494,13 +494,30 @@ export class Collection {
     }
 
     if (result.count === 0) {
-      // Empty local result is ambiguous: this drive may genuinely have no
-      // children matching the filter, or the parent's drive simply hasn't
-      // been synced yet (common for shared resources accepted via invite —
-      // first-drive-sync only covers the user's personal drive, not the
-      // host drive the chatroom/folder belongs to). Fall through to the
-      // server `/query` so a freshly-shared resource's contents become
-      // visible without waiting for a full drive sync.
+      // Empty local result is normally authoritative — but it's ambiguous on
+      // a fresh page load before the drive sync has touched the store yet
+      // (the index may be mid-populate). Once any drive sync has completed
+      // we trust the empty: a freshly-created table or folder just has no
+      // children, and the upstream caller (`useCollection`) is blocking
+      // `ready` on this resolution. Falling through to a server `/query`
+      // here is what made empty grids stay un-rendered for >5s under load.
+      //
+      // For genuinely shared/foreign drives the caller's `before-sync`
+      // branch (`waitForFirstDriveSync` then retry) still kicks in via
+      // the `no-db` path before this one — so cross-drive imports keep
+      // their server fallback.
+      if (this.store.hasCompletedDriveSync()) {
+        const empty = new Resource<Collections.Collection>(
+          this.buildSubject(page),
+        );
+        empty.applyHydratedValues([
+          [collections.properties.members, []],
+          [collections.properties.totalMembers, 0],
+        ]);
+        this.pages.set(page, empty);
+        this._totalMembers = 0;
+        return 'ok';
+      }
       return 'no-db';
     }
 

@@ -1882,6 +1882,14 @@ export class Store {
     }
   }
 
+  /** True once any drive sync has finished in this session. Used by
+   * collection queries to decide whether an empty local-DB result is
+   * authoritative ("the table has no children") or ambiguous ("the index
+   * may not be populated yet"). */
+  public hasCompletedDriveSync(): boolean {
+    return this._lastDriveSync !== undefined;
+  }
+
   /** Resolves once the WebSocket has run its first drive-sync handshake
    * (`SYNC_DIFF` + `SYNC_PUSH` complete, `finishDriveSync` called). Used by
    * collection fetches to defer the fallback `/query` GET until the local
