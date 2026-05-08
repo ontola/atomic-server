@@ -526,6 +526,13 @@ impl Resource {
         vec.push(value.clone());
         let full_array: Value = vec.into();
         self.propvals.insert(property.into(), full_array.clone());
+        // Mirror the change into the live Loro doc if it's been initialized.
+        // Without this, `sign()` exports a stale snapshot (it prefers the
+        // live doc over the commitbuilder's set map), and the appended
+        // element is silently dropped from the resulting commit's loroUpdate.
+        if let Some(doc) = &self.loro {
+            let _ = doc.set_property(property, &full_array);
+        }
         // Store the full array value in the commit builder so the Loro update
         // contains the complete state, not just the appended item.
         self.commit.set(property.into(), full_array);
@@ -734,6 +741,31 @@ impl Resource {
     ) -> AtomicResult<crate::commit::CommitResponse> {
         let agent = store.get_default_agent()?;
         let commit_builder = self.get_commit_builder().clone();
+        // No-op save: same rationale as `save_locally`. Avoids tripping
+        // `apply_commit`'s "no loroUpdate" rejection for callers that
+        // call save defensively without checking dirtiness first.
+        if !commit_builder.has_changes() {
+            self.reset_commit_builder();
+            return Ok(crate::commit::CommitResponse {
+                commit: crate::Commit {
+                    subject: self.get_subject().clone(),
+                    signer: agent.subject.clone(),
+                    loro_update: None,
+                    destroy: Some(false),
+                    created_at: crate::utils::now(),
+                    previous_commit: None,
+                    is_genesis: None,
+                    signature: None,
+                    url: None,
+                },
+                commit_resource: Resource::new(self.get_subject().to_string()),
+                resource_new: Some(self.clone()),
+                resource_old: None,
+                add_atoms: Vec::new(),
+                remove_atoms: Vec::new(),
+                changed_props: std::collections::HashSet::new(),
+            });
+        }
         let commit = commit_builder.sign(&agent, store, self).await?;
         // If the current client is a server, and the subject is hosted here, don't post
         let should_post = match self.subject.clone() {
@@ -771,6 +803,33 @@ impl Resource {
     pub async fn save_locally(&mut self, store: &impl Storelike) -> AtomicResult<CommitResponse> {
         let agent = store.get_default_agent()?;
         let commitbuilder = self.get_commit_builder().clone();
+        // Saving a resource that hasn't been touched is a no-op. Without
+        // this short-circuit, `apply_commit` would reject the empty
+        // commit ("no `loroUpdate` and is not a destroy"), which surfaces
+        // as a hard error in idiomatic init code like
+        // `Resource::new_generate_subject(&store).save_locally(&store)`.
+        if !commitbuilder.has_changes() {
+            self.reset_commit_builder();
+            return Ok(CommitResponse {
+                commit: crate::Commit {
+                    subject: self.get_subject().clone(),
+                    signer: agent.subject.clone(),
+                    loro_update: None,
+                    destroy: Some(false),
+                    created_at: crate::utils::now(),
+                    previous_commit: None,
+                    is_genesis: None,
+                    signature: None,
+                    url: None,
+                },
+                commit_resource: Resource::new(self.get_subject().to_string()),
+                resource_new: Some(self.clone()),
+                resource_old: None,
+                add_atoms: Vec::new(),
+                remove_atoms: Vec::new(),
+                changed_props: std::collections::HashSet::new(),
+            });
+        }
         let commit = commitbuilder.sign(&agent, store, self).await?;
         let opts = CommitOpts {
             validate_schema: true,

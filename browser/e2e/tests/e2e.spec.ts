@@ -122,8 +122,15 @@ test.describe('data-browser', async () => {
       currentPage.getByLabel('Chat input');
 
     await newResource('chatroom', page);
-    // EditableTitle auto-focuses on creation; type a title and press Enter.
-    // Focus should then move to the chat input.
+    // EditableTitle auto-focuses on creation, but the chat input also
+    // mounts and may grab focus first — racing the early keystrokes into
+    // the wrong element ("est Chat" in the title, "T" in the input).
+    // Explicitly click the title and assert it's a textbox first.
+    await editableTitle(page).click();
+    await expect(editableTitle(page)).toHaveRole('textbox');
+    await page.keyboard.press(
+      process.platform === 'darwin' ? 'Meta+a' : 'Control+a',
+    );
     await page.keyboard.type('Test Chat');
     await page.keyboard.press('Enter');
     await expect(
@@ -143,17 +150,15 @@ test.describe('data-browser', async () => {
       'Chat message not appearing directly after sending',
     ).toBeVisible({ timeout: 15_000 });
 
-    // Prefer the owner’s real location bar href when it is already /app/show?subject=…; otherwise build the
-    // same URL from `main[about]` (resolved subject, e.g. DID) so the guest opens the right resource.
+    // Build the chatroom fallback URL on the SERVER's origin (same as the
+    // invite URL the guest opens), not the frontend dev server. The guest
+    // sets up their agent on `localhost:9883` after accepting the invite —
+    // crossing to `localhost:5173` would land on a fresh-origin localStorage
+    // with no agent and bounce the guest to the welcome page.
     const chatSubject = await getCurrentSubject(page);
-    const ownerLoc = new URL(page.url());
-    const showFallback = new URL('/app/show', FRONTEND_URL);
+    const showFallback = new URL('/app/show', SERVER_URL);
     showFallback.searchParams.set('subject', chatSubject);
-    const chatRoomHref =
-      ownerLoc.pathname.endsWith('/app/show') &&
-      ownerLoc.searchParams.get('subject')
-        ? ownerLoc.href
-        : showFallback.href;
+    const chatRoomHref = showFallback.href;
 
     // Owner: Share → invite. Guest: open invite URL only (new agent via acceptInvite).
     await topBarShareButton(page).click();

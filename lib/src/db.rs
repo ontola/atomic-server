@@ -360,7 +360,7 @@ impl Db {
                             let hash_bytes = hash.as_bytes();
 
                             redb_store.insert(Tree::Blobs, hash_bytes, &bytes)?;
-                            propvals.insert(urls::BLOB.to_string(), Value::AtomicUrl(format!("did:ad:blob:{}", hash_hex.clone())));
+                            propvals.insert(urls::BLOB.to_string(), Value::AtomicUrl(format!("did:ad:blob:{}", hash_hex.clone()).into()));
                             propvals.insert(urls::INTERNAL_ID.to_string(), Value::String(hash_hex));
                             count_blobs += 1;
                         }
@@ -1751,8 +1751,45 @@ impl Storelike for Db {
                     .map_err(|e| format!("Failed to add atom to index {}. {}", a, e))?;
             }
         }
+        // Materialize a loroUpdate propval if missing. Two cases:
+        // 1. Live Loro doc but propval not exported — happens when callers
+        //    bypass the commit pipeline (e.g. test setup using `set_loro` +
+        //    `add_resource_opts`).
+        // 2. Neither live doc nor propval — happens when callers build a
+        //    resource via `set_string`/`set_unsafe` and persist directly,
+        //    without going through `Resource::save`. Without seeding a
+        //    Loro snapshot here, a SUBSEQUENT `save()` would seed both the
+        //    client's sign() and the server's apply_changes() from
+        //    propvals independently, producing ops on different peer IDs
+        //    with the same Lamport — LWW becomes a coin-flip and changes
+        //    silently revert. Seeding once at persist time gives both
+        //    sides a shared causal base.
+        let mut propvals = resource.get_propvals().clone();
+        if !propvals.contains_key(crate::urls::LORO_UPDATE) {
+            let snapshot = resource.get_loro_snapshot().or_else(|| {
+                resource
+                    .build_loro_doc_from_state()
+                    .ok()
+                    .map(|doc| doc.export_snapshot())
+            });
+            if let Some(snapshot) = snapshot {
+                propvals.insert(
+                    crate::urls::LORO_UPDATE.into(),
+                    crate::Value::LoroDoc(snapshot.clone()),
+                );
+                // Also persist to the dedicated LoroSnapshots tree so the
+                // VV-based sync engine can find it on first sync.
+                transaction.push(Operation {
+                    tree: Tree::LoroSnapshots,
+                    method: Method::Insert,
+                    key: subject_str.as_bytes().to_vec(),
+                    val: Some(snapshot),
+                });
+            }
+        }
+
         // Persist the resource data in the same transaction
-        let resource_bin = encode_propvals(resource.get_propvals())?;
+        let resource_bin = encode_propvals(&propvals)?;
         transaction.push(Operation {
             tree: Tree::Resources,
             method: Method::Insert,

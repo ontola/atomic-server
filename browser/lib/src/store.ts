@@ -881,18 +881,24 @@ export class Store {
     // need to be synced first.
     if (storeResource) {
       storeResource.merge(resource.__internalObject);
-      this.notify(storeResource);
     } else {
       this.resources.set(subject, resource.__internalObject);
-      this.notify(resource.__internalObject);
     }
+    const emitResource = storeResource ?? resource.__internalObject;
 
     // Update local full-text search index.
     if (!resource.loading && !resource.new) {
       this.localSearch.addResource(resource);
     }
 
-    // Forward to WASM DB in the background (non-blocking).
+    // Queue the OPFS write BEFORE firing `ResourceUpdated`. The clientDb
+    // worker processes messages in posted order (see `workQueue` in
+    // `client-db.worker.ts`), so a `putResource` queued before a
+    // subsequent `queryLocalDb` is guaranteed to land first. Listeners on
+    // `ResourceUpdated` that call `Collection.refresh()` (which queues
+    // `queryLocalDb` via `fetchPageFromLocalDb`) thus see the new
+    // resource in OPFS — no race. The put itself stays fire-and-forget
+    // (no `await`); only the message-queue order matters.
     //
     // Persist only resources whose commits have reached the server. After
     // `signChanges`, `resource.new` is false but `hasPendingCommits` is still
@@ -903,9 +909,6 @@ export class Store {
     // Offline-applied resources persist themselves via
     // `applyPendingCommitsLocally`, so `addResource` doesn't need to handle
     // them here either.
-    // The intended persist site is the post-push `addResources` call in
-    // `resource.pushCommits` — by then the pending queue is drained and both
-    // checks pass.
     if (
       this.clientDb &&
       !resource.loading &&
@@ -921,10 +924,6 @@ export class Store {
           this.clientDb
             .putResource(jsonAd)
             .then(async () => {
-              // Verify the put round-tripped. The previous version only
-              // checked resources with parents, which hid silent drops for
-              // top-level DIDs (drives have no parent). Stay quiet on the
-              // happy path — only log when verification fails.
               const stored = await this.clientDb!.getResource(
                 resource.subject,
               ).catch(() => null);
@@ -950,6 +949,12 @@ export class Store {
         );
       }
     }
+
+    // Notify subscribers AFTER the OPFS put has been queued. Any listener
+    // that triggers a `queryLocalDb` (e.g. `Collection.refresh()`) will
+    // see the new resource because the worker's serialized message queue
+    // processes the put before the query.
+    this.notify(emitResource);
   }
 
   /**

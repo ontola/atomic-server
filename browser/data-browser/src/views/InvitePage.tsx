@@ -32,7 +32,7 @@ import {
 import atomicServerLogoUrl from '../../../../logo.svg?url';
 
 import { useId, useState, type JSX } from 'react';
-import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
+import { useNavigate } from '@tanstack/react-router';
 import { getResourcesDrive } from '@helpers/getResourcesDrive';
 import { fetchPersonalDriveSubject } from '@helpers/personalDrive';
 import { saveAgentToIDB } from '@helpers/agentStorage';
@@ -49,7 +49,14 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
   const [usagesLeft] = useNumber(resource, server.properties.usagesLeft);
   const [write] = useBoolean(resource, server.properties.write);
   const [description] = useString(resource, core.properties.description);
-  const navigate = useNavigateWithTransition();
+  // Use plain `useNavigate` rather than `useNavigateWithTransition`. The
+  // transition wrapper chains navigations through
+  // `document.startViewTransition` whose `finished` promise never resolves
+  // in headless test contexts (no compositor), wedging the next
+  // post-invite navigate. The invite redirect runs once on accept; not
+  // animating it is fine.
+  const baseNavigate = useNavigate();
+  const navigate = (to: string) => baseNavigate({ to });
   const { agent, setAgent, setDrive } = useSettings();
   const agentResource = useResource(agent?.subject);
   const [agentTitle] = useTitle(agentResource, 15);
@@ -77,7 +84,7 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
   const goToRedirect = (destination?: string) => {
     const url = destination ?? redirectURL;
     if (!url) return;
-    requestAnimationFrame(() => {
+    queueMicrotask(() => {
       navigate(constructOpenURL(url));
       void store.fetchResourceFromServer(url).finally(() => {
         const signedIn = store.getAgent();
