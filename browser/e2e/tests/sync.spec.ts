@@ -266,13 +266,13 @@ test.describe('sync', () => {
       `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(resourceSubject!)}`,
     );
 
-    // Verify the offline edit is visible — first wait for the editor to
-    // mount (signals page-load complete), then assert the title appears in
-    // any of the rendered locations.
-    await page2.waitForLoadState('networkidle').catch(() => undefined);
+    // The actual race is: WS handshake → resource GET → store hydrates →
+    // React renders. `networkidle` is unreliable (persistent WS keeps the
+    // network never-idle). Wait for the main view's H1 — that's the
+    // visible signal the data has landed and rendered.
     await expect(
-      page2.getByText('Synced From Offline').first(),
-    ).toBeVisible({ timeout: 15000 });
+      page2.getByRole('heading', { level: 1, name: 'Synced From Offline' }),
+    ).toBeVisible({ timeout: 30000 });
 
     await context2.close();
   });
