@@ -524,10 +524,13 @@ export class AtomicServer {
         // path fails on the musl-cross image (see the comment in
         // rustBuild()). Pinning the URL guarantees the artefact is
         // ABI-compatible with the host triple of the build container.
+        // `mkdir -p` because the cargo bin dir isn't always materialized
+        // by the time we get here (cache-mount layout / rustup state),
+        // and `tar -C <missing>` errors with "Cannot open".
         .withExec([
           'sh',
           '-c',
-          'curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C /usr/local/cargo/bin',
+          'mkdir -p /usr/local/cargo/bin && curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C /usr/local/cargo/bin',
         ])
         .withExec(['cargo', 'nextest', 'run'])
         .stdout()
