@@ -107,7 +107,15 @@ test.describe('data-browser', async () => {
     );
     expect(inviteUrl).not.toBeFalsy();
 
-    await page.waitForTimeout(200);
+    // The invite resource needs to be persisted server-side before the
+    // invitee opens its URL — otherwise the server returns 404. Wait for
+    // the dirty queue to drain rather than guessing a fixed 200ms.
+    await page.waitForFunction(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      () => (window as any).store?.getSyncStatus?.().pendingDirtyCount === 0,
+      undefined,
+      { timeout: 10000 },
+    );
 
     // Open invite
     const page3 = await openNewSubjectWindow(browser, inviteUrl as string);
@@ -253,8 +261,16 @@ test.describe('data-browser', async () => {
       await editableTitle(page).type(letter, { delay: Math.random() * 300 });
     }
 
-    // Wait long enough for the final debounce (100ms) + network round-trip.
-    await page.waitForTimeout(1500);
+    // Wait for the debounced save to drain into the server before exiting
+    // edit mode. The dirty queue settles to 0 once every accumulated keystroke
+    // has been ack'd — that's the actual "typing finished saving" signal,
+    // and it returns immediately if we're already idle.
+    await page.waitForFunction(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      () => (window as any).store?.getSyncStatus?.().pendingDirtyCount === 0,
+      undefined,
+      { timeout: 10000 },
+    );
     await page.keyboard.press('Escape');
 
     await expect(
