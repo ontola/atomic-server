@@ -373,7 +373,9 @@ impl CommitMonitor {
     /// filter shape. Drive is guaranteed to be set by the auth gate above.
     fn register_subscription(&mut self, msg: SubscribeQuery) {
         let SubscribeQuery {
-            addr, query, agent: _,
+            addr,
+            query,
+            agent: _,
         } = msg;
 
         let drive_str = match query.drive.as_ref() {
@@ -387,10 +389,8 @@ impl CommitMonitor {
         // Filter subscription: property + value + drive → encode as
         // QueryFilter and watch in Tree::WatchedQueries.
         if let (Some(prop), Some(val_str)) = (query.property.as_ref(), query.value.as_ref()) {
-            let drive_subject = atomic_lib::Subject::from_raw(
-                &drive_str,
-                self.store.get_base_domain().as_deref(),
-            );
+            let drive_subject =
+                atomic_lib::Subject::from_raw(&drive_str, self.store.get_base_domain().as_deref());
             let q_filter = QueryFilter {
                 property: Some(prop.clone()),
                 value: Some(Value::String(val_str.clone())),
@@ -400,9 +400,7 @@ impl CommitMonitor {
             match q_filter.encode() {
                 Ok(filter_bytes) => {
                     if let Err(e) = q_filter.watch(&self.store) {
-                        tracing::warn!(
-                            "Failed to register filter in Tree::WatchedQueries: {e}"
-                        );
+                        tracing::warn!("Failed to register filter in Tree::WatchedQueries: {e}");
                     }
                     #[allow(clippy::mutable_key_type)]
                     let entry = self
@@ -413,9 +411,7 @@ impl CommitMonitor {
                     return;
                 }
                 Err(e) => {
-                    tracing::warn!(
-                        "Failed to encode QueryFilter, dropping subscription: {e}"
-                    );
+                    tracing::warn!("Failed to encode QueryFilter, dropping subscription: {e}");
                     return;
                 }
             }

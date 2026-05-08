@@ -121,7 +121,11 @@ impl SearchState {
         let title_is_subject = title == subject;
         tracing::info!(
             "INDEXING title={:?} has_name={} title_is_fallback={}",
-            if title_is_subject { "<subject>" } else { &title },
+            if title_is_subject {
+                "<subject>"
+            } else {
+                &title
+            },
             has_name,
             title_is_subject
         );
@@ -357,7 +361,9 @@ mod tests {
         let unique = atomic_lib::utils::random_string(10);
         let config = crate::config::build_temp_config(&unique).unwrap();
         let store = atomic_lib::Db::init_temp(&unique).await.unwrap();
-        atomic_lib::test_utils::setup_test_env(&store).await.unwrap();
+        atomic_lib::test_utils::setup_test_env(&store)
+            .await
+            .unwrap();
 
         let search_state = SearchState::new(&config).unwrap();
         let fields = search_state.get_schema_fields().unwrap();

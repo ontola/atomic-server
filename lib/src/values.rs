@@ -430,7 +430,9 @@ impl fmt::Display for Value {
             Value::Boolean(b) => write!(f, "{}", b),
             Value::Uri(s) => write!(f, "{}", s),
             Value::Json(s) => write!(f, "{}", s),
-            Value::JsonArray(arr) => write!(f, "{}", serde_json::to_string(arr).unwrap_or_default()),
+            Value::JsonArray(arr) => {
+                write!(f, "{}", serde_json::to_string(arr).unwrap_or_default())
+            }
             Value::YDoc(s) => write!(f, "{}", general_purpose::STANDARD.encode(s)),
             Value::LoroDoc(s) => write!(f, "{}", general_purpose::STANDARD.encode(s)),
             Value::Unsupported(u) => write!(f, "{}", u.value),

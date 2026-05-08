@@ -25,11 +25,7 @@ async fn seed_watched_queries(store: &atomic_lib::Db, count: usize) {
     seed_watched_queries_with_drive(store, count, "https://atomicdata.dev").await
 }
 
-async fn seed_watched_queries_with_drive(
-    store: &atomic_lib::Db,
-    count: usize,
-    drive_str: &str,
-) {
+async fn seed_watched_queries_with_drive(store: &atomic_lib::Db, count: usize, drive_str: &str) {
     let drive = Subject::from(drive_str.to_string());
     for i in 0..count {
         let q = Query {
@@ -79,7 +75,9 @@ fn bench_populate(c: &mut Criterion) {
             rt.block_on(async {
                 let mut total = std::time::Duration::ZERO;
                 for i in 0..iters {
-                    let store = atomic_lib::Db::init_temp(&format!("pop_{i}")).await.unwrap();
+                    let store = atomic_lib::Db::init_temp(&format!("pop_{i}"))
+                        .await
+                        .unwrap();
                     let start = std::time::Instant::now();
                     atomic_lib::populate::bootstrap(&store).await.unwrap();
                     total += start.elapsed();
@@ -98,7 +96,9 @@ fn bench_populate(c: &mut Criterion) {
             rt.block_on(async {
                 let mut total = std::time::Duration::ZERO;
                 for i in 0..iters {
-                    let store = atomic_lib::Db::init_temp(&format!("big_{i}")).await.unwrap();
+                    let store = atomic_lib::Db::init_temp(&format!("big_{i}"))
+                        .await
+                        .unwrap();
                     // Pre-populate with 10K "user" resources under the drive.
                     for j in 0..10_000 {
                         let subj = format!("https://localhost/things/{j}");
@@ -112,14 +112,15 @@ fn bench_populate(c: &mut Criterion) {
                         .unwrap();
                         r.set(
                             atomic_lib::urls::IS_A.into(),
-                            atomic_lib::Value::ResourceArray(vec![
-                                atomic_lib::urls::AGENT.into(),
-                            ]),
+                            atomic_lib::Value::ResourceArray(vec![atomic_lib::urls::AGENT.into()]),
                             &store,
                         )
                         .await
                         .unwrap();
-                        store.add_resource_opts(&r, false, true, true).await.unwrap();
+                        store
+                            .add_resource_opts(&r, false, true, true)
+                            .await
+                            .unwrap();
                     }
                     let start = std::time::Instant::now();
                     atomic_lib::populate::bootstrap(&store).await.unwrap();
@@ -139,7 +140,9 @@ fn bench_populate(c: &mut Criterion) {
             rt.block_on(async {
                 let mut total = std::time::Duration::ZERO;
                 for i in 0..iters {
-                    let store = atomic_lib::Db::init_temp(&format!("bs2_{i}")).await.unwrap();
+                    let store = atomic_lib::Db::init_temp(&format!("bs2_{i}"))
+                        .await
+                        .unwrap();
                     // init_temp already runs bootstrap once; run it again to
                     // simulate a restart of an already-populated server.
                     let start = std::time::Instant::now();
@@ -193,16 +196,11 @@ fn bench_populate(c: &mut Criterion) {
                     rt.block_on(async {
                         let mut total = std::time::Duration::ZERO;
                         for i in 0..iters {
-                            let store =
-                                atomic_lib::Db::init_temp(&format!("wqdd_{n}_{i}"))
-                                    .await
-                                    .unwrap();
-                            seed_watched_queries_with_drive(
-                                &store,
-                                n,
-                                "http://localhost:9883",
-                            )
-                            .await;
+                            let store = atomic_lib::Db::init_temp(&format!("wqdd_{n}_{i}"))
+                                .await
+                                .unwrap();
+                            seed_watched_queries_with_drive(&store, n, "http://localhost:9883")
+                                .await;
                             let start = std::time::Instant::now();
                             atomic_lib::populate::bootstrap(&store).await.unwrap();
                             total += start.elapsed();

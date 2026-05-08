@@ -2,9 +2,7 @@ use std::{ffi::OsStr, path::Path};
 
 use actix_multipart::{Field, Multipart};
 use actix_web::{web, HttpResponse};
-use atomic_lib::{
-    hierarchy::check_write, urls, Db, Resource, Storelike, Subject, Value,
-};
+use atomic_lib::{hierarchy::check_write, urls, Db, Resource, Storelike, Subject, Value};
 use futures::{StreamExt, TryStreamExt};
 #[cfg(feature = "img")]
 use image::GenericImageView;
@@ -112,7 +110,11 @@ async fn save_file_and_create_resource(
         .await?
         .set_string(urls::INTERNAL_ID.into(), &hash_str, store)
         .await?
-        .set(urls::BLOB.into(), Value::AtomicUrl(format!("did:ad:blob:{}", hash_str).into()), store)
+        .set(
+            urls::BLOB.into(),
+            Value::AtomicUrl(format!("did:ad:blob:{}", hash_str).into()),
+            store,
+        )
         .await?
         .set(urls::FILESIZE.into(), Value::Integer(byte_count), store)
         .await?

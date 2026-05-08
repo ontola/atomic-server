@@ -182,7 +182,9 @@ pub async fn serve(config: crate::config::Config) -> AtomicServerResult<()> {
                 // drive (see `announce_drives_pkarr`).
                 let appstate_clone = appstate.clone();
                 actix_web::rt::spawn(async move {
-                    if let Err(e) = announce_drives_pkarr(&appstate_clone, &node_id.to_string()).await {
+                    if let Err(e) =
+                        announce_drives_pkarr(&appstate_clone, &node_id.to_string()).await
+                    {
                         tracing::warn!("Pkarr announcement failed: {e}");
                     }
                 });

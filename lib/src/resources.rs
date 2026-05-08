@@ -6,12 +6,12 @@ use crate::storelike::Query;
 use crate::urls;
 use crate::utils::random_string;
 use crate::values::{SubResource, Value};
+use crate::{commit::CommitBuilder, errors::AtomicResult};
 use crate::{
-    Atom, Storelike, Subject,
     mapping::is_url,
     schema::{Class, Property},
+    Atom, Storelike, Subject,
 };
-use crate::{commit::CommitBuilder, errors::AtomicResult};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tracing::instrument;
@@ -54,8 +54,7 @@ impl Clone for Resource {
 impl Resource {
     fn clone_loro_state(doc: &crate::loro::AtomicLoroDoc) -> crate::loro::AtomicLoroDoc {
         let snapshot = doc.export_snapshot();
-        crate::loro::AtomicLoroDoc::from_snapshot(&snapshot)
-            .expect("Failed to clone Loro doc")
+        crate::loro::AtomicLoroDoc::from_snapshot(&snapshot).expect("Failed to clone Loro doc")
     }
 
     fn adopt_resource_state(&mut self, new: &Resource) {
@@ -214,7 +213,9 @@ impl Resource {
 
     /// Get a reference to the Loro doc. Panics if `init_loro()` hasn't been called.
     fn loro(&self) -> &crate::loro::AtomicLoroDoc {
-        self.loro.as_ref().expect("loro not initialized — call init_loro() first")
+        self.loro
+            .as_ref()
+            .expect("loro not initialized — call init_loro() first")
     }
 
     /// Rebuild propvals + commit from the current Loro doc state.
@@ -548,7 +549,10 @@ impl Resource {
     ) -> crate::errors::AtomicResult<()> {
         match self.propvals.get_mut(property) {
             Some(Value::JsonArray(arr)) => arr.push(item.clone()),
-            _ => { self.propvals.insert(property.into(), Value::JsonArray(vec![item.clone()])); }
+            _ => {
+                self.propvals
+                    .insert(property.into(), Value::JsonArray(vec![item.clone()]));
+            }
         };
         self.init_loro()?;
         self.loro().push_to_json_array(property, &item)?;
@@ -578,7 +582,8 @@ impl Resource {
                     return Err(format!(
                         "Index {index} out of bounds for {property} (len {})",
                         arr.len()
-                    ).into());
+                    )
+                    .into());
                 }
                 arr.insert(index, item.clone());
             }
@@ -586,7 +591,8 @@ impl Resource {
                 if index != 0 {
                     return Err(format!("{property} is not a JsonArray").into());
                 }
-                self.propvals.insert(property.into(), Value::JsonArray(vec![item.clone()]));
+                self.propvals
+                    .insert(property.into(), Value::JsonArray(vec![item.clone()]));
             }
         };
         self.init_loro()?;
@@ -596,7 +602,8 @@ impl Resource {
 
     /// Clear all items from a JsonArray property. Clears the LoroList too.
     pub fn clear_json_array(&mut self, property: &str) -> crate::errors::AtomicResult<()> {
-        self.propvals.insert(property.into(), Value::JsonArray(vec![]));
+        self.propvals
+            .insert(property.into(), Value::JsonArray(vec![]));
         self.init_loro()?;
         self.loro().clear_json_array(property)?;
         Ok(())

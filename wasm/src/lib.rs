@@ -196,7 +196,10 @@ impl ClientDb {
         if hash.len() != 32 {
             return Err(to_js_err("Hash must be 32 bytes"));
         }
-        self.db.kv.insert(Tree::Blobs, hash, data).map_err(to_js_err)
+        self.db
+            .kv
+            .insert(Tree::Blobs, hash, data)
+            .map_err(to_js_err)
     }
 
     /// Retrieve a binary blob by its BLAKE3 hash. Returns null if not found.
@@ -231,8 +234,7 @@ impl ClientDb {
 
         for item in self.db.kv.iter_tree(Tree::LoroSnapshots) {
             let (key_bytes, snapshot_bytes) = item.map_err(to_js_err)?;
-            let subject =
-                String::from_utf8(key_bytes).map_err(|e| JsError::new(&e.to_string()))?;
+            let subject = String::from_utf8(key_bytes).map_err(|e| JsError::new(&e.to_string()))?;
 
             match AtomicLoroDoc::from_snapshot(&snapshot_bytes) {
                 Ok(doc) => {
