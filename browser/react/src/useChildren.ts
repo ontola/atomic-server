@@ -52,7 +52,11 @@ export function useChildren(parentSubject: string | undefined): {
         // is created/updated, but they're never tree-children. Also dedupe —
         // collection refreshes can race, leaving the same subject indexed
         // twice across pages.
-        if (member && !member.startsWith('did:ad:commit:') && !seen.has(member)) {
+        if (
+          member &&
+          !member.startsWith('did:ad:commit:') &&
+          !seen.has(member)
+        ) {
           seen.add(member);
           members.push(member);
         }

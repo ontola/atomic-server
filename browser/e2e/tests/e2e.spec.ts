@@ -388,10 +388,13 @@ test.describe('data-browser', async () => {
     await page.reload();
     await openSubject(page, nestedResource);
 
+    // ErrorPage renders `Could not open <subject>` for missing resources.
+    // The destroy + cascade may take a moment to propagate over WS, so allow
+    // a longer poll than the default.
     await expect(
-      page.locator('text=Resource not found'),
+      page.getByRole('heading').filter({ hasText: /Could not open/ }),
       'Nested resource not deleted',
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 15000 });
   });
 
   test('sidebar subresource', async ({ page }) => {

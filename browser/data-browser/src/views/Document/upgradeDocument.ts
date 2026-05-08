@@ -1,8 +1,4 @@
-import {
-  type DataBrowser,
-  type Resource,
-  type Store,
-} from '@tomic/react';
+import { type DataBrowser, type Resource, type Store } from '@tomic/react';
 
 /**
  * V1→V2 document upgrade is no longer supported after the Yjs→Loro migration.

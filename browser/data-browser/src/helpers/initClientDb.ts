@@ -44,8 +44,7 @@ export function initClientDb(store: Store): void {
     for (const resource of store.resources.values()) {
       if (!resource.loading && !resource.new && resource.subject) {
         const isA = resource.get(isAProp);
-        const isProperty =
-          Array.isArray(isA) && isA.includes(propertyClass);
+        const isProperty = Array.isArray(isA) && isA.includes(propertyClass);
 
         if (isProperty) {
           properties.push(resource.subject);
@@ -160,4 +159,3 @@ export function initClientDb(store: Store): void {
     });
   }
 }
-

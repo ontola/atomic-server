@@ -41,9 +41,11 @@ const CHAT_PAGE_SIZE = 50;
 
 /** Full page ChatRoom that shows a message list and a form to add Messages. */
 export function ChatRoomPage({ resource }: ResourcePageProps) {
-  const { messages, loading: messagesLoading, invalidate } = useChatMessages(
-    resource.subject,
-  );
+  const {
+    messages,
+    loading: messagesLoading,
+    invalidate,
+  } = useChatMessages(resource.subject);
   const [newMessageVal, setNewMessage] = useState('');
   const store = useStore();
   const [isReplyTo, setReplyTo] = useState<string | undefined>(undefined);
@@ -540,4 +542,3 @@ function useChatMessages(chatSubject: string) {
     invalidate: invalidateCollection,
   };
 }
-

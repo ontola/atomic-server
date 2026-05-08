@@ -1,4 +1,9 @@
-import { createRootRoute, createRoute, Outlet, useLocation } from '@tanstack/react-router';
+import {
+  createRootRoute,
+  createRoute,
+  Outlet,
+  useLocation,
+} from '@tanstack/react-router';
 import { useStore } from '@tomic/react';
 import { useEffect, useState } from 'react';
 import { pathNames, paths } from './paths';
@@ -91,7 +96,7 @@ const TopRouteComponent: React.FC = () => {
   const origin =
     (isDev() || isRunningInTauri()) && baseURL
       ? new URL(baseURL).origin
-      : (isDev() || isRunningInTauri())
+      : isDev() || isRunningInTauri()
         ? getLocalServerOrigin()
         : window.location.origin;
 

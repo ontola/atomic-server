@@ -273,9 +273,14 @@ test.describe('Ontology', async () => {
         .nth(1),
     );
 
-    expect(await page.getByText('Red arrow with circle').count()).toBe(4);
-    expect(await page.getByText('Green arrow with black border').count()).toBe(
-      4,
-    );
+    // Each instance shows up in three places after being added to allows-only:
+    // the sidebar tree, the allows-only list button, and the instances area
+    // (link + heading). Poll because dialog commits propagate async.
+    await expect(page.getByText('Red arrow with circle')).toHaveCount(3, {
+      timeout: 15000,
+    });
+    await expect(
+      page.getByText('Green arrow with black border'),
+    ).toHaveCount(3, { timeout: 15000 });
   });
 });

@@ -27,10 +27,7 @@ import { ResourceInline } from '../views/ResourceInline';
 import { AtomicLink } from '../components/AtomicLink';
 import { formatTimeAgo } from '../helpers/formatTimeAgo';
 import { isRunningInTauri } from '../helpers/tauri';
-import {
-  isClientDbEnabled,
-  setClientDbEnabled,
-} from '../helpers/clientDbMode';
+import { isClientDbEnabled, setClientDbEnabled } from '../helpers/clientDbMode';
 import { appRoute } from './RootRoutes';
 import { pathNames } from './paths';
 import { useSettings } from '../helpers/AppSettings';
@@ -304,7 +301,6 @@ function SyncPage() {
           </SyncDiagram>
         )}
 
-
         {/* Details accordion */}
         <Section>
           <SectionTitle>Details</SectionTitle>
@@ -412,9 +408,7 @@ function SyncPage() {
                 )}
                 {knownPeers.map(peer => (
                   <PeerRow key={peer.nodeId}>
-                    <PeerIdText title={peer.nodeId}>
-                      {peer.label}
-                    </PeerIdText>
+                    <PeerIdText title={peer.nodeId}>{peer.label}</PeerIdText>
                     {peer.lastSync && (
                       <PeerLastSync>
                         {formatTimeAgo(new Date(peer.lastSync)) ?? 'just now'}
@@ -459,9 +453,7 @@ function SyncPage() {
                   </NodeAction>
                 )}
                 {peerSyncResult && (
-                  <PeerSyncResult
-                    $error={peerSyncResult.startsWith('Error')}
-                  >
+                  <PeerSyncResult $error={peerSyncResult.startsWith('Error')}>
                     {peerSyncResult}
                   </PeerSyncResult>
                 )}
@@ -489,9 +481,8 @@ function SyncPage() {
                 <DetailLabel>Last sync</DetailLabel>
                 <DetailValue>
                   {status.lastDriveSync.count} resources,{' '}
-                  {formatTimeAgo(
-                    new Date(status.lastDriveSync.timestamp),
-                  ) ?? 'just now'}
+                  {formatTimeAgo(new Date(status.lastDriveSync.timestamp)) ??
+                    'just now'}
                 </DetailValue>
               </DetailItem>
             )}
@@ -517,9 +508,7 @@ function SyncPage() {
           <SectionTitle>
             Commit Log
             {status.pendingDirtyCount > 0 && (
-              <PendingCount>
-                {status.pendingDirtyCount} unsynced
-              </PendingCount>
+              <PendingCount>{status.pendingDirtyCount} unsynced</PendingCount>
             )}
           </SectionTitle>
           {commitLog.length > 0 ? (
@@ -543,9 +532,7 @@ function SyncPage() {
                     {entry.commitId ? (
                       <AtomicLink subject={entry.commitId}>
                         <TimeText
-                          title={new Date(
-                            entry.timestamp,
-                          ).toLocaleString()}
+                          title={new Date(entry.timestamp).toLocaleString()}
                         >
                           {formatTimeAgo(new Date(entry.timestamp)) ??
                             'just now'}
@@ -555,8 +542,7 @@ function SyncPage() {
                       <TimeText
                         title={new Date(entry.timestamp).toLocaleString()}
                       >
-                        {formatTimeAgo(new Date(entry.timestamp)) ??
-                          'just now'}
+                        {formatTimeAgo(new Date(entry.timestamp)) ?? 'just now'}
                       </TimeText>
                     )}
                   </LogHeader>
@@ -787,7 +773,10 @@ const Muted = styled.p`
 
 // --- Sync diagram ---
 
-const statusColor = (status: NodeStatus, theme: { colors: Record<string, string> }) => {
+const statusColor = (
+  status: NodeStatus,
+  theme: { colors: Record<string, string> },
+) => {
   switch (status) {
     case 'synced':
       return theme.colors.main;

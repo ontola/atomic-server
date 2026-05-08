@@ -1,4 +1,9 @@
-import { ResourceEvents, StoreEvents, type Resource, useStore } from '@tomic/react';
+import {
+  ResourceEvents,
+  StoreEvents,
+  type Resource,
+  useStore,
+} from '@tomic/react';
 import { useEffect, useState } from 'react';
 import styled from 'styled-components';
 

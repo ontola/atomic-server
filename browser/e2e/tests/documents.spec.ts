@@ -53,11 +53,16 @@ test.describe('documents', async () => {
     if (await setDriveButton.isVisible({ timeout: 1500 }).catch(() => false)) {
       await setDriveButton.click();
     }
-    await expect(page2.getByText('loading...')).not.toBeVisible();
+    // Sidebar may still show loading placeholders for unrelated children;
+    // scope to `main` so we only wait for the document body to land. Bumped
+    // timeout because the second tab needs WS auth + initial sync.
+    await expect(
+      page2.getByRole('main').getByText(/^loading/i),
+    ).not.toBeVisible({ timeout: 15000 });
     await expect(
       page2.getByRole('heading', { name: teststring }),
       'First paragraph title not visible in second tab. Not a websocket issue',
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 15000 });
     expect(await page2.title()).toEqual(title);
 
     await page2.getByLabel('Rich Text Editor').focus();

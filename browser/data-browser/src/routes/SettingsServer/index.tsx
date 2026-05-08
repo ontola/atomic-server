@@ -119,8 +119,7 @@ function SettingsServer(): JSX.Element {
           />
 
           <p>
-            Server settings have moved to the{' '}
-            <a href='/app/sync'>Sync page</a>.
+            Server settings have moved to the <a href='/app/sync'>Sync page</a>.
           </p>
         </Column>
       </ContainerWide>

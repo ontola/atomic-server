@@ -146,9 +146,15 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
 
       await rowResource.destroy();
 
-      invalidateCollection();
+      // No explicit invalidateCollection — `removeResource()` (called by
+      // `destroy()`) emits `ResourceRemoved`, and `useCollection`'s listener
+      // surgically strips the row from the cached page via
+      // `applyResourceChange`. Calling `refresh()` here would re-fetch from
+      // the local WASM DB (which still contains the just-destroyed row, since
+      // `removeResource` doesn't tombstone there) and clobber the optimistic
+      // update back to the pre-delete state.
     },
-    [collection, store, invalidateCollection, addItemsToHistoryStack],
+    [collection, store, addItemsToHistoryStack],
   );
 
   const handleClearCells = useHandleClearCells(

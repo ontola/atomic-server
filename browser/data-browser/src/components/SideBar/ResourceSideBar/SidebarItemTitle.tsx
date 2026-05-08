@@ -36,58 +36,117 @@ const NavResourceLink = styled(StyledLink)`
   align-self: stretch;
 `;
 
-export const SidebarItemTitle = memo(forwardRef<
-  HTMLAnchorElement,
-  SidebarItemTitleProps
->(
-  (
-    {
-      subject,
-      active,
-      listeners,
-      attributes,
-      hideActionButtons,
-      isDragging,
-      onClick,
-      expandable = false,
-      expanded = false,
-      onToggleExpand,
-    },
-    ref,
-  ): React.JSX.Element => {
-    const resource = useResource(subject);
-    const { sidebarKeyboardDndEnabled } = useSettings();
-    const [classType] = useArray(resource, core.properties.isA);
-    const [description] = useString(resource, core.properties.description);
-    const Icon = getIconForClass(classType[0]!);
+export const SidebarItemTitle = memo(
+  forwardRef<HTMLAnchorElement, SidebarItemTitleProps>(
+    (
+      {
+        subject,
+        active,
+        listeners,
+        attributes,
+        hideActionButtons,
+        isDragging,
+        onClick,
+        expandable = false,
+        expanded = false,
+        onToggleExpand,
+      },
+      ref,
+    ): React.JSX.Element => {
+      const resource = useResource(subject);
+      const { sidebarKeyboardDndEnabled } = useSettings();
+      const [classType] = useArray(resource, core.properties.isA);
+      const [description] = useString(resource, core.properties.description);
+      const Icon = getIconForClass(classType[0]!);
 
-    const expandLabel = expanded ? 'Collapse folder' : 'Expand folder';
+      const expandLabel = expanded ? 'Collapse folder' : 'Expand folder';
 
-    return (
-      <ActionWrapper
-        isDragging={isDragging}
-        data-sidebar-id={getTransitionName(SIDEBAR_TRANSITION_TAG, subject)}
-      >
-        {sidebarKeyboardDndEnabled ? (
-          expandable ? (
+      return (
+        <ActionWrapper
+          isDragging={isDragging}
+          data-sidebar-id={getTransitionName(SIDEBAR_TRANSITION_TAG, subject)}
+        >
+          {sidebarKeyboardDndEnabled ? (
+            expandable ? (
+              <>
+                <ExpandToggleButton
+                  type='button'
+                  aria-expanded={expanded}
+                  aria-label={expandLabel}
+                  title={`Rearrange ${resource.title}`}
+                  onClick={e => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onToggleExpand?.();
+                  }}
+                  {...(listeners ?? {})}
+                  {...(attributes ?? {})}
+                >
+                  <ExpandCaret $open={expanded} />
+                </ExpandToggleButton>
+                <RowBody>
+                  <NavResourceLink subject={subject} clean ref={ref}>
+                    <ResourceLinkSideBarItem
+                      onClick={onClick}
+                      disabled={active}
+                      resource={subject}
+                      title={description}
+                    >
+                      <TextWrapper>
+                        <TreeRowTitle>{resource.title}</TreeRowTitle>
+                        <UnsavedIndicator resource={resource} />
+                      </TextWrapper>
+                    </ResourceLinkSideBarItem>
+                  </NavResourceLink>
+                </RowBody>
+              </>
+            ) : (
+              <NavResourceLink subject={subject} clean ref={ref}>
+                <ResourceTreeRow
+                  onClick={onClick}
+                  disabled={active}
+                  resource={subject}
+                  title={description}
+                >
+                  <TextWrapper>
+                    <StyledIconButton
+                      title={`Rearange ${resource.title}`}
+                      {...(listeners ?? {})}
+                      {...(attributes ?? {})}
+                      role='link'
+                    >
+                      <Icon />
+                      <FaGripVertical />
+                    </StyledIconButton>
+                    <TreeRowTitle>{resource.title}</TreeRowTitle>
+                    <UnsavedIndicator resource={resource} />
+                  </TextWrapper>
+                </ResourceTreeRow>
+              </NavResourceLink>
+            )
+          ) : expandable ? (
             <>
               <ExpandToggleButton
                 type='button'
                 aria-expanded={expanded}
                 aria-label={expandLabel}
-                title={`Rearrange ${resource.title}`}
+                title={expandLabel}
                 onClick={e => {
                   e.preventDefault();
                   e.stopPropagation();
                   onToggleExpand?.();
                 }}
-                {...(listeners ?? {})}
-                {...(attributes ?? {})}
               >
                 <ExpandCaret $open={expanded} />
               </ExpandToggleButton>
               <RowBody>
-                <NavResourceLink subject={subject} clean ref={ref}>
+                <NavResourceLink
+                  subject={subject}
+                  clean
+                  ref={ref}
+                  {...(listeners ?? {})}
+                  {...(attributes ?? {})}
+                >
                   <ResourceLinkSideBarItem
                     onClick={onClick}
                     disabled={active}
@@ -103,7 +162,13 @@ export const SidebarItemTitle = memo(forwardRef<
               </RowBody>
             </>
           ) : (
-            <NavResourceLink subject={subject} clean ref={ref}>
+            <NavResourceLink
+              subject={subject}
+              clean
+              ref={ref}
+              {...(listeners ?? {})}
+              {...(attributes ?? {})}
+            >
               <ResourceTreeRow
                 onClick={onClick}
                 disabled={active}
@@ -111,91 +176,25 @@ export const SidebarItemTitle = memo(forwardRef<
                 title={description}
               >
                 <TextWrapper>
-                  <StyledIconButton
-                    title={`Rearange ${resource.title}`}
-                    {...(listeners ?? {})}
-                    {...(attributes ?? {})}
-                    role='link'
-                  >
+                  <LeadingSlot>
                     <Icon />
-                    <FaGripVertical />
-                  </StyledIconButton>
+                  </LeadingSlot>
                   <TreeRowTitle>{resource.title}</TreeRowTitle>
                   <UnsavedIndicator resource={resource} />
                 </TextWrapper>
               </ResourceTreeRow>
             </NavResourceLink>
-          )
-        ) : expandable ? (
-          <>
-            <ExpandToggleButton
-              type='button'
-              aria-expanded={expanded}
-              aria-label={expandLabel}
-              title={expandLabel}
-              onClick={e => {
-                e.preventDefault();
-                e.stopPropagation();
-                onToggleExpand?.();
-              }}
-            >
-              <ExpandCaret $open={expanded} />
-            </ExpandToggleButton>
-            <RowBody>
-              <NavResourceLink
-                subject={subject}
-                clean
-                ref={ref}
-                {...(listeners ?? {})}
-                {...(attributes ?? {})}
-              >
-                <ResourceLinkSideBarItem
-                  onClick={onClick}
-                  disabled={active}
-                  resource={subject}
-                  title={description}
-                >
-                  <TextWrapper>
-                    <TreeRowTitle>{resource.title}</TreeRowTitle>
-                    <UnsavedIndicator resource={resource} />
-                  </TextWrapper>
-                </ResourceLinkSideBarItem>
-              </NavResourceLink>
-            </RowBody>
-          </>
-        ) : (
-          <NavResourceLink
-            subject={subject}
-            clean
-            ref={ref}
-            {...(listeners ?? {})}
-            {...(attributes ?? {})}
-          >
-            <ResourceTreeRow
-              onClick={onClick}
-              disabled={active}
-              resource={subject}
-              title={description}
-            >
-              <TextWrapper>
-                <LeadingSlot>
-                  <Icon />
-                </LeadingSlot>
-                <TreeRowTitle>{resource.title}</TreeRowTitle>
-                <UnsavedIndicator resource={resource} />
-              </TextWrapper>
-            </ResourceTreeRow>
-          </NavResourceLink>
-        )}
-        {!hideActionButtons && (
-          <FloatingActionsCell>
-            <FloatingActions subject={subject} />
-          </FloatingActionsCell>
-        )}
-      </ActionWrapper>
-    );
-  },
-));
+          )}
+          {!hideActionButtons && (
+            <FloatingActionsCell>
+              <FloatingActions subject={subject} />
+            </FloatingActionsCell>
+          )}
+        </ActionWrapper>
+      );
+    },
+  ),
+);
 
 SidebarItemTitle.displayName = 'SidebarItemTitle';
 

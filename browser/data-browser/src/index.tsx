@@ -37,9 +37,7 @@ if (
             (algorithm as unknown as { name: string }).name.toUpperCase();
 
       const input =
-        data instanceof Uint8Array
-          ? data
-          : new Uint8Array(data as ArrayBuffer);
+        data instanceof Uint8Array ? data : new Uint8Array(data as ArrayBuffer);
 
       if (algoStr === 'SHA-256' || algoStr === 'SHA256') {
         return sha256(input).buffer;

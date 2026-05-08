@@ -4955,7 +4955,7 @@ msgstr "Letzte Synchronisation"
 
 #. placeholder {0}: status.lastDriveSync.count
 #. placeholder {1}: ' '
-#. placeholder {2}: formatTimeAgo( new Date(status.lastDriveSync.timestamp), ) ?? 'just now'
+#. placeholder {2}: formatTimeAgo(new Date(status.lastDriveSync.timestamp)) ?? 'just now'
 #: src/routes/SyncRoute.tsx
 msgid "{0} resources,{1} {2}"
 msgstr "{0} Ressourcen,{1} {2}"
@@ -4987,7 +4987,7 @@ msgstr "Wieder verbinden"
 msgid "{0} unsynced"
 msgstr "{0} nicht synchronisiert"
 
-#. placeholder {0}: status.pendingDirtyCount > 0 && ( <PendingCount> {status.pendingDirtyCount} unsynced </PendingCount> )
+#. placeholder {0}: status.pendingDirtyCount > 0 && ( <PendingCount>{status.pendingDirtyCount} unsynced</PendingCount> )
 #: src/routes/SyncRoute.tsx
 msgid "Commit Log {0}"
 msgstr "Commit-Protokoll {0}"
@@ -5084,10 +5084,8 @@ msgstr "+ Hinzufügen"
 msgid "/app/sync"
 msgstr "/app/sync"
 
-#. placeholder {0}: ' '
-#: src/routes/SettingsServer/index.tsx
-msgid "Server settings have moved to the{0} <0>Sync page</0>."
-msgstr "Die Servereinstellungen wurden auf die{0} <0>Synchronisationsseite</0> verschoben."
+#~ msgid "Server settings have moved to the{0} <0>Sync page</0>."
+#~ msgstr "Die Servereinstellungen wurden auf die{0} <0>Synchronisationsseite</0> verschoben."
 
 #: src/routes/SyncRoute.tsx
 msgid "How to run your own server"
@@ -5202,4 +5200,8 @@ msgstr "Überprüfen Sie die Browserkonsole für Details, oder versuchen Sie, zu
 #. placeholder {0}: e instanceof Error ? e.message : String(e)
 #: src/routes/History/HistoryRoute.tsx
 msgid "Could not restore version: {0}"
+msgstr ""
+
+#: src/routes/SettingsServer/index.tsx
+msgid "Server settings have moved to the <0>Sync page</0>."
 msgstr ""

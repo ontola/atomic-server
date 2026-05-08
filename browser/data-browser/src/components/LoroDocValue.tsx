@@ -32,7 +32,9 @@ function inspectLoroSnapshot(
   }
 }
 
-export const LoroDocValue: React.FC<LoroDocValueProps> = ({ value: rawValue }) => {
+export const LoroDocValue: React.FC<LoroDocValueProps> = ({
+  value: rawValue,
+}) => {
   const [showState, setShowState] = useState(false);
 
   // Normalize: base64 strings (from server JSON-AD) → Uint8Array
@@ -45,7 +47,9 @@ export const LoroDocValue: React.FC<LoroDocValueProps> = ({ value: rawValue }) =
         const bytes = new Uint8Array(binary.length);
         for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
         return bytes;
-      } catch { return undefined; }
+      } catch {
+        return undefined;
+      }
     }
     return undefined;
   }, [rawValue]);

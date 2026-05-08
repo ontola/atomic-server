@@ -25,9 +25,7 @@ export function VersionButton({
       data-testid='version-button'
     >
       <DateTime date={new Date(version.timestamp)} />
-      {version.message && (
-        <Message>{version.message}</Message>
-      )}
+      {version.message && <Message>{version.message}</Message>}
     </VersionRow>
   );
 }

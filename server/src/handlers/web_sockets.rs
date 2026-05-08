@@ -356,7 +356,19 @@ impl Handler<CommitMessage> for WebSocketConnection {
 
     fn handle(&mut self, msg: CommitMessage, ctx: &mut ws::WebsocketContext<Self>) {
         let commit = &msg.commit_response.commit;
-        let commit_id = commit.url.as_deref().or(commit.signature.as_deref()).unwrap_or("");
+        // The wire `commit_id` becomes the client's `lastCommit` propval and,
+        // on its next commit, its `previousCommit`. The latter is parsed as
+        // an AtomicURL by the server's JSON-AD parser — a raw base64
+        // signature isn't a URL and gets rejected. Always emit the full
+        // `did:ad:commit:{signature}` DID. (`commit.url` is never populated
+        // in practice, so the previous `or(signature)` fallback was always
+        // taken — silently dropping the prefix.)
+        let commit_id_owned = commit
+            .url
+            .clone()
+            .or_else(|| commit.signature.as_ref().map(|s| format!("did:ad:commit:{}", s)))
+            .unwrap_or_default();
+        let commit_id = commit_id_owned.as_str();
 
         // Resolve any `internal:/…` subject to the server's origin — the client
         // only speaks HTTP URLs and DIDs; `internal:` is a server-only form.

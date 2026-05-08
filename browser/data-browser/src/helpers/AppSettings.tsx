@@ -72,7 +72,9 @@ export const AppSettingsContextProvider = (
     useLocalStorage('sidebarKeyboardDndEnabled', false);
 
   useEffect(() => {
-    const currentOrigin = isDev() ? 'http://localhost:9883' : getLocalServerOrigin();
+    const currentOrigin = isDev()
+      ? 'http://localhost:9883'
+      : getLocalServerOrigin();
 
     serverURLStorage.addKnownServer(currentOrigin);
   }, []);

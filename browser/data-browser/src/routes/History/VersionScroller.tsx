@@ -48,10 +48,7 @@ export function VersionScroller({
                   onClick={() => onSelectVersion(version)}
                   version={version}
                   key={`${version.peer}-${version.frontiers[0]?.counter ?? 0}`}
-                  selected={
-                    persistSelection &&
-                    selectedVersion === version
-                  }
+                  selected={persistSelection && selectedVersion === version}
                 />
               ))}
             </Fragment>
