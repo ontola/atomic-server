@@ -1,0 +1,9 @@
+# See https://nexte.st/book/configuration.html
+
+[profile.default]
+# Many integration tests spin up an actix HTTP server on a unique port.
+# Running them all in parallel (default = num CPUs) saturates the runtime
+# and surfaces flakes in `query_subscribe`, `blob_sync`, and `search`.
+# 2 is the threshold at which all 191 tests pass deterministically on the
+# current branch — 4 still lets `search::test_update_resource` flake.
+test-threads = 2
