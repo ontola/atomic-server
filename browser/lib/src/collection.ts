@@ -195,11 +195,7 @@ export class Collection {
   public applyResourceChange(
     subject: string,
     resource: Resource | undefined,
-  ):
-    | 'unchanged'
-    | 'member-removed'
-    | 'member-added'
-    | 'membership-stale' {
+  ): 'unchanged' | 'member-removed' | 'member-added' | 'membership-stale' {
     const fp = this.params.property;
     const fv = this.params.value;
 
@@ -508,7 +504,10 @@ export class Collection {
       return 'no-db';
     }
 
-    if (result.resources && result.resources.length === result.subjects.length) {
+    if (
+      result.resources &&
+      result.resources.length === result.subjects.length
+    ) {
       for (let i = 0; i < result.subjects.length; i++) {
         this.store.hydrateResourceFromJsonAd(
           result.subjects[i]!,
@@ -554,9 +553,9 @@ export class Collection {
         const valA = sortKeys.get(a);
         const valB = sortKeys.get(b);
 
-        if (valA == null && valB == null) return 0;
-        if (valA == null) return 1;
-        if (valB == null) return -1;
+        if (valA === null && valB === null) return 0;
+        if (valA === null) return 1;
+        if (valB === null) return -1;
 
         const cmp =
           typeof valA === 'number' && typeof valB === 'number'

@@ -594,9 +594,7 @@ export function useDate(
 /**
  * Gets or creates a Loro document for the resource. Returns undefined if the resource is still loading.
  */
-export function useLoroDoc(
-  resource: Resource,
-): LoroDoc | undefined {
+export function useLoroDoc(resource: Resource): LoroDoc | undefined {
   const [doc, setDoc] = useState<LoroDoc | undefined>(() =>
     resource.loading ? undefined : resource.getLoroDoc(),
   );
@@ -657,22 +655,31 @@ export function useCanWrite(resource: Resource): boolean {
   // on every property change.
   useEffect(() => {
     if (agent && !resource.new) {
-      resource.canWrite(agent.subject).then(([result]) => {
-        if (result) {
-          setCanWrite(true);
-        } else if (resource.subject?.startsWith('did:ad:') && agent.subject?.startsWith('did:ad:')) {
-          // DID resources are self-sovereign — the owning agent always has write access.
-          // The normal canWrite check fails because DID drives don't have explicit write rights.
-          setCanWrite(true);
-        } else {
-          setCanWrite(false);
-        }
-      }).catch(() => {
-        // Offline fallback: assume write access for DID resources
-        if (resource.subject?.startsWith('did:ad:') && agent.subject?.startsWith('did:ad:')) {
-          setCanWrite(true);
-        }
-      });
+      resource
+        .canWrite(agent.subject)
+        .then(([result]) => {
+          if (result) {
+            setCanWrite(true);
+          } else if (
+            resource.subject?.startsWith('did:ad:') &&
+            agent.subject?.startsWith('did:ad:')
+          ) {
+            // DID resources are self-sovereign — the owning agent always has write access.
+            // The normal canWrite check fails because DID drives don't have explicit write rights.
+            setCanWrite(true);
+          } else {
+            setCanWrite(false);
+          }
+        })
+        .catch(() => {
+          // Offline fallback: assume write access for DID resources
+          if (
+            resource.subject?.startsWith('did:ad:') &&
+            agent.subject?.startsWith('did:ad:')
+          ) {
+            setCanWrite(true);
+          }
+        });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resource.subject, agent?.subject]);

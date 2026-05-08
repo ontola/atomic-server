@@ -1,10 +1,6 @@
 import { useEffect, useState, type JSX } from 'react';
 import { StoreEvents, type StoreSyncStatus, useStore } from '@tomic/react';
-import {
-  FaWifi,
-  FaArrowsRotate,
-  FaCircleExclamation,
-} from 'react-icons/fa6';
+import { FaWifi, FaArrowsRotate, FaCircleExclamation } from 'react-icons/fa6';
 import { MdSignalWifiOff } from 'react-icons/md';
 import { styled, keyframes } from 'styled-components';
 import { paths } from '../../routes/paths';
@@ -53,7 +49,11 @@ export function SyncMenuItem({
 
 function getSyncIcon(status: StoreSyncStatus): JSX.Element {
   if (status.syncInProgress) {
-    return <SpinningIcon aria-hidden><FaArrowsRotate /></SpinningIcon>;
+    return (
+      <SpinningIcon aria-hidden>
+        <FaArrowsRotate />
+      </SpinningIcon>
+    );
   }
 
   if (!status.serverConnected) {
@@ -61,7 +61,11 @@ function getSyncIcon(status: StoreSyncStatus): JSX.Element {
   }
 
   if (status.pendingDirtyCount > 0) {
-    return <WarningIcon><FaCircleExclamation title='Changes pending' /></WarningIcon>;
+    return (
+      <WarningIcon>
+        <FaCircleExclamation title='Changes pending' />
+      </WarningIcon>
+    );
   }
 
   return <FaWifi title='Connected' />;
@@ -70,7 +74,8 @@ function getSyncIcon(status: StoreSyncStatus): JSX.Element {
 function getSyncLabel(status: StoreSyncStatus): string {
   if (status.syncInProgress) return 'Syncing...';
   if (!status.serverConnected) return 'Offline';
-  if (status.pendingDirtyCount > 0) return `${status.pendingDirtyCount} changes pending`;
+  if (status.pendingDirtyCount > 0)
+    return `${status.pendingDirtyCount} changes pending`;
 
   return 'Connected';
 }

@@ -58,9 +58,9 @@ describe('Offline persistence', () => {
       const valA = store.resources.get(a)?.get(core.properties.name);
       const valB = store.resources.get(b)?.get(core.properties.name);
 
-      if (valA == null && valB == null) return 0;
-      if (valA == null) return 1;
-      if (valB == null) return -1;
+      if (valA === null && valB === null) return 0;
+      if (valA === null) return 1;
+      if (valB === null) return -1;
 
       return String(valA).localeCompare(String(valB));
     });
@@ -75,9 +75,9 @@ describe('Offline persistence', () => {
       const valA = store.resources.get(a)?.get(core.properties.name);
       const valB = store.resources.get(b)?.get(core.properties.name);
 
-      if (valA == null && valB == null) return 0;
-      if (valA == null) return 1;
-      if (valB == null) return -1;
+      if (valA === null && valB === null) return 0;
+      if (valA === null) return 1;
+      if (valB === null) return -1;
 
       return -String(valA).localeCompare(String(valB));
     });

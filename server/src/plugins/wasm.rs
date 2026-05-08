@@ -14,7 +14,7 @@ use std::{
 use atomic_lib::{
     agents::{Agent, ForAgent},
     class_extender::ClassExtender,
-    commit::{CommitBuilder, CommitBuilderJSON, CommitOpts},
+    commit::{CommitBuilder, CommitOpts},
     db::plugin_meta::{PermissionType, PluginManifest, PluginMeta},
     errors::{AtomicError, AtomicResult},
     parse::{parse_json_ad_resource, ParseOpts, SaveOpts},
@@ -521,12 +521,23 @@ impl WasmPlugin {
         &self,
         context: &'a class_extender::CommitExtenderContext<'a>,
     ) -> AtomicResult<WasmCommitContext> {
+        // Plugins parse `commit_json` into `atomic_plugin::Commit`, which
+        // requires the `subject` field. The deterministic serializer
+        // strips `subject` for genesis commits (because the signature
+        // derivation can't include it — circular dep), so using it here
+        // makes every genesis commit fail with "missing field subject"
+        // inside the plugin's WASM before user logic runs. The plugin
+        // doesn't care about signing-deterministic output; it just needs
+        // to inspect the commit. Use a regular `to_json_ad` of the commit
+        // resource — that always includes `subject`.
+        let commit_resource = context.commit.into_resource(context.store).await?;
+        let origin = context
+            .store
+            .get_base_domain()
+            .unwrap_or_else(|| "http://localhost".to_string());
         Ok(WasmCommitContext {
             subject: context.resource.get_subject().to_string(),
-            commit_json: context
-                .commit
-                .serialize_deterministically_json_ad(context.store)
-                .await?,
+            commit_json: commit_resource.to_json_ad(Some(&origin))?,
             snapshot: self.encode_resource(context.resource)?,
             is_new: context.is_new,
         })
@@ -771,11 +782,46 @@ impl bindings::atomic::class_extender::host::Host for PluginHostState {
             return Err("Plugin does not have an agent".to_string());
         };
 
-        let commit_builder_json: CommitBuilderJSON =
-            serde_json::from_str(&commit).map_err(|e| e.to_string())?;
+        // The plugin SDK's `CommitBuilder` serializes with full set / remove
+        // payloads (HashMap<String, JsonValue> / HashSet<String>). The
+        // canonical `CommitBuilderJSON` only carries `loro_update`, so plugins
+        // that build a commit by accumulating `set` calls would otherwise
+        // arrive with no Loro update and get rejected. Parse the wire shape
+        // directly here and convert each JsonValue → typed `Value` via the
+        // property's datatype, then `sign_at` materializes the Loro update.
+        #[derive(serde::Deserialize)]
+        struct PluginCommitWire {
+            subject: String,
+            #[serde(default)]
+            set: std::collections::HashMap<String, serde_json::Value>,
+            #[serde(default)]
+            remove: HashSet<String>,
+            #[serde(default)]
+            destroy: bool,
+            #[serde(default)]
+            previous_commit: Option<String>,
+        }
 
-        let commit_builder = CommitBuilder::from_commit_builder_json(commit_builder_json)
-            .map_err(|e| format!("Failed to deserialize commit: {}", e))?;
+        let wire: PluginCommitWire =
+            serde_json::from_str(&commit).map_err(|e| format!("Invalid commit JSON: {e}"))?;
+
+        let mut commit_builder = CommitBuilder::new(wire.subject.into());
+        commit_builder.destroy(wire.destroy);
+        // `previous_commit` is intentionally ignored: `sign()` overrides it
+        // from the resource's `lastCommit` propval, so any value the plugin
+        // supplies would be discarded anyway.
+        let _ = wire.previous_commit;
+        for prop in wire.remove {
+            commit_builder.remove(prop);
+        }
+        let parse_opts = ParseOpts::default();
+        for (prop, json_val) in wire.set {
+            let (key, value) =
+                atomic_lib::parse::parse_propval(&prop, &json_val, None, &*self.db, &parse_opts)
+                    .await
+                    .map_err(|e| format!("Failed to convert plugin set value for {prop}: {e}"))?;
+            commit_builder.set(key.to_string(), value);
+        }
 
         let resource = self
             .db
@@ -830,8 +876,30 @@ impl bindings::atomic::class_extender::host::Host for PluginHostState {
             return "{}".to_string();
         };
 
+        // Loro stores Value::Json as a JSON string, and the loader heuristic
+        // in `loro_value_to_atomic_value` reinflates `{...}` strings as
+        // `Value::NestedResource`. So accept any shape that can be coerced
+        // back to a JSON object.
         match val {
             atomic_lib::Value::Json(json_val) => json_val.to_string(),
+            atomic_lib::Value::String(s) => match serde_json::from_str::<serde_json::Value>(s) {
+                Ok(parsed) if parsed.is_object() => s.clone(),
+                _ => "{}".to_string(),
+            },
+            atomic_lib::Value::NestedResource(atomic_lib::values::SubResource::Nested(
+                propvals,
+            )) => {
+                let map: serde_json::Map<String, serde_json::Value> = propvals
+                    .iter()
+                    .filter_map(|(k, v)| {
+                        let s = v.to_string();
+                        let parsed = serde_json::from_str::<serde_json::Value>(&s)
+                            .unwrap_or(serde_json::Value::String(s));
+                        Some((k.clone(), parsed))
+                    })
+                    .collect();
+                serde_json::Value::Object(map).to_string()
+            }
             _ => "{}".to_string(),
         }
     }

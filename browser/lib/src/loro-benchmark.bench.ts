@@ -124,7 +124,7 @@ describe('Loro vs Map performance', () => {
 
   bench('Read 10 props from cached toJSON object', () => {
     for (const [k] of props) {
-      cached[k];
+      void cached[k];
     }
   });
 
@@ -143,7 +143,7 @@ describe('Loro vs Map performance', () => {
   bench('Read 10 props from 200 cached objects (proposed)', () => {
     for (const obj of cachedObjects) {
       for (const [k] of props) {
-        obj[k];
+        void obj[k];
       }
     }
   });

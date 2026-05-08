@@ -56,7 +56,10 @@ export function useServerSearch(
   const updateResults = useEffectEvent(
     (r: string[], relevantQuery: string, relevantOpts: SearchOpts) => {
       // If the query became empty since the last fetch, don't update the results
-      if (relevantQuery !== debouncedQuery || relevantOpts !== memoizedSearchOpts) {
+      if (
+        relevantQuery !== debouncedQuery ||
+        relevantOpts !== memoizedSearchOpts
+      ) {
         return;
       }
       setResults(r);

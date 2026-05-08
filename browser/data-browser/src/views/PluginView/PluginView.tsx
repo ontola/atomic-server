@@ -56,7 +56,7 @@ export const PluginView: React.FC<PluginViewProps> = ({ plugin }) => {
   const pluginData = getUIPluginData(plugin);
   const [frameRef, resourcePickerDialog] = usePluginRPC(pluginData);
   const stylesheet = useCreateThemeVars();
-  const pluginUrl = `${store.getServerUrl()}/plugin-ui?drive=${drive}&plugin=${plugin}`;
+  const pluginUrl = `${store.getServerUrl()}/plugin-ui?drive=${encodeURIComponent(drive)}&plugin=${encodeURIComponent(plugin)}`;
   const scriptSrc = `${pluginUrl}&format=js`;
   const cssSrc = pluginData.uiManifest.css
     ? `${pluginUrl}&format=css`

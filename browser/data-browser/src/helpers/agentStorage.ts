@@ -39,13 +39,18 @@ export async function getAgentFromIDB(): Promise<Agent | undefined> {
           storedAgent.subject,
         );
       } catch (e) {
-        console.warn('Failed to load agent with SubtleCrypto, trying fallback:', e);
+        console.warn(
+          'Failed to load agent with SubtleCrypto, trying fallback:',
+          e,
+        );
       }
     }
   }
 
   // Fallback: load from plaintext private key (insecure context)
-  const fallback = (await get(AGENT_FALLBACK_KEY)) as StoredAgentFallback | undefined;
+  const fallback = (await get(AGENT_FALLBACK_KEY)) as
+    | StoredAgentFallback
+    | undefined;
 
   if (fallback) {
     try {

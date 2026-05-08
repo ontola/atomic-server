@@ -49,9 +49,11 @@ export function useProcessMessages() {
  */
 const toResultObject = (resource: Resource, includeCommitData: boolean) => {
   const props = Object.fromEntries(
-    resource.getEntries().filter(
-      ([key]) => includeCommitData || key !== commits.properties.lastCommit,
-    ),
+    resource
+      .getEntries()
+      .filter(
+        ([key]) => includeCommitData || key !== commits.properties.lastCommit,
+      ),
   );
 
   return {

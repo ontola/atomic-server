@@ -1854,7 +1854,6 @@ export class Store {
         // fetchResourceFromServer already handles its own errors.
       });
     }
-
   }
 
   /**
@@ -2009,6 +2008,15 @@ export class Store {
     const resolved = this.aliases.get(normalized) ?? normalized;
 
     const resource = this.resources.get(resolved);
+
+    // Tombstone in ClientDb (OPFS) so the resource doesn't reappear after a
+    // page reload. The in-memory `resources` map is wiped on reload, but the
+    // WASM DB persists; without this, cascade-deleted children survive
+    // restart and re-render. Fire-and-forget — the worker queues writes.
+    const clientDb = this.clientDb;
+    if (clientDb) {
+      void clientDb.removeResource(resolved).catch(() => undefined);
+    }
 
     if (resource) {
       this.resources.delete(resolved);

@@ -1,4 +1,10 @@
-import React, { cloneElement, isValidElement, useEffect, useState, type JSX } from 'react';
+import React, {
+  cloneElement,
+  isValidElement,
+  useEffect,
+  useState,
+  type JSX,
+} from 'react';
 import { core, useCanWrite, useResource, useStore } from '@tomic/react';
 
 import { Dialog, useDialog } from '../Dialog';

@@ -105,9 +105,7 @@ const ResourcePage: React.FC<Props> = ({ subject }) => {
             The resource at <code>{subject}</code> hasn't loaded after 15
             seconds. It may not exist, or the server may be unreachable.
           </p>
-          <p>
-            Check the browser console for details, or try navigating back.
-          </p>
+          <p>Check the browser console for details, or try navigating back.</p>
         </ContainerNarrow>
       </Main>
     );

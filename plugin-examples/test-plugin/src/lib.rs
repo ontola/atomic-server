@@ -1,5 +1,6 @@
-use atomic_plugin::{ClassExtender, Resource};
+use atomic_plugin::{ClassExtender, Commit, CommitBuilder, Resource};
 use serde::Deserialize;
+use serde_json::Value as JsonValue;
 
 struct TestPlugin;
 
@@ -19,24 +20,29 @@ impl ClassExtender for TestPlugin {
         vec![FOLDER_CLASS.to_string(), BIRD_CLASS.to_string()]
     }
 
-    // Modify the response from the server every time a folder is fetched.
-    // Appends a random number to the end of the folder name.
-    fn on_resource_get(resource: &mut Resource) -> Result<Option<&Resource>, String> {
+    fn after_commit(commit: &Commit, resource: &Resource, _is_new: bool) -> Result<(), String> {
+        if !resource.is_a(FOLDER_CLASS) {
+            return Ok(());
+        }
         let config = atomic_plugin::get_config::<Config>()?;
-
-        let base_name = resource
+        let prefix = config.folder_prefix.trim();
+        if prefix.is_empty() {
+            return Ok(());
+        }
+        let current_name = resource
             .props
             .get(NAME_PROP)
-            .and_then(|val| val.as_str())
-            .unwrap_or("Folder");
-
-        let updated_name = format!("{} {}", config.folder_prefix, base_name.trim_start());
-
-        resource
-            .props
-            .insert(NAME_PROP.to_string(), updated_name.into());
-
-        Ok(Some(resource))
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let prefix_with_space = format!("{} ", prefix);
+        if current_name.starts_with(&prefix_with_space) {
+            return Ok(());
+        }
+        let target = format!("{} {}", prefix, current_name.trim_start());
+        let mut builder = CommitBuilder::new(commit.subject.clone());
+        builder.set(NAME_PROP.to_string(), JsonValue::String(target));
+        atomic_plugin::commit(&builder)?;
+        Ok(())
     }
 }
 

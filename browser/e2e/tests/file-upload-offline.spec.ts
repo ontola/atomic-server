@@ -70,8 +70,13 @@ test.describe('file upload + offline survival', () => {
     page,
   }) => {
     await page.evaluate(() => (window as any).store.disconnect());
+    // syncStatus updates fire on the next event-loop tick after the WS
+    // close is observed; under suite-wide load that can exceed the default
+    // 5s waitForFunction timeout.
     await page.waitForFunction(
       () => (window as any).store.getSyncStatus().serverConnected === false,
+      undefined,
+      { timeout: 15000 },
     );
 
     const subject = await uploadGeneratedPng(page, 'pure-offline.png');
@@ -96,8 +101,13 @@ test.describe('file upload + offline survival', () => {
 
   test('offline upload survives reload + reconnect', async ({ page }) => {
     await page.evaluate(() => (window as any).store.disconnect());
+    // syncStatus updates fire on the next event-loop tick after the WS
+    // close is observed; under suite-wide load that can exceed the default
+    // 5s waitForFunction timeout.
     await page.waitForFunction(
       () => (window as any).store.getSyncStatus().serverConnected === false,
+      undefined,
+      { timeout: 15000 },
     );
 
     const subject = await uploadGeneratedPng(page, 'survives-reload.png');
