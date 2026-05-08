@@ -522,15 +522,17 @@ export class AtomicServer {
       this.rustBuild()
         // Install nextest from a prebuilt tarball — the `cargo install`
         // path fails on the musl-cross image (see the comment in
-        // rustBuild()). Pinning the URL guarantees the artefact is
-        // ABI-compatible with the host triple of the build container.
-        // `mkdir -p` because the cargo bin dir isn't always materialized
-        // by the time we get here (cache-mount layout / rustup state),
-        // and `tar -C <missing>` errors with "Cannot open".
+        // rustBuild()). The `linux-musl` URL is required: the default
+        // `linux` artifact is the glibc binary, which silently exits
+        // 1 on the musl-cross container (cargo then reports "no such
+        // command: nextest" because the subcommand returned nonzero).
+        // Place the binary in `$CARGO_HOME/bin` (resolved at runtime —
+        // the rust-musl-cross image puts it under /root/.cargo, the
+        // official rust:bookworm under /usr/local/cargo).
         .withExec([
           'sh',
           '-c',
-          'mkdir -p /usr/local/cargo/bin && curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C /usr/local/cargo/bin',
+          'BIN_DIR="${CARGO_HOME:-$HOME/.cargo}/bin" && mkdir -p "$BIN_DIR" && curl -LsSf https://get.nexte.st/latest/linux-musl | tar zxf - -C "$BIN_DIR" && "$BIN_DIR/cargo-nextest" --version',
         ])
         .withExec(['cargo', 'nextest', 'run'])
         .stdout()
