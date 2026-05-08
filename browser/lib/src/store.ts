@@ -1612,32 +1612,15 @@ export class Store {
       return true;
     }
 
-    // Offline-created resources keep their genesis commit in `_pendingCommits`
-    // until the next reconnect, when `syncDirtyResources` drains it via
-    // `pushCommits`. Replacing the in-memory instance with a fresh one from
-    // clientDb wipes the queue — so the dirty subject gets "Synced" with an
-    // empty queue, no /commit POST fires, the server never sees the resource,
-    // and `/download/files/<hash>` keeps returning 404 even after reconnect.
+    // Offline-created resources with queued signed commits: the
+    // outbox holds them durably across reload. The freshly hydrated
+    // resource doesn't need a per-instance queue re-attachment —
+    // `pushCommits` reads straight from `store.outbox.getEntry`.
     if (existing?.hasPendingCommits) {
       return true;
     }
 
-    // Same problem after a page reload: the in-memory queue is gone, but
-    // the outbox persisted it durably. Re-attach the queue to the
-    // freshly hydrated instance so the next sync can push.
-    const restoredCommits = this.outbox.getEntry(subject)?.commits;
-
     this.hydrateOfflineReplay(subject, parsed);
-
-    // Re-attach restored commits AFTER hydrateOfflineReplay because the
-    // ingress may merge the new instance into an existing placeholder
-    // (created by getResourceLoading); merge() carries Loro/cache state
-    // but not `_pendingCommits`, so writing them on the freshly-built
-    // resource wouldn't survive. Pull the canonical instance back out
-    // and patch it.
-    if (restoredCommits?.length) {
-      this.getResolved(subject)?.setPendingCommits([...restoredCommits]);
-    }
 
     return true;
   }
