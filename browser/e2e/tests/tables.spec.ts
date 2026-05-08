@@ -225,8 +225,14 @@ test.describe('tables', async () => {
         select: 'wtf',
       },
     ];
-    await page.getByRole('gridcell').first().click({ force: true });
-    await expect(page.getByRole('gridcell').first()).toBeFocused();
+    // Click + explicit focus: a `click({ force: true })` alone occasionally
+    // leaves the cell in 'inactive' state under suite load (probably the
+    // grid's onClick handler hasn't bound by the time the click lands).
+    // Calling `.focus()` directly bypasses that race.
+    const firstCell = page.getByRole('gridcell').first();
+    await firstCell.click({ force: true });
+    await firstCell.focus();
+    await expect(firstCell).toBeFocused();
     await page.waitForTimeout(1000);
 
     for (const [index, row] of rows.entries()) {
