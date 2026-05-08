@@ -5,7 +5,13 @@ import React, {
   useState,
   type JSX,
 } from 'react';
-import { core, useCanWrite, useResource, useStore } from '@tomic/react';
+import {
+  core,
+  ResourceEvents,
+  useCanWrite,
+  useResource,
+  useStore,
+} from '@tomic/react';
 
 import { Dialog, useDialog } from '../Dialog';
 import { Button } from '../Button';
@@ -54,7 +60,7 @@ export function ShareDialog({
     setHasLocalChanges(resource.hasUnsavedChanges());
     const stable = resource.stable;
 
-    return stable.on('local-change', prop => {
+    return stable.on(ResourceEvents.LocalChange, prop => {
       if (prop === core.properties.read || prop === core.properties.write) {
         setHasLocalChanges(stable.hasUnsavedChanges());
       }

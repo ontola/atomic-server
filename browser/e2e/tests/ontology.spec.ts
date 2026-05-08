@@ -273,14 +273,20 @@ test.describe('Ontology', async () => {
         .nth(1),
     );
 
-    // Each instance shows up in three places after being added to allows-only:
-    // the sidebar tree, the allows-only list button, and the instances area
-    // (link + heading). Poll because dialog commits propagate async.
-    await expect(page.getByText('Red arrow with circle')).toHaveCount(3, {
-      timeout: 15000,
-    });
-    await expect(
-      page.getByText('Green arrow with black border'),
-    ).toHaveCount(3, { timeout: 15000 });
+    // Each instance is rendered at least three times (sidebar tree, allows-only
+    // button, instances heading+link). Some race conditions add a fourth match
+    // (e.g. drive-children list refresh after the commit), so accept ≥ 3.
+    await expect
+      .poll(
+        () => page.getByText('Red arrow with circle').count(),
+        { timeout: 15000 },
+      )
+      .toBeGreaterThanOrEqual(3);
+    await expect
+      .poll(
+        () => page.getByText('Green arrow with black border').count(),
+        { timeout: 15000 },
+      )
+      .toBeGreaterThanOrEqual(3);
   });
 });

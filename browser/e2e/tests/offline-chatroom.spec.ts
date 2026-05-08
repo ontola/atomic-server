@@ -48,10 +48,12 @@ async function waitForReady(page: Page) {
 
 async function disconnect(page: Page) {
   await page.evaluate(() => (window as any).store.disconnect());
+  // syncStatus updates fire on the next event-loop tick after the WS close;
+  // under suite-wide load that can run past the default 5s budget.
   await page.waitForFunction(
     () => (window as any).store.getSyncStatus().serverConnected === false,
     undefined,
-    { timeout: 5000 },
+    { timeout: 15000 },
   );
 }
 

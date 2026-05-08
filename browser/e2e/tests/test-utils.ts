@@ -740,8 +740,14 @@ export async function inDialog(
 
 export async function acceptInvite(page: Page) {
   // InvitePage CTA now reads "Create account and accept" (it generates a new
-  // DID agent on the fly); the old "Accept as new user" button is gone.
-  await page.getByRole('button', { name: 'Create account and accept' }).click();
+  // DID agent on the fly); the old "Accept as new user" button is gone. The
+  // invite resource is loaded over WS, so under suite-wide load wait longer
+  // than the default 5s for the button to appear.
+  const acceptBtn = page.getByRole('button', {
+    name: 'Create account and accept',
+  });
+  await expect(acceptBtn).toBeVisible({ timeout: 15000 });
+  await acceptBtn.click();
 
   await inDialog(page, async (dialog, closeDialog) => {
     await expect(

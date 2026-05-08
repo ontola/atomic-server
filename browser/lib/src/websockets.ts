@@ -25,7 +25,13 @@ import {
 import { BLOB } from './urls.js';
 import { hexToBytes, bytesToHex } from './value.js';
 
-const REQUEST_TIMEOUT = 5000;
+// 15s, not 5s — under network load (heavy commit traffic, search-index
+// rebuilds, multi-tab sync) the server can take longer than 5s to ack a
+// GET. Failing with `timed out after 5000ms` then sends the user to the
+// error page even when the resource is on its way. 15s matches the e2e
+// suite's heavy-action assertion budget and is still well under the
+// 30s default test timeout.
+const REQUEST_TIMEOUT = 15000;
 const WS_PROTOCOL = 'atomicdata-ws.v2';
 
 /**

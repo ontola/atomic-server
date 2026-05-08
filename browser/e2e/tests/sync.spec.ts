@@ -100,9 +100,7 @@ test.describe('sync', () => {
     ).toBeVisible({ timeout: 15000 });
   });
 
-  // Requires OPFS persistence to survive reload. Skipped because Playwright's
-  // browser context may not reliably support OPFS (falls back to in-memory).
-  test.skip('edits made offline persist across reload', async ({ page }) => {
+  test('edits made offline persist across reload', async ({ page }) => {
     test.slow();
 
     // 1. Create a document while online
@@ -152,16 +150,15 @@ test.describe('sync', () => {
     await page.reload({ waitUntil: 'domcontentloaded' });
     await waitForClientDb(page);
 
-    // 5. Verify the offline edit survived the reload
-    await expect(page.getByText('Edited Offline')).toBeVisible({
-      timeout: 15000,
-    });
+    // 5. Verify the offline edit survived the reload (the title appears in
+    // the breadcrumb, sidebar tree, and main editable title — match the
+    // main one to avoid strict-mode multi-match).
+    await expect(
+      page.getByTestId('editable-title').getByText('Edited Offline'),
+    ).toBeVisible({ timeout: 15000 });
   });
 
-  // TODO: The offline→reconnect→sync flow works (confirmed by screenshot)
-  // but the WS reconnection after Playwright's setOffline(false) is unreliable.
-  // The test needs a better way to simulate network interruption.
-  test.skip('offline edits sync to server when connection is restored', async ({
+  test('offline edits sync to server when connection is restored', async ({
     page,
     context,
     browser,
@@ -196,8 +193,24 @@ test.describe('sync', () => {
     // Get the secret so we can sign in from another context
     const secret = await getDevDriveSecret(page);
 
-    // 2. Go offline using Playwright's network control
+    // Make sure the lazy `CollaborativeEditor` chunk is loaded BEFORE going
+    // offline, otherwise the document body falls into an ErrorBoundary and
+    // the editable title disappears. Vite serves these chunks dynamically;
+    // setOffline(true) blocks the fetch.
+    await expect(page.getByLabel('Rich Text Editor')).toBeVisible({
+      timeout: 15000,
+    });
+
+    // 2. Go offline using Playwright's network control + close the WS
+    // directly. `setOffline(true)` blocks new connections but doesn't tear
+    // down the open one, so the store's `serverConnected` flag won't flip
+    // until something forces a close. Closing here also halts auto-retry
+    // (close() sets `_closed=true`) so the backoff doesn't pile up.
     await context.setOffline(true);
+    await page.evaluate(() => {
+      const store = (window as any).store;
+      store?.getDefaultWebSocket()?.close();
+    });
 
     // Wait for the store to detect the disconnect
     await page.waitForFunction(
@@ -205,14 +218,6 @@ test.describe('sync', () => {
       undefined,
       { timeout: 15000 },
     );
-
-    // Stop the WS auto-reconnect retries while offline (they'd just fail
-    // and grow the backoff delay). We'll trigger a manual reconnect.
-    await page.evaluate(() => {
-      const store = (window as any).store;
-      const ws = store?.getDefaultWebSocket();
-      ws?.close(); // close() sets _closed=true, stopping retries
-    });
 
     // 3. Edit title offline
     await editableTitle(page).click();
@@ -255,13 +260,19 @@ test.describe('sync', () => {
     // Wait for the second page to connect
     await waitForConnected(page2);
 
-    // Navigate to the resource
-    await page2.getByTestId('adress-bar').fill(resourceSubject!);
+    // Navigate to the resource — the legacy `adress-bar` input is gone;
+    // route directly via the SPA's /app/show entry.
+    await page2.goto(
+      `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(resourceSubject!)}`,
+    );
 
-    // Verify the offline edit is visible
-    await expect(page2.getByText('Synced From Offline')).toBeVisible({
-      timeout: 15000,
-    });
+    // Verify the offline edit is visible — first wait for the editor to
+    // mount (signals page-load complete), then assert the title appears in
+    // any of the rendered locations.
+    await page2.waitForLoadState('networkidle').catch(() => undefined);
+    await expect(
+      page2.getByText('Synced From Offline').first(),
+    ).toBeVisible({ timeout: 15000 });
 
     await context2.close();
   });

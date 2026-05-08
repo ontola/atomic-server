@@ -59,7 +59,7 @@ test.describe('offline create → online sync → disable localDB', () => {
     await page.waitForFunction(
       () => (window as any).store.getSyncStatus().serverConnected === false,
       undefined,
-      { timeout: 5000 },
+      { timeout: 15000 },
     );
 
     // 3. Create a drive while offline.

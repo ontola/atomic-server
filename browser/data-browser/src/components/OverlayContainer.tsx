@@ -349,10 +349,12 @@ function SearchOverlay(): JSX.Element {
   // Shift+Enter always starts an AI chat
   useHotkeys(
     'shift+enter',
-    async e => {
+    e => {
       e.preventDefault();
-      await handleStartAIChat(query, store, drive, navigate);
-      closeOverlay();
+      void (async () => {
+        await handleStartAIChat(query, store, drive, navigate);
+        closeOverlay();
+      })();
     },
     { enableOnTags: ['INPUT'] },
     [query, store, drive, navigate],
