@@ -25,7 +25,10 @@ import {
 import { BLOB } from './urls.js';
 import { hexToBytes, bytesToHex } from './value.js';
 
-const REQUEST_TIMEOUT = 5000;
+// 5s is too tight for a shared atomic-server under suite-wide e2e load
+// (auth race + drive sub + several parallel GETs queue up). Above ~10s, the
+// failure mode is a real server hang or stuck WS, not transient slowness.
+const REQUEST_TIMEOUT = 10000;
 const WS_PROTOCOL = 'atomicdata-ws.v2';
 
 /**
