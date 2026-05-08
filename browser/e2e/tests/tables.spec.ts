@@ -218,12 +218,8 @@ test.describe('tables', async () => {
         select: 'wtf',
       },
     ];
-    // The grid wires up its keyboard focus on first paint; under suite load
-    // the click can fire before that's set up, so retry until focus sticks.
-    const firstCell = page.getByRole('gridcell').first();
-    await expect(firstCell).toBeVisible({ timeout: 15000 });
-    await firstCell.click({ force: true });
-    await expect(firstCell).toBeFocused({ timeout: 15000 });
+    await page.getByRole('gridcell').first().click({ force: true });
+    await expect(page.getByRole('gridcell').first()).toBeFocused();
     await page.waitForTimeout(1000);
 
     for (const [index, row] of rows.entries()) {
