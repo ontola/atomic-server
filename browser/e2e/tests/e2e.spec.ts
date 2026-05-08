@@ -286,6 +286,12 @@ test.describe('data-browser', async () => {
       .getByRole('button', { name: 'New Document' })
       .first()
       .click();
+    // Wait for navigation onto the new document before editing — under
+    // suite-wide load the folder page can still be active and `editTitle`
+    // would otherwise rename the folder instead of the new document.
+    await page.waitForURL(url => url.toString() !== folderUrl, {
+      timeout: 10000,
+    });
     const docTitle = 'RAM Downloading Strategies';
     await editTitle(docTitle, page);
 
@@ -481,7 +487,19 @@ test.describe('data-browser', async () => {
     await page.getByRole('button', { name: 'Import' }).click();
     await expect(page.locator('text=Imported!')).toBeVisible();
 
-    await page.goto(parentSubject + '/' + localID);
+    // DID-parent imports get fresh DIDs (signed genesis commits), not a
+    // path-derived subject. Navigate to the parent and click through to the
+    // imported child; HTTP-parent imports still produce `<parent>/<id>`.
+    if (parentSubject.startsWith('did:')) {
+      await openSubject(page, parentSubject);
+      const childLink = page
+        .getByRole('main')
+        .getByRole('link', { name, exact: true });
+      await expect(childLink).toBeVisible({ timeout: 10000 });
+      await childLink.click();
+    } else {
+      await openSubject(page, `${parentSubject}/${localID}`);
+    }
     await expect(page.getByRole('heading', { name })).toBeVisible();
   });
 

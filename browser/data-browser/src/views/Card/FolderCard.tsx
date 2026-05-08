@@ -31,6 +31,7 @@ export const FolderCard: React.FC<CardViewProps> = ({ resource }) => {
       <TableWrapper>
         <ListView
           basic
+          parent={resource.subject}
           subResources={subResources}
           onNewClick={() => {}}
           showNewButton={false}

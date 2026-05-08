@@ -1,5 +1,5 @@
 import { useEffect, useState, type JSX } from 'react';
-import { core, useCanWrite, useResource } from '@tomic/react';
+import { core, ResourceEvents, useCanWrite, useResource } from '@tomic/react';
 import { ContainerNarrow } from '../../components/Containers';
 import { Card, CardInsideFull } from '../../components/Card';
 import { Button } from '../../components/Button';
@@ -56,7 +56,7 @@ function SharePage(): JSX.Element {
     setHasLocalChanges(resource.hasUnsavedChanges());
     const stable = resource.stable;
 
-    return stable.on('local-change', prop => {
+    return stable.on(ResourceEvents.LocalChange, prop => {
       if (prop === core.properties.read || prop === core.properties.write) {
         setHasLocalChanges(stable.hasUnsavedChanges());
       }

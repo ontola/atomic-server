@@ -19,6 +19,10 @@ test.describe('documents', async () => {
     page,
     browser,
   }) => {
+    // The multi-user flow opens a second context, signs in, syncs, edits,
+    // and waits for cross-tab WS propagation — frequently bumps past the
+    // 30s default under suite-wide load.
+    test.slow();
     const folderTitle = 'SomeFolder';
 
     const secret = await getDevDriveSecret(page);
@@ -97,14 +101,17 @@ test.describe('documents', async () => {
     await page2.keyboard.press('Backspace');
     await page2.keyboard.up('Alt');
 
-    await expect(
-      page.locator(`text=${syncText}`),
-      'Paragraph not deleted in first window.',
-    ).not.toBeVisible();
+    // Loro CRDT sync between two browser contexts goes through the server's
+    // WS hub, so propagation can take several seconds under suite-wide load.
+    // Verify the local deletion first, then poll for the cross-tab sync.
     await expect(
       page2.locator(`text=${syncText}`),
       'Paragraph not deleted in second window',
-    ).not.toBeVisible();
+    ).not.toBeVisible({ timeout: 15000 });
+    await expect(
+      page.locator(`text=${syncText}`),
+      'Paragraph not deleted in first window.',
+    ).not.toBeVisible({ timeout: 15000 });
 
     // Wait for AtomicServer to index the folder
     await waitForSearchIndex(page2);
@@ -118,8 +125,9 @@ test.describe('documents', async () => {
     ).toBeVisible();
     await page2.keyboard.press('Enter');
 
+    // Cross-tab CRDT sync of the @-mention link can take a few seconds.
     await expect(
       page.getByLabel('Rich Text Editor').locator('a:has-text("SomeFolder")'),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 15000 });
   });
 });

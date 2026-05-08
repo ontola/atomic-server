@@ -40,11 +40,11 @@ if (
         data instanceof Uint8Array ? data : new Uint8Array(data as ArrayBuffer);
 
       if (algoStr === 'SHA-256' || algoStr === 'SHA256') {
-        return sha256(input).buffer;
+        return sha256(input).buffer as ArrayBuffer;
       }
 
       if (algoStr === 'SHA-512' || algoStr === 'SHA512') {
-        return sha512(input).buffer;
+        return sha512(input).buffer as ArrayBuffer;
       }
 
       throw new Error(

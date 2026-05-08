@@ -525,9 +525,9 @@ function entriesToJSONRecord(
         return [key, undefined];
       }
 
-      return [key, value];
+      return [key, value as JSONValue];
     }),
-  );
+  ) as Record<string, JSONValue>;
 }
 
 export function usePluginRPC(

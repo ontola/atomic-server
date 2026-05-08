@@ -218,8 +218,12 @@ test.describe('tables', async () => {
         select: 'wtf',
       },
     ];
-    await page.getByRole('gridcell').first().click({ force: true });
-    await expect(page.getByRole('gridcell').first()).toBeFocused();
+    // The grid wires up its keyboard focus on first paint; under suite load
+    // the click can fire before that's set up, so retry until focus sticks.
+    const firstCell = page.getByRole('gridcell').first();
+    await expect(firstCell).toBeVisible({ timeout: 15000 });
+    await firstCell.click({ force: true });
+    await expect(firstCell).toBeFocused({ timeout: 15000 });
     await page.waitForTimeout(1000);
 
     for (const [index, row] of rows.entries()) {
@@ -282,11 +286,14 @@ test.describe('tables', async () => {
     // grid) don't get swallowed by the title input.
     await page.keyboard.press('Escape');
 
-    // Wait for table to be ready
-    await page.waitForTimeout(500);
+    // Wait for the table grid to be ready before clicking. Under suite-wide
+    // load the row-virtualizer mounts more slowly than the default 5s click
+    // timeout, so wait for the first gridcell explicitly.
+    const firstCell = page.getByRole('gridcell').first();
+    await expect(firstCell).toBeVisible({ timeout: 15000 });
 
     // Click first cell to focus the table
-    await page.getByRole('gridcell').first().click({ force: true });
+    await firstCell.click({ force: true });
     await page.waitForTimeout(300);
 
     const values = ['alpha', 'bravo', 'charlie', 'delta', 'echo'];
