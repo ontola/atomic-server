@@ -165,7 +165,6 @@ export class Resource<C extends OptionalClass = any> {
     ResourceEventHandlers
   >();
 
-  private errorRetries = 0;
 
   public constructor(subject: string, newResource?: boolean) {
     if (typeof subject !== 'string') {
@@ -2186,14 +2185,9 @@ export class Resource<C extends OptionalClass = any> {
       };
     });
 
-    // Keep a backup of the commit builder in case push fails.
-    const oldCommitBuilder = hasChanges
-      ? this.commitBuilder.clone()
-      : undefined;
     const wasNew = this.new;
 
     try {
-      // Sign any unsaved changes into the local queue.
       if (hasChanges) {
         try {
           await this.signChanges(agent);
@@ -2226,7 +2220,9 @@ export class Resource<C extends OptionalClass = any> {
 
       return result;
     } catch (e) {
-      // Network error (server went down mid-request) — apply locally and queue for sync.
+      // Network error (server went down mid-request) — outbox still
+      // holds the signed commit; persist a local snapshot and resume
+      // the queue on reconnect.
       if (isNetworkError(e)) {
         this.store.setServerConnected(false);
         await this.saveOffline();
@@ -2235,42 +2231,11 @@ export class Resource<C extends OptionalClass = any> {
         return undefined;
       }
 
-      // Logic for handling error if the previousCommit is wrong.
-      if (e.message?.includes('previousCommit')) {
-        if (this.errorRetries > 3) {
-          this.errorRetries = 0;
-          throw e;
-        }
-
-        this.errorRetries++;
-
-        console.warn('previousCommit missing or mismatch, retrying...');
-        const resourceFetched = await this.store.fetchResourceFromServer(
-          this.subject,
-        );
-
-        if (resourceFetched.error) {
-          throw resourceFetched.error;
-        }
-
-        const fixedLastCommit = resourceFetched!
-          .get(properties.commit.lastCommit)
-          ?.toString();
-
-        if (fixedLastCommit) {
-          this.setLastCommitValue(fixedLastCommit);
-        }
-
-        reportDone();
-
-        return await this.save(agent);
-      }
-
-      // Revert the commit builder on failure.
-      if (oldCommitBuilder) {
-        this.commitBuilder = oldCommitBuilder;
-      }
-
+      // Other errors propagate. The signed commit is durable in the
+      // outbox; a `previousCommit` mismatch becomes an idempotent
+      // replay on the next attempt (server-side accept, per
+      // `commit-retention-and-state-certificates.md` Phase 1), so the
+      // legacy refetch-and-retry branch is no longer needed.
       this.commitError = e;
       this.new = wasNew;
       this.applyToStore('local-pre-push');
