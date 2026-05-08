@@ -261,16 +261,14 @@ test.describe('data-browser', async () => {
       await editableTitle(page).type(letter, { delay: Math.random() * 300 });
     }
 
-    // Wait for the debounced save to drain into the server before exiting
-    // edit mode. The dirty queue settles to 0 once every accumulated keystroke
-    // has been ack'd — that's the actual "typing finished saving" signal,
-    // and it returns immediately if we're already idle.
-    await page.waitForFunction(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      () => (window as any).store?.getSyncStatus?.().pendingDirtyCount === 0,
-      undefined,
-      { timeout: 10000 },
-    );
+    // After typing, we need the LAST debounce to fire (~100ms) then its
+    // commit to ack. `pendingDirtyCount === 0` polls too eagerly here —
+    // the last keystroke's debounce timer hasn't started yet at loop exit,
+    // so the count is briefly 0 (last save done, next not yet enqueued)
+    // and `waitForFunction` returns before the final value is committed.
+    // `waitForTimeout(1500)` gives the debounce + round-trip enough budget
+    // before we Escape (which would otherwise cancel the pending save).
+    await page.waitForTimeout(1500);
     await page.keyboard.press('Escape');
 
     await expect(
