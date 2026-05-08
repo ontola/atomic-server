@@ -1,3 +1,11 @@
+// The bindings here use `Db::init_redb_opfs`, which is only compiled for the
+// wasm32 target (see `lib/src/db.rs`). When cargo runs `clippy/fmt/check` on
+// the workspace from a host target, this crate's body would otherwise fail to
+// compile. Stub the whole module out on non-wasm32 targets so workspace-level
+// commands stay green; the cdylib build still happens via `wasm-pack` (see
+// `.dagger/src/index.ts:wasmBuild`) which targets wasm32-unknown-unknown.
+#![cfg(target_arch = "wasm32")]
+
 use atomic_lib::{
     commit::CommitOpts,
     parse::ParseOpts,
