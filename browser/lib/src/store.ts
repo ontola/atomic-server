@@ -1198,10 +1198,15 @@ export class Store {
       await this.clientDb.waitForReady();
     }
 
-    // Try the WASM DB (OPFS) for persisted resources.
+    // Try the WASM DB (OPFS) for persisted resources. One combined
+    // round-trip instead of `getResource` + `getLoroSnapshot`: every
+    // mounted useResource takes this path on cold-load, and each
+    // worker postMessage costs ~ms; halving the round-trips visibly
+    // reduces time-to-first-paint on a populated drive.
     if (this.clientDb?.isReady) {
       try {
-        const jsonAd = await this.clientDb.getResource(subject);
+        const { jsonAd, snapshot } =
+          await this.clientDb.getResourceWithSnapshot(subject);
 
         if (jsonAd) {
           hasLocalData = this.hydrateResourceFromJson(
@@ -1210,16 +1215,11 @@ export class Store {
           );
         }
 
-        // Restore Loro snapshot if available (stored separately from JSON-AD).
-        if (hasLocalData) {
-          const snapshot = await this.clientDb.getLoroSnapshot(subject);
+        if (hasLocalData && snapshot && snapshot.length > 0) {
+          const resource = this.resources.get(subject);
 
-          if (snapshot && snapshot.length > 0) {
-            const resource = this.resources.get(subject);
-
-            if (resource) {
-              resource.importLoroUpdate(snapshot);
-            }
+          if (resource) {
+            resource.importLoroUpdate(snapshot);
           }
         }
       } catch (e) {
