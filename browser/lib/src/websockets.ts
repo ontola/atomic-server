@@ -493,6 +493,18 @@ export class WSClient {
 
         // Subscription push
         let resource = this.store.resources.get(msg.subject);
+        // Capture the pre-import commit so we can detect echo pushes
+        // (the server replaying a commit we just sent) and skip the
+        // re-render storm. `addResources` always runs with
+        // `skipCommitCompare: true` for SUB pushes because the store-side
+        // check compares `storeResource.get(lastCommit)` to itself
+        // (`resource` IS `storeResource` for in-place updates) — by then
+        // it's too late, the value has already been mutated. So we gate
+        // the notify here, on the WS side, with a *temporal* compare.
+        const isExisting = !!resource;
+        const prevCommit = resource?.get(
+          'https://atomicdata.dev/properties/lastCommit',
+        ) as string | undefined;
 
         if (resource) {
           resource.importLoroUpdate(msg.loroBytes);
@@ -508,7 +520,20 @@ export class WSClient {
 
         resource.source = msg.flags & Flags.PUSH ? 'ws-commit' : 'server-ws';
         resource.sourceTimestamp = Date.now();
-        this.store.addResources(resource, { skipCommitCompare: true });
+
+        // Echo detection: pre-existing resource + unchanged lastCommit =
+        // server replayed a commit we already applied. Persist + check
+        // blobs (idempotent), but skip the notify so subscribers don't
+        // re-render for nothing.
+        const newCommit = resource.get(
+          'https://atomicdata.dev/properties/lastCommit',
+        ) as string | undefined;
+        const isEcho =
+          isExisting && prevCommit !== undefined && prevCommit === newCommit;
+
+        if (!isEcho) {
+          this.store.addResources(resource, { skipCommitCompare: true });
+        }
         this.persistToClientDb(msg.subject, resource);
         this.checkForMissingBlobs(resource);
 

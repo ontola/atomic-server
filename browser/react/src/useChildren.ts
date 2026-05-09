@@ -42,16 +42,25 @@ export function useChildren(parentSubject: string | undefined): {
 
     const extractMembers = async () => {
       await collection.waitForReady();
+
+      // Resolve all members in parallel — `getMemberWithIndex` is a
+      // worker round-trip per call, so a 200-child folder used to pay
+      // 200× sequential RTT on cold open. Promise.all hands the worker
+      // a batch which it can process while the UI thread is otherwise
+      // idle.
+      const resolved = await Promise.all(
+        Array.from({ length: collection.totalMembers }, (_, i) =>
+          collection.getMemberWithIndex(i),
+        ),
+      );
+
+      // Drop commit subjects: they leak into parent= queries when a resource
+      // is created/updated, but they're never tree-children. Also dedupe —
+      // collection refreshes can race, leaving the same subject indexed
+      // twice across pages.
       const seen = new Set<string>();
       const members: string[] = [];
-
-      for (let i = 0; i < collection.totalMembers; i++) {
-        const member = await collection.getMemberWithIndex(i);
-
-        // Drop commit subjects: they leak into parent= queries when a resource
-        // is created/updated, but they're never tree-children. Also dedupe —
-        // collection refreshes can race, leaving the same subject indexed
-        // twice across pages.
+      for (const member of resolved) {
         if (
           member &&
           !member.startsWith('did:ad:commit:') &&
