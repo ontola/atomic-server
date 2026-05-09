@@ -109,6 +109,22 @@ export class NodeClientDb {
     return (r as string | null) ?? null;
   }
 
+  /** Mirror of {@link ClientDbWorker.getResourceWithSnapshot} for the
+   *  Node integration tests. There's no postMessage layer here, so the
+   *  speedup is academic — but keeping the API symmetric means the store
+   *  can use it unconditionally regardless of which backend is wired up. */
+  async getResourceWithSnapshot(
+    subject: string,
+  ): Promise<{ jsonAd: string | null; snapshot: Uint8Array | null }> {
+    const db = this.requireDb();
+    const jsonAd = (await db.getResource(subject)) as string | null;
+    const snapshot = jsonAd
+      ? (db.getLoroSnapshot(subject) as Uint8Array | null)
+      : null;
+
+    return { jsonAd: jsonAd ?? null, snapshot: snapshot ?? null };
+  }
+
   async putResource(jsonAd: string): Promise<void> {
     await this.requireDb().putResource(jsonAd);
   }

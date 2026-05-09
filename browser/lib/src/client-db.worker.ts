@@ -15,6 +15,7 @@ let initPromise: Promise<void> | null = null;
 export type WorkerRequest =
   | { id: number; type: 'init'; wasmUrl: string; baseUrl?: string }
   | { id: number; type: 'getResource'; subject: string }
+  | { id: number; type: 'getResourceWithSnapshot'; subject: string }
   | { id: number; type: 'putResource'; jsonAd: string }
   | { id: number; type: 'applyCommit'; commitJsonAd: string }
   | { id: number; type: 'removeResource'; subject: string }
@@ -65,6 +66,22 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
       await ensureInit();
 
       return db!.getResource(msg.subject);
+    }
+
+    case 'getResourceWithSnapshot': {
+      // Combined getter for the cold-load fast path: every
+      // `fetchResourceWithLocalFallback` used to do two sequential
+      // worker round-trips (one for the JSON-AD, one for the Loro
+      // snapshot). On a page that mounts 30 useResource hooks that's
+      // 60× postMessage cost serially. Returning both in a single
+      // response halves the worker traffic — and the caller already
+      // ignores the snapshot when JSON-AD is null, so the combined
+      // shape doesn't change semantics.
+      await ensureInit();
+      const jsonAd = db!.getResource(msg.subject);
+      const snapshot = jsonAd ? db!.getLoroSnapshot(msg.subject) : null;
+
+      return { jsonAd: jsonAd ?? null, snapshot: snapshot ?? null };
     }
 
     case 'putResource': {
