@@ -32,6 +32,7 @@ import type {
 import { LocalSearch } from './local-search.js';
 import { perfMark, perfSpan } from './perf-trace.js';
 import { OpfsPersistor } from './opfs-persistor.js';
+import { LocalOutbox, type OutboxEntry } from './local-outbox.js';
 
 /** Function called when a resource is updated or removed */
 type ResourceCallback<C extends OptionalClass = UnknownClass> = (
@@ -284,8 +285,16 @@ export class Store {
   private persistor?: OpfsPersistor;
   /** Client-side full-text search index (MiniSearch). */
   private localSearch = new LocalSearch();
-  /** Resources with local changes that haven't been synced to the server yet. */
-  private dirtyForSync: Set<string> = new Set();
+  /**
+   * Single durable queue of "writes that haven't reached the
+   * server". Replaces the old quartet (`dirtyForSync` Set,
+   * `atomic.dirtyForSync` localStorage key,
+   * `atomic.offline.<subject>` per-subject keys, and the
+   * `_lastLocalSignature` reload-amnesia footgun). On construction
+   * the outbox migrates from the legacy keys, then the legacy keys
+   * are removed.
+   */
+  public readonly outbox: LocalOutbox = new LocalOutbox();
   /**
    * Whether the Store has an active connection to the server.
    * Driven by WebSocket open/close events. When false, commits are stored
@@ -344,24 +353,14 @@ export class Store {
 
     this.client = new Client(this.injectedFetch);
 
-    // Restore dirty-for-sync set from localStorage AND rehydrate the commit
-    // log from the persisted `atomic.offline.<subject>` blobs. Without this
-    // pass the Sync page shows "N unsynced" but "No activity recorded" on
-    // page reload — the in-memory `_commitLog` starts empty even though the
-    // pending commits themselves survived in localStorage.
-    if (typeof localStorage !== 'undefined') {
-      try {
-        const stored = localStorage.getItem('atomic.dirtyForSync');
-
-        if (stored) {
-          for (const s of JSON.parse(stored)) {
-            this.dirtyForSync.add(s);
-            this.hydrateCommitLogFromOffline(s);
-          }
-        }
-      } catch (e) {
-        this.notifyError(e);
-      }
+    // Rehydrate the commit log from the outbox so the Sync page
+    // shows what's queued instead of "No activity recorded" after
+    // a reload. The outbox itself is already populated by its
+    // constructor — that handles both the new `atomic.outbox` key
+    // and the one-shot migration from the legacy
+    // `atomic.dirtyForSync` + `atomic.offline.<subject>` shape.
+    for (const entry of this.outbox.pending()) {
+      this.hydrateCommitLogFromOutbox(entry);
     }
 
     // We need to bind this method because it is passed down by other functions
@@ -411,40 +410,12 @@ export class Store {
   }
 
   /**
-   * Reads the persisted offline pending commits for `subject` from
-   * `localStorage` and pushes them onto `_commitLog` as `pending` entries.
-   * Called once per dirty subject during construction so the Sync page
-   * shows what's actually queued, not just an "N unsynced" count with an
-   * empty log. No-op if nothing's persisted for the subject.
+   * Surface a hydrated outbox entry's commits in `_commitLog` as
+   * `pending` rows so the Sync page shows what's queued after a
+   * reload, not "No activity recorded".
    */
-  private hydrateCommitLogFromOffline(subject: string): void {
-    if (typeof localStorage === 'undefined') return;
-
-    let raw: string | null;
-    try {
-      raw = localStorage.getItem(`atomic.offline.${subject}`);
-    } catch {
-      return;
-    }
-    if (!raw) return;
-
-    let entries: unknown;
-    try {
-      entries = JSON.parse(raw);
-    } catch {
-      return;
-    }
-    if (!Array.isArray(entries)) return;
-
-    for (const entry of entries) {
-      let commit;
-      try {
-        commit = parseCommitJSON(JSON.stringify(entry));
-      } catch (e) {
-        console.warn('[hydrateCommitLogFromOffline] parse failed:', e);
-        continue;
-      }
-
+  private hydrateCommitLogFromOutbox(entry: OutboxEntry): void {
+    for (const commit of entry.commits) {
       this.pushCommitLog({
         timestamp: Date.now(),
         direction: 'outgoing',
@@ -464,85 +435,32 @@ export class Store {
   }
 
   /**
-   * Mark a resource as having local changes that need to be synced to the server.
-   * Called when a save fails due to the server being unreachable.
+   * Mark a resource as having local changes that need to be synced
+   * to the server. Called when a save fails due to the server being
+   * unreachable. The actual queuing of commits is now done via
+   * {@link Resource.applyPendingCommitsLocally}, which writes to
+   * the outbox; this method is kept for API compatibility but is
+   * effectively a status-update no-op once the outbox already has
+   * an entry for the subject.
    */
-  public markDirtyForSync(subject: string): void {
-    this.dirtyForSync.add(subject);
-
-    // Persist to localStorage so it survives page reloads
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(
-        'atomic.dirtyForSync',
-        JSON.stringify([...this.dirtyForSync]),
-      );
-    }
-
+  public markDirtyForSync(_subject: string): void {
     this.emitSyncStatus();
   }
 
   /**
-   * Sync all dirty resources to the server.
-   * For each dirty resource, creates a fresh commit from the current state
-   * (Loro snapshot has all accumulated changes) and POSTs it.
-   * Called on WebSocket reconnect.
+   * Sync all queued writes to the server. Delegates to
+   * {@link LocalOutbox.drain} which owns idempotency (concurrent
+   * calls share the in-flight promise — the structural version of
+   * the `5c168355` re-entrance fix).
+   *
+   * For each entry the outbox calls back here via
+   * {@link postOutboxEntry} which uses the Resource's existing
+   * `pushCommits` / `save` flow.
    */
-  /**
-   * Sort dirty resources by dependency order so that the server receives
-   * them in a valid sequence: agents first, then drives, then children
-   * sorted by parent depth (shallowest first).
-   */
-  private sortDirtyForSync(subjects: string[]): string[] {
-    const getPriority = (subject: string): number => {
-      // Agents must exist before anything else
-      if (subject.startsWith('did:ad:agent:')) return 0;
-
-      // The current drive must exist before its children
-      if (subject === this.drive) return 1;
-
-      // Everything else is a child resource
-      return 2;
-    };
-
-    const getDepth = (subject: string): number => {
-      let depth = 0;
-      let current = subject;
-
-      // Walk up the parent chain (max 20 to avoid infinite loops)
-      while (depth < 20) {
-        const resource = this.resources.get(current);
-
-        if (!resource) break;
-
-        const parent = resource.get(core.properties.parent) as
-          | string
-          | undefined;
-
-        if (!parent || parent === current) break;
-
-        depth++;
-        current = parent;
-      }
-
-      return depth;
-    };
-
-    return subjects.sort((a, b) => {
-      const pa = getPriority(a);
-      const pb = getPriority(b);
-
-      if (pa !== pb) return pa - pb;
-
-      // Within same priority, sort by parent depth (shallow first)
-      return getDepth(a) - getDepth(b);
-    });
-  }
-
   public async syncDirtyResources(): Promise<void> {
-    if (this.dirtyForSync.size === 0) return;
+    if (this.outbox.size === 0) return;
 
     this.setDirtySyncInProgress(true);
-
     const agent = this.getAgent();
 
     if (!agent) {
@@ -551,57 +469,84 @@ export class Store {
       return;
     }
 
-    const subjects = this.sortDirtyForSync([...this.dirtyForSync]);
-    perfMark('store.syncDirtyResources.subjects', { count: subjects.length });
-
-    for (const subject of subjects) {
-      const resource = this.resources.get(subject);
-
-      if (!resource) {
-        this.dirtyForSync.delete(subject);
-        this.emitSyncStatus();
-        continue;
-      }
-
-      try {
-        // The resource already has its changes in propvals + Loro doc.
-        // signChanges + pushCommits will create a fresh commit and POST it.
-        if (resource.hasUnsavedChanges()) {
-          await resource.save();
-        } else {
-          // Changes were already signed but push failed — retry push.
-          await resource.pushCommits();
-        }
-
-        this.dirtyForSync.delete(subject);
-        this.emitSyncStatus();
-
-        // Clean up offline localStorage entry
-        if (typeof localStorage !== 'undefined') {
-          localStorage.removeItem(`atomic.offline.${subject}`);
-        }
-      } catch (e) {
-        console.warn(`[Sync] Failed to sync ${subject}:`, e);
-        // Leave in dirty set for next attempt
-      }
-    }
+    perfMark('store.syncDirtyResources.subjects', { count: this.outbox.size });
 
     try {
-      // Update persisted dirty set
-      if (typeof localStorage !== 'undefined') {
-        if (this.dirtyForSync.size === 0) {
-          localStorage.removeItem('atomic.dirtyForSync');
-        } else {
-          localStorage.setItem(
-            'atomic.dirtyForSync',
-            JSON.stringify([...this.dirtyForSync]),
-          );
-        }
-      }
+      await this.outbox.drain({
+        sort: this.sortOutboxEntries,
+        postEntry: this.postOutboxEntry,
+      });
     } finally {
       this.setDirtySyncInProgress(false);
+      this.emitSyncStatus();
     }
   }
+
+  /**
+   * Outbox sort order: agents → current drive → everything else,
+   * with shallow-parent before deep within the last tier. Agents
+   * must exist on the server before their commits validate; the
+   * drive must exist before its children's `parent` references
+   * resolve.
+   */
+  private sortOutboxEntries = (
+    entries: readonly OutboxEntry[],
+  ): OutboxEntry[] => {
+    const priority = (subject: string): number => {
+      if (subject.startsWith('did:ad:agent:')) return 0;
+      if (subject === this.drive) return 1;
+
+      return 2;
+    };
+
+    const depth = (subject: string): number => {
+      let d = 0;
+      let current = subject;
+
+      while (d < 20) {
+        const r = this.resources.get(current);
+        if (!r) break;
+        const parent = r.get(core.properties.parent) as string | undefined;
+        if (!parent || parent === current) break;
+        d++;
+        current = parent;
+      }
+
+      return d;
+    };
+
+    return [...entries].sort((a, b) => {
+      const pa = priority(a.subject);
+      const pb = priority(b.subject);
+      if (pa !== pb) return pa - pb;
+
+      return depth(a.subject) - depth(b.subject);
+    });
+  };
+
+  /**
+   * Post a single outbox entry to the server. Reuses the existing
+   * Resource flow: `save()` if there are still unsaved Loro
+   * changes (rare — the outbox entry already holds signed
+   * commits), otherwise `pushCommits()`. Throws on failure;
+   * `LocalOutbox.drain` records `lastAttemptError` and continues.
+   */
+  private postOutboxEntry = async (entry: OutboxEntry): Promise<void> => {
+    const resource = this.resources.get(entry.subject);
+
+    if (!resource) {
+      // No in-memory resource — outbox is stale. Drop the entry
+      // (next reload won't see it either).
+      return;
+    }
+
+    if (resource.hasUnsavedChanges()) {
+      await resource.save();
+    } else {
+      await resource.pushCommits();
+    }
+    this.emitSyncStatus();
+  };
 
   /**
    * Compute the drive sync state: a hash summarizing all resources' Loro
@@ -1395,22 +1340,12 @@ export class Store {
     }
 
     // Same problem after a page reload: the in-memory queue is gone, but
-    // `applyPendingCommitsLocally` persisted it under `atomic.offline.<subject>`.
-    // Re-attach it to the freshly hydrated instance so the next sync can push.
-    let restoredCommits: Commit[] | undefined;
-    if (typeof localStorage !== 'undefined') {
-      try {
-        const stored = localStorage.getItem(`atomic.offline.${subject}`);
-        if (stored) {
-          const parsed = JSON.parse(stored) as unknown[];
-          restoredCommits = parsed.map(obj =>
-            parseCommitJSON(JSON.stringify(obj)),
-          );
-        }
-      } catch {
-        // bad JSON — ignore, the worst case is the original 404 behavior
-      }
-    }
+    // the outbox persisted it durably. Re-attach the queue to the
+    // freshly hydrated instance so the next sync can push.
+    const outboxEntry = this.outbox.getEntry(subject);
+    const restoredCommits: Commit[] | undefined = outboxEntry
+      ? [...outboxEntry.commits]
+      : undefined;
 
     const resource = new Resource(subject);
 
@@ -1953,8 +1888,8 @@ export class Store {
       driveSyncInProgress: this._driveSyncInProgress,
       dirtySyncInProgress: this._dirtySyncInProgress,
       syncInProgress: this._driveSyncInProgress || this._dirtySyncInProgress,
-      pendingDirtyCount: this.dirtyForSync.size,
-      pendingDirtySubjects: [...this.dirtyForSync],
+      pendingDirtyCount: this.outbox.size,
+      pendingDirtySubjects: this.outbox.pendingSubjects(),
       serverUrl: this.serverUrl,
       drive: this.drive,
       websocketReadyState: ws?.readyState,
