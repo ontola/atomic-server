@@ -339,14 +339,27 @@ export class WSClient {
     }
 
     return new Promise((resolve, reject) => {
+      const close = perfSpan('ws.GET', { subject: subject.slice(0, 200) });
       const timer = setTimeout(() => {
         this.pendingGets.delete(requestId);
+        close({ err: 'timeout' });
         reject(
           new Error(`GET "${subject}" timed out after ${REQUEST_TIMEOUT}ms.`),
         );
       }, REQUEST_TIMEOUT);
 
-      this.pendingGets.set(requestId, { subject, resolve, reject, timer });
+      this.pendingGets.set(requestId, {
+        subject,
+        resolve: (r: Resource) => {
+          close('ok');
+          resolve(r);
+        },
+        reject: (e: unknown) => {
+          close({ err: e instanceof Error ? e.message : String(e) });
+          reject(e);
+        },
+        timer,
+      });
       this.sendBinary(encodeGet(requestId, subject));
     });
   }
