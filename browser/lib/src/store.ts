@@ -16,7 +16,7 @@ import { core } from './ontologies/core.js';
 import { server, type Server } from './ontologies/server.js';
 import type { OptionalClass, UnknownClass } from './ontology.js';
 import { JSONADParser } from './parse.js';
-import { Resource, unknownSubject, type ResourceSource } from './resource.js';
+import { Resource, unknownSubject } from './resource.js';
 import { type SearchOpts, buildSearchSubject } from './search.js';
 import { stringToSlug } from './stringToSlug.js';
 import { bytesToHex, hexToBytes, type JSONValue } from './value.js';
@@ -241,26 +241,6 @@ export interface IncomingChange {
 
 /** Returns True if the client has WebSocket support */
 const supportsWebSockets = () => typeof WebSocket !== 'undefined';
-
-/** Map {@link ChangeSource} onto the legacy {@link ResourceSource}
- * field on `Resource`. */
-function mapChangeSourceToResourceSource(s: ChangeSource): ResourceSource {
-  switch (s) {
-    case 'ws-pending-get':
-    case 'ws-sub-push':
-    case 'ws-query-update':
-      return 'server-ws';
-    case 'ws-sync-push':
-      return 'ws-sync';
-    case 'http-fetch':
-      return 'server-http';
-    case 'local-pre-push':
-    case 'local-acked':
-      return 'created';
-    case 'offline-replay':
-      return 'local-cache';
-  }
-}
 
 /**
  * Cheap equality for commit-log property values. Strict `===` would always
@@ -803,13 +783,8 @@ export class Store {
   public applyIncoming(
     change: IncomingChange,
   ): 'applied' | 'deduped' | 'invalid' {
-    const ts = change.receivedAt ?? Date.now();
-    const src = mapChangeSourceToResourceSource(change.source);
-
     // Resource-direct path: caller is the authoritative producer.
     if (change.resource) {
-      change.resource.source = src;
-      change.resource.sourceTimestamp = ts;
       const alias =
         change.subject !== change.resource.subject ? change.subject : undefined;
       this.addResource(change.resource, { skipCommitCompare: true, alias });
@@ -838,8 +813,6 @@ export class Store {
       existing ?? this.getResourceLoading(subject, { newResource: false });
     resource.importLoroUpdate(change.loroBytes);
     if (change.commitId) resource.setLastCommitValue(change.commitId);
-    resource.source = src;
-    resource.sourceTimestamp = ts;
     resource.loading = false;
     this.addResource(resource, { skipCommitCompare: true });
 
@@ -917,28 +890,12 @@ export class Store {
       this.localSearch.addResource(resource);
     }
 
-    // Queue the OPFS write BEFORE firing `ResourceUpdated`. The clientDb
-    // worker processes messages in posted order (see `workQueue` in
-    // `client-db.worker.ts`), so a `putResource` queued before a
-    // subsequent `queryLocalDb` is guaranteed to land first. Listeners on
-    // `ResourceUpdated` that call `Collection.refresh()` (which queues
-    // `queryLocalDb` via `fetchPageFromLocalDb`) thus see the new
-    // resource in OPFS — no race. The put itself stays fire-and-forget
-    // (no `await`); only the message-queue order matters.
-    //
-    // Persist only resources whose commits have reached the server. After
-    // `signChanges`, `resource.new` is false but `hasPendingCommits` is still
-    // true — indicating a locally-signed commit that hasn't been pushed.
-    // Those include unsaved placeholders like `TableNewRow`'s pre-created
-    // empty row: seeding them would drop a phantom child into OPFS that the
-    // children query then picks up on every reload.
-    // Offline-applied resources persist themselves via
-    // `applyPendingCommitsLocally`, so `addResource` doesn't need to handle
-    // them here either.
-    // Atomic JSON-AD + Loro snapshot put. Skipped for new/loading/
-    // incomplete resources or those with unsynced commits — those
-    // either persist themselves via `applyPendingCommitsLocally` or
-    // are placeholders that shouldn't land in OPFS yet.
+    // Atomic put queued BEFORE notify. The worker's serialised
+    // queue means a follow-up `queryLocalDb` (e.g. from
+    // Collection.refresh in a notify listener) sees the new
+    // resource. Skip for new/loading/incomplete/unsynced — those
+    // persist themselves via `applyPendingCommitsLocally` or are
+    // placeholders.
     if (
       this.clientDb &&
       !resource.loading &&
@@ -949,13 +906,8 @@ export class Store {
       try {
         const jsonAd = resourceToJsonAd(resource);
         if (jsonAd) {
-          let snapshot: Uint8Array | undefined;
-          try {
-            const doc = resource.getLoroDoc?.();
-            if (doc) snapshot = doc.export({ mode: 'snapshot' });
-          } catch {
-            // No Loro doc — JSON-AD-only put.
-          }
+          const doc = resource.getLoroDoc?.();
+          const snapshot = doc?.export({ mode: 'snapshot' });
           this.clientDb
             .putResourceWithSnapshot(resource.subject, jsonAd, snapshot)
             .catch(e =>
@@ -973,10 +925,6 @@ export class Store {
       }
     }
 
-    // Notify subscribers AFTER the OPFS put has been queued. Any listener
-    // that triggers a `queryLocalDb` (e.g. `Collection.refresh()`) will
-    // see the new resource because the worker's serialized message queue
-    // processes the put before the query.
     this.notify(emitResource);
   }
 
@@ -1647,9 +1595,6 @@ export class Store {
       // New resources don't have to load, they are just created.
       if (!opts.newResource && !isTemporarySubject) {
         resource.loading = true;
-      } else {
-        resource.source = 'created';
-        resource.sourceTimestamp = Date.now();
       }
 
       this.addResource(resource, { alias: normalized });
