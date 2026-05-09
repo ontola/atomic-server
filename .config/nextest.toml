@@ -18,6 +18,12 @@ retries = 2
 # shows the binaries. Underscore version doesn't match anything.
 filter = 'binary(=atomic-server) and test(=search::tests::test_update_resource)'
 test-group = 'serial'
+# This test hits a tantivy reload race under heavy parallel CI load
+# (the reader uses `OnCommitWithDelay` and the background segment-merge
+# thread can starve when 20+ actix HTTP servers are spinning up). The
+# in-test poll loop already waits 30s; allow more retries on top so a
+# truly unlucky run still has a fallback before the hard fail.
+retries = 5
 
 [test-groups]
 serial = { max-threads = 1 }
