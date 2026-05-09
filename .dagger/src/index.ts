@@ -9,6 +9,7 @@ import {
   File,
   Platform,
   Service,
+  CacheSharingMode,
 } from '@dagger.io/dagger';
 
 const NODE_IMAGE = 'node:22';
@@ -130,7 +131,7 @@ export class AtomicServer {
     return dag
       .container()
       .from(RUST_IMAGE)
-      .withMountedCache('/usr/local/cargo/registry', cargoCache)
+      .withMountedCache('/usr/local/cargo/registry', cargoCache, { sharing: CacheSharingMode.Locked })
       .withExec(['cargo', 'install', 'wasm-pack'])
       .withFile('/code/Cargo.toml', this.source.file('Cargo.toml'))
       .withFile('/code/Cargo.lock', this.source.file('Cargo.lock'))
@@ -178,7 +179,7 @@ export class AtomicServer {
     return dag
       .container()
       .from(RUST_IMAGE)
-      .withMountedCache('/usr/local/cargo/registry', cargoCache)
+      .withMountedCache('/usr/local/cargo/registry', cargoCache, { sharing: CacheSharingMode.Locked })
       .withFile('/code/Cargo.toml', this.source.file('Cargo.toml'))
       .withFile('/code/Cargo.lock', this.source.file('Cargo.lock'))
       .withDirectory('/code/server', this.source.directory('server'))
@@ -462,7 +463,7 @@ export class AtomicServer {
       .from(image)
       .withExec(['apt-get', 'update', '-qq'])
       .withExec(['apt', 'install', '-y', 'nasm'])
-      .withMountedCache('/usr/local/cargo/registry', cargoCache)
+      .withMountedCache('/usr/local/cargo/registry', cargoCache, { sharing: CacheSharingMode.Locked })
       .withExec(['rustup', 'component', 'add', 'clippy'])
       .withExec(['rustup', 'component', 'add', 'rustfmt']);
     // cargo-nextest used to be installed here, but recent versions need
