@@ -148,6 +148,21 @@ export class NodeClientDb {
     await this.requireDb().putResource(jsonAd);
   }
 
+  /**
+   * Mirror of {@link ClientDbWorker.putResourceWithSnapshot} for Node.
+   * No postMessage queue here, so atomicity is just sequential
+   * execution within one async tick — same observable contract.
+   */
+  async putResourceWithSnapshot(
+    subject: string,
+    jsonAd: string,
+    snapshot: Uint8Array,
+  ): Promise<void> {
+    const db = this.requireDb();
+    await db.putResource(jsonAd);
+    db.putLoroSnapshot(subject, snapshot);
+  }
+
   /** Mirror of {@link ClientDbWorker.putResources} for the Node integration
    *  tests. No postMessage layer here, so the speedup is academic — but
    *  keeping the API symmetric means callers don't branch on which backend
