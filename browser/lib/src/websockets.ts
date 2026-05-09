@@ -687,25 +687,19 @@ export class WSClient {
 
   private handleOpen() {
     perfMark('ws.open');
-    const agent = this.store.getAgent();
     const drive = this.store.getDrive();
 
     const doSync = async () => {
-      try {
-        const dirtyClose = perfSpan('ws.syncDirtyResources');
-        try {
-          await this.store.syncDirtyResources();
-        } finally {
-          dirtyClose();
-        }
-        await this.startVVSync(drive);
-      } catch {
-        // Non-fatal — VV sync gets a separate attempt below.
-        await this.startVVSync(drive);
-      }
+      const dirtyClose = perfSpan('ws.syncDirtyResources');
+      // Drain the outbox; failures are recorded per-entry inside
+      // the outbox itself, so a thrown drain doesn't prevent VV
+      // sync from running.
+      await this.store.syncDirtyResources().catch(() => undefined);
+      dirtyClose();
+      await this.startVVSync(drive);
     };
 
-    if (agent?.subject) {
+    if (this.store.getAgent()?.subject) {
       const authClose = perfSpan('ws.authenticate');
       this.authenticate()
         .then(() => authClose('ok'))
@@ -715,7 +709,7 @@ export class WSClient {
           console.error('Auth error:', e);
         });
     } else {
-      doSync().catch(() => {});
+      doSync().catch(() => undefined);
     }
   }
 
