@@ -1542,11 +1542,7 @@ export class Resource<C extends OptionalClass = any> {
 
     try {
       this.commitError = undefined;
-      // Pre-push: surface the about-to-be-sent state to subscribers
-      // (so the UI shows the typed text immediately, not after the
-      // server round-trip). Routed through the unified ingress with
-      // a tagged source so listeners can distinguish local-pending
-      // from server-acked.
+      // Pre-push: surface in-flight state to subscribers.
       this.store.applyIncoming({
         subject: this.subject,
         resource: this,
@@ -1555,32 +1551,21 @@ export class Resource<C extends OptionalClass = any> {
 
       while (this._pendingCommits.length > 0) {
         const commit = this._pendingCommits[0];
-
-        const createdCommit = await this.store.postCommit(commit, endpoint);
-        lastCommitId = createdCommit.id as string;
-        // Server omits @id for did:ad:commit: subjects, so derive it from the signature.
-        if (!lastCommitId && createdCommit.signature) {
-          lastCommitId = `did:ad:commit:${createdCommit.signature}`;
-        }
-
+        const created = await this.store.postCommit(commit, endpoint);
+        lastCommitId =
+          (created.id as string | undefined) ??
+          (created.signature
+            ? `did:ad:commit:${created.signature}`
+            : undefined);
         this._pendingCommits.shift();
       }
 
-      // All commits pushed successfully.
       this._lastLocalSignature = undefined;
-
-      if (lastCommitId) {
-        this.setLastCommitValue(lastCommitId);
-      }
-
+      if (lastCommitId) this.setLastCommitValue(lastCommitId);
       this.store.notifyResourceSaved(this);
 
-      // Post-ack: re-route through the ingress with `local-acked`
-      // so the OPFS persist gate (which gates on `!hasPendingCommits`)
-      // sees the now-empty queue and writes the resource. Without
-      // this re-add, a freshly-created DID resource is on the server
-      // but never lands in OPFS — the user sees "Offline: resource
-      // not available locally" on reload.
+      // Post-ack re-add: triggers the OPFS persist gate (which
+      // skips when `hasPendingCommits` is true).
       this.store.applyIncoming({
         subject: this.subject,
         resource: this,
@@ -1588,24 +1573,12 @@ export class Resource<C extends OptionalClass = any> {
         commitId: lastCommitId,
       });
 
-      // If this resource references a locally-stored blob, push the bytes to
-      // the server. Hooked here (not in uploadFiles) so the offline → online
-      // path also covers it: pending commits queued offline get flushed by
-      // `syncDirtyResources` on reconnect, which calls back through this
-      // success path, which then pushes the blob.
-      //
-      // Awaited (not fire-and-forget): callers like `createPlugin` save the
-      // file, then save a second resource that REFERENCES the blob (e.g. a
-      // Plugin pointing at the uploaded zip). The second commit's server-side
-      // extender reads the blob immediately — if the push hasn't landed yet,
-      // it sees "blob not found". Waiting here serializes the two paths.
-      await this.store.maybePushBlobForResource(this).catch(() => {
-        // Non-fatal — server can request the blob lazily via BLOB_REQUEST.
-      });
+      // Push referenced blobs. Awaited so a follow-up commit
+      // referencing the blob doesn't race the server-side extender.
+      await this.store.maybePushBlobForResource(this).catch(() => undefined);
 
       if (wasNew) {
-        // The first `SUBSCRIBE` message will not have worked, because the resource didn't exist yet.
-        // https://github.com/atomicdata-dev/atomic-data-rust/issues/486
+        // First SUBSCRIBE wouldn't have worked pre-create. #486.
         this.store.subscribeWebSocket(this.subject);
         await this.store.saveBatchForParent(this.subject);
       }
@@ -1809,98 +1782,59 @@ export class Resource<C extends OptionalClass = any> {
     }
   }
 
-  /**
-   * Persist the current resource state locally.
-   * Uses a simple JSON blob in localStorage — bypasses the WASM DB parser
-   * which can silently drop binary properties like loroUpdate.
-   * On reconnect, a fresh commit will be created from the Loro snapshot.
-   */
+  /** Persist the current resource state offline: each pending
+   * commit becomes a CommitDetail-renderable resource, the
+   * resource itself is persisted atomically (JSON-AD + Loro
+   * snapshot), and the outbox is updated so the queue survives
+   * a reload. `_pendingCommits` stays in-memory until drain. */
   private async applyPendingCommitsLocally(): Promise<void> {
-    // Ensure createdAt is set — the server normally sets this when applying
-    // a commit, but offline we need to do it ourselves for sorting to work.
+    // Server sets createdAt on apply; we need it locally for sort.
     if (this.get(commits.properties.createdAt) === undefined) {
       this.setCreatedAtValue(Date.now());
     }
 
-    // Store each pending commit as a Resource in the Store so that
-    // CommitDetail can render author/date even while offline.
     let lastCommitSubject: string | undefined;
-
     for (const commit of this._pendingCommits) {
       const commitSubject = `did:ad:commit:${commit.signature}`;
       lastCommitSubject = commitSubject;
-
-      const jsonAd = commitToJsonADObject(commit);
       const commitResource = new Resource(commitSubject);
       commitResource.applyHydratedValues(
-        Object.entries(jsonAd) as [string, AtomicValue][],
+        Object.entries(commitToJsonADObject(commit)) as [string, AtomicValue][],
       );
-
       commitResource.loading = false;
       commitResource.new = false;
-      // The unified ingress writes JSON-AD + Loro snapshot atomically
-      // through clientDb's atomic put and notifies in one step.
       this.store.applyIncoming({
         subject: commitSubject,
         resource: commitResource,
         source: 'offline-replay',
       });
     }
+    if (lastCommitSubject) this.setLastCommitValue(lastCommitSubject);
 
-    // Set lastCommit on the resource so the UI can find the latest commit.
-    if (lastCommitSubject) {
-      this.setLastCommitValue(lastCommitSubject);
-    }
-
-    // Persist JSON-AD index entry + Loro snapshot in one worker
-    // postMessage. Previously this was two separate calls
-    // (`clientDb.putLoroSnapshot` and `clientDb.putResource`) which
-    // could land in either order — the worker's queue serialises
-    // them but a thrown serialiser between the two would persist
-    // the snapshot without the JSON-AD index, leaving the resource
-    // queryable by Loro replay but invisible to `parent=` queries
-    // until the next addResource call. Atomic put closes that gap.
     const clientDb = this.store.getClientDb();
     if (clientDb) {
       const obj: Record<string, unknown> = { '@id': this.subject };
-      for (const [key, value] of this.getEntries()) {
-        if (value instanceof Uint8Array) continue;
-        obj[key] = value;
+      for (const [k, v] of this.getEntries()) {
+        if (!(v instanceof Uint8Array)) obj[k] = v;
       }
-      const snapshot = this._loroDoc
-        ? this._loroDoc.export({ mode: 'snapshot' })
-        : undefined;
+      const snapshot = this._loroDoc?.export({ mode: 'snapshot' });
       clientDb
         .putResourceWithSnapshot(this.subject, JSON.stringify(obj), snapshot)
         .catch(e => console.error('[Offline] persist failed:', e));
     }
 
-    // Also update the in-memory store so the UI reflects changes immediately.
     this.store.applyIncoming({
       subject: this.subject,
       resource: this,
       source: 'offline-replay',
     });
 
-    // Persist the queue to the durable outbox so it survives a
-    // reload. The previous shape — per-subject
-    // `localStorage['atomic.offline.<subject>']` blobs plus an
-    // `atomic.dirtyForSync` index — has been replaced by one
-    // unified `LocalOutbox` (one localStorage key, one schema, one
-    // re-entrance-safe drain). Without this set, the in-memory
-    // `_pendingCommits` array would be lost on navigation,
-    // `syncDirtyResources` would call `pushCommits` on a fresh
-    // hydrated instance with no commits, the dirty subject would
-    // be cleared, and the server would never receive the resource.
+    // Outbox is durable — survives reload so reconnect drain
+    // sees the queued commits even after the in-memory store
+    // is wiped.
     if (this._pendingCommits.length) {
       this.store.outbox.setEntry(this.subject, this._pendingCommits);
     }
-
-    // Intentionally DO NOT clear `_pendingCommits` here. They've been applied
-    // locally for the UI, but the server hasn't seen them yet. On reconnect,
-    // `syncDirtyResources` calls `pushCommits()` which drains this queue and
-    // POSTs each commit. Clearing here previously caused offline-created
-    // resources to be "marked synced" without ever reaching the server.
   }
 
   /**
