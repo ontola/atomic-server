@@ -1474,9 +1474,10 @@ export class Resource<C extends OptionalClass = any> {
         // which emits events that trigger cascading fetches (sideBarHandler etc.)
         this.store.resources.delete(oldSubject);
         // Keep an alias so children that reference the old _new: subject can still find it.
-        this.store.addResources(this, {
-          skipCommitCompare: true,
-          alias: oldSubject,
+        this.store.applyIncoming({
+          subject: oldSubject,
+          resource: this,
+          source: 'local-pre-push',
         });
       }
     }
@@ -1541,7 +1542,16 @@ export class Resource<C extends OptionalClass = any> {
 
     try {
       this.commitError = undefined;
-      this.store.addResources(this, { skipCommitCompare: true });
+      // Pre-push: surface the about-to-be-sent state to subscribers
+      // (so the UI shows the typed text immediately, not after the
+      // server round-trip). Routed through the unified ingress with
+      // a tagged source so listeners can distinguish local-pending
+      // from server-acked.
+      this.store.applyIncoming({
+        subject: this.subject,
+        resource: this,
+        source: 'local-pre-push',
+      });
 
       while (this._pendingCommits.length > 0) {
         const commit = this._pendingCommits[0];
@@ -1565,13 +1575,18 @@ export class Resource<C extends OptionalClass = any> {
 
       this.store.notifyResourceSaved(this);
 
-      // Re-add to the store now that `this.new` has flipped to false. The
-      // earlier add (during `signChanges`) happened while `new === true`,
-      // and `store.addResource` skips OPFS persistence for new/loading/
-      // incomplete resources. Without this re-add, a freshly-created DID
-      // resource is on the server but never lands in OPFS — so the user
-      // sees "Offline: resource not available locally" on reload.
-      this.store.addResources(this, { skipCommitCompare: true });
+      // Post-ack: re-route through the ingress with `local-acked`
+      // so the OPFS persist gate (which gates on `!hasPendingCommits`)
+      // sees the now-empty queue and writes the resource. Without
+      // this re-add, a freshly-created DID resource is on the server
+      // but never lands in OPFS — the user sees "Offline: resource
+      // not available locally" on reload.
+      this.store.applyIncoming({
+        subject: this.subject,
+        resource: this,
+        source: 'local-acked',
+        commitId: lastCommitId,
+      });
 
       // If this resource references a locally-stored blob, push the bytes to
       // the server. Hooked here (not in uploadFiles) so the offline → online
@@ -1712,7 +1727,11 @@ export class Resource<C extends OptionalClass = any> {
         this.commitError = undefined;
         this.loading = false;
         // Notify subscribers so the UI updates (e.g. sidebar sees new subResources)
-        this.store.addResources(this, { skipCommitCompare: true });
+        this.store.applyIncoming({
+          subject: this.subject,
+          resource: this,
+          source: 'offline-replay',
+        });
         this.store.notifyResourceSaved(this);
         reportDone();
 
@@ -1733,7 +1752,11 @@ export class Resource<C extends OptionalClass = any> {
         this.store.markDirtyForSync(this.subject);
         this.commitError = undefined;
         this.loading = false;
-        this.store.addResources(this, { skipCommitCompare: true });
+        this.store.applyIncoming({
+          subject: this.subject,
+          resource: this,
+          source: 'offline-replay',
+        });
         this.store.notifyResourceSaved(this);
         reportDone();
 
@@ -1778,7 +1801,11 @@ export class Resource<C extends OptionalClass = any> {
 
       this.commitError = e;
       this.new = wasNew;
-      this.store.addResources(this, { skipCommitCompare: true });
+      this.store.applyIncoming({
+        subject: this.subject,
+        resource: this,
+        source: 'local-pre-push',
+      });
       reportDone();
       throw e;
     }
@@ -1813,8 +1840,13 @@ export class Resource<C extends OptionalClass = any> {
 
       commitResource.loading = false;
       commitResource.new = false;
-      // addResources will forward to the WASM DB for OPFS persistence.
-      this.store.addResources(commitResource, { skipCommitCompare: true });
+      // The unified ingress writes JSON-AD + Loro snapshot atomically
+      // through OpfsPersistor and notifies in one step.
+      this.store.applyIncoming({
+        subject: commitSubject,
+        resource: commitResource,
+        source: 'offline-replay',
+      });
     }
 
     // Set lastCommit on the resource so the UI can find the latest commit.
@@ -1855,7 +1887,11 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     // Also update the in-memory store so the UI reflects changes immediately.
-    this.store.addResources(this, { skipCommitCompare: true });
+    this.store.applyIncoming({
+      subject: this.subject,
+      resource: this,
+      source: 'offline-replay',
+    });
 
     // Persist the queue to the durable outbox so it survives a
     // reload. The previous shape — per-subject
