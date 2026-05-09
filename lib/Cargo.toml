@@ -51,7 +51,7 @@ blake3 = "1.5"
 tokio = { version = "1.43", features = ["rt", "macros", "sync"] }
 async-trait = "0.1.89"
 tokio-tungstenite = { version = "0.26", features = [
-  "native-tls",
+  "rustls-tls-native-roots",
 ], optional = true }
 
 # For WASM: enable JS-backed randomness via feature unification
