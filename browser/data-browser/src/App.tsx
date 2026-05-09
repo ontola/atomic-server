@@ -13,10 +13,7 @@ import { RouterProvider } from '@tanstack/react-router';
 import { router } from './routes/Router';
 
 import { errorHandler } from './handlers/errorHandler';
-import {
-  PerformanceProfiler,
-  attachStoreToProfiler,
-} from './helpers/profiler';
+import { PerformanceProfiler, attachStoreToProfiler } from './helpers/profiler';
 
 function fixDevUrl(url: string) {
   if (isDev()) {
