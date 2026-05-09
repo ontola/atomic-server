@@ -424,21 +424,22 @@ export class Collection {
 
     const hasClientDb = !!this.store.getClientDb();
 
-    // Try the local WASM DB first.
+    // Try the local WASM DB first. If the drive sync has already
+    // completed, an empty result here is authoritative (the empty-fast
+    // path inside `fetchPageFromLocalDb` returns 'ok' for empty +
+    // sync-completed). If sync hasn't completed yet, we get 'no-db'
+    // and fall through to the server.
     if ((await this.fetchPageFromLocalDb(page)) === 'ok') {
       return;
     }
 
-    // If a clientDb exists but the query couldn't be answered, wait for
-    // first drive-sync to complete in case the index is mid-populate, then
-    // retry once. Skip this wait when there's no clientDb — there's no
-    // index to populate, so it would just delay the server fallback.
-    if (hasClientDb && this.store.serverConnected) {
-      await this.store.waitForFirstDriveSync();
-      if ((await this.fetchPageFromLocalDb(page)) === 'ok') {
-        return;
-      }
-    }
+    // Previously we'd `await waitForFirstDriveSync()` and re-check OPFS
+    // here — but the bootstrap sync only seeds Properties/Classes, not
+    // the user's drive contents (those arrive piecemeal via WS UPDATE
+    // pushes). For typical filters (`parent=<userDrive>`), the retry
+    // never returned 'ok' and just added 1–5 s of cold-load latency
+    // before the server fallback fires. Skip it; the server `/query`
+    // below is the authoritative answer for not-yet-indexed data.
 
     // Without a local DB, server `/query` is the only option. On a fresh
     // page reload the WS may still be connecting when this runs — wait
