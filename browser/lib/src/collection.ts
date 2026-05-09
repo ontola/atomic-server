@@ -46,6 +46,15 @@ export class Collection {
   public readonly __internalObject = this;
   private store: Store;
   private pages = new Map<number, Resource<Collections.Collection>>();
+  /**
+   * subject → page index. Lets `applyResourceChange` answer "is this
+   * subject already a member" in O(1) instead of scanning every loaded
+   * page on every incoming `ResourceUpdated`. Maintained in lockstep
+   * with `pages` via {@link setPage} / {@link clearPages}; the
+   * applyResourceChange add/remove branches keep it consistent on
+   * surgical mutations.
+   */
+  private _memberIndex = new Map<string, number>();
   private server: string;
   private params: CollectionParams;
 
@@ -129,6 +138,32 @@ export class Collection {
 
   public clearPages(): void {
     this.pages = new Map();
+    this._memberIndex.clear();
+  }
+
+  /**
+   * Single point that mutates `pages` so the member-subject index stays
+   * in sync. Replaces any existing mapping for the same page index.
+   */
+  private setPage(
+    pageIdx: number,
+    resource: Resource<Collections.Collection>,
+  ): void {
+    // Drop the old page's members from the index first, then re-add the
+    // new page's. Members can move between pages on `refresh`, so we
+    // can't just additively merge.
+    const existing = this.pages.get(pageIdx);
+    if (existing) {
+      for (const s of existing.getSubjects(collections.properties.members)) {
+        if (this._memberIndex.get(s) === pageIdx) {
+          this._memberIndex.delete(s);
+        }
+      }
+    }
+    this.pages.set(pageIdx, resource);
+    for (const s of resource.getSubjects(collections.properties.members)) {
+      this._memberIndex.set(s, pageIdx);
+    }
   }
 
   /** Tracks an in-flight `refresh()` so concurrent callers reuse the same
@@ -221,19 +256,17 @@ export class Collection {
       !!resource &&
       (Array.isArray(propVal) ? propVal.includes(fv) : propVal === fv);
 
-    let foundInPage: number | undefined;
-    let foundIndex = -1;
-    for (const [pageIdx, page] of this.pages) {
-      const members = page.getSubjects(collections.properties.members);
-      const idx = members.indexOf(subject);
-      if (idx !== -1) {
-        foundInPage = pageIdx;
-        foundIndex = idx;
-        break;
-      }
-    }
-
+    // O(1) lookup via the maintained subject→page index instead of
+    // scanning every loaded page on every incoming event. The within-
+    // page `indexOf` for the remove path stays — that's the array
+    // splice position, which we don't track separately.
+    const foundInPage = this._memberIndex.get(subject);
     const currentlyMember = foundInPage !== undefined;
+
+    // Fast path for the overwhelming majority of events: a resource we
+    // don't track had a property change that doesn't make it a member.
+    // Bail before the more expensive add/remove logic below.
+    if (!matches && !currentlyMember) return 'unchanged';
 
     if (matches && !currentlyMember) {
       // No page loaded yet — either constructor's initial `fetchPage(0)`
@@ -275,6 +308,7 @@ export class Collection {
       const members = lastPage.getSubjects(collections.properties.members);
       if (members.includes(subject)) return 'unchanged'; // paranoia
       this._totalMembers += 1;
+      this._memberIndex.set(subject, lastPageIdx);
       lastPage.applyHydratedValues([
         [collections.properties.members, [...members, subject]],
         [collections.properties.totalMembers, this._totalMembers],
@@ -289,9 +323,18 @@ export class Collection {
       // straightforwardly N-1 since we know the subject was a member.
       const page = this.pages.get(foundInPage!)!;
       const members = page.getSubjects(collections.properties.members);
+      const idx = members.indexOf(subject);
+      if (idx === -1) {
+        // Index drift — the subject was indexed but not present on the
+        // page. Drop the stale index entry and treat as no-op rather
+        // than corrupt state further.
+        this._memberIndex.delete(subject);
+        return 'unchanged';
+      }
       const next = [...members];
-      next.splice(foundIndex, 1);
+      next.splice(idx, 1);
       this._totalMembers = Math.max(0, this._totalMembers - 1);
+      this._memberIndex.delete(subject);
       page.applyHydratedValues([
         [collections.properties.members, next],
         [collections.properties.totalMembers, this._totalMembers],
@@ -307,6 +350,9 @@ export class Collection {
     collection._totalMembers = this._totalMembers;
     collection._waitForReady = this._waitForReady;
     collection.pages = this.pages;
+    // Share the index too — both clones look at the same `pages` Map,
+    // so they should observe the same membership.
+    collection._memberIndex = this._memberIndex;
 
     return collection;
   }
@@ -488,7 +534,7 @@ export class Collection {
         [collections.properties.members, []],
         [collections.properties.totalMembers, 0],
       ]);
-      this.pages.set(page, empty);
+      this.setPage(page, empty);
       this._totalMembers = 0;
       return 'no-db';
     }
@@ -514,7 +560,7 @@ export class Collection {
           [collections.properties.members, []],
           [collections.properties.totalMembers, 0],
         ]);
-        this.pages.set(page, empty);
+        this.setPage(page, empty);
         this._totalMembers = 0;
         return 'ok';
       }
@@ -550,7 +596,7 @@ export class Collection {
         [collections.properties.members, []],
         [collections.properties.totalMembers, 0],
       ]);
-      this.pages.set(page, empty);
+      this.setPage(page, empty);
       this._totalMembers = 0;
       return 'ok';
     }
@@ -597,7 +643,7 @@ export class Collection {
       [collections.properties.totalMembers, result.count],
     ]);
 
-    this.pages.set(page, resource);
+    this.setPage(page, resource);
     this._totalMembers = result.count;
 
     return 'ok';
@@ -635,7 +681,7 @@ export class Collection {
       ]);
     }
 
-    this.pages.set(page, resource);
+    this.setPage(page, resource);
 
     const totalMembers = resource.props.totalMembers;
 
