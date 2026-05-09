@@ -1857,23 +1857,18 @@ export class Resource<C extends OptionalClass = any> {
     // Also update the in-memory store so the UI reflects changes immediately.
     this.store.addResources(this, { skipCommitCompare: true });
 
-    // Persist the queue to localStorage so it survives page reloads. Without
-    // this the in-memory _pendingCommits array would be lost on navigation,
-    // syncDirtyResources would call pushCommits on a fresh hydrated instance
-    // with no commits, log "Synced", clear the dirty subject, and the server
-    // would never receive the resource — exactly the offline-create-then-
-    // online failure mode the dirty queue is supposed to prevent.
-    if (typeof localStorage !== 'undefined' && this._pendingCommits.length) {
-      try {
-        localStorage.setItem(
-          `atomic.offline.${this.subject}`,
-          JSON.stringify(
-            this._pendingCommits.map(c => commitToJsonADObject(c)),
-          ),
-        );
-      } catch (e) {
-        console.warn('[Offline] failed to persist pending commits:', e);
-      }
+    // Persist the queue to the durable outbox so it survives a
+    // reload. The previous shape — per-subject
+    // `localStorage['atomic.offline.<subject>']` blobs plus an
+    // `atomic.dirtyForSync` index — has been replaced by one
+    // unified `LocalOutbox` (one localStorage key, one schema, one
+    // re-entrance-safe drain). Without this set, the in-memory
+    // `_pendingCommits` array would be lost on navigation,
+    // `syncDirtyResources` would call `pushCommits` on a fresh
+    // hydrated instance with no commits, the dirty subject would
+    // be cleared, and the server would never receive the resource.
+    if (this._pendingCommits.length) {
+      this.store.outbox.setEntry(this.subject, this._pendingCommits);
     }
 
     // Intentionally DO NOT clear `_pendingCommits` here. They've been applied
