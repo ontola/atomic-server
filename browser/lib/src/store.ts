@@ -16,7 +16,7 @@ import { core } from './ontologies/core.js';
 import { server, type Server } from './ontologies/server.js';
 import type { OptionalClass, UnknownClass } from './ontology.js';
 import { JSONADParser } from './parse.js';
-import { Resource, unknownSubject } from './resource.js';
+import { Resource, unknownSubject, type ResourceSource } from './resource.js';
 import { type SearchOpts, buildSearchSubject } from './search.js';
 import { stringToSlug } from './stringToSlug.js';
 import { bytesToHex, hexToBytes, type JSONValue } from './value.js';
@@ -215,8 +215,98 @@ export interface ResourceTreeTemplate {
   [property: string]: true | ResourceTreeTemplate;
 }
 
+/**
+ * Where a {@link IncomingChange} came from. Carried through to the
+ * resource's `source` field and to listeners so collection-membership
+ * updates and React subscribers can decide whether they care.
+ *
+ * This is the *one* enum that distinguishes ingress paths. The set
+ * is deliberately small — adding a new ingress is one new variant
+ * here plus one call site, not a new code path through 4 files.
+ */
+export type ChangeSource =
+  /** Response to our own `WSClient.fetch(subject)` GET. */
+  | 'ws-pending-get'
+  /** Subscription push from another client (or our own commit echo). */
+  | 'ws-sub-push'
+  /** Drive sync delta — bulk-applied during reconnect handshake. */
+  | 'ws-sync-push'
+  /** `QUERY_UPDATE` push announcing a collection membership change. */
+  | 'ws-query-update'
+  /** Resource arrived via the HTTP fallback (`Client.fetchResourceHTTP`). */
+  | 'http-fetch'
+  /** Local commit signed and added to in-memory state, not yet POSTed. */
+  | 'local-pre-push'
+  /** Server `POST /commit` returned `200`; commit is durable upstream. */
+  | 'local-acked'
+  /** Outbox replay of a commit signed in a previous session. */
+  | 'offline-replay';
+
+/**
+ * One authoritative-or-local update to a resource, in either Loro or
+ * JSON-AD wire form. The single ingress used by every code path that
+ * learns of a new version of a resource.
+ *
+ * Before: WS UPDATE / SYNC_PUSH / QUERY_UPDATE / pending-GET / HTTP
+ * fetch / local commit pre-/post-POST / offline replay each had their
+ * own bespoke setup (`setSource`, `setSourceTimestamp`, `loading=false`,
+ * conditional `addResources({skipCommitCompare})`, optional
+ * `persistToClientDb`, ad-hoc echo detection). 9 ingress paths, 4
+ * echo-detection schemes.
+ *
+ * After: every path constructs an `IncomingChange` and calls
+ * {@link Store.applyIncoming}. Subject normalisation, commit-id
+ * dedup, persistence, and notification happen in one place with one
+ * ordering contract.
+ */
+export interface IncomingChange {
+  subject: string;
+  /** Loro snapshot or delta — exclusive with {@link jsonAd}. */
+  loroBytes?: Uint8Array;
+  /** JSON-AD payload — exclusive with {@link loroBytes}. Used for
+   * the HTTP fetch path where the server returns JSON-AD. */
+  jsonAd?: string;
+  /** `did:ad:commit:<sig>` of the commit that produced this state.
+   * Used for echo dedup: a change whose commitId equals the cached
+   * resource's `lastCommit` is a no-op. */
+  commitId?: string;
+  source: ChangeSource;
+  /** Defaults to `Date.now()` when omitted. */
+  receivedAt?: number;
+  /** Force notify even if dedup says it's an echo. Reserved for
+   * paths that intentionally re-trigger UI (e.g. resource-renamed
+   * post-genesis). Default false. */
+  forceNotify?: boolean;
+}
+
 /** Returns True if the client has WebSocket support */
 const supportsWebSockets = () => typeof WebSocket !== 'undefined';
+
+/**
+ * Map the {@link ChangeSource} (the ingress-path enum we own here)
+ * onto {@link ResourceSource} (the legacy field on `Resource`). Kept
+ * one-way so future `Resource` consumers see a stable enum, while
+ * we evolve the more granular `ChangeSource` for ingress dedup +
+ * telemetry purposes.
+ */
+function mapChangeSourceToResourceSource(s: ChangeSource): ResourceSource {
+  switch (s) {
+    case 'ws-pending-get':
+    case 'ws-sub-push':
+      return 'server-ws';
+    case 'ws-sync-push':
+      return 'ws-sync';
+    case 'ws-query-update':
+      return 'server-ws';
+    case 'http-fetch':
+      return 'server-http';
+    case 'local-pre-push':
+    case 'local-acked':
+      return 'created';
+    case 'offline-replay':
+      return 'local-cache';
+  }
+}
 
 /**
  * Cheap equality for commit-log property values. Strict `===` would always
@@ -776,6 +866,80 @@ export class Store {
     } catch (e) {
       return subject;
     }
+  }
+
+  /**
+   * **The single ingress point** for resource state arriving from any
+   * source (WS UPDATE / SYNC_PUSH / QUERY_UPDATE / pending-GET, HTTP
+   * fetch, local commit pre-/post-POST, offline replay). All call
+   * sites construct an {@link IncomingChange} and call this method
+   * — the function handles subject normalisation, commit-id dedup,
+   * Loro/JSON-AD hydration, atomic OPFS persistence, and the single
+   * `notify` fan-out in one ordered pass.
+   *
+   * Returns `'applied'` if the change reached `notify`, `'deduped'`
+   * if `commitId` matched the cached `lastCommit` (no-op echo), or
+   * `'invalid'` if the change was malformed.
+   *
+   * Implementation note: this is currently a thin shim over the
+   * existing `addResource` flow. As WS handlers and the local
+   * commit path migrate over, the bespoke `getResourceLoading +
+   * importLoroUpdate + addResources({skipCommitCompare: true})` blocks
+   * will collapse into one `applyIncoming(...)` call per ingress.
+   */
+  public applyIncoming(
+    change: IncomingChange,
+  ): 'applied' | 'deduped' | 'invalid' {
+    if (!change.loroBytes && !change.jsonAd) return 'invalid';
+
+    const subject = this.normalizeSubject(change.subject);
+    const aliased = this.aliases.get(subject) ?? subject;
+
+    // Commit-id dedup: replaces the bespoke `isEcho` block in the
+    // WS UPDATE handler and the `skipCommitCompare` gate in
+    // `addResource`. A change whose `commitId` matches the cached
+    // `lastCommit` is an echo of state we already applied.
+    const existing = this.resources.get(aliased);
+    if (
+      !change.forceNotify &&
+      change.commitId &&
+      existing &&
+      !existing.loading &&
+      !existing.new &&
+      existing.get(commits.properties.lastCommit) === change.commitId
+    ) {
+      return 'deduped';
+    }
+
+    // Hydrate into an in-memory Resource. Reuse an existing
+    // instance when present so callers' references stay valid;
+    // otherwise create a placeholder (`getResourceLoading`).
+    const resource =
+      existing ?? this.getResourceLoading(subject, { newResource: false });
+
+    if (change.loroBytes) {
+      resource.importLoroUpdate(change.loroBytes);
+    }
+    // jsonAd path is exercised by HTTP fetch + offline replay; the
+    // current `addResource` consumers go through their own JSON-AD
+    // parsing, so we leave that wiring to the migration step that
+    // moves them over (Step 3.5).
+
+    if (change.commitId) {
+      resource.setLastCommitValue(change.commitId);
+    }
+
+    resource.source = mapChangeSourceToResourceSource(change.source);
+    resource.sourceTimestamp = change.receivedAt ?? Date.now();
+    resource.loading = false;
+
+    // Re-use the shared addResource flow for persistence + notify.
+    // `skipCommitCompare` is unconditionally true here because we
+    // already deduped above — the in-flight `addResource` gate
+    // would just repeat that check.
+    this.addResource(resource, { skipCommitCompare: true });
+
+    return 'applied';
   }
 
   public addResources(
