@@ -73,7 +73,18 @@ export class Collection {
     this.params = params;
 
     if (!noFetch) {
-      this._waitForReady = this.fetchPage(0);
+      // Route the initial fetch through `refresh()` rather than calling
+      // `fetchPage(0)` directly. `refresh()` sets `_refreshInFlight`,
+      // which `applyResourceChange` reads to know whether a late-
+      // arriving matching subject (one whose `ResourceUpdated` event
+      // fires while the initial WS `/query` GET is still blocked
+      // behind auth) should set `_refreshPending` so the loop iterates
+      // and re-queries the server. Without this, the matching subject
+      // is silently dropped: the collection's pages stay empty and the
+      // sidebar/table never reflects the just-created resource.
+      // Reproducible under `ATOMIC_TEST_CPU_THROTTLE=5` via
+      // `perf-sidebar-reload.spec.ts`.
+      this._waitForReady = this.refresh();
     }
 
     this.clearPages = this.clearPages.bind(this);
