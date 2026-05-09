@@ -76,6 +76,13 @@ test.describe('table refresh', () => {
     }
   });
 
+  // FLAKY (dagger CI): the post-Tab `pendingDirtyCount === 0` poll
+  // doesn't always converge before the test asserts row counts. Path:
+  // type into row 2 col 2 → Tab → wait dirty 0 → snapshot row count
+  // across 8 reloads. Under dagger contention an inflight commit
+  // sometimes re-enters dirty=>0=>1=>0 between sample and assertion.
+  // Investigate: hold the wait until *two* consecutive poll ticks
+  // observe dirty=0, or use `waitForCommit` for the explicit save.
   test('reloading after typing into a cell does not grow rows', async ({
     page,
   }) => {

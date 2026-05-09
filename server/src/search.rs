@@ -411,6 +411,20 @@ mod tests {
         );
     }
 
+    // FLAKY (local + dagger CI + remote CI): tantivy's `IndexReader`
+    // uses `OnCommitWithDelay` reload policy; under heavy parallel test
+    // load (many actix HTTP servers spinning up alongside) the
+    // post-commit segment delete doesn't propagate to the searcher
+    // before the in-test poll deadline. Local repro: ~1-in-5 first-
+    // attempts fail; passes on retry with fresh setup. The poll loop
+    // has a 30s deadline and `.config/nextest.toml` configures
+    // `retries = 5` for this test specifically — but the override
+    // doesn't take effect in the dagger nextest invocation (unclear
+    // why). Investigate: verify the binary-name filter matches in CI
+    // (`cargo nextest list` from inside the dagger container), or
+    // switch the reader to `ReloadPolicy::Manual` and call `reload`
+    // explicitly so the test isn't at the mercy of the background
+    // merge thread.
     #[actix_rt::test]
     async fn test_update_resource() {
         let unique_string = atomic_lib::utils::random_string(10);
