@@ -100,6 +100,13 @@ test.describe('sync', () => {
     ).toBeVisible({ timeout: 15000 });
   });
 
+  // FLAKY (dagger CI + remote CI): the `Edited Offline` editable-title
+  // doesn't appear within 15 s after the `setOffline(false)` reload.
+  // Path: edit while offline → reload → wait for `serverConnected` →
+  // expect title rendered with offline edit. Likely the WS reconnect +
+  // dirty-queue drain doesn't finish in time on a contended runner.
+  // Investigate: poll `store.getResourceLoading(subject).title === '...'`
+  // directly (we already do this for the cross-context test below).
   test('edits made offline persist across reload', async ({ page }) => {
     test.slow();
 
@@ -158,6 +165,15 @@ test.describe('sync', () => {
     ).toBeVisible({ timeout: 15000 });
   });
 
+  // FLAKY (dagger CI + remote CI): on the second-context (page2) view of
+  // the document, the `Synced From Offline` H1 doesn't render within
+  // 30 s. Path is page1 edits offline → reconnect → page1
+  // `waitForSearchable` → page2 navigates to the resource subject.
+  // Already does a `waitForFunction` against `store.resources.get(...)`,
+  // but under dagger CPU contention the Loro WASM init + WS
+  // authenticate + GET round-trip exceeds the budget. Investigate:
+  // pre-warm Loro on page2 before navigation, or split the deadline so
+  // the WS GET budget is independent of the H1 render budget.
   test('offline edits sync to server when connection is restored', async ({
     page,
     context,

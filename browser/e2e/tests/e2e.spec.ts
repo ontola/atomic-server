@@ -125,6 +125,13 @@ test.describe('data-browser', async () => {
     await expect(page3.getByText(driveTitle).first()).toBeVisible();
   });
 
+  // FLAKY (dagger CI, recovered on retry 1): the second-context message
+  // (`text=My test: <timestamp>`) intermittently doesn't appear in the
+  // owner's window within 15 s. Cross-context chat propagation goes
+  // through the server's WS hub; under dagger CPU contention the
+  // round-trip eats the budget. Investigate: replace the DOM text wait
+  // with a `store.subscribe` poll on the chatroom resource's `messages`
+  // property.
   test('chatroom', async ({ page, browser, context }) => {
     const inputLocator = (currentPage: Page) =>
       currentPage.getByLabel('Chat input');
@@ -286,6 +293,13 @@ test.describe('data-browser', async () => {
     ).toBeVisible();
   });
 
+  // FLAKY (dagger CI): the created document `RAM Downloading
+  // Strategies` doesn't appear inside the folder view within 10 s after
+  // creation. Locator was
+  // `getByRole('main').getByText('RAM Downloading Strategies').first()`.
+  // Likely a children-collection invalidation race after the `newResource`
+  // commit. Investigate: subscribe directly to the folder's `useChildren`
+  // collection ready state instead of waiting for the DOM.
   test('folder', async ({ page }) => {
     await newResource('folder', page);
     const folderTitle = 'TestFolder-uniqueName';
@@ -383,6 +397,13 @@ test.describe('data-browser', async () => {
     await expect(page.locator('text=Resource Saved')).toBeVisible();
   });
 
+  // FLAKY (dagger CI): the `Resource deleted` toast and/or the sidebar
+  // un-listing of `folder` aren't visible within 5 s after the delete
+  // confirmation. The toast fires from the store's
+  // `notifyResourceManuallyCreated` / removal handler — the surrounding
+  // commit-flush + sidebar refetch path is what's slow. Investigate:
+  // assert on `store.resources.has(subject) === false` via
+  // `waitForFunction` instead of toast text.
   test('delete resource', async ({ page }) => {
     await newResource('folder', page);
     const parentResource = await getCurrentSubject(page);
@@ -482,6 +503,12 @@ test.describe('data-browser', async () => {
     ).toBeVisible({ timeout: 10000 });
   });
 
+  // FLAKY (dagger CI + remote CI): the imported resource's link
+  // (`getByRole('link', { name: 'blaat', exact: true })`) doesn't show
+  // up within 10 s. Likely a children-collection refresh race after the
+  // import commit batch — same pattern as `folder` above. Investigate:
+  // poll the store for the imported subject under the parent rather
+  // than DOM text.
   test('import', async ({ page }) => {
     await newResource('folder', page);
     await contextMenuClick('import', page);

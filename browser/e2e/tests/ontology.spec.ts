@@ -13,6 +13,11 @@ import {
 test.describe('Ontology', async () => {
   test.beforeEach(before);
 
+  // FLAKY (remote CI, observed once): one of the dropdown picks fails
+  // to register — `pickOption` helper has a 100 ms wait that's
+  // probably too short under contention. Investigate: replace the
+  // `waitForTimeout(100)` in `pickOption` with an explicit visibility
+  // wait on the dropdown's option list.
   test('Create and edit ontology', async ({ page }) => {
     test.slow();
 

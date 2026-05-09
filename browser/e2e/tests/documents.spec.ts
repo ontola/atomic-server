@@ -15,6 +15,13 @@ import {
 test.describe('documents', async () => {
   test.beforeEach(before);
 
+  // FLAKY (dagger CI, intermittent on remote): multi-context CRDT sync
+  // via the WS hub. Page2 sometimes doesn't see the page1 deletion of
+  // "New paragraph" within 15s — pattern is `Locator: locator('text=New
+  // paragraph')` Expected: not visible / Received: visible. Likely
+  // exceeds the loro broadcast budget under dagger CPU contention.
+  // Investigate: bump the assertion to `waitForFunction` polling on the
+  // store's loro-doc state instead of DOM text.
   test('create document, edit, page title, websockets', async ({
     page,
     browser,
