@@ -305,8 +305,8 @@ Verified May 9, 2026 against branch `did-rebased2`:
 |-------|-------|-----------|
 | `@tomic/lib` unit tests | 37/37 ✅ | 37/37 ✅ |
 | `@tomic/lib` integration tests | 5/5 ✅ | 5/5 ✅ |
-| `cargo nextest run --workspace --exclude atomic-server-tauri` | 191/191 ✅ (1 flaky search test, recovered on retry 2/3) | 191/191 ✅ (same flake) |
-| `pnpm test-e2e` (CI-mode, workers=1) | 39/39 ✅ × 2 consecutive runs | 8 failed, 1 flaky, 29 passed |
+| `cargo nextest run --workspace --exclude atomic-server-tauri` | 191/191 ✅ (1 flaky search test, recovered at retry 2/6 — `package(atomic-server)` override applies after `cc66e88e`) | 191/191 ✅ (same FLAKY 2/6 — override active in dagger) |
+| `pnpm test-e2e` (CI-mode, workers=1) | 39/39 ✅ × 2 consecutive runs | 26–28 passed, 11–12 failed, 1–2 flaky-recovered (depends on which env-flake hits) |
 
 The dagger-only failures are **all** in the chronically flaky tests
 already annotated with `// FLAKY (...)` markers (`grep -rn 'FLAKY ('`).
@@ -315,6 +315,14 @@ host-resolver routing + single-core actix container, but pass cleanly
 on a dev box. Treat them as environment flakes, not regressions, until
 a fix lands for each individually (each annotation has a suggested
 investigation path).
+
+A separate spammy log line is also visible in dagger e2e runs:
+`Commit for did:ad:... has is_genesis: true, but the resource already exists`
+(emitted from `lib/src/commit.rs:422`). It correlates with offline-flow
+tests (sync.spec.ts, file-upload-offline.spec.ts) and looks like a
+dirty-queue replay re-submitting a genesis commit that the server has
+already accepted via a parallel WS push. Worth a separate investigation;
+not gating any of the cold-load wins above.
 
 ## Out of scope / not bottlenecks
 
