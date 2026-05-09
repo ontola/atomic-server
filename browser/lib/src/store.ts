@@ -30,6 +30,7 @@ import type {
   ClientDbQueryResult,
 } from './client-db.js';
 import { LocalSearch } from './local-search.js';
+import { perfMark, perfSpan } from './perf-trace.js';
 
 /** Function called when a resource is updated or removed */
 type ResourceCallback<C extends OptionalClass = UnknownClass> = (
@@ -532,6 +533,7 @@ export class Store {
     }
 
     const subjects = this.sortDirtyForSync([...this.dirtyForSync]);
+    perfMark('store.syncDirtyResources.subjects', { count: subjects.length });
 
     for (const subject of subjects) {
       const resource = this.resources.get(subject);
@@ -2772,8 +2774,12 @@ export class Store {
 
   /** Posts a Commit to some endpoint. Returns the Commit created by the server. */
   public async postCommit(commit: Commit, endpoint: string): Promise<Commit> {
+    const close = perfSpan('store.postCommit', {
+      genesis: commit.previousCommit === undefined,
+    });
     try {
       const created = await this.client.postCommit(commit, endpoint);
+      close('ok');
       this.pushCommitLog({
         timestamp: Date.now(),
         direction: 'outgoing',
@@ -2794,6 +2800,7 @@ export class Store {
 
       return created;
     } catch (e) {
+      close({ err: e instanceof Error ? e.message : String(e) });
       this.pushCommitLog({
         timestamp: Date.now(),
         direction: 'outgoing',

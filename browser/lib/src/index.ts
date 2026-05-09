@@ -57,3 +57,11 @@ export * from './CryptoProvider.js';
 export { ClientDbWorker } from './client-db.js';
 export type { ClientDbQueryOpts, ClientDbQueryResult } from './client-db.js';
 export { LocalSearch } from './local-search.js';
+export {
+  perfMark,
+  perfSpan,
+  perfSnapshot,
+  perfReset,
+  type PerfEvent,
+  type PerfSnapshot,
+} from './perf-trace.js';
