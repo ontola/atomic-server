@@ -1194,8 +1194,16 @@ export class Store {
     // Wait for the WASM DB to initialize (if one is set).
     // This is important on page reload: the DB may still be loading
     // but it has data from a previous session that we need.
+    //
+    // We deliberately wait only for `init` here, not the bootstrap
+    // `seed`. The seed pushes in-memory default-property resources
+    // into OPFS — useful for offline reload — but lookups in this
+    // function are for user-data subjects that aren't part of the
+    // bootstrap, so they don't depend on it. Gating useResource
+    // cold-loads on the seed adds 200–500 ms of dead time on a
+    // populated drive (70 sequential property puts + reseed loop).
     if (this.clientDb) {
-      await this.clientDb.waitForReady();
+      await this.clientDb.waitForInit();
     }
 
     // Try the WASM DB (OPFS) for persisted resources. One combined
@@ -1203,7 +1211,7 @@ export class Store {
     // mounted useResource takes this path on cold-load, and each
     // worker postMessage costs ~ms; halving the round-trips visibly
     // reduces time-to-first-paint on a populated drive.
-    if (this.clientDb?.isReady) {
+    if (this.clientDb?.isInitialized) {
       try {
         const { jsonAd, snapshot } =
           await this.clientDb.getResourceWithSnapshot(subject);

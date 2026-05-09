@@ -54,7 +54,7 @@ export function initClientDb(store: Store): void {
       }
     }
 
-    const seedResource = (subject: string): Promise<void> | undefined => {
+    const serializeResource = (subject: string): string | undefined => {
       const resource = store.resources.get(subject);
 
       if (!resource) return undefined;
@@ -82,22 +82,27 @@ export function initClientDb(store: Store): void {
 
       if (!hasProps) return undefined;
 
-      return clientDb.putResource(JSON.stringify(obj)).catch(() => {});
+      return JSON.stringify(obj);
     };
 
-    // Seed properties first (serially to avoid race conditions in the parser)
-    for (const subject of properties) {
-      await seedResource(subject);
-    }
+    // Properties must be seeded first so subsequent resources parse with
+    // correct datatype validation. Used to be 70 sequential `putResource`
+    // round-trips (~350 ms of dead time on cold start); batch them into
+    // one worker call. The worker still processes them in order, so the
+    // datatype-priming property is preserved.
+    const propertyJsonAds = properties
+      .map(serializeResource)
+      .filter((s): s is string => s !== undefined);
+    await clientDb.putResources(propertyJsonAds).catch(() => {});
 
-    // Then seed everything else in parallel
-    const otherPromises = others
-      .map(seedResource)
-      .filter((p): p is Promise<void> => p !== undefined);
-    await Promise.all(otherPromises);
+    // Then seed everything else in one batch too.
+    const otherJsonAds = others
+      .map(serializeResource)
+      .filter((s): s is string => s !== undefined);
+    await clientDb.putResources(otherJsonAds).catch(() => {});
 
     console.info(
-      `[ClientDb] WASM database ready, seeded ${properties.length} properties + ${otherPromises.length} resources`,
+      `[ClientDb] WASM database ready, seeded ${propertyJsonAds.length} properties + ${otherJsonAds.length} resources`,
     );
   });
 
@@ -114,7 +119,13 @@ export function initClientDb(store: Store): void {
       // currently in memory. This captures resources that were added to the
       // store during the init window, when calls to `clientDb.putResource`
       // could race with the worker's async WASM init.
+      //
+      // Batched into one worker call — the previous sequential loop did
+      // ~200 round-trips (~1 second of post-init dead time on a populated
+      // session); the worker still processes them in order so any
+      // ordering invariants downstream of `putResource` are preserved.
       const reseedAll = async () => {
+        const jsonAds: string[] = [];
         for (const resource of store.resources.values()) {
           if (
             resource.loading ||
@@ -133,11 +144,10 @@ export function initClientDb(store: Store): void {
             hasProps = true;
           }
           if (!hasProps) continue;
-          try {
-            await clientDb.putResource(JSON.stringify(obj));
-          } catch {
-            // individual put failure is non-fatal; continue
-          }
+          jsonAds.push(JSON.stringify(obj));
+        }
+        if (jsonAds.length > 0) {
+          await clientDb.putResources(jsonAds).catch(() => {});
         }
       };
       await reseedAll();

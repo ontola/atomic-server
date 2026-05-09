@@ -338,6 +338,16 @@ export class ClientDbWorker {
     await this.send({ type: 'putResource', jsonAd });
   }
 
+  /** Put many resources in a single worker round-trip. The worker
+   *  processes them in order — caller-side ordering is preserved — but
+   *  the postMessage overhead amortises to ~one round-trip total
+   *  instead of N. Used by the bootstrap seed loop (70 properties
+   *  used to mean 70 sequential round-trips). */
+  async putResources(jsonAds: string[]): Promise<void> {
+    if (jsonAds.length === 0) return;
+    await this.send({ type: 'putResources', jsonAds });
+  }
+
   async applyCommit(commitJsonAd: string): Promise<void> {
     await this.send({ type: 'applyCommit', commitJsonAd });
   }
@@ -412,11 +422,34 @@ export class ClientDbWorker {
     return this.ready && this.seeded;
   }
 
+  /** True once the WASM worker is initialized — independent of the
+   *  bootstrap seed. Lookups for resources that aren't part of the
+   *  bootstrap (i.e. user data) only need this; gating them on the seed
+   *  blocks every cold-load useResource on a few hundred milliseconds
+   *  of property puts they don't even depend on. */
+  get isInitialized(): boolean {
+    return this.ready;
+  }
+
   setSeedPromise(promise: Promise<void>): void {
     this.seeded = false;
     this.seedPromise = promise.then(() => {
       this.seeded = true;
     });
+  }
+
+  /** Resolves when the WASM worker is initialized (lookups can run).
+   *  Does NOT wait for the bootstrap seed — see {@link waitForReady}. */
+  async waitForInit(): Promise<boolean> {
+    if (this.ready) return true;
+    if (!this.initPromise) return false;
+    try {
+      await this.initPromise;
+
+      return this.ready;
+    } catch {
+      return false;
+    }
   }
 
   async waitForReady(): Promise<boolean> {
