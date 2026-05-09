@@ -424,38 +424,43 @@ export class Collection {
 
     const hasClientDb = !!this.store.getClientDb();
 
-    // Try the local WASM DB first. If the drive sync has already
-    // completed, an empty result here is authoritative (the empty-fast
-    // path inside `fetchPageFromLocalDb` returns 'ok' for empty +
-    // sync-completed). If sync hasn't completed yet, we get 'no-db'
-    // and fall through to the server.
-    if ((await this.fetchPageFromLocalDb(page)) === 'ok') {
+    // Race OPFS and server. Both `fetchPageFromLocalDb` and
+    // `fetchPageFromServer` mutate `this.pages` on success — the second
+    // one to land just overwrites with the same data, which is
+    // harmless. The win is that OPFS check + server query no longer
+    // run sequentially: if OPFS hits, we return as soon as it does;
+    // if it misses, the server query is already in flight.
+    //
+    // For the OPFS-miss case this saves the OPFS round-trip latency
+    // (~50–200 ms in dagger) on every cold-loaded collection.
+    let serverPromise: Promise<void> | undefined;
+    if (this.store.serverConnected) {
+      // Fire-and-forget; we await later only if OPFS misses.
+      serverPromise = this.fetchPageFromServer(page).catch(() => undefined);
+    } else if (!hasClientDb) {
+      // No OPFS *and* offline — give the WS a brief window to come up,
+      // otherwise the constructor's `_waitForReady` would resolve to an
+      // empty page and freeze the UI in a "no rows" state.
+      await this.waitForServerConnected(3000);
+      if (this.store.serverConnected) {
+        serverPromise = this.fetchPageFromServer(page).catch(() => undefined);
+      }
+    }
+
+    // Try OPFS. If the drive sync has already completed, an empty
+    // result here is authoritative (the empty-fast path inside
+    // `fetchPageFromLocalDb` returns 'ok' for empty + sync-completed).
+    if (hasClientDb && (await this.fetchPageFromLocalDb(page)) === 'ok') {
+      // OPFS won. The in-flight server fetch will land later and
+      // overwrite with identical data — non-blocking, non-fatal.
       return;
     }
 
-    // Previously we'd `await waitForFirstDriveSync()` and re-check OPFS
-    // here — but the bootstrap sync only seeds Properties/Classes, not
-    // the user's drive contents (those arrive piecemeal via WS UPDATE
-    // pushes). For typical filters (`parent=<userDrive>`), the retry
-    // never returned 'ok' and just added 1–5 s of cold-load latency
-    // before the server fallback fires. Skip it; the server `/query`
-    // below is the authoritative answer for not-yet-indexed data.
-
-    // Without a local DB, server `/query` is the only option. On a fresh
-    // page reload the WS may still be connecting when this runs — wait
-    // briefly for it (bounded) so the constructor's `_waitForReady` doesn't
-    // resolve to an empty page and freeze the UI in a "no rows" state.
-    if (!this.store.serverConnected) {
-      if (!hasClientDb) {
-        await this.waitForServerConnected(3000);
-      }
-      if (!this.store.serverConnected) return;
-    }
-
-    try {
-      await this.fetchPageFromServer(page);
-    } catch {
-      // Server unreachable and no local data — leave collection empty
+    // OPFS missed (or absent). Wait for the server result we kicked
+    // off above. If we never started one (offline + no clientDb),
+    // there's nothing to wait for — leave the page empty.
+    if (serverPromise) {
+      await serverPromise;
     }
   }
 
