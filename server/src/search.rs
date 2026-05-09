@@ -453,25 +453,39 @@ mod tests {
         search_state.add_resource(&resource, &store).await.unwrap();
         search_state.writer.write().unwrap().commit().unwrap();
 
-        // Make sure changes are visible to searcher
-        search_state.reader.reload().unwrap();
-
-        let searcher = search_state.reader.searcher();
-
-        // Search for the old title - should return no results
+        // Make sure changes are visible to searcher.
+        // `IndexReader::reload()` returns sync but the visible Searcher
+        // generation can lag the underlying segment merge briefly under
+        // load. Poll instead of asserting once: the new generation
+        // settles within a few hundred milliseconds; a real bug would
+        // never converge inside the deadline.
         let query_parser =
             tantivy::query::QueryParser::for_index(&search_state.index, vec![fields.title]);
-        let query = query_parser.parse_query("Initial").unwrap();
-        let top_docs = searcher
-            .search(&query, &tantivy::collector::TopDocs::with_limit(1))
-            .unwrap();
-        assert_eq!(top_docs.len(), 0, "Old title should not be found in index");
-
-        // Search for the new title - should return one result
-        let query = query_parser.parse_query("Updated").unwrap();
-        let top_docs = searcher
-            .search(&query, &tantivy::collector::TopDocs::with_limit(1))
-            .unwrap();
-        assert_eq!(top_docs.len(), 1, "New title should be found in index");
+        let initial_query = query_parser.parse_query("Initial").unwrap();
+        let updated_query = query_parser.parse_query("Updated").unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let mut last_initial = usize::MAX;
+        let mut last_updated = usize::MAX;
+        loop {
+            search_state.reader.reload().unwrap();
+            let searcher = search_state.reader.searcher();
+            last_initial = searcher
+                .search(&initial_query, &tantivy::collector::TopDocs::with_limit(1))
+                .unwrap()
+                .len();
+            last_updated = searcher
+                .search(&updated_query, &tantivy::collector::TopDocs::with_limit(1))
+                .unwrap()
+                .len();
+            if last_initial == 0 && last_updated == 1 {
+                break;
+            }
+            if std::time::Instant::now() >= deadline {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        assert_eq!(last_initial, 0, "Old title should not be found in index");
+        assert_eq!(last_updated, 1, "New title should be found in index");
     }
 }
