@@ -518,10 +518,12 @@ export function parseAndApplyCommit(jsonAdObjStr: string, store: Store) {
     return;
   } else {
     resource.appliedCommitSignatures.add(signature);
-    resource.source = 'ws-commit';
-    resource.sourceTimestamp = Date.now();
 
-    store.addResources(resource, { skipCommitCompare: true });
+    store.applyIncoming({
+      subject: resource.subject,
+      resource,
+      source: 'ws-sub-push',
+    });
   }
 }
 

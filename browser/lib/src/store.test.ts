@@ -12,7 +12,7 @@ describe('Store', () => {
     const testval = 'Hi world';
     const newResource = new Resource(subject);
     await newResource.set(core.properties.description, testval, false);
-    store.addResources(newResource);
+    store.addResource(newResource);
     const gotResource = store.getResourceLoading(subject);
     const atomString = gotResource!
       .get(core.properties.description)!
@@ -103,7 +103,7 @@ describe('Store', () => {
     await resource.set(core.properties.description, 'Identity verified', false);
 
     // Explicitly add with alias
-    store.addResources(resource, { alias });
+    store.addResource(resource, { alias });
 
     // Both subjects should return the same resource
     const gotByAlias = store.getResourceLoading(alias);

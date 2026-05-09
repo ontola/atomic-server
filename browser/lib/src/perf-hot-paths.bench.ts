@@ -98,17 +98,17 @@ describe('Store.addResource (commit-compare gate)', () => {
   const store = makeStore();
   const subject = 'https://example.com/gated';
   // Pre-add a resource so subsequent calls hit the merge/skip path.
-  store.addResources(makeResource(subject), { skipCommitCompare: true });
+  store.addResource(makeResource(subject), { skipCommitCompare: true });
 
   bench('addResource — same lastCommit (gate skips notify)', () => {
     // Same lastCommit → store gate returns early without merge or notify.
     const next = makeResource(subject);
-    store.addResources(next);
+    store.addResource(next);
   });
 
   bench('addResource — skipCommitCompare:true (forced merge + notify)', () => {
     const next = makeResource(subject, { [core.properties.name]: 'Forced' });
-    store.addResources(next, { skipCommitCompare: true });
+    store.addResource(next, { skipCommitCompare: true });
   });
 });
 
@@ -118,7 +118,7 @@ describe('Store.notify fan-out (subscriber chain)', () => {
   const store = makeStore();
   const subject = 'https://example.com/fanout';
   const r = makeResource(subject);
-  store.addResources(r, { skipCommitCompare: true });
+  store.addResource(r, { skipCommitCompare: true });
 
   // Subscribe N callbacks for the same subject — represents N mounted
   // useResource calls all watching the same resource.
@@ -129,7 +129,7 @@ describe('Store.notify fan-out (subscriber chain)', () => {
 
   bench(`addResource → notify with ${N} subject subscribers`, () => {
     const next = makeResource(subject, { [core.properties.name]: 'Notify' });
-    store.addResources(next, { skipCommitCompare: true });
+    store.addResource(next, { skipCommitCompare: true });
   });
 });
 
@@ -146,7 +146,7 @@ describe('Collection.applyResourceChange (B2: indexed lookup)', () => {
     (_, i) => `https://example.com/member-${i}`,
   );
   for (const m of memberSubjects) {
-    store.addResources(
+    store.addResource(
       makeResource(m, {
         [core.properties.parent]: 'https://example.com/parent',
       }),
