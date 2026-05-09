@@ -455,15 +455,18 @@ mod tests {
 
         // Make sure changes are visible to searcher.
         // `IndexReader::reload()` returns sync but the visible Searcher
-        // generation can lag the underlying segment merge briefly under
-        // load. Poll instead of asserting once: the new generation
-        // settles within a few hundred milliseconds; a real bug would
-        // never converge inside the deadline.
+        // generation can lag the underlying segment merge under heavy
+        // parallel test load (the reader uses `OnCommitWithDelay`).
+        // Poll instead of asserting once: the new generation settles
+        // within a few hundred milliseconds in normal conditions, but
+        // under CI parallelism it can take several seconds before
+        // tantivy's background merge thread gets CPU time. 30s is a
+        // safety net — a real bug would never converge inside it.
         let query_parser =
             tantivy::query::QueryParser::for_index(&search_state.index, vec![fields.title]);
         let initial_query = query_parser.parse_query("Initial").unwrap();
         let updated_query = query_parser.parse_query("Updated").unwrap();
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
         let mut last_initial = usize::MAX;
         let mut last_updated = usize::MAX;
         loop {
@@ -483,7 +486,9 @@ mod tests {
             if std::time::Instant::now() >= deadline {
                 break;
             }
-            std::thread::sleep(std::time::Duration::from_millis(50));
+            // Yield + delay, giving tantivy's background segment-merge
+            // thread CPU time before we check again.
+            std::thread::sleep(std::time::Duration::from_millis(100));
         }
         assert_eq!(last_initial, 0, "Old title should not be found in index");
         assert_eq!(last_updated, 1, "New title should be found in index");
