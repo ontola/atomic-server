@@ -542,7 +542,17 @@ export class AtomicServer {
           '-c',
           'BIN_DIR="${CARGO_HOME:-$HOME/.cargo}/bin" && mkdir -p "$BIN_DIR" && curl -LsSf https://get.nexte.st/latest/linux-musl | tar zxf - -C "$BIN_DIR" && "$BIN_DIR/cargo-nextest" --version',
         ])
-        .withExec(['cargo', 'nextest', 'run'])
+        // `--exclude atomic-server-tauri`: same reason as `rustClippy` —
+        // the Tauri desktop crate needs system libs (glib-2.0, pkg-config)
+        // that aren't installed in the musl-cross CI image.
+        .withExec([
+          'cargo',
+          'nextest',
+          'run',
+          '--workspace',
+          '--exclude',
+          'atomic-server-tauri',
+        ])
         .stdout()
     );
   }
@@ -551,10 +561,17 @@ export class AtomicServer {
   rustClippy(): Promise<string> {
     const rustContainer = this.rustBuild();
 
+    // Exclude `desktop` (Tauri) — its build pulls in `glib-sys`, which
+    // requires `pkg-config` + `glib-2.0` dev libraries that the musl-cross
+    // CI image doesn't carry. The desktop crate is built separately via the
+    // Tauri toolchain on platforms that have those system libs.
     return rustContainer
       .withExec([
         'cargo',
         'clippy',
+        '--workspace',
+        '--exclude',
+        'atomic-server-tauri',
         '--no-deps',
         '--all-features',
         '--all-targets',
