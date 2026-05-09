@@ -534,19 +534,81 @@ export class AtomicServer {
     return container.file('/atomic-server-binary');
   }
 
+  /**
+   * Source-only rust container for `cargo fmt --check` / `cargo clippy`
+   * / `cargo nextest run`. Same workspace inputs as {@link rustBuild}
+   * but **without** the data-browser asset bundle (`assets_tmp`) and
+   * without `cargo build`. The asset bundle was a hidden invalidation
+   * trigger: any JS-source change rebuilt the assets, which busted the
+   * dagger op-cache for fmt/clippy/test even though those steps don't
+   * read the bundle. Splitting them off lets a JS-only commit cache-
+   * hit through the entire rust pipeline.
+   *
+   * Uses its own `rust-checks-target` cache volume so it shares
+   * incremental compile artifacts across fmt → clippy → test (they run
+   * sequentially in `ci`) without contending with the release-binary
+   * build's `rust-target`.
+   */
+  private rustChecksContainer(): Container {
+    const source = this.source;
+    const cargoCache = dag.cacheVolume('cargo');
+    const image = TARGET_IMAGE_MAP['x86_64-unknown-linux-musl'];
+
+    return dag
+      .container()
+      .from(image)
+      .withExec(['apt-get', 'update', '-qq'])
+      .withExec(['apt', 'install', '-y', 'nasm'])
+      .withMountedCache('/usr/local/cargo/registry', cargoCache, {
+        sharing: CacheSharingMode.Locked,
+      })
+      .withExec(['rustup', 'component', 'add', 'clippy'])
+      .withExec(['rustup', 'component', 'add', 'rustfmt'])
+      .withFile('/code/Cargo.toml', source.file('Cargo.toml'))
+      .withFile('/code/Cargo.lock', source.file('Cargo.lock'))
+      .withFile('/code/Cross.toml', source.file('Cross.toml'))
+      .withFile(
+        '/code/.config/nextest.toml',
+        source.file('.config/nextest.toml'),
+      )
+      .withDirectory('/code/server', source.directory('server'))
+      .withDirectory('/code/lib', source.directory('lib'))
+      .withDirectory('/code/cli', source.directory('cli'))
+      .withDirectory('/code/desktop', source.directory('desktop'))
+      .withDirectory('/code/wasm', source.directory('wasm'))
+      .withDirectory(
+        '/code/plugin-examples',
+        source.directory('plugin-examples'),
+      )
+      .withDirectory('/code/atomic-plugin', source.directory('atomic-plugin'))
+      .withMountedCache('/code/target', dag.cacheVolume('rust-checks-target'))
+      .withWorkdir('/code')
+      // build.rs in atomic-server wants to bundle a JS dist. Skip it —
+      // fmt/clippy/test don't need it and including the bundle would
+      // re-introduce the JS-source dependency we just removed.
+      .withEnvVariable('ATOMICSERVER_SKIP_JS_BUILD', 'true')
+      .withExec(['mkdir', '-p', '/code/server/assets_tmp'])
+      .withExec([
+        'sh',
+        '-c',
+        'echo "<html><body>checks stub</body></html>" > /code/server/assets_tmp/index.html',
+      ])
+      .withExec(['cargo', 'fetch']);
+  }
+
   @func()
   rustTest(): Promise<string> {
     return (
-      this.rustBuild()
+      this.rustChecksContainer()
         // Install nextest from a prebuilt tarball — the `cargo install`
-        // path fails on the musl-cross image (see the comment in
-        // rustBuild()). The `linux-musl` URL is required: the default
-        // `linux` artifact is the glibc binary, which silently exits
-        // 1 on the musl-cross container (cargo then reports "no such
-        // command: nextest" because the subcommand returned nonzero).
-        // Place the binary in `$CARGO_HOME/bin` (resolved at runtime —
-        // the rust-musl-cross image puts it under /root/.cargo, the
-        // official rust:bookworm under /usr/local/cargo).
+        // path fails on the musl-cross image. The `linux-musl` URL is
+        // required: the default `linux` artifact is the glibc binary,
+        // which silently exits 1 on the musl-cross container (cargo
+        // then reports "no such command: nextest" because the
+        // subcommand returned nonzero). Place the binary in
+        // `$CARGO_HOME/bin` (resolved at runtime — the rust-musl-cross
+        // image puts it under /root/.cargo, the official rust:bookworm
+        // under /usr/local/cargo).
         .withExec([
           'sh',
           '-c',
@@ -569,8 +631,6 @@ export class AtomicServer {
 
   @func()
   rustClippy(): Promise<string> {
-    const rustContainer = this.rustBuild();
-
     // Exclude `desktop` (Tauri) — its build pulls in `glib-sys`, which
     // requires `pkg-config` + `glib-2.0` dev libraries that the musl-cross
     // CI image doesn't carry. The desktop crate is built separately via the
@@ -581,7 +641,7 @@ export class AtomicServer {
     // (e.g. `openssl-sys` via some opentelemetry / TLS feature) that need
     // system OpenSSL we don't ship. Default features are what the release
     // binary already builds with.
-    return rustContainer
+    return this.rustChecksContainer()
       .withExec([
         'cargo',
         'clippy',
@@ -596,9 +656,11 @@ export class AtomicServer {
 
   @func()
   rustFmt(): Promise<string> {
-    const rustContainer = this.rustBuild();
-
-    return rustContainer.withExec(['cargo', 'fmt', '--check']).stdout();
+    // Fmt only reads source — runs against the source-only checks
+    // container so a JS-source change can't bust its dagger op-cache.
+    return this.rustChecksContainer()
+      .withExec(['cargo', 'fmt', '--check'])
+      .stdout();
   }
 
   // @func()
