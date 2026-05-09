@@ -129,6 +129,18 @@ export class NodeClientDb {
     await this.requireDb().putResource(jsonAd);
   }
 
+  /** Mirror of {@link ClientDbWorker.putResources} for the Node integration
+   *  tests. No postMessage layer here, so the speedup is academic — but
+   *  keeping the API symmetric means callers don't branch on which backend
+   *  is wired up. */
+  async putResources(jsonAds: string[]): Promise<void> {
+    if (jsonAds.length === 0) return;
+    const db = this.requireDb();
+    for (const jsonAd of jsonAds) {
+      await db.putResource(jsonAd);
+    }
+  }
+
   async applyCommit(commitJsonAd: string): Promise<void> {
     await this.requireDb().applyCommit(commitJsonAd);
   }
