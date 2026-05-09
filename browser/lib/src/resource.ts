@@ -124,6 +124,15 @@ export class Resource<C extends OptionalClass = any> {
 
   private inProgressCommit: Promise<void> | undefined;
   private hasQueue = false;
+  /**
+   * Coalesces concurrent {@link pushCommits} invocations onto a single
+   * in-flight drain. Two callers must NOT both POST the same queued
+   * commit — under load the second POST hits the server's
+   * lookup→genesis-check TOCTOU and 500s with
+   * "is_genesis: true, but the resource already exists". Reproduced in
+   * `tests/genesis-double-push.integration.test.ts`.
+   */
+  private inProgressPush: Promise<string | undefined> | undefined;
 
   private _store?: Store;
   private eventManager = new EventManager<
@@ -1492,12 +1501,37 @@ export class Resource<C extends OptionalClass = any> {
    *
    * After a successful push the resource's `lastCommit` is updated from the
    * server response and the local queue is cleared.
+   *
+   * Concurrent invocations (e.g. two `syncDirtyResources` calls fired by a
+   * fast WS reconnect flap) are coalesced onto the same in-flight drain via
+   * {@link inProgressPush} — the second caller observes the first's POST
+   * result instead of double-POSTing the queued commits. Without that
+   * guard the dagger CI runner reproducibly hits
+   * "Commit for did:ad:… has is_genesis: true, but the resource already
+   * exists" when both pushes race the server's lookup→apply window.
    */
   public async pushCommits(): Promise<string | undefined> {
     if (this._pendingCommits.length === 0) {
       return undefined;
     }
 
+    if (this.inProgressPush) {
+      return this.inProgressPush;
+    }
+
+    const drain = this._drainPendingCommits();
+    this.inProgressPush = drain;
+    try {
+      return await drain;
+    } finally {
+      // Clear AFTER await so a concurrent caller arriving mid-drain still
+      // joins this same promise; only post-resolution does the next call
+      // start a fresh drain.
+      this.inProgressPush = undefined;
+    }
+  }
+
+  private async _drainPendingCommits(): Promise<string | undefined> {
     const endpoint = this.getCommitEndpoint();
     const wasNew =
       this._pendingCommits.length > 0 &&
