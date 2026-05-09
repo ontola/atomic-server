@@ -1839,7 +1839,7 @@ export class Resource<C extends OptionalClass = any> {
       commitResource.loading = false;
       commitResource.new = false;
       // The unified ingress writes JSON-AD + Loro snapshot atomically
-      // through OpfsPersistor and notifies in one step.
+      // through clientDb's atomic put and notifies in one step.
       this.store.applyIncoming({
         subject: commitSubject,
         resource: commitResource,
@@ -1860,28 +1860,19 @@ export class Resource<C extends OptionalClass = any> {
     // the snapshot without the JSON-AD index, leaving the resource
     // queryable by Loro replay but invisible to `parent=` queries
     // until the next addResource call. Atomic put closes that gap.
-    const persistor = this.store.getPersistor();
-    if (persistor) {
+    const clientDb = this.store.getClientDb();
+    if (clientDb) {
       const obj: Record<string, unknown> = { '@id': this.subject };
-
       for (const [key, value] of this.getEntries()) {
         if (value instanceof Uint8Array) continue;
         obj[key] = value;
       }
-
       const snapshot = this._loroDoc
         ? this._loroDoc.export({ mode: 'snapshot' })
         : undefined;
-
-      persistor
-        .putResource({
-          subject: this.subject,
-          jsonAd: JSON.stringify(obj),
-          snapshot,
-        })
-        .catch(e => {
-          console.error('[Offline] Failed to persist resource:', e);
-        });
+      clientDb
+        .putResourceWithSnapshot(this.subject, JSON.stringify(obj), snapshot)
+        .catch(e => console.error('[Offline] persist failed:', e));
     }
 
     // Also update the in-memory store so the UI reflects changes immediately.
