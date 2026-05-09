@@ -348,6 +348,28 @@ export class ClientDbWorker {
     await this.send({ type: 'putResource', jsonAd });
   }
 
+  /**
+   * Atomic put: writes the resource's JSON-AD index entry AND its
+   * Loro snapshot in one worker postMessage. Use this whenever you
+   * know both forms; it's faster than two separate round-trips and
+   * — more importantly — neither write can land without the other.
+   * The previous shape (`putResource` here, `putLoroSnapshot` from
+   * a separate call site) was the source of OPFS half-states under
+   * load.
+   */
+  async putResourceWithSnapshot(
+    subject: string,
+    jsonAd: string,
+    snapshot: Uint8Array,
+  ): Promise<void> {
+    await this.send({
+      type: 'putResourceWithSnapshot',
+      subject,
+      jsonAd,
+      snapshot,
+    });
+  }
+
   /** Put many resources in a single worker round-trip. The worker
    *  processes them in order — caller-side ordering is preserved — but
    *  the postMessage overhead amortises to ~one round-trip total

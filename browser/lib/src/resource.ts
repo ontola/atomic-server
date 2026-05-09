@@ -1822,19 +1822,16 @@ export class Resource<C extends OptionalClass = any> {
       this.setLastCommitValue(lastCommitSubject);
     }
 
-    const clientDb = this.store.getClientDb();
-
-    // Export the Loro snapshot and persist it to the WASM DB (OPFS).
-    if (this._loroDoc && clientDb) {
-      const snapshot = this._loroDoc.export({ mode: 'snapshot' });
-      clientDb.putLoroSnapshot(this.subject, snapshot).catch(e => {
-        console.error('[Offline] Failed to persist Loro snapshot:', e);
-      });
-    }
-
-    // Persist resource to WASM DB (OPFS) for indexing.
-    // Loro snapshots are stored separately — skip Uint8Array values here.
-    if (clientDb) {
+    // Persist JSON-AD index entry + Loro snapshot in one worker
+    // postMessage. Previously this was two separate calls
+    // (`clientDb.putLoroSnapshot` and `clientDb.putResource`) which
+    // could land in either order — the worker's queue serialises
+    // them but a thrown serialiser between the two would persist
+    // the snapshot without the JSON-AD index, leaving the resource
+    // queryable by Loro replay but invisible to `parent=` queries
+    // until the next addResource call. Atomic put closes that gap.
+    const persistor = this.store.getPersistor();
+    if (persistor) {
       const obj: Record<string, unknown> = { '@id': this.subject };
 
       for (const [key, value] of this.getEntries()) {
@@ -1842,7 +1839,19 @@ export class Resource<C extends OptionalClass = any> {
         obj[key] = value;
       }
 
-      clientDb.putResource(JSON.stringify(obj)).catch(() => {});
+      const snapshot = this._loroDoc
+        ? this._loroDoc.export({ mode: 'snapshot' })
+        : undefined;
+
+      persistor
+        .putResource({
+          subject: this.subject,
+          jsonAd: JSON.stringify(obj),
+          snapshot,
+        })
+        .catch(e => {
+          console.error('[Offline] Failed to persist resource:', e);
+        });
     }
 
     // Also update the in-memory store so the UI reflects changes immediately.

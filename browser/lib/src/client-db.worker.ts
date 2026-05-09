@@ -18,6 +18,13 @@ export type WorkerRequest =
   | { id: number; type: 'getResourceWithSnapshot'; subject: string }
   | { id: number; type: 'putResource'; jsonAd: string }
   | { id: number; type: 'putResources'; jsonAds: string[] }
+  | {
+      id: number;
+      type: 'putResourceWithSnapshot';
+      subject: string;
+      jsonAd: string;
+      snapshot: Uint8Array;
+    }
   | { id: number; type: 'applyCommit'; commitJsonAd: string }
   | { id: number; type: 'removeResource'; subject: string }
   | {
@@ -111,6 +118,23 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
       for (const jsonAd of msg.jsonAds) {
         await db!.putResource(jsonAd);
       }
+
+      return;
+    }
+
+    case 'putResourceWithSnapshot': {
+      // Atomic write of a resource's JSON-AD index entry AND its Loro
+      // snapshot in one postMessage. The worker's serialised queue
+      // means no other message interleaves, so callers see this as
+      // one durable step — solving the previous footgun where a WS
+      // UPDATE handler wrote JSON-AD via `addResource` and the Loro
+      // snapshot via a separate `persistToClientDb` call. If the two
+      // got separated (e.g. one threw, queue drained out of order
+      // under contention) the next reload would see a half-state.
+      // Now both land or neither does.
+      await ensureInit();
+      await db!.putResource(msg.jsonAd);
+      db!.putLoroSnapshot(msg.subject, msg.snapshot);
 
       return;
     }

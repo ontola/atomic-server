@@ -31,6 +31,7 @@ import type {
 } from './client-db.js';
 import { LocalSearch } from './local-search.js';
 import { perfMark, perfSpan } from './perf-trace.js';
+import { OpfsPersistor } from './opfs-persistor.js';
 
 /** Function called when a resource is updated or removed */
 type ResourceCallback<C extends OptionalClass = UnknownClass> = (
@@ -274,6 +275,13 @@ export class Store {
 
   /** Optional WASM-backed client-side database running in a Web Worker. */
   private clientDb?: ClientDbWorker;
+  /**
+   * Single chokepoint for every OPFS write. Created lazily in
+   * `setClientDb` and held until the worker is replaced. Read paths
+   * still use `clientDb` directly (see `queryLocalDb`); writes go
+   * through this so the JSON-AD/Loro-snapshot pair lands atomically.
+   */
+  private persistor?: OpfsPersistor;
   /** Client-side full-text search index (MiniSearch). */
   private localSearch = new LocalSearch();
   /** Resources with local changes that haven't been synced to the server yet. */
@@ -379,12 +387,23 @@ export class Store {
    */
   public setClientDb(clientDb: ClientDbWorker): void {
     this.clientDb = clientDb;
+    this.persistor = new OpfsPersistor(clientDb);
     this.emitSyncStatus();
   }
 
   /** Returns the ClientDbWorker if one has been set (may still be initializing). */
   public getClientDb(): ClientDbWorker | undefined {
     return this.clientDb;
+  }
+
+  /**
+   * Returns the OPFS write chokepoint — present iff a `clientDb`
+   * is attached. Prefer this over `getClientDb()` for any path
+   * that writes to OPFS; reads still go through `getClientDb()`
+   * for now (read-side migration is its own step).
+   */
+  public getPersistor(): OpfsPersistor | undefined {
+    return this.persistor;
   }
 
   public getCommitLog(): CommitLogEntry[] {
@@ -912,7 +931,7 @@ export class Store {
     // `applyPendingCommitsLocally`, so `addResource` doesn't need to handle
     // them here either.
     if (
-      this.clientDb &&
+      this.persistor &&
       !resource.loading &&
       !resource.new &&
       !resource.hasPendingCommits &&
@@ -922,17 +941,35 @@ export class Store {
         const jsonAd = resourceToJsonAd(resource);
 
         if (jsonAd) {
+          // If the resource has a Loro doc in memory, export the
+          // snapshot here and write both forms in one worker
+          // postMessage. This used to be a separate
+          // `WSClient.persistToClientDb` call after this one, which
+          // meant the JSON-AD index entry could land in OPFS while
+          // its Loro snapshot didn't — a half-state that the next
+          // reload would silently inherit. The atomic put closes
+          // that gap.
+          let snapshot: Uint8Array | undefined;
+          try {
+            const doc = resource.getLoroDoc?.();
+            if (doc) snapshot = doc.export({ mode: 'snapshot' });
+          } catch {
+            // Resource has no Loro state — fine, fall back to
+            // JSON-AD-only put below.
+          }
           // Fire-and-forget. We previously chained a `getResource` after
           // every put to verify the round-trip — that doubled the worker
           // messages on drive sync (a 50-resource sync queues 100
           // postMessages), and the worker's serialised queue + the
           // putResource error-path below already surface real failures.
-          this.clientDb.putResource(jsonAd).catch(e => {
-            console.error(
-              `[ClientDb] putResource failed for ${resource.subject.slice(0, 60)}:`,
-              e,
-            );
-          });
+          this.persistor
+            .putResource({ subject: resource.subject, jsonAd, snapshot })
+            .catch(e => {
+              console.error(
+                `[ClientDb] putResource failed for ${resource.subject.slice(0, 60)}:`,
+                e,
+              );
+            });
         }
       } catch (e) {
         console.error(
@@ -2021,9 +2058,8 @@ export class Store {
     // page reload. The in-memory `resources` map is wiped on reload, but the
     // WASM DB persists; without this, cascade-deleted children survive
     // restart and re-render. Fire-and-forget — the worker queues writes.
-    const clientDb = this.clientDb;
-    if (clientDb) {
-      void clientDb.removeResource(resolved).catch(() => undefined);
+    if (this.persistor) {
+      void this.persistor.removeResource(resolved).catch(() => undefined);
     }
 
     if (resource) {
@@ -2724,7 +2760,7 @@ export class Store {
       const hashBytes = await this.clientDb.blake3Hash(data);
       const hash = bytesToHex(hashBytes);
 
-      await this.clientDb.putBlob(hashBytes, data);
+      await this.persistor!.putBlob(hashBytes, data);
 
       const newSubject = useDid
         ? `_new:${this.randomPart()}`

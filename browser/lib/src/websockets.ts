@@ -549,9 +549,11 @@ export class WSClient {
           isExisting && prevCommit !== undefined && prevCommit === newCommit;
 
         if (!isEcho) {
+          // `addResources` now persists JSON-AD + Loro snapshot
+          // atomically via the OPFS chokepoint, so the previous
+          // `persistToClientDb(...)` call here is redundant.
           this.store.addResources(resource, { skipCommitCompare: true });
         }
-        this.persistToClientDb(msg.subject, resource);
         this.checkForMissingBlobs(resource);
 
         break;
@@ -610,10 +612,12 @@ export class WSClient {
 
             resource.source = 'server-ws';
             resource.sourceTimestamp = Date.now();
+            // `addResources` persists JSON-AD + Loro snapshot
+            // atomically; the explicit snapshot persist that used
+            // to follow this call is no longer needed.
             this.store.addResources(resource, {
               skipCommitCompare: true,
             });
-            this.persistToClientDb(subject, resource);
             this.checkForMissingBlobs(resource);
           }
 
@@ -674,10 +678,10 @@ export class WSClient {
         const resp = decodeBlobResponse(payload);
 
         if (resp) {
-          const clientDb = this.store.getClientDb();
+          const persistor = this.store.getPersistor();
 
-          if (clientDb) {
-            clientDb.putBlob(resp.hash, resp.bytes);
+          if (persistor) {
+            persistor.putBlob(resp.hash, resp.bytes);
           }
         }
 
@@ -844,19 +848,6 @@ export class WSClient {
 
       if (!exists) {
         this.sendBinary(encodeBlobRequest(hash));
-      }
-    }
-  }
-
-  private persistToClientDb(subject: string, resource: Resource) {
-    const clientDb = this.store.getClientDb();
-
-    if (clientDb) {
-      const doc = resource.getLoroDoc?.();
-
-      if (doc) {
-        const snapshot = doc.export({ mode: 'snapshot' });
-        clientDb.putLoroSnapshot(subject, snapshot).catch(() => {});
       }
     }
   }
