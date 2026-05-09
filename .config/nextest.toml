@@ -14,20 +14,21 @@ retries = 2
 # making `Updated Title` appear missing despite the writer having
 # committed it.
 [[profile.default.overrides]]
-# Binary name is `atomic-server` (with dash) — `cargo nextest list`
-# shows the binaries. Underscore version doesn't match anything.
-filter = 'binary(=atomic-server) and test(=search::tests::test_update_resource)'
+# Use `package(atomic-server)` rather than `binary(=atomic-server)` —
+# the latter matches the binary *name* not binary-id, and silently
+# fails to match the lib-unit-test binary in this workspace
+# (verified via `cargo nextest run -E '...'`: package() returns the
+# test, binary() returns 0). Symptom of the wrong syntax: nextest
+# parses the override but the filter matches no tests, so the
+# test-group + retries override never applies in practice.
+filter = 'package(atomic-server) and test(=search::tests::test_update_resource)'
 test-group = 'serial'
 # This test hits a tantivy reload race under heavy parallel CI load
 # (the reader uses `OnCommitWithDelay` and the background segment-merge
 # thread can starve when 20+ actix HTTP servers are spinning up). The
 # in-test poll loop already waits 30s; allow more retries on top so a
 # truly unlucky run still has a fallback before the hard fail.
-# The `{ count, ... }` form is required for the override to actually
-# replace the profile-default `retries`; the bare `retries = 5` form
-# parses but silently inherits the profile default (a longstanding
-# nextest quirk).
-retries = { backoff = "fixed", count = 5, delay = "1s" }
+retries = 5
 
 [test-groups]
 serial = { max-threads = 1 }
