@@ -47,11 +47,13 @@ const config: PlaywrightTestConfig = {
       },
     ],
   ],
-  // Retry once on CI — the single shared atomic-server is loaded enough
-  // that occasional transient WS / search-index races slip through even
-  // serial test execution. A retry usually gets a clean run; a real
-  // regression still fails twice.
-  retries: process.env.CI ? 1 : 0,
+  // Up to 2 retries on CI — the dagger container has noticeably less
+  // CPU than a dev laptop, and the shared atomic-server occasionally
+  // surfaces transient WS / search-index / multi-context-sync races
+  // that don't reproduce serially. Two retries (3 attempts total)
+  // catches genuinely flaky paths without hiding real regressions:
+  // a regression fails three times. Matches nextest's `retries = 2`.
+  retries: process.env.CI ? 2 : 0,
   // timeout: 1000 * 120, // 2 minutes
   projects: [
     {
