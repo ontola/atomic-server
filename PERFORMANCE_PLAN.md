@@ -243,6 +243,11 @@ Useful patterns:
 | B2 | subject→page index + early-bail in `applyResourceChange` | ✅ `d8ca1f39` |
 | Bonus | drop OPFS `putResource` verification round-trip | ✅ `0fe9113a` |
 | Bonus | skip `LoadingChange` listener for already-loaded resources | ✅ `43704c6c` |
+| Cold | combine `getResource` + `getLoroSnapshot` into one worker round-trip | ✅ `59280b3d` |
+| Cold | split `waitForReady` so useResource only waits for worker init, not bootstrap seed | ✅ `eefacc48` |
+| Cold | batch the 70 sequential property-seed puts (and the 200-entry reseedAll) into one worker call each | ✅ `eefacc48` |
+| Cold | parallelise `getAgentFromIDB` + `enableLoro` in App.tsx top-level | ✅ `40a55b3a` |
+| Cold | `<link rel="preload">` for OPFS worker's WASM module + binary in index.html | ✅ `40a55b3a` |
 | B8 | memoise `Resource.title` | ⏭ skipped — only 1 hashmap lookup in the common case (`name` set), not on the hot path |
 | B1 | replace `proxyResource` with `useSyncExternalStore` | ⏸ deferred — every component touching `useValue` depends on `resource !== prevResource` to detect updates; pulling the proxy out without refactoring `useValue`/`useTitle` to subscribe per-property would silently freeze them. The cheaper wins above remove most of the proxy's per-update cost. |
 | B3 | incremental `rebuildCacheFromLoro` via Loro container events | ⏸ deferred — Loro emits events on the next microtask, so the existing rebuild-after-import is needed for correctness; gain would be limited to the `merge`/`importLoroUpdate` hot path. Profile the suite once the round above lands and revisit. |
