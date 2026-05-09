@@ -703,60 +703,35 @@ export class Store {
   };
 
   /**
-   * Post a single outbox entry to the server. Reuses the existing
-   * Resource flow: `save()` if there are still unsaved Loro
-   * changes (rare — the outbox entry already holds signed
-   * commits), otherwise `pushCommits()`. Throws on failure;
-   * `LocalOutbox.drain` records `lastAttemptError` and continues.
+   * Post a single outbox entry to the server. When the resource is
+   * loaded in the store, delegate to `resource.pushCommits()` so the
+   * full post-ack pipeline runs (advance `lastCommit`, OPFS persist,
+   * `applyToStore('local-acked')`, blob push, subscribeWebSocket,
+   * saveBatchForParent). When it isn't (reconnect drain for a subject
+   * the user hasn't opened yet), POST the queued commit bytes
+   * directly and trust the WS broadcast to re-hydrate the resource.
+   * Re-posting a server-applied commit is safe thanks to idempotent
+   * replay accept (`commit-retention-and-state-certificates.md`
+   * Phase 1).
    */
   private postOutboxEntry = async (entry: OutboxEntry): Promise<void> => {
-    // The outbox entry IS the source of truth for commits we owe the
-    // server. Post `entry.commits` directly rather than delegating to
-    // `resource.pushCommits()` — that method uses the resource's
-    // in-memory `_pendingCommits` list, which is empty after a page
-    // reload (the resource was just re-fetched from the server, so its
-    // local state has no pending changes). Relying on it silently
-    // dropped every offline commit on reload: outbox.drain saw no
-    // throw, deleted the entry, and the server never received the
-    // edit. sync.spec.ts:177 was the user-visible repro.
-    //
-    // If the resource has lingering unsaved local changes (rare —
-    // typically only when `save()` is called twice in quick succession
-    // and the second call hits before the first finished pushing),
-    // sign them into commits first so they ride along with the
-    // outbox-stored ones.
     const resource = this.resources.get(entry.subject);
 
-    if (resource?.hasUnsavedChanges()) {
-      await resource.save();
-      // `save()` will have posted everything it could; if it
-      // re-queued anything to the outbox the drain will iterate it.
+    if (resource) {
+      if (resource.hasUnsavedChanges()) await resource.save();
+      else await resource.pushCommits();
       this.emitSyncStatus();
 
       return;
     }
 
     const endpoint = new URL('/commit', this.serverUrl).toString();
-    // Re-posting a commit the server already applied is safe: the server
-    // detects the idempotent replay (the commit's Loro ops are already in
-    // the resource's oplog) and accepts it. Only a genuine causality
-    // failure throws — and that must propagate, not be swallowed.
-    await Promise.all(
-      entry.commits.map(commit => this.postCommit(commit, endpoint)),
-    );
-
-    // Mirror Resource.pushCommits' post-ack blob push. When an upload
-    // races a network outage the commit POST fails, bytes land in the
-    // local ClientDb, the commit is queued in the outbox. On reconnect
-    // we replay the commit here — but unlike the in-memory pushCommits
-    // path, no one else calls maybePushBlobForResource, so the server
-    // gets the File resource but never the bytes and /download/files/<hash>
-    // 404s. Fire the hook here on the still-cached resource (it was
-    // populated during the offline upload via applyPendingCommitsLocally).
-    if (resource) {
-      await this.maybePushBlobForResource(resource).catch(() => undefined);
+    const postedSignatures: string[] = [];
+    for (const commit of entry.commits) {
+      await this.postCommit(commit, endpoint);
+      if (commit.signature) postedSignatures.push(commit.signature);
     }
-
+    this.outbox.acknowledgeCommits(entry.subject, postedSignatures);
     this.emitSyncStatus();
   };
 
