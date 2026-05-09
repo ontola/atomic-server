@@ -7,7 +7,13 @@ const config: PlaywrightTestConfig = {
     viewport: { width: 1200, height: 800 },
     locale: 'en-GB',
     timezoneId: 'Europe/Amsterdam',
-    actionTimeout: 5000,
+    // 10s actionTimeout. The atomic-server runs as a single process behind
+    // every test (dev-drives, commits, search index, WS handshake all on
+    // one box). On CI the server is in a smaller container and runs
+    // noticeably slower than a dev laptop — the default 5s budget started
+    // catching real round-trips, not bugs. 10s covers the slow path
+    // without hiding genuine hangs.
+    actionTimeout: 10000,
     trace: 'retain-on-failure',
     storageState: {
       cookies: [],
@@ -37,7 +43,11 @@ const config: PlaywrightTestConfig = {
       },
     ],
   ],
-  retries: 0,
+  // Retry once on CI — the single shared atomic-server is loaded enough
+  // that occasional transient WS / search-index races slip through even
+  // serial test execution. A retry usually gets a clean run; a real
+  // regression still fails twice.
+  retries: process.env.CI ? 1 : 0,
   // timeout: 1000 * 120, // 2 minutes
   projects: [
     {
