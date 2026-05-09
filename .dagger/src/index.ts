@@ -565,6 +565,12 @@ export class AtomicServer {
     // requires `pkg-config` + `glib-2.0` dev libraries that the musl-cross
     // CI image doesn't carry. The desktop crate is built separately via the
     // Tauri toolchain on platforms that have those system libs.
+    //
+    // Drop `--all-features` to keep the build inside what the musl-cross
+    // image can satisfy: enabling every feature pulls in optional deps
+    // (e.g. `openssl-sys` via some opentelemetry / TLS feature) that need
+    // system OpenSSL we don't ship. Default features are what the release
+    // binary already builds with.
     return rustContainer
       .withExec([
         'cargo',
@@ -573,7 +579,6 @@ export class AtomicServer {
         '--exclude',
         'atomic-server-tauri',
         '--no-deps',
-        '--all-features',
         '--all-targets',
       ])
       .stdout();
