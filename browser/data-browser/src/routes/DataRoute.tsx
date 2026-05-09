@@ -5,7 +5,6 @@ import {
   HeadersObject,
   useStore,
 } from '@tomic/react';
-import { formatTimeAgo } from '../helpers/formatTimeAgo';
 
 import AllProps from '../components/AllProps';
 import { ContainerNarrow } from '../components/Containers';
@@ -117,17 +116,6 @@ function Data(): JSX.Element {
               subject:
             </PropertyLabel>
             <AtomicLink subject={subject}>{subject}</AtomicLink>
-          </PropValRow>
-          <PropValRow columns>
-            <PropertyLabel title='Where this resource was last loaded from'>
-              source:
-            </PropertyLabel>
-            <span>
-              {resource.source ?? 'unknown'}
-              {resource.sourceTimestamp
-                ? ` (${formatTimeAgo(new Date(resource.sourceTimestamp)) ?? 'just now'})`
-                : ''}
-            </span>
           </PropValRow>
           <AllProps resource={resource} editable columns />
           {resource.hasUnsavedChanges() ? (

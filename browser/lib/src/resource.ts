@@ -30,17 +30,6 @@ import {
   type AtomicValue,
 } from './value.js';
 
-/** Debug info: where a resource was loaded from */
-export type ResourceSource =
-  | 'created'
-  | 'server-http'
-  | 'server-ws'
-  | 'ws-commit'
-  | 'ws-sync'
-  | 'client-db'
-  | 'local-cache'
-  | 'merge';
-
 /**
  * If a resource has no subject, it will have this subject. This means that the
  * Resource is not saved or fetched.
@@ -73,10 +62,6 @@ export class Resource<C extends OptionalClass = any> {
   public commitError?: Error;
   /** Is true for locally created, unsaved resources */
   public new: boolean;
-  /** Debug: where this resource was last loaded/updated from */
-  public source?: ResourceSource;
-  /** Debug: timestamp of last source update */
-  public sourceTimestamp?: number;
   /**
    * Every commit that has been applied should be stored here, which prevents
    * applying the same commit twice
@@ -851,11 +836,6 @@ export class Resource<C extends OptionalClass = any> {
     this.new = resourceB.new;
     this.error = resourceB.error;
     this.commitError = resourceB.commitError;
-
-    if (resourceB.source) {
-      this.source = resourceB.source;
-      this.sourceTimestamp = resourceB.sourceTimestamp;
-    }
 
     // Only update _lastCommit if the remote version has one and we don't have one,
     // or if they are different (assuming the remote one is newer if it comes from the store).
