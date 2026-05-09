@@ -32,6 +32,30 @@
     />
     <meta content="yes" name="apple-mobile-web-app-capable" />
     <meta content="yes" name="mobile-web-app-capable" />
+    <!--
+      Warm the cache for the OPFS worker's WASM module. The
+      ClientDbWorker spawns a Worker that does `import('/wasm/atomic_wasm.js')`,
+      which then fetches `atomic_wasm_bg.wasm`. On first-paint these
+      downloads sit on the cold-load critical path. Preloading from the
+      main thread lets the browser fetch them in parallel with the JS
+      bundle so they're cache-hits by the time the worker asks.
+
+      `as="fetch"` + `crossorigin` + `type="application/wasm"` is the
+      contract that lets the worker reuse the cached response.
+    -->
+    <link
+      rel="preload"
+      as="fetch"
+      crossorigin="anonymous"
+      type="application/wasm"
+      href="/wasm/atomic_wasm_bg.wasm"
+    />
+    <link
+      rel="preload"
+      as="script"
+      crossorigin="anonymous"
+      href="/wasm/atomic_wasm.js"
+    />
     <link
       rel="preconnect"
       crossorigin="anonymous"
