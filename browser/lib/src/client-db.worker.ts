@@ -78,9 +78,16 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
       // response halves the worker traffic — and the caller already
       // ignores the snapshot when JSON-AD is null, so the combined
       // shape doesn't change semantics.
+      //
+      // Both calls MUST be awaited before being placed in the response
+      // object. wasm-bindgen renders `getResource` / `getLoroSnapshot`
+      // as Promise-returning JS functions; embedding a Promise in the
+      // response makes `postMessage` throw "could not be cloned" and
+      // every cold-load OPFS lookup fails — fell back to a much-slower
+      // WS GET path, which is what surfaced as widespread e2e timeouts.
       await ensureInit();
-      const jsonAd = db!.getResource(msg.subject);
-      const snapshot = jsonAd ? db!.getLoroSnapshot(msg.subject) : null;
+      const jsonAd = await db!.getResource(msg.subject);
+      const snapshot = jsonAd ? await db!.getLoroSnapshot(msg.subject) : null;
 
       return { jsonAd: jsonAd ?? null, snapshot: snapshot ?? null };
     }
