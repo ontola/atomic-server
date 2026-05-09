@@ -2,6 +2,10 @@ import type { PlaywrightTestConfig } from '@playwright/test';
 import { devices } from '@playwright/test';
 
 const config: PlaywrightTestConfig = {
+  // Default `expect` timeout. Playwright's built-in is 5s; bump to 10s
+  // so retrying assertions match the action timeout below. Tests that
+  // need a longer specific budget still pass `{ timeout: ... }` directly.
+  expect: { timeout: 10000 },
   use: {
     screenshot: 'only-on-failure',
     viewport: { width: 1200, height: 800 },
