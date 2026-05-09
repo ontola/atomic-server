@@ -13,6 +13,10 @@ import { RouterProvider } from '@tanstack/react-router';
 import { router } from './routes/Router';
 
 import { errorHandler } from './handlers/errorHandler';
+import {
+  PerformanceProfiler,
+  attachStoreToProfiler,
+} from './helpers/profiler';
 
 function fixDevUrl(url: string) {
   if (isDev()) {
@@ -100,6 +104,11 @@ registerHandlers(store);
 // Make the Store available globally for debugging
 window.store = store;
 
+// Wire store events into the perf profiler so subscription / commit
+// traffic shows up alongside React render counts. Cmd/Ctrl+Shift+P to
+// dump a snapshot.
+attachStoreToProfiler(store);
+
 if (isDev()) {
   const { attachDevtools } = await import('./helpers/devtools');
   attachDevtools(store);
@@ -124,7 +133,9 @@ function App(): JSX.Element {
 
   return (
     <StoreContext.Provider value={store}>
-      <RouterProvider router={router}></RouterProvider>
+      <PerformanceProfiler id='app'>
+        <RouterProvider router={router}></RouterProvider>
+      </PerformanceProfiler>
     </StoreContext.Provider>
   );
 }
