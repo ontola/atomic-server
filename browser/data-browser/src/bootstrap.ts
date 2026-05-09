@@ -20,7 +20,11 @@ export function bootstrap(store: Store): void {
 
     for (const r of resources) {
       r.loading = false;
-      store.addResources(r, { skipCommitCompare: true });
+      store.applyIncoming({
+        subject: r.subject,
+        resource: r,
+        source: 'offline-replay',
+      });
     }
 
     return resources.length;
