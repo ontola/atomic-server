@@ -918,29 +918,19 @@ export class Store {
     ) {
       try {
         const jsonAd = resourceToJsonAd(resource);
-        const short = resource.subject.slice(0, 60);
 
         if (jsonAd) {
-          this.clientDb
-            .putResource(jsonAd)
-            .then(async () => {
-              const stored = await this.clientDb!.getResource(
-                resource.subject,
-              ).catch(() => null);
-              if (!stored) {
-                console.error(
-                  `[ClientDb] PUT succeeded but resource NOT found: ${short}`,
-                  `\n  JSON: ${jsonAd.slice(0, 300)}`,
-                );
-              }
-            })
-            .catch(e => {
-              console.error(
-                `[ClientDb] putResource THREW for ${short}:`,
-                e,
-                `\n  JSON: ${jsonAd.slice(0, 300)}`,
-              );
-            });
+          // Fire-and-forget. We previously chained a `getResource` after
+          // every put to verify the round-trip — that doubled the worker
+          // messages on drive sync (a 50-resource sync queues 100
+          // postMessages), and the worker's serialised queue + the
+          // putResource error-path below already surface real failures.
+          this.clientDb.putResource(jsonAd).catch(e => {
+            console.error(
+              `[ClientDb] putResource failed for ${resource.subject.slice(0, 60)}:`,
+              e,
+            );
+          });
         }
       } catch (e) {
         console.error(
