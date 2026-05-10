@@ -527,22 +527,21 @@ export function useDate(
 }
 
 /**
- * Gets or creates a Loro document for the resource. Returns undefined if the resource is still loading.
+ * Gets or creates a Loro document for the resource. Returns undefined
+ * if the resource is still loading.
  */
 export function useLoroDoc(resource: Resource): LoroDoc | undefined {
-  const [doc, setDoc] = useState<LoroDoc | undefined>(() =>
-    resource.loading ? undefined : resource.getLoroDoc(),
+  const stable = resource.stable;
+  const subject = resource.subject;
+  const store = useStore();
+  const subscribe = useCallback(
+    (cb: () => void) => store.subscribe(subject, () => cb()),
+    [store, subject],
   );
 
-  useEffect(() => {
-    return resource.stable.on(ResourceEvents.LoadingChange, () => {
-      setDoc(
-        resource.stable.loading ? undefined : resource.stable.getLoroDoc(),
-      );
-    });
-  }, [resource.stable]);
-
-  return doc;
+  return useSyncExternalStore(subscribe, () =>
+    stable.loading ? undefined : stable.getLoroDoc(),
+  );
 }
 
 /** Preferred way of using the store in a Component or Hook */
