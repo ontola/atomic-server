@@ -166,15 +166,20 @@ requires testing across browsers. Estimated 2.5 days. Skipped.
 **Partially fixed**: The drain re-entrance bug is structurally
 impossible now because `LocalOutbox.drain` joins the in-flight
 promise. `WSClient.handleOpen` was simplified in `bf24863c`.
-`_dirtySyncInProgress` was removed in `d34ea7ac` (Phase 4a) — its
-only readers now derive the same answer from `outbox.isDraining`.
+`_dirtySyncInProgress` was removed in `d34ea7ac` (Phase 4a) and
+the public `StoreSyncStatus` type was trimmed in `56740988`
+(Phase 4b) — `driveSyncInProgress`, `dirtySyncInProgress`,
+`pendingDirtySubjects`, `websocketReadyState`, `websocketProtocol`
+all had zero external consumers and are gone. UI just reads
+`syncInProgress` (the OR) and `pendingDirtyCount`.
 
-**Not fixed**: There's still no proper `DriveSync` class.
-Status flags (`_driveSyncInProgress`, `_serverConnected`,
-`clientDbReady`, `clientDbAttached`) still live as separate
-booleans. I prototyped a `DriveSync` class during the session and
-reverted it because it was adding more code than it was deleting —
-Phase 4a took the deletion-only subset instead.
+**Not fixed**: there's still no proper `DriveSync` class.
+The orchestration that lives in `WSClient.handleOpen` +
+`Store.{startDriveSync, finishDriveSync, setServerConnected}`
+fans out across two files and writes booleans, but it's small
+(~30 LoC) and a class wrapper would be pure indirection; the
+prototype attempt mid-session added more code than it deleted.
+Phase 4a + 4b shipped the deletion-only subset.
 
 ---
 
@@ -257,7 +262,7 @@ LoC and one type-bridge function.
 | 4. `proxyResource` Proxy | ✅ Scoped down | folded into `Store.getResourceSnapshot` (Phase 5a–c) |
 | 5. Pending commits 3 places | ✅ Closed | `098c8db9` |
 | 6. Leader election | ⚠️ Patched | `74f0834b` (timeout bump only) |
-| 7. Parallel drive sync | ⚠️ Partial | drain re-entrance fixed; `_dirtySyncInProgress` removed (`d34ea7ac`); state machine deferred |
+| 7. Parallel drive sync | ⚠️ Partial | drain re-entrance fixed; sync-status surface trimmed (`d34ea7ac` 4a + `56740988` 4b); state machine deferred |
 | 8. `Store` god object | ❌ Not fixed | (file flat: 3,091 → 3,050) |
 | 9. Subject normalisation | ❌ Not started | |
 | 10a. Collection init | ✅ Closed | `73fecf18` (pre-plan, mid-session) |
