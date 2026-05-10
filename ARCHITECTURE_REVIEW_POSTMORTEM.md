@@ -4,12 +4,12 @@ Going back through `ARCHITECTURE_REVIEW.md` from earlier this session
 and checking which of the 10 gripes I actually closed vs. which are
 still open.
 
-Final cumulative session diff: **+606 net LoC** in `browser/` (peaked
-at +1,599; clawed back ~993 by aggressive trim across ~30 deletion
-commits). Of that +606, ~627 is test/diagnostic infrastructure
+Final cumulative session diff: **+540 net LoC** in `browser/` (peaked
+at +1,599; clawed back ~1,059 by aggressive trim across ~38 deletion
+commits). Of that +540, ~627 is test/diagnostic infrastructure
 (perf-trace, perf probes, integration tests for race fixes); the
 data-layer (`browser/lib/src` + `browser/react/src` +
-`browser/svelte/src`) is **−21 net** — measurably *smaller* than
+`browser/svelte/src`) is **−87 net** — measurably *smaller* than
 the pre-refactor baseline despite all the new architecture
 (`LocalOutbox`, `applyIncoming` chokepoint, `IncomingChange`
 types, per-subject snapshot getter, perf probes).
@@ -23,16 +23,27 @@ The simplification compounded across three rounds:
    field, trimmed unused `StoreSyncStatus` shape, dropped dead
    helpers and stale TODOs. −149.
 3. **The major-bump cleanup pass** (after the user explicitly
-   approved breaking the `@tomic/lib` public API): deleted
-   `proxyResource` entirely (gripe 4 is now structurally
-   closed), extracted shared helpers (`getResolved`,
-   `failResource`, `resolveSubject`, `addLoroSubscriber`,
-   `dispatchLoroMessage`, `buildCommitLogEntry`,
-   `extractLoroSnapshot`, `decodeStoredSnapshot`,
-   `buildPreloadUrl`, `WSClient.sendText`), collapsed
-   `getResourceLoading`'s 3-branch isNew handling, and routed
-   `Store.subscribe` through the same `addLoroSubscriber`
-   helper as the Loro sync paths. −230 across that round.
+   approved breaking the `@tomic/lib` public API). Two phases:
+
+   *Round 3a — first 13 commits.* Deleted `proxyResource`
+   entirely (gripe 4 is now structurally closed), extracted
+   shared helpers (`getResolved`, `failResource`,
+   `resolveSubject`, `addLoroSubscriber`, `dispatchLoroMessage`,
+   `buildCommitLogEntry`, `extractLoroSnapshot`,
+   `decodeStoredSnapshot`, `buildPreloadUrl`,
+   `WSClient.sendText`), collapsed `getResourceLoading`'s
+   3-branch `isNew` handling, and routed `Store.subscribe`
+   through the same `addLoroSubscriber` helper as the Loro
+   sync paths. −230.
+
+   *Round 3b — next 8 commits.* Added more shared helpers
+   (`hydrateOfflineReplay`, `Resource.saveOffline`,
+   `Resource.applyToStore`, `Collection.writePageMembers`,
+   `commitIdOf`, `WSClient.takePending`), routed
+   `Resource.destroy` through the existing
+   `getCommitEndpoint()`, and dropped the entire
+   `unsubscribeWebSocket → unsubscribeResource → encodeUnsub`
+   chain (zero callers across the monorepo). Another −66.
 
 ---
 
@@ -306,12 +317,14 @@ transport split), and the loading-state booleans (Resource.loading
 + .new + ._loroSnapshotBytes).
 
 The Store split (Gripe 8) ended in an unusual place: the file is
-~140 lines smaller than at session start, but no extraction-into-
-new-files was done. The user's "I want simplification, not
-relocation" guidance pushed every win toward deletion rather than
-file-shuffling. \`store.ts\` is still 2,920 lines — but every line
-in there now has a job, with one shared helper per shape-duplicate
-pattern.
+~210 lines smaller than at session start (3,091 → 2,882), but no
+extraction-into-new-files was done. The user's "I want
+simplification, not relocation" guidance pushed every win toward
+deletion rather than file-shuffling. Every line in `store.ts` now
+has a job, with one shared helper per shape-duplicate pattern.
+
+`resource.ts` similarly dropped from 2,142 → 1,991 lines and
+`websockets.ts` from 884 → 803.
 
 The biggest *user-facing* improvements: every dagger-flake class
 that the original review attributed to gripes 1, 2, 3, 5, and 10a
