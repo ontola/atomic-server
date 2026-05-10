@@ -13,7 +13,7 @@ import { bench, beforeAll, describe } from 'vitest';
 
 import { Collection } from './collection.js';
 import { enableLoro } from './loro-loader.js';
-import { proxyResource, Resource } from './resource.js';
+import { Resource } from './resource.js';
 import { Store } from './store.js';
 import { collections } from './ontologies/collections.js';
 import { core } from './ontologies/core.js';
@@ -195,12 +195,3 @@ describe('Collection.applyResourceChange (B2: indexed lookup)', () => {
   });
 });
 
-// --- 6. proxyResource allocation -----------------------------------------
-
-describe('proxyResource (B1: every notify path)', () => {
-  const r = makeResource('https://example.com/proxy');
-
-  bench('proxyResource(r) — Proxy allocation', () => {
-    proxyResource(r);
-  });
-});
