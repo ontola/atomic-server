@@ -1754,7 +1754,17 @@ export class Store {
       resource.error = undefined;
       resource.loading = true;
       this.notify(resource);
-      this.fetchResourceFromServer(subject).catch(() => undefined);
+      // On error, flip loading back so the resource isn't permanently
+      // stuck in the loading state — `fetchResourceFromServer`'s own
+      // applyIncoming path handles success.
+      this.fetchResourceFromServer(subject).catch(e => {
+        const r = this.resources.get(subject);
+        if (r) {
+          r.loading = false;
+          r.setError(e instanceof Error ? e : new Error(String(e)));
+          this.notify(r);
+        }
+      });
     }
   }
 
