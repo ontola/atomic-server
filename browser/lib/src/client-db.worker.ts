@@ -43,7 +43,6 @@ export type WorkerRequest =
   | { id: number; type: 'populate' }
   | { id: number; type: 'exportAllResources' }
   | { id: number; type: 'importAllResources'; jsonArray: string }
-  | { id: number; type: 'putLoroSnapshot'; subject: string; data: Uint8Array }
   | { id: number; type: 'getLoroSnapshot'; subject: string }
   | { id: number; type: 'putBlob'; hash: Uint8Array; data: Uint8Array }
   | { id: number; type: 'getBlob'; hash: Uint8Array }
@@ -185,13 +184,6 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
       await ensureInit();
 
       return db!.importAllResources(msg.jsonArray);
-    }
-
-    case 'putLoroSnapshot': {
-      await ensureInit();
-      db!.putLoroSnapshot(msg.subject, msg.data);
-
-      return;
     }
 
     case 'getLoroSnapshot': {
