@@ -393,13 +393,6 @@ export function serializeDeterministically(
   return stringify(jsonadCommit);
 }
 
-// /** Checks whether the commit signature is correct */
-// function verifyCommit(commit: Commit, publicKey: string): boolean {
-//   delete commit.signature;
-//   const serializedCommit = serializeDeterministically(commit);
-//   verify();
-// }
-
 export function parseCommitResource(resource: Resource): Commit {
   const commit: Commit = {
     id: resource.subject,
