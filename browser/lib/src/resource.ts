@@ -1211,35 +1211,22 @@ export class Resource<C extends OptionalClass = any> {
    */
   public async getRights(): Promise<Right[]> {
     const rights: Right[] = [];
-    const write: string[] = this.getSubjects(properties.write);
-    write.forEach((subject: string) => {
-      rights.push({
-        for: subject,
-        type: RightType.WRITE,
-        setIn: this.subject,
-      });
-    });
+    const collect = (prop: string, type: RightType) => {
+      for (const subject of this.getSubjects(prop)) {
+        rights.push({ for: subject, type, setIn: this.subject });
+      }
+    };
+    collect(properties.write, RightType.WRITE);
+    collect(properties.read, RightType.READ);
 
-    const read: string[] = this.getSubjects(properties.read);
-    read.forEach((subject: string) => {
-      rights.push({
-        for: subject,
-        type: RightType.READ,
-        setIn: this.subject,
-      });
-    });
     const parentSubject = this.get(properties.parent) as string;
-
     if (parentSubject) {
       if (parentSubject === this.subject) {
         console.warn('Circular parent', parentSubject);
-
         return rights;
       }
-
       const parent = await this.store.getResource(parentSubject);
-      const parentRights = await parent.getRights();
-      rights.push(...parentRights);
+      rights.push(...(await parent.getRights()));
     }
 
     return rights;
