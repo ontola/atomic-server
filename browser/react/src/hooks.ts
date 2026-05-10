@@ -34,83 +34,34 @@ import {
 import type { LoroDoc } from 'loro-crdt';
 import { useOnValueChange } from './helpers/useOnValueChange.js';
 
-export type UseResourceOptions = FetchOpts & {
-  /**
-   * If provided, the hook will only update the resource when the properties in this array change value.
-   * Useful for avoiding large rerenders in performance critical components.
-   */
-  track?: string[];
-};
+export type UseResourceOptions = FetchOpts;
 
 /**
- * Hook for getting a Resource in a React component. Will try to fetch the
- * subject and add its parsed values to the store.
+ * Hook for getting a Resource in a React component. Wraps the
+ * Store's per-subject snapshot via `useSyncExternalStore`. Each
+ * notify swaps the snapshot's Proxy identity so direct
+ * `resource.title` / `resource.props.x` / `resource.loading`
+ * reads re-render. Replaces the previous 3-`useEffect` shape that
+ * manually set `proxyResource()` per notify and per
+ * `LocalChange`/`LoadingChange` event.
  */
 export function useResource<C extends OptionalClass = never>(
   subject: string = unknownSubject,
   opts: UseResourceOptions = {},
 ): Resource<C> {
-  const { track, ...fetchOpts } = opts;
   const store = useStore();
-  const [resource, setResource] = useState<Resource<C>>(() =>
-    store.getResourceLoading(subject, fetchOpts),
+  const memoizedOpts = useMemoizedOpts(opts);
+
+  const subscribe = useCallback(
+    (cb: () => void) => store.subscribe(subject, () => cb()),
+    [store, subject],
+  );
+  const getSnapshot = useCallback(
+    () => store.getResourceSnapshot(subject, memoizedOpts),
+    [store, subject, memoizedOpts],
   );
 
-  const memoizedOpts = useMemoizedOpts(fetchOpts);
-
-  // Store track in a ref so the subscribe callback can read it without
-  // being in the dependency array (which causes infinite loops).
-  const trackRef = useRef(track);
-  trackRef.current = track;
-
-  // When a component mounts or the subject changes, it needs to let the store know that it will subscribe to changes to that resource.
-  useEffect(() => {
-    setResource(proxyResource(store.getResourceLoading(subject, memoizedOpts)));
-
-    return store.subscribe(subject, (updated: Resource<C>) => {
-      // If track is set, this component only cares about specific properties.
-      // Skip the re-render from notify() — the LocalChange listener below
-      // handles per-property updates instead.
-      if (trackRef.current !== undefined) {
-        return;
-      }
-
-      setResource(proxyResource(updated));
-    });
-
-    // Adding opts to the array causes infinite loops, probably because it is not memoized anywhere in data-browser.
-  }, [store, subject, memoizedOpts]);
-
-  useEffect(() => {
-    // Only listen to LocalChange when track is explicitly set.
-    // Components that need per-property reactivity should use `track`.
-    // Components using useValue/useString/useTitle get updates through
-    // those hooks' own state — they don't need LocalChange re-renders.
-    if (track === undefined) return;
-
-    return resource.stable.on(ResourceEvents.LocalChange, prop => {
-      if (track.includes(prop)) {
-        setResource(proxyResource(resource.stable));
-      }
-    });
-  }, [resource.stable, track]);
-
-  // Update the proxy when the resource is done loading. `loading` only
-  // ever transitions from true → false in the resource lifecycle, so we
-  // can skip attaching the listener once the resource is already
-  // loaded — which is the overwhelmingly common case (cache hit, OPFS
-  // hydration done before mount). This shaves one event-manager
-  // subscription per `useResource` call where we're not actually
-  // waiting on anything.
-  useEffect(() => {
-    if (!resource.stable.loading) return;
-
-    return resource.stable.on(ResourceEvents.LoadingChange, () => {
-      setResource(proxyResource(resource.stable));
-    });
-  }, [resource.stable]);
-
-  return resource;
+  return useSyncExternalStore(subscribe, getSnapshot).resource as Resource<C>;
 }
 
 const stableEmptyArray: string[] = [];
