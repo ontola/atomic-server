@@ -9,7 +9,6 @@ import {
   encodeAuth,
   encodeGet,
   encodeSub,
-  encodeUnsub,
   decodeUpdate,
   decodeError,
   decodeSyncOk,
@@ -300,10 +299,6 @@ export class WSClient {
   }
 
   // ---- Resource operations ----
-
-  public unsubscribeResource(subject: string): void {
-    this.sendBinary(encodeUnsub(subject));
-  }
 
   /** Fetch a resource over WebSocket. Returns a promise that resolves when the UPDATE arrives. */
   public async fetch(subject: string): Promise<Resource> {
