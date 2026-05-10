@@ -689,7 +689,13 @@ export class Resource<C extends OptionalClass = any> {
   /** Checks if the agent has write rights by traversing the graph. Recursive function. */
   public async canWrite(
     agent?: string,
-    child?: string,
+    /**
+     * @internal Recursion accumulator: subjects already visited in this
+     * permission chain. Catches multi-step parent cycles (A→B→C→A) which
+     * the previous immediate-parent check missed — leading to infinite
+     * recursion under accidentally-cyclical drives.
+     */
+    seen?: Set<string>,
   ): Promise<[boolean, string | undefined]> {
     if (!agent) {
       return [false, 'No agent given'];
@@ -721,17 +727,19 @@ export class Resource<C extends OptionalClass = any> {
       return [true, undefined];
     }
 
-    // This should not happen, but it prevents an infinite loop
-    if (child === parentSubject) {
-      console.warn('Circular parent', child);
-
-      return [true, `Circular parent in ${this.subject}`];
+    // Cycle detection: any ancestor we've already visited in this chain.
+    // Catches both immediate (A↔B) and longer (A→B→C→A) cycles.
+    const visited = seen ?? new Set<string>();
+    if (visited.has(parentSubject)) {
+      console.warn('Circular parent chain at', this.subject, '→', parentSubject);
+      return [true, `Circular parent chain at ${this.subject}`];
     }
+    visited.add(this.subject);
 
     const parent: Resource = await this.store.getResource(parentSubject);
 
     // The recursive part
-    return await parent.canWrite(agent, this.subject);
+    return await parent.canWrite(agent, visited);
   }
 
   /**
