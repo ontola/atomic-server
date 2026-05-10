@@ -1812,7 +1812,16 @@ export class Store {
   public async notifyResourceManuallyCreated(
     resource: Resource,
   ): Promise<void> {
-    this.recentlyCreatedSubjects.set(resource.subject, Date.now());
+    const now = Date.now();
+    // Prune stale entries: anything older than the longest plausible
+    // consume window (5× the default 2s). Otherwise unsubscribed
+    // creations accumulate forever — small leak in practice but
+    // visible under fuzzing/bulk-creation tests.
+    const cutoff = now - 10_000;
+    for (const [subject, ts] of this.recentlyCreatedSubjects) {
+      if (ts < cutoff) this.recentlyCreatedSubjects.delete(subject);
+    }
+    this.recentlyCreatedSubjects.set(resource.subject, now);
     await this.eventManager.emit(StoreEvents.ResourceManuallyCreated, resource);
   }
 
