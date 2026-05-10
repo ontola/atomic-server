@@ -149,10 +149,8 @@ export class CommitBuilder {
    * Signs the commit using the privateKey of the Agent, and returns a full
    * Commit which is ready to be sent to an Atomic-Server `/commit` endpoint.
    */
-  public async sign(agent: Agent): Promise<Commit> {
-    const commit = await this.signAt(agent, getTimestampNow());
-
-    return commit;
+  public sign(agent: Agent): Promise<Commit> {
+    return this.signAt(agent, getTimestampNow());
   }
 
   /** Returns true if the CommitBuilder has non-empty changes (set, remove, destroy) */
