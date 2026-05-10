@@ -20,10 +20,7 @@ export function GridView({
   return (
     <Grid>
       {Array.from(subResources.values()).map(resource => (
-        <ResourceGridItem
-          subject={resource.getSubject()}
-          key={resource.getSubject()}
-        />
+        <ResourceGridItem subject={resource.subject} key={resource.subject} />
       ))}
       {showNewButton && (
         <GridItemWrapper>

@@ -4805,13 +4805,11 @@ msgstr "Sync"
 msgid "destroy"
 msgstr "destroy"
 
-#: src/routes/DataRoute.tsx
-msgid "source:"
-msgstr "source:"
+#~ msgid "source:"
+#~ msgstr "source:"
 
-#: src/routes/DataRoute.tsx
-msgid "Where this resource was last loaded from"
-msgstr "Where this resource was last loaded from"
+#~ msgid "Where this resource was last loaded from"
+#~ msgstr "Where this resource was last loaded from"
 
 #~ msgid "Running in offline mode"
 #~ msgstr "Running in offline mode"
@@ -5140,4 +5138,3 @@ msgstr "Could not restore version: {0}"
 #: src/routes/SettingsServer/index.tsx
 msgid "Server settings have moved to the <0>Sync page</0>."
 msgstr "Server settings have moved to the <0>Sync page</0>."
-0>."

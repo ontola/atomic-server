@@ -95,7 +95,7 @@ const TagPanel: FC<TagPanelProps> = ({ resource, ontology }) => {
           <EditableTag subject={tag} key={tag} onDelete={removeTag} />
         ))}
       </Row>
-      <CreateTagRow parent={ontology.getSubject()} onNewTag={addTag} />
+      <CreateTagRow parent={ontology.subject} onNewTag={addTag} />
     </Column>
   );
 };

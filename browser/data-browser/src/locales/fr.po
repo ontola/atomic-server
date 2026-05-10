@@ -4874,13 +4874,11 @@ msgstr "Synchroniser"
 msgid "destroy"
 msgstr "Détruire"
 
-#: src/routes/DataRoute.tsx
-msgid "source:"
-msgstr "source :"
+#~ msgid "source:"
+#~ msgstr "source :"
 
-#: src/routes/DataRoute.tsx
-msgid "Where this resource was last loaded from"
-msgstr "D'où cette ressource a été chargée pour la dernière fois"
+#~ msgid "Where this resource was last loaded from"
+#~ msgstr "D'où cette ressource a été chargée pour la dernière fois"
 
 #~ msgid "Running in offline mode"
 #~ msgstr ""
