@@ -24,7 +24,7 @@ export function Title({ resource, prefix, link }: PageTitleProps): JSX.Element {
     <H1>
       {prefix && `${prefix} `}
       {link ? (
-        <AtomicLink subject={resource.getSubject()}>{title}</AtomicLink>
+        <AtomicLink subject={resource.subject}>{title}</AtomicLink>
       ) : (
         title
       )}

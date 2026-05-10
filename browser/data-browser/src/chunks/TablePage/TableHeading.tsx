@@ -28,7 +28,7 @@ function getIcon(
   hoverOrFocus: boolean,
   dataType: Datatype,
 ): IconType {
-  if (sorting.prop === propResource.getSubject()) {
+  if (sorting.prop === propResource.subject) {
     return sorting.sortDesc ? FaAngleDown : FaAngleUp;
   }
 

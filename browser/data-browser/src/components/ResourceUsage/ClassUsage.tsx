@@ -13,12 +13,12 @@ interface ClassUsageProps {
 export function ClassUsage({ resource }: ClassUsageProps): JSX.Element {
   const { collection: instanceOfClassCollection } = useCollection({
     property: properties.isA,
-    value: resource.getSubject(),
+    value: resource.subject,
   });
 
   const { collection: classTypeCollection } = useCollection({
     property: properties.classType,
-    value: resource.getSubject(),
+    value: resource.subject,
   });
 
   const instanceTotal = instanceOfClassCollection.totalMembers;

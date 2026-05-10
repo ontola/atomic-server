@@ -13,7 +13,7 @@ interface PropertyUsageProps {
 export function PropertyUsage({ resource }: PropertyUsageProps): JSX.Element {
   const { collection: instancesWithPropCollection } = useCollection(
     {
-      property: resource.getSubject(),
+      property: resource.subject,
     },
     { pageSize: 10 },
   );
@@ -21,7 +21,7 @@ export function PropertyUsage({ resource }: PropertyUsageProps): JSX.Element {
   const { collection: requiresPropCollection } = useCollection(
     {
       property: properties.requires,
-      value: resource.getSubject(),
+      value: resource.subject,
     },
     { pageSize: 10 },
   );
@@ -29,7 +29,7 @@ export function PropertyUsage({ resource }: PropertyUsageProps): JSX.Element {
   const { collection: recommendsPropCollection } = useCollection(
     {
       property: properties.recommends,
-      value: resource.getSubject(),
+      value: resource.subject,
     },
     { pageSize: 10 },
   );

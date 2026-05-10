@@ -16,7 +16,7 @@ function FilePill({ subject }: FilePillProps): JSX.Element {
 
   return (
     <FilePillStyled data-test='file-pill'>
-      <AtomicLink subject={resource.getSubject()}>
+      <AtomicLink subject={resource.subject}>
         <span>{title}</span>
       </AtomicLink>
     </FilePillStyled>
