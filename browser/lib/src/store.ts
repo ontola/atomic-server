@@ -16,7 +16,7 @@ import { core } from './ontologies/core.js';
 import { server, type Server } from './ontologies/server.js';
 import type { OptionalClass, UnknownClass } from './ontology.js';
 import { JSONADParser } from './parse.js';
-import { Resource, unknownSubject, proxyResource } from './resource.js';
+import { Resource, unknownSubject } from './resource.js';
 import { type SearchOpts, buildSearchSubject } from './search.js';
 import { stringToSlug } from './stringToSlug.js';
 import { bytesToHex, hexToBytes, type JSONValue } from './value.js';
@@ -2944,8 +2944,8 @@ export class Store {
     const r = this.getResourceLoading(subject, opts);
     const key = this.normalizeSubject(r.subject);
     let snap = this.snapshots.get(key);
-    if (!snap || snap.resource.__internalObject !== r.__internalObject) {
-      snap = { resource: proxyResource(r) };
+    if (!snap || snap.resource !== r.__internalObject) {
+      snap = { resource: r.__internalObject };
       this.snapshots.set(key, snap);
     }
 
@@ -2954,11 +2954,12 @@ export class Store {
 
   /** Lets subscribers know that a resource has been changed. */
   private async notify(resource: Resource): Promise<void> {
-    // Bump snapshot identity so `useSyncExternalStore` consumers
-    // re-render. Same canonical-subject key as `subscribers` so
-    // they stay in sync.
+    // Bump snapshot tuple identity so `useSyncExternalStore` consumers
+    // re-render. The Resource itself is mutated in place, but a fresh
+    // outer `{resource}` object is `!== ` the previous one, which is
+    // all `Object.is` needs.
     const key = this.normalizeSubject(resource.subject);
-    this.snapshots.set(key, { resource: proxyResource(resource) });
+    this.snapshots.set(key, { resource: resource.__internalObject });
 
     this.eventManager.emit(StoreEvents.ResourceUpdated, resource);
 
