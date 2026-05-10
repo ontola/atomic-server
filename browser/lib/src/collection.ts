@@ -152,14 +152,23 @@ export class Collection {
     this._memberIndex.clear();
   }
 
+  /** Write `members` + `totalMembers` propvals onto a page Resource. */
+  private writePageMembers(
+    page: Resource<Collections.Collection>,
+    members: string[],
+    total: number,
+  ): void {
+    page.applyHydratedValues([
+      [collections.properties.members, members],
+      [collections.properties.totalMembers, total],
+    ]);
+  }
+
   /** Stamp an empty page so callers see `pages.has(page) === true`
    * + `totalMembers === 0` as the authoritative "no children" state. */
   private setEmptyPage(page: number): void {
     const empty = new Resource<Collections.Collection>(this.buildSubject(page));
-    empty.applyHydratedValues([
-      [collections.properties.members, []],
-      [collections.properties.totalMembers, 0],
-    ]);
+    this.writePageMembers(empty, [], 0);
     this.setPage(page, empty);
     this._totalMembers = 0;
   }
@@ -332,10 +341,11 @@ export class Collection {
       if (members.includes(subject)) return 'unchanged'; // paranoia
       this._totalMembers += 1;
       this._memberIndex.set(subject, lastPageIdx);
-      lastPage.applyHydratedValues([
-        [collections.properties.members, [...members, subject]],
-        [collections.properties.totalMembers, this._totalMembers],
-      ]);
+      this.writePageMembers(
+        lastPage,
+        [...members, subject],
+        this._totalMembers,
+      );
 
       return 'member-added';
     }
@@ -358,10 +368,7 @@ export class Collection {
       next.splice(idx, 1);
       this._totalMembers = Math.max(0, this._totalMembers - 1);
       this._memberIndex.delete(subject);
-      page.applyHydratedValues([
-        [collections.properties.members, next],
-        [collections.properties.totalMembers, this._totalMembers],
-      ]);
+      this.writePageMembers(page, next, this._totalMembers);
       return 'member-removed';
     }
 
@@ -639,11 +646,7 @@ export class Collection {
     const resource = new Resource<Collections.Collection>(
       this.buildSubject(page),
     );
-    resource.applyHydratedValues([
-      [collections.properties.members, pageSubjects],
-      [collections.properties.totalMembers, result.count],
-    ]);
-
+    this.writePageMembers(resource, pageSubjects, result.count);
     this.setPage(page, resource);
     this._totalMembers = result.count;
 
@@ -676,10 +679,7 @@ export class Collection {
     );
     const filteredMembers = filterIndexLeakage(rawMembers);
     if (filteredMembers.length !== rawMembers.length) {
-      resource.applyHydratedValues([
-        [collections.properties.members, filteredMembers],
-        [collections.properties.totalMembers, filteredMembers.length],
-      ]);
+      this.writePageMembers(resource, filteredMembers, filteredMembers.length);
     }
 
     this.setPage(page, resource);
