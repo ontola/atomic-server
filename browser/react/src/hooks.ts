@@ -6,6 +6,7 @@ import {
   useContext,
   createContext,
   useRef,
+  useSyncExternalStore,
 } from 'react';
 import {
   Property,
@@ -300,10 +301,44 @@ export function useValue(
     handleValidationError,
   } = opts;
 
-  const [val, set] = useState<JSONValue>(resource.get(propertyURL));
-  const [prevResourceReference, setPrevResourceReference] = useState(resource);
-
   const store = useStore();
+
+  // Subscribe to BOTH per-property local changes (`LocalChange`,
+  // fires from `Resource.set()`) AND store-level notifies
+  // (`store.subscribe`, fires from any addResource — covers remote
+  // WS UPDATEs that come through `importLoroUpdate`). Either signal
+  // re-runs getSnapshot which reads `resource.get(propertyURL)`.
+  // Replaces the old `prevResourceReference !== resource` identity
+  // check that depended on `proxyResource` swapping per notify.
+  const stable = resource.stable;
+  const subject = resource.subject;
+  const subscribe = useCallback(
+    (cb: () => void) => {
+      const u1 = store.subscribe(subject, () => cb());
+      const u2 = stable.on(ResourceEvents.LocalChange, p => {
+        if (p === '' || p === propertyURL) cb();
+      });
+
+      return () => {
+        u1();
+        u2();
+      };
+    },
+    [store, subject, stable, propertyURL],
+  );
+  const val = useSyncExternalStore(subscribe, () => resource.get(propertyURL));
+
+  const set = useCallback((_v: JSONValue | undefined) => {
+    // `set` was the local optimistic update for the legacy
+    // `useState`-based shape. Now that the value is derived from
+    // `resource.get()` via `useSyncExternalStore`, optimistic local
+    // updates happen via the actual `resource.set()` call inside
+    // `validateAndSet` — which fires `LocalChange` and triggers a
+    // re-render through the subscription. This stub stays for the
+    // remove-value branch in `validateAndSet` to keep the same
+    // call shape.
+    void _v;
+  }, []);
 
   const saveResource = useCallback(() => {
     if (!commit) {
@@ -365,23 +400,6 @@ export function useValue(
       propertyURL,
     ],
   );
-
-  // Update value when resource changes.
-  if (resource !== prevResourceReference) {
-    let localVal: JSONValue | undefined;
-
-    try {
-      localVal = resource.get(propertyURL);
-      set(localVal);
-    } catch (e) {
-      store.notifyError(e);
-    }
-
-    setPrevResourceReference(resource);
-
-    // We changed the value but we don't want to wait a whole react cycle to return the new value so we return the value here directly.
-    return [localVal, validateAndSet];
-  }
 
   return [val, validateAndSet];
 }
