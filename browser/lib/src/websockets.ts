@@ -361,39 +361,28 @@ export class WSClient {
 
   // ---- Loro sync (real-time collaboration) ----
 
+  /** Send a text frame `<prefix> <payload>` if the WS is open.
+   *  Loro sync still uses text frames (low-frequency, will migrate
+   *  to binary later). No-op on non-open sockets. */
+  private sendText(prefix: string, payload: string): void {
+    if (this.readyState !== WebSocket.OPEN) return;
+    this.ws.send(new TextEncoder().encode(`${prefix} ${payload}`));
+  }
+
   public subscribeLoroSync(subject: string): void {
-    // Still uses text for now — low-frequency, will migrate later
-    if (this.readyState === WebSocket.OPEN) {
-      this.ws.send(
-        new TextEncoder().encode(
-          'LORO_SYNC_SUBSCRIBE ' + JSON.stringify({ subject }),
-        ),
-      );
-    }
+    this.sendText('LORO_SYNC_SUBSCRIBE', JSON.stringify({ subject }));
   }
 
   public unsubscribeLoroSync(subject: string): void {
-    if (this.readyState === WebSocket.OPEN) {
-      this.ws.send(
-        new TextEncoder().encode(
-          'LORO_SYNC_UNSUBSCRIBE ' + JSON.stringify({ subject }),
-        ),
-      );
-    }
+    this.sendText('LORO_SYNC_UNSUBSCRIBE', JSON.stringify({ subject }));
   }
 
   public sendLoroSyncUpdate(message: string): void {
-    if (this.readyState === WebSocket.OPEN) {
-      this.ws.send(new TextEncoder().encode('LORO_SYNC_UPDATE ' + message));
-    }
+    this.sendText('LORO_SYNC_UPDATE', message);
   }
 
   public sendLoroEphemeralUpdate(message: string): void {
-    if (this.readyState === WebSocket.OPEN) {
-      this.ws.send(
-        new TextEncoder().encode('LORO_EPHEMERAL_UPDATE ' + message),
-      );
-    }
+    this.sendText('LORO_EPHEMERAL_UPDATE', message);
   }
 
   /** Send a binary frame, logging it in debug mode. */
