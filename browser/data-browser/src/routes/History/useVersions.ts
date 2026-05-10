@@ -18,7 +18,7 @@ export function useVersions(resource: Resource): UseVersionsResult {
   const isRunning = useRef(false);
 
   useEffect(() => {
-    if (resource.getSubject() === unknownSubject || resource.loading) {
+    if (resource.subject === unknownSubject || resource.loading) {
       return;
     }
 

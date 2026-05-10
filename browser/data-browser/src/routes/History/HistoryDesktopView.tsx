@@ -53,7 +53,7 @@ export function HistoryDesktopView({
       <VersionScroller
         persistSelection
         title={`History of ${resource.title}`}
-        subject={resource.getSubject()}
+        subject={resource.subject}
         groupedVersions={groupedVersions}
         selectedVersion={selectedVersion}
         onSelectVersion={onSelectVersion}

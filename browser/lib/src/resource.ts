@@ -1168,13 +1168,6 @@ export class Resource<C extends OptionalClass = any> {
     await this.save();
   }
 
-  /**
-   * @deprecated use resource.subject
-   */
-  public getSubject(): string {
-    return this.subject;
-  }
-
   /** Returns the subject URL of the Resource */
   public getSubjectNoParams(): string {
     // DID subjects (did:ad:...) don't have meaningful origin/pathname.
@@ -1319,11 +1312,6 @@ export class Resource<C extends OptionalClass = any> {
     this.store.removeResource(this.subject);
   }
 
-  /** @deprecated use `resource.push` */
-  public pushPropVal(propUrl: string, values: JSONArray, unique?: boolean) {
-    this.push(propUrl, values, unique);
-  }
-
   /** Appends a Resource to a ResourceArray */
   public push(propUrl: string, values: JSONArray, unique?: boolean): void {
     const propVal = (this.get(propUrl) as JSONArray) ?? [];
@@ -1339,11 +1327,6 @@ export class Resource<C extends OptionalClass = any> {
     this.loroSetProperty(propUrl, newArray);
     this._cacheDirty = true;
     this._dirty = true;
-  }
-
-  /** @deprecated use `resource.remove()` */
-  public removePropVal(propertyUrl: string): void {
-    this.remove(propertyUrl);
   }
 
   /** Removes a property value combination from the resource */

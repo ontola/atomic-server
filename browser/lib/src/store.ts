@@ -1608,16 +1608,6 @@ export class Store {
   }
 
   /**
-   * @deprecated
-   * renamed to `getResource`
-   */
-  public async getResourceAsync<C extends OptionalClass = UnknownClass>(
-    subject: string,
-  ): Promise<Resource<C>> {
-    return this.getResource(subject);
-  }
-
-  /**
    * Gets a resource by URL. Fetches and parses it if it's not available in the
    * store. Not recommended to use this for rendering, because it might cause
    * resources to be fetched multiple times.
