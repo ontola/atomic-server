@@ -74,69 +74,47 @@ export function useResources(
   subjects: string[] | undefined = stableEmptyArray,
   opts: FetchOpts = {},
 ): Map<string, Resource> {
-  const [resources, setResources] = useState(new Map<string, Resource>());
   const store = useStore();
-
   const memoizedOpts = useMemoizedOpts(opts);
 
-  useEffect(() => {
-    setResources(prev => {
-      const newResources = new Map<string, Resource>();
+  // One subscription per subject — cb() wakes useSyncExternalStore
+  // which re-runs getSnapshot below. Same model as useResource.
+  const subscribe = useCallback(
+    (cb: () => void) => {
+      const unsubs = subjects.map(s => store.subscribe(s, () => cb()));
 
-      for (const subject of subjects) {
-        const resource = store.getResourceLoading(subject, memoizedOpts);
+      return () => unsubs.forEach(u => u());
+    },
+    [store, subjects],
+  );
 
-        if (!prev.has(subject)) {
-          newResources.set(subject, proxyResource(resource));
-        } else {
-          newResources.set(subject, prev.get(subject)!);
-        }
-      }
+  // Cache the returned Map by "all snapshot identities". Build a
+  // fresh Map only when at least one subject's snapshot changed,
+  // so `useSyncExternalStore`'s `Object.is` reports stable when
+  // nothing moved.
+  const cacheRef = useRef<{
+    map: Map<string, Resource>;
+    snapshots: Array<{ resource: Resource }>;
+  } | null>(null);
 
-      return newResources;
-    });
-  }, [memoizedOpts, store, subjects]);
-
-  useEffect(() => {
-    // When a change happens, set the new Resource.
-    function handleNotify(updated: Resource) {
-      setResources(prev => {
-        prev.set(updated.subject, proxyResource(updated));
-
-        // We need to create new Maps for react hooks to update - React only checks references, not content
-        return new Map(prev);
-      });
+  const getSnapshot = useCallback((): Map<string, Resource> => {
+    const snaps = subjects.map(s => store.getResourceSnapshot(s, memoizedOpts));
+    const cached = cacheRef.current;
+    if (
+      cached &&
+      cached.snapshots.length === snaps.length &&
+      cached.snapshots.every((s, i) => s === snaps[i])
+    ) {
+      return cached.map;
     }
+    const map = new Map<string, Resource>();
+    subjects.forEach((s, i) => map.set(s, snaps[i].resource));
+    cacheRef.current = { map, snapshots: snaps };
 
-    const unsubLoadingFuncs: (() => void)[] = [];
+    return map;
+  }, [store, subjects, memoizedOpts]);
 
-    for (const resource of resources.values()) {
-      store.subscribe(resource.subject, handleNotify);
-      unsubLoadingFuncs.push(
-        resource.on(ResourceEvents.LoadingChange, () => {
-          setResources(prev => {
-            prev.set(resource.subject, proxyResource(resource));
-
-            // We need to create new Maps for react hooks to update - React only checks references, not content
-            return new Map(prev);
-          });
-        }),
-      );
-    }
-
-    return () => {
-      // When the component is unmounted, unsubscribe from the store.
-      for (const resource of resources.values()) {
-        store.unsubscribe(resource.subject, handleNotify);
-      }
-
-      for (const unsubLoadingFunc of unsubLoadingFuncs) {
-        unsubLoadingFunc();
-      }
-    };
-  }, [resources, store, memoizedOpts]);
-
-  return resources;
+  return useSyncExternalStore(subscribe, getSnapshot);
 }
 
 /**
