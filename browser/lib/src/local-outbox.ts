@@ -84,10 +84,6 @@ export class LocalOutbox {
     return this.entries.size;
   }
 
-  pendingSubjects(): string[] {
-    return [...this.entries.keys()];
-  }
-
   hasPending(subject: string): boolean {
     return this.entries.has(subject);
   }

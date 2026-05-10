@@ -77,15 +77,12 @@ export interface StoreOpts {
 
 export interface StoreSyncStatus {
   serverConnected: boolean;
-  driveSyncInProgress: boolean;
-  dirtySyncInProgress: boolean;
+  /** True iff EITHER the WS-driven drive sync is mid-handshake OR
+   * the outbox is currently draining. */
   syncInProgress: boolean;
   pendingDirtyCount: number;
-  pendingDirtySubjects: string[];
   serverUrl: string;
   drive: string;
-  websocketReadyState?: number;
-  websocketProtocol?: string;
   clientDbReady: boolean;
   /** True if a ClientDb was attached to the store (regardless of readiness). */
   clientDbAttached: boolean;
@@ -1784,33 +1781,20 @@ export class Store {
    *     e.g. because the server went down mid-flight).
    */
   private refetchOfflineErroredResources(): void {
-    const subjectsToRetry: string[] = [];
-
     for (const [subject, resource] of this.resources.entries()) {
       const erroredOffline =
         resource.error && resource.error.message.startsWith('Offline:');
       const stuckLoading = resource.loading && !resource.new;
-
-      if (erroredOffline || stuckLoading) {
-        subjectsToRetry.push(subject);
-      }
-    }
-
-    for (const subject of subjectsToRetry) {
-      const resource = this.resources.get(subject);
-
-      if (!resource) continue;
+      if (!erroredOffline && !stuckLoading) continue;
 
       resource.error = undefined;
       resource.loading = true;
       this.notify(resource);
-      this.fetchResourceFromServer(subject).catch(() => {
-        // fetchResourceFromServer already handles its own errors.
-      });
+      this.fetchResourceFromServer(subject).catch(() => undefined);
     }
   }
 
-  public startDriveSync(_drive: string): void {
+  public startDriveSync(): void {
     this._driveSyncInProgress = true;
     this.emitSyncStatus();
   }
@@ -1856,19 +1840,12 @@ export class Store {
   private _firstDriveSyncResolve: (() => void) | undefined;
 
   public getSyncStatus(): StoreSyncStatus {
-    const ws = this.getDefaultWebSocket();
-
     return {
       serverConnected: this._serverConnected,
-      driveSyncInProgress: this._driveSyncInProgress,
-      dirtySyncInProgress: this.outbox.isDraining,
       syncInProgress: this._driveSyncInProgress || this.outbox.isDraining,
       pendingDirtyCount: this.outbox.size,
-      pendingDirtySubjects: this.outbox.pendingSubjects(),
       serverUrl: this.serverUrl,
       drive: this.drive,
-      websocketReadyState: ws?.readyState,
-      websocketProtocol: 'v2',
       clientDbReady: this.clientDb?.isReady ?? false,
       clientDbAttached: !!this.clientDb,
       clientDbError: this.clientDb?.initError?.message,
