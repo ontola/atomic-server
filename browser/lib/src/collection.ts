@@ -152,6 +152,18 @@ export class Collection {
     this._memberIndex.clear();
   }
 
+  /** Stamp an empty page so callers see `pages.has(page) === true`
+   * + `totalMembers === 0` as the authoritative "no children" state. */
+  private setEmptyPage(page: number): void {
+    const empty = new Resource<Collections.Collection>(this.buildSubject(page));
+    empty.applyHydratedValues([
+      [collections.properties.members, []],
+      [collections.properties.totalMembers, 0],
+    ]);
+    this.setPage(page, empty);
+    this._totalMembers = 0;
+  }
+
   /**
    * Single point that mutates `pages` so the member-subject index stays
    * in sync. Replaces any existing mapping for the same page index.
@@ -544,41 +556,20 @@ export class Collection {
     // `totalMembers === 0` is a real, server-authoritative answer rather
     // than a "still fetching" placeholder.
     if (!result) {
-      const empty = new Resource<Collections.Collection>(
-        this.buildSubject(page),
-      );
-      empty.applyHydratedValues([
-        [collections.properties.members, []],
-        [collections.properties.totalMembers, 0],
-      ]);
-      this.setPage(page, empty);
-      this._totalMembers = 0;
+      this.setEmptyPage(page);
+
       return 'no-db';
     }
 
     if (result.count === 0) {
-      // Empty local result is normally authoritative — but it's ambiguous on
-      // a fresh page load before the drive sync has touched the store yet
-      // (the index may be mid-populate). Once any drive sync has completed
-      // we trust the empty: a freshly-created table or folder just has no
-      // children, and the upstream caller (`useCollection`) is blocking
-      // `ready` on this resolution. Falling through to a server `/query`
-      // here is what made empty grids stay un-rendered for >5s under load.
-      //
-      // For genuinely shared/foreign drives the caller's `before-sync`
-      // branch (`waitForFirstDriveSync` then retry) still kicks in via
-      // the `no-db` path before this one — so cross-drive imports keep
-      // their server fallback.
+      // Empty local result is normally authoritative — but it's ambiguous
+      // on a fresh page load before the drive sync has touched the store
+      // yet (the index may be mid-populate). Once any drive sync has
+      // completed we trust the empty: a freshly-created table or folder
+      // just has no children. Pre-sync, fall back to `/query`.
       if (this.store.hasCompletedDriveSync()) {
-        const empty = new Resource<Collections.Collection>(
-          this.buildSubject(page),
-        );
-        empty.applyHydratedValues([
-          [collections.properties.members, []],
-          [collections.properties.totalMembers, 0],
-        ]);
-        this.setPage(page, empty);
-        this._totalMembers = 0;
+        this.setEmptyPage(page);
+
         return 'ok';
       }
       return 'no-db';
@@ -606,15 +597,8 @@ export class Collection {
     result.count = result.subjects.length;
 
     if (result.subjects.length === 0) {
-      const empty = new Resource<Collections.Collection>(
-        this.buildSubject(page),
-      );
-      empty.applyHydratedValues([
-        [collections.properties.members, []],
-        [collections.properties.totalMembers, 0],
-      ]);
-      this.setPage(page, empty);
-      this._totalMembers = 0;
+      this.setEmptyPage(page);
+
       return 'ok';
     }
 
