@@ -253,7 +253,13 @@ export class WSClient {
     // doesn't reconnect within the test timeout. No-op outside the browser.
     if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
       this._onlineListener = () => {
-        if (this._closed || this.ws.readyState === WebSocket.OPEN) return;
+        // Skip if the WS is already trying or up. Without the CONNECTING
+        // guard, a fast online-then-timer race can spawn two sockets:
+        // the retry timer fires first → socket1 created → online event
+        // fires next → my handler creates socket2 → socket1 leaks.
+        if (this._closed) return;
+        const rs = this.ws.readyState;
+        if (rs === WebSocket.OPEN || rs === WebSocket.CONNECTING) return;
         if (this._retryTimer) {
           clearTimeout(this._retryTimer);
           this._retryTimer = undefined;
