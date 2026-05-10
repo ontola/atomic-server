@@ -1945,7 +1945,11 @@ export class Store {
 
     if (agent && agent.subject) {
       if (hasBrowserAPI()) {
-        setCookieAuthentication(this.serverUrl, agent);
+        // Fire-and-forget here: this is a side effect on agent change,
+        // not a precondition of a specific request. The HTTP request
+        // path (`Client.fetchResourceHTTP`) re-installs the cookie if
+        // it's missing, and awaits it there.
+        setCookieAuthentication(this.serverUrl, agent).catch(() => undefined);
       }
 
       this.webSockets.forEach(ws => {
