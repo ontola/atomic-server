@@ -96,6 +96,12 @@ export class LocalOutbox {
     return this.entries.get(subject);
   }
 
+  /** True while a drain is in flight. Mirrors `drainInFlight` for
+   * external read access (status displays). */
+  get isDraining(): boolean {
+    return this.drainInFlight !== undefined;
+  }
+
   /** Idempotent drain: concurrent calls share the in-flight promise. */
   async drain(ctx: OutboxDrainContext): Promise<void> {
     if (this.drainInFlight) return this.drainInFlight;
