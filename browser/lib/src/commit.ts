@@ -49,6 +49,15 @@ interface CommitBuilderBase {
 type JSONADObject = Record<string, JSONValue>;
 
 /** Return the current time as Atomic Data timestamp. Milliseconds since unix epoch. */
+/** Resolve the commitId (the `did:ad:commit:<sig>` URL or
+ *  whatever the server stored) for a freshly-acked Commit. */
+export function commitIdOf(commit: Commit): string | undefined {
+  return (
+    (commit.id as string | undefined) ??
+    (commit.signature ? `did:ad:commit:${commit.signature}` : undefined)
+  );
+}
+
 export function getTimestampNow(): number {
   return Math.round(new Date().getTime());
 }

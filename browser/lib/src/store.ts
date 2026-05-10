@@ -5,7 +5,7 @@ import {
   setCookieAuthentication,
 } from './authentication.js';
 import { Client, type FileOrFileLike } from './client.js';
-import { parseCommitJSON, type Commit } from './commit.js';
+import { commitIdOf, parseCommitJSON, type Commit } from './commit.js';
 import { datatypeFromUrl, type Datatype } from './datatypes.js';
 import { AtomicError, ErrorType } from './error.js';
 import { EventManager } from './EventManager.js';
@@ -2574,12 +2574,9 @@ export class Store {
     try {
       const created = await this.client.postCommit(commit, endpoint);
       close('ok');
-      const serverCommitId =
-        (created.id as string | undefined) ??
-        (created.signature ? `did:ad:commit:${created.signature}` : undefined);
       this.pushCommitLog(
         this.buildCommitLogEntry(commit, 'outgoing', 'sent', {
-          commitId: serverCommitId,
+          commitId: commitIdOf(created),
         }),
       );
       return created;

@@ -6,7 +6,7 @@ import type { Agent } from './agent.js';
 import { Client } from './client.js';
 import type { Collection } from './collection.js';
 import { CollectionBuilder } from './collectionBuilder.js';
-import { CommitBuilder, Commit, commitToJsonADObject } from './commit.js';
+import { CommitBuilder, Commit, commitIdOf, commitToJsonADObject } from './commit.js';
 import { validateDatatype } from './datatypes.js';
 import { isUnauthorized } from './error.js';
 import { commits } from './ontologies/commits.js';
@@ -1486,11 +1486,7 @@ export class Resource<C extends OptionalClass = any> {
       while (this._pendingCommits.length > 0) {
         const commit = this._pendingCommits[0];
         const created = await this.store.postCommit(commit, endpoint);
-        lastCommitId =
-          (created.id as string | undefined) ??
-          (created.signature
-            ? `did:ad:commit:${created.signature}`
-            : undefined);
+        lastCommitId = commitIdOf(created);
         this._pendingCommits.shift();
       }
 
