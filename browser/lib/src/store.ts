@@ -673,34 +673,36 @@ export class Store {
 
     try {
       const jsonAd = await this.clientDb.getResource(subject);
-
       if (!jsonAd) return null;
-
-      const parsed = JSON.parse(jsonAd);
-      const resource = new Resource(subject);
-
-      resource.applyHydratedValues(
-        Object.entries(parsed).filter(([key]) => key !== '@id') as [
-          string,
-          JSONValue,
-        ][],
-      );
-
-      resource.getLoroDoc();
-
-      resource.loading = false;
-      // Route through unified ingress; the source tag tells listeners
-      // this is an OPFS rehydrate, not a server-fresh result.
-      this.applyIncoming({
-        subject: resource.subject,
-        resource,
-        source: 'offline-replay',
-      });
-
-      return resource;
+      return this.hydrateOfflineReplay(subject, JSON.parse(jsonAd));
     } catch {
       return null;
     }
+  }
+
+  /** Build a Resource from a parsed JSON-AD object, hydrate Loro,
+   *  and route through the unified ingress with `offline-replay`
+   *  source. Used by both the OPFS-cold-load path and the
+   *  per-page-reload outbox restore path. */
+  private hydrateOfflineReplay(
+    subject: string,
+    parsed: Record<string, unknown>,
+  ): Resource {
+    const resource = new Resource(subject);
+    resource.applyHydratedValues(
+      Object.entries(parsed).filter(([key]) => key !== '@id') as [
+        string,
+        JSONValue,
+      ][],
+    );
+    resource.getLoroDoc();
+    resource.loading = false;
+    this.applyIncoming({
+      subject: resource.subject,
+      resource,
+      source: 'offline-replay',
+    });
+    return resource;
   }
 
   /**
@@ -1300,9 +1302,9 @@ export class Store {
     subject: string,
     parsed: Record<string, unknown>,
   ): boolean {
-    // Don't overwrite a resource that has a Loro snapshot with one that doesn't.
-    const existing = this.resources.get(this.normalizeSubject(subject));
+    const existing = this.getResolved(subject);
 
+    // Don't overwrite a resource that has a Loro snapshot with one that doesn't.
     if (
       existing &&
       existing.get(commits.properties.loroUpdate) &&
@@ -1317,45 +1319,25 @@ export class Store {
     // clientDb wipes the queue — so the dirty subject gets "Synced" with an
     // empty queue, no /commit POST fires, the server never sees the resource,
     // and `/download/files/<hash>` keeps returning 404 even after reconnect.
-    if (existing && existing.hasPendingCommits) {
+    if (existing?.hasPendingCommits) {
       return true;
     }
 
     // Same problem after a page reload: the in-memory queue is gone, but
     // the outbox persisted it durably. Re-attach the queue to the
     // freshly hydrated instance so the next sync can push.
-    const outboxEntry = this.outbox.getEntry(subject);
-    const restoredCommits: Commit[] | undefined = outboxEntry
-      ? [...outboxEntry.commits]
-      : undefined;
+    const restoredCommits = this.outbox.getEntry(subject)?.commits;
 
-    const resource = new Resource(subject);
+    this.hydrateOfflineReplay(subject, parsed);
 
-    resource.applyHydratedValues(
-      Object.entries(parsed).filter(([key]) => key !== '@id') as [
-        string,
-        JSONValue,
-      ][],
-    );
-
-    resource.getLoroDoc();
-
-    resource.loading = false;
-    this.applyIncoming({
-      subject,
-      resource,
-      source: 'offline-replay',
-    });
-
-    // Re-attach restored commits AFTER applyIncoming because the
+    // Re-attach restored commits AFTER hydrateOfflineReplay because the
     // ingress may merge the new instance into an existing placeholder
-    // (created by getResourceLoading); merge() carries Loro/cache
-    // state but not `_pendingCommits`, so writing them on the
-    // just-created `resource`
-    // wouldn't survive. Pull the canonical instance back out and patch it.
+    // (created by getResourceLoading); merge() carries Loro/cache state
+    // but not `_pendingCommits`, so writing them on the freshly-built
+    // resource wouldn't survive. Pull the canonical instance back out
+    // and patch it.
     if (restoredCommits?.length) {
-      const stored = this.resources.get(this.normalizeSubject(subject));
-      stored?.setPendingCommits(restoredCommits);
+      this.getResolved(subject)?.setPendingCommits([...restoredCommits]);
     }
 
     return true;
