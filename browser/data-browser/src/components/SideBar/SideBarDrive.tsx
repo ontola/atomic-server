@@ -61,9 +61,7 @@ export function SideBarDrive({
   const navigate = useNavigateWithTransition();
   const agentCanWrite = useCanWrite(driveResource);
   const [currentSubject] = useCurrentSubject();
-  const currentResource = useResource(currentSubject, {
-    track: [core.properties.parent],
-  });
+  const currentResource = useResource(currentSubject);
   const [ancestry, setAncestry] = useState<string[]>([]);
 
   useEffect(() => {

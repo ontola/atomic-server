@@ -16,7 +16,7 @@ import { core } from './ontologies/core.js';
 import { server, type Server } from './ontologies/server.js';
 import type { OptionalClass, UnknownClass } from './ontology.js';
 import { JSONADParser } from './parse.js';
-import { Resource, unknownSubject } from './resource.js';
+import { Resource, unknownSubject, proxyResource } from './resource.js';
 import { type SearchOpts, buildSearchSubject } from './search.js';
 import { stringToSlug } from './stringToSlug.js';
 import { bytesToHex, hexToBytes, type JSONValue } from './value.js';
@@ -2967,23 +2967,41 @@ export class Store {
     return url;
   }
 
-  /** Lets subscribers know that a resource has been changed. Time to update your views.
-   */
-  private async notify(resource: Resource): Promise<void> {
-    // Global event for collection live-membership listeners. Fires for every
-    // resource that lands in the store via `addResource` — local commits and
-    // remote `UPDATE` pushes alike. Kept separate from the per-subject
-    // subscriber list because collections need to react to changes on
-    // resources they may not yet know about (e.g. a brand-new chat message).
-    this.eventManager.emit(StoreEvents.ResourceUpdated, resource);
+  /** Per-subject snapshot wrappers for `useSyncExternalStore`. Each
+   * snapshot's `resource` field is a fresh Proxy of the cached
+   * Resource, so `R.foo` reads stay reactive (Resource is mutated
+   * in place, but the Proxy identity changes per notify). The
+   * snapshot tuple identity changes too, which is what
+   * `useSyncExternalStore` checks. */
+  private snapshots = new Map<string, { resource: Resource }>();
 
-    const subject = resource.subject;
-    const callbacks = this.subscribers.get(subject);
-
-    if (callbacks === undefined) {
-      return;
+  public getResourceSnapshot(
+    subject: string,
+    opts: FetchOpts = {},
+  ): { resource: Resource } {
+    const r = this.getResourceLoading(subject, opts);
+    const key = this.normalizeSubject(r.subject);
+    let snap = this.snapshots.get(key);
+    if (!snap || snap.resource.__internalObject !== r.__internalObject) {
+      snap = { resource: proxyResource(r) };
+      this.snapshots.set(key, snap);
     }
 
+    return snap;
+  }
+
+  /** Lets subscribers know that a resource has been changed. */
+  private async notify(resource: Resource): Promise<void> {
+    // Bump snapshot identity so `useSyncExternalStore` consumers
+    // re-render. Same canonical-subject key as `subscribers` so
+    // they stay in sync.
+    const key = this.normalizeSubject(resource.subject);
+    this.snapshots.set(key, { resource: proxyResource(resource) });
+
+    this.eventManager.emit(StoreEvents.ResourceUpdated, resource);
+
+    const callbacks = this.subscribers.get(key);
+    if (!callbacks) return;
     Promise.allSettled(callbacks.map(async cb => cb(resource)));
   }
 }
