@@ -182,6 +182,20 @@ export class WSClient {
     return pending;
   }
 
+  /** Fail every in-flight GET. Called on WS close so callers don't
+   *  hang for REQUEST_TIMEOUT (10 s) when the socket dies mid-flight
+   *  — the next reconnect will fetch fresh state anyway. */
+  private rejectAllPending(reason: string): void {
+    if (this.pendingGets.size === 0) return;
+    const entries = [...this.pendingGets.values()];
+    this.pendingGets.clear();
+    const err = new AtomicError(reason, ErrorType.Server);
+    for (const p of entries) {
+      clearTimeout(p.timer);
+      p.reject(err);
+    }
+  }
+
   constructor(url: string, store: Store) {
     this.store = store;
     this.handleMessage = this.handleMessage.bind(this);
@@ -208,6 +222,7 @@ export class WSClient {
       });
       ws.addEventListener('close', () => {
         this.store.setServerConnected(false);
+        this.rejectAllPending('WebSocket closed before response arrived');
 
         if (!this._closed) {
           this._retryTimer = setTimeout(() => {
