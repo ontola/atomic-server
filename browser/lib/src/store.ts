@@ -2282,10 +2282,10 @@ export class Store {
         ...this._commitLog.slice(existingIdx + 1),
       ];
     } else {
-      this._commitLog = [
-        { ...entry, id: ulid() },
-        ...this._commitLog,
-      ].slice(0, 50);
+      this._commitLog = [{ ...entry, id: ulid() }, ...this._commitLog].slice(
+        0,
+        50,
+      );
     }
     this.eventManager.emit(StoreEvents.CommitLogChanged, this.getCommitLog());
   }
@@ -2491,7 +2491,9 @@ export class Store {
   }
 
   public logIncomingCommit(commit: Commit): void {
-    this.pushCommitLog(this.buildCommitLogEntry(commit, 'incoming', 'received'));
+    this.pushCommitLog(
+      this.buildCommitLogEntry(commit, 'incoming', 'received'),
+    );
   }
 
   /**
