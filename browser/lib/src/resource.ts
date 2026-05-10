@@ -6,7 +6,12 @@ import type { Agent } from './agent.js';
 import { Client } from './client.js';
 import type { Collection } from './collection.js';
 import { CollectionBuilder } from './collectionBuilder.js';
-import { CommitBuilder, Commit, commitIdOf, commitToJsonADObject } from './commit.js';
+import {
+  CommitBuilder,
+  Commit,
+  commitIdOf,
+  commitToJsonADObject,
+} from './commit.js';
 import { validateDatatype } from './datatypes.js';
 import { isUnauthorized } from './error.js';
 import { commits } from './ontologies/commits.js';
@@ -731,7 +736,12 @@ export class Resource<C extends OptionalClass = any> {
     // Catches both immediate (A↔B) and longer (A→B→C→A) cycles.
     const visited = seen ?? new Set<string>();
     if (visited.has(parentSubject)) {
-      console.warn('Circular parent chain at', this.subject, '→', parentSubject);
+      console.warn(
+        'Circular parent chain at',
+        this.subject,
+        '→',
+        parentSubject,
+      );
       return [true, `Circular parent chain at ${this.subject}`];
     }
     visited.add(this.subject);

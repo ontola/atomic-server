@@ -255,7 +255,10 @@ export class WSClient {
     // up — otherwise we wait out the current backoff (up to 30 s) before
     // even trying. Matches the dagger-flake pattern where `setOffline(false)`
     // doesn't reconnect within the test timeout. No-op outside the browser.
-    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    if (
+      typeof window !== 'undefined' &&
+      typeof window.addEventListener === 'function'
+    ) {
       this._onlineListener = () => {
         // Skip if the WS is already trying or up. Without the CONNECTING
         // guard, a fast online-then-timer race can spawn two sockets:
@@ -698,7 +701,9 @@ export class WSClient {
     // exact length sent by `sendText(prefix, payload)` which writes
     // `${prefix} ${payload}`.
     if (text.startsWith('LORO_SYNC_UPDATE ')) {
-      this.store.__handleLoroSyncMessage(text.slice('LORO_SYNC_UPDATE '.length));
+      this.store.__handleLoroSyncMessage(
+        text.slice('LORO_SYNC_UPDATE '.length),
+      );
     } else if (text.startsWith('LORO_EPHEMERAL_UPDATE ')) {
       this.store.__handleLoroEphemeralMessage(
         text.slice('LORO_EPHEMERAL_UPDATE '.length),
