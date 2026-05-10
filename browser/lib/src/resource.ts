@@ -326,22 +326,11 @@ export class Resource<C extends OptionalClass = any> {
       this._loroMap = this._loroDoc.getMap('properties');
 
       // If the resource has a persisted Loro snapshot, import it.
-      const existingSnapshot = this._loroSnapshotBytes;
-      let initializedFromSnapshot = false;
+      const stored = Resource.decodeStoredSnapshot(this._loroSnapshotBytes);
+      const initializedFromSnapshot = !!stored;
 
-      if (
-        existingSnapshot instanceof Uint8Array &&
-        existingSnapshot.length > 0
-      ) {
-        this._loroDoc.import(existingSnapshot);
-        initializedFromSnapshot = true;
-      } else if (
-        typeof existingSnapshot === 'string' &&
-        existingSnapshot.length > 0
-      ) {
-        // May arrive as a base64 string from JSON-AD parsing
-        this._loroDoc.import(decodeB64(existingSnapshot));
-        initializedFromSnapshot = true;
+      if (stored) {
+        this._loroDoc.import(stored);
       } else {
         for (const [key, value] of Object.entries(this._cache)) {
           this.loroSetProperty(key, value);
@@ -611,20 +600,26 @@ export class Resource<C extends OptionalClass = any> {
     }
   }
 
+  /** Decode the dual-typed `_loroSnapshotBytes` field: Uint8Array
+   *  passes through, base64 string is decoded. Returns undefined
+   *  if the bytes are missing or empty. */
+  private static decodeStoredSnapshot(
+    bytes: Uint8Array | string | undefined,
+  ): Uint8Array | undefined {
+    if (bytes instanceof Uint8Array && bytes.length > 0) return bytes;
+    if (typeof bytes === 'string' && bytes.length > 0) return decodeB64(bytes);
+    return undefined;
+  }
+
   /** Snapshot bytes from a source Resource: prefer the live Loro
-   *  doc, fall back to stored bytes (`Uint8Array` or base64 string).
-   *  Returns undefined if no Loro state exists. Used by both
-   *  `merge` and `cloneLoroStateFrom`. */
+   *  doc, fall back to stored bytes. Used by `merge` and
+   *  `cloneLoroStateFrom`. */
   private static extractLoroSnapshot(
     resource: Resource,
   ): Uint8Array | undefined {
-    if (resource._loroDoc) {
-      return resource._loroDoc.export({ mode: 'snapshot' });
-    }
-    const bytes = resource._loroSnapshotBytes;
-    if (bytes instanceof Uint8Array) return bytes;
-    if (typeof bytes === 'string' && bytes.length > 0) return decodeB64(bytes);
-    return undefined;
+    return resource._loroDoc
+      ? resource._loroDoc.export({ mode: 'snapshot' })
+      : Resource.decodeStoredSnapshot(resource._loroSnapshotBytes);
   }
 
   private cloneLoroStateFrom(resource: Resource): void {
