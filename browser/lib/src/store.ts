@@ -1552,40 +1552,21 @@ export class Store {
     // a prior fetch (e.g. `did:ad:commit:<sig>` accidentally aliased to the
     // committed-to subject during signing/hydration) sends the user to the
     // resource the commit edits instead of the commit itself.
-    const isCommitDid = normalized.startsWith('did:ad:commit:');
-    const resolved = isCommitDid
+    const resolved = normalized.startsWith('did:ad:commit:')
       ? normalized
       : (this.aliases.get(normalized) ?? normalized);
-    const isTemporarySubject =
-      normalized.startsWith('_new:') || normalized.startsWith('_local:');
-
-    // This is needed because it can happen that the useResource react hook is called while there is no subject passed.
-    if (normalized === unknownSubject || normalized === null) {
-      const newR = new Resource<C>(unknownSubject, opts.newResource);
-      newR.setStore(this);
-
-      return newR;
-    }
+    const isNew =
+      !!opts.newResource ||
+      normalized.startsWith('_new:') ||
+      normalized.startsWith('_local:');
 
     let resource = this.resources.get(resolved);
 
     if (!resource) {
-      resource = new Resource<C>(
-        normalized,
-        opts.newResource || isTemporarySubject,
-      );
-
-      // New resources don't have to load, they are just created.
-      if (!opts.newResource && !isTemporarySubject) {
-        resource.loading = true;
-      }
-
+      resource = new Resource<C>(normalized, isNew);
+      if (!isNew) resource.loading = true;
       this.addResource(resource, { alias: normalized });
-
-      if (!opts.newResource && !isTemporarySubject) {
-        this.fetchResourceWithLocalFallback(normalized, opts);
-      }
-
+      if (!isNew) this.fetchResourceWithLocalFallback(normalized, opts);
       return resource;
     }
 
