@@ -797,9 +797,19 @@ export class WSClient {
     }
 
     if (Object.keys(deltas).length > 0) {
-      this.ws.send(
-        'SYNC_DELTAS ' + JSON.stringify({ drive: diff.drive, deltas }),
-      );
+      // The WS can transition to CLOSING after we receive the SYNC_DIFF
+      // and before we get a chance to reply (server-initiated close,
+      // network blip). `send` on a non-OPEN socket throws — swallow it,
+      // the next reconnect's handleOpen will redo the VV sync.
+      if (this.readyState !== WebSocket.OPEN) return;
+      try {
+        this.ws.send(
+          'SYNC_DELTAS ' + JSON.stringify({ drive: diff.drive, deltas }),
+        );
+      } catch (e) {
+        console.warn('[WS] SYNC_DELTAS send failed:', e);
+        return;
+      }
     }
 
     // If server has nothing to push, sync is done
