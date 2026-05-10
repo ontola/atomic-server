@@ -2103,11 +2103,11 @@ export class Store {
   }
 
   /**
-   * Registers a callback for when the a resource is updated. When you call
-   * this
-   * The method returns a function that you can call to unsubscribe. You can also unsubscribe by calling `store.unsubscribe()`.
+   * Subscribe to changes for a resource. The callback fires on every
+   * `notify` for that subject (local commits + remote pushes).
+   * Returns an unsubscriber. Per-property subscriptions are handled
+   * separately by `Resource.on(ResourceEvents.LocalChange)`.
    */
-  // TODO: consider subscribing to properties, maybe add a second subscribe function, use that in useValue
   public subscribe(subject: string, callback: ResourceCallback): () => void {
     if (subject === undefined) {
       throw Error('Cannot subscribe to undefined subject');
@@ -2318,22 +2318,19 @@ export class Store {
       ? this._commitLog.findIndex(e => e.commitId === entry.commitId)
       : -1;
 
-    // On a status transition we ran `summarizeCommitProperties` a second time
-    // for the same commit. The first call stored the snapshot as the prior
-    // baseline; the second call diffs the snapshot against itself → empty
-    // → undefined. Reuse the original summary so the empty diff doesn't
-    // overwrite the real one when we spread-merge below.
     if (existingIdx >= 0) {
-      entry = {
-        ...entry,
-        propertySummaries: this._commitLog[existingIdx].propertySummaries,
-      };
-    }
-
-    if (existingIdx >= 0) {
+      // Status transition for an already-logged commit. Two things
+      // matter: (1) reuse the original \`propertySummaries\` —
+      // \`summarizeCommitProperties\` is destructive on the second
+      // call (it stored the snapshot as the prior baseline; the
+      // second pass diffs the snapshot against itself → empty); (2)
+      // move the merged entry to the top so users see fresh status
+      // changes on the right side of the activity log.
+      const prior = this._commitLog[existingIdx];
       const merged: CommitLogEntry = {
-        ...this._commitLog[existingIdx],
+        ...prior,
         ...entry,
+        propertySummaries: prior.propertySummaries,
       };
       this._commitLog = [
         merged,
@@ -2342,10 +2339,7 @@ export class Store {
       ];
     } else {
       this._commitLog = [
-        {
-          ...entry,
-          id: ulid(),
-        },
+        { ...entry, id: ulid() },
         ...this._commitLog,
       ].slice(0, 50);
     }
