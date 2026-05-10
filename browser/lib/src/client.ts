@@ -193,7 +193,13 @@ export class Client {
           // https://github.com/atomicdata-dev/atomic-data-browser/issues/253
           if (hasBrowserAPI() && subject.startsWith(window.location.origin)) {
             if (!checkAuthenticationCookie()) {
-              setCookieAuthentication(signInfo.serverURL, signInfo.agent);
+              // Await: the request that follows depends on this cookie.
+              // Without the await, the first call after `setAgent`
+              // race-conditions a 401 because the cookie hasn't been
+              // installed yet (the next request reads
+              // `checkAuthenticationCookie()` and re-installs anyway,
+              // but the first response is already a stale 401).
+              await setCookieAuthentication(signInfo.serverURL, signInfo.agent);
             }
           } else {
             requestHeaders = await signRequest(
