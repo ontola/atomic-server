@@ -560,7 +560,32 @@ export class ClientDbWorker {
     const id = String(this.nextId++);
 
     return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
+      // If the leader tab dies between sending the request and the
+      // response coming back, the BroadcastChannel doesn't surface a
+      // "peer closed" event — the pending entry sits forever.
+      // Time out after 30 s. The caller can retry; by then a new
+      // leader will usually have been elected via navigator.locks.
+      const timer = setTimeout(() => {
+        if (this.pending.has(id)) {
+          this.pending.delete(id);
+          reject(
+            new Error(
+              `ClientDb sendToLeader timed out after 30s — leader tab may have closed.`,
+            ),
+          );
+        }
+      }, 30_000);
+
+      this.pending.set(id, {
+        resolve: (data: unknown) => {
+          clearTimeout(timer);
+          resolve(data);
+        },
+        reject: (e: Error) => {
+          clearTimeout(timer);
+          reject(e);
+        },
+      });
       this.bc!.postMessage({
         type: 'rpc-req',
         fromTab: this.tabId,
