@@ -4,16 +4,35 @@ Going back through `ARCHITECTURE_REVIEW.md` from earlier this session
 and checking which of the 10 gripes I actually closed vs. which are
 still open.
 
-Final cumulative session diff: **+871 net LoC** in `browser/` (peaked
-at +1,599; clawed back ~728 by aggressive trim across 11 deletion
-commits). Of that +871, ~642 is test/diagnostic infrastructure
+Final cumulative session diff: **+606 net LoC** in `browser/` (peaked
+at +1,599; clawed back ~993 by aggressive trim across ~30 deletion
+commits). Of that +606, ~627 is test/diagnostic infrastructure
 (perf-trace, perf probes, integration tests for race fixes); the
-data-layer (`browser/lib/src` + `browser/react/src`) is **+229 net**.
+data-layer (`browser/lib/src` + `browser/react/src` +
+`browser/svelte/src`) is **−21 net** — measurably *smaller* than
+the pre-refactor baseline despite all the new architecture
+(`LocalOutbox`, `applyIncoming` chokepoint, `IncomingChange`
+types, per-subject snapshot getter, perf probes).
 
-After this post-mortem was first written, Phases 4a + 5a–5h + a
-final `putLoroSnapshot` proxy trim shaved another −149 net out of
-`browser/` and reclassified two gripes as closed; this file has
-been updated to reflect the final post-Phase-5 state.
+The simplification compounded across three rounds:
+
+1. **Original phases 1–5** (the planned Phase-1-through-Phase-5
+   work). Closed gripes 1, 2, 3, 5, 10a, 10b. ~+1,011 peak.
+2. **Phase 4b cleanup pass** (post-mortem v1): deletion-only
+   subset of Gripe 7 — removed dead `_dirtySyncInProgress`
+   field, trimmed unused `StoreSyncStatus` shape, dropped dead
+   helpers and stale TODOs. −149.
+3. **The major-bump cleanup pass** (after the user explicitly
+   approved breaking the `@tomic/lib` public API): deleted
+   `proxyResource` entirely (gripe 4 is now structurally
+   closed), extracted shared helpers (`getResolved`,
+   `failResource`, `resolveSubject`, `addLoroSubscriber`,
+   `dispatchLoroMessage`, `buildCommitLogEntry`,
+   `extractLoroSnapshot`, `decodeStoredSnapshot`,
+   `buildPreloadUrl`, `WSClient.sendText`), collapsed
+   `getResourceLoading`'s 3-branch isNew handling, and routed
+   `Store.subscribe` through the same `addLoroSubscriber`
+   helper as the Loro sync paths. −230 across that round.
 
 ---
 
@@ -94,22 +113,26 @@ subject. The triple-`useEffect` mess is gone.
 
 ---
 
-## Gripe 4 — `proxyResource()` defeats referential equality ✅ **SCOPED DOWN**
+## Gripe 4 — `proxyResource()` defeats referential equality ✅ **CLOSED**
 
 > The Proxy is empty — its only role is to be a *different object
 > reference* than the previous proxy, so `useState`'s `Object.is`
 > check decides to re-render.
 
-**Scoped down by Phase 5a–c**: `proxyResource` is now called from
-*one* place (`Store.getResourceSnapshot` / `Store.notify`) — every
-hook reads through that snapshot rather than allocating its own
-Proxy. The empty-handler Proxy still exists as the identity-bump
-mechanism, but it's no longer scattered across the hook layer and
-no longer fights React's render-bailout.
+**Closed in `60df7cf2`**. Once both React and Svelte hooks
+subscribed via `Store.getResourceSnapshot`, the *outer* `{ resource
+}` tuple's identity change was already what triggered re-renders —
+the inner Proxy was redundant. Deleted entirely:
 
-The lingering thing: the Proxy itself could be replaced with a
-counter + tuple snapshot for the next major. Not load-bearing
-enough to do mid-session.
+  - `proxyResource` export removed from `@tomic/lib/resource.ts`.
+  - `Store.notify` and `Store.getResourceSnapshot` write
+    `{ resource: r.__internalObject }` directly.
+  - Svelte's `getResource()` collapsed its three-`$effect` block
+    to a single `store.subscribe` against the same snapshot
+    getter — same pattern as React's `useResource`.
+  - perf-hot-paths bench dropped its `proxyResource(r)` benchmark.
+
+The "Proxy as identity hack" is gone from the codebase.
 
 ---
 
@@ -259,7 +282,7 @@ LoC and one type-bridge function.
 | 1. No single ingress | ✅ Closed | `f01cd175` + `5ed045ac` |
 | 2. OPFS three layers | ✅ Closed | `4b0a402a` + `b2f875e0` |
 | 3. 3 notification systems | ✅ Closed | `e878843d` + `f239c503` + `84197161` + `af2dda1b` (Phase 5a–e) |
-| 4. `proxyResource` Proxy | ✅ Scoped down | folded into `Store.getResourceSnapshot` (Phase 5a–c) |
+| 4. `proxyResource` Proxy | ✅ Closed | deleted entirely in `60df7cf2` (major-bump pass) |
 | 5. Pending commits 3 places | ✅ Closed | `098c8db9` |
 | 6. Leader election | ⚠️ Patched | `74f0834b` (timeout bump only) |
 | 7. Parallel drive sync | ⚠️ Partial | drain re-entrance fixed; sync-status surface trimmed (`d34ea7ac` 4a + `56740988` 4b); state machine deferred |
@@ -272,13 +295,23 @@ LoC and one type-bridge function.
 | Bonus: `ResourceSource` dup | ✅ Closed | `12426da3` |
 | Bonus: `putLoroSnapshot` proxy | ✅ Closed | `b4f601de` |
 
-**7 closed structurally, 2 partially, 5 still open.** The closed
-ones are Phases 1–5 of the plan (which all landed) plus the
-adjacent finds (`ResourceSource`, `putLoroSnapshot`, collection
-init, echo dedup). The deferred ones are Phase 6 (SharedWorker,
-explicitly skipped over Firefox/Safari OPFS quirks) plus the
-major-bump items (Subject normalisation, Store split, the two
-remaining HTTP/WS GET paths and loading-state booleans).
+**8 closed structurally, 2 partially, 4 still open.** The closed
+set covers Phases 1–5 of the plan, the four bonus finds
+(`ResourceSource`, `putLoroSnapshot`, `proxyResource`, collection
+init, echo dedup), and Phase 4 in deletion-only form. The
+remaining open ones are Phase 6 (SharedWorker, explicitly skipped
+over Firefox/Safari OPFS quirks), Subject normalisation forks
+(touched but not unified), the two HTTP/WS GET paths (deliberate
+transport split), and the loading-state booleans (Resource.loading
++ .new + ._loroSnapshotBytes).
+
+The Store split (Gripe 8) ended in an unusual place: the file is
+~140 lines smaller than at session start, but no extraction-into-
+new-files was done. The user's "I want simplification, not
+relocation" guidance pushed every win toward deletion rather than
+file-shuffling. \`store.ts\` is still 2,920 lines — but every line
+in there now has a job, with one shared helper per shape-duplicate
+pattern.
 
 The biggest *user-facing* improvements: every dagger-flake class
 that the original review attributed to gripes 1, 2, 3, 5, and 10a
