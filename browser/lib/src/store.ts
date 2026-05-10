@@ -2085,23 +2085,10 @@ export class Store {
     if (subject === undefined) {
       throw Error('Cannot subscribe to undefined subject');
     }
-
     const normalized = this.normalizeSubject(subject);
-
-    let callbackArray = this.subscribers.get(normalized);
-
-    if (callbackArray === undefined) {
-      // Only subscribe once
-      this.subscribeWebSocket(normalized);
-      callbackArray = [];
-    }
-
-    callbackArray.push(callback);
-    this.subscribers.set(normalized, callbackArray);
-
-    return () => {
-      this.unsubscribe(normalized, callback);
-    };
+    return this.addLoroSubscriber(this.subscribers, normalized, callback, () =>
+      this.subscribeWebSocket(normalized),
+    );
   }
 
   public subscribeWebSocket(subject: string): void {
@@ -2261,17 +2248,13 @@ export class Store {
 
   /** Unregisters the callback (see `subscribe()`) */
   public unsubscribe(subject: string, callback: ResourceCallback): void {
-    if (subject === undefined) {
-      return;
-    }
-
+    if (subject === undefined) return;
     const normalized = this.normalizeSubject(subject);
-    let callbackArray = this.subscribers.get(normalized);
-
-    if (callbackArray) {
-      callbackArray = callbackArray.filter(cb => cb !== callback);
-      this.subscribers.set(normalized, callbackArray);
-    }
+    const subs = this.subscribers.get(normalized);
+    if (!subs) return;
+    const filtered = subs.filter(cb => cb !== callback);
+    if (filtered.length === 0) this.subscribers.delete(normalized);
+    else this.subscribers.set(normalized, filtered);
   }
 
   public on<T extends StoreEvents>(event: T, callback: StoreEventHandlers[T]) {
