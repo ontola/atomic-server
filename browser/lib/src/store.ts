@@ -2073,26 +2073,19 @@ export class Store {
     );
   }
 
+  /** v2 uses drive-level WS subscriptions, so per-resource subscribe
+   *  is a no-op kept for API stability — callers don't need to gate
+   *  themselves. The lookup confirms the origin's WS exists. */
   public subscribeWebSocket(subject: string): void {
     if (!this._serverConnected) return;
-
     const normalized = this.normalizeSubject(subject);
-
-    if (normalized === unknownSubject) {
-      return;
-    }
-
-    // Commits are immutable — no need to subscribe for push updates
     if (
+      normalized === unknownSubject ||
       normalized.includes('/commits/') ||
       normalized.startsWith('did:ad:commit:')
     ) {
       return;
     }
-
-    // v2 uses drive-level subscriptions only — per-resource SUB
-    // is a no-op. We still call `getWebSocketForSubject` for the
-    // side effect of routing to the right WS connection.
     try {
       this.getWebSocketForSubject(subject);
     } catch (e) {
@@ -2214,18 +2207,6 @@ export class Store {
   /** @internal */
   public __handleLoroEphemeralMessage(message: string): void {
     this.dispatchLoroMessage(this.loroEphemeralSubscribers, message);
-  }
-
-  public unSubscribeWebSocket(subject: string): void {
-    if (subject === unknownSubject) {
-      return;
-    }
-
-    try {
-      this.getDefaultWebSocket()?.unsubscribeResource(subject);
-    } catch (e) {
-      console.error(e);
-    }
   }
 
   /** Unregisters the callback (see `subscribe()`) */

@@ -149,15 +149,6 @@ export function encodeSub(driveSubject: string): Uint8Array {
   return buf;
 }
 
-export function encodeUnsub(driveSubject: string): Uint8Array {
-  const payload = encoder.encode(driveSubject);
-  const buf = new Uint8Array(1 + payload.length);
-  buf[0] = Tag.UNSUB;
-  buf.set(payload, 1);
-
-  return buf;
-}
-
 export function encodeSync(
   driveSubject: string,
   hash: Uint8Array,
