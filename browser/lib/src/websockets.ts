@@ -219,6 +219,10 @@ export class WSClient {
         }
 
         this.store.setServerConnected(false);
+        // Some environments fire error without an immediately-following
+        // close. Reject anyway — if close does fire later, the second
+        // rejectAllPending sees an empty Map and is a no-op.
+        this.rejectAllPending('WebSocket error before response arrived');
       });
       ws.addEventListener('close', () => {
         this.store.setServerConnected(false);
