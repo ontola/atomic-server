@@ -1584,15 +1584,18 @@ export class Store {
     if (found && !found.isReady()) {
       return new Promise((resolve, reject) => {
         const defaultTimeout = 10000;
+        let timer: ReturnType<typeof setTimeout> | undefined;
 
         const cb: ResourceCallback<C> = res => {
+          if (timer) clearTimeout(timer);
           this.unsubscribe(subjectRaw, cb);
           resolve(res);
         };
 
         this.subscribe(subjectRaw, cb);
 
-        setTimeout(() => {
+        timer = setTimeout(() => {
+          timer = undefined;
           this.unsubscribe(subjectRaw, cb);
           reject(
             new Error(
