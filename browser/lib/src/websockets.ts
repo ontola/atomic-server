@@ -705,6 +705,13 @@ export class WSClient {
       // sync from running.
       await this.store.syncDirtyResources().catch(() => undefined);
       dirtyClose();
+      // Refetch resources whose offline state needs a server check
+      // (errored-offline, stuck-loading). Runs AFTER drain so any
+      // queued commits land before we ask the server for the
+      // current state of those subjects — otherwise the refetch
+      // pulls the pre-drain snapshot and the UI flickers back to
+      // the offline-stale view.
+      this.store.refetchOfflineErroredResources();
       await this.startVVSync(drive);
     };
 
