@@ -1771,16 +1771,30 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     if (validate) {
-      const fullProp = await this.store.getProperty(prop);
-
+      let fullProp;
       try {
-        validateDatatype(value, fullProp.datatype);
+        fullProp = await this.store.getProperty(prop);
       } catch (e) {
-        if (e instanceof Error) {
-          e.message = `Error validating ${fullProp.shortname} with value ${value} for ${this.subject}: ${e.message}`;
+        // Property fetch failed (offline, server 5xx, property doesn't
+        // exist yet on a fresh server). Skipping validation here lets
+        // the edit land in Loro — the server will reject the resulting
+        // commit later if the datatype is genuinely wrong. Dropping the
+        // user's keystroke in this case is the worse outcome.
+        console.warn(
+          `[Resource.set] Skipping validation for ${prop} on ${this.subject} — property fetch failed:`,
+          e,
+        );
+        fullProp = undefined;
+      }
+      if (fullProp) {
+        try {
+          validateDatatype(value, fullProp.datatype);
+        } catch (e) {
+          if (e instanceof Error) {
+            e.message = `Error validating ${fullProp.shortname} with value ${value} for ${this.subject}: ${e.message}`;
+          }
+          throw e;
         }
-
-        throw e;
       }
     }
 
