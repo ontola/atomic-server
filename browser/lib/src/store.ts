@@ -707,10 +707,16 @@ export class Store {
    * Normalizes a subject: if it is a relative path, it becomes a full URL using the server's base URL.
    * DIDs and full HTTP URLs are returned as-is.
    */
+  /** Normalize then alias-resolve a user-supplied subject to its
+   *  canonical key (the one used in the resources Map). */
+  private resolveSubject(subject: string): string {
+    const normalized = this.normalizeSubject(subject);
+    return this.aliases.get(normalized) ?? normalized;
+  }
+
   /** Resolve a (possibly aliased) subject to its cached Resource. */
   private getResolved(subject: string): Resource | undefined {
-    const normalized = this.normalizeSubject(subject);
-    return this.resources.get(this.aliases.get(normalized) ?? normalized);
+    return this.resources.get(this.resolveSubject(subject));
   }
 
   /** Mark a resource as errored + not-loading + notify. No-op if
@@ -1604,9 +1610,7 @@ export class Store {
   public async getResource<C extends OptionalClass = UnknownClass>(
     subjectRaw: string,
   ): Promise<Resource<C>> {
-    const normalized = this.normalizeSubject(subjectRaw);
-    const resolved = this.aliases.get(normalized) ?? normalized;
-
+    const resolved = this.resolveSubject(subjectRaw);
     const found = this.resources.get(resolved);
 
     if (found && found.isReady()) {
@@ -1894,17 +1898,9 @@ export class Store {
    */
   public async preloadPropsAndClasses(): Promise<void> {
     // TODO: use some sort of CollectionBuilder for this.
-    const classesUrl = new URL('/classes', this.serverUrl);
-    const propertiesUrl = new URL('/properties', this.serverUrl);
-    classesUrl.searchParams.set('include_external', 'true');
-    propertiesUrl.searchParams.set('include_external', 'true');
-    classesUrl.searchParams.set('include_nested', 'true');
-    propertiesUrl.searchParams.set('include_nested', 'true');
-    classesUrl.searchParams.set('page_size', '999');
-    propertiesUrl.searchParams.set('page_size', '999');
     await Promise.all([
-      this.fetchResourceFromServer(classesUrl.toString()),
-      this.fetchResourceFromServer(propertiesUrl.toString()),
+      this.fetchResourceFromServer(this.buildPreloadUrl('/classes')),
+      this.fetchResourceFromServer(this.buildPreloadUrl('/properties')),
     ]);
   }
 
@@ -1920,12 +1916,20 @@ export class Store {
     });
   }
 
+  /** Build a `/classes` or `/properties` preload URL with the
+   *  `include_external + include_nested + page_size=999` triple
+   *  every preload uses. */
+  private buildPreloadUrl(path: string): string {
+    const url = new URL(path, this.serverUrl);
+    url.searchParams.set('include_external', 'true');
+    url.searchParams.set('include_nested', 'true');
+    url.searchParams.set('page_size', '999');
+    return url.toString();
+  }
+
   /** Removes resource from this store, does not delete it from the server, use `resource.destroy()` to delete it from the server. */
   public removeResource(subjectRaw: string, shouldNotify = true): void {
-    const normalized = this.normalizeSubject(subjectRaw);
-    const resolved = this.aliases.get(normalized) ?? normalized;
-
-    const resource = this.resources.get(resolved);
+    const resolved = this.resolveSubject(subjectRaw);
 
     // Tombstone in ClientDb (OPFS) so the resource doesn't reappear after a
     // page reload. The in-memory `resources` map is wiped on reload, but the
@@ -1935,10 +1939,8 @@ export class Store {
       void this.clientDb.removeResource(resolved).catch(() => undefined);
     }
 
-    if (resource) {
-      this.resources.delete(resolved);
+    if (this.resources.delete(resolved)) {
       this.localSearch.removeResource(resolved);
-
       if (shouldNotify) {
         this.eventManager.emit(StoreEvents.ResourceRemoved, subjectRaw);
       }
