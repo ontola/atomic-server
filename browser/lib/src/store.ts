@@ -1720,10 +1720,21 @@ export class Store {
     this.emitSyncStatus();
 
     if (connected) {
-      this.syncDirtyResources().catch(e => {
-        console.warn('[Sync] Failed to sync dirty resources on reconnect:', e);
-      });
-      this.refetchOfflineErroredResources();
+      // Order matters: drain the outbox FIRST so any locally-queued
+      // commits land on the server before we ask the server for the
+      // current state of those resources. Without that ordering, the
+      // refetch can pull a pre-drain snapshot and the UI flickers
+      // back to the offline-stale view for a beat before the drain
+      // completes and SYNC_PUSH catches it up — a real source of
+      // dagger-flake "doesn't appear within 15s" failures.
+      void (async () => {
+        try {
+          await this.syncDirtyResources();
+        } catch (e) {
+          console.warn('[Sync] Failed to sync dirty resources on reconnect:', e);
+        }
+        this.refetchOfflineErroredResources();
+      })();
     }
   }
 
@@ -1733,9 +1744,15 @@ export class Store {
    *   - errored with our `Offline:` marker (surfaced by the fallback path), or
    *   - still stuck in `loading=true` (fetch started but never completed,
    *     e.g. because the server went down mid-flight).
+   *
+   * Skips resources with pending commits — those are still in the outbox or
+   * mid-drain; pulling a fresh server copy while a push is in flight races
+   * the SYNC_PUSH echo and shows the user the pre-edit state until the echo
+   * lands.
    */
   private refetchOfflineErroredResources(): void {
     for (const [subject, resource] of this.resources.entries()) {
+      if (resource.hasPendingCommits) continue;
       const erroredOffline =
         resource.error && resource.error.message.startsWith('Offline:');
       const stuckLoading = resource.loading && !resource.new;
