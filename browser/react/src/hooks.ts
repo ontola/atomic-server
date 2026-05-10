@@ -582,33 +582,42 @@ export function useCanWrite(resource: Resource): boolean {
   // Using resource.subject instead of the full proxy to avoid re-running
   // on every property change.
   useEffect(() => {
-    if (agent && !resource.new) {
-      resource
-        .canWrite(agent.subject)
-        .then(([result]) => {
-          if (result) {
-            setCanWrite(true);
-          } else if (
-            resource.subject?.startsWith('did:ad:') &&
-            agent.subject?.startsWith('did:ad:')
-          ) {
-            // DID resources are self-sovereign — the owning agent always has write access.
-            // The normal canWrite check fails because DID drives don't have explicit write rights.
-            setCanWrite(true);
-          } else {
-            setCanWrite(false);
-          }
-        })
-        .catch(() => {
-          // Offline fallback: assume write access for DID resources
-          if (
-            resource.subject?.startsWith('did:ad:') &&
-            agent.subject?.startsWith('did:ad:')
-          ) {
-            setCanWrite(true);
-          }
-        });
-    }
+    if (!agent || resource.new) return;
+    // Cancellation guard: `canWrite` recurses across parents and can take
+    // a few hundred ms; without it, a fast subject swap leaves an
+    // in-flight check that writes a stale result after the effect re-ran
+    // for the new subject.
+    let cancelled = false;
+    resource
+      .canWrite(agent.subject)
+      .then(([result]) => {
+        if (cancelled) return;
+        if (result) {
+          setCanWrite(true);
+        } else if (
+          resource.subject?.startsWith('did:ad:') &&
+          agent.subject?.startsWith('did:ad:')
+        ) {
+          // DID resources are self-sovereign — the owning agent always has write access.
+          // The normal canWrite check fails because DID drives don't have explicit write rights.
+          setCanWrite(true);
+        } else {
+          setCanWrite(false);
+        }
+      })
+      .catch(() => {
+        if (cancelled) return;
+        // Offline fallback: assume write access for DID resources
+        if (
+          resource.subject?.startsWith('did:ad:') &&
+          agent.subject?.startsWith('did:ad:')
+        ) {
+          setCanWrite(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resource.subject, agent?.subject]);
 
