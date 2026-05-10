@@ -275,10 +275,8 @@ export class Store {
   private loroEphemeralSubscribers: Map<string, LoroEphemeralCallback[]> =
     new Map();
   private injectedFetch: Fetch;
-  /**
-   /** The base URL of an Atomic Server. This is where to send commits, create new
-    * instances, search, etc.
-    */
+  /** The base URL of an Atomic Server. Where commits, search, and
+   *  new-instance requests are sent. */
   private serverUrl: string;
   /** The current Drive subject URL */
   private drive: string;
@@ -297,7 +295,6 @@ export class Store {
 
   /** Optional WASM-backed client-side database running in a Web Worker. */
   private clientDb?: ClientDbWorker;
-  /**
   /** Client-side full-text search index (MiniSearch). */
   private localSearch = new LocalSearch();
   /**
@@ -1449,11 +1446,9 @@ export class Store {
         source: 'http-fetch',
       });
 
+      const primarySubject = this.normalizeSubject(resource.subject);
       createdResources.forEach(r => {
-        if (
-          this.normalizeSubject(r.subject) !==
-          this.normalizeSubject(resource.subject)
-        ) {
+        if (this.normalizeSubject(r.subject) !== primarySubject) {
           this.applyIncoming({
             subject: r.subject,
             resource: r,
@@ -1737,11 +1732,6 @@ export class Store {
     }
   }
 
-  /**
-   * If the store does not have an active internet connection, will return
-   * false. This may affect some functionality. For example, some checks will
-   * not be performed client side when offline.
-   */
   /**
    * Whether the Store has an active WebSocket connection to the server.
    * Use this to decide whether to attempt server operations or store locally.
