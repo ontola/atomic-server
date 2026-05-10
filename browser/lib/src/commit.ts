@@ -393,27 +393,6 @@ export function serializeDeterministically(
   return stringify(jsonadCommit);
 }
 
-export function parseCommitResource(resource: Resource): Commit {
-  const commit: Commit = {
-    id: resource.subject,
-    subject: resource.get(commits.properties.subject),
-    set: resource.get(commits.properties.set),
-    push: resource.get(commits.properties.push),
-    loroUpdate: parseLoroUpdateValue(
-      resource.get(commits.properties.loroUpdate),
-    ),
-    signer: resource.get(commits.properties.signer),
-    createdAt: resource.get(commits.properties.createdAt),
-    remove: resource.get(commits.properties.remove),
-    destroy: resource.get(commits.properties.destroy),
-    signature: resource.get(commits.properties.signature),
-    isGenesis: resource.get(commits.properties.isGenesis),
-    previousCommit: resource.get(commits.properties.previousCommit),
-  };
-
-  return commit;
-}
-
 export function parseCommitJSON(str: string): Commit {
   try {
     const jsonAdObj = JSON.parse(str);
