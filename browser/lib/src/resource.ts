@@ -1626,16 +1626,7 @@ export class Resource<C extends OptionalClass = any> {
 
       // If the server is not connected, save locally and queue for sync.
       if (!this.store.serverConnected) {
-        await this.applyPendingCommitsLocally();
-        this.commitError = undefined;
-        this.loading = false;
-        // Notify subscribers so the UI updates (e.g. sidebar sees new subResources)
-        this.store.applyIncoming({
-          subject: this.subject,
-          resource: this,
-          source: 'offline-replay',
-        });
-        this.store.notifyResourceSaved(this);
+        await this.saveOffline();
         reportDone();
 
         return undefined;
@@ -1651,15 +1642,7 @@ export class Resource<C extends OptionalClass = any> {
       // Network error (server went down mid-request) — apply locally and queue for sync.
       if (isNetworkError(e)) {
         this.store.setServerConnected(false);
-        await this.applyPendingCommitsLocally();
-        this.commitError = undefined;
-        this.loading = false;
-        this.store.applyIncoming({
-          subject: this.subject,
-          resource: this,
-          source: 'offline-replay',
-        });
-        this.store.notifyResourceSaved(this);
+        await this.saveOffline();
         reportDone();
 
         return undefined;
@@ -1711,6 +1694,20 @@ export class Resource<C extends OptionalClass = any> {
       reportDone();
       throw e;
     }
+  }
+
+  /** Save when the server is unreachable: persist locally,
+   *  clear error, notify. Used by both `save()` offline branches. */
+  private async saveOffline(): Promise<void> {
+    await this.applyPendingCommitsLocally();
+    this.commitError = undefined;
+    this.loading = false;
+    this.store.applyIncoming({
+      subject: this.subject,
+      resource: this,
+      source: 'offline-replay',
+    });
+    this.store.notifyResourceSaved(this);
   }
 
   /** Persist the current resource state offline: each pending
