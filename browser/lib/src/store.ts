@@ -2158,154 +2158,120 @@ export class Store {
     }
   }
 
-  /**
-   * Subscribe to Yjs Sync messages send over the websocket connection.
-   * These sync messages can be used for realtime collaboration and are not persisted on the server.
-   * For regular updates to normal values an ydocs use `store.subscribe()` instead.
-   * @param subject The subject of the resource that you want to subscribe to.
-   * @param property The property that contains the ydoc.
-   * @param callback The callback that will be called when the doc or awareness state changes.
-   * @returns A function that can be called to unsubscribe.
-   */
   // === Loro CRDT Sync ===
+
+  /** Add `callback` to `map[subject]` and return an unsubscriber.
+   *  `onFirstAdd` fires when the list goes 0 → 1 (per-subject WS
+   *  subscribe). `onLastRemove` fires when it goes 1 → 0 (WS
+   *  unsubscribe). Used by both Loro sync and Loro ephemeral
+   *  channels — same shape, different transport hooks. */
+  private addLoroSubscriber<T>(
+    map: Map<string, T[]>,
+    subject: string,
+    callback: T,
+    onFirstAdd?: () => void,
+    onLastRemove?: () => void,
+  ): () => void {
+    const existing = map.get(subject);
+    if (existing) {
+      existing.push(callback);
+    } else {
+      map.set(subject, [callback]);
+      onFirstAdd?.();
+    }
+    return () => {
+      const subs = map.get(subject);
+      if (!subs) return;
+      const filtered = subs.filter(c => c !== callback);
+      if (filtered.length === 0) {
+        map.delete(subject);
+        onLastRemove?.();
+      } else {
+        map.set(subject, filtered);
+      }
+    };
+  }
+
+  private dispatchLoroMessage<T extends (update: Uint8Array) => void>(
+    map: Map<string, T[]>,
+    message: string,
+  ): void {
+    const { subject, update } = JSON.parse(message) as {
+      subject: string;
+      update: string;
+    };
+    const subs = map.get(subject);
+    if (!subs) return;
+    const bytes = decodeB64(update);
+    subs.forEach(cb => cb(bytes));
+  }
 
   /**
    * Subscribe to Loro document sync updates for a resource.
-   * This is for real-time CRDT synchronization — persistent changes go through commits.
+   * Real-time CRDT synchronization — persistent changes go through commits.
    * @returns A function to unsubscribe.
    */
   public subscribeLoroSync(
     subject: string,
     callback: LoroSyncCallback,
   ): () => void {
-    const unsub = () => {
-      const subscribers = this.loroSyncSubscribers.get(subject);
-
-      if (subscribers) {
-        const afterUnsub = subscribers.filter(item => item !== callback);
-
-        if (afterUnsub.length === 0) {
-          this.loroSyncSubscribers.delete(subject);
-
-          if (this._serverConnected) {
-            this.getWebSocketForSubject(subject)?.unsubscribeLoroSync(subject);
-          }
-        } else {
-          this.loroSyncSubscribers.set(subject, afterUnsub);
+    return this.addLoroSubscriber(
+      this.loroSyncSubscribers,
+      subject,
+      callback,
+      () => {
+        if (this._serverConnected) {
+          this.getWebSocketForSubject(subject)?.subscribeLoroSync(subject);
         }
-      }
-    };
-
-    const subscribers = this.loroSyncSubscribers.get(subject);
-
-    if (subscribers) {
-      subscribers.push(callback);
-
-      return unsub;
-    }
-
-    this.loroSyncSubscribers.set(subject, [callback]);
-
-    if (this._serverConnected) {
-      this.getWebSocketForSubject(subject)?.subscribeLoroSync(subject);
-    }
-
-    return unsub;
+      },
+      () => {
+        if (this._serverConnected) {
+          this.getWebSocketForSubject(subject)?.unsubscribeLoroSync(subject);
+        }
+      },
+    );
   }
 
-  /**
-   * Broadcast a Loro document update to all peers via WebSocket.
-   * These are non-persistent real-time updates. For persistence, use commits with loroUpdate.
-   */
+  /** Broadcast a Loro document update to all peers via WebSocket.
+   *  Non-persistent real-time; persistence is via commits. */
   public broadcastLoroSyncUpdate(subject: string, update: Uint8Array): void {
     if (!this._serverConnected) return;
-
-    const ws = this.getWebSocketForSubject(subject);
-
-    const messageBody = {
-      subject,
-      update: encodeB64(update),
-    };
-
-    ws?.sendLoroSyncUpdate(JSON.stringify(messageBody));
+    this.getWebSocketForSubject(subject)?.sendLoroSyncUpdate(
+      JSON.stringify({ subject, update: encodeB64(update) }),
+    );
   }
 
-  /**
-   * Subscribe to Loro ephemeral updates (cursors, presence) for a resource.
-   * @returns A function to unsubscribe.
-   */
+  /** Subscribe to Loro ephemeral updates (cursors, presence). */
   public subscribeLoroEphemeral(
     subject: string,
     callback: LoroEphemeralCallback,
   ): () => void {
-    const unsub = () => {
-      const subscribers = this.loroEphemeralSubscribers.get(subject);
-
-      if (subscribers) {
-        const afterUnsub = subscribers.filter(item => item !== callback);
-
-        if (afterUnsub.length === 0) {
-          this.loroEphemeralSubscribers.delete(subject);
-        } else {
-          this.loroEphemeralSubscribers.set(subject, afterUnsub);
-        }
-      }
-    };
-
-    const subscribers = this.loroEphemeralSubscribers.get(subject);
-
-    if (subscribers) {
-      subscribers.push(callback);
-
-      return unsub;
-    }
-
-    this.loroEphemeralSubscribers.set(subject, [callback]);
-
-    return unsub;
+    return this.addLoroSubscriber(
+      this.loroEphemeralSubscribers,
+      subject,
+      callback,
+    );
   }
 
-  /**
-   * Broadcast a Loro ephemeral update (cursor positions, presence) to peers.
-   */
+  /** Broadcast a Loro ephemeral update (cursors, presence) to peers. */
   public broadcastLoroEphemeralUpdate(
     subject: string,
     update: Uint8Array,
   ): void {
     if (!this._serverConnected) return;
-
-    const ws = this.getWebSocketForSubject(subject);
-
-    const messageBody = {
-      subject,
-      update: encodeB64(update),
-    };
-
-    ws?.sendLoroEphemeralUpdate(JSON.stringify(messageBody));
+    this.getWebSocketForSubject(subject)?.sendLoroEphemeralUpdate(
+      JSON.stringify({ subject, update: encodeB64(update) }),
+    );
   }
 
   /** @internal */
   public __handleLoroSyncMessage(message: string): void {
-    const messageBody: { subject: string; update: string } =
-      JSON.parse(message);
-    const subscribers = this.loroSyncSubscribers.get(messageBody.subject);
-
-    if (subscribers) {
-      const update = decodeB64(messageBody.update);
-      subscribers.forEach(callback => callback(update));
-    }
+    this.dispatchLoroMessage(this.loroSyncSubscribers, message);
   }
 
   /** @internal */
   public __handleLoroEphemeralMessage(message: string): void {
-    const messageBody: { subject: string; update: string } =
-      JSON.parse(message);
-    const subscribers = this.loroEphemeralSubscribers.get(messageBody.subject);
-
-    if (subscribers) {
-      const update = decodeB64(messageBody.update);
-      subscribers.forEach(callback => callback(update));
-    }
+    this.dispatchLoroMessage(this.loroEphemeralSubscribers, message);
   }
 
   public unSubscribeWebSocket(subject: string): void {
