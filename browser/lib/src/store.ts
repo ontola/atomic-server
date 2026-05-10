@@ -1719,23 +1719,11 @@ export class Store {
     this.eventManager.emit(StoreEvents.ConnectionChanged, connected);
     this.emitSyncStatus();
 
-    if (connected) {
-      // Order matters: drain the outbox FIRST so any locally-queued
-      // commits land on the server before we ask the server for the
-      // current state of those resources. Without that ordering, the
-      // refetch can pull a pre-drain snapshot and the UI flickers
-      // back to the offline-stale view for a beat before the drain
-      // completes and SYNC_PUSH catches it up — a real source of
-      // dagger-flake "doesn't appear within 15s" failures.
-      void (async () => {
-        try {
-          await this.syncDirtyResources();
-        } catch (e) {
-          console.warn('[Sync] Failed to sync dirty resources on reconnect:', e);
-        }
-        this.refetchOfflineErroredResources();
-      })();
-    }
+    // Reconnect orchestration (auth → drain → VVSync → refetch) lives in
+    // `WSClient.handleOpen`. Firing `syncDirtyResources` and
+    // `refetchOfflineErroredResources` here would re-do the drain (the
+    // outbox guard absorbs it) and race the refetch with the WS handshake.
+    // Letting handleOpen own the sequence keeps one chain to reason about.
   }
 
   /**
@@ -1749,8 +1737,10 @@ export class Store {
    * mid-drain; pulling a fresh server copy while a push is in flight races
    * the SYNC_PUSH echo and shows the user the pre-edit state until the echo
    * lands.
+   *
+   * Called from `WSClient.handleOpen` AFTER the outbox drain completes.
    */
-  private refetchOfflineErroredResources(): void {
+  public refetchOfflineErroredResources(): void {
     for (const [subject, resource] of this.resources.entries()) {
       if (resource.hasPendingCommits) continue;
       const erroredOffline =
