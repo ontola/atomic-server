@@ -2026,12 +2026,6 @@ export interface Version {
   propvals: Map<string, JSONValue>;
 }
 
-/** @deprecated Use Version instead. Kept for backward compat during migration. */
-export interface LegacyVersion {
-  commit: Commit;
-  resource: Resource;
-}
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function proxyResource<C extends OptionalClass = any>(
   resource: Resource<C>,
