@@ -25,7 +25,6 @@ import {
   unknownSubject,
   JSONArray,
   OptionalClass,
-  proxyResource,
   type Core,
   ResourceEvents,
   core,
@@ -241,6 +240,9 @@ export function useValue(
   // check that depended on `proxyResource` swapping per notify.
   const stable = resource.stable;
   const subject = resource.subject;
+  // Subscribe to per-property `LocalChange` (fires from `set()`) AND
+  // store-level notify (covers remote WS UPDATEs that don't fire
+  // LocalChange). Either signal re-runs `resource.get(propertyURL)`.
   const subscribe = useCallback(
     (cb: () => void) => {
       const u1 = store.subscribe(subject, () => cb());
@@ -256,18 +258,6 @@ export function useValue(
     [store, subject, stable, propertyURL],
   );
   const val = useSyncExternalStore(subscribe, () => resource.get(propertyURL));
-
-  const set = useCallback((_v: JSONValue | undefined) => {
-    // `set` was the local optimistic update for the legacy
-    // `useState`-based shape. Now that the value is derived from
-    // `resource.get()` via `useSyncExternalStore`, optimistic local
-    // updates happen via the actual `resource.set()` call inside
-    // `validateAndSet` — which fires `LocalChange` and triggers a
-    // re-render through the subscription. This stub stays for the
-    // remove-value branch in `validateAndSet` to keep the same
-    // call shape.
-    void _v;
-  }, []);
 
   const saveResource = useCallback(() => {
     if (!commit) {
@@ -294,28 +284,18 @@ export function useValue(
   const validateAndSet = useCallback(
     async (newVal: JSONValue): Promise<void> => {
       if (newVal === undefined) {
-        // remove the value
         resource.__internalObject.remove(propertyURL);
-        set(undefined);
         saveResource();
 
         return;
       }
-
-      set(newVal);
-
-      // Validates and sets a property / value combination. Will invoke the
-      // callback if the value is not valid.
       try {
         await resource.__internalObject.set(propertyURL, newVal, validate);
         saveResource();
         handleValidationError?.(undefined);
       } catch (e) {
-        if (handleValidationError) {
-          handleValidationError(e);
-        } else {
-          store.notifyError(e);
-        }
+        if (handleValidationError) handleValidationError(e);
+        else store.notifyError(e);
       }
     },
 
