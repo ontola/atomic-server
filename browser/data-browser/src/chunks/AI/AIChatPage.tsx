@@ -16,8 +16,10 @@ import { EditableTitle } from '@components/EditableTitle';
 import { DEFAULT_AICHAT_NAME } from '@components/AI/aiContstants';
 import { useGenerativeData } from './useGenerativeData';
 import {
-  uiMessageToResource,
+  addMessageToChatResource,
   messageResourcesToDisplayMessages,
+  removeFollowingMessagesFromChatResource,
+  removeMessageFromChatResource,
 } from './chatConversionUtils';
 import { TagBar } from '@components/Tag/TagBar';
 import { RealAIChat } from './RealAIChat';
@@ -30,13 +32,7 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
   const [loading, setLoading] = useState(true);
   const [messages, setMessages] = useState<AtomicUIMessage[]>([]);
   const [contextItems, setContextItems] = useState<AIMessageContext[]>([]);
-  const [messageSubjects, setMessageSubjects] = useArray(
-    resource,
-    ai.properties.messages,
-    {
-      commit: true,
-    },
-  );
+  const [messageSubjects] = useArray(resource, ai.properties.messages);
   const [messageToResourceMap, setMessageToResourceMap] = useState(
     new Map<AtomicUIMessage, Resource>(),
   );
@@ -60,20 +56,17 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
     }
 
     try {
-      const messageResource = await uiMessageToResource(
+      const messageResource = await addMessageToChatResource(
         message,
         resource,
         store,
       );
 
-      resource.push(ai.properties.messages, [messageResource.subject]);
-
-      await resource.save();
-
       setMessageToResourceMap(prev => {
-        prev.set(message, messageResource);
+        const next = new Map(prev);
+        next.set(message, messageResource);
 
-        return prev;
+        return next;
       });
     } catch (error) {
       console.error(error);
@@ -81,66 +74,48 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
     }
   };
 
-  const handleDeleteMessage = (message: AtomicUIMessage) => {
+  const handleDeleteMessage = async (message: AtomicUIMessage) => {
     const messageResource = messageToResourceMap.get(message);
 
     if (messageResource) {
-      setMessageSubjects(
-        messageSubjects.filter(s => s !== messageResource.subject),
-      );
-      messageResource.destroy();
+      try {
+        await removeMessageFromChatResource(messageResource, resource);
+      } catch (error) {
+        console.error('Error removing message:', error);
+        toast.error('Failed to remove message resource');
+      }
     }
 
     setMessages(prev => prev.filter(m => m !== message));
 
     setMessageToResourceMap(prev => {
-      prev.delete(message);
+      const next = new Map(prev);
+      next.delete(message);
 
-      return prev;
+      return next;
     });
   };
 
   const removeFollowingMessages = async (message: AtomicUIMessage) => {
-    const nextMessages = messages.slice(
-      messages.findIndex(x => x.id === message.id) + 1,
-    );
-
-    // We need to destroy the resources server side as well as in the internal state.
-    // We also need to update the `messages` prop in the chat resource.
-    const destroySubjects: string[] = [];
-
-    for (const m of nextMessages) {
-      const r = messageToResourceMap.get(m);
-
-      if (r) {
-        destroySubjects.push(r.subject);
-
-        try {
-          await r.destroy();
-        } catch (error) {
-          console.error('Error removing message:', error);
-        }
-      } else {
-        throw new Error(`Resource not found for message: ${m.id}`);
-      }
-    }
-
     try {
-      // Set chat resource on server with new message array
-      await resource.set(
-        ai.properties.messages,
-        resource.props.messages?.filter(x => !destroySubjects.includes(x)),
+      const newMessages = await removeFollowingMessagesFromChatResource(
+        message,
+        messages,
+        messageToResourceMap,
+        resource,
       );
-      await resource.save();
-      // Set internal message state
-      setMessages(prev => {
-        const newMessages = prev.slice(
-          0,
-          prev.findIndex(x => x.id === message.id) + 1,
-        );
 
-        return newMessages;
+      setMessageToResourceMap(prev => {
+        const next = new Map(prev);
+
+        for (const m of messages.slice(newMessages.length)) {
+          next.delete(m);
+        }
+
+        return next;
       });
+
+      setMessages(newMessages);
     } catch (error) {
       console.error('Error removing messages:', error);
     }

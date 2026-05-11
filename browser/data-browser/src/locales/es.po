@@ -2383,16 +2383,8 @@ msgid "Install"
 msgstr "Instalar"
 
 #: src/chunks/AI/AISidebar.tsx
-msgid "Reset"
-msgstr "Reiniciar"
-
-#: src/chunks/AI/AISidebar.tsx
 msgid "Atomic Assistant"
 msgstr "Asistente Atómico"
-
-#: src/chunks/AI/AISidebar.tsx
-msgid "Save Chat"
-msgstr "Guardar Chat"
 
 #: src/chunks/AI/AISidebar.tsx
 msgid "Close AI Sidebar"
@@ -2418,10 +2410,6 @@ msgstr "Detener la generación"
 #: src/chunks/AI/RealAIChat.tsx
 msgid "Remove file"
 msgstr "Eliminar archivo"
-
-#: src/chunks/AI/RealAIChat.tsx
-msgid "Toggle web search"
-msgstr "Activar/desactivar búsqueda web"
 
 #: src/chunks/AI/RealAIChat.tsx
 msgid "Attach file"
@@ -3109,7 +3097,6 @@ msgstr "Leyendo esquema"
 msgid "Tokens used: {0} input,{1} {2} output"
 msgstr "Tokens utilizados: {0} entrada,{1} {2} salida"
 
-#: src/chunks/AI/AISidebar.tsx
 #: src/components/SideBar/AIPanel.tsx
 msgid "Untitled Chat"
 msgstr "Chat sin título"
@@ -3527,3 +3514,23 @@ msgstr "Buscando en línea"
 #: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
 msgid "Reading <0/>"
 msgstr "Lectura <0/>"
+
+#: src/chunks/AI/AISidebar.tsx
+msgid "Failed to save AI chat message"
+msgstr "Error al guardar el mensaje del chat con IA"
+
+#: src/chunks/AI/AISidebar.tsx
+msgid "Failed to remove AI chat message"
+msgstr "Error al eliminar el mensaje del chat con IA"
+
+#: src/chunks/AI/AISidebar.tsx
+msgid "Failed to regenerate AI chat message"
+msgstr "Error al regenerar el mensaje del chat con IA"
+
+#: src/chunks/AI/AISidebar.tsx
+msgid "New Chat"
+msgstr "Nuevo chat"
+
+#: src/chunks/AI/AIChatPage.tsx
+msgid "Failed to remove message resource"
+msgstr "Error al eliminar el recurso del mensaje"

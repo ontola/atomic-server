@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Column, Row } from '@components/Row';
 import { useAtomicMCPTools } from './useAtomicTools';
 import { skillTools, getSkillsSystemPromptPart } from './skills/skill';
@@ -7,11 +7,8 @@ import { type FileUIPart } from 'ai';
 import { useTools } from './useTools';
 import { styled } from 'styled-components';
 import { GeneratingIndicator } from './GeneratingIndicator';
-import {
-  IconButton,
-  IconButtonVariant,
-} from '@components/IconButton/IconButton';
-import { FaXmark, FaPaperclip, FaFile, FaGlobe } from 'react-icons/fa6';
+import { IconButton } from '@components/IconButton/IconButton';
+import { FaXmark, FaPaperclip, FaFile } from 'react-icons/fa6';
 import { ChatMessagesContainer } from './ChatMessagesContainer';
 import { useStore, type Resource } from '@tomic/react';
 import { AIProvider } from '@components/AI/aiContstants';
@@ -96,7 +93,6 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
 
   // useChat does not update it's options so we need to use a ref to make it use the latest value.
   const showFollowUpPromptsRef = useRef(showFollowUpPrompts);
-  showFollowUpPromptsRef.current = showFollowUpPrompts;
 
   const { getInitialAgent, setLastUsedAgentForChat, setLastUsedSidebarAgent } =
     useAIAgentConfig();
@@ -134,12 +130,8 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     AIMessageContext[]
   >([]);
   const { generateFollowUpQuestions } = useGenerativeData();
-  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [agentConfigOpen, setAgentConfigOpen] = useState(false);
   const [followUpQuestions, setFollowUpQuestions] = useState<string[]>([]);
-
-  const webSearchSupported =
-    selectedAgent.model.provider === AIProvider.OpenRouter;
 
   const { tools: atomicTools } = useAtomicMCPTools({
     onResourceEdited: (originalResource: Resource) => {
@@ -160,7 +152,6 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
       ...(selectedAgent.skillsEnabled ? skillTools : {}),
       ...getToolsForAgent(selectedAgent),
     },
-    webSearchEnabled,
     resolveOutputModalities: getOutputModalities,
     resolveParameterSupport: checkORModelSupport,
     addContextToMessages,
@@ -333,6 +324,10 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   const isEmptyChat = messages.length === 0;
   const totalTokensUsed = usage.input + usage.output;
 
+  useEffect(() => {
+    showFollowUpPromptsRef.current = showFollowUpPrompts;
+  }, [showFollowUpPrompts]);
+
   return (
     <ChatWindow fullView={fullView} empty={messages.length === 0}>
       {children}
@@ -453,18 +448,6 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                     <SubtleButton onClick={() => setAgentConfigOpen(true)}>
                       {selectedAgent.name}
                     </SubtleButton>
-                    {webSearchSupported && (
-                      <IconButton
-                        title='Toggle web search'
-                        onClick={() => setWebSearchEnabled(v => !v)}
-                        color={webSearchEnabled ? 'main' : 'textLight'}
-                        variant={
-                          webSearchEnabled ? IconButtonVariant.Fill : undefined
-                        }
-                      >
-                        <FaGlobe />
-                      </IconButton>
-                    )}
                     {checkModelSupportsImageInput(selectedAgent.model) && (
                       <>
                         <input

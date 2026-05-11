@@ -103,6 +103,90 @@ export const uiMessageToResource = async (
   return messageResource;
 };
 
+export const addMessageToChatResource = async (
+  message: AtomicUIMessage,
+  chatResource: Resource<Ai.AiChat>,
+  store: Store,
+  { saveChat = true }: { saveChat?: boolean } = {},
+): Promise<Resource<Ai.AiMessage>> => {
+  const messageResource = await uiMessageToResource(
+    message,
+    chatResource,
+    store,
+  );
+
+  chatResource.push(ai.properties.messages, [messageResource.subject]);
+
+  if (saveChat) {
+    await chatResource.save();
+  }
+
+  return messageResource;
+};
+
+export const removeMessageFromChatResource = async (
+  messageResource: Resource,
+  chatResource: Resource<Ai.AiChat>,
+  { saveChat = true }: { saveChat?: boolean } = {},
+): Promise<void> => {
+  await chatResource.set(
+    ai.properties.messages,
+    chatResource.props.messages?.filter(
+      subject => subject !== messageResource.subject,
+    ),
+  );
+
+  if (saveChat) {
+    await chatResource.save();
+  }
+
+  await messageResource.destroy();
+};
+
+export const removeFollowingMessagesFromChatResource = async (
+  message: AtomicUIMessage,
+  messages: AtomicUIMessage[],
+  messageToResourceMap: Map<AtomicUIMessage, Resource>,
+  chatResource: Resource<Ai.AiChat>,
+  { saveChat = true }: { saveChat?: boolean } = {},
+): Promise<AtomicUIMessage[]> => {
+  const messageIndex = messages.findIndex(x => x.id === message.id);
+
+  if (messageIndex === -1) {
+    throw new Error(`Message not found: ${message.id}`);
+  }
+
+  const nextMessages = messages.slice(messageIndex + 1);
+  const destroySubjects: string[] = [];
+
+  for (const m of nextMessages) {
+    const r = messageToResourceMap.get(m);
+
+    if (r) {
+      destroySubjects.push(r.subject);
+
+      try {
+        await r.destroy();
+      } catch (error) {
+        console.error('Error removing message:', error);
+      }
+    } else {
+      throw new Error(`Resource not found for message: ${m.id}`);
+    }
+  }
+
+  await chatResource.set(
+    ai.properties.messages,
+    chatResource.props.messages?.filter(x => !destroySubjects.includes(x)),
+  );
+
+  if (saveChat) {
+    await chatResource.save();
+  }
+
+  return messages.slice(0, messageIndex + 1);
+};
+
 const contextToResource = async (
   context: AIMessageContext,
   message: Resource<Ai.AiMessage>,

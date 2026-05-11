@@ -24,7 +24,6 @@ export interface ClientOnlyTransportOptions {
   ollamaURL?: string;
   selectedAgent: AIAgent;
   tools: ToolSet;
-  webSearchEnabled: boolean;
   addContextToMessages: (
     messages: AtomicUIMessage[],
   ) => Promise<AtomicUIMessage[]>;
@@ -120,9 +119,7 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
         },
       });
 
-      return openRouter(
-        agent.model.id + (this.options.webSearchEnabled ? ':online' : ''),
-      );
+      return openRouter(agent.model.id);
     }
 
     if (agent.model.provider === AIProvider.Ollama && this.options.ollamaURL) {
@@ -234,6 +231,7 @@ export const useClientOnlyTransport = (options: ClientOnlyTransportOptions) => {
   );
   const prevOptionsRef = useRef(options);
 
+  // The ClientOnlyTransport instance needs to be stable between renders but we still need to update it's options when they change. I don't know how to do this without refs so we just have to accept these warnings.
   if (options !== prevOptionsRef.current) {
     transportRef.current.setOptions(options);
     prevOptionsRef.current = options;

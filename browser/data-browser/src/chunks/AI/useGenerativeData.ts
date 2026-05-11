@@ -5,12 +5,12 @@ import z from 'zod';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import { useGetModel } from './useModel';
 
-const titleSystemPrompt = `You a specialized AI system that generates titles for AI conversations.
-You will given the first part of a conversion between the user and an AI assistatn.
+const titleSystemPrompt = `You are a specialized AI system that generates titles for AI conversations.
+You will be given the first part of a conversation between the user and an AI assistant.
 Think of a short title that fits the given conversation. This title will be shown in the UI as the title of the conversation.
 
-ALWAYS USE THE SAME LANGUAGE AS THE USER!
-ONLY RESPOND WITH JUST THE TITLE, NOTHING ELSE! NO FORMATTING OR EXTRA TEXT!
+ALWAYS write the title in the same natural language as the user's own message text.
+Do NOT use the language of quoted text, existing titles, URLs, resource names, or language names mentioned by the user.
 `;
 
 const generateFollowUpQuestionsSystemPrompt = (
@@ -54,21 +54,31 @@ export const useGenerativeData = () => {
       return undefined;
     }
 
-    const filteredConversation = removeFilesAndImages(
+    const filteredConversation = simplifyConversation(
       conversation.slice(0, 2).filter(m => m.role !== 'system'),
     );
     const convoString = JSON.stringify(filteredConversation);
 
-    const { text } = await generateText({
+    const { output } = await generateText({
       model,
       system: titleSystemPrompt,
-      prompt: `\`\`\`json
+      output: Output.object({
+        schema: z.object({
+          title: z.string(),
+        }),
+      }),
+      prompt: `Generate a title for the following conversation:
+\`\`\`json
 ${convoString}
 \`\`\`
 `,
     });
 
-    const cleaned = text.trim();
+    if (!output.title) {
+      return undefined;
+    }
+
+    const cleaned = output.title.trim();
 
     if (cleaned) {
       return cleaned;
@@ -84,7 +94,7 @@ ${convoString}
       return [];
     }
 
-    const filteredConversation = removeFilesAndImages(
+    const filteredConversation = simplifyConversation(
       conversation.slice(-2).filter(m => m.role !== 'system'),
     );
     const convoString = JSON.stringify(filteredConversation);
@@ -105,13 +115,19 @@ ${convoString}
   return { generateTitleFromConversation, generateFollowUpQuestions };
 };
 
-function removeFilesAndImages(
-  conversation: AtomicUIMessage[],
-): AtomicUIMessage[] {
+function simplifyConversation(conversation: AtomicUIMessage[]): {
+  role: 'user' | 'assistant' | 'system';
+  parts: { type: 'text'; text: string }[];
+}[] {
   return conversation.map(message => {
     return {
-      ...message,
-      parts: message.parts.filter(part => part.type === 'text'),
+      role: message.role,
+      parts: message.parts
+        .filter(part => part.type === 'text')
+        .map(part => ({
+          type: part.type,
+          text: part.text.replace(/```\n|```/g, ''),
+        })),
     };
   });
 }
