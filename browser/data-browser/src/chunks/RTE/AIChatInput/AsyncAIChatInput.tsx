@@ -219,6 +219,23 @@ const AsyncAIChatInput: React.FC<
       autofocus: true,
       contentType: 'markdown',
       editable: !disabled,
+      editorProps: {
+        handlePaste: (_view, event) => {
+          if (!onFileAdded) {
+            return false;
+          }
+
+          const files = extractImageFilesFromClipboard(event.clipboardData);
+
+          if (files.length === 0) {
+            return false;
+          }
+
+          onFileAdded(files);
+
+          return true;
+        },
+      },
     },
     [serversWithResources, searchResourcesOfServer, disabled],
   );
@@ -303,4 +320,52 @@ function digForMentions(data: JSONContent): MentionItem[] {
   }
 
   return [];
+}
+
+const clipboardImageExtensionByMimeType: Record<string, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/gif': 'gif',
+  'image/webp': 'webp',
+  'image/avif': 'avif',
+  'image/bmp': 'bmp',
+  'image/svg+xml': 'svg',
+  'image/tiff': 'tiff',
+};
+
+function extractImageFilesFromClipboard(
+  clipboardData: DataTransfer | null,
+): File[] {
+  if (!clipboardData) {
+    return [];
+  }
+
+  return Array.from(clipboardData.items).reduce<File[]>((files, item) => {
+    if (item.kind !== 'file' || !item.type.startsWith('image/')) {
+      return files;
+    }
+
+    const file = item.getAsFile();
+
+    if (!file) {
+      return files;
+    }
+
+    files.push(file.name ? file : nameClipboardImageFile(file, files.length));
+
+    return files;
+  }, []);
+}
+
+function nameClipboardImageFile(file: File, index: number): File {
+  const extension =
+    clipboardImageExtensionByMimeType[file.type] ??
+    file.type.replace(/^image\//, '').replace(/\+xml$/, '') ??
+    'png';
+  const suffix = index === 0 ? '' : `-${index + 1}`;
+
+  return new File([file], `pasted-image${suffix}.${extension}`, {
+    type: file.type,
+    lastModified: file.lastModified,
+  });
 }
