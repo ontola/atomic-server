@@ -42,26 +42,29 @@ const storedIsValid =
     storedServerUrl.startsWith('iroh:'));
 const serverUrl = storedIsValid ? storedServerUrl! : defaultServerUrl;
 
-// Loro CRDT must be initialized BEFORE the Store opens its WebSocket. The
-// Store's constructor (`new Store(...)`) wires up `setServerUrl` →
-// `openWebSocket`, and the resulting WS can complete `AUTH` and start
-// receiving `SYNC_PUSH` frames within a few hundred milliseconds — long
-// before `await enableLoro()` would resolve if it ran later. When
-// `SYNC_PUSH` lands without Loro loaded, `Resource.importLoroUpdate`
-// buffers the bytes in `_loroSnapshotBytes` instead of materialising the
-// `_loroDoc`. The `resource.loading` getter then keeps reporting `true`
-// (it considers buffered-without-doc as still loading), which gates the
-// resource out of `clientDb.putResource(...)` in `addResource`. The WASM
-// index never sees those resources, so on initial page load every
-// `useChildren` / `useCollection` query for a synced parent returns 0
-// hits in the local DB and falls through to a `/query` GET against the
-// server — even though the data was just pushed.
+// Loro CRDT loads in the background — first paint doesn't wait. The
+// JSON-AD-initial meta tag emitted by atomic-server flattens the linked
+// resource's propvals into `_cache` via `parseMetaTags()` below, so
+// reads like `resource.get(prop)` return data immediately even before
+// Loro's WASM finishes downloading. SYNC_PUSH frames that land during
+// the Loro-init window buffer their loroUpdate bytes in
+// `_loroSnapshotBytes`; the `Resource.loading` getter treats that as
+// "loaded" iff `_cache` has propvals (the common post-meta-tag state),
+// so the UI doesn't gate on Loro for the initial render.
 //
-// Run the IndexedDB agent read and the Loro module import in parallel.
-// The agent fetch and the Loro WASM/JS download don't depend on each
-// other, and on a cold load with a populated cache they can each take
-// ~50–100 ms — sequencing them paid for both in series.
-const [initalAgent] = await Promise.all([getAgentFromIDB(), enableLoro()]);
+// Once Loro resolves: subsequent reads on a resource with buffered
+// bytes call `getLoroDoc()` which imports them lazily. Writes
+// (`Resource.set`) also go through `getLoroDoc()` and force the
+// materialise-then-mutate path. No explicit "Loro is ready, now
+// rehydrate everything" sweep is needed.
+// Fire-and-forget — first paint doesn't wait. Catch so a failed import
+// (offline + no cached module) doesn't show up as an unhandledrejection
+// in the console; LoroLoader.isLoaded() stays false and code paths
+// that need Loro (editor, history scrub) gracefully no-op.
+enableLoro().catch(e =>
+  console.warn('[Loro] init failed, edit/history features disabled:', e),
+);
+const initalAgent = await getAgentFromIDB();
 
 // Initialize the store
 const store = new Store({
