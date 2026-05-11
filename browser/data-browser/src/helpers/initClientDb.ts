@@ -54,27 +54,70 @@ export function initClientDb(store: Store): void {
     return JSON.stringify(obj);
   };
 
+  /** Compute a cheap fingerprint of the in-memory bootstrap state.
+   *  Includes the resource count and a deterministic checksum of the
+   *  sorted subject list. A change to any bundled `lib/defaults/*.json`
+   *  changes the count or the subjects, so the fingerprint flips and
+   *  the seed re-runs on the next page load. Subsequent loads with
+   *  unchanged bootstrap data skip the seed entirely. */
+  const computeBootstrapFingerprint = (): string => {
+    const subjects: string[] = [];
+    for (const r of store.resources.values()) {
+      if (r.loading || r.new || r.hasPendingCommits) continue;
+      subjects.push(r.subject);
+    }
+    subjects.sort();
+    // FNV-1a 32-bit hash of the sorted subject list. Cheap, deterministic,
+    // good enough to detect added/removed bootstrap resources. We don't
+    // need crypto-grade — the worst-case collision means we miss a
+    // reseed on a single deployment, which the next deployment fixes.
+    let hash = 0x811c9dc5;
+    for (const s of subjects) {
+      for (let i = 0; i < s.length; i++) {
+        hash ^= s.charCodeAt(i);
+        hash = Math.imul(hash, 0x01000193);
+      }
+      hash ^= 0x2c;
+      hash = Math.imul(hash, 0x01000193);
+    }
+    return `${subjects.length}:${(hash >>> 0).toString(16)}`;
+  };
+
+  const FINGERPRINT_KEY = 'atomic.client-db.bootstrap-fingerprint';
+  const currentFingerprint = computeBootstrapFingerprint();
+  const storedFingerprint =
+    typeof localStorage !== 'undefined'
+      ? localStorage.getItem(FINGERPRINT_KEY)
+      : null;
+  const bootstrapChanged = storedFingerprint !== currentFingerprint;
+
   // Start init — this creates the Worker immediately (sync) and
   // sends the WASM init message (async). Messages sent to the worker
   // before WASM loads will queue and process after init.
   // After WASM is ready, seed the DB from the Store's in-memory map
   // so tables/queries work even without OPFS persistence.
   const initPromise = clientDb.init(store.getServerUrl()).then(async () => {
-    // Skip seeding entirely if the WASM DB already has data from a prior
-    // session (OPFS persists). The bootstrap resources are stable — they
-    // don't change between sessions — so a non-empty index means the
-    // seed has already happened and we can save ~200 puts × wasm-bindgen
-    // crossings (~1s of cold-load time on a slow runner).
-    let alreadyPopulated = false;
+    // Skip the seed entirely when:
+    //   - The WASM DB is already populated from OPFS (prior session), AND
+    //   - The bundled bootstrap data hasn't changed since the last seed
+    //     (fingerprint matches).
+    //
+    // First load: localStorage has no fingerprint → seeds.
+    // Subsequent loads with same code: fingerprints match + OPFS has
+    //   data → skips. Saves ~200 wasm-bindgen crossings (~1-2s on slow
+    //   runners) per cold load.
+    // Version bumps that add/remove bootstrap resources: fingerprint
+    //   mismatch → reseeds (one-time cost for that version).
+    let opfsHasData = false;
     try {
       const existing = await clientDb.allSubjects();
-      alreadyPopulated = existing.length > 0;
+      opfsHasData = existing.length > 0;
     } catch {
       // allSubjects failed — proceed with seed as fallback.
     }
-    if (alreadyPopulated) {
+    if (opfsHasData && !bootstrapChanged) {
       console.info(
-        '[ClientDb] WASM database already populated from OPFS, skipping seed',
+        `[ClientDb] bootstrap fingerprint unchanged (${currentFingerprint}) and OPFS populated, skipping seed`,
       );
       return;
     }
@@ -116,8 +159,20 @@ export function initClientDb(store: Store): void {
       .filter((s): s is string => s !== undefined);
     await clientDb.putResources(otherJsonAds).catch(() => {});
 
+    // Persist the fingerprint AFTER the seed lands so a crashed seed
+    // forces a retry on the next load (the stored value would still
+    // be the old/empty fingerprint, mismatching the new bundle).
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem(FINGERPRINT_KEY, currentFingerprint);
+      } catch {
+        // Quota or privacy mode — non-fatal, just means we'll reseed
+        // next load.
+      }
+    }
+
     console.info(
-      `[ClientDb] WASM database ready, seeded ${propertyJsonAds.length} properties + ${otherJsonAds.length} resources`,
+      `[ClientDb] seeded ${propertyJsonAds.length} properties + ${otherJsonAds.length} resources (fingerprint ${currentFingerprint}${bootstrapChanged && storedFingerprint ? `, was ${storedFingerprint}` : ''})`,
     );
   });
 
