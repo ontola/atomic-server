@@ -26,7 +26,13 @@ use crate::{
 };
 
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
-const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
+// How long a connection can go without receiving anything from the
+// client before we declare it dead. Generous on purpose — TCP RST
+// already catches truly broken connections, and the renderer can
+// legitimately stall PONG delivery for several seconds when the JS
+// thread is saturated (parallel playwright workers, heavy WASM init).
+// A tighter budget here disconnects healthy clients under load.
+const CLIENT_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// Upgrade an HTTP request to a WebSocket connection.
 #[tracing::instrument(skip(appstate, stream))]

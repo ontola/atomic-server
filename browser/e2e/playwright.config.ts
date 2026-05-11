@@ -98,15 +98,11 @@ const config: PlaywrightTestConfig = {
   //   },
   // ],
   fullyParallel: true,
-  // The whole suite hits a single shared atomic-server instance: agents,
-  // drives, commits, search index, plugins all live on one process. With
-  // 2 workers the suite ran ~2× faster locally but a handful of tests
-  // (chatroom, sidebar-subresource, ontology, plugin, sync) flaked on
-  // auth races, search-index lag, and WS contention — same tests CI
-  // already had pinned as `// FLAKY`. Default to 1 worker so local
-  // runs match CI's reliability; override with `--workers=2` when
-  // you accept the flake rate for speed.
-  workers: 1,
+  // 2 workers for speed. CI uses 1 worker + retries=2; locally we
+  // prefer the speed and depend on the tests themselves to be
+  // robust against the contention storms the shared atomic-server
+  // produces.
+  workers: process.env.CI ? 1 : 2,
 };
 
 export default config;

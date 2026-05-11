@@ -186,10 +186,18 @@ export class WSClient {
    *  hang for REQUEST_TIMEOUT (10 s) when the socket dies mid-flight
    *  — the next reconnect will fetch fresh state anyway. */
   private rejectAllPending(reason: string): void {
+    const err = new AtomicError(reason, ErrorType.Server);
+    // Fail any in-flight `waitForTag` calls (e.g. an AUTH_OK that
+    // will never arrive because the socket died mid-handshake).
+    if (this.tagRejectors.size > 0) {
+      const rejectors = [...this.tagRejectors];
+      this.tagRejectors.clear();
+      this.tagListeners.clear();
+      for (const r of rejectors) r(err);
+    }
     if (this.pendingGets.size === 0) return;
     const entries = [...this.pendingGets.values()];
     this.pendingGets.clear();
-    const err = new AtomicError(reason, ErrorType.Server);
     for (const p of entries) {
       clearTimeout(p.timer);
       p.reject(err);
@@ -332,8 +340,9 @@ export class WSClient {
 
         this.sendBinary(encodeAuth(JSON.stringify(json)));
 
-        // Wait for AUTH_OK
-        await this.waitForTag(Tag.AUTH_OK, REQUEST_TIMEOUT);
+        // Wait for AUTH_OK — rejected by the close handler if the socket
+        // dies mid-handshake, otherwise waits as long as needed.
+        await this.waitForTag(Tag.AUTH_OK);
 
         this.authenticatedWith = agent.subject;
         recordServerVersionFromWsProtocol(
@@ -865,16 +874,26 @@ export class WSClient {
   }
 
   private tagListeners = new Map<number, () => void>();
+  private tagRejectors = new Set<(reason: Error) => void>();
 
-  private waitForTag(tag: number, timeout: number): Promise<void> {
+  /** Wait for a specific WS tag (e.g. AUTH_OK) to arrive. Rejects only
+   *  when the underlying WebSocket closes or errors — no fixed timeout
+   *  budget. A stressed atomic-server (8 workers, slow CI container)
+   *  can legitimately take several seconds to respond to AUTH; we
+   *  want to wait that out, not artificially time out. If the socket
+   *  is genuinely dead, the close handler fires and rejects all
+   *  in-flight `waitForTag` calls — same model as `rejectAllPending`
+   *  for GET round-trips. */
+  private waitForTag(tag: number): Promise<void> {
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
+      const rejector = (err: Error) => {
         this.tagListeners.delete(tag);
-        reject(new Error(`Timeout waiting for tag 0x${tag.toString(16)}`));
-      }, timeout);
-
+        this.tagRejectors.delete(rejector);
+        reject(err);
+      };
+      this.tagRejectors.add(rejector);
       this.tagListeners.set(tag, () => {
-        clearTimeout(timer);
+        this.tagRejectors.delete(rejector);
         resolve();
       });
     });
