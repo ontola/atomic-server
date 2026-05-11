@@ -544,6 +544,14 @@ test.describe('data-browser', async () => {
     await expect(page.getByRole('heading', { name })).toBeVisible();
   });
 
+  // FLAKY (local, observed in suite re-runs): when the dev-drive is reused
+  // across tests in the same suite (e.g. a previous `dialog` run left
+  // `test-prop` and `test-shortname` resources), `getByRole('button', {
+  // name: 'test-prop', exact: true })` resolves to 2 elements and trips
+  // playwright's strict-mode check. Looks pre-existing — same pattern
+  // the `// FLAKY` block above this file already documents for the
+  // children-collection refresh race. Investigation: either add a per-
+  // test resource-name suffix or have `before()` clean up matching names.
   test('dialog', async ({ page }) => {
     await newResource('https://atomicdata.dev/classes/Class', page);
 
