@@ -456,16 +456,16 @@ export class Collection {
 
     // Race OPFS and server. Both `fetchPageFromLocalDb` and
     // `fetchPageFromServer` mutate `this.pages` on success — the second
-    // one to land just overwrites with the same data, which is
-    // harmless. The win is that OPFS check + server query no longer
-    // run sequentially: if OPFS hits, we return as soon as it does;
-    // if it misses, the server query is already in flight.
+    // one to land just overwrites with the same data, which is harmless.
     //
-    // For the OPFS-miss case this saves the OPFS round-trip latency
-    // (~50–200 ms in dagger) on every cold-loaded collection.
+    // On cold loads OPFS is slow: `fetchPageFromLocalDb` awaits
+    // `clientDb.waitForReady()`, which gates on the bootstrap seed
+    // (~hundreds of ms of wasm-bindgen crossings). The server `/query`
+    // is usually fast (~50 ms). Racing them — and accepting whichever
+    // resolves first as authoritative — lets the sidebar render off the
+    // server result while OPFS is still initializing.
     let serverPromise: Promise<void> | undefined;
     if (this.store.serverConnected) {
-      // Fire-and-forget; we await later only if OPFS misses.
       serverPromise = this.fetchPageFromServer(page).catch(() => undefined);
     } else if (!hasClientDb) {
       // No OPFS *and* offline — give the WS a brief window to come up,
@@ -477,20 +477,34 @@ export class Collection {
       }
     }
 
-    // Try OPFS. If the drive sync has already completed, an empty
-    // result here is authoritative (the empty-fast path inside
-    // `fetchPageFromLocalDb` returns 'ok' for empty + sync-completed).
-    if (hasClientDb && (await this.fetchPageFromLocalDb(page)) === 'ok') {
-      // OPFS won. The in-flight server fetch will land later and
-      // overwrite with identical data — non-blocking, non-fatal.
+    const opfsPromise = hasClientDb
+      ? this.fetchPageFromLocalDb(page)
+      : undefined;
+
+    // Both in flight: race them. Two outcomes satisfy the call:
+    //   - server resolved (already wrote the page)
+    //   - OPFS returned 'ok' (populated, or empty post-drive-sync —
+    //     authoritative either way)
+    // OPFS returning 'no-db' means it can't answer (ClientDb absent,
+    // not-ready, or pre-sync empty); wait on the server instead.
+    if (serverPromise && opfsPromise) {
+      const winner = await Promise.race([
+        serverPromise.then(() => 'server-done' as const),
+        opfsPromise,
+      ]);
+      if (winner === 'server-done' || winner === 'ok') return;
+      await serverPromise;
       return;
     }
 
-    // OPFS missed (or absent). Wait for the server result we kicked
-    // off above. If we never started one (offline + no clientDb),
-    // there's nothing to wait for — leave the page empty.
     if (serverPromise) {
       await serverPromise;
+      return;
+    }
+
+    // No server (offline) — fall back to whatever OPFS can give us.
+    if (opfsPromise) {
+      await opfsPromise;
     }
   }
 
@@ -557,14 +571,11 @@ export class Collection {
       includeResources: true,
     });
 
-    // Build a synthetic page resource even when the result is empty —
-    // `pages.has(page) === true` then signals to `applyResourceChange`
-    // that this collection's first page is loaded, and to consumers that
-    // `totalMembers === 0` is a real, server-authoritative answer rather
-    // than a "still fetching" placeholder.
+    // Worker returned no result (query error / DB not available). Don't
+    // overwrite the page — `fetchPage` races us against `/query`, and a
+    // late `setEmptyPage` here can clobber a server result that already
+    // landed. Just signal "no-db" so callers fall back.
     if (!result) {
-      this.setEmptyPage(page);
-
       return 'no-db';
     }
 
@@ -575,8 +586,12 @@ export class Collection {
       // completed we trust the empty: a freshly-created table or folder
       // just has no children. Pre-sync, fall back to `/query`.
       if (this.store.hasCompletedDriveSync()) {
-        this.setEmptyPage(page);
-
+        // `fetchPage` races us against `/query`. If the server already
+        // populated the page with non-empty data, leave it — server is
+        // authoritative for the instant of the query.
+        if (!this.pages.has(page)) {
+          this.setEmptyPage(page);
+        }
         return 'ok';
       }
       return 'no-db';
