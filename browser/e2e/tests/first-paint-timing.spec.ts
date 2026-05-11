@@ -20,6 +20,9 @@ import { applyCpuThrottle, envCpuThrottle } from './perf-attach';
  * download completes.
  */
 test('first paint timing — meta-tag fast path', async ({ page }) => {
+  // Generous overall budget — devDrive + cold cold-load + probes can
+  // run >30s under 10x CPU throttle on contended runners.
+  test.setTimeout(120_000);
   const throttle = envCpuThrottle();
   if (throttle) await applyCpuThrottle(page, throttle);
 
@@ -43,9 +46,23 @@ test('first paint timing — meta-tag fast path', async ({ page }) => {
   await currentDriveTitle(page).waitFor({ state: 'visible', timeout: 15000 });
   const titleVisibleMs = Date.now() - t0;
 
+  // When does the first sidebar child link render? This is the real
+  // "is the sidebar useful" moment — it gates on Collection.fetchPage,
+  // which used to wait for OPFS seed. With the race-server-vs-OPFS fix,
+  // it should land well before the WASM seed completes.
+  let firstSidebarChildMs = -1;
+  try {
+    await page.waitForSelector('[data-test="resource-sidebar"]', {
+      timeout: 2000,
+    });
+    firstSidebarChildMs = Date.now() - t0;
+  } catch {
+    // Drive may have no children — leave as -1.
+  }
+
   const loroLoadedAt = await page.evaluate(async () => {
     const start = performance.now();
-    while (performance.now() - start < 15000) {
+    while (performance.now() - start < 5000) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const loaded = (globalThis as any).LoroLoader?.isLoaded?.();
       if (loaded) return performance.now();
@@ -60,6 +77,10 @@ test('first paint timing — meta-tag fast path', async ({ page }) => {
   console.log(`  goto returned:     ${gotoMs} ms`);
   // eslint-disable-next-line no-console
   console.log(`  title visible:     ${titleVisibleMs} ms`);
+  // eslint-disable-next-line no-console
+  console.log(
+    `  1st sidebar child: ${firstSidebarChildMs < 0 ? 'n/a (no children)' : firstSidebarChildMs + ' ms'}`,
+  );
   // eslint-disable-next-line no-console
   console.log(
     `  Loro ready @page:  ${loroLoadedAt < 0 ? 'never' : Math.round(loroLoadedAt) + ' ms'}`,
