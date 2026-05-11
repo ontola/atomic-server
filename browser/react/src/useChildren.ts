@@ -1,8 +1,6 @@
 import { commits, core } from '@tomic/lib';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useCollection } from './useCollection.js';
-import { useStore } from './hooks.js';
-import { StoreEvents } from '@tomic/lib';
 
 /**
  * Returns the subjects of direct children of a resource, sorted by createdAt.
@@ -16,11 +14,10 @@ export function useChildren(parentSubject: string | undefined): {
   subjects: string[];
   loading: boolean;
 } {
-  const store = useStore();
   const [subjects, setSubjects] = useState<string[]>([]);
   const disabled = !parentSubject;
 
-  const { collection, ready, invalidateCollection } = useCollection(
+  const { collection, ready } = useCollection(
     {
       property: core.properties.parent,
       // `Collection.fetchPage` short-circuits when value is undefined, so
@@ -90,25 +87,12 @@ export function useChildren(parentSubject: string | undefined): {
     };
   }, [collection, disabled]);
 
-  // Refresh when a resource is created under this parent
-  const invalidateRef = useRef(invalidateCollection);
-  invalidateRef.current = invalidateCollection;
-
-  const parentRef = useRef(parentSubject);
-  parentRef.current = parentSubject;
-
-  useEffect(() => {
-    const unsub = store.on(StoreEvents.ResourceManuallyCreated, resource => {
-      if (
-        parentRef.current &&
-        resource.get(core.properties.parent) === parentRef.current
-      ) {
-        invalidateRef.current();
-      }
-    });
-
-    return unsub;
-  }, [store]);
+  // `useCollection` listens for `ResourceManuallyCreated` and routes
+  // it through `applyResourceChange` for an optimistic add — no full
+  // refetch needed. The previous duplicate listener here called
+  // `invalidateCollection` instead, which races: invalidate clears
+  // the optimistic page right back out while the underlying `/query`
+  // refresh is still in flight.
 
   return {
     subjects: disabled ? [] : subjects,
