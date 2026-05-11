@@ -454,16 +454,18 @@ export class Collection {
 
     const hasClientDb = !!this.store.getClientDb();
 
-    // Race OPFS and server. Both `fetchPageFromLocalDb` and
-    // `fetchPageFromServer` mutate `this.pages` on success — the second
-    // one to land just overwrites with the same data, which is harmless.
+    // Kick off server `/query` immediately (non-blocking). It typically
+    // resolves faster than OPFS on cold loads (OPFS waits for
+    // `clientDb.waitForReady()` → bootstrap seed). We let it write the
+    // page in the background and only await it if OPFS doesn't answer.
     //
-    // On cold loads OPFS is slow: `fetchPageFromLocalDb` awaits
-    // `clientDb.waitForReady()`, which gates on the bootstrap seed
-    // (~hundreds of ms of wasm-bindgen crossings). The server `/query`
-    // is usually fast (~50 ms). Racing them — and accepting whichever
-    // resolves first as authoritative — lets the sidebar render off the
-    // server result while OPFS is still initializing.
+    // We DON'T race server vs OPFS here — a previous race attempt let
+    // OPFS resolve first with one snapshot and then the server land
+    // later with a different snapshot, leaving React's `useChildren`
+    // stuck on the first read (it subscribes via `useSyncExternalStore`
+    // to a collection whose internal pages mutated without firing a
+    // notify). Awaiting OPFS first preserves the single
+    // `setPage`-followed-by-rerender shape that React consumers expect.
     let serverPromise: Promise<void> | undefined;
     if (this.store.serverConnected) {
       serverPromise = this.fetchPageFromServer(page).catch(() => undefined);
@@ -477,34 +479,20 @@ export class Collection {
       }
     }
 
-    const opfsPromise = hasClientDb
-      ? this.fetchPageFromLocalDb(page)
-      : undefined;
-
-    // Both in flight: race them. Two outcomes satisfy the call:
-    //   - server resolved (already wrote the page)
-    //   - OPFS returned 'ok' (populated, or empty post-drive-sync —
-    //     authoritative either way)
-    // OPFS returning 'no-db' means it can't answer (ClientDb absent,
-    // not-ready, or pre-sync empty); wait on the server instead.
-    if (serverPromise && opfsPromise) {
-      const winner = await Promise.race([
-        serverPromise.then(() => 'server-done' as const),
-        opfsPromise,
-      ]);
-      if (winner === 'server-done' || winner === 'ok') return;
-      await serverPromise;
+    // Try OPFS. If the drive sync has already completed, an empty
+    // result here is authoritative (the empty-fast path inside
+    // `fetchPageFromLocalDb` returns 'ok' for empty + sync-completed).
+    if (hasClientDb && (await this.fetchPageFromLocalDb(page)) === 'ok') {
+      // OPFS won. The in-flight server fetch will land later and
+      // overwrite with identical data — non-blocking, non-fatal.
       return;
     }
 
+    // OPFS missed (or absent). Wait for the server result we kicked
+    // off above. If we never started one (offline + no clientDb),
+    // there's nothing to wait for — leave the page empty.
     if (serverPromise) {
       await serverPromise;
-      return;
-    }
-
-    // No server (offline) — fall back to whatever OPFS can give us.
-    if (opfsPromise) {
-      await opfsPromise;
     }
   }
 
