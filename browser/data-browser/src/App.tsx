@@ -42,40 +42,23 @@ const storedIsValid =
     storedServerUrl.startsWith('iroh:'));
 const serverUrl = storedIsValid ? storedServerUrl! : defaultServerUrl;
 
-// Loro CRDT loads in the background — first paint doesn't wait. The
-// JSON-AD-initial meta tag emitted by atomic-server flattens the linked
-// resource's propvals into `_cache` via `parseMetaTags()` below, so
-// reads like `resource.get(prop)` return data immediately even before
-// Loro's WASM finishes downloading. SYNC_PUSH frames that land during
-// the Loro-init window buffer their loroUpdate bytes in
-// `_loroSnapshotBytes`; the `Resource.loading` getter treats that as
-// "loaded" iff `_cache` has propvals (the common post-meta-tag state),
-// so the UI doesn't gate on Loro for the initial render.
+// Fire-and-forget — first paint doesn't wait. Catch so a failed import
+// (offline + no cached module) doesn't show up as an unhandledrejection
+// in the console; LoroLoader.isLoaded() stays false and code paths
+// that need Loro (editor, history scrub) gracefully no-op.
 //
-// Once Loro resolves: subsequent reads on a resource with buffered
-// bytes call `getLoroDoc()` which imports them lazily. Writes
-// (`Resource.set`) also go through `getLoroDoc()` and force the
-// materialise-then-mutate path. No explicit "Loro is ready, now
-// rehydrate everything" sweep is needed.
-// Defer the Loro WASM download until AFTER first paint. Module-eval
-// fire-and-forget would still kick off the ~920 KB request immediately,
-// competing with the much smaller FCP-critical chunks on the network.
-// `requestIdleCallback` (with a setTimeout fallback) lets the browser
-// finish layouts/paints first.
-//
-// Read paths don't need Loro — `_cache` is populated synchronously from
-// the JSON-AD-initial meta tag. Writes that hit `signChanges` before
-// Loro loads will trigger an on-demand `enableLoro()` there.
-const scheduleLoro = () => {
-  enableLoro().catch(e =>
-    console.warn('[Loro] init failed, edit/history features disabled:', e),
-  );
-};
-if (typeof requestIdleCallback === 'function') {
-  requestIdleCallback(scheduleLoro, { timeout: 2000 });
-} else {
-  setTimeout(scheduleLoro, 0);
-}
+// We tried scheduling this via requestIdleCallback to keep the WASM
+// download off the FCP-critical network bus, but that breaks the
+// title-save round-trip in tests: useValue's setter calls
+// `resource.set()` (which falls back to `_cache` when Loro isn't
+// loaded) and then debounces a `save()`. Between those two, the input
+// can unmount before signChanges runs, and the debounced save races
+// the in-flight Loro import in ways we don't fully understand yet.
+// Until the save flow is hardened (or the debounce moved into the
+// resource itself), keep Loro eager.
+enableLoro().catch(e =>
+  console.warn('[Loro] init failed, edit/history features disabled:', e),
+);
 
 const initalAgent = await getAgentFromIDB();
 
