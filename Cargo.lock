@@ -768,6 +768,7 @@ dependencies = [
  "atomic_lib",
  "base64 0.21.7",
  "blake3",
+ "brotli 7.0.0",
  "chrono",
  "clap",
  "colored",

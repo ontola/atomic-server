@@ -17,6 +17,7 @@ path = "src/bin.rs"
 test = false
 
 [build-dependencies]
+brotli = "7"
 dircpy = "0.3.15"
 static-files = "0.2"
 walkdir = "2"

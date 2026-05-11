@@ -1,6 +1,7 @@
 use std::{
     fs,
-    path::PathBuf,
+    io::Write,
+    path::{Path, PathBuf},
     time::{Duration, Instant, SystemTime},
 };
 
@@ -75,6 +76,21 @@ fn main() -> std::io::Result<()> {
             start_copy.elapsed().as_secs_f32()
         );
     }
+
+    // Pre-compress big, compressible assets with brotli quality 11. The
+    // runtime `middleware::Compress` only uses brotli at its default
+    // quality (~3), which leaves significant size on the table for big
+    // assets (the Loro WASM goes 941 KB → 691 KB with q11). Files are
+    // re-used across builds — `precompress_assets` skips when the `.br`
+    // sibling is newer than the source.
+    let start_precompress = Instant::now();
+    if let Err(e) = precompress_assets(&dirs.js_dist_tmp) {
+        p!("Pre-compression failed (continuing without): {}", e);
+    }
+    p!(
+        "Pre-compressing assets took: {:.3}s",
+        start_precompress.elapsed().as_secs_f32()
+    );
 
     // Makes the static files available for compilation
     let start_bundle = Instant::now();
@@ -188,6 +204,86 @@ fn build_js(dirs: &Dirs) {
         let stderr = String::from_utf8_lossy(&out.stderr);
         panic!("js build failed:\nStdout:\n{}\nStderr:\n{}", stdout, stderr);
     }
+}
+
+/// Pre-compress eligible files (`.wasm`, `.js`, `.css`, `.html`, `.svg`,
+/// `.json`) with brotli quality 11 and write `<path>.br` siblings. Skips
+/// files below `MIN_SIZE` (compression overhead dominates) and reuses
+/// existing `.br` outputs when they're newer than the source — so
+/// incremental builds don't re-pay the (slow) q11 cost.
+fn precompress_assets(root: &Path) -> std::io::Result<()> {
+    const COMPRESSIBLE: &[&str] = &["wasm", "js", "css", "html", "svg", "json"];
+    const MIN_SIZE: u64 = 4096;
+    const QUALITY: u32 = 11;
+    const WINDOW: u32 = 22;
+
+    let mut compressed = 0usize;
+    let mut total_in = 0u64;
+    let mut total_out = 0u64;
+
+    for entry in walkdir::WalkDir::new(root).into_iter().filter_map(|e| e.ok()) {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let ext = path
+            .extension()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        if !COMPRESSIBLE.iter().any(|e| *e == ext) {
+            continue;
+        }
+        let meta = match entry.metadata() {
+            Ok(m) => m,
+            Err(_) => continue,
+        };
+        if meta.len() < MIN_SIZE {
+            continue;
+        }
+
+        let mut br_path = path.to_path_buf();
+        let new_ext = format!("{}.br", ext);
+        br_path.set_extension(&new_ext);
+
+        // Skip if .br is up-to-date relative to the source.
+        if let Ok(br_meta) = fs::metadata(&br_path) {
+            if let (Ok(src_t), Ok(br_t)) = (meta.modified(), br_meta.modified()) {
+                if br_t >= src_t {
+                    continue;
+                }
+            }
+        }
+
+        let data = fs::read(path)?;
+        let mut out: Vec<u8> = Vec::with_capacity(data.len() / 3);
+        {
+            let mut w = brotli::CompressorWriter::new(&mut out, 4096, QUALITY, WINDOW);
+            w.write_all(&data)?;
+            w.flush()?;
+        }
+        // Only emit if compression actually paid off — for tiny files
+        // brotli sometimes inflates.
+        if (out.len() as u64) < meta.len() {
+            fs::write(&br_path, &out)?;
+            compressed += 1;
+            total_in += meta.len();
+            total_out += out.len() as u64;
+        }
+    }
+
+    if compressed > 0 {
+        let saved = total_in.saturating_sub(total_out);
+        p!(
+            "Pre-compressed {} files: {} KB → {} KB (saved {} KB, {:.1}% ratio)",
+            compressed,
+            total_in / 1024,
+            total_out / 1024,
+            saved / 1024,
+            (total_out as f64 / total_in.max(1) as f64) * 100.0,
+        );
+    }
+    Ok(())
 }
 
 /// Finds the modification time of the newest file in the dist directory
