@@ -1521,11 +1521,27 @@ export class Store {
   ): Resource<C> {
     // Guard before normalization: 'unknown-subject' would otherwise be
     // resolved to `{serverUrl}/unknown-subject` and trigger a real fetch.
+    //
+    // The instance MUST be cached in `this.resources` — `useResource`
+    // wraps `getResourceSnapshot`, whose identity check is
+    // `snap.resource !== r.__internalObject`. Allocating a fresh
+    // Resource on every call flips that identity each tick, the
+    // snapshot tuple turns over, `useSyncExternalStore` reports a new
+    // value, React re-renders, we loop. That's the "Too many
+    // re-renders / getSnapshot should be cached" infinite render hang
+    // any caller that passes `undefined` (e.g. `useResource(drive)`
+    // before the drive setting hydrates) used to trigger.
     if (subjectRaw === unknownSubject || subjectRaw === null) {
-      const newR = new Resource<C>(unknownSubject, opts.newResource);
-      newR.setStore(this);
+      let resource = this.resources.get(unknownSubject) as
+        | Resource<C>
+        | undefined;
+      if (!resource) {
+        resource = new Resource<C>(unknownSubject, opts.newResource);
+        resource.setStore(this);
+        this.resources.set(unknownSubject, resource);
+      }
 
-      return newR;
+      return resource;
     }
 
     const normalized = this.normalizeSubject(subjectRaw);
