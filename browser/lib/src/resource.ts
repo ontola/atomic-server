@@ -163,22 +163,23 @@ export class Resource<C extends OptionalClass = any> {
    */
   public get loading(): boolean {
     if (this._loading) return true;
-    // A resource with buffered Loro snapshot bytes but no doc isn't actually
-    // readable yet — `get(prop)` returns undefined until Loro WASM hydrates
-    // the buffer. Treat that as still loading so consumers (e.g. useTitle)
-    // show a loading indicator instead of falling back to a truncated DID.
-    // This window is short (typically <1s on cold reloads, when SYNC_PUSH
-    // beats the Loro WASM init) but visible. The flag flips back to false
-    // automatically — `getLoroDoc()` lazily imports the buffer the first
-    // time anything reads through, after which `_loroSnapshotBytes` is
-    // moved into the doc and this getter falls through to `_loading`.
+    // A resource with buffered Loro snapshot bytes but no doc CAN be readable
+    // if the cache has propvals already (typical post-`parseMetaTags`: the
+    // JSON-AD-initial meta tag flattens propvals into `_cache` and the
+    // `loroUpdate` field — if present — lands in `_loroSnapshotBytes`).
+    // Only treat the buffered-without-doc state as "loading" when there's
+    // genuinely nothing to render — empty cache means `get(prop)` would
+    // return undefined for every prop until Loro hydrates the buffer.
     if (!this._loroDoc) {
       const buf = this._loroSnapshotBytes;
-      if (
+      const hasBuffered =
         (buf instanceof Uint8Array && buf.length > 0) ||
-        (typeof buf === 'string' && buf.length > 0)
-      ) {
-        return true;
+        (typeof buf === 'string' && buf.length > 0);
+      if (hasBuffered) {
+        // Object.create(null)-style _cache → use Object.keys to count
+        // own props. Hot path; cheap.
+        const hasCache = Object.keys(this._cache).length > 0;
+        if (!hasCache) return true;
       }
     }
     return false;
