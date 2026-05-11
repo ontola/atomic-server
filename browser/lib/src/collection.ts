@@ -301,16 +301,6 @@ export class Collection {
     if (!matches && !currentlyMember) return 'unchanged';
 
     if (matches && !currentlyMember) {
-      // No page loaded yet — either constructor's initial `fetchPage(0)`
-      // hasn't completed, or `refresh()`'s active loop just called
-      // `clearPages()` and is mid-fetch. In the second case, mark a
-      // follow-up so the loop iterates and includes this late arrival.
-      if (!this.pages.has(0)) {
-        if (this._refreshInFlight) this._refreshPending = true;
-
-        return 'unchanged';
-      }
-
       // Local-only drafts (`newResource()` created a genesis but no commit
       // has been signed-and-applied yet) shouldn't count as members.
       // `resource.new === true` until `signChanges` runs. Each
@@ -320,6 +310,27 @@ export class Collection {
       // rows. Once the resource is signed (and eventually pushed), it
       // fires another `ResourceUpdated` with `new=false` and lands here.
       if (resource.new) return 'unchanged';
+
+      // No page loaded yet — either the constructor's initial
+      // `fetchPage(0)` hasn't completed, or `refresh()`'s active loop
+      // just called `clearPages()` and is mid-fetch. We still want the
+      // resource to land in the UI immediately: bootstrap a page 0
+      // with just this resource, so consumers (`useChildren`,
+      // `useChatMessages`, etc.) re-render against the new collection
+      // state. Also mark `_refreshPending` if a refresh is in flight
+      // so the loop iterates and produces server-authoritative
+      // ordering/count once the underlying fetch returns.
+      if (!this.pages.has(0)) {
+        if (this._refreshInFlight) this._refreshPending = true;
+        const page = new Resource<Collections.Collection>(
+          this.buildSubject(0),
+        );
+        this.writePageMembers(page, [subject], 1);
+        this.setPage(0, page);
+        this._totalMembers = 1;
+
+        return 'member-added';
+      }
 
       // Append to the last loaded page directly. This handles both
       // unsorted collections and the `createdAt`-sorted default (where
