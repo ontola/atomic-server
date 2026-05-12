@@ -294,6 +294,13 @@ export class Store {
   /** List of resources that have parents that are not saved to the server, when a parent is saved it should also save its children */
   private batchedResources: Map<string, Set<string>> = new Map();
 
+  /** Subject → in-flight `fetchResourceFromServer` promise. Two parallel
+   *  `useResource(X)` calls that both miss the cache share one network
+   *  round-trip instead of each firing their own. Cleared in `finally`
+   *  so subsequent calls (e.g. a forced refresh after a known change)
+   *  can re-fetch. Keyed by normalized subject. */
+  private _inFlightFetches: Map<string, Promise<Resource>> = new Map();
+
   /** Current Agent, used for signing commits. Is required for posting things. */
   private agent?: Agent;
   /** Mapped from origin to websocket */
@@ -1275,32 +1282,17 @@ export class Store {
           );
         }
       } else if (hasLocalData) {
-        // Online with local data — show local first, but background-verify
-        // with the server. If the resource was deleted while we were away
-        // (cascade delete, destroy commit while disconnected), the server
-        // will return 404 and we evict from local cache. WS COMMIT updates
-        // handle the live case; this handles the cold-load case.
-        void this.fetchResourceFromServer(subject, opts).catch(e => {
-          // Cover both HTTP 404 (ErrorType.NotFound) and WS error frames
-          // (ErrorType.Server with a "not found" message). When the
-          // resource is gone server-side, mark the local Resource with the
-          // server's error so subscribed UI re-renders into the
-          // "Resource not found" state instead of keeping stale data.
-          const message: string = e?.message ?? '';
-
-          if (
-            e instanceof AtomicError &&
-            (e.type === ErrorType.NotFound || /not found/i.test(message))
-          ) {
-            this.failResource(
-              subject,
-              new AtomicError(
-                `Resource ${subject} not found on server`,
-                ErrorType.NotFound,
-              ),
-            );
-          }
-        });
+        // Online with local data: trust OPFS + live WS updates. SUB
+        // on each drive produces SYNC_DIFF / SYNC_PUSH frames that
+        // tell us about deltas, and DESTROY frames evict gone
+        // subjects from the local cache. A background-verify GET per
+        // cached resource used to live here as a belt-and-braces
+        // catch for "deleted-while-disconnected" — but it fires for
+        // every `useResource(...)` on every reload, producing the
+        // user-observed N×{GET sub} storm on a populated drive. The
+        // narrow case it covered (a destroy commit that landed while
+        // we were disconnected AND not covered by SUB on reconnect)
+        // is rare and recovers on the next live update.
       } else {
         // Online, no local data — server is our only source.
         await this.fetchResourceFromServer(subject, opts);
@@ -1401,6 +1393,56 @@ export class Store {
       /** HTTP Body for POSTing */
       body?: ArrayBuffer | string;
     } = {},
+  ): Promise<Resource<C>> {
+    const normalizedSubject = this.normalizeSubject(subject);
+
+    // In-flight dedup. SideBarDrive and DrivePage both call
+    // `useResource(drive)` on the same render → two parallel
+    // `fetchResourceFromServer(drive)`. Without sharing, both fire
+    // their own WS `GET` (visible as `did:ad:<drive> (×2)` in the
+    // network log). Reuse the in-flight promise; the second caller
+    // gets the same Resource handle the first eventually resolves to.
+    //
+    // Skip dedup for POST (different semantics — each is a write).
+    // Skip dedup when `setLoading` is requested (caller explicitly
+    // wants a fresh roundtrip + loading state). Skip for temporary
+    // subjects (`_new:`/`_local:`) which never go to the network.
+    const canDedup =
+      opts.method !== 'POST' &&
+      !opts.setLoading &&
+      !normalizedSubject.startsWith('_new:') &&
+      !normalizedSubject.startsWith('_local:');
+    if (canDedup) {
+      const inflight = this._inFlightFetches.get(normalizedSubject);
+      if (inflight) return inflight as Promise<Resource<C>>;
+    }
+    const work = this._fetchResourceFromServerImpl<C>(subject, opts);
+    if (canDedup) {
+      const tracked = work.finally(() => {
+        // Only clear if we're still the owner of the slot — a
+        // re-entrant fetch that took the slot after us shouldn't be
+        // wiped by our completion.
+        if (this._inFlightFetches.get(normalizedSubject) === tracked) {
+          this._inFlightFetches.delete(normalizedSubject);
+        }
+      });
+      this._inFlightFetches.set(normalizedSubject, tracked);
+      return tracked as Promise<Resource<C>>;
+    }
+    return work;
+  }
+
+  private async _fetchResourceFromServerImpl<
+    C extends OptionalClass = UnknownClass,
+  >(
+    subject: string,
+    opts: {
+      fromProxy?: boolean;
+      setLoading?: boolean;
+      noWebSocket?: boolean;
+      method?: 'GET' | 'POST';
+      body?: ArrayBuffer | string;
+    },
   ): Promise<Resource<C>> {
     const normalizedSubject = this.normalizeSubject(subject);
     const isTemporarySubject =
