@@ -110,11 +110,24 @@ test.describe('sync', () => {
   test('edits made offline persist across reload', async ({ page }) => {
     test.slow();
 
-    // 1. Create a document while online
+    // 1. Create a document while online.
+    //
+    // CRITICAL: wait for the URL to flip off the drive page before
+    // touching `editableTitle`. The drive page ALSO has an editable
+    // title; if we proceed before the click→navigate window closes,
+    // we end up renaming the DRIVE and the rest of the test
+    // (offline edit, reload, expect) operates on a different
+    // resource than intended. Confirmed via debug logging:
+    // `main[about] === store.getDrive()` immediately after the
+    // click, so `editableTitle` resolved to the drive's input.
+    const driveUrl = page.url();
     await page
       .getByTestId('sidebar')
       .getByRole('button', { name: 'New Document' })
       .click();
+    await page.waitForURL(url => url.toString() !== driveUrl, {
+      timeout: 10000,
+    });
 
     await expect(editableTitle(page)).toBeVisible({ timeout: 10000 });
     await editableTitle(page).click();
@@ -181,11 +194,24 @@ test.describe('sync', () => {
   }) => {
     test.slow();
 
-    // 1. Create a document while online
+    // 1. Create a document while online.
+    //
+    // CRITICAL: wait for the URL to flip to the new doc's subject before
+    // touching `editableTitle`. The drive page also has an editable
+    // title; if the click→navigate window is wide enough (server under
+    // load) we'd be targeting the drive's title input and end up
+    // renaming the DRIVE to "Will Edit Offline" instead of the doc.
+    // Later assertions (`sidebar.getByText('Will Edit Offline')`) would
+    // still pass because the drive's title also shows in the sidebar,
+    // masking the bug until the second context fails to find the doc.
+    const driveUrl = page.url();
     await page
       .getByTestId('sidebar')
       .getByRole('button', { name: 'New Document' })
       .click();
+    await page.waitForURL(url => url.toString() !== driveUrl, {
+      timeout: 10000,
+    });
 
     await expect(editableTitle(page)).toBeVisible({ timeout: 10000 });
     await editableTitle(page).click();
@@ -282,13 +308,24 @@ test.describe('sync', () => {
       `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(resourceSubject!)}`,
     );
 
-    // The actual race is: WS handshake → resource GET → store hydrates →
-    // React renders. `networkidle` is unreliable (persistent WS keeps the
-    // network never-idle). Wait for the main view's H1 — that's the
-    // visible signal the data has landed and rendered.
-    await expect(
-      page2.getByRole('heading', { level: 1, name: 'Synced From Offline' }),
-    ).toBeVisible({ timeout: 30000 });
+    // KNOWN BUG: the offline rename to "Synced From Offline" does NOT
+    // actually propagate to the server on reconnect — the test's prior
+    // `waitForSearchable` passes only because `store.search` falls
+    // back to the LOCAL Tantivy/minisearch index (which has the
+    // offline edit) before consulting the server. On page2 (fresh
+    // context, no local cache) the doc still has its pre-offline name
+    // "Will Edit Offline". Needs a server-side investigation: why
+    // doesn't the outbox-drain on reconnect actually push the offline
+    // commit?
+    //
+    // Polling `page2.title()` reliably surfaces the symptom (page2
+    // shows the server's title), so this is what fails when the bug
+    // is present — vs `getByRole('heading', { level: 1 })` which has
+    // its own accessibility-tree quirk that confuses the diagnosis.
+    await expect.poll(
+      async () => page2.title(),
+      { timeout: 60000, intervals: [500] },
+    ).toBe('Synced From Offline');
 
     await context2.close();
   });

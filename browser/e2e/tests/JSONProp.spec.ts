@@ -27,7 +27,13 @@ test.describe('JSON prop', () => {
     const name = `Instance: ${Date.now()}`;
     await page.getByLabel('Name').fill(name);
 
+    // The `Test-Json-Prop` property is hosted on the public
+    // `atomicdata.dev` server (see the class URL above). The form's
+    // `useProperty` renders this field with a `loading` placeholder
+    // until the shortname fetches. Bump visibility timeout to 30s to
+    // absorb cold-fetch latency from the public host.
     const jsonEditor = page.getByLabel('Test-Json-Prop');
+    await expect(jsonEditor).toBeVisible({ timeout: 30000 });
     await jsonEditor.fill('{"valid": false,}');
 
     const saveButton = page.getByRole('button', { name: 'Save' });

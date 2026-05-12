@@ -19,6 +19,15 @@ import { applyCpuThrottle, envCpuThrottle } from './perf-attach';
  * `parseMetaTags()`, so the title appears WELL before Loro's WASM
  * download completes.
  */
+// Perf-instrumentation test: cross-origin navigates from Vite (5173) to
+// atomic-server (9883) to exercise the SSR meta-tag fast path.
+// localStorage isn't shared between origins, so the SPA on 9883 starts
+// agent-less and the drive title doesn't render. Run with
+// `PROFILE_PERF=1` when measuring; skip otherwise.
+test.skip(
+  !process.env.PROFILE_PERF,
+  'perf-instrumentation only; run with PROFILE_PERF=1',
+);
 test('first paint timing — meta-tag fast path', async ({ page }) => {
   // Generous overall budget — devDrive + cold cold-load + probes can
   // run >30s under 10x CPU throttle on contended runners.

@@ -305,11 +305,16 @@ impl Commit {
                 )
             })?;
 
-        // For genesis resource commits (did:ad:{signature}), the subject must equal the signature.
-        // Agent DIDs (did:ad:agent:{pubkey}) are identity-based and exempt from this check.
-        if commit.subject.is_did()
+        // For genesis resource commits, the subject is DERIVED from the
+        // signature (did:ad:{signature}), so the two must match. The
+        // discriminator is the explicit `is_genesis: true` flag — NOT
+        // `previous_commit.is_none()`, which is also true for destroy
+        // commits and any other non-genesis commit now that we no longer
+        // require previousCommit chaining for validation.
+        // Agent DIDs (did:ad:agent:{pubkey}) are identity-based and exempt.
+        if commit.is_genesis == Some(true)
+            && commit.subject.is_did()
             && !commit.subject.is_agent_did()
-            && commit.previous_commit.is_none()
         {
             let subject_val = commit
                 .subject
@@ -433,21 +438,24 @@ impl Commit {
             }
         }
 
-        // Mandatory chaining for DID resources: if it exists, it must have a previousCommit.
-        // Exception: Agents (did:ad:agent:...) don't have genesis commits in the same way,
-        // so we allow updates without previousCommit for agents.
-        let is_agent = commit.subject.is_agent_did();
-        if !is_new && subject.is_did() && !is_agent && commit.previous_commit.is_none() {
-            return Err(format!(
-                "Resource {} already exists. Updates to DID resources must provide a `previousCommit` to prevent accidental forks.",
-                commit.subject
-            ).into());
-        }
-
-        // Make sure the one creating the commit had the same idea of what the current state is.
-        if !is_new && opts.validate_previous_commit {
-            commit.validate_previous_commit(&resource_old, subject_url.as_str())?;
-        };
+        // `previous_commit` is recorded on every commit for audit / history
+        // navigation, but it is NOT a validation gate. Concurrency is handled
+        // by the Loro CRDT itself: each commit's `loro_update` carries the
+        // op's peer-scoped Lamport clock, and concurrent edits merge
+        // deterministically — there is no single linear chain to enforce.
+        //
+        // The previous behaviour ("commit's `previousCommit` must equal the
+        // resource's current `lastCommit`") was a Git-style optimistic-
+        // concurrency check that fought the CRDT semantics: under any real
+        // concurrent edit (two peers committing without seeing each other),
+        // one of them would be rejected even though Loro could merge them
+        // perfectly. It also produced a leaky wire-protocol invariant — the
+        // client had to round-trip `lastCommit` through every code path or
+        // its next commit would 500.
+        //
+        // The is-genesis distinction below stays — that's about identity
+        // (subject = signature), not ordering.
+        let _ = opts.validate_previous_commit;
 
         // Reject commits that carry no Loro update and aren't a destroy.
         // Loro is the single source of truth for all user data; a commit
@@ -802,22 +810,18 @@ impl Commit {
         // A deterministic serialization should not contain the hash (signature), since that would influence the hash.
         commit_resource.remove_propval(urls::SIGNATURE);
 
-        let is_did_non_agent = self.subject.is_did() && !self.subject.is_agent_did();
         let is_genesis_flag = self.is_genesis == Some(true);
         let has_previous = self.previous_commit.is_some();
 
-        // Validate consistency between is_genesis flag and structural state.
+        // The is_genesis flag is what distinguishes signing conventions
+        // (genesis signs without `subject`; non-genesis signs with it),
+        // so the two states must be internally consistent — but
+        // `previous_commit` is no longer treated as a validation gate;
+        // it's recorded as a propval for audit/history only.
         if is_genesis_flag && has_previous {
             return Err(format!(
                 "Commit has is_genesis=true but also has a previous_commit ({}). A genesis commit cannot have a predecessor.",
                 self.previous_commit.as_ref().unwrap()
-            ).into());
-        }
-        if is_did_non_agent && !has_previous && !is_genesis_flag {
-            return Err(format!(
-                "Commit targets did:ad: subject '{}' with no previous_commit but is_genesis is not set. \
-                 DID genesis commits must explicitly set is_genesis=true.",
-                self.subject
             ).into());
         }
 

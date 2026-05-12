@@ -145,6 +145,11 @@ test.describe('Plugins', () => {
         // Fill an explicit query so the picker filters down to the renamed
         // folder. Empty queries depend on search-index ordering, which can
         // race with the plugin's host.commit rename under suite-wide load.
+        // The server-side tantivy index is updated asynchronously after
+        // the rename commit, and under accumulated suite state (~30 prior
+        // dev drives, each with their own resources) the indexing latency
+        // routinely exceeds 15s. Bump to 30s — this is index-write lag,
+        // not a race-prevention timeout.
         const pickOption = await fillSearchBox(
           dialog,
           'Search for a folder',
@@ -153,7 +158,7 @@ test.describe('Plugins', () => {
         await dialog
           .getByTestId('searchbox-results')
           .getByText('My Problem')
-          .waitFor({ timeout: 15000 });
+          .waitFor({ timeout: 30000 });
         await pickOption('My Problem');
         await closeWith('Confirm');
       });

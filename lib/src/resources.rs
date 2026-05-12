@@ -102,8 +102,16 @@ impl Resource {
             return crate::loro::AtomicLoroDoc::from_snapshot(&doc.export_snapshot());
         }
 
-        if let Some(Value::LoroDoc(snapshot)) = self.propvals.get(urls::LORO_UPDATE) {
-            return crate::loro::AtomicLoroDoc::from_snapshot(snapshot);
+        // A Commit resource (`did:ad:commit:<sig>`) carries a `loroUpdate`
+        // property whose bytes are the COMMITTED resource's snapshot — NOT
+        // the commit's own Loro state. Using those bytes here would expose
+        // the committed resource's propvals (isA: Message, parent, …) as
+        // if they belonged to the commit. For commits, seed from propvals
+        // instead so the doc reflects (isA: Commit, signature, signer, …).
+        if !self.subject.is_commit_did() {
+            if let Some(Value::LoroDoc(snapshot)) = self.propvals.get(urls::LORO_UPDATE) {
+                return crate::loro::AtomicLoroDoc::from_snapshot(snapshot);
+            }
         }
 
         let doc = crate::loro::AtomicLoroDoc::new();
@@ -241,8 +249,15 @@ impl Resource {
             return Some(doc.export_snapshot());
         }
 
-        if let Some(Value::LoroDoc(snapshot)) = self.propvals.get(urls::LORO_UPDATE) {
-            return Some(snapshot.clone());
+        // Commits' `loroUpdate` value belongs to the committed resource, not
+        // the commit itself — see `build_loro_doc_from_state` above. Skip
+        // the property-as-snapshot shortcut so callers that need the
+        // commit's own state build it from propvals (via the build_*
+        // path), not from the wrong-resource bytes.
+        if !self.subject.is_commit_did() {
+            if let Some(Value::LoroDoc(snapshot)) = self.propvals.get(urls::LORO_UPDATE) {
+                return Some(snapshot.clone());
+            }
         }
 
         None

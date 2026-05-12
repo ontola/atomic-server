@@ -118,6 +118,10 @@ Create new branches off `develop`. When an issue is ready for PR, open PR agains
 
 ## Testing
 
+- We try to test at every level, unit tests, integration tests, e2e tests (playwright).
+- When tests fail, first make sure the unit tests are green, then do integration tests, then to e2e.
+- If e2e tests fail, try walking through the steps 1 by 1 either with the playwright debugger, or by simply reproducing the steps in your browser of choice.
+
 ```sh
 # Make sure nextest is installed
 cargo install cargo-nextest
@@ -134,20 +138,6 @@ cd browser && pnpm i && pnpm test-e2e
 # if things go wrong, debug!
 pnpm run test-query {testname}
 ```
-
-<!--
-NOTE: NOT WORKING SINCE EARHTLY
-
-## Code coverage
-
-- Visible at https://app.codecov.io/gh/atomicdata-dev/atomic-server/
-- Checked in CI
-
-```sh
-# install cargo-llvm-cov, see https://github.com/taiki-e/cargo-llvm-cov
-# Run the tests with a coverage report
-cargo llvm-cov --all-features --show-missing-lines
-``` -->
 
 ## Performance monitoring / benchmarks
 
@@ -240,7 +230,7 @@ Note:
 - We use [semver](https://semver.org/), and are still quite far from 1.0.0.
 - The version for `atomic-lib` is the most important, and dictates the versions of `cli` and `server`. When `lib` changes minor version, `cli` and `server` should follow.
 
-### CI situation
+### CI/CD pipeline
 
 - Github Action for `push`: builds + tests + docker (using `dagger`, see `.dagger` and the `.github` folders)
 - Github Action for `tag`: create release + publish binaries

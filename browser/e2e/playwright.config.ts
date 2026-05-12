@@ -54,7 +54,13 @@ const config: PlaywrightTestConfig = {
   // catches genuinely flaky paths without hiding real regressions:
   // a regression fails three times. Matches nextest's `retries = 2`.
   retries: process.env.CI ? 2 : 0,
-  // timeout: 1000 * 120, // 2 minutes
+  // Per-test budget — not a race-prevention timeout. Playwright's
+  // default is 30s; some tests (chatroom invite flow, share menu,
+  // tables) legitimately run 25–35s when the shared atomic-server is
+  // under suite-wide load. Bumping to 60s gives them headroom without
+  // masking real hangs. Specific assertions inside tests still have
+  // their own targeted timeouts.
+  timeout: 60_000,
   projects: [
     {
       name: 'chromium',

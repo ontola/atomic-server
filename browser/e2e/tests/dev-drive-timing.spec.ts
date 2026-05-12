@@ -15,6 +15,11 @@ async function timeIt<T>(label: string, fn: () => Promise<T>): Promise<{ label: 
 }
 
 test.describe('dev-drive timing', () => {
+  // Phase-timing measurement only; skip under regular CI runs.
+  test.skip(
+    !process.env.PROFILE_PERF,
+    'perf-instrumentation only; run with PROFILE_PERF=1',
+  );
   test('full devDrive() flow', async ({ page }) => {
     const throttle = envCpuThrottle();
     if (throttle) await applyCpuThrottle(page, throttle);

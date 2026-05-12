@@ -105,4 +105,57 @@ describe('parse.ts', () => {
       'https://atomicdata.dev/classes/Document',
     ]);
   });
+
+  /**
+   * Regression: a Commit resource (`did:ad:commit:<sig>`) carries a
+   * `loroUpdate` property whose bytes are the snapshot of the *committed*
+   * resource (the Document, Message, etc. that was edited). Parsing the
+   * commit must NOT import those bytes into the commit's own Loro doc —
+   * doing so overwrote the commit's propvals (`isA: [Commit]`,
+   * `signature`, `signer`, …) with the committed resource's propvals
+   * (`isA: [Message]`, `parent: ChatRoom`, …), so `/show?subject=did:ad:commit:…`
+   * rendered the commit as if it WERE the message.
+   *
+   * The parse path is the one this fix lives on — fetched JSON-AD lands
+   * here on every server response.
+   */
+  it('keeps a commit resource as a commit, not the committed resource it carries', async ({
+    expect,
+  }) => {
+    // Build a snapshot of the committed resource — a hypothetical Message.
+    const COMMITTED_SUBJECT = 'did:ad:abc123';
+    const message = new Resource(COMMITTED_SUBJECT);
+    await message.set(
+      core.properties.isA,
+      ['https://atomicdata.dev/classes/Message'],
+      false,
+    );
+    await message.set(core.properties.description, ':)', false);
+    const snapshot = (message as any)._loroDoc.export({
+      mode: 'snapshot',
+    }) as Uint8Array;
+
+    // The shape the server returns when you GET `did:ad:commit:<sig>`:
+    // a Commit resource whose `loroUpdate` carries the COMMITTED
+    // resource's snapshot, not its own.
+    const COMMIT_SUBJECT = 'did:ad:commit:zzz999';
+    const parser = new JSONADParser();
+    const [commit] = parser.parse({
+      '@id': COMMIT_SUBJECT,
+      [core.properties.isA]: ['https://atomicdata.dev/classes/Commit'],
+      [commits.properties.subject]: COMMITTED_SUBJECT,
+      [commits.properties.signature]: 'zzz999',
+      [commits.properties.loroUpdate]: {
+        type: 'lorodoc',
+        data: encodeB64(snapshot),
+      },
+    });
+
+    // The commit's own propvals must survive — `isA` stays `[Commit]`,
+    // and the committed Message's `description` does NOT leak in.
+    expect(commit.get(core.properties.isA)).toEqual([
+      'https://atomicdata.dev/classes/Commit',
+    ]);
+    expect(commit.get(core.properties.description)).toBeUndefined();
+  });
 });

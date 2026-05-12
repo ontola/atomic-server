@@ -1,3 +1,11 @@
+/**
+ * These End to End tests of AtomicServer are where we test if the server and the browser integrate well.
+ * Since these tests are relatively slow, try to utilize unit tests to catch bugs earlier.
+ * Use the devDrive helpers to quickly setup an agent + drive and start with a clean slate.
+ * Keeping these tests as fast as possible is essential.
+ * Try not to rely on hardcoded timeouts, as this is likely to lead to race conditions and flakiness in CI (slower hardware).
+ */
+
 import { test, expect, type Page } from '@playwright/test';
 import {
   FRONTEND_URL,
@@ -165,6 +173,34 @@ test.describe('data-browser', async () => {
       'Chat message not appearing directly after sending',
     ).toBeVisible({ timeout: 15_000 });
 
+    // The message's CommitDetail row should show the author's name AND the
+    // date. The author name comes from the agent resource's `name` propval
+    // — `devDrive()` sets it to "Dev User" — and only renders if the
+    // commit was persisted server-side and the signer resource is
+    // loadable back. The date comes from the commit's `createdAt`. Both
+    // together are a tight roundtrip check: client signed → server
+    // stored → refetched + rendered by `<CommitDetail>`. Scope to the
+    // message element (the styled <div> wrapping the message body +
+    // CommitDetail; it carries `about={subject}` in the DOM) by walking
+    // up from the message paragraph, so we don't accidentally match
+    // some unrelated "Dev User" elsewhere on the page.
+    const messageLocator = page
+      .getByText(teststring)
+      .locator('xpath=ancestor::*[@about][1]');
+    await expect(messageLocator).toBeVisible();
+    await expect(
+      messageLocator,
+      'Message author "Dev User" missing — commit author not stored/retrievable',
+    ).toContainText('Dev User');
+    // Date format from `DateTime`: locale-aware. Assert the year is shown
+    // — it's the most stable substring across locales without coupling
+    // to wall-clock minutes.
+    const year = new Date().getFullYear().toString();
+    await expect(
+      messageLocator,
+      'Message date missing — commit createdAt not stored/retrievable',
+    ).toContainText(year);
+
     // Build the chatroom fallback URL on the SERVER's origin (same as the
     // invite URL the guest opens), not the frontend dev server. The guest
     // sets up their agent on `localhost:9883` after accepting the invite —
@@ -325,8 +361,7 @@ test.describe('data-browser', async () => {
 
     // Wait for the doc's save to flush before navigating away.
     await page.waitForFunction(
-      () =>
-        (window as any).store?.getSyncStatus?.().pendingDirtyCount === 0,
+      () => (window as any).store?.getSyncStatus?.().pendingDirtyCount === 0,
       undefined,
       { timeout: 10000 },
     );
@@ -420,9 +455,7 @@ test.describe('data-browser', async () => {
     // Confirm the destroy in the dialog. Scoping to `dialog[open]` is needed
     // because the menu's "Delete" entry can still match `button:has-text` on
     // some renders before it unmounts, leading to flaky no-ops.
-    await page
-      .locator('dialog[open] button:has-text("Delete")')
-      .click();
+    await page.locator('dialog[open] button:has-text("Delete")').click();
 
     await expect(page.locator('text=Resource deleted')).toBeVisible();
 
@@ -641,9 +674,7 @@ test.describe('data-browser', async () => {
     // may render either an `<h1>First Title</h1>` or an
     // `<input value="First Title">` depending on whether the resource is in
     // auto-edit mode — match either form via the test-id.
-    await expect(
-      page.getByTestId('editable-title').first(),
-    ).toBeVisible();
+    await expect(page.getByTestId('editable-title').first()).toBeVisible();
     await expect(
       page.getByRole('heading', { name: 'History of First Title', level: 1 }),
     ).not.toBeVisible();
