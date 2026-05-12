@@ -1392,6 +1392,16 @@ impl Db {
                 {
                     subjects.push(atom.subject.clone());
                     resources.push(resource.to_single());
+                } else {
+                    // The index has an entry for this subject but the
+                    // requesting agent can't resolve it — auth-filtered,
+                    // destroyed-with-stale-index, or otherwise invisible.
+                    // Roll back the count bump so it doesn't outrun the
+                    // returned subjects and produce a
+                    // `totalMembers: N, members: []` drift. We only do
+                    // this for in-page hits; entries past the limit stay
+                    // counted blindly (issue #286).
+                    total_count -= 1;
                 }
             }
         }

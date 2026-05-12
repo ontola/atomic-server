@@ -14,8 +14,13 @@ export class CollectionBuilder {
   public constructor(store: Store, server?: string) {
     this.store = store;
     this.server = server ?? new URL(store.getServerUrl()).origin;
-    // Auto-derive drive from server URL if not explicitly set
-    this.params.drive = this.params.drive ?? this.server;
+    // Default the drive filter to the active drive DID. The old fallback
+    // was `this.server` (a URL like `http://localhost:9883`), which the
+    // server then tried to filter `drive == <server-origin>` against —
+    // never matched any real resource (resources are scoped by drive DID),
+    // so every default-drive query returned zero rows.
+    const activeDrive = store.getDrive();
+    this.params.drive = this.params.drive ?? activeDrive;
   }
 
   public setProperty(property: string): CollectionBuilder {
