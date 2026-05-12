@@ -31,6 +31,33 @@ import { perfMark, perfSpan } from './perf-trace.js';
 const REQUEST_TIMEOUT = 10000;
 const WS_PROTOCOL = 'atomicdata-ws.v2';
 
+/**
+ * Decide whether a QUERY_UPDATE `added` subject needs a network fetch.
+ *
+ * Commits are immutable: once the local store has one, re-fetching is
+ * pure waste. This is the self-echo case from posting a chat message —
+ * the client signs and posts a commit, the server processes it and
+ * broadcasts QUERY_UPDATE to all subscribers (including us), and the
+ * stock handler then GETs the commit DID it literally just sent. The
+ * server response carries identical bytes to the locally-signed copy.
+ *
+ * Non-commit subjects are kept on the fetch path: regular resources
+ * can be mutated, so a QUERY_UPDATE `added` may signal a new version
+ * the local copy doesn't have. Per-resource version dedup happens
+ * deeper, inside `applyIncoming` (commit-id check), but the WS GET
+ * round-trip is unavoidable for those — the QUERY_UPDATE frame
+ * itself doesn't carry the payload.
+ */
+export function shouldFetchOnQueryUpdate(
+  subject: string,
+  store: Store,
+): boolean {
+  if (subject.startsWith('did:ad:commit:') && store.resources.has(subject)) {
+    return false;
+  }
+  return true;
+}
+
 // Optional perf-profiler hook. The data-browser app installs an object
 // at `window.__atomicProfiler` that aggregates render + event counts;
 // when it's present we feed WS frame traffic through it. Reverse-lookup
@@ -660,6 +687,7 @@ export class WSClient {
           this.store.removeResource(s);
         }
         for (const s of msg.added) {
+          if (!shouldFetchOnQueryUpdate(s, this.store)) continue;
           this.store.fetchResourceFromServer(s).catch(() => undefined);
         }
         break;
@@ -730,6 +758,7 @@ export class WSClient {
           this.store.removeResource(s);
         }
         for (const s of added) {
+          if (!shouldFetchOnQueryUpdate(s, this.store)) continue;
           this.store.fetchResourceFromServer(s).catch(() => {});
         }
       } catch {

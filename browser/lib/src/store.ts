@@ -5,7 +5,12 @@ import {
   setCookieAuthentication,
 } from './authentication.js';
 import { Client, type FileOrFileLike } from './client.js';
-import { commitIdOf, parseCommitJSON, type Commit } from './commit.js';
+import {
+  commitIdOf,
+  commitToJsonADObject,
+  parseCommitJSON,
+  type Commit,
+} from './commit.js';
 import { datatypeFromUrl, type Datatype } from './datatypes.js';
 import { AtomicError, ErrorType } from './error.js';
 import { EventManager } from './EventManager.js';
@@ -221,6 +226,7 @@ export type ChangeSource =
   | 'http-fetch'
   | 'local-pre-push'
   | 'local-acked'
+  | 'local-post'
   | 'offline-replay';
 
 /** One authoritative-or-local resource update. Either `loroBytes`
@@ -2653,6 +2659,15 @@ export class Store {
           commitId: commitIdOf(created),
         }),
       );
+      // Materialize the just-signed commit as a Resource so subsequent
+      // `useResource(commitSubject)` lookups (chatroom <CommitDetail>,
+      // version views, etc.) hit the local cache instead of round-
+      // tripping back to the server for data we already had in hand.
+      // The offline-save branch already does this via
+      // `applyPendingCommitsLocally` (resource.ts); the online happy
+      // path used to skip it, which produced the `GET did:ad:commit:*`
+      // visible in the network log right after posting a chat message.
+      this.materializeCommitLocally(created);
       return created;
     } catch (e) {
       const errMsg = e instanceof Error ? e.message : String(e);
@@ -2667,6 +2682,32 @@ export class Store {
       );
       throw e;
     }
+  }
+
+  /**
+   * Cache a freshly-signed commit as a Resource in the local store.
+   * Idempotent: bails if the commit's subject is already present
+   * (e.g. the offline path beat us to it via `applyPendingCommitsLocally`).
+   */
+  private materializeCommitLocally(commit: Commit): void {
+    const signature = commit.signature;
+    if (!signature) return;
+    const commitSubject = `did:ad:commit:${signature}`;
+    if (this.resources.has(commitSubject)) return;
+
+    const commitResource = new Resource(commitSubject);
+    commitResource.applyHydratedValues(
+      Object.entries(commitToJsonADObject(commit)) as Iterable<
+        [string, any] // eslint-disable-line @typescript-eslint/no-explicit-any
+      >,
+    );
+    commitResource.loading = false;
+    commitResource.new = false;
+    this.applyIncoming({
+      subject: commitSubject,
+      resource: commitResource,
+      source: 'local-post',
+    });
   }
 
   /**
