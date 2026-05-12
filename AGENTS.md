@@ -4,8 +4,8 @@ Guidance for coding agents working in this repo.
 
 ## Local Setup
 
-- `http://localhost:5173` — Vite dev server (frontend).
-- `http://localhost:9883` — local Atomic Server.
+- `http://localhost:5173` — Vite dev server (frontend). (`cd browser && pnpm dev`)
+- `http://localhost:9883` — local AtomicServer. (`cd server && cargo run`)
 
 The frontend auto-updates via HMR. If changes don't appear, reload the page. If you edit `@tomic/lib` or `@tomic/react`, those packages may need a rebuild first.
 
@@ -17,28 +17,27 @@ In E2E tests, most specs use `test.beforeEach(before)` from `test-utils.ts`, whi
 
 ## Charlotte / Browser Automation
 
-- Always operate the app at `localhost:5173`, not `9883` directly.
+- Operate the app at `localhost:5173` for quick iterations on react code.
 - Start every session by navigating to `http://localhost:5173/app/dev-drive` to get a clean, authenticated state.
 - If the app shows `Unauthorized` or `Something went wrong`, navigate to `/app/dev-drive` to fix it.
 
-## Debugging Checklist
+## Debugging process
 
-- Is the frontend open on `5173`?
-- Is the active drive/server `9883`?
-- Is there a signed-in agent?
-- Run `devDrive(page)` to reset to a clean state.
+1. Identify the bug, where it's coming from.
+2. Reproduce the bug in a test at the right abstraction level. E2E tests are the most expensive, so try to find a different level if possible.
+3. After reproduction in a failing test, fix the bug until the test and all other tests are green again
 
 ## DevTools Console Helpers
 
 In dev mode, `window.devtools` exposes diagnostics for inspecting a resource across every persistence layer. Run `devtools.help()` for the list. Most useful:
 
-| call | what it does |
-|---|---|
+| call                         | what it does                                                                                                |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | `devtools.inspect(subject?)` | JS store + WASM/OPFS + server HTTP GET, side-by-side. Defaults to the URL's `?subject=` (or current drive). |
-| `devtools.opfsList(prefix?)` | Subjects in the WASM DB (default prefix `did:ad:`) |
-| `devtools.wsLog(n?)` | `console.table` of the last N commit log entries |
-| `devtools.problems()` | Resources currently loading, errored, or new |
-| `devtools.forcePut(subject)` | Re-serialize a JS-store resource into OPFS with round-trip verification |
+| `devtools.opfsList(prefix?)` | Subjects in the WASM DB (default prefix `did:ad:`)                                                          |
+| `devtools.wsLog(n?)`         | `console.table` of the last N commit log entries                                                            |
+| `devtools.problems()`        | Resources currently loading, errored, or new                                                                |
+| `devtools.forcePut(subject)` | Re-serialize a JS-store resource into OPFS with round-trip verification                                     |
 
 Source: `browser/data-browser/src/helpers/devtools.ts`.
 
@@ -47,14 +46,17 @@ Source: `browser/data-browser/src/helpers/devtools.ts`.
 Atomic Server is a graph database with real-time sync, built on **Loro CRDT** for conflict-free collaborative editing.
 
 ### Crates
-- **`atomic_lib`** (`lib/`) — Core library. WASM-compatible (no `ring`, no `rt-multi-thread`). Contains Resource, Commit, Store, Loro integration, Iroh P2P sync, WS client, connected Client API.
-- **`atomic-server`** (`server/`) — Actix-web HTTP/WS server. Uses `atomic_lib` + redb + search (tantivy).
-- **`@tomic/lib`** (`browser/lib/`) — TypeScript client library.
+
+- **`docs`** (`docs`) — Atomic Data spec documentation. Describes how the protocol works, very important.
+- **`atomic_lib`** (`lib/`) — Core library powering atomic-server + WASM / OPFS browser storage.
+- **`atomic-server`** (`server/`) — Actix-web HTTP/WS server. Uses `atomic_lib` + search (tantivy).
+- **`@tomic/lib`** (`browser/lib/`) — TypeScript client library, powering the other JS projects
 - **`@tomic/react`** (`browser/react/`) — React hooks.
-- **`data-browser`** (`browser/data-browser/`) — The web app (React + TipTap + Loro).
+- **`data-browser`** (`browser/data-browser/`) — The web app (React + TipTap + Loro), feels similar to notion.
 - **`flutter/`** — Cross-platform canvas app (Android/iOS/Web). Uses `flutter_rust_bridge` to call `atomic_lib`. See `flutter/README.md` and `flutter/AGENTS.md`.
 
 ### Data model
+
 - **Resource** = property-value pairs with a Subject URL, backed by a Loro CRDT document.
 - **Commit** = a signed mutation containing `loroUpdate` (base64 Loro binary).
 - **Agent** = Ed25519 keypair, identified by `did:ad:agent:{publicKey}`.
@@ -65,11 +67,13 @@ Atomic Server is a graph database with real-time sync, built on **Loro CRDT** fo
 **Loro is the sole state management engine.** The old `set`/`remove`/`push` commit fields are deprecated and rejected by the server.
 
 ### Client side (TypeScript)
+
 1. `resource.set(prop, value)` → writes to LoroDoc's `"properties"` map + sets `_dirty`
 2. `resource.save()` → `exportLoroDelta()` → base64 → commit `loroUpdate` → sign → POST
 3. Incoming WS commits: `execLoroUpdateCommit()` imports Loro binary into resource's LoroDoc, materializes properties into propvals
 
 ### Server side (Rust)
+
 1. Commit arrives at `/commit`
 2. `apply_changes()` imports `loroUpdate` into resource's LoroDoc
 3. `import_update_with_diff()` computes add/remove atoms for search indexing
@@ -77,12 +81,14 @@ Atomic Server is a graph database with real-time sync, built on **Loro CRDT** fo
 5. Loro snapshot stored alongside PropVals for future merges
 
 ### Loro value serialization in the Map
+
 - Strings, numbers, booleans → stored directly
 - `ResourceArray` → JSON string `["url1", "url2"]`
 - `AtomicUrl` → plain string
 - `loro_value_to_atomic_value()` parses back: strings starting with `[` → ResourceArray, `{` → NestedResource
 
 ### Critical: always build on existing state
+
 When editing a resource, load the existing Loro snapshot first, then edit on top. Creating a fresh LoroDoc for each edit causes LWW conflicts. The `CommitBuilder` on the server converts `set`/`remove` to Loro at sign time via `sign_at()`.
 
 ## Commit Structure
@@ -114,15 +120,15 @@ Equality is by URL string only — `drive_hint` and `subdomain` don't affect ide
 
 ## WebSocket Protocol
 
-| Message | Direction | Purpose |
-|---|---|---|
-| `AUTHENTICATE {json}` | C→S | Auth |
-| `AUTHENTICATED` | S→C | Confirmed |
-| `SUBSCRIBE {subject}` | C→S | Commit notifications |
-| `COMMIT {json}` | S→C | Applied commit |
-| `LORO_SYNC_SUBSCRIBE {json}` | C→S | Real-time Loro sync |
-| `LORO_SYNC_UPDATE {json}` | Both | Loro binary (base64) |
-| `LORO_EPHEMERAL_UPDATE {json}` | Both | Cursors/presence |
+| Message                        | Direction | Purpose              |
+| ------------------------------ | --------- | -------------------- |
+| `AUTHENTICATE {json}`          | C→S       | Auth                 |
+| `AUTHENTICATED`                | S→C       | Confirmed            |
+| `SUBSCRIBE {subject}`          | C→S       | Commit notifications |
+| `COMMIT {json}`                | S→C       | Applied commit       |
+| `LORO_SYNC_SUBSCRIBE {json}`   | C→S       | Real-time Loro sync  |
+| `LORO_SYNC_UPDATE {json}`      | Both      | Loro binary (base64) |
+| `LORO_EPHEMERAL_UPDATE {json}` | Both      | Cursors/presence     |
 
 **Pattern:** Subscribe to broadcast BEFORE sending a message that expects a response.
 
@@ -163,6 +169,7 @@ Devices sync via [Iroh](https://iroh.computer) QUIC connections. The transport i
 - **`protocol.rs`** — Binary frame encoding: AUTH, SYNC, SYNC_DIFF, SYNC_PUSH, SYNC_OK, GET, UPDATE.
 
 ### Sync flow (QR pairing)
+
 1. Both devices start Iroh (`peer::start()`) → get persistent NodeID, connect to n0 relay
 2. Device A shows QR code containing `did:ad:node:<nodeId>`
 3. Device B scans QR → calls `peer_sync(nodeId)` → `sync_drive_with_peer()`
@@ -172,12 +179,14 @@ Devices sync via [Iroh](https://iroh.computer) QUIC connections. The transport i
 7. Both devices now have each other's data
 
 ### Key details
+
 - The `Router` must be kept alive globally (`ROUTER` static) — dropping it stops incoming connections.
 - After sending the final SYNC_PUSH, call `send.finish()` + short delay so the server processes it before the connection drops.
 - Loro snapshots are stored in `Tree::LoroSnapshots` keyed by `Subject::pure_id()` (strips query params/drive hints).
 - `collect_drive_subjects()` and `build_drive_vvs()` must use `pure_id()` consistently to match snapshot keys.
 
 ### Node identity
+
 - `did:ad:node:<hex>` — URI format for Iroh NodeIDs, used in QR codes and UI.
 - NodeIDs are persistent — derived from a secret key stored in redb (`Tree::PluginMeta`).
 - Known peers are also stored in `Tree::PluginMeta` as a JSON array.
@@ -187,20 +196,9 @@ Devices sync via [Iroh](https://iroh.computer) QUIC connections. The transport i
 ```
 cargo test -p atomic_lib --no-default-features  # 76 tests
 cargo test -p atomic-server --lib               # 23 tests
-cargo test -p atomic-server --test sync          # E2E: real server, 2 agents, WS sync
+cargo test -p atomic-server --test sync          # integration test: real server, 2 agents, WS sync
 cargo test -p atomic_lib --features "iroh,discovery,db-redb" --lib -- sync::tests  # Iroh sync tests
 cd browser/lib && pnpm test                      # 29 JS tests
 cd browser && pnpm run -r build                  # Full workspace build
+cd browser && pnpm run test-e2e                  # Full e2e test
 ```
-
-## Watch Out For
-
-1. **ChatRoom plugin** (`chatroom.rs`): Fake commit must include full messages array — Loro `set` replaces, doesn't append.
-2. **Empty Loro updates**: ~22 byte header only. `exportLoroDelta()` filters with `<= 28` byte threshold.
-3. **`default_store.json`**: `loroUpdate` property and `lorodoc` datatype must be present. New servers need `--initialize`.
-4. **CSP**: Includes `'wasm-unsafe-eval'` for Loro WASM in browser.
-5. **`build.rs`**: Watches `lib/src`, `react/src`, `data-browser/src`. Delete `server/assets_tmp` to force JS rebuild.
-6. **`CommitBuilder.push_propval`**: Starts from empty, not from resource's existing value. Load current value first if appending.
-7. **`flutter/rust/`** is excluded from the Cargo workspace (`Cargo.toml` `exclude`). It has its own `Cargo.toml` with a path dep to `../../lib`.
-8. **NDK 27 `llvm-strip`** corrupts large `.so` files. Debug builds use `doNotStrip '**/*.so'` in both `app/build.gradle` and `rust_builder/android/build.gradle`.
-9. **Iroh Router lifetime**: `peer::start()` returns a Router that must be kept alive. Dropping it silently stops incoming connections — no error, just "failed connecting to remote endpoint" on the other side.

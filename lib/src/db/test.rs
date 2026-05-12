@@ -213,6 +213,169 @@ async fn destroy_resource_and_check_collection_and_commits() {
     );
 }
 
+/// Regression test for stale parent-index entries leaking into `count`.
+///
+/// Symptom seen in the wild: a browser hit `/query?property=parent&value=<drive>`
+/// and got back `totalMembers: 3` with `members: []`. The three index entries
+/// pointed at resources that no longer resolved for the requesting agent —
+/// destroyed, ACL-filtered, or otherwise inaccessible — but `query_basic` /
+/// `query_sorted_indexed` still bumped `count` for each iter entry,
+/// regardless of whether the entry survived the include_external filter
+/// or whether `get_resource_extended` succeeded.
+///
+/// Contract under test: after destroying every resource that points
+/// `parent=X`, the count for the `parent=X` query must be 0 — equal to
+/// `subjects.len()`. If count drifts above subjects.len(), the parent
+/// index has orphan entries that destroy didn't clean up, OR count is
+/// being incremented from raw iter steps instead of returnable hits.
+#[tokio::test]
+async fn destroy_clears_parent_index_count() {
+    let store = Db::init_temp("destroy_clears_parent_index_count")
+        .await
+        .unwrap();
+    crate::test_utils::setup_test_env(&store).await.unwrap();
+
+    // Use a synthetic parent subject. We don't need it to resolve as a
+    // real resource — the parent-index is keyed by string value, not
+    // by resource existence.
+    let parent_subject = "https://example.com/parent-X";
+
+    let mut child_subjects = Vec::new();
+    for _ in 0..3 {
+        let mut child = Resource::new_generate_subject(&store).unwrap();
+        child
+            .set(
+                urls::PARENT.into(),
+                Value::AtomicUrl(parent_subject.into()),
+                &store,
+            )
+            .await
+            .unwrap();
+        child.save(&store).await.unwrap();
+        child_subjects.push(child.get_subject().to_string());
+    }
+
+    let q = Query {
+        property: Some(urls::PARENT.into()),
+        value: Some(Value::AtomicUrl(parent_subject.into())),
+        limit: Some(500),
+        start_val: None,
+        end_val: None,
+        offset: 0,
+        sort_by: None,
+        sort_desc: false,
+        include_external: true,
+        include_nested: false,
+        for_agent: ForAgent::Sudo,
+        drive: None,
+    };
+
+    let before = store.query(&q).await.unwrap();
+    assert_eq!(before.count, 3, "three children indexed");
+    assert_eq!(before.subjects.len(), 3, "three children returned");
+
+    // Destroy all three. After this, the parent-index should hold no
+    // entries for `parent=<parent_subject>`.
+    for subject in &child_subjects {
+        let mut r = store
+            .get_resource(&subject.as_str().into())
+            .await
+            .unwrap();
+        r.destroy(&store).await.unwrap();
+    }
+
+    let after = store.query(&q).await.unwrap();
+    assert_eq!(
+        after.subjects.len(),
+        0,
+        "no children should be returned after destroy"
+    );
+    assert_eq!(
+        after.count, 0,
+        "count must equal subjects.len() after destroy — \
+         stale index entries inflate count, producing the \
+         `totalMembers: 3, members: []` drift seen in the field"
+    );
+}
+
+/// Companion regression test: when resources match the query filter but
+/// the requesting agent isn't authorized to read them, `count` and
+/// `subjects.len()` must agree. They currently don't — there's a
+/// known-issue comment in the existing `queries` test (line ~408)
+/// that intentionally skips this assertion, pointing at GH issue #286.
+///
+/// This is the actual surface of the bug observed in the field: the
+/// user's server reported `totalMembers: 3, members: []` for a
+/// `parent=<drive>` query. Those 3 entries weren't destroyed — they
+/// were authorization-filtered, so `get_resource_extended` failed and
+/// the push into `subjects` was skipped, while `count` kept marching
+/// on. Once count drifts above the visible row count, the client
+/// trusts the count for pagination, optimistic-add bookkeeping, and
+/// (in our concrete case) keeps phantom subject DIDs in the WASM DB
+/// because the count says "there's something here" but the server
+/// keeps returning an empty page.
+#[tokio::test]
+async fn unauthorized_query_count_matches_subjects() {
+    let store = Db::init_temp("unauthorized_query_count_matches_subjects")
+        .await
+        .unwrap();
+    crate::test_utils::setup_test_env(&store).await.unwrap();
+
+    let parent_subject = "https://example.com/parent-private";
+
+    // Create three children. Don't set any `read` ACL — the resources
+    // are only visible to Sudo / the server-internal agent, never to
+    // a regular signed-in user.
+    for _ in 0..3 {
+        let mut child = Resource::new_generate_subject(&store).unwrap();
+        child
+            .set(
+                urls::PARENT.into(),
+                Value::AtomicUrl(parent_subject.into()),
+                &store,
+            )
+            .await
+            .unwrap();
+        child.save(&store).await.unwrap();
+    }
+
+    let q = Query {
+        property: Some(urls::PARENT.into()),
+        value: Some(Value::AtomicUrl(parent_subject.into())),
+        limit: Some(500),
+        start_val: None,
+        end_val: None,
+        offset: 0,
+        sort_by: None,
+        sort_desc: false,
+        include_external: true,
+        include_nested: false,
+        // Public agent: no ACL grants read access to the children we
+        // just created, so `get_resource_extended` will fail auth on
+        // each one and `subjects` will end up empty.
+        for_agent: urls::PUBLIC_AGENT.into(),
+        drive: None,
+    };
+
+    let res = store.query(&q).await.unwrap();
+
+    assert_eq!(
+        res.subjects.len(),
+        0,
+        "no subjects should be returned to an unauthorized agent"
+    );
+    assert_eq!(
+        res.count,
+        res.subjects.len(),
+        "count must equal subjects.len() — count={}, subjects.len()={}. \
+         Index iteration is incrementing count for entries that auth \
+         filters then drop from the response, producing the \
+         `totalMembers: N, members: []` drift seen in the field.",
+        res.count,
+        res.subjects.len(),
+    );
+}
+
 #[tokio::test]
 async fn get_extended_resource_pagination() {
     let store = Db::init_temp("get_extended_resource_pagination")
