@@ -22,6 +22,7 @@ import {
 } from './atomicSchemaHelpers';
 import { useDocumentEditAgent } from './documentEditAgent';
 import * as Y from 'yjs';
+import type { AIModelIdentifier } from './types';
 
 export const TOOL_NAMES = {
   SEMANTIC_SEARCH: 'semantic_search',
@@ -78,15 +79,17 @@ const getClassesString = async (
 
 interface UseAtomicMCPToolsProps {
   onResourceEdited?: (originalResource: Resource) => void;
+  editModel: AIModelIdentifier;
 }
 
 export function useAtomicMCPTools({
   onResourceEdited,
-}: UseAtomicMCPToolsProps = {}) {
+  editModel,
+}: UseAtomicMCPToolsProps) {
   const store = useStore();
   const navigate = useNavigateWithTransition();
   const { drive } = useSettings();
-  const runDocumentEdit = useDocumentEditAgent();
+  const runDocumentEdit = useDocumentEditAgent(editModel);
 
   const tools = {
     read: {

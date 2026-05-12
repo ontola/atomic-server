@@ -134,6 +134,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   const [followUpQuestions, setFollowUpQuestions] = useState<string[]>([]);
 
   const { tools: atomicTools } = useAtomicMCPTools({
+    editModel: selectedAgent.model,
     onResourceEdited: (originalResource: Resource) => {
       reportAIEdit(originalResource);
     },

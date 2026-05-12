@@ -114,8 +114,8 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
         apiKey: this.options.openRouterAPIKey,
         compatibility: 'strict',
         extraBody: {
-          transforms: ['middle-out'],
           modalities,
+          plugins: [{ id: 'context-compression' }],
         },
       });
 

@@ -3182,7 +3182,7 @@ msgstr "Editing {0} on <0/>"
 msgid "Editing <0/>"
 msgstr "Editing <0/>"
 
-#. 0: " · "
+#. 0: ' · '
 #: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
 msgid "Loading skill: <0/> {0} <1/>"
 msgstr "Loading skill: <0/> {0} <1/>"
@@ -3514,9 +3514,8 @@ msgstr "LLM Instructions"
 msgid "Searching online"
 msgstr "Searching online"
 
-#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
-msgid "Reading <0/>"
-msgstr "Reading <0/>"
+#~ msgid "Reading <0/>"
+#~ msgstr "Reading <0/>"
 
 #: src/chunks/AI/AISidebar.tsx
 msgid "Failed to save AI chat message"
@@ -3537,3 +3536,8 @@ msgstr "New Chat"
 #: src/chunks/AI/AIChatPage.tsx
 msgid "Failed to remove message resource"
 msgstr "Failed to remove message resource"
+
+#. 0: ' '
+#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
+msgid "Reading{0} <0/>"
+msgstr "Reading{0} <0/>"

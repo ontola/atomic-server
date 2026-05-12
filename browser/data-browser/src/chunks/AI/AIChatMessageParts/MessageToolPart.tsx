@@ -1,6 +1,6 @@
-import { getStaticToolName, type ToolUIPart } from "ai";
-import { styled } from "styled-components";
-import { Row } from "@components/Row";
+import { getStaticToolName, type ToolUIPart } from 'ai';
+import { styled } from 'styled-components';
+import { Row } from '@components/Row';
 import {
   FaBook,
   FaDatabase,
@@ -11,13 +11,14 @@ import {
   FaPencil,
   FaPlus,
   FaWrench,
-} from "react-icons/fa6";
-import { Details } from "@components/Details";
-import { SearchToolMessageContent } from "./SearchToolMessageContent";
-import { TOOL_NAMES } from "../useAtomicTools";
-import { InlineFormattedResourceList } from "@components/InlineFormattedResourceList";
-import { core, useResource } from "@tomic/react";
-import { MCP_TOOL_NAMES } from "../defaultMCPServers";
+} from 'react-icons/fa6';
+import { Details } from '@components/Details';
+import { SearchToolMessageContent } from './SearchToolMessageContent';
+import { TOOL_NAMES } from '../useAtomicTools';
+import { InlineFormattedResourceList } from '@components/InlineFormattedResourceList';
+import { core, useResource } from '@tomic/react';
+import { MCP_TOOL_NAMES } from '../defaultMCPServers';
+import { Client } from '@tomic/react';
 
 interface ToolMessageProps {
   part: ToolUIPart;
@@ -28,10 +29,10 @@ export const MessageToolPart: React.FC<ToolMessageProps> = ({ part }) => {
 
   const Icon = getIcon(toolName);
 
-  if (part.state === "input-streaming" || part.state === "input-available") {
+  if (part.state === 'input-streaming' || part.state === 'input-available') {
     return (
       <ToolUseMessage>
-        <TitleRow center gap="0.5ch">
+        <TitleRow center gap='0.5ch'>
           <Icon />
           <ToolTitle toolName={toolName} part={part} />
         </TitleRow>
@@ -39,13 +40,13 @@ export const MessageToolPart: React.FC<ToolMessageProps> = ({ part }) => {
     );
   }
 
-  if (part.state === "output-available") {
+  if (part.state === 'output-available') {
     return (
       <Details
         noIndent
         titleButton={
           <ToolUseMessage>
-            <TitleRow center gap="0.5ch">
+            <TitleRow center gap='0.5ch'>
               <Icon />
               <ToolTitle toolName={toolName} part={part} />
             </TitleRow>
@@ -55,7 +56,9 @@ export const MessageToolPart: React.FC<ToolMessageProps> = ({ part }) => {
         {toolName === TOOL_NAMES.SEMANTIC_SEARCH ? (
           <SearchToolMessageContent
             output={part.output}
-            query={isVectorSearchArgs(part.input) ? part.input.query : undefined}
+            query={
+              isVectorSearchArgs(part.input) ? part.input.query : undefined
+            }
           />
         ) : (
           <StyledPre>{JSON.stringify(part.output, null, 2)}</StyledPre>
@@ -93,7 +96,13 @@ const getIcon = (toolName: string) => {
   }
 };
 
-const ToolTitle = ({ toolName, part }: { toolName: string; part: ToolUIPart }) => {
+const ToolTitle = ({
+  toolName,
+  part,
+}: {
+  toolName: string;
+  part: ToolUIPart;
+}) => {
   const args = part.input as unknown;
 
   if (toolName === MCP_TOOL_NAMES.EXA_WEB_SEARCH) {
@@ -112,7 +121,10 @@ const ToolTitle = ({ toolName, part }: { toolName: string; part: ToolUIPart }) =
     return <EditTitle property={args.property} subject={args.subject} />;
   }
 
-  if (toolName === TOOL_NAMES.EDIT_DOCUMENT_RESOURCE && isEditDocumentArgs(args)) {
+  if (
+    toolName === TOOL_NAMES.EDIT_DOCUMENT_RESOURCE &&
+    isEditDocumentArgs(args)
+  ) {
     return <EditDocumentTitle subject={args.subject} />;
   }
 
@@ -148,11 +160,14 @@ const ToolTitle = ({ toolName, part }: { toolName: string; part: ToolUIPart }) =
     );
   }
 
-  if (toolName === TOOL_NAMES.READ_SKILL_REFERENCE && isReadSkillReferenceArgs(args)) {
+  if (
+    toolName === TOOL_NAMES.READ_SKILL_REFERENCE &&
+    isReadSkillReferenceArgs(args)
+  ) {
     return (
       <span>
         Loading skill: <Name>{args.name.trim()}</Name>
-        {" · "}
+        {' · '}
         <Name>{args.path.trim()}</Name>
       </span>
     );
@@ -164,29 +179,46 @@ const ToolTitle = ({ toolName, part }: { toolName: string; part: ToolUIPart }) =
 const FetchResourceTitle = ({ subjects }: { subjects: string[] }) => {
   return (
     <span>
-      Reading <InlineFormattedResourceList subjects={subjects} RenderComp={ResourceTitle} />
+      Reading{' '}
+      <InlineFormattedResourceList
+        subjects={subjects}
+        RenderComp={ResourceTitle}
+      />
     </span>
   );
 };
 
 const ResourceTitle = ({ subject }: { subject: string }) => {
+  // Some models stream tool inputs, that means that the subject is often not valid at the start.
+  return Client.isValidSubject(subject) ? (
+    <ResourceTitleInner subject={subject} />
+  ) : (
+    // Just render the subject if it's not a valid url yet.
+    subject
+  );
+};
+
+const ResourceTitleInner = ({ subject }: { subject: string }) => {
   const resource = useResource(subject);
 
   return (
     <Name>
       {resource.title.slice(0, 20)}
-      {resource.title.length > 20 ? "..." : ""}
+      {resource.title.length > 20 ? '...' : ''}
     </Name>
   );
 };
 
 const CreateResourceTitle = ({ jsonAD }: { jsonAD: string }) => {
-  let name = "resource";
+  let name = 'resource';
 
   try {
     const data = JSON.parse(jsonAD);
 
-    name = data[core.properties.name] ?? data[core.properties.shortname] ?? "resource";
+    name =
+      data[core.properties.name] ??
+      data[core.properties.shortname] ??
+      'resource';
   } catch {
     // Invalid JSON-AD, let the AI handle it.
   }
@@ -198,7 +230,13 @@ const CreateResourceTitle = ({ jsonAD }: { jsonAD: string }) => {
   );
 };
 
-const EditTitle = ({ property, subject }: { property: string; subject: string }) => {
+const EditTitle = ({
+  property,
+  subject,
+}: {
+  property: string;
+  subject: string;
+}) => {
   const propertyResource = useResource(property);
 
   return (
@@ -216,8 +254,15 @@ const EditDocumentTitle = ({ subject }: { subject: string }) => {
   );
 };
 
-function isVectorSearchArgs(args: unknown): args is { query: string; description: string } {
-  return typeof args === "object" && args !== null && "query" in args && "description" in args;
+function isVectorSearchArgs(
+  args: unknown,
+): args is { query: string; description: string } {
+  return (
+    typeof args === 'object' &&
+    args !== null &&
+    'query' in args &&
+    'description' in args
+  );
 }
 
 function isQueryArgs(args: unknown): args is {
@@ -225,16 +270,18 @@ function isQueryArgs(args: unknown): args is {
   filters: Record<string, unknown>;
   limit: number;
 } {
-  return typeof args === "object" && args !== null && "description" in args;
+  return typeof args === 'object' && args !== null && 'description' in args;
 }
 
-function isEditArgs(args: unknown): args is { subject: string; property: string; value: unknown } {
+function isEditArgs(
+  args: unknown,
+): args is { subject: string; property: string; value: unknown } {
   return (
-    typeof args === "object" &&
+    typeof args === 'object' &&
     args !== null &&
-    "subject" in args &&
-    "property" in args &&
-    "value" in args
+    'subject' in args &&
+    'property' in args &&
+    'value' in args
   );
 }
 
@@ -242,48 +289,50 @@ function isEditDocumentArgs(
   args: unknown,
 ): args is { subject: string; instruction: string; edit: string } {
   return (
-    typeof args === "object" &&
+    typeof args === 'object' &&
     args !== null &&
-    "subject" in args &&
-    "instruction" in args &&
-    "edit" in args
+    'subject' in args &&
+    'instruction' in args &&
+    'edit' in args
   );
 }
 
 function isGetSchemaArgs(args: unknown): args is { subject?: string } {
-  return typeof args === "object" && args !== null;
+  return typeof args === 'object' && args !== null;
 }
 
 function isFetchArgs(args: unknown): args is { subjects: string[] } {
   return (
-    typeof args === "object" &&
+    typeof args === 'object' &&
     args !== null &&
-    "subjects" in args &&
+    'subjects' in args &&
     Array.isArray((args as { subjects?: unknown }).subjects)
   );
 }
 
 function isCreateResourceArgs(args: unknown): args is { jsonAD: string } {
-  return typeof args === "object" && args !== null && "jsonAD" in args;
+  return typeof args === 'object' && args !== null && 'jsonAD' in args;
 }
 
 function isReadSkillArgs(args: unknown): args is { name: string } {
   return (
-    typeof args === "object" &&
+    typeof args === 'object' &&
     args !== null &&
-    "name" in args &&
-    typeof (args as { name: unknown }).name === "string"
+    'name' in args &&
+    typeof (args as { name: unknown }).name === 'string'
   );
 }
 
-function isReadSkillReferenceArgs(args: unknown): args is { name: string; path: string } {
+function isReadSkillReferenceArgs(
+  args: unknown,
+): args is { name: string; path: string } {
   return (
-    typeof args === "object" &&
+    typeof args === 'object' &&
     args !== null &&
-    "name" in args &&
-    "path" in args &&
-    typeof (args as { name: unknown }).name === "string" &&
-    typeof (args as { path: unknown }).path === "string"
+    'name' in args &&
+    'path' in args &&
+    typeof (args as { name: unknown }).name === 'string' &&
+    typeof (args as { path: unknown }).path === 'string'
   );
 }
 
@@ -297,9 +346,9 @@ const ToolUseMessage = styled.div`
 `;
 
 const StyledPre = styled.pre`
-  background-color: ${(p) => p.theme.colors.bg};
-  padding: ${(p) => p.theme.size()};
-  border-radius: ${(p) => p.theme.radius};
+  background-color: ${p => p.theme.colors.bg};
+  padding: ${p => p.theme.size()};
+  border-radius: ${p => p.theme.radius};
   overflow-x: auto;
   code {
     font-family: Monaco, monospace;
@@ -315,5 +364,5 @@ const TitleRow = styled(Row)`
 `;
 
 const Name = styled.span`
-  color: ${(p) => p.theme.colors.textLight};
+  color: ${p => p.theme.colors.textLight};
 `;

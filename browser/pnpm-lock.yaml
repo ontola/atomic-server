@@ -163,8 +163,8 @@ importers:
         specifier: ^0.6.1
         version: 0.6.1
       '@openrouter/ai-sdk-provider':
-        specifier: ^2.3.0
-        version: 2.3.0(ai@6.0.116(zod@4.1.13))(zod@4.1.13)
+        specifier: ^2.9.0
+        version: 2.9.0(ai@6.0.116(zod@4.1.13))(zod@4.1.13)
       '@radix-ui/react-popover':
         specifier: ^1.1.15
         version: 1.1.15(@types/react-dom@19.2.3(@types/react@19.2.6))(@types/react@19.2.6)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -2887,8 +2887,8 @@ packages:
   '@oddbird/css-anchor-positioning@0.6.1':
     resolution: {integrity: sha512-/M1guQMJROMAFjS0uTmcg93S2X5r0Gwe6m5DqmRrGxNEUe1llmY6/Qw8UuhvexP6yeD+GDCP9CJtXBJS1vS9UQ==}
 
-  '@openrouter/ai-sdk-provider@2.3.0':
-    resolution: {integrity: sha512-LXbXDDxCmEnXqvLH+37ZgoQzlmkmAPCbrUaTYhsuquTNVAu8BiwNHW7sEHcA3NOE49k50TRtLHce9JKcgKeoGA==}
+  '@openrouter/ai-sdk-provider@2.9.0':
+    resolution: {integrity: sha512-Seva+NCa0WUQnJIUE5GzHsUv1WTIeyqwz0ELl2VtS6NP+eF+77yCXGFVOMbvoCM7QMjlnhv7931e89R+8pJdcQ==}
     engines: {node: '>=18'}
     peerDependencies:
       ai: ^6.0.0
@@ -13971,7 +13971,7 @@ snapshots:
       css-tree: 3.1.0
       nanoid: 5.1.6
 
-  '@openrouter/ai-sdk-provider@2.3.0(ai@6.0.116(zod@4.1.13))(zod@4.1.13)':
+  '@openrouter/ai-sdk-provider@2.9.0(ai@6.0.116(zod@4.1.13))(zod@4.1.13)':
     dependencies:
       ai: 6.0.116(zod@4.1.13)
       zod: 4.1.13

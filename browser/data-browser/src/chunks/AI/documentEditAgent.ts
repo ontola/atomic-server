@@ -10,7 +10,6 @@ import {
 } from '@tomic/react';
 import type { JSONContent } from '@tiptap/core';
 import { z } from 'zod';
-import { useAISettings } from '@components/AI/AISettingsContext';
 import { useGetModel } from './useModel';
 import type { AIModelIdentifier } from './types';
 import { getCollaborativeEditorSchema } from '@chunks/RTE/getCollaborativeEditorSchema';
@@ -232,7 +231,7 @@ async function generatePatchCompilerText(
 async function runDocumentEdit(
   store: Store,
   getModel: ReturnType<typeof useGetModel>,
-  genFeaturesModel: AIModelIdentifier,
+  editModel: AIModelIdentifier,
   subject: string,
   instruction: string,
   edit: string,
@@ -244,10 +243,10 @@ async function runDocumentEdit(
     return `Error: Resource ${subject} is not a Document (document-v2).`;
   }
 
-  const model = getModel(genFeaturesModel);
+  const model = getModel(editModel);
 
   if (!model) {
-    return 'Error: No AI model configured for document features (set a model in AI settings).';
+    return 'Error: The selected chat model is not available. Check that its provider is enabled and configured in AI settings.';
   }
 
   const { schema } = getCollaborativeEditorSchema(store);
@@ -376,9 +375,8 @@ async function runDocumentEdit(
   return `Document edit successful for ${subject}`;
 }
 
-export function useDocumentEditAgent() {
+export function useDocumentEditAgent(editModel: AIModelIdentifier) {
   const store = useStore();
-  const { genFeaturesModel } = useAISettings();
   const getModel = useGetModel();
 
   return async (
@@ -390,7 +388,7 @@ export function useDocumentEditAgent() {
     runDocumentEdit(
       store,
       getModel,
-      genFeaturesModel,
+      editModel,
       subject,
       instruction,
       edit,
