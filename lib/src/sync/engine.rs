@@ -146,7 +146,7 @@ pub async fn handle_frame(
 /// Collects all resource subjects belonging to a drive via BFS on parent relationships.
 /// Collects all resource subjects belonging to a drive via BFS on parent relationships.
 /// Returns pure_id() strings (no query params/drive hints) to match LoroSnapshot keys.
-pub fn collect_drive_subjects(
+pub async fn collect_drive_subjects(
     store: &Db,
     drive_subject: &crate::Subject,
 ) -> std::collections::HashSet<String> {
@@ -155,35 +155,56 @@ pub fn collect_drive_subjects(
     result.insert(drive_str.clone());
 
     if drive_subject.is_did() {
-        let mut parent_to_children: std::collections::HashMap<String, Vec<String>> =
-            std::collections::HashMap::new();
-
-        for resource in store.all_resources(false) {
-            if let Ok(parent_val) = resource.get(crate::urls::PARENT) {
-                let parent_pure = crate::Subject::from_raw(
-                    &parent_val.to_string(),
-                    store.get_base_domain().as_deref(),
-                )
-                .pure_id();
-                parent_to_children
-                    .entry(parent_pure)
-                    .or_default()
-                    .push(resource.get_subject().pure_id());
-            }
-        }
-
+        // BFS through the parent-index. Querying
+        // `property=parent value=current` hits the same index used by
+        // `useChildren` / `/query` and returns only the subjects that
+        // actually point at `current` — no full-store scan, no commits
+        // touched (commits have no `parent` propval, so they're absent
+        // from the index by construction). Cost drops from
+        // O(total `Tree::Resources` rows, including every commit ever
+        // signed) to O(drive subjects) — see the
+        // `collect_drive_subjects_scales_with_target_drive_only`
+        // regression test in `sync/tests.rs`.
         let mut queue = vec![drive_str];
 
         while let Some(current) = queue.pop() {
-            if let Some(children) = parent_to_children.get(&current) {
-                for child in children {
-                    if result.insert(child.clone()) {
-                        queue.push(child.clone());
+            let q = crate::storelike::Query {
+                property: Some(crate::urls::PARENT.into()),
+                value: Some(crate::Value::AtomicUrl(current.clone().into())),
+                limit: None,
+                start_val: None,
+                end_val: None,
+                offset: 0,
+                sort_by: None,
+                sort_desc: false,
+                include_external: true,
+                include_nested: false,
+                // Sudo: sync needs to enumerate every subject the
+                // drive actually contains. Per-agent ACL filtering
+                // happens later in `handle_sync_vv` (`check_read` on
+                // each subject before push/pull). Scoping the index
+                // walk by `for_agent` here would also re-trigger the
+                // count-drift fix path for unauthorized rows, which
+                // is the wrong layer.
+                for_agent: crate::agents::ForAgent::Sudo,
+                drive: None,
+            };
+
+            if let Ok(qr) = store.query(&q).await {
+                for child in qr.subjects {
+                    let child_str = child.pure_id();
+                    if result.insert(child_str.clone()) {
+                        queue.push(child_str);
                     }
                 }
             }
         }
     } else {
+        // Non-DID (HTTP-URL) drive: subjects start with the drive
+        // origin. We keep the legacy full-scan here — there's no
+        // parent-index entry for the drive root itself in the
+        // HTTP-URL case, and DID drives are the hot path for the
+        // SUB → SYNC_DIFF latency we're targeting.
         let drive_pure = drive_subject.pure_id();
         for resource in store.all_resources(false) {
             let subject = resource.get_subject();
@@ -291,7 +312,7 @@ pub async fn handle_sync_vv(
     agent: &crate::agents::ForAgent,
 ) -> Vec<Vec<u8>> {
     let drive_subject = crate::Subject::from_raw(drive, store.get_base_domain().as_deref());
-    let drive_subjects = collect_drive_subjects(store, &drive_subject);
+    let drive_subjects = collect_drive_subjects(store, &drive_subject).await;
     let server_vvs = build_drive_vvs(store, &drive_subjects);
 
     // Fast path: hash match
