@@ -45,7 +45,8 @@ mod peer_sync_tests {
 
         // Device B computes its sync state (empty — it has nothing)
         let drive_subject_b = crate::Subject::from_raw(&drive_b, db_b.get_base_domain().as_deref());
-        let drive_subjects_b = crate::sync::engine::collect_drive_subjects(&db_b, &drive_subject_b);
+        let drive_subjects_b =
+            crate::sync::engine::collect_drive_subjects(&db_b, &drive_subject_b).await;
         let vvs_b = crate::sync::engine::build_drive_vvs(&db_b, &drive_subjects_b);
         let hash_b = crate::sync::engine::compute_drive_hash(&vvs_b);
         println!(
@@ -379,7 +380,8 @@ mod peer_sync_tests {
 
         // === Test 1: Sync as Public (unauthenticated) — should get NOTHING ===
         let drive_subject = crate::Subject::from_raw(&drive_did, db_a.get_base_domain().as_deref());
-        let drive_subjects = crate::sync::engine::collect_drive_subjects(&db_a, &drive_subject);
+        let drive_subjects =
+            crate::sync::engine::collect_drive_subjects(&db_a, &drive_subject).await;
         assert!(
             drive_subjects.len() >= 2,
             "Drive should have at least 2 resources (drive + child), got {}",
@@ -1341,5 +1343,126 @@ mod peer_sync_tests {
         }
 
         println!("TEST PASSED: live sync deletion test completed");
+    }
+
+    /// Regression test for the SYNC_VV → SYNC_DIFF latency that drove
+    /// the "SUB takes 10 seconds" observation on a 3.6 GB redb.
+    ///
+    /// Root cause: `collect_drive_subjects` iterates `all_resources(false)`
+    /// — the entire `Tree::Resources` — and builds a parent → children
+    /// map from scratch on every call. That tree includes every commit
+    /// ever made (`did:ad:commit:<sig>` subjects) and every resource in
+    /// every drive the store has accumulated. So the cost of finding
+    /// "subjects belonging to drive A" scales with `|total store|`,
+    /// not `|drive A|`.
+    ///
+    /// Contract under test: with two drives in one store where B is
+    /// substantially larger than A (plus a pile of commits sitting in
+    /// the resources tree), `collect_drive_subjects(A)` must run in
+    /// time proportional to `|A|`, not `|store|`. We measure that with
+    /// a ratio of the two calls on the same machine — machine speed
+    /// drops out, so we get a stable signal even on slow CI.
+    #[tokio::test]
+    async fn collect_drive_subjects_scales_with_target_drive_only() {
+        use std::time::Instant;
+
+        let db = Db::init_temp("collect_drive_subjects_scales").await.unwrap();
+
+        // Drive A — small (4 children).
+        let (_agent_a, drive_a) = db.setup("alice").await.unwrap();
+        for i in 0..4 {
+            db.create_resource(
+                "https://atomicdata.dev/classes/Folder",
+                &drive_a,
+                &format!("a-child-{i}"),
+                None,
+            )
+            .await
+            .unwrap();
+        }
+
+        // Drive B — much larger. Live in the same store. Each
+        // `create_resource` also persists a commit row in
+        // `Tree::Resources`, so the count of irrelevant rows the old
+        // scan paid for is roughly 2× this number.
+        let (_agent_b, drive_b) = db.setup("bob").await.unwrap();
+        const B_CHILDREN: usize = 400;
+        for i in 0..B_CHILDREN {
+            db.create_resource(
+                "https://atomicdata.dev/classes/Folder",
+                &drive_b,
+                &format!("b-child-{i}"),
+                None,
+            )
+            .await
+            .unwrap();
+        }
+
+        let drive_a_subject =
+            crate::Subject::from_raw(&drive_a, db.get_base_domain().as_deref());
+        let drive_b_subject =
+            crate::Subject::from_raw(&drive_b, db.get_base_domain().as_deref());
+
+        // Warm-up: first call may touch caches / mmap. Discard it.
+        let _ = crate::sync::engine::collect_drive_subjects(&db, &drive_a_subject).await;
+
+        let t = Instant::now();
+        let a_subjects =
+            crate::sync::engine::collect_drive_subjects(&db, &drive_a_subject).await;
+        let time_a = t.elapsed();
+
+        let t = Instant::now();
+        let b_subjects =
+            crate::sync::engine::collect_drive_subjects(&db, &drive_b_subject).await;
+        let time_b = t.elapsed();
+
+        // Correctness — drive A's collection must contain A and its
+        // four children, nothing from drive B, and no commits.
+        assert_eq!(
+            a_subjects.len(),
+            5,
+            "drive A should report itself + 4 children, got {:?}",
+            a_subjects
+        );
+        for s in &a_subjects {
+            assert!(
+                !s.starts_with("did:ad:commit:"),
+                "commit subject leaked into drive A: {s}"
+            );
+        }
+        assert!(
+            !a_subjects.contains(&drive_b),
+            "drive B leaked into drive A's collection"
+        );
+        assert_eq!(b_subjects.len(), B_CHILDREN + 1, "drive B count");
+
+        // Performance — A is ~1% the size of B, so A's call must be
+        // measurably faster than B's. If the scan is full-store
+        // (current bug), both calls take ~the same time and the ratio
+        // collapses to ~1. We use 3× as the regression bar — generous
+        // for noisy CI, but tight enough to fail if scan cost is
+        // O(total store) instead of O(target drive).
+        let ratio = time_b.as_nanos() as f64 / time_a.as_nanos().max(1) as f64;
+        eprintln!(
+            "collect_drive_subjects: drive A ({} subjects) = {:?}, \
+             drive B ({} subjects) = {:?}, ratio = {:.2}×",
+            a_subjects.len(),
+            time_a,
+            b_subjects.len(),
+            time_b,
+            ratio,
+        );
+        assert!(
+            ratio >= 3.0,
+            "collect_drive_subjects scan cost is not proportional to target drive size. \
+             time_a={:?} ({} subjects), time_b={:?} ({} subjects), ratio={:.2}× \
+             (expected ≥ 3×). Likely cause: `all_resources(false)` scans the entire \
+             `Tree::Resources` including commits, so both calls pay the full-store cost.",
+            time_a,
+            a_subjects.len(),
+            time_b,
+            b_subjects.len(),
+            ratio,
+        );
     }
 }
