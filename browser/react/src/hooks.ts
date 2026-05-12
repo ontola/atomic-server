@@ -117,43 +117,50 @@ export function useResources(
 /**
  * Hook for using a Property. Will return `undefined` if the Property is not yet
  * loaded, and add Error strings to shortname and description if something goes wrong.
+ *
+ * Intentionally NOT `useMemo`'d: the underlying `Resource` mutates in
+ * place when its fetch completes (loading → false, propvals populate),
+ * which `useSyncExternalStore` reflects via a new snapshot tuple — but
+ * the Resource *reference* stays the same across renders. A `useMemo`
+ * keyed on `[resource, subject]` would therefore freeze on the initial
+ * `loading` state and never reflect the populated shortname/datatype,
+ * so any form rendered with `<ResourceField property=...>` would show
+ * the "loading" label forever. Recomputing the small property object
+ * each render is cheap; downstream `useMemo`s on individual fields
+ * (`label`, `datatype`) stay valid because those fields are primitives.
  */
 export function useProperty(subject: string): Property {
   const resource = useResource<Core.Property>(subject);
 
-  const property: Property = useMemo(() => {
-    if (resource.loading) {
-      return {
-        subject,
-        datatype: Datatype.UNKNOWN,
-        shortname: 'loading',
-        description: `Loading property ${subject}`,
-        loading: true,
-      };
-    }
-
-    if (resource.error) {
-      return {
-        subject,
-        datatype: Datatype.UNKNOWN,
-        shortname: 'error',
-        description: 'Error getting Property. ' + resource.error.message,
-        error: resource.error,
-      };
-    }
-
+  if (resource.loading) {
     return {
       subject,
-      datatype: datatypeFromUrl(resource.props.datatype),
-      shortname: resource.props.shortname,
-      description: resource.props.description,
-      classType: resource.props.classtype,
-      isDynamic: !!resource.props.isDynamic,
-      allowsOnly: resource.props.allowsOnly,
+      datatype: Datatype.UNKNOWN,
+      shortname: 'loading',
+      description: `Loading property ${subject}`,
+      loading: true,
     };
-  }, [resource, subject]);
+  }
 
-  return property;
+  if (resource.error) {
+    return {
+      subject,
+      datatype: Datatype.UNKNOWN,
+      shortname: 'error',
+      description: 'Error getting Property. ' + resource.error.message,
+      error: resource.error,
+    };
+  }
+
+  return {
+    subject,
+    datatype: datatypeFromUrl(resource.props.datatype),
+    shortname: resource.props.shortname,
+    description: resource.props.description,
+    classType: resource.props.classtype,
+    isDynamic: !!resource.props.isDynamic,
+    allowsOnly: resource.props.allowsOnly,
+  };
 }
 
 export type SetValue<T extends JSONValue = JSONValue> = (

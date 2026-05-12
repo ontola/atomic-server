@@ -411,6 +411,26 @@ export class Resource<C extends OptionalClass = any> {
 
   private applyRawValue(prop: string, val: AtomicValue): void {
     if (prop === commits.properties.loroUpdate) {
+      // For a Commit resource (`did:ad:commit:<sig>`), `loroUpdate` is a
+      // BINARY PROPERTY OF THE COMMIT — the snapshot bytes for the
+      // *committed* resource, not the commit's own Loro state. Importing
+      // those bytes into the commit's Loro doc would overwrite the
+      // commit's propvals (isA=Commit, signature, signer, etc.) with the
+      // committed resource's propvals (e.g. isA=Message, parent, …),
+      // which is exactly what `did:ad:commit:` pages showed before.
+      //
+      // Keep the bytes in `_auxValues` so they round-trip on `toObject`
+      // and `getEntries`, but don't touch `_loroSnapshotBytes`.
+      if (this._subject.startsWith('did:ad:commit:')) {
+        if (val === undefined) {
+          this._auxValues.delete(prop);
+        } else if (val instanceof Uint8Array) {
+          this._auxValues.set(prop, val);
+        } else if (typeof val === 'string') {
+          this._auxValues.set(prop, decodeB64(val));
+        }
+        return;
+      }
       if (val === undefined) {
         this._loroSnapshotBytes = undefined;
         this.resetLoroState();
@@ -1757,9 +1777,21 @@ export class Resource<C extends OptionalClass = any> {
         if (!(v instanceof Uint8Array)) obj[k] = v;
       }
       const snapshot = this._loroDoc?.export({ mode: 'snapshot' });
-      clientDb
-        .putResourceWithSnapshot(this.subject, JSON.stringify(obj), snapshot)
-        .catch(e => console.error('[Offline] persist failed:', e));
+      // `await` the OPFS write — the caller (`save()`) treats this
+      // method as durable: when it returns, the edit MUST survive a
+      // reload. Without the await, `save()` resolved while the OPFS
+      // write was still in flight; a subsequent reload (the offline-
+      // edit-persists-across-reload test does this immediately) read
+      // OPFS before the write landed and the offline edit was lost.
+      try {
+        await clientDb.putResourceWithSnapshot(
+          this.subject,
+          JSON.stringify(obj),
+          snapshot,
+        );
+      } catch (e) {
+        console.error('[Offline] persist failed:', e);
+      }
     }
 
     this.applyToStore('offline-replay');
