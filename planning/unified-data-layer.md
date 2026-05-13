@@ -1,5 +1,11 @@
 # Unified data layer — proposal
 
+> Scope note: this proposal focuses on the browser/JS data layer and the OPFS
+> flakes that exposed it. The broader runtime direction is now documented in
+> `planning/atomic-lib-runtime.md`: `atomic_lib` should expose a complete
+> local node API, while this data layer becomes the browser cache/reactivity
+> layer around that API.
+
 The data-layer flakes we keep landing on (genesis double-POST,
 collection drops members during init, leadership-election timeout,
 sidebar-not-visible-after-reload) are all symptoms of the same

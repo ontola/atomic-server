@@ -47,7 +47,8 @@ Atomic Server is a graph database with real-time sync, built on **Loro CRDT** fo
 
 ### Crates
 
-- **`docs`** (`docs`) — Atomic Data spec documentation. Describes how the protocol works, very important.
+- **`docs`** (`docs`) — Public-facing Atomic Data spec and product documentation. Describes how the protocol works, very important.
+- **`planning`** (`planning/`) — Internal design notes and larger technical direction. Read `planning/README.md` and the relevant plan before broad architectural work.
 - **`atomic_lib`** (`lib/`) — Core library powering atomic-server + WASM / OPFS browser storage.
 - **`atomic-server`** (`server/`) — Actix-web HTTP/WS server. Uses `atomic_lib` + search (tantivy).
 - **`@tomic/lib`** (`browser/lib/`) — TypeScript client library, powering the other JS projects
