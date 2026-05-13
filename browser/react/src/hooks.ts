@@ -570,6 +570,23 @@ export function useLoroDoc(resource: Resource): LoroDoc | undefined {
   );
 }
 
+/**
+ * Reactively tracks whether the Loro CRDT WASM module has finished
+ * loading. Re-renders when it becomes ready.
+ *
+ * Use this to distinguish "the editor engine is still streaming in"
+ * (transient — keep showing a spinner) from "the engine failed to
+ * load" (terminal — show an error). Without it, a tab where the
+ * `loro-crdt` WASM import failed leaves every `useLoroDoc` consumer
+ * stuck on `undefined` forever with no signal as to why.
+ */
+export function useLoroReady(): boolean {
+  return useSyncExternalStore(
+    cb => LoroLoader.onReady(cb),
+    () => LoroLoader.isLoaded(),
+  );
+}
+
 /** Preferred way of using the store in a Component or Hook */
 export function useStore(): Store {
   const store = useContext(StoreContext);

@@ -5,18 +5,13 @@ import type {
   VersionVector,
 } from 'loro-crdt';
 import { enableLoro, LoroLoader } from './loro-loader.js';
-import { decodeB64 } from './base64.js';
+import { decodeB64, encodeB64 } from './base64.js';
 import { EventManager } from './EventManager.js';
 import type { Agent } from './agent.js';
 import { Client } from './client.js';
 import type { Collection } from './collection.js';
 import { CollectionBuilder } from './collectionBuilder.js';
-import {
-  CommitBuilder,
-  Commit,
-  commitIdOf,
-  commitToJsonADObject,
-} from './commit.js';
+import { CommitBuilder, Commit } from './commit.js';
 import { validateDatatype, datatypeTag } from './datatypes.js';
 import { isUnauthorized } from './error.js';
 import { commits } from './ontologies/commits.js';
@@ -45,6 +40,16 @@ import {
  * Resource is not saved or fetched.
  */
 export const unknownSubject = 'unknown-subject';
+
+/**
+ * Outcome of {@link Resource.save}:
+ *  - `'persisted'` — the server acknowledged the commit.
+ *  - `'offline'`   — server unreachable; saved locally, drain retries
+ *                    on reconnect (also returned for a child queued
+ *                    behind an unsaved parent).
+ *  - `'noop'`      — nothing to save.
+ */
+export type SaveResult = 'persisted' | 'offline' | 'noop';
 
 /**
  * Origin tag attached to Loro commits the runtime writes for housekeeping
@@ -116,6 +121,14 @@ export class Resource<C extends OptionalClass = any> {
   /** Raw Loro snapshot bytes, kept separate from properties. Not a propval. */
   private _loroSnapshotBytes?: Uint8Array | string;
 
+  /** A genesis commit signed by `store.newResource` to derive the DID
+   *  subject, held HERE (not in the outbox) until the first `save()`.
+   *  Keeping it off the outbox means a created-but-never-saved resource
+   *  — e.g. an unfilled table placeholder row, which `TableNewRow`
+   *  creates on mount — is never POSTed: it's just GC'd when discarded.
+   *  `save()` moves it into the outbox to drain. See sign-at-drain. */
+  private _pendingGenesis?: Commit;
+
   /** Loro CRDT document backing this resource. Lazily initialized. */
   private _loroDoc?: LoroDoc;
   /** The "properties" map inside the LoroDoc. Typed as any because the LoroMap generic causes issues with set(). */
@@ -132,14 +145,8 @@ export class Resource<C extends OptionalClass = any> {
    */
   private _lastCommit: string | undefined;
 
-  private inProgressCommit: Promise<void> | undefined;
-
   /** Refcount of in-flight `save()` calls. Bumped in `save()` entry
-   * and dropped in the matching `finally`. `inProgressCommit` above
-   * is left set even after the promise resolves (the existing flow
-   * uses it as a "save was started" sentinel), so checking it for
-   * "saving right now?" gives a permanent true after the first save.
-   */
+   * and dropped in the matching `finally`. */
   private _saveDepth = 0;
 
   /** True while at least one `save()` is in flight. Lets the store
@@ -148,23 +155,12 @@ export class Resource<C extends OptionalClass = any> {
   public get isSaving(): boolean {
     return this._saveDepth > 0;
   }
-  private hasQueue = false;
-  /**
-   * Coalesces concurrent {@link pushCommits} invocations onto a single
-   * in-flight drain. Two callers must NOT both POST the same queued
-   * commit — under load the second POST hits the server's
-   * lookup→genesis-check TOCTOU and 500s with
-   * "is_genesis: true, but the resource already exists". Reproduced in
-   * `tests/genesis-double-push.integration.test.ts`.
-   */
-  private inProgressPush: Promise<string | undefined> | undefined;
 
   private _store?: Store;
   private eventManager = new EventManager<
     ResourceEvents,
     ResourceEventHandlers
   >();
-
 
   public constructor(subject: string, newResource?: boolean) {
     if (typeof subject !== 'string') {
@@ -343,7 +339,7 @@ export class Resource<C extends OptionalClass = any> {
   /** Funnel `this` through the store's unified ingress.
    *  Defaults `subject` to `this.subject`; pass an override only
    *  for the post-genesis subject-rename case. */
-  private applyToStore(
+  public applyToStore(
     source: ChangeSource,
     opts: { subject?: string; commitId?: string } = {},
   ): void {
@@ -420,8 +416,21 @@ export class Resource<C extends OptionalClass = any> {
 
       this.rebuildCacheFromLoro();
       this._cacheDirty = false;
+      // Initialize the export cursor:
+      //   - If the outbox holds a dirty bit for this subject, the
+      //     ops in the loaded snapshot weren't all server-acked yet
+      //     (offline-edit-then-reload case). Leave the cursor
+      //     undefined so the next drain exports a full snapshot —
+      //     server idempotently replays the ops it already has.
+      //   - Otherwise (clean hydrate from clientDb, or an existing
+      //     resource that wasn't dirty), set the cursor to current
+      //     oplogVersion so subsequent edits export as deltas from
+      //     this point.
+      const outboxKnowsThisSubjectIsDirty =
+        this._store?.outbox.hasPending(this.subject) ?? false;
       this._loroVersionAtLastSave =
-        initializedFromSnapshot || (!this.new && !this._dirty)
+        !outboxKnowsThisSubjectIsDirty &&
+        (initializedFromSnapshot || (!this.new && !this._dirty))
           ? this._loroDoc.oplogVersion()
           : undefined;
 
@@ -434,6 +443,40 @@ export class Resource<C extends OptionalClass = any> {
       if (initializedFromSnapshot && !this._loading) {
         this.eventManager.emit(ResourceEvents.LoadingChange, false);
       }
+
+      // Sign-at-drain: any local Loro op marks the subject dirty in
+      // the outbox. Server imports of remote ops go through
+      // `doc.import()` which doesn't fire `subscribeLocalUpdates` —
+      // only user-driven `set()` calls do.
+      //
+      // Skip subjects we don't own:
+      // - `did:ad:commit:*` are commit-detail resources materialized
+      //   locally for the Sync page; the server creates them on apply
+      //   and there's nothing to POST.
+      // - External HTTP subjects (atomicdata.dev/* etc.) belong to
+      //   another domain. POSTing them returns "Subject of commit
+      //   should be sent to other domain."
+      this._loroDoc.subscribeLocalUpdates(() => {
+        if (!this._store) return;
+        if (this.subject.startsWith('did:ad:commit:')) return;
+        // `_new:` is the transient client-side subject used between
+        // `getResourceLoading` and the DID-derive in `signChanges`.
+        // If `set()` runs before sign, the subscriber would mark the
+        // soon-to-be-replaced subject dirty and that entry would
+        // strand in the outbox after the subject mutates.
+        if (this.subject.startsWith('_new:')) return;
+        if (!this._store.isOwnedSubject(this.subject)) return;
+        // Skip when offline: `pendingDirtyCount > 0` is the canonical
+        // "edit is durable" signal. Marking dirty here while offline
+        // would race the async `saveOffline` clientDb write — a
+        // page reload between this synchronous `markDirty` and the
+        // OPFS persist landing would lose the edit. `_saveInner`'s
+        // offline branch awaits `saveOffline` and only then calls
+        // `markDirty`, so the count rising correctly implies the
+        // edit is in clientDb.
+        if (!this._store.serverConnected) return;
+        this._store.outbox.markDirty(this.subject);
+      });
     }
 
     return this._loroDoc;
@@ -763,13 +806,164 @@ export class Resource<C extends OptionalClass = any> {
     return bytes.length > 4 ? bytes : undefined;
   }
 
-  private exportLoroDelta(isFirstCommit: boolean): Uint8Array | undefined {
+  /**
+   * Sign-at-drain export helper. Returns the Loro delta from the
+   * last-saved cursor (or a full snapshot on first sign), along with
+   * the version vector AT the moment of export. The drain must
+   * advance `_loroVersionAtLastSave` to *that* version after the
+   * commit POSTs — not to the current `oplogVersion`, because the
+   * user can type more characters during the POST round-trip and
+   * those new ops are NOT in the signed commit. Advancing to current
+   * would silently drop them on the next drain pass.
+   *
+   * @internal store-level drain only — not part of the public API.
+   */
+  public exportLoroDeltaForDrain(
+    isFirstCommit: boolean,
+    commitMessage?: string,
+  ): { bytes: Uint8Array; versionAfterExport: VersionVector } | undefined {
+    const bytes = this.exportLoroDeltaInternal(isFirstCommit, commitMessage);
+    if (!bytes) return undefined;
+    if (!this._loroDoc) return undefined;
+
+    return { bytes, versionAfterExport: this._loroDoc.oplogVersion() };
+  }
+
+  /**
+   * Legacy export helper — used by `signChanges` to fold the Loro
+   * delta into a CommitBuilder before sign. Same bytes as
+   * `exportLoroDeltaForDrain` returns, just without the version
+   * capture (signChanges advances the cursor itself with a direct
+   * `_loroVersionAtLastSave = oplogVersion()` assignment).
+   *
+   * @internal used by `signChanges` only — not part of the public API.
+   */
+  public exportLoroDelta(isFirstCommit: boolean): Uint8Array | undefined {
+    return this.exportLoroDeltaInternal(isFirstCommit);
+  }
+
+  /**
+   * Advance the Loro save cursor to a specific version (typically the
+   * version captured at drain-time export, not the current oplog
+   * version — see `exportLoroDeltaForDrain` above for why).
+   *
+   * @internal store-level drain only — not part of the public API.
+   */
+  public markLoroSavedAt(version: VersionVector): void {
+    if (this._loroDoc) {
+      this._loroVersionAtLastSave = version;
+    }
+  }
+
+  /** Base64-encode the current save cursor (last-synced Loro version) for
+   *  durable storage. Returns undefined when nothing has synced yet (the
+   *  cursor is the resource's whole history → handled as a first commit).
+   *  @internal offline-persistence only. */
+  public getEncodedSaveCursor(): string | undefined {
+    if (!this._loroVersionAtLastSave) return undefined;
+
+    try {
+      return encodeB64(this._loroVersionAtLastSave.encode());
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** Restore the save cursor from a base64-encoded `VersionVector` (see
+   *  `getEncodedSaveCursor`). Used on reload to point the cursor back at
+   *  the last-synced version so the reconnect drain exports the offline
+   *  delta rather than an empty one.
+   *  @internal store-level drain only. */
+  public restoreSaveCursor(encoded: string): void {
+    if (!this._loroDoc || !LoroLoader.isLoaded()) return;
+
+    try {
+      const { VersionVector } = LoroLoader.Loro;
+      this._loroVersionAtLastSave = VersionVector.decode(decodeB64(encoded));
+    } catch (e) {
+      console.warn(
+        `[Resource] failed to restore save cursor for ${this.subject}:`,
+        e,
+      );
+    }
+  }
+
+  /** True when the Loro doc has ops past the current save cursor —
+   *  i.e. local edits not yet exported into a signed commit. Used by
+   *  the drain to decide whether to clear the outbox dirty bit after
+   *  a successful POST: if the user typed more during the round-trip,
+   *  those ops are past the just-advanced cursor and the subject must
+   *  stay dirty so the next drain pass picks them up.
+   *  @internal store-level drain only — not part of the public API. */
+  public hasOpsPastSaveCursor(): boolean {
+    if (!this._loroDoc) return false;
+    if (!this._loroVersionAtLastSave) return false;
+
+    return !this.versionVectorsEqual(
+      this._loroDoc.oplogVersion(),
+      this._loroVersionAtLastSave,
+    );
+  }
+
+  /** The canonical `previousCommit` value for chaining the next sign:
+   *  the in-memory `_lastCommit` (set by `setLastCommitValue` after
+   *  every ack) falls back to the cached property.
+   *  @internal store-level drain only — not part of the public API. */
+  public getLastCommitForChain(): string | undefined {
+    return (
+      this._lastCommit ?? this.get(properties.commit.lastCommit)?.toString()
+    );
+  }
+
+  /** Compare two Loro VersionVectors by their JSON representation. */
+  private versionVectorsEqual(a: VersionVector, b: VersionVector): boolean {
+    const aj = a.toJSON();
+    const bj = b.toJSON();
+    if (aj.size !== bj.size) return false;
+
+    for (const [peer, counter] of aj) {
+      if (bj.get(peer) !== counter) return false;
+    }
+
+    return true;
+  }
+
+  private exportLoroDeltaInternal(
+    isFirstCommit: boolean,
+    commitMessage?: string,
+  ): Uint8Array | undefined {
     if (!this._loroDoc) {
       return undefined;
     }
 
-    // Force commit any pending transaction in Loro so that oplog version is advanced.
-    this._loroDoc.commit();
+    // Pre-check: if oplogVersion matches the cursor exactly, no new
+    // local ops since the last sign. `doc.commit()` below would
+    // otherwise emit a fresh "commit-point" op (because
+    // `setRecordTimestamp(true)` writes a timestamp on every commit
+    // boundary), advancing oplogVersion past the cursor and producing
+    // a non-empty delta with no real content. Skipping the
+    // doc.commit() also avoids re-firing `subscribeLocalUpdates`
+    // which would re-mark the subject dirty in the outbox.
+    if (!isFirstCommit && this._loroVersionAtLastSave) {
+      const currentVV = this._loroDoc.oplogVersion();
+
+      if (this.versionVectorsEqual(currentVV, this._loroVersionAtLastSave)) {
+        return undefined;
+      }
+    }
+
+    // Force commit any pending transaction in Loro so that oplog version is
+    // advanced. Tag the change with `commitMessage` when the caller (the
+    // drain) provides one: a distinct message per Atomic commit makes Loro
+    // start a NEW Change rather than merging these ops into the previous
+    // one. That per-commit Change boundary is what `getLoroHistory` buckets
+    // by to reconstruct one version per commit — without it, every edit
+    // collapses into a single Change (same peer, same second) and history
+    // shows only the latest state. Set synchronously here, before any
+    // `await`, so it never races user input or the save cursor.
+    this._loroDoc.commit(
+      commitMessage ? { message: commitMessage } : undefined,
+    );
 
     // If it's the first commit, we must export a full snapshot.
     if (isFirstCommit || !this._loroVersionAtLastSave) {
@@ -1054,11 +1248,13 @@ export class Resource<C extends OptionalClass = any> {
         properties.commit.lastCommit,
         commits.properties.createdAt,
       ];
+
       for (const key of serverManaged) {
         if (resourceB._cache[key] !== undefined) {
           this._cache[key] = resourceB._cache[key];
         }
       }
+
       // Shallow copy other fields if no loro doc exists at all
       if (!this._loroDoc) {
         this._cache = resourceB._cache;
@@ -1081,6 +1277,7 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     const remoteCreatedAt = resourceB.get(commits.properties.createdAt);
+
     if (typeof remoteCreatedAt === 'number') {
       this.setCreatedAtValue(remoteCreatedAt);
     }
@@ -1090,10 +1287,12 @@ export class Resource<C extends OptionalClass = any> {
   }
 
   /**
-   * Marks the next commit as a DID genesis commit. Must be called before
-   * {@link signChanges} when creating a brand-new DID resource. This is the
-   * only way to produce a genesis commit — the old implicit detection based on
-   * `_new:` subject prefixes has been removed to prevent accidental genesis.
+   * Marks the next commit as a DID genesis commit. Creating a new DID
+   * resource derives its `did:ad:<sig>` subject from this commit's
+   * signature, so genesis is decided when the resource is created.
+   *
+   * @internal Only `Store.newResource` calls this. Application code
+   * never marks genesis by hand — use `store.newResource(...)`.
    */
   public markNextCommitAsGenesis(): void {
     this.commitBuilder.setIsGenesis(true);
@@ -1202,6 +1401,20 @@ export class Resource<C extends OptionalClass = any> {
     return this.commitBuilder.hasUnsavedChanges() || this._dirty;
   }
 
+  /** Clear the dirty flag after a successful drain has signed + POSTed
+   *  the accumulated Loro delta. The store-level drain
+   *  (`drainOutboxSubject`) calls this once the resource is caught up
+   *  (no ops past the save cursor) — without it, `_dirty` stays `true`
+   *  forever after the very first edit and the editable-title `*`
+   *  indicator never clears (rename-regression e2e). Distinct from the
+   *  Loro save cursor (`markLoroSavedAt`): the cursor tracks WHICH ops
+   *  are signed; this flag is the coarse "are there any unsynced
+   *  edits" signal that `hasUnsavedChanges` / `UnsavedIndicator` read.
+   *  @internal store-level drain only. */
+  public markSynced(): void {
+    this._dirty = false;
+  }
+
   /** Mark the resource as having unsaved local changes.
    *  Use this when external code (e.g. Loro editor plugins) modifies the
    *  resource's LoroDoc directly without going through `set()`. */
@@ -1297,7 +1510,7 @@ export class Resource<C extends OptionalClass = any> {
 
     const lastCommitProp = 'https://atomicdata.dev/properties/lastCommit';
     type GroupedVersion = {
-      lastCommitKey: string;
+      bucketKey: string;
       contentKey: string;
       step: Step;
       propvals: Map<string, JSONValue>;
@@ -1366,13 +1579,21 @@ export class Resource<C extends OptionalClass = any> {
         }
       }
 
-      // Bucket by lastCommit. An empty lastCommit (pre-genesis) is its own
-      // bucket. The latest entry per bucket wins — that's the final saved
-      // state under that commit.
-      const lastCommitKey = String(propvals.get(lastCommitProp) ?? '');
+      // Bucket by the Loro Change message — the drain tags each Atomic
+      // commit's change with a unique token (see `exportLoroDeltaForDrain`),
+      // so all ops of one commit share a message and form one version. Ops
+      // with no message (the genesis/base change, and body edits made
+      // outside the drain) bucket under '' as the base version. The latest
+      // entry per bucket wins — the final saved state under that commit.
+      //
+      // (Earlier this bucketed by the `lastCommit` propval, but under
+      // sign-at-drain `lastCommit` is server-assigned and never written into
+      // the Loro doc, so every op collapsed into the '' bucket and history
+      // showed only the latest state.)
+      const bucketKey = step.message ?? '';
       const cKey = contentSignature(propvals, containers);
 
-      const existing = grouped.find(g => g.lastCommitKey === lastCommitKey);
+      const existing = grouped.find(g => g.bucketKey === bucketKey);
 
       if (existing) {
         existing.step = step;
@@ -1381,7 +1602,7 @@ export class Resource<C extends OptionalClass = any> {
         existing.contentKey = cKey;
       } else {
         grouped.push({
-          lastCommitKey,
+          bucketKey,
           contentKey: cKey,
           step,
           propvals,
@@ -1413,7 +1634,10 @@ export class Resource<C extends OptionalClass = any> {
       frontiers: [
         { peer: g.step.peer as `${number}`, counter: g.step.counter },
       ],
-      message: g.step.message,
+      // `step.message` is the internal per-commit bucketing token
+      // (`c-<ulid>`), not a human-authored message — don't surface it in the
+      // history UI. Left undefined until real commit messages exist.
+      message: undefined,
       propvals: g.propvals,
       containers: g.containers,
     }));
@@ -1859,15 +2083,17 @@ export class Resource<C extends OptionalClass = any> {
   }
 
   /**
-   * Sign pending changes into a {@link Commit} and queue it locally.
+   * Sign pending changes into a {@link Commit}.
    *
    * - For DID genesis commits the subject is replaced with `did:ad:<signature>`.
    * - Locally-queued commits are chained via their signatures so that
    *   `previousCommit` stays consistent even before pushing.
-   * - Call {@link pushCommits} (or {@link save}) to send the queued commits to
-   *   the server.
    *
    * @returns The signed {@link Commit}.
+   *
+   * @internal Called only by `Store.newResource` (genesis) and the
+   * store-level drain. Application code uses `store.newResource(...)`
+   * + `resource.save()`, never this directly.
    */
   public async signChanges(differentAgent?: Agent): Promise<Commit> {
     const agent = this.store.getAgent() ?? differentAgent;
@@ -1897,23 +2123,16 @@ export class Resource<C extends OptionalClass = any> {
     // covers props set via `set()` and via cache hydration alike.
     this.writeDatatypeTags();
 
-    // Chain on the most recent signed-but-undrained commit if one
-    // exists, else on the server-known `lastCommit`. The outbox is
-    // the canonical "what's signed but not acked" list.
-    const queued = this.store.outbox.getEntry(this.subject)?.commits;
-    const lastQueuedSig = queued?.length
-      ? queued[queued.length - 1]?.signature
-      : undefined;
+    // Chain on the resource's lastCommit (server-acked). Under
+    // sign-at-drain there's at most one signed-but-unposted commit
+    // per subject (the optional `signedGenesis` in the outbox), and
+    // genesis commits don't have a previousCommit, so we never need
+    // to chain on an unposted local commit.
+    const lastCommit =
+      this._lastCommit ?? this.get(properties.commit.lastCommit)?.toString();
 
-    if (lastQueuedSig) {
-      this.commitBuilder.setPreviousCommit(`did:ad:commit:${lastQueuedSig}`);
-    } else {
-      const lastCommit =
-        this._lastCommit ?? this.get(properties.commit.lastCommit)?.toString();
-
-      if (lastCommit) {
-        this.commitBuilder.setPreviousCommit(lastCommit);
-      }
+    if (lastCommit) {
+      this.commitBuilder.setPreviousCommit(lastCommit);
     }
 
     // Export Loro delta — this is the sole carrier of property changes.
@@ -1944,11 +2163,7 @@ export class Resource<C extends OptionalClass = any> {
       this.subject.startsWith('_new:') || this.subject.startsWith('did:ad:');
     const isAgent = this.subject.startsWith('did:ad:agent:');
 
-    if (
-      isDIDEligible &&
-      !isAgent &&
-      !this.commitBuilder.previousCommit
-    ) {
+    if (isDIDEligible && !isAgent && !this.commitBuilder.previousCommit) {
       this.commitBuilder.setIsGenesis(true);
     }
 
@@ -1956,6 +2171,7 @@ export class Resource<C extends OptionalClass = any> {
     const builder = this.commitBuilder.clone();
     this.commitBuilder = new CommitBuilder(this.subject);
     this._dirty = false;
+
     // Advance the save cursor: everything in the doc up to here is now
     // captured in the signed commit. The next exportLoroDelta will start
     // from this version. Must be a direct assignment — `markLoroSaved`-
@@ -1963,6 +2179,7 @@ export class Resource<C extends OptionalClass = any> {
     if (this._loroDoc) {
       this._loroVersionAtLastSave = this._loroDoc.oplogVersion();
     }
+
     const commit = await builder.sign(agent);
 
     // DID genesis: the real subject is derived from the signature.
@@ -1985,9 +2202,12 @@ export class Resource<C extends OptionalClass = any> {
     this.loading = false;
     this.new = false;
 
-    // S4a: outbox owns "signed but not acked." The certificate goes
-    // straight onto it; `_drainPendingCommits` reads from there.
-    this.store.outbox.upsertCommit(this.subject, commit);
+    // Under sign-at-drain, the caller (`store.newResource` for the
+    // genesis path) decides how to enqueue the envelope — typically
+    // via `outbox.setGenesisCommit` for DID-derived subjects. Drain
+    // POSTs the genesis; subsequent Loro ops mark dirty + drain
+    // signs incremental commits directly without going through
+    // `signChanges`.
 
     // Surface the queued commit in the Sync page's commit log immediately,
     // so users can see what's pending without waiting for the push. The same
@@ -1999,104 +2219,6 @@ export class Resource<C extends OptionalClass = any> {
   }
 
   /**
-   * Push all locally-queued commits to the server, in order.
-   *
-   * After a successful push the resource's `lastCommit` is updated from the
-   * server response and the local queue is cleared.
-   *
-   * Concurrent invocations (e.g. two `syncDirtyResources` calls fired by a
-   * fast WS reconnect flap) are coalesced onto the same in-flight drain via
-   * {@link inProgressPush} — the second caller observes the first's POST
-   * result instead of double-POSTing the queued commits. Without that
-   * guard the dagger CI runner reproducibly hits
-   * "Commit for did:ad:… has is_genesis: true, but the resource already
-   * exists" when both pushes race the server's lookup→apply window.
-   */
-  public async pushCommits(): Promise<string | undefined> {
-    if (!this.store.outbox.hasPending(this.subject)) {
-      return undefined;
-    }
-
-    if (this.inProgressPush) {
-      return this.inProgressPush;
-    }
-
-    const drain = this._drainPendingCommits();
-    this.inProgressPush = drain;
-
-    try {
-      return await drain;
-    } finally {
-      // Clear AFTER await so a concurrent caller arriving mid-drain still
-      // joins this same promise; only post-resolution does the next call
-      // start a fresh drain.
-      this.inProgressPush = undefined;
-    }
-  }
-
-  /**
-   * POST every signed commit the outbox holds for this subject, in
-   * order, then run the post-ack work that the legacy save flow
-   * expected (`lastCommit` advance, `applyToStore('local-acked')`,
-   * blob push, new-subject subscribe + child save).
-   *
-   * The outbox is the durable queue; this method is the per-resource
-   * drain that propagates errors back to the caller. Cross-resource
-   * reconnect drains run through `store.syncDirtyResources` ->
-   * `postOutboxEntry`, which delegates here too.
-   */
-  private async _drainPendingCommits(): Promise<string | undefined> {
-    const endpoint = this.getCommitEndpoint();
-    const entry = this.store.outbox.getEntry(this.subject);
-    if (!entry || entry.commits.length === 0) return undefined;
-
-    const wasNew = entry.commits[0]?.previousCommit === undefined;
-
-    let lastCommitId: string | undefined;
-    const postedSignatures: string[] = [];
-
-    try {
-      this.commitError = undefined;
-      // Pre-push: surface in-flight state to subscribers.
-      this.applyToStore('local-pre-push');
-
-      for (const commit of [...entry.commits]) {
-        const created = await this.store.postCommit(commit, endpoint);
-        lastCommitId = commitIdOf(created);
-        if (commit.signature) postedSignatures.push(commit.signature);
-      }
-
-      // Ack what we actually posted — commits upserted mid-drain
-      // (typing a new character while the previous letter's POST was
-      // in flight) stay queued for the next drain.
-      this.store.outbox.acknowledgeCommits(this.subject, postedSignatures);
-
-      if (lastCommitId) this.setLastCommitValue(lastCommitId);
-      this.store.notifyResourceSaved(this);
-
-      // Post-ack re-add: triggers the OPFS persist gate (which
-      // skips when `hasPendingCommits` is true).
-      this.applyToStore('local-acked', { commitId: lastCommitId });
-
-      // Push referenced blobs. Awaited so a follow-up commit
-      // referencing the blob doesn't race the server-side extender.
-      await this.store.maybePushBlobForResource(this).catch(() => undefined);
-
-      if (wasNew) {
-        // First SUBSCRIBE wouldn't have worked pre-create. #486.
-        this.store.subscribeWebSocket(this.subject);
-        await this.store.saveBatchForParent(this.subject);
-      }
-
-      return lastCommitId;
-    } catch (e) {
-      this.commitError = e;
-      throw e;
-    }
-  }
-
-
-  /**
    * Commits the changes and sends the Commit to the resource's `/commit`
    * endpoint. Returns the Url of the created Commit. If you don't pass an Agent
    * explicitly, the default Agent of the Store is used.
@@ -2104,35 +2226,52 @@ export class Resource<C extends OptionalClass = any> {
    *
    * This is equivalent to calling {@link signChanges} followed by {@link pushCommits}.
    */
-  public async save(differentAgent?: Agent): Promise<string | undefined> {
+  /**
+   * Persist this resource. Resolves once the change is durable:
+   *
+   *  - `'persisted'` — the server acknowledged the commit.
+   *  - `'offline'`   — server unreachable; saved to clientDb, the drain
+   *                    retries on reconnect.
+   *  - `'noop'`      — nothing to save (no unsaved changes, nothing
+   *                    pending).
+   *
+   * Always uses the store's agent. Genesis (DID derivation) is decided
+   * internally by `store.newResource`, not by callers — there is no
+   * public "mark this as genesis" step.
+   */
+  /** @internal — set by `store.newResource` to hand off the
+   *  DID-derivation genesis commit. Held until the first `save()`. */
+  public stashGenesis(commit: Commit): void {
+    this._pendingGenesis = commit;
+  }
+
+  public async save(): Promise<SaveResult> {
     const hasChanges = this.hasUnsavedChanges();
 
-    if (!hasChanges && !this.store.outbox.hasPending(this.subject)) {
+    if (
+      !hasChanges &&
+      !this._pendingGenesis &&
+      !this.store.outbox.hasPending(this.subject)
+    ) {
       // Save called on a clean resource (typical on blur with no edits) — not
       // an error worth surfacing to the console.
-      return undefined;
+      return 'noop';
     }
 
     this._saveDepth++;
+
     try {
-      return await this._saveInner(differentAgent, hasChanges);
+      return await this._saveInner(hasChanges);
     } finally {
       this._saveDepth--;
     }
   }
 
-  private async _saveInner(
-    differentAgent: Agent | undefined,
-    hasChanges: boolean,
-  ): Promise<string | undefined> {
-    const agent = this.store.getAgent() ?? differentAgent;
+  private async _saveInner(hasChanges: boolean): Promise<SaveResult> {
+    const agent = this.store.getAgent();
 
     if (!agent) {
-      throw new Error('No agent has been set or passed, you cannot save.');
-    }
-
-    if (this.hasQueue) {
-      return;
+      throw new Error('No agent has been set, you cannot save.');
     }
 
     if (!this._lastCommit) {
@@ -2143,96 +2282,105 @@ export class Resource<C extends OptionalClass = any> {
     if (this.isParentNew()) {
       this.store.batchResource(this.subject);
 
-      return;
+      return 'offline';
     }
-
-    if (this.inProgressCommit) {
-      this.hasQueue = true;
-      await this.inProgressCommit;
-      this.hasQueue = false;
-      this.inProgressCommit = undefined;
-
-      return this.save(differentAgent);
-    }
-
-    let reportDone: () => void = () => undefined;
-
-    this.inProgressCommit = new Promise(resolve => {
-      reportDone = () => {
-        resolve();
-      };
-    });
-
-    const wasNew = this.new;
 
     try {
-      if (hasChanges) {
+      // A genesis signed at creation time by `store.newResource` is held
+      // on the resource (`_pendingGenesis`) — NOT the outbox — so an
+      // unsaved placeholder (e.g. a table row created on mount but never
+      // filled) is never POSTed. Now that the user is explicitly
+      // saving, move it into the outbox to drain.
+      if (this._pendingGenesis) {
+        this.store.outbox.setGenesisCommit(this.subject, this._pendingGenesis);
+        this._pendingGenesis = undefined;
+      } else if (
+        hasChanges &&
+        (this.commitBuilder.isGenesis || this.subject.startsWith('_new:'))
+      ) {
+        // Genesis path for resources NOT created via `store.newResource` —
+        // either `new Resource(...)` + `markNextCommitAsGenesis()`, or the
+        // new-resource form / `NewInstanceButton`, which mint a transient
+        // `_new:` subject via `store.createSubject()` and then `set()` +
+        // `save()` with no explicit genesis step. The real `did:ad:<sig>`
+        // subject only exists after signing, so sign now: `signChanges`
+        // auto-detects genesis (no previousCommit + DID-eligible), derives
+        // the DID, and renames this resource in place; we enqueue the
+        // signed genesis under the NEW subject. Without this a `_new:`
+        // subject would be marked dirty and the drain would POST a commit
+        // with `subject: "_new:…"`, which the server rejects ("Unable to
+        // parse string as URL") and retries forever.
         try {
-          await this.signChanges(agent);
+          const genesis = await this.signChanges(agent);
+          this.store.outbox.setGenesisCommit(this.subject, genesis);
         } catch (e) {
           if (
             e instanceof Error &&
             e.message.startsWith('No changes to sign')
           ) {
-            reportDone();
-
-            return undefined;
+            return 'noop';
           }
 
           throw e;
         }
       }
 
-      // If the server is not connected, save locally and queue for sync.
       if (!this.store.serverConnected) {
+        // Offline: persist the Loro snapshot to clientDb BEFORE
+        // marking the outbox dirty. `pendingDirtyCount > 0` is the
+        // canonical "edit landed durably" signal; bumping it via
+        // `markDirty` before `saveOffline` finishes would leave a
+        // window where a reload loses the OPFS snapshot while the
+        // localStorage dirty bit survives.
         await this.saveOffline();
-        reportDone();
 
-        return undefined;
+        if (hasChanges && !this.commitBuilder.isGenesis) {
+          this.store.outbox.markDirty(this.subject);
+        }
+
+        return 'offline';
       }
 
-      // Push all queued commits to the server.
-      const result = await this.pushCommits();
+      if (hasChanges && !this.commitBuilder.isGenesis) {
+        // Online non-genesis: mark dirty. The store-level drain
+        // exports the accumulated Loro delta, signs ONE commit, sends.
+        this.store.outbox.markDirty(this.subject);
+      }
 
-      reportDone();
+      // Await the drain so `save()` resolves only once the server has
+      // acked. The keystroke path is unaffected — `useValue` debounces
+      // 100 ms before calling `save()`, and the drain coalesces; the
+      // await matters for explicit saves (blur, Enter, programmatic)
+      // that need "is it safe to leave?" before proceeding.
+      await this.store.syncDirtyResources();
 
-      return result;
+      return 'persisted';
     } catch (e) {
-      // Network error (server went down mid-request) — outbox still
-      // holds the signed commit; persist a local snapshot and resume
-      // the queue on reconnect.
       if (isNetworkError(e)) {
         this.store.setServerConnected(false);
         await this.saveOffline();
-        reportDone();
 
-        return undefined;
+        return 'offline';
       }
 
-      // Other errors propagate. The signed commit is durable in the
-      // outbox; a `previousCommit` mismatch becomes an idempotent
-      // replay on the next attempt (server-side accept, per
-      // `commit-retention-and-state-certificates.md` Phase 1), so the
-      // legacy refetch-and-retry branch is no longer needed.
       this.commitError = e;
-      this.new = wasNew;
       this.applyToStore('local-pre-push');
-      reportDone();
       throw e;
     }
   }
 
   /**
-   * Save when the server is unreachable. Materializes each queued
-   * commit as a `CommitDetail`-renderable resource for the offline
-   * audit log, advances `lastCommit` to the most recent local
-   * signature, and persists this resource atomically (JSON-AD + Loro
-   * snapshot) to clientDb so a reload can hydrate it before the WS
-   * reconnect.
+   * Save when the server is unreachable. Under sign-at-drain the
+   * outbox holds a dirty bit (and optionally a pre-signed genesis
+   * envelope) but no incremental signed commits — those are signed
+   * fresh from the Loro delta at drain time. So the offline path:
    *
-   * The outbox persists the signed commits themselves — the drain
-   * on reconnect pulls straight from `store.outbox.getEntry`, no
-   * extra reattachment step needed on this side.
+   *  - Materializes the pre-signed genesis (if present) as a
+   *    `CommitDetail`-renderable resource for the offline audit log.
+   *  - Persists this resource atomically (JSON-AD + Loro snapshot) to
+   *    clientDb so a reload can hydrate the Loro state before the WS
+   *    reconnect drain re-signs from the same `_loroVersionAtLastSave`
+   *    cursor.
    */
   private async saveOffline(): Promise<void> {
     // Server sets createdAt on apply; we need it locally for sort.
@@ -2240,15 +2388,28 @@ export class Resource<C extends OptionalClass = any> {
       this.setCreatedAtValue(Date.now());
     }
 
-    const queued = this.store.outbox.getEntry(this.subject)?.commits ?? [];
-    let lastCommitSubject: string | undefined;
+    const signedGenesis = this.store.outbox.getEntry(
+      this.subject,
+    )?.signedGenesis;
 
-    for (const commit of queued) {
-      lastCommitSubject = `did:ad:commit:${commit.signature}`;
-      this.store.materializeCommitLocally(commit);
+    if (signedGenesis) {
+      this.store.materializeCommitLocally(signedGenesis);
+      this.setLastCommitValue(`did:ad:commit:${signedGenesis.signature}`);
     }
 
-    if (lastCommitSubject) this.setLastCommitValue(lastCommitSubject);
+    // Capture the last-synced Loro version so a reload can rewind the save
+    // cursor here and re-emit this offline delta. `_loroVersionAtLastSave`
+    // still points at the last server-acked version (the offline ops are
+    // past it — that's why the subject is dirty), so this is exactly the
+    // baseline the reconnect drain must export from. `setBaseVersion` keeps
+    // only the first offline baseline, so a run of offline edits all rebase
+    // on the same synced version. (Skipped when nothing synced yet — the
+    // drain then sends a first-commit snapshot.)
+    const baseVersion = this.getEncodedSaveCursor();
+
+    if (baseVersion) {
+      this.store.outbox.setBaseVersion(this.subject, baseVersion);
+    }
 
     const clientDb = this.store.getClientDb();
 
@@ -2385,7 +2546,12 @@ export class Resource<C extends OptionalClass = any> {
     this.resetLoroState();
   }
 
-  public importLoroUpdate(loroUpdate: Uint8Array): void {
+  /** Import committed Loro bytes (snapshot or update) into the doc.
+   *  Returns `{ complete }` — `false` when the bytes couldn't fully
+   *  apply (threw, or left pending ops awaiting base deps we don't
+   *  have). Callers persisting / displaying the result should treat
+   *  `complete: false` as "this state is unusable," not "loaded." */
+  public importLoroUpdate(loroUpdate: Uint8Array): { complete: boolean } {
     // Ensure the LoroDoc exists, then import the update into it.
     const doc = this.getLoroDoc();
 
@@ -2396,11 +2562,13 @@ export class Resource<C extends OptionalClass = any> {
       // consumers don't fall back to the truncated DID.
       this._loroSnapshotBytes = loroUpdate;
 
-      return;
+      // Not applied yet, but not a failure — `getLoroDoc()` will
+      // import the buffer and the `loading` getter keeps it gated.
+      return { complete: true };
     }
 
     try {
-      doc.import(loroUpdate);
+      const status = doc.import(loroUpdate);
       this.rebuildCacheFromLoro();
       this._cacheDirty = false;
       this.initLoroSaveCursorIfFresh();
@@ -2411,11 +2579,38 @@ export class Resource<C extends OptionalClass = any> {
       // WS `UPDATE` quietly mutates the doc and the UI keeps painting the
       // pre-import state until the user navigates away and back.
       this.eventManager.emit(ResourceEvents.LocalChange, '', undefined);
+
+      // `pending` is non-null when the update referenced base ops we
+      // don't have — Loro buffers those ops and applies *nothing*
+      // visible until the missing deps arrive (which, for a GET /
+      // sync-push response, they never will). This is how a 14 KB
+      // delta sent to a client that lacks the base snapshot lands as
+      // a resource with only `subject` + `lastCommit` and no real
+      // properties — and used to do so silently. Surface it so the
+      // store can decide whether to error the resource. See
+      // `lib/src/sync/engine.rs` `export_updates_since` — the server
+      // sends a delta whenever the client reports any VV for the
+      // subject, so a client whose in-memory doc doesn't actually
+      // hold that base (e.g. an OPFS-leadership-failed tab reporting
+      // the leader's VVs) gets an unappliable delta.
+      // `pending` is non-null when the update referenced base ops we
+      // don't have — Loro buffers those and applies nothing visible.
+      // We DON'T warn here: importing a delta into a fresh
+      // commit-detail resource (materialization) legitimately leaves
+      // pending ops. The caller decides whether pending is a problem —
+      // `applyIncoming` treats it as a sync error (full state expected),
+      // materialization ignores it (delta expected).
+      const pending = status?.pending;
+      const hasPending = !!pending && pending.size > 0;
+
+      return { complete: !hasPending };
     } catch (e) {
       console.warn(
         `[Resource] importLoroUpdate failed for ${this.subject}:`,
         e,
       );
+
+      return { complete: false };
     }
   }
 

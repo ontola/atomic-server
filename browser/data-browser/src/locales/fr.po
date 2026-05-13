@@ -4345,3 +4345,23 @@ msgstr ""
 #: src/routes/SyncRoute.tsx
 msgid "Synced {0} resource{1} with {2}"
 msgstr ""
+
+#~ msgid "Loading... damn"
+#~ msgstr ""
+
+#: src/views/Document/DocumentV2FullPage.tsx
+msgid "Couldn't open the document editor"
+msgstr ""
+
+#: src/views/Document/DocumentV2FullPage.tsx
+msgid ""
+"The collaborative editing engine (Loro / WebAssembly) failed to\n"
+"initialize in this tab, so the document body can't be shown."
+msgstr ""
+
+#: src/views/Document/DocumentV2FullPage.tsx
+msgid ""
+"Try reloading the page. If it keeps happening, another tab of this\n"
+"app or a browser extension may be blocking WebAssembly, or the tab\n"
+"ran out of memory."
+msgstr ""

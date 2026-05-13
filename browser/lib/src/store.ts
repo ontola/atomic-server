@@ -5,7 +5,12 @@ import {
   setCookieAuthentication,
 } from './authentication.js';
 import { Client, type FileOrFileLike } from './client.js';
-import { commitIdOf, commitToJsonADObject, type Commit } from './commit.js';
+import {
+  CommitBuilder,
+  commitIdOf,
+  commitToJsonADObject,
+  type Commit,
+} from './commit.js';
 import { datatypeFromUrl, type Datatype } from './datatypes.js';
 import { EventManager } from './EventManager.js';
 import { hasBrowserAPI } from './hasBrowserAPI.js';
@@ -324,9 +329,41 @@ export class Store {
    * Constructor callback re-emits `SyncStatusChanged` so subscribers
    * see queue-size changes without a manual `markDirtyForSync` call.
    */
-  public readonly outbox: LocalOutbox = new LocalOutbox(() =>
-    this.emitSyncStatus(),
-  );
+  public readonly outbox: LocalOutbox = new LocalOutbox(() => {
+    this.emitSyncStatus();
+    this.scheduleOutboxDrain();
+  });
+  private outboxDrainTimer: ReturnType<typeof setTimeout> | undefined;
+  /**
+   * Macrotask-debounced auto-drain. Every local Loro op (`set`,
+   * `loroSetProperty`, etc.) marks the subject dirty via
+   * `outbox.markDirty`; we schedule a drain on the NEXT macrotask
+   * so a burst of `set()` calls in one logical save boundary
+   * coalesces into one drain pass.
+   *
+   * Why setTimeout and not queueMicrotask: microtasks run between
+   * every `await` point, which means `await resource.set('a'); await
+   * resource.set('b')` would drain after `a` (splitting the save
+   * into two commits). setTimeout(0) defers past all current sync
+   * + microtask work to the next macrotask cycle.
+   *
+   * Post-drain re-check: if entries remain after the drain completes
+   * (typing during the `await postCommit` round-trip leaves the
+   * subject dirty — see `hasOpsPastSaveCursor` in
+   * `drainOutboxSubject`), schedule another drain so the new ops
+   * land instead of stranding until the next user keystroke.
+   */
+  private scheduleOutboxDrain(): void {
+    if (this.outboxDrainTimer) return;
+    if (!this._serverConnected) return;
+    if (this.outbox.size === 0) return;
+    if (!this.getAgent()) return;
+    this.outboxDrainTimer = setTimeout(() => {
+      this.outboxDrainTimer = undefined;
+      if (!this._serverConnected) return;
+      void this.syncDirtyResources().catch(() => undefined);
+    }, 0);
+  }
   /**
    * Whether the Store has an active connection to the server.
    * Driven by WebSocket open/close events. When false, commits are stored
@@ -593,12 +630,15 @@ export class Store {
   }
 
   /**
-   * Surface a hydrated outbox entry's commits in `_commitLog` as
-   * `pending` rows so the Sync page shows what's queued after a
-   * reload, not "No activity recorded".
+   * Surface a hydrated outbox entry in `_commitLog` as a `pending` row
+   * so the Sync page shows what's queued after a reload, not
+   * "No activity recorded". Under sign-at-drain the outbox doesn't
+   * hold a signed envelope (except for `signedGenesis`); the pending
+   * row just records "this subject has unsynced edits."
    */
   private hydrateCommitLogFromOutbox(entry: OutboxEntry): void {
-    for (const commit of entry.commits) {
+    if (entry.signedGenesis) {
+      const commit = entry.signedGenesis;
       this.pushCommitLog({
         timestamp: Date.now(),
         direction: 'outgoing',
@@ -613,6 +653,16 @@ export class Store {
         destroy: !!commit.destroy,
         summary: this.summarizeCommit(commit),
         propertySummaries: this.summarizeCommitProperties(commit),
+      });
+    } else {
+      this.pushCommitLog({
+        timestamp: entry.enqueuedAt,
+        direction: 'outgoing',
+        status: 'pending',
+        subject: entry.subject,
+        destroy: false,
+        hasLoroUpdate: true,
+        summary: '(unsynced Loro edits)',
       });
     }
   }
@@ -635,7 +685,7 @@ export class Store {
     try {
       await this.outbox.drain({
         sort: this.sortOutboxEntries,
-        postEntry: this.postOutboxEntry,
+        drainSubject: this.drainOutboxSubject,
         isTerminalError: (_entry, e) => {
           const msg = e instanceof Error ? e.message : String(e);
 
@@ -703,35 +753,222 @@ export class Store {
   };
 
   /**
-   * Post a single outbox entry to the server. When the resource is
-   * loaded in the store, delegate to `resource.pushCommits()` so the
-   * full post-ack pipeline runs (advance `lastCommit`, OPFS persist,
-   * `applyToStore('local-acked')`, blob push, subscribeWebSocket,
-   * saveBatchForParent). When it isn't (reconnect drain for a subject
-   * the user hasn't opened yet), POST the queued commit bytes
-   * directly and trust the WS broadcast to re-hydrate the resource.
-   * Re-posting a server-applied commit is safe thanks to idempotent
-   * replay accept (`commit-retention-and-state-certificates.md`
-   * Phase 1).
+   * Drain one subject's outbox entry under sign-at-drain. Steps:
+   *
+   *  1. If a `signedGenesis` envelope is queued (DID-derived subject
+   *     whose POST hadn't acked yet), POST it. Server idempotently
+   *     applies. On success: clear genesis, run the wasNew pipeline
+   *     (subscribeWebSocket + saveBatchForParent), advance the Loro
+   *     save cursor on the resource so subsequent delta exports start
+   *     from this version.
+   *  2. If the subject has accumulated local Loro ops (`markDirty` was
+   *     called since the last successful drain), export the delta,
+   *     sign ONE commit chained on `resource.lastCommit`, POST. On
+   *     success: clear dirty, `setLastCommitValue`, advance cursor.
+   *
+   *  Resource must be loaded in the store; cold drains for unloaded
+   *  subjects fall through to a `fetchResourceFromServer` that
+   *  rehydrates the Loro state before signing. (If both fail, the
+   *  entry stays dirty and the next drain trigger retries.)
+   *
+   *  Re-posting a server-applied commit is safe thanks to idempotent
+   *  replay accept (`commit-retention-and-state-certificates.md`
+   *  Phase 1).
    */
-  private postOutboxEntry = async (entry: OutboxEntry): Promise<void> => {
-    const resource = this.resources.get(entry.subject);
+  private drainOutboxSubject = async (subject: string): Promise<void> => {
+    let entry = this.outbox.getEntry(subject);
+    if (!entry) return;
 
-    if (resource) {
-      if (resource.hasUnsavedChanges()) await resource.save();
-      else await resource.pushCommits();
+    // A `_new:` subject has no derived DID yet — it must be sign-genesis'd
+    // (which renames it to `did:ad:<sig>`) before it can be POSTed.
+    // Reaching the drain with one is a bug in the save path: the server
+    // rejects `subject: "_new:…"` with a 500 ("Unable to parse string as
+    // URL") and the failed POST reschedules the drain, storming the server
+    // forever. Drop the stray dirty bit rather than retry an un-POSTable
+    // commit. The genesis derivation happens in `_saveInner`/`newResource`.
+    if (subject.startsWith('_new:')) {
+      this.outbox.clearGenesis(subject);
+      this.outbox.clearDirty(subject);
       this.emitSyncStatus();
 
       return;
     }
 
     const endpoint = new URL('/commit', this.serverUrl).toString();
-    const postedSignatures: string[] = [];
-    for (const commit of entry.commits) {
-      await this.postCommit(commit, endpoint);
-      if (commit.signature) postedSignatures.push(commit.signature);
+
+    // Step 1: POST the pre-signed genesis if present. The genesis
+    // commit's `loroUpdate` was captured in `signChanges` at sign
+    // time; `_loroVersionAtLastSave` was advanced THERE to the same
+    // version. So we do NOT advance the cursor again here — doing so
+    // would silently drop any ops the user typed between
+    // `setGenesisCommit` and this drain pass (they're past the
+    // genesis's captured version but would be marked "saved" by an
+    // overzealous `markLoroSaved()`). Step 2 below picks those up.
+    if (entry.signedGenesis) {
+      const genesis = entry.signedGenesis;
+      const created = await this.postCommit(genesis, endpoint);
+      const commitId = commitIdOf(created);
+      const resource = this.resources.get(subject);
+
+      if (resource && commitId) {
+        resource.setLastCommitValue(commitId);
+        resource.applyToStore('local-acked', { commitId });
+        resource.markSynced();
+        await this.maybePushBlobForResource(resource).catch(() => undefined);
+        // wasNew pipeline — first-time subscribe + save batched children
+        this.subscribeWebSocket(subject);
+        await this.saveBatchForParent(subject);
+        // The genesis POST IS a save — fire `ResourceSaved` so listeners
+        // waiting on first persistence run. The FilePicker, for example,
+        // can't upload a file until its parent resource exists on the
+        // server, so it sets `https://placeholder` and schedules the real
+        // upload on `ResourceSaved`. When a resource is created via genesis
+        // alone (no follow-up Loro delta), step 2 below short-circuits and
+        // never notifies — so without this the scheduled upload never runs
+        // and the placeholder is left dangling.
+        this.notifyResourceSaved(resource);
+      }
+
+      this.outbox.clearGenesis(subject);
+      entry = this.outbox.getEntry(subject);
+
+      if (!entry) {
+        this.emitSyncStatus();
+
+        return;
+      }
     }
-    this.outbox.acknowledgeCommits(entry.subject, postedSignatures);
+
+    // Step 2: sign and POST the accumulated Loro delta, if any.
+    const resource = this.resources.get(subject);
+
+    if (!resource) {
+      // Cold drain: resource not in memory. Without the Loro doc we
+      // can't sign the delta. Critical: do NOT clear the dirty bit
+      // here — on page reload, the outbox is restored from
+      // localStorage BEFORE clientDb hydration finishes, so the
+      // drain races ahead of resource hydration. Clearing here would
+      // permanently drop offline edits that haven't been replayed
+      // into the in-memory store yet. Leave the entry dirty; the
+      // hydration path will re-trigger the drain once the resource
+      // is in place (via `markDirty` from the post-hydrate Loro
+      // subscriber, or via the next user action).
+      this.emitSyncStatus();
+
+      return;
+    }
+
+    // Cold-drain extension: even if there's a Resource object in
+    // `this.resources` for the subject, treat it as "not hydrated"
+    // when it's still loading and has no Loro doc state. A fresh
+    // placeholder (`getResourceLoading` cold-call before clientDb
+    // hydrate completes) shows up here as `loading=true` with an
+    // empty Loro doc — draining it would `exportLoroDeltaForDrain →
+    // undefined → clearDirty`, permanently dropping the
+    // localStorage-restored offline edit before its real state has
+    // a chance to land.
+    const hasLoroState =
+      resource.hasLoroDoc() && !!resource.getLoroDoc()?.oplogVersion();
+
+    if (resource.loading && !hasLoroState) {
+      this.emitSyncStatus();
+
+      return;
+    }
+
+    const agent = this.getAgent();
+    if (!agent) return;
+
+    // Offline-edit recovery: if this subject went dirty while offline, the
+    // outbox holds the last-synced version. On reload the doc rehydrates
+    // with the offline ops already applied and its save cursor resets to
+    // the current version — exporting from there yields an empty delta and
+    // the edit is lost. Rewind the cursor to the synced baseline so the
+    // export below emits the offline delta. No-op during normal online
+    // operation (`baseVersion` is only set on the offline path).
+    if (entry.baseVersion) {
+      resource.restoreSaveCursor(entry.baseVersion);
+    }
+
+    const previousCommit = resource.getLastCommitForChain();
+    const isFirstCommit = !previousCommit;
+    // Tag this commit's Loro change with a unique token so the oplog keeps
+    // a distinct Change per Atomic commit — `getLoroHistory` buckets by it
+    // to reconstruct one version per commit. The token only needs to be
+    // unique within the doc's oplog (including across reloads, since a
+    // rehydrated doc carries its old tokens), so combine wall-clock time
+    // with a monotonic counter.
+    const commitToken = `c-${this.randomPart()}`;
+    // Capture {bytes, version} atomically so the cursor advances to
+    // the version that's in this commit — not to a later one that
+    // arrived during the await on `postCommit`.
+    const exported = resource.exportLoroDeltaForDrain(
+      isFirstCommit,
+      commitToken,
+    );
+
+    if (!exported) {
+      this.outbox.clearBaseVersion(subject);
+      this.outbox.clearDirty(subject);
+      this.emitSyncStatus();
+
+      return;
+    }
+
+    const { bytes: delta, versionAfterExport } = exported;
+    const builder = new CommitBuilder(subject);
+    if (previousCommit) builder.setPreviousCommit(previousCommit);
+    builder.setLoroUpdate(delta);
+    const commit = await builder.sign(agent);
+
+    const created = await this.postCommit(commit, endpoint);
+    const commitId = commitIdOf(created);
+
+    if (commit.signature) {
+      resource.appliedCommitSignatures.add(commit.signature);
+    }
+
+    if (commitId) {
+      resource.setLastCommitValue(commitId);
+      resource.applyToStore('local-acked', { commitId });
+    }
+
+    // Advance the cursor to the version that was IN this commit, not
+    // to current oplog version — any local ops added during the
+    // `await postCommit` round-trip are post-commit and must remain
+    // dirty until the next drain pass.
+    resource.markLoroSavedAt(versionAfterExport);
+
+    // The offline baseline (if any) has now been exported and acked — the
+    // cursor sits at or past it, so drop it. Any still-dirty ops past the
+    // cursor are online edits with the live cursor as their baseline.
+    this.outbox.clearBaseVersion(subject);
+
+    // Did this commit capture everything, or did the user type more
+    // during the `await postCommit` round-trip? Compute BEFORE firing
+    // `notifyResourceSaved` so the `_dirty` flag is already cleared
+    // when `UnsavedIndicator`'s ResourceSaved handler re-reads
+    // `hasUnsavedChanges()` — otherwise it reads a stale `true` and the
+    // editable-title `*` never clears (rename-regression e2e).
+    const caughtUp = !resource.hasOpsPastSaveCursor();
+
+    if (caughtUp) {
+      resource.markSynced();
+    }
+
+    this.notifyResourceSaved(resource);
+    await this.maybePushBlobForResource(resource).catch(() => undefined);
+
+    // Only clear the outbox dirty bit if we caught up. If the user
+    // typed more characters mid-round-trip, the Loro subscriber already
+    // called `markDirty` (synchronously) and our `clearDirty` would
+    // erase that entry — so leave it dirty and nudge another drain.
+    if (caughtUp) {
+      this.outbox.clearDirty(subject);
+    } else {
+      this.outbox.markDirty(subject);
+    }
+
     this.emitSyncStatus();
   };
 
@@ -946,6 +1183,45 @@ export class Store {
     this.notify(resource);
   }
 
+  /**
+   * Returns true if this store owns the given subject — i.e. local
+   * Loro edits to it should be POSTed to our server. Used by the
+   * sign-at-drain dirty filter: external-domain HTTP subjects and
+   * derived commit-detail resources accept Loro hydration locally
+   * but must not reach our `/commit` endpoint.
+   */
+  public isOwnedSubject(subject: string): boolean {
+    if (subject.startsWith('did:ad:commit:')) return false;
+    if (subject.startsWith('did:')) return true;
+    // `_new:` is the client-only transient subject between
+    // `getResourceLoading` and the DID derive in `signChanges`.
+    // `_local:` is Rust-side and shouldn't appear here.
+    if (subject.startsWith('_new:')) return true;
+
+    if (subject.startsWith('http://') || subject.startsWith('https://')) {
+      try {
+        const url = new URL(subject);
+
+        // Query/endpoint URLs (`/query?page_size=…`, search, etc.) carry
+        // query params. They're transient server-computed projections
+        // that happen to be Loro-backed locally for client-side sorting
+        // — NOT committable resources. A real resource subject never has
+        // query params (commits strip them via `removeQueryParamsFromURL`).
+        // Without this guard the Loro subscriber marks these dirty, they
+        // enter the outbox, and the drain can never POST a commit for a
+        // `/query?…` endpoint → `pendingDirtyCount` never reaches 0 and
+        // every `waitForSynced` / offline-sync flow strands. (sync:219.)
+        if (url.search) return false;
+
+        return url.origin === new URL(this.serverUrl).origin;
+      } catch {
+        return false;
+      }
+    }
+
+    return false;
+  }
+
   public normalizeSubject(subject: string): string {
     const stripLeadingSlash = (value: string) =>
       value.startsWith('/') ? value.slice(1) : value;
@@ -1032,7 +1308,44 @@ export class Store {
 
     const resource =
       existing ?? this.getResourceLoading(subject, { newResource: false });
-    resource.importLoroUpdate(change.loroBytes);
+    const { complete } = resource.importLoroUpdate(change.loroBytes);
+
+    // Commit-detail resources (`did:ad:commit:<sig>`) carry a single
+    // commit's `loroUpdate`, which is a DELTA by design — importing it
+    // into a fresh doc legitimately leaves "pending" ops (the base it
+    // builds on lives in the committed-to resource, not here). They are
+    // exempt from the incomplete-import guard below; otherwise every
+    // commit fetched on refresh (e.g. <CommitDetail> in a chatroom)
+    // would be failed and vanish.
+    const isCommitDetail = subject.startsWith('did:ad:commit:');
+
+    // Incomplete import: the bytes couldn't fully apply (missing base
+    // ops left pending). The resource has whatever it had before plus
+    // `lastCommit` — but NOT the real Loro-backed props. Without this
+    // guard it would flip to `loading=false` and render as an empty
+    // "loaded" resource (only `subject` + `lastCommit` showing), with
+    // no error anywhere. Surface it instead. Skip the failure if the
+    // resource already had usable content from a prior good import
+    // (a late/partial live push shouldn't blow away a good state).
+    if (!complete && !isCommitDetail && !resource.get(core.properties.isA)) {
+      console.warn(
+        `[Store] applyIncoming: incomplete Loro import for ${subject.slice(0, 60)} ` +
+          `(source: ${change.source}) — server sent a delta this client can't apply ` +
+          `(missing base state). Surfacing as error.`,
+      );
+      if (change.commitId) resource.setLastCommitValue(change.commitId);
+      this.failResource(
+        subject,
+        new Error(
+          'Sync error: received an incomplete update for this resource ' +
+            '(missing base state). Try reloading; if it persists, the ' +
+            "local cache may be out of sync with the server's history.",
+        ),
+      );
+
+      return 'invalid';
+    }
+
     if (change.commitId) resource.setLastCommitValue(change.commitId);
     resource.loading = false;
     this.addResource(resource, { skipCommitCompare: true });
@@ -1213,9 +1526,15 @@ export class Store {
       }
     }
 
-    // For DID resources: sign the genesis commit locally to derive the real
-    // DID from the signature.  The signed commit is queued on the resource and
-    // will be sent to the server on the next `save()` / `push()`.
+    // For DID resources: sign the genesis commit locally to derive the
+    // real DID from the signature, then STASH it ON THE RESOURCE (not
+    // the outbox). Creating a resource must not persist it — only
+    // `save()` does. Holding the genesis off the outbox means a
+    // created-but-never-saved resource (e.g. a `TableNewRow` placeholder
+    // mounted but never filled) is never POSTed; it's discarded with the
+    // component. `save()` moves the stashed genesis into the outbox to
+    // drain. This is the ONLY remaining call site for `signChanges` —
+    // every other path signs from the Loro delta at drain time.
     if (shouldUseDid && !subject) {
       const agent = this.getAgent();
 
@@ -1225,11 +1544,10 @@ export class Store {
         );
       }
 
-      // Explicitly flag as genesis before signing so the commit builder never
-      // accidentally produces a genesis commit for a later edit.
       resource.markNextCommitAsGenesis();
-      await resource.signChanges(agent);
+      const genesisCommit = await resource.signChanges(agent);
       // resource.subject is now did:ad:<signature>
+      resource.stashGenesis(genesisCommit);
     }
 
     return resource;
@@ -1587,18 +1905,39 @@ export class Store {
       return true;
     }
 
-    // Don't clobber an in-memory resource that has unsaved local
-    // edits — `hydrateOfflineReplay` would overwrite the in-flight
-    // Loro state with the older clientDb snapshot. The outbox queue
-    // survives reload independently; the drain reads from there.
-    // (Cold-load case: `existing` is a placeholder with no Loro doc
-    // and no unsaved changes, so this guard is a no-op and the
-    // hydration proceeds.)
+    // Don't clobber an in-memory resource that has unsaved local edits
+    // — `hydrateOfflineReplay` would overwrite the in-flight Loro state
+    // with the (older) clientDb snapshot. The signal is in-memory only:
+    // `hasUnsavedChanges()` (commitBuilder / `_dirty` between a `set()`
+    // and the next drain).
+    //
+    // We deliberately do NOT gate on `hasPendingCommits` (the outbox
+    // genesis/dirty bit): that survives reload via localStorage, so on
+    // a cold load a freshly-created placeholder for an offline-saved
+    // resource has `hasPendingCommits === true` but NO in-memory state
+    // to protect. Gating on it skipped `hydrateOfflineReplay`, leaving
+    // the placeholder stuck `loading: true` forever (offline file
+    // upload never rendered; the snapshot import populated the doc but
+    // `loading` never cleared). clientDb already holds the offline
+    // state, so hydrating from it RESTORES the edit — it doesn't clobber
+    // it.
     if (existing?.hasUnsavedChanges()) {
       return true;
     }
 
     this.hydrateOfflineReplay(subject, parsed);
+
+    // If the outbox holds a dirty bit for this subject (offline edit
+    // restored from localStorage), kick a drain now that the resource
+    // is finally in the store. Without this nudge the drain would
+    // either: (a) never fire — `hydrateOfflineReplay` doesn't go
+    // through `set()`, so the Loro subscriber that normally schedules
+    // drains stays silent; (b) have fired earlier (in
+    // `setClientDb`'s auto-trigger) when the resource wasn't loaded
+    // yet, hit the "no resource" cold-drain branch, and bailed.
+    if (this.outbox.hasPending(subject)) {
+      this.scheduleOutboxDrain();
+    }
 
     return true;
   }
@@ -2143,6 +2482,7 @@ export class Store {
     // completes; the next interaction races the previous commit.
     // Repro: rename-regression "two sequential renames".
     let inFlightSaves = 0;
+
     for (const r of this.resources.values()) {
       if (r.isSaving) inFlightSaves++;
     }
@@ -2150,7 +2490,10 @@ export class Store {
     return {
       serverConnected: this._serverConnected,
       serverConnectionError: this._serverConnectionError,
-      syncInProgress: this._driveSyncInProgress || this.outbox.isDraining || inFlightSaves > 0,
+      syncInProgress:
+        this._driveSyncInProgress ||
+        this.outbox.isDraining ||
+        inFlightSaves > 0,
       pendingDirtyCount: this.outbox.size + inFlightSaves,
       serverUrl: this.serverUrl,
       drive: this.drive,
@@ -3024,10 +3367,17 @@ export class Store {
 
       // For DID resources, sign the genesis commit locally so the placeholder
       // `_new:` subject is replaced with the real `did:ad:` subject derived
-      // from the signature. Mirrors `Store.newResource` behavior.
+      // from the signature, then STASH it on the resource — mirrors
+      // `Store.newResource`. `save()` below moves the stashed genesis into
+      // the outbox and drains it. (Stashing on the resource rather than
+      // enqueuing here means a never-saved upload is never POSTed; here we
+      // always `save()`, but the genesis MUST be stashed or `save()` has
+      // nothing to POST — `signChanges` resets `commitBuilder.isGenesis`,
+      // so the genesis would otherwise be silently dropped.)
       if (useDid) {
         resource.markNextCommitAsGenesis();
-        await resource.signChanges(this.getAgent()!);
+        const genesis = await resource.signChanges(this.getAgent()!);
+        resource.stashGenesis(genesis);
       }
 
       await resource.save();

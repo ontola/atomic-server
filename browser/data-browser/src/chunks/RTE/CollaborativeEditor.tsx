@@ -7,7 +7,8 @@ import { Extension } from '@tiptap/core';
 import {
   LoroSyncPlugin,
   LoroUndoPlugin,
-  LoroEphemeralCursorPlugin,
+  // LoroEphemeralCursorPlugin — removed: incompatible with
+  // prosemirror-view 1.41 (TipTap 3.23). See the editor plugin list.
   redo as loroRedo,
   undo as loroUndo,
   type LoroDocType,
@@ -247,16 +248,26 @@ export default function CollaborativeEditor({
               // plugin is silently absent. The visible symptom: zero
               // `LORO_EPHEMERAL_UPDATE` frames on the wire, doc sync
               // works fine, no remote carets ever render.
-              ...(ephemeralStore
-                ? [
-                    LoroEphemeralCursorPlugin(ephemeralStore, {
-                      user: {
-                        name: agentResource.title,
-                        color,
-                      },
-                    }),
-                  ]
-                : []),
+              // REMOTE-CURSOR PLUGIN REMOVED (2026-05-29).
+              //
+              // `LoroEphemeralCursorPlugin` (loro-prosemirror 0.4.3 — the
+              // latest published) is incompatible with prosemirror-view
+              // 1.41 pulled in by the TipTap 3.11→3.23 bump: its
+              // remote-caret decorations produce a `DecorationGroup`
+              // with an undefined member, and prosemirror-view's
+              // `DecorationGroup.eq` then throws `this.members[i] is
+              // undefined` during `updateState` — crashing the WHOLE
+              // editor on every document (read or write). Confirmed by
+              // toggling: editor renders with this off, crashes with it
+              // on.
+              //
+              // We still broadcast our own caret via
+              // `ephemeralStore.setLocal` below (harmless, no
+              // decorations) so re-enabling remote rendering is a
+              // one-liner once loro-prosemirror ships a release
+              // compatible with current prosemirror. Until then, live
+              // remote carets are disabled; collaborative *editing*
+              // (LoroSyncPlugin) is unaffected.
             ];
           },
           // `LoroUndoPlugin` exposes the undo manager + ProseMirror

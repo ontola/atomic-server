@@ -1,4 +1,12 @@
-import { useResource, type Resource, type Server } from '@tomic/react';
+import {
+  core,
+  server,
+  useArray,
+  useResource,
+  useString,
+  type Resource,
+  type Server,
+} from '@tomic/react';
 import type React from 'react';
 import { AtomicLink } from '@components/AtomicLink';
 import styled from 'styled-components';
@@ -9,7 +17,13 @@ interface PluginListProps {
 }
 
 export const PluginList: React.FC<PluginListProps> = ({ drive }) => {
-  const plugins = drive.props.plugins ?? [];
+  // Read via `useArray` (not `drive.props.plugins`) so the component
+  // re-renders when the array changes. Reading `.props.X` directly inside
+  // render is memoized by the React Compiler on the stable `drive` proxy
+  // ref — an internal `push()` mutation doesn't change that ref, so a
+  // direct read would never invalidate and the list would stay stuck on
+  // "No plugins installed" after a fresh install.
+  const [plugins] = useArray(drive, server.properties.plugins);
 
   if (plugins.length === 0) {
     return <NoPluginsInstalled>No plugins installed</NoPluginsInstalled>;
@@ -27,16 +41,21 @@ export const PluginList: React.FC<PluginListProps> = ({ drive }) => {
 };
 
 const PluginItem: React.FC<{ subject: string }> = ({ subject }) => {
+  // Subscribe to each field so the row re-renders when the plugin resource
+  // finishes loading — same React Compiler reasoning as above.
   const resource = useResource<Server.Plugin>(subject);
+  const [namespace] = useString(resource, server.properties.namespace);
+  const [name] = useString(resource, core.properties.name);
+  const [version] = useString(resource, server.properties.version);
 
-  const title = `${resource.props.namespace ?? ''}/${resource.props.name ?? ''}`;
+  const title = `${namespace ?? ''}/${name ?? ''}`;
 
   return (
     <tr>
       <td>
         <AtomicLink subject={subject}>{title}</AtomicLink>
       </td>
-      <td>{resource.props.version}</td>
+      <td>{version}</td>
     </tr>
   );
 };

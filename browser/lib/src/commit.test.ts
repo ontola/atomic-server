@@ -11,8 +11,16 @@ import { JSCryptoProvider } from './CryptoProvider.js';
 import { Agent } from './agent.js';
 import { Resource } from './resource.js';
 import { core } from './index.js';
+import { testStore } from './test-store.js';
 
-describe('Commit signing and keys', () => {
+/**
+ * Low-level signing primitives. These legitimately exercise
+ * `CommitBuilder` directly — it's the unit under test here (canonical
+ * serialization, Ed25519 signatures, DID-from-signature derivation).
+ * Application/integration tests below never touch `CommitBuilder`;
+ * they go through `store.newResource()` → `set()` → `save()`.
+ */
+describe('Commit signing primitives', () => {
   const privateKey = 'CapMWIhFUT+w7ANv9oCPqrHrwZpkP2JhzF9JnyT6WcI=';
   const agentSubject =
     'http://localhost/agents/7LsjMW5gOfDdJzK/atgjQ1t20J/rw8MjVg6xwqm+h8U=';
@@ -34,202 +42,200 @@ describe('Commit signing and keys', () => {
     });
 
     const commit = await commitBuilder.signAt(agent, createdAt);
-    const sig = commit.signature;
-    const serialized = serializeDeterministically(commit);
-    expect(serialized).to.equal(serializedCommitRust);
-    expect(sig).to.equal(signatureCorrect);
+    expect(serializeDeterministically(commit)).to.equal(serializedCommitRust);
+    expect(commit.signature).to.equal(signatureCorrect);
   });
 
-  it('handles did:ad genesis commits correctly', async ({ expect }) => {
-    const tempSubject = 'did:ad:genesis';
-    const createdAt = 0;
-
-    const commitBuilder = new CommitBuilder(tempSubject, {
+  it('derives a did:ad subject from the genesis signature', async ({
+    expect,
+  }) => {
+    const commitBuilder = new CommitBuilder('did:ad:genesis', {
       set: new Map([
         ['https://atomicdata.dev/properties/description', 'Genesis value'],
       ]),
     });
     commitBuilder.setIsGenesis(true);
 
-    const commit = await commitBuilder.signAt(agent, createdAt);
+    const commit = await commitBuilder.signAt(agent, 0);
 
-    // Subject should match signature
+    // Subject IS the signature.
     expect(commit.subject).to.equal(`did:ad:${commit.signature}`);
     expect(commit.isGenesis).toBe(true);
 
-    // Serialization should NOT contain the subject (circular dep — subject IS the signature)
-    // but SHOULD contain isGenesis so the server can verify it
-    const serialized = serializeDeterministically(commit);
-    const jsonCorrect = JSON.parse(serialized);
-    expect(
-      jsonCorrect['https://atomicdata.dev/properties/subject'],
-    ).toBeUndefined();
-    expect(jsonCorrect['https://atomicdata.dev/properties/isGenesis']).toBe(
-      true,
+    // Serialization omits the subject (it's circular — the subject is
+    // derived FROM the signature) but keeps isGenesis for the server.
+    const json = JSON.parse(serializeDeterministically(commit));
+    expect(json['https://atomicdata.dev/properties/subject']).toBeUndefined();
+    expect(json['https://atomicdata.dev/properties/isGenesis']).toBe(true);
+  });
+
+  it('derives a did:ad subject from a temporary _new subject', async ({
+    expect,
+  }) => {
+    const didAgent = new Agent(
+      new JSCryptoProvider(privateKey),
+      'did:ad:agent:TESTAGENT',
+    );
+    const commitBuilder = new CommitBuilder('_new:01TESTTEMP', {
+      set: new Map([
+        ['https://atomicdata.dev/properties/description', 'Genesis value'],
+      ]),
+    });
+    commitBuilder.setIsGenesis(true);
+
+    const commit = await commitBuilder.signAt(didAgent, 0);
+
+    expect(commit.subject).to.equal(`did:ad:${commit.signature}`);
+    const json = JSON.parse(serializeDeterministically(commit));
+    expect(json['https://atomicdata.dev/properties/subject']).toBeUndefined();
+  });
+
+  it('preserves a did:ad:agent subject — never treats it as genesis', async ({
+    expect,
+  }) => {
+    const agentDid = 'did:ad:agent:SOMEPUBLICKEY123';
+    const didAgent = new Agent(new JSCryptoProvider(privateKey), agentDid);
+
+    const commitBuilder = new CommitBuilder(agentDid, {
+      set: new Map([['https://atomicdata.dev/properties/name', 'Alice']]),
+    });
+
+    const commit = await commitBuilder.signAt(didAgent, 0);
+
+    // Subject must remain the agent DID, not become did:ad:{signature}.
+    expect(commit.subject).to.equal(agentDid);
+    const json = JSON.parse(serializeDeterministically(commit));
+    expect(json['https://atomicdata.dev/properties/subject']).to.equal(
+      agentDid,
     );
   });
 
-  it('preserves DID subject and chains commits on sequential saves', async ({
+  it('keeps the _new subject for non-did signers', async ({ expect }) => {
+    const commitBuilder = new CommitBuilder('_new:01TESTTEMP', {
+      set: new Map([
+        ['https://atomicdata.dev/properties/description', 'Regular value'],
+      ]),
+    });
+
+    const commit = await commitBuilder.signAt(agent, 0);
+
+    expect(commit.subject).to.equal('_new:01TESTTEMP');
+    const json = JSON.parse(serializeDeterministically(commit));
+    expect(json['https://atomicdata.dev/properties/subject']).to.equal(
+      '_new:01TESTTEMP',
+    );
+  });
+});
+
+/**
+ * The application-facing flow: create a resource, edit it, save it.
+ * No `CommitBuilder`, no `markNextCommitAsGenesis`, no `_new:`
+ * subjects, no `syncDirtyResources` — `save()` resolves once the
+ * server has acked.
+ */
+describe('Resource save flow', () => {
+  it('creates a DID resource and chains commits on sequential saves', async ({
     expect,
   }) => {
-    const store = new Store({ serverUrl: 'https://example.com' });
-    store.setServerConnected(true);
-    const agentKeys = await Agent.generateKeyPair();
-    const agentDID = `did:ad:agent:${agentKeys.publicKey}`;
-    const agentProvider = new JSCryptoProvider(agentKeys.privateKey);
-    const signingAgent = new Agent(agentProvider, agentDID);
-    store.setAgent(signingAgent);
+    const { store, postCommitSpy } = await testStore();
 
-    // Mock postCommit to return a commit with a proper subject
-    const postCommitSpy = vi
-      .spyOn(store, 'postCommit')
-      .mockImplementation(async commit => {
-        const mockCommit = {
-          ...commit,
-          id: `https://example.com/commits/${commit.signature}`,
-        } as Commit;
+    const doc = await store.newResource({
+      isA: 'https://atomicdata.dev/classes/Drive',
+      propVals: { [core.properties.name]: 'First Save' },
+      noParent: true,
+    });
 
-        return mockCommit;
-      });
-
-    // Use Resource constructor directly to avoid fetches
-    const resource = new Resource('did:ad:genesis');
-    resource.setStore(store);
-    resource.new = true;
-    await resource.set(
-      'https://atomicdata.dev/properties/isA',
-      ['https://atomicdata.dev/classes/Drive'],
-      false,
-    );
-    await resource.set(
-      'https://atomicdata.dev/properties/name',
-      'First Save',
-      false,
-    );
-
-    // First save (Genesis) — must be explicitly marked
-    resource.markNextCommitAsGenesis();
-    const firstCommitId = await resource.save();
-    const genesisSubject = resource.subject;
+    const genesisSubject = doc.subject;
     expect(genesisSubject).toMatch(/^did:ad:/);
     expect(genesisSubject).not.toBe('did:ad:genesis');
-    expect(firstCommitId).toBe(
-      `https://example.com/commits/${resource.appliedCommitSignatures.values().next().value}`,
-    );
 
-    // Simulate clobbering: remove lastCommit from the cached resource state.
-    // (This simulates an old remote state being merged)
-    resource.removeUnsafe('https://atomicdata.dev/properties/lastCommit');
-    expect(
-      resource.get('https://atomicdata.dev/properties/lastCommit'),
-    ).toBeUndefined();
+    expect(await doc.save()).toBe('persisted');
 
-    // Second save (Update)
-    // Use set with validate: false to avoid property fetches in test
-    await resource.set(
+    // A remote merge that drops `lastCommit` must not break chaining —
+    // the resource keeps its own commit cursor.
+    doc.removeUnsafe('https://atomicdata.dev/properties/lastCommit');
+
+    await doc.set(
       'https://atomicdata.dev/properties/description',
-      'Second Save',
+      'Second',
       false,
     );
-    const secondCommitId = await resource.save();
+    expect(await doc.save()).toBe('persisted');
 
-    // The subject MUST NOT have changed
-    expect(resource.subject).toBe(genesisSubject);
-    expect(secondCommitId).not.toBe(firstCommitId);
+    // Subject is stable across saves.
+    expect(doc.subject).toBe(genesisSubject);
 
-    // Verify the second commit has the first one as previousCommit
-    const secondCommitCall = postCommitSpy.mock.calls[1][0];
-    expect(secondCommitCall.previousCommit).toBe(firstCommitId);
-    expect(secondCommitCall.subject).toBe(genesisSubject);
+    // Two commits, the second chained on the first.
+    expect(postCommitSpy.mock.calls.length).toBe(2);
+    const first = postCommitSpy.mock.calls[0][0] as Commit;
+    const second = postCommitSpy.mock.calls[1][0] as Commit;
+    expect(second.subject).toBe(genesisSubject);
+    expect(second.previousCommit).toContain(first.signature!);
   });
 
-  it('exports a full genesis loroUpdate even if Loro was initialized before first save', async ({
+  it('a no-op save returns "noop" and posts nothing', async ({ expect }) => {
+    const { store, postCommitSpy } = await testStore();
+
+    const doc = await store.newResource({
+      isA: 'https://atomicdata.dev/classes/Drive',
+      propVals: { [core.properties.name]: 'Doc' },
+      noParent: true,
+    });
+    await doc.save();
+    postCommitSpy.mockClear();
+
+    expect(await doc.save()).toBe('noop');
+    expect(postCommitSpy.mock.calls.length).toBe(0);
+  });
+
+  it('the genesis commit carries the full initial state', async ({
     expect,
   }) => {
-    const store = new Store({ serverUrl: 'https://example.com' });
-    store.setServerConnected(true);
-    const agentKeys = await Agent.generateKeyPair();
-    const agentDID = `did:ad:agent:${agentKeys.publicKey}`;
-    const signingAgent = new Agent(
-      new JSCryptoProvider(agentKeys.privateKey),
-      agentDID,
-    );
-    store.setAgent(signingAgent);
+    const { store, postCommitSpy, agentDID } = await testStore();
 
-    const postCommitSpy = vi
-      .spyOn(store, 'postCommit')
-      .mockImplementation(async commit => {
-        return {
-          ...commit,
-          id: `https://example.com/commits/${commit.signature}`,
-        } as Commit;
-      });
+    const drive = await store.newResource({
+      isA: 'https://atomicdata.dev/classes/Drive',
+      noParent: true,
+      propVals: {
+        [core.properties.name]: 'Test Drive',
+        'https://atomicdata.dev/properties/write': [agentDID],
+        'https://atomicdata.dev/properties/read': [agentDID],
+      },
+    });
+    expect(await drive.save()).toBe('persisted');
 
-    const resource = new Resource('did:ad:genesis');
-    resource.setStore(store);
-    resource.new = true;
-    await resource.set(
-      'https://atomicdata.dev/properties/name',
-      'First Save',
-      false,
-    );
+    const genesis = postCommitSpy.mock.calls[0][0] as Commit;
+    expect(genesis.loroUpdate).toBeDefined();
 
-    // Simulate UI code touching the Loro doc before the first save.
-    resource.getLoroDoc();
-
-    resource.markNextCommitAsGenesis();
-    await resource.save();
-
-    const firstCommitCall = postCommitSpy.mock.calls[0][0];
-    expect(firstCommitCall.loroUpdate).toBeDefined();
-
-    const materialized = new Resource(firstCommitCall.subject);
-    materialized.importLoroUpdate(firstCommitCall.loroUpdate!);
+    // Materialize the genesis bytes into a fresh resource and check the
+    // full state round-trips.
+    const materialized = new Resource(genesis.subject);
+    materialized.importLoroUpdate(genesis.loroUpdate!);
     expect(materialized.get('https://atomicdata.dev/properties/name')).toBe(
-      'First Save',
+      'Test Drive',
     );
+    expect(materialized.get('https://atomicdata.dev/properties/write')).toEqual(
+      [agentDID],
+    );
+    expect(materialized.get('https://atomicdata.dev/properties/read')).toEqual([
+      agentDID,
+    ]);
   });
 
-  it('newResource DID genesis includes parent and class metadata for folder resources', async ({
-    expect,
-  }) => {
-    const store = new Store({ serverUrl: 'https://example.com' });
-    store.setServerConnected(true);
-    const agentKeys = await Agent.generateKeyPair();
-    const agentDID = `did:ad:agent:${agentKeys.publicKey}`;
-    const signingAgent = new Agent(
-      new JSCryptoProvider(agentKeys.privateKey),
-      agentDID,
-    );
-    store.setAgent(signingAgent);
-
-    const postCommitSpy = vi
-      .spyOn(store, 'postCommit')
-      .mockImplementation(async commit => {
-        return {
-          ...commit,
-          id: `https://example.com/commits/${commit.signature}`,
-        } as Commit;
-      });
-
+  it('a folder genesis carries parent + class metadata', async ({ expect }) => {
+    const { store, postCommitSpy } = await testStore();
     const parent = 'did:ad:drive-parent';
+
     const folder = await store.newResource({
       isA: core.classes.property,
       parent,
-      propVals: {
-        'https://atomicdata.dev/properties/name': 'Folder',
-        'https://atomicdata.dev/property/display-style':
-          'https://atomicdata.dev/display-styles/list',
-      },
+      propVals: { [core.properties.name]: 'Folder' },
     });
+    expect(await folder.save()).toBe('persisted');
 
-    await folder.save();
-
-    const genesisCommit = postCommitSpy.mock.calls[0][0];
-    expect(genesisCommit.loroUpdate).toBeDefined();
-
-    const materialized = new Resource(genesisCommit.subject);
-    materialized.importLoroUpdate(genesisCommit.loroUpdate!);
+    const genesis = postCommitSpy.mock.calls[0][0] as Commit;
+    const materialized = new Resource(genesis.subject);
+    materialized.importLoroUpdate(genesis.loroUpdate!);
 
     expect(materialized.get('https://atomicdata.dev/properties/parent')).toBe(
       parent,
@@ -240,235 +246,73 @@ describe('Commit signing and keys', () => {
     expect(materialized.get('https://atomicdata.dev/properties/name')).toBe(
       'Folder',
     );
+  });
+
+  it('saves Loro-doc changes made outside set() (e.g. the rich text editor)', async ({
+    expect,
+  }) => {
+    const { store, postCommitSpy } = await testStore();
+
+    const doc = await store.newResource({
+      isA: 'https://atomicdata.dev/classes/DocumentV2',
+      propVals: { [core.properties.name]: 'My Doc' },
+      noParent: true,
+    });
+    expect(await doc.save()).toBe('persisted');
+    expect(postCommitSpy.mock.calls.length).toBe(1);
+    const genesis = postCommitSpy.mock.calls[0][0] as Commit;
+
+    // Simulate loro-prosemirror: mutate the LoroDoc directly, then
+    // signal the change the way `useLoroSync` does.
+    const editorDoc = doc.getLoroDoc()!;
+    editorDoc.getMap('doc').set('content', 'Hello world');
+    doc.markDirty();
+    expect(doc.hasUnsavedChanges()).toBe(true);
+
+    expect(await doc.save()).toBe('persisted');
+    expect(postCommitSpy.mock.calls.length).toBe(2);
+    const delta = postCommitSpy.mock.calls[1][0] as Commit;
+    expect(delta.loroUpdate!.length).toBeGreaterThan(4);
+
+    // The out-of-band edit round-trips: genesis snapshot + delta.
+    const materialized = new Resource(delta.subject);
+    materialized.importLoroUpdate(genesis.loroUpdate!);
+    materialized.importLoroUpdate(delta.loroUpdate!);
+    expect(materialized.getLoroDoc()!.getMap('doc').toJSON()).toHaveProperty(
+      'content',
+      'Hello world',
+    );
+  });
+
+  it('caches the just-saved commit locally so <CommitDetail> needs no fetch', async ({
+    expect,
+  }) => {
+    /**
+     * Regression: a chatroom message post used to trigger a
+     * `GET did:ad:commit:<sig>` because the commit wasn't materialized
+     * locally. After `save()`, the commit's DID subject must be present
+     * in `store.resources` with the propvals <CommitDetail> reads.
+     */
+    const { store, posted, agentDID } = await testStore();
+
+    const msg = await store.newResource({
+      isA: 'https://atomicdata.dev/classes/Message',
+      propVals: { [core.properties.description]: 'hello chatroom' },
+      noParent: true,
+    });
+    expect(await msg.save()).toBe('persisted');
+
+    expect(posted.length).toBe(1);
+    const commitDidSubject = `did:ad:commit:${posted[0].signature}`;
+    expect(store.resources.has(commitDidSubject)).toBe(true);
+
+    const commitResource = store.resources.get(commitDidSubject)!;
+    expect(commitResource.get('https://atomicdata.dev/properties/signer')).toBe(
+      agentDID,
+    );
     expect(
-      materialized.get('https://atomicdata.dev/property/display-style'),
-    ).toBe('https://atomicdata.dev/display-styles/list');
-  });
-
-  it('drive genesis commit includes write and read arrays', async ({
-    expect,
-  }) => {
-    const store = new Store({ serverUrl: 'https://example.com' });
-    store.setServerConnected(true);
-    const agentKeys = await Agent.generateKeyPair();
-    const agentDID = `did:ad:agent:${agentKeys.publicKey}`;
-    const signingAgent = new Agent(
-      new JSCryptoProvider(agentKeys.privateKey),
-      agentDID,
-    );
-    store.setAgent(signingAgent);
-
-    const postCommitSpy = vi
-      .spyOn(store, 'postCommit')
-      .mockImplementation(async commit => {
-        return {
-          ...commit,
-          id: `https://example.com/commits/${commit.signature}`,
-        } as Commit;
-      });
-
-    // Simulate createDrive: set properties manually to avoid validation
-    const resource = new Resource('_new:test-drive');
-    resource.setStore(store);
-    resource.new = true;
-    await resource.set(
-      core.properties.isA,
-      ['https://atomicdata.dev/classes/Drive'],
-      false,
-    );
-    await resource.set(
-      'https://atomicdata.dev/properties/name',
-      'Test Drive',
-      false,
-    );
-    await resource.set(
-      'https://atomicdata.dev/properties/write',
-      [agentDID],
-      false,
-    );
-    await resource.set(
-      'https://atomicdata.dev/properties/read',
-      [agentDID],
-      false,
-    );
-
-    resource.markNextCommitAsGenesis();
-    const drive = resource;
-
-    await drive.save();
-
-    const genesisCommit = postCommitSpy.mock.calls[0][0];
-    expect(genesisCommit.loroUpdate).toBeDefined();
-
-    // Materialize: import the Loro update into a fresh resource
-    const materialized = new Resource(genesisCommit.subject);
-    materialized.importLoroUpdate(genesisCommit.loroUpdate!);
-
-    // The critical check: write and read arrays must be in the Loro delta
-    expect(materialized.get('https://atomicdata.dev/properties/write')).toEqual(
-      [agentDID],
-    );
-    expect(materialized.get('https://atomicdata.dev/properties/read')).toEqual([
-      agentDID,
-    ]);
-    expect(materialized.get('https://atomicdata.dev/properties/name')).toBe(
-      'Test Drive',
-    );
-  });
-
-  it('saves Loro doc changes made outside set() (e.g. rich text editor)', async ({
-    expect,
-  }) => {
-    const store = new Store({ serverUrl: 'https://example.com' });
-    store.setServerConnected(true);
-    const agentKeys = await Agent.generateKeyPair();
-    const agentDID = `did:ad:agent:${agentKeys.publicKey}`;
-    const signingAgent = new Agent(
-      new JSCryptoProvider(agentKeys.privateKey),
-      agentDID,
-    );
-    store.setAgent(signingAgent);
-
-    const postCommitSpy = vi
-      .spyOn(store, 'postCommit')
-      .mockImplementation(async commit => {
-        return {
-          ...commit,
-          id: `https://example.com/commits/${commit.signature}`,
-        } as Commit;
-      });
-
-    // Create resource with a title
-    const resource = new Resource('_new:test-doc');
-    resource.setStore(store);
-    resource.new = true;
-    await resource.set(
-      core.properties.isA,
-      ['https://atomicdata.dev/classes/DocumentV2'],
-      false,
-    );
-    await resource.set(
-      'https://atomicdata.dev/properties/name',
-      'My Doc',
-      false,
-    );
-
-    // Genesis save
-    resource.markNextCommitAsGenesis();
-    await resource.save();
-    expect(postCommitSpy).toHaveBeenCalledTimes(1);
-
-    const firstCommit = postCommitSpy.mock.calls[0][0];
-    expect(firstCommit.loroUpdate).toBeDefined();
-
-    // Now simulate what loro-prosemirror does: modify the LoroDoc directly
-    const doc = resource.getLoroDoc();
-    expect(doc).toBeDefined();
-
-    // Create a "doc" root map (like loro-prosemirror does for rich text)
-    const docMap = doc!.getMap('doc');
-    docMap.set('content', 'Hello world');
-
-    // Mark dirty (this is what useLoroSync does after local updates)
-    resource.markDirty();
-
-    // The resource should now have unsaved changes
-    expect(resource.hasUnsavedChanges()).toBe(true);
-
-    // Save should succeed and produce a commit with loroUpdate
-    await resource.save();
-    expect(postCommitSpy).toHaveBeenCalledTimes(2);
-
-    const secondCommit = postCommitSpy.mock.calls[1][0];
-    // THIS IS THE KEY ASSERTION: the second commit must have a loroUpdate
-    // containing the doc map changes
-    expect(secondCommit.loroUpdate).toBeDefined();
-    expect(secondCommit.loroUpdate!.length).toBeGreaterThan(4);
-
-    // Verify the content roundtrips: import the delta into a fresh doc
-    // that already has the genesis state (simulating the server's flow)
-    const materialized = new Resource(secondCommit.subject);
-    // First import the genesis snapshot
-    materialized.importLoroUpdate(firstCommit.loroUpdate!);
-    // Then import the delta
-    materialized.importLoroUpdate(secondCommit.loroUpdate!);
-    
-    const importedDoc = materialized.getLoroDoc();
-    const importedDocMap = importedDoc!.getMap('doc');
-    expect(importedDocMap.toJSON()).toHaveProperty('content', 'Hello world');
-  });
-
-  it('derives did:ad subject from temporary _new subject', async ({
-    expect,
-  }) => {
-    const tempSubject = '_new:01TESTTEMP';
-    const createdAt = 0;
-    const didAgent = new Agent(
-      new JSCryptoProvider(privateKey),
-      'did:ad:agent:TESTAGENT',
-    );
-
-    const commitBuilder = new CommitBuilder(tempSubject, {
-      set: new Map([
-        ['https://atomicdata.dev/properties/description', 'Genesis value'],
-      ]),
-    });
-    commitBuilder.setIsGenesis(true);
-
-    const commit = await commitBuilder.signAt(didAgent, createdAt);
-
-    expect(commit.subject).to.equal(`did:ad:${commit.signature}`);
-
-    const serialized = serializeDeterministically(commit);
-    const jsonCorrect = JSON.parse(serialized);
-    expect(
-      jsonCorrect['https://atomicdata.dev/properties/subject'],
-    ).toBeUndefined();
-  });
-
-  it('preserves did:ad:agent subject — never treats it as genesis', async ({
-    expect,
-  }) => {
-    const agentDid = 'did:ad:agent:SOMEPUBLICKEY123';
-    const didAgent = new Agent(new JSCryptoProvider(privateKey), agentDid);
-    const createdAt = 0;
-
-    // Editing an existing agent resource (no previousCommit yet on first edit).
-    const commitBuilder = new CommitBuilder(agentDid, {
-      set: new Map([['https://atomicdata.dev/properties/name', 'Alice']]),
-    });
-
-    const commit = await commitBuilder.signAt(didAgent, createdAt);
-
-    // Subject must remain the agent DID, not become did:ad:{signature}.
-    expect(commit.subject).to.equal(agentDid);
-
-    // Serialization must include the subject (not omit it like genesis commits).
-    const serialized = serializeDeterministically(commit);
-    const json = JSON.parse(serialized);
-    expect(json['https://atomicdata.dev/properties/subject']).to.equal(
-      agentDid,
-    );
-  });
-
-  it('keeps _new subject for non-did signers', async ({ expect }) => {
-    const tempSubject = '_new:01TESTTEMP';
-    const createdAt = 0;
-    const commitBuilder = new CommitBuilder(tempSubject, {
-      set: new Map([
-        ['https://atomicdata.dev/properties/description', 'Regular value'],
-      ]),
-    });
-
-    const commit = await commitBuilder.signAt(agent, createdAt);
-
-    expect(commit.subject).to.equal(tempSubject);
-
-    const serialized = serializeDeterministically(commit);
-    const jsonCorrect = JSON.parse(serialized);
-    expect(jsonCorrect['https://atomicdata.dev/properties/subject']).to.equal(
-      tempSubject,
-    );
+      commitResource.get('https://atomicdata.dev/properties/createdAt'),
+    ).toBeTypeOf('number');
   });
 });
 
@@ -507,83 +351,151 @@ describe('Commit parse and apply', () => {
   });
 });
 
-describe('Store.postCommit caches commit locally', () => {
-  /**
-   * Regression test for the "chatroom message post triggers a
-   * `GET did:ad:commit:<sig>`" trace the user observed in the WS log.
-   * Path: client signs commit → POST /commit → server applies → server
-   * pushes QUERY_UPDATE → UI mounts <Message> → <CommitDetail>
-   * → `useResource(commitSubject)` — which used to miss the local
-   * store (the online drain path didn't materialize commits as
-   * Resources, only `applyPendingCommitsLocally` did) and round-trip
-   * to the server for data we literally just signed.
-   *
-   * Contract under test: after a successful `Store.postCommit(...)`,
-   * the commit's subject MUST be present in `store.resources`, and
-   * MUST carry the `signer` / `createdAt` / `previousCommit` propvals
-   * that <CommitDetail> reads. We mock `client.postCommit` (NOT
-   * `store.postCommit`) so the new materialization step inside
-   * `Store.postCommit` actually runs.
-   */
-  it('adds the just-posted commit to store.resources', async ({ expect }) => {
-    const store = new Store({ serverUrl: 'https://example.com' });
-    store.setServerConnected(true);
-    const agentKeys = await Agent.generateKeyPair();
-    const agentDID = `did:ad:agent:${agentKeys.publicKey}`;
-    const agentProvider = new JSCryptoProvider(agentKeys.privateKey);
-    const signingAgent = new Agent(agentProvider, agentDID);
-    store.setAgent(signingAgent);
+/**
+ * Offline durability regressions. These assert on the OUTBOX and
+ * clientDb plumbing (the contract that an offline `save()` persists
+ * locally and survives a reload), so they wire a mock clientDb and
+ * inspect what gets written — but the resource lifecycle still goes
+ * through the public `newResource()` → `set()` → `save()` API.
+ */
+describe('offline persistence', () => {
+  interface DbEntry {
+    json: string;
+    snapshot?: Uint8Array;
+  }
 
-    // Mock the LOWER client.postCommit so Store.postCommit's
-    // materialization step still runs. Capture every commit the mock
-    // returns — the signature is the source of truth for the
-    // commit's DID subject and we'll use it directly to look up
-    // the materialized Resource (the resource's `lastCommit`
-    // propval is a URL whose path-tail extraction is unreliable
-    // when the signature itself contains base64 `/` characters).
-    const posted: Commit[] = [];
-    vi.spyOn(store['client'], 'postCommit').mockImplementation(
-      async (commit: Commit) => {
-        const created = {
-          ...commit,
-          id: `https://example.com/commits/${commit.signature}`,
-        } as Commit;
-        posted.push(created);
+  /** Attach an in-memory mock clientDb to a store; returns its backing map. */
+  function attachMockClientDb(store: Store): Map<string, DbEntry> {
+    const dbState = new Map<string, DbEntry>();
+    (store as unknown as { clientDb: unknown }).clientDb = {
+      isReady: true,
+      isInitialized: true,
+      initError: undefined,
+      putResourceWithSnapshot: vi.fn(
+        async (subject: string, json: string, snapshot?: Uint8Array) => {
+          dbState.set(subject, { json, snapshot });
+        },
+      ),
+      getResource: async (s: string) => dbState.get(s)?.json ?? null,
+      getResourceWithSnapshot: async (s: string) => {
+        const e = dbState.get(s);
 
-        return created;
+        return { jsonAd: e?.json ?? null, snapshot: e?.snapshot };
       },
-    );
+      getLoroSnapshot: async (s: string) => dbState.get(s)?.snapshot,
+      waitForInit: async () => true,
+      waitForReady: async () => true,
+    };
 
-    const resource = new Resource('did:ad:genesis-msg');
-    resource.setStore(store);
-    resource.new = true;
-    await resource.set(
-      core.properties.isA,
-      ['https://atomicdata.dev/classes/Message'],
+    return dbState;
+  }
+
+  it('an offline save persists to clientDb and marks the outbox dirty', async ({
+    expect,
+  }) => {
+    const { store } = await testStore();
+    const dbState = attachMockClientDb(store);
+
+    const doc = await store.newResource({
+      isA: 'https://atomicdata.dev/classes/Folder',
+      propVals: { [core.properties.name]: 'OnlineName' },
+      noParent: true,
+    });
+    await doc.save();
+    const subject = doc.subject;
+
+    store.setServerConnected(false);
+    await doc.set(
+      'https://atomicdata.dev/properties/name',
+      'OfflineName',
       false,
     );
-    await resource.set(core.properties.description, 'hello chatroom', false);
+    expect(await doc.save()).toBe('offline');
 
-    resource.markNextCommitAsGenesis();
-    await resource.save();
+    expect(dbState.get(subject)?.json).toContain('OfflineName');
+    expect(store.outbox.hasPending(subject)).toBe(true);
+  });
 
-    // Genesis save: exactly one commit is signed and posted.
-    expect(posted.length).toBe(1);
-    const commitDidSubject = `did:ad:commit:${posted[0].signature}`;
+  it('a stale WS update does not clobber the offline edit in clientDb', async ({
+    expect,
+  }) => {
+    const { store } = await testStore();
+    const dbState = attachMockClientDb(store);
+
+    const doc = await store.newResource({
+      isA: 'https://atomicdata.dev/classes/Folder',
+      propVals: { [core.properties.name]: 'OnlineName' },
+      noParent: true,
+    });
+    await doc.save();
+    const subject = doc.subject;
+
+    store.setServerConnected(false);
+    await doc.set(
+      'https://atomicdata.dev/properties/name',
+      'OfflineName',
+      false,
+    );
+    await doc.save();
+    expect(dbState.get(subject)?.json).toContain('OfflineName');
+
+    // A WS UPDATE arrives carrying the stale server state. The outbox
+    // dirty bit must protect the local offline edit from being
+    // overwritten in clientDb.
+    const stale = new Resource(subject);
+    stale.setStore(store);
+    stale.applyHydratedValues(
+      Object.entries({
+        '@id': subject,
+        [core.properties.isA]: ['https://atomicdata.dev/classes/Folder'],
+        'https://atomicdata.dev/properties/name': 'OnlineName',
+      }) as [string, never][],
+    );
+    stale.loading = false;
+    stale.new = false;
+    store.applyIncoming({
+      subject,
+      resource: stale,
+      source: 'remote-incoming-update',
+    });
+    await Promise.resolve();
 
     expect(
-      store.resources.has(commitDidSubject),
-      `expected commit Resource at ${commitDidSubject} in local store after postCommit`,
-    ).toBe(true);
+      dbState.get(subject)?.json,
+      'clientDb was overwritten with stale server state — offline edit lost',
+    ).toContain('OfflineName');
+  });
 
-    const commitResource = store.resources.get(commitDidSubject)!;
-    expect(
-      commitResource.get('https://atomicdata.dev/properties/signer'),
-      'commit Resource must carry signer for <CommitDetail>',
-    ).toBe(agentDID);
-    expect(
-      commitResource.get('https://atomicdata.dev/properties/createdAt'),
-      'commit Resource must carry createdAt for <CommitDetail>',
-    ).toBeTypeOf('number');
+  it('the Loro subscriber does not mark dirty mid-edit while offline', async ({
+    expect,
+  }) => {
+    // Regression: `pendingDirtyCount` must not rise from a bare `set()`
+    // before `save()` runs `saveOffline`. Otherwise the e2e
+    // `set → wait(pendingDirtyCount>0) → reload` races ahead of the
+    // clientDb write and loses the edit.
+    const { store } = await testStore();
+    attachMockClientDb(store);
+
+    const doc = await store.newResource({
+      isA: 'https://atomicdata.dev/classes/Folder',
+      propVals: { [core.properties.name]: 'Online' },
+      noParent: true,
+    });
+    await doc.save();
+
+    store.setServerConnected(false);
+    const baseline = store.getSyncStatus().pendingDirtyCount;
+
+    // Mutate WITHOUT saving — the subscriber must stay quiet offline.
+    await doc.set(
+      'https://atomicdata.dev/properties/name',
+      'OfflineEdit',
+      false,
+    );
+    expect(store.getSyncStatus().pendingDirtyCount).toBe(baseline);
+
+    // Saving raises it.
+    await doc.save();
+    expect(store.getSyncStatus().pendingDirtyCount).toBeGreaterThan(baseline);
   });
 });

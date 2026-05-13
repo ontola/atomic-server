@@ -4352,3 +4352,28 @@ msgstr "Error: Expected {0}<node-id>"
 #: src/routes/SyncRoute.tsx
 msgid "Synced {0} resource{1} with {2}"
 msgstr "Synced {0} resource{1} with {2}"
+
+#~ msgid "Loading... damn"
+#~ msgstr "Loading... damn"
+
+#: src/views/Document/DocumentV2FullPage.tsx
+msgid "Couldn't open the document editor"
+msgstr "Couldn't open the document editor"
+
+#: src/views/Document/DocumentV2FullPage.tsx
+msgid ""
+"The collaborative editing engine (Loro / WebAssembly) failed to\n"
+"initialize in this tab, so the document body can't be shown."
+msgstr ""
+"The collaborative editing engine (Loro / WebAssembly) failed to\n"
+"initialize in this tab, so the document body can't be shown."
+
+#: src/views/Document/DocumentV2FullPage.tsx
+msgid ""
+"Try reloading the page. If it keeps happening, another tab of this\n"
+"app or a browser extension may be blocking WebAssembly, or the tab\n"
+"ran out of memory."
+msgstr ""
+"Try reloading the page. If it keeps happening, another tab of this\n"
+"app or a browser extension may be blocking WebAssembly, or the tab\n"
+"ran out of memory."

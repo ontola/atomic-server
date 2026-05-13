@@ -22,6 +22,7 @@
  * See `planning/subject-types-end-to-end.md` for the migration plan.
  */
 declare const SubjectBrand: unique symbol;
+
 export type Subject = string & { readonly [SubjectBrand]: true };
 
 const DID_PREFIX = 'did:ad:';
@@ -60,6 +61,7 @@ export function tryAsSubject(raw: string): Subject | undefined {
  */
 export function isValidSubject(raw: string): boolean {
   if (typeof raw !== 'string' || raw.length === 0) return false;
+
   return raw.startsWith(DID_PREFIX) || HTTP_RE.test(raw);
 }
 

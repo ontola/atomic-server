@@ -26,14 +26,25 @@ const libDefaultsDir = fs.existsSync(
 
 export default defineConfig({
   resolve: {
-    alias: {
-      '@components': path.resolve(__dirname, 'src/components'),
-      '@views': path.resolve(__dirname, 'src/views'),
-      '@hooks': path.resolve(__dirname, 'src/hooks'),
-      '@helpers': path.resolve(__dirname, 'src/helpers'),
-      '@chunks': path.resolve(__dirname, 'src/chunks'),
-      '@repo-lib-defaults': libDefaultsDir,
-    },
+    alias: [
+      // Force EVERY `loro-crdt` import (our `enableLoro`, plus
+      // `loro-prosemirror` used by the editor) onto the `web` build.
+      // The default entry resolves via the `module` field to the
+      // `bundler` build, whose WASM↔JS circular import + top-level
+      // -await glue hangs under `vite-plugin-wasm` (loro-crdt ≥ 1.12).
+      // Aliasing to one build also guarantees a SINGLE Loro module
+      // instance — otherwise a web-build `LoroDoc` handed to a
+      // bundler-build `loro-prosemirror` fails `instanceof` checks and
+      // the two WASM memories diverge. Exact-match regex so the
+      // `loro-crdt/web` subpath import in `LoroLoader` is left alone.
+      { find: /^loro-crdt$/, replacement: 'loro-crdt/web' },
+      { find: '@components', replacement: path.resolve(__dirname, 'src/components') },
+      { find: '@views', replacement: path.resolve(__dirname, 'src/views') },
+      { find: '@hooks', replacement: path.resolve(__dirname, 'src/hooks') },
+      { find: '@helpers', replacement: path.resolve(__dirname, 'src/helpers') },
+      { find: '@chunks', replacement: path.resolve(__dirname, 'src/chunks') },
+      { find: '@repo-lib-defaults', replacement: libDefaultsDir },
+    ],
   },
   plugins: [
     wasm(),
@@ -248,7 +259,32 @@ export default defineConfig({
     // mid-session and serves a half-written file to the next request,
     // surfacing as `NS_ERROR_CORRUPTED_CONTENT` + empty MIME type on the
     // browser. Listing it up front makes the optimization happen at boot.
+    //
     include: ['react/compiler-runtime'],
+    // `loro-crdt` ships a WASM module that `vite-plugin-wasm` (see the
+    // `wasm()` plugin above) handles. esbuild's dep-optimizer CANNOT —
+    // if Vite prebundles loro-crdt, the WASM init in the optimized
+    // chunk hangs forever: `import('loro-crdt')` in `enableLoro()`
+    // never resolves OR rejects, so `LoroLoader.isLoaded()` stays
+    // false, every `getLoroDoc()` returns undefined, and documents are
+    // stuck (now surfaced as the "editor failed to load" error in
+    // `DocumentV2FullPage`). Excluding it from optimization lets
+    // `vite-plugin-wasm` serve the module untouched. This is the
+    // documented requirement for WASM deps under vite-plugin-wasm.
+    //
+    // It also explains the *intermittent* original failure: with
+    // loro-crdt neither included nor excluded, Vite auto-discovered it
+    // on the first lazy import and tried to optimize it mid-session —
+    // sometimes racing cleanly, sometimes hanging. Excluding makes it
+    // deterministic.
+    // Both must skip esbuild prebundling: the `web` build loads its
+    // `.wasm` via `fetch(new URL('loro_wasm_bg.wasm', import.meta.url))`.
+    // If esbuild inlines either into an optimized chunk, `import.meta.url`
+    // points at `.vite/deps/…` where the `.wasm` doesn't exist → 404.
+    // Excluding keeps them served from `node_modules` so the relative
+    // `.wasm` URL resolves. `loro-prosemirror` is here too because it
+    // imports `loro-crdt` (aliased to the web build above).
+    exclude: ['loro-crdt', 'loro-prosemirror'],
     // this may help when linking + HMR is not working
     // exclude: ['@tomic/lib', '@tomic/react'],
   },

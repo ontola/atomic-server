@@ -21,7 +21,44 @@ export class LoroLoader {
       return;
     }
 
-    this._Loro = await import('loro-crdt');
+    // In a browser, import loro-crdt's `web` build and run its
+    // wasm-bindgen init. The default `loro-crdt` entry resolves (via
+    // its `module` field) to the `bundler` build, whose WASM↔JS
+    // circular import + top-level-await glue HANGS under
+    // `vite-plugin-wasm` (loro-crdt ≥ 1.12) — `import()` never settles,
+    // no error. The `web` build is purpose-built for direct browser
+    // use: it fetches `loro_wasm_bg.wasm` and instantiates it via an
+    // explicit `default()` init. In Node (tests) the `web` build's
+    // `fetch(new URL(...))` can't read a file:// URL, so fall back to
+    // the default entry (resolves to the Node build there).
+    const isBrowser =
+      typeof window !== 'undefined' && typeof window.document !== 'undefined';
+
+    try {
+      const mod = isBrowser
+        ? ((await import('loro-crdt/web')) as unknown as typeof Loro & {
+            default?: unknown;
+          })
+        : await import('loro-crdt');
+
+      // The `web` build (wasm-bindgen web target) exposes its async
+      // init as the default export and instantiates nothing until it
+      // runs. The `bundler` / Node builds have no default function and
+      // auto-init, so this is a no-op for them.
+      const init = (mod as { default?: unknown }).default;
+
+      if (typeof init === 'function') {
+        await (init as () => Promise<unknown>)();
+      }
+
+      this._Loro = mod;
+    } catch (e) {
+      console.error(
+        '[LoroLoader] initializeLoro: loro-crdt import/init failed:',
+        e,
+      );
+      throw e;
+    }
 
     // Fire the ready callbacks. Hooks that called `getLoroDoc()` *before*
     // the WASM module finished loading would have observed it as
@@ -33,6 +70,7 @@ export class LoroLoader {
     // updates, never on WASM-ready.
     const listeners = [...this._readyListeners];
     this._readyListeners.clear();
+
     for (const cb of listeners) {
       try {
         cb();
