@@ -440,30 +440,32 @@ mod tests {
 
         let search_state = SearchState::new(&config).unwrap();
         let fields = search_state.get_schema_fields().unwrap();
+        let initial_title = format!("initial{unique_string}");
+        let updated_title = format!("updated{unique_string}");
 
         // Create initial resource
         let mut resource = Resource::new_generate_subject(&store).unwrap();
         resource
-            .set_string(urls::NAME.into(), "Initial Title", &store)
+            .set_string(urls::NAME.into(), &initial_title, &store)
             .await
             .unwrap();
         store.add_resource(&resource).await.unwrap();
 
         // Add to search index
+        let indexed_subject = resource.get_subject().to_string();
         search_state.add_resource(&resource, &store).await.unwrap();
         search_state.writer.write().unwrap().commit().unwrap();
 
         // Update the resource
         resource
-            .set_string(urls::NAME.into(), "Updated Title", &store)
+            .set_string(urls::NAME.into(), &updated_title, &store)
             .await
             .unwrap();
-        resource.save(&store).await.unwrap();
+        store.add_resource(&resource).await.unwrap();
 
-        // Update in search index — just use the canonical subject, no resolution needed
-        search_state
-            .remove_resource(resource.get_subject().as_str())
-            .unwrap();
+        // Remove the exact subject that was indexed above before re-adding the
+        // updated resource.
+        search_state.remove_resource(&indexed_subject).unwrap();
         search_state.add_resource(&resource, &store).await.unwrap();
         search_state.writer.write().unwrap().commit().unwrap();
 
@@ -478,8 +480,8 @@ mod tests {
         // safety net — a real bug would never converge inside it.
         let query_parser =
             tantivy::query::QueryParser::for_index(&search_state.index, vec![fields.title]);
-        let initial_query = query_parser.parse_query("Initial").unwrap();
-        let updated_query = query_parser.parse_query("Updated").unwrap();
+        let initial_query = query_parser.parse_query(&initial_title).unwrap();
+        let updated_query = query_parser.parse_query(&updated_title).unwrap();
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
         let (last_initial, last_updated) = loop {
             search_state.reader.reload().unwrap();
