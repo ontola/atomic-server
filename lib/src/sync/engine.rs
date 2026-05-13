@@ -312,26 +312,6 @@ pub async fn handle_sync_vv(
     agent: &crate::agents::ForAgent,
 ) -> Vec<Vec<u8>> {
     let drive_subject = crate::Subject::from_raw(drive, store.get_base_domain().as_deref());
-
-    // Fast-fail for non-DID drives. The browser's `handleOpen`
-    // (websockets.ts) fires SYNC_VV for whatever `store.getDrive()`
-    // returns; for an anonymous page that's the server's HTTP origin,
-    // not a real drive DID. The non-DID branch of
-    // `collect_drive_subjects` (engine.rs:202) walks every resource
-    // in the store — on a populated DB that's seconds of CPU work
-    // and the spawned future starves the WebSocketConnection actor,
-    // queueing any follow-up GET behind it (the failing-bench root
-    // cause). For a non-DID "drive" the right answer is "nothing to
-    // sync" — return SYNC_OK so the client's startup state machine
-    // moves on without sweeping the server.
-    if !drive_subject.is_did() {
-        tracing::debug!(
-            "SYNC_VV: drive {} is not a DID — skipping full-store scan, returning SYNC_OK",
-            drive
-        );
-        return vec![protocol::encode_sync_ok(drive)];
-    }
-
     let drive_subjects = collect_drive_subjects(store, &drive_subject).await;
     let server_vvs = build_drive_vvs(store, &drive_subjects);
 
