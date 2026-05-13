@@ -139,6 +139,13 @@ pub enum Command {
     /// Danger! Removes all data from the store.
     #[clap(name = "reset")]
     Reset,
+    /// Compact the on-disk redb file (rebuilds page layout, truncates
+    /// dead-page tail). Slow — typically minutes on a multi-GB store —
+    /// but makes future boots dramatically faster because the open-time
+    /// `fsync` cost scales with file size. Server MUST be stopped:
+    /// redb takes an exclusive file lock and will fail otherwise.
+    #[clap(name = "compact")]
+    Compact,
 }
 
 #[derive(Parser, Clone, Debug)]

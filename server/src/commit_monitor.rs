@@ -7,7 +7,6 @@ use crate::{
         CommitMessage, DriveNotification, MembershipNotification, QueryUpdate, Subscribe,
         SubscribeQuery, UnsubscribeQuery,
     },
-    errors::AtomicServerResult,
     handlers::web_sockets::WebSocketConnection,
     search::SearchState,
 };
@@ -16,8 +15,9 @@ use actix::{
     ActorFutureExt, Addr, ResponseActFuture, WrapFuture,
 };
 use atomic_lib::{agents::ForAgent, db::QueryFilter, Db, DbEvent, Storelike, Value};
-use chrono::Local;
 use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 /// The Commit Monitor is an Actor that manages subscriptions for subjects and sends Commits to listeners.
 /// It's also responsible for checking whether the rights are present.
@@ -47,8 +47,16 @@ pub struct CommitMonitor {
     drive_subscriptions: HashMap<String, HashSet<Addr<WebSocketConnection>>>,
     store: Db,
     search_state: SearchState,
-    last_search_commit: chrono::DateTime<Local>,
-    run_expensive_next_tick: bool,
+    /// Set by every commit handler that adds a doc to the tantivy
+    /// writer. A standalone `tokio::spawn` task drains this flag and
+    /// calls `writer.commit()` to flush. The actor itself never owns
+    /// the flush — that decoupling matters because the actor mailbox
+    /// is shared with `CommitMessage` / `Subscribe` / drive-broadcast
+    /// notifications, all of which can back up under suite load and
+    /// stall a `run_interval` callback. With the flush off-actor the
+    /// search-index visibility window is bounded by `REBUILD_INDEX_TIME`
+    /// regardless of mailbox depth.
+    pending_commit: Arc<AtomicBool>,
 }
 
 // Only runs expensive index operation (tantivy) once every x seconds
@@ -61,8 +69,48 @@ impl Actor for CommitMonitor {
     fn started(&mut self, ctx: &mut Context<Self>) {
         tracing::debug!("CommitMonitor started");
         if tokio::runtime::Handle::try_current().is_ok() {
-            ctx.run_interval(REBUILD_INDEX_TIME, |actor, ctx| {
-                actor.tick(ctx);
+            // Tantivy flush runs OFF the actor on its own tokio task.
+            // The previous design used `ctx.run_interval(...)` which
+            // queued a `tick()` message on the actor mailbox — and the
+            // mailbox is shared with every `CommitMessage`,
+            // `Subscribe`, drive/membership notification, etc., so
+            // under suite-wide load (multiple Playwright workers
+            // hammering commits) the tick fired well after its 5s
+            // schedule, leaving the search index 30s+ behind. This
+            // task holds clones of the writer + flag and is
+            // unaffected by mailbox depth.
+            let flag = self.pending_commit.clone();
+            let writer = self.search_state.writer.clone();
+            tokio::spawn(async move {
+                let mut interval = tokio::time::interval(REBUILD_INDEX_TIME);
+                // `interval.tick()` returns immediately on first call;
+                // skip it so we don't commit an empty writer at boot.
+                interval.tick().await;
+                loop {
+                    interval.tick().await;
+                    if !flag.swap(false, Ordering::AcqRel) {
+                        continue;
+                    }
+                    match writer.write() {
+                        Ok(mut guard) => {
+                            if let Err(e) = guard.commit() {
+                                tracing::error!(
+                                    "Tantivy commit failed: {}",
+                                    e
+                                );
+                                // Re-arm so the next pass retries.
+                                flag.store(true, Ordering::Release);
+                            }
+                        }
+                        Err(e) => {
+                            tracing::error!(
+                                "Tantivy writer lock poisoned: {}",
+                                e
+                            );
+                            flag.store(true, Ordering::Release);
+                        }
+                    }
+                }
             });
 
             // Bridge DbEvents to actor messages. All query-subscription
@@ -426,26 +474,6 @@ impl CommitMonitor {
         entry.insert(addr);
     }
 
-    /// Runs every X seconds to perform expensive operations.
-    fn tick(&mut self, _ctx: &mut Context<Self>) {
-        if self.run_expensive_next_tick {
-            _ = self.update_expensive().map_err(|e| {
-                tracing::error!(
-                    "Error during expensive update in Commit Monitor: {}",
-                    e.to_string()
-                )
-            });
-        }
-    }
-
-    /// Run expensive updates that should not be run after every single Commit
-    fn update_expensive(&mut self) -> AtomicServerResult<()> {
-        tracing::debug!("Update expensive");
-        self.search_state.writer.write()?.commit()?;
-        self.last_search_commit = chrono::Local::now();
-        self.run_expensive_next_tick = false;
-        Ok(())
-    }
 }
 
 impl Handler<CommitMessage> for CommitMonitor {
@@ -527,7 +555,10 @@ impl Handler<CommitMessage> for CommitMonitor {
                 if let Err(e) = res {
                     tracing::error!("{}", e);
                 }
-                actor.run_expensive_next_tick = true;
+                // Off-actor flush task picks this up on its next tick.
+                actor
+                    .pending_commit
+                    .store(true, Ordering::Release);
             }),
         )
     }
@@ -543,8 +574,7 @@ pub fn create_commit_monitor(store: Db, search_state: SearchState) -> Addr<Commi
             drive_subscriptions: HashMap::new(),
             store,
             search_state,
-            run_expensive_next_tick: false,
-            last_search_commit: chrono::Local::now(),
+            pending_commit: Arc::new(AtomicBool::new(false)),
         }
     })
 }
