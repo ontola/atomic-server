@@ -16,14 +16,18 @@ pub(crate) trait Embedder: Send + Sync {
     /// How many text chunks to embed per batch when building or incrementally updating the vector index.
     fn index_batch_size(&self) -> usize;
 
+    /// How many embedding requests may be kept in flight while indexing.
+    fn index_batch_concurrency(&self) -> usize;
+
     async fn embed_strings(&self, chunks: &[String]) -> AtomicServerResult<Vec<Vec<f32>>>;
 }
 
 pub(crate) async fn create_embedder(config: &Config) -> AtomicServerResult<Arc<dyn Embedder>> {
     if let Some(api_key) = config.openrouter_api_key.clone() {
-        Ok(Arc::new(
-            openrouter::OpenRouterEmbedder::new(config, api_key).await?,
-        ) as Arc<dyn Embedder>)
+        Ok(
+            Arc::new(openrouter::OpenRouterEmbedder::new(config, api_key).await?)
+                as Arc<dyn Embedder>,
+        )
     } else {
         Ok(Arc::new(local::LocalEmbedder::new(config)?) as Arc<dyn Embedder>)
     }

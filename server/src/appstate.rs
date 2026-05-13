@@ -118,16 +118,17 @@ impl AppState {
             })
         };
 
-        let vector_search_state = crate::vector_search::VectorSearchState::new(
-            &config,
-            Some(index_notifier),
-        )
-        .await
-            .map_err(|e| format!("Failed to start vector search service: {}", e))?;
+        let vector_search_state =
+            crate::vector_search::VectorSearchState::new(&config, Some(index_notifier))
+                .await
+                .map_err(|e| format!("Failed to start vector search service: {}", e))?;
 
         // Initialize commit monitor, which watches commits and sends these to the commit_monitor actor
-        let commit_monitor =
-            crate::commit_monitor::create_commit_monitor(store.clone(), search_state.clone(), vector_search_state.clone());
+        let commit_monitor = crate::commit_monitor::create_commit_monitor(
+            store.clone(),
+            search_state.clone(),
+            vector_search_state.clone(),
+        );
 
         let commit_monitor_clone = commit_monitor.clone();
 
@@ -183,7 +184,28 @@ impl AppState {
     /// Cleanup code, writing buffers, committing changes, etc.
     fn exit(&self) -> AtomicServerResult<()> {
         self.search_state.writer.write()?.commit()?;
-        Ok(())
+
+        // `flush_pending` is async; sync teardown (`exit`) runs outside/normal teardown contexts where we cannot safely call `Handle::block_on()`
+        // — nesting Tokio block-on triggers panic ("cannot block_on runtime inside runtime").
+        let vs = self.vector_search_state.clone();
+        match std::thread::spawn(move || -> AtomicServerResult<()> {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .map_err(|e| {
+                    format!(
+                        "failed to build shutdown tokio runtime for vector flush: {}",
+                        e
+                    )
+                })?;
+            rt.block_on(vs.flush_pending())
+        })
+        .join()
+        {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(e)) => Err(e),
+            Err(_panic) => Err("vector index flush thread panicked on shutdown".into()),
+        }
     }
 }
 

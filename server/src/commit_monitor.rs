@@ -130,8 +130,12 @@ impl CommitMonitor {
     fn update_expensive(&mut self) -> AtomicServerResult<()> {
         tracing::debug!("Update expensive");
         self.search_state.writer.write()?.commit()?;
-        // polarisdb writes are auto-flushed, but we can flush here to be safe
-        // let _ = futures::executor::block_on(self.vector_search_state.collection.write()).flush();
+        let vector_search_state = self.vector_search_state.clone();
+        tokio::spawn(async move {
+            if let Err(e) = vector_search_state.flush_pending().await {
+                tracing::error!("Vector index periodic flush failed: {}", e);
+            }
+        });
         self.last_search_commit = chrono::Local::now();
         self.run_expensive_next_tick = false;
         Ok(())
@@ -162,44 +166,67 @@ impl Handler<CommitMessage> for CommitMonitor {
         let store = self.store.clone();
         let search_state = self.search_state.clone();
         let vector_search_state = self.vector_search_state.clone();
+        let resource_old = msg.commit_response.resource_old.clone();
         let resource_new = msg.commit_response.resource_new.clone();
 
         Box::pin(
             async move {
-                search_state.remove_resource(&target).map_err(|e| {
-                    format!(
-                        "Handling commit in CommitMonitor failed, cache may not be fully updated: {}",
-                        e
-                    )
-                })?;
-                vector_search_state.remove_resource(&target).await.map_err(|e| {
-                    format!(
-                        "Handling commit in CommitMonitor failed for vector search: {}",
-                        e
-                    )
-                })?;
-                if let Some(resource) = resource_new {
-                    // We could one day re-(allow) to keep old resources,
-                    // but then we also should index the older versions when re-indexing.
-                    // Add new resource to search index
+                // Skip vector re-indexing when only non-text properties changed (e.g. parent adding
+                // a child to its subResources array). If the indexable text content is identical,
+                // neither a remove nor an add is needed — the existing vector entry is still correct.
+                let vector_text_unchanged = resource_old.as_ref().zip(resource_new.as_ref()).is_some_and(
+                    |(old, new)| {
+                        crate::vector_search::get_resource_text_parts(old)
+                            == crate::vector_search::get_resource_text_parts(new)
+                    },
+                );
+
+                // The full-text search index covers all JSON-AD properties, so it must update on
+                // every commit regardless of which fields changed.
+                if resource_old.is_some() {
+                    search_state.remove_resource(&target).map_err(|e| {
+                        format!(
+                            "Handling commit in CommitMonitor failed, cache may not be fully updated: {}",
+                            e
+                        )
+                    })?;
+                }
+                if let Some(resource) = resource_new.as_ref() {
                     search_state
-                        .add_resource(&resource, &store)
+                        .add_resource(resource, &store)
                         .await
                         .map_err(|e| {
                             format!(
-                    "Handling commit in CommitMonitor failed, cache may not be fully updated: {}",
-                    e
-                )
+                                "Handling commit in CommitMonitor failed, cache may not be fully updated: {}",
+                                e
+                            )
                         })?;
-                    vector_search_state
-                        .add_resource(&resource, &store)
-                        .await
-                        .map_err(|e| {
+                }
+
+                if !vector_text_unchanged {
+                    // Remove old vector entry when the resource existed before (skip for new
+                    // resources and for unchanged text to avoid costly no-op LanceDB scans).
+                    if resource_old.is_some() {
+                        vector_search_state.remove_resource(&target).await.map_err(|e| {
                             format!(
-                    "Handling commit in CommitMonitor failed for vector search: {}",
-                    e
-                )
+                                "Handling commit in CommitMonitor failed for vector search: {}",
+                                e
+                            )
                         })?;
+                    }
+                    if let Some(resource) = resource_new {
+                        // We could one day re-(allow) to keep old resources,
+                        // but then we also should index the older versions when re-indexing.
+                        vector_search_state
+                            .add_resource(&resource, &store)
+                            .await
+                            .map_err(|e| {
+                                format!(
+                                    "Handling commit in CommitMonitor failed for vector search: {}",
+                                    e
+                                )
+                            })?;
+                    }
                 }
                 Ok::<_, String>(())
             }
@@ -215,7 +242,11 @@ impl Handler<CommitMessage> for CommitMonitor {
 }
 
 /// Spawns a commit monitor actor
-pub fn create_commit_monitor(store: Db, search_state: SearchState, vector_search_state: crate::vector_search::VectorSearchState) -> Addr<CommitMonitor> {
+pub fn create_commit_monitor(
+    store: Db,
+    search_state: SearchState,
+    vector_search_state: crate::vector_search::VectorSearchState,
+) -> Addr<CommitMonitor> {
     tracing::info!("spawning commit monitor");
     crate::commit_monitor::CommitMonitor::create(|_ctx: &mut Context<CommitMonitor>| {
         CommitMonitor {

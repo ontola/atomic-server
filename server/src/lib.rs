@@ -17,8 +17,8 @@ mod jsonerrors;
 pub mod plugins;
 mod routes;
 pub mod serve;
-mod y_sync_broadcaster;
 pub mod vector_search;
+mod y_sync_broadcaster;
 // #[cfg(feature = "search")]
 mod search;
 #[cfg(test)]

@@ -19,11 +19,13 @@ pub(crate) fn fastembed_gpu_execution_providers() -> Vec<ExecutionProviderDispat
     {
         execution_providers
             .push(ort::execution_providers::DirectMLExecutionProvider::default().build());
-        execution_providers.push(ort::execution_providers::CUDAExecutionProvider::default().build());
+        execution_providers
+            .push(ort::execution_providers::CUDAExecutionProvider::default().build());
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
-        execution_providers.push(ort::execution_providers::CUDAExecutionProvider::default().build());
+        execution_providers
+            .push(ort::execution_providers::CUDAExecutionProvider::default().build());
     }
 
     execution_providers

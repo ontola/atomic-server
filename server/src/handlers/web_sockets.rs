@@ -27,8 +27,8 @@ use crate::{
     commit_monitor::CommitMonitor,
     errors::AtomicServerResult,
     helpers::get_auth_headers,
-    y_sync_broadcaster::YSyncBroadcaster,
     vector_search::VectorSearchState,
+    y_sync_broadcaster::YSyncBroadcaster,
 };
 
 /// Get an HTTP request, upgrade it to a Websocket connection
@@ -260,8 +260,8 @@ fn handle_ws_message_sync(
     conn: &mut WebSocketConnection,
 ) -> AtomicResult<()> {
     if let Some(json) = text.strip_prefix("SUBSCRIBE_INDEX_STATUS ") {
-        let v: serde_json::Value =
-            serde_json::from_str(json).map_err(|e| format!("Invalid SUBSCRIBE_INDEX_STATUS JSON: {}", e))?;
+        let v: serde_json::Value = serde_json::from_str(json)
+            .map_err(|e| format!("Invalid SUBSCRIBE_INDEX_STATUS JSON: {}", e))?;
         let drive = v
             .get("drive")
             .and_then(|d| d.as_str())

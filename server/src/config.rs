@@ -339,10 +339,7 @@ pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
 
     let gpu_indexing = opts.gpu_indexing;
 
-    let openrouter_api_key = opts
-        .openrouter_api_key
-        .clone()
-        .filter(|s| !s.is_empty());
+    let openrouter_api_key = opts.openrouter_api_key.clone().filter(|s| !s.is_empty());
     let openrouter_embedding_model = opts
         .openrouter_embedding_model
         .clone()

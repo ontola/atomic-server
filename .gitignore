@@ -9,3 +9,4 @@ artifact
 server/assets_tmp
 .netlify
 .fastembed_cache
+.claude

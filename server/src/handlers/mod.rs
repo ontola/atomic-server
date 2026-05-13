@@ -14,7 +14,7 @@ pub mod image;
 pub mod plugin_ui;
 pub mod post_resource;
 pub mod search;
-pub mod vector_search;
 pub mod single_page_app;
 pub mod upload;
+pub mod vector_search;
 pub mod web_sockets;

@@ -6,7 +6,8 @@ use serde::{Deserialize, Serialize};
 
 const OPENROUTER_EMBEDDINGS_URL: &str = "https://openrouter.ai/api/v1/embeddings";
 
-const OPENROUTER_INDEX_BATCH_SIZE: usize = 256;
+const OPENROUTER_INDEX_BATCH_SIZE: usize = 64;
+const OPENROUTER_INDEX_BATCH_CONCURRENCY: usize = 4;
 
 /// OpenRouter-backed embeddings (`Config::openrouter_*`, env `OPENROUTER_*`). Optional `dimensions` is only honored by some upstream models.
 #[derive(Clone)]
@@ -67,6 +68,7 @@ async fn openrouter_embed_http(
         },
     };
 
+    tracing::info!("Sending OpenRouter request with number of chunks: {}", inputs.len());
     let response = client
         .post(url)
         .header("Authorization", format!("Bearer {}", api_key))
@@ -123,6 +125,10 @@ impl Embedder for OpenRouterEmbedder {
 
     fn index_batch_size(&self) -> usize {
         OPENROUTER_INDEX_BATCH_SIZE
+    }
+
+    fn index_batch_concurrency(&self) -> usize {
+        OPENROUTER_INDEX_BATCH_CONCURRENCY
     }
 
     async fn embed_strings(&self, chunks: &[String]) -> AtomicServerResult<Vec<Vec<f32>>> {

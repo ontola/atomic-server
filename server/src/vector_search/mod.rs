@@ -11,7 +11,7 @@ mod fastembed_gpu;
 mod table;
 
 use crate::config::Config;
-use crate::errors::AtomicServerResult;
+use crate::errors::{AtomicServerError, AtomicServerResult};
 use crate::search::extract_plain_text;
 use arrow::array::{
     ArrayRef, FixedSizeListArray, Float32Array, ListBuilder, RecordBatch, RecordBatchIterator,
@@ -22,6 +22,10 @@ use atomic_lib::{Db, Resource, Storelike};
 use embeddings::Embedder;
 use fastembed::{RerankInitOptions, RerankerModel, TextRerank};
 use fastembed_gpu::fastembed_gpu_execution_providers;
+use futures::{
+    future::{BoxFuture, FutureExt},
+    stream::{FuturesUnordered, StreamExt},
+};
 use lancedb::index::scalar::{BTreeIndexBuilder, FtsIndexBuilder, LabelListIndexBuilder};
 use lancedb::index::vector::IvfPqIndexBuilder;
 use lancedb::index::Index;
@@ -49,6 +53,143 @@ struct PendingBatch {
     batch_is_a: Vec<Vec<String>>,
     batch_hierarchy: Vec<Vec<String>>,
     batch_text_chunks: Vec<String>,
+}
+
+#[derive(Default)]
+struct IndexBatch {
+    batch_subjects: Vec<String>,
+    batch_is_a: Vec<Vec<String>>,
+    batch_hierarchy: Vec<Vec<String>>,
+    batch_text_chunks: Vec<String>,
+}
+
+impl IndexBatch {
+    fn len(&self) -> usize {
+        self.batch_subjects.len()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.batch_subjects.is_empty()
+    }
+
+    fn from_parts(
+        batch_subjects: Vec<String>,
+        batch_is_a: Vec<Vec<String>>,
+        batch_hierarchy: Vec<Vec<String>>,
+        batch_text_chunks: Vec<String>,
+    ) -> Self {
+        Self {
+            batch_subjects,
+            batch_is_a,
+            batch_hierarchy,
+            batch_text_chunks,
+        }
+    }
+}
+
+struct IndexBatchOutcome {
+    chunk_rows: usize,
+    result: AtomicServerResult<()>,
+}
+
+struct ParallelIndexBatches<'a> {
+    state: &'a VectorSearchState,
+    in_flight: FuturesUnordered<BoxFuture<'a, IndexBatchOutcome>>,
+    max_in_flight: usize,
+    track_pending_rows: bool,
+    first_error: Option<AtomicServerError>,
+}
+
+impl<'a> ParallelIndexBatches<'a> {
+    fn new(state: &'a VectorSearchState, track_pending_rows: bool) -> Self {
+        Self {
+            state,
+            in_flight: FuturesUnordered::new(),
+            max_in_flight: state.embedder.index_batch_concurrency().max(1),
+            track_pending_rows,
+            first_error: None,
+        }
+    }
+
+    fn push(&mut self, batch: IndexBatch) {
+        if batch.is_empty() {
+            return;
+        }
+
+        let state = self.state;
+        let track_pending_rows = self.track_pending_rows;
+        self.in_flight.push(
+            async move {
+                let chunk_rows = batch.len();
+                let track_subjects = track_pending_rows.then(|| batch.batch_subjects.clone());
+                let track_hierarchy = track_pending_rows.then(|| batch.batch_hierarchy.clone());
+
+                let result = state
+                    .embed_and_add_owned_batch(
+                        batch.batch_subjects,
+                        batch.batch_is_a,
+                        batch.batch_hierarchy,
+                        batch.batch_text_chunks,
+                    )
+                    .await;
+
+                if let (Some(subjects), Some(hierarchy)) = (track_subjects, track_hierarchy) {
+                    state.complete_batch_rows(&subjects, &hierarchy);
+                }
+
+                IndexBatchOutcome { chunk_rows, result }
+            }
+            .boxed(),
+        );
+    }
+
+    async fn wait_for_available_slot(&mut self) -> AtomicServerResult<Option<usize>> {
+        if self.in_flight.len() < self.max_in_flight {
+            return Ok(None);
+        }
+
+        self.wait_for_next_completed().await
+    }
+
+    async fn wait_for_next_completed(&mut self) -> AtomicServerResult<Option<usize>> {
+        let completed_rows = self.wait_next().await;
+        if self.first_error.is_some() {
+            self.drain_in_flight().await;
+            return Err(self.take_first_error());
+        }
+
+        Ok(completed_rows)
+    }
+
+    async fn drain(&mut self) -> AtomicServerResult<()> {
+        while self.wait_for_next_completed().await?.is_some() {
+            // Continue until all in-flight batches finish.
+        }
+        Ok(())
+    }
+
+    async fn drain_in_flight(&mut self) {
+        while !self.in_flight.is_empty() {
+            self.wait_next().await;
+        }
+    }
+
+    async fn wait_next(&mut self) -> Option<usize> {
+        let outcome = self.in_flight.next().await?;
+        let chunk_rows = outcome.chunk_rows;
+        if let Err(e) = outcome.result {
+            if self.first_error.is_none() {
+                self.first_error = Some(e);
+            }
+        }
+        Some(chunk_rows)
+    }
+
+    fn take_first_error(&mut self) -> AtomicServerError {
+        self.first_error
+            .take()
+            .unwrap_or_else(|| "Unknown vector index batch error".into())
+    }
 }
 
 pub fn get_resource_title(resource: &Resource) -> Option<String> {
@@ -239,18 +380,31 @@ impl VectorSearchState {
         self.notify_indexing_changed(&[drive.to_string()]);
     }
 
-    fn complete_batch_rows(&self, batch_subjects: &[String], batch_hierarchy: &[Vec<String>]) {
+    fn indexing_drive_key(subject: &str, hierarchy: &[String]) -> String {
+        hierarchy
+            .last()
+            .cloned()
+            .unwrap_or_else(|| subject.to_string())
+    }
+
+    /// Decrements per-drive chunk row refcounts for rows that were registered but will not be embedded
+    /// (e.g. dropped from the pending queue on delete).
+    fn release_indexing_rows_for_pairs(
+        &self,
+        batch_subjects: &[String],
+        batch_hierarchy: &[Vec<String>],
+    ) {
         debug_assert_eq!(batch_subjects.len(), batch_hierarchy.len());
+        if batch_subjects.is_empty() {
+            return;
+        }
         let mut drives_to_notify = Vec::new();
         let mut g = self
             .indexing_rows_by_drive
             .lock()
             .expect("indexing_rows_by_drive mutex");
         for i in 0..batch_subjects.len() {
-            let drive_key = batch_hierarchy[i]
-                .last()
-                .cloned()
-                .unwrap_or_else(|| batch_subjects[i].clone());
+            let drive_key = Self::indexing_drive_key(&batch_subjects[i], &batch_hierarchy[i]);
             let should_remove = {
                 if let Some(c) = g.get_mut(&drive_key) {
                     *c = c.saturating_sub(1);
@@ -267,6 +421,10 @@ impl VectorSearchState {
         }
         drop(g);
         self.notify_indexing_changed(&drives_to_notify);
+    }
+
+    fn complete_batch_rows(&self, batch_subjects: &[String], batch_hierarchy: &[Vec<String>]) {
+        self.release_indexing_rows_for_pairs(batch_subjects, batch_hierarchy);
     }
 
     /// True while incremental vector indexing has queued or in-flight chunk rows for this drive root.
@@ -297,6 +455,7 @@ impl VectorSearchState {
         let mut batch_count = 0;
         let mut resources_processed = 0;
         let batch_size = self.embedder.index_batch_size();
+        let mut batch_processor = ParallelIndexBatches::new(self, false);
 
         for resource in resources {
             if let Some((subject, is_a, hierarchy, chunks)) =
@@ -310,17 +469,17 @@ impl VectorSearchState {
 
                     if batch_subjects.len() >= batch_size {
                         batch_count += 1;
-                        println!(
+                        tracing::info!(
                             "starting batch: {}, resources processed: {}",
                             batch_count, resources_processed
                         );
-                        self.embed_and_add_batch(
-                            &mut batch_subjects,
-                            &mut batch_is_a,
-                            &mut batch_hierarchy,
-                            &mut batch_text_chunks,
-                        )
-                        .await?;
+                        batch_processor.push(IndexBatch::from_parts(
+                            std::mem::take(&mut batch_subjects),
+                            std::mem::take(&mut batch_is_a),
+                            std::mem::take(&mut batch_hierarchy),
+                            std::mem::take(&mut batch_text_chunks),
+                        ));
+                        batch_processor.wait_for_available_slot().await?;
                     }
                 }
             }
@@ -329,14 +488,14 @@ impl VectorSearchState {
         }
 
         if !batch_subjects.is_empty() {
-            self.embed_and_add_batch(
-                &mut batch_subjects,
-                &mut batch_is_a,
-                &mut batch_hierarchy,
-                &mut batch_text_chunks,
-            )
-            .await?;
+            batch_processor.push(IndexBatch::from_parts(
+                std::mem::take(&mut batch_subjects),
+                std::mem::take(&mut batch_is_a),
+                std::mem::take(&mut batch_hierarchy),
+                std::mem::take(&mut batch_text_chunks),
+            ));
         }
+        batch_processor.drain().await?;
 
         tracing::info!("Creating vector index...");
         self.table
@@ -421,26 +580,6 @@ impl VectorSearchState {
         .await?;
 
         Ok(())
-    }
-
-    async fn embed_and_add_batch(
-        &self,
-        batch_subjects: &mut Vec<String>,
-        batch_is_a: &mut Vec<Vec<String>>,
-        batch_hierarchy: &mut Vec<Vec<String>>,
-        batch_text_chunks: &mut Vec<String>,
-    ) -> AtomicServerResult<()> {
-        if batch_subjects.is_empty() {
-            return Ok(());
-        }
-
-        self.embed_and_add_owned_batch(
-            std::mem::take(batch_subjects),
-            std::mem::take(batch_is_a),
-            std::mem::take(batch_hierarchy),
-            std::mem::take(batch_text_chunks),
-        )
-        .await
     }
 
     #[tracing::instrument(
@@ -566,8 +705,8 @@ impl VectorSearchState {
                 .collect();
         }
 
-        let max_length = 256;
-        let overlap = 100;
+        let max_length = 384;
+        let overlap = 96;
 
         let plain_text_splitter = TextSplitter::new(
             ChunkConfig::new(max_length)
@@ -582,19 +721,40 @@ impl VectorSearchState {
 
         let mut chunks = Vec::new();
 
-        if let Some(title) = title {
-            chunks.push(title);
+        if let Some(title) = title.as_ref() {
+            chunks.push(title.clone());
         }
+
+        // Prepend a truncated title to each chunk to improve semantic retrieval.
+        // Capped at 60 chars to avoid pushing chunk content beyond model token limits.
+        let title_prefix: Option<String> = title.as_ref().map(|t| {
+            let cutoff = t.char_indices().nth(60).map(|(i, _)| i).unwrap_or(t.len());
+            if cutoff == t.len() {
+                t.clone()
+            } else {
+                format!("{}…", &t[..cutoff])
+            }
+        });
 
         if let Some(description) = description {
             for chunk in markdown_splitter.chunks(&description) {
-                chunks.push(chunk.to_string());
+                let chunk = if let Some(prefix) = title_prefix.as_ref() {
+                    format!("{}\n{}", prefix, chunk)
+                } else {
+                    chunk.to_string()
+                };
+                chunks.push(chunk);
             }
         }
 
         if let Some(doc_content) = doc_content {
             for chunk in plain_text_splitter.chunks(&doc_content) {
-                chunks.push(chunk.to_string());
+                let chunk = if let Some(prefix) = title_prefix.as_ref() {
+                    format!("{}\n{}", prefix, chunk)
+                } else {
+                    chunk.to_string()
+                };
+                chunks.push(chunk);
             }
         }
 
@@ -603,6 +763,20 @@ impl VectorSearchState {
         }
 
         Ok(Some((subject, is_a, hierarchy, chunks)))
+    }
+
+    async fn log_incremental_batch_completion(&self, label: &str, chunk_rows: usize) {
+        let batch_no = self.incremental_batch_seq.fetch_add(1, Ordering::Relaxed) + 1;
+        let pending_after = self.pending.lock().await.batch_subjects.len();
+        let resources_processed = self.incremental_resources_indexed.load(Ordering::Relaxed);
+        tracing::info!(
+            "starting incremental batch{}: {}, chunk rows: {}, pending rows after: {}, resources processed: {}",
+            label,
+            batch_no,
+            chunk_rows,
+            pending_after,
+            resources_processed
+        );
     }
 
     #[tracing::instrument(skip(self, resource, store))]
@@ -632,117 +806,118 @@ impl VectorSearchState {
         self.register_pending(&drive_root, chunk_count);
 
         let batch_size = self.embedder.index_batch_size();
+        let mut batch_processor = ParallelIndexBatches::new(self, true);
         loop {
-            let (batch_subjects, batch_is_a, batch_hierarchy, batch_text_chunks) = {
+            let batch = {
                 let mut p = self.pending.lock().await;
                 if p.batch_subjects.len() < batch_size {
                     break;
                 }
-                let batch_subjects: Vec<_> =
-                    p.batch_subjects.drain(..batch_size).collect();
-                let batch_is_a: Vec<_> = p.batch_is_a.drain(..batch_size).collect();
-                let batch_hierarchy: Vec<_> =
-                    p.batch_hierarchy.drain(..batch_size).collect();
-                let batch_text_chunks: Vec<_> = p
-                    .batch_text_chunks
-                    .drain(..batch_size)
-                    .collect();
-                (
-                    batch_subjects,
-                    batch_is_a,
-                    batch_hierarchy,
-                    batch_text_chunks,
+                IndexBatch::from_parts(
+                    p.batch_subjects.drain(..batch_size).collect(),
+                    p.batch_is_a.drain(..batch_size).collect(),
+                    p.batch_hierarchy.drain(..batch_size).collect(),
+                    p.batch_text_chunks.drain(..batch_size).collect(),
                 )
             };
-            let track_subjects = batch_subjects.clone();
-            let track_hierarchy = batch_hierarchy.clone();
-            let res = self
-                .embed_and_add_owned_batch(
-                    batch_subjects,
-                    batch_is_a,
-                    batch_hierarchy,
-                    batch_text_chunks,
-                )
-                .await;
-            self.complete_batch_rows(&track_subjects, &track_hierarchy);
-            res?;
-
-            let batch_no = self.incremental_batch_seq.fetch_add(1, Ordering::Relaxed) + 1;
-            let pending_after = self.pending.lock().await.batch_subjects.len();
-            let resources_processed = self.incremental_resources_indexed.load(Ordering::Relaxed);
-            println!(
-                "starting incremental batch: {}, chunk rows: {}, pending rows after: {}, resources processed: {}",
-                batch_no,
-                batch_size,
-                pending_after,
-                resources_processed
-            );
+            batch_processor.push(batch);
+            if let Some(chunk_rows) = batch_processor.wait_for_available_slot().await? {
+                self.log_incremental_batch_completion("", chunk_rows).await;
+            }
         }
 
-        // Drain any remainder (fewer than one full batch) so LanceDB stays in sync and
-        // per-drive indexing refcounts match completed embeds (see `register_pending` / `complete_batch_rows`).
-        self.flush_pending().await?;
+        while let Some(chunk_rows) = batch_processor.wait_for_next_completed().await? {
+            self.log_incremental_batch_completion("", chunk_rows).await;
+        }
+
+        // Remainder stays in `pending` so the next resources' chunks can fill a full batch.
+        // Tails are written by periodic `flush_pending` (see commit monitor) or shutdown.
 
         Ok(())
     }
 
     /// Writes all pending vector index rows to LanceDB. Safe to call when idle.
-    /// [`remove_resource`] flushes automatically so deletes do not race unflushed adds.
+    /// Incremental adds no longer flush partial batches per resource; call this periodically
+    /// or on shutdown so tails reach LanceDB. Deletes use [`VectorSearchState::scrub_pending_for_subject`]
+    /// so they do not force-flush unrelated pending rows.
     #[tracing::instrument(skip(self))]
     pub async fn flush_pending(&self) -> AtomicServerResult<()> {
         let batch_size = self.embedder.index_batch_size();
+        let mut batch_processor = ParallelIndexBatches::new(self, true);
         loop {
-            let (chunk_rows, batch_subjects, batch_is_a, batch_hierarchy, batch_text_chunks) = {
+            let batch = {
                 let mut p = self.pending.lock().await;
                 if p.batch_subjects.is_empty() {
-                    return Ok(());
+                    break;
                 }
                 let n = if p.batch_subjects.len() >= batch_size {
                     batch_size
                 } else {
                     p.batch_subjects.len()
                 };
-                let batch_subjects: Vec<_> = p.batch_subjects.drain(..n).collect();
-                let batch_is_a: Vec<_> = p.batch_is_a.drain(..n).collect();
-                let batch_hierarchy: Vec<_> = p.batch_hierarchy.drain(..n).collect();
-                let batch_text_chunks: Vec<_> = p.batch_text_chunks.drain(..n).collect();
-                (
-                    n,
-                    batch_subjects,
-                    batch_is_a,
-                    batch_hierarchy,
-                    batch_text_chunks,
+                IndexBatch::from_parts(
+                    p.batch_subjects.drain(..n).collect(),
+                    p.batch_is_a.drain(..n).collect(),
+                    p.batch_hierarchy.drain(..n).collect(),
+                    p.batch_text_chunks.drain(..n).collect(),
                 )
             };
-            let track_subjects = batch_subjects.clone();
-            let track_hierarchy = batch_hierarchy.clone();
-            let res = self
-                .embed_and_add_owned_batch(
-                    batch_subjects,
-                    batch_is_a,
-                    batch_hierarchy,
-                    batch_text_chunks,
-                )
-                .await;
-            self.complete_batch_rows(&track_subjects, &track_hierarchy);
-            res?;
+            batch_processor.push(batch);
+            if let Some(chunk_rows) = batch_processor.wait_for_available_slot().await? {
+                self.log_incremental_batch_completion(" (flush)", chunk_rows)
+                    .await;
+            }
+        }
 
-            let batch_no = self.incremental_batch_seq.fetch_add(1, Ordering::Relaxed) + 1;
-            let pending_after = self.pending.lock().await.batch_subjects.len();
-            let resources_processed = self.incremental_resources_indexed.load(Ordering::Relaxed);
-            println!(
-                "starting incremental batch (flush): {}, chunk rows: {}, pending rows after: {}, resources processed: {}",
-                batch_no,
-                chunk_rows,
-                pending_after,
-                resources_processed
-            );
+        while let Some(chunk_rows) = batch_processor.wait_for_next_completed().await? {
+            self.log_incremental_batch_completion(" (flush)", chunk_rows)
+                .await;
+        }
+
+        Ok(())
+    }
+
+    /// Removes queued chunk rows for `subject` without embedding them (e.g. resource deleted before flush).
+    #[tracing::instrument(skip(self))]
+    pub async fn scrub_pending_for_subject(&self, subject: &str) {
+        let mut removed_subjects = Vec::new();
+        let mut removed_hierarchy = Vec::new();
+        {
+            let mut p = self.pending.lock().await;
+            let n = p.batch_subjects.len();
+            if n == 0 {
+                return;
+            }
+            let mut keep_subjects = Vec::with_capacity(n);
+            let mut keep_is_a = Vec::with_capacity(n);
+            let mut keep_hierarchy = Vec::with_capacity(n);
+            let mut keep_chunks = Vec::with_capacity(n);
+            for i in 0..n {
+                if p.batch_subjects[i] == subject {
+                    removed_subjects.push(p.batch_subjects[i].clone());
+                    removed_hierarchy.push(p.batch_hierarchy[i].clone());
+                } else {
+                    keep_subjects.push(p.batch_subjects[i].clone());
+                    keep_is_a.push(p.batch_is_a[i].clone());
+                    keep_hierarchy.push(p.batch_hierarchy[i].clone());
+                    keep_chunks.push(p.batch_text_chunks[i].clone());
+                }
+            }
+            *p = PendingBatch {
+                batch_subjects: keep_subjects,
+                batch_is_a: keep_is_a,
+                batch_hierarchy: keep_hierarchy,
+                batch_text_chunks: keep_chunks,
+            };
+        }
+        if !removed_subjects.is_empty() {
+            self.release_indexing_rows_for_pairs(&removed_subjects, &removed_hierarchy);
         }
     }
 
     #[tracing::instrument(skip(self))]
     pub async fn remove_resource(&self, subject: &str) -> AtomicServerResult<()> {
-        self.flush_pending().await?;
+        self.scrub_pending_for_subject(subject).await;
 
         let safe_subject = subject.replace("'", "''");
         self.table

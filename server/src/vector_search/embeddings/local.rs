@@ -10,6 +10,7 @@ use std::sync::Arc;
 const LOCAL_EMBEDDING_DIM: usize = 384;
 
 const LOCAL_INDEX_BATCH_SIZE: usize = 64;
+const LOCAL_INDEX_BATCH_CONCURRENCY: usize = 1;
 
 pub(crate) struct LocalEmbedder {
     model: Arc<tokio::sync::Mutex<TextEmbedding>>,
@@ -43,6 +44,10 @@ impl Embedder for LocalEmbedder {
 
     fn index_batch_size(&self) -> usize {
         LOCAL_INDEX_BATCH_SIZE
+    }
+
+    fn index_batch_concurrency(&self) -> usize {
+        LOCAL_INDEX_BATCH_CONCURRENCY
     }
 
     async fn embed_strings(&self, chunks: &[String]) -> AtomicServerResult<Vec<Vec<f32>>> {
