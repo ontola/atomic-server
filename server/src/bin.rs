@@ -102,6 +102,44 @@ async fn main_wrapped() -> errors::AtomicServerResult<()> {
             println!("{:#?}", config);
             Ok(())
         }
+        Some(config::Command::Compact) => {
+            let redb_path = config.store_path.join("atomic.redb");
+            if !redb_path.exists() {
+                return Err(format!(
+                    "No redb file found at {}. Has the server ever run with this --data-dir?",
+                    redb_path.display()
+                )
+                .into());
+            }
+            println!("Compacting {}...", redb_path.display());
+            println!(
+                "(This holds an exclusive lock — make sure no atomic-server is running.)"
+            );
+            let t = std::time::Instant::now();
+            let (size_before, size_after, did_compact) =
+                atomic_lib::db::redb_store::compact_file(&redb_path)?;
+            let elapsed = t.elapsed();
+            let mib = |b: u64| b as f64 / (1024.0 * 1024.0);
+            let saved = size_before.saturating_sub(size_after);
+            println!(
+                "{} in {:.1?}: {:.1} MiB → {:.1} MiB (saved {:.1} MiB, {:.1}%)",
+                if did_compact {
+                    "Compacted"
+                } else {
+                    "No compaction needed"
+                },
+                elapsed,
+                mib(size_before),
+                mib(size_after),
+                mib(saved),
+                if size_before > 0 {
+                    100.0 * saved as f64 / size_before as f64
+                } else {
+                    0.0
+                },
+            );
+            Ok(())
+        }
         Some(config::Command::Reset) => {
             if dialoguer::Confirm::with_theme(&dialoguer::theme::ColorfulTheme::default())
             .with_prompt(
