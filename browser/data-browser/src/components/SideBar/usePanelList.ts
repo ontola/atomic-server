@@ -12,7 +12,7 @@ export const usePanelList = (): {
   disablePanel: (panel: Panel) => void;
 } => {
   const [enabledPanels, setEnabledPanels] = useLocalStorage<Panel[]>(
-    'sidebar-panels',
+    'atomic.sidebar-panels',
     [],
   );
 

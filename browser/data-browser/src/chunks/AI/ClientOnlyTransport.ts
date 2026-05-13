@@ -88,15 +88,7 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
       sendReasoning: true,
     });
 
-    // Create a transform stream that logs each chunk
-    const loggingTransform = new TransformStream({
-      transform(chunk, controller) {
-        // console.log(chunk.type, chunk);
-        controller.enqueue(chunk);
-      },
-    });
-
-    return originalStream.pipeThrough(loggingTransform);
+    return originalStream;
   }
 
   public async reconnectToStream(): Promise<ReadableStream<UIMessageChunk> | null> {

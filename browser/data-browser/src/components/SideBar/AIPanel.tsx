@@ -62,10 +62,29 @@ export function AIChatsPanel(): JSX.Element | null {
   }, [drive, search]);
 
   useEffect(() => {
-    return store.on(StoreEvents.ResourceRemoved, subject => {
+    const unsubRemove = store.on(StoreEvents.ResourceRemoved, subject => {
       setChats(prev => prev.filter(s => s !== subject));
     });
-  }, [store]);
+
+    const unsubSave = store.on(StoreEvents.ResourceSaved, resource => {
+      if (chats.includes(resource.subject)) {
+        // Chat is already displayed in the list.
+        return;
+      }
+
+      if (resource.hasClasses(ai.classes.aiChat)) {
+        // Wait 5 seconds for the search index to catch up.
+        setTimeout(() => {
+          search().then(setChats);
+        }, 5000);
+      }
+    });
+
+    return () => {
+      unsubRemove();
+      unsubSave();
+    };
+  }, [store, search, chats]);
 
   return (
     <Wrapper>

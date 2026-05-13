@@ -296,6 +296,16 @@ const AISidebar: React.FC = () => {
     titlePromiseRef.current = undefined;
   };
 
+  // When the active drive changes the cached resource refs belong to the old
+  // drive. Clear them so the next call to getOrCreateDraftChatResource creates
+  // a fresh resource on the correct drive. Incrementing chatGenerationRef also
+  // causes any still-resolving promises from the previous drive to be ignored.
+  useEffect(() => {
+    chatGenerationRef.current += 1;
+    draftChatPromiseRef.current = null;
+    chatResourceRef.current = undefined;
+  }, [drive]);
+
   useEffect(() => {
     if (isOpen) {
       void getOrCreateDraftChatResource();
