@@ -341,7 +341,7 @@ impl Commit {
         store: &impl Storelike,
     ) -> AtomicResult<CommitResponse> {
         let commit = self;
-        let subject = Subject::from(commit.subject.clone());
+        let subject = commit.subject.clone();
 
         if subject.is_did() && subject.as_str().starts_with("did:ad:") {
             let pure_id = subject.pure_id();
@@ -391,8 +391,7 @@ impl Commit {
         // For agent DIDs, get_resource() returns a synthetic "just-in-time" agent
         // even when no data is stored. Detect this by checking for a lastCommit —
         // a real stored resource always has one after its genesis commit.
-        let (resource_old, is_new) = match store.get_resource(&commit.subject.clone().into()).await
-        {
+        let (resource_old, is_new) = match store.get_resource(&commit.subject.clone()).await {
             Ok(rs) => {
                 let is_synthetic_agent =
                     commit.subject.is_agent_did() && rs.get(urls::LAST_COMMIT).is_err();
@@ -400,11 +399,7 @@ impl Commit {
                     // Treat synthetic fallback agents as non-existent so genesis
                     // commits work and the Loro doc is built from scratch.
                     (
-                        Resource::new(
-                            store
-                                .normalize_subject(&commit.subject.clone().into())
-                                .to_string(),
-                        ),
+                        Resource::new(store.normalize_subject(&commit.subject.clone()).to_string()),
                         true,
                     )
                 } else {
@@ -412,11 +407,7 @@ impl Commit {
                 }
             }
             Err(_) => (
-                Resource::new(
-                    store
-                        .normalize_subject(&commit.subject.clone().into())
-                        .to_string(),
-                ),
+                Resource::new(store.normalize_subject(&commit.subject.clone()).to_string()),
                 true,
             ),
         };

@@ -1278,10 +1278,7 @@ impl Db {
                 }
             };
             let drive_key = qf.drive.as_str().to_string();
-            new_map
-                .entry(drive_key)
-                .or_insert_with(Vec::new)
-                .push(Arc::new(qf));
+            new_map.entry(drive_key).or_default().push(Arc::new(qf));
         }
         if let Ok(mut map) = self.watched_queries_by_drive.write() {
             *map = new_map;
@@ -1573,69 +1570,6 @@ impl Db {
     }
 }
 
-#[cfg(test)]
-mod resolver_tests {
-    use super::*;
-    use crate::{test_utils::setup_test_env, urls, Resource, Storelike, Value};
-
-    #[tokio::test]
-    async fn resolves_root_to_drive_subject() {
-        let store = Db::init_temp("resolver_root").await.unwrap();
-        setup_test_env(&store).await.unwrap();
-
-        let resolved = store
-            .resolve_request_target(
-                &Subject::from_raw("/", None),
-                "localhost",
-                "/",
-                "http://localhost",
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(
-            resolved.alias_subject,
-            Some("http://localhost/".to_string())
-        );
-        assert!(matches!(resolved.subject, Subject::Did { .. }));
-    }
-
-    #[tokio::test]
-    async fn resolves_drive_relative_paths_to_canonical_did() {
-        let store = Db::init_temp("resolver_path").await.unwrap();
-        setup_test_env(&store).await.unwrap();
-
-        let drive_did = store.get_drive_did("localhost").await.unwrap().unwrap();
-        let mut resource = Resource::new("did:ad:test-child".into());
-        resource.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(drive_did.clone()));
-        resource.set_unsafe(urls::SHORTNAME.into(), Value::Slug("about".into()));
-        resource.set_unsafe(urls::NAME.into(), Value::String("About".into()));
-        store
-            .add_resource_opts(&resource, false, true, true)
-            .await
-            .unwrap();
-
-        let resolved = store
-            .resolve_request_target(
-                &Subject::from_raw("/about", None),
-                "localhost",
-                "/about",
-                "http://localhost",
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(
-            resolved.alias_subject,
-            Some("http://localhost/about".to_string())
-        );
-        assert_eq!(
-            resolved.subject.as_str(),
-            "did:ad:test-child?drive=".to_string() + drive_did.as_str()
-        );
-    }
-}
-
 // Drop is handled by SledStore's own Drop impl which flushes on drop.
 // No explicit Drop needed for Db since Arc<dyn KvStore> handles cleanup.
 
@@ -1838,7 +1772,7 @@ impl Storelike for Db {
     ) -> AtomicResult<CommitResponse> {
         let store = self;
 
-        let commit_response = commit.validate_and_build_response(&opts, store).await?;
+        let commit_response = commit.validate_and_build_response(opts, store).await?;
 
         let mut transaction = Transaction::new();
 
@@ -1902,7 +1836,7 @@ impl Storelike for Db {
             }
             (Some(_old), None) => {
                 let normalized_commit_subject =
-                    self.normalize_subject(&commit_response.commit.subject.clone().into());
+                    self.normalize_subject(&commit_response.commit.subject.clone());
                 assert_eq!(
                     _old.get_subject().to_string(),
                     normalized_commit_subject.to_string()
@@ -1911,7 +1845,7 @@ impl Storelike for Db {
                     .commit
                     .destroy
                     .expect("Resource was removed but `commit.destroy` was not set!"));
-                let subject: Subject = commit_response.commit.subject.clone().into();
+                let subject: Subject = commit_response.commit.subject.clone();
                 self.remove_resource(&subject).await?;
             }
             _ => {}
@@ -2379,5 +2313,68 @@ impl std::fmt::Debug for Db {
         f.debug_struct("Db")
             .field("base_domain", &self.base_domain)
             .finish()
+    }
+}
+
+#[cfg(test)]
+mod resolver_tests {
+    use super::*;
+    use crate::{test_utils::setup_test_env, urls, Resource, Storelike, Value};
+
+    #[tokio::test]
+    async fn resolves_root_to_drive_subject() {
+        let store = Db::init_temp("resolver_root").await.unwrap();
+        setup_test_env(&store).await.unwrap();
+
+        let resolved = store
+            .resolve_request_target(
+                &Subject::from_raw("/", None),
+                "localhost",
+                "/",
+                "http://localhost",
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            resolved.alias_subject,
+            Some("http://localhost/".to_string())
+        );
+        assert!(matches!(resolved.subject, Subject::Did { .. }));
+    }
+
+    #[tokio::test]
+    async fn resolves_drive_relative_paths_to_canonical_did() {
+        let store = Db::init_temp("resolver_path").await.unwrap();
+        setup_test_env(&store).await.unwrap();
+
+        let drive_did = store.get_drive_did("localhost").await.unwrap().unwrap();
+        let mut resource = Resource::new("did:ad:test-child".into());
+        resource.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(drive_did.clone()));
+        resource.set_unsafe(urls::SHORTNAME.into(), Value::Slug("about".into()));
+        resource.set_unsafe(urls::NAME.into(), Value::String("About".into()));
+        store
+            .add_resource_opts(&resource, false, true, true)
+            .await
+            .unwrap();
+
+        let resolved = store
+            .resolve_request_target(
+                &Subject::from_raw("/about", None),
+                "localhost",
+                "/about",
+                "http://localhost",
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            resolved.alias_subject,
+            Some("http://localhost/about".to_string())
+        );
+        assert_eq!(
+            resolved.subject.as_str(),
+            "did:ad:test-child?drive=".to_string() + drive_did.as_str()
+        );
     }
 }

@@ -277,10 +277,7 @@ async fn destroy_clears_parent_index_count() {
     // Destroy all three. After this, the parent-index should hold no
     // entries for `parent=<parent_subject>`.
     for subject in &child_subjects {
-        let mut r = store
-            .get_resource(&subject.as_str().into())
-            .await
-            .unwrap();
+        let mut r = store.get_resource(&subject.as_str().into()).await.unwrap();
         r.destroy(&store).await.unwrap();
     }
 
@@ -1035,7 +1032,7 @@ async fn query_by_parent_sorted_is_stable_across_calls() {
 
     for name in &["alpha", "bravo", "charlie"] {
         let subj = format!("https://localhost/sorted/{name}");
-        let mut r = crate::Resource::new(subj.into());
+        let mut r = crate::Resource::new(subj);
         r.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(parent_subject.into()));
         r.set_unsafe(urls::NAME.into(), Value::String((*name).to_string()));
         store

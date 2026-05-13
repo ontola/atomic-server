@@ -60,7 +60,9 @@ const createModel = async (page: Page) => {
   await expect(page.locator('input[value="robot"]')).toBeVisible();
 
   await page.getByRole('button', { name: 'add required property' }).click();
-  await page.getByPlaceholder(SEARCHBOX_PROPERTY_PLACEHOLDER).fill('programming');
+  await page
+    .getByPlaceholder(SEARCHBOX_PROPERTY_PLACEHOLDER)
+    .fill('programming');
 
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('Enter');

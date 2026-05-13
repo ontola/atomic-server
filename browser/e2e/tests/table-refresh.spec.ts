@@ -109,9 +109,7 @@ test.describe('table refresh', () => {
               return;
             }
             if (Date.now() - start > 20000) {
-              resolve(
-                `timeout: db=${!!db} isReady=${db?.isReady}`,
-              );
+              resolve(`timeout: db=${!!db} isReady=${db?.isReady}`);
               return;
             }
             setTimeout(tick, 200);
@@ -120,7 +118,10 @@ test.describe('table refresh', () => {
         }),
     );
     console.log(`ClientDb state: ${clientDbState}`);
-    expect(clientDbState, 'WASM ClientDb must be ready for this test to be meaningful').toBe('ready');
+    expect(
+      clientDbState,
+      'WASM ClientDb must be ready for this test to be meaningful',
+    ).toBe('ready');
 
     await newResource('table', page);
     const nameInput = page.getByPlaceholder('New Table');
@@ -209,7 +210,7 @@ test.describe('table refresh', () => {
         const m = /subject=([^&]+)/.exec(window.location.search);
         return m ? decodeURIComponent(m[1]) : path;
       });
-      const dump = await page.evaluate(async (parentSubject) => {
+      const dump = await page.evaluate(async parentSubject => {
         const store = (window as any).store;
         const clientDb = store?.getClientDb?.();
         if (!clientDb) return { count: 0, subjects: [] };

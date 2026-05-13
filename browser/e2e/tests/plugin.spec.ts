@@ -123,9 +123,9 @@ test.describe('Plugins', () => {
 
       // Iframe needs to load ui.js, open its own WS, fetch the resource —
       // give it more headroom than the default 5s actionTimeout.
-      await expect(
-        frame.getByRole('heading', { name: 'Duck' }),
-      ).toBeVisible({ timeout: 20000 });
+      await expect(frame.getByRole('heading', { name: 'Duck' })).toBeVisible({
+        timeout: 20000,
+      });
       await expect(
         frame.getByText('This is a custom view for the Bird class.'),
       ).toBeVisible();

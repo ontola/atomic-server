@@ -78,7 +78,9 @@ test.describe('offline create → online sync → disable localDB', () => {
     const pendingBeforeReconnect = await page.evaluate(
       () => (window as any).store.getSyncStatus().pendingDirtyCount,
     );
-    console.log(`[setup] pendingDirtyCount while offline: ${pendingBeforeReconnect}`);
+    console.log(
+      `[setup] pendingDirtyCount while offline: ${pendingBeforeReconnect}`,
+    );
     expect(pendingBeforeReconnect).toBeGreaterThan(0);
 
     // 4. Reconnect and wait for the dirty sync to drain.
@@ -159,7 +161,8 @@ test.describe('offline create → online sync → disable localDB', () => {
       const props: Record<string, unknown> = {};
       if (r) {
         for (const [k, v] of r.getEntries()) {
-          props[k] = v instanceof Uint8Array ? `<Uint8Array ${v.byteLength}b>` : v;
+          props[k] =
+            v instanceof Uint8Array ? `<Uint8Array ${v.byteLength}b>` : v;
         }
       }
       return {
@@ -186,4 +189,3 @@ test.describe('offline create → online sync → disable localDB', () => {
     );
   });
 });
-

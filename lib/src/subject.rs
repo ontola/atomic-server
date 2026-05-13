@@ -211,9 +211,7 @@ impl Subject {
                 let s = url.as_str();
                 let rest = s.strip_prefix(DID_AD_BLOB_PREFIX)?;
                 // Drop query (`?drive=...`) / fragment if present.
-                let end = rest
-                    .find(|c: char| c == '?' || c == '#')
-                    .unwrap_or(rest.len());
+                let end = rest.find(['?', '#']).unwrap_or(rest.len());
                 Some(&rest[..end])
             }
             _ => None,

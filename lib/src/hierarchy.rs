@@ -38,7 +38,7 @@ impl fmt::Display for Right {
 /// Throws if not allowed.
 /// Returns string with explanation if allowed.
 pub fn check_write<'a>(
-    store: &'a (impl Storelike + Sync),
+    store: &'a impl Storelike,
     resource: &'a Resource,
     for_agent: &'a ForAgent,
 ) -> AsyncResult<'a, AtomicResult<String>> {
@@ -49,7 +49,7 @@ pub fn check_write<'a>(
 /// Throws if not allowed.
 /// Returns string with explanation if allowed.
 pub fn check_read<'a>(
-    store: &'a (impl Storelike + Sync),
+    store: &'a impl Storelike,
     resource: &'a Resource,
     for_agent: &'a ForAgent,
 ) -> AsyncResult<'a, AtomicResult<String>> {
@@ -62,7 +62,7 @@ pub fn check_read<'a>(
 /// Returns string with explanation if allowed.
 #[tracing::instrument(skip_all)]
 pub async fn check_append(
-    store: &(impl Storelike + Sync),
+    store: &impl Storelike,
     resource: &Resource,
     for_agent: &ForAgent,
 ) -> AtomicResult<String> {
@@ -96,7 +96,7 @@ pub async fn check_append(
 /// Returns string with explanation if allowed.
 #[tracing::instrument(skip_all)]
 pub fn check_rights<'a>(
-    store: &'a (impl Storelike + Sync),
+    store: &'a impl Storelike,
     resource: &'a Resource,
     for_agent_enum: &'a ForAgent,
     right: Right,
@@ -112,7 +112,7 @@ pub fn check_rights<'a>(
         }
 
         if let Ok(server_agent) = store.get_default_agent() {
-            let normalized_server_agent = store.normalize_subject(&server_agent.subject.into());
+            let normalized_server_agent = store.normalize_subject(&server_agent.subject);
             if normalized_server_agent == normalized_for_agent {
                 return Ok("Server agent has root access, and can edit anything.".into());
             }

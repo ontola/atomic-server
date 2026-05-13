@@ -199,7 +199,10 @@ export function useCollection(
       }
     };
 
-    const unsubUpdated = store.on(StoreEvents.ResourceUpdated, onResourceChange);
+    const unsubUpdated = store.on(
+      StoreEvents.ResourceUpdated,
+      onResourceChange,
+    );
 
     // Also handle locally-created resources: `notifyResourceManuallyCreated`
     // (chatroom send, sidebar New Folder, etc.) fires immediately after

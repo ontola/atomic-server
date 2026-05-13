@@ -42,7 +42,7 @@ pub async fn web_socket_handler(
     appstate: web::Data<AppState>,
     context: crate::context::RequestContext,
 ) -> AtomicServerResult<HttpResponse> {
-    let auth_header_values = get_auth_headers(req.headers(), "ws".into())?;
+    let auth_header_values = get_auth_headers(req.headers(), "ws")?;
     let for_agent =
         get_agent_from_auth_values_and_check(auth_header_values, &appstate.store).await?;
 

@@ -8,7 +8,10 @@ import { applyCpuThrottle, envCpuThrottle } from './perf-attach';
  * slow runner.
  */
 
-async function timeIt<T>(label: string, fn: () => Promise<T>): Promise<{ label: string; ms: number; result: T }> {
+async function timeIt<T>(
+  label: string,
+  fn: () => Promise<T>,
+): Promise<{ label: string; ms: number; result: T }> {
   const start = Date.now();
   const result = await fn();
   return { label, ms: Date.now() - start, result };
@@ -61,7 +64,9 @@ test.describe('dev-drive timing', () => {
       console.log(`[perf rollup] ${perf.count} events in ${perf.windowMs}ms`);
       for (const r of perf.rollup.slice(0, 10)) {
         // eslint-disable-next-line no-console
-        console.log(`  ${r.name.padEnd(35)} n=${String(r.count).padStart(3)}  total=${String(r.totalMs).padStart(7)}ms  max=${String(r.maxMs).padStart(7)}ms`);
+        console.log(
+          `  ${r.name.padEnd(35)} n=${String(r.count).padStart(3)}  total=${String(r.totalMs).padStart(7)}ms  max=${String(r.maxMs).padStart(7)}ms`,
+        );
       }
     }
   });

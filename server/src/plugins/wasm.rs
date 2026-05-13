@@ -267,6 +267,7 @@ struct WasmPluginInner {
 }
 
 impl WasmPlugin {
+    #[allow(clippy::too_many_arguments)]
     async fn load(
         engine: Arc<Engine>,
         wasm_bytes: &[u8],
@@ -891,11 +892,11 @@ impl bindings::atomic::class_extender::host::Host for PluginHostState {
             )) => {
                 let map: serde_json::Map<String, serde_json::Value> = propvals
                     .iter()
-                    .filter_map(|(k, v)| {
+                    .map(|(k, v)| {
                         let s = v.to_string();
                         let parsed = serde_json::from_str::<serde_json::Value>(&s)
                             .unwrap_or(serde_json::Value::String(s));
-                        Some((k.clone(), parsed))
+                        (k.clone(), parsed)
                     })
                     .collect();
                 serde_json::Value::Object(map).to_string()
@@ -1360,6 +1361,7 @@ pub async fn install_or_update_plugin(
 
 /// Rolls back a failed plugin installation by restoring file backups and metadata
 /// (for updates) or removing newly created files and metadata (for fresh installs).
+#[allow(clippy::too_many_arguments)]
 async fn rollback_plugin_install(
     store: &Db,
     drive_subject: &str,
