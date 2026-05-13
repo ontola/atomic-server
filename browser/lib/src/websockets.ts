@@ -809,27 +809,6 @@ export class WSClient {
   private async startVVSync(drive: string): Promise<void> {
     if (this.readyState !== WebSocket.OPEN) return;
 
-    // Skip if the "drive" isn't a real DID drive. `store.getDrive()`
-    // falls back to the server URL when no drive is set yet (e.g.
-    // an anonymous page on a fresh context, or right after agent
-    // sign-up before `setDrive(personalDrive)` lands). Firing
-    // SYNC_VV with the server URL hits the server's non-DID branch
-    // of `collect_drive_subjects` which scans every resource in the
-    // store and BLOCKS the WebSocketConnection actor's event loop
-    // — see `server/tests/ws_get_unauthorized_latency.rs`'s
-    // `anon_ws_get_during_sync_vv_is_fast` bench, which reproduces
-    // 8 s GET latency from this head-of-line block.
-    //
-    // We also can NOT make the server fast-fail with SYNC_OK: that
-    // would call `finishDriveSync()` on the client, which flips
-    // `hasCompletedDriveSync()` to true and tricks `useChildren` /
-    // collection queries into treating an empty local WASM DB as
-    // authoritative — leading to "No messages yet" in chatrooms
-    // even when the server has the data.
-    if (!drive.startsWith('did:ad:')) {
-      return;
-    }
-
     this.store.startDriveSync();
     const close = perfSpan('ws.computeDriveSyncState');
 
