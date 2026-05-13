@@ -259,7 +259,7 @@ impl WsClient {
     }
 
     /// Send a raw binary frame over the WebSocket (v2 protocol).
-    async fn send_binary(&self, bytes: Vec<u8>) -> AtomicResult<()> {
+    pub async fn send_binary(&self, bytes: Vec<u8>) -> AtomicResult<()> {
         self.tx
             .send(Message::Binary(bytes.into()))
             .await
