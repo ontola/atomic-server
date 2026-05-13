@@ -72,7 +72,10 @@ test.describe('perf: sidebar after reload', () => {
       const samples: { ms: number; hasText: boolean }[] = [];
       while (performance.now() - start < 16000) {
         const has = !!sidebar?.textContent?.includes(target);
-        samples.push({ ms: Math.round(performance.now() - start), hasText: has });
+        samples.push({
+          ms: Math.round(performance.now() - start),
+          hasText: has,
+        });
         if (has) break;
         await new Promise(r => setTimeout(r, 200));
       }

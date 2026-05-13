@@ -47,8 +47,7 @@ use atomic_lib::{
 use std::time::{Duration, Instant};
 
 fn server_url() -> String {
-    std::env::var("ATOMIC_BENCH_SERVER")
-        .unwrap_or_else(|_| "http://localhost:9883".to_string())
+    std::env::var("ATOMIC_BENCH_SERVER").unwrap_or_else(|_| "http://localhost:9883".to_string())
 }
 
 fn ws_url() -> String {
@@ -116,8 +115,7 @@ async fn anon_get_after_sync_vv_latency(
     //    full-store-scan path (`engine.rs:202` — non-DID branch of
     //    `collect_drive_subjects`).
     let peers: Vec<String> = Vec::new();
-    let resources: serde_json::Map<String, serde_json::Value> =
-        serde_json::Map::new();
+    let resources: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
     let sync_vv_json = serde_json::json!({
         "drive": server_url,
         "driveHash": "",
@@ -158,9 +156,7 @@ async fn anon_ws_get_on_private_drive_is_fast_under_load() -> AtomicResult<()> {
     // --- Set up: agent A creates a PRIVATE drive on the live server ---
     let client_a = Client::new(&server).await?;
     let agent_a = client_a.new_agent("BenchAlice").await?;
-    let private_drive = client_a
-        .new_drive(&agent_a, "Bench Private Drive")
-        .await?;
+    let private_drive = client_a.new_drive(&agent_a, "Bench Private Drive").await?;
 
     let n: usize = std::env::var("ATOMIC_BENCH_N")
         .ok()

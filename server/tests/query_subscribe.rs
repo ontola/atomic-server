@@ -247,7 +247,7 @@ async fn query_subscribe_listener_path_receives_update() -> AtomicResult<()> {
     );
     let child_subject = child.save_remote(client_a.store()).await?;
 
-    let received = tokio::time::timeout(Duration::from_secs(5), async {
+    tokio::time::timeout(Duration::from_secs(5), async {
         loop {
             match rx.recv().await {
                 Ok(WsMessage::QueryUpdate { added, .. }) => {
@@ -266,7 +266,6 @@ async fn query_subscribe_listener_path_receives_update() -> AtomicResult<()> {
     .await
     .map_err(|_| "Timeout: listener path did not emit QUERY_UPDATE within 5s")??;
 
-    let _ = received;
     Ok(())
 }
 

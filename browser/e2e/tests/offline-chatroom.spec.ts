@@ -165,7 +165,10 @@ test.describe('offline chatroom', () => {
     const positions: Array<{ text: string; y: number }> = [];
 
     for (const text of MESSAGES) {
-      const box = await page.getByText(text, { exact: true }).first().boundingBox();
+      const box = await page
+        .getByText(text, { exact: true })
+        .first()
+        .boundingBox();
       expect(box, `message "${text}" has no bounding box`).toBeTruthy();
       positions.push({ text, y: box!.y });
     }
@@ -175,8 +178,9 @@ test.describe('offline chatroom', () => {
       .sort((a, b) => a.y - b.y)
       .map(p => p.text);
 
-    expect(orderedByPosition, 'rendered message order does not match send order').toEqual([
-      ...MESSAGES,
-    ]);
+    expect(
+      orderedByPosition,
+      'rendered message order does not match send order',
+    ).toEqual([...MESSAGES]);
   });
 });

@@ -1,8 +1,5 @@
 import { test } from '@playwright/test';
-import {
-  FRONTEND_URL,
-  currentDriveTitle,
-} from './test-utils';
+import { FRONTEND_URL, currentDriveTitle } from './test-utils';
 import { applyCpuThrottle, envCpuThrottle } from './perf-attach';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -47,7 +44,9 @@ test('dev-drive CDP trace', async ({ page, browser }) => {
   const total = Date.now() - t0;
 
   // eslint-disable-next-line no-console
-  console.log(`[trace] devDrive full flow: ${total} ms (throttle ${throttle ?? 1}x)`);
+  console.log(
+    `[trace] devDrive full flow: ${total} ms (throttle ${throttle ?? 1}x)`,
+  );
 
   // Stop tracing and stream the result to disk.
   const traceCompleted = new Promise<string>((resolve, reject) => {
@@ -75,5 +74,7 @@ test('dev-drive CDP trace', async ({ page, browser }) => {
   );
   fs.writeFileSync(outPath, trace);
   // eslint-disable-next-line no-console
-  console.log(`[trace] saved to ${outPath} (${(trace.length / 1024).toFixed(0)} KB)`);
+  console.log(
+    `[trace] saved to ${outPath} (${(trace.length / 1024).toFixed(0)} KB)`,
+  );
 });

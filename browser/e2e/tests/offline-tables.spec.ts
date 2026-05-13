@@ -43,7 +43,10 @@ test.describe('offline tables', () => {
     await expect(driveTitle).toBeVisible({ timeout: 15000 });
 
     // 2. Create a table via the sidebar quick-create icon
-    await page.getByTestId('sidebar').getByRole('button', { name: 'New Table' }).click();
+    await page
+      .getByTestId('sidebar')
+      .getByRole('button', { name: 'New Table' })
+      .click();
 
     // Fill in the table name in the dialog
     const tableNameInput = page.getByPlaceholder('New Table');
@@ -96,7 +99,9 @@ test.describe('offline tables', () => {
     );
 
     // Verify the table title survives reload
-    await expect(page.getByTestId('editable-title').getByText('My Offline Table')).toBeVisible({
+    await expect(
+      page.getByTestId('editable-title').getByText('My Offline Table'),
+    ).toBeVisible({
       timeout: 15000,
     });
 

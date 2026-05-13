@@ -400,7 +400,7 @@ pub async fn handle_sync_vv(
             if let Ok(blob_val) = resource.get(crate::urls::BLOB) {
                 let blob_did = blob_val.to_string();
                 if let Some(hash_hex) = crate::Subject::from_raw(&blob_did, None).blob_hash_hex() {
-                    if let Ok(hash_bytes) = hex::decode(&hash_hex) {
+                    if let Ok(hash_bytes) = hex::decode(hash_hex) {
                         if hash_bytes.len() == 32 {
                             let mut hash = [0u8; 32];
                             hash.copy_from_slice(&hash_bytes);
@@ -564,7 +564,7 @@ pub async fn import_sync_push(
         if let Ok(blob_val) = resource.get(crate::urls::BLOB) {
             let blob_did = blob_val.to_string();
             if let Some(hash_hex) = crate::Subject::from_raw(&blob_did, None).blob_hash_hex() {
-                if let Ok(hash_bytes) = hex::decode(&hash_hex) {
+                if let Ok(hash_bytes) = hex::decode(hash_hex) {
                     if hash_bytes.len() == 32 {
                         let mut hash = [0u8; 32];
                         hash.copy_from_slice(&hash_bytes);
@@ -610,10 +610,7 @@ pub async fn handle_sync_deltas(
 
         let doc =
             if let Ok(Some(snapshot)) = store.kv.get(Tree::LoroSnapshots, subject_str.as_bytes()) {
-                match AtomicLoroDoc::from_snapshot(&snapshot) {
-                    Ok(d) => d,
-                    Err(_) => AtomicLoroDoc::new(),
-                }
+                AtomicLoroDoc::from_snapshot(&snapshot).unwrap_or_default()
             } else {
                 AtomicLoroDoc::new()
             };
@@ -637,7 +634,7 @@ pub async fn handle_sync_deltas(
         let mut resource = store
             .get_resource(&subject)
             .await
-            .unwrap_or_else(|_| crate::Resource::new(subject.to_string().into()));
+            .unwrap_or_else(|_| crate::Resource::new(subject.to_string()));
 
         if resource.replace_state_from_loro_doc(doc).is_err() {
             continue;

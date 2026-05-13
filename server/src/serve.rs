@@ -241,9 +241,9 @@ pub async fn serve(config: crate::config::Config) -> AtomicServerResult<()> {
                 }
             }
         }
-        message.push_str("\n");
+        message.push('\n');
     } else {
-        message.push_str("\n");
+        message.push('\n');
     }
 
     if config.opts.https {

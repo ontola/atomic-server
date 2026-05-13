@@ -221,7 +221,10 @@ fn precompress_assets(root: &Path) -> std::io::Result<()> {
     let mut total_in = 0u64;
     let mut total_out = 0u64;
 
-    for entry in walkdir::WalkDir::new(root).into_iter().filter_map(|e| e.ok()) {
+    for entry in walkdir::WalkDir::new(root)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
         let path = entry.path();
         if !path.is_file() {
             continue;

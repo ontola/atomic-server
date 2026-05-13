@@ -88,8 +88,7 @@ test.describe('perf budgets', () => {
     for (let i = 0; i < N; i++) {
       await newResource('folder', page);
       await page.waitForFunction(
-        () =>
-          (window as any).store?.getSyncStatus?.()?.pendingDirtyCount === 0,
+        () => (window as any).store?.getSyncStatus?.()?.pendingDirtyCount === 0,
         undefined,
         { timeout: 10000 },
       );

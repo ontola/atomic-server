@@ -824,11 +824,8 @@ pub async fn sync_drive_with_peer_using(
     let mut pull_subjects: Vec<String> = Vec::new();
 
     // Read frames until the peer is done
-    loop {
-        let len = match recv.read_u32().await {
-            Ok(n) => n as usize,
-            Err(_) => break,
-        };
+    while let Ok(n) = recv.read_u32().await {
+        let len = n as usize;
         if len == 0 || len > 50_000_000 {
             break;
         }
@@ -1045,11 +1042,8 @@ async fn handle_stream(
     let mut agent = ForAgent::Public;
     let mut total_imported = 0;
 
-    loop {
-        let len = match recv.read_u32().await {
-            Ok(n) => n as usize,
-            Err(_) => break,
-        };
+    while let Ok(n) = recv.read_u32().await {
+        let len = n as usize;
 
         if len == 0 || len > 10_000_000 {
             break;

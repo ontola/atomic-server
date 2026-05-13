@@ -259,9 +259,7 @@ pub async fn bootstrap(store: &impl Storelike) -> AtomicResult<()> {
     // and can make a fresh store look seeded after fetching only the
     // sentinel resource.
     if store.has_stored_resource(&crate::urls::SHORTNAME.into()) {
-        tracing::debug!(
-            "populate::bootstrap: store already seeded, skipping"
-        );
+        tracing::debug!("populate::bootstrap: store already seeded, skipping");
         return Ok(());
     }
 

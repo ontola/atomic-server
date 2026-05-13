@@ -95,9 +95,9 @@ test.describe('sync', () => {
     await expect(currentDriveTitle(page)).toBeVisible({ timeout: 15000 });
 
     // The document should be accessible (not unauthorized)
-    await expect(
-      page.getByTestId('sidebar').locator('a').first(),
-    ).toBeVisible({ timeout: 15000 });
+    await expect(page.getByTestId('sidebar').locator('a').first()).toBeVisible({
+      timeout: 15000,
+    });
   });
 
   // FLAKY (dagger CI + remote CI): the `Edited Offline` editable-title
@@ -322,10 +322,9 @@ test.describe('sync', () => {
     // shows the server's title), so this is what fails when the bug
     // is present — vs `getByRole('heading', { level: 1 })` which has
     // its own accessibility-tree quirk that confuses the diagnosis.
-    await expect.poll(
-      async () => page2.title(),
-      { timeout: 60000, intervals: [500] },
-    ).toBe('Synced From Offline');
+    await expect
+      .poll(async () => page2.title(), { timeout: 60000, intervals: [500] })
+      .toBe('Synced From Offline');
 
     await context2.close();
   });
@@ -333,8 +332,14 @@ test.describe('sync', () => {
   test('sync page shows correct status', async ({ page }) => {
     await page.goto(`${FRONTEND_URL}/app/sync`);
 
-    await expect(page.getByText('This device', { exact: true })).toBeVisible({ timeout: 10000 });
-    await expect(page.getByRole('heading', { name: 'Sync', exact: true })).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText('Details', { exact: true })).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('This device', { exact: true })).toBeVisible({
+      timeout: 10000,
+    });
+    await expect(
+      page.getByRole('heading', { name: 'Sync', exact: true }),
+    ).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('Details', { exact: true })).toBeVisible({
+      timeout: 10000,
+    });
   });
 });

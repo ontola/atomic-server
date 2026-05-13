@@ -81,9 +81,7 @@ test.describe('Ontology', async () => {
     await expect(page.locator('input[value="thumbnail"]')).toBeVisible();
     await page.getByText('Change me').fill('Thumbnail of a youtube video');
     await page.getByRole('button', { name: 'add required property' }).click();
-    await page
-      .getByPlaceholder(SEARCHBOX_PROPERTY_PLACEHOLDER)
-      .fill('arrows');
+    await page.getByPlaceholder(SEARCHBOX_PROPERTY_PLACEHOLDER).fill('arrows');
 
     await page.keyboard.press('ArrowDown');
     await page.keyboard.press('Enter');
@@ -282,16 +280,14 @@ test.describe('Ontology', async () => {
     // button, instances heading+link). Some race conditions add a fourth match
     // (e.g. drive-children list refresh after the commit), so accept ≥ 3.
     await expect
-      .poll(
-        () => page.getByText('Red arrow with circle').count(),
-        { timeout: 15000 },
-      )
+      .poll(() => page.getByText('Red arrow with circle').count(), {
+        timeout: 15000,
+      })
       .toBeGreaterThanOrEqual(3);
     await expect
-      .poll(
-        () => page.getByText('Green arrow with black border').count(),
-        { timeout: 15000 },
-      )
+      .poll(() => page.getByText('Green arrow with black border').count(), {
+        timeout: 15000,
+      })
       .toBeGreaterThanOrEqual(3);
   });
 });

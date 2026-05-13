@@ -271,7 +271,7 @@ pub trait Storelike: Sized + Send + Sync {
             }
             (Some(_old), None) => {
                 assert_eq!(_old.get_subject().as_str(), applied.commit.subject);
-                self.remove_resource(&applied.commit.subject.clone().into())
+                self.remove_resource(&applied.commit.subject.clone())
                     .await?;
             }
         }

@@ -66,7 +66,7 @@ fn handle_bookmark_request<'a>(
             (Some(name), Some(path)) => (name, path),
             _ => {
                 return bookmark_endpoint()
-                    .to_resource_response(store, &subject.to_string())
+                    .to_resource_response(store, subject.as_ref())
                     .await
             }
         };

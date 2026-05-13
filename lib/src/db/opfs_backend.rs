@@ -79,7 +79,7 @@ impl OpfsBackend {
 }
 
 fn js_err(msg: &str, e: JsValue) -> io::Error {
-    io::Error::new(io::ErrorKind::Other, format!("{}: {:?}", msg, e))
+    io::Error::other(format!("{}: {:?}", msg, e))
 }
 
 impl redb::StorageBackend for OpfsBackend {

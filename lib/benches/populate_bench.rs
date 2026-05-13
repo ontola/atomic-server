@@ -8,7 +8,6 @@
 //!
 //! Run with: `cargo bench -p atomic_lib --bench populate_bench --features db-redb`
 
-use atomic_lib::db::kv_store::KvStore;
 use atomic_lib::db::trees::Tree;
 use atomic_lib::storelike::Query;
 use atomic_lib::{Storelike, Subject};

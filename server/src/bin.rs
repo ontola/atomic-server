@@ -112,9 +112,7 @@ async fn main_wrapped() -> errors::AtomicServerResult<()> {
                 .into());
             }
             println!("Compacting {}...", redb_path.display());
-            println!(
-                "(This holds an exclusive lock — make sure no atomic-server is running.)"
-            );
+            println!("(This holds an exclusive lock — make sure no atomic-server is running.)");
             let t = std::time::Instant::now();
             let (size_before, size_after, did_compact) =
                 atomic_lib::db::redb_store::compact_file(&redb_path)?;

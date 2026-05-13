@@ -559,11 +559,7 @@ describe('Store.postCommit caches commit locally', () => {
       ['https://atomicdata.dev/classes/Message'],
       false,
     );
-    await resource.set(
-      core.properties.description,
-      'hello chatroom',
-      false,
-    );
+    await resource.set(core.properties.description, 'hello chatroom', false);
 
     resource.markNextCommitAsGenesis();
     await resource.save();
