@@ -402,6 +402,16 @@ pub trait Storelike: Sized + Send + Sync {
     /// If you're not sure what to use, use `get_resource_extended`.
     async fn get_resource(&self, subject: &Subject) -> AtomicResult<Resource>;
 
+    /// Returns true when the resource is present in the local backing store.
+    ///
+    /// This must not fetch, synthesize dynamic resources, call endpoints, or
+    /// otherwise mutate the store. It exists for bootstrap guards where
+    /// `get_resource` is too broad: `get_resource` may fetch external Atomic
+    /// URLs and make an empty store look seeded.
+    fn has_stored_resource(&self, _subject: &Subject) -> bool {
+        false
+    }
+
     /// Returns an existing resource, or creates a new one with the given Subject
     async fn get_resource_new(&self, subject: &Subject) -> Resource {
         match self.get_resource(subject).await {

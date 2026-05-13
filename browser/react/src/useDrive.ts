@@ -5,9 +5,9 @@ import { useStore } from './index.js';
 /**
  * A hook for using and adjusting the current Drive.
  */
-export const useDrive = (): [string, (drive: string) => void] => {
+export const useDrive = (): [string | undefined, (drive: string) => void] => {
   const store = useStore();
-  const [drive, setDrive] = useState<string>(store.getDrive());
+  const [drive, setDrive] = useState<string | undefined>(store.getDrive());
 
   const set = useCallback(
     (value: string) => {
