@@ -19,6 +19,8 @@ const RUST_IMAGE = 'rust:bookworm';
 // makes the chromium browser binary missing inside the container — every
 // test times out at `page.goto`.
 const PLAYWRIGHT_VERSION = 'v1.58.2-noble';
+// Keep in sync with `flutter/.mise.toml` (`[tools].flutter`).
+const FLUTTER_IMAGE = 'ghcr.io/cirruslabs/flutter:3.22.1';
 // See https://github.com/rust-cross/rust-musl-cross?tab=readme-ov-file#prebuilt-images
 const TARGET_IMAGE_MAP = {
   'x86_64-unknown-linux-musl': 'ghcr.io/rust-cross/rust-musl-cross:x86_64-musl',
@@ -94,6 +96,7 @@ export class AtomicServer {
       this.jsLint(),
       this.jsTest(),
       this.jsTestIntegration(),
+      this.flutterTest(),
       (async () => {
         await this.rustFmt();
         await this.rustClippy();
@@ -119,6 +122,72 @@ export class AtomicServer {
     return depsContainer
       .withWorkdir('/app')
       .withExec(['pnpm', 'run', 'test'])
+      .stdout();
+  }
+
+  /**
+   * Flutter unit/widget tests + static analysis. The FFI plugin (cargokit)
+   * compiles `flutter/rust` against repo-root `lib/` (`atomic_lib`);
+   * both trees are mounted under `/workspace/`.
+   */
+  @func()
+  async flutterTest(): Promise<string> {
+    const cargoCache = dag.cacheVolume('cargo');
+    const flutterRustTarget = dag.cacheVolume('flutter-plugin-rust-target');
+    const pathPrefix = 'export PATH="$HOME/.cargo/bin:$PATH"';
+    return dag
+      .container()
+      .from(FLUTTER_IMAGE)
+      .withEnvVariable('CI', 'true')
+      .withExec(['apt-get', 'update', '-qq'])
+      .withExec([
+        'apt-get',
+        'install',
+        '-y',
+        '--no-install-recommends',
+        'ca-certificates',
+        'curl',
+        'git',
+        'build-essential',
+        'cmake',
+        'ninja-build',
+        'pkg-config',
+        'libssl-dev',
+        'clang',
+      ])
+      .withExec([
+        'sh',
+        '-c',
+        'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal',
+      ])
+      .withMountedCache('/root/.cargo/registry', cargoCache, {
+        sharing: CacheSharingMode.Locked,
+      })
+      .withDirectory('/workspace/lib', this.source.directory('lib'))
+      .withDirectory('/workspace/flutter', this.source.directory('flutter'))
+      .withMountedCache(
+        '/workspace/flutter/rust/target',
+        flutterRustTarget,
+        { sharing: CacheSharingMode.Locked },
+      )
+      .withWorkdir('/workspace/flutter')
+      .withExec([
+        'bash',
+        '-lc',
+        `${pathPrefix} && flutter --version && flutter pub get`,
+      ])
+      // Scope like `Makefile analyze`: cargokit `build_tool` is a nested
+      // Dart package — analyzing the whole repo without its own pub get fails.
+      .withExec([
+        'bash',
+        '-lc',
+        `${pathPrefix} && flutter analyze lib test`,
+      ])
+      .withExec([
+        'bash',
+        '-lc',
+        `${pathPrefix} && flutter test --no-pub`,
+      ])
       .stdout();
   }
 
