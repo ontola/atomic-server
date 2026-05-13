@@ -789,7 +789,16 @@ export class WSClient {
       // pulls the pre-drain snapshot and the UI flickers back to
       // the offline-stale view.
       this.store.refetchOfflineErroredResources();
-      await this.startVVSync(drive);
+      // No drive selected (e.g. anon share-link cold open, fresh
+      // /app/welcome before the user picks a drive): there's
+      // nothing to VV-sync. The server's `collect_drive_subjects`
+      // on a bare host URL used to walk every resource in the
+      // store and starved the per-conn actor for seconds (see the
+      // `anon_ws_get_during_sync_vv_is_fast` bench in
+      // `server/tests/ws_get_unauthorized_latency.rs`).
+      if (drive) {
+        await this.startVVSync(drive);
+      }
     };
 
     if (this.store.getAgent()?.subject) {

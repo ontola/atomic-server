@@ -87,7 +87,11 @@ export interface StoreSyncStatus {
   syncInProgress: boolean;
   pendingDirtyCount: number;
   serverUrl: string;
-  drive: string;
+  /** `undefined` when no drive has been selected (cold open before
+   *  `setDrive`). Callers must handle the absent case rather than
+   *  treat the server URL as a stand-in drive — a bare host URL is
+   *  not a real drive subject. */
+  drive: string | undefined;
   clientDbReady: boolean;
   /** True if a ClientDb was attached to the store (regardless of readiness). */
   clientDbAttached: boolean;
@@ -284,8 +288,12 @@ export class Store {
   /** The base URL of an Atomic Server. Where commits, search, and
    *  new-instance requests are sent. */
   private serverUrl: string;
-  /** The current Drive subject URL */
-  private drive: string;
+  /** The current Drive subject (DID or HTTP URL). `undefined` until
+   *  `setDrive` is called — there is no implicit fallback to the
+   *  server URL: a host URL is not a real drive subject and treating
+   *  it as one made drive-scoped paths (SYNC_VV, `encodeSub`,
+   *  collection filters) walk or subscribe to nothing. */
+  private drive: string | undefined;
   /** All the resources of the store */
   private _resources: Map<string, Resource>;
   /** Mapping from HTTP aliases to primary subjects (e.g. DIDs) */
@@ -364,14 +372,40 @@ export class Store {
     if (opts.serverUrl) this.setServerUrl(opts.serverUrl);
     if (opts.agent) this.setAgent(opts.agent);
 
-    // Initialize drive from localStorage if available
+    // Initialize drive from localStorage if available.
+    // No fallback to `serverUrl`: a bare host URL is not a real drive
+    // subject — it carries no resources of its own, and the server's
+    // `SYNC_VV` handler used to walk every `Tree::Resources` row
+    // trying to enumerate "what's in" that pseudo-drive (the non-DID
+    // branch in `lib/src/sync/engine.rs::collect_drive_subjects`).
+    // `undefined` = no drive selected; the WS `handleOpen` skips
+    // `startVVSync` when this is `undefined`, leaving the per-conn
+    // actor free for the GET that almost always follows on share-
+    // link / welcome-page cold opens.
+    //
+    // A stored value that happens to be an HTTP URL (legacy data from
+    // pre-DID drives) is also ignored here for drive purposes —
+    // `setServerUrl` above already absorbed the origin, and an
+    // accidental URL-as-drive is exactly what we're avoiding.
+    let storedDrive: string | undefined = undefined;
     if (typeof window !== 'undefined') {
-      const storedDrive = localStorage.getItem('drive');
-      this.drive = storedDrive
-        ? JSON.parse(storedDrive)
-        : (opts.serverUrl ?? '');
+      const raw = localStorage.getItem('drive');
+      if (raw) {
+        try {
+          storedDrive = JSON.parse(raw);
+        } catch {
+          // ignore corrupt value
+        }
+      }
+    }
+    if (
+      storedDrive &&
+      !storedDrive.startsWith('http://') &&
+      !storedDrive.startsWith('https://')
+    ) {
+      this.drive = storedDrive;
     } else {
-      this.drive = opts.serverUrl ?? '';
+      this.drive = undefined;
     }
 
     this.client = new Client(this.injectedFetch);
@@ -2092,23 +2126,40 @@ export class Store {
     }
   }
 
-  /** Returns the current Drive subject URL */
-  public getDrive(): string {
+  /** Returns the current Drive subject, or `undefined` if no drive
+   *  has been selected. Callers must handle the absent case rather
+   *  than treat the server URL as a drive — see the type doc on
+   *  `private drive` for why. */
+  public getDrive(): string | undefined {
     return this.drive;
   }
 
-  /** Sets the current Drive and persists it to localStorage */
+  /** Sets the current Drive.
+   *
+   *  Accepts either a drive subject (a DID — the only form that actually
+   *  identifies a drive in the index) or an HTTP URL. An HTTP URL is
+   *  treated as a *server origin*, not a drive: it updates `serverUrl`
+   *  but leaves `this.drive` untouched (i.e. `getDrive()` keeps
+   *  returning whatever real drive — possibly `undefined` — was set
+   *  before). This split is what prevents the SYNC_VV / encodeSub
+   *  paths from running against a bare host URL, which the server's
+   *  `collect_drive_subjects` cannot enumerate cheaply.
+   *
+   *  Both forms still persist to localStorage and fire `DriveChanged`
+   *  so AppSettings-style UI mirrors stay in sync.
+   */
   public setDrive(drive: string): void {
-    this.drive = drive;
+    const isUrl = drive.startsWith('http://') || drive.startsWith('https://');
+
+    if (isUrl) {
+      const url = new URL(drive);
+      this.setServerUrl(url.origin);
+    } else {
+      this.drive = drive;
+    }
 
     if (typeof window !== 'undefined') {
       localStorage.setItem('drive', JSON.stringify(drive));
-    }
-
-    // If the drive is an HTTP URL, also update the server URL
-    if (drive.startsWith('http://') || drive.startsWith('https://')) {
-      const url = new URL(drive);
-      this.setServerUrl(url.origin);
     }
 
     this.eventManager.emit(StoreEvents.DriveChanged, drive);

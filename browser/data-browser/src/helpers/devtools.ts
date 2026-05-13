@@ -119,17 +119,20 @@ async function inspectWasm(
 
 /**
  * Resolve the default subject: `?subject=...` in the URL, falling back to
- * the full URL for non-`/app/*` paths, and finally to the active drive.
+ * the full URL for non-`/app/*` paths, and finally to the active drive
+ * (server URL if no drive has been selected — devtools is a debugging
+ * helper, so a sensible fallback is more useful than `undefined`).
  */
 function currentSubject(store: Store): string {
-  if (typeof window === 'undefined') return store.getDrive();
+  if (typeof window === 'undefined')
+    return store.getDrive() ?? store.getServerUrl();
   const params = new URLSearchParams(window.location.search);
   const q = params.get('subject');
   if (q) return q;
   if (!window.location.pathname.startsWith('/app/')) {
     return window.location.href;
   }
-  return store.getDrive();
+  return store.getDrive() ?? store.getServerUrl();
 }
 
 /** Inspect one subject across all three persistence layers. */
