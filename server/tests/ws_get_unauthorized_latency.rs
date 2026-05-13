@@ -98,6 +98,54 @@ async fn anon_get_latency(ws_url: &str, subject: &str) -> AtomicResult<Duration>
     Ok(t.elapsed())
 }
 
+/// Like `anon_get_latency`, but first sends a SYNC_VV for the server
+/// URL to mimic the browser's `handleOpen` path. On a populated store
+/// SYNC_VV walks every resource — if its spawned future stalls the
+/// actor event loop, the follow-up GET can't be processed in time.
+async fn anon_get_after_sync_vv_latency(
+    server_url: &str,
+    ws_url: &str,
+    subject: &str,
+) -> AtomicResult<Duration> {
+    let ws = WsClient::connect(ws_url).await?;
+    let mut rx = ws.subscribe();
+
+    // 1. Fire SYNC_VV with the SERVER URL as the drive (matches the
+    //    browser default when no drive is set — see store.ts:
+    //    `this.drive = storedDrive ?? opts.serverUrl`). This is the
+    //    full-store-scan path (`engine.rs:202` — non-DID branch of
+    //    `collect_drive_subjects`).
+    let peers: Vec<String> = Vec::new();
+    let resources: serde_json::Map<String, serde_json::Value> =
+        serde_json::Map::new();
+    let sync_vv_json = serde_json::json!({
+        "drive": server_url,
+        "driveHash": "",
+        "peers": peers,
+        "resources": resources,
+    });
+    ws.send_raw(&format!("SYNC_VV {}", sync_vv_json)).await?;
+
+    // 2. Immediately fire the GET. The browser's openSubject path
+    //    races SYNC_VV processing the same way.
+    let t = Instant::now();
+    ws.send_binary(encode_get(1, subject)).await?;
+
+    let timeout = tokio::time::timeout(Duration::from_secs(10), async {
+        while let Ok(msg) = rx.recv().await {
+            match msg {
+                WsMessage::Resource(_) | WsMessage::Error(_) => return Ok(()),
+                _ => continue,
+            }
+        }
+        Err::<(), _>(atomic_lib::errors::AtomicError::from("ws closed"))
+    })
+    .await
+    .map_err(|_| atomic_lib::errors::AtomicError::from("ws GET timed out > 10s"))?;
+    timeout?;
+    Ok(t.elapsed())
+}
+
 /// Marked `#[ignore]` because it requires an externally-running
 /// atomic-server. CI / one-shot runs invoke it explicitly via
 /// `cargo test -- --ignored`.
@@ -173,6 +221,64 @@ async fn anon_ws_get_on_private_drive_is_fast_under_load() -> AtomicResult<()> {
          should respond in sub-ms; if this assertion trips, the GET \
          handler is being starved or a new round-trip was added on \
          the read hot path.",
+        p95,
+    );
+
+    Ok(())
+}
+
+/// Reproduces the e2e share-menu flake: an anonymous WS connection
+/// fires SYNC_VV (per `handleOpen` in `browser/lib/src/websockets.ts`)
+/// and then immediately sends a GET. On a populated store SYNC_VV
+/// walks the entire resource tree; if its spawned future blocks the
+/// actor's event loop the follow-up GET can wait seconds for its
+/// response.
+#[tokio::test]
+#[ignore]
+async fn anon_ws_get_during_sync_vv_is_fast() -> AtomicResult<()> {
+    let server = server_url();
+    let ws = ws_url();
+
+    let client_a = Client::new(&server).await?;
+    let agent_a = client_a.new_agent("BenchAlice2").await?;
+    let private_drive = client_a
+        .new_drive(&agent_a, "Bench Private Drive 2")
+        .await?;
+
+    // Single sequential measurement — this models a fresh anon page2
+    // (no concurrent connections). The SYNC_VV is the head-of-line
+    // blocker we're investigating.
+    let n: usize = std::env::var("ATOMIC_BENCH_N")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(5);
+
+    let mut latencies = Vec::with_capacity(n);
+    for _ in 0..n {
+        let d = anon_get_after_sync_vv_latency(&server, &ws, &private_drive).await?;
+        latencies.push(d);
+    }
+
+    latencies.sort();
+    let p50 = latencies[n / 2];
+    let p95 = latencies[(n * 95) / 100];
+    let max = *latencies.last().unwrap();
+    eprintln!(
+        "anon-WS-GET-after-SYNC_VV  (n={n}, server={}): \
+         p50={:?}  p95={:?}  max={:?}",
+        server, p50, p95, max
+    );
+
+    // 500ms ceiling. If GETs are queueing behind SYNC_VV's heavy work
+    // the assertion catches it. Healthy: p95 < 100ms.
+    assert!(
+        p95 < Duration::from_millis(500),
+        "p95 latency {:?} exceeds 500 ms budget — the GET is being \
+         queued behind SYNC_VV's spawned future inside the actor. \
+         The fix is to move SYNC_VV's `collect_drive_subjects` + \
+         `build_drive_vvs` work off the actor event loop, or to \
+         yield between subjects so the actor can interleave GETs. \
+         See `handle_sync_vv` in `lib/src/sync/engine.rs`.",
         p95,
     );
 
