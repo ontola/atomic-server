@@ -147,4 +147,3 @@ Peer A                              Peer B
 - [Client implementation (TypeScript)](https://github.com/atomicdata-dev/atomic-server/blob/master/browser/lib/src/websockets.ts)
 - [Server implementation (Rust/Actix)](https://github.com/atomicdata-dev/atomic-server/blob/master/server/src/handlers/web_sockets.rs)
 - [Binary Protocol Encoding (TypeScript)](https://github.com/atomicdata-dev/atomic-server/blob/master/browser/lib/src/ws-v2.ts)
-- [Sync Protocol Design](./design/unified-data-layer.md#sync-protocol)
