@@ -276,7 +276,17 @@ export class WSClient {
           opened = true;
           this._retryDelay = 1000;
           resolve();
-          this.store.setServerConnected(true);
+          // setServerConnected(true) is deliberately NOT called here.
+          // Firing it on WS open creates a race window between OPEN and
+          // AUTH_OK: useResource(drive) can fire during that gap, see
+          // `_serverConnected === true`, take the online fetch path, and
+          // call ws.fetch — which itself awaits `authenticate()`. If the
+          // auth handshake is slow (Rosetta-translated crypto, busy
+          // server), the GET frame is never sent until auth completes,
+          // and ws.fetch's REQUEST_TIMEOUT only starts AFTER auth, so a
+          // stalled handshake hangs every fetch indefinitely. `handleOpen`
+          // below flips the flag at the right moment: immediately when
+          // there's no agent to authenticate, otherwise after AUTH_OK.
           this.handleOpen();
         });
       });
@@ -804,13 +814,29 @@ export class WSClient {
     if (this.store.getAgent()?.subject) {
       const authClose = perfSpan('ws.authenticate');
       this.authenticate()
-        .then(() => authClose('ok'))
+        .then(() => {
+          authClose('ok');
+          // Only flip `_serverConnected` AFTER AUTH_OK arrives. See the
+          // comment in the `open` handler above for the race this closes.
+          this.store.setServerConnected(true);
+        })
         .then(doSync)
         .catch(e => {
           authClose({ err: String(e) });
           console.error('Auth error:', e);
+          // Auth failed (timeout, server rejection, socket closed mid-
+          // handshake). The socket itself may still be open — surface
+          // the connected state anyway so the UI can present a real
+          // error instead of staying stuck in a "connecting" limbo. The
+          // pending GETs already rejected via `rejectAllPending` if the
+          // socket died; if it's still up, subsequent fetches will fail
+          // unauthenticated and surface a 401 error to the user.
+          this.store.setServerConnected(true);
         });
     } else {
+      // No agent to authenticate — the socket is open and we're ready
+      // to serve anonymous fetches. Flip immediately.
+      this.store.setServerConnected(true);
       doSync().catch(() => undefined);
     }
   }
@@ -914,23 +940,41 @@ export class WSClient {
   private tagListeners = new Map<number, () => void>();
   private tagRejectors = new Set<(reason: Error) => void>();
 
-  /** Wait for a specific WS tag (e.g. AUTH_OK) to arrive. Rejects only
-   *  when the underlying WebSocket closes or errors — no fixed timeout
-   *  budget. A stressed atomic-server (8 workers, slow CI container)
-   *  can legitimately take several seconds to respond to AUTH; we
-   *  want to wait that out, not artificially time out. If the socket
-   *  is genuinely dead, the close handler fires and rejects all
-   *  in-flight `waitForTag` calls — same model as `rejectAllPending`
-   *  for GET round-trips. */
-  private waitForTag(tag: number): Promise<void> {
+  /** Wait for a specific WS tag (e.g. AUTH_OK) to arrive. Rejects when
+   *  the underlying WebSocket closes/errors, or after `timeoutMs` if no
+   *  matching frame arrives. A stressed atomic-server (8 workers, slow
+   *  CI container, Rosetta-translated crypto) can legitimately take
+   *  several seconds to respond to AUTH; the default 30s budget waits
+   *  that out without leaving downstream callers hung forever. Without
+   *  this, `ws.fetch` (which `await`s `authenticate()` before sending
+   *  the GET frame) would hang indefinitely on a stalled handshake,
+   *  ignoring its own REQUEST_TIMEOUT.
+   *
+   *  Pass `0` to disable the timeout. */
+  private waitForTag(tag: number, timeoutMs = 30000): Promise<void> {
     return new Promise((resolve, reject) => {
+      const timer =
+        timeoutMs > 0
+          ? setTimeout(() => {
+              this.tagListeners.delete(tag);
+              this.tagRejectors.delete(rejector);
+              reject(
+                new AtomicError(
+                  `Timed out waiting ${timeoutMs}ms for WS tag ${tag}`,
+                  ErrorType.Server,
+                ),
+              );
+            }, timeoutMs)
+          : undefined;
       const rejector = (err: Error) => {
+        if (timer) clearTimeout(timer);
         this.tagListeners.delete(tag);
         this.tagRejectors.delete(rejector);
         reject(err);
       };
       this.tagRejectors.add(rejector);
       this.tagListeners.set(tag, () => {
+        if (timer) clearTimeout(timer);
         this.tagRejectors.delete(rejector);
         resolve();
       });

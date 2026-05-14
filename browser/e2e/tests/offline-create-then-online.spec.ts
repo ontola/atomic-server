@@ -147,7 +147,10 @@ test.describe('offline create → online sync → disable localDB', () => {
           );
         },
         undefined,
-        { timeout: 15000 },
+        // 30s. With ClientDb disabled, fetching the drive goes server-only
+        // over a fresh WS handshake on each reload (init store → resolve
+        // agent from IDB → open WS → SYNC_VV handshake → first GET).
+        { timeout: 30000 },
       )
       .catch(() => {
         /* surface via the assertions below instead of throwing here */

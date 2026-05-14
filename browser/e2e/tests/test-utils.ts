@@ -377,7 +377,13 @@ export async function openSubject(page: Page, subject: string) {
   await page.goto(
     `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(subject)}`,
   );
-  await expect(page.locator(`main[about="${subject}"]`).first()).toBeVisible();
+  // Default 5s actionTimeout is too tight under dagger CI: a second-context
+  // openSubject has to bootstrap WASM, open a WS, authenticate, and fetch
+  // the resource before `main[about=...]` lands. Multi-context tests
+  // (authorization invite, multi-user documents) saw routine 10s+ waits.
+  await expect(page.locator(`main[about="${subject}"]`).first()).toBeVisible({
+    timeout: 20000,
+  });
 }
 
 export async function getCurrentSubject(page: Page): Promise<string> {
@@ -760,7 +766,11 @@ export function currentDialog(page: Page) {
 }
 
 export async function waitForCurrentDialog(page: Page) {
-  await currentDialog(page).waitFor({ state: 'visible' });
+  // Default waitFor uses the 5s `actionTimeout`. Several dialogs only open
+  // after a server round-trip (plugin upload parses the zip server-side, file
+  // chooser uploads the file, etc.). 20s covers the slow path without
+  // hiding genuine hangs.
+  await currentDialog(page).waitFor({ state: 'visible', timeout: 20000 });
 }
 
 export const DIALOG_CLOSE_BUTTON = 'dialog-close-button';
