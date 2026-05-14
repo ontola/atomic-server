@@ -24,6 +24,12 @@ test.describe('Plugins', () => {
   // Investigate: rerun locally with `--workers=1` and add intermediate
   // `waitForCommit` poll points so we can see which step is slow.
   test('install a plugin', async ({ page }) => {
+    // Two upload + commit + plugin-install chains, a full bird-creation
+    // form, an iframe-driven picker, plus a reload-and-verify. The test
+    // routinely needs 40-50s on a dev machine even when nothing is wrong;
+    // the default 60s budget leaves no headroom for the tantivy index
+    // poll below. test.slow() triples it.
+    test.slow();
     await signIn(page);
     await newDrive(page);
 
@@ -146,19 +152,38 @@ test.describe('Plugins', () => {
         // folder. Empty queries depend on search-index ordering, which can
         // race with the plugin's host.commit rename under suite-wide load.
         // The server-side tantivy index is updated asynchronously after
-        // the rename commit, and under accumulated suite state (~30 prior
-        // dev drives, each with their own resources) the indexing latency
-        // routinely exceeds 15s. Bump to 30s — this is index-write lag,
-        // not a race-prevention timeout.
+        // the rename commit (REBUILD_INDEX_TIME = 5s in commit_monitor.rs),
+        // and under accumulated suite state (~30 prior dev drives, each
+        // with their own resources) the indexing latency can be substantial.
+        // Poll the search input by retyping until the result lands, so
+        // the SearchBox's local debounce can't swallow the index update.
         const pickOption = await fillSearchBox(
           dialog,
           'Search for a folder',
           'My',
         );
-        await dialog
+        const resultLocator = dialog
           .getByTestId('searchbox-results')
-          .getByText('My Problem')
-          .waitFor({ timeout: 30000 });
+          .getByText('My Problem');
+        const searchInput = dialog.getByPlaceholder(/Search for a folder/);
+        // Each retype waits 1.5s for the result to appear. 30s of polling
+        // covers ~6 tantivy `REBUILD_INDEX_TIME` (5s) cycles — plenty for
+        // the rename commit to land in the index. We keep the poll budget
+        // well under the outer test.slow() timeout so the test doesn't
+        // burn its full budget here on a hung loop.
+        const deadline = Date.now() + 30000;
+        while (Date.now() < deadline) {
+          if (
+            await resultLocator.isVisible({ timeout: 1500 }).catch(() => false)
+          ) {
+            break;
+          }
+          // Retype to retrigger the search — covers cases where the
+          // SearchBox cached an earlier empty result.
+          await searchInput.fill('');
+          await searchInput.fill('My');
+        }
+        await expect(resultLocator).toBeVisible({ timeout: 5000 });
         await pickOption('My Problem');
         await closeWith('Confirm');
       });

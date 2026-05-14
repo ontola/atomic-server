@@ -19,6 +19,8 @@
     "**/.netlify",
     "**/playwright-report/**",
     "**/test-results/**",
+    "**/trace-*.json",
+    "**/dev-drive-trace-*.json",
     "browser/data-browser/src/locales/**",
     "**/*.min.js",
     "**/*.min.css"

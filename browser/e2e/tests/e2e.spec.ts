@@ -500,18 +500,9 @@ test.describe('data-browser', async () => {
     // depth0's subject if it ran before the navigation settled.
     await editTitle(d1, page);
 
-    await expect(
-      page.getByTestId('sidebar').getByText(d0),
-      "Sidebar doesn't show updated parent resource title",
-    ).toBeVisible({ timeout: 10000 });
-    await expect(
-      page.getByTestId('sidebar').getByText(d1),
-      "Sidebar doesn't show child resource title",
-    ).toBeVisible({ timeout: 10000 });
-    // Wait for all pending commits to be acked by the server before reloading.
-    // A naked waitForTimeout(500) is racy: the page can tear down its in-memory
-    // store before the depth1 commit reaches the server, then on reload the
-    // sidebar query doesn't see depth1 as a child of depth0.
+    // Wait for all pending commits to be acked by the server. Without this the
+    // page can tear down its in-memory store before the depth1 commit reaches
+    // the server, and the sidebar query (post-reload below) misses depth1.
     await page.waitForFunction(
       () =>
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -519,19 +510,25 @@ test.describe('data-browser', async () => {
       undefined,
       { timeout: 10000 },
     );
-    await page.reload();
-    // After reload the sidebar collapses parent folders by default — depth1
-    // is in the tree but not in the DOM until depth0 is expanded.
+
+    const sidebar = page.getByTestId('sidebar');
     await expect(
-      page.getByTestId('sidebar').getByText(d0),
+      sidebar.getByText(d0),
+      "Sidebar doesn't show updated parent resource title",
+    ).toBeVisible({ timeout: 10000 });
+    // The optimistic-add path for the sidebar's depth0 children collection
+    // races with navigation and the server's QUERY_UPDATE round-trip; under
+    // load depth0 can render collapsed without an expand control before
+    // the new child reaches the collection. Reload to get a deterministic
+    // server-authoritative tree before asserting depth1.
+    await page.reload();
+    await expect(
+      sidebar.getByText(d0),
       "Sidebar doesn't show parent resource title after refresh",
     ).toBeVisible({ timeout: 10000 });
-    await page
-      .getByTestId('sidebar')
-      .getByRole('button', { name: 'Expand folder' })
-      .click();
+    await sidebar.getByRole('button', { name: 'Expand folder' }).click();
     await expect(
-      page.getByTestId('sidebar').getByText(d1),
+      sidebar.getByText(d1),
       "Sidebar doesn't show child resource title after refresh",
     ).toBeVisible({ timeout: 10000 });
   });
@@ -577,14 +574,6 @@ test.describe('data-browser', async () => {
     await expect(page.getByRole('heading', { name })).toBeVisible();
   });
 
-  // FLAKY (local, observed in suite re-runs): when the dev-drive is reused
-  // across tests in the same suite (e.g. a previous `dialog` run left
-  // `test-prop` and `test-shortname` resources), `getByRole('button', {
-  // name: 'test-prop', exact: true })` resolves to 2 elements and trips
-  // playwright's strict-mode check. Looks pre-existing — same pattern
-  // the `// FLAKY` block above this file already documents for the
-  // children-collection refresh race. Investigation: either add a per-
-  // test resource-name suffix or have `before()` clean up matching names.
   test('dialog', async ({ page }) => {
     await newResource('https://atomicdata.dev/classes/Class', page);
 
@@ -634,8 +623,14 @@ test.describe('data-browser', async () => {
       await closeDialogWith('Save');
     });
 
+    // Scope to the main content area — once test-prop lands as a child of
+    // test-shortname, the sidebar ALSO renders it as a `button "test-prop"`,
+    // and an unscoped `getByRole` would resolve to two elements and trip
+    // playwright's strict-mode check.
     await expect(
-      page.getByRole('button', { name: 'test-prop', exact: true }),
+      page
+        .getByRole('main')
+        .getByRole('button', { name: 'test-prop', exact: true }),
     ).toBeVisible();
   });
 

@@ -581,6 +581,17 @@ export class Store {
     for (const commit of entry.commits) {
       await this.postCommit(commit, endpoint);
     }
+    // Mirror Resource.pushCommits' post-ack blob push. When an upload
+    // races a network outage the commit POST fails, bytes land in the
+    // local ClientDb, the commit is queued in the outbox. On reconnect
+    // we replay the commit here — but unlike the in-memory pushCommits
+    // path, no one else calls maybePushBlobForResource, so the server
+    // gets the File resource but never the bytes and /download/files/<hash>
+    // 404s. Fire the hook here on the still-cached resource (it was
+    // populated during the offline upload via applyPendingCommitsLocally).
+    if (resource) {
+      await this.maybePushBlobForResource(resource).catch(() => undefined);
+    }
     this.emitSyncStatus();
   };
 
