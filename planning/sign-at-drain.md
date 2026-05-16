@@ -359,10 +359,26 @@ Each step is independently shippable; tests stay green after each.
 > marked `@internal` (callable across `lib`, excluded from the public
 > surface); `commit.test.ts` rewritten against `newResource → set →
 > save` with a new `test-store.ts` helper; `_new:` no longer appears in
-> any test. **Not yet done:** truly deleting/`#private`-ing the
-> `@internal` methods, `_cache`/`commitBuilder` → `#private`, removing
-> `isSaving`, typed proxy setters (`doc.name = …`). The `@internal`
-> tags are the pragmatic lockdown; full privatisation is follow-up.
+> any test. **Update (2026-05-29, follow-up commit):**
+> `markNextCommitAsGenesis` is now **deleted** — `signChanges` already
+> auto-detects genesis for a `_new:`/`did:ad:` subject with no
+> previousCommit, so the explicit "mark genesis" step was redundant;
+> `newResource` and `uploadFiles` call `signChanges` directly.
+> `signChanges` stays `@internal` (only callers are `store.newResource`,
+> `store.uploadFiles`, `Resource._saveInner` — all in-package; no
+> app/test code calls it, so it's off the public surface. A true
+> `#private` isn't possible: `Store` calls it across the class
+> boundary).
+>
+> **Update (2026-05-30) — Step 6 complete.** `#commitBuilder`,
+> `#cache`, `#cacheDirty` are now runtime `#private`. `isSaving` was
+> already gone. Typed setters ship via `.props` (`doc.props.name = …`,
+> typed read+write; the bare `doc.name =` form is intentionally NOT
+> offered — shortnames collide with `Resource` methods, and a wrapping
+> Proxy would break the React-Compiler proxy-ref memoisation). The
+> low-level `CommitBuilder` / `_new:` crypto tests moved out of
+> `commit.test.ts` into `sign.test.ts`, so `commit.test.ts` is now a
+> pure consumer-API canary (`newResource → set → save`, no scaffolding).
 
 Sign-at-drain left the public API carrying scaffolding that only the
 internals should know about. `commit.test.ts` is the canary: it still
@@ -516,7 +532,25 @@ await resource.save();
 
 Same genesis-sign + POST flow, through the public API.
 
-### Optional: typed proxy setters
+### Typed proxy setters — delivered via `.props` (2026-05-29)
+
+> **Resolved.** Typed property setters already exist through the `props`
+> accessor: `doc.props.name = 'New name'` resolves the shortname to its
+> property URL and writes via `set(…, false)`. `QuickAccessKnownPropType`
+> is a non-`readonly` mapped type, so this is typed for both read AND
+> write — the write-side companion of the existing typed read accessor.
+> Locked by a unit test (`supports typed property setters via the props
+> proxy` in `commit.test.ts`).
+>
+> The bare `doc.name = …` form below (props flattened onto the Resource)
+> is **intentionally NOT shipped**: a property shortname can collide with
+> a `Resource` method/getter (`save`, `subject`, `parent`, `error`,
+> `loading`, …), and the only collision-free runtime — wrapping the
+> Resource in another Proxy — would break the React-Compiler proxy-ref
+> memoisation that `useResource`/`props` depend on (see
+> `react-compiler-resource-proxy-pitfall`). `.props` is the safe,
+> namespaced home for typed field access. Keeping the original sketch
+> below for context.
 
 `doc.name = 'New name'` instead of `await resource.set(core.properties.name, val)`
 via `Object.defineProperty` on the Resource:

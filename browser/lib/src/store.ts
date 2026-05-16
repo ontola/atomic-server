@@ -1544,7 +1544,9 @@ export class Store {
         );
       }
 
-      resource.markNextCommitAsGenesis();
+      // `signChanges` auto-detects genesis for a `_new:` subject with no
+      // previousCommit, deriving the real `did:ad:<sig>` subject from the
+      // signature — no explicit "mark genesis" step needed.
       const genesisCommit = await resource.signChanges(agent);
       // resource.subject is now did:ad:<signature>
       resource.stashGenesis(genesisCommit);
@@ -3375,7 +3377,8 @@ export class Store {
       // nothing to POST — `signChanges` resets `commitBuilder.isGenesis`,
       // so the genesis would otherwise be silently dropped.)
       if (useDid) {
-        resource.markNextCommitAsGenesis();
+        // `signChanges` auto-detects genesis (DID-eligible `_new:` subject,
+        // no previousCommit) and derives the `did:ad:` subject.
         const genesis = await resource.signChanges(this.getAgent()!);
         resource.stashGenesis(genesis);
       }
