@@ -2342,6 +2342,17 @@ export class Resource<C extends OptionalClass = any> {
       // that need "is it safe to leave?" before proceeding.
       await this.store.syncDirtyResources();
 
+      // Agents are special: the server returns a synthetic just-in-time
+      // view (no `drives`/`personalDrive`) whenever its commit hasn't
+      // durably persisted, so a reload that refetches the agent from the
+      // server loses the user's saved drives under load. Mirror the
+      // just-saved agent into clientDb so the cold-load path reads it
+      // locally instead of the racy server view. Cheap — agents are
+      // committed rarely (drive create/link).
+      if (this.subject.startsWith('did:ad:agent:')) {
+        await this.persistToClientDb();
+      }
+
       return 'persisted';
     } catch (e) {
       if (isNetworkError(e)) {
@@ -2399,36 +2410,52 @@ export class Resource<C extends OptionalClass = any> {
       this.store.outbox.setBaseVersion(this.subject, baseVersion);
     }
 
-    const clientDb = this.store.getClientDb();
-
-    if (clientDb) {
-      const obj: Record<string, unknown> = { '@id': this.subject };
-
-      for (const [k, v] of this.getEntries()) {
-        if (!(v instanceof Uint8Array)) obj[k] = v;
-      }
-
-      const snapshot = this._loroDoc?.export({ mode: 'snapshot' });
-
-      // Await the OPFS write — when `save()` resolves the edit MUST
-      // survive a reload. A non-awaited write left the offline-edit-
-      // persists-across-reload test reading OPFS before the write
-      // landed and silently lost the edit.
-      try {
-        await clientDb.putResourceWithSnapshot(
-          this.subject,
-          JSON.stringify(obj),
-          snapshot,
-        );
-      } catch (e) {
-        console.error('[Offline] persist failed:', e);
-      }
-    }
+    await this.persistToClientDb();
 
     this.commitError = undefined;
     this.loading = false;
     this.applyToStore('offline-replay');
     this.store.notifyResourceSaved(this);
+  }
+
+  /**
+   * Mirror this resource's full state (JSON-AD propvals + Loro snapshot)
+   * into clientDb (OPFS) so a reload can read it locally. `saveOffline`
+   * uses it for offline durability. The online save path uses it for
+   * `did:ad:agent:` subjects: the server returns a synthetic just-in-time
+   * agent view (only publicKey/read/createdAt/isA — NO `drives`) whenever
+   * the agent's commit hasn't durably persisted yet, so under load a
+   * reload would refetch that view and lose the user's saved drives.
+   * Mirroring the agent locally means the cold-load path
+   * (`fetchResourceWithLocalFallback`) reads it from clientDb and never
+   * consults the racy server view.
+   *
+   * @internal store-level / offline-persistence only.
+   */
+  public async persistToClientDb(): Promise<void> {
+    const clientDb = this.store.getClientDb();
+    if (!clientDb) return;
+
+    const obj: Record<string, unknown> = { '@id': this.subject };
+
+    for (const [k, v] of this.getEntries()) {
+      if (!(v instanceof Uint8Array)) obj[k] = v;
+    }
+
+    const snapshot = this._loroDoc?.export({ mode: 'snapshot' });
+
+    // Await the OPFS write — when `save()` resolves the edit MUST survive a
+    // reload. A non-awaited write left a reload reading OPFS before the
+    // write landed and silently losing the edit.
+    try {
+      await clientDb.putResourceWithSnapshot(
+        this.subject,
+        JSON.stringify(obj),
+        snapshot,
+      );
+    } catch (e) {
+      console.error('[persistToClientDb] failed:', e);
+    }
   }
 
   /**
