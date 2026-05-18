@@ -2273,6 +2273,15 @@ export class Resource<C extends OptionalClass = any> {
       return 'offline';
     }
 
+    // True when this save creates the resource for the first time (a genesis
+    // commit). Newly-created online resources are not otherwise written to the
+    // local clientDb — `addResource` skips OPFS puts for `_new:`/unsynced
+    // resources, and the `_new:`→`did:ad:` rename doesn't re-persist. Without a
+    // clientDb write the resource is on the server but absent from OPFS, so the
+    // OPFS-first collection queries (`parent=…`) miss it after a reload until a
+    // full drive re-sync happens to pull it back. We persist it below.
+    let wasGenesis = false;
+
     try {
       // A genesis signed at creation time by `store.newResource` is held
       // on the resource (`_pendingGenesis`) — NOT the outbox — so an
@@ -2280,12 +2289,15 @@ export class Resource<C extends OptionalClass = any> {
       // filled) is never POSTed. Now that the user is explicitly
       // saving, move it into the outbox to drain.
       if (this._pendingGenesis) {
+        wasGenesis = true;
         this.store.outbox.setGenesisCommit(this.subject, this._pendingGenesis);
         this._pendingGenesis = undefined;
       } else if (
         hasChanges &&
         (this.#commitBuilder.isGenesis || this.subject.startsWith('_new:'))
       ) {
+        wasGenesis = true;
+
         // Genesis path for resources NOT created via `store.newResource` —
         // the new-resource form / `NewInstanceButton`, which mint a
         // transient `_new:` subject via `store.createSubject()` and then
@@ -2342,14 +2354,16 @@ export class Resource<C extends OptionalClass = any> {
       // that need "is it safe to leave?" before proceeding.
       await this.store.syncDirtyResources();
 
-      // Agents are special: the server returns a synthetic just-in-time
-      // view (no `drives`/`personalDrive`) whenever its commit hasn't
-      // durably persisted, so a reload that refetches the agent from the
-      // server loses the user's saved drives under load. Mirror the
-      // just-saved agent into clientDb so the cold-load path reads it
-      // locally instead of the racy server view. Cheap — agents are
-      // committed rarely (drive create/link).
-      if (this.subject.startsWith('did:ad:agent:')) {
+      // Mirror just-created resources into clientDb so the OPFS-first cold
+      // path (collection `parent=` queries after a reload) sees them locally
+      // instead of returning a stale empty result. Covers two cases:
+      //  - Agents: the server returns a synthetic just-in-time view (no
+      //    `drives`/`personalDrive`) until the commit durably persists, so a
+      //    refetch under load loses the user's saved drives.
+      //  - Any genesis (e.g. table rows materialized from a virtual `_new:`
+      //    placeholder): the resource is on the server but was never put in
+      //    OPFS, so its parent-indexed membership is invisible after reload.
+      if (wasGenesis || this.subject.startsWith('did:ad:agent:')) {
         await this.persistToClientDb();
       }
 
