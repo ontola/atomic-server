@@ -1,11 +1,14 @@
-import { useEffect, useState } from 'react';
+import { forwardRef, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoute } from '@tanstack/react-router';
+import toast from 'react-hot-toast';
 import {
   StoreEvents,
   type StoreSyncStatus,
   type CommitLogEntry,
   useStore,
   useProperty,
+  useResource,
+  useTitle,
   truncateUrl,
   Datatype,
 } from '@tomic/react';
@@ -32,6 +35,11 @@ import { appRoute } from './RootRoutes';
 import { pathNames } from './paths';
 import { useSettings } from '../helpers/AppSettings';
 import { serverURLStorage } from '../helpers/serverURLStorage';
+import { DriveSwitcher } from '../components/SideBar/DriveSwitcher';
+import type {
+  DropdownTriggerComponent,
+  DropdownTriggerProps,
+} from '../components/Dropdown/DropdownTrigger';
 
 export const SyncRoute = createRoute({
   path: pathNames.sync,
@@ -105,6 +113,7 @@ function statusLabel(status: NodeStatus): string {
 
 function SyncPage() {
   const store = useStore();
+  const reconnectRequested = useRef(false);
   const [status, setStatus] = useState<StoreSyncStatus>(() =>
     store.getSyncStatus(),
   );
@@ -169,6 +178,19 @@ function SyncPage() {
       unsubServer();
     };
   }, [store]);
+
+  useEffect(() => {
+    if (status.serverConnected) {
+      reconnectRequested.current = false;
+
+      return;
+    }
+
+    if (reconnectRequested.current && status.serverConnectionError) {
+      toast.error(status.serverConnectionError);
+      reconnectRequested.current = false;
+    }
+  }, [status.serverConnected, status.serverConnectionError]);
 
   const nodes = deriveNodeStatuses(status);
 
@@ -288,12 +310,23 @@ function SyncPage() {
                 <StatusIcon status={nodes.server} />
                 {statusLabel(nodes.server)}
               </NodeStatusBadge>
+              {!status.serverConnected && status.serverConnectionError && (
+                <NodeError role='alert'>
+                  <FaCircleExclamation aria-hidden />
+                  <span>{status.serverConnectionError}</span>
+                </NodeError>
+              )}
               {status.serverConnected ? (
                 <NodeAction onClick={() => store.disconnect()}>
                   Disconnect
                 </NodeAction>
               ) : (
-                <NodeAction onClick={() => store.reconnect()}>
+                <NodeAction
+                  onClick={() => {
+                    reconnectRequested.current = true;
+                    store.reconnect();
+                  }}
+                >
                   Reconnect
                 </NodeAction>
               )}
@@ -309,7 +342,7 @@ function SyncPage() {
               <DetailLabel>Drive</DetailLabel>
               <DetailValue title={status.drive}>
                 {status.drive ? (
-                  <ResourceInline subject={status.drive} />
+                  <DriveDetailSwitcher drive={status.drive} />
                 ) : (
                   'none'
                 )}
@@ -643,6 +676,40 @@ function LocalDbControl({
   );
 }
 
+function DriveDetailSwitcher({ drive }: { drive: string }) {
+  const driveResource = useResource(drive);
+  const [title] = useTitle(driveResource);
+  const label = driveResource.isUnauthorized()
+    ? 'Unauthorized'
+    : (title ?? truncateUrl(drive, 24, true));
+
+  const Trigger = useMemo<DropdownTriggerComponent>(() => {
+    const DriveDetailTrigger: DropdownTriggerComponent = forwardRef<
+      HTMLButtonElement,
+      Omit<DropdownTriggerProps, 'ref'>
+    >(({ onClick, menuId, isActive, id }, ref) => (
+      <DriveSwitchTriggerButton
+        id={id}
+        aria-controls={menuId}
+        aria-expanded={isActive}
+        aria-haspopup='menu'
+        onClick={onClick}
+        ref={ref}
+        title='Open Drive Settings'
+        type='button'
+      >
+        {label}
+      </DriveSwitchTriggerButton>
+    ));
+
+    DriveDetailTrigger.displayName = 'DriveDetailTrigger';
+
+    return DriveDetailTrigger;
+  }, [label]);
+
+  return <DriveSwitcher Trigger={Trigger} />;
+}
+
 function PropertyName({ propertyURL }: { propertyURL: string }) {
   const property = useProperty(propertyURL);
   const label = property.loading
@@ -785,7 +852,7 @@ const statusColor = (
     case 'unsynced':
       return theme.colors.warning;
     case 'offline':
-      return theme.colors.textLight;
+      return theme.colors.alert;
     case 'unknown':
       return theme.colors.textLight;
   }
@@ -850,6 +917,22 @@ const NodeStatusBadge = styled.span<{ $status: NodeStatus }>`
       css`
         animation: ${spin} 1s linear infinite;
       `}
+  }
+`;
+
+const NodeError = styled.div`
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+  max-width: 14rem;
+  color: ${p => p.theme.colors.alert};
+  font-size: 0.8rem;
+  line-height: 1.25;
+  text-align: left;
+
+  svg {
+    flex-shrink: 0;
+    margin-top: 0.12rem;
   }
 `;
 
@@ -945,6 +1028,31 @@ const DetailValue = styled.span`
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
+`;
+
+const DriveSwitchTriggerButton = styled.button`
+  appearance: none;
+  background: none;
+  border: none;
+  color: ${p => p.theme.colors.main};
+  cursor: pointer;
+  font: inherit;
+  margin: 0;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 0;
+  text-align: start;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${p => p.theme.colors.main};
+    outline-offset: 2px;
+  }
 `;
 
 // --- Activity log ---

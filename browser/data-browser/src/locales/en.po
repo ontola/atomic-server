@@ -55,6 +55,7 @@ msgid "No Results"
 msgstr "No Results"
 
 #: src/components/SideBar/SideBarDrive.tsx
+#: src/routes/SyncRoute.tsx
 #: src/views/ErrorPage.tsx
 msgid "Unauthorized"
 msgstr "Unauthorized"
@@ -5138,3 +5139,11 @@ msgstr "Could not restore version: {0}"
 #: src/routes/SettingsServer/index.tsx
 msgid "Server settings have moved to the <0>Sync page</0>."
 msgstr "Server settings have moved to the <0>Sync page</0>."
+
+#: src/routes/SyncRoute.tsx
+msgid "Open Drive Settings"
+msgstr "Open Drive Settings"
+
+#: src/routes/SyncRoute.tsx
+msgid "DriveDetailTrigger"
+msgstr "DriveDetailTrigger"
