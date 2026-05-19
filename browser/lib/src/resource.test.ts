@@ -1,5 +1,5 @@
 import { describe, it } from 'vitest';
-import { Resource } from './resource.js';
+import { normalizeLoroChangeTimestampMs, Resource } from './resource.js';
 
 describe('resource.ts', () => {
   it('push propvals', ({ expect }) => {
@@ -85,6 +85,17 @@ describe('resource.ts', () => {
    * stored ops — Loro LWW silently dropped them. Now it must keep the
    * existing doc and merge the snapshot in.
    */
+  it('normalizes Loro oplog timestamps in seconds or milliseconds', ({
+    expect,
+  }) => {
+    expect(normalizeLoroChangeTimestampMs(1_700_000_000)).toBe(
+      1_700_000_000_000,
+    );
+    expect(normalizeLoroChangeTimestampMs(1_700_000_000_000)).toBe(
+      1_700_000_000_000,
+    );
+  });
+
   it('keeps the same Loro peer across a loroUpdate hydration', async ({
     expect,
   }) => {

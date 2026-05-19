@@ -32,6 +32,7 @@ import {
   openAgentPage,
   fillSearchBox,
   clickSidebarItem,
+  selectHistoryVersionShowing,
   inDialog,
   acceptInvite,
   topBarShareButton,
@@ -674,9 +675,9 @@ test.describe('data-browser', async () => {
       page.getByRole('heading', { name: 'History of Second Title', level: 1 }),
     ).toBeVisible();
 
-    await page.getByTestId('version-button').nth(1).click();
+    await selectHistoryVersionShowing(page, 'First Title');
 
-    await expect(page.locator('text=First Title').first()).toBeVisible();
+    await expect(page.getByText('First Title', { exact: true }).first()).toBeVisible();
 
     await page.click('text=Restore this version');
 
