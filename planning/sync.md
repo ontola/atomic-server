@@ -9,7 +9,9 @@ But there are a bunch of shortcomings:
 
 ## Bugs
 
-- After signing in with the same secret on 2 devices, and using QR to set up sync, the resources sync successfully initially. Awesome. But after htat initial sync, i don't see new strokes appears. When i create a new resource, i do see a new (empty) item appearing, but not the strokes. Even after manual retry / refresh. I suppose we lack a test for this case.
+- After signing in with the same secret on 2 devices, and using QR to set up sync, the resources sync successfully initially. Awesome. But after that initial sync, i don't see new strokes appears. When i create a new resource, i do see a new (empty) item appearing, but not the strokes. Even after manual retry / refresh.
+  - **Root cause (Flutter / Iroh):** `push_stroke` → `push_list_item` updates the in-memory Loro doc but not `CommitBuilder`, so `save_locally()` hit the no-op path (`has_changes() == false`). Strokes stayed in the tablet's `CANVAS_CACHE` only; no `apply_commit`, no `DbEvent` delta, no live Iroh push. New canvases worked because `create_resource` commits through a different path.
+  - **Fix:** `Resource::sync_loro_changes_to_commit_builder()` (called from `save` / `save_locally`) exports a Loro delta when only the in-memory doc changed. Test: `resources::test::push_list_item_save_locally_persists_strokes`.
 
 ## Plan: Persist commits over WebSocket
 
