@@ -81,6 +81,7 @@ impl Actor for CommitMonitor {
             // unaffected by mailbox depth.
             let flag = self.pending_commit.clone();
             let writer = self.search_state.writer.clone();
+            let reader = self.search_state.reader.clone();
             tokio::spawn(async move {
                 let mut interval = tokio::time::interval(REBUILD_INDEX_TIME);
                 // `interval.tick()` returns immediately on first call;
@@ -96,6 +97,12 @@ impl Actor for CommitMonitor {
                             if let Err(e) = guard.commit() {
                                 tracing::error!("Tantivy commit failed: {}", e);
                                 // Re-arm so the next pass retries.
+                                flag.store(true, Ordering::Release);
+                                continue;
+                            }
+                            drop(guard);
+                            if let Err(e) = reader.reload() {
+                                tracing::error!("Tantivy reader reload failed: {}", e);
                                 flag.store(true, Ordering::Release);
                             }
                         }

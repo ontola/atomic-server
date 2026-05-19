@@ -379,25 +379,31 @@ test.describe('data-browser', async () => {
     await expect(editableTitle(page)).toHaveRole('textbox');
   });
 
-  // This test asserts the drive title equals the server hostname, which is
-  // legacy behavior from when drives were identified by HTTP URL. Modern
-  // drives use `did:ad:...` subjects; the currentDriveTitle reflects the
-  // drive's `name` property instead. Skipping until the test is rewritten
-  // to cover the DID-era drive switcher.
-  test.skip('configure drive page', async ({ page }) => {
-    await signIn(page);
-    await openConfigureDrive(page);
-    const expectedTitle = new URL(SERVER_URL);
-    await expect(currentDriveTitle(page)).toContainText(expectedTitle.hostname);
+  test('configure drive page', async ({ page }) => {
+    const initialDriveSubject = await getCurrentSubject(page);
+    const initialDriveTitle = await currentDriveTitle(page).textContent();
 
     await openConfigureDrive(page);
-    await changeDrive('https://example.com', page, false);
-    await expect(currentDriveTitle(page)).toHaveText('example.com/');
+    await expect(
+      page.getByRole('heading', { name: 'Saved Drives' }),
+    ).toBeVisible();
+    await expect(page.getByLabel('Custom Drive URL')).toHaveValue(
+      initialDriveSubject,
+    );
+    await expect(page.getByText(initialDriveSubject)).toBeVisible();
 
-    // Switch back to localhost
+    const { driveURL: secondDriveSubject, driveTitle: secondDriveTitle } =
+      await newDrive(page);
+    await expect(currentDriveTitle(page)).toHaveText(secondDriveTitle);
+
     await openConfigureDrive(page);
-    await changeDrive(SERVER_URL, page);
-    await expect(currentDriveTitle(page)).toContainText(expectedTitle.hostname);
+    await expect(page.getByLabel('Custom Drive URL')).toHaveValue(
+      secondDriveSubject,
+    );
+
+    await page.getByLabel('Custom Drive URL').fill(initialDriveSubject);
+    await page.locator('[data-test="drive-url-save"]').click();
+    await expect(currentDriveTitle(page)).toHaveText(initialDriveTitle ?? '');
   });
 
   test('form validation', async ({ page }) => {

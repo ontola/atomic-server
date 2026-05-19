@@ -10,7 +10,12 @@ import {
   useStore,
   ai,
   core,
+  dataBrowser,
+  useArray,
+  useResource,
+  useResources,
   type Ai,
+  type Server,
   type Store,
 } from '@tomic/react';
 import { useSettings } from '../helpers/AppSettings';
@@ -261,12 +266,40 @@ const TagSelectRow = styled.div`
 
 // ─── Search Overlay ────────────────────────────────────────────────────────────
 
+const tagTokenRegex = /\btag:([\w-]+)/g;
+
+function parseSearchTags(
+  query: string,
+  tagResources: Map<string, { title: string }>,
+): { searchQuery: string; tagSubjects: string[] } {
+  const tagSubjects = new Set<string>();
+
+  for (const match of query.matchAll(tagTokenRegex)) {
+    const tagTitle = match[1].toLowerCase();
+
+    for (const [subject, tag] of tagResources) {
+      if (tag.title.toLowerCase() === tagTitle) {
+        tagSubjects.add(subject);
+        break;
+      }
+    }
+  }
+
+  return {
+    searchQuery: query.replace(tagTokenRegex, '').trim(),
+    tagSubjects: [...tagSubjects],
+  };
+}
+
 function SearchOverlay(): JSX.Element {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const { drive } = useSettings();
   const { scope } = useQueryScopeHandler();
   const navigate = useNavigateWithTransition();
   const store = useStore();
+  const driveResource = useResource<Server.Drive>(drive);
+  const [driveTags] = useArray(driveResource, dataBrowser.properties.tagList);
+  const tagResources = useResources(driveTags);
 
   const handleStartAIChat = async (
     q: string,
@@ -291,11 +324,18 @@ function SearchOverlay(): JSX.Element {
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelected] = useState(0);
 
-  const filters = {};
-  const filterIsEmpty = true;
-  const tags: string[] = [];
+  const { searchQuery, tagSubjects } = useMemo(
+    () => parseSearchTags(query, tagResources),
+    [query, tagResources],
+  );
+  const filters: Record<string, string[]> =
+    tagSubjects.length > 0
+      ? { [dataBrowser.properties.tags]: tagSubjects }
+      : {};
+  const filterIsEmpty = Object.keys(filters).length === 0;
+  const tags = tagSubjects;
 
-  const { results, loading, error } = useServerSearch(query, {
+  const { results, loading, error } = useServerSearch(searchQuery, {
     debounce: 0,
     parents: scope || drive,
     include: true,
