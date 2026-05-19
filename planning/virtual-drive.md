@@ -140,8 +140,12 @@ arrives; that's a v2 win, not a blocker.
 ### Auth
 
 Local user equals the agent whose private key the daemon holds. Bind the NFS
-listener to 127.0.0.1, refuse non-loopback. This matches the desktop pattern
-already in use.
+listener to 127.0.0.1 and refuse non-loopback, matching the desktop pattern
+already in use. **This is not isolation** — every local process gets full
+agent-level access through the mount. See the [Security model](#security-model)
+section for the full picture, including filename sanitization requirements
+and admission-control invariants. For multi-user Linux hosts, prefer a Unix
+domain socket with peer-credential verification over TCP loopback.
 
 ## Mapping Atomic resources to filesystem entries
 
@@ -156,6 +160,106 @@ already in use.
 - **Atomic properties beyond name / size / mtime** → xattrs where the FS
   supports them; otherwise drop from the FS view (still visible in the Atomic
   UI).
+
+## Security model
+
+The VFS does not add a new authorization layer; it projects the existing
+Atomic ACL model onto a filesystem surface. The invariants below must hold
+for any implementation, on any platform.
+
+### Trust boundary
+
+**Mounting equals delegating full agent capability to every local process.**
+The VFS daemon holds the agent's private key and signs commits on behalf of
+any process that writes through the mount. NFS v3 over loopback uses
+`AUTH_UNIX`, in which the client asserts its own UID — a malicious local
+process can claim any UID. This is the same model as Google Drive Desktop
+and Dropbox: accepted, but not a security control. Loopback binding only
+prevents off-host connections; it does not provide intra-host isolation.
+
+State this clearly in user-visible documentation. Do not let the loopback
+bind imply that there is per-app or per-user enforcement.
+
+Stronger isolation, not v1:
+
+- Unix domain socket with `SO_PEERCRED` (Linux) / `LOCAL_PEERCRED` (macOS)
+  for per-user enforcement on multi-user hosts.
+- Per-app entitlements require OS sandboxing (macOS App Sandbox, iOS,
+  Windows AppContainer) and are out of scope for desktop v1.
+
+### Filename sanitization
+
+Atomic resource names are free-form Unicode strings. The VFS surface
+demands FS-safe basenames. The mapping is **load-bearing** — every
+cloud-sync product has had a path-traversal or filename-injection CVE
+here. Apply at the materialization boundary, in one direction only (the
+canonical name in Atomic remains the original string).
+
+| Input | Action |
+| --- | --- |
+| `/`, `\`, NUL | Replace with U+FF0F (fullwidth solidus) or `_` |
+| `..` or `.` as the entire name | Suffix with U+2024 (one-dot leader) |
+| Control characters (U+0000–U+001F, U+007F) | Replace with U+FFFD |
+| Windows reserved names (`CON`, `PRN`, `AUX`, `NUL`, `COM1–9`, `LPT1–9`) | Suffix with `_` |
+| Trailing dot or space on Windows | Strip |
+| > 255 bytes UTF-8 | Truncate at codepoint boundary, append short hash |
+| Surrogate halves, non-characters | Replace with U+FFFD |
+| RTL / bidi override (U+202A–U+202E, U+2066–U+2069) | Strip |
+
+Two resources whose sanitized names collide get the `(2)` / `(3)` suffix
+already described in [Mapping](#mapping-atomic-resources-to-filesystem-entries).
+
+### ACL revocation latency
+
+Commit-driven cache invalidation evicts VFS-layer entries immediately, but
+the kernel page cache and the NFS attribute cache hold bytes and attrs for
+seconds to minutes. A process that already held an open file descriptor
+keeps reading until close. **ACL revocation is not real-time through the
+VFS.** Document the limitation. Sub-second revocation requires unmount-
+remount, or the explicit invalidation hooks that FUSE and the native
+cloud-sync APIs provide.
+
+### Stub file safety
+
+`.atomic` JSON-AD stubs are pointers, not capabilities. The desktop app
+**must not** auto-execute, auto-navigate, or perform agent-side actions
+based on stub contents. A stub is untrusted input from whoever wrote it
+(sync peer, local process, anyone with mount write access) and must be
+treated like a `.url` file or `.desktop` file — display and require
+explicit user action.
+
+### Credential storage threat model
+
+The "encrypted Secret with server-held DEK" design in
+[s3-blob-storage.md](./s3-blob-storage.md) protects S3 credentials against
+a leaked `/query` response or a backup of the redb file *without* its
+sibling keystore. It does **not** protect against an attacker with local
+disk read — DEK and Secret live on the same filesystem in the daemon's
+state directory. State this explicitly so operators do not over-trust the
+encryption.
+
+### Admission control against hostile peers
+
+A paired peer can push arbitrary numbers of resources into a synced drive.
+The VFS surfaces every committed resource, so a malicious peer can DoS the
+local mount by pushing pathological data: million-child folders, names
+crafted to thrash caches, deep folder nesting. Hard caps must be applied
+at commit-accept time, **not** at the VFS layer, so they also protect
+non-VFS workloads (search, sync engine, browser pagination).
+
+- Max children per parent (configurable; default ~100k).
+- Max name length after sanitization (255 bytes).
+- Max folder depth (default ~64).
+- Max File resource size for in-RAM staging (default 100 MB; above this,
+  spill to disk staging).
+
+### iOS provider exposure
+
+iOS File Provider extensions are accessible to **any iOS app** the user
+opens a file in. Bytes flow through the standard share/picker UI to
+whichever app receives them; there is no per-app allowlist. Same model as
+iCloud Drive. Document this; there is no remediation other than choosing
+not to expose sensitive drives through the provider.
 
 ## Mobile platforms (iOS and Android)
 
@@ -308,11 +412,17 @@ designed together rather than independently:
   downloads. This is one of the strongest arguments for prioritizing the
   Option C frontends, especially on mobile where the user is also paying
   for the bytes on a metered connection.
-- **Presigned redirect downloads are a big win for the VFS.** Phase 3 of
-  s3-blob-storage.md (presigned-URL `302` redirects) means large media
-  files stream directly from S3 to the OS without touching the desktop
-  server's RAM or upstream bandwidth. For a virtual-drive workload that's
-  the difference between "watchable 4K video" and "noticeable buffering."
+- **Presigned redirects don't directly help the NFS / FUSE read path.**
+  Phase 3 of s3-blob-storage.md returns `302 Found` to HTTP clients. NFS
+  and FUSE call `BlobBackend::get_stream` directly and pay full S3 egress
+  through the desktop server. Where presigned URLs *do* land is the native
+  cloud-sync APIs (iOS File Provider's `fetchContents`, Windows Cloud
+  Files placeholder fetch, macOS File Provider's
+  `fileProvider(_:fetchContentsFor:)`) — those can hand a presigned URL
+  to the OS for direct download, bypassing the server. NFS/FUSE workloads
+  need either generous local blob caching (the LRU at minimum, ideally a
+  pin-on-disk policy for frequently-read blobs) or acceptance that bytes
+  always proxy through the server.
 - **GC matters more with the VFS in play.** Every file edit produces a new
   blob; binary editing churn (e.g. opening a docx, saving, opening, saving)
   generates orphan blobs fast. The mark-and-sweep design in
@@ -389,6 +499,121 @@ replicate:
   operator visibility — caching mistakes in a VFS are very expensive and
   silent, and the easiest way to find them is a hit-rate chart.
 
+## Performance considerations
+
+The VFS turns Atomic commits from a human-paced event stream into a
+machine-paced one. Several existing assumptions break at the new rate;
+each needs an explicit countermeasure before the write path goes live.
+
+### Write amplification on large files
+
+Content-addressed storage means any byte change produces an entirely new
+blob. A 1 KB write to a 1 GB file = 1 GB blob write + 1 GB BLAKE3 + 1 GB
+S3 transfer + commit + index update. SQLite databases, log files,
+mailboxes, and Electron app state all mutate large files in small
+increments continuously. Without mitigation, a user dragging
+`~/Library/Application Support` into the mount produces multi-GB-per-minute
+churn.
+
+Two viable paths:
+
+- **Content-defined chunking (preferred long-term).** Store File resources
+  as ordered concatenations of chunk-blobs (FastCDC or Rabin). Restic,
+  borg, IPFS, and Tahoe all do this. A 1 KB edit in the middle of a 1 GB
+  file re-uploads one ~1 MB chunk, not the whole file. Major design
+  change: affects the `File` schema (`blob` becomes `chunks`, an ordered
+  list), the HTTP download path (concatenate-on-stream), and the sync
+  protocol (per-chunk `BLOB_REQUEST`).
+- **Path-based exclusion (interim).** Ship a `.atomic.ignore` mechanism
+  like `.dropbox.ignore` and document common patterns to exclude. Cheap,
+  punts the problem to the user. Acceptable for an alpha but not for a
+  general-purpose virtual drive.
+
+**Decide this before writing the write path.** Refactoring chunking in
+later requires migrating every existing File resource.
+
+### Commit coalescing
+
+VFS writes are machine-paced: editors invoke `write` dozens of times per
+save; build systems and indexers produce thousands of writes per second.
+The per-handle staging buffer already batches within an open file. Add a
+write-quiet-period debounce (~500 ms) before committing, so an editor's
+rapid open / write / write / close loop produces one commit, not one per
+save. `fsync` semantics should flush immediately so applications that
+demand durability still get it.
+
+Without coalescing, the WS broadcast cost and Tantivy index churn alone
+make the VFS unusable on a build server.
+
+### Hash-then-write streaming
+
+The naive write path: stage bytes to disk, re-read to compute BLAKE3,
+write to the blob backend. Triple I/O on large files. Use BLAKE3's
+incremental hashing during write for append-only patterns (the common
+case for new files). Fall back to re-read only when the writer seeks
+backwards.
+
+### fileid ↔ DID storage
+
+NFS and FUSE require stable `u64` fileids. DIDs are ~80-byte strings. A
+1 M-resource drive needs a 1 M-entry bidirectional map. In RAM that is
+~250 MB; on an iOS extension (24 MB cap) it is impossible. Use a
+disk-backed map (a dedicated redb tree is fine) with an LRU front; accept
+that cold lookups cost a redb read. Plan for this from the start — fileid
+stability is part of the public protocol and cannot be patched in later.
+
+### Readdir pagination and hard caps
+
+Atomic does not bound children per parent. Without an indexed cursor, NFS
+readdir cookies cause O(N²/page) enumeration on large folders. Two fixes,
+both required:
+
+- The TPF query for children must accept a cursor (`after = <last_did>`)
+  resuming pagination in O(log N). This is likely needed for browser
+  pagination too.
+- The admission-control cap from the [Security model](#admission-control-against-hostile-peers)
+  (e.g. 100k children) returns `EFBIG`-equivalent above the limit.
+
+### Sync update fanout
+
+Every commit broadcasts `UPDATE` to every subscriber of the touched
+resource. With multiple paired devices and machine-paced VFS writes, a
+single drive can produce thousands of outbound WS frames per second. Add
+a per-subscriber debounce (~100 ms) at the broadcast layer. Mobile clients
+on metered connections will otherwise see severe data and battery cost.
+This change benefits sync.md's broader load profile too.
+
+### iOS extension cold-start budget
+
+Files.app expects sub-100 ms responses. Loading the full sync engine on
+the extension cold path does not fit. The extension's read-only fallback
+must:
+
+- Open redb with no migrations or warmup.
+- Skip rebuilding the watched-queries cache (only needed for live push).
+- Defer Tantivy index opening until first search query.
+- Respond to `readdir` and `getattr` from a minimal handler that does
+  only the necessary store lookups.
+
+Target: < 100 ms to first response on a typical phone, measured under
+throttled-disk conditions. Numbers, not adjectives.
+
+### NFS attribute cache (`actimeo`)
+
+Consumer macOS NFS clients default to `actimeo=60` — remote edits remain
+invisible for up to a minute. Overriding via mount-time flags is not
+universally honored, and Finder-initiated mounts inherit the OS default.
+**Validate empirically per OS** before promising bounded staleness in
+seconds.
+
+### Per-commit signature verification cost
+
+Commits flow over WS as JSON-AD. Every VFS write triggers full Ed25519
+verification plus JSON parsing on the server. At human rates this is
+invisible; at VFS rates it is measurable. The v2 binary commit format
+deferred in [sync.md](./sync.md) becomes more pressing once the VFS is
+the dominant commit source.
+
 ## Hard problems the docs don't yet resolve
 
 - **Non-file resources on disk.** `.atomic` stubs leak the abstraction (users
@@ -405,6 +630,20 @@ replicate:
   not describe GC. A virtual drive that rewrites files constantly will
   accumulate orphan blobs fast. Refcounting or a sweep pass is required —
   not VFS-specific but the VFS will surface the need immediately.
+- **Rendition cache vs. blob GC.** Processed image renditions
+  (`server/src/handlers/download.rs:133–170`) are stored in `Tree::Blobs`
+  under content-derived keys, but **no `File` resource references them.**
+  The mark-and-sweep GC in [s3-blob-storage.md](./s3-blob-storage.md)
+  Phase 1d walks File resources and deletes anything not in the
+  referenced-hash set — it will eat the entire rendition cache on its
+  first run. Fix before either ships: move renditions to a separate redb
+  tree, or add an allow-list in GC for the content-derived cache-key
+  namespace. Cheap fix; needs to be made deliberately, not discovered in
+  production.
+- **Write-amplification mitigation strategy.** See
+  [Performance considerations](#write-amplification-on-large-files). The
+  choice between content-defined chunking and a `.atomic.ignore` mechanism
+  has to be made before the write path lands; chunking is hard to retrofit.
 
 ## v1 slice
 
@@ -420,6 +659,32 @@ Two tracks, sharing the `VfsBackend` trait.
    the local version back as `filename (conflicted copy from <device>).ext`
    and re-fetch the remote.
 4. **Blob GC sweep.** Separate task; not VFS-specific but newly urgent.
+
+**Gating items before step 2 (the write path) goes live:**
+
+These are not optional and should not be discovered in production. Several
+also benefit the rest of the system independently.
+
+- **Filename sanitization** per the
+  [Security model](#filename-sanitization) table. Without this the write
+  path is a path-traversal vulnerability.
+- **Write-amplification decision.** Content-defined chunking vs.
+  `.atomic.ignore` — pick one before writing the write path. See
+  [Performance considerations](#write-amplification-on-large-files).
+- **Commit coalescing.** Per-handle write-quiet-period debounce. Without
+  this the WS broadcast cost alone makes machine-paced workloads
+  unusable.
+- **Admission-control caps** on the commit path (children-per-parent,
+  name length, folder depth, max in-RAM file size). Protects all
+  workloads against pathological data from hostile peers.
+- **Rendition cache namespace fix** in
+  [s3-blob-storage.md](./s3-blob-storage.md). Otherwise the first GC run
+  destroys every cached thumbnail.
+- **Readdir cursor support** in the TPF child query, so large folders
+  don't quadratic-scan during NFS pagination.
+- **fileid ↔ DID storage decision.** Disk-backed redb tree with LRU
+  front, not a pure in-memory map. Cannot be retrofitted later (fileid
+  stability is on the wire).
 
 **Mobile (after desktop step 2 stabilizes the `VfsBackend` trait):**
 
@@ -451,3 +716,11 @@ platform-specific cloud-sync code lands.
 - What does the placeholder story look like before we have native cloud-sync
   APIs? NFS can lazy-fetch blobs on `read`, but the user has no way to see
   "this file is not yet local."
+- How is the agent's signing key surfaced to the VFS daemon, and what
+  process boundary protects it? On a single-user desktop this is moot
+  (daemon process == user process), but the question becomes real for
+  multi-user Linux and for any future per-app entitlement model.
+- Should the v1 mount be read-only by default, opt-in to read-write? The
+  gating items above are substantial; shipping read-only first lets the
+  data-model integration prove out without exposing the write surface
+  while the chunking and coalescing decisions are still being made.
