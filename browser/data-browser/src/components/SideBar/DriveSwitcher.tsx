@@ -14,10 +14,11 @@ import { useSavedDrives } from '../../hooks/useSavedDrives';
 import { paths } from '../../routes/paths';
 import { type DropdownItem, DIVIDER, DropdownMenu } from '../Dropdown';
 import { buildDefaultTrigger } from '../Dropdown/DefaultTrigger';
+import type { DropdownTriggerComponent } from '../Dropdown/DropdownTrigger';
 import { useNewResourceUI } from '../forms/NewForm/useNewResourceUI';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 
-const Trigger = buildDefaultTrigger(<FaHardDrive />, 'Open Drive Settings');
+const DefaultTrigger = buildDefaultTrigger(<FaHardDrive />, 'Open Drive Settings');
 
 function getTitle(resource: Resource): string {
   return (resource.get(core.properties.name) as string) ?? resource.subject;
@@ -27,7 +28,11 @@ function dedupeAFromB<K, V>(a: Map<K, V>, b: Map<K, V>): Map<K, V> {
   return new Map([...a].filter(([key]) => !b.has(key)));
 }
 
-export function DriveSwitcher() {
+export function DriveSwitcher({
+  Trigger = DefaultTrigger,
+}: {
+  Trigger?: DropdownTriggerComponent;
+}) {
   const navigate = useNavigateWithTransition();
   const { drive, setDrive, agent } = useSettings();
   const [savedDrives] = useSavedDrives();

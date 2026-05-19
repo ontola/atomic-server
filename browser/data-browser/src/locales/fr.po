@@ -880,6 +880,7 @@ msgid "Provider not enabled"
 msgstr "Fournisseur non activé"
 
 #: src/components/SideBar/SideBarDrive.tsx
+#: src/routes/SyncRoute.tsx
 #: src/views/ErrorPage.tsx
 msgid "Unauthorized"
 msgstr "Non autorisé"
@@ -5202,4 +5203,12 @@ msgstr ""
 
 #: src/routes/SettingsServer/index.tsx
 msgid "Server settings have moved to the <0>Sync page</0>."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Open Drive Settings"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "DriveDetailTrigger"
 msgstr ""
