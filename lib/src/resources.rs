@@ -753,59 +753,44 @@ impl Resource {
         self.commit = CommitBuilder::new(self.subject.clone());
     }
 
-    /// Saves the resource (with all the changes) to the store by creating a Commit.
-    /// Uses default Agent to sign the Commit.
-    /// Stores changes on the Subject's Server by sending a Commit.
-    /// Returns the generated Commit, the new Resource and the old Resource.
-    pub async fn save(
+    /// When only the in-memory Loro doc changed (`push_list_item`, undo/redo), copy
+    /// an incremental update onto the commit builder so sign/apply can run.
+    fn sync_loro_changes_to_commit_builder(&mut self) -> AtomicResult<()> {
+        if self.commit.has_changes() {
+            return Ok(());
+        }
+        let Some(doc) = self.loro.as_ref() else {
+            return Ok(());
+        };
+        let base = match self.get(urls::LORO_UPDATE) {
+            Ok(Value::LoroDoc(snapshot)) => Some(snapshot.clone()),
+            _ => None,
+        };
+        let update = if let Some(ref snapshot) = base {
+            let base_doc = crate::loro::AtomicLoroDoc::from_snapshot(snapshot)?;
+            doc.export_updates_since(&base_doc.oplog_vv())
+        } else {
+            doc.export_snapshot()
+        };
+        if !update.is_empty() {
+            self.commit.set_loro_update(update);
+        }
+        Ok(())
+    }
+
+    /// Sign, apply to the store, and adopt the resulting resource state.
+    async fn apply_signed_commit(
         &mut self,
         store: &impl Storelike,
-    ) -> AtomicResult<crate::commit::CommitResponse> {
+        commit: crate::Commit,
+    ) -> AtomicResult<CommitResponse> {
         let agent = store.get_default_agent()?;
-        let commit_builder = self.get_commit_builder().clone();
-        // No-op save: same rationale as `save_locally`. Avoids tripping
-        // `apply_commit`'s "no loroUpdate" rejection for callers that
-        // call save defensively without checking dirtiness first.
-        if !commit_builder.has_changes() {
-            self.reset_commit_builder();
-            return Ok(crate::commit::CommitResponse {
-                commit: crate::Commit {
-                    subject: self.get_subject().clone(),
-                    signer: agent.subject.clone(),
-                    loro_update: None,
-                    destroy: Some(false),
-                    created_at: crate::utils::now(),
-                    previous_commit: None,
-                    is_genesis: None,
-                    signature: None,
-                    url: None,
-                },
-                commit_resource: Resource::new(self.get_subject().to_string()),
-                resource_new: Some(self.clone()),
-                resource_old: None,
-                add_atoms: Vec::new(),
-                remove_atoms: Vec::new(),
-                changed_props: std::collections::HashSet::new(),
-                source_id: None,
-            });
-        }
-        let commit = commit_builder.sign(&agent, store, self).await?;
-        // If the current client is a server, and the subject is hosted here, don't post
-        let should_post = match self.subject.clone() {
-            crate::Subject::Internal { .. } => false,
-            crate::Subject::External(_) => true,
-            crate::Subject::Did { .. } => false,
-        };
-        if should_post {
-            crate::client::post_commit(&commit, store).await?;
-        }
         let opts = CommitOpts {
             validate_schema: true,
             validate_signature: false,
             validate_timestamp: false,
             validate_rights: false,
             validate_for_agent: Some(agent.subject.to_string()),
-            // TODO: auto-merge should work before we enable this https://github.com/atomicdata-dev/atomic-server/issues/412
             validate_previous_commit: false,
             validate_loro_causality: false,
             update_index: true,
@@ -819,6 +804,56 @@ impl Resource {
         Ok(commit_response)
     }
 
+    /// No-op save response when there is nothing to commit.
+    fn empty_commit_response(&self, signer: Subject) -> CommitResponse {
+        CommitResponse {
+            commit: crate::Commit {
+                subject: self.get_subject().clone(),
+                signer,
+                loro_update: None,
+                destroy: Some(false),
+                created_at: crate::utils::now(),
+                previous_commit: None,
+                is_genesis: None,
+                signature: None,
+                url: None,
+            },
+            commit_resource: Resource::new(self.get_subject().to_string()),
+            resource_new: Some(self.clone()),
+            resource_old: None,
+            add_atoms: Vec::new(),
+            remove_atoms: Vec::new(),
+            changed_props: std::collections::HashSet::new(),
+            source_id: None,
+        }
+    }
+
+    /// Saves the resource (with all the changes) to the store by creating a Commit.
+    /// Uses default Agent to sign the Commit.
+    /// Stores changes on the Subject's Server by sending a Commit.
+    /// Returns the generated Commit, the new Resource and the old Resource.
+    pub async fn save(
+        &mut self,
+        store: &impl Storelike,
+    ) -> AtomicResult<crate::commit::CommitResponse> {
+        let agent = store.get_default_agent()?;
+        self.sync_loro_changes_to_commit_builder()?;
+        if !self.get_commit_builder().has_changes() {
+            self.reset_commit_builder();
+            return Ok(self.empty_commit_response(agent.subject.clone()));
+        }
+        let commit = self.get_commit_builder().clone().sign(&agent, store, self).await?;
+        let should_post = match self.subject.clone() {
+            crate::Subject::Internal { .. } => false,
+            crate::Subject::External(_) => true,
+            crate::Subject::Did { .. } => false,
+        };
+        if should_post {
+            crate::client::post_commit(&commit, store).await?;
+        }
+        self.apply_signed_commit(store, commit).await
+    }
+
     /// Saves the resource (with all the changes) to the store by creating a Commit.
     /// Uses default Agent to sign the Commit.
     /// Returns the generated Commit and the new Resource.
@@ -826,54 +861,13 @@ impl Resource {
     /// Does not store these changes on the server of the Subject - the Commit will be lost, unless you handle it manually.
     pub async fn save_locally(&mut self, store: &impl Storelike) -> AtomicResult<CommitResponse> {
         let agent = store.get_default_agent()?;
-        let commitbuilder = self.get_commit_builder().clone();
-        // Saving a resource that hasn't been touched is a no-op. Without
-        // this short-circuit, `apply_commit` would reject the empty
-        // commit ("no `loroUpdate` and is not a destroy"), which surfaces
-        // as a hard error in idiomatic init code like
-        // `Resource::new_generate_subject(&store).save_locally(&store)`.
-        if !commitbuilder.has_changes() {
+        self.sync_loro_changes_to_commit_builder()?;
+        if !self.get_commit_builder().has_changes() {
             self.reset_commit_builder();
-            return Ok(CommitResponse {
-                commit: crate::Commit {
-                    subject: self.get_subject().clone(),
-                    signer: agent.subject.clone(),
-                    loro_update: None,
-                    destroy: Some(false),
-                    created_at: crate::utils::now(),
-                    previous_commit: None,
-                    is_genesis: None,
-                    signature: None,
-                    url: None,
-                },
-                commit_resource: Resource::new(self.get_subject().to_string()),
-                resource_new: Some(self.clone()),
-                resource_old: None,
-                add_atoms: Vec::new(),
-                remove_atoms: Vec::new(),
-                changed_props: std::collections::HashSet::new(),
-                source_id: None,
-            });
+            return Ok(self.empty_commit_response(agent.subject.clone()));
         }
-        let commit = commitbuilder.sign(&agent, store, self).await?;
-        let opts = CommitOpts {
-            validate_schema: true,
-            validate_signature: false,
-            validate_timestamp: false,
-            validate_rights: false,
-            validate_for_agent: Some(agent.subject.to_string()),
-            // https://github.com/atomicdata-dev/atomic-server/issues/412
-            validate_previous_commit: false,
-            validate_loro_causality: false,
-            update_index: true,
-            source_id: None,
-        };
-        let commit_response = store.apply_commit(commit, &opts).await?;
-        if let Some(new) = &commit_response.resource_new {
-            self.adopt_resource_state(new);
-        }
-        self.reset_commit_builder();
-        Ok(commit_response)
+        let commit = self.get_commit_builder().clone().sign(&agent, store, self).await?;
+        self.apply_signed_commit(store, commit).await
     }
 
     /// Saves the resource as a new DID-native resource.
@@ -1579,6 +1573,50 @@ mod test {
             resource.get(urls::NAME).unwrap().to_string(),
             "Fresh propvals"
         );
+    }
+
+    #[tokio::test]
+    async fn push_list_item_save_locally_persists_strokes() {
+        let store: crate::Db = init_store().await;
+        let (_agent, drive) = store.setup("test").await.unwrap();
+        let stroke_data = "https://atomicdata.dev/ontology/canvas/strokeData";
+        let canvas = store
+            .create_resource(
+                "https://atomicdata.dev/ontology/canvas/Canvas",
+                &drive,
+                "Stroke test",
+                Some(vec![(stroke_data, Value::JsonArray(vec![]))]),
+            )
+            .await
+            .unwrap();
+
+        let mut resource = store.get_resource(&canvas.as_str().into()).await.unwrap();
+        resource.init_loro().unwrap();
+        resource
+            .push_list_item(
+                stroke_data,
+                serde_json::json!({"color": 255, "width": 2.0, "path": [[1.0, 2.0]]}),
+            )
+            .unwrap();
+        // Loro-only edits (Flutter `push_stroke`) do not touch CommitBuilder::set/remove.
+        assert!(
+            !resource.get_commit_builder().has_changes(),
+            "test setup: push_list_item alone must not mark the commit builder dirty"
+        );
+        let resp = resource.save_locally(&store).await.unwrap();
+        assert!(
+            resp.commit
+                .loro_update
+                .as_ref()
+                .is_some_and(|u| !u.is_empty()),
+            "stroke append should produce a loro update commit"
+        );
+
+        let reloaded = store.get_resource(&canvas.as_str().into()).await.unwrap();
+        match reloaded.get(stroke_data) {
+            Ok(Value::JsonArray(arr)) => assert_eq!(arr.len(), 1),
+            other => panic!("expected 1 stroke after save_locally, got {other:?}"),
+        }
     }
 
     #[tokio::test]

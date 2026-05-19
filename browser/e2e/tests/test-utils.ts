@@ -999,6 +999,30 @@ export async function waitForCurrentDialog(page: Page) {
 
 export const DIALOG_CLOSE_BUTTON = 'dialog-close-button';
 
+/** Click history version buttons until the preview panel shows `text`. */
+export async function selectHistoryVersionShowing(
+  page: Page,
+  text: string,
+): Promise<void> {
+  const buttons = page.getByTestId('version-button');
+  const count = await buttons.count();
+
+  for (let i = 0; i < count; i++) {
+    await buttons.nth(i).click();
+    const visible = await page
+      .getByText(text, { exact: true })
+      .first()
+      .isVisible()
+      .catch(() => false);
+
+    if (visible) {
+      return;
+    }
+  }
+
+  throw new Error(`No history version preview shows "${text}"`);
+}
+
 export async function inDialog(
   page: Page,
   fn: (
@@ -1009,13 +1033,15 @@ export async function inDialog(
   await waitForCurrentDialog(page);
 
   const closeDialogWith = async (buttonText: string) => {
+    const dialog = currentDialog(page);
+
     if (buttonText === DIALOG_CLOSE_BUTTON) {
-      await currentDialog(page).getByRole('button', { name: 'Close' }).click();
+      await dialog.getByRole('button', { name: 'Close' }).click();
 
       return;
     }
 
-    const button = page.locator('footer button', { hasText: buttonText });
+    const button = dialog.locator('footer button', { hasText: buttonText });
     await expect(button).toBeEnabled();
     await button.click();
   };
