@@ -645,12 +645,12 @@ pub async fn handle_sync_deltas(
     deltas: &std::collections::HashMap<String, String>,
     store: &Db,
 ) {
-    use base64::Engine as _;
-
     let mut count = 0;
 
     for (subject_str, delta_b64) in deltas {
-        let Ok(delta_bytes) = base64::engine::general_purpose::STANDARD.decode(delta_b64) else {
+        // Decode via the shared helper so it accepts the URL-safe encoding
+        // (`crate::agents::encode_base64`) as well as the legacy standard one.
+        let Ok(delta_bytes) = crate::agents::decode_base64(delta_b64) else {
             tracing::warn!("SYNC_DELTAS: bad base64 for {}", subject_str);
             continue;
         };
