@@ -850,6 +850,7 @@ impl bindings::atomic::class_extender::host::Host for PluginHostState {
             validate_loro_causality: false,
             update_index: true,
             validate_for_agent: None,
+            source_id: None,
         };
 
         self.db

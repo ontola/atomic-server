@@ -11,6 +11,11 @@ pub struct Subscribe {
     pub addr: Addr<crate::handlers::web_sockets::WebSocketConnection>,
     pub subject: atomic_lib::Subject,
     pub agent: String,
+    /// Identifier of the originating WS connection. The commit monitor
+    /// stores this alongside the subscriber address and skips broadcasts
+    /// to subscribers whose `source_id` matches an event's `source_id`,
+    /// so a client never receives its own commit back.
+    pub source_id: String,
 }
 
 /// A message containing a Resource, which should be sent to subscribers
@@ -86,6 +91,8 @@ pub struct SubscribeQuery {
     pub addr: Addr<crate::handlers::web_sockets::WebSocketConnection>,
     pub query: QuerySubscriptionJSON,
     pub agent: String,
+    /// Same role as [`Subscribe::source_id`].
+    pub source_id: String,
 }
 
 /// Unsubscribe from a query.
@@ -106,6 +113,8 @@ pub struct QueryUpdate {
     pub added: Vec<String>,
     /// Subjects removed from the query results
     pub removed: Vec<String>,
+    /// Optional transport/source identity for echo suppression.
+    pub source_id: Option<String>,
 }
 
 /// Forwarded into `CommitMonitor` by the `DbEvent::QueryMembershipChanged`
@@ -117,6 +126,7 @@ pub struct MembershipNotification {
     pub filter_bytes: Vec<u8>,
     pub subject: String,
     pub added: bool,
+    pub source_id: Option<String>,
 }
 
 /// Forwarded into `CommitMonitor` by the listener task on every
@@ -129,4 +139,5 @@ pub struct MembershipNotification {
 pub struct DriveNotification {
     pub subject: String,
     pub removed: bool,
+    pub source_id: Option<String>,
 }

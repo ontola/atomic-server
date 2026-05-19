@@ -13,6 +13,7 @@ superseded at the top.
 | Document | Scope |
 | --- | --- |
 | [`atomic-lib-runtime.md`](./atomic-lib-runtime.md) | Target architecture: `atomic_lib` as the complete HTTP-optional local node runtime. |
+| [`sync.md`](./sync.md) | WebSocket sync direction, including source-aware persisted commits over WS. |
 | [`unified-data-layer.md`](./unified-data-layer.md) | Browser/JS data-layer simplification: one ingress, one outbox, one subscription model. |
 | [`s3-blob-storage.md`](./s3-blob-storage.md) | Pluggable blob backend design for redb/S3/hybrid storage. |
 

@@ -1191,6 +1191,7 @@ async fn did_loro_only_commit_sled() {
         validate_schema: true,
         update_index: true,
         validate_for_agent: Some(agent.subject.to_string()),
+        source_id: None,
     };
 
     let result = store.apply_commit(commit, &opts).await.unwrap();

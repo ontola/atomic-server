@@ -126,6 +126,7 @@ impl ClientDb {
             validate_loro_causality: false,
             validate_for_agent: None,
             update_index: true,
+            source_id: None,
         };
         self.db
             .apply_commit(commit, &opts)
