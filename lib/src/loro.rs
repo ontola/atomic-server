@@ -40,7 +40,7 @@ impl VersionID {
 pub struct VersionMetadata {
     /// Opaque version identifier (encoded Loro Frontiers).
     pub id: VersionID,
-    /// Unix timestamp in milliseconds (0 if not recorded).
+    /// Unix timestamp in seconds (0 if not recorded). Same unit as Loro `ChangeMeta::timestamp`.
     pub timestamp: i64,
     /// The peer that authored this change (Loro PeerID as string).
     pub peer_id: String,
@@ -396,6 +396,11 @@ impl AtomicLoroDoc {
             um.set_merge_interval(0);
             *guard = Some(um);
         }
+    }
+
+    /// Finalize pending Loro edits so they enter the oplog (required for undo + sync export).
+    pub fn commit(&self) {
+        self.doc.commit();
     }
 
     /// Record a checkpoint so that subsequent operations form a new undo group.
@@ -1913,6 +1918,34 @@ mod test {
 
         // Out of bounds should error
         assert!(doc.delete_from_json_array(prop, 10).is_err());
+    }
+
+    #[test]
+    fn undo_exports_updates_for_sync() {
+        let prop = "https://atomicdata.dev/ontology/canvas/strokeData";
+        let doc = AtomicLoroDoc::new();
+        doc.set_property(prop, &Value::JsonArray(vec![])).unwrap();
+        doc.doc().commit();
+        doc.ensure_undo_manager();
+
+        let base_snapshot = doc.export_snapshot();
+        let base = AtomicLoroDoc::from_snapshot(&base_snapshot).unwrap();
+
+        doc.push_to_json_array(prop, &serde_json::json!({"color": 1}))
+            .unwrap();
+        doc.doc().commit();
+        doc.checkpoint().unwrap();
+        doc.push_to_json_array(prop, &serde_json::json!({"color": 2}))
+            .unwrap();
+        doc.doc().commit();
+        doc.checkpoint().unwrap();
+
+        assert!(doc.undo().unwrap());
+        let update = doc.export_updates_since(&base.oplog_vv());
+        assert!(
+            !update.is_empty(),
+            "undo must produce oplog updates that can be exported for peer sync"
+        );
     }
 
     #[test]

@@ -132,6 +132,98 @@ mod peer_sync_tests {
         println!("SUCCESS: Device B has '{}' with strokes!", name);
     }
 
+    /// Device A appends strokes, syncs to B, then undoes on A — B must see fewer strokes
+    /// after another sync (same engine path as Iroh/WS).
+    #[tokio::test]
+    async fn undo_syncs_to_peer_via_engine() {
+        const STROKE_DATA: &str = "https://atomicdata.dev/ontology/canvas/strokeData";
+
+        let db_a = Db::init_temp("undo_sync_a").await.unwrap();
+        let (agent_a, drive_a) = db_a.setup("Alice").await.unwrap();
+        let secret = agent_a.build_secret().unwrap();
+
+        let canvas = db_a
+            .create_resource(
+                "https://atomicdata.dev/ontology/canvas/Canvas",
+                &drive_a,
+                "Undo sync canvas",
+                Some(vec![(STROKE_DATA, crate::Value::JsonArray(vec![]))]),
+            )
+            .await
+            .unwrap();
+
+        let db_b = Db::init_temp("undo_sync_b").await.unwrap();
+        db_b.load_agent_from_secret(&secret).await.unwrap();
+
+        async fn pull_from_a(db_a: &Db, db_b: &Db, drive_a: &str) -> usize {
+            let drive_subject =
+                crate::Subject::from_raw(drive_a, db_b.get_base_domain().as_deref());
+            let subjects =
+                crate::sync::engine::collect_drive_subjects(db_b, &drive_subject).await;
+            let vvs = crate::sync::engine::build_drive_vvs(db_b, &subjects);
+            let hash = crate::sync::engine::compute_drive_hash(&vvs);
+            let frames = crate::sync::engine::handle_sync_vv(
+                drive_a,
+                &hash,
+                &[],
+                &std::collections::HashMap::new(),
+                db_a,
+                &ForAgent::Public,
+            )
+            .await;
+            let mut imported = 0;
+            for frame in frames {
+                if frame.first() == Some(&crate::sync::protocol::tag::SYNC_PUSH) {
+                    if let Some(push) = crate::sync::protocol::decode_sync_push(&frame[1..]) {
+                        let (count, _) =
+                            crate::sync::engine::import_sync_push(&push, db_b, &ForAgent::Sudo)
+                                .await;
+                        imported += count;
+                    }
+                }
+            }
+            imported
+        }
+
+        async fn stroke_count_on(db: &Db, canvas: &str) -> usize {
+            let r = db.get_resource(&canvas.into()).await.unwrap();
+            match r.get(STROKE_DATA) {
+                Ok(crate::Value::JsonArray(arr)) => arr.len(),
+                _ => 0,
+            }
+        }
+
+        // A: two strokes, persist, replicate to B
+        let mut resource_a = db_a.get_resource(&canvas.as_str().into()).await.unwrap();
+        resource_a.init_loro().unwrap();
+        resource_a.init_undo();
+        resource_a
+            .push_list_item(
+                STROKE_DATA,
+                serde_json::json!({"color": 1, "width": 2.0, "path": [[0.0, 0.0]]}),
+            )
+            .unwrap();
+        resource_a
+            .push_list_item(
+                STROKE_DATA,
+                serde_json::json!({"color": 2, "width": 2.0, "path": [[1.0, 1.0]]}),
+            )
+            .unwrap();
+        resource_a.save_locally(&db_a).await.unwrap();
+        assert!(pull_from_a(&db_a, &db_b, &drive_a).await > 0);
+        assert_eq!(stroke_count_on(&db_b, &canvas).await, 2);
+
+        // A: undo last stroke, persist, replicate to B again
+        assert!(resource_a.undo().unwrap());
+        resource_a.save_locally(&db_a).await.unwrap();
+        pull_from_a(&db_a, &db_b, &drive_a).await;
+        assert_eq!(
+            stroke_count_on(&db_b, &canvas).await,
+            1,
+            "peer should see undo after sync engine import"
+        );
+    }
+
     #[tokio::test]
     async fn sync_blobs_via_engine() {
         // === Device A: create agent, drive, resource with blob ===

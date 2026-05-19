@@ -1,4 +1,12 @@
-.PHONY: web tablet phone emu reload-web restart-web reload-tablet restart-tablet reload-phone restart-phone reload-emu restart-emu reload-all restart-all analyze
+.PHONY: web tablet phone emu connect-tablet reload-web restart-web reload-tablet restart-tablet reload-phone restart-phone reload-emu restart-emu reload-all restart-all analyze
+
+# Wireless tablet (SM X810). On tablet: Developer options → Wireless debugging → ON.
+# Pair: make connect-tablet PAIR_HOST=192.168.0.169:PORT CODE=123456
+# Then: make connect-tablet CONNECT_HOST=192.168.0.169:PORT
+connect-tablet:
+	@./connect-tablet.sh status
+	@if [ -n "$(PAIR_HOST)" ] && [ -n "$(CODE)" ]; then ./connect-tablet.sh pair $(PAIR_HOST) $(CODE); fi
+	@if [ -n "$(CONNECT_HOST)" ]; then ./connect-tablet.sh connect $(CONNECT_HOST); fi
 
 web:
 	./dev.sh web
