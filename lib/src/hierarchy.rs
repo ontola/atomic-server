@@ -257,6 +257,7 @@ mod test {
             validate_loro_causality: false,
             update_index: true,
             validate_for_agent: Some(agent.subject.to_string()),
+            source_id: None,
         };
         store.apply_commit(commit, &opts).await.unwrap();
     }

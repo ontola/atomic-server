@@ -786,6 +786,7 @@ impl Resource {
                 add_atoms: Vec::new(),
                 remove_atoms: Vec::new(),
                 changed_props: std::collections::HashSet::new(),
+                source_id: None,
             });
         }
         let commit = commit_builder.sign(&agent, store, self).await?;
@@ -808,6 +809,7 @@ impl Resource {
             validate_previous_commit: false,
             validate_loro_causality: false,
             update_index: true,
+            source_id: None,
         };
         let commit_response = store.apply_commit(commit, &opts).await?;
         if let Some(new) = &commit_response.resource_new {
@@ -850,6 +852,7 @@ impl Resource {
                 add_atoms: Vec::new(),
                 remove_atoms: Vec::new(),
                 changed_props: std::collections::HashSet::new(),
+                source_id: None,
             });
         }
         let commit = commitbuilder.sign(&agent, store, self).await?;
@@ -863,6 +866,7 @@ impl Resource {
             validate_previous_commit: false,
             validate_loro_causality: false,
             update_index: true,
+            source_id: None,
         };
         let commit_response = store.apply_commit(commit, &opts).await?;
         if let Some(new) = &commit_response.resource_new {
@@ -907,6 +911,7 @@ impl Resource {
             validate_previous_commit: false,
             validate_loro_causality: false,
             update_index: true,
+            source_id: None,
         };
 
         let commit_response = store.apply_commit(final_commit, &opts).await?;
@@ -1410,6 +1415,7 @@ mod test {
                     validate_loro_causality: false,
                     validate_for_agent: None,
                     update_index: true,
+                    source_id: None,
                 },
             )
             .await

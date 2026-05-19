@@ -9,6 +9,12 @@ Guidance for coding agents working in this repo.
 
 The frontend auto-updates via HMR. If changes don't appear, reload the page. If you edit `@tomic/lib` or `@tomic/react`, those packages may need a rebuild first.
 
+## Planning
+
+Use the `./planning` folder to write plans and keep track of progress.
+Use todo lists and checkboxes to track progress.
+Make sure to update the planning as you find new insights and see outdated planning text.
+
 ## Quick Dev Setup
 
 Navigate to `http://localhost:5173/app/dev-drive` to instantly create a fresh agent + drive on `localhost:9883` and switch to it. Only works in dev mode.

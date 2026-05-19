@@ -735,6 +735,7 @@ async fn parse_json_ad_map_to_resource(
                     validate_loro_causality: false,
                     validate_for_agent: Some(parse_opts.for_agent.to_string()),
                     update_index: true,
+                    source_id: None,
                 };
                 let response = store
                     .apply_commit(final_commit, &opts)
@@ -787,6 +788,7 @@ async fn parse_json_ad_map_to_resource(
                 validate_loro_causality: false,
                 validate_for_agent: Some(parse_opts.for_agent.to_string()),
                 update_index: true,
+                source_id: None,
             };
 
             store

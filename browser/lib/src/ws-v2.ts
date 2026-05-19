@@ -14,6 +14,8 @@ export const Tag = {
   GET: 0x10,
   UPDATE: 0x11,
   DESTROY: 0x12,
+  COMMIT: 0x13,
+  COMMIT_OK: 0x14,
   SUB: 0x20,
   UNSUB: 0x21,
   SYNC: 0x30,
@@ -103,6 +105,29 @@ export function encodeGet(requestId: number, subject: string): Uint8Array {
   buf[0] = Tag.GET;
   writeU16(buf, 1, requestId);
   buf.set(subjectBytes, 3);
+
+  return buf;
+}
+
+export function encodeCommit(requestId: number, commitJson: string): Uint8Array {
+  const payload = encoder.encode(commitJson);
+  const buf = new Uint8Array(3 + payload.length);
+  buf[0] = Tag.COMMIT;
+  writeU16(buf, 1, requestId);
+  buf.set(payload, 3);
+
+  return buf;
+}
+
+export function encodeCommitOk(
+  requestId: number,
+  commitJson: string,
+): Uint8Array {
+  const payload = encoder.encode(commitJson);
+  const buf = new Uint8Array(3 + payload.length);
+  buf[0] = Tag.COMMIT_OK;
+  writeU16(buf, 1, requestId);
+  buf.set(payload, 3);
 
   return buf;
 }
@@ -240,6 +265,11 @@ export interface DecodedGet {
   subject: string;
 }
 
+export interface DecodedCommit {
+  requestId: number;
+  commitJson: string;
+}
+
 export interface DecodedError {
   requestId: number;
   message: string;
@@ -298,6 +328,14 @@ export function decodeGet(data: Uint8Array): DecodedGet | undefined {
   const subject = decoder.decode(data.subarray(off));
 
   return { requestId, subject };
+}
+
+export function decodeCommit(data: Uint8Array): DecodedCommit | undefined {
+  if (data.length < 3) return undefined;
+  const [requestId, off] = readU16(data, 0);
+  const commitJson = decoder.decode(data.subarray(off));
+
+  return { requestId, commitJson };
 }
 
 export function decodeError(data: Uint8Array): DecodedError | undefined {
@@ -438,6 +476,8 @@ const TAG_NAMES: Record<number, string> = {
   [Tag.GET]: 'GET',
   [Tag.UPDATE]: 'UPDATE',
   [Tag.DESTROY]: 'DESTROY',
+  [Tag.COMMIT]: 'COMMIT',
+  [Tag.COMMIT_OK]: 'COMMIT_OK',
   [Tag.SUB]: 'SUB',
   [Tag.UNSUB]: 'UNSUB',
   [Tag.SYNC]: 'SYNC',
@@ -508,6 +548,18 @@ export function debugFrameInfo(
         headline: msg
           ? `${direction} GET #${msg.requestId} ${msg.subject}`
           : `${direction} GET (${payload.length}B)`,
+        details: () => msg ?? { rawBytes: payload.length },
+      };
+    }
+
+    case Tag.COMMIT:
+    case Tag.COMMIT_OK: {
+      const msg = decodeCommit(payload);
+
+      return {
+        headline: msg
+          ? `${direction} ${name} #${msg.requestId} (${msg.commitJson.length}B)`
+          : `${direction} ${name} (${payload.length}B)`,
         details: () => msg ?? { rawBytes: payload.length },
       };
     }
@@ -640,6 +692,15 @@ export function debugFrame(data: Uint8Array, direction: '→' | '←'): string {
       return msg
         ? `${direction} GET #${msg.requestId} ${msg.subject}`
         : `${direction} GET (${payload.length}B)`;
+    }
+
+    case Tag.COMMIT:
+    case Tag.COMMIT_OK: {
+      const msg = decodeCommit(payload);
+
+      return msg
+        ? `${direction} ${name} #${msg.requestId} (${msg.commitJson.length}B)`
+        : `${direction} ${name} (${payload.length}B)`;
     }
 
     case Tag.UPDATE: {

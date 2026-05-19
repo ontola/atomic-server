@@ -15,7 +15,7 @@ use actix::{
     ActorFutureExt, Addr, ResponseActFuture, WrapFuture,
 };
 use atomic_lib::{agents::ForAgent, db::QueryFilter, Db, DbEvent, Storelike, Value};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -40,11 +40,13 @@ use std::sync::Arc;
 #[allow(clippy::mutable_key_type)]
 pub struct CommitMonitor {
     /// Maintains a list of all the resources that are being subscribed to, and maps these to websocket connections.
-    subscriptions: HashMap<atomic_lib::Subject, HashSet<Addr<WebSocketConnection>>>,
+    /// Inner map: subscriber `Addr` → `source_id`. The id is used to suppress
+    /// broadcasts back to the connection that originated the change.
+    subscriptions: HashMap<atomic_lib::Subject, HashMap<Addr<WebSocketConnection>, String>>,
     /// Filter subscriptions: keyed by encoded `QueryFilter` bytes.
-    query_subscriptions: HashMap<Vec<u8>, HashSet<Addr<WebSocketConnection>>>,
+    query_subscriptions: HashMap<Vec<u8>, HashMap<Addr<WebSocketConnection>, String>>,
     /// Drive-wide subscriptions: keyed by drive subject string.
-    drive_subscriptions: HashMap<String, HashSet<Addr<WebSocketConnection>>>,
+    drive_subscriptions: HashMap<String, HashMap<Addr<WebSocketConnection>, String>>,
     store: Db,
     search_state: SearchState,
     /// Set by every commit handler that adds a doc to the tantivy
@@ -129,14 +131,20 @@ impl Actor for CommitMonitor {
                             filter_bytes,
                             subject,
                             added,
+                            source_id,
                         } => {
                             addr.do_send(MembershipNotification {
                                 filter_bytes,
                                 subject,
                                 added,
+                                source_id,
                             });
                         }
-                        DbEvent::Changed { subject, .. } => {
+                        DbEvent::Changed {
+                            subject,
+                            source_id,
+                            ..
+                        } => {
                             // `did:ad:commit:<sig>` resources are write-time
                             // metadata: each successful commit stores one,
                             // which fires its own `DbEvent::Changed`. Clients
@@ -155,15 +163,17 @@ impl Actor for CommitMonitor {
                             addr.do_send(DriveNotification {
                                 subject: subject.to_string(),
                                 removed: false,
+                                source_id,
                             });
                         }
-                        DbEvent::Destroyed { subject } => {
+                        DbEvent::Destroyed { subject, source_id } => {
                             if subject.is_commit_did() {
                                 continue;
                             }
                             addr.do_send(DriveNotification {
                                 subject: subject.to_string(),
                                 removed: true,
+                                source_id,
                             });
                         }
                     }
@@ -232,8 +242,8 @@ impl Handler<Subscribe> for CommitMonitor {
                     let set = actor
                         .subscriptions
                         .entry(msg.subject.clone())
-                        .or_insert_with(HashSet::new);
-                    set.insert(msg.addr);
+                        .or_default();
+                    set.insert(msg.addr, msg.source_id);
                     tracing::debug!("handle subscribe {} ", msg.subject);
                 }
             }),
@@ -331,6 +341,16 @@ impl Handler<UnsubscribeQuery> for CommitMonitor {
     }
 }
 
+/// True iff a `DbEvent`/`CommitResponse` with `event_source` should NOT be
+/// delivered to a subscriber registered with `subscriber_source`. Same
+/// connection on both sides means the client originated this change and
+/// already has it locally — sending it back is the self-echo we want to
+/// suppress. Missing event source (`None`) means a non-WS origin (HTTP
+/// commit, internal write) and we deliver to everyone.
+fn skip_same_source(event_source: Option<&str>, subscriber_source: &str) -> bool {
+    event_source.is_some_and(|s| s == subscriber_source)
+}
+
 /// `DbEvent::Changed` / `Destroyed` arriving via the listener task. Match the
 /// subject's drive prefix against drive-wide subscriptions and push a
 /// minimal `QueryUpdate` (subject only — empty filter). DID-form subjects
@@ -364,8 +384,12 @@ impl Handler<DriveNotification> for CommitMonitor {
                 } else {
                     vec![]
                 },
+                source_id: msg.source_id.clone(),
             };
-            for addr in subscribers {
+            for (addr, sub_source) in subscribers {
+                if skip_same_source(msg.source_id.as_deref(), sub_source) {
+                    continue;
+                }
                 addr.do_send(update.clone());
             }
         }
@@ -410,8 +434,12 @@ impl Handler<MembershipNotification> for CommitMonitor {
             value,
             added,
             removed,
+            source_id: msg.source_id.clone(),
         };
-        for addr in subscribers {
+        for (addr, sub_source) in subscribers {
+            if skip_same_source(msg.source_id.as_deref(), sub_source) {
+                continue;
+            }
             addr.do_send(update.clone());
         }
     }
@@ -425,6 +453,7 @@ impl CommitMonitor {
             addr,
             query,
             agent: _,
+            source_id,
         } = msg;
 
         let drive_str = match query.drive.as_ref() {
@@ -453,7 +482,7 @@ impl CommitMonitor {
                     }
                     #[allow(clippy::mutable_key_type)]
                     let entry = self.query_subscriptions.entry(filter_bytes).or_default();
-                    entry.insert(addr);
+                    entry.insert(addr, source_id);
                     return;
                 }
                 Err(e) => {
@@ -466,7 +495,7 @@ impl CommitMonitor {
         // Drive-wide subscription: drive only (no property/value).
         #[allow(clippy::mutable_key_type)]
         let entry = self.drive_subscriptions.entry(drive_str).or_default();
-        entry.insert(addr);
+        entry.insert(addr, source_id);
     }
 }
 
@@ -482,13 +511,17 @@ impl Handler<CommitMessage> for CommitMonitor {
         );
 
         // Notify websocket listeners
+        let event_source = msg.commit_response.source_id.as_deref();
         if let Some(subscribers) = self.subscriptions.get(&target_subject) {
             tracing::debug!(
                 "Sending commit {} to {} subscribers",
                 target_subject,
                 subscribers.len()
             );
-            for connection in subscribers {
+            for (connection, sub_source) in subscribers {
+                if skip_same_source(event_source, sub_source) {
+                    continue;
+                }
                 connection.do_send(msg.clone());
             }
         } else {

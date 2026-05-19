@@ -1147,6 +1147,7 @@ mod test {
             validate_loro_causality: false,
             update_index: false,
             validate_for_agent: None,
+            source_id: None,
         };
         let response = store.apply_commit(commit, &opts).await.unwrap();
 
@@ -1191,6 +1192,7 @@ mod test {
             validate_loro_causality: false,
             update_index: false,
             validate_for_agent: None,
+            source_id: None,
         };
 
         // Client A sets name

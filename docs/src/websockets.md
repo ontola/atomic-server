@@ -37,6 +37,8 @@ A connection is established over a WebSocket (typically to a responder's `/ws` e
 | `0x10` | `GET`           | either      | `[request_id: u16] [subject: string]`                                                                                               |
 | `0x11` | `UPDATE`        | either      | `[flags: u8] [request_id: u16] [subject_len: u16] [subject] [commit_id_len: u16 (optional)] [commit_id (optional)] [loro_bytes...]` |
 | `0x12` | `DESTROY`       | either      | `[request_id: u16] [subject: string]`                                                                                               |
+| `0x13` | `COMMIT`        | Init → Resp | `[request_id: u16] [commit_json_utf8]`                                                                                              |
+| `0x14` | `COMMIT_OK`     | Resp → Init | `[request_id: u16] [server_commit_json_utf8]`                                                                                       |
 | `0x20` | `SUB`           | either      | UTF-8 String (Subject)                                                                                                              |
 | `0x21` | `UNSUB`         | either      | UTF-8 String (Subject)                                                                                                              |
 | `0x30` | `SYNC`          | either      | `[drive_len: u16] [drive] [hash_len: u16] [hash] [json_vv]`                                                                         |
@@ -63,6 +65,33 @@ Before sending any other messages, the initiator must authenticate:
 ```
 
 A peer fetches the current state of a resource as a binary Loro snapshot.
+
+## Persisted Commits
+
+Persisted writes can travel over the WebSocket instead of the HTTP `/commit`
+endpoint. The on-wire commit payload is the same signed JSON-AD body the HTTP
+endpoint accepts — only the transport changes, so deterministic signing and
+commit parsing are unaffected.
+
+```
+-> COMMIT (0x13) [request_id] [commit_json]
+<- COMMIT_OK (0x14) [request_id] [server_commit_json]
+<- UPDATE (0x11) ...     # sent to OTHER subscribers, not the origin connection
+```
+
+`server_commit_json` is the same created commit resource HTTP `/commit` returns
+today (JSON-AD `did:ad:commit:<sig>`). On failure, the responder emits
+`ERROR (0x03)` with the matching `request_id`.
+
+Each WebSocket connection has a per-process identifier. The responder tags the
+emitted database events with that id and skips broadcasting follow-up `UPDATE`,
+`DESTROY`, or `QUERY_UPDATE` frames back to the connection that originated the
+commit — the client never sees its own change return as a subscription push.
+Other subscribers, including additional tabs/devices owned by the same agent,
+do receive the update on their own connections.
+
+HTTP `POST /commit` continues to work and remains the fallback path; HTTP
+commits have no connection id and are broadcast to every matching subscriber.
 
 ## Subscriptions
 
@@ -137,6 +166,9 @@ Peer A                              Peer B
   |<----------- BLOB_RESPONSE (0x35) --|
   |                                    |
   |<----- UPDATE (0x11) {subject,delta}|  (subscription push)
+  |                                    |
+  |-- COMMIT (0x13) {commit_json} ---->|
+  |<----------- COMMIT_OK (0x14) ------|  (no echo back to Peer A)
   |                                    |
   |-- GET (0x10) {subject} ----------->|
   |<----------- UPDATE (0x11) ---------|

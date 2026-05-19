@@ -17,6 +17,7 @@ use atomic_lib::{
     authentication::{get_agent_from_auth_values_and_check, AuthValues},
     Db, Storelike,
 };
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use crate::{
@@ -33,6 +34,17 @@ const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 // thread is saturated (parallel playwright workers, heavy WASM init).
 // A tighter budget here disconnects healthy clients under load.
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// Per-process counter for generating WebSocket connection identifiers.
+/// Used as the `source_id` carried on `CommitOpts`/`CommitResponse` so
+/// the commit monitor can suppress same-source broadcasts (no echo of
+/// a client's own commit back to the connection that sent it).
+static CONNECTION_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+fn new_connection_id() -> String {
+    let n = CONNECTION_COUNTER.fetch_add(1, Ordering::Relaxed);
+    format!("ws-{n}")
+}
 
 /// Upgrade an HTTP request to a WebSocket connection.
 #[tracing::instrument(skip(appstate, stream))]
@@ -54,6 +66,7 @@ pub async fn web_socket_handler(
             loro_sync_broadcaster_addr: appstate.loro_sync_broadcaster.clone(),
             agent: for_agent,
             store: appstate.store.clone(),
+            connection_id: new_connection_id(),
         },
         &req,
         stream,
@@ -71,6 +84,10 @@ pub struct WebSocketConnection {
     loro_sync_broadcaster_addr: Addr<LoroSyncBroadcaster>,
     agent: ForAgent,
     store: Db,
+    /// Unique-per-process identifier. Threaded through `CommitOpts` into
+    /// `CommitResponse` and the emitted `DbEvent`s, so the commit monitor
+    /// can suppress broadcasts back to this connection.
+    connection_id: String,
 }
 
 impl Actor for WebSocketConnection {
@@ -221,6 +238,41 @@ impl WebSocketConnection {
                 );
             }
 
+            ws_v2::tag::COMMIT => {
+                let Some(decoded) = ws_v2::decode_commit(&bin[1..]) else {
+                    return;
+                };
+                let request_id = decoded.request_id;
+                let body = decoded.commit_json.to_string();
+                let store = self.store.clone();
+                let source_id = self.connection_id.clone();
+                let origin = self
+                    .store
+                    .get_base_domain()
+                    .unwrap_or_else(|| "http://localhost".to_string());
+                ctx.spawn(
+                    async move {
+                        let result = crate::handlers::commit::apply_commit_json(
+                            &store,
+                            &origin,
+                            &body,
+                            Some(source_id),
+                        )
+                        .await;
+                        (request_id, result)
+                    }
+                    .into_actor(self)
+                    .map(|(rid, res), _actor, ctx| match res {
+                        Ok(server_commit_json) => {
+                            ctx.binary(ws_v2::encode_commit_ok(rid, &server_commit_json));
+                        }
+                        Err(e) => {
+                            ctx.binary(ws_v2::encode_error(rid, &e.to_string()));
+                        }
+                    }),
+                );
+            }
+
             ws_v2::tag::SUB => {
                 if let Ok(subject_str) = std::str::from_utf8(&bin[1..]) {
                     let subject = atomic_lib::Subject::from_raw(
@@ -238,6 +290,7 @@ impl WebSocketConnection {
                                 drive: Some(subject_str.to_string()),
                             },
                             agent: self.agent.to_string(),
+                            source_id: self.connection_id.clone(),
                         });
                     // Also subscribe to resource-level commits on the drive itself
                     self.commit_monitor_addr
@@ -245,6 +298,7 @@ impl WebSocketConnection {
                             addr: ctx.address(),
                             subject: subject.clone(),
                             agent: self.agent.to_string(),
+                            source_id: self.connection_id.clone(),
                         });
                     self.subscribed.insert(subject);
                 }
@@ -333,6 +387,7 @@ impl WebSocketConnection {
                         addr: ctx.address(),
                         query,
                         agent: self.agent.to_string(),
+                        source_id: self.connection_id.clone(),
                     });
             }
         } else if let Some(json) = text.strip_prefix("SUBSCRIBE ") {
@@ -343,6 +398,7 @@ impl WebSocketConnection {
                     addr: ctx.address(),
                     subject: subject.clone(),
                     agent: self.agent.to_string(),
+                    source_id: self.connection_id.clone(),
                 });
             self.subscribed.insert(subject);
         } else if let Some(json) = text.strip_prefix("SYNC_VV ") {
