@@ -43,5 +43,9 @@
 	<false/>
 	<key>NSCameraUsageDescription</key>
 	<string>Camera is used to scan QR codes for device pairing</string>
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
 </dict>
 </plist>

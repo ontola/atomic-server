@@ -111,6 +111,11 @@ class _InfiniteCanvasState extends State<InfiniteCanvas>
   }
 
   bool _watching = false;
+  bool _loroCanUndo = false;
+  bool _loroCanRedo = false;
+
+  bool get _canUndoToolbar => _isHistoryMode ? _actionIndex > 0 : _loroCanUndo;
+  bool get _canRedoToolbar => _isHistoryMode ? _actionIndex < _allActions.length : _loroCanRedo;
 
   @override
   void initState() {
@@ -127,6 +132,22 @@ class _InfiniteCanvasState extends State<InfiniteCanvas>
           .addPostFrameCallback((_) => _zoomToFit(isInitial: true));
     }
     _startWatchingResource();
+    _refreshUndoRedoState();
+  }
+
+  Future<void> _refreshUndoRedoState() async {
+    final state = await widget.store.undoRedoState(widget.canvas);
+    if (!mounted) return;
+    setState(() {
+      _loroCanUndo = state.canUndo;
+      _loroCanRedo = state.canRedo;
+    });
+  }
+
+  void _applyStrokesFromStore() {
+    _strokes = List.of(widget.canvas.strokes);
+    _allActions = _strokes.map((s) => StrokeAdded(s) as HistoryAction).toList();
+    _actionIndex = _allActions.length;
   }
 
   @override
@@ -145,21 +166,12 @@ class _InfiniteCanvasState extends State<InfiniteCanvas>
       while (_watching && mounted) {
         final result = await AtomicClient.watchResource(widget.canvas.id);
         if (!_watching || !mounted || result == 'timeout') continue;
-        // Reload strokes from DB
         await widget.store.loadStrokes(widget.canvas);
         if (!mounted) break;
-        // Merge: add any new strokes we don't already have
-        final remoteStrokes = widget.canvas.strokes;
-        if (remoteStrokes.length > _strokes.length) {
-          final newStrokes = List<StrokeData>.of(_strokes);
-          for (int i = _strokes.length; i < remoteStrokes.length; i++) {
-            newStrokes.add(remoteStrokes[i]);
-            _allActions.add(StrokeAdded(remoteStrokes[i]));
-          }
-          setState(() {
-            _strokes = newStrokes; // New reference triggers shouldRepaint
-            _actionIndex = _allActions.length;
-          });
+        final remote = widget.canvas.strokes;
+        if (remote.length != _strokes.length) {
+          setState(() => _applyStrokesFromStore());
+          await _refreshUndoRedoState();
         }
       }
     });
@@ -262,24 +274,48 @@ class _InfiniteCanvasState extends State<InfiniteCanvas>
   }
 
   void _undo() {
-    if (!_canUndo) return;
-    _actionIndex--;
-    setState(() => _reverseAction(_allActions[_actionIndex]));
-    widget.store.onCanvasChanged(widget.canvas, _strokes,
-        isDarkMode: Theme.of(context).brightness == Brightness.dark,
-        penColor: _penColor,
-        prevColor: _prevColor);
+    if (_isHistoryMode) {
+      if (!_canUndo) return;
+      _actionIndex--;
+      setState(() => _reverseAction(_allActions[_actionIndex]));
+      return;
+    }
+    if (!_loroCanUndo) return;
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    Future(() async {
+      final ok = await widget.store.undoCanvas(widget.canvas);
+      if (!ok || !mounted) return;
+      setState(() => _applyStrokesFromStore());
+      await _refreshUndoRedoState();
+      if (!mounted) return;
+      widget.store.onCanvasChanged(widget.canvas, _strokes,
+          isDarkMode: isDarkMode,
+          penColor: _penColor,
+          prevColor: _prevColor);
+    });
   }
 
   void _redo() {
-    if (!_canRedo) return;
-    final action = _allActions[_actionIndex];
-    _actionIndex++;
-    setState(() => _applyAction(action));
-    widget.store.onCanvasChanged(widget.canvas, _strokes,
-        isDarkMode: Theme.of(context).brightness == Brightness.dark,
-        penColor: _penColor,
-        prevColor: _prevColor);
+    if (_isHistoryMode) {
+      if (!_canRedo) return;
+      final action = _allActions[_actionIndex];
+      _actionIndex++;
+      setState(() => _applyAction(action));
+      return;
+    }
+    if (!_loroCanRedo) return;
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    Future(() async {
+      final ok = await widget.store.redoCanvas(widget.canvas);
+      if (!ok || !mounted) return;
+      setState(() => _applyStrokesFromStore());
+      await _refreshUndoRedoState();
+      if (!mounted) return;
+      widget.store.onCanvasChanged(widget.canvas, _strokes,
+          isDarkMode: isDarkMode,
+          penColor: _penColor,
+          prevColor: _prevColor);
+    });
   }
 
   // ── Fan ─────────────────────────────────────────────────────────────────────
@@ -762,7 +798,9 @@ class _InfiniteCanvasState extends State<InfiniteCanvas>
       });
       _pushAction(StrokeAdded(stroke));
       // Push stroke to Loro immediately (CRDT-friendly append)
-      widget.store.pushStroke(widget.canvas, stroke);
+      widget.store.pushStroke(widget.canvas, stroke).then((_) {
+        if (mounted) _refreshUndoRedoState();
+      });
     }
     if (_activePointers.length < 2) {
       _pinchStartDist = null;
@@ -857,8 +895,8 @@ class _InfiniteCanvasState extends State<InfiniteCanvas>
                 child: BottomToolbar(
                   penColor: _penColor,
                   penWidth: _penWidth,
-                  canUndo: _canUndo,
-                  canRedo: _canRedo,
+                  canUndo: _canUndoToolbar,
+                  canRedo: _canRedoToolbar,
                   eraserMode: _eraserMode,
                   onEraserToggle: () =>
                       setState(() => _eraserMode = !_eraserMode),

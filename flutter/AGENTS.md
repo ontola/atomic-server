@@ -115,7 +115,7 @@ The original app lives at `../atomiccanvas`. Key files:
 
 ## Dev Environment
 
-- Flutter 3.22.1-stable (via mise)
+- Flutter 3.44+ (via mise, see `flutter/.mise.toml`)
 - Rust toolchain for flutter_rust_bridge (needs wasm32 target for web)
 - atomic-server as backend (local or remote)
 - Run: `mise exec -- flutter run -d chrome` (web) or `flutter run` (mobile)

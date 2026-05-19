@@ -163,6 +163,28 @@ class AtomicClient {
   static Future<void> pushStroke(String subject, String strokeJson) =>
       _cmd('push_stroke:$subject:$strokeJson');
 
+  /// Undo the last stroke edit (Loro). Persists and syncs. Returns new stroke count.
+  static Future<int> undoCanvas(String subject) async {
+    final result = await _cmd('undo_canvas:$subject');
+    return int.tryParse(result) ?? 0;
+  }
+
+  /// Redo the last undone stroke edit. Persists and syncs. Returns new stroke count.
+  static Future<int> redoCanvas(String subject) async {
+    final result = await _cmd('redo_canvas:$subject');
+    return int.tryParse(result) ?? 0;
+  }
+
+  static Future<bool> canUndoCanvas(String subject) async {
+    final result = await _cmd('can_undo_canvas:$subject');
+    return result == '1';
+  }
+
+  static Future<bool> canRedoCanvas(String subject) async {
+    final result = await _cmd('can_redo_canvas:$subject');
+    return result == '1';
+  }
+
   /// Replace all strokes (used after undo/scrub). Clears and re-sets the full list.
   static Future<void> setStrokes(String subject, String strokesJson) =>
       _cmd('set_strokes:$subject:$strokesJson');

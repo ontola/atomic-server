@@ -176,6 +176,48 @@ class CanvasStore {
     }
   }
 
+  /// Loro undo (persisted + sync). Reloads [canvas].strokes. Returns false if nothing to undo.
+  Future<bool> undoCanvas(CanvasEntry canvas) async {
+    if (canvas.id.isEmpty) return false;
+    try {
+      final before = canvas.strokes.length;
+      await AtomicClient.undoCanvas(canvas.id);
+      await loadStrokes(canvas, isDarkMode: isDarkMode);
+      return canvas.strokes.length < before;
+    } catch (e) {
+      debugPrint('Failed to undo canvas: $e');
+      return false;
+    }
+  }
+
+  /// Loro redo (persisted + sync). Reloads [canvas].strokes.
+  Future<bool> redoCanvas(CanvasEntry canvas) async {
+    if (canvas.id.isEmpty) return false;
+    try {
+      final before = canvas.strokes.length;
+      await AtomicClient.redoCanvas(canvas.id);
+      await loadStrokes(canvas, isDarkMode: isDarkMode);
+      return canvas.strokes.length != before;
+    } catch (e) {
+      debugPrint('Failed to redo canvas: $e');
+      return false;
+    }
+  }
+
+  Future<({bool canUndo, bool canRedo})> undoRedoState(CanvasEntry canvas) async {
+    if (canvas.id.isEmpty) {
+      return (canUndo: false, canRedo: false);
+    }
+    try {
+      final canUndo = await AtomicClient.canUndoCanvas(canvas.id);
+      final canRedo = await AtomicClient.canRedoCanvas(canvas.id);
+      return (canUndo: canUndo, canRedo: canRedo);
+    } catch (e) {
+      debugPrint('Failed to read undo/redo state: $e');
+      return (canUndo: false, canRedo: false);
+    }
+  }
+
   /// Save the full stroke list (replaces Loro list). Used after undo/scrub.
   Future<void> saveFullStrokeState(
       CanvasEntry canvas, List<StrokeData> strokes) async {

@@ -22,7 +22,7 @@
 
 ## Development
 
-This project uses [mise](https://mise.jdx.dev/) to manage the Flutter SDK version (see `.mise.toml`).
+This project uses [mise](https://mise.jdx.dev/) to manage the Flutter SDK (Flutter 3.44+, Dart 3.12 — see `.mise.toml`).
 
 A `Makefile` wraps `dev.sh` which sets up a FIFO pipe so you can trigger hot reload **from any terminal tab** — no need to switch focus or type into the running process.
 

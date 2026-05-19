@@ -274,7 +274,7 @@ fn ensure_cache_listener() {
         loop {
             let subject = match rx.recv().await {
                 Ok(atomic_lib::DbEvent::Changed { subject, .. }) => subject,
-                Ok(atomic_lib::DbEvent::Destroyed { subject }) => subject,
+                Ok(atomic_lib::DbEvent::Destroyed { subject, .. }) => subject,
                 Ok(atomic_lib::DbEvent::QueryMembershipChanged { .. }) => continue,
                 Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
                 Err(_) => {
@@ -460,6 +460,18 @@ pub async fn undo_canvas(subject: String) -> Result<i32, String> {
         _ => 0,
     };
     Ok(count)
+}
+
+/// Whether the canvas has a local undo step available.
+pub async fn can_undo_canvas(subject: String) -> Result<bool, String> {
+    let guard = get_canvas(&subject).await?;
+    Ok(guard.as_ref().unwrap().can_undo())
+}
+
+/// Whether the canvas has a local redo step available.
+pub async fn can_redo_canvas(subject: String) -> Result<bool, String> {
+    let guard = get_canvas(&subject).await?;
+    Ok(guard.as_ref().unwrap().can_redo())
 }
 
 /// Redo the last undone Loro operation on a canvas. Returns the new stroke count.
@@ -726,7 +738,7 @@ pub async fn connect(server_url: String, _agent_secret: String) -> Result<String
                     Ok(atomic_lib::DbEvent::Changed { subject, .. }) if subject == target => {
                         return subject.to_string();
                     }
-                    Ok(atomic_lib::DbEvent::Destroyed { subject }) if subject == target => {
+                    Ok(atomic_lib::DbEvent::Destroyed { subject, .. }) if subject == target => {
                         return format!("!{}", subject);
                     }
                     Ok(_) => continue,
@@ -765,7 +777,7 @@ pub async fn connect(server_url: String, _agent_secret: String) -> Result<String
         let result = tokio::time::timeout(std::time::Duration::from_secs(60), async {
             loop {
                 match rx.recv().await {
-                    Ok(atomic_lib::DbEvent::Destroyed { subject }) => {
+                    Ok(atomic_lib::DbEvent::Destroyed { subject, .. }) => {
                         return format!("!{}", subject);
                     }
                     Ok(atomic_lib::DbEvent::Changed { subject, .. }) => {
@@ -898,6 +910,34 @@ pub async fn connect(server_url: String, _agent_secret: String) -> Result<String
         };
         push_stroke(subject.to_string(), stroke_json.to_string()).await?;
         return Ok("ok".into());
+    }
+
+    if let Some(subject) = cmd.strip_prefix("undo_canvas:") {
+        let count = undo_canvas(subject.to_string()).await?;
+        return Ok(count.to_string());
+    }
+
+    if let Some(subject) = cmd.strip_prefix("redo_canvas:") {
+        let count = redo_canvas(subject.to_string()).await?;
+        return Ok(count.to_string());
+    }
+
+    if let Some(subject) = cmd.strip_prefix("can_undo_canvas:") {
+        return Ok(if can_undo_canvas(subject.to_string()).await? {
+            "1"
+        } else {
+            "0"
+        }
+        .into());
+    }
+
+    if let Some(subject) = cmd.strip_prefix("can_redo_canvas:") {
+        return Ok(if can_redo_canvas(subject.to_string()).await? {
+            "1"
+        } else {
+            "0"
+        }
+        .into());
     }
 
     // Default: treat as Iroh NodeID, strip prefixes
