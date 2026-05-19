@@ -42,6 +42,11 @@ export const TagSelectPopover: React.FC<TagSelectPopoverProps> = ({
 
   const [internalOpen, setInternalOpen] = useState(false);
   const [filterValue, setFilterValue] = useState('');
+  const selectedTagsRef = useRef(selectedTags);
+
+  useEffect(() => {
+    selectedTagsRef.current = selectedTags;
+  }, [selectedTags]);
 
   // Use external state if provided, otherwise use internal state
   const isControlled = externalOpen !== undefined;
@@ -57,11 +62,20 @@ export const TagSelectPopover: React.FC<TagSelectPopoverProps> = ({
     .filter(tag => tag.title.includes(filterValue))
     .map(t => t.subject);
 
+  const updateSelectedTags = (tags: string[]) => {
+    selectedTagsRef.current = tags;
+    setSelectedTags(tags);
+  };
+
   const modifyTags = (add: boolean, tag: string) => {
+    const currentTags = selectedTagsRef.current;
+
     if (add) {
-      setSelectedTags([...selectedTags, tag]);
-    } else if (selectedTags.includes(tag)) {
-      setSelectedTags(selectedTags.filter(t => t !== tag));
+      if (!currentTags.includes(tag)) {
+        updateSelectedTags([...currentTags, tag]);
+      }
+    } else if (currentTags.includes(tag)) {
+      updateSelectedTags(currentTags.filter(t => t !== tag));
     }
   };
 
@@ -81,7 +95,7 @@ export const TagSelectPopover: React.FC<TagSelectPopoverProps> = ({
     try {
       await tag.save();
       onNewTag?.(tag.subject);
-      setSelectedTags([...selectedTags, tag.subject]);
+      updateSelectedTags([...selectedTagsRef.current, tag.subject]);
     } catch (error) {
       console.error(error);
     }

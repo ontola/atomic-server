@@ -246,7 +246,12 @@ test.describe('tables', async () => {
     // the React handlers are bound by the time mousedown fires, which is
     // what sets `activeCell` and `CursorMode.Visual` (the precondition
     // for Enter → Edit mode in fillRow).
-    const firstCell = page.getByRole('gridcell').first();
+    const firstCell = page.locator(
+      '[role="row"][aria-rowindex="2"] > [role="gridcell"][aria-colindex="2"]',
+    );
+    await firstCell.evaluate(element =>
+      element.scrollIntoView({ block: 'nearest', inline: 'nearest' }),
+    );
     await firstCell.click();
     await expect(firstCell).toBeFocused();
     await page.waitForTimeout(1000);
