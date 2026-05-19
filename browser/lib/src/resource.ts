@@ -52,9 +52,15 @@ type ResourceEventHandlers = {
 };
 
 /**
- * Loro oplog timestamps are normally Unix seconds; values >= 1e12 are already ms.
+ * Loro OpLog change timestamps are Unix **seconds** (see loro-crdt `Change.timestamp`).
+ * The history UI uses milliseconds. Some older snapshots may incorrectly carry ms in the
+ * oplog; treat values >= 1e12 as already ms.
  */
 export function normalizeLoroChangeTimestampMs(timestamp: number): number {
+  if (timestamp <= 0) {
+    return timestamp;
+  }
+
   return timestamp >= 1_000_000_000_000 ? timestamp : timestamp * 1000;
 }
 
@@ -351,6 +357,8 @@ export class Resource<C extends OptionalClass = any> {
     if (!this._loroDoc) {
       const { LoroDoc: LoroDocClass } = LoroLoader.Loro;
       this._loroDoc = new LoroDocClass();
+      // Match the server (`lib/src/loro.rs`): record per-change Unix seconds on commit.
+      this._loroDoc.setRecordTimestamp(true);
       this._loroMap = this._loroDoc.getMap('properties');
 
       // If the resource has a persisted Loro snapshot, import it.
@@ -1049,11 +1057,21 @@ export class Resource<C extends OptionalClass = any> {
    * — no network round-trips needed.
    */
   public getLoroHistory(): Version[] {
-    const doc = this.getLoroDoc();
+    const liveDoc = this.getLoroDoc();
 
-    if (!doc) {
+    if (!liveDoc) {
       return [];
     }
+
+    // Time-travel on a fork. `doc.checkout()` mutates the doc's state and
+    // fires events on every subscriber — including loro-prosemirror's plugin,
+    // whose docSubscription leaks across editor unmount (its plugin destroy
+    // only clears the init timeout, never unsubscribes). Calling checkout on
+    // the live doc would fire that stale subscription with a historical state
+    // where containers tracked in the plugin's mapping may not yet have a
+    // `children` field, crashing in `absolutePositionToCursor`. The fork has
+    // its own state and no subscribers, so checkouts here are isolated.
+    const doc = liveDoc.fork();
 
     // Loro merges sequential same-peer ops into a single Change whose
     // `length` is the operation count. Iterating only over Changes therefore
@@ -1181,9 +1199,6 @@ export class Resource<C extends OptionalClass = any> {
       message: g.step.message,
       propvals: g.propvals,
     }));
-
-    // Restore to latest version
-    doc.checkoutToLatest();
 
     return versions;
   }

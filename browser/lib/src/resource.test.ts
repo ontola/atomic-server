@@ -94,6 +94,29 @@ describe('resource.ts', () => {
     expect(normalizeLoroChangeTimestampMs(1_700_000_000_000)).toBe(
       1_700_000_000_000,
     );
+    expect(normalizeLoroChangeTimestampMs(0)).toBe(0);
+  });
+
+  it('records Loro oplog timestamps in seconds', async ({ expect }) => {
+    const resource = new Resource('https://example.com/loro-timestamp');
+    await resource.set('https://atomicdata.dev/properties/name', 'test', false);
+    const doc = resource.getLoroDoc();
+    expect(doc).toBeDefined();
+    doc!.commit();
+
+    const timestamps: number[] = [];
+    for (const changes of doc!.getAllChanges().values()) {
+      for (const change of changes) {
+        if (change.timestamp > 0) {
+          timestamps.push(change.timestamp);
+        }
+      }
+    }
+
+    expect(timestamps.length).toBeGreaterThan(0);
+    for (const ts of timestamps) {
+      expect(ts).toBeLessThan(1_000_000_000_000);
+    }
   });
 
   it('keeps the same Loro peer across a loroUpdate hydration', async ({
