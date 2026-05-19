@@ -16,7 +16,7 @@ export function CreateInstanceButton({ ontology }: CreateInstanceButtonProps) {
   const [createdInstanceSubject, setCreatedInstanceSubject] =
     useState<string>();
 
-  const [dialogProps, show, close, isOpen] = useDialog({
+  const [dialogProps, show, close] = useDialog({
     onSuccess: async () => {
       ontology.push(core.properties.instances, [createdInstanceSubject], true);
       await ontology.save();
@@ -58,7 +58,13 @@ export function CreateInstanceButton({ ontology }: CreateInstanceButtonProps) {
 
   const handleSaveClick = (subject: string) => {
     setCreatedInstanceSubject(subject);
+    setClassSubject(undefined);
     close(true);
+  };
+
+  const handleCancel = () => {
+    setClassSubject(undefined);
+    close(false);
   };
 
   return (
@@ -74,10 +80,10 @@ export function CreateInstanceButton({ ontology }: CreateInstanceButtonProps) {
         ontologies={[ontology.subject]}
       />
       <Dialog {...dialogProps} width='50rem'>
-        {isOpen && classSubject && (
+        {dialogProps.show && classSubject && (
           <NewFormDialog
             classSubject={classSubject}
-            onCancel={() => close(false)}
+            onCancel={handleCancel}
             onSaveClick={handleSaveClick}
             parent={ontology.subject}
           />

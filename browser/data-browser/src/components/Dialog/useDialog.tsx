@@ -28,6 +28,7 @@ export function useDialog<E extends HTMLElement>(
   const [showDialog, setShowDialog] = useState(false);
   const [visible, setVisible] = useState(false);
   const [wasSuccess, setWasSuccess] = useState(false);
+  const [instantClose, setInstantClose] = useState(false);
 
   const show = useCallback(() => {
     document.body.setAttribute('inert', '');
@@ -38,6 +39,7 @@ export function useDialog<E extends HTMLElement>(
 
   const close = useCallback((success = false) => {
     setWasSuccess(success);
+    setInstantClose(success);
     setShowDialog(false);
   }, []);
 
@@ -45,6 +47,7 @@ export function useDialog<E extends HTMLElement>(
     document.body.removeAttribute('inert');
     bindShow?.(false);
     setVisible(false);
+    setInstantClose(false);
 
     if (wasSuccess) {
       onSuccess?.();
@@ -61,10 +64,11 @@ export function useDialog<E extends HTMLElement>(
   const dialogProps = useMemo<InternalDialogProps>(
     () => ({
       show: showDialog,
+      instantClose,
       onClose: close,
       onClosed: handleClosed,
     }),
-    [showDialog, close, handleClosed],
+    [showDialog, instantClose, close, handleClosed],
   );
 
   return [dialogProps, show, close, visible];
