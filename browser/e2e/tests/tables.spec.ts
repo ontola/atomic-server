@@ -401,4 +401,57 @@ test.describe('tables', async () => {
       `Last row "${last}" should be visible after refresh`,
     ).toBeVisible();
   });
+
+  test('sorting reorders freshly-entered (virtual) rows', async ({ page }) => {
+    test.slow();
+    await page.getByTitle('New Table').first().click();
+    await page.getByPlaceholder('New Table').fill('Sort Test');
+    await page.locator('dialog[open] button:has-text("Create")').click();
+    await page.waitForURL(url => url.pathname.startsWith('/app/show'), {
+      timeout: 15000,
+    });
+    await expect(page.getByTestId('editable-title').first()).toBeVisible({
+      timeout: 15000,
+    });
+    await page.keyboard.press('Escape');
+
+    const firstCell = page.getByRole('gridcell').first();
+    await expect(firstCell).toBeVisible({ timeout: 15000 });
+    await firstCell.click({ force: true });
+    await page.waitForTimeout(300);
+
+    // Enter rows whose names are NOT in alphabetical order.
+    for (const name of ['gamma', 'alpha', 'beta']) {
+      await page.keyboard.press('Enter');
+      await page.waitForTimeout(100);
+      await page.keyboard.type(name, { delay: 20 });
+      await page.waitForTimeout(100);
+    }
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(
+      () => window.store.getSyncStatus().pendingDirtyCount === 0,
+      undefined,
+      { timeout: 10000 },
+    );
+
+    // Default sort is by creation time → insertion order: gamma is row 1.
+    await expect(
+      page
+        .locator('[aria-rowindex="2"]')
+        .getByRole('gridcell', { name: 'gamma', exact: true }),
+      'Before sort, first row should be the first-entered ("gamma")',
+    ).toBeVisible();
+
+    // Click the "name" column header to sort by name (ascending).
+    await page.getByRole('button', { name: 'name', exact: true }).first().click();
+    await page.waitForTimeout(500);
+
+    // After sort, the freshly-entered virtual rows must reorder: "alpha" first.
+    await expect(
+      page
+        .locator('[aria-rowindex="2"]')
+        .getByRole('gridcell', { name: 'alpha', exact: true }),
+      'After sorting by name, first row should be "alpha"',
+    ).toBeVisible();
+  });
 });

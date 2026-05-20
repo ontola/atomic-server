@@ -21,7 +21,14 @@ import {
 import { TableNewRow, TableRow } from '@chunks/TablePage/TableRow';
 import { useTableColumns } from '@chunks/TablePage/useTableColumns';
 import { useTableData } from '@chunks/TablePage/useTableData';
-import { useId, useState, useCallback, useMemo, useRef } from 'react';
+import {
+  useId,
+  useState,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+} from 'react';
 import { FancyTable } from '@chunks/TableEditor/TableEditor';
 import { NewColumnButton } from './NewColumnButton';
 import { TableHeading } from './TableHeading';
@@ -108,6 +115,40 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
   // render as `TableRow`s during load (matching the old behaviour); once ready,
   // the frozen baseline takes over.
   const memberCount = baselineMemberCountRef.current ?? collection.totalMembers;
+
+  // Applying a sort must visibly reorder the rows. Session rows render from
+  // `newRowSubjects` in INSERTION order, bypassing the collection's sort, so a
+  // sort would otherwise do nothing (the virtual rows ignore it). On a sort
+  // change, "rebase" onto the freshly-sorted collection: clear the frozen
+  // baseline (it re-captures from the re-sorted collection, so members render
+  // in the new order) and reset the session to a single trailing placeholder.
+  //
+  // First, force-materialize any session row that has content but hasn't been
+  // saved yet — otherwise dropping the session list would lose it. Once saved,
+  // it joins the collection and reappears in its sorted position. Skips the
+  // initial mount.
+  const newRowSubjectsRef = useRef(newRowSubjects);
+  newRowSubjectsRef.current = newRowSubjects;
+  const sortInitialisedRef = useRef(false);
+
+  useEffect(() => {
+    if (!sortInitialisedRef.current) {
+      sortInitialisedRef.current = true;
+
+      return;
+    }
+
+    for (const subject of newRowSubjectsRef.current) {
+      const row = store.getResourceLoading(subject);
+
+      if (row.subject.startsWith('_new:') && row.getEntries().length > 2) {
+        void row.save().catch(() => undefined);
+      }
+    }
+
+    baselineMemberCountRef.current = null;
+    setNewRowSubjects([generateRowSubject()]);
+  }, [sorting, store, generateRowSubject]);
 
   const decrementMemberCount = useCallback(() => {
     if (baselineMemberCountRef.current && baselineMemberCountRef.current > 0) {
