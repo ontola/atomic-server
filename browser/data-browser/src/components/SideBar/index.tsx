@@ -124,7 +124,7 @@ interface SideBarOverlayProps {
 
 const StyledNav = styled.nav.attrs<StyledNavProps>(p => ({
   style: {
-    [SIDEBAR_WIDTH_PROP]: p.size,
+    [SIDEBAR_WIDTH_PROP.raw]: p.size,
   } as Record<string, string>,
 }))`
   z-index: ${p => p.theme.zIndex.sidebar};
@@ -134,11 +134,11 @@ const StyledNav = styled.nav.attrs<StyledNavProps>(p => ({
     opacity 0.3s,
     left 0.3s;
   left: ${p =>
-    p.exposed ? '0' : `calc(var(${SIDEBAR_WIDTH_PROP}) * -1 + 0.5rem)`};
+    p.exposed ? '0' : `calc(${SIDEBAR_WIDTH_PROP.var()} * -1 + 0.5rem)`};
   /* When the user is hovering, show half opacity */
   opacity: ${p => (p.exposed ? 1 : 0)};
   height: ${CalculatedPageHeight.var()};
-  width: var(${SIDEBAR_WIDTH_PROP});
+  width: ${SIDEBAR_WIDTH_PROP.var()};
   position: ${p => (p.locked ? 'relative' : 'absolute')};
   border-right: ${p => `1px solid ${p.theme.colors.bg2}`};
   box-shadow: ${p => (p.locked ? 'none' : p.theme.boxShadowSoft)};

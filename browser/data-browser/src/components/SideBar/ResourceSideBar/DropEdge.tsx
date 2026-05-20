@@ -63,7 +63,7 @@ const DropEdgeElement = styled.div<{ visible: boolean; active: boolean }>`
   background: ${p => p.theme.colors.main};
   opacity: ${p => (p.active ? 1 : 0)};
   z-index: 2;
-  width: calc(var(${SIDEBAR_WIDTH_PROP}) - 2rem);
+  width: calc(${SIDEBAR_WIDTH_PROP.var()} - 2rem);
 
   ${transition('opacity', 'transform')}
 `;
