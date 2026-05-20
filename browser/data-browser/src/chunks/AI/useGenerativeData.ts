@@ -4,6 +4,7 @@ import { type AtomicUIMessage } from './types';
 import z from 'zod';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import { useGetModel } from './useModel';
+import { simplifyConversation } from './simplifyConversation';
 
 const titleSystemPrompt = `You are a specialized AI system that generates titles for AI conversations.
 You will be given the first part of a conversation between the user and an AI assistant.
@@ -112,22 +113,8 @@ ${convoString}
     return output.prompt && output.prompt.trim() !== '' ? [output.prompt] : [];
   };
 
-  return { generateTitleFromConversation, generateFollowUpQuestions };
+  return {
+    generateTitleFromConversation,
+    generateFollowUpQuestions,
+  };
 };
-
-function simplifyConversation(conversation: AtomicUIMessage[]): {
-  role: 'user' | 'assistant' | 'system';
-  parts: { type: 'text'; text: string }[];
-}[] {
-  return conversation.map(message => {
-    return {
-      role: message.role,
-      parts: message.parts
-        .filter(part => part.type === 'text')
-        .map(part => ({
-          type: part.type,
-          text: part.text.replace(/```\n|```/g, ''),
-        })),
-    };
-  });
-}

@@ -65,7 +65,7 @@
     "fast-json-patch": "^3.1.1",
     "idb-keyval": "^6.2.2",
     "katex": "^0.16.45",
-    "ollama-ai-provider-v2": "^1.5.5",
+    "ollama-ai-provider-v2": "^3.5.1",
     "polished": "^4.3.1",
     "prismjs": "^1.30.0",
     "quick-score": "^0.2.0",

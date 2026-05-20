@@ -18,6 +18,10 @@ pub struct Opts {
     #[clap(long, env = "ATOMIC_INITIALIZE")]
     pub initialize: bool,
 
+    /// Re-imports built-in ontologies and default server resources (`populate_all`) without rebuilding indexes or re-running full initialization.
+    #[clap(long, env = "ATOMIC_REPOPULATE_DEFAULTS")]
+    pub repopulate_defaults: bool,
+
     /// Re-builds the indexes. Parses all the resources.
     /// Do this when updating requires it, or if you have issues with Collections / Queries / Search.
     #[clap(value_enum, long, env = "ATOMIC_REBUILD_INDEX")]
@@ -226,6 +230,8 @@ pub struct Config {
     pub plugin_cache_path: PathBuf,
     /// If true, the initialization scripts will be ran (create first Drive, Agent, indexing, etc)
     pub initialize: bool,
+    /// If true, runs `populate_all` on startup without full initialize (no index rebuild).
+    pub repopulate_defaults: bool,
     /// Use the GPU (if available) for processing vector search embeddings.
     pub gpu_indexing: bool,
 
@@ -318,6 +324,7 @@ pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
     plugin_cache_path.push("plugin_cache");
 
     let initialize = !std::path::Path::exists(&store_path) || opts.initialize;
+    let repopulate_defaults = opts.repopulate_defaults;
 
     if opts.https & opts.email.is_none() {
         return Err(
@@ -360,6 +367,7 @@ pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
 
     Ok(Config {
         initialize,
+        repopulate_defaults,
         gpu_indexing,
         openrouter_api_key,
         openrouter_embedding_model,

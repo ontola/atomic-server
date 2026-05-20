@@ -97,8 +97,8 @@ impl AppState {
             tracing::warn!("Server URL resource not found. This is likely because the server URL has changed. Initializing a new database...");
         }
         let should_init = !&config.store_path.exists() || config.initialize || no_server_resource;
-        if should_init {
-            tracing::info!("Initialize: creating and populating new Database...");
+        if should_init || config.repopulate_defaults {
+            tracing::info!("Populating database with defaults...");
             atomic_lib::populate::populate_default_store(&store)
                 .await
                 .map_err(|e| format!("Failed to populate default store. {}", e))?;

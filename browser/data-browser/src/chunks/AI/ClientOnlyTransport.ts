@@ -57,8 +57,10 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
     abortSignal,
     ...options
   }: Parameters<ChatTransport<AtomicUIMessage>['sendMessages']>[0]) {
+    const messagesFromLastSummary = trimToLastSummary(options.messages);
+
     const transformedMessages = await this.options.addContextToMessages(
-      options.messages,
+      messagesFromLastSummary,
     );
 
     const agent = this.options.selectedAgent;
@@ -155,6 +157,15 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
 
     throw new Error('Invalid model provider');
   }
+}
+
+/** Returns messages starting from the last summary message (inclusive), or all messages if none. */
+function trimToLastSummary(messages: AtomicUIMessage[]): AtomicUIMessage[] {
+  const lastSummaryIndex = messages.findLastIndex(
+    m => m.metadata?.isSummary === true,
+  );
+
+  return lastSummaryIndex >= 0 ? messages.slice(lastSummaryIndex) : messages;
 }
 
 export const useClientOnlyTransport = (options: ClientOnlyTransportOptions) => {

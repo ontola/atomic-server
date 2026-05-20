@@ -21,6 +21,8 @@ export interface AIAgent {
   ragEnabled: boolean;
   skillsEnabled: boolean;
   temperature?: number;
+  /** 0 disables auto-compact; otherwise compact when input tokens exceed this % of model context. */
+  autoCompactThresholdPercent?: number;
 }
 
 export enum AIState {
@@ -62,6 +64,7 @@ export type MessageMetadata = {
   inputTokensUsed?: number;
   outputTokensUsed?: number;
   error?: string;
+  isSummary?: boolean;
 };
 
 export type AtomicUIMessage = UIMessage<MessageMetadata>;

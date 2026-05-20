@@ -165,7 +165,8 @@
       "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/tag/assistant",
       "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/tag/system",
       "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/tag/tool",
-      "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/tag/error"
+      "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/tag/error",
+      "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/tag/summary"
     ],
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
     "https://atomicdata.dev/properties/description": "The type of message",
@@ -251,6 +252,14 @@
     ],
     "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/role",
     "https://atomicdata.dev/properties/shortname": "system"
+  },
+  {
+    "@id": "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/tag/summary",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Tag"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/role",
+    "https://atomicdata.dev/properties/shortname": "summary"
   },
   {
     "@id": "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/tag/tool",

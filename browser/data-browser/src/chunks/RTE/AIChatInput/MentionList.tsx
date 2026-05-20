@@ -2,10 +2,16 @@ import { forwardRef, useImperativeHandle } from 'react';
 import styled from 'styled-components';
 import { getIconForClass } from '../../../helpers/iconMap';
 import { useSelectedIndex } from '../../../hooks/useSelectedIndex';
-import { FaAtom, FaServer, FaWandMagicSparkles } from 'react-icons/fa6';
+import {
+  FaAtom,
+  FaServer,
+  FaTerminal,
+  FaWandMagicSparkles,
+} from 'react-icons/fa6';
 import type {
   CategorySuggestion,
   AtomicResourceSuggestion,
+  CommandSuggestion,
   SearchSuggestion,
   MCPResourceSuggestion,
   SkillSuggestion,
@@ -85,6 +91,10 @@ export const MentionList = forwardRef<MentionListRef, MentionListProps>(
 
             if (isSkillSuggestion(item)) {
               return <SkillItem key={item.id} item={item} {...commonProps} />;
+            }
+
+            if (isCommandSuggestion(item)) {
+              return <CommandItem key={item.id} item={item} {...commonProps} />;
             }
 
             throw new Error(`Unknown suggestion type`);
@@ -187,6 +197,42 @@ const SkillItem: React.FC<DropdownItemProps<SkillSuggestion>> = ({
       </SkillItemContent>
     </button>
   );
+};
+
+const COMMAND_ICONS: Record<CommandSuggestion['id'], React.ComponentType> = {
+  compact: FaTerminal,
+  skill: FaWandMagicSparkles,
+};
+
+const CommandItem: React.FC<DropdownItemProps<CommandSuggestion>> = ({
+  item,
+  selected,
+  onClick,
+  onMouseOver,
+}) => {
+  const Icon = COMMAND_ICONS[item.id];
+
+  return (
+    <button
+      className={selected ? 'is-selected' : ''}
+      onClick={onClick}
+      // Focus is handled by selectedIndex
+      // eslint-disable-next-line jsx-a11y/mouse-events-have-key-events
+      onMouseOver={onMouseOver}
+    >
+      <Icon />
+      <SkillItemContent>
+        <span>/{item.label}</span>
+        <SkillDescription>{item.description}</SkillDescription>
+      </SkillItemContent>
+    </button>
+  );
+};
+
+const isCommandSuggestion = (
+  item: SearchSuggestion,
+): item is CommandSuggestion => {
+  return item.type === 'slash-command';
 };
 
 const isAtomicResourceSuggestion = (

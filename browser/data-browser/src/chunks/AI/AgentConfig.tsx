@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { styled } from 'styled-components';
-import { Row, Column } from '@components/Row';
+import { Column } from '@components/Row';
 import { FaPlus } from 'react-icons/fa6';
 import { ModelSelect } from './ModelSelect/ModelSelect';
 import { AIProvider } from '@components/AI/aiContstants';
@@ -11,11 +11,8 @@ import { Button } from '@components/Button';
 import { SkeletonButton } from '@components/SkeletonButton';
 import { MarkdownInput } from '@components/forms/MarkdownInput';
 import { Checkbox, CheckboxLabel } from '@components/forms/Checkbox';
-import {
-  Input,
-  InputWrapper,
-  InputStyled,
-} from '@components/forms/InputStyles';
+import { Input } from '@components/forms/InputStyles';
+import { SliderInput } from '@components/forms/SliderInput';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import { AgentConfigItem } from './AgentConfigItem';
 import atomicAgentPrompt from './system-prompts/atomic-agent.md?raw';
@@ -27,6 +24,8 @@ const temperatureFormatter = new Intl.NumberFormat(undefined, {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
+
+const DEFAULT_AUTO_COMPACT_THRESHOLD_PERCENT = 80;
 
 // Helper function to generate a unique ID
 const generateId = () => {
@@ -54,6 +53,7 @@ const defaultNewAgent: Omit<AIAgent, 'id'> = {
   ragEnabled: false,
   skillsEnabled: true,
   temperature: 0.1,
+  autoCompactThresholdPercent: DEFAULT_AUTO_COMPACT_THRESHOLD_PERCENT,
 };
 
 const defaultAgents: AIAgent[] = [
@@ -73,6 +73,7 @@ const defaultAgents: AIAgent[] = [
     ragEnabled: false,
     skillsEnabled: true,
     temperature: 0.1,
+    autoCompactThresholdPercent: DEFAULT_AUTO_COMPACT_THRESHOLD_PERCENT,
   },
   {
     name: 'General Agent',
@@ -89,6 +90,7 @@ const defaultAgents: AIAgent[] = [
     ragEnabled: false,
     skillsEnabled: true,
     temperature: 0.1,
+    autoCompactThresholdPercent: DEFAULT_AUTO_COMPACT_THRESHOLD_PERCENT,
   },
 ];
 
@@ -465,32 +467,58 @@ const AgentForm = ({ agent, isDefaultAgent, onChange }: AgentFormProps) => {
         fieldId='agent-temperature'
         helper='Trade accuracy for creativity'
       >
-        <Row center fullWidth>
-          <RangeInput
-            id='agent-temperature'
-            type='range'
-            min={0}
-            max={2}
-            step={0.01}
-            value={agent.temperature ?? 0}
-            onChange={e =>
-              handleChange('temperature', parseFloat(e.target.value))
+        <SliderInput
+          id='agent-temperature'
+          min={0}
+          max={2}
+          step={0.01}
+          value={agent.temperature ?? 0}
+          onChange={value => handleChange('temperature', value)}
+          formatValue={temperatureFormatter.format}
+          numberAriaLabel='Temperature value'
+        />
+      </StyledField>
+
+      <StyledField
+        label='Auto-compact threshold'
+        labelPrefix={
+          <Checkbox
+            checked={
+              (agent.autoCompactThresholdPercent ??
+                DEFAULT_AUTO_COMPACT_THRESHOLD_PERCENT) > 0
             }
+            onChange={checked =>
+              handleChange(
+                'autoCompactThresholdPercent',
+                checked ? DEFAULT_AUTO_COMPACT_THRESHOLD_PERCENT : 0,
+              )
+            }
+            aria-label='Enable auto-compact'
           />
-          <InputWrapper>
-            <InputStyled
-              type='number'
-              min={0}
-              max={2}
-              step={0.01}
-              value={temperatureFormatter.format(agent.temperature ?? 0)}
-              onChange={e =>
-                handleChange('temperature', parseFloat(e.target.value))
-              }
-              aria-label='Temperature value'
-            />
-          </InputWrapper>
-        </Row>
+        }
+        fieldId='agent-auto-compact-threshold'
+        helper='Automatically compact the conversation when input tokens exceed this percentage of the selected model context window. Manual /compact still works when disabled.'
+      >
+        {(agent.autoCompactThresholdPercent ??
+          DEFAULT_AUTO_COMPACT_THRESHOLD_PERCENT) === 0 ? (
+          <SubtleText>Don&apos;t auto compact conversation</SubtleText>
+        ) : (
+          <SliderInput
+            id='agent-auto-compact-threshold'
+            min={1}
+            max={100}
+            step={1}
+            suffix='%'
+            value={
+              agent.autoCompactThresholdPercent ??
+              DEFAULT_AUTO_COMPACT_THRESHOLD_PERCENT
+            }
+            onChange={value =>
+              handleChange('autoCompactThresholdPercent', value)
+            }
+            numberAriaLabel='Auto-compact threshold percent'
+          />
+        )}
       </StyledField>
     </FormContainer>
   );
@@ -545,11 +573,6 @@ const ToolList = styled.ul`
     margin: 0;
     padding: 0;
   }
-`;
-
-const RangeInput = styled.input`
-  flex: 1;
-  flex-basis: 75%;
 `;
 
 const SubtleText = styled.p`

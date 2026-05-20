@@ -34,6 +34,7 @@ const TAG_TO_ROLE_MAPPING = {
   'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/tag/system': 'system',
   'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/tag/tool': 'tool',
   'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/tag/error': 'error',
+  'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/tag/summary': 'summary',
 } as const;
 
 const roleToTagMapping = Object.fromEntries(
@@ -45,12 +46,15 @@ export const uiMessageToResource = async (
   parent: Resource<Ai.AiChat>,
   store: Store,
 ): Promise<Resource<Ai.AiMessage>> => {
+  // Summary messages are stored with role 'summary' regardless of their UI role.
+  const persistedRole = message.metadata?.isSummary ? 'summary' : message.role;
+
   const messageResource = await store.newResource<Ai.AiMessage>({
     subject: message.id,
     isA: ai.classes.aiMessage,
     parent: parent.subject,
     propVals: {
-      [ai.properties.role]: roleToTag(message.role),
+      [ai.properties.role]: roleToTag(persistedRole),
     },
   });
 
@@ -342,6 +346,23 @@ export const messageResourcesToDisplayMessages = async (
         id: resource.subject,
         role,
         parts: [toTextPart(contentResource)],
+      };
+    }
+
+    if (role === 'summary') {
+      const contentResource = partResources[0];
+
+      if (!resourceIsTextPart(contentResource)) {
+        throw new Error(
+          `Part with class ${contentResource.getClasses()} not supported on role: summary`,
+        );
+      }
+
+      message = {
+        id: resource.subject,
+        role: 'user',
+        parts: [toTextPart(contentResource)],
+        metadata: { isSummary: true },
       };
     }
 

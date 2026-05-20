@@ -10,6 +10,8 @@ import { complement } from 'polished';
 interface FieldProps {
   /** Label */
   label?: string;
+  /** Rendered before the label text in the label row (e.g. a checkbox). */
+  labelPrefix?: React.ReactNode;
   /** Helper text / collapsible info */
   helper?: React.ReactNode;
   /** If true the helper text will always be visible and no button to toggle it will be shown */
@@ -41,6 +43,7 @@ interface FieldProps {
 /** High level form field skeleton. Pass the actual input as a child component. */
 function Field({
   label,
+  labelPrefix,
   helper,
   helperAlwaysVisible,
   children,
@@ -59,6 +62,7 @@ function Field({
     <FieldStyled as={multiInput ? 'fieldset' : undefined} className={className}>
       <LabelWrapper>
         <Row gap='0.4rem' center>
+          {labelPrefix}
           <FieldLabel
             data-test={`field-label-${label}`}
             htmlFor={fieldId}

@@ -31,6 +31,9 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
   const { shouldGenerateTitles } = useAISettings();
   const [loading, setLoading] = useState(true);
   const [messages, setMessages] = useState<AtomicUIMessage[]>([]);
+  const [compactedMessages, setCompactedMessages] = useState<AtomicUIMessage[]>(
+    [],
+  );
   const [contextItems, setContextItems] = useState<AIMessageContext[]>([]);
   const [messageSubjects] = useArray(resource, ai.properties.messages);
   const [messageToResourceMap, setMessageToResourceMap] = useState(
@@ -96,11 +99,43 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
     });
   };
 
+  const handleCompact = async (
+    priorMessages: AtomicUIMessage[],
+    summaryMessage: AtomicUIMessage,
+    activeMessages: AtomicUIMessage[],
+  ) => {
+    setCompactedMessages(prev => [...prev, ...priorMessages]);
+    setMessages(activeMessages);
+
+    try {
+      const messageResource = await addMessageToChatResource(
+        summaryMessage,
+        resource,
+        store,
+      );
+
+      setMessageToResourceMap(prev => {
+        const next = new Map(prev);
+        next.set(summaryMessage, messageResource);
+
+        return next;
+      });
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to save summary message');
+    }
+  };
+
   const removeFollowingMessages = async (message: AtomicUIMessage) => {
+    const isHistorical = compactedMessages.some(m => m.id === message.id);
+    const allMessages = isHistorical
+      ? [...compactedMessages, ...messages]
+      : messages;
+
     try {
       const newMessages = await removeFollowingMessagesFromChatResource(
         message,
-        messages,
+        allMessages,
         messageToResourceMap,
         resource,
       );
@@ -108,12 +143,16 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
       setMessageToResourceMap(prev => {
         const next = new Map(prev);
 
-        for (const m of messages.slice(newMessages.length)) {
+        for (const m of allMessages.slice(newMessages.length)) {
           next.delete(m);
         }
 
         return next;
       });
+
+      if (isHistorical) {
+        setCompactedMessages([]);
+      }
 
       setMessages(newMessages);
     } catch (error) {
@@ -124,7 +163,18 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
   // On load create AIChatDisplayMessages from the resource's messages.
   useEffect(() => {
     messageResourcesToDisplayMessages(messageSubjects, store).then(map => {
-      setMessages(Array.from(map.keys()));
+      const allMessages = Array.from(map.keys());
+      const lastSummaryIndex = allMessages.findLastIndex(
+        m => m.metadata?.isSummary,
+      );
+
+      if (lastSummaryIndex > 0) {
+        setCompactedMessages(allMessages.slice(0, lastSummaryIndex));
+        setMessages(allMessages.slice(lastSummaryIndex));
+      } else {
+        setMessages(allMessages);
+      }
+
       setMessageToResourceMap(map);
       setLoading(false);
     });
@@ -138,11 +188,13 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
     <RealAIChat
       fullView
       initialMessages={messages}
+      historicalMessages={compactedMessages}
       readonly={!canWrite}
       externalContextItems={contextItems}
       setExternalContextItems={setContextItems}
       chatSubject={resource.subject}
       onNewMessage={addNewMessage}
+      onCompact={handleCompact}
       onDeleteMessage={handleDeleteMessage}
       onRegenerateMessage={removeFollowingMessages}
     >

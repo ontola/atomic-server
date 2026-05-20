@@ -37,7 +37,7 @@ const CardBase = styled.div.attrs<CardProps>(p => ({
 
 /** A Card with a border.
  * By default the Card has padding but if you use `Card.Content` inside the card, only the content will have padding.
-*/
+ */
 export const Card = Object.assign(CardBase, { Content });
 
 export interface CardRowProps {

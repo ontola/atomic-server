@@ -2607,9 +2607,8 @@ msgstr "Parametergröße:"
 msgid "No results"
 msgstr "Keine Ergebnisse"
 
-#: src/chunks/RTE/AIChatInput/AsyncAIChatInput.tsx
-msgid "Ask me anything..."
-msgstr "Frag mich alles..."
+#~ msgid "Ask me anything..."
+#~ msgstr "Frag mich alles..."
 
 #: src/chunks/RTE/AIChatInput/MentionList.tsx
 msgid "No result"
@@ -3038,12 +3037,12 @@ msgstr "Slug"
 msgid "Length"
 msgstr "Länge"
 
-#: src/components/forms/RangeInput.tsx
-#: src/components/forms/RangeInput.tsx
+#: src/components/forms/MinMaxInput.tsx
+#: src/components/forms/MinMaxInput.tsx
 msgid "Value should be a round number."
 msgstr "Der Wert sollte eine ganze Zahl sein."
 
-#: src/components/forms/RangeInput.tsx
+#: src/components/forms/MinMaxInput.tsx
 msgid "Min must be a less than max"
 msgstr "Der Minimalwert muss kleiner als der Maximalwert sein"
 
@@ -3538,3 +3537,77 @@ msgstr "Fehler beim Entfernen der Nachrichtenressource"
 #: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
 msgid "Reading{0} <0/>"
 msgstr "Liest{0} <0/>"
+
+#~ msgid "Context compacted"
+#~ msgstr "Kontext komprimiert"
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Compacting context"
+msgstr "Kontext komprimieren"
+
+#: src/chunks/AI/AIChatPage.tsx
+msgid "Failed to save summary message"
+msgstr "Fehler beim Speichern der Zusammenfassungsnachricht"
+
+#~ msgid "Context compacted {0}"
+#~ msgstr "Kontext komprimiert {0}"
+
+#: src/chunks/AI/CompactSeparatorWidget.tsx
+msgid "Show summary"
+msgstr "Zusammenfassung anzeigen"
+
+#. 0: summaryText && ( <ChevronIcon expanded={expanded}> <FaChevronRight /> </ChevronIcon> )
+#: src/chunks/AI/CompactSeparatorWidget.tsx
+msgid "{0} Context compacted"
+msgstr "{0} Kontext komprimiert"
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "Auto-compact threshold percent"
+msgstr "Prozentsatz des automatischen Kompaktierungs-Schwellenwerts"
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "Auto-compact threshold"
+msgstr "Automatischer Kompaktierungs-Schwellenwert"
+
+#~ msgid "Automatically compact the conversation when input tokens exceed this percentage of the selected model context window. Set to 0% to disable auto-compact (manual /compact still works)."
+#~ msgstr "Die Konversation wird automatisch komprimiert, wenn die Eingabetoken diesen Prozentsatz des ausgewählten Modellkontextfensters überschreiten. Auf 0 % setzen, um die automatische Komprimierung zu deaktivieren (manuelle /compact-Funktion funktioniert weiterhin)."
+
+#~ msgid "<0/> Auto-compact threshold"
+#~ msgstr "<0/> Auto-Verdichtungs-Schwellenwert"
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "Don't auto compact conversation"
+msgstr "Konversation nicht automatisch verdichten"
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "Automatically compact the conversation when input tokens exceed this percentage of the selected model context window. Manual /compact still works when disabled."
+msgstr "Verdichtet die Konversation automatisch, wenn die Eingabetoken diesen Prozentsatz des ausgewählten Modellkontextfensters überschreiten. Manuelles /compact funktioniert weiterhin, wenn diese Option deaktiviert ist."
+
+#~ msgid "Disable auto-compact"
+#~ msgstr "Automatisches Komprimieren deaktivieren"
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "Enable auto-compact"
+msgstr "Automatisches Verdichten aktivieren"
+
+#~ msgid "<0/> /M"
+#~ msgstr "<0/> /M"
+
+#~ msgid "Hello"
+#~ msgstr ""
+
+#~ msgid "Find cats"
+#~ msgstr ""
+
+#~ msgid "What is this?"
+#~ msgstr ""
+
+#~ msgid "RAG snippet about the drive"
+#~ msgstr ""
+
+#~ msgid "Tool call failed"
+#~ msgstr ""
+
+#: src/chunks/RTE/AIChatInput/AsyncAIChatInput.tsx
+msgid "Ask me anything, / for commands, @ for context"
+msgstr "Fragen Sie mich alles, / für Befehle, @ für Kontext"

@@ -2,7 +2,8 @@ export type SearchSuggestion =
   | AtomicResourceSuggestion
   | CategorySuggestion
   | MCPResourceSuggestion
-  | SkillSuggestion;
+  | SkillSuggestion
+  | CommandSuggestion;
 
 export type MentionItem =
   | AtomicResourceSuggestion
@@ -32,6 +33,13 @@ export type MCPResourceSuggestion = {
 export type SkillSuggestion = {
   type: 'skill';
   id: string;
+  label: string;
+  description: string;
+};
+
+export type CommandSuggestion = {
+  type: 'slash-command';
+  id: 'compact' | 'skill';
   label: string;
   description: string;
 };

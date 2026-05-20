@@ -1,22 +1,50 @@
 import { styled } from 'styled-components';
-import { useEffect, useRef } from 'react';
+import { useEffect, useEffectEvent, useRef } from 'react';
 import { ScrollArea } from '@components/ScrollArea';
 import { Column } from '@components/Row';
 
 interface ChatMessagesContainerProps {
   enableAutoScroll?: boolean;
+  /** When this value changes, scroll the compact separator (or bottom) into view. */
+  scrollToCompactTrigger?: number;
   fullView?: boolean;
 }
 
 export const ChatMessagesContainer: React.FC<
   React.PropsWithChildren<ChatMessagesContainerProps>
-> = ({ children, enableAutoScroll, fullView }) => {
+> = ({ children, enableAutoScroll, scrollToCompactTrigger, fullView }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'instant' });
   };
+
+  const scrollToCompactSeparator = useEffectEvent(() => {
+    const separators = containerRef.current?.querySelectorAll(
+      '[data-compact-separator]',
+    );
+    const separator =
+      separators && separators.length > 0
+        ? separators[separators.length - 1]
+        : null;
+
+    if (separator) {
+      separator.scrollIntoView({ behavior: 'instant', block: 'center' });
+
+      return;
+    }
+
+    scrollToBottom();
+  });
+
+  useEffect(() => {
+    if (scrollToCompactTrigger === undefined || scrollToCompactTrigger === 0) {
+      return;
+    }
+
+    scrollToCompactSeparator();
+  }, [scrollToCompactTrigger]);
 
   useEffect(() => {
     // Initial scroll to bottom when component mounts

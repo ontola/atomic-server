@@ -5,7 +5,7 @@ import { skillTools, getSkillsSystemPromptPart } from './skills/skill';
 import { AIChatMessage } from './AIChatMessage';
 import { type FileUIPart } from 'ai';
 import { useTools } from './useTools';
-import { styled } from 'styled-components';
+import { styled, keyframes } from 'styled-components';
 import { GeneratingIndicator } from './GeneratingIndicator';
 import { IconButton } from '@components/IconButton/IconButton';
 import { FaXmark, FaPaperclip, FaFile } from 'react-icons/fa6';
@@ -27,10 +27,15 @@ import { MessageContextItem } from './MessageContextItem';
 import { useProcessMessages } from './useProcessMessages';
 import { NoKeyOverlay } from './NoKeyOverlay';
 import { useOpenRouterModels } from './useOpenRouterModels';
+import {
+  getAutoCompactTokenThreshold,
+  useModelContextLength,
+} from './useModelContextLength';
 import type { MentionItem } from '@chunks/RTE/AIChatInput/types';
 import { useChat } from '@ai-sdk/react';
 import { useClientOnlyTransport } from './ClientOnlyTransport';
 import { useGenerativeData } from './useGenerativeData';
+import { useConversationSummary } from './useConversationSummary';
 import { FollowUpPrompt } from './FollowUpPrompt';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import UsesMCPServers from '@components/AI/MCP/UsesMCPServers';
@@ -49,7 +54,18 @@ interface RealAIChatProps {
   fullView?: boolean;
   readonly?: boolean;
   initialMessages?: AtomicUIMessage[];
+  /** Messages that predate the latest compaction — shown in UI but not sent to the LLM. */
+  historicalMessages?: AtomicUIMessage[];
   onNewMessage: (message: AtomicUIMessage) => void;
+  /**
+   * Called when compaction happens. All prior messages move to historical UI state;
+   * activeMessages is `[summary, ...lastTwo]` for LLM context and parent sync.
+   */
+  onCompact?: (
+    priorMessages: AtomicUIMessage[],
+    summaryMessage: AtomicUIMessage,
+    activeMessages: AtomicUIMessage[],
+  ) => void;
   externalContextItems: AIMessageContext[];
   chatSubject?: string;
   setExternalContextItems: React.Dispatch<
@@ -74,10 +90,12 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   fullView = false,
   readonly = false,
   initialMessages,
+  historicalMessages,
   externalContextItems,
   chatSubject,
   setExternalContextItems,
   onNewMessage,
+  onCompact,
   onDeleteMessage,
   onRegenerateMessage,
   children,
@@ -93,6 +111,9 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
 
   // useChat does not update it's options so we need to use a ref to make it use the latest value.
   const showFollowUpPromptsRef = useRef(showFollowUpPrompts);
+  const autoCompactTokenThresholdRef = useRef<number | null>(null);
+  // Use a ref for the guard so the stale onFinish closure sees the current value.
+  const isCompactingRef = useRef(false);
 
   const { getInitialAgent, setLastUsedAgentForChat, setLastUsedSidebarAgent } =
     useAIAgentConfig();
@@ -112,6 +133,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   const [selectedAgent, setSelectedAgent] = useState<AIAgent>(
     getInitialAgent(!chatSubject, chatSubject),
   );
+  const modelContextLength = useModelContextLength(selectedAgent.model);
   const addContextToMessages = useProcessMessages({
     includeDriveInstructions: selectedAgent.canReadAtomicData,
   });
@@ -130,6 +152,9 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     AIMessageContext[]
   >([]);
   const { generateFollowUpQuestions } = useGenerativeData();
+  const { generateConversationSummary } = useConversationSummary(
+    selectedAgent.model,
+  );
   const [agentConfigOpen, setAgentConfigOpen] = useState(false);
   const [followUpQuestions, setFollowUpQuestions] = useState<string[]>([]);
 
@@ -176,8 +201,68 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
         if (showFollowUpPromptsRef.current && message.role === 'assistant') {
           generateFollowUpQuestions(_messages).then(setFollowUpQuestions);
         }
+
+        const inputTokens = message.metadata?.inputTokensUsed ?? 0;
+        const threshold = autoCompactTokenThresholdRef.current;
+
+        if (threshold !== null && inputTokens > threshold) {
+          compact(_messages);
+        }
       },
     });
+
+  const [isCompacting, setIsCompacting] = useState(false);
+  const [scrollToCompactTrigger, setScrollToCompactTrigger] = useState(0);
+
+  const compact = async (messagesOverride?: AtomicUIMessage[]) => {
+    const messagesToCompact = messagesOverride ?? messages;
+
+    if (isCompactingRef.current || messagesToCompact.length < 2) return;
+
+    isCompactingRef.current = true;
+    setIsCompacting(true);
+
+    let summaryText: string | undefined;
+
+    try {
+      summaryText = await generateConversationSummary(messagesToCompact);
+    } catch (e) {
+      console.error(e);
+      isCompactingRef.current = false;
+      setIsCompacting(false);
+
+      return;
+    }
+
+    if (!summaryText) {
+      isCompactingRef.current = false;
+      setIsCompacting(false);
+
+      return;
+    }
+
+    const summaryMessage: AtomicUIMessage = {
+      id: store.createSubject(),
+      role: 'user',
+      parts: [
+        {
+          type: 'text',
+          text: `<conversation-summary>\n${summaryText}\n</conversation-summary>`,
+        },
+      ],
+      metadata: { isSummary: true },
+    };
+
+    const keep = messagesToCompact.slice(-2);
+    const activeMessages: AtomicUIMessage[] = [summaryMessage, ...keep];
+
+    setMessages(activeMessages);
+    onCompact?.(messagesToCompact, summaryMessage, activeMessages);
+    setScrollToCompactTrigger(t => t + 1);
+
+    isCompactingRef.current = false;
+    setIsCompacting(false);
+  };
 
   const usage = messages.reduce(
     (acc, message) => ({
@@ -250,6 +335,14 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
 
   const handleSubmit = async (inputOverride?: string) => {
     const text = inputOverride || userInput;
+
+    if (text.trim() === '/compact') {
+      setUserInput('');
+      await compact();
+
+      return;
+    }
+
     const context = [...externalContextItems, ...userSelectedContextItems];
     const message: AtomicUIMessage = {
       id: store.createSubject(),
@@ -304,6 +397,17 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   const regenerateMessage = async (message: AtomicUIMessage) => {
     await onRegenerateMessage(message);
 
+    // If the message is historical (before the summary), it isn't in useChat's
+    // internal messages. Restore those messages so regenerate() can find the ID.
+    if (historicalMessageIds.has(message.id)) {
+      const historicalList = historicalMessages ?? [];
+      const targetIndex = historicalList.findIndex(m => m.id === message.id);
+
+      if (targetIndex !== -1) {
+        setMessages(historicalList.slice(0, targetIndex + 1));
+      }
+    }
+
     regenerate({
       messageId: message.id,
     });
@@ -325,18 +429,48 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   const isEmptyChat = messages.length === 0;
   const totalTokensUsed = usage.input + usage.output;
 
+  // Kept messages stay in useChat for the LLM but are shown only in historicalMessages.
+  const historicalMessageIds = new Set(
+    (historicalMessages ?? []).map(m => m.id),
+  );
+  const visibleMessages = messages.filter(
+    m => m.metadata?.isSummary || !historicalMessageIds.has(m.id),
+  );
+
   useEffect(() => {
     showFollowUpPromptsRef.current = showFollowUpPrompts;
   }, [showFollowUpPrompts]);
+
+  useEffect(() => {
+    const percent = selectedAgent.autoCompactThresholdPercent ?? 80;
+    autoCompactTokenThresholdRef.current = getAutoCompactTokenThreshold(
+      modelContextLength,
+      percent,
+    );
+  }, [selectedAgent.autoCompactThresholdPercent, modelContextLength]);
 
   return (
     <ChatWindow fullView={fullView} empty={messages.length === 0}>
       {children}
       <ChatMessagesContainer
         enableAutoScroll={status === 'streaming'}
+        scrollToCompactTrigger={scrollToCompactTrigger}
         fullView={fullView}
       >
-        {messages.map(message => (
+        {historicalMessages && historicalMessages.length > 0 && (
+          <>
+            {historicalMessages.map(message => (
+              <HistoricalMessageWrapper key={message.id}>
+                <AIChatMessage
+                  message={message}
+                  onDeleteMessage={deleteMessage}
+                  onRegenerateMessage={regenerateMessage}
+                />
+              </HistoricalMessageWrapper>
+            ))}
+          </>
+        )}
+        {visibleMessages.map(message => (
           <AIChatMessage
             key={message.id}
             message={message}
@@ -357,6 +491,11 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
         {status !== 'streaming' && isRagging && (
           <Row center gap='0.2ch'>
             <GeneratingIndicator text='Gathering context' />
+          </Row>
+        )}
+        {isCompacting && (
+          <Row center gap='0.2ch'>
+            <GeneratingIndicator text='Compacting context' />
           </Row>
         )}
         {!readonly && (
@@ -431,6 +570,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                   onMentionUpdate={handleMentionUpdate}
                   onChange={setUserInput}
                   onSubmit={handleSubmit}
+                  onCompact={compact}
                   onFileAdded={
                     checkModelSupportsImageInput(selectedAgent.model)
                       ? handleFileUpload
@@ -617,4 +757,21 @@ const ContextItemRow = styled(Row)`
 
 const IndexingIndicator = styled(Row)`
   color: ${p => p.theme.colors.textLight};
+`;
+
+/**
+ * Animates from full opacity (in-viewport) to dim (above viewport) as the message
+ * exits by scrolling upward. The exit range covers exactly the height of the element
+ * crossing the viewport's top edge, so the fade-out is proportional to scroll distance.
+ * animation-fill-mode: both keeps it dim when above the viewport and bright when in view.
+ */
+const historicalExitFade = keyframes`
+  from { opacity: 1; }
+  to { opacity: 0.2; }
+`;
+
+const HistoricalMessageWrapper = styled.div`
+  animation: ${historicalExitFade} linear both;
+  animation-timeline: view();
+  animation-range: exit 0% exit 80%;
 `;

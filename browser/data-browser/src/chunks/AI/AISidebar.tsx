@@ -117,6 +117,9 @@ const AISidebar: React.FC = () => {
   const { isOpen, contextItems, setContextItems, setIsOpen } = useAISidebar();
   const { drive } = useSettings();
   const [messages, setMessages] = useState<AtomicUIMessage[]>([]);
+  const [compactedMessages, setCompactedMessages] = useState<AtomicUIMessage[]>(
+    [],
+  );
   // The chat callbacks can fire before React has committed the latest state, so
   // keep mutable mirrors for values that async persistence logic must read.
   const messagesRef = useRef<AtomicUIMessage[]>([]);
@@ -126,9 +129,7 @@ const AISidebar: React.FC = () => {
   const isChatSavedRef = useRef(false);
   // Draft creation is shared by "sidebar opened" and "first message added".
   // Store the in-flight promise so both paths use the same resource.
-  const draftChatPromiseRef = useRef<Promise<
-    Resource<Ai.AiChat>
-  > | null>(null);
+  const draftChatPromiseRef = useRef<Promise<Resource<Ai.AiChat>> | null>(null);
   // Incremented when starting a new chat to ignore stale async resource
   // creation from the previous conversation.
   const chatGenerationRef = useRef(0);
@@ -174,6 +175,27 @@ const AISidebar: React.FC = () => {
     return newChatResource;
   }, [drive, store]);
 
+  const handleCompact = (
+    priorMessages: AtomicUIMessage[],
+    summaryMessage: AtomicUIMessage,
+    activeMessages: AtomicUIMessage[],
+  ) => {
+    setCompactedMessages(prev => [...prev, ...priorMessages]);
+    messagesRef.current = activeMessages;
+    setMessages(activeMessages);
+
+    persistSidebarMessage({
+      message: summaryMessage,
+      newMessages: activeMessages,
+      store,
+      getOrCreateDraftChatResource,
+      isChatSavedRef,
+      titlePromiseRef,
+      setMessageToResourceMap,
+      setIsChatSaved,
+    }).catch(handleSidebarMessageSaveError);
+  };
+
   const addNewMessage = (message: AtomicUIMessage) => {
     const newMessages = [...messagesRef.current, message];
 
@@ -210,11 +232,9 @@ const AISidebar: React.FC = () => {
 
     if (chatResource && messageResource) {
       try {
-        await removeMessageFromChatResource(
-          messageResource,
-          chatResource,
-          { saveChat: isChatSavedRef.current },
-        );
+        await removeMessageFromChatResource(messageResource, chatResource, {
+          saveChat: isChatSavedRef.current,
+        });
       } catch (error) {
         console.error('Error removing message:', error);
         toast.error('Failed to remove AI chat message');
@@ -241,6 +261,7 @@ const AISidebar: React.FC = () => {
     isChatSavedRef.current = false;
     setIsChatSaved(false);
     setMessages([]);
+    setCompactedMessages([]);
     messagesRef.current = [];
     setMessageToResourceMap(new Map());
     titlePromiseRef.current = undefined;
@@ -254,11 +275,16 @@ const AISidebar: React.FC = () => {
   };
 
   const onRegenerateMessage = async (message: AtomicUIMessage) => {
+    const isHistorical = compactedMessages.some(m => m.id === message.id);
+    const allMessages = isHistorical
+      ? [...compactedMessages, ...messages]
+      : messages;
+
     if (chatResource) {
       try {
         const trimmedMessages = await removeFollowingMessagesFromChatResource(
           message,
-          messages,
+          allMessages,
           messageToResourceMap,
           chatResource,
           { saveChat: isChatSavedRef.current },
@@ -267,12 +293,16 @@ const AISidebar: React.FC = () => {
         setMessageToResourceMap(prev => {
           const next = new Map(prev);
 
-          for (const m of messages.slice(trimmedMessages.length)) {
+          for (const m of allMessages.slice(trimmedMessages.length)) {
             next.delete(m);
           }
 
           return next;
         });
+
+        if (isHistorical) {
+          setCompactedMessages([]);
+        }
 
         messagesRef.current = trimmedMessages;
         setMessages(trimmedMessages);
@@ -286,10 +316,14 @@ const AISidebar: React.FC = () => {
     }
 
     // Remove all messages after the one that was regenerated
-    const trimmedMessages = messages.slice(
+    const trimmedMessages = allMessages.slice(
       0,
-      messages.findIndex(x => x.id === message.id) + 1,
+      allMessages.findIndex(x => x.id === message.id) + 1,
     );
+
+    if (isHistorical) {
+      setCompactedMessages([]);
+    }
 
     messagesRef.current = trimmedMessages;
     setMessages(trimmedMessages);
@@ -348,7 +382,9 @@ const AISidebar: React.FC = () => {
       {/* When resetting the chat it is better to refresh the whole component because the useChat hook keeps internal state that is not easy to reset. */}
       <RealAIChat
         initialMessages={messages}
+        historicalMessages={compactedMessages}
         onNewMessage={addNewMessage}
+        onCompact={handleCompact}
         externalContextItems={contextItems}
         setExternalContextItems={setContextItems}
         chatSubject={isChatSaved ? chatResource?.subject : undefined}

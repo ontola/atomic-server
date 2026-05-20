@@ -98,6 +98,7 @@ interface AsyncAIChatInputProps {
   onMentionUpdate: (mentions: MentionItem[]) => void;
   onChange: (markdown: string) => void;
   onSubmit: () => void;
+  onCompact?: () => void;
   onFileAdded?: (files: File[]) => void;
   rightAlignedChildren?: React.ReactNode;
 }
@@ -113,6 +114,7 @@ const AsyncAIChatInput: React.FC<
   onMentionUpdate,
   onChange,
   onSubmit,
+  onCompact,
   onFileAdded,
   rightAlignedChildren,
 }) => {
@@ -122,9 +124,11 @@ const AsyncAIChatInput: React.FC<
   const [markdown, setMarkdown] = useState('');
   const markdownRef = useRef(markdown);
   const onSubmitRef = useRef(onSubmit);
+  const onCompactRef = useRef(onCompact);
   const disableSubmitRef = useRef(disableSubmit);
   markdownRef.current = markdown;
   onSubmitRef.current = onSubmit;
+  onCompactRef.current = onCompact;
   disableSubmitRef.current = disableSubmit;
 
   const { serversWithResources, searchResourcesOfServer } = useMcpServers();
@@ -193,14 +197,14 @@ const AsyncAIChatInput: React.FC<
           },
           suggestion: {
             char: '/',
-            ...skillSuggestionBuilder(),
+            ...skillSuggestionBuilder(() => onCompactRef.current?.()),
           },
           renderText({ node }) {
             return `/${node.attrs.label ?? ''}`;
           },
         }),
         Placeholder.configure({
-          placeholder: 'Ask me anything...',
+          placeholder: 'Ask me anything, / for commands, @ for context',
         }),
         ...addIf(
           !!onFileAdded,

@@ -2,7 +2,7 @@ import { useCallback, type JSX } from 'react';
 import { InputStyled, InputWrapper } from './InputStyles';
 import { Row } from '../Row';
 
-interface RangeInputProps {
+interface MinMaxInputProps {
   minValue?: number;
   maxValue?: number;
   round?: boolean;
@@ -47,14 +47,14 @@ export function validateRange(
   return error;
 }
 
-export function RangeInput({
+export function MinMaxInput({
   round = false,
   minValue,
   maxValue,
   invalid,
   onBlur,
   onChange,
-}: RangeInputProps): JSX.Element {
+}: MinMaxInputProps): JSX.Element {
   const handleMinChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const num = toOptionalNum(e.target.value, round);
