@@ -183,7 +183,17 @@ function FancyTableInner<T>({
 
   const rowProps = useMemo(() => ({}), []);
 
-  const VirtualList = useCallback(
+  // Render the StyledList (react-window) directly — NOT wrapped in a
+  // `useCallback`'d component. A wrapper component's identity changes whenever
+  // `itemCount`/`Row` change (every time a row is added), and `<Wrapper/>`
+  // with a new function type makes React unmount + remount `StyledList`,
+  // which resets react-window's scrollTop to 0. That's invisible while all
+  // rows fit the viewport, but once the list has scrolled to follow the active
+  // cell, the remount snaps it back to the top — throwing the active cell off
+  // screen, where it's virtualized out and stops receiving keystrokes (so
+  // rapid Enter-entry silently stops adding rows). Rendering the stable
+  // `StyledList` type means only its props update; scroll position is kept.
+  const renderList = useCallback(
     ({ height }: { height: number | undefined }) => (
       <StyledList
         style={{ height: height ?? 0, width: '100%' }}
@@ -246,9 +256,7 @@ function FancyTableInner<T>({
               NewColumnButtonComponent={NewColumnButtonComponent}
             />
             <AutoSizeTamer role='rowgroup'>
-              <AutoSizer
-                renderProp={({ height }) => <VirtualList height={height} />}
-              />
+              <AutoSizer renderProp={renderList} />
             </AutoSizeTamer>
             <ActiveCellIndicator
               sizeStr={templateColumns}
