@@ -12,7 +12,7 @@ import {
   commitIdOf,
   commitToJsonADObject,
 } from './commit.js';
-import { validateDatatype } from './datatypes.js';
+import { validateDatatype, datatypeTag } from './datatypes.js';
 import { isUnauthorized } from './error.js';
 import { commits } from './ontologies/commits.js';
 import { core } from './ontologies/core.js';
@@ -535,6 +535,45 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     this._cache = nextCache;
+  }
+
+  /**
+   * Phase 1 (loro-source-of-truth): populate the sibling `datatypes` Loro map
+   * so the server recovers reference / array `Value` variants exactly instead
+   * of guessing. The map is sparse — only load-bearing datatypes get a tag;
+   * see {@link datatypeTag}. Idempotent: re-signing rewrites nothing.
+   *
+   * Cache-only — never triggers a fetch. A property whose definition is not
+   * already cached is left untagged; the server then falls back to its
+   * materialization heuristic, exactly as before this map existed. Properties
+   * edited via `set()` with validation are always cached by the time we sign.
+   */
+  private writeDatatypeTags(): void {
+    const doc = this._loroDoc;
+
+    if (!doc) {
+      return;
+    }
+
+    const props = doc.getMap('properties').toJSON() as Record<string, unknown>;
+    const datatypesMap = doc.getMap('datatypes');
+
+    for (const [prop, loroValue] of Object.entries(props)) {
+      const datatype = this.store?.resources
+        .get(prop)
+        ?.get(core.properties.datatype)
+        ?.toString();
+
+      if (datatype === undefined) {
+        continue;
+      }
+
+      const tag = datatypeTag(datatype, loroValue);
+
+      if (tag !== undefined && datatypesMap.get(prop) !== tag) {
+        datatypesMap.set(prop, tag);
+      }
+    }
   }
 
   private resetLoroState(): void {
@@ -1396,11 +1435,7 @@ export class Resource<C extends OptionalClass = any> {
       list = map.setContainer(propUrl, new LoroList());
     }
 
-    if (
-      item !== null &&
-      typeof item === 'object' &&
-      !Array.isArray(item)
-    ) {
+    if (item !== null && typeof item === 'object' && !Array.isArray(item)) {
       const itemMap = list.pushContainer(new LoroMap());
       this.writeJsonToLoroMap(itemMap, item as JSONObject);
     } else {
@@ -1438,10 +1473,7 @@ export class Resource<C extends OptionalClass = any> {
     }
   }
 
-  private writeJsonToLoroList(
-    list: LoroList,
-    arr: JSONValue[],
-  ): void {
+  private writeJsonToLoroList(list: LoroList, arr: JSONValue[]): void {
     const { LoroList, LoroMap } = LoroLoader.Loro;
 
     for (const item of arr) {
@@ -1500,6 +1532,12 @@ export class Resource<C extends OptionalClass = any> {
     this.getLoroDoc();
     this.rebuildCacheFromLoro();
     this._cacheDirty = false;
+
+    // Phase 1 (loro-source-of-truth): stamp the sibling `datatypes` map so
+    // the server materializes references/arrays exactly. Runs here — after
+    // every property is in the doc, before the snapshot export below — so it
+    // covers props set via `set()` and via cache hydration alike.
+    this.writeDatatypeTags();
 
     // Chain: use last locally-signed commit, or the server-known lastCommit.
     if (this._lastLocalSignature) {

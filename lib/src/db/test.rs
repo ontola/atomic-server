@@ -1342,3 +1342,96 @@ async fn loro_non_property_container_survives_commit_roundtrip() {
          (this is what the WS GET handler serves to a second viewer)",
     );
 }
+
+/// A deleted resource must not leave its Loro snapshot orphaned in
+/// `Tree::LoroSnapshots`, and the subject must be tombstoned so bulk sync
+/// does not resurrect it. Regression test for Phase 0 of the
+/// `loro-source-of-truth` plan.
+#[tokio::test]
+#[timeout(30000)]
+async fn remove_resource_deletes_loro_snapshot() {
+    let store = Db::init_temp("orphan_snapshot").await.unwrap();
+    let drive = store.create_drive("test-drive").await.unwrap();
+    let did = store
+        .create_resource(
+            "https://atomicdata.dev/classes/Property",
+            &drive,
+            "age",
+            None,
+        )
+        .await
+        .unwrap();
+    let subject = Subject::from_raw(&did, store.get_base_domain().as_deref());
+    let pure_id = subject.pure_id();
+
+    assert!(
+        store
+            .kv
+            .get(Tree::LoroSnapshots, pure_id.as_bytes())
+            .unwrap()
+            .is_some(),
+        "a Loro snapshot should be persisted for a freshly created resource"
+    );
+
+    store.remove_resource(&subject).await.unwrap();
+
+    assert!(
+        store
+            .kv
+            .get(Tree::LoroSnapshots, pure_id.as_bytes())
+            .unwrap()
+            .is_none(),
+        "Loro snapshot was orphaned after remove_resource"
+    );
+    assert!(
+        crate::sync::tombstones::is_tombstoned(&store, &pure_id),
+        "removed subject should be tombstoned to prevent sync resurrection"
+    );
+}
+
+/// Deleting via a subject that carries a `?drive=` hint must still remove the
+/// snapshot — it is keyed by `pure_id()`. Regression test for the mis-keyed
+/// `apply_destroy` snapshot removal.
+#[tokio::test]
+#[timeout(30000)]
+async fn remove_resource_with_drive_hint_subject_deletes_snapshot() {
+    let store = Db::init_temp("orphan_snapshot_hint").await.unwrap();
+    let drive = store.create_drive("test-drive").await.unwrap();
+    let did = store
+        .create_resource(
+            "https://atomicdata.dev/classes/Property",
+            &drive,
+            "age",
+            None,
+        )
+        .await
+        .unwrap();
+    let subject = Subject::from_raw(&did, store.get_base_domain().as_deref());
+    let pure_id = subject.pure_id();
+    assert!(
+        store
+            .kv
+            .get(Tree::LoroSnapshots, pure_id.as_bytes())
+            .unwrap()
+            .is_some()
+    );
+
+    // Delete via a subject carrying a `?drive=` hint. The snapshot is keyed by
+    // pure_id(); the old raw-subject key would miss it.
+    let hinted = subject.clone().set_drive_hint(drive.clone());
+    assert_ne!(
+        hinted.to_string(),
+        pure_id,
+        "drive hint should make to_string() differ from pure_id()"
+    );
+    store.remove_resource(&hinted).await.unwrap();
+
+    assert!(
+        store
+            .kv
+            .get(Tree::LoroSnapshots, pure_id.as_bytes())
+            .unwrap()
+            .is_none(),
+        "snapshot orphaned when deleting via a drive-hinted subject"
+    );
+}

@@ -42,6 +42,37 @@ export const datatypeFromUrl = (url: string): Datatype => {
   return Datatype.UNKNOWN;
 };
 
+/**
+ * The sibling `datatypes` Loro-map tag for a property, mirroring the Rust
+ * `datatype_tag` (`lib/src/loro.rs`). Lets the server materialize a value to
+ * the exact `Value` variant instead of guessing from the primitive.
+ *
+ * Only the load-bearing reference / array distinctions are tagged; cosmetic
+ * datatypes (string/markdown/slug/date/uri) and scalars collapse and carry no
+ * tag. A nested resource (an object stored as a JSON string under an
+ * `atomicURL` property) is left untagged for the server's heuristic — see
+ * `planning/loro-source-of-truth.md`.
+ *
+ * `loroValue` is the value as stored in the Loro `properties` map.
+ */
+export const datatypeTag = (
+  datatype: string,
+  loroValue: unknown,
+): string | undefined => {
+  switch (datatype) {
+    case Datatype.ATOMIC_URL:
+      return typeof loroValue === 'string' && !loroValue.startsWith('{')
+        ? 'atomicUrl'
+        : undefined;
+    case Datatype.RESOURCEARRAY:
+      return 'resourceArray';
+    case Datatype.JSON:
+      return 'json';
+    default:
+      return undefined;
+  }
+};
+
 const slug_regex = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 // https://stackoverflow.com/a/22061879/2502163
 const dateStringRegex = /^\d{4}-(0[1-9]|1[012])-(0[1-9]|[12][0-9]|3[01])$/;

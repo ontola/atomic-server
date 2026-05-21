@@ -121,6 +121,18 @@ impl Operation {
             val: None,
         }
     }
+
+    /// Remove a resource's Loro snapshot. `pure_id` must be the
+    /// [`crate::Subject::pure_id`] form — that is the key snapshots are
+    /// written under (see `apply_commit` / `add_resource_opts`).
+    pub fn remove_loro_snapshot(pure_id: &str) -> Self {
+        Operation {
+            tree: Tree::LoroSnapshots,
+            method: Method::Delete,
+            key: pure_id.as_bytes().to_vec(),
+            val: None,
+        }
+    }
 }
 
 /// A set of [Operation]s that should be executed atomically by the database.

@@ -104,12 +104,18 @@ pub async fn apply_destroy(store: &Db, subject: &str) -> AtomicResult<()> {
         return Ok(());
     }
 
+
     set_importing(true);
     let subj = crate::Subject::from_raw(subject, store.get_base_domain().as_deref());
+    // `remove_resource` deletes the resource, its Loro snapshot (keyed by
+    // `pure_id()`) and records a tombstone. The previous explicit
+    // `kv.remove(LoroSnapshots, subject.as_bytes())` here was mis-keyed by the
+    // raw subject and missed snapshots for `?drive=`-suffixed subjects.
     let _ = store.remove_resource(&subj).await;
-    let _ = store
-        .kv
-        .remove(crate::db::trees::Tree::LoroSnapshots, subject.as_bytes());
+    // Tombstone again unconditionally: a DESTROY for a subject we never
+    // stored makes `remove_resource` error out before it records one, and we
+    // still must not resurrect it on the next bulk sync. `record_tombstone`
+    // is idempotent.
     crate::sync::tombstones::record_tombstone(store, subject);
     set_importing(false);
     tracing::info!("[ws_apply] deleted {}", &subject[..subject.len().min(20)]);

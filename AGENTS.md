@@ -84,15 +84,28 @@ Atomic Server is a graph database with real-time sync, built on **Loro CRDT** fo
 1. Commit arrives at `/commit`
 2. `apply_changes()` imports `loroUpdate` into resource's LoroDoc
 3. `import_update_with_diff()` computes add/remove atoms for search indexing
-4. `loro_value_to_atomic_value()` materializes Loro values to Atomic `Value` types
+4. `loro_value_to_atomic_value_tagged()` materializes Loro values to Atomic `Value` types, using the `datatypes` map
 5. Loro snapshot stored alongside PropVals for future merges
 
 ### Loro value serialization in the Map
 
-- Strings, numbers, booleans → stored directly
-- `ResourceArray` → JSON string `["url1", "url2"]`
-- `AtomicUrl` → plain string
-- `loro_value_to_atomic_value()` parses back: strings starting with `[` → ResourceArray, `{` → NestedResource
+The LoroDoc has two sibling root maps:
+
+- **`properties`** — `property URL → value`. Loro primitives stored directly
+  (strings, numbers, booleans); arrays as native `LoroList`s; objects as JSON strings.
+- **`datatypes`** — sparse `property URL → tag`, recording the datatype only
+  where a bare primitive is ambiguous in a load-bearing way. Tags: `atomicUrl`,
+  `resourceArray`, `jsonArray`, `json`, `resource`. Scalars and plain/cosmetic
+  strings carry no entry. Written by `set_property` (Rust) and
+  `Resource.writeDatatypeTags` at sign time (TS).
+
+Materialization prefers the tag: `loro_value_to_atomic_value_tagged()` recovers
+the exact `Value` variant from it. Untagged values fall back to the
+`loro_value_to_atomic_value()` heuristic (URL-shaped strings → `AtomicUrl`,
+`{...}` → `NestedResource`), kept for legacy / not-yet-tagged docs. Cosmetic
+datatypes (`markdown`/`slug`/`date`/`uri`, `timestamp`) are deliberately not
+tagged — they collapse to `string`/`integer`; the Property's `datatype` stays
+authoritative. See `planning/loro-source-of-truth.md`.
 
 ### Critical: always build on existing state
 
