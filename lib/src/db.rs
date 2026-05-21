@@ -1043,7 +1043,18 @@ impl Db {
             });
         }
 
-        let resource_bin = encode_propvals(propvals)?;
+        // Phase 2c (loro-source-of-truth): the `loroUpdate` propval is the
+        // resource's CRDT snapshot — it belongs in `Tree::LoroSnapshots`, not
+        // duplicated inside the resource blob, which is now a pure derived
+        // projection. Commit resources are the exception: a commit's
+        // `loroUpdate` is its signed payload and must stay in the blob.
+        let resource_bin = if subject.is_commit_did() {
+            encode_propvals(propvals)?
+        } else {
+            let mut projection = propvals.clone();
+            projection.remove(crate::urls::LORO_UPDATE);
+            encode_propvals(&projection)?
+        };
 
         transaction.push(Operation {
             tree: Tree::Resources,
@@ -1740,41 +1751,28 @@ impl Storelike for Db {
                     .map_err(|e| format!("Failed to add atom to index {}. {}", a, e))?;
             }
         }
-        // Materialize a loroUpdate propval if missing. Two cases:
-        // 1. Live Loro doc but propval not exported — happens when callers
-        //    bypass the commit pipeline (e.g. test setup using `set_loro` +
-        //    `add_resource_opts`).
-        // 2. Neither live doc nor propval — happens when callers build a
-        //    resource via `set_string`/`set_unsafe` and persist directly,
-        //    without going through `Resource::save`. Without seeding a
-        //    Loro snapshot here, a SUBSEQUENT `save()` would seed both the
-        //    client's sign() and the server's apply_changes() from
-        //    propvals independently, producing ops on different peer IDs
-        //    with the same Lamport — LWW becomes a coin-flip and changes
-        //    silently revert. Seeding once at persist time gives both
-        //    sides a shared causal base.
+        // Phase 2b/2c (loro-source-of-truth): the snapshot in
+        // `Tree::LoroSnapshots` is the authoritative CRDT state. Derive and
+        // persist it here UNCONDITIONALLY for every CRDT resource — in the
+        // same transaction as the `Tree::Resources` write — so the invariant
+        // holds that every resource blob is paired with a current snapshot.
+        // (The old code only wrote the snapshot when the propvals lacked a
+        // `loroUpdate`, so any resource that had been through `apply_state_doc`
+        // — i.e. every sync import — had its snapshot write silently skipped.)
+        // The `loroUpdate` propval is stripped from the `Tree::Resources`
+        // blob: that blob is a pure derived projection, not a second home for
+        // the CRDT state. Commits are native (immutable, not CRDT) — they get
+        // no snapshot and keep their `loroUpdate` payload in the blob.
         let mut propvals = resource.get_propvals().clone();
-        if !propvals.contains_key(crate::urls::LORO_UPDATE) {
-            let snapshot = resource.materialized_state().or_else(|| {
-                resource
-                    .build_state_doc()
-                    .ok()
-                    .map(|doc| doc.export_snapshot())
+        if !subject.is_commit_did() {
+            let snapshot = resource.build_state_doc()?.export_snapshot();
+            propvals.remove(crate::urls::LORO_UPDATE);
+            transaction.push(Operation {
+                tree: Tree::LoroSnapshots,
+                method: Method::Insert,
+                key: subject_str.as_bytes().to_vec(),
+                val: Some(snapshot),
             });
-            if let Some(snapshot) = snapshot {
-                propvals.insert(
-                    crate::urls::LORO_UPDATE.into(),
-                    crate::Value::LoroDoc(snapshot.clone()),
-                );
-                // Also persist to the dedicated LoroSnapshots tree so the
-                // VV-based sync engine can find it on first sync.
-                transaction.push(Operation {
-                    tree: Tree::LoroSnapshots,
-                    method: Method::Insert,
-                    key: subject_str.as_bytes().to_vec(),
-                    val: Some(snapshot),
-                });
-            }
         }
 
         // Persist the resource data in the same transaction

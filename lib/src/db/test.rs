@@ -1435,3 +1435,67 @@ async fn remove_resource_with_drive_hint_subject_deletes_snapshot() {
         "snapshot orphaned when deleting via a drive-hinted subject"
     );
 }
+
+/// Phase 2b/2c (loro-source-of-truth): `add_resource_opts` persists a Loro
+/// snapshot for every CRDT resource — including when the resource already
+/// carries a `loroUpdate` propval — and the `Tree::Resources` blob is a pure
+/// projection with no `loroUpdate`.
+#[tokio::test]
+#[timeout(30000)]
+async fn add_resource_opts_always_writes_loro_snapshot() {
+    let store = Db::init_temp("add_resource_snapshot").await.unwrap();
+
+    let mut resource = crate::Resource::new("did:ad:phase2b-test".into());
+    resource.set_unsafe(urls::NAME.into(), Value::String("Test".into()));
+    store
+        .add_resource_opts(&resource, false, true, true)
+        .await
+        .unwrap();
+    let pure_id = resource.get_subject().pure_id();
+    assert!(
+        store
+            .kv
+            .get(Tree::LoroSnapshots, pure_id.as_bytes())
+            .unwrap()
+            .is_some(),
+        "add_resource_opts must persist a Loro snapshot"
+    );
+
+    // 2c: the persisted blob is a pure projection — no `loroUpdate` in it.
+    let blob = store
+        .kv
+        .get(Tree::Resources, pure_id.as_bytes())
+        .unwrap()
+        .unwrap();
+    assert!(
+        !decode_propvals(&blob).unwrap().contains_key(urls::LORO_UPDATE),
+        "Tree::Resources blob must not carry a loroUpdate propval"
+    );
+
+    // get_resource overlays the snapshot, so the fetched resource carries a
+    // `loroUpdate` propval in memory (apply_state_doc re-inserts it).
+    let fetched = store.get_resource(resource.get_subject()).await.unwrap();
+    assert!(
+        fetched.get_propvals().contains_key(urls::LORO_UPDATE),
+        "fetched resource should carry a loroUpdate propval in memory"
+    );
+
+    // Drop the snapshot row, then re-add: the snapshot must be rewritten even
+    // though the resource already carries `loroUpdate`.
+    store
+        .kv
+        .remove(Tree::LoroSnapshots, pure_id.as_bytes())
+        .unwrap();
+    store
+        .add_resource_opts(&fetched, false, true, true)
+        .await
+        .unwrap();
+    assert!(
+        store
+            .kv
+            .get(Tree::LoroSnapshots, pure_id.as_bytes())
+            .unwrap()
+            .is_some(),
+        "snapshot must be rewritten even when propvals already carry loroUpdate"
+    );
+}
