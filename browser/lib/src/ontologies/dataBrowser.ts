@@ -304,7 +304,10 @@ declare module '../index.js' {
   interface PropTypeMapping {
     [dataBrowser.properties.color]: string;
     [dataBrowser.properties.currency]: string;
-    [dataBrowser.properties.customNodePositioning]: string;
+    [dataBrowser.properties.customNodePositioning]: Record<
+      string,
+      [x: number, y: number]
+    >;
     [dataBrowser.properties.dateFormat]: string;
     [dataBrowser.properties.decimalPlaces]: number;
     [dataBrowser.properties.displayStyle]: string;
@@ -324,7 +327,7 @@ declare module '../index.js' {
     [dataBrowser.properties.replyTo]: string;
     [dataBrowser.properties.resources]: string[];
     [dataBrowser.properties.subResources]: string[];
-    [dataBrowser.properties.tableColumnWidths]: string;
+    [dataBrowser.properties.tableColumnWidths]: number[];
     [dataBrowser.properties.tags]: string[];
     [dataBrowser.properties.tagList]: string[];
     [dataBrowser.properties.url]: string;

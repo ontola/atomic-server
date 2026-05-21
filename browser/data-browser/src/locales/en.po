@@ -4377,3 +4377,6 @@ msgstr ""
 "Try reloading the page. If it keeps happening, another tab of this\n"
 "app or a browser extension may be blocking WebAssembly, or the tab\n"
 "ran out of memory."
+
+#~ msgid "Ignoring corrupted table column widths \"{0}\": {1}"
+#~ msgstr "Ignoring corrupted table column widths \"{0}\": {1}"

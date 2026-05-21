@@ -199,11 +199,24 @@
       "https://atomicdata.dev/classes/Class"
     ],
     "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/tableColumnWidths"
+    ],
     "https://atomicdata.dev/properties/requires": [
       "https://atomicdata.dev/properties/classtype",
       "https://atomicdata.dev/properties/name"
     ],
     "https://atomicdata.dev/properties/shortname": "table"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/tableColumnWidths",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "The widths (in pixels) of the columns of a Table, stored as a JSON array of numbers — one per column, in column order.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "table-column-widths"
   },
   {
     "@id": "https://atomicdata.dev/properties/emoji",
