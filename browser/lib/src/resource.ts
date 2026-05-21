@@ -1369,6 +1369,98 @@ export class Resource<C extends OptionalClass = any> {
     this._dirty = true;
   }
 
+  /**
+   * Append one item to a JSON array property using the native Loro list (CRDT-friendly).
+   * Used for canvas strokes and other list fields that merge per element across peers.
+   */
+  public pushListItem(propUrl: string, item: JSONValue): void {
+    const propVal = (this.get(propUrl) as JSONArray) ?? [];
+    this._cache[propUrl] = [...propVal, item];
+    this._cacheDirty = true;
+    this._dirty = true;
+
+    const map = this.getLoroMap();
+
+    if (!map) {
+      return;
+    }
+
+    const { LoroList, LoroMap } = LoroLoader.Loro;
+    const existing = map.get(propUrl);
+
+    let list: LoroList;
+
+    if (existing && typeof existing === 'object' && 'push' in existing) {
+      list = existing as LoroList;
+    } else {
+      list = map.setContainer(propUrl, new LoroList());
+    }
+
+    if (
+      item !== null &&
+      typeof item === 'object' &&
+      !Array.isArray(item)
+    ) {
+      const itemMap = list.pushContainer(new LoroMap());
+      this.writeJsonToLoroMap(itemMap, item as JSONObject);
+    } else {
+      list.push(item);
+    }
+
+    this._loroDoc?.commit();
+    this.eventManager.emit(
+      ResourceEvents.LocalChange,
+      propUrl,
+      this._cache[propUrl],
+    );
+  }
+
+  private writeJsonToLoroMap(
+    map: InstanceType<typeof LoroLoader.Loro.LoroMap>,
+    obj: JSONObject,
+  ): void {
+    const { LoroList, LoroMap } = LoroLoader.Loro;
+
+    for (const [key, value] of Object.entries(obj)) {
+      if (
+        typeof value === 'string' ||
+        typeof value === 'number' ||
+        typeof value === 'boolean'
+      ) {
+        map.set(key, value);
+      } else if (Array.isArray(value)) {
+        const list = map.setContainer(key, new LoroList());
+        this.writeJsonToLoroList(list, value);
+      } else if (value && typeof value === 'object') {
+        const nested = map.setContainer(key, new LoroMap());
+        this.writeJsonToLoroMap(nested, value as JSONObject);
+      }
+    }
+  }
+
+  private writeJsonToLoroList(
+    list: LoroList,
+    arr: JSONValue[],
+  ): void {
+    const { LoroList, LoroMap } = LoroLoader.Loro;
+
+    for (const item of arr) {
+      if (Array.isArray(item)) {
+        const nested = list.pushContainer(new LoroList());
+        this.writeJsonToLoroList(nested, item);
+      } else if (item && typeof item === 'object') {
+        const nested = list.pushContainer(new LoroMap());
+        this.writeJsonToLoroMap(nested, item as JSONObject);
+      } else if (
+        typeof item === 'string' ||
+        typeof item === 'number' ||
+        typeof item === 'boolean'
+      ) {
+        list.push(item);
+      }
+    }
+  }
+
   /** Removes a property value combination from the resource */
   public remove(propertyUrl: string): void {
     this.removeUnsafe(propertyUrl);

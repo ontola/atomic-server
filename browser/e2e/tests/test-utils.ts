@@ -177,8 +177,10 @@ export async function installCommitWatcher(page: Page) {
   await page.addInitScript(() => {
     // Idempotent — `before()` may run multiple times against the same
     // browser context if a spec opens additional pages.
-    if ((window as unknown as { __atomicCommitWatcherInstalled?: boolean })
-      .__atomicCommitWatcherInstalled) {
+    if (
+      (window as unknown as { __atomicCommitWatcherInstalled?: boolean })
+        .__atomicCommitWatcherInstalled
+    ) {
       return;
     }
     (
@@ -299,11 +301,7 @@ export async function setTitle(page: Page, title: string) {
 
 /** Wait for either an HTTP `/commit` POST or a WS COMMIT frame whose
  *  body references `subject` and was sent at or after `since`. */
-function waitForCommitForSubject(
-  page: Page,
-  subject: string,
-  since: number,
-) {
+function waitForCommitForSubject(page: Page, subject: string, since: number) {
   const http = page.waitForResponse(
     r => {
       const request = r.request();
@@ -580,7 +578,9 @@ export async function waitForCommitOnCurrentResource(
         if (hasLoroUpdate) return true;
         const setMap = commit[setProp] as Record<string, unknown> | undefined;
         if (!setMap) return false;
-        return Object.keys(matchSet).every(key => setMap[key] === matchSet[key]);
+        return Object.keys(matchSet).every(
+          key => setMap[key] === matchSet[key],
+        );
       });
     },
     {
@@ -872,7 +872,7 @@ export const waitForCommit = async (page: Page, filter?: CommitFilter) => {
   // future-only semantics. Without this, pre-existing entries in
   // `__atomicCommitLog` would resolve the helper immediately.
   const since = Date.now();
-  return Promise.race([
+  return Promise.any([
     waitForHttpCommit(page, filter),
     waitForWsCommit(page, filter, since),
   ]);
@@ -986,7 +986,7 @@ const waitForHttpCommit = (page: Page, filter?: CommitFilter) =>
   });
 
 export function currentDialog(page: Page) {
-  return page.locator('dialog[data-top-level="true"]');
+  return page.locator('dialog[open][data-top-level="true"]');
 }
 
 export async function waitForCurrentDialog(page: Page) {
@@ -1049,6 +1049,7 @@ export async function inDialog(
   await fn(currentDialog(page), closeDialogWith);
 
   await currentDialog(page).waitFor({ state: 'hidden' });
+  await expect(page.locator('dialog[open]')).toHaveCount(0);
 }
 
 export async function acceptInvite(page: Page) {

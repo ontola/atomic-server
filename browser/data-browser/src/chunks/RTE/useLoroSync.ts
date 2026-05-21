@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useLayoutEffect, useMemo } from 'react';
 import type { LoroDoc } from 'loro-crdt';
 import { CursorEphemeralStore } from 'loro-prosemirror';
 import { type Resource, useStore } from '@tomic/react';
@@ -20,8 +20,12 @@ export function useLoroSync(
   }, [doc]);
 
   // Subscribe to local doc updates, broadcast them, and mark resource dirty
-  useEffect(() => {
-    const unsub = doc.subscribeLocalUpdates((update: Uint8Array) => {
+  useLayoutEffect(() => {
+    const unsub = doc.subscribeLocalUpdates(() => {
+      // The callback update can be causally incomplete for peers that missed
+      // early editor-initialisation ops. Send a self-contained update so remote
+      // imports do not get stuck as pending.
+      const update = doc.export({ mode: 'update' });
       store.broadcastLoroSyncUpdate(subject, update);
       // Mark the resource as dirty so save() knows there are local changes
       resource.markDirty();
@@ -33,7 +37,7 @@ export function useLoroSync(
   }, [doc, subject, store]);
 
   // Subscribe to remote doc updates
-  useEffect(() => {
+  useLayoutEffect(() => {
     const unsub = store.subscribeLoroSync(subject, (update: Uint8Array) => {
       doc.import(update);
     });

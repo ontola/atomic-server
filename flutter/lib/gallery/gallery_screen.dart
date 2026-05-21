@@ -39,6 +39,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
     super.initState();
     _folderNameFocus.addListener(() {
       if (!_folderNameFocus.hasFocus && _editingFolderName) {
+        _commitFolderRename();
         setState(() => _editingFolderName = false);
       }
     });
@@ -124,6 +125,15 @@ class _GalleryScreenState extends State<GalleryScreen> {
 
   String _folderDisplayName(FolderEntry f) =>
       f.name.isEmpty ? 'Unnamed folder' : f.name;
+
+  void _commitFolderRename() {
+    final folder = _currentFolder;
+    if (folder == null) return;
+    final name = _folderNameController.text.trim();
+    final resolved = name.isEmpty ? 'Folder' : name;
+    if (resolved == folder.name) return;
+    widget.store.renameFolder(folder, resolved);
+  }
 
   void _startEditingFolderName() {
     _folderNameController.text = _currentFolder!.name;
@@ -447,7 +457,10 @@ class _GalleryScreenState extends State<GalleryScreen> {
             contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           ),
           onChanged: (v) => _currentFolder!.name = v,
-          onSubmitted: (_) => setState(() => _editingFolderName = false),
+          onSubmitted: (_) {
+            _commitFolderRename();
+            setState(() => _editingFolderName = false);
+          },
         );
       }
       return GestureDetector(

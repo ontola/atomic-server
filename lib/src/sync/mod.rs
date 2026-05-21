@@ -7,5 +7,9 @@ pub mod engine;
 #[cfg(feature = "iroh")]
 pub mod peer;
 pub mod protocol;
-#[cfg(test)]
+pub mod tombstones;
+pub mod ws_apply;
+#[cfg(all(test, feature = "iroh"))]
 mod tests;
+#[cfg(all(test, feature = "iroh", feature = "db-redb"))]
+mod iroh_e2e;

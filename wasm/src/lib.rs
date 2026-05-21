@@ -188,11 +188,21 @@ impl ClientDb {
             .map_err(to_js_err)
     }
 
-    /// Retrieve a Loro CRDT snapshot for a resource subject. Returns null if not found.
+    /// Opaque versioned state bytes for a resource. Returns null if not found.
+    #[wasm_bindgen(js_name = "getStateSnapshot")]
+    pub fn get_state_snapshot(&self, subject: &str) -> Result<JsValue, JsError> {
+        Self::state_snapshot_js(&self.db, subject)
+    }
+
+    /// Back-compat alias for browser client-db (`getLoroSnapshot`).
     #[wasm_bindgen(js_name = "getLoroSnapshot")]
     pub fn get_loro_snapshot(&self, subject: &str) -> Result<JsValue, JsError> {
+        Self::state_snapshot_js(&self.db, subject)
+    }
+
+    fn state_snapshot_js(db: &atomic_lib::Db, subject: &str) -> Result<JsValue, JsError> {
         use atomic_lib::db::trees::Tree;
-        match self.db.kv.get(Tree::LoroSnapshots, subject.as_bytes()) {
+        match db.kv.get(Tree::LoroSnapshots, subject.as_bytes()) {
             Ok(Some(data)) => Ok(js_sys::Uint8Array::from(data.as_slice()).into()),
             Ok(None) => Ok(JsValue::NULL),
             Err(e) => Err(to_js_err(e)),

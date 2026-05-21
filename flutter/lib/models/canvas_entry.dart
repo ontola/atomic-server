@@ -46,7 +46,7 @@ class CanvasEntry {
 }
 
 class FolderEntry {
-  final String id;
+  String id;
   String name;
 
   FolderEntry({required this.id, required this.name});

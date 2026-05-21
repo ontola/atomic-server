@@ -13,8 +13,10 @@ superseded at the top.
 | Document | Scope |
 | --- | --- |
 | [`atomic-lib-runtime.md`](./atomic-lib-runtime.md) | Target architecture: `atomic_lib` as the complete HTTP-optional local node runtime. |
-| [`sync.md`](./sync.md) | WebSocket sync direction, including source-aware persisted commits over WS. |
+| [`unified-sync.md`](./unified-sync.md) | **Active:** one sync API over WS or Iroh; mobile same as browser; retire manual `peer_sync`. |
+| [`sync.md`](./sync.md) | WS `COMMIT` / echo suppression (mostly done); query-semantics follow-up. |
 | [`unified-data-layer.md`](./unified-data-layer.md) | Browser/JS data-layer simplification: one ingress, one outbox, one subscription model. |
+| [`loro-source-of-truth.md`](./loro-source-of-truth.md) | Make the Loro doc authoritative; `PropVals` becomes a derived projection. |
 | [`s3-blob-storage.md`](./s3-blob-storage.md) | Pluggable blob backend design for redb/S3/hybrid storage. |
 
 Protocol reference lives in the public docs: [`docs/src/websockets.md`](../docs/src/websockets.md).
@@ -26,8 +28,9 @@ not duplicate the wire reference.
 Before architectural work, read:
 
 1. [`atomic-lib-runtime.md`](./atomic-lib-runtime.md) for the long-term boundary.
-2. Any domain-specific plan that matches the task.
-3. Relevant code and tests; treat plans as direction, not proof that code already matches.
+2. [`unified-sync.md`](./unified-sync.md) for sync/transport work (Flutter, WS, Iroh).
+3. Any other domain-specific plan that matches the task.
+4. Relevant code and tests; treat plans as direction, not proof that code already matches.
 
 Keep `planning/` concise. Avoid session transcripts, stale estimates, and
 postmortems that duplicate current plans.

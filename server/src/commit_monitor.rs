@@ -143,6 +143,7 @@ impl Actor for CommitMonitor {
                         DbEvent::Changed {
                             subject,
                             source_id,
+                            is_new,
                             ..
                         } => {
                             // `did:ad:commit:<sig>` resources are write-time
@@ -164,6 +165,7 @@ impl Actor for CommitMonitor {
                                 subject: subject.to_string(),
                                 removed: false,
                                 source_id,
+                                is_new,
                             });
                         }
                         DbEvent::Destroyed { subject, source_id } => {
@@ -174,6 +176,7 @@ impl Actor for CommitMonitor {
                                 subject: subject.to_string(),
                                 removed: true,
                                 source_id,
+                                is_new: false,
                             });
                         }
                     }
@@ -371,6 +374,16 @@ impl Handler<DriveNotification> for CommitMonitor {
             if !is_did && !msg.subject.starts_with(drive.as_str()) {
                 continue;
             }
+
+            // Narrowing: only notify drive-wide subscribers of membership
+            // changes (resource created or destroyed). Existing resource
+            // edits should arrive through direct resource subscriptions
+            // (see Handler<CommitMessage>), not through drive-wide
+            // QUERY_UPDATE.
+            if !msg.removed && !msg.is_new {
+                continue;
+            }
+
             let update = QueryUpdate {
                 property: None,
                 value: None,

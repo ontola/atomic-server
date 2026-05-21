@@ -41,7 +41,7 @@ function TagSelectPopoverWrapper({ resource }: { resource: Resource }) {
   const store = useStore();
   const [driveSubject, setDriveSubject] = useState<string>();
   const drive = useResource(driveSubject);
-  const [driveTags, setDriveTags] = useArray(
+  const [driveTags, , pushDriveTags] = useArray(
     drive,
     dataBrowser.properties.tagList,
     { commit: true },
@@ -56,7 +56,7 @@ function TagSelectPopoverWrapper({ resource }: { resource: Resource }) {
   }, [resource, store]);
 
   const handleNewTag = (newTag: string) => {
-    setDriveTags([...driveTags, newTag]);
+    pushDriveTags([newTag]);
   };
 
   if (driveSubject === undefined || resource.loading) {

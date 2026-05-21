@@ -5147,3 +5147,19 @@ msgstr "Open Drive Settings"
 #: src/routes/SyncRoute.tsx
 msgid "DriveDetailTrigger"
 msgstr "DriveDetailTrigger"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Pen color"
+msgstr "Pen color"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Width <0/>"
+msgstr "Width <0/>"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Saving…"
+msgstr "Saving…"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Draw with left click · Pan with Alt+drag or middle mouse · Scroll to zoom"
+msgstr "Draw with left click · Pan with Alt+drag or middle mouse · Scroll to zoom"

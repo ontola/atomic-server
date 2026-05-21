@@ -1126,6 +1126,12 @@ mod test {
         client_doc
             .set_property(crate::urls::SHORTNAME, &Value::String("loro-test".into()))
             .unwrap();
+        client_doc
+            .set_property(
+                crate::urls::IS_A,
+                &Value::ResourceArray(vec![crate::urls::CLASS.into()]),
+            )
+            .unwrap();
 
         // Export the update
         let update = client_doc.export_snapshot();
@@ -1133,11 +1139,6 @@ mod test {
         // Build a commit with the loro update
         let mut builder = crate::commit::CommitBuilder::new(subject.into());
         builder.set_loro_update(update);
-        // Also set isA so schema validation can work (or we skip it)
-        builder.set(
-            crate::urls::IS_A.into(),
-            Value::ResourceArray(vec![crate::urls::CLASS.into()]),
-        );
 
         let resource = crate::Resource::new(subject.into());
         let commit = builder.sign(&agent, &store, &resource).await.unwrap();

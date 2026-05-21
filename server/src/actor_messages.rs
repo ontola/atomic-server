@@ -140,4 +140,5 @@ pub struct DriveNotification {
     pub subject: String,
     pub removed: bool,
     pub source_id: Option<String>,
+    pub is_new: bool,
 }

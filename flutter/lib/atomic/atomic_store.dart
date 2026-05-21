@@ -36,7 +36,11 @@ class AtomicStore extends ChangeNotifier {
     _agent = await AtomicClient.getActiveAgent();
     _drive = AtomicClient.getActiveDrive();
 
-    await AtomicSession.save(serverUrl: '', secret: secret, drive: _drive);
+    await AtomicSession.save(
+      serverUrl: AtomicClient.defaultServerUrl,
+      secret: secret,
+      drive: _drive,
+    );
 
     notifyListeners();
   }
