@@ -166,36 +166,54 @@ lockstep. Flutter rides the Rust layer. Document the convention (update the
 
 ## Target model
 
+**One canonical representation: the Loro document (a snapshot, *with* its
+oplog history).** Everything else is a derived cache.
+
+| Layer | Canonical | Derived cache |
+| --- | --- | --- |
+| On disk | Loro snapshot — `Tree::LoroSnapshots` | `Tree::Resources` (`PropVals`) — query/index cache, rebuildable |
+| In transport | Loro bytes — commit `loroUpdate`, sync snapshots/deltas | — |
+| In memory | the `Resource`'s Loro doc | `Resource.propvals` — a memoized projection |
+| Current-state read (HTTP GET, query) | — | `PropVals` (in-memory + on-disk cache) |
+
+A Loro snapshot already carries history, so "persist the doc" = persist
+history (the History page reads it). The `PropVals` cache is never authored
+directly — it is materialized from the doc and may be dropped/rebuilt.
+
 ```text
-write:  mutation → Loro doc (faithful, typed) → snapshot + projection
-                       │                            │
-                       ▼                            ▼
-              Tree::LoroSnapshots            Tree::Resources (PropVals)
-              (authoritative, CRDT)          (derived: query/index cache)
-                                             — no `loroUpdate` persisted here
+write:  set*(prop, val) → Loro doc  (fallible: doc writes can fail)
+                              │
+                              ├──▶ Resource.propvals  (memoized cache, refreshed)
+                              ▼
+        persist:  Tree::LoroSnapshots (snapshot)  +  Tree::Resources (projection)
+                  ── one transaction, snapshot derived via build_state_doc() ──
 
 sync:   receive Loro bytes → merge into Tree::LoroSnapshots
                            → refresh projection + index from the merged doc
                            (never get_resource — no auth/extender/endpoint work)
 
-read:   get_resource → load projection (fast path: query/display)
-                     → load doc only when history/merge is needed
-
-commits & native resources: PropVals-native in Tree::Resources, no doc
+read:   get_resource → Tree::Resources projection (fast path: query/display)
+                     → Tree::LoroSnapshots only when history/merge is needed
 ```
 
-- One on-disk home for CRDT state: `Tree::LoroSnapshots`.
+- **One canonical store per layer** — no split where the doc is canonical on
+  disk but `PropVals` is canonical in memory. Mutations target the doc;
+  `PropVals` (in `Resource` and in `Tree::Resources`) is always derived.
+- Because doc writes are fallible, **mutation methods are fallible** — no
+  `let _` swallowing. `set_unsafe` is the legacy infallible holdout to fix.
 - `loroUpdate` exists only in-memory and on the wire (commits, JSON-AD); it is
   never persisted inside the `Tree::Resources` blob.
-- Snapshot + projection written in **one transaction** (today the sync paths
-  `ws_apply.rs` / `engine.rs` do two non-atomic writes).
+- Snapshot + projection written in **one transaction**.
+- **Commits & native resources are the exception** — a commit is signed and
+  immutable, never a CRDT; it stays a `PropVals`-native row in
+  `Tree::Resources` with no Loro doc. (Bootstrap vocabulary may join them —
+  Phase 3.)
 - **Sync never calls `get_resource`.** Its transport + merge logic is pure Loro
   (already true in `engine.rs` / `peer.rs`). After merging it refreshes the
   derived projection + index directly from the merged doc — a lightweight
   `doc → PropVals → atoms → index` step, with no auth / extender / endpoint
   machinery. `get_resource` stays the heavy *reader* path for a requesting
-  agent. Today `ws_apply::apply_state_update_inner` calls `get_resource` and
-  then `apply_state_doc` discards its result — pure waste.
+  agent.
 
 ## Implementation phases
 
@@ -248,21 +266,75 @@ commits & native resources: PropVals-native in Tree::Resources, no doc
       the defensive `AtomicUrl || String` matches. Needs full Rust + TS tag
       coverage first.
 
-### Phase 2 — flip write authority to the doc
+### Phase 2 — the Loro doc is canonical; `PropVals` is a derived cache
 
-- [ ] `Resource::set*` write into `self.loro`; `PropVals` materialized via
-      `sync_propvals_from_loro`.
-- [ ] `add_resource_opts` no longer seeds the doc from propvals; persist doc +
-      projection in one transaction.
-- [ ] Stop persisting `loroUpdate` in the `Tree::Resources` blob (strip in
-      `encode_propvals` or before `add_resource_tx`).
-- [ ] Collapse the `commit.rs` signing fallback chain to the doc.
-- [x] Sync write path: dropped the `get_resource` call in
-      `ws_apply::apply_state_update_inner` and both `engine.rs` import paths
-      (`import_sync_push`, `handle_sync_deltas`) — `apply_state_doc` replaces
-      propvals wholesale, so the read was always discarded. Folding the
-      snapshot write + projection write into one transaction is part of the
-      `add_resource_opts` rework above.
+The doc is the write target both in memory and on disk. `Resource.propvals`
+becomes a memoized projection of the doc; `Tree::Resources` becomes a
+rebuildable on-disk cache. No layer has a second source of truth.
+
+#### 2a — mutation is doc-first and fallible — **deferred (attempted, reverted)**
+
+> **Attempted and reverted.** Making `set_unsafe` materialize a doc for every
+> resource broke commit signing: a commit is a native, signed, immutable
+> resource, but `set_unsafe` gave the *commit resource* a Loro doc, and
+> `propvals_for_serialization` then re-derived the commit's `loroUpdate` field
+> from `doc.export_snapshot()`. A Loro snapshot embeds a random peer id, so
+> client-sign and server-verify produced different bytes → "Incorrect
+> signature for Commit". An `is_commit_did()` guard cannot fix this: the
+> commit's subject is a placeholder when the client signs and
+> `did:ad:commit:…` when the server verifies, so any subject-based gate makes
+> the two sides serialize differently.
+>
+> **The real blocker is the serialization layer**, not the setters:
+> `propvals_for_serialization` injects `loroUpdate` whenever a doc exists.
+> Before 2a can land safely:
+> 1. Commit signing/verification must serialize the explicit `propvals`
+>    only — never re-derive `loroUpdate` from `self.loro`.
+> 2. `loroUpdate` injection into JSON-AD must be an explicit transport
+>    decision, not an automatic side-effect of "a doc exists".
+>
+> Only then is making `set_unsafe` doc-first (and the ~120-call-site
+> fallibility sweep) safe. 2a is also not required for the disk/transport
+> vision — 2b/2c already deliver that. Best bundled with the legacy
+> `CommitBuilder` removal. The doc-first in-memory `Resource` is a real
+> redesign, deferred deliberately.
+
+#### 2b — `add_resource_opts`: snapshot + projection in one transaction — done
+
+- [x] `add_resource_opts` derives the snapshot via `build_state_doc()?` and
+      writes `Tree::LoroSnapshots` + `Tree::Resources` in one transaction for
+      every non-commit resource — the `!contains_key(LORO_UPDATE)` conditional
+      is gone. Invariant established: every CRDT-resource blob write is paired
+      with a current snapshot. Test:
+      `add_resource_opts_always_writes_loro_snapshot`.
+
+#### 2c — stop persisting `loroUpdate` in the `Tree::Resources` blob — done
+
+- [x] `add_resource_opts` and `add_resource_tx` strip the `loroUpdate` propval
+      from the blob for non-commit subjects (commits keep it — it is their
+      signed payload). `Tree::Resources` is now a pure derived cache; the
+      snapshot lives only in `Tree::LoroSnapshots`. `loroUpdate` still rides
+      the wire via `propvals_for_serialization`. Test asserts the blob has no
+      `loroUpdate` while the in-memory resource still does (snapshot overlay).
+
+#### 2d — collapse the fallback chains — **deferred**
+
+> The `build_state_doc` / `materialized_state` fallback (live doc →
+> `loroUpdate` propval → seed from propvals) is **not** gratuitous: it adapts
+> three genuine input forms — an in-memory live doc, a wire-received
+> `loroUpdate` propval (still carried in JSON-AD so the browser can seed its
+> LoroDoc), and a raw-propvals resource (freshly built / bootstrap). The
+> `loroUpdate`-propval rung is still load-bearing for any resource parsed from
+> the wire before it is promoted to a live doc. Collapsing the chain needs one
+> input form eliminated — i.e. 2a (everything has a doc) or a wire-format
+> change. The `commit.rs` signing chain is likewise tied to the legacy
+> `CommitBuilder`. Deferred with 2a.
+
+- [x] Sync write path (`engine.rs`): dropped the `get_resource` call in
+      `import_sync_push` and `handle_sync_deltas` — `apply_state_doc` replaces
+      propvals wholesale, so the read was discarded.
+      `ws_apply::apply_state_update_inner` still uses `get_resource` for the
+      live UPDATE path; fold it into 2b's one-transaction rework.
 
 ### Phase 3 — CRDT / native split
 
