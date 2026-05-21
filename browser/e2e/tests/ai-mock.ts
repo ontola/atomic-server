@@ -17,6 +17,13 @@ const BOOKMARK_URL_PROP = 'https://atomicdata.dev/property/url';
  * The content is a JSON string that satisfies both structured-output schemas
  * used in the app (title: string, prompt: string).
  */
+/** Distinct strings for compact E2E — exported so ai.spec.ts stays in sync. */
+export const FIRST_USER = 'First message before compact';
+export const FIRST_RESPONSE = 'First mock response.';
+export const SUMMARY_TEXT = 'E2E compact summary text.';
+export const AFTER_COMPACT_USER = 'Message after compact';
+export const AFTER_UNCOMPACT_USER = 'Message after uncompact';
+
 function buildJSONCompletionBody(): string {
   return JSON.stringify({
     id: 'chatcmpl-test-gen',
@@ -38,6 +45,71 @@ function buildJSONCompletionBody(): string {
     ],
     usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
   });
+}
+
+function buildSummaryCompletionBody(text: string): string {
+  return JSON.stringify({
+    id: 'chatcmpl-test-summary',
+    object: 'chat.completion',
+    created: 1234567890,
+    model: TEST_MODEL,
+    choices: [
+      {
+        index: 0,
+        message: { role: 'assistant', content: text },
+        finish_reason: 'stop',
+      },
+    ],
+    usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+  });
+}
+
+type ChatMessage = { role?: string; content?: unknown };
+
+function messageContentToString(content: unknown): string {
+  if (typeof content === 'string') {
+    return content;
+  }
+
+  if (Array.isArray(content)) {
+    return content
+      .map(part => {
+        if (typeof part === 'object' && part !== null && 'text' in part) {
+          return String((part as { text?: string }).text ?? '');
+        }
+
+        return JSON.stringify(part);
+      })
+      .join('');
+  }
+
+  return JSON.stringify(content ?? '');
+}
+
+function extractRequestText(body: Record<string, unknown>): string {
+  const parts: string[] = [];
+
+  if (typeof body.system === 'string') {
+    parts.push(body.system);
+  }
+
+  const messages = (body.messages as ChatMessage[] | undefined) ?? [];
+
+  for (const message of messages) {
+    if (message.role) {
+      parts.push(message.role);
+    }
+
+    parts.push(messageContentToString(message.content));
+  }
+
+  return parts.join('\n');
+}
+
+function isSummaryRequest(body: Record<string, unknown>): boolean {
+  const text = extractRequestText(body);
+
+  return text.includes('compacting an AI conversation');
 }
 
 function buildSSEBody(text: string): string {
@@ -86,7 +158,11 @@ function buildToolCallSSE(
   return [
     chunk({
       choices: [
-        { index: 0, delta: { role: 'assistant', content: null }, finish_reason: null },
+        {
+          index: 0,
+          delta: { role: 'assistant', content: null },
+          finish_reason: null,
+        },
       ],
     }),
     chunk({
@@ -95,7 +171,12 @@ function buildToolCallSSE(
           index: 0,
           delta: {
             tool_calls: [
-              { index: 0, id: toolCallId, type: 'function', function: { name: toolName, arguments: '' } },
+              {
+                index: 0,
+                id: toolCallId,
+                type: 'function',
+                function: { name: toolName, arguments: '' },
+              },
             ],
           },
           finish_reason: null,
@@ -106,7 +187,11 @@ function buildToolCallSSE(
       choices: [
         {
           index: 0,
-          delta: { tool_calls: [{ index: 0, function: { arguments: JSON.stringify(args) } }] },
+          delta: {
+            tool_calls: [
+              { index: 0, function: { arguments: JSON.stringify(args) } },
+            ],
+          },
           finish_reason: null,
         },
       ],
@@ -129,7 +214,9 @@ export type ToolCallMockState = {
  * before sending the first chat message so the create_resource call uses the
  * correct parent URL.
  */
-export async function setupAIToolCallMocks(page: Page): Promise<ToolCallMockState> {
+export async function setupAIToolCallMocks(
+  page: Page,
+): Promise<ToolCallMockState> {
   const state: ToolCallMockState = { driveUrl: '', createdSubject: '' };
   let streamingCallCount = 0;
 
@@ -170,12 +257,16 @@ export async function setupAIToolCallMocks(page: Page): Promise<ToolCallMockStat
     }
 
     const callIndex = streamingCallCount++;
-    const messages = (body.messages as Array<{ role: string; content: string }>) ?? [];
+    const messages =
+      (body.messages as Array<{ role: string; content: string }>) ?? [];
 
     if (callIndex === 0) {
       await route.fulfill({
         status: 200,
-        headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+        },
         body: buildToolCallSSE(
           'create_resource',
           {
@@ -192,7 +283,8 @@ export async function setupAIToolCallMocks(page: Page): Promise<ToolCallMockStat
     } else if (callIndex === 1) {
       // Extract the subject from the create_resource tool result
       const toolMessages = messages.filter(m => m.role === 'tool');
-      const lastToolContent = toolMessages[toolMessages.length - 1]?.content ?? '';
+      const lastToolContent =
+        toolMessages[toolMessages.length - 1]?.content ?? '';
       const match = /subject (\S+)$/.exec(lastToolContent);
 
       if (match) {
@@ -201,7 +293,10 @@ export async function setupAIToolCallMocks(page: Page): Promise<ToolCallMockStat
 
       await route.fulfill({
         status: 200,
-        headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+        },
         body: buildToolCallSSE(
           'edit_atomic_resource',
           {
@@ -215,7 +310,10 @@ export async function setupAIToolCallMocks(page: Page): Promise<ToolCallMockStat
     } else if (callIndex === 2) {
       await route.fulfill({
         status: 200,
-        headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+        },
         body: buildToolCallSSE(
           'get_atomic_resource',
           { subjects: [state.createdSubject], includeCommitData: false },
@@ -225,8 +323,13 @@ export async function setupAIToolCallMocks(page: Page): Promise<ToolCallMockStat
     } else {
       await route.fulfill({
         status: 200,
-        headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
-        body: buildSSEBody('Done! I created, edited, and read back the resource.'),
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+        },
+        body: buildSSEBody(
+          'Done! I created, edited, and read back the resource.',
+        ),
       });
     }
   });
@@ -280,7 +383,10 @@ export async function setupAIRouteMocks(
     if (isStreaming) {
       await route.fulfill({
         status: 200,
-        headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+        },
         body: buildSSEBody(response),
       });
     } else {
@@ -290,6 +396,127 @@ export async function setupAIRouteMocks(
         body: buildJSONCompletionBody(),
       });
     }
+  });
+
+  await page.route(`${OPENROUTER_BASE}/credits**`, route =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ data: { total_credits: 100, usage: 0 } }),
+    }),
+  );
+}
+
+/**
+ * Registers route mocks for manual /compact: one chat exchange, summary
+ * generation, then a post-compact message whose mock response reports whether
+ * pre-compact messages were excluded from the API payload.
+ */
+export async function setupAICompactMocks(page: Page) {
+  let compactDone = false;
+
+  await page.route(`${OPENROUTER_BASE}/models**`, route =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: [
+          {
+            id: TEST_MODEL,
+            name: 'Gemini Flash',
+            description: '',
+            architecture: {
+              input_modalities: ['text', 'image'],
+              output_modalities: ['text'],
+            },
+            pricing: { prompt: 0, completion: 0, web_search: 0 },
+            supported_parameters: ['temperature'],
+          },
+        ],
+      }),
+    }),
+  );
+
+  await page.route(`${OPENROUTER_BASE}/chat/completions**`, async route => {
+    const body = route.request().postDataJSON() as Record<string, unknown>;
+    const isStreaming = body?.stream === true;
+
+    if (!isStreaming) {
+      if (isSummaryRequest(body)) {
+        compactDone = true;
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: buildSummaryCompletionBody(SUMMARY_TEXT),
+        });
+
+        return;
+      }
+
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: buildJSONCompletionBody(),
+      });
+
+      return;
+    }
+
+    if (!compactDone) {
+      await route.fulfill({
+        status: 200,
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+        },
+        body: buildSSEBody(FIRST_RESPONSE),
+      });
+
+      return;
+    }
+
+    const requestText = extractRequestText(body);
+    const hasSummary =
+      requestText.includes('conversation-summary') ||
+      requestText.includes(SUMMARY_TEXT);
+    const hasFirstExchange =
+      requestText.includes(FIRST_USER) || requestText.includes(FIRST_RESPONSE);
+
+    if (requestText.includes(AFTER_UNCOMPACT_USER)) {
+      const hasNewMessage = requestText.includes(AFTER_UNCOMPACT_USER);
+      const contextOk = hasFirstExchange && hasNewMessage && !hasSummary;
+
+      const responseText = contextOk
+        ? 'Uncompact context OK'
+        : `Uncompact context FAIL: firstExchange=${hasFirstExchange} new=${hasNewMessage} summary=${hasSummary}`;
+
+      await route.fulfill({
+        status: 200,
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+        },
+        body: buildSSEBody(responseText),
+      });
+
+      return;
+    }
+
+    const hasNewMessage = requestText.includes(AFTER_COMPACT_USER);
+    const contextOk = hasSummary && hasNewMessage && !hasFirstExchange;
+
+    const responseText = contextOk
+      ? 'Compact context OK'
+      : `Compact context FAIL: summary=${hasSummary} new=${hasNewMessage} firstExchange=${hasFirstExchange}`;
+
+    await route.fulfill({
+      status: 200,
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+      },
+      body: buildSSEBody(responseText),
+    });
   });
 
   await page.route(`${OPENROUTER_BASE}/credits**`, route =>
@@ -313,13 +540,14 @@ export async function enableAIForTesting(page: Page) {
       JSON.stringify('test-e2e-key'),
     );
     localStorage.setItem(
-      'atomic.ai.enabledProviders',
-      JSON.stringify(['openrouter']),
+      'atomic.ai.defaultChatModel',
+      JSON.stringify({
+        id: '~google/gemini-flash-latest',
+        provider: 'openrouter',
+      }),
     );
+    localStorage.setItem('atomic.ai.setupComplete', JSON.stringify(true));
     localStorage.setItem('atomic.aiSidebar.open', JSON.stringify(true));
-    localStorage.setItem(
-      'atomic.sidebar-panels',
-      JSON.stringify(['aichats']),
-    );
+    localStorage.setItem('atomic.sidebar-panels', JSON.stringify(['aichats']));
   });
 }

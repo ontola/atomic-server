@@ -5,7 +5,7 @@ Prefer the existing reusable layout, resource view, overlay, button, loading, an
 
 ## Tech Stack
 
-This project uses React, TypeScript, Styled Components, and the Atomic Data ecosystem.
+This project uses Pnpm, Vite, React, TypeScript, Styled Components, and the Atomic Data ecosystem.
 
 ### React Compiler
 
@@ -19,3 +19,7 @@ We are using Wuchale for localization.
 It handles text extraction and translation automatically.
 Use ignore comments (`/* @wc-ignore */` or `// @wc-ignore-file`) to exclude certain strings or files from being translated (For example agent system prompts).
 All strings not in any function or JSX scope are automatically ignored. Strings in functions or element attributes are ignored when they do not start with a capital letter.
+
+## Verify your edits
+
+After your done makeing your changes. Use `pnpm typecheck` to verify there are no type errors.

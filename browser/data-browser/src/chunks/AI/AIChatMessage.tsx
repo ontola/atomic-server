@@ -22,9 +22,15 @@ export const AIChatMessage = ({
 }: MessageProps) => {
   if (message.metadata?.isSummary) {
     return (
-      <CompactSeparatorWidget
-        summaryText={extractSummaryTextFromMessage(message)}
-      />
+      <MessageActionWrapper
+        message={message}
+        onDeleteMessage={onDeleteMessage}
+        data-summary-message
+      >
+        <CompactSeparatorWidget
+          summaryText={extractSummaryTextFromMessage(message)}
+        />
+      </MessageActionWrapper>
     );
   }
 
@@ -71,14 +77,11 @@ const MessageTopWrapper = styled.div`
   }
 `;
 
-const MessageActionWrapper: React.FC<React.PropsWithChildren<MessageProps>> = ({
-  children,
-  message,
-  onDeleteMessage,
-  onRegenerateMessage,
-}) => {
+const MessageActionWrapper: React.FC<
+  React.PropsWithChildren<MessageProps & { 'data-summary-message'?: true }>
+> = ({ children, message, onDeleteMessage, onRegenerateMessage, ...rest }) => {
   return (
-    <MessageTopWrapper>
+    <MessageTopWrapper {...rest}>
       <FloatingActionRow>
         {onDeleteMessage && (
           <IconButton

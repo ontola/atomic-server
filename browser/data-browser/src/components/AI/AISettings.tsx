@@ -3,17 +3,17 @@ import { Column, Row } from '@components/Row';
 import { Checkbox, CheckboxLabel } from '@components/forms/Checkbox';
 import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
 import styled, { useTheme } from 'styled-components';
-import { transition } from '@helpers/transition';
 import { Suspense, useEffect, useState } from 'react';
 import { OpenRouterLoginButton } from './OpenRouterLoginButton';
 import { effectFetch } from '@helpers/effectFetch';
 import { CheckboxDescriptor } from '@components/forms/CheckboxDescriptor';
 import { OutlinedSection } from '@components/OutlinedSection';
 import { useAISettings } from './AISettingsContext';
-import { AIProvider } from './aiContstants';
 import { useIsOllamaUrlValid } from './useIsOllamaUrlValid';
-import { FaCheck, FaTriangleExclamation } from 'react-icons/fa6';
+import { ProviderStatus, Subtle } from './ProviderStatus';
 import { Details } from '@components/Details';
+import { WarningBlock } from '@components/WarningBlock';
+import { FaCheck, FaTriangleExclamation } from 'react-icons/fa6';
 
 const ModelSelect = React.lazy(
   () => import('@chunks/AI/ModelSelect/ModelSelect'),
@@ -47,8 +47,11 @@ const AISettings: React.FC = () => {
     setOllamaUrl,
     showFollowUpPrompts,
     setShowFollowUpPrompts,
-    isProviderEnabled,
-    setIsProviderEnabled,
+    openRouterAvailable,
+    ollamaAvailable,
+    isProviderAvailable,
+    defaultChatModel,
+    setDefaultChatModel,
     shouldGenerateTitles,
     setShouldGenerateTitles,
     genFeaturesModel,
@@ -57,10 +60,7 @@ const AISettings: React.FC = () => {
 
   const [creditUsage, setCreditUsage] = useState<CreditUsage | undefined>();
 
-  const isOllamaUrlValid = useIsOllamaUrlValid(
-    isProviderEnabled(AIProvider.Ollama),
-    ollamaUrl,
-  );
+  const isOllamaUrlValid = useIsOllamaUrlValid(ollamaUrl);
 
   useEffect(() => {
     if (!openRouterApiKey) {
@@ -87,6 +87,13 @@ const AISettings: React.FC = () => {
     setOpenRouterApiKey(key);
   };
 
+  const genFeaturesUnavailable = !isProviderAvailable(
+    genFeaturesModel.provider,
+  );
+  const defaultModelUnavailable = !isProviderAvailable(
+    defaultChatModel.provider,
+  );
+
   return (
     <>
       <Heading>AI</Heading>
@@ -99,22 +106,33 @@ const AISettings: React.FC = () => {
           <Checkbox checked={showTokenUsage} onChange={setShowTokenUsage} />
           Show token usage in chats
         </CheckboxLabel>
+        <Heading as='h3'>Default chat model</Heading>
+        <Subtle as='p'>
+          Pre-selected when creating new agents. Does not override models you
+          have already set per agent.
+        </Subtle>
+        {defaultModelUnavailable && (
+          <WarningBlock>
+            <WarningBlock.Title>
+              The selected default model&apos;s provider is not available.
+              Choose a model from a connected provider below.
+            </WarningBlock.Title>
+          </WarningBlock>
+        )}
+        <Suspense>
+          <ModelSelect
+            defaultModel={defaultChatModel}
+            onSelect={setDefaultChatModel}
+            enforceToolSupport
+          />
+        </Suspense>
         <Heading as='h3'>AI Providers</Heading>
         <OutlinedSection title='OpenRouter'>
-          <CheckboxLabel>
-            <Checkbox
-              checked={isProviderEnabled(AIProvider.OpenRouter)}
-              onChange={checked => {
-                setIsProviderEnabled(AIProvider.OpenRouter, checked);
-              }}
-            />
-            Enable OpenRouter
-          </CheckboxLabel>
-          <ConditionalSettings
-            fullWidth
-            gap='0.5rem'
-            enabled={isProviderEnabled(AIProvider.OpenRouter)}
-          >
+          <ProviderStatus
+            connected={openRouterAvailable}
+            configured={Boolean(openRouterApiKey)}
+          />
+          <Column fullWidth gap='0.5rem'>
             <label htmlFor='openrouter-api-key'>OpenRouter API Key</label>
             <Row center>
               {!openRouterApiKey && (
@@ -149,60 +167,53 @@ const AISettings: React.FC = () => {
                 cost-effective options.
               </Subtle>
             )}
-          </ConditionalSettings>
+          </Column>
         </OutlinedSection>
         <OutlinedSection title='Ollama'>
-          <CheckboxDescriptor
-            label='Enable Ollama'
-            description={
-              <>
-                Host your own AI models locally using{' '}
-                <a href='https://ollama.com/' target='_blank' rel='noreferrer'>
-                  Ollama
-                </a>
-              </>
-            }
-          >
-            {id => (
-              <Checkbox
-                id={id}
-                checked={isProviderEnabled(AIProvider.Ollama)}
-                onChange={checked =>
-                  setIsProviderEnabled(AIProvider.Ollama, checked)
-                }
-              />
-            )}
-          </CheckboxDescriptor>
-          <ConditionalSettings
-            fullWidth
-            gap='1rem'
-            enabled={isProviderEnabled(AIProvider.Ollama)}
-          >
-            <Column gap='0.5rem'>
-              <Row center gap='1ch'>
-                {isOllamaUrlValid ? (
-                  <FaCheck title='Server found' color={theme.colors.main} />
-                ) : (
-                  <FaTriangleExclamation
-                    title='Server not responding'
-                    color={theme.colors.warning}
-                  />
-                )}
-                <label htmlFor='ollama-url'>Ollama API Url</label>
-              </Row>
-              <InputWrapper>
-                <InputStyled
-                  id='ollama-url'
-                  value={ollamaUrl || ''}
-                  onChange={e => setOllamaUrl(e.target.value || undefined)}
-                  type='url'
-                  placeholder='http://localhost:11434'
+          <ProviderStatus
+            connected={ollamaAvailable}
+            configured={Boolean(ollamaUrl)}
+            checking={Boolean(ollamaUrl) && !isOllamaUrlValid}
+          />
+          <Column gap='0.5rem'>
+            <Row center gap='1ch'>
+              {ollamaUrl && isOllamaUrlValid ? (
+                <FaCheck title='Server found' color={theme.colors.main} />
+              ) : ollamaUrl ? (
+                <FaTriangleExclamation
+                  title='Server not responding'
+                  color={theme.colors.warning}
                 />
-              </InputWrapper>
-            </Column>
-          </ConditionalSettings>
+              ) : null}
+              <label htmlFor='ollama-url'>Ollama API Url</label>
+            </Row>
+            <Subtle as='p'>
+              Host your own AI models locally using{' '}
+              <a href='https://ollama.com/' target='_blank' rel='noreferrer'>
+                Ollama
+              </a>
+              . A provider is available when the server responds at this URL.
+            </Subtle>
+            <InputWrapper>
+              <InputStyled
+                id='ollama-url'
+                value={ollamaUrl || ''}
+                onChange={e => setOllamaUrl(e.target.value || undefined)}
+                type='url'
+                placeholder='http://localhost:11434'
+              />
+            </InputWrapper>
+          </Column>
         </OutlinedSection>
         <Heading as='h3'>Generative Features</Heading>
+        {genFeaturesUnavailable && (
+          <WarningBlock>
+            <WarningBlock.Title>
+              The generative features model uses a provider that is not
+              available.
+            </WarningBlock.Title>
+          </WarningBlock>
+        )}
         <CheckboxLabel>
           <Checkbox
             checked={shouldGenerateTitles}
@@ -246,12 +257,6 @@ const ConditionalSettings = styled(Column)<{ enabled: boolean }>`
   opacity: ${p => (p.enabled ? 1 : 0.3)};
   pointer-events: ${p => (p.enabled ? 'auto' : 'none')};
   touch-action: ${p => (p.enabled ? 'auto' : 'none')};
-  ${transition('opacity')}
-`;
-
-const Subtle = styled.div`
-  font-size: 0.8rem;
-  color: ${p => p.theme.colors.textLight};
 `;
 
 export default AISettings;

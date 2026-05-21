@@ -66,7 +66,7 @@ These components help with rendering resources in different contexts.
 - `src/components/forms/Field.tsx` - High level form field skeleton. Pass the actual input as a child component.
 - `src/components/forms/Checkbox.tsx` - Themed checkbox input.
 - `src/components/forms/RadioInput.tsx` - Themed radio input.
-- `src/components/forms/RangeInput.tsx` - Themed range input.
+- `src/components/forms/SliderInput.tsx` - Themed range input.
 - `src/components/forms/MarkdownInput.tsx` - Themed markdown input.
 - `src/components/forms/EmojiInput.tsx` - Themed emoji input.
 - `src/components/ComboBox.tsx` - Filterable combobox using Downshift and QuickScore, with optional CSS anchor positioning.

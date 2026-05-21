@@ -24,10 +24,10 @@ const createOllamaProvider = (ollamaUrl: string) => {
 export function useGetModel(): (
   identifier: AIModelIdentifier,
 ) => LanguageModel | undefined {
-  const { openRouterApiKey, ollamaUrl, isProviderEnabled } = useAISettings();
+  const { openRouterApiKey, ollamaUrl, isProviderAvailable } = useAISettings();
 
   return (identifier: AIModelIdentifier): LanguageModel | undefined => {
-    if (!isProviderEnabled(identifier.provider)) {
+    if (!isProviderAvailable(identifier.provider)) {
       return undefined;
     }
 

@@ -35,7 +35,7 @@ export const AISettingsDialog = ({
   }, [open]);
 
   return (
-    <Dialog {...dialogProps} width='600px'>
+    <Dialog {...dialogProps} width='900px'>
       {isOpen && (
         <>
           <Dialog.Title>

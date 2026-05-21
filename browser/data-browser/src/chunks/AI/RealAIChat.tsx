@@ -25,7 +25,7 @@ import { useAIAgentConfig } from './AgentConfig';
 import { AISettingsDialog } from './AISettingsDialog';
 import { MessageContextItem } from './MessageContextItem';
 import { useProcessMessages } from './useProcessMessages';
-import { NoKeyOverlay } from './NoKeyOverlay';
+import { AISetupPanel } from './AISetupPanel';
 import { useOpenRouterModels } from './useOpenRouterModels';
 import {
   getAutoCompactTokenThreshold,
@@ -58,14 +58,15 @@ interface RealAIChatProps {
   historicalMessages?: AtomicUIMessage[];
   onNewMessage: (message: AtomicUIMessage) => void;
   /**
-   * Called when compaction happens. All prior messages move to historical UI state;
-   * activeMessages is `[summary, ...lastTwo]` for LLM context and parent sync.
+   * Called after compaction. All prior messages move to historical UI state;
+   * only the summary is kept for LLM context.
    */
-  onCompact?: (
+  onCompacted?: (
     priorMessages: AtomicUIMessage[],
     summaryMessage: AtomicUIMessage,
-    activeMessages: AtomicUIMessage[],
   ) => void;
+  /** Called when a summary message is deleted and prior messages are restored. */
+  onSummaryDeleted?: (restoredMessages: AtomicUIMessage[]) => void;
   externalContextItems: AIMessageContext[];
   chatSubject?: string;
   setExternalContextItems: React.Dispatch<
@@ -95,7 +96,8 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   chatSubject,
   setExternalContextItems,
   onNewMessage,
-  onCompact,
+  onCompacted,
+  onSummaryDeleted,
   onDeleteMessage,
   onRegenerateMessage,
   children,
@@ -106,7 +108,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     showTokenUsage,
     showFollowUpPrompts,
     ollamaUrl,
-    isProviderEnabled,
+    isProviderAvailable,
   } = useAISettings();
 
   // useChat does not update it's options so we need to use a ref to make it use the latest value.
@@ -146,7 +148,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     (selectedAgent.canReadAtomicData || selectedAgent.ragEnabled);
 
   const { reportAIEdit } = useAIChanges();
-  const canUseInput = isProviderEnabled(selectedAgent.model.provider);
+  const canUseInput = isProviderAvailable(selectedAgent.model.provider);
 
   const [userSelectedContextItems, setUserSelectedContextItems] = useState<
     AIMessageContext[]
@@ -253,11 +255,8 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
       metadata: { isSummary: true },
     };
 
-    const keep = messagesToCompact.slice(-2);
-    const activeMessages: AtomicUIMessage[] = [summaryMessage, ...keep];
-
-    setMessages(activeMessages);
-    onCompact?.(messagesToCompact, summaryMessage, activeMessages);
+    setMessages([summaryMessage]);
+    onCompacted?.(messagesToCompact, summaryMessage);
     setScrollToCompactTrigger(t => t + 1);
 
     isCompactingRef.current = false;
@@ -414,6 +413,18 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   };
 
   const deleteMessage = (message: AtomicUIMessage) => {
+    if (message.metadata?.isSummary) {
+      const restored = [
+        ...(historicalMessages ?? []),
+        ...messages.filter(m => m.id !== message.id),
+      ];
+      setMessages(restored);
+      onSummaryDeleted?.(restored);
+      onDeleteMessage(message);
+
+      return;
+    }
+
     onDeleteMessage(message);
     setMessages(prev => prev.filter(m => m !== message));
   };
@@ -429,7 +440,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   const isEmptyChat = messages.length === 0;
   const totalTokensUsed = usage.input + usage.output;
 
-  // Kept messages stay in useChat for the LLM but are shown only in historicalMessages.
+  // Historical messages are shown in the UI but excluded from the active message list.
   const historicalMessageIds = new Set(
     (historicalMessages ?? []).map(m => m.id),
   );
@@ -615,7 +626,6 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                 </AIChatInput>
               </Column>
               {messages.length === 0 && <div></div>}
-              <NoKeyOverlay />
             </ChatInputWrapper>
             {showTokenUsage && totalTokensUsed > 0 && (
               <TokensUsed>
@@ -632,6 +642,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
         selectedAgent={selectedAgent}
         onSelectAgent={setSelectedAgent}
       />
+      {!readonly && <AISetupPanel />}
     </ChatWindow>
   );
 };
@@ -727,7 +738,6 @@ const SubtleButton = styled.button`
   cursor: pointer;
   background: none;
   border: none;
-  color: ${p => p.theme.colors.textLight};
   border-radius: ${p => p.theme.radius};
   padding: ${p => p.theme.size(1)};
   padding-inline: ${p => p.theme.size(2)};

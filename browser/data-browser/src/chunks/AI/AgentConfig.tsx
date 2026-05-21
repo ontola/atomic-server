@@ -174,6 +174,7 @@ export const AgentConfigTab = ({
   onActionsVisibleChange,
 }: AgentConfigTabProps) => {
   const { agents, saveAgents } = useAIAgentConfig();
+  const { defaultChatModel } = useAISettings();
   const [editingAgent, setEditingAgent] = useState<AIAgent | null>(null);
   const [isCreating, setIsCreating] = useState(false);
 
@@ -238,6 +239,7 @@ export const AgentConfigTab = ({
     setEditingAgent({
       ...defaultNewAgent,
       id: generateId(),
+      model: defaultChatModel,
     });
     setIsCreating(true);
     onActionsVisibleChange(true);
@@ -559,8 +561,7 @@ const SystemPromptPreview = styled.div`
   box-shadow: 0 0 0 1px ${p => p.theme.colors.bg2};
   max-height: 30rem;
   overflow: auto;
-  padding: ${p => p.theme.margin}rem;
-  width: min(100%, 75ch);
+  padding: ${p => p.theme.size()};
 `;
 
 const ToolList = styled.ul`

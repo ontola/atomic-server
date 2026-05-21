@@ -1127,10 +1127,6 @@ msgid "AI Providers"
 msgstr "AI Providers"
 
 #: src/components/AI/AISettings.tsx
-msgid "<0/> Enable OpenRouter"
-msgstr "<0/> Enable OpenRouter"
-
-#: src/components/AI/AISettings.tsx
 msgid "OpenRouter API Key"
 msgstr "OpenRouter API Key"
 
@@ -1147,18 +1143,10 @@ msgstr "Enter your OpenRouter API key"
 msgid "Credits used: {0} /{1} {2}"
 msgstr "Credits used: {0} /{1} {2}"
 
+#: src/chunks/AI/AISetupPanel.tsx
 #: src/components/AI/AISettings.tsx
 msgid "OpenRouter"
 msgstr "OpenRouter"
-
-#: src/components/AI/AISettings.tsx
-msgid "Enable Ollama"
-msgstr "Enable Ollama"
-
-#. 0: ' '
-#: src/components/AI/AISettings.tsx
-msgid "Host your own AI models locally using{0} <0>Ollama</0>"
-msgstr "Host your own AI models locally using{0} <0>Ollama</0>"
 
 #: src/components/AI/AISettings.tsx
 msgid "Server found"
@@ -1172,6 +1160,7 @@ msgstr "Server not responding"
 msgid "Ollama API Url"
 msgstr "Ollama API Url"
 
+#: src/chunks/AI/AISetupPanel.tsx
 #: src/components/AI/AISettings.tsx
 msgid "Ollama"
 msgstr "Ollama"
@@ -1314,6 +1303,7 @@ msgstr "Enter a name"
 msgid "Agent Name"
 msgstr "Agent Name"
 
+#: src/chunks/AI/AISetupPanel.tsx
 #: src/views/InvitePage.tsx
 msgid "Continue"
 msgstr "Continue"
@@ -2489,19 +2479,6 @@ msgstr "Temperature"
 msgid "Temperature value"
 msgstr "Temperature value"
 
-#: src/chunks/AI/NoKeyOverlay.tsx
-msgid "No AI providers enabled."
-msgstr "No AI providers enabled."
-
-#: src/chunks/AI/NoKeyOverlay.tsx
-#: src/chunks/AI/NoKeyOverlay.tsx
-msgid "<0/> Settings"
-msgstr "<0/> Settings"
-
-#: src/chunks/AI/NoKeyOverlay.tsx
-msgid "No AI provider configured."
-msgstr "No AI provider configured."
-
 #: src/chunks/AI/AIChatMessageParts/UserMessage.tsx
 msgid "You"
 msgstr "You"
@@ -2546,10 +2523,6 @@ msgstr "Thinking..."
 msgid "Thinking"
 msgstr "Thinking"
 
-#: src/chunks/AI/ModelSelect/OpenRouterModelSelector.tsx
-msgid "OpenRouter is not enabled"
-msgstr "OpenRouter is not enabled"
-
 #. 0: models.length
 #. 0: modelList.length
 #: src/chunks/AI/ModelSelect/OllamaModelSelector.tsx
@@ -2581,10 +2554,6 @@ msgid "Unable to connect to Ollama server. Check if the server is running and yo
 msgstr "Unable to connect to Ollama server. Check if the server is running and you configured the correct url in the settings"
 
 #: src/chunks/AI/ModelSelect/OllamaModelSelector.tsx
-msgid "Ollama is not enabled"
-msgstr "Ollama is not enabled"
-
-#: src/chunks/AI/ModelSelect/OllamaModelSelector.tsx
 msgid "Format:"
 msgstr "Format:"
 
@@ -2606,9 +2575,6 @@ msgstr "Parameter Size:"
 #: src/components/ComboBox.tsx
 msgid "No results"
 msgstr "No results"
-
-#~ msgid "Ask me anything..."
-#~ msgstr "Ask me anything..."
 
 #: src/chunks/RTE/AIChatInput/MentionList.tsx
 msgid "No result"
@@ -3513,9 +3479,6 @@ msgstr "LLM Instructions"
 msgid "Searching online"
 msgstr "Searching online"
 
-#~ msgid "Reading <0/>"
-#~ msgstr "Reading <0/>"
-
 #: src/chunks/AI/AISidebar.tsx
 msgid "Failed to save AI chat message"
 msgstr "Failed to save AI chat message"
@@ -3541,9 +3504,6 @@ msgstr "Failed to remove message resource"
 msgid "Reading{0} <0/>"
 msgstr "Reading{0} <0/>"
 
-#~ msgid "Context compacted"
-#~ msgstr "Context compacted"
-
 #: src/chunks/AI/RealAIChat.tsx
 msgid "Compacting context"
 msgstr "Compacting context"
@@ -3551,9 +3511,6 @@ msgstr "Compacting context"
 #: src/chunks/AI/AIChatPage.tsx
 msgid "Failed to save summary message"
 msgstr "Failed to save summary message"
-
-#~ msgid "Context compacted {0}"
-#~ msgstr "Context compacted {0}"
 
 #: src/chunks/AI/CompactSeparatorWidget.tsx
 msgid "Show summary"
@@ -3572,12 +3529,6 @@ msgstr "Auto-compact threshold percent"
 msgid "Auto-compact threshold"
 msgstr "Auto-compact threshold"
 
-#~ msgid "Automatically compact the conversation when input tokens exceed this percentage of the selected model context window. Set to 0% to disable auto-compact (manual /compact still works)."
-#~ msgstr "Automatically compact the conversation when input tokens exceed this percentage of the selected model context window. Set to 0% to disable auto-compact (manual /compact still works)."
-
-#~ msgid "<0/> Auto-compact threshold"
-#~ msgstr "<0/> Auto-compact threshold"
-
 #: src/chunks/AI/AgentConfig.tsx
 msgid "Don't auto compact conversation"
 msgstr "Don't auto compact conversation"
@@ -3586,31 +3537,102 @@ msgstr "Don't auto compact conversation"
 msgid "Automatically compact the conversation when input tokens exceed this percentage of the selected model context window. Manual /compact still works when disabled."
 msgstr "Automatically compact the conversation when input tokens exceed this percentage of the selected model context window. Manual /compact still works when disabled."
 
-#~ msgid "Disable auto-compact"
-#~ msgstr "Disable auto-compact"
-
 #: src/chunks/AI/AgentConfig.tsx
 msgid "Enable auto-compact"
 msgstr "Enable auto-compact"
 
-#~ msgid "<0/> /M"
-#~ msgstr "<0/> /M"
-
-#~ msgid "Hello"
-#~ msgstr "Hello"
-
-#~ msgid "Find cats"
-#~ msgstr "Find cats"
-
-#~ msgid "What is this?"
-#~ msgstr "What is this?"
-
-#~ msgid "RAG snippet about the drive"
-#~ msgstr "RAG snippet about the drive"
-
-#~ msgid "Tool call failed"
-#~ msgstr "Tool call failed"
-
 #: src/chunks/RTE/AIChatInput/AsyncAIChatInput.tsx
 msgid "Ask me anything, / for commands, @ for context"
 msgstr "Ask me anything, / for commands, @ for context"
+
+#: src/components/AI/ProviderStatus.tsx
+msgid "Not configured"
+msgstr "Not configured"
+
+#: src/components/AI/ProviderStatus.tsx
+#: src/components/AI/ProviderStatus.tsx
+msgid "Connected"
+msgstr "Connected"
+
+#: src/components/AI/ProviderStatus.tsx
+#: src/components/AI/ProviderStatus.tsx
+msgid "Not responding"
+msgstr "Not responding"
+
+#: src/components/AI/AISettings.tsx
+msgid "Default chat model"
+msgstr "Default chat model"
+
+#: src/components/AI/AISettings.tsx
+msgid "The selected default model's provider is not available. Choose a model from a connected provider below."
+msgstr "The selected default model's provider is not available. Choose a model from a connected provider below."
+
+#. 0: ' '
+#: src/components/AI/AISettings.tsx
+msgid "Host your own AI models locally using{0} <0>Ollama</0> . A provider is available when the server responds at this URL."
+msgstr "Host your own AI models locally using{0} <0>Ollama</0> . A provider is available when the server responds at this URL."
+
+#: src/components/AI/AISettings.tsx
+msgid "The generative features model uses a provider that is not available."
+msgstr "The generative features model uses a provider that is not available."
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "Choose a default model"
+msgstr "Choose a default model"
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "Also use for chat titles and follow-up prompts"
+msgstr "Also use for chat titles and follow-up prompts"
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "Start chatting"
+msgstr "Start chatting"
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "Connect a model to use Atomic Assistant"
+msgstr "Connect a model to use Atomic Assistant"
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "or"
+msgstr "or"
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "Paste API key"
+msgstr "Paste API key"
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "OpenRouter API key"
+msgstr "OpenRouter API key"
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "Ollama URL"
+msgstr "Ollama URL"
+
+#: src/components/AI/ProviderStatus.tsx
+#: src/components/AI/ProviderStatus.tsx
+msgid "Checking server…"
+msgstr "Checking server…"
+
+#: src/chunks/AI/ModelSelect/OllamaModelSelector.tsx
+msgid "Check your Ollama URL and that the server is running"
+msgstr "Check your Ollama URL and that the server is running"
+
+#: src/chunks/AI/ModelSelect/OpenRouterModelSelector.tsx
+msgid "Add an OpenRouter API key in settings"
+msgstr "Add an OpenRouter API key in settings"
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "Back"
+msgstr "Back"
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "Use OpenRouter (cloud models) or Ollama (local models). At least one provider must be connected before you can continue."
+msgstr "Use OpenRouter (cloud models) or Ollama (local models). At least one provider must be connected before you can continue."
+
+#: src/components/AI/AISettings.tsx
+msgid "Pre-selected when creating new agents. Does not override models you have already set per agent."
+msgstr "Pre-selected when creating new agents. Does not override models you have already set per agent."
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "This pre-selects a model for built-in agents and new custom agents. You can change each agent's model individually later."
+msgstr "This pre-selects a model for built-in agents and new custom agents. You can change each agent's model individually later."

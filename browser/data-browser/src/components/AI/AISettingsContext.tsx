@@ -6,6 +6,12 @@ import {
   defaultMCPServers,
   mergeDefaultMCPServers,
 } from '@chunks/AI/defaultMCPServers';
+import { useProviderAvailability } from './useProviderAvailability';
+
+export const DEFAULT_CHAT_MODEL: AIModelIdentifier = {
+  id: '~google/gemini-flash-latest',
+  provider: AIProvider.OpenRouter,
+};
 
 interface AISettingsContextType {
   /** Enable all AI features in the app */
@@ -21,9 +27,13 @@ interface AISettingsContextType {
   /** Whether to show the follow up prompts in AI chats */
   showFollowUpPrompts: boolean;
   setShowFollowUpPrompts: (b: boolean) => void;
-  enabledProviders: AIProvider[];
-  isProviderEnabled: (provider: AIProvider) => boolean;
-  setIsProviderEnabled: (provider: AIProvider, enabled: boolean) => void;
+  /** Default model for built-in agents and new custom agents */
+  defaultChatModel: AIModelIdentifier;
+  setDefaultChatModel: (model: AIModelIdentifier) => void;
+  isProviderAvailable: (provider: AIProvider) => boolean;
+  availableProviders: AIProvider[];
+  openRouterAvailable: boolean;
+  ollamaAvailable: boolean;
   /** The OpenRouter API key for making requests to OpenRouter */
   openRouterApiKey: string | undefined;
   setOpenRouterApiKey: (key: string | undefined) => void;
@@ -49,12 +59,15 @@ const initialState: AISettingsContextType = {
   setShowTokenUsage: () => undefined,
   showFollowUpPrompts: true,
   setShowFollowUpPrompts: () => undefined,
-  enabledProviders: [],
-  isProviderEnabled: () => false,
-  setIsProviderEnabled: () => undefined,
+  defaultChatModel: DEFAULT_CHAT_MODEL,
+  setDefaultChatModel: () => undefined,
+  isProviderAvailable: () => false,
+  availableProviders: [],
+  openRouterAvailable: false,
+  ollamaAvailable: false,
   openRouterApiKey: undefined,
   setOpenRouterApiKey: () => undefined,
-  ollamaUrl: 'http://localhost:11434/api',
+  ollamaUrl: 'http://localhost:11434',
   setOllamaUrl: () => undefined,
   shouldGenerateTitles: true,
   setShouldGenerateTitles: () => undefined,
@@ -89,13 +102,15 @@ export const AISettingsContextProvider = (
     'atomic.ai.showTokenUsage',
     true,
   );
-  const [enabledProviders, setEnabledProviders] = useLocalStorage<AIProvider[]>(
-    'atomic.ai.enabledProviders',
-    [],
-  );
   const [openRouterApiKey, setOpenRouterApiKey] = useLocalStorage<
     string | undefined
   >('atomic.ai.openrouter-api-key', undefined);
+
+  const [defaultChatModel, setDefaultChatModel] =
+    useLocalStorage<AIModelIdentifier>(
+      'atomic.ai.defaultChatModel',
+      DEFAULT_CHAT_MODEL,
+    );
 
   const [genFeaturesModel, setGenFeaturesModel] =
     useLocalStorage<AIModelIdentifier>('atomic.ai.genFeaturesModel', {
@@ -113,17 +128,16 @@ export const AISettingsContextProvider = (
     true,
   );
 
-  const isProviderEnabled = (provider: AIProvider) =>
-    enabledProviders.includes(provider);
+  const {
+    openRouterAvailable,
+    ollamaAvailable,
+    isProviderAvailable,
+    availableProviders,
+  } = useProviderAvailability(openRouterApiKey, ollamaUrl);
 
   const mcpServers = mergeDefaultMCPServers(storedMcpServers);
   const setMcpServers = (servers: MCPServer[]) =>
     setStoredMcpServers(mergeDefaultMCPServers(servers));
-
-  const setIsProviderEnabled = (provider: AIProvider, enabled: boolean) =>
-    setEnabledProviders(prev =>
-      enabled ? [...prev, provider] : prev.filter(p => p !== provider),
-    );
 
   const context = {
     openRouterApiKey,
@@ -138,9 +152,12 @@ export const AISettingsContextProvider = (
     setOllamaUrl,
     showFollowUpPrompts,
     setShowFollowUpPrompts,
-    enabledProviders,
-    isProviderEnabled,
-    setIsProviderEnabled,
+    defaultChatModel,
+    setDefaultChatModel,
+    isProviderAvailable,
+    availableProviders,
+    openRouterAvailable,
+    ollamaAvailable,
     shouldGenerateTitles,
     setShouldGenerateTitles,
     genFeaturesModel,

@@ -1127,10 +1127,6 @@ msgid "AI Providers"
 msgstr "Fournisseurs d’IA"
 
 #: src/components/AI/AISettings.tsx
-msgid "<0/> Enable OpenRouter"
-msgstr "<0/> Activer OpenRouter"
-
-#: src/components/AI/AISettings.tsx
 msgid "OpenRouter API Key"
 msgstr "Clé API OpenRouter"
 
@@ -1147,18 +1143,10 @@ msgstr "Entrez votre clé API OpenRouter"
 msgid "Credits used: {0} /{1} {2}"
 msgstr "Crédits utilisés : {0} / {1} {2}"
 
+#: src/chunks/AI/AISetupPanel.tsx
 #: src/components/AI/AISettings.tsx
 msgid "OpenRouter"
 msgstr "OpenRouter"
-
-#: src/components/AI/AISettings.tsx
-msgid "Enable Ollama"
-msgstr "Activer Ollama"
-
-#. 0: ' '
-#: src/components/AI/AISettings.tsx
-msgid "Host your own AI models locally using{0} <0>Ollama</0>"
-msgstr "Hébergez vos propres modèles d’IA localement en utilisant{0} <0>Ollama</0>"
 
 #: src/components/AI/AISettings.tsx
 msgid "Server found"
@@ -1172,6 +1160,7 @@ msgstr "Le serveur ne répond pas"
 msgid "Ollama API Url"
 msgstr "URL de l’API Ollama"
 
+#: src/chunks/AI/AISetupPanel.tsx
 #: src/components/AI/AISettings.tsx
 msgid "Ollama"
 msgstr "Ollama"
@@ -1314,6 +1303,7 @@ msgstr "Saisissez un nom"
 msgid "Agent Name"
 msgstr "Nom de l'agent"
 
+#: src/chunks/AI/AISetupPanel.tsx
 #: src/views/InvitePage.tsx
 msgid "Continue"
 msgstr "Continuer"
@@ -2489,19 +2479,6 @@ msgstr "Température"
 msgid "Temperature value"
 msgstr "Valeur de la température"
 
-#: src/chunks/AI/NoKeyOverlay.tsx
-msgid "No AI providers enabled."
-msgstr "Aucun fournisseur d'IA activé."
-
-#: src/chunks/AI/NoKeyOverlay.tsx
-#: src/chunks/AI/NoKeyOverlay.tsx
-msgid "<0/> Settings"
-msgstr "<0/> Paramètres"
-
-#: src/chunks/AI/NoKeyOverlay.tsx
-msgid "No AI provider configured."
-msgstr "Aucun fournisseur d'IA configuré."
-
 #: src/chunks/AI/AIChatMessageParts/UserMessage.tsx
 msgid "You"
 msgstr "Vous"
@@ -2546,10 +2523,6 @@ msgstr "Réflexion..."
 msgid "Thinking"
 msgstr "Réflexion"
 
-#: src/chunks/AI/ModelSelect/OpenRouterModelSelector.tsx
-msgid "OpenRouter is not enabled"
-msgstr "OpenRouter n'est pas activé"
-
 #. 0: models.length
 #. 0: modelList.length
 #: src/chunks/AI/ModelSelect/OllamaModelSelector.tsx
@@ -2581,10 +2554,6 @@ msgid "Unable to connect to Ollama server. Check if the server is running and yo
 msgstr "Impossible de se connecter au serveur Ollama. Vérifiez si le serveur est en cours d'exécution et si vous avez configuré l'URL correcte dans les paramètres."
 
 #: src/chunks/AI/ModelSelect/OllamaModelSelector.tsx
-msgid "Ollama is not enabled"
-msgstr "Ollama n'est pas activé"
-
-#: src/chunks/AI/ModelSelect/OllamaModelSelector.tsx
 msgid "Format:"
 msgstr "Format :"
 
@@ -2606,9 +2575,6 @@ msgstr "Taille des paramètres :"
 #: src/components/ComboBox.tsx
 msgid "No results"
 msgstr "Aucun résultat"
-
-#~ msgid "Ask me anything..."
-#~ msgstr "Demandez-moi n'importe quoi..."
 
 #: src/chunks/RTE/AIChatInput/MentionList.tsx
 msgid "No result"
@@ -3510,9 +3476,6 @@ msgstr "Instructions LLM"
 msgid "Searching online"
 msgstr "Recherche en ligne"
 
-#~ msgid "Reading <0/>"
-#~ msgstr "Lecture <0/>"
-
 #: src/chunks/AI/AISidebar.tsx
 msgid "Failed to save AI chat message"
 msgstr "Échec de l’enregistrement du message de chat IA"
@@ -3538,9 +3501,6 @@ msgstr "Échec de la suppression de la ressource de message"
 msgid "Reading{0} <0/>"
 msgstr "Lecture{0} <0/>"
 
-#~ msgid "Context compacted"
-#~ msgstr "Contexte compacté"
-
 #: src/chunks/AI/RealAIChat.tsx
 msgid "Compacting context"
 msgstr "Compactage du contexte"
@@ -3548,9 +3508,6 @@ msgstr "Compactage du contexte"
 #: src/chunks/AI/AIChatPage.tsx
 msgid "Failed to save summary message"
 msgstr "Échec de l'enregistrement du message récapitulatif"
-
-#~ msgid "Context compacted {0}"
-#~ msgstr "Contexte compacté {0}"
 
 #: src/chunks/AI/CompactSeparatorWidget.tsx
 msgid "Show summary"
@@ -3569,12 +3526,6 @@ msgstr "Pourcentage de seuil de compactage automatique"
 msgid "Auto-compact threshold"
 msgstr "Seuil de compactage automatique"
 
-#~ msgid "Automatically compact the conversation when input tokens exceed this percentage of the selected model context window. Set to 0% to disable auto-compact (manual /compact still works)."
-#~ msgstr "Compacte automatiquement la conversation lorsque les jetons d'entrée dépassent ce pourcentage de la fenêtre contextuelle du modèle sélectionné. Réglez à 0 % pour désactiver le compactage automatique (/compact fonctionne toujours)."
-
-#~ msgid "<0/> Auto-compact threshold"
-#~ msgstr "Seuil de compactage automatique <0/>"
-
 #: src/chunks/AI/AgentConfig.tsx
 msgid "Don't auto compact conversation"
 msgstr "Ne pas compresser automatiquement la conversation"
@@ -3583,31 +3534,102 @@ msgstr "Ne pas compresser automatiquement la conversation"
 msgid "Automatically compact the conversation when input tokens exceed this percentage of the selected model context window. Manual /compact still works when disabled."
 msgstr "Compacter automatiquement la conversation lorsque les jetons d'entrée dépassent ce pourcentage de la fenêtre de contexte du modèle sélectionné. La commande manuelle /compact fonctionne toujours lorsqu'elle est désactivée."
 
-#~ msgid "Disable auto-compact"
-#~ msgstr "Désactiver le compactage automatique"
-
 #: src/chunks/AI/AgentConfig.tsx
 msgid "Enable auto-compact"
 msgstr "Activer l'auto-compactage"
 
-#~ msgid "<0/> /M"
-#~ msgstr "<0/> /M"
-
-#~ msgid "Hello"
-#~ msgstr ""
-
-#~ msgid "Find cats"
-#~ msgstr ""
-
-#~ msgid "What is this?"
-#~ msgstr ""
-
-#~ msgid "RAG snippet about the drive"
-#~ msgstr ""
-
-#~ msgid "Tool call failed"
-#~ msgstr ""
-
 #: src/chunks/RTE/AIChatInput/AsyncAIChatInput.tsx
 msgid "Ask me anything, / for commands, @ for context"
 msgstr "Demandez-moi n'importe quoi, / pour les commandes, @ pour le contexte"
+
+#: src/components/AI/ProviderStatus.tsx
+msgid "Not configured"
+msgstr "Non configuré"
+
+#: src/components/AI/ProviderStatus.tsx
+#: src/components/AI/ProviderStatus.tsx
+msgid "Connected"
+msgstr "Connecté"
+
+#: src/components/AI/ProviderStatus.tsx
+#: src/components/AI/ProviderStatus.tsx
+msgid "Not responding"
+msgstr "Ne répond pas"
+
+#: src/components/AI/AISettings.tsx
+msgid "Default chat model"
+msgstr "Modèle de chat par défaut"
+
+#: src/components/AI/AISettings.tsx
+msgid "The selected default model's provider is not available. Choose a model from a connected provider below."
+msgstr "Le fournisseur du modèle par défaut sélectionné n'est pas disponible. Choisissez un modèle parmi un fournisseur connecté ci-dessous."
+
+#. 0: ' '
+#: src/components/AI/AISettings.tsx
+msgid "Host your own AI models locally using{0} <0>Ollama</0> . A provider is available when the server responds at this URL."
+msgstr "Hébergez vos propres modèles d'IA localement en utilisant{0} <0>Ollama</0> . Un fournisseur est disponible lorsque le serveur répond à cette URL."
+
+#: src/components/AI/AISettings.tsx
+msgid "The generative features model uses a provider that is not available."
+msgstr "Le modèle de fonctionnalités génératives utilise un fournisseur qui n'est pas disponible."
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "Choose a default model"
+msgstr "Choisir un modèle par défaut"
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "Also use for chat titles and follow-up prompts"
+msgstr "Utiliser aussi pour les titres de chat et les invites de suivi"
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "Start chatting"
+msgstr "Commencer à discuter"
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "Connect a model to use Atomic Assistant"
+msgstr "Connecter un modèle pour utiliser Atomic Assistant"
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "or"
+msgstr "ou"
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "Paste API key"
+msgstr "Coller la clé API"
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "OpenRouter API key"
+msgstr "Clé API OpenRouter"
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "Ollama URL"
+msgstr "URL Ollama"
+
+#: src/components/AI/ProviderStatus.tsx
+#: src/components/AI/ProviderStatus.tsx
+msgid "Checking server…"
+msgstr "Vérification du serveur…"
+
+#: src/chunks/AI/ModelSelect/OllamaModelSelector.tsx
+msgid "Check your Ollama URL and that the server is running"
+msgstr "Vérifiez votre URL Ollama et que le serveur est en cours d'exécution"
+
+#: src/chunks/AI/ModelSelect/OpenRouterModelSelector.tsx
+msgid "Add an OpenRouter API key in settings"
+msgstr "Ajouter une clé API OpenRouter dans les paramètres"
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "Back"
+msgstr "Retour"
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "Use OpenRouter (cloud models) or Ollama (local models). At least one provider must be connected before you can continue."
+msgstr "Utilisez OpenRouter (modèles cloud) ou Ollama (modèles locaux). Au moins un fournisseur doit être connecté pour que vous puissiez continuer."
+
+#: src/components/AI/AISettings.tsx
+msgid "Pre-selected when creating new agents. Does not override models you have already set per agent."
+msgstr "Pré-sélectionné lors de la création de nouveaux agents. Ne remplace pas les modèles que vous avez déjà définis par agent."
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "This pre-selects a model for built-in agents and new custom agents. You can change each agent's model individually later."
+msgstr "Ceci présélectionne un modèle pour les agents intégrés et les nouveaux agents personnalisés. Vous pourrez modifier le modèle de chaque agent individuellement plus tard."

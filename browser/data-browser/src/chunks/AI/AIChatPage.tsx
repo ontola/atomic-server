@@ -77,6 +77,11 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
     }
   };
 
+  const handleSummaryDeleted = (restored: AtomicUIMessage[]) => {
+    setCompactedMessages([]);
+    setMessages(restored);
+  };
+
   const handleDeleteMessage = async (message: AtomicUIMessage) => {
     const messageResource = messageToResourceMap.get(message);
 
@@ -89,23 +94,26 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
       }
     }
 
-    setMessages(prev => prev.filter(m => m !== message));
-
     setMessageToResourceMap(prev => {
       const next = new Map(prev);
       next.delete(message);
 
       return next;
     });
+
+    if (message.metadata?.isSummary) {
+      return;
+    }
+
+    setMessages(prev => prev.filter(m => m !== message));
   };
 
-  const handleCompact = async (
+  const handleCompacted = async (
     priorMessages: AtomicUIMessage[],
     summaryMessage: AtomicUIMessage,
-    activeMessages: AtomicUIMessage[],
   ) => {
     setCompactedMessages(prev => [...prev, ...priorMessages]);
-    setMessages(activeMessages);
+    setMessages([summaryMessage]);
 
     try {
       const messageResource = await addMessageToChatResource(
@@ -194,7 +202,8 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
       setExternalContextItems={setContextItems}
       chatSubject={resource.subject}
       onNewMessage={addNewMessage}
-      onCompact={handleCompact}
+      onCompacted={handleCompacted}
+      onSummaryDeleted={handleSummaryDeleted}
       onDeleteMessage={handleDeleteMessage}
       onRegenerateMessage={removeFollowingMessages}
     >

@@ -49,10 +49,10 @@ export const AgentConfigItem: React.FC<AgentConfigItemProps> = ({
 
   const theme = useTheme();
   const { defaultAgentId, setDefaultAgentId } = useAIAgentConfig();
-  const { isProviderEnabled } = useAISettings();
+  const { isProviderAvailable } = useAISettings();
 
   const isDefault = defaultAgentId === agent.id;
-  const providerDisabled = !isProviderEnabled(agent.model.provider);
+  const providerDisabled = !isProviderAvailable(agent.model.provider);
 
   const contextItems: DropdownItem[] = [
     {

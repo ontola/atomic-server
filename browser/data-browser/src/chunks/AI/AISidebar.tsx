@@ -116,6 +116,12 @@ const AISidebar: React.FC = () => {
   const { shouldGenerateTitles } = useAISettings();
   const { isOpen, contextItems, setContextItems, setIsOpen } = useAISidebar();
   const { drive } = useSettings();
+
+  useEffect(() => {
+    if (sessionStorage.getItem('atomic.ai.openSetup') === 'true') {
+      setIsOpen(true);
+    }
+  }, [setIsOpen]);
   const [messages, setMessages] = useState<AtomicUIMessage[]>([]);
   const [compactedMessages, setCompactedMessages] = useState<AtomicUIMessage[]>(
     [],
@@ -175,18 +181,17 @@ const AISidebar: React.FC = () => {
     return newChatResource;
   }, [drive, store]);
 
-  const handleCompact = (
+  const handleCompacted = (
     priorMessages: AtomicUIMessage[],
     summaryMessage: AtomicUIMessage,
-    activeMessages: AtomicUIMessage[],
   ) => {
     setCompactedMessages(prev => [...prev, ...priorMessages]);
-    messagesRef.current = activeMessages;
-    setMessages(activeMessages);
+    messagesRef.current = [summaryMessage];
+    setMessages([summaryMessage]);
 
     persistSidebarMessage({
       message: summaryMessage,
-      newMessages: activeMessages,
+      newMessages: [summaryMessage],
       store,
       getOrCreateDraftChatResource,
       isChatSavedRef,
@@ -227,6 +232,12 @@ const AISidebar: React.FC = () => {
     }).catch(handleSidebarMessageSaveError);
   };
 
+  const handleSummaryDeleted = (restored: AtomicUIMessage[]) => {
+    setCompactedMessages([]);
+    messagesRef.current = restored;
+    setMessages(restored);
+  };
+
   const handleMessageDelete = async (message: AtomicUIMessage) => {
     const messageResource = messageToResourceMap.get(message);
 
@@ -247,6 +258,10 @@ const AISidebar: React.FC = () => {
 
       return next;
     });
+
+    if (message.metadata?.isSummary) {
+      return;
+    }
 
     const nextMessages = messagesRef.current.filter(m => m !== message);
     messagesRef.current = nextMessages;
@@ -384,7 +399,8 @@ const AISidebar: React.FC = () => {
         initialMessages={messages}
         historicalMessages={compactedMessages}
         onNewMessage={addNewMessage}
-        onCompact={handleCompact}
+        onCompacted={handleCompacted}
+        onSummaryDeleted={handleSummaryDeleted}
         externalContextItems={contextItems}
         setExternalContextItems={setContextItems}
         chatSubject={isChatSaved ? chatResource?.subject : undefined}
