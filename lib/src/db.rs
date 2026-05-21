@@ -1483,16 +1483,28 @@ impl Db {
         Ok(())
     }
 
-    /// Recursively removes a resource and its children from the database
+    /// Recursively removes a resource and its children from the database.
+    /// `removed` collects the `pure_id()` of every deleted subject so the
+    /// caller can tombstone them after the transaction is applied.
     async fn recursive_remove(
         &self,
         subject: &Subject,
         transaction: &mut Transaction,
+        removed: &mut Vec<String>,
     ) -> AtomicResult<()> {
-        let subject_str = subject.to_string();
+        // Key by `pure_id()` — that is how resources and Loro snapshots are
+        // stored (`add_resource_tx`, `apply_commit`). Looking up by the raw
+        // `to_string()` (which may carry `?drive=` params) would miss the
+        // row entirely for DID subjects with a drive hint.
+        let subject_str = subject.pure_id();
         if let Ok(found) = self.get_propvals(&subject_str) {
             let resource = Resource::from_propvals(found, subject.clone());
             transaction.push(Operation::remove_resource(&subject_str));
+            // Remove the Loro snapshot in the same transaction. Without this
+            // the snapshot is orphaned in `Tree::LoroSnapshots` and leaks
+            // forever — only the WS/Iroh DESTROY path cleaned it before.
+            transaction.push(Operation::remove_loro_snapshot(&subject_str));
+            removed.push(subject_str.clone());
             let mut children = resource.get_children(self).await?;
             for child in children.iter_mut() {
                 // Notify subscribers so clients evict the cascade-deleted
@@ -1505,7 +1517,8 @@ impl Db {
                     source_id: None,
                 });
                 // Because the function is async we need to box it to use recursion.
-                Box::pin(self.recursive_remove(child.get_subject(), transaction)).await?;
+                Box::pin(self.recursive_remove(child.get_subject(), transaction, removed))
+                    .await?;
             }
             for (prop, val) in resource.get_propvals() {
                 let remove_atom = crate::Atom::new(subject.clone(), prop.clone(), val.clone());
@@ -2319,8 +2332,15 @@ impl Storelike for Db {
     #[instrument(skip_all)]
     async fn remove_resource(&self, subject: &Subject) -> AtomicResult<()> {
         let mut transaction = Transaction::new();
-        self.recursive_remove(subject, &mut transaction).await?;
+        let mut removed = Vec::new();
+        self.recursive_remove(subject, &mut transaction, &mut removed)
+            .await?;
         self.apply_transaction(&mut transaction)?;
+        // Tombstone every removed subject so bulk sync (Iroh / WS `SYNC`)
+        // does not resurrect them from a peer that still holds a stale copy.
+        for s in &removed {
+            crate::sync::tombstones::record_tombstone(self, s);
+        }
         // TODO: deletion sync — should create a signed destroy commit
         // and push it through the normal commit pipeline, not a raw DESTROY frame.
         Ok(())

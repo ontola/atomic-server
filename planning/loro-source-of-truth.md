@@ -64,18 +64,79 @@ pattern-match `Value::AtomicUrl` and `check_required_props` do care.
 A lossy projection cannot be promoted to source of truth. Fixing this is the
 gate; nothing else below is safe first.
 
-**Two ways to fix (decide in Phase 1):**
+### The fix: coarse materialization + a sparse `datatypes` map — decided
 
-- **A — datatype-aware materialization.** `materialize_propvals_from_loro_doc`
-  looks up each Property's `datatype` and parses accordingly. Faithful and in
-  the Atomic spirit (datatype lives on the Property), but the function is
-  currently pure and would need an `&impl Storelike` handle.
-- **B — type-tagged encoding.** Store a datatype discriminant alongside each
-  value in the doc. Self-contained, no store lookup, but a doc-format change
-  and a migration.
+An audit of every `Value`-variant dependency across `lib/` and `server/`
+(71 call sites) settles what must be preserved:
 
-Recommendation: **A**, falling back to a tag only for values whose datatype
-cannot be resolved from the Property (unknown/external properties).
+- **Collapse (21 sites — COSMETIC + SCALAR).** `Markdown` / `Slug` / `Date` /
+  `Uri` → `String`; `Timestamp` → `Integer`. Nothing matches these variants
+  meaningfully; `.to_int()` already abstracts `Integer`/`Timestamp`. Loro can
+  be naive here, exactly like JSON-AD.
+- **Preserve (47 sites — STRUCTURAL-REF + STRUCTURAL-SHAPE).** Whether a value
+  is a *reference* (`AtomicUrl` / `ResourceArray` / `NestedResource`) and, for
+  lists, whether it holds refs or objects (`ResourceArray` vs `JsonArray`).
+  This drives reference indexing (`to_indexable_atoms`,
+  `to_reference_index_strings`), hierarchy/permission checks (`hierarchy.rs`),
+  class membership (`to_subjects`) and export traversal. The
+  `starts_with("http"|"did:")` heuristic in `loro_value_to_atomic_value` is the
+  unsafe stand-in — it mis-types URL-shaped plain strings, misses relative-path
+  refs, and **cannot classify an empty list**.
+
+So the goal is not "preserve all 14 `Value` variants" — it is **preserve
+reference-ness and array shape, collapse the rest.**
+
+Two options were considered for the bit that must survive:
+
+- **A — datatype-aware materialization.** Look up each Property's `datatype`.
+  Costs a per-property lookup on the hot read path, for a distinction that is
+  "plain string" the large majority of the time.
+- **B — sparse type tag (chosen).** Persist the load-bearing tag in the doc.
+  No store handle, no read-time lookup; materialization stays pure and total,
+  and the heuristic is deleted. Nothing is deployed, so re-encoding costs zero.
+
+**Reference-ness is a per-property fact**, not per-value — a property always
+holds references or never does (it *is* the Property's `datatype`). So the tag
+is a sparse, stable, per-property mark, not a per-value wrapper.
+
+**Encoding — sibling `datatypes` map.** Do **not** wrap values in a nested
+`{d, v}` LoroMap: that changes the CRDT merge unit, and field-wise LWW can
+splice a type from one peer onto another peer's value. Instead:
+
+- `properties` LoroMap — unchanged: native primitives, numbers stay numbers,
+  arrays stay `LoroList`s. Each value remains a single LWW register / native
+  container.
+- `datatypes` LoroMap (sibling) — `property_url → tag`, written **only** for
+  properties whose Loro primitive is load-bearing-ambiguous (ref-strings,
+  lists, maps). One LWW register per such property; changes only if the
+  property's type changes.
+
+**Materialized `Value` set.** Materialization produces only these; lists and
+maps always carry a tag, scalars and plain strings never do:
+
+| Loro primitive | `datatypes` tag | materialized `Value` |
+| --- | --- | --- |
+| `Bool` | (none) | `Boolean` |
+| `Double` | (none) | `Float` |
+| `I64` | (none) | `Integer` |
+| `String` | (none) | `String` |
+| `String` | `atomicUrl` | `AtomicUrl` |
+| `String` | `json` | `Json` |
+| `List` | `resourceArray` | `ResourceArray` |
+| `List` | `jsonArray` | `JsonArray` |
+| `Map` | `resource` | `NestedResource` |
+
+`Markdown` / `Slug` / `Date` / `Uri` / `Timestamp` are **never materialized** —
+they collapse. The `starts_with` heuristic and the `value.to_string()` fallback
+in `loro_value_to_atomic_value` / `set_property` are both removed. The five
+tags (`atomicUrl`, `json`, `resourceArray`, `jsonArray`, `resource`) are the
+entire vocabulary.
+
+**Cross-language convention.** The tag rides the `loroUpdate` wire payload, so
+the Rust (`lib/src/loro.rs`) and TypeScript (`browser/lib`, see `AGENTS.md`
+§"Loro value serialization") Loro layers must adopt the `datatypes` map in
+lockstep. Flutter rides the Rust layer. Document the convention (update the
+`AGENTS.md` note).
 
 ## Other things in the way
 
@@ -113,6 +174,10 @@ write:  mutation → Loro doc (faithful, typed) → snapshot + projection
               (authoritative, CRDT)          (derived: query/index cache)
                                              — no `loroUpdate` persisted here
 
+sync:   receive Loro bytes → merge into Tree::LoroSnapshots
+                           → refresh projection + index from the merged doc
+                           (never get_resource — no auth/extender/endpoint work)
+
 read:   get_resource → load projection (fast path: query/display)
                      → load doc only when history/merge is needed
 
@@ -124,25 +189,64 @@ commits & native resources: PropVals-native in Tree::Resources, no doc
   never persisted inside the `Tree::Resources` blob.
 - Snapshot + projection written in **one transaction** (today the sync paths
   `ws_apply.rs` / `engine.rs` do two non-atomic writes).
+- **Sync never calls `get_resource`.** Its transport + merge logic is pure Loro
+  (already true in `engine.rs` / `peer.rs`). After merging it refreshes the
+  derived projection + index directly from the merged doc — a lightweight
+  `doc → PropVals → atoms → index` step, with no auth / extender / endpoint
+  machinery. `get_resource` stays the heavy *reader* path for a requesting
+  agent. Today `ws_apply::apply_state_update_inner` calls `get_resource` and
+  then `apply_state_doc` discards its result — pure waste.
 
 ## Implementation phases
 
-### Phase 0 — independent bug fixes (no model change)
+### Phase 0 — independent bug fixes (no model change) — done
 
-- [ ] `recursive_remove`: also remove `Tree::LoroSnapshots` row (by `pure_id()`)
-      and record a tombstone.
-- [ ] `ws_apply::apply_destroy`: key the snapshot removal by `pure_id()`.
-- [ ] Tests: local delete leaves no orphan snapshot; destroy of a
-      `?drive=`-suffixed subject removes the snapshot.
+- [x] `recursive_remove`: also remove `Tree::LoroSnapshots` row (keyed by
+      `pure_id()`, in the same transaction) and collect removed subjects;
+      `remove_resource` tombstones them after the transaction applies.
+      `recursive_remove` now also looks resources up by `pure_id()` so
+      `?drive=`-hinted subjects are not silently missed.
+- [x] `ws_apply::apply_destroy`: dropped the mis-keyed
+      `kv.remove(LoroSnapshots, subject.as_bytes())`; snapshot removal now
+      happens inside `remove_resource` keyed by `pure_id()`.
+- [x] Tests in `lib/src/db/test.rs`: `remove_resource_deletes_loro_snapshot`
+      (no orphan + tombstone) and
+      `remove_resource_with_drive_hint_subject_deletes_snapshot`.
+- [x] Regression: full `atomic_lib` suite + `sync::` tests green; no new
+      clippy warnings.
 
 ### Phase 1 — faithful typed round-trip (the gate)
 
-- [ ] Decide A vs B (recommend A).
-- [ ] Make `materialize_propvals_from_loro_doc` datatype-aware (Property
-      lookup); tag fallback for unresolved properties.
-- [ ] Property-based test: every `Value` variant round-trips
-      doc → propvals → doc unchanged.
-- [ ] Verify extenders / `check_required_props` against post-sync resources.
+- [x] Decide approach → **B**, coarse materialization + sparse `datatypes`
+      map. Audit of `lib/`+`server/` (71 sites) confirmed cosmetic variants
+      collapse; ~47 sites need reference-ness / array shape.
+- [x] Rust: `set_property` writes a tag into a sibling `datatypes` LoroMap for
+      ref-strings, lists and nested objects (`datatype_tag` in `loro.rs`);
+      `loro_value_to_atomic_value_tagged` reads it, used by
+      `materialize_propvals_from_loro_doc` and `import_update_with_diff`. The
+      `starts_with` heuristic is **retained as a fallback** for untagged
+      values — needed until the browser also emits the map.
+- [x] Round-trip test (Rust): `datatype_tags_preserve_load_bearing_variants`
+      in `loro.rs` — tagged variants + empty `ResourceArray` survive a
+      snapshot round-trip; plain strings stay untagged.
+- [x] TypeScript (write side): `browser/lib` stamps the `datatypes` map at
+      sign time — `Resource.writeDatatypeTags` (cache-only, no fetch) +
+      `datatypeTag` helper in `datatypes.ts`, unit-tested. Tags `atomicUrl` /
+      `resourceArray` / `json`; `jsonArray` and nested `resource` have no TS
+      `Datatype` and stay untagged (rare in the browser → server heuristic).
+      No read side: TS materializes to JSON and has no typed `Value` enum —
+      datatype comes from the ontology, so it stays naive by design.
+- [x] Verify extenders / `check_required_props`: the full regression suite
+      (`atomic_lib` 153, `atomic-server` 26, `--test sync`) exercises both with
+      tags active and stays green. The defensive `AtomicUrl || String` matches
+      (`plugin.rs`, `parse.rs`) intentionally stay until the heuristic is gone.
+- [x] Update the `AGENTS.md` Loro-serialization note to the new convention.
+- [ ] **Remaining gate-completion step.** Add an explicit `string` tag (and
+      tags for the rest) so *every* value is tagged — only then is an untagged
+      string unambiguous. Then delete the `starts_with` heuristic, the
+      `value.to_string()` fallback and the no-tag fallback path, and simplify
+      the defensive `AtomicUrl || String` matches. Needs full Rust + TS tag
+      coverage first.
 
 ### Phase 2 — flip write authority to the doc
 
@@ -153,6 +257,12 @@ commits & native resources: PropVals-native in Tree::Resources, no doc
 - [ ] Stop persisting `loroUpdate` in the `Tree::Resources` blob (strip in
       `encode_propvals` or before `add_resource_tx`).
 - [ ] Collapse the `commit.rs` signing fallback chain to the doc.
+- [x] Sync write path: dropped the `get_resource` call in
+      `ws_apply::apply_state_update_inner` and both `engine.rs` import paths
+      (`import_sync_push`, `handle_sync_deltas`) — `apply_state_doc` replaces
+      propvals wholesale, so the read was always discarded. Folding the
+      snapshot write + projection write into one transaction is part of the
+      `add_resource_opts` rework above.
 
 ### Phase 3 — CRDT / native split
 
@@ -176,10 +286,14 @@ commits & native resources: PropVals-native in Tree::Resources, no doc
 ## Open questions
 
 1. Bootstrap vocabulary — CRDT-backed (a snapshot per property/class) or native?
-2. Phase 1: pure type-tag (B) as a safety net for external properties, or
-   accept lossy fallback for those?
-3. Does promoting Loro to truth change the `loroUpdate` payload on the wire, or
-   only what is persisted? (Plan assumes wire format unchanged.)
+2. Tag vocabulary — short tokens (`markdown`, as in the table) or the canonical
+   Atomic datatype URLs? Tokens are compact; URLs match the Property's
+   `datatype` field directly. Leaning tokens — snapshots compress repeated
+   strings anyway.
+
+Resolved: B changes the `loroUpdate` wire payload (it now carries the
+`datatypes` map). Since nothing is deployed, no compatibility shim is needed —
+Rust and TS just adopt it together.
 
 ## Related plans
 

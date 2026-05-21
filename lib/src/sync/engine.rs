@@ -558,11 +558,10 @@ pub async fn import_sync_push(
             continue;
         }
 
+        // No `get_resource` — `apply_state_doc` rebuilds propvals from the
+        // merged doc, so the read would be discarded. Sync builds directly.
         let subject = crate::Subject::from_raw(&snapshot_key, store.get_base_domain().as_deref());
-        let mut resource = store
-            .get_resource(&subject)
-            .await
-            .unwrap_or_else(|_| crate::Resource::new(subject.to_string()));
+        let mut resource = crate::Resource::new(subject.to_string());
 
         if resource.apply_state_doc(doc).is_err() {
             continue;
@@ -652,11 +651,10 @@ pub async fn handle_sync_deltas(
             continue;
         }
 
+        // No `get_resource` — `apply_state_doc` rebuilds propvals from the
+        // merged doc, so the read would be discarded. Sync builds directly.
         let subject = crate::Subject::from_raw(subject_str, store.get_base_domain().as_deref());
-        let mut resource = store
-            .get_resource(&subject)
-            .await
-            .unwrap_or_else(|_| crate::Resource::new(subject.to_string()));
+        let mut resource = crate::Resource::new(subject.to_string());
 
         if resource.apply_state_doc(doc).is_err() {
             continue;
