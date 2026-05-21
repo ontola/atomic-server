@@ -1417,6 +1417,16 @@
     "https://atomicdata.dev/properties/shortname": "stroke-data"
   },
   {
+    "@id": "https://atomicdata.dev/ontology/canvas/dateEdited",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/timestamp",
+    "https://atomicdata.dev/properties/description": "Unix milliseconds when this canvas was last edited (strokes, folder, etc.). Used for gallery sort order.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/canvas",
+    "https://atomicdata.dev/properties/shortname": "date-edited"
+  },
+  {
     "@id": "https://atomicdata.dev/ontology/canvas/Canvas",
     "https://atomicdata.dev/properties/description": "An infinite canvas drawing. Contains stroke data for pen/brush drawings with color, width, and path points.",
     "https://atomicdata.dev/properties/isA": [
@@ -1425,7 +1435,8 @@
     "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/canvas",
     "https://atomicdata.dev/properties/recommends": [
       "https://atomicdata.dev/properties/name",
-      "https://atomicdata.dev/ontology/canvas/strokeData"
+      "https://atomicdata.dev/ontology/canvas/strokeData",
+      "https://atomicdata.dev/ontology/canvas/dateEdited"
     ],
     "https://atomicdata.dev/properties/requires": [],
     "https://atomicdata.dev/properties/shortname": "canvas"

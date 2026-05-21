@@ -155,12 +155,11 @@ async fn server_tests() {
         vec![appstate.store.get_default_agent().unwrap().subject.clone()].into(),
     );
     loro_resource.set_unsafe(urls::NAME.into(), "Loro Sync Test".to_string().into());
-    loro_resource
-        .set_loro(
-            urls::DESCRIPTION,
-            &atomic_lib::Value::String("Synced through Loro".into()),
-        )
-        .unwrap();
+    loro_resource.set_unsafe(
+        urls::DESCRIPTION.into(),
+        atomic_lib::Value::String("Synced through CRDT".into()),
+    );
+    loro_resource.ensure_materialized().unwrap();
     store
         .add_resource_opts(&loro_resource, false, true, true)
         .await

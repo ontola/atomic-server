@@ -440,7 +440,10 @@ Android-specific benefits:
 ### Flutter
 
 Flutter should call the same runtime through `flutter_rust_bridge`, not a
-separate mobile database API.
+separate mobile database API. **Sync strategy:** same as the browser — WS session
+to a configured server, live query/resource subscriptions, outbox drained via
+`COMMIT`. Do not treat manual Iroh `peer_sync` after QR pairing as the primary
+multi-device path. See [`unified-sync.md`](./unified-sync.md).
 
 The bridge should expose node-level commands and streams:
 
@@ -450,7 +453,10 @@ The bridge should expose node-level commands and streams:
 - `mutate`
 - `put_blob`
 - `subscribe_events`
-- `sync_with_peer`
+- `open_sync_session` / `close_sync_session` (WS or other `AtomicTransport`)
+
+`sync_with_peer` / bulk `peer_sync` are legacy; fold into `SyncSession` with
+`IrohTransport` only if serverless P2P remains a product requirement.
 
 Flutter should not need to know whether the node is backed by native redb, OPFS,
 or a hosted server adapter.

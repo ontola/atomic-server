@@ -677,7 +677,9 @@ test.describe('data-browser', async () => {
 
     await selectHistoryVersionShowing(page, 'First Title');
 
-    await expect(page.getByText('First Title', { exact: true }).first()).toBeVisible();
+    await expect(
+      page.getByText('First Title', { exact: true }).first(),
+    ).toBeVisible();
 
     await page.click('text=Restore this version');
 

@@ -11,6 +11,7 @@ import 'screens/login_screen.dart';
 import 'screens/pair_screen.dart';
 import 'theme.dart';
 import 'atomic/atomic_client.dart';
+import 'atomic/session.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -36,6 +37,8 @@ class _AtomicCanvasAppState extends State<AtomicCanvasApp>
   final _navKey = GlobalKey<NavigatorState>();
   static const _linkChannel = MethodChannel('app.atomicdata.canvas/deeplink');
   Timer? _eventPoller;
+  bool _backgroundSyncRunning = false;
+  final Map<String, DateTime> _lastSyncSnackAt = {};
 
   @override
   void initState() {
@@ -43,9 +46,33 @@ class _AtomicCanvasAppState extends State<AtomicCanvasApp>
     WidgetsBinding.instance.addObserver(this);
     _handleInitialLink();
     _linkChannel.setMethodCallHandler(_handleLinkCall);
-    AtomicClient.getActiveAgent().then((agent) {
-      if (agent != null) _onLoggedIn();
-    });
+    _resumeFromSession();
+  }
+
+  /// Same path as LoginScreen auto-login: session → WS → Iroh discover fallback.
+  Future<void> _resumeFromSession() async {
+    final session = await AtomicSession.load();
+    if (session == null || session.secret.isEmpty) return;
+
+    try {
+      final status = await AtomicClient.resumeSession(
+        serverUrl: session.serverUrl,
+        secret: session.secret,
+        drive: session.drive,
+      );
+      final drive = AtomicClient.getActiveDrive();
+      if (drive != null) {
+        await AtomicSession.saveDrive(drive);
+      }
+      if (status == 'ok' && mounted) {
+        _onLoggedIn();
+      } else if (mounted) {
+        // Still try Iroh when drive missing locally
+        _startBackgroundSync();
+      }
+    } catch (e) {
+      debugPrint('Session resume failed: $e');
+    }
   }
 
   @override
@@ -53,6 +80,14 @@ class _AtomicCanvasAppState extends State<AtomicCanvasApp>
     _eventPoller?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _loggedIn) {
+      _resumeFromSession();
+      _startBackgroundSync(quiet: true);
+    }
   }
 
   void _startEventListener() {
@@ -67,28 +102,31 @@ class _AtomicCanvasAppState extends State<AtomicCanvasApp>
         final count = event['resources_imported'] as int? ?? 0;
         final kind = event['kind'] as String? ?? 'sync';
 
-        final peers = await AtomicClient.getKnownPeers();
+        if (kind == 'connected' || kind == 'disconnected') {
+          AtomicClient.notifyLivePeersChanged();
+          continue;
+        }
+        if (kind == 'sync' && count == 0) continue;
+
         final ctx = _navKey.currentContext;
         if (ctx == null || !ctx.mounted) continue;
-        final peer = peers.where((p) => p['node_id'] == nodeId).firstOrNull;
+
+        final peers = await AtomicClient.getKnownPeers();
+        final peerNorm = AtomicClient.normalizeNodeId(nodeId);
+        final peer = peers
+            .where((p) =>
+                AtomicClient.normalizeNodeId(p['node_id'] ?? '') == peerNorm)
+            .firstOrNull;
         final name = (peer != null && peer['name']!.isNotEmpty)
             ? peer['name']!
             : '${nodeId.substring(0, nodeId.length.clamp(0, 12))}...';
 
-        String message;
-        switch (kind) {
-          case 'connected':
-            message = '$name connected';
-          case 'disconnected':
-            message = '$name disconnected';
-          default:
-            message = '$name synced $count resource${count != 1 ? 's' : ''}';
-        }
+        final message = switch (kind) {
+          'disconnected' => '$name disconnected',
+          _ => '$name synced $count resource${count != 1 ? 's' : ''}',
+        };
 
-        ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
-          content: Text(message),
-          duration: const Duration(seconds: 2),
-        ));
+        _showDebouncedSnack(ctx, '$kind:$nodeId', message);
       }
     });
   }
@@ -129,12 +167,58 @@ class _AtomicCanvasAppState extends State<AtomicCanvasApp>
       if (mounted) setState(() {});
     });
     _startEventListener();
+    _startBackgroundSync();
+  }
+
+  void _showDebouncedSnack(BuildContext ctx, String key, String message,
+      {Duration minInterval = const Duration(seconds: 15)}) {
+    final now = DateTime.now();
+    final last = _lastSyncSnackAt[key];
+    if (last != null && now.difference(last) < minInterval) return;
+    _lastSyncSnackAt[key] = now;
+    ScaffoldMessenger.of(ctx).showSnackBar(
+      SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
+    );
+  }
+
+  /// Auto-sync known peers / pkarr after login (no Settings → Retry needed).
+  void _startBackgroundSync({bool quiet = false}) {
+    if (_backgroundSyncRunning) return;
+    _backgroundSyncRunning = true;
+    Future(() async {
+      try {
+        final report = await AtomicClient.syncConnectivityNow();
+        if (!mounted) return;
+        final ctx = _navKey.currentContext;
+        if (ctx == null || !ctx.mounted) return;
+
+        if (report.livePeers > 0 && !quiet) {
+          _showDebouncedSnack(ctx, 'sync:connected', report.message);
+        } else if (report.imported == 0 &&
+            !report.message.contains('No peers online')) {
+          _showDebouncedSnack(ctx, 'sync:error', report.message,
+              minInterval: const Duration(seconds: 5));
+        }
+      } catch (e) {
+        debugPrint('Background sync: $e');
+        final ctx = _navKey.currentContext;
+        if (ctx != null && ctx.mounted) {
+          _showDebouncedSnack(ctx, 'sync:error', 'Sync: $e',
+              minInterval: const Duration(seconds: 5));
+        }
+      } finally {
+        _backgroundSyncRunning = false;
+      }
+    });
   }
 
   void _openFromGallery(CanvasEntry canvas) async {
     final isDarkMode = View.of(context).platformDispatcher.platformBrightness ==
         Brightness.dark;
     await _store.loadStrokes(canvas, isDarkMode: isDarkMode);
+    if (canvas.id.isNotEmpty) {
+      AtomicClient.wsSubscribeCanvas(canvas.id).catchError((_) {});
+    }
     if (mounted) setState(() => _openCanvas = canvas);
   }
 
@@ -144,6 +228,9 @@ class _AtomicCanvasAppState extends State<AtomicCanvasApp>
     }
     final canvas = _store.createCanvas(folderId: folderId);
     setState(() => _openCanvas = canvas);
+    if (canvas.id.isNotEmpty) {
+      AtomicClient.wsSubscribeCanvas(canvas.id).catchError((_) {});
+    }
   }
 
   void _closeCanvas() {

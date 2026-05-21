@@ -79,6 +79,8 @@ pub enum DbEvent {
         delta: Option<Vec<u8>>,
         /// Optional transport/source identity for echo suppression.
         source_id: Option<String>,
+        /// True when this change created the resource (no prior version).
+        is_new: bool,
     },
     /// Resource destroyed.
     Destroyed {
@@ -1740,9 +1742,9 @@ impl Storelike for Db {
         //    sides a shared causal base.
         let mut propvals = resource.get_propvals().clone();
         if !propvals.contains_key(crate::urls::LORO_UPDATE) {
-            let snapshot = resource.get_loro_snapshot().or_else(|| {
+            let snapshot = resource.materialized_state().or_else(|| {
                 resource
-                    .build_loro_doc_from_state()
+                    .build_state_doc()
                     .ok()
                     .map(|doc| doc.export_snapshot())
             });
@@ -1775,6 +1777,7 @@ impl Storelike for Db {
             subject: resource.get_subject().without_params(),
             delta: None,
             source_id: None,
+            is_new: false,
         });
         Ok(())
     }
@@ -1875,7 +1878,7 @@ impl Storelike for Db {
 
             // Persist the Loro snapshot so VV-based sync can find it.
             // Use pure_id() (strips query params/drive hints) for a canonical key.
-            if let Some(snapshot) = new.get_loro_snapshot() {
+            if let Some(snapshot) = new.materialized_state() {
                 transaction.push(trees::Operation {
                     tree: trees::Tree::LoroSnapshots,
                     method: trees::Method::Insert,
@@ -1917,6 +1920,7 @@ impl Storelike for Db {
                 subject,
                 delta: commit_response.commit.loro_update.clone(),
                 source_id: commit_response.source_id.clone(),
+                is_new: commit_response.resource_old.is_none(),
             }
         };
         let _ = store.db_events.send(event);
@@ -2008,7 +2012,17 @@ impl Storelike for Db {
                 }
             }
 
-            let resource = Resource::from_propvals(propvals, res_subject);
+            let mut resource = Resource::from_propvals(propvals, res_subject);
+            // Authoritative merged CRDT state (full oplog) lives in LoroSnapshots.
+            // Propvals may carry a smaller incremental `loroUpdate` from the last commit.
+            if let Ok(Some(snapshot)) = self
+                .kv
+                .get(crate::db::trees::Tree::LoroSnapshots, subject_str.as_bytes())
+            {
+                if let Ok(doc) = crate::loro::AtomicLoroDoc::from_snapshot(&snapshot) {
+                    let _ = resource.apply_state_doc(doc);
+                }
+            }
             Ok(resource)
         } else {
             // Resolve the subject to a full URL for network operations

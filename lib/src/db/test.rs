@@ -1209,3 +1209,136 @@ async fn did_loro_only_commit_sled() {
         "Name should be materialized from Loro in sled store"
     );
 }
+
+/// Minimal repro for the cross-tab document sync bug.
+///
+/// Mimics the browser flow: a document is created via a genesis commit (no
+/// RTE body yet), then the body is added via a FOLLOW-UP commit whose
+/// `loroUpdate` is a full snapshot carrying a separate `documentContent` text
+/// container (the RTE / ProseMirror tree). After the follow-up + a
+/// `get_resource` roundtrip, `materialized_state()` — what the WS GET handler
+/// serves to a second viewer — must still carry the `documentContent`
+/// container. If it only carries the `properties` map, the second viewer
+/// receives a properties-only doc and cross-tab CRDT sync can never converge.
+#[tokio::test]
+async fn loro_non_property_container_survives_commit_roundtrip() {
+    use crate::agents::Agent;
+    use crate::commit::{Commit, CommitBuilder, CommitOpts};
+
+    let store = Db::init_temp("loro_container_roundtrip").await.unwrap();
+    store.populate().await.unwrap();
+
+    let private_key = "CapMWIhFUT+w7ANv9oCPqrHrwZpkP2JhzF9JnyT6WcI=";
+    let agent = Agent::new_from_private_key(None, private_key).unwrap();
+    store
+        .add_resource(&agent.to_resource().unwrap())
+        .await
+        .unwrap();
+
+    // Same opts the real WS commit handler uses (see handlers/commit.rs).
+    let opts = CommitOpts {
+        validate_signature: true,
+        validate_timestamp: false,
+        validate_previous_commit: false,
+        validate_loro_causality: true,
+        validate_rights: true,
+        validate_schema: true,
+        update_index: true,
+        validate_for_agent: Some(agent.subject.to_string()),
+        source_id: None,
+    };
+
+    // --- Genesis commit: document with just a `properties` map, no RTE body ---
+    let doc = loro::LoroDoc::new();
+    doc.set_record_timestamp(true);
+    doc.get_map("properties")
+        .insert(urls::NAME, "My Document")
+        .unwrap();
+    doc.commit();
+    let genesis_snapshot = doc.export(loro::ExportMode::Snapshot).unwrap();
+
+    let mut builder = CommitBuilder::new("placeholder".into());
+    builder.set_loro_update(genesis_snapshot);
+    let genesis = Commit::create_did(builder, &agent, &store).await.unwrap();
+    let did_subject = genesis.subject.clone();
+    let genesis_result = store.apply_commit(genesis, &opts).await.unwrap();
+    let genesis_commit_url = genesis_result.commit_resource.get_subject().to_string();
+
+    // --- Follow-up commit: add RTE body to a `documentContent` text container ---
+    // The browser sends a full snapshot of its editor doc each commit.
+    let rte = doc.get_text("documentContent");
+    rte.insert(0, "RTE_BODY_TEXT").unwrap();
+    doc.commit();
+    let followup_snapshot = doc.export(loro::ExportMode::Snapshot).unwrap();
+
+    // Sanity check: the snapshot the follow-up carries has the RTE container.
+    {
+        let check = loro::LoroDoc::new();
+        check.import(&followup_snapshot).unwrap();
+        assert_eq!(
+            check.get_text("documentContent").to_string(),
+            "RTE_BODY_TEXT",
+            "precondition: follow-up snapshot carries the RTE container",
+        );
+    }
+
+    let stored_before_followup = store.get_resource(&did_subject).await.unwrap();
+    let mut builder2 = CommitBuilder::new(did_subject.clone());
+    builder2.set_loro_update(followup_snapshot);
+    builder2.set_previous_commit(genesis_commit_url);
+    let followup = builder2
+        .sign(&agent, &store, &stored_before_followup)
+        .await
+        .unwrap();
+
+    // Route the follow-up through the exact wire path the WS commit handler
+    // uses: serialize to JSON-AD (loroUpdate becomes base64), then parse it
+    // back — `apply_commit_json` does precisely this.
+    let wire_json = crate::client::commit_to_wire_json(&followup, &store)
+        .await
+        .unwrap();
+    let parsed = crate::parse::parse_json_ad_commit_resource(&wire_json, &store)
+        .await
+        .unwrap();
+    let followup_from_wire = Commit::from_resource(parsed).unwrap();
+    store.apply_commit(followup_from_wire, &opts).await.unwrap();
+
+    // (1) Plain get_resource path.
+    let stored = store
+        .get_resource(&did_subject)
+        .await
+        .expect("document should be retrievable after commit");
+    let materialized = stored
+        .materialized_state()
+        .expect("stored document must expose a materialized Loro snapshot");
+    let roundtripped = loro::LoroDoc::new();
+    roundtripped.import(&materialized).unwrap();
+    assert_eq!(
+        roundtripped.get_text("documentContent").to_string(),
+        "RTE_BODY_TEXT",
+        "RTE container content must survive get_resource",
+    );
+
+    // (2) Exactly what the server's WS GET handler does: get_resource_extended
+    // → to_single() → materialized_state().
+    let extended = store
+        .get_resource_extended(
+            &did_subject,
+            false,
+            &crate::agents::ForAgent::Sudo,
+        )
+        .await
+        .expect("document should be retrievable via get_resource_extended")
+        .to_single();
+    let materialized_ext = extended.materialized_state().expect(
+        "get_resource_extended document must expose a materialized Loro snapshot",
+    );
+    let roundtripped_ext = loro::LoroDoc::new();
+    roundtripped_ext.import(&materialized_ext).unwrap();
+    assert_eq!(
+        roundtripped_ext.get_text("documentContent").to_string(),
+        "RTE_BODY_TEXT",
+        "RTE container content must survive the get_resource_extended path \
+         (this is what the WS GET handler serves to a second viewer)",
+    );
+}

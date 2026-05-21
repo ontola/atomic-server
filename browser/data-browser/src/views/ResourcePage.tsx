@@ -33,6 +33,8 @@ import { OntologyPage } from './OntologyPage';
 import { TagPage } from './TagPage/TagPage';
 import { AIChatPage } from '@views/AIChat/AIChatPage';
 import { DocumentV2FullPage } from './Document/DocumentV2FullPage';
+import { CanvasPage } from './Canvas/CanvasPage';
+import { canvas } from '@tomic/lib';
 import { PluginPage } from '@views/Plugin/PluginPage';
 import { useCustomViews } from '@components/CustomViewProvider';
 import { PluginView } from './PluginView/PluginView';
@@ -189,6 +191,8 @@ function selectComponent(klass: string | undefined) {
       return AIChatPage;
     case dataBrowser.classes.documentV2:
       return DocumentV2FullPage;
+    case canvas.classes.canvas:
+      return CanvasPage;
     case server.classes.plugin:
       return PluginPage;
     default:

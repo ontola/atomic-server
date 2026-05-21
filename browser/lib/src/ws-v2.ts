@@ -283,6 +283,7 @@ export interface DecodedSyncDiff {
   drive: string;
   pull: string[];
   push: string[];
+  remove: string[];
 }
 
 export interface DecodedSyncPushEntry {
@@ -357,9 +358,9 @@ export function decodeSyncDiff(data: Uint8Array): DecodedSyncDiff | undefined {
   const json = decoder.decode(data.subarray(off));
 
   try {
-    const { pull, push } = JSON.parse(json);
+    const { pull, push, remove = [] } = JSON.parse(json);
 
-    return { drive, pull, push };
+    return { drive, pull, push, remove };
   } catch {
     return undefined;
   }

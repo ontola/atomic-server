@@ -153,7 +153,12 @@ class _PairScreenState extends State<PairScreen> {
       _error = null;
     });
     try {
-      final count = await AtomicClient.peerSync(nodeId);
+      final count = await AtomicClient.peerSync(nodeId).timeout(
+        const Duration(seconds: 25),
+        onTimeout: () => throw Exception(
+          'Sync timed out after 25s. Keep both devices open on Wi‑Fi and try again.',
+        ),
+      );
       await AtomicClient.addKnownPeer(nodeId, name);
       if (!mounted) return;
       setState(() {

@@ -246,9 +246,9 @@ test.describe('Ontology', async () => {
       });
 
       await expect(page.getByText('Resource loading...')).not.toBeVisible();
-      await expect(
-        page.getByRole('heading', { name, level: 2 }),
-      ).toBeVisible({ timeout: 20000 });
+      await expect(page.getByRole('heading', { name, level: 2 })).toBeVisible({
+        timeout: 20000,
+      });
     };
 
     await createInstance('Red arrow with circle');

@@ -114,6 +114,16 @@ pub fn encode_update(
     buf
 }
 
+/// Encode a GET message.
+pub fn encode_get(request_id: u16, subject: &str) -> Vec<u8> {
+    let subject_bytes = subject.as_bytes();
+    let mut buf = Vec::with_capacity(3 + subject_bytes.len());
+    buf.push(tag::GET);
+    buf.extend_from_slice(&request_id.to_be_bytes());
+    buf.extend_from_slice(subject_bytes);
+    buf
+}
+
 /// Encode a DESTROY message.
 pub fn encode_destroy(request_id: u16, subject: &str) -> Vec<u8> {
     let mut buf = Vec::with_capacity(3 + subject.len());
@@ -154,6 +164,15 @@ pub fn encode_error(request_id: u16, message: &str) -> Vec<u8> {
     buf
 }
 
+/// Encode SUB: subscribe to drive-scoped updates (server pushes QUERY_UPDATE + UPDATE).
+pub fn encode_sub(drive_subject: &str) -> Vec<u8> {
+    let drive_bytes = drive_subject.as_bytes();
+    let mut buf = Vec::with_capacity(1 + drive_bytes.len());
+    buf.push(tag::SUB);
+    buf.extend_from_slice(drive_bytes);
+    buf
+}
+
 /// Encode AUTH_OK.
 pub fn encode_auth_ok() -> Vec<u8> {
     vec![tag::AUTH_OK]
@@ -169,10 +188,15 @@ pub fn encode_sync_ok(drive: &str) -> Vec<u8> {
     buf
 }
 
-/// Encode SYNC_DIFF: [0x32] [drive_len: u16] [drive] [json{pull, push}]
-pub fn encode_sync_diff(drive: &str, pull: &[String], push: &[String]) -> Vec<u8> {
+/// Encode SYNC_DIFF: [0x32] [drive_len: u16] [drive] [json{pull, push, remove?}]
+pub fn encode_sync_diff(
+    drive: &str,
+    pull: &[String],
+    push: &[String],
+    remove: &[String],
+) -> Vec<u8> {
     let drive_bytes = drive.as_bytes();
-    let diff = serde_json::json!({ "pull": pull, "push": push });
+    let diff = serde_json::json!({ "pull": pull, "push": push, "remove": remove });
     let diff_bytes = serde_json::to_vec(&diff).unwrap_or_default();
 
     let mut buf = Vec::with_capacity(3 + drive_bytes.len() + diff_bytes.len());
@@ -510,6 +534,8 @@ pub struct DecodedSyncDiff {
     pub drive: String,
     pub pull: Vec<String>,
     pub push: Vec<String>,
+    /// Subjects the client should delete (destroyed on the server).
+    pub remove: Vec<String>,
 }
 
 /// Decode a SYNC_DIFF message (after the type tag).
@@ -525,6 +551,8 @@ pub fn decode_sync_diff(data: &[u8]) -> Option<DecodedSyncDiff> {
     struct DiffJson {
         pull: Vec<String>,
         push: Vec<String>,
+        #[serde(default)]
+        remove: Vec<String>,
     }
 
     let parsed: DiffJson = serde_json::from_slice(json_bytes).ok()?;
@@ -533,6 +561,7 @@ pub fn decode_sync_diff(data: &[u8]) -> Option<DecodedSyncDiff> {
         drive: drive.to_string(),
         pull: parsed.pull,
         push: parsed.push,
+        remove: parsed.remove,
     })
 }
 
@@ -717,6 +746,13 @@ mod tests {
         let request_id = u16::from_be_bytes([encoded[1], encoded[2]]);
         assert_eq!(request_id, 99);
         assert_eq!(&encoded[3..], b"Not found");
+    }
+
+    #[test]
+    fn encode_sub_frame() {
+        let encoded = encode_sub("did:ad:drive:abc");
+        assert_eq!(encoded[0], tag::SUB);
+        assert_eq!(&encoded[1..], b"did:ad:drive:abc");
     }
 
     // Keep encode_get available for tests even though the server doesn't use it yet

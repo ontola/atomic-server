@@ -19,6 +19,17 @@ fn io_err(e: impl std::fmt::Display) -> crate::errors::AtomicError {
 /// ALPN protocol identifier for Atomic Data over Iroh.
 const ATOMIC_ALPN: &[u8] = b"atomic/1";
 
+/// Canonical 64-char lowercase hex NodeID for map keys and UI matching.
+pub fn normalize_node_id(id: &str) -> String {
+    let mut s = id.trim().to_string();
+    if let Some(rest) = s.strip_prefix("did:ad:node:") {
+        s = rest.split(':').next().unwrap_or(rest).to_string();
+    } else if let Some(rest) = s.strip_prefix("iroh:") {
+        s = rest.to_string();
+    }
+    s.to_lowercase()
+}
+
 /// Global NodeID, set once on startup.
 static NODE_ID: OnceLock<String> = OnceLock::new();
 
@@ -116,10 +127,10 @@ pub async fn start(store: Db) -> anyhow::Result<(NodeId, Router)> {
     // Auto-connect to known peers in background, retry until connected
     let auto_store = bg_store;
     tokio::spawn(async move {
-        let my_id = get_node_id().unwrap_or_default().to_string();
+        let my_id = normalize_node_id(&get_node_id().unwrap_or_default());
 
-        // Initial delay to let relay establish
-        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+        // Brief delay so relay can register our NodeID
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
         loop {
             let drive = match auto_store.get_active_drive() {
@@ -137,18 +148,26 @@ pub async fn start(store: Db) -> anyhow::Result<(NodeId, Router)> {
 
             let mut all_connected = true;
             for peer in &peers {
-                if peer.node_id == my_id {
+                if normalize_node_id(&peer.node_id) == my_id {
                     continue;
                 }
-                if live_peer_ids().contains(&peer.node_id) {
+                let peer_key = normalize_node_id(&peer.node_id);
+                if live_peer_ids().contains(&peer_key) {
                     continue;
                 }
 
-                // Only the device with the smaller NodeID initiates.
-                // The other device waits for the incoming connection.
-                if my_id.as_str() > peer.node_id.as_str() {
-                    all_connected = false; // still not connected, but we wait
-                    continue;
+                // Prefer the device with the smaller NodeID to dial first (avoids
+                // duplicate handshakes). The larger NodeID waits briefly, then
+                // also dials if still offline — otherwise one side never connects
+                // when relay discovery is flaky.
+                if normalize_node_id(&my_id) > peer_key {
+                    if live_peer_ids().contains(&peer_key) {
+                        continue;
+                    }
+                    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                    if live_peer_ids().contains(&peer_key) {
+                        continue;
+                    }
                 }
 
                 all_connected = false;
@@ -156,7 +175,7 @@ pub async fn start(store: Db) -> anyhow::Result<(NodeId, Router)> {
                     "[auto_connect] connecting to {}",
                     &peer.node_id[..peer.node_id.len().min(12)]
                 );
-                match sync_drive_with_peer(&peer.node_id, &drive, &auto_store).await {
+                match sync_drive_with_peer_if_needed(&peer.node_id, &drive, &auto_store).await {
                     Ok(count) => {
                         tracing::info!(
                             "[auto_connect] synced {count} resources, live connection established"
@@ -213,11 +232,8 @@ impl iroh::protocol::ProtocolHandler for AtomicHandler {
         let store = self.store.clone();
         Box::pin(async move {
             let remote = connection.remote_node_id()?;
-            let remote_str = remote.to_string();
-            tracing::info!("[accept] incoming connection from {remote}");
-
-            // Auto-add to known peers
-            add_known_peer(&store, &remote_str, "");
+            let remote_str = normalize_node_id(&remote.to_string());
+            tracing::info!("[accept] incoming connection from {remote_str}");
 
             // Accept the first (and only) bi stream for sync + live
             let (send, recv) = match connection.accept_bi().await {
@@ -282,12 +298,96 @@ pub fn live_peer_ids() -> Vec<String> {
         .unwrap_or_default()
 }
 
-/// Flag: true while importing from a peer (prevents echo back).
-static IMPORTING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+/// Drop a live peer entry (dead write loop, closed channel, or reconnect).
+pub fn remove_live_peer(peer_id: &str) {
+    remove_live_peer_inner(peer_id, true);
+}
+
+/// Drop without notifying the UI (intentional reconnect / replace).
+fn remove_live_peer_quiet(peer_id: &str) {
+    remove_live_peer_inner(peer_id, false);
+}
+
+fn remove_live_peer_inner(peer_id: &str, notify: bool) {
+    let key = normalize_node_id(peer_id);
+    let mut removed = false;
+    if let Ok(mut guard) = LIVE_PEERS.lock() {
+        if let Some(map) = guard.as_mut() {
+            removed = map.remove(&key).is_some();
+        }
+    }
+    if removed {
+        tracing::info!(
+            "[live] removed peer {}",
+            &key[..key.len().min(12)]
+        );
+        if notify {
+            push_event(&key, 0, "disconnected");
+        }
+    }
+}
+
+static LAST_EVENT_MS: OnceLock<std::sync::Mutex<std::collections::HashMap<(String, String), u64>>> =
+    OnceLock::new();
+
+const EVENT_DEBOUNCE_MS: u64 = 15_000;
+
+fn last_event_ms() -> &'static std::sync::Mutex<std::collections::HashMap<(String, String), u64>> {
+    LAST_EVENT_MS.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
+}
 
 /// Returns true if we're currently importing data from a remote peer.
 pub fn is_importing() -> bool {
-    IMPORTING.load(std::sync::atomic::Ordering::Relaxed)
+    super::ws_apply::is_importing()
+}
+
+fn encode_live_update_wire_msg(subject_key: &str, loro_bytes: &[u8]) -> Vec<u8> {
+    let frame = super::protocol::encode_update(0, 0, subject_key, None, loro_bytes);
+    let len = frame.len() as u32;
+    let mut msg = Vec::with_capacity(4 + frame.len());
+    msg.extend_from_slice(&len.to_be_bytes());
+    msg.extend_from_slice(&frame);
+    msg
+}
+
+fn send_live_update_wire_msg(msg: Vec<u8>) {
+    let mut dead_peers = Vec::new();
+    let peers = LIVE_PEERS.lock().unwrap();
+    if let Some(map) = peers.as_ref() {
+        for (peer_id, tx) in map {
+            match tx.try_send(msg.clone()) {
+                Ok(_) => {}
+                Err(tokio::sync::mpsc::error::TrySendError::Full(m)) => {
+                    let peer = peer_id.clone();
+                    let tx_retry = tx.clone();
+                    tokio::spawn(async move {
+                        if tx_retry.send(m).await.is_err() {
+                            tracing::warn!(
+                                "[live_sync] retry send failed for {}",
+                                &peer[..peer.len().min(12)]
+                            );
+                        }
+                    });
+                }
+                Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
+                    dead_peers.push(peer_id.clone());
+                }
+            }
+        }
+    }
+    drop(peers);
+    for peer_id in dead_peers {
+        remove_live_peer(&peer_id);
+    }
+}
+
+/// Push an UPDATE frame to all connected live peers immediately (e.g. after a stroke save).
+pub fn broadcast_live_update(subject_key: &str, loro_bytes: &[u8]) {
+    if loro_bytes.is_empty() || super::ws_apply::is_importing() {
+        return;
+    }
+    let msg = encode_live_update_wire_msg(subject_key, loro_bytes);
+    send_live_update_wire_msg(msg);
 }
 
 /// Start the live sync system. Watches for local changes and pushes to all connected peers.
@@ -322,53 +422,46 @@ fn start_live_sync(store: Db) {
                 }
             };
 
-            if IMPORTING.load(std::sync::atomic::Ordering::Relaxed) {
+            if super::ws_apply::is_importing() {
                 continue;
             }
 
-            let msg = match &event {
-                crate::DbEvent::Changed {
-                    subject,
-                    delta: Some(delta),
-                    ..
-                } if !delta.is_empty() => {
-                    let frame = super::protocol::encode_update(0, 0, subject.as_str(), None, delta);
-                    let len = frame.len() as u32;
-                    let mut msg = Vec::with_capacity(4 + frame.len());
-                    msg.extend_from_slice(&len.to_be_bytes());
-                    msg.extend_from_slice(&frame);
-                    msg
+            let subject_key = match &event {
+                crate::DbEvent::Changed { subject, .. } | crate::DbEvent::Destroyed { subject, .. } => {
+                    subject.pure_id()
                 }
-                crate::DbEvent::Destroyed { subject, .. } => {
-                    let frame = super::protocol::encode_destroy(0, subject.as_str());
-                    let len = frame.len() as u32;
-                    let mut msg = Vec::with_capacity(4 + frame.len());
-                    msg.extend_from_slice(&len.to_be_bytes());
-                    msg.extend_from_slice(&frame);
-                    msg
-                }
-                _ => continue, // Changed without delta — nothing to push
+                _ => continue,
             };
 
-            let peers = LIVE_PEERS.lock().unwrap();
-            if let Some(map) = peers.as_ref() {
-                for (peer_id, tx) in map {
-                    match tx.try_send(msg.clone()) {
-                        Ok(_) => {}
-                        Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
-                            tracing::warn!(
-                                "[live_sync] buffer full for {}",
-                                &peer_id[..peer_id.len().min(12)]
-                            );
-                        }
-                        Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
-                            tracing::warn!(
-                                "[live_sync] closed for {}",
-                                &peer_id[..peer_id.len().min(12)]
-                            );
-                        }
-                    }
+            let loro_bytes: Option<Vec<u8>> = match &event {
+                crate::DbEvent::Changed {
+                    delta: Some(delta),
+                    ..
+                } if !delta.is_empty() => Some(delta.clone()),
+                crate::DbEvent::Changed { .. } => store
+                    .kv
+                    .get(
+                        crate::db::trees::Tree::LoroSnapshots,
+                        subject_key.as_bytes(),
+                    )
+                    .ok()
+                    .flatten()
+                    .filter(|b| !b.is_empty()),
+                crate::DbEvent::Destroyed { .. } => {
+                    let frame = super::protocol::encode_destroy(0, &subject_key);
+                    let len = frame.len() as u32;
+                    let mut msg = Vec::with_capacity(4 + frame.len());
+                    msg.extend_from_slice(&len.to_be_bytes());
+                    msg.extend_from_slice(&frame);
+                    send_live_update_wire_msg(msg);
+                    continue;
                 }
+                _ => None,
+            };
+
+            if let Some(bytes) = loro_bytes {
+                let msg = encode_live_update_wire_msg(&subject_key, &bytes);
+                send_live_update_wire_msg(msg);
             }
         }
     });
@@ -381,31 +474,39 @@ fn register_live_peer(
     mut recv: iroh::endpoint::RecvStream,
     store: Db,
 ) {
+    let key = normalize_node_id(&peer_id);
+    add_known_peer(&store, &key, "");
+
     let (tx, mut rx) = tokio::sync::mpsc::channel::<Vec<u8>>(64);
     // Cloned for the read loop so it can send responses (e.g. BLOB_RESPONSE
     // back to the requester) through the same write loop.
     let tx_for_read = tx.clone();
 
     // Add to peer map — replace if already connected (incoming may supersede outgoing)
-    {
+    let is_new_peer = {
         let mut map = LIVE_PEERS.lock().unwrap();
         if let Some(m) = map.as_mut() {
-            if m.contains_key(&peer_id) {
+            let replacing = m.contains_key(&key);
+            if replacing {
                 tracing::info!(
                     "[live] replacing existing connection to {}",
-                    &peer_id[..peer_id.len().min(12)]
+                    &key[..key.len().min(12)]
                 );
             }
-            m.insert(peer_id.clone(), tx);
+            m.insert(key.clone(), tx);
+            !replacing
+        } else {
+            false
         }
-    }
+    };
 
-    let peer_short = peer_id[..peer_id.len().min(12)].to_string();
-    tracing::info!("[live] registered peer {peer_short}");
-    push_event(&peer_id, 0, "connected");
+    let peer_short = key[..key.len().min(12)].to_string();
+    tracing::info!("[live] registered peer {peer_short} (new={is_new_peer})");
+    // Always notify so both sides refresh UI (replacing a dead channel still counts).
+    push_event(&key, 0, "connected");
 
     // Write loop: sends queued UPDATE frames to the peer
-    let write_peer_id = peer_id.clone();
+    let write_peer_id = key.clone();
     tokio::spawn(async move {
         tracing::info!(
             "[live] write loop started for {}",
@@ -433,10 +534,11 @@ fn register_live_peer(
             "[live] write loop ended for {}",
             &write_peer_id[..write_peer_id.len().min(12)]
         );
+        remove_live_peer(&write_peer_id);
     });
 
     // Read loop: receives UPDATE frames from the peer, imports them
-    let read_peer_id = peer_id.clone();
+    let read_peer_id = key.clone();
     tokio::spawn(async move {
         tracing::info!(
             "[live] read loop started for {}",
@@ -479,17 +581,7 @@ fn register_live_peer(
                     let subject = std::str::from_utf8(&buf[3..])
                         .unwrap_or_default()
                         .to_string();
-                    if !subject.is_empty() {
-                        IMPORTING.store(true, std::sync::atomic::Ordering::Relaxed);
-                        let subj =
-                            crate::Subject::from_raw(&subject, store.get_base_domain().as_deref());
-                        let _ = store.remove_resource(&subj).await;
-                        let _ = store
-                            .kv
-                            .remove(crate::db::trees::Tree::LoroSnapshots, subject.as_bytes());
-                        IMPORTING.store(false, std::sync::atomic::Ordering::Relaxed);
-                        tracing::info!("[live] deleted {}", &subject[..subject.len().min(20)]);
-                    }
+                    let _ = super::ws_apply::apply_destroy(&store, &subject).await;
                 }
                 continue;
             }
@@ -512,64 +604,7 @@ fn register_live_peer(
                 let loro_bytes = &payload[5 + subject_len..];
 
                 if !loro_bytes.is_empty() {
-                    IMPORTING.store(true, std::sync::atomic::Ordering::Relaxed);
-
-                    // Import into local store
-                    let doc = if let Ok(Some(existing)) = store
-                        .kv
-                        .get(crate::db::trees::Tree::LoroSnapshots, subject.as_bytes())
-                    {
-                        match crate::loro::AtomicLoroDoc::from_snapshot(&existing) {
-                            Ok(d) => {
-                                if let Err(e) = d.import_update(loro_bytes) {
-                                    tracing::warn!(
-                                        "[live] import_update failed for {}: {e}",
-                                        &subject[..subject.len().min(20)]
-                                    );
-                                }
-                                d
-                            }
-                            Err(_) => match crate::loro::AtomicLoroDoc::from_snapshot(loro_bytes) {
-                                Ok(d) => d,
-                                Err(_) => {
-                                    IMPORTING.store(false, std::sync::atomic::Ordering::Relaxed);
-                                    continue;
-                                }
-                            },
-                        }
-                    } else {
-                        match crate::loro::AtomicLoroDoc::from_snapshot(loro_bytes) {
-                            Ok(d) => d,
-                            Err(_) => {
-                                let d = crate::loro::AtomicLoroDoc::new();
-                                if d.import_update(loro_bytes).is_err() {
-                                    IMPORTING.store(false, std::sync::atomic::Ordering::Relaxed);
-                                    continue;
-                                }
-                                d
-                            }
-                        }
-                    };
-
-                    let snapshot = doc.export_snapshot();
-                    let _ = store.kv.insert(
-                        crate::db::trees::Tree::LoroSnapshots,
-                        subject.as_bytes(),
-                        &snapshot,
-                    );
-
-                    let subj =
-                        crate::Subject::from_raw(&subject, store.get_base_domain().as_deref());
-                    let mut resource = store
-                        .get_resource(&subj)
-                        .await
-                        .unwrap_or_else(|_| crate::Resource::new(subject.clone()));
-
-                    if resource.replace_state_from_loro_doc(doc).is_ok() {
-                        let _ = store.add_resource_opts(&resource, false, true, true).await;
-                    }
-
-                    IMPORTING.store(false, std::sync::atomic::Ordering::Relaxed);
+                    let _ = super::ws_apply::apply_state_update(&store, &subject, loro_bytes).await;
                     tracing::trace!(
                         "[live] imported update for {} from {}",
                         &subject[..subject.len().min(20)],
@@ -600,18 +635,7 @@ fn register_live_peer(
             }
         }
 
-        // Remove from map FIRST, then fire event (so count is correct when UI reads it)
-        {
-            let mut map = LIVE_PEERS.lock().unwrap();
-            if let Some(m) = map.as_mut() {
-                m.remove(&read_peer_id);
-            }
-        }
-        tracing::info!(
-            "[live] peer {} disconnected",
-            &read_peer_id[..read_peer_id.len().min(12)]
-        );
-        push_event(&read_peer_id, 0, "disconnected");
+        remove_live_peer(&read_peer_id);
     });
 }
 
@@ -644,10 +668,28 @@ fn push_sync_event(remote_node_id: &str, resources_imported: usize) {
 }
 
 fn push_event(remote_node_id: &str, resources_imported: usize, kind: &str) {
+    let now = crate::utils::now() as u64;
+    let key = (remote_node_id.to_string(), kind.to_string());
+    // Never debounce `connected` — both devices must refresh live-peer UI.
+    if kind != "connected" {
+        if let Ok(mut last) = last_event_ms().lock() {
+            if let Some(&prev) = last.get(&key) {
+                if now.saturating_sub(prev) < EVENT_DEBOUNCE_MS {
+                    tracing::debug!(
+                        "[live] debounced {kind} for {}",
+                        &remote_node_id[..remote_node_id.len().min(12)]
+                    );
+                    return;
+                }
+            }
+            last.insert(key, now);
+        }
+    }
+
     let event = SyncEvent {
         remote_node_id: remote_node_id.to_string(),
         resources_imported,
-        timestamp: crate::utils::now() as u64,
+        timestamp: now,
         kind: kind.to_string(),
     };
     let _ = get_event_tx().send(event);
@@ -706,15 +748,34 @@ pub async fn wait_for_peer_count_change(current: usize) -> usize {
 
 /// Sync a drive with a remote peer. Initiates the SYNC protocol over Iroh QUIC.
 /// Uses the global endpoint (set by `start()`). Returns the number of resources imported.
+/// Replaces an existing live connection when `force` is true (QR pair / manual sync).
 pub async fn sync_drive_with_peer(
     remote_node_id: &str,
     drive: &str,
     store: &Db,
 ) -> crate::errors::AtomicResult<usize> {
+    sync_drive_with_peer_forced(remote_node_id, drive, store, true).await
+}
+
+/// Bulk sync only when there is no healthy live stream to this peer (auto-connect / nudge).
+pub async fn sync_drive_with_peer_if_needed(
+    remote_node_id: &str,
+    drive: &str,
+    store: &Db,
+) -> crate::errors::AtomicResult<usize> {
+    sync_drive_with_peer_forced(remote_node_id, drive, store, false).await
+}
+
+async fn sync_drive_with_peer_forced(
+    remote_node_id: &str,
+    drive: &str,
+    store: &Db,
+    force: bool,
+) -> crate::errors::AtomicResult<usize> {
     let endpoint = ENDPOINT
         .get()
         .ok_or("Iroh peer not started. Call start() first.")?;
-    sync_drive_with_peer_using(endpoint, remote_node_id, drive, store).await
+    sync_drive_with_peer_using(endpoint, remote_node_id, drive, store, force).await
 }
 
 /// Sync a drive using a specific Iroh endpoint. Useful for tests where
@@ -724,10 +785,24 @@ pub async fn sync_drive_with_peer_using(
     remote_node_id: &str,
     drive: &str,
     store: &Db,
+    force: bool,
 ) -> crate::errors::AtomicResult<usize> {
-    let node_id: NodeId = remote_node_id
+    let remote_key = normalize_node_id(remote_node_id);
+    let node_id: NodeId = remote_key
         .parse()
         .map_err(|e| format!("Invalid NodeID '{remote_node_id}': {e}"))?;
+
+    if !force && live_peer_ids().contains(&remote_key) {
+        tracing::debug!(
+            "[sync] already live with {}, skipping bulk reconnect",
+            &remote_key[..remote_key.len().min(12)]
+        );
+        return Ok(0);
+    }
+
+    if force && live_peer_ids().contains(&remote_key) {
+        remove_live_peer_quiet(&remote_key);
+    }
 
     let my_node_id = endpoint.node_id();
     let my_relay = endpoint.home_relay();
@@ -739,13 +814,29 @@ pub async fn sync_drive_with_peer_using(
         &drive[..drive.len().min(20)],
     );
 
-    let conn = endpoint.connect(node_id, ATOMIC_ALPN).await.map_err(|e| {
-        tracing::error!(
-            "[sync] connect failed to {}: {e}",
-            &node_id.to_string()[..16]
-        );
-        format!("Iroh connect to {} failed: {e}", &node_id.to_string()[..16])
-    })?;
+    const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
+    let remote_short = &node_id.to_string()[..node_id.to_string().len().min(16)];
+    let conn = match tokio::time::timeout(CONNECT_TIMEOUT, endpoint.connect(node_id, ATOMIC_ALPN))
+        .await
+    {
+        Ok(Ok(c)) => c,
+        Ok(Err(e)) => {
+            tracing::error!("[sync] connect failed to {remote_short}: {e}");
+            return Err(format!(
+                "Iroh connect to {remote_short} failed: {e}"
+            )
+            .into());
+        }
+        Err(_) => {
+            tracing::error!("[sync] connect timed out to {remote_short}");
+            return Err(format!(
+                "Iroh connect to {remote_short} timed out after {}s. \
+                 Is the other device online, on the network, and running the app?",
+                CONNECT_TIMEOUT.as_secs()
+            )
+            .into());
+        }
+    };
 
     tracing::info!("[sync] connected! Opening bi stream...");
 
@@ -849,10 +940,14 @@ pub async fn sync_drive_with_peer_using(
             super::protocol::tag::SYNC_DIFF => {
                 if let Some(diff) = super::protocol::decode_sync_diff(payload) {
                     tracing::info!(
-                        "SYNC_DIFF: server pushes {}, server pulls {}",
+                        "SYNC_DIFF: server pushes {}, server pulls {}, remove {}",
                         diff.push.len(),
-                        diff.pull.len()
+                        diff.pull.len(),
+                        diff.remove.len()
                     );
+                    for subject in &diff.remove {
+                        let _ = super::ws_apply::apply_destroy(store, subject).await;
+                    }
                     pull_subjects = diff.pull.clone();
 
                     // If server has nothing to push, it won't send SYNC_PUSH.
@@ -959,7 +1054,7 @@ pub async fn sync_drive_with_peer_using(
             v.push(conn);
         }
     }
-    register_live_peer(remote_node_id.to_string(), send, recv, store.clone());
+    register_live_peer(remote_key.clone(), send, recv, store.clone());
 
     Ok(total_imported)
 }
@@ -989,14 +1084,15 @@ pub fn get_known_peers(store: &Db) -> Vec<KnownPeer> {
 
 /// Add a peer to the known peers list. Updates name if already known.
 pub fn add_known_peer(store: &Db, node_id: &str, name: &str) {
+    let key = normalize_node_id(node_id);
     let mut peers = get_known_peers(store);
-    if let Some(existing) = peers.iter_mut().find(|p| p.node_id == node_id) {
+    if let Some(existing) = peers.iter_mut().find(|p| normalize_node_id(&p.node_id) == key) {
         if !name.is_empty() {
             existing.name = name.to_string();
         }
     } else {
         peers.push(KnownPeer {
-            node_id: node_id.to_string(),
+            node_id: key,
             name: name.to_string(),
         });
     }
@@ -1009,8 +1105,9 @@ pub fn add_known_peer(store: &Db, node_id: &str, name: &str) {
 
 /// Remove a peer from the known peers list.
 pub fn remove_known_peer(store: &Db, node_id: &str) {
+    let key = normalize_node_id(node_id);
     let mut peers = get_known_peers(store);
-    peers.retain(|p| p.node_id != node_id);
+    peers.retain(|p| normalize_node_id(&p.node_id) != key);
     let _ = store.kv.insert(
         crate::db::trees::Tree::PluginMeta,
         KNOWN_PEERS_KEY,
@@ -1040,8 +1137,10 @@ async fn handle_stream(
     store: Db,
     remote_id: String,
 ) -> anyhow::Result<usize> {
+    let remote_key = normalize_node_id(&remote_id);
     let mut agent = ForAgent::Public;
     let mut total_imported = 0;
+    let mut sent_sync_ok = false;
 
     while let Ok(n) = recv.read_u32().await {
         let len = n as usize;
@@ -1068,23 +1167,49 @@ async fn handle_stream(
         let sync_ok = responses
             .iter()
             .any(|r| !r.is_empty() && r[0] == super::protocol::tag::SYNC_OK);
+        if sync_ok {
+            sent_sync_ok = true;
+        }
 
         for response in responses {
-            send.write_u32(response.len() as u32).await?;
-            send.write_all(&response).await?;
+            if let Err(e) = send.write_u32(response.len() as u32).await {
+                tracing::warn!(
+                    "[accept] failed to write response header to {}: {e}",
+                    &remote_key[..remote_key.len().min(12)]
+                );
+                break;
+            }
+            if let Err(e) = send.write_all(&response).await {
+                tracing::warn!(
+                    "[accept] failed to write response body to {}: {e}",
+                    &remote_key[..remote_key.len().min(12)]
+                );
+                break;
+            }
         }
 
         // Transition to live mode after the sync exchange is fully complete:
         // - SYNC_OK: no data to exchange, we're done
         // - Client's SYNC_PUSH: bidirectional exchange complete
+        // Register even if the last write failed — the initiator may already have
+        // read SYNC_OK and registered, and we must not show "connected" only on one side.
         if sync_ok || client_pushed {
             tracing::info!(
                 "[accept] sync complete, transitioning to live mode with {}",
-                &remote_id[..remote_id.len().min(12)]
+                &remote_key[..remote_key.len().min(12)]
             );
-            register_live_peer(remote_id, send, recv, store);
+            register_live_peer(remote_key, send, recv, store);
             return Ok(total_imported);
         }
+    }
+
+    // Initiator may stop sending after reading our SYNC_OK; we already sent it.
+    if sent_sync_ok {
+        tracing::info!(
+            "[accept] SYNC_OK sent, entering live mode with {}",
+            &remote_key[..remote_key.len().min(12)]
+        );
+        register_live_peer(remote_key, send, recv, store);
     }
 
     Ok(total_imported)

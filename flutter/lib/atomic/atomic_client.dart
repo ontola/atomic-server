@@ -1,10 +1,12 @@
 import 'dart:convert';
 import 'dart:typed_data';
+
+import 'package:flutter/foundation.dart';
 import '../src/rust/api/simple.dart' as ffi;
-import '../src/rust/api/simple.dart'
+import '../src/rust/api/simple/types.dart'
     show AgentInfo, CanvasListItem, VersionMetadata;
 
-export '../src/rust/api/simple.dart'
+export '../src/rust/api/simple/types.dart'
     show AgentInfo, CanvasListItem, VersionMetadata;
 
 /// Atomic Data SDK — local-first with optional sync.
@@ -71,20 +73,33 @@ class AtomicClient {
 
   // ── 5. Canvas CRUD ───────────────────────────────────────────────────────
 
-  static Future<String> createCanvas(String name) =>
-      ffi.createCanvas(name: name);
+  static Future<String> createCanvas(String name, {String? folderId}) =>
+      ffi.createCanvasWithFolder(name: name, folderId: folderId);
 
   static Future<String> loadCanvasStrokes(String subject) =>
       ffi.loadCanvasStrokes(subject: subject);
 
-  static Future<List<CanvasListItem>> listCanvases() async =>
-      (await ffi.listCanvases()).toList();
+  static Future<List<CanvasListItem>> listCanvases() => ffi.listCanvases();
+
+  static Future<Map<String, String>> listCanvasFolderIds() async {
+    final json = await ffi.listCanvasesJson();
+    final list = jsonDecode(json) as List;
+    return {
+      for (final e in list)
+        if ((e['folder_id'] as String?)?.isNotEmpty ?? false)
+          e['subject'] as String: e['folder_id'] as String,
+    };
+  }
 
   static Future<void> deleteCanvas(String subject) =>
       ffi.deleteCanvas(subject: subject);
 
   static Future<void> renameCanvas(String subject, String name) =>
       ffi.renameCanvas(subject: subject, name: name);
+
+  /// Rename a gallery folder (same signed commit path as [renameCanvas]).
+  static Future<void> renameFolder(String subject, String name) =>
+      renameCanvas(subject, name);
 
   // ── 6. History ───────────────────────────────────────────────────────────
 
@@ -108,7 +123,7 @@ class AtomicClient {
   static Future<String> startPeer() => ffi.startPeer();
 
   /// Get this device's NodeID, or null if peer not started.
-  static Future<String?> getPeerId() => ffi.getPeerId();
+  static Future<String?> getPeerId() async => ffi.getPeerId();
 
   /// Announce a drive on DHT so other devices can find us.
   static Future<void> peerAnnounce(String driveSubject) =>
@@ -121,15 +136,23 @@ class AtomicClient {
   static Future<int> peerDiscoverSync(String driveSubject) =>
       ffi.peerDiscoverSync(driveSubject: driveSubject);
 
-  // ── 8. Known peers ──────────────────────────────────────────────────────
+  /// Start Iroh, sync known peers + pkarr. Use on app open and Settings → Retry.
+  static Future<SyncConnectivityReport> syncConnectivityNow() async {
+    final json = await ffi.syncConnectivityNow();
+    final m = jsonDecode(json) as Map<String, dynamic>;
+    return SyncConnectivityReport(
+      imported: (m['imported'] as num?)?.toInt() ?? 0,
+      livePeers: (m['live_peers'] as num?)?.toInt() ?? 0,
+      message: m['message'] as String? ?? '',
+    );
+  }
 
-  static Future<String> _cmd(String cmd) =>
-      ffi.connect(serverUrl: cmd, agentSecret: '');
+  // ── 8. Known peers ──────────────────────────────────────────────────────
 
   /// Get all known peers (persisted in DB).
   /// Returns list of {node_id: String, name: String}.
   static Future<List<Map<String, String>>> getKnownPeers() async {
-    final json = await _cmd('get_known_peers');
+    final json = ffi.getKnownPeersJson();
     try {
       return (jsonDecode(json) as List)
           .map((e) => {
@@ -143,71 +166,144 @@ class AtomicClient {
   }
 
   /// Add a peer with optional device name.
-  static Future<void> addKnownPeer(String nodeId, [String name = '']) =>
-      _cmd('add_known_peer:$nodeId:$name');
+  static Future<void> addKnownPeer(String nodeId, [String name = '']) async =>
+      ffi.addKnownPeer(nodeId: nodeId, name: name);
 
   /// Remove a peer by NodeID.
-  static Future<void> removeKnownPeer(String nodeId) =>
-      _cmd('remove_known_peer:$nodeId');
+  static Future<void> removeKnownPeer(String nodeId) async =>
+      ffi.removeKnownPeer(nodeId: nodeId);
 
-  // ── 10. Live queries ────────────────────────────────────────────────────
+  // ── 10. WebSocket sync (server-backed) ───────────────────────────────────
+
+  /// Optional LAN hub (e.g. `http://192.168.x.x:9883`). Empty = device-to-device only.
+  static const defaultServerUrl = '';
+
+  /// Connect to Atomic Server over WebSocket; SUB active drive; apply remote updates.
+  static Future<void> openWsSync(String serverUrl) =>
+      ffi.openWsSync(serverUrl: serverUrl);
+
+  static Future<void> closeWsSync() => ffi.closeWsSync();
+
+  /// Boot / auto-login: load agent, WS sync, fetch drive, optional Iroh discover.
+  /// Returns `ok` or `needs_sync`.
+  static Future<String> resumeSession({
+    required String serverUrl,
+    required String secret,
+    String? drive,
+  }) {
+    return ffi.resumeAppSession(
+      serverUrl: serverUrl,
+      secret: secret,
+      driveHint: drive,
+    );
+  }
+
+  static Future<void> wsSubscribeCanvas(String subject) =>
+      ffi.wsSubscribeCanvas(subject: subject);
+
+  static Future<String> createFolder(String name) =>
+      ffi.createFolder(name: name);
+
+  static Future<List<({String subject, String name})>> listFolders() async {
+    final list = await ffi.listFolders();
+    return list
+        .map((e) => (
+              subject: e.subject,
+              name: e.name,
+            ))
+        .toList();
+  }
+
+  static Future<void> setCanvasFolder(String subject, String? folderId) =>
+      ffi.setCanvasFolder(subject: subject, folderId: folderId);
+
+  /// Block until a DB event (changed / destroyed / query membership). Null on timeout.
+  static Future<Map<String, dynamic>?> pollDbEvent(
+      {int timeoutMs = 60000}) async {
+    final json = await ffi.pollDbEvent(timeoutMs: timeoutMs);
+    if (json == null || json == 'null') return null;
+    try {
+      return Map<String, dynamic>.from(jsonDecode(json));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // ── 11. Live queries ────────────────────────────────────────────────────
 
   /// Get persisted device name.
-  static Future<String> getDeviceName() => _cmd('get_device_name');
+  static Future<String> getDeviceName() async => ffi.getDeviceName();
 
   /// Set device name (persisted in DB).
-  static Future<void> setDeviceName(String name) =>
-      _cmd('set_device_name:$name');
+  static Future<void> setDeviceName(String name) async =>
+      ffi.setDeviceName(name: name);
 
   /// Push a single stroke to a canvas (CRDT-friendly append).
   static Future<void> pushStroke(String subject, String strokeJson) =>
-      _cmd('push_stroke:$subject:$strokeJson');
+      ffi.pushStroke(subject: subject, strokeJson: strokeJson);
 
-  /// Undo the last stroke edit (Loro). Persists and syncs. Returns new stroke count.
-  static Future<int> undoCanvas(String subject) async {
-    final result = await _cmd('undo_canvas:$subject');
-    return int.tryParse(result) ?? 0;
-  }
+  /// Undo the last stroke edit. Persists and syncs. Returns new stroke count.
+  static Future<int> undoCanvas(String subject) =>
+      ffi.undoCanvas(subject: subject);
 
   /// Redo the last undone stroke edit. Persists and syncs. Returns new stroke count.
-  static Future<int> redoCanvas(String subject) async {
-    final result = await _cmd('redo_canvas:$subject');
-    return int.tryParse(result) ?? 0;
-  }
+  static Future<int> redoCanvas(String subject) =>
+      ffi.redoCanvas(subject: subject);
 
-  static Future<bool> canUndoCanvas(String subject) async {
-    final result = await _cmd('can_undo_canvas:$subject');
-    return result == '1';
-  }
+  static Future<bool> canUndoCanvas(String subject) =>
+      ffi.canUndoCanvas(subject: subject);
 
-  static Future<bool> canRedoCanvas(String subject) async {
-    final result = await _cmd('can_redo_canvas:$subject');
-    return result == '1';
-  }
+  static Future<bool> canRedoCanvas(String subject) =>
+      ffi.canRedoCanvas(subject: subject);
 
   /// Replace all strokes (used after undo/scrub). Clears and re-sets the full list.
   static Future<void> setStrokes(String subject, String strokesJson) =>
-      _cmd('set_strokes:$subject:$strokesJson');
+      ffi.setStrokes(subject: subject, strokesJson: strokesJson);
 
-  /// Get the number of currently connected live peers.
-  static Future<int> livePeerCount() async {
-    final result = await _cmd('live_peer_count');
-    return int.tryParse(result) ?? 0;
+  /// Move canvas to a synced Loro history version and persist (history scrub).
+  static Future<void> checkoutCanvasVersion(
+      String subject, List<int> versionId) {
+    return setStrokes(
+      subject,
+      jsonEncode({'checkout_version_id': versionId}),
+    );
   }
 
+  /// Get the number of currently connected live peers.
+  static Future<int> livePeerCount() async => ffi.livePeerCount();
+
   /// Get the node IDs of currently connected live peers.
-  static Future<Set<String>> livePeerIds() async {
-    final json = await _cmd('live_peer_ids');
-    try {
-      return Set<String>.from(jsonDecode(json));
-    } catch (_) {
-      return {};
+  static Set<String> livePeerIds() => ffi.livePeerIds().toSet();
+
+  /// Fired when Iroh live-peer count changes (`connected` / `disconnected` events).
+  static final ValueNotifier<int> livePeersRevision = ValueNotifier(0);
+
+  static void notifyLivePeersChanged() {
+    livePeersRevision.value++;
+  }
+
+  /// Canonical 64-char hex NodeID (matches Rust `normalize_node_id`).
+  static String normalizeNodeId(String id) {
+    var s = id.trim();
+    const prefix = 'did:ad:node:';
+    if (s.startsWith(prefix)) {
+      s = s.substring(prefix.length);
+      if (s.length > 64 && s[64] == ':') {
+        s = s.substring(0, 64);
+      }
     }
+    if (s.startsWith('iroh:')) s = s.substring(5);
+    return s.toLowerCase();
+  }
+
+  static bool isLivePeer(String knownNodeId, Set<String> liveIds) {
+    final n = normalizeNodeId(knownNodeId);
+    return liveIds.any((l) => normalizeNodeId(l) == n);
   }
 
   /// Block until the next sync event arrives. Reactive — no polling.
   static Future<Map<String, dynamic>?> waitForSyncEvent() async {
-    final json = await _cmd('wait_for_sync_event');
+    final json = await ffi.waitForSyncEvent();
     if (json == 'null') return null;
     try {
       return Map<String, dynamic>.from(jsonDecode(json));
@@ -217,26 +313,24 @@ class AtomicClient {
   }
 
   /// Block until the live peer count changes from [current]. Reactive.
-  static Future<int> waitForPeerCountChange(int current) async {
-    final result = await _cmd('wait_for_peer_count_change:$current');
-    return int.tryParse(result) ?? current;
-  }
+  static Future<int> waitForPeerCountChange(int current) =>
+      ffi.waitForPeerCountChange(current: current);
 
   /// Block until a specific resource changes. Returns the subject or "timeout".
   static Future<String> watchResource(String subject) =>
-      _cmd('watch_resource:$subject');
+      ffi.watchResource(subject: subject);
 
   /// Block until a child of [parent] changes. Returns the changed subject.
   /// Times out after 60s and returns "timeout".
   static Future<String> watchChildren(String parent) =>
-      _cmd('watch_children:$parent');
+      ffi.watchChildren(parent: parent);
 
   // ── 9. Sync events ─────────────────────────────────────────────────────
 
   /// Poll for incoming sync events (peer connected and synced).
   /// Returns a list of {remoteNodeId, resourcesImported, timestamp}.
   static Future<List<Map<String, dynamic>>> pollSyncEvents() async {
-    final json = await _cmd('poll_sync_events');
+    final json = await ffi.pollSyncEvents();
     try {
       return List<Map<String, dynamic>>.from(
         (jsonDecode(json) as List).map((e) => Map<String, dynamic>.from(e)),
@@ -245,4 +339,17 @@ class AtomicClient {
       return [];
     }
   }
+}
+
+/// Result of [`AtomicClient.syncConnectivityNow`].
+class SyncConnectivityReport {
+  final int imported;
+  final int livePeers;
+  final String message;
+
+  const SyncConnectivityReport({
+    required this.imported,
+    required this.livePeers,
+    required this.message,
+  });
 }

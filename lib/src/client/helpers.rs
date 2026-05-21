@@ -184,6 +184,19 @@ fn should_sign_request(url: &str, agent: &Agent) -> bool {
         && target.port_or_known_default() == agent_url.port_or_known_default()
 }
 
+/// JSON-AD body for posting a commit (HTTP or WS). Includes signature; omits `@id`.
+pub async fn commit_to_wire_json(
+    commit: &crate::Commit,
+    store: &impl Storelike,
+) -> AtomicResult<String> {
+    let mut json_val: serde_json::Value =
+        serde_json::from_str(&commit.into_resource(store).await?.to_json_ad(None)?)?;
+    if let Some(obj) = json_val.as_object_mut() {
+        obj.remove("@id");
+    }
+    Ok(serde_json::to_string(&json_val)?)
+}
+
 /// Posts a Commit to the endpoint of the Subject from the Commit
 pub async fn post_commit(commit: &crate::Commit, store: &impl Storelike) -> AtomicResult<()> {
     let subject_str = commit.get_subject();
@@ -209,13 +222,7 @@ async fn post_commit_custom_endpoint(
     commit: &crate::Commit,
     store: &impl Storelike,
 ) -> AtomicResult<()> {
-    let mut json_val: serde_json::Value =
-        serde_json::from_str(&commit.into_resource(store).await?.to_json_ad(None)?)?;
-    // Remove @id — the server derives the commit subject from the signature
-    if let Some(obj) = json_val.as_object_mut() {
-        obj.remove("@id");
-    }
-    let json = serde_json::to_string(&json_val)?;
+    let json = commit_to_wire_json(commit, store).await?;
 
     let client = http_client_builder()
         .build()

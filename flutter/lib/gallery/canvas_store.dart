@@ -6,6 +6,13 @@ import '../models/canvas_entry.dart';
 import '../models/stroke_data.dart';
 import '../canvas/thumbnail.dart';
 
+bool _subjectMatches(String canvasId, String eventSubject) {
+  if (canvasId == eventSubject) return true;
+  final a = canvasId.split('?').first;
+  final b = eventSubject.split('?').first;
+  return a == b;
+}
+
 class CanvasStore {
   final List<CanvasEntry> canvases = [];
   final List<FolderEntry> folders = [];
@@ -25,26 +32,24 @@ class CanvasStore {
 
   void _startWatching() {
     _watching = true;
-    final drive = AtomicClient.getActiveDrive();
-    if (drive == null) return;
     Future(() async {
       while (_onChanged != null) {
-        final changedSubject = await AtomicClient.watchChildren(drive);
-        if (changedSubject == 'timeout' || _onChanged == null) continue;
+        final event = await AtomicClient.pollDbEvent(timeoutMs: 60000);
+        if (event == null || _onChanged == null) continue;
 
-        // Collect more changes that arrive in quick succession
-        final changed = <String>{changedSubject};
-        await Future.delayed(const Duration(milliseconds: 50));
-        // Note: watchChildren blocks until next change, so we just use the set we have
+        final kind = event['kind'] as String? ?? '';
+        final subject = event['subject'] as String? ?? '';
 
         await load();
 
-        // Only reload strokes for changed canvases + any without strokes
-        for (final canvas in canvases) {
-          if (canvas.id.isNotEmpty &&
-              (changed.contains(canvas.id) || canvas.strokes.isEmpty)) {
-            await loadStrokes(canvas, isDarkMode: isDarkMode);
+        if (kind == 'changed' || kind == 'query_membership') {
+          for (final canvas in canvases) {
+            if (canvas.id.isNotEmpty && _subjectMatches(canvas.id, subject)) {
+              await loadStrokes(canvas, isDarkMode: isDarkMode);
+            }
           }
+        } else if (kind == 'destroyed') {
+          canvases.removeWhere((c) => c.id == subject);
         }
 
         _onChanged?.call();
@@ -60,16 +65,27 @@ class CanvasStore {
   Future<void> load() async {
     try {
       final items = await AtomicClient.listCanvases();
+      final folderIds = await AtomicClient.listCanvasFolderIds();
+      final folderItems = await AtomicClient.listFolders();
+      folders
+        ..clear()
+        ..addAll(folderItems.map(
+            (f) => FolderEntry(id: f.subject, name: f.name)));
       // Merge: keep existing entries (with thumbnails), add new, remove stale
       final newIds = items.map((i) => i.subject).toSet();
       canvases.removeWhere((c) => c.id.isNotEmpty && !newIds.contains(c.id));
       final newEntries = <CanvasEntry>[];
       for (final item in items) {
+        final edited = DateTime.fromMillisecondsSinceEpoch(
+          item.dateEdited.toInt(),
+          isUtc: true,
+        ).toLocal();
         if (!canvases.any((c) => c.id == item.subject)) {
           final entry = CanvasEntry(
             id: item.subject,
-            lastModified: DateTime.now(),
+            lastModified: edited,
             name: item.name,
+            folderId: folderIds[item.subject],
             strokes: [],
           );
           canvases.add(entry);
@@ -77,6 +93,11 @@ class CanvasStore {
         } else {
           final existing = canvases.firstWhere((c) => c.id == item.subject);
           existing.name = item.name;
+          existing.lastModified = edited;
+          // Map only includes canvases with a folder; absent key => root gallery.
+          existing.folderId = folderIds.containsKey(item.subject)
+              ? folderIds[item.subject]
+              : null;
         }
       }
       // Load strokes + generate thumbnails for new entries
@@ -108,7 +129,10 @@ class CanvasStore {
   Future<void> _createRemote(CanvasEntry entry) async {
     try {
       final name = 'Canvas ${DateTime.now().millisecondsSinceEpoch}';
-      final subject = await AtomicClient.createCanvas(name);
+      final subject = await AtomicClient.createCanvas(
+        name,
+        folderId: entry.folderId,
+      );
       entry.id = subject;
       entry.name = name;
     } catch (e) {
@@ -117,9 +141,19 @@ class CanvasStore {
   }
 
   FolderEntry createFolder({String name = ''}) {
-    final folder = FolderEntry(
-        id: DateTime.now().microsecondsSinceEpoch.toString(), name: name);
+    final folder = FolderEntry(id: '', name: name);
     folders.add(folder);
+    Future(() async {
+      try {
+        final subject = await AtomicClient.createFolder(
+          name.isEmpty ? 'Folder' : name,
+        );
+        folder.id = subject;
+        _onChanged?.call();
+      } catch (e) {
+        debugPrint('Failed to create folder: $e');
+      }
+    });
     return folder;
   }
 
@@ -141,12 +175,36 @@ class CanvasStore {
       if (c.folderId == folderId) c.folderId = null;
     }
     folders.removeWhere((f) => f.id == folderId);
+    if (folderId.isNotEmpty) {
+      AtomicClient.deleteCanvas(folderId).catchError((e) {
+        debugPrint('Failed to delete folder: $e');
+      });
+    }
+  }
+
+  /// Persist folder display name and sync to peers (Iroh / WS).
+  Future<void> renameFolder(FolderEntry folder, String name) async {
+    folder.name = name;
+    if (folder.id.isEmpty) return;
+    try {
+      await AtomicClient.renameFolder(folder.id, name);
+    } catch (e) {
+      debugPrint('Failed to rename folder: $e');
+    }
   }
 
   void moveToFolder(List<String> canvasIds, String? folderId) {
     for (final c in canvases) {
-      if (canvasIds.contains(c.id)) c.folderId = folderId;
+      if (canvasIds.contains(c.id)) {
+        c.folderId = folderId;
+        if (c.id.isNotEmpty) {
+          AtomicClient.setCanvasFolder(c.id, folderId).catchError((e) {
+            debugPrint('Failed to set canvas folder: $e');
+          });
+        }
+      }
     }
+    _onChanged?.call();
   }
 
   List<CanvasEntry> canvasesInFolder(String? folderId) {
@@ -165,7 +223,7 @@ class CanvasStore {
         .then((img) => canvas.thumbnail = img);
   }
 
-  /// Push a single stroke to the canvas. CRDT-friendly — appends to the Loro list.
+  /// Push a single stroke to the canvas (appends; merges across devices).
   Future<void> pushStroke(CanvasEntry canvas, StrokeData stroke) async {
     if (canvas.id.isEmpty) return;
     try {
@@ -176,7 +234,7 @@ class CanvasStore {
     }
   }
 
-  /// Loro undo (persisted + sync). Reloads [canvas].strokes. Returns false if nothing to undo.
+  /// Undo (persisted + sync). Reloads [canvas].strokes. Returns false if nothing to undo.
   Future<bool> undoCanvas(CanvasEntry canvas) async {
     if (canvas.id.isEmpty) return false;
     try {
@@ -190,7 +248,7 @@ class CanvasStore {
     }
   }
 
-  /// Loro redo (persisted + sync). Reloads [canvas].strokes.
+  /// Redo (persisted + sync). Reloads [canvas].strokes.
   Future<bool> redoCanvas(CanvasEntry canvas) async {
     if (canvas.id.isEmpty) return false;
     try {
@@ -218,7 +276,7 @@ class CanvasStore {
     }
   }
 
-  /// Save the full stroke list (replaces Loro list). Used after undo/scrub.
+  /// Save the full stroke list. Used after undo/scrub.
   Future<void> saveFullStrokeState(
       CanvasEntry canvas, List<StrokeData> strokes) async {
     if (canvas.id.isEmpty) return;
@@ -235,7 +293,11 @@ class CanvasStore {
     if (canvas.id.isEmpty) return;
     try {
       final jsonStr = await AtomicClient.loadCanvasStrokes(canvas.id);
-      if (jsonStr.isEmpty || jsonStr == "[]") return;
+      if (jsonStr.isEmpty || jsonStr == '[]') {
+        canvas.strokes = const [];
+        canvas.thumbnail = null;
+        return;
+      }
 
       final dynamic decoded = jsonDecode(jsonStr);
 
