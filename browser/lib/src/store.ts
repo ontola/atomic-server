@@ -582,7 +582,25 @@ export class Store {
     }
     const endpoint = new URL('/commit', this.serverUrl).toString();
     for (const commit of entry.commits) {
-      await this.postCommit(commit, endpoint);
+      try {
+        await this.postCommit(commit, endpoint);
+      } catch (e) {
+        // A commit the server rejects as producing no state changes is
+        // already applied — re-posting it is an idempotent no-op (this
+        // happens when the outbox still holds commits that synced over a
+        // different transport, or that a peer already merged). Treat it
+        // as synced and continue draining: stranding the whole entry on
+        // it would block every genuinely-unsynced commit behind it.
+        const msg = e instanceof Error ? e.message : String(e);
+        if (msg.includes('produced no state changes')) {
+          console.warn(
+            `[Outbox] commit ${commit.signature?.slice(0, 8)} already applied (no-op), skipping`,
+          );
+          continue;
+        }
+
+        throw e;
+      }
     }
     // Mirror Resource.pushCommits' post-ack blob push. When an upload
     // races a network outage the commit POST fails, bytes land in the
