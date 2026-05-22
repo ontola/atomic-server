@@ -738,6 +738,20 @@ impl Resource {
         }
     }
 
+    /// Doc-first, fallible propval removal — the Phase 2a replacement for
+    /// [`Self::remove_propval`]. For CRDT resources the removal is applied to
+    /// the live Loro doc with `?` (no swallowed error); commit resources
+    /// ([`Self::is_native`]) are propval-only and never get a state doc.
+    pub fn remove_propval_fallible(&mut self, property_url: &str) -> AtomicResult<()> {
+        if !self.is_native() {
+            self.ensure_materialized()?;
+            self.loro().remove_property(property_url)?;
+        }
+        self.propvals.remove_entry(property_url);
+        self.commit.remove(property_url.into());
+        Ok(())
+    }
+
     /// Remove a propval from a resource by property URL or shortname.
     /// Returns error if propval does not exist in this resource or its class.
     pub async fn remove_propval_shortname(
@@ -1106,6 +1120,39 @@ impl Resource {
         self.propvals.insert(property.clone(), value.clone());
         self.commit.set(property, value);
         self
+    }
+
+    /// Doc-first, fallible mutation — the Phase 2a replacement for
+    /// [`Self::set_unsafe`]. For CRDT resources the live Loro doc is
+    /// materialized and the write applied to it with `?`: a failed doc write
+    /// surfaces instead of being swallowed, so the doc and the `propvals`
+    /// cache cannot silently diverge.
+    ///
+    /// Commit resources ([`Self::is_native`]) are propval-only — they never
+    /// get a state doc. Native-ness is read from `isA`; when `isA` itself is
+    /// the property being set, the incoming value is consulted so a commit
+    /// resource never acquires a doc, not even transiently while it is built.
+    pub fn set_unsafe_fallible(
+        &mut self,
+        property: String,
+        value: Value,
+    ) -> AtomicResult<&mut Self> {
+        let is_native = if property == urls::IS_A {
+            self.subject.is_commit_did()
+                || value
+                    .to_subjects(None)
+                    .is_ok_and(|classes| classes.iter().any(|c| c == urls::COMMIT))
+        } else {
+            self.is_native()
+        };
+
+        if !is_native {
+            self.ensure_materialized()?;
+            self.loro().set_property(&property, &value)?;
+        }
+        self.propvals.insert(property.clone(), value.clone());
+        self.commit.set(property, value);
+        Ok(self)
     }
 
     /// Sets a property / value combination.
@@ -1615,6 +1662,50 @@ mod test {
             ),
             other => panic!("expected the verbatim LoroDoc payload, got {other:?}"),
         }
+    }
+
+    #[tokio::test]
+    async fn set_unsafe_fallible_is_doc_first_for_crdt_resources() {
+        let store: crate::Db = init_store().await;
+        let mut resource = Resource::new_generate_subject(&store).unwrap();
+        resource
+            .set_unsafe_fallible(
+                urls::DESCRIPTION.into(),
+                Value::String("doc-first value".into()),
+            )
+            .unwrap();
+
+        assert!(
+            resource.loro.is_some(),
+            "a CRDT resource materializes a live doc on the first fallible set"
+        );
+        let json = resource.to_json_ad(Some("http://localhost")).unwrap();
+        assert!(
+            json.contains(urls::LORO_UPDATE),
+            "serialized JSON-AD should carry a loroUpdate"
+        );
+        assert!(json.contains("doc-first value"));
+    }
+
+    #[tokio::test]
+    async fn set_unsafe_fallible_keeps_commit_resources_docless() {
+        // `isA: Commit` set first → every subsequent fallible set is
+        // propval-only; the commit resource never acquires a state doc.
+        let mut resource = Resource::new("did:ad:will-be-a-commit".into());
+        resource
+            .set_unsafe_fallible(urls::IS_A.into(), vec![urls::COMMIT.to_string()].into())
+            .unwrap();
+        resource
+            .set_unsafe_fallible(
+                urls::DESCRIPTION.into(),
+                Value::String("commit field".into()),
+            )
+            .unwrap();
+
+        assert!(
+            resource.loro.is_none(),
+            "a commit resource must never get a state doc"
+        );
     }
 
     #[tokio::test]
