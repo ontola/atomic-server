@@ -192,6 +192,7 @@ export function useCollection(
 
     const onResourceChange = (resource: Resource) => {
       const result = col.applyResourceChange(resource.subject, resource);
+
       if (result === 'membership-stale') {
         invalidateRef.current();
       } else if (result === 'member-removed' || result === 'member-added') {

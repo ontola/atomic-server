@@ -697,7 +697,13 @@ export class Collection {
     );
     this.writePageMembers(resource, pageSubjects, result.count);
     this.setPage(page, resource);
-    this._totalMembers = result.count;
+    // `setPage` may have merged optimistic adds (resources created locally
+    // but not yet in the local-DB query result) into the page. Use the
+    // post-merge total it wrote — `result.count` is the pre-merge count, and
+    // setting it here would make consumers that iterate `0..totalMembers`
+    // skip the just-added resource. `fetchPageFromServer` already does this.
+    const mergedTotal = resource.props.totalMembers;
+    this._totalMembers = isNumber(mergedTotal) ? mergedTotal : result.count;
 
     return 'ok';
   }
