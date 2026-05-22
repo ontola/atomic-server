@@ -71,19 +71,57 @@ export function useServerSearch(
       return;
     }
 
-    store
-      .search(debouncedQuery, memoizedSearchOpts)
-      .then(r => {
-        updateResults(r, debouncedQuery, memoizedSearchOpts);
-        setError(undefined);
-      })
-      .catch(e => {
-        setError(e);
-        setResults([]);
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+    // The server's Tantivy index commits on a throttle (~5s), so a resource
+    // created moments ago is not searchable immediately. A single query
+    // would miss it and never refresh — the user (or a test) sees no result
+    // for something that exists. While results are empty, retry a bounded
+    // number of times so a freshly-indexed resource appears on its own.
+    let cancelled = false;
+    let attempt = 0;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    const MAX_RETRIES = 4;
+    const RETRY_DELAY_MS = 2000;
+
+    const runSearch = () => {
+      store
+        .search(debouncedQuery, memoizedSearchOpts)
+        .then(r => {
+          if (cancelled) {
+            return;
+          }
+
+          updateResults(r, debouncedQuery, memoizedSearchOpts);
+          setError(undefined);
+
+          if (r.length === 0 && attempt < MAX_RETRIES) {
+            attempt++;
+            retryTimer = setTimeout(runSearch, RETRY_DELAY_MS);
+          }
+        })
+        .catch(e => {
+          if (cancelled) {
+            return;
+          }
+
+          setError(e);
+          setResults([]);
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setLoading(false);
+          }
+        });
+    };
+
+    runSearch();
+
+    return () => {
+      cancelled = true;
+
+      if (retryTimer) {
+        clearTimeout(retryTimer);
+      }
+    };
   }, [store, allowEmptyQuery, debouncedQuery, memoizedSearchOpts]);
 
   // Remove cached results when component unmounts.
