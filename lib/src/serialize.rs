@@ -316,6 +316,23 @@ mod test {
     use super::*;
     use crate::Storelike;
 
+    /// Drops the `loroUpdate` snapshot from a serialized object so golden
+    /// fixtures stay stable. Since Phase 2a, every materialized resource
+    /// carries a live Loro doc, and `to_json_ad` / `to_json` / `to_json_ld`
+    /// emit its snapshot — whose bytes embed a random peer id and so cannot
+    /// be pinned in a literal fixture. The snapshot riding the wire is
+    /// intentional (the browser seeds its LoroDoc from it); these tests just
+    /// assert the *materialized* shape, so they strip it before comparing.
+    fn strip_loro_update(value: &mut serde_json::Value) {
+        if let Some(obj) = value.as_object_mut() {
+            obj.remove(crate::urls::LORO_UPDATE);
+            obj.remove("loro-update");
+            if let Some(ctx) = obj.get_mut("@context").and_then(|c| c.as_object_mut()) {
+                ctx.remove("loro-update");
+            }
+        }
+    }
+
     #[tokio::test]
     async fn serialize_json_ad() {
         let store = crate::Store::init().await.unwrap();
@@ -345,7 +362,8 @@ mod test {
   "https://atomicdata.dev/properties/shortname": "agent"
 }"#;
         let correct_value: serde_json::Value = serde_json::from_str(correct_json).unwrap();
-        let our_value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        let mut our_value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        strip_loro_update(&mut our_value);
 
         assert_eq!(our_value, correct_value)
     }
@@ -388,7 +406,8 @@ mod test {
             "shortname": "agent"
           }"#;
         let correct_value: serde_json::Value = serde_json::from_str(correct_json).unwrap();
-        let our_value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        let mut our_value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        strip_loro_update(&mut our_value);
 
         assert_eq!(our_value, correct_value)
     }
@@ -439,7 +458,8 @@ mod test {
             "shortname": "agent"
           }"#;
         let correct_value: serde_json::Value = serde_json::from_str(correct_json).unwrap();
-        let our_value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        let mut our_value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        strip_loro_update(&mut our_value);
 
         assert_eq!(our_value, correct_value)
     }

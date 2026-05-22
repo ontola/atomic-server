@@ -793,7 +793,7 @@ async fn test_collection_update_value(
 
     // Remove one of the properties, not relevant to the query.
     // This should not impact the results
-    resources[1].remove_propval(irrelevant_property_url);
+    resources[1].remove_propval(irrelevant_property_url).unwrap();
     resources[1].save(store).await.unwrap();
     let res = store
         .query(&q)
@@ -806,7 +806,7 @@ async fn test_collection_update_value(
 
     // Modify the filtered property.
     // This should remove the item from the results.
-    resources[1].remove_propval(filter_prop);
+    resources[1].remove_propval(filter_prop).unwrap();
     resources[1].save(store).await.unwrap();
     let res = store
         .query(&q)
@@ -921,7 +921,7 @@ async fn query_by_parent_after_add_resource() {
 
     // Create parent
     let mut parent = crate::Resource::new(parent_subject.into());
-    parent.set_unsafe(urls::NAME.into(), Value::String("Parent Folder".into()));
+    parent.set_unsafe(urls::NAME.into(), Value::String("Parent Folder".into())).unwrap();
     store
         .add_resource_opts(&parent, false, true, true)
         .await
@@ -929,16 +929,16 @@ async fn query_by_parent_after_add_resource() {
 
     // Create children with parent property
     let mut child1 = crate::Resource::new(child1_subject.into());
-    child1.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(parent_subject.into()));
-    child1.set_unsafe(urls::NAME.into(), Value::String("Child 1".into()));
+    child1.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(parent_subject.into())).unwrap();
+    child1.set_unsafe(urls::NAME.into(), Value::String("Child 1".into())).unwrap();
     store
         .add_resource_opts(&child1, false, true, true)
         .await
         .unwrap();
 
     let mut child2 = crate::Resource::new(child2_subject.into());
-    child2.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(parent_subject.into()));
-    child2.set_unsafe(urls::NAME.into(), Value::String("Child 2".into()));
+    child2.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(parent_subject.into())).unwrap();
+    child2.set_unsafe(urls::NAME.into(), Value::String("Child 2".into())).unwrap();
     store
         .add_resource_opts(&child2, false, true, true)
         .await
@@ -1024,7 +1024,7 @@ async fn query_by_parent_sorted_is_stable_across_calls() {
 
     let parent_subject = "https://localhost/parent-sorted";
     let mut parent = crate::Resource::new(parent_subject.into());
-    parent.set_unsafe(urls::NAME.into(), Value::String("Parent".into()));
+    parent.set_unsafe(urls::NAME.into(), Value::String("Parent".into())).unwrap();
     store
         .add_resource_opts(&parent, false, true, true)
         .await
@@ -1033,8 +1033,8 @@ async fn query_by_parent_sorted_is_stable_across_calls() {
     for name in &["alpha", "bravo", "charlie"] {
         let subj = format!("https://localhost/sorted/{name}");
         let mut r = crate::Resource::new(subj);
-        r.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(parent_subject.into()));
-        r.set_unsafe(urls::NAME.into(), Value::String((*name).to_string()));
+        r.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(parent_subject.into())).unwrap();
+        r.set_unsafe(urls::NAME.into(), Value::String((*name).to_string())).unwrap();
         store
             .add_resource_opts(&r, false, true, true)
             .await
@@ -1084,16 +1084,16 @@ async fn query_by_parent_did_subjects() {
 
     // Create children with DID parent
     let mut child1 = crate::Resource::new(child1_did.into());
-    child1.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(parent_did.into()));
-    child1.set_unsafe(urls::NAME.into(), Value::String("DID Child 1".into()));
+    child1.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(parent_did.into())).unwrap();
+    child1.set_unsafe(urls::NAME.into(), Value::String("DID Child 1".into())).unwrap();
     store
         .add_resource_opts(&child1, false, true, true)
         .await
         .unwrap();
 
     let mut child2 = crate::Resource::new(child2_did.into());
-    child2.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(parent_did.into()));
-    child2.set_unsafe(urls::NAME.into(), Value::String("DID Child 2".into()));
+    child2.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(parent_did.into())).unwrap();
+    child2.set_unsafe(urls::NAME.into(), Value::String("DID Child 2".into())).unwrap();
     store
         .add_resource_opts(&child2, false, true, true)
         .await
@@ -1446,7 +1446,7 @@ async fn add_resource_opts_always_writes_loro_snapshot() {
     let store = Db::init_temp("add_resource_snapshot").await.unwrap();
 
     let mut resource = crate::Resource::new("did:ad:phase2b-test".into());
-    resource.set_unsafe(urls::NAME.into(), Value::String("Test".into()));
+    resource.set_unsafe(urls::NAME.into(), Value::String("Test".into())).unwrap();
     store
         .add_resource_opts(&resource, false, true, true)
         .await

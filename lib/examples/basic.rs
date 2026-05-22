@@ -16,27 +16,27 @@ async fn main() -> AtomicResult<()> {
     let drive = client.new_drive(&agent, "Alice's Drive").await?;
     println!("Drive: {}", drive);
 
-    let mut resource = client.new_resource(&drive);
-    resource.set_name("My first resource");
+    let mut resource = client.new_resource(&drive)?;
+    resource.set_name("My first resource")?;
     resource.set_unsafe(
         "https://atomicdata.dev/properties/description".into(),
         atomic_lib::Value::String("Created with atomic_lib".into()),
-    );
+    )?;
     resource.set_unsafe(
         atomic_lib::urls::IS_A.into(),
         atomic_lib::Value::ResourceArray(vec![atomic_lib::urls::CLASS.into()]),
-    );
+    )?;
     resource.set_unsafe(
         atomic_lib::urls::SHORTNAME.into(),
         atomic_lib::Value::Slug("my-resource".into()),
-    );
+    )?;
 
     let subject = resource.save_remote(client.store()).await?;
     println!("Created: {}", subject);
     println!("  name: {}", resource.get_name().unwrap_or_default());
 
     // Edit
-    resource.set_name("Updated name");
+    resource.set_name("Updated name")?;
     resource.save_remote(client.store()).await?;
     println!(
         "  name (after edit): {}",

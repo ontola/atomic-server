@@ -132,12 +132,12 @@ impl Storelike for Store {
             match map.get_mut(&subject) {
                 // Resource exists in map
                 Some(resource) => {
-                    resource.set_unsafe(property, value);
+                    resource.set_unsafe(property, value)?;
                 }
                 // Resource does not exist
                 None => {
                     let mut resource = Resource::new(subject.to_string());
-                    resource.set_unsafe(property, value);
+                    resource.set_unsafe(property, value)?;
                     map.insert(subject, resource);
                 }
             }

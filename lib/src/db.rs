@@ -571,7 +571,7 @@ impl Db {
             .unwrap_or_default();
         if !drives.iter().any(|d| d.to_string() == did) {
             drives.push(did.clone().into());
-            agent_resource.set_unsafe(urls::DRIVES.into(), Value::ResourceArray(drives));
+            agent_resource.set_unsafe(urls::DRIVES.into(), Value::ResourceArray(drives))?;
             self.add_resource_opts(&agent_resource, false, true, true)
                 .await?;
         }
@@ -2405,9 +2405,15 @@ mod resolver_tests {
 
         let drive_did = store.get_drive_did("localhost").await.unwrap().unwrap();
         let mut resource = Resource::new("did:ad:test-child".into());
-        resource.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(drive_did.clone()));
-        resource.set_unsafe(urls::SHORTNAME.into(), Value::Slug("about".into()));
-        resource.set_unsafe(urls::NAME.into(), Value::String("About".into()));
+        resource
+            .set_unsafe(urls::PARENT.into(), Value::AtomicUrl(drive_did.clone()))
+            .unwrap();
+        resource
+            .set_unsafe(urls::SHORTNAME.into(), Value::Slug("about".into()))
+            .unwrap();
+        resource
+            .set_unsafe(urls::NAME.into(), Value::String("About".into()))
+            .unwrap();
         store
             .add_resource_opts(&resource, false, true, true)
             .await

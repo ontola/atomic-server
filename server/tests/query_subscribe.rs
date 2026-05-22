@@ -71,20 +71,20 @@ async fn query_subscribe_receives_new_child() -> AtomicResult<()> {
     let drive = client_a.new_public_drive(&agent_a, "Test Drive").await?;
 
     // Create a parent resource (like a ChatRoom or Table)
-    let mut parent = client_a.new_resource(&drive);
-    parent.set_name("Test Parent");
+    let mut parent = client_a.new_resource(&drive)?;
+    parent.set_name("Test Parent")?;
     parent.set_unsafe(
         atomic_lib::urls::IS_A.into(),
         atomic_lib::Value::ResourceArray(vec![atomic_lib::urls::CLASS.into()]),
-    );
+    )?;
     parent.set_unsafe(
         atomic_lib::urls::SHORTNAME.into(),
         atomic_lib::Value::Slug("test-parent".into()),
-    );
+    )?;
     parent.set_unsafe(
         atomic_lib::urls::DESCRIPTION.into(),
         atomic_lib::Value::String("A test parent resource".into()),
-    );
+    )?;
     let parent_subject = parent.save_remote(client_a.store()).await?;
 
     // --- Agent B: connect via WS, subscribe to query "parent = parent_subject" ---
@@ -110,20 +110,20 @@ async fn query_subscribe_receives_new_child() -> AtomicResult<()> {
     tokio::time::sleep(Duration::from_secs(1)).await;
 
     // --- Agent A: create a child resource ---
-    let mut child = client_a.new_resource(&parent_subject);
-    child.set_name("New Child");
+    let mut child = client_a.new_resource(&parent_subject)?;
+    child.set_name("New Child")?;
     child.set_unsafe(
         atomic_lib::urls::IS_A.into(),
         atomic_lib::Value::ResourceArray(vec![atomic_lib::urls::CLASS.into()]),
-    );
+    )?;
     child.set_unsafe(
         atomic_lib::urls::SHORTNAME.into(),
         atomic_lib::Value::Slug("new-child".into()),
-    );
+    )?;
     child.set_unsafe(
         atomic_lib::urls::DESCRIPTION.into(),
         atomic_lib::Value::String("A test child resource".into()),
-    );
+    )?;
     let child_subject = child.save_remote(client_a.store()).await?;
 
     // --- Agent B: should receive a QUERY_UPDATE with the child subject ---
@@ -199,20 +199,20 @@ async fn query_subscribe_listener_path_receives_update() -> AtomicResult<()> {
         .new_public_drive(&agent_a, "Listener Drive")
         .await?;
 
-    let mut parent = client_a.new_resource(&drive);
-    parent.set_name("Listener Parent");
+    let mut parent = client_a.new_resource(&drive)?;
+    parent.set_name("Listener Parent")?;
     parent.set_unsafe(
         atomic_lib::urls::IS_A.into(),
         atomic_lib::Value::ResourceArray(vec![atomic_lib::urls::CLASS.into()]),
-    );
+    )?;
     parent.set_unsafe(
         atomic_lib::urls::SHORTNAME.into(),
         atomic_lib::Value::Slug("listener-parent".into()),
-    );
+    )?;
     parent.set_unsafe(
         atomic_lib::urls::DESCRIPTION.into(),
         atomic_lib::Value::String("Listener-path parent".into()),
-    );
+    )?;
     let parent_subject = parent.save_remote(client_a.store()).await?;
 
     let client_b = Client::new(&server_url).await?;
@@ -231,20 +231,20 @@ async fn query_subscribe_listener_path_receives_update() -> AtomicResult<()> {
     let mut rx = ws_b.subscribe();
     tokio::time::sleep(Duration::from_secs(1)).await;
 
-    let mut child = client_a.new_resource(&parent_subject);
-    child.set_name("Listener Child");
+    let mut child = client_a.new_resource(&parent_subject)?;
+    child.set_name("Listener Child")?;
     child.set_unsafe(
         atomic_lib::urls::IS_A.into(),
         atomic_lib::Value::ResourceArray(vec![atomic_lib::urls::CLASS.into()]),
-    );
+    )?;
     child.set_unsafe(
         atomic_lib::urls::SHORTNAME.into(),
         atomic_lib::Value::Slug("listener-child".into()),
-    );
+    )?;
     child.set_unsafe(
         atomic_lib::urls::DESCRIPTION.into(),
         atomic_lib::Value::String("Listener-path child".into()),
-    );
+    )?;
     let child_subject = child.save_remote(client_a.store()).await?;
 
     tokio::time::timeout(Duration::from_secs(5), async {
@@ -298,20 +298,20 @@ async fn drive_wide_subscription_receives_any_change() -> AtomicResult<()> {
     tokio::time::sleep(Duration::from_secs(1)).await;
 
     // --- Agent A: create any resource in the drive ---
-    let mut resource = client_a.new_resource(&drive);
-    resource.set_name("Something");
+    let mut resource = client_a.new_resource(&drive)?;
+    resource.set_name("Something")?;
     resource.set_unsafe(
         atomic_lib::urls::IS_A.into(),
         atomic_lib::Value::ResourceArray(vec![atomic_lib::urls::CLASS.into()]),
-    );
+    )?;
     resource.set_unsafe(
         atomic_lib::urls::SHORTNAME.into(),
         atomic_lib::Value::Slug("something".into()),
-    );
+    )?;
     resource.set_unsafe(
         atomic_lib::urls::DESCRIPTION.into(),
         atomic_lib::Value::String("A resource".into()),
-    );
+    )?;
     let resource_subject = resource.save_remote(client_a.store()).await?;
 
     // --- Agent B: should receive a QUERY_UPDATE ---
@@ -388,20 +388,20 @@ async fn query_subscribe_requires_read_permission() -> AtomicResult<()> {
     tokio::time::sleep(Duration::from_secs(1)).await;
 
     // --- Agent A: create a child resource inside the private drive ---
-    let mut secret = client_a.new_resource(&private_drive);
-    secret.set_name("Top Secret");
+    let mut secret = client_a.new_resource(&private_drive)?;
+    secret.set_name("Top Secret")?;
     secret.set_unsafe(
         atomic_lib::urls::IS_A.into(),
         atomic_lib::Value::ResourceArray(vec![atomic_lib::urls::CLASS.into()]),
-    );
+    )?;
     secret.set_unsafe(
         atomic_lib::urls::SHORTNAME.into(),
         atomic_lib::Value::Slug("top-secret".into()),
-    );
+    )?;
     secret.set_unsafe(
         atomic_lib::urls::DESCRIPTION.into(),
         atomic_lib::Value::String("Bob must not learn this exists".into()),
-    );
+    )?;
     let secret_subject = secret.save_remote(client_a.store()).await?;
 
     // --- Agent B: must NOT receive a QUERY_UPDATE referencing the secret ---
@@ -467,20 +467,20 @@ async fn drive_wide_subscription_excludes_commit_subjects() -> AtomicResult<()> 
     tokio::time::sleep(Duration::from_secs(1)).await;
 
     // Trigger a commit with a side-effect: any resource save under the drive.
-    let mut resource = client_a.new_resource(&drive);
-    resource.set_name("Triggers a commit");
+    let mut resource = client_a.new_resource(&drive)?;
+    resource.set_name("Triggers a commit")?;
     resource.set_unsafe(
         atomic_lib::urls::IS_A.into(),
         atomic_lib::Value::ResourceArray(vec![atomic_lib::urls::CLASS.into()]),
-    );
+    )?;
     resource.set_unsafe(
         atomic_lib::urls::SHORTNAME.into(),
         atomic_lib::Value::Slug("triggers-a-commit".into()),
-    );
+    )?;
     resource.set_unsafe(
         atomic_lib::urls::DESCRIPTION.into(),
         atomic_lib::Value::String("anything".into()),
-    );
+    )?;
     let resource_subject = resource.save_remote(client_a.store()).await?;
 
     // Collect every QUERY_UPDATE we see for ~2s after the commit. A correct

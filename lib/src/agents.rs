@@ -73,32 +73,32 @@ impl Agent {
     /// Does not include private key, only public.
     pub fn to_resource(&self) -> AtomicResult<Resource> {
         let mut resource = Resource::new(self.subject.to_string());
-        resource.set_class(urls::AGENT);
+        resource.set_class(urls::AGENT)?;
         resource.set_subject(self.subject.to_string());
         if let Some(name) = &self.name {
-            resource.set_unsafe(crate::urls::NAME.into(), Value::String(name.into()));
+            resource.set_unsafe(crate::urls::NAME.into(), Value::String(name.into()))?;
         }
         resource.set_unsafe(
             crate::urls::PUBLIC_KEY.into(),
             Value::String(self.public_key.clone()),
-        );
+        )?;
         // Agents must be read by anyone when validating their keys
         resource.push(crate::urls::READ, urls::PUBLIC_AGENT.into(), true)?;
         resource.set_unsafe(
             crate::urls::CREATED_AT.into(),
             Value::Timestamp(self.created_at),
-        );
+        )?;
         if let Some(initial_drive) = &self.initial_drive {
             resource.set_unsafe(
                 urls::DRIVES.into(),
                 Value::ResourceArray(vec![crate::values::SubResource::Subject(
                     initial_drive.clone(),
                 )]),
-            );
+            )?;
             resource.set_unsafe(
                 urls::PERSONAL_DRIVE.into(),
                 Value::AtomicUrl(initial_drive.to_string().into()),
-            );
+            )?;
         }
         Ok(resource)
     }

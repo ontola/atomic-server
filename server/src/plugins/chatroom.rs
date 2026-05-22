@@ -127,7 +127,7 @@ async fn test_ws_push_chatroom() {
     db.set_default_agent(agent.clone());
 
     let mut chatroom = atomic_lib::Resource::new("http://localhost/chat".into());
-    chatroom.set_class(urls::CHATROOM);
+    chatroom.set_class(urls::CHATROOM).unwrap();
     let mut chatroom_builder = CommitBuilder::new(chatroom.get_subject().clone());
     chatroom_builder
         .push_propval(urls::IS_A, SubResource::Subject(urls::CHATROOM.into()))
@@ -150,11 +150,13 @@ async fn test_ws_push_chatroom() {
     }));
 
     let mut message = atomic_lib::Resource::new("http://localhost/msg1".into());
-    message.set_class(urls::MESSAGE);
-    message.set_unsafe(
-        urls::PARENT.into(),
-        Value::AtomicUrl("http://localhost/chat".into()),
-    );
+    message.set_class(urls::MESSAGE).unwrap();
+    message
+        .set_unsafe(
+            urls::PARENT.into(),
+            Value::AtomicUrl("http://localhost/chat".into()),
+        )
+        .unwrap();
 
     let mut message_builder = CommitBuilder::new(message.get_subject().clone());
     message_builder

@@ -379,7 +379,7 @@ fn on_resource_get(context: GetExtenderContext) -> BoxFuture<AtomicResult<Resour
         db_resource.set_unsafe(
             urls::PLUGIN_AGENT.to_string(),
             Value::AtomicUrl(agent.subject.clone()),
-        );
+        )?;
 
         db_resource
             .set(

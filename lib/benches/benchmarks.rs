@@ -33,7 +33,9 @@ fn random_atom_array() -> Atom {
 
 fn random_resource(atom: &Atom) -> Resource {
     let mut resource = Resource::new(atom.subject.to_string());
-    resource.set_unsafe(atom.property.clone(), atom.value.clone());
+    resource
+        .set_unsafe(atom.property.clone(), atom.value.clone())
+        .unwrap();
     resource
 }
 

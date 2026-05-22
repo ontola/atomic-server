@@ -1318,14 +1318,16 @@ mod peer_sync_tests {
 
         // Device A adds more strokes
         let mut resource_a = db_a.get_resource(&canvas.as_str().into()).await.unwrap();
-        resource_a.set_unsafe(
-            "https://atomicdata.dev/ontology/canvas/strokeData".into(),
-            crate::Value::JsonArray(vec![
-                serde_json::json!({"color": 255, "width": 2.0, "path": [[1.0, 2.0]]}),
-                serde_json::json!({"color": 16711680, "width": 5.0, "path": [[10.0, 20.0]]}),
-                serde_json::json!({"color": 65280, "width": 3.0, "path": [[30.0, 40.0]]}),
-            ]),
-        );
+        resource_a
+            .set_unsafe(
+                "https://atomicdata.dev/ontology/canvas/strokeData".into(),
+                crate::Value::JsonArray(vec![
+                    serde_json::json!({"color": 255, "width": 2.0, "path": [[1.0, 2.0]]}),
+                    serde_json::json!({"color": 16711680, "width": 5.0, "path": [[10.0, 20.0]]}),
+                    serde_json::json!({"color": 65280, "width": 3.0, "path": [[30.0, 40.0]]}),
+                ]),
+            )
+            .unwrap();
         resource_a.save_locally(&db_a).await.unwrap();
         println!("Device A updated to 3 strokes");
 
