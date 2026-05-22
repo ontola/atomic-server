@@ -588,7 +588,7 @@ impl Commit {
                             writers.push(signer_str.clone());
                             applied
                                 .resource_new
-                                .set_unsafe(urls::WRITE.into(), writers.into());
+                                .set_unsafe(urls::WRITE.into(), writers.into())?;
                         }
                     }
                 }
@@ -745,54 +745,54 @@ impl Commit {
             }
         };
         // `new_instance(COMMIT, …)` already set `isA: Commit`, so the
-        // resource is `is_native()` from here on: every `set_unsafe_fallible`
+        // resource is `is_native()` from here on: every `set_unsafe`
         // below takes the propval-only branch and never materializes a Loro
         // state doc. That is exactly what keeps the commit's `loroUpdate`
         // (its signed payload) from being re-derived as a doc snapshot.
         let mut resource = Resource::new_instance(urls::COMMIT, store).await?;
         resource.set_subject(commit_subject);
-        resource.set_unsafe_fallible(
+        resource.set_unsafe(
             urls::SUBJECT.into(),
             Value::new(self.subject.as_str(), &DataType::AtomicUrl)?,
         )?;
         let classes = vec![urls::COMMIT.to_string()];
-        resource.set_unsafe_fallible(urls::IS_A.into(), classes.into())?;
-        resource.set_unsafe_fallible(
+        resource.set_unsafe(urls::IS_A.into(), classes.into())?;
+        resource.set_unsafe(
             urls::CREATED_AT.into(),
             Value::new(&self.created_at.to_string(), &DataType::Timestamp)?,
         )?;
-        resource.set_unsafe_fallible(
+        resource.set_unsafe(
             SIGNER.into(),
             Value::new(self.signer.as_str(), &DataType::AtomicUrl)?,
         )?;
         if let Some(destroy) = self.destroy {
             if destroy {
-                resource.set_unsafe_fallible(urls::DESTROY.into(), true.into())?;
+                resource.set_unsafe(urls::DESTROY.into(), true.into())?;
             }
         }
         if let Some(previous_commit) = &self.previous_commit {
-            resource.set_unsafe_fallible(
+            resource.set_unsafe(
                 urls::PREVIOUS_COMMIT.into(),
                 Value::AtomicUrl(previous_commit.clone().into()),
             )?;
         }
         if let Some(is_genesis) = self.is_genesis {
-            resource.set_unsafe_fallible(urls::IS_GENESIS.into(), is_genesis.into())?;
+            resource.set_unsafe(urls::IS_GENESIS.into(), is_genesis.into())?;
         }
         if let Some(loro_update) = &self.loro_update {
             if !loro_update.is_empty() {
-                resource.set_unsafe_fallible(
+                resource.set_unsafe(
                     urls::LORO_UPDATE.into(),
                     Value::LoroDoc(loro_update.clone()),
                 )?;
             }
         }
-        resource.set_unsafe_fallible(
+        resource.set_unsafe(
             SIGNER.into(),
             Value::new(self.signer.as_str(), &DataType::AtomicUrl)?,
         )?;
         if let Some(signature) = &self.signature {
-            resource.set_unsafe_fallible(urls::SIGNATURE.into(), signature.clone().into())?;
+            resource.set_unsafe(urls::SIGNATURE.into(), signature.clone().into())?;
         }
         Ok(resource)
     }
@@ -810,7 +810,7 @@ impl Commit {
     ) -> AtomicResult<String> {
         let mut commit_resource = self.into_resource(store).await?;
         // A deterministic serialization should not contain the hash (signature), since that would influence the hash.
-        commit_resource.remove_propval(urls::SIGNATURE);
+        commit_resource.remove_propval(urls::SIGNATURE)?;
 
         let is_genesis_flag = self.is_genesis == Some(true);
         let has_previous = self.previous_commit.is_some();
@@ -831,7 +831,7 @@ impl Commit {
         // must not be part of the signed bytes (circular dependency).
         // is_genesis stays in the bytes so both sides sign/verify the same content.
         if is_genesis_flag {
-            commit_resource.remove_propval(urls::SUBJECT);
+            commit_resource.remove_propval(urls::SUBJECT)?;
         }
         let json_obj = crate::serialize::propvals_to_json_ad_map(
             commit_resource.get_propvals(),
@@ -1221,16 +1221,20 @@ mod test {
         )
         .unwrap();
         let snapshot = doc.export_snapshot();
-        resource.set_unsafe(
-            crate::urls::LORO_UPDATE.into(),
-            Value::LoroDoc(snapshot),
-        );
+        resource
+            .set_unsafe(
+                crate::urls::LORO_UPDATE.into(),
+                Value::LoroDoc(snapshot),
+            )
+            .unwrap();
         resource.ensure_materialized().unwrap();
 
-        resource.set_unsafe(
-            FOLDER_PROP.into(),
-            Value::String("did:ad:folder:test".into()),
-        );
+        resource
+            .set_unsafe(
+                FOLDER_PROP.into(),
+                Value::String("did:ad:folder:test".into()),
+            )
+            .unwrap();
 
         let commit = resource
             .get_commit_builder()
@@ -1516,10 +1520,12 @@ mod test {
             .get_resource(&did_subject.as_str().into())
             .await
             .unwrap();
-        resource.set_unsafe(
-            crate::urls::DESCRIPTION.into(),
-            Value::new("v2", &DataType::Markdown).unwrap(),
-        );
+        resource
+            .set_unsafe(
+                crate::urls::DESCRIPTION.into(),
+                Value::new("v2", &DataType::Markdown).unwrap(),
+            )
+            .unwrap();
         let update = resource
             .get_commit_builder()
             .clone()
@@ -1641,14 +1647,18 @@ mod test {
         let subject = "https://localhost/loro_seeded_resource";
 
         let mut existing = Resource::new(subject.into());
-        existing.set_unsafe(
-            crate::urls::NAME.into(),
-            Value::String("Before delete".into()),
-        );
-        existing.set_unsafe(
-            crate::urls::DESCRIPTION.into(),
-            Value::String("Delete me".into()),
-        );
+        existing
+            .set_unsafe(
+                crate::urls::NAME.into(),
+                Value::String("Before delete".into()),
+            )
+            .unwrap();
+        existing
+            .set_unsafe(
+                crate::urls::DESCRIPTION.into(),
+                Value::String("Delete me".into()),
+            )
+            .unwrap();
 
         let base_doc = crate::loro::AtomicLoroDoc::new();
         base_doc
@@ -1697,14 +1707,18 @@ mod test {
 
         let drive_subject = "did:ad:test-drive";
         let mut drive = Resource::new(drive_subject.into());
-        drive.set_unsafe(
-            crate::urls::IS_A.into(),
-            Value::ResourceArray(vec![crate::urls::DRIVE.to_string().into()]),
-        );
-        drive.set_unsafe(
-            crate::urls::WRITE.into(),
-            Value::ResourceArray(vec![agent.subject.to_string().into()]),
-        );
+        drive
+            .set_unsafe(
+                crate::urls::IS_A.into(),
+                Value::ResourceArray(vec![crate::urls::DRIVE.to_string().into()]),
+            )
+            .unwrap();
+        drive
+            .set_unsafe(
+                crate::urls::WRITE.into(),
+                Value::ResourceArray(vec![agent.subject.to_string().into()]),
+            )
+            .unwrap();
         store.add_resource(&drive).await.unwrap();
 
         let mut builder = CommitBuilder::new("placeholder".into());
@@ -1742,10 +1756,12 @@ mod test {
         );
 
         let mut updated_resource = created.clone();
-        updated_resource.set_unsafe(
-            crate::urls::DESCRIPTION.into(),
-            Value::String("Second version".into()),
-        );
+        updated_resource
+            .set_unsafe(
+                crate::urls::DESCRIPTION.into(),
+                Value::String("Second version".into()),
+            )
+            .unwrap();
         let update = updated_resource
             .get_commit_builder()
             .clone()

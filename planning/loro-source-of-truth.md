@@ -272,32 +272,39 @@ The doc is the write target both in memory and on disk. `Resource.propvals`
 becomes a memoized projection of the doc; `Tree::Resources` becomes a
 rebuildable on-disk cache. No layer has a second source of truth.
 
-#### 2a — mutation is doc-first and fallible — **deferred (attempted, reverted)**
+#### 2a — mutation is doc-first and fallible — done
 
-> **Attempted and reverted.** Making `set_unsafe` materialize a doc for every
-> resource broke commit signing: a commit is a native, signed, immutable
-> resource, but `set_unsafe` gave the *commit resource* a Loro doc, and
-> `propvals_for_serialization` then re-derived the commit's `loroUpdate` field
-> from `doc.export_snapshot()`. A Loro snapshot embeds a random peer id, so
-> client-sign and server-verify produced different bytes → "Incorrect
-> signature for Commit". An `is_commit_did()` guard cannot fix this: the
-> commit's subject is a placeholder when the client signs and
-> `did:ad:commit:…` when the server verifies, so any subject-based gate makes
-> the two sides serialize differently.
->
-> **The real blocker is the serialization layer**, not the setters:
-> `propvals_for_serialization` injects `loroUpdate` whenever a doc exists.
-> Before 2a can land safely:
-> 1. Commit signing/verification must serialize the explicit `propvals`
->    only — never re-derive `loroUpdate` from `self.loro`.
-> 2. `loroUpdate` injection into JSON-AD must be an explicit transport
->    decision, not an automatic side-effect of "a doc exists".
->
-> Only then is making `set_unsafe` doc-first (and the ~120-call-site
-> fallibility sweep) safe. 2a is also not required for the disk/transport
-> vision — 2b/2c already deliver that. Best bundled with the legacy
-> `CommitBuilder` removal. The doc-first in-memory `Resource` is a real
-> redesign, deferred deliberately.
+The first attempt was reverted because making `set_unsafe` doc-first gave a
+*commit* resource a Loro doc, and `propvals_for_serialization` then re-derived
+the commit's signed `loroUpdate` from `doc.export_snapshot()` (random peer id →
+non-deterministic bytes → "Incorrect signature"). Done correctly this time in
+ordered steps:
+
+- [x] **Serialization prerequisite.** `Resource::is_native()` — true when a
+      resource's `loroUpdate` is a *signed payload* not a CRDT snapshot
+      (commits). It gates on `isA: Commit`, not the subject (a commit's
+      subject is a placeholder at sign time, `did:ad:commit:…` at verify
+      time). `propvals_for_serialization` injects a doc snapshot only for
+      non-native resources; commits keep their `loroUpdate` propval verbatim.
+      `build_state_doc` / `materialized_state` likewise gate on `is_native`.
+- [x] **Fallible doc-first setters.** `set_unsafe` / `remove_propval` now
+      materialize the live doc and apply the write with `?` — no `let _`
+      swallowing. Native (commit) resources stay propval-only and never get a
+      state doc; when `isA` itself is being set, the incoming value decides.
+      All ~84 non-test call sites migrated; `Commit::into_resource` sets
+      `isA: Commit` first so the commit is `is_native` for every write.
+- [x] **Doc continuity across `save` (the load-bearing fix).** The server's
+      apply path writes its own ops (`lastCommit`) under a fresh peer id. If
+      the client kept its pre-commit branch, the next edit was causally
+      *concurrent* with the server's state and every later commit re-merged
+      two divergent branches as LWW — silently dropping writes at random
+      (peer-id tiebreak; reproduced by `query_on_resource_arrays`).
+      `adopt_resource_state` now **imports** the server's post-commit doc into
+      the client's existing doc: one shared causal lineage, no divergence,
+      and the live `UndoManager` survives (a snapshot clone would discard it).
+- [x] Fixtures: `to_json_ad` now emits `loroUpdate` for every mutated
+      resource — `serialize::test` strips the non-deterministic snapshot
+      before comparing golden JSON-AD.
 
 #### 2b — `add_resource_opts`: snapshot + projection in one transaction — done
 

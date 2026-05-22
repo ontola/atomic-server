@@ -72,7 +72,7 @@ fn handle_bookmark_request<'a>(
         };
 
         let mut resource = Resource::new(subject.to_string());
-        resource.set_class(urls::BOOKMARK);
+        resource.set_class(urls::BOOKMARK)?;
         resource.set_string(urls::URL.into(), &path, store).await?;
 
         // Fetch the data and create a parser from it.

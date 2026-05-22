@@ -47,8 +47,8 @@ impl ResponseError for AtomicServerError {
             Some(res) => res.as_ref().clone(),
             None => {
                 let mut res = Resource::new("subject".into());
-                res.set_class(urls::ERROR);
-                res.set_unsafe(
+                let _ = res.set_class(urls::ERROR);
+                let _ = res.set_unsafe(
                     urls::DESCRIPTION.into(),
                     Value::String(self.message.clone()),
                 );
@@ -58,7 +58,7 @@ impl ResponseError for AtomicServerError {
 
         // Error class requires description; ensure it is always set so clients get valid JSON-AD.
         if r.get(urls::DESCRIPTION).is_err() {
-            r.set_unsafe(
+            let _ = r.set_unsafe(
                 urls::DESCRIPTION.into(),
                 Value::String(self.message.clone()),
             );
@@ -94,10 +94,12 @@ impl From<atomic_lib::errors::AtomicError> for AtomicServerError {
             .subject
             .clone()
             .unwrap_or_else(|| "unknown_subject".into());
+        let message = error.to_string();
+        let error_resource = error.into_resource(subject).ok().map(Box::new);
         AtomicServerError {
-            message: error.to_string(),
+            message,
             error_type,
-            error_resource: Some(Box::new(error.into_resource(subject))),
+            error_resource,
         }
     }
 }

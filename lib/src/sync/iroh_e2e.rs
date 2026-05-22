@@ -111,7 +111,8 @@ async fn folder_id_on(db: &Db, canvas: &str) -> Option<String> {
 async fn assign_folder(db: &Db, canvas: &str, folder: &str) {
     let mut r = db.get_resource(&canvas.into()).await.unwrap();
     r.ensure_materialized().unwrap();
-    r.set_unsafe(FOLDER_PROP.into(), crate::Value::String(folder.into()));
+    r.set_unsafe(FOLDER_PROP.into(), crate::Value::String(folder.into()))
+        .unwrap();
     r.save_locally(db).await.unwrap();
 }
 

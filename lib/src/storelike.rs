@@ -380,7 +380,11 @@ pub trait Storelike: Sized + Send + Sync {
                     Some(async move {
                         match self.get_resource(&result_subject.as_str().into()).await {
                             Ok(r) => r,
-                            Err(err) => err.into_resource(result_subject.to_string()),
+                            Err(err) => err
+                                .into_resource(result_subject.to_string())
+                                .unwrap_or_else(|_| {
+                                    Resource::new(result_subject.to_string())
+                                }),
                         }
                     })
                 } else {

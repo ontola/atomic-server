@@ -87,10 +87,10 @@ async fn test_multi_client_gallery_sync() -> AtomicResult<()> {
     let canvas_subject_str = format!("{}/paragraph/{}", server_url, atomic_lib::utils::random_string(10));
     let canvas_subject: atomic_lib::Subject = canvas_subject_str.clone().into();
     let mut canvas_res = atomic_lib::Resource::new(canvas_subject_str);
-    canvas_res.set_unsafe(atomic_lib::urls::IS_A.into(), vec![atomic_lib::urls::PARAGRAPH].into());
-    canvas_res.set_unsafe(atomic_lib::urls::PARENT.into(), drive_subject.clone().into());
-    canvas_res.set_name("Tablet Canvas");
-    canvas_res.set_unsafe(atomic_lib::urls::DESCRIPTION.into(), atomic_lib::Value::String("A test canvas".into()));
+    canvas_res.set_unsafe(atomic_lib::urls::IS_A.into(), vec![atomic_lib::urls::PARAGRAPH].into())?;
+    canvas_res.set_unsafe(atomic_lib::urls::PARENT.into(), drive_subject.clone().into())?;
+    canvas_res.set_name("Tablet Canvas")?;
+    canvas_res.set_unsafe(atomic_lib::urls::DESCRIPTION.into(), atomic_lib::Value::String("A test canvas".into()))?;
     let response = canvas_res.save_locally(&db_a).await?;
 
     // Push commit to server
@@ -116,7 +116,7 @@ async fn test_multi_client_gallery_sync() -> AtomicResult<()> {
 
     // 3. Tablet edits the canvas (stroke)
     let mut canvas = db_a.get_resource(&canvas_subject).await?;
-    canvas.set_name("Tablet Canvas (Edited)");
+    canvas.set_name("Tablet Canvas (Edited)")?;
     let response_edit = canvas.save_locally(&db_a).await?;
     let commit_json_edit = atomic_lib::client::commit_to_wire_json(&response_edit.commit, &db_a).await?;
     ws_a.post_commit(2, &commit_json_edit).await?;

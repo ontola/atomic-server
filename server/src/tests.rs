@@ -146,19 +146,27 @@ async fn server_tests() {
 
     // Resources with server-side Loro state should expose their snapshot in JSON-AD
     let mut loro_resource = atomic_lib::Resource::new("/loro-sync-test".into());
-    loro_resource.set_unsafe(
-        urls::READ.into(),
-        vec![appstate.store.get_default_agent().unwrap().subject.clone()].into(),
-    );
-    loro_resource.set_unsafe(
-        urls::WRITE.into(),
-        vec![appstate.store.get_default_agent().unwrap().subject.clone()].into(),
-    );
-    loro_resource.set_unsafe(urls::NAME.into(), "Loro Sync Test".to_string().into());
-    loro_resource.set_unsafe(
-        urls::DESCRIPTION.into(),
-        atomic_lib::Value::String("Synced through CRDT".into()),
-    );
+    loro_resource
+        .set_unsafe(
+            urls::READ.into(),
+            vec![appstate.store.get_default_agent().unwrap().subject.clone()].into(),
+        )
+        .unwrap();
+    loro_resource
+        .set_unsafe(
+            urls::WRITE.into(),
+            vec![appstate.store.get_default_agent().unwrap().subject.clone()].into(),
+        )
+        .unwrap();
+    loro_resource
+        .set_unsafe(urls::NAME.into(), "Loro Sync Test".to_string().into())
+        .unwrap();
+    loro_resource
+        .set_unsafe(
+            urls::DESCRIPTION.into(),
+            atomic_lib::Value::String("Synced through CRDT".into()),
+        )
+        .unwrap();
     loro_resource.ensure_materialized().unwrap();
     store
         .add_resource_opts(&loro_resource, false, true, true)
@@ -356,7 +364,7 @@ async fn test_did_agent_edit() {
     // 2. Setup onboarding: create a drive and map it
     let drive_did = "did:ad:test-drive";
     let mut drive = Resource::new(drive_did.into());
-    drive.set_class(urls::DRIVE);
+    drive.set_class(urls::DRIVE).unwrap();
     drive
         .set(
             urls::READ.into(),
@@ -383,12 +391,16 @@ async fn test_did_agent_edit() {
     // 3. Setup the agent resource manually in the store
     let mut agent_res = agent.to_resource().unwrap();
     agent_res.set_subject(agent_did.clone());
-    agent_res.set_unsafe(urls::NAME.into(), Value::String("Initial Name".into()));
+    agent_res
+        .set_unsafe(urls::NAME.into(), Value::String("Initial Name".into()))
+        .unwrap();
     // Dummy last commit to avoid genesis trigger
-    agent_res.set_unsafe(
-        urls::LAST_COMMIT.into(),
-        Value::AtomicUrl("dummy-initial-commit".into()),
-    );
+    agent_res
+        .set_unsafe(
+            urls::LAST_COMMIT.into(),
+            Value::AtomicUrl("dummy-initial-commit".into()),
+        )
+        .unwrap();
     appstate
         .store
         .add_resource_opts(&agent_res, false, false, true)

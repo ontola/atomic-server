@@ -161,14 +161,14 @@ impl InviteToken {
         // 2. Verify signature
         // We construct a temporary resource to use atomic_lib's validation logic
         let mut resource = Resource::new("local:invite".into());
-        resource.set_unsafe(urls::TARGET.into(), Value::AtomicUrl(self.target.clone()));
-        resource.set_unsafe(urls::WRITE_BOOL.into(), Value::Boolean(self.write));
-        resource.set_unsafe(urls::EXPIRES_AT.into(), Value::Timestamp(self.expires_at));
-        resource.set_unsafe(urls::SIGNER.into(), Value::AtomicUrl(self.signer.clone()));
+        resource.set_unsafe(urls::TARGET.into(), Value::AtomicUrl(self.target.clone()))?;
+        resource.set_unsafe(urls::WRITE_BOOL.into(), Value::Boolean(self.write))?;
+        resource.set_unsafe(urls::EXPIRES_AT.into(), Value::Timestamp(self.expires_at))?;
+        resource.set_unsafe(urls::SIGNER.into(), Value::AtomicUrl(self.signer.clone()))?;
         resource.set_unsafe(
             urls::SIGNATURE.into(),
             Value::String(self.signature.clone()),
-        );
+        )?;
 
         // We need to verify that the signer signed this data.
         // atomic_lib::commit::Commit::validate_signature uses a similar logic.
