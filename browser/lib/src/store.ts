@@ -447,6 +447,53 @@ export class Store {
   public setClientDb(clientDb: ClientDbWorker): void {
     this.clientDb = clientDb;
     this.emitSyncStatus();
+    // Rebuild the in-memory local search index from the persistent
+    // ClientDb. `LocalSearch` (MiniSearch) lives only in memory, so every
+    // page load starts it empty — without this, offline search after a
+    // reload finds only resources that happen to have been re-loaded into
+    // the store, not the whole local dataset. Runs in the background so it
+    // never blocks startup.
+    void this.rehydrateLocalSearch(clientDb);
+  }
+
+  /** Populate `localSearch` from every resource persisted in the ClientDb. */
+  private async rehydrateLocalSearch(clientDb: ClientDbWorker): Promise<void> {
+    try {
+      const ready = await clientDb.waitForReady();
+
+      if (!ready) {
+        return;
+      }
+
+      const exported = await clientDb.exportAllResources();
+      const parsed = JSON.parse(exported);
+
+      if (!Array.isArray(parsed)) {
+        return;
+      }
+
+      for (const obj of parsed) {
+        const subject = obj?.['@id'];
+
+        if (typeof subject !== 'string') {
+          continue;
+        }
+
+        const resource = new Resource(subject);
+        resource.applyHydratedValues(
+          Object.entries(obj).filter(([key]) => key !== '@id') as [
+            string,
+            JSONValue,
+          ][],
+        );
+        resource.loading = false;
+        // `addResource` is dedup-safe, so overlap with resources already
+        // indexed via the normal ingest path is harmless.
+        this.localSearch.addResource(resource);
+      }
+    } catch (e) {
+      console.warn('[Store] local search rehydration failed:', e);
+    }
   }
 
   /** Returns the ClientDbWorker if one has been set (may still be initializing). */
