@@ -456,10 +456,37 @@ export class Store {
     void this.rehydrateLocalSearch(clientDb);
   }
 
+  /**
+   * The drive a resource belongs to — the root of its `parent` chain,
+   * resolved against the in-memory store. Used to partition the local
+   * search index per drive.
+   */
+  private driveOf(subject: string): string {
+    let current = subject;
+    const seen = new Set<string>();
+
+    for (let i = 0; i < 64; i++) {
+      if (seen.has(current)) break;
+
+      seen.add(current);
+      const parent = this.resources.get(current)?.get(core.properties.parent);
+
+      if (typeof parent !== 'string' || !parent || parent === current) {
+        return current;
+      }
+
+      current = parent;
+    }
+
+    return current;
+  }
+
   /** Populate `localSearch` from every resource persisted in the ClientDb. */
   private async rehydrateLocalSearch(clientDb: ClientDbWorker): Promise<void> {
     try {
+      console.debug('[search] rehydrate: waiting for ClientDb ready…');
       const ready = await clientDb.waitForReady();
+      console.debug('[search] rehydrate: ClientDb ready =', ready);
 
       if (!ready) {
         return;
@@ -467,10 +494,50 @@ export class Store {
 
       const exported = await clientDb.exportAllResources();
       const parsed = JSON.parse(exported);
+      console.debug(
+        '[search] rehydrate: exportAllResources →',
+        Array.isArray(parsed) ? `${parsed.length} resources` : typeof parsed,
+      );
 
       if (!Array.isArray(parsed)) {
         return;
       }
+
+      // Build a subject→parent map over the whole export so each resource's
+      // drive (root of the chain) resolves even when ancestors are not in
+      // the in-memory store yet.
+      const parentOf = new Map<string, string>();
+
+      for (const obj of parsed) {
+        const subject = obj?.['@id'];
+        const parent = obj?.[core.properties.parent];
+
+        if (typeof subject === 'string' && typeof parent === 'string') {
+          parentOf.set(subject, parent);
+        }
+      }
+
+      const driveOf = (subject: string): string => {
+        let current = subject;
+        const seen = new Set<string>();
+
+        for (let i = 0; i < 64; i++) {
+          if (seen.has(current)) break;
+
+          seen.add(current);
+          const parent = parentOf.get(current);
+
+          if (!parent || parent === current) {
+            return current;
+          }
+
+          current = parent;
+        }
+
+        return current;
+      };
+
+      let indexed = 0;
 
       for (const obj of parsed) {
         const subject = obj?.['@id'];
@@ -487,12 +554,21 @@ export class Store {
           ][],
         );
         resource.loading = false;
+        const before = this.localSearch.size;
         // `addResource` is dedup-safe, so overlap with resources already
         // indexed via the normal ingest path is harmless.
-        this.localSearch.addResource(resource);
+        this.localSearch.addResource(resource, driveOf(subject));
+
+        if (this.localSearch.size > before) {
+          indexed++;
+        }
       }
+
+      console.debug(
+        `[search] rehydrate: done — indexed=${indexed} totalSize=${this.localSearch.size}`,
+      );
     } catch (e) {
-      console.warn('[Store] local search rehydration failed:', e);
+      console.warn('[search] rehydrate FAILED:', e);
     }
   }
 
@@ -1031,9 +1107,13 @@ export class Store {
     }
     const emitResource = storeResource ?? resource.__internalObject;
 
-    // Update local full-text search index.
+    // Update local full-text search index, partitioned by the resource's
+    // drive (root of its parent chain).
     if (!resource.loading && !resource.new) {
-      this.localSearch.addResource(resource);
+      this.localSearch.addResource(
+        resource,
+        this.driveOf(resource.subject),
+      );
     }
 
     // Atomic put queued BEFORE notify. The worker's serialised
@@ -1229,27 +1309,69 @@ export class Store {
   }
 
   public async search(query: string, opts: SearchOpts = {}): Promise<string[]> {
+    // The local search index is partitioned per drive. The `parents` scope
+    // the overlay passes is either the drive itself or a folder inside it;
+    // resolve it up to the drive so the right partition is searched.
+    const searchDrive = this.driveOf(
+      opts.parents ?? this.getDrive() ?? '',
+    );
+    console.debug('[search] search()', {
+      query,
+      hasFilters: !!opts.filters,
+      parents: opts.parents,
+      searchDrive,
+      driveIndexSize: this.localSearch.sizeForDrive(searchDrive),
+      serverConnected: this._serverConnected,
+    });
+
     // Try local search first if the index has content and no filters are set.
     // Filters (property-value constraints) require server-side Tantivy for now.
-    if (this.localSearch.size > 0 && !opts.filters && !opts.parents) {
-      const local = this.localSearch.search(query, opts.limit ?? 30);
+    if (
+      this.localSearch.sizeForDrive(searchDrive) > 0 &&
+      !opts.filters &&
+      !opts.parents
+    ) {
+      const local = this.localSearch.search(
+        query,
+        searchDrive,
+        opts.limit ?? 30,
+      );
+      console.debug('[search] local (unscoped) →', local.subjects.length);
 
       if (local.subjects.length > 0) {
         return local.subjects;
       }
     }
 
-    // When offline, return local results (even if empty) — don't hit the server.
+    // When offline, the server's filtered Tantivy search is unreachable.
+    // Fall back to the drive's local index — `filters` (property-value
+    // constraints) can't be honoured client-side, but the per-drive
+    // partition still scopes results to the drive being browsed. The
+    // search overlay always passes `parents: <drive>`, so without this
+    // fallback offline search would never consult the local index at all.
     if (!this._serverConnected) {
-      return [];
+      const offline = this.localSearch.search(
+        query,
+        searchDrive,
+        opts.limit ?? 30,
+      );
+      console.debug(
+        '[search] OFFLINE local fallback →',
+        offline.subjects.length,
+        offline.subjects,
+      );
+
+      return offline.subjects;
     }
 
     // Fall back to server search (Tantivy)
     const searchSubject = buildSearchSubject(this.serverUrl, query, opts);
+    console.debug('[search] server search →', searchSubject);
     const searchResource = await this.fetchResourceFromServer(searchSubject, {
       noWebSocket: true,
     });
     const results = searchResource.get(server.properties.results) ?? [];
+    console.debug('[search] server search returned', results.length);
 
     return results;
   }
