@@ -152,4 +152,45 @@ test.describe('search', async () => {
     ).toHaveCount(0);
     await page.keyboard.press('Escape');
   });
+
+  // Offline search must resolve from the client-side MiniSearch index
+  // (`LocalSearch`) — no server round-trip. A regression here makes search
+  // silently return nothing while disconnected.
+  test('search works offline against the local index', async ({
+    page,
+    context,
+  }) => {
+    test.slow();
+
+    // Create a folder with a distinctive name while online.
+    const unique = `OfflineFindable-${timestamp()}`;
+    await sidebarNewResourceButton(page).click();
+    await page.locator('button:has-text("folder")').click();
+    await setTitle(page, unique);
+
+    // It must be in the store (and therefore the local search index) before
+    // we cut the connection.
+    await expect(
+      page.getByTestId('sidebar').getByText(unique),
+    ).toBeVisible({ timeout: 10000 });
+
+    // Go offline: block the network and close the WebSocket.
+    await context.setOffline(true);
+    await page.evaluate(() => {
+      (window as unknown as { store?: { getDefaultWebSocket(): { close(): void } | undefined } })
+        .store?.getDefaultWebSocket()
+        ?.close();
+    });
+    await page.waitForFunction(
+      () => (window as any).store?.getSyncStatus()?.serverConnected === false,
+      undefined,
+      { timeout: 15000 },
+    );
+
+    // Search while offline — must surface the folder from the local index.
+    await typeInSearch(page, unique);
+    await expect(
+      page.locator('[data-index]').filter({ hasText: unique }).first(),
+    ).toBeVisible({ timeout: 10000 });
+  });
 });
