@@ -5220,3 +5220,7 @@ msgstr ""
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Draw with left click · Pan with Alt+drag or middle mouse · Scroll to zoom"
 msgstr ""
+
+#: src/views/Drive/DrivePage.tsx
+msgid "Resources"
+msgstr ""
