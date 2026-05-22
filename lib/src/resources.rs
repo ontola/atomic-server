@@ -433,14 +433,41 @@ impl Resource {
         &self.propvals
     }
 
+    /// True for resources whose `loroUpdate` is a *signed payload*, not a CRDT
+    /// snapshot of their own state — i.e. commits. Such resources are never
+    /// given a live `loro` state doc, and their `loroUpdate` propval is
+    /// serialized verbatim, never re-derived from a doc.
+    ///
+    /// Discriminates on `isA: Commit` rather than the subject: a commit's
+    /// subject is a placeholder (`did:ad:genesis`) at client-sign time and
+    /// `did:ad:commit:…` only at server-verify time, so a subject-based gate
+    /// would make the two sides serialize different bytes. `isA` is present
+    /// and stable from the moment the commit resource is built.
+    pub(crate) fn is_native(&self) -> bool {
+        if self.subject.is_commit_did() {
+            return true;
+        }
+        self.propvals
+            .get(urls::IS_A)
+            .and_then(|is_a| is_a.to_subjects(None).ok())
+            .is_some_and(|classes| classes.iter().any(|c| c == urls::COMMIT))
+    }
+
     fn propvals_for_serialization(&self) -> PropVals {
         let mut propvals = self.propvals.clone();
 
-        if let Some(doc) = &self.loro {
-            propvals.insert(
-                urls::LORO_UPDATE.into(),
-                Value::LoroDoc(doc.export_snapshot()),
-            );
+        // Inject the live doc's snapshot as `loroUpdate` for transport — but
+        // ONLY for CRDT resources. A commit's `loroUpdate` is its signed
+        // payload; re-deriving it from a doc (whose snapshot embeds a random
+        // peer id) would make the serialized bytes non-deterministic and
+        // break signature verification. Commits keep their propval verbatim.
+        if !self.is_native() {
+            if let Some(doc) = &self.loro {
+                propvals.insert(
+                    urls::LORO_UPDATE.into(),
+                    Value::LoroDoc(doc.export_snapshot()),
+                );
+            }
         }
 
         propvals
@@ -1560,6 +1587,34 @@ mod test {
             json.contains("Server-side snapshot"),
             "serialized JSON-AD should still include materialized properties"
         );
+    }
+
+    #[tokio::test]
+    async fn commit_loro_update_is_not_re_derived_from_doc() {
+        // A commit resource's `loroUpdate` is its signed payload. Even with a
+        // live `loro` doc attached, serialization must emit that payload
+        // verbatim — re-deriving from a doc snapshot (random peer id) would
+        // make the bytes non-deterministic and break signature verification.
+        let _store: crate::Db = init_store().await;
+        let mut resource = Resource::new("did:ad:commit:test-signature".into());
+        resource.set_unsafe(urls::IS_A.into(), vec![urls::COMMIT.to_string()].into());
+        let signed_payload: Vec<u8> = vec![9, 8, 7, 6, 5, 4, 3, 2, 1];
+        resource.set_unsafe(
+            urls::LORO_UPDATE.into(),
+            Value::LoroDoc(signed_payload.clone()),
+        );
+        assert!(resource.is_native(), "a Commit-class resource is native");
+
+        // Attach a live doc — its snapshot differs from the signed payload.
+        resource.ensure_materialized().unwrap();
+
+        match resource.propvals_for_serialization().get(urls::LORO_UPDATE) {
+            Some(Value::LoroDoc(bytes)) => assert_eq!(
+                bytes, &signed_payload,
+                "commit loroUpdate must stay the signed payload, not a doc snapshot"
+            ),
+            other => panic!("expected the verbatim LoroDoc payload, got {other:?}"),
+        }
     }
 
     #[tokio::test]
