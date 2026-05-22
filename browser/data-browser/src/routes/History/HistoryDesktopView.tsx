@@ -6,6 +6,7 @@ import { Column, Row } from '../../components/Row';
 import { Title } from '../../components/Title';
 import { VersionTitle } from './VersionTitle';
 import { VersionScroller } from './VersionScroller';
+import { VersionContent } from './VersionContent';
 
 export function HistoryDesktopView({
   resource,
@@ -40,6 +41,7 @@ export function HistoryDesktopView({
                       </PropertyRow>
                     ))}
                 </PropertiesList>
+                <VersionContent containers={selectedVersion.containers} />
               </StyledCard>
               <Row>
                 <Button onClick={onVersionAccept} disabled={isCurrentVersion}>

@@ -1152,18 +1152,28 @@ export class Resource<C extends OptionalClass = any> {
       contentKey: string;
       step: Step;
       propvals: Map<string, JSONValue>;
+      containers: Map<string, JSONValue>;
     };
     const grouped: GroupedVersion[] = [];
 
-    /** Stable signature of the propvals minus `lastCommit`, used to detect
-     *  versions that represent the same observable state arrived at from
-     *  different peers (e.g. the same snapshot reimported during sync). */
-    const contentSignature = (pv: Map<string, JSONValue>): string => {
-      const entries = Array.from(pv.entries())
+    /** Stable signature of propvals (minus `lastCommit`) plus other top-level
+     *  containers, used to detect versions that represent the same observable
+     *  state arrived at from different peers (e.g. the same snapshot
+     *  reimported during sync). Including containers is what lets body-only
+     *  edits register as distinct versions instead of collapsing into the
+     *  previous propvals-identical bucket. */
+    const contentSignature = (
+      pv: Map<string, JSONValue>,
+      ct: Map<string, JSONValue>,
+    ): string => {
+      const propEntries = Array.from(pv.entries())
         .filter(([k]) => k !== lastCommitProp)
         .sort(([a], [b]) => a.localeCompare(b));
+      const containerEntries = Array.from(ct.entries()).sort(([a], [b]) =>
+        a.localeCompare(b),
+      );
 
-      return JSON.stringify(entries);
+      return JSON.stringify([propEntries, containerEntries]);
     };
 
     for (const step of steps) {
@@ -1177,15 +1187,32 @@ export class Resource<C extends OptionalClass = any> {
         continue;
       }
 
-      const propsMap = doc.getMap('properties');
+      // Materialize *the whole doc* at this version, not just `properties`.
+      // The `properties` root holds Atomic propvals; loro-prosemirror writes
+      // a Document's body into a separate top-level `doc` root container.
+      // Reading only `properties` is why the history page silently dropped
+      // every document-body edit, surfacing only title/metadata changes.
+      const fullJson = doc.toJSON() as
+        | Record<string, JSONValue>
+        | null
+        | undefined;
       const propvals = new Map<string, JSONValue>();
+      const containers = new Map<string, JSONValue>();
 
-      if (propsMap) {
-        const json = propsMap.toJSON();
-
-        if (json && typeof json === 'object') {
-          for (const [key, value] of Object.entries(json)) {
-            propvals.set(key, value as JSONValue);
+      if (fullJson && typeof fullJson === 'object') {
+        for (const [key, value] of Object.entries(fullJson)) {
+          if (key === 'properties') {
+            if (value && typeof value === 'object' && !Array.isArray(value)) {
+              for (const [pk, pv] of Object.entries(
+                value as Record<string, JSONValue>,
+              )) {
+                propvals.set(pk, pv);
+              }
+            }
+          } else if (key !== 'datatypes') {
+            // `datatypes` is internal property-type metadata, not content
+            // anyone should see in a history view.
+            containers.set(key, value);
           }
         }
       }
@@ -1194,13 +1221,14 @@ export class Resource<C extends OptionalClass = any> {
       // bucket. The latest entry per bucket wins — that's the final saved
       // state under that commit.
       const lastCommitKey = String(propvals.get(lastCommitProp) ?? '');
-      const cKey = contentSignature(propvals);
+      const cKey = contentSignature(propvals, containers);
 
       const existing = grouped.find(g => g.lastCommitKey === lastCommitKey);
 
       if (existing) {
         existing.step = step;
         existing.propvals = propvals;
+        existing.containers = containers;
         existing.contentKey = cKey;
       } else {
         grouped.push({
@@ -1208,6 +1236,7 @@ export class Resource<C extends OptionalClass = any> {
           contentKey: cKey,
           step,
           propvals,
+          containers,
         });
       }
     }
@@ -1237,6 +1266,7 @@ export class Resource<C extends OptionalClass = any> {
       ],
       message: g.step.message,
       propvals: g.propvals,
+      containers: g.containers,
     }));
 
     return versions;
@@ -1245,6 +1275,14 @@ export class Resource<C extends OptionalClass = any> {
   /**
    * Sets the resource to the specified version and saves it.
    * @param version The version to set the resource to, you can get this using `resource.getHistory()`
+   *
+   * NOTE: restores **propvals only**. Top-level Loro containers in
+   * `version.containers` (most importantly the `doc` body for Documents) are
+   * not replayed back into the live doc, so restoring a historical version
+   * leaves the body at its current state. A complete restore needs to
+   * either checkout the historical frontiers and re-export, or import a
+   * targeted snapshot of each container — distinct work from this view-side
+   * fix.
    */
   public async setVersion(version: Version): Promise<void> {
     // Remove any prop that doesn't exist in this version
@@ -2189,6 +2227,10 @@ export interface Version {
   message?: string;
   /** Materialized property values at this version */
   propvals: Map<string, JSONValue>;
+  /** Top-level Loro containers besides `properties` at this version — most
+   *  notably `doc`, the loro-prosemirror rich-text root that holds a
+   *  Document's body. Empty when the resource has no extra containers. */
+  containers: Map<string, JSONValue>;
 }
 
 /** Returns true if the error is a network/fetch failure (server unreachable). */
