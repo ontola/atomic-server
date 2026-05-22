@@ -79,6 +79,23 @@ export async function openSearchOverlay(page: Page) {
  * across re-opens in the same page session.
  */
 export async function typeInSearch(page: Page, text: string) {
+  // The search overlay re-renders as results stream in — its input node can
+  // be detached and replaced mid-`fill` ("element was detached from the
+  // DOM"). Retry against a freshly-resolved locator until the value sticks.
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const input = await openSearchOverlay(page);
+    const ok = await input
+      .fill(text)
+      .then(() => input.inputValue())
+      .then(value => value === text)
+      .catch(() => false);
+
+    if (ok) {
+      return;
+    }
+  }
+
+  // Final attempt — surface the error if the input is still unstable.
   const input = await openSearchOverlay(page);
   await input.fill(text);
 }
