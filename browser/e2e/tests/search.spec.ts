@@ -188,9 +188,16 @@ test.describe('search', async () => {
     );
 
     // Search while offline — must surface the folder from the local index.
+    // Exclude the "Start AI Chat with …" fallback row: it echoes the query
+    // text, so a plain `hasText` match would pass even with zero real
+    // results.
     await typeInSearch(page, unique);
     await expect(
-      page.locator('[data-index]').filter({ hasText: unique }).first(),
+      page
+        .locator('[data-index]')
+        .filter({ hasText: unique })
+        .filter({ hasNotText: 'Start AI Chat' })
+        .first(),
     ).toBeVisible({ timeout: 10000 });
   });
 });

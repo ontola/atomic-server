@@ -139,10 +139,15 @@ describe('Store', () => {
     // `setClientDb` must rebuild it from the persistent ClientDb so a
     // reloaded, offline session can still search its whole local dataset.
     const store = new Store({ serverUrl: 'https://atomicdata.dev' });
+    const driveSubject = 'https://atomicdata.dev/test-drive';
     const subject = 'https://atomicdata.dev/offline-search-target';
     const name = 'ZephyrQuokkaOfflineTarget';
     const exported = JSON.stringify([
-      { '@id': subject, [core.properties.name]: name },
+      {
+        '@id': subject,
+        [core.properties.name]: name,
+        [core.properties.parent]: driveSubject,
+      },
     ]);
 
     const fakeClientDb = {
@@ -163,7 +168,7 @@ describe('Store', () => {
 
     for (let i = 0; i < 100 && results.length === 0; i++) {
       await new Promise(resolve => setTimeout(resolve, 10));
-      results = await store.search(name);
+      results = await store.search(name, { parents: driveSubject });
     }
 
     expect(results).toContain(subject);
