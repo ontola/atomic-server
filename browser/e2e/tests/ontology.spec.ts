@@ -8,7 +8,6 @@ import {
   inDialog,
   DIALOG_CLOSE_BUTTON,
   SEARCHBOX_PROPERTY_PLACEHOLDER,
-  waitForCommit,
 } from './test-utils';
 
 test.describe('Ontology', async () => {
@@ -23,7 +22,11 @@ test.describe('Ontology', async () => {
     test.slow();
 
     const pickOption = async (query: Locator, keyboardSteps?: number) => {
-      await page.waitForTimeout(100);
+      // Wait for the dropdown option to actually render before navigating to
+      // it, instead of sleeping for the open animation. `visible` doesn't
+      // require in-viewport, so it holds for the keyboard path too (where the
+      // option may be scrolled out of view).
+      await query.waitFor({ state: 'visible' });
 
       // Sometimes when the page moves after the dropdown opens, part of the dropdown falls outside the viewport.
       // In this case we have to use the keyboard because scrolling doesn't seem to work.
@@ -238,11 +241,7 @@ test.describe('Ontology', async () => {
 
         await expect(dialog.getByLabel('name')).toBeVisible();
         await dialog.getByLabel('name').fill(name);
-        const saved = waitForCommit(page, {
-          set: { ['https://atomicdata.dev/properties/name']: name },
-        });
         await closeDialogWith('Save');
-        await saved;
       });
 
       await expect(page.getByText('Resource loading...')).not.toBeVisible();

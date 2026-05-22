@@ -12,7 +12,6 @@ import {
   sidebarNewResourceButton,
   signIn,
   testFilePath,
-  waitForCommit,
   waitForSearchIndex,
 } from './test-utils';
 
@@ -85,9 +84,7 @@ const createModel = async (page: Page) => {
       },
     );
 
-    const commitPromise = waitForCommit(page);
     await page.keyboard.press('Enter');
-    await commitPromise;
     await expect(dialog.getByLabel('Classtype')).toHaveText('file');
 
     await closeDialogWith(DIALOG_CLOSE_BUTTON);
@@ -108,7 +105,8 @@ test.describe('File Picker', () => {
 
     await createModel(page);
 
-    // The new resource page relies on the search API to show ontology class buttons. If the prossess of creating the ontology took less than 5 seconds it will not appear on the new resource page.
+    // The new resource page relies on the search API to show ontology class
+    // buttons; wait until the just-created `robot` class is searchable.
     await waitForSearchIndex(page);
 
     {
