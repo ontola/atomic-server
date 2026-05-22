@@ -27,14 +27,42 @@ async function waitForConnected(page: import('@playwright/test').Page) {
 
 /** Wait for all dirty resources to be synced (pendingDirtyCount === 0). */
 async function waitForSynced(page: import('@playwright/test').Page) {
-  await page.waitForFunction(
-    () => {
-      const status = (window as any).store?.getSyncStatus();
-      return status?.serverConnected && status?.pendingDirtyCount === 0;
-    },
-    undefined,
-    { timeout: 30000 },
-  );
+  try {
+    await page.waitForFunction(
+      () => {
+        const status = (window as any).store?.getSyncStatus();
+        return status?.serverConnected && status?.pendingDirtyCount === 0;
+      },
+      undefined,
+      { timeout: 30000 },
+    );
+  } catch (e) {
+    // Surface WHY sync didn't settle. A stuck `pendingDirtyCount` means
+    // an outbox entry's post keeps throwing — `lastAttemptError` carries
+    // the server's rejection reason, which is otherwise invisible.
+    const diag = await page
+      .evaluate(() => {
+        const store = (window as any).store;
+        const status = store?.getSyncStatus();
+        const entries = (store?.outbox?.pending?.() ?? []).map((entry: any) => ({
+          subject: entry.subject,
+          commitCount: entry.commits?.length,
+          commits: (entry.commits ?? []).map((c: any) => ({
+            signature: c.signature,
+            previousCommit: c.previousCommit,
+            setKeys: c.set ? Object.keys(c.set) : undefined,
+            destroy: c.destroy,
+          })),
+          lastAttemptError: entry.lastAttemptError,
+        }));
+
+        return { status, entries };
+      })
+      .catch(() => undefined);
+    throw new Error(
+      `waitForSynced timed out. Outbox diagnostics: ${JSON.stringify(diag)}`,
+    );
+  }
 }
 
 /** Wait for the server's search index to process a commit (polls search endpoint). */

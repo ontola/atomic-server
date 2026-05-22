@@ -1033,15 +1033,40 @@ export async function inDialog(
   await waitForCurrentDialog(page);
 
   const closeDialogWith = async (buttonText: string) => {
-    const dialog = currentDialog(page);
+    const button =
+      buttonText === DIALOG_CLOSE_BUTTON
+        ? currentDialog(page).getByRole('button', { name: 'Close' })
+        : currentDialog(page).locator('footer button', { hasText: buttonText });
 
-    if (buttonText === DIALOG_CLOSE_BUTTON) {
-      await dialog.getByRole('button', { name: 'Close' }).click();
+    // The dialog footer re-renders while an async commit settles — the
+    // Save/Create button is detached and replaced under Playwright's
+    // click ("element is not stable" / "element was detached from the
+    // DOM"). A single click then races that churn and times out.
+    //
+    // Retry the click while the dialog is still open: every
+    // `closeDialogWith` call is meant to dismiss the dialog, so a click
+    // that took effect closes it (and further clicks hit nothing), while
+    // a click that lost the detach race leaves it open for another try.
+    // Bounded, so a genuinely stuck dialog still fails loudly.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (await currentDialog(page).isHidden()) {
+        return;
+      }
 
-      return;
+      await expect(button).toBeEnabled();
+      await button.click({ timeout: 10000 }).catch(() => undefined);
+
+      const closed = await currentDialog(page)
+        .waitFor({ state: 'hidden', timeout: 4000 })
+        .then(() => true)
+        .catch(() => false);
+
+      if (closed) {
+        return;
+      }
     }
 
-    const button = dialog.locator('footer button', { hasText: buttonText });
+    // Final attempt — no catch, so a still-stuck dialog surfaces the error.
     await expect(button).toBeEnabled();
     await button.click();
   };
