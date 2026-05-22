@@ -704,26 +704,12 @@ export class Store {
       return;
     }
     const endpoint = new URL('/commit', this.serverUrl).toString();
+    // Re-posting a commit the server already applied is safe: the server
+    // detects the idempotent replay (the commit's Loro ops are already in
+    // the resource's oplog) and accepts it. Only a genuine causality
+    // failure throws — and that must propagate, not be swallowed.
     for (const commit of entry.commits) {
-      try {
-        await this.postCommit(commit, endpoint);
-      } catch (e) {
-        // A commit the server rejects as producing no state changes is
-        // already applied — re-posting it is an idempotent no-op (this
-        // happens when the outbox still holds commits that synced over a
-        // different transport, or that a peer already merged). Treat it
-        // as synced and continue draining: stranding the whole entry on
-        // it would block every genuinely-unsynced commit behind it.
-        const msg = e instanceof Error ? e.message : String(e);
-        if (msg.includes('produced no state changes')) {
-          console.warn(
-            `[Outbox] commit ${commit.signature?.slice(0, 8)} already applied (no-op), skipping`,
-          );
-          continue;
-        }
-
-        throw e;
-      }
+      await this.postCommit(commit, endpoint);
     }
     // Mirror Resource.pushCommits' post-ack blob push. When an upload
     // races a network outage the commit POST fails, bytes land in the
