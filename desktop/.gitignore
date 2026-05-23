@@ -8,4 +8,7 @@ WixTools
 /gen/android/app/build/
 /gen/android/app/src/main/jniLibs/
 
+# Auto-generated Android Studio project files
+/gen/android/.idea/
+
 /dist/
