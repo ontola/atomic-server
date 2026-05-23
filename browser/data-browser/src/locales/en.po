@@ -4210,10 +4210,28 @@ msgstr "Canvas"
 msgid "Space"
 msgstr "Space"
 
+#~ msgid ""
+#~ "Draw with left click · Pan with Space+drag or middle mouse · Scroll to\n"
+#~ "zoom"
+#~ msgstr ""
+#~ "Draw with left click · Pan with Space+drag or middle mouse · Scroll to\n"
+#~ "zoom"
+
+#~ msgid "Undo (Ctrl+Z)"
+#~ msgstr "Undo (Ctrl+Z)"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Redo (Ctrl+Shift+Z)"
+msgstr "Redo (Ctrl+Shift+Z)"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Undo (Ctrl+Z) — drag horizontally to scrub history"
+msgstr "Undo (Ctrl+Z) — drag horizontally to scrub history"
+
 #: src/views/Canvas/CanvasPage.tsx
 msgid ""
 "Draw with left click · Pan with Space+drag or middle mouse · Scroll to\n"
-"zoom"
+"zoom · Drag the undo button to scrub history"
 msgstr ""
 "Draw with left click · Pan with Space+drag or middle mouse · Scroll to\n"
-"zoom"
+"zoom · Drag the undo button to scrub history"

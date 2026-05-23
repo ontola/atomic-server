@@ -9,33 +9,23 @@ export type CanvasStroke = {
 
 export const DEFAULT_STROKE_WIDTH = 10;
 
-/** Parse `strokeData` from a resource property (array or legacy JSON string). */
+/**
+ * Parse `strokeData` from a resource property.
+ *
+ * `strokeData`'s declared datatype is `jsonArray`, materialized as a
+ * `LoroList<LoroMap>` — so `raw` is always a JSON array of stroke objects
+ * (or `undefined` on an empty canvas). The earlier JSON-string fallback
+ * was removed when the ontology moved off `string`; any pre-migration
+ * canvas now needs a one-time rewrite.
+ */
 export function parseCanvasStrokes(raw: JSONValue | undefined): CanvasStroke[] {
-  if (raw === undefined || raw === null) {
-    return [];
-  }
-
-  let arr: unknown = raw;
-
-  if (typeof raw === 'string') {
-    if (raw === '' || raw === '[]') {
-      return [];
-    }
-
-    try {
-      arr = JSON.parse(raw);
-    } catch {
-      return [];
-    }
-  }
-
-  if (!Array.isArray(arr)) {
+  if (!Array.isArray(raw)) {
     return [];
   }
 
   const strokes: CanvasStroke[] = [];
 
-  for (const item of arr) {
+  for (const item of raw) {
     const stroke = strokeFromJson(item);
 
     if (stroke) {
