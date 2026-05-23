@@ -1367,12 +1367,8 @@ msgstr "Die Tastaturunterstützung für Drag & Drop ist deaktiviert. Aktivieren 
 msgid "Picked up {0}"
 msgstr "{0} aufgenommen"
 
-#. placeholder {0}: dragResource.title
-#. placeholder {1}: dropResource.title
-#. placeholder {2}: pos + 1
-#: src/components/SideBar/useSidebarDnd.ts
-msgid "Draggable item {0} was moved over droppable area in {1} at position {2}"
-msgstr "Das ziehbare Element {0} wurde über den Ablagebereich in {1} an Position {2} bewegt"
+#~ msgid "Draggable item {0} was moved over droppable area in {1} at position {2}"
+#~ msgstr "Das ziehbare Element {0} wurde über den Ablagebereich in {1} an Position {2} bewegt"
 
 #: src/components/SideBar/useSidebarDnd.ts
 #: src/components/SideBar/useSidebarDnd.ts
@@ -4337,4 +4333,10 @@ msgstr ""
 
 #: src/components/NavBar.tsx
 msgid "Click to rename"
+msgstr ""
+
+#. placeholder {0}: dragResource.title
+#. placeholder {1}: dropResource.title
+#: src/components/SideBar/useSidebarDnd.ts
+msgid "Draggable item {0} was moved over droppable area in {1}"
 msgstr ""
