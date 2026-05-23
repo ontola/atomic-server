@@ -2307,6 +2307,7 @@ msgid "Set a title"
 msgstr "Set a title"
 
 #: src/components/EditableTitle.tsx
+#: src/components/NavBar.tsx
 msgid "Untitled"
 msgstr "Untitled"
 
@@ -4363,3 +4364,7 @@ msgstr "<0>Ctrl</0>+<1/> undo · <2>Ctrl</2>+ <3>Shift</3>+<4/> redo"
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Tap the eraser button, then drag across strokes to remove them"
 msgstr "Tap the eraser button, then drag across strokes to remove them"
+
+#: src/components/NavBar.tsx
+msgid "Click to rename"
+msgstr "Click to rename"

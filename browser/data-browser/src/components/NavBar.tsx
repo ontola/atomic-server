@@ -32,7 +32,7 @@ import {
 } from 'react-icons/fa6';
 import * as RadixPopover from '@radix-ui/react-popover';
 import type { JSX } from 'react';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useAISidebar } from './AI/AISidebarContext';
 import { AIIcon } from './AI/AIIcon';
 import { useAISettings } from './AI/AISettingsContext';
@@ -252,7 +252,7 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
       </IconButton>
       <VerticalDivider />
       {parent && <DirectParent subject={parent} />}
-      <BreadCrumbCurrent>{title}</BreadCrumbCurrent>
+      <EditableBreadcrumb resource={resource} fallback={title} />
       <Spacer />
       <ButtonArea>
         <ShareDialog
@@ -404,9 +404,99 @@ const BreadCrumbBase = css`
   min-width: 0;
 `;
 
-const BreadCrumbCurrent = styled.span`
+const BreadCrumbCurrent = styled.span<{ $editable?: boolean }>`
   ${BreadCrumbBase}
+  border-radius: 4px;
+  cursor: ${p => (p.$editable ? 'text' : 'default')};
+
+  ${p =>
+    p.$editable &&
+    css`
+      &:hover {
+        background: ${p.theme.colors.bg1};
+        color: ${p.theme.colors.text};
+      }
+    `}
 `;
+
+const BreadCrumbInput = styled.input`
+  ${BreadCrumbBase}
+  color: ${p => p.theme.colors.text};
+  background: ${p => p.theme.colors.bg};
+  border: 1px solid ${p => p.theme.colors.bg2};
+  border-radius: 4px;
+  outline: none;
+  min-width: 12ch;
+
+  &:focus {
+    border-color: ${p => p.theme.colors.main};
+  }
+`;
+
+/**
+ * The current-page breadcrumb, rendered as a click-to-rename inline
+ * editor. Mirrors {@link EditableTitle} (commit on Enter / blur, Escape
+ * cancels) but stays small enough to live in the breadcrumb row. Falls
+ * back to read-only display if the user lacks write permission, or if
+ * the resource is unsaved.
+ */
+function EditableBreadcrumb({
+  resource,
+  fallback,
+}: {
+  resource: Resource;
+  fallback: string;
+}): JSX.Element {
+  const [text, setText] = useTitle(resource, Infinity, {
+    commit: true,
+    validate: false,
+  });
+  const canEdit = useCanWrite(resource);
+  const [isEditing, setIsEditing] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isEditing) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+  }, [isEditing]);
+
+  const display = text || fallback;
+
+  if (isEditing && canEdit) {
+    return (
+      <BreadCrumbInput
+        ref={inputRef}
+        type='text'
+        value={text || ''}
+        placeholder='Untitled'
+        onChange={e => setText(e.target.value)}
+        onBlur={() => setIsEditing(false)}
+        onKeyDown={e => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            setIsEditing(false);
+          } else if (e.key === 'Escape') {
+            setIsEditing(false);
+          }
+        }}
+      />
+    );
+  }
+
+  return (
+    <BreadCrumbCurrent
+      $editable={!!canEdit}
+      title={canEdit ? 'Click to rename' : undefined}
+      onClick={() => {
+        if (canEdit) setIsEditing(true);
+      }}
+    >
+      {display}
+    </BreadCrumbCurrent>
+  );
+}
 
 const Breadcrumb = styled.a`
   ${BreadCrumbBase}

@@ -59,6 +59,7 @@ msgid "No results"
 msgstr "Sin resultados"
 
 #: src/components/EditableTitle.tsx
+#: src/components/NavBar.tsx
 msgid "Untitled"
 msgstr "Sin título"
 
@@ -4326,4 +4327,8 @@ msgstr ""
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Tap the eraser button, then drag across strokes to remove them"
+msgstr ""
+
+#: src/components/NavBar.tsx
+msgid "Click to rename"
 msgstr ""
