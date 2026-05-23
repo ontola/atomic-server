@@ -46,6 +46,18 @@ import {
  */
 export const unknownSubject = 'unknown-subject';
 
+/**
+ * Origin tag attached to Loro commits the runtime writes for housekeeping
+ * (datatype-tag mirroring, post-save bookkeeping, etc.). Commits with this
+ * origin are excluded from the `UndoManager` so they don't consume the
+ * user's undo presses — see {@link Resource.ensureUndoManager}.
+ *
+ * `atomic:` is reserved as the namespace; pick further-specific origins
+ * (e.g. `atomic:system:datatypes`) if/when undo behavior needs to
+ * differentiate them.
+ */
+export const SYSTEM_COMMIT_ORIGIN = 'atomic:system';
+
 export enum ResourceEvents {
   LocalChange = 'local-change',
   LoadingChange = 'loading-change',
@@ -565,6 +577,8 @@ export class Resource<C extends OptionalClass = any> {
     const props = doc.getMap('properties').toJSON() as Record<string, unknown>;
     const datatypesMap = doc.getMap('datatypes');
 
+    let wroteAnything = false;
+
     for (const [prop, loroValue] of Object.entries(props)) {
       const datatype = this.store?.resources
         .get(prop)
@@ -579,7 +593,18 @@ export class Resource<C extends OptionalClass = any> {
 
       if (tag !== undefined && datatypesMap.get(prop) !== tag) {
         datatypesMap.set(prop, tag);
+        wroteAnything = true;
       }
+    }
+
+    // Flush these writes in their own commit, tagged with the system
+    // origin so the UndoManager (configured with `excludeOriginPrefixes:
+    // ['atomic:system']` in {@link ensureUndoManager}) doesn't record them
+    // as undo steps. Without this, every first save after a user edit
+    // pushes a phantom checkpoint and the user's next undo silently reverts
+    // the datatype-tag rewrite instead of their stroke / property change.
+    if (wroteAnything) {
+      doc.commit({ origin: SYSTEM_COMMIT_ORIGIN });
     }
   }
 
@@ -1356,14 +1381,24 @@ export class Resource<C extends OptionalClass = any> {
     return objectView ? JSON.stringify(objectView) : '{}';
   }
 
-  /** Updates the cached lastCommit metadata without treating it as a user edit. */
+  /**
+   * Updates the cached `lastCommit` metadata without treating it as a user
+   * edit. Called after the server acks a commit. The doc write is committed
+   * under the system origin so the `UndoManager` (excluding that prefix)
+   * doesn't count it as an undo step — otherwise the user's next undo press
+   * would silently rewind the `lastCommit` pointer instead of the visible
+   * edit they actually want to reverse.
+   */
   public setLastCommitValue(lastCommit: string): void {
     this._lastCommit = lastCommit;
     this.applyRawValue(properties.commit.lastCommit, lastCommit);
+    this._loroDoc?.commit({ origin: SYSTEM_COMMIT_ORIGIN });
   }
 
+  /** Same system-origin treatment as `setLastCommitValue` for `createdAt`. */
   public setCreatedAtValue(createdAt: number): void {
     this.applyRawValue(commits.properties.createdAt, createdAt);
+    this._loroDoc?.commit({ origin: SYSTEM_COMMIT_ORIGIN });
   }
 
   /**
@@ -1623,7 +1658,19 @@ export class Resource<C extends OptionalClass = any> {
     }
   }
 
-  /** Initialize the Loro UndoManager for undo/redo support. Call after the doc is ready. */
+  /**
+   * Initialize the Loro UndoManager for undo/redo support. Call after the
+   * doc is ready.
+   *
+   * `excludeOriginPrefixes: ['atomic:system']` is load-bearing. Internal
+   * housekeeping commits (`writeDatatypeTags`, `markLoroSaved`, future
+   * `adoptResourceState` etc.) tag their commits with that origin —
+   * without the exclude, every save inserts a phantom undo step (the
+   * datatype-tag rewrite), and the user's first undo press silently
+   * reverts *that* instead of their last visible edit, exactly matching
+   * the canvas bug: "Saving… shown, but the stroke doesn't disappear".
+   * See {@link SYSTEM_COMMIT_ORIGIN}.
+   */
   public ensureUndoManager(): void {
     const doc = this.getLoroDoc();
     if (!doc || this._loroUndoManager) return;
@@ -1631,6 +1678,7 @@ export class Resource<C extends OptionalClass = any> {
     const um = new UndoManager(doc, {
       maxUndoSteps: 200,
       mergeInterval: 0,
+      excludeOriginPrefixes: [SYSTEM_COMMIT_ORIGIN],
     });
     this._loroUndoManager = um;
   }
