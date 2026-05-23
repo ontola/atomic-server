@@ -42,6 +42,12 @@ const SCRUB_PIXELS_PER_HISTORY = 300;
 const SCRUB_DRAG_THRESHOLD = 5;
 
 /**
+ * Pixels of horizontal drag on the zoom button that double (or halve) the
+ * canvas scale. Matches Flutter's `_onZoomScrubDelta` ratio.
+ */
+const ZOOM_SCRUB_PX_PER_2X = 150;
+
+/**
  * Pen-color swatches and stroke widths — match Flutter `fan_helpers.dart` so
  * a canvas drawn on one device renders identically on the other. Stored as
  * 0xAARRGGBB ints so the wire format also matches Flutter's `StrokeData`.
@@ -838,9 +844,105 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
 
   const handleEraserToggle = useCallback(() => setEraserMode(m => !m), []);
 
+  // ──────────────── Zoom scrub gesture (Flutter parity) ────────────────────
+  //
+  // Tap zoom = fit-all. Press-and-drag the zoom button horizontally: scale
+  // = startScale × 2^(dx / SCRUB_PIXELS_PER_ZOOM_DOUBLE), with the world
+  // point under the viewport centre pinned in place so the user's focus
+  // doesn't drift. Matches Flutter's `_onZoomScrubDelta` (150 px = 2×).
+
+  const zoomScrubRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startScale: number;
+    centerWorld: { x: number; y: number };
+    dragged: boolean;
+  } | null>(null);
+
+  const onZoomPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLButtonElement>) => {
+      const container = containerRef.current;
+      if (!container) return;
+      e.preventDefault();
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+
+      const containerW = container.clientWidth;
+      const containerH = container.clientHeight;
+      const centerWorldX =
+        (containerW / 2 - offsetRef.current.x) / scaleRef.current;
+      const centerWorldY =
+        (containerH / 2 - offsetRef.current.y) / scaleRef.current;
+
+      zoomScrubRef.current = {
+        pointerId: e.pointerId,
+        startX: e.clientX,
+        startScale: scaleRef.current,
+        centerWorld: { x: centerWorldX, y: centerWorldY },
+        dragged: false,
+      };
+    },
+    [],
+  );
+
+  const onZoomPointerMove = useCallback(
+    (e: React.PointerEvent<HTMLButtonElement>) => {
+      const z = zoomScrubRef.current;
+      if (!z || z.pointerId !== e.pointerId) return;
+
+      const dx = e.clientX - z.startX;
+      if (!z.dragged && Math.abs(dx) < SCRUB_DRAG_THRESHOLD) return;
+      z.dragged = true;
+
+      const container = containerRef.current;
+      if (!container) return;
+
+      const nextScale = Math.min(
+        30,
+        Math.max(0.05, z.startScale * Math.pow(2, dx / ZOOM_SCRUB_PX_PER_2X)),
+      );
+      setScale(nextScale);
+      setOffset({
+        x: container.clientWidth / 2 - z.centerWorld.x * nextScale,
+        y: container.clientHeight / 2 - z.centerWorld.y * nextScale,
+      });
+    },
+    [],
+  );
+
+  // `handleZoomToFit` is declared after these handlers and recreates when
+  // `strokes` changes; capture the latest through a ref so the tap path
+  // doesn't fit against a stale stroke snapshot. Same pattern as the
+  // chatroom send-ref bridge in `ChatRoomPage`.
+  const handleZoomToFitRef = useRef<() => void>(() => undefined);
+
+  const onZoomPointerUp = useCallback(
+    (e: React.PointerEvent<HTMLButtonElement>) => {
+      const z = zoomScrubRef.current;
+      if (!z || z.pointerId !== e.pointerId) return;
+      (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+      zoomScrubRef.current = null;
+
+      if (!z.dragged) {
+        handleZoomToFitRef.current();
+      }
+    },
+    [],
+  );
+
+  const onZoomPointerCancel = useCallback(
+    (e: React.PointerEvent<HTMLButtonElement>) => {
+      const z = zoomScrubRef.current;
+      if (!z || z.pointerId !== e.pointerId) return;
+      zoomScrubRef.current = null;
+    },
+    [],
+  );
+
   /** Zoom to fit: compute the bounding box of all strokes, scale to fit
    * with a small padding, center in the viewport. Matches the start-state
-   * of Flutter's zoom button when nothing else has zoomed. */
+   * of Flutter's zoom button when nothing else has zoomed. The latest
+   * version is also kept in `handleZoomToFitRef` so `onZoomPointerUp`
+   * (declared above) can call it without a stale-closure bug. */
   const handleZoomToFit = useCallback(() => {
     const container = containerRef.current;
 
@@ -891,6 +993,10 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       y: container.clientHeight / 2 - cy * nextScale,
     });
   }, [strokes]);
+
+  // Mirror the latest `handleZoomToFit` into the ref so the zoom button's
+  // tap path always sees fresh strokes (see `handleZoomToFitRef` above).
+  handleZoomToFitRef.current = handleZoomToFit;
 
   const widthDotPx = Math.max(4, Math.min(22, penWidth * 0.6));
 
@@ -989,8 +1095,11 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
           </CircleButton>
           <CircleButton
             type='button'
-            title='Zoom to fit'
-            onClick={handleZoomToFit}
+            title='Zoom to fit (tap) — drag horizontally to zoom-scrub'
+            onPointerDown={onZoomPointerDown}
+            onPointerMove={onZoomPointerMove}
+            onPointerUp={onZoomPointerUp}
+            onPointerCancel={onZoomPointerCancel}
           >
             <FaExpand />
           </CircleButton>
