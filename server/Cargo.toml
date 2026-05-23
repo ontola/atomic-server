@@ -17,119 +17,103 @@ path = "src/bin.rs"
 test = false
 
 [build-dependencies]
-brotli = "7"
-dircpy = "0.3.15"
-static-files = "0.2"
+brotli = "8"
+dircpy = "0.3.20"
+static-files = "0.3.1"
 walkdir = "2"
 
 [dependencies]
-actix = ">= 0.12, < 0.14"
-actix-cors = "0.7"
-actix-files = "0.6"
-actix-multipart = "0.6"
-actix-web-actors = "4"
-base64 = "0.21"
-chrono = "0.4"
-colored = "2"
-dialoguer = "0.11"
-directories = ">= 2, < 5"
+actix = "0.13.5"
+actix-cors = "0.7.1"
+actix-files = "0.6.10"
+actix-multipart = "0.7.2"
+actix-web-actors = "4.3.1"
+base64 = "0.22"
+chrono = "0.4.44"
+colored = "3.1.1"
+dialoguer = "0.12"
+directories = "6"
 dotenv = "0.15"
-futures = "0.3"
-percent-encoding = "2.2.0"
-regex = "1"
-rio_api = "0.8"
-rio_turtle = "0.8"
-sanitize-filename = "0.5"
+futures = "0.3.32"
+percent-encoding = "2.3.2"
+regex = "1.12.3"
+rio_api = "0.8.6"
+rio_turtle = "0.8.6"
+sanitize-filename = "0.6"
 serde_json = "1"
-serde_jcs = "0.1.0"
-serde_with = "3.3.0"
-simple-server-timing-header = "0.1.0"
-static-files = "0.2"
-tantivy = "0.22"
-tracing = "0.1"
-tracing-chrome = "0.7"
+serde_jcs = "0.2"
+serde_with = "3.20"
+simple-server-timing-header = "0.1"
+static-files = "0.3.1"
+tantivy = "0.26.1"
+tracing = "0.1.44"
+tracing-chrome = "0.7.2"
 tracing-log = "0.2"
-ureq = "2"
+ureq = "3.3.0"
 urlencoding = "2"
 ring = "0.17.14"
-wasmtime = { version = "39.0.1", optional = true, features = [
-  "component-model",
-] }
-wasmtime-wasi = { version = "39.0.1", optional = true, features = ["p2"] }
-wasmtime-wasi-http = { version = "39.0.1", optional = true }
-url = "2.5.7"
-html2md = { version = "0.2.14" }
-kuchikiki = { version = "0.8.2" }
-indexmap = { version = "1.9.3", features = ["std"] }
-lol_html = { version = "1" }
-zip = { version = "7.1.0", optional = true }
-reqwest = { version = "0.13.1", default-features = false, features = [
-  "rustls",
-  "json",
-  "stream",
-] }
-mainline = "6"
-sha1 = "0.10"
-blake3 = "1.5"
+wasmtime = { version = "45.0.0", optional = true, features = ["component-model"] }
+wasmtime-wasi = { version = "45.0.0", optional = true, features = ["p2"] }
+wasmtime-wasi-http = { version = "45.0.0", optional = true }
+url = "2.5.8"
+html2md = "0.2.15"
+kuchikiki = "0.8.2"
+indexmap = { version = "2.14.0", features = ["std"] }
+lol_html = "2.9"
+zip = { version = "8.6.0", optional = true }
+reqwest = { version = "0.13.3", default-features = false, features = ["rustls", "json", "stream"] }
+mainline = "6.2.0"
+sha1 = "0.11"
+blake3 = "1.8.5"
 hex = "0.4"
-local-ip-address = "0.6.11"
+local-ip-address = "0.6.13"
 anyhow = "1"
+actix-web-static-files = { version = "4.1.1", features = ["static-files-03"] }
+rand = "0.8.6"
 
 [dependencies.instant-acme]
 optional = true
-version = "0.4"
+version = "0.8.5"
 
 [dependencies.rustls-pemfile]
 optional = true
-version = "1"
+version = "2.2"
 
 [dependencies.rcgen]
 optional = true
-version = "0.12"
-
-
-# Alias to get rustls 0.23 (used by tonic) so we can install the ring crypto provider
-[dependencies.rustls023]
-package = "rustls"
-optional = true
-version = "0.23"
-features = ["ring"]
+version = "0.14.8"
 
 [dependencies.tonic]
 optional = true
-version = "0.14"
+version = "0.14.6"
 features = ["tls-ring", "tls-native-roots"]
 
 [dependencies.tracing-opentelemetry]
 optional = true
-version = "0.32"
+version = "0.33"
 
 [dependencies.opentelemetry]
 optional = true
-version = "0.31"
+version = "0.32"
 
 [dependencies.opentelemetry-otlp]
 optional = true
-version = "0.31"
+version = "0.32"
 
 [dependencies.opentelemetry_sdk]
 optional = true
-version = "0.31"
+version = "0.32"
 
 [dependencies.opentelemetry-appender-tracing]
 optional = true
-version = "0.31"
+version = "0.32"
 
 [dependencies.tracing-actix-web]
-version = "0.7"
-features = ["opentelemetry_0_31"]
+version = "0.7.21"
 
 [dependencies.actix-web]
-features = ["rustls"]
-version = "4.4"
-
-[dependencies.actix-web-static-files]
-version = ">= 4.0.1"
+features = ["rustls-0_23"]
+version = "4.13.0"
 
 [dependencies.atomic_lib]
 features = ["config", "db-redb", "rdf", "discovery", "iroh", "ring"]
@@ -138,14 +122,12 @@ version = "0.40.0"
 
 [dependencies.clap]
 features = ["derive", "env", "cargo"]
-version = "4"
-
-[dependencies.rand]
-version = "0.8"
+version = "4.6.1"
 
 [dependencies.rustls]
 optional = true
-version = "0.20"
+version = "0.23"
+features = ["ring"]
 
 [dependencies.serde]
 features = ["derive"]
@@ -153,37 +135,37 @@ version = "1"
 
 [dependencies.tokio]
 features = ["time"]
-version = "1"
+version = "1.52.3"
 
 [dependencies.image]
 optional = true
-version = "0.25.2"
+version = "0.25.10"
 
 [dependencies.webp]
 optional = true
-version = "0.3"
+version = "0.3.1"
 
 [dependencies.tracing-subscriber]
 features = ["env-filter"]
-version = "0.3"
+version = "0.3.23"
 
 [dev-dependencies]
-actix-rt = "2"
-assert_cmd = "2"
-mainline = "6"
+actix-rt = "2.11.0"
+assert_cmd = "2.2.2"
+mainline = "6.2.0"
 reqwest = { version = "0.13", default-features = false, features = [
   "rustls",
   "json",
   "multipart",
 ] }
 serde_json = "1"
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1.52.3", features = ["full"] }
 portpicker = "0.1"
 atomic_lib = { path = "../lib", features = ["ws"] }
-blake3 = "1"
-tokio-tungstenite = { version = "0.26", features = ["rustls-tls-native-roots"] }
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-futures-util = "0.3"
+blake3 = "1.8.5"
+tokio-tungstenite = { version = "0.29.0", features = ["rustls-tls-native-roots"] }
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+futures-util = "0.3.32"
 
 [features]
 default = ["https", "telemetry", "img", "wasm-plugins"]
@@ -198,7 +180,7 @@ telemetry = [
   "opentelemetry-otlp/tls-roots", # system trust roots (needed for SigNoz cloud)
   "opentelemetry-otlp/internal-logs", # surface OTel SDK errors via tracing/log
   "tonic",
-  "rustls023",
+  "rustls",
   "opentelemetry_sdk",
   "opentelemetry_sdk/rt-tokio",
   "opentelemetry_sdk/logs",
@@ -209,6 +191,14 @@ telemetry = [
 img = ["webp", "image"]
 https = ["rustls", "instant-acme", "rcgen", "rustls-pemfile"]
 wasm-plugins = ["wasmtime", "wasmtime-wasi", "wasmtime-wasi-http", "zip"]
+image = ["dep:image"]
+tonic = ["dep:tonic"]
+tracing-opentelemetry = ["dep:tracing-opentelemetry"]
+wasmtime = ["dep:wasmtime"]
+wasmtime-wasi = ["dep:wasmtime-wasi"]
+wasmtime-wasi-http = ["dep:wasmtime-wasi-http"]
+webp = ["dep:webp"]
+zip = ["dep:zip"]
 
 [lib]
 name = "atomic_server_lib"

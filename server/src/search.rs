@@ -402,7 +402,10 @@ mod tests {
             tantivy::query::QueryParser::for_index(&search_state.index, vec![fields.title]);
         let query = parser.parse_query("MyUniqueFolder").unwrap();
         let top_docs = searcher
-            .search(&query, &tantivy::collector::TopDocs::with_limit(10))
+            .search(
+                &query,
+                &tantivy::collector::TopDocs::with_limit(10).order_by_score(),
+            )
             .unwrap();
 
         assert!(
@@ -487,11 +490,17 @@ mod tests {
             search_state.reader.reload().unwrap();
             let searcher = search_state.reader.searcher();
             let last_initial = searcher
-                .search(&initial_query, &tantivy::collector::TopDocs::with_limit(1))
+                .search(
+                    &initial_query,
+                    &tantivy::collector::TopDocs::with_limit(1).order_by_score(),
+                )
                 .unwrap()
                 .len();
             let last_updated = searcher
-                .search(&updated_query, &tantivy::collector::TopDocs::with_limit(1))
+                .search(
+                    &updated_query,
+                    &tantivy::collector::TopDocs::with_limit(1).order_by_score(),
+                )
                 .unwrap()
                 .len();
             if last_initial == 0 && last_updated == 1 {

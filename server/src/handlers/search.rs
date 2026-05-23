@@ -77,7 +77,7 @@ pub async fn search_query(
     let top_docs = searcher
         .search(
             &query,
-            &TopDocs::with_limit(limit * UNAUTHORIZED_RESULTS_FACTOR),
+            &TopDocs::with_limit(limit * UNAUTHORIZED_RESULTS_FACTOR).order_by_score(),
         )
         .map_err(|e| format!("Error with creating search results: {} ", e))?;
 
@@ -334,7 +334,8 @@ fn docs_to_subjects(
         let retrieved_doc: tantivy::TantivyDocument = searcher.doc(doc_address)?;
         let subject_val = retrieved_doc.get_first(fields.subject).ok_or("No 'subject' in search doc found. This is required when indexing. Run with --rebuild-indexes")?;
 
-        let subject = unpack_value(subject_val, &retrieved_doc, "Subject".to_string())?;
+        let subject_val = tantivy::schema::OwnedValue::from(subject_val);
+        let subject = unpack_value(&subject_val, &retrieved_doc, "Subject".to_string())?;
         if !subjects.contains(&subject) {
             subjects.push(subject.clone());
         }

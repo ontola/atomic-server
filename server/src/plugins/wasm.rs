@@ -33,7 +33,10 @@ use wasmtime::{
     Config, Engine, ResourceLimiter, Store, StoreLimits, StoreLimitsBuilder, Trap,
 };
 use wasmtime_wasi::{p2, DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
-use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
+use wasmtime_wasi_http::{
+    p2::{add_only_http_to_linker_async, WasiHttpCtxView, WasiHttpView},
+    WasiHttpCtx,
+};
 
 use atomic_lib::db::plugin_meta::PluginMetaKey;
 
@@ -242,7 +245,6 @@ pub async fn load_wasm_class_extenders(
 fn build_engine() -> AtomicResult<Engine> {
     let mut config = Config::new();
     config.wasm_component_model(true);
-    config.async_support(true);
     config.consume_fuel(true);
 
     Engine::new(&config).map_err(to_atomic_error)
@@ -488,7 +490,7 @@ impl WasmPlugin {
             self.inner.manifest.as_ref(),
             PermissionType::Network,
         ) {
-            wasmtime_wasi_http::add_only_http_to_linker_async(&mut linker)
+            add_only_http_to_linker_async(&mut linker)
                 .map_err(|err| AtomicError::from(err.to_string()))?;
         }
 
@@ -694,12 +696,12 @@ impl WasiView for PluginHostState {
 }
 
 impl WasiHttpView for PluginHostState {
-    fn ctx(&mut self) -> &mut WasiHttpCtx {
-        &mut self.http
-    }
-
-    fn table(&mut self) -> &mut ResourceTable {
-        &mut self.table
+    fn http(&mut self) -> WasiHttpCtxView<'_> {
+        WasiHttpCtxView {
+            ctx: &mut self.http,
+            table: &mut self.table,
+            hooks: Default::default(),
+        }
     }
 }
 

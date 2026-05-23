@@ -127,7 +127,7 @@ pub async fn start(store: Db) -> anyhow::Result<(NodeId, Router)> {
     // Auto-connect to known peers in background, retry until connected
     let auto_store = bg_store;
     tokio::spawn(async move {
-        let my_id = normalize_node_id(&get_node_id().unwrap_or_default());
+        let my_id = normalize_node_id(get_node_id().unwrap_or_default());
 
         // Brief delay so relay can register our NodeID
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;

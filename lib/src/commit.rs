@@ -1075,10 +1075,8 @@ async fn sign_at(
             doc.remove_property(prop)?;
         }
         Some(doc.export_snapshot())
-    } else if let Some(update) = commitbuilder.loro_update {
-        Some(update)
     } else {
-        None
+        commitbuilder.loro_update
     };
 
     let mut commit = Commit {

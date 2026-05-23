@@ -62,13 +62,13 @@ async fn test_multi_client_gallery_sync() -> AtomicResult<()> {
     let dir_a = std::env::temp_dir().join(format!("device_a_{}", atomic_lib::utils::random_string(5)));
     let db_a = atomic_lib::Db::init_redb_file(&dir_a, Some(server_url.clone()), &dir_a.join("uploads")).await?;
     db_a.set_default_agent(agent.clone());
-    db_a.set_active_drive(&drive_subject);
+    db_a.set_active_drive(&drive_subject)?;
 
     // Device B (Phone) - Local Redb Store
     let dir_b = std::env::temp_dir().join(format!("device_b_{}", atomic_lib::utils::random_string(5)));
     let db_b = atomic_lib::Db::init_redb_file(&dir_b, Some(server_url.clone()), &dir_b.join("uploads")).await?;
     db_b.set_default_agent(agent.clone());
-    db_b.set_active_drive(&drive_subject);
+    db_b.set_active_drive(&drive_subject)?;
 
     // Start WS session for Tablet (Device A)
     let ws_a = WsClient::connect(&ws_url).await?;

@@ -42,7 +42,7 @@ pub async fn apply_commit_json(
         );
     }
 
-    let incoming_commit_resource = parse_json_ad_commit_resource(&body, store).await?;
+    let incoming_commit_resource = parse_json_ad_commit_resource(body, store).await?;
     let incoming_commit = Commit::from_resource(incoming_commit_resource)?;
 
     // Log incoming commit details for debugging
@@ -132,7 +132,7 @@ pub async fn apply_commit_json(
     let commit_response = store.apply_commit(incoming_commit, &opts).await?;
     crate::metrics::commit_applied();
 
-    let message = commit_response.commit_resource.to_json_ad(Some(&origin))?;
+    let message = commit_response.commit_resource.to_json_ad(Some(origin))?;
 
     Ok(message)
 }

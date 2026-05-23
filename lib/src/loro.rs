@@ -5,7 +5,7 @@
 //! set/remove/push deltas. The server imports the update, derives add/remove atoms from
 //! the diff events, and updates indexes — the read path (JSON-AD) stays unchanged.
 
-use crate::errors::AtomicResult;
+use crate::errors::{AtomicError, AtomicResult};
 use crate::values::Value;
 use crate::Atom;
 use loro::{ExportMode, LoroDoc, VersionVector};
@@ -187,10 +187,13 @@ impl AtomicLoroDoc {
         version: &VersionID,
     ) -> AtomicResult<std::collections::HashMap<String, loro::LoroValue>> {
         let frontiers = version.to_frontiers()?;
-        let fork = self.doc.fork_at(&frontiers);
+        let fork = self
+            .doc
+            .fork_at(&frontiers)
+            .map_err(|err| AtomicError::other_error(err.to_string()))?;
         let root = fork.get_map("properties");
         let mut result = std::collections::HashMap::new();
-        root.for_each(|key, value: loro::ValueOrContainer| {
+        root.for_each(|key: &str, value: loro::ValueOrContainer| {
             result.insert(key.to_string(), value.get_deep_value());
         });
         Ok(result)
@@ -603,10 +606,7 @@ pub fn datatype_tag(value: &Value) -> Option<&'static str> {
 /// Falls back to [`loro_value_to_atomic_value`]'s heuristics for untagged
 /// values — legacy snapshots and docs written by clients that do not yet
 /// emit the `datatypes` map.
-pub fn loro_value_to_atomic_value_tagged(
-    lv: &loro::LoroValue,
-    tag: Option<&str>,
-) -> Option<Value> {
+pub fn loro_value_to_atomic_value_tagged(lv: &loro::LoroValue, tag: Option<&str>) -> Option<Value> {
     if let Some(tag) = tag {
         if let Some(v) = atomic_value_from_tag(lv, tag) {
             return Some(v);
@@ -621,18 +621,14 @@ pub fn loro_value_to_atomic_value_tagged(
 /// Returns `None` if the tag and primitive shape disagree (caller falls back).
 fn atomic_value_from_tag(lv: &loro::LoroValue, tag: &str) -> Option<Value> {
     match (tag, lv) {
-        ("atomicUrl", loro::LoroValue::String(s)) => {
-            Some(Value::AtomicUrl(s.to_string().into()))
-        }
+        ("atomicUrl", loro::LoroValue::String(s)) => Some(Value::AtomicUrl(s.to_string().into())),
         ("json", loro::LoroValue::String(s)) => {
             serde_json::from_str(s.as_ref()).ok().map(Value::Json)
         }
         ("resource", loro::LoroValue::String(s)) => {
             serde_json::from_str::<std::collections::HashMap<String, Value>>(s.as_ref())
                 .ok()
-                .map(|obj| {
-                    Value::NestedResource(crate::values::SubResource::Nested(obj))
-                })
+                .map(|obj| Value::NestedResource(crate::values::SubResource::Nested(obj)))
         }
         ("resourceArray", loro::LoroValue::List(items)) => {
             let subjects: Vec<crate::values::SubResource> = items
@@ -644,11 +640,9 @@ fn atomic_value_from_tag(lv: &loro::LoroValue, tag: &str) -> Option<Value> {
                 .collect();
             Some(Value::ResourceArray(subjects))
         }
-        ("jsonArray", loro::LoroValue::List(items)) => {
-            Some(Value::JsonArray(
-                items.iter().map(loro_value_to_json).collect(),
-            ))
-        }
+        ("jsonArray", loro::LoroValue::List(items)) => Some(Value::JsonArray(
+            items.iter().map(loro_value_to_json).collect(),
+        )),
         _ => None,
     }
 }
