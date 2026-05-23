@@ -84,11 +84,28 @@ export function Cell({
   }, [setMouseDown]);
 
   const handleMouseEnter = useCallback(() => {
-    if (mouseDown) {
+    // Drag-select: only enter MultiSelect when the mouse leaves the
+    // initially-clicked cell while still held. Without the diff-check, the
+    // mouseenter that fires *during the initial mousedown* (e.g. the way
+    // playwright dispatches click sequences in newer versions) leaves the
+    // cell in MultiSelect mode after a plain click, so no Visual-mode
+    // keyboard handler — Enter, character-typing, arrows — fires.
+    if (
+      mouseDown &&
+      (rowIndex !== selectedRow || columnIndex !== selectedColumn)
+    ) {
       setMultiSelectCorner(rowIndex, columnIndex);
       setCursorMode(CursorMode.MultiSelect);
     }
-  }, [mouseDown, rowIndex, columnIndex, setMultiSelectCorner, setCursorMode]);
+  }, [
+    mouseDown,
+    rowIndex,
+    columnIndex,
+    selectedRow,
+    selectedColumn,
+    setMultiSelectCorner,
+    setCursorMode,
+  ]);
 
   const shouldEnterEditMode = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {

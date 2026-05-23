@@ -11,6 +11,7 @@ import {
 import {
   getToolName,
   isToolUIPart,
+  type DynamicToolUIPart,
   type FileUIPart,
   type ReasoningUIPart,
   type SourceUrlUIPart,
@@ -386,7 +387,7 @@ const partsToResourceBuilder = (
     });
   },
 
-  async toolCallPartToResource(part: ToolUIPart) {
+  async toolCallPartToResource(part: ToolUIPart | DynamicToolUIPart) {
     return await store.newResource<Ai.ToolCallPart>({
       isA: ai.classes.toolCallPart,
       parent: parent.subject,

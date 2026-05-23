@@ -6,11 +6,14 @@
     "allowSyntheticDefaultImports": true,
     "jsx": "react-jsx",
     "strictFunctionTypes": true,
+    "strictPropertyInitialization": false,
     "sourceMap": true,
     "declaration": true,
     "strictNullChecks": true,
     "noImplicitAny": true,
+    "useUnknownInCatchVariables": false,
     "downlevelIteration": true,
+    "ignoreDeprecations": "6.0",
     // Prevent typecheck to fail if some library is doing something wrong
     "skipLibCheck": true
   },

@@ -11,11 +11,11 @@
   },
   "dependencies": {
     "@tomic/lib": "workspace:*",
-    "chalk": "^5.3.0"
+    "chalk": "^5.6.2"
   },
   "devDependencies": {
-    "@types/node": "^20.17.0",
-    "typescript": "^5.9.3"
+    "@types/node": "^25.9.1",
+    "typescript": "^6.0.3"
   },
   "description": "Generate templates using Atomic Data",
   "license": "MIT",

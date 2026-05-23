@@ -17,8 +17,6 @@
     ".": "./dist/index.js",
     "./package.json": "./package.json"
   },
-  "main": "./dist/index.js",
-  "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "sideEffects": false,
   "files": [
@@ -40,11 +38,11 @@
   },
   "devDependencies": {
     "@arethetypeswrong/core": "^0.18.2",
-    "@types/node": "^25.0.3",
-    "bumpp": "^10.3.2",
-    "publint": "^0.3.17",
-    "tsdown": "^0.18.1",
-    "typescript": "^5.9.3",
-    "vitest": "^4.0.16"
+    "@types/node": "^25.9.1",
+    "bumpp": "^11.1.0",
+    "publint": "^0.3.21",
+    "tsdown": "^0.22.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7"
   }
 }

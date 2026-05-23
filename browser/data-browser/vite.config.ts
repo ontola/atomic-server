@@ -13,6 +13,7 @@ import * as path from 'node:path';
 // doesn't happen), no PWA service worker (tauri:// isn't HTTP), separate
 // outDir so the server build keeps its own nonce'd dist.
 const isTauri = process.env.TAURI === '1';
+const isVitest = process.env.VITEST === 'true';
 
 const repoLibDefaults = path.resolve(__dirname, '../../lib/defaults');
 const ciLibDefaults = path.resolve(__dirname, '../lib-defaults');
@@ -35,8 +36,8 @@ export default defineConfig({
   },
   plugins: [
     wasm(),
-    webfontDownload(),
-    wuchale(),
+    !isVitest && webfontDownload(),
+    !isVitest && wuchale(),
     react({
       babel: {
         plugins: [
@@ -47,7 +48,7 @@ export default defineConfig({
         ],
       },
     }),
-    !isTauri && VitePWA({
+    !isVitest && !isTauri && VitePWA({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
       manifest: {
@@ -192,7 +193,7 @@ export default defineConfig({
         ],
       },
     }),
-    prismjs({
+    !isVitest && prismjs({
       languages: ['typescript'],
       css: true,
       theme: 'default',

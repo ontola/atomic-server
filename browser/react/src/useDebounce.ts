@@ -45,7 +45,7 @@ export function useDebouncedSave(
         setSavePending(false);
       } catch (e) {
         if (onError) {
-          onError(e);
+          onError(e instanceof Error ? e : new Error(String(e)));
         } else {
           throw e;
         }

@@ -610,7 +610,7 @@ export class WSClient {
     if (frame.length > 0)
       profilerTick(`ws.out.${tagName(frame[0])}`, frame.length);
 
-    this.ws.send(frame);
+    this.ws.send(new Uint8Array(frame));
   }
 
   /**
@@ -916,9 +916,6 @@ export class WSClient {
   private reSubscribeAll(): void {
     for (const subject of this.store.getLoroSyncSubjects()) {
       this.subscribeLoroSync(subject);
-    }
-    for (const subject of this.store.getLoroEphemeralSubjects()) {
-      this.subscribeLoroEphemeral(subject);
     }
   }
 

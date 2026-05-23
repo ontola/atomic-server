@@ -81,7 +81,7 @@ export function Search(): JSX.Element {
         navigate(openURL);
       }
     },
-    { enableOnTags: ['INPUT'], enableOnContentEditable: true },
+    { enableOnFormTags: ['INPUT'], enableOnContentEditable: true },
     // Explicitly include results and selectedIndex in the dependency array
     [results, selectedIndex, navigate],
   );
@@ -92,7 +92,7 @@ export function Search(): JSX.Element {
       e.preventDefault();
       setSelected(prev => (prev > 0 ? prev - 1 : 0));
     },
-    { enableOnTags: ['INPUT'], enableOnContentEditable: true },
+    { enableOnFormTags: ['INPUT'], enableOnContentEditable: true },
     [selectedIndex],
   );
 
@@ -104,7 +104,7 @@ export function Search(): JSX.Element {
         prev === results.length - 1 ? results.length - 1 : prev + 1,
       );
     },
-    { enableOnTags: ['INPUT'], enableOnContentEditable: true },
+    { enableOnFormTags: ['INPUT'], enableOnContentEditable: true },
     [selectedIndex],
   );
 

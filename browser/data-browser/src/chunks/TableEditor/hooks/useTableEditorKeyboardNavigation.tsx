@@ -70,11 +70,19 @@ export function useTableEditorKeyboardNavigation(
           column = 1;
         }
 
-        if (listRef.current) {
-          listRef.current.scrollToItem(row, 'auto');
+        // Cursor target may legitimately be outside [0, rowCount) — e.g.
+        // pressing Enter on the last row pre-emptively targets the next
+        // row before the new row exists. react-window v1's `scrollToItem`
+        // silently clamped that; v2's `scrollToRow` throws a RangeError
+        // (`Invalid index specified: N`) and the whole keystroke is lost.
+        // Clamp the scroll target ourselves; setActiveCell already clamps.
+        const clampedRow = Math.min(Math.max(row, 0), rowCount - 1);
+
+        if (listRef.current && rowCount > 0) {
+          listRef.current.scrollToRow({ index: clampedRow, align: 'auto' });
         }
 
-        setActiveCell(Math.min(Math.max(row, 0), rowCount - 1), column);
+        setActiveCell(clampedRow, column);
       };
 
       const context: HandlerContext = {

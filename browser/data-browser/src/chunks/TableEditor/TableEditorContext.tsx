@@ -8,7 +8,7 @@ import {
   ReactElement,
   type JSX,
 } from 'react';
-import { FixedSizeList } from 'react-window';
+import type { ListImperativeAPI } from 'react-window';
 import { EventManager } from '@helpers/EventManager';
 import { KeyboardInteraction } from './helpers/keyboardHandlers';
 
@@ -62,7 +62,7 @@ export interface TableEditorContext {
   updateMultiSelectCornerCellRef: (newValue: HTMLDivElement | null) => void;
   isDragging: boolean;
   setIsDragging: React.Dispatch<React.SetStateAction<boolean>>;
-  listRef: React.RefObject<FixedSizeList | null>;
+  listRef: React.RefObject<ListImperativeAPI | null>;
   cursorMode: CursorMode;
   setCursorMode: React.Dispatch<React.SetStateAction<CursorMode>>;
   clearCell: () => void;
@@ -122,7 +122,7 @@ export function TableEditorContextProvider({
 }: React.PropsWithChildren<TableEditorContextProviderProps>): JSX.Element {
   const [mouseDown, setMouseDown] = useState(false);
   const tableRef = useRef<HTMLDivElement | null>(null);
-  const listRef = useRef<FixedSizeList>(null);
+  const listRef = useRef<ListImperativeAPI>(null);
   const [eventManager] = useState(
     () => new EventManager<TableEvent, TableEventHandlers>(),
   );

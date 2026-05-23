@@ -1295,7 +1295,10 @@ export class Store {
     // The local search index is partitioned per drive. The `parents` scope
     // the overlay passes is either the drive itself or a folder inside it;
     // resolve it up to the drive so the right partition is searched.
-    const searchDrive = this.driveOf(opts.parents ?? this.getDrive() ?? '');
+    const parentScope = Array.isArray(opts.parents)
+      ? opts.parents[0]
+      : opts.parents;
+    const searchDrive = this.driveOf(parentScope ?? this.getDrive() ?? '');
     console.debug('[search] search()', {
       query,
       hasFilters: !!opts.filters,

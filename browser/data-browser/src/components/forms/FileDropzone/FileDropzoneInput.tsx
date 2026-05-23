@@ -1,6 +1,6 @@
 import { Resource } from '@tomic/react';
-import { useCallback, type JSX } from 'react';
-import { useDropzone } from 'react-dropzone';
+import { useCallback, useMemo, type JSX } from 'react';
+import { useDropzone, type Accept } from 'react-dropzone';
 import { FaUpload } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import { ErrMessage } from '../InputStyles';
@@ -28,6 +28,13 @@ export function FileDropzoneInput({
   onFilesUploaded,
 }: FileDropzoneInputProps): JSX.Element {
   const { upload, isUploading, error } = useUpload(parentResource);
+  const acceptedMimeTypes = useMemo<Accept | undefined>(
+    () =>
+      accept
+        ? Object.fromEntries(accept.map(mimeType => [mimeType, []]))
+        : undefined,
+    [accept],
+  );
 
   const onFileSelect = useCallback(
     async (files: File[]) => {
@@ -43,7 +50,7 @@ export function FileDropzoneInput({
   const { getRootProps, getInputProps } = useDropzone({
     onDrop: onFileSelect,
     maxFiles,
-    accept,
+    accept: acceptedMimeTypes,
   });
 
   const defaultText =
@@ -53,7 +60,16 @@ export function FileDropzoneInput({
 
   return (
     <>
-      <VisualDropZone {...getRootProps()} className={className}>
+      {/* react-dropzone's getRootProps() defaults to role="presentation",
+         which hides the dropzone from the accessibility tree. This control
+         is keyboard-activatable and opens a file dialog — it IS a button.
+         Pass `role: 'button'` so screen-readers, keyboard users, and the
+         e2e selector (getByRole('button', { name: 'Drop files…' })) can
+         all find it. */}
+      <VisualDropZone
+        {...getRootProps({ role: 'button' })}
+        className={className}
+      >
         {error && <ErrMessage>{error.message}</ErrMessage>}
         <input {...getInputProps()} />
         <TextWrapper>
