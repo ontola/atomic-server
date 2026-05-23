@@ -2,6 +2,7 @@ import { EditableTitle } from '@components/EditableTitle';
 import { useDarkMode } from '@helpers/useDarkMode';
 import {
   canvas,
+  core,
   DEFAULT_STROKE_WIDTH,
   enableLoro,
   parseCanvasStrokes,
@@ -11,25 +12,47 @@ import {
   type Resource,
   type Version,
 } from '@tomic/lib';
+import { useStore } from '@tomic/react';
 import type { ResourcePageProps } from '@views/ResourcePage';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
 import { drawCanvasStrokes, screenToCanvas } from './canvas-draw';
-import { FaRotateLeft, FaRotateRight } from 'react-icons/fa6';
+import {
+  FaEraser,
+  FaExpand,
+  FaPen,
+  FaPlus,
+  FaRotateLeft,
+  FaRotateRight,
+  FaTableCellsLarge,
+} from 'react-icons/fa6';
+import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
+import { constructOpenURL } from '@helpers/navigation';
 
 /**
  * Pixels of horizontal pointer travel that map to scrubbing through the
- * entire Loro history. Matches the Flutter undo-button drag gesture
- * (`canvas/infinite_canvas.dart:_onUndoPanDelta`).
+ * entire Loro history. Matches Flutter's `_onUndoPanDelta`.
  */
 const SCRUB_PIXELS_PER_HISTORY = 300;
+const SCRUB_DRAG_THRESHOLD = 5;
 
 /**
- * Threshold (px) before a pointer-down on the undo button is treated as a
- * drag instead of a tap. Below the threshold the gesture falls back to
- * single-step `resource.undo()`.
+ * Pen-color swatches and stroke widths — match Flutter `fan_helpers.dart` so
+ * a canvas drawn on one device renders identically on the other. Stored as
+ * 0xAARRGGBB ints so the wire format also matches Flutter's `StrokeData`.
  */
-const SCRUB_DRAG_THRESHOLD = 5;
+const PEN_COLORS = [
+  0xff000000, 0xffe63946, 0xfff4a261, 0xff2a9d8f, 0xff457b9d, 0xff9b5de5,
+];
+const PEN_WIDTHS = [1, 2, 5, 10, 18, 30, 46];
+
+/**
+ * Eraser hit-radius in screen pixels — multiplied by `1 / scale` at the
+ * call site so the visual radius is constant regardless of zoom.
+ */
+const ERASE_SCREEN_RADIUS = 15;
+
+const PARENT_PROP = 'https://atomicdata.dev/properties/parent';
 
 type ScrubState = {
   pointerId: number;
@@ -42,12 +65,10 @@ type ScrubState = {
   dragged: boolean;
 };
 
-const PEN_COLORS = [
-  0xff000000, 0xffe63946, 0xfff4a261, 0xff2a9d8f, 0xff457b9d, 0xff9b5de5,
-];
-
 export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   const [darkMode] = useDarkMode();
+  const store = useStore();
+  const navigate = useNavigateWithTransition();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -57,25 +78,31 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [penColor, setPenColor] = useState(PEN_COLORS[0]);
   const [penWidth, setPenWidth] = useState(DEFAULT_STROKE_WIDTH);
+  const [eraserMode, setEraserMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | undefined>();
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
 
-  // History scrub state — populated while the user holds + drags the undo
-  // button. While non-null the canvas paints `previewStrokes` (a historical
-  // version) instead of the live `strokes`, matching Flutter's drag-to-scrub
-  // gesture.
+  // History scrub preview — when set, the canvas paints these instead of the
+  // live `strokes`. Matches Flutter's drag-to-scrub gesture on the undo
+  // button.
   const [previewStrokes, setPreviewStrokes] = useState<CanvasStroke[] | null>(
     null,
   );
   const scrubRef = useRef<ScrubState | null>(null);
+
+  // Eraser drag state: indices of strokes the current drag has marked for
+  // deletion. Materialized as one atomic `replaceListItems` on release so the
+  // UndoManager records the whole erase as one undo step.
+  const erasedIndicesRef = useRef<Set<number>>(new Set());
 
   const scaleRef = useRef(scale);
   const offsetRef = useRef(offset);
   const strokesRef = useRef(strokes);
   const currentStrokeRef = useRef(currentStroke);
   const previewStrokesRef = useRef(previewStrokes);
+  const eraserModeRef = useRef(eraserMode);
   const isPanningRef = useRef(false);
   const panStartRef = useRef<{
     x: number;
@@ -84,10 +111,11 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     oy: number;
   } | null>(null);
   const drawingPointerRef = useRef<number | null>(null);
+  const erasingPointerRef = useRef<number | null>(null);
   const isPanModeRef = useRef(false);
   const [panMode, setPanMode] = useState<'idle' | 'ready' | 'panning'>('idle');
 
-  // Track Space key for pan mode
+  // Track Space key for pan mode (Space+drag = pan, matching Figma/Photoshop).
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.code === 'Space' && !e.repeat) {
@@ -118,6 +146,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   strokesRef.current = strokes;
   currentStrokeRef.current = currentStroke;
   previewStrokesRef.current = previewStrokes;
+  eraserModeRef.current = eraserMode;
 
   const reloadStrokesFromResource = useCallback((res: Resource) => {
     setStrokes(parseCanvasStrokes(res.get(canvas.properties.strokeData)));
@@ -136,6 +165,8 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
         prop === undefined
       ) {
         reloadStrokesFromResource(resource);
+        setCanUndo(resource.canUndo());
+        setCanRedo(resource.canRedo());
       }
     });
 
@@ -196,8 +227,16 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
 
     const ro = new ResizeObserver(() => paint());
     ro.observe(container);
+
     return () => ro.disconnect();
   }, [paint]);
+
+  // ──────────────── Undo / Redo / scrub-history (Flutter parity) ───────────
+  //
+  // Tap = `resource.undo()`, drag = scrub through `getLoroHistory()` with
+  // live preview, release = `replaceListItems` to the scrubbed-to version
+  // (one undo checkpoint). See `planning/canvas-undo-consolidation.md` for
+  // the design.
 
   const handleUndo = useCallback(async () => {
     if (!resource.undo()) return;
@@ -226,18 +265,6 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       setSaving(false);
     }
   }, [resource]);
-
-  // ───────────────── History-scrub gesture (Flutter parity) ────────────────
-  //
-  // Press the undo button and drag horizontally: each `SCRUB_PIXELS_PER_HISTORY`
-  // of horizontal travel scrubs through the entire Loro history of stroke
-  // edits. Release to commit to the scrubbed-to version (one atomic
-  // `replaceListItems` → one undo checkpoint). A plain press-and-release
-  // (no drag past `SCRUB_DRAG_THRESHOLD`) falls back to single-step undo.
-  //
-  // The pointer is captured on down, so the gesture survives the cursor
-  // leaving the button. Preview repaints happen via `previewStrokes` state,
-  // so the canvas re-renders without touching the live Loro doc.
 
   const onUndoPointerDown = useCallback(
     (e: React.PointerEvent) => {
@@ -269,8 +296,6 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     const total = s.versions.length;
     if (total === 0) return;
 
-    // Map raw dx to a history index. Drag-left (negative dx) scrubs
-    // backward through history; drag-right scrubs forward.
     const stepsBack = Math.round((-dx / SCRUB_PIXELS_PER_HISTORY) * total);
     const idx = Math.max(0, Math.min(total - 1, s.startIndex - stepsBack));
     if (idx === s.currentIndex) return;
@@ -288,18 +313,14 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
       scrubRef.current = null;
 
-      // No real drag → treat as a tap = single-step undo.
+      // No drag → tap = single-step undo.
       if (!s.dragged) {
         await handleUndo();
         return;
       }
 
-      // Real drag → commit the scrubbed-to version. Clear the preview
-      // overlay first so the canvas reverts to live strokes while the
-      // save round-trips; then `replaceListItems` updates them in place.
       setPreviewStrokes(null);
 
-      // Released back where we started? Nothing to commit.
       if (s.currentIndex === s.startIndex) {
         return;
       }
@@ -333,10 +354,10 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     const s = scrubRef.current;
     if (!s || s.pointerId !== e.pointerId) return;
     scrubRef.current = null;
-    // Pointer cancelled mid-scrub (system gesture, focus loss). Drop the
-    // preview; the live strokes are unchanged.
     setPreviewStrokes(null);
   }, []);
+
+  // ──────────────── Save / draw the actual stroke ──────────────────────────
 
   const pushStrokeToServer = async (stroke: CanvasStroke) => {
     setSaving(true);
@@ -356,23 +377,74 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     setCanRedo(resource.canRedo());
   };
 
-  // Keyboard shortcuts: Ctrl+Z undo, Ctrl+Shift+Z redo
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
-        if (e.shiftKey) {
-          e.preventDefault();
-          handleRedo();
-        } else {
-          e.preventDefault();
-          handleUndo();
+  // ──────────────── Eraser: drag across strokes deletes them ───────────────
+  //
+  // Identical hit-test to Flutter's `_eraseAt`: per stroke, any point within
+  // `(15 + width/2)` screen pixels of the cursor marks the stroke. All
+  // marked strokes flush as one atomic `replaceListItems` on release so the
+  // UndoManager records the erase as a single undo step.
+
+  const eraseAt = useCallback((canvasX: number, canvasY: number) => {
+    const hitRadius = ERASE_SCREEN_RADIUS / scaleRef.current;
+    const erased = erasedIndicesRef.current;
+    const strokesNow = strokesRef.current;
+    let changed = false;
+
+    for (let i = 0; i < strokesNow.length; i++) {
+      if (erased.has(i)) continue;
+      const stroke = strokesNow[i];
+      const radius = hitRadius + stroke.width / 2 / scaleRef.current;
+      for (const [px, py] of stroke.path) {
+        if (Math.hypot(canvasX - px, canvasY - py) < radius) {
+          erased.add(i);
+          changed = true;
+          break;
         }
       }
-    };
+    }
 
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [handleUndo, handleRedo]);
+    if (changed) {
+      // Optimistic visual: paint the canvas without the erased strokes.
+      // We DON'T mutate the resource until pointer-up; this is preview
+      // only. Reusing `previewStrokes` keeps `paint()` consistent.
+      const preview = strokesNow.filter((_, i) => !erased.has(i));
+      setPreviewStrokes(preview);
+    }
+  }, []);
+
+  const finishErase = useCallback(async () => {
+    if (erasedIndicesRef.current.size === 0) {
+      setPreviewStrokes(null);
+      return;
+    }
+
+    const remaining = strokesRef.current.filter(
+      (_, i) => !erasedIndicesRef.current.has(i),
+    );
+    erasedIndicesRef.current = new Set();
+    setPreviewStrokes(null);
+
+    setSaving(true);
+    setSaveError(undefined);
+
+    try {
+      await enableLoro();
+      resource.replaceListItems(
+        canvas.properties.strokeData,
+        remaining.map(strokeToJson),
+      );
+      await resource.save();
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+
+    setCanUndo(resource.canUndo());
+    setCanRedo(resource.canRedo());
+  }, [resource]);
+
+  // ──────────────── Pointer flow: pan / draw / erase ───────────────────────
 
   const onPointerDown = (e: React.PointerEvent) => {
     const el = canvasRef.current;
@@ -391,6 +463,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
         oy: offsetRef.current.y,
       };
       el.setPointerCapture(e.pointerId);
+
       return;
     }
 
@@ -407,6 +480,14 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       offsetRef.current.x,
       offsetRef.current.y,
     );
+
+    if (eraserModeRef.current) {
+      erasingPointerRef.current = e.pointerId;
+      el.setPointerCapture(e.pointerId);
+      eraseAt(x, y);
+
+      return;
+    }
 
     drawingPointerRef.current = e.pointerId;
     setCurrentStroke({
@@ -425,13 +506,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
         x: panStartRef.current.ox + dx,
         y: panStartRef.current.oy + dy,
       });
-      return;
-    }
 
-    if (
-      drawingPointerRef.current !== e.pointerId ||
-      !currentStrokeRef.current
-    ) {
       return;
     }
 
@@ -450,6 +525,19 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       offsetRef.current.x,
       offsetRef.current.y,
     );
+
+    if (erasingPointerRef.current === e.pointerId) {
+      eraseAt(x, y);
+
+      return;
+    }
+
+    if (
+      drawingPointerRef.current !== e.pointerId ||
+      !currentStrokeRef.current
+    ) {
+      return;
+    }
 
     const stroke = currentStrokeRef.current;
     const last = stroke.path[stroke.path.length - 1];
@@ -469,6 +557,15 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       panStartRef.current = null;
       setPanMode(isPanModeRef.current ? 'ready' : 'idle');
       canvasRef.current?.releasePointerCapture(e.pointerId);
+
+      return;
+    }
+
+    if (erasingPointerRef.current === e.pointerId) {
+      erasingPointerRef.current = null;
+      canvasRef.current?.releasePointerCapture(e.pointerId);
+      void finishErase();
+
       return;
     }
 
@@ -483,6 +580,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
 
     if (!stroke || stroke.path.length === 0) {
       setCurrentStroke(null);
+
       return;
     }
 
@@ -514,34 +612,203 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     });
   };
 
+  // ──────────────── Toolbar button handlers ────────────────────────────────
+
+  // Keyboard shortcuts: Ctrl+Z undo, Ctrl+Shift+Z redo.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
+        if (e.shiftKey) {
+          e.preventDefault();
+          handleRedo();
+        } else {
+          e.preventDefault();
+          handleUndo();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [handleUndo, handleRedo]);
+
+  /** Gallery: navigate to this canvas's parent (the drive or folder). */
+  const handleGallery = useCallback(() => {
+    const parent = resource.get(PARENT_PROP);
+
+    if (typeof parent === 'string' && parent) {
+      navigate(constructOpenURL(parent));
+    }
+  }, [resource, navigate]);
+
+  /** New canvas: create one in the same parent and navigate to it. */
+  const handleNewCanvas = useCallback(async () => {
+    const parent = resource.get(PARENT_PROP);
+
+    if (typeof parent !== 'string' || !parent) return;
+
+    setSaving(true);
+    setSaveError(undefined);
+
+    try {
+      await enableLoro();
+      const newCanvas = await store.newResource({
+        parent,
+        isA: canvas.classes.canvas,
+        propVals: {
+          [core.properties.name]: 'Canvas',
+        },
+      });
+      await newCanvas.save();
+      navigate(constructOpenURL(newCanvas.subject));
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  }, [resource, store, navigate]);
+
+  /** Color: temporary cycle through PEN_COLORS. D2 replaces this with the fan. */
+  const handleColorClick = useCallback(() => {
+    const idx = PEN_COLORS.indexOf(penColor);
+    const next = PEN_COLORS[(idx + 1) % PEN_COLORS.length];
+    setPenColor(next);
+  }, [penColor]);
+
+  /** Width: temporary cycle through PEN_WIDTHS. D2 replaces this with the fan. */
+  const handleWidthClick = useCallback(() => {
+    const idx = PEN_WIDTHS.indexOf(penWidth);
+    const next = PEN_WIDTHS[(idx === -1 ? 3 : idx + 1) % PEN_WIDTHS.length];
+    setPenWidth(next);
+  }, [penWidth]);
+
+  const handleEraserToggle = useCallback(() => setEraserMode(m => !m), []);
+
+  /** Zoom to fit: compute the bounding box of all strokes, scale to fit
+   * with a small padding, center in the viewport. Matches the start-state
+   * of Flutter's zoom button when nothing else has zoomed. */
+  const handleZoomToFit = useCallback(() => {
+    const container = containerRef.current;
+
+    if (!container || strokes.length === 0) {
+      // Reset to default view if nothing to fit.
+      setScale(1);
+      setOffset({ x: 0, y: 0 });
+
+      return;
+    }
+
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+
+    for (const s of strokes) {
+      for (const [x, y] of s.path) {
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+      }
+    }
+
+    if (!Number.isFinite(minX)) {
+      setScale(1);
+      setOffset({ x: 0, y: 0 });
+
+      return;
+    }
+
+    const padding = 40;
+    const w = container.clientWidth - padding * 2;
+    const h = container.clientHeight - padding * 2;
+    const contentW = Math.max(1, maxX - minX);
+    const contentH = Math.max(1, maxY - minY);
+    const nextScale = Math.min(
+      30,
+      Math.max(0.05, Math.min(w / contentW, h / contentH)),
+    );
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+
+    setScale(nextScale);
+    setOffset({
+      x: container.clientWidth / 2 - cx * nextScale,
+      y: container.clientHeight / 2 - cy * nextScale,
+    });
+  }, [strokes]);
+
+  const widthDotPx = Math.max(4, Math.min(22, penWidth * 0.6));
+
   return (
     <Page>
-      <Header>
+      <FloatingTitle>
         <EditableTitle resource={resource} />
-        <Toolbar>
-          <ColorRow>
-            {PEN_COLORS.map(c => (
-              <ColorSwatch
-                key={c}
-                type='button'
-                $active={penColor === c}
-                $color={c}
-                onClick={() => setPenColor(c)}
-                aria-label='Pen color'
-              />
-            ))}
-          </ColorRow>
-          <label>
-            Width
-            <input
-              type='range'
-              min={1}
-              max={40}
-              value={penWidth}
-              onChange={ev => setPenWidth(Number(ev.target.value))}
-            />
-          </label>
-          <UndoButton
+      </FloatingTitle>
+      {(saving || saveError) && (
+        <SaveStatus $error={!!saveError}>
+          {saveError ? `Save failed: ${saveError}` : 'Saving…'}
+        </SaveStatus>
+      )}
+      <CanvasArea
+        ref={containerRef}
+        onWheel={onWheel}
+        $dark={darkMode}
+        $panMode={panMode}
+        $eraser={eraserMode}
+      >
+        <DrawCanvas
+          ref={canvasRef}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={finishStroke}
+          onPointerCancel={finishStroke}
+        />
+        <Hint>
+          {eraserMode
+            ? 'Drag across a stroke to erase it · Tap eraser again to draw'
+            : 'Draw with left click · Pan with Space+drag or middle mouse · Drag the undo button to scrub history'}
+        </Hint>
+        <BottomToolbar>
+          <CircleButton
+            type='button'
+            title='Back to gallery'
+            onClick={handleGallery}
+          >
+            <FaTableCellsLarge />
+          </CircleButton>
+          <CircleButton
+            type='button'
+            title='New canvas'
+            onClick={handleNewCanvas}
+          >
+            <FaPlus />
+          </CircleButton>
+          <CircleButton
+            type='button'
+            title={eraserMode ? 'Switch to draw' : 'Eraser'}
+            $active={eraserMode}
+            onClick={handleEraserToggle}
+          >
+            {eraserMode ? <FaPen /> : <FaEraser />}
+          </CircleButton>
+          <ColorCircleButton
+            type='button'
+            title='Pen color (tap to cycle)'
+            $color={penColor}
+            onClick={handleColorClick}
+            aria-label='Pen color'
+          />
+          <WidthCircleButton
+            type='button'
+            title={`Stroke width: ${penWidth} (tap to cycle)`}
+            onClick={handleWidthClick}
+            aria-label='Stroke width'
+          >
+            <WidthDot $size={widthDotPx} />
+          </WidthCircleButton>
+          <CircleButton
             type='button'
             title='Undo (Ctrl+Z) — drag horizontally to scrub history'
             onPointerDown={onUndoPointerDown}
@@ -552,40 +819,29 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
             aria-pressed={previewStrokes !== null}
           >
             <FaRotateLeft />
-          </UndoButton>
-          <UndoButton
+          </CircleButton>
+          <CircleButton
             type='button'
             title='Redo (Ctrl+Shift+Z)'
             onClick={handleRedo}
             disabled={!canRedo}
           >
             <FaRotateRight />
-          </UndoButton>
-          {saving && <Status>Saving…</Status>}
-          {saveError && <Status $error>{saveError}</Status>}
-        </Toolbar>
-      </Header>
-      <CanvasArea
-        ref={containerRef}
-        onWheel={onWheel}
-        $dark={darkMode}
-        $panMode={panMode}
-      >
-        <DrawCanvas
-          ref={canvasRef}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={finishStroke}
-          onPointerCancel={finishStroke}
-        />
-        <Hint>
-          Draw with left click · Pan with Space+drag or middle mouse · Scroll to
-          zoom · Drag the undo button to scrub history
-        </Hint>
+          </CircleButton>
+          <CircleButton
+            type='button'
+            title='Zoom to fit'
+            onClick={handleZoomToFit}
+          >
+            <FaExpand />
+          </CircleButton>
+        </BottomToolbar>
       </CanvasArea>
     </Page>
   );
 };
+
+// ──────────────── Styles ───────────────────────────────────────────────────
 
 const Page = styled.div`
   display: flex;
@@ -593,74 +849,41 @@ const Page = styled.div`
   flex: 1;
   min-height: ${p => p.theme.heights.fullPage};
   background: ${p => p.theme.colors.bg};
+  position: relative;
 `;
 
-const Header = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: ${p => p.theme.size()};
-  padding: ${p => p.theme.size()} ${p => p.theme.size(2)};
-  border-bottom: 1px solid ${p => p.theme.colors.bg2};
-`;
-
-const Toolbar = styled.div`
-  display: flex;
-  align-items: center;
-  gap: ${p => p.theme.size(2)};
-  margin-left: auto;
-
-  label {
-    display: flex;
-    align-items: center;
-    gap: ${p => p.theme.size()};
-    font-size: 0.875rem;
-    color: ${p => p.theme.colors.textLight};
-  }
-`;
-
-const ColorRow = styled.div`
-  display: flex;
-  gap: 4px;
-`;
-
-const ColorSwatch = styled.button<{ $color: number; $active: boolean }>`
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  border: 2px solid
-    ${p => (p.$active ? p.theme.colors.text : p.theme.colors.bg2)};
-  background: #${p => (p.$color >>> 0).toString(16).padStart(8, '0').slice(2)};
-  cursor: pointer;
-  padding: 0;
-`;
-
-const UndoButton = styled.button<{ disabled: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2rem;
-  height: 2rem;
+const FloatingTitle = styled.div`
+  position: absolute;
+  top: ${p => p.theme.size()};
+  left: ${p => p.theme.size(2)};
+  z-index: 2;
+  /* Subtle backdrop so the title reads against any stroke colors. */
+  background: ${p => p.theme.colors.bg};
   border: 1px solid ${p => p.theme.colors.bg2};
   border-radius: ${p => p.theme.radius};
-  background: transparent;
-  color: ${p => (p.disabled ? p.theme.colors.textLight : p.theme.colors.text)};
-  cursor: ${p => (p.disabled ? 'default' : 'pointer')};
-  opacity: ${p => (p.disabled ? 0.4 : 1)};
-  font-size: 0.875rem;
-  padding: 0;
-
-  &:hover:not(:disabled) {
-    background: ${p => p.theme.colors.bg1};
-  }
+  padding: 4px 10px;
+  max-width: 60%;
 `;
 
-const Status = styled.span<{ $error?: boolean }>`
+const SaveStatus = styled.span<{ $error?: boolean }>`
+  position: absolute;
+  top: ${p => p.theme.size()};
+  right: ${p => p.theme.size(2)};
+  z-index: 2;
   font-size: 0.875rem;
+  padding: 4px 10px;
+  border-radius: ${p => p.theme.radius};
+  background: ${p => p.theme.colors.bg};
   color: ${p => (p.$error ? p.theme.colors.alert : p.theme.colors.textLight)};
+  border: 1px solid
+    ${p => (p.$error ? p.theme.colors.alert : p.theme.colors.bg2)};
 `;
 
-const CanvasArea = styled.div<{ $dark: boolean; $panMode: string }>`
+const CanvasArea = styled.div<{
+  $dark: boolean;
+  $panMode: string;
+  $eraser: boolean;
+}>`
   position: relative;
   flex: 1;
   min-height: 400px;
@@ -672,7 +895,9 @@ const CanvasArea = styled.div<{ $dark: boolean; $panMode: string }>`
       ? 'grab'
       : p.$panMode === 'panning'
         ? 'grabbing'
-        : 'crosshair'};
+        : p.$eraser
+          ? 'cell'
+          : 'crosshair'};
 `;
 
 const DrawCanvas = styled.canvas`
@@ -683,11 +908,117 @@ const DrawCanvas = styled.canvas`
 
 const Hint = styled.p`
   position: absolute;
-  bottom: ${p => p.theme.size()};
-  left: ${p => p.theme.size(2)};
+  bottom: 6.5rem; /* clear of the bottom toolbar */
+  left: 50%;
+  transform: translateX(-50%);
   margin: 0;
   font-size: 0.75rem;
   color: ${p => p.theme.colors.textLight};
   pointer-events: none;
   opacity: 0.8;
+  text-align: center;
+  white-space: nowrap;
+`;
+
+/**
+ * Bottom pill toolbar — matches Flutter's `bottom_toolbar.dart` desktop
+ * layout: floating, centered, rounded, theme-aware background with a soft
+ * shadow. Compact widths just shrink the gap; the desktop pill survives.
+ */
+const BottomToolbar = styled.div`
+  position: absolute;
+  bottom: ${p => p.theme.size(2)};
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  background: ${p => p.theme.colors.bg};
+  border: 1px solid ${p => p.theme.colors.bg2};
+  border-radius: 32px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+`;
+
+interface CircleButtonProps {
+  $active?: boolean;
+}
+
+const CircleButton = styled.button<CircleButtonProps>`
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  background: ${p => (p.$active ? p.theme.colors.main : 'transparent')};
+  color: ${p =>
+    p.$active
+      ? p.theme.colors.bg
+      : p.disabled
+        ? p.theme.colors.textLight
+        : p.theme.colors.text};
+  cursor: ${p => (p.disabled ? 'default' : 'pointer')};
+  opacity: ${p => (p.disabled ? 0.4 : 1)};
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  padding: 0;
+  transition: background 120ms ease;
+
+  &:hover:not(:disabled) {
+    background: ${p => (p.$active ? p.theme.colors.main : p.theme.colors.bg1)};
+  }
+`;
+
+/**
+ * Color button: a circle filled with the current pen color. Tap cycles to
+ * the next swatch. D2 replaces this with the proper Flutter color fan
+ * (drag-to-select among 32 colors).
+ */
+/* `>>> 0` coerces to unsigned 32-bit; slice(2) drops the alpha bytes
+ * since the canvas paints ignoring alpha at the toolbar size. */
+const colorIntToHex = (c: number): string =>
+  `#${(c >>> 0).toString(16).padStart(8, '0').slice(2)}`;
+
+const ColorCircleButton = styled.button<{ $color: number }>`
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: ${p => colorIntToHex(p.$color)};
+  border: 2px solid ${p => p.theme.colors.bg2};
+  cursor: pointer;
+  padding: 0;
+
+  &:hover {
+    border-color: ${p => p.theme.colors.text};
+  }
+`;
+
+/**
+ * Width button: a circle with a centered dot whose size mirrors the current
+ * stroke width. Tap cycles. D2 replaces this with the fan.
+ */
+const WidthCircleButton = styled.button`
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+
+  &:hover {
+    background: ${p => p.theme.colors.bg1};
+  }
+`;
+
+const WidthDot = styled.span<{ $size: number }>`
+  width: ${p => p.$size}px;
+  height: ${p => p.$size}px;
+  border-radius: 50%;
+  background: ${p => p.theme.colors.text};
 `;
