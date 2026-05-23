@@ -5160,10 +5160,34 @@ msgstr "Width <0/>"
 msgid "Saving…"
 msgstr "Saving…"
 
-#: src/views/Canvas/CanvasPage.tsx
-msgid "Draw with left click · Pan with Alt+drag or middle mouse · Scroll to zoom"
-msgstr "Draw with left click · Pan with Alt+drag or middle mouse · Scroll to zoom"
+#~ msgid "Draw with left click · Pan with Alt+drag or middle mouse · Scroll to zoom"
+#~ msgstr "Draw with left click · Pan with Alt+drag or middle mouse · Scroll to zoom"
 
 #: src/views/Drive/DrivePage.tsx
 msgid "Resources"
 msgstr "Resources"
+
+#: src/routes/History/VersionContent.tsx
+msgid "Document body"
+msgstr "Document body"
+
+#: src/routes/History/VersionContent.tsx
+msgid "(empty)"
+msgstr "(empty)"
+
+#: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
+msgid "Canvas"
+msgstr "Canvas"
+
+#: src/views/Canvas/CanvasPage.tsx
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Space"
+msgstr "Space"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid ""
+"Draw with left click · Pan with Space+drag or middle mouse · Scroll to\n"
+"zoom"
+msgstr ""
+"Draw with left click · Pan with Space+drag or middle mouse · Scroll to\n"
+"zoom"

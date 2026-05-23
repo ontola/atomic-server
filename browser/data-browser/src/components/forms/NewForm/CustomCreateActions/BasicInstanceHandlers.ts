@@ -1,4 +1,4 @@
-import { dataBrowser, core, classes, ai } from '@tomic/react';
+import { dataBrowser, core, classes, ai, canvas } from '@tomic/react';
 import { registerBasicInstanceHandler } from '../useNewResourceUI';
 import { DEFAULT_AICHAT_NAME } from '../../../AI/aiContstants';
 
@@ -60,6 +60,21 @@ export const registerBasicInstanceHandlers = () => {
         dataBrowser.classes.documentV2,
         {
           [core.properties.name]: 'Document',
+        },
+        {
+          parent,
+        },
+      );
+    },
+  );
+
+  registerBasicInstanceHandler(
+    canvas.classes.canvas,
+    async (parent, createAndNavigate) => {
+      await createAndNavigate(
+        canvas.classes.canvas,
+        {
+          [core.properties.name]: 'Canvas',
         },
         {
           parent,
