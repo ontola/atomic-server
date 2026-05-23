@@ -227,6 +227,14 @@ test.describe('Plugins', () => {
     // URL would 404. Navigate to the drive page first.
     await page.getByTestId(sidebarDriveButtonId).click();
 
+    // Drive page nests children under a 'Resources' collapsible section
+    // (commit 32db1349). It starts collapsed on the drive view, so expand
+    // it before asserting the rename-survives-uninstall behaviour below.
+    await page
+      .getByRole('main')
+      .getByText('Resources', { exact: true })
+      .click();
+
     // The folder keeps its prefixed name after uninstall: with the
     // after_commit + host.commit model the rename was a real commit, so it
     // persists.
