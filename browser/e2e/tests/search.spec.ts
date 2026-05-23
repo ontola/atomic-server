@@ -284,6 +284,44 @@ test.describe('search', async () => {
       timeout: 10000,
     });
 
+    // Offline search reads the client-side MiniSearch index. The folder is
+    // created (commit 1) and named via `setTitle` (commit 2); the local index
+    // only picks up the *name* once that rename commit round-trips and
+    // re-ingests — the sidebar shows the name optimistically well before. So
+    // going offline on sidebar-visibility races the indexing (under load the
+    // name reaches the local index hundreds of ms later, intermittently more).
+    // Wait for the exact signal offline search depends on: the local index
+    // returns the folder for its name. `store.search()` can't be used here —
+    // online it falls back to the server when the local index misses, which
+    // would mask the very gap we must close.
+    const folderSubject = await getCurrentSubject(page);
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            ({ subj, q }) => {
+              const store = window.store as unknown as {
+                driveOf(s: string): string;
+                localSearch: {
+                  search(q: string, d: string, n: number): {
+                    subjects: string[];
+                  };
+                };
+              };
+              try {
+                const drive = store.driveOf(subj);
+
+                return store.localSearch.search(q, drive, 30).subjects.length;
+              } catch {
+                return 0;
+              }
+            },
+            { subj: folderSubject, q: unique },
+          ),
+        { timeout: 15000 },
+      )
+      .toBeGreaterThan(0);
+
     // Go offline: block the network and close the WebSocket.
     await context.setOffline(true);
     await page.evaluate(() => {
