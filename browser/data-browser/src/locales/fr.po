@@ -4174,9 +4174,8 @@ msgstr ""
 msgid "Pen color"
 msgstr ""
 
-#: src/views/Canvas/CanvasPage.tsx
-msgid "Width <0/>"
-msgstr ""
+#~ msgid "Width <0/>"
+#~ msgstr ""
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Saving…"
@@ -4195,6 +4194,7 @@ msgid "(empty)"
 msgstr ""
 
 #: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
+#: src/views/Canvas/CanvasPage.tsx
 msgid "Canvas"
 msgstr ""
 
@@ -4219,8 +4219,124 @@ msgstr ""
 msgid "Undo (Ctrl+Z) — drag horizontally to scrub history"
 msgstr ""
 
+#~ msgid ""
+#~ "Draw with left click · Pan with Space+drag or middle mouse · Scroll to\n"
+#~ "zoom · Drag the undo button to scrub history"
+#~ msgstr ""
+
+#. placeholder {0}: saveError
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Save failed: {0}"
+msgstr ""
+
+#~ msgid "Drag across a stroke to erase it · Tap eraser again to draw"
+#~ msgstr ""
+
+#~ msgid "Draw with left click · Pan with Space+drag or middle mouse · Drag the undo button to scrub history"
+#~ msgstr ""
+
+#~ msgid "Back to gallery"
+#~ msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "New canvas"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Switch to draw"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Eraser"
+msgstr ""
+
+#~ msgid "Pen color (tap to cycle)"
+#~ msgstr ""
+
+#~ msgid "Stroke width: {0} (tap to cycle)"
+#~ msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Stroke width"
+msgstr ""
+
+#~ msgid "Zoom to fit"
+#~ msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Pen color (tap to swap with previous, drag to pick from fan)"
+msgstr ""
+
+#. placeholder {0}: penWidth
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Stroke width: {0} (tap to swap with previous, drag to pick from fan)"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Zoom to fit (tap) — drag horizontally to zoom-scrub"
+msgstr ""
+
+#~ msgid "Draw with left click · Pan with scroll, Space+drag, or middle mouse · Ctrl+scroll or trackpad pinch to zoom · Drag the undo button to scrub history"
+#~ msgstr ""
+
+#~ msgid "Draw with left click · Pan with scroll, Space+drag, or middle mouse · Ctrl+scroll or pinch to zoom · Drag the undo button to scrub history"
+#~ msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Canvas help"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Show canvas help"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Canvas controls"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "<0>Left click</0> & drag — draw a stroke"
+msgstr ""
+
 #: src/views/Canvas/CanvasPage.tsx
 msgid ""
-"Draw with left click · Pan with Space+drag or middle mouse · Scroll to\n"
-"zoom · Drag the undo button to scrub history"
+"<0>Scroll</0> · <1>Space</1>+drag · middle-mouse drag\n"
+"— pan the canvas"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid ""
+"<0>Ctrl</0>+<1>scroll</1> · trackpad pinch — zoom\n"
+"toward the cursor"
+msgstr ""
+
+#~ msgid ""
+#~ "Tap the eraser button, then drag across strokes to remove\n"
+#~ "them"
+#~ msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid ""
+"Tap the colour or width button to swap with the previous\n"
+"choice; press & drag to open the picker fan"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid ""
+"Tap <0>Undo</0> / <1>Redo</1> to step through edits;\n"
+"drag the undo button left/right to scrub the full history"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid ""
+"Tap the zoom button to fit all strokes; drag left/right to\n"
+"zoom continuously"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "<0>Ctrl</0>+<1/> undo · <2>Ctrl</2>+ <3>Shift</3>+<4/> redo"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Tap the eraser button, then drag across strokes to remove them"
 msgstr ""

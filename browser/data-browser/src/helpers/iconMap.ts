@@ -1,5 +1,6 @@
 import {
   ai,
+  canvas,
   collections,
   commits,
   core,
@@ -31,6 +32,7 @@ import {
   FaFont,
   FaListUl,
   FaMarkdown,
+  FaPaintbrush,
   FaRegSquareCheck,
   FaLink,
   FaCode,
@@ -58,6 +60,7 @@ const iconMap = new Map<string, IconType>([
   [core.classes.ontology, FaShapes],
   [dataBrowser.classes.tag, FaTag],
   [ai.classes.aiChat, AIIcon],
+  [canvas.classes.canvas, FaPaintbrush],
 ]);
 
 export function getIconForClass(
