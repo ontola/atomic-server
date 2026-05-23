@@ -117,7 +117,6 @@ msgstr "Invitation créée et copiée dans le presse-papier ! 🚀"
 #: src/views/Document/DocumentV2FullPage.tsx
 #: src/views/File/FilePreview.tsx
 #: src/views/File/FilePreviewThumbnail.tsx
-#: src/views/ResourceLine.tsx
 #: src/views/ResourcePage.tsx
 #: src/views/ResourceRow.tsx
 msgid "Loading..."
@@ -149,9 +148,6 @@ msgstr "Retour"
 msgid "Go forward"
 msgstr "Avancer"
 
-#~ msgid "Toggle AI panel"
-#~ msgstr "Basculer le panneau d'IA"
-
 #: src/components/NavBar.tsx
 #: src/components/Parent.tsx
 msgid "Breadcrumbs"
@@ -169,9 +165,6 @@ msgstr "Définir le Drive"
 msgid "Set {0} as current drive"
 msgstr "Définir {0} comme lecteur actuel"
 
-#~ msgid "Set as drive"
-#~ msgstr "Définir comme lecteur"
-
 #: src/components/ImageViewer.tsx
 msgid "Click to enlarge"
 msgstr "Cliquez pour agrandir"
@@ -180,12 +173,6 @@ msgstr "Cliquez pour agrandir"
 #: src/components/PropVal.tsx
 msgid "Loading {0}"
 msgstr "Chargement {0}"
-
-#~ msgid "You are offline, changes might not be persisted."
-#~ msgstr "Vous êtes hors ligne, les modifications pourraient ne pas être conservées."
-
-#~ msgid "No Internet Connection."
-#~ msgstr "Aucune connexion Internet."
 
 #: src/components/SkipNav.tsx
 msgid "Skip Navigation?"
@@ -230,31 +217,13 @@ msgstr "Aller à la page des paramètres utilisateur"
 msgid "Settings"
 msgstr "Paramètres"
 
-#~ msgid "<0/> Language"
-#~ msgstr "<0/> Langue"
-
 #: src/routes/AppSettings.tsx
 msgid "Theme"
 msgstr "Thème"
 
-#~ msgid "🌓 Auto"
-#~ msgstr "🌓 Auto"
-
 #: src/routes/AppSettings.tsx
 msgid "Use the browser's / OS dark mode settings"
 msgstr "Utiliser les paramètres du mode sombre du navigateur / système d'exploitation"
-
-#~ msgid "🌑 Dark"
-#~ msgstr "🌑 Sombre"
-
-#~ msgid "🌕 Light"
-#~ msgstr "🌕 Clair"
-
-#~ msgid "Navigation bar position"
-#~ msgstr "Position de la barre de navigation"
-
-#~ msgid "Floating"
-#~ msgstr "Flottante"
 
 #: src/routes/AppSettings.tsx
 msgid "Bottom"
@@ -271,12 +240,6 @@ msgstr "Couleur principale"
 #: src/routes/NewResource/NewRoute.tsx
 msgid "Templates"
 msgstr "Modèles"
-
-#~ msgid "<0/>{0} Hide templates on new resource page."
-#~ msgstr "<0/>{0} Masquer les modèles sur la page de nouveau resource."
-
-#~ msgid "Panels"
-#~ msgstr "Panneaux"
 
 #. placeholder {0}: ' '
 #: src/routes/AppSettings.tsx
@@ -475,11 +438,6 @@ msgstr "Entrez une URL de ressource..."
 msgid "Prune Test Data"
 msgstr "Élaguer les données de test"
 
-#~ msgid ""
-#~ "Pruning test data will delete all drives on the server that have\n"
-#~ "’testdrive’ in their name."
-#~ msgstr "L'élagage des données de test supprimera tous les lecteurs sur le serveur qui ont 'testdrive' dans leur nom."
-
 #: src/routes/PruneTestsRoute.tsx
 msgid "Prune"
 msgstr "Élaguer"
@@ -601,9 +559,6 @@ msgstr "Secret de l'Agent"
 msgid "Enter your Agent Secret"
 msgstr "Entrez votre secret d'Agent"
 
-#~ msgid "The Agent Secret is a long string of characters that encodes both the Subject and the Private Key. You can think of it as a combined username + password. Store it safely, and don't share it with others."
-#~ msgstr "Le secret de l'Agent est une longue chaîne de caractères qui encode à la fois le Sujet et la clé privée. Vous pouvez le considérer comme un nom d'utilisateur + mot de passe combinés. Stockez-le en toute sécurité et ne le partagez pas avec d'autres."
-
 #: src/routes/SettingsAgent.tsx
 msgid "Sign out with current Agent and reset this form"
 msgstr "Se déconnecter avec l'Agent actuel et réinitialiser ce formulaire"
@@ -693,17 +648,6 @@ msgstr "Définir comme lecteur actuel"
 msgid "Default Ontology"
 msgstr "Ontologie par défaut"
 
-#~ msgid ""
-#~ "You are running Atomic-Server on `localhost`, which means that it\n"
-#~ "will not be available from any other machine than your current local\n"
-#~ "device. If you want your Atomic-Server to be available from the web,\n"
-#~ "you should set this up at a Domain on a server."
-#~ msgstr ""
-#~ "Vous utilisez Atomic-Server sur `localhost`, ce qui signifie qu'il ne sera\n"
-#~ "pas disponible depuis une autre machine que votre appareil local actuel. Si\n"
-#~ "vous voulez que votre Atomic-Server soit disponible sur le web, vous devez le\n"
-#~ "configurer sur un domaine sur un serveur."
-
 #. placeholder {0}: JSON.stringify(error)
 #. placeholder {0}: searchError.message
 #. placeholder {0}: data.error
@@ -714,27 +658,14 @@ msgstr "Ontologie par défaut"
 #: src/components/forms/SearchBox/SearchBoxWindow.tsx
 #: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
-#: src/views/ResourceLine.tsx
 #: src/views/ResourceRow.tsx
 msgid "Error: {0}"
 msgstr "Erreur : {0}"
-
-#~ msgid "Invite to {0}"
-#~ msgstr "Inviter à {0}"
-
-#~ msgid "Sorry, this Invite has no usages left. Ask for a new one."
-#~ msgstr "Désolé, cette invitation n'a plus d'utilisations disponibles. Veuillez en demander une nouvelle."
 
 #. placeholder {0}: agentTitle
 #: src/views/InvitePage.tsx
 msgid "Accept as {0}"
 msgstr "Accepter en tant que {0}"
-
-#~ msgid "Accept as new user"
-#~ msgstr "Accepter en tant que nouvel utilisateur"
-
-#~ msgid "({0} usages left)"
-#~ msgstr "({0} utilisations restantes)"
 
 #: src/chunks/CodeEditor/AsyncJSONEditor.tsx
 msgid "Enter valid JSON..."
@@ -744,9 +675,6 @@ msgstr "Entrez un JSON valide..."
 #: src/views/EndpointPage.tsx
 msgid "{0} endpoint"
 msgstr "Point de terminaison {0}"
-
-#~ msgid "Go"
-#~ msgstr "Go"
 
 #: src/routes/Search/SearchOverlay.tsx
 #: src/routes/Search/SearchRoute.tsx
@@ -1034,7 +962,6 @@ msgid "This URL will be used as the default Parent for imported resources."
 msgstr "Cette URL sera utilisée comme parent par défaut pour les ressources importées."
 
 #: src/views/ImporterPage.tsx
-#: src/views/OnboardingPage.tsx
 msgid "Importing..."
 msgstr "Importation..."
 
@@ -1165,9 +1092,6 @@ msgstr "<0/> Activer les fonctionnalités de l’IA"
 msgid "<0/> Show token usage in chats"
 msgstr "<0/> Afficher l’utilisation des jetons dans les discussions"
 
-#~ msgid "AI Providers"
-#~ msgstr "Fournisseurs d’IA"
-
 #: src/components/AI/AISettings.tsx
 msgid "<0/> Enable OpenRouter"
 msgstr "<0/> Activer OpenRouter"
@@ -1190,13 +1114,6 @@ msgstr "Entrez votre clé API OpenRouter"
 #: src/components/AI/AISettings.tsx
 msgid "Credits used: {0} /{1} {2}"
 msgstr "Crédits utilisés : {0} / {1} {2}"
-
-#~ msgid ""
-#~ "OpenRouter provides a unified API that gives you access to\n"
-#~ "hundreds of AI models from all major vendors, while\n"
-#~ "automatically handling fallbacks and selecting the most\n"
-#~ "cost-effective options."
-#~ msgstr "OpenRouter fournit une API unifiée qui vous donne accès à des centaines de modèles d’IA de tous les principaux fournisseurs, tout en gérant automatiquement les solutions de repli et en sélectionnant les options les plus rentables."
 
 #: src/components/AI/AISettings.tsx
 msgid "OpenRouter"
@@ -1227,9 +1144,6 @@ msgstr "URL de l’API Ollama"
 msgid "Ollama"
 msgstr "Ollama"
 
-#~ msgid "Generative Features"
-#~ msgstr "Fonctionnalités génératives"
-
 #: src/components/AI/AISettings.tsx
 msgid "<0/> Generate AI Chat titles"
 msgstr "<0/> Générer des titres de chat IA"
@@ -1249,9 +1163,6 @@ msgstr "(Conseil) Choisissez un modèle bon marché et rapide"
 #: src/components/AI/AISettings.tsx
 msgid "Change what model is used for generative features"
 msgstr "Modifier le modèle utilisé pour les fonctionnalités génératives"
-
-#~ msgid "MCP Servers"
-#~ msgstr "Serveurs MCP"
 
 #: src/components/AI/ChatLoadingIndicator.tsx
 msgid "Loading AI"
@@ -1388,9 +1299,6 @@ msgstr "Supprimer la ressource"
 msgid "Open menu ({0})"
 msgstr "Ouvrir le menu ({0})"
 
-#~ msgid "Start searching"
-#~ msgstr "Commencer la recherche"
-
 #. placeholder {0}: title
 #: src/components/Searchbar/Searchbar.tsx
 msgid "in:{0}"
@@ -1474,9 +1382,6 @@ msgstr "Nouvelle ressource"
 #: src/components/SideBar/DriveSwitcher.tsx
 msgid "Switch to {0}"
 msgstr "Basculer vers {0}"
-
-#~ msgid "Configure Drives"
-#~ msgstr "Configurer les lecteurs"
 
 #: src/components/SideBar/DriveSwitcher.tsx
 msgid "Load drives not displayed in this list."
@@ -1593,15 +1498,9 @@ msgstr "<0/> Supprimer"
 msgid "There are no tags yet."
 msgstr "Il n'y a pas encore d'étiquettes."
 
-#~ msgid "Add tags"
-#~ msgstr "Ajouter des étiquettes"
-
 #: src/routes/History/HistoryRoute.tsx
 msgid "Resource version updated"
 msgstr "Version de la ressource mise à jour"
-
-#~ msgid "Building history of {0}"
-#~ msgstr "Construction de l'historique de {0}"
 
 #: src/routes/History/VersionScroller.tsx
 msgid "Previous item"
@@ -1615,9 +1514,6 @@ msgstr "Élément suivant"
 msgid "All versions <0/>"
 msgstr "Toutes les versions <0/>"
 
-#~ msgid "Editted <0/> by{0} <1/>"
-#~ msgstr "Modifié <0/> par{0} <1/>"
-
 #. placeholder {0}: resource.title
 #. placeholder {0}: resource.title
 #: src/routes/History/HistoryDesktopView.tsx
@@ -1628,9 +1524,6 @@ msgstr "Historique de {0}"
 #: src/routes/History/HistoryMobileView.tsx
 msgid "Version"
 msgstr "Version"
-
-#~ msgid "Make current version"
-#~ msgstr "Définir comme version actuelle"
 
 #: src/routes/Search/SearchRoute.tsx
 msgid "Enter a search query"
@@ -1689,12 +1582,6 @@ msgstr "Modifier {0}"
 #: src/routes/History/HistoryDesktopView.tsx
 msgid "History of"
 msgstr "Historique de"
-
-#~ msgid "Show Commit"
-#~ msgstr "Afficher le commit"
-
-#~ msgid "Versions"
-#~ msgstr "Versions"
 
 #: src/components/forms/Field.tsx
 msgid "Required field"
@@ -1909,15 +1796,6 @@ msgstr "Rien à afficher"
 msgid "Drive Configuration"
 msgstr "Configuration du lecteur"
 
-#~ msgid "Current Drive"
-#~ msgstr "Lecteur actuel"
-
-#~ msgid "Saved"
-#~ msgstr "Enregistré"
-
-#~ msgid "Other"
-#~ msgstr "Autre"
-
 #: src/views/Article/ArticleDescription.tsx
 msgid "<0/> Add Content"
 msgstr "<0/> Ajouter du contenu"
@@ -2096,9 +1974,6 @@ msgstr "Classe"
 msgid "Last Modified"
 msgstr "Dernière modification"
 
-#~ msgid "<0/> New Resource"
-#~ msgstr "<0/> Nouvelle ressource"
-
 #: src/views/OntologyPage/CreateInstanceButton.tsx
 msgid "<0/> New Instance"
 msgstr "<0/> Nouvelle instance"
@@ -2245,9 +2120,6 @@ msgstr "Exporter au format CSV"
 msgid "Attached File"
 msgstr "Fichier joint"
 
-#~ msgid "You"
-#~ msgstr "Vous"
-
 #: src/chunks/AI/AIChatMessageParts/ReasoningMessage.tsx
 msgid "Thinking..."
 msgstr "Réflexion..."
@@ -2345,22 +2217,10 @@ msgstr "Aucun résultat"
 msgid "No MCP servers configured"
 msgstr "Aucun serveur MCP configuré"
 
-#~ msgid "Add Server"
-#~ msgstr "Ajouter un serveur"
-
-#~ msgid "Server Name"
-#~ msgstr "Nom du serveur"
-
-#~ msgid "Enter server name"
-#~ msgstr "Entrer le nom du serveur"
-
 #: src/components/AI/MCP/MCPServersManager.tsx
 #: src/components/AI/MCP/ServerItem.tsx
 msgid "Server URL"
 msgstr "URL du serveur"
-
-#~ msgid "Enter server URL"
-#~ msgstr "Entrer l'URL du serveur"
 
 #: src/components/AI/MCP/MCPServersManager.tsx
 msgid "Type"
@@ -2626,9 +2486,6 @@ msgstr "Ajouter une ressource"
 msgid "Open edit dialog"
 msgstr "Ouvrir la boîte de dialogue d'édition"
 
-#~ msgid "Filter tags..."
-#~ msgstr "Filtrer les étiquettes..."
-
 #: src/chunks/TablePage/PropertyForm/DatePropertyForm.tsx
 msgid "<0/> Include Time"
 msgstr "<0/> Inclure l'heure"
@@ -2645,12 +2502,6 @@ msgstr "Ajouter une propriété externe"
 #: src/routes/SyncRoute.tsx
 msgid "Add"
 msgstr "Ajouter"
-
-#~ msgid "A column in a table"
-#~ msgstr "Une colonne dans un tableau"
-
-#~ msgid "New <0/> Column"
-#~ msgstr "Nouvelle <0/> Colonne"
 
 #: src/chunks/TablePage/PropertyForm/TextPropertyForm.tsx
 msgid "Text Format:"
@@ -2699,15 +2550,6 @@ msgstr "<0/> Autoriser plusieurs valeurs"
 #: src/chunks/TablePage/PropertyForm/categories.tsx
 msgid "No Type selected"
 msgstr "Aucun type sélectionné"
-
-#~ msgid "Untitled Folder"
-#~ msgstr "Dossier sans titre"
-
-#~ msgid "Untitled ChatRoom"
-#~ msgstr "Salon de discussion sans titre"
-
-#~ msgid "Untitled Document"
-#~ msgstr "Document sans titre"
 
 #: src/chunks/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
 msgid "Numeric"
@@ -2813,9 +2655,6 @@ msgstr ""
 msgid "Shortname"
 msgstr "Shortname"
 
-#~ msgid "Login"
-#~ msgstr "Connexion"
-
 #: src/components/SideBar/AppMenu.tsx
 msgid "See and edit the current Agent / User (u)"
 msgstr "Voir et modifier l'agent / l'utilisateur actuel (u)"
@@ -2823,12 +2662,6 @@ msgstr "Voir et modifier l'agent / l'utilisateur actuel (u)"
 #: src/components/SideBar/AppMenu.tsx
 msgid "Change client settings (t)"
 msgstr "Modifier les paramètres du client (t)"
-
-#~ msgid "Keyboard Shortcuts"
-#~ msgstr "Raccourcis clavier"
-
-#~ msgid "View the keyboard shortcuts (?)"
-#~ msgstr "Afficher les raccourcis clavier (?)"
 
 #: src/components/SideBar/AppMenu.tsx
 msgid "About"
@@ -2877,17 +2710,8 @@ msgid "Add another property..."
 msgstr "Ajouter une autre propriété..."
 
 #: src/components/LoroDocValue.tsx
-#: src/components/YDocValue.tsx
 msgid "Empty"
 msgstr "Vide"
-
-#: src/components/YDocValue.tsx
-msgid "Show encoded state"
-msgstr "Afficher l'état encodé"
-
-#: src/components/YDocValue.tsx
-msgid "Hide encoded state"
-msgstr "Masquer l'état encodé"
 
 #: src/components/forms/InputYDoc.tsx
 msgid "Editing YDoc directly is not supported"
@@ -2896,9 +2720,6 @@ msgstr "La modification directe de YDoc n'est pas prise en charge"
 #: src/chunks/RTE/ImagePicker.tsx
 msgid "Left"
 msgstr "Gauche"
-
-#~ msgid "Center"
-#~ msgstr "Centrer"
 
 #: src/chunks/RTE/ImagePicker.tsx
 msgid "Right"
@@ -3286,11 +3107,6 @@ msgstr "Aucun plugin installé"
 msgid "Sign Out"
 msgstr "Se déconnecter"
 
-#~ msgid ""
-#~ "You can create your own Agent by hosting an{0} <0>atomic-server</0> . Alternatively, you can use an Invite to get a guest Agent on\n"
-#~ "someone else{1} Atomic Server."
-#~ msgstr "Vous pouvez créer votre propre agent en hébergeant un <0>atomic-server</0>. Vous pouvez également utiliser une invitation pour obtenir un agent invité sur le serveur atomique de quelqu'un d'autre."
-
 #: src/views/InvitePage.tsx
 msgid "Agent created!"
 msgstr "Agent créé !"
@@ -3306,12 +3122,6 @@ msgstr "Continuer"
 msgid "Copy secret to continue"
 msgstr "Copier le secret pour continuer"
 
-#~ msgid ""
-#~ "IMPORTANT! Below is your agent secret, you use this to login. Save\n"
-#~ "it somewhere safe, the secret will not be show again and if you\n"
-#~ "lose it you will not be able to access this user again."
-#~ msgstr "IMPORTANT ! Ci-dessous se trouve votre secret d'agent, vous l'utilisez pour vous connecter. Sauvegardez-le dans un endroit sûr, le secret ne sera plus affiché et si vous le perdez, vous ne pourrez plus accéder à cet utilisateur."
-
 #: src/views/InvitePage.tsx
 msgid "Enter a name"
 msgstr "Saisissez un nom"
@@ -3323,11 +3133,6 @@ msgstr "Nom de l'agent"
 #: src/components/SideBar/SideBarDrive.tsx
 msgid "This drive is private, sign in to view it"
 msgstr "Ce lecteur est privé, connectez-vous pour le consulter"
-
-#~ msgid ""
-#~ "An Agent is a user, consisting of a Subject (its URL) and Private Key.\n"
-#~ "Together, these can be used to edit data and sign Commits."
-#~ msgstr "Un agent est un utilisateur, composé d'un sujet (son URL) et d'une clé privée. Ensemble, ceux-ci peuvent être utilisés pour modifier des données et signer des Commits."
 
 #: src/views/Plugin/AssignRights.tsx
 msgid "Pick a resource"
@@ -3413,9 +3218,6 @@ msgstr "<0/> veut modifier une ressource qui n'est pas contenue dans la portée 
 msgid "Searching for <0/>..."
 msgstr "Recherche de <0/>..."
 
-#~ msgid "Failed to add invited drive to agent"
-#~ msgstr "Échec de l'ajout du disque invité à l'agent"
-
 #: src/views/InvitePage.tsx
 msgid "Failed to persist agent after accepting invite"
 msgstr "Échec de la persistance de l'agent après avoir accepté l'invitation"
@@ -3427,18 +3229,6 @@ msgstr "Invitation acceptée, mais aucune destination n'a été renvoyée."
 #: src/components/forms/NewForm/SubjectField.tsx
 msgid "The identifier of the resource. DID subjects are determined by the genesis commit signature."
 msgstr "L'identifiant de la ressource. Les sujets DID sont déterminés par la signature de validation de la genèse."
-
-#~ msgid "Connection to server lost, reconnecting..."
-#~ msgstr "Connexion au serveur perdue, reconnexion en cours..."
-
-#~ msgid "Server connection lost."
-#~ msgstr ""
-
-#~ msgid "No internet connection"
-#~ msgstr "Aucune connexion Internet"
-
-#~ msgid "Server connection lost — reconnecting…"
-#~ msgstr "Connexion au serveur perdue — reconnexion…"
 
 #: src/views/InvitePage.tsx
 msgid ""
@@ -3454,81 +3244,17 @@ msgstr ""
 msgid "Subdomain"
 msgstr "Sous-domaine"
 
-#~ msgid "This secret does not contain an initial drive link. You might need to set it up manually or create a new account."
-#~ msgstr ""
-
-#~ msgid "Initial Drive"
-#~ msgstr ""
-
-#~ msgid "My first decentralized drive"
-#~ msgstr ""
-
-#~ msgid "Welcome to Atomic Server"
-#~ msgstr ""
-
-#~ msgid "This server node is currently uninitialized for <0/>."
-#~ msgstr ""
-
-#~ msgid "I already have an account (Paste Secret)"
-#~ msgstr ""
-
-#~ msgid "Create a new Account & Drive"
-#~ msgstr ""
-
-#~ msgid "Paste your Agent Secret"
-#~ msgstr ""
-
 #: src/components/LoggedOutAgentPanel.tsx
 msgid "Back"
 msgstr "Retour"
-
-#: src/views/OnboardingPage.tsx
-msgid "Import & Connect"
-msgstr "Importer et connecter"
-
-#~ msgid "Create a New Identity"
-#~ msgstr ""
-
-#~ msgid "This will generate a new self-sovereign Agent (your ID) and a decentralized Drive (your data storage) anchored to this server."
-#~ msgstr ""
 
 #: src/components/NewIdentitySection.tsx
 msgid "Generating..."
 msgstr "Génération en cours..."
 
-#~ msgid "Generate Identity"
-#~ msgstr ""
-
-#~ msgid "Success! Your Identity is ready."
-#~ msgstr ""
-
-#~ msgid "<0>IMPORTANT:</0> Save this secret key. It is the only way to access your data if you clear your browser cache or sign in from another device."
-#~ msgstr ""
-
-#~ msgid "Finish Setup"
-#~ msgstr ""
-
-#~ msgid "or"
-#~ msgstr ""
-
-#~ msgid "Active Server"
-#~ msgstr ""
-
-#~ msgid "Connect via {0}"
-#~ msgstr "Se connecter via {0}"
-
 #: src/routes/SettingsServer/ServersCard.tsx
 msgid "No known servers"
 msgstr "Aucun serveur connu"
-
-#~ msgid "Gateway Server"
-#~ msgstr "Serveur passerelle"
-
-#~ msgid "The gateway server is used to resolve DIDs and fetch data from the network."
-#~ msgstr ""
-
-#~ msgid "Active Gateway"
-#~ msgstr "Passerelle active"
 
 #: src/routes/SettingsServer/index.tsx
 msgid "Saved Drives"
@@ -3542,145 +3268,13 @@ msgstr "URL de lecteur personnalisée"
 msgid "Enter a Drive DID or URL"
 msgstr "Saisissez un DID ou une URL de lecteur"
 
-#~ msgid "Add Gateway by URL"
-#~ msgstr "Ajouter une passerelle par URL"
-
-#~ msgid "Set Active"
-#~ msgstr "Définir comme actif"
-
 #: src/components/SideBar/DriveSwitcher.tsx
 msgid "Configure"
 msgstr "Configurer"
 
-#~ msgid "Gateway (Locked to Drive)"
-#~ msgstr "Passerelle (verrouillée sur le lecteur)"
-
-#~ msgid "Cannot change gateway for HTTP drives"
-#~ msgstr "Impossible de changer de passerelle pour les lecteurs HTTP"
-
-#~ msgid ""
-#~ "The gateway is currently locked to{0} <0/> because you are using an\n"
-#~ "HTTP-based drive."
-#~ msgstr ""
-#~ "La passerelle est actuellement verrouillée sur{0} <0/> car vous utilisez un lecteur\n"
-#~ "basé sur HTTP."
-
-#~ msgid ""
-#~ "The gateway server is used to resolve DIDs and fetch data from the\n"
-#~ "network."
-#~ msgstr ""
-#~ "Le serveur passerelle est utilisé pour résoudre les DID et récupérer les données du\n"
-#~ "réseau."
-
-#~ msgid "Locked"
-#~ msgstr "Verrouillé"
-
-#~ msgid "This secret does not contain an initial drive, and no drives were found on this server. Please create a new account."
-#~ msgstr ""
-
-#~ msgid "Initial drive for {0}"
-#~ msgstr ""
-
-#: src/views/OnboardingPage.tsx
-msgid "Welcome to Atomic Data"
-msgstr "Bienvenue dans Atomic Data"
-
-#~ msgid "Create a new Identity & Drive"
-#~ msgstr ""
-
-#~ msgid "Login via existing server"
-#~ msgstr ""
-
-#~ msgid "If you have an Atomic Data secret from another device or server, paste it here to anchor your identity to this node."
-#~ msgstr ""
-
-#~ msgid "This will generate a new self-sovereign <0>Agent</0> (your global ID) and a decentralized <1>Drive</1> (your storage) anchored to this server."
-#~ msgstr ""
-
-#~ msgid "Create Identity"
-#~ msgstr ""
-
-#. placeholder {0}: ' '
-#: src/views/OnboardingPage.tsx
-msgid "This server node is currently uninitialized for{0} <0/>."
-msgstr "Ce nœud de serveur n'est pas encore initialisé pour{0} <0/>."
-
-#~ msgid ""
-#~ "If you have an Atomic Data secret from another device or\n"
-#~ "server, paste it here to anchor your identity to this node."
-#~ msgstr ""
-
-#~ msgid "This will generate a new self-sovereign <0>Agent</0>{0} (your global ID) and a decentralized <1>Drive</1>{1} (your storage) anchored to this server."
-#~ msgstr ""
-
-#~ msgid ""
-#~ "<0>IMPORTANT:</0> Save this secret key. It is the\n"
-#~ "only way to access your data if you clear your browser cache\n"
-#~ "or sign in from another device."
-#~ msgstr ""
-
-#~ msgid "Option 1: Create a New Identity"
-#~ msgstr ""
-
-#~ msgid ""
-#~ "This will generate a new self-sovereign{0} <0>Agent</0> (your global ID) and a decentralized{1} <1>Drive</1> (your storage) anchored to this\n"
-#~ "server."
-#~ msgstr ""
-
-#~ msgid "Option 2: Use an existing Identity"
-#~ msgstr ""
-
-#: src/views/OnboardingPage.tsx
-msgid ""
-"Paste your Atomic Data secret key below to connect your\n"
-"existing identity to this node."
-msgstr ""
-"Collez votre clé secrète de données atomiques ci-dessous pour connecter votre\n"
-"identité existante à ce nœud."
-
-#~ msgid "Your new identity is ready"
-#~ msgstr "Votre nouvelle identité est prête"
-
-#~ msgid ""
-#~ "<0>IMPORTANT:</0> Save this secret key. It is the only\n"
-#~ "way to access your data if you clear your browser cache or sign in\n"
-#~ "from another device."
-#~ msgstr ""
-
-#~ msgid "Done"
-#~ msgstr ""
-
-#~ msgid "Create a new identity"
-#~ msgstr "Créer une nouvelle identité"
-
-#~ msgid "Generate a new self-sovereign Agent and Drive on this server."
-#~ msgstr "Générer un nouvel Agent et Drive auto-souverains sur ce serveur."
-
 #: src/components/NewIdentitySection.tsx
 msgid "Create new identity"
 msgstr "Créer une nouvelle identité"
-
-#~ msgid "Sign in with existing secret"
-#~ msgstr "Se connecter avec un secret existant"
-
-#~ msgid "Don{0}t have a server yet? You can use an{1} <0>atomic-server</0>{2} or an Invite from someone else{3} server."
-#~ msgstr ""
-
-#: src/views/OnboardingPage.tsx
-msgid "Use an existing identity"
-msgstr "Utiliser une identité existante"
-
-#~ msgid ""
-#~ "<0>IMPORTANT:</0> Save this secret key. It is the only way\n"
-#~ "to access your data if you clear your browser cache or sign in from\n"
-#~ "another device."
-#~ msgstr "<0>IMPORTANT :</0> Enregistrez cette clé secrète. C'est le seul moyen d'accéder à vos données si vous videz le cache de votre navigateur ou si vous vous connectez depuis un autre appareil."
-
-#~ msgid "Are you sure you{0}ve stored this secret somewhere safe? You cannot recover it if you lose it."
-#~ msgstr "Êtes-vous sûr d'avoir stocké ce secret en lieu sûr ? Vous ne pourrez pas le récupérer si vous le perdez."
-
-#~ msgid "Copy the secret key to continue"
-#~ msgstr "Copiez la clé secrète pour continuer"
 
 #: src/components/NewIdentitySection.tsx
 msgid "Yes, I've stored it safely"
@@ -3691,26 +3285,9 @@ msgstr "Oui, je l'ai stocké en toute sécurité"
 msgid "Login / New User"
 msgstr "Connexion / Nouvel utilisateur"
 
-#~ msgid "This host is not bound to a Drive yet:{0} <0/>."
-#~ msgstr ""
-
-#~ msgid "If this host has not been bound to a Drive yet, continue at{0} <0>the onboarding page</0> ."
-#~ msgstr ""
-
-#~ msgid ""
-#~ "Are you sure you{0}ve stored this secret somewhere safe? You\n"
-#~ "cannot recover it if you lose it."
-#~ msgstr ""
-
-#~ msgid "Setting up..."
-#~ msgstr ""
-
 #: src/components/SideBar/AppMenu.tsx
 msgid "Dev Drive"
 msgstr "Dev Drive"
-
-#~ msgid "Create a new agent + drive on localhost:9883 and switch to it"
-#~ msgstr ""
 
 #: src/routes/DevDriveRoute.tsx
 msgid "Setting up dev drive..."
@@ -3719,30 +3296,6 @@ msgstr "Configuration du lecteur de développement..."
 #: src/components/SideBar/AppMenu.tsx
 msgid "Create a fresh agent + drive on localhost:9883"
 msgstr "Créer un nouvel agent + drive sur localhost:9883"
-
-#~ msgid "New {0} Column"
-#~ msgstr ""
-
-#~ msgid "AbortError"
-#~ msgstr ""
-
-#~ msgid ""
-#~ "Welcome to your Drive.\n"
-#~ "\n"
-#~ "This is your personal Atomic Data drive. Edit this description to tell visitors what this space is about."
-#~ msgstr ""
-
-#~ msgid "This is your personal Atomic Data drive. Edit this description to tell visitors what this space is about."
-#~ msgstr ""
-
-#~ msgid "{0} {1}{2} for <0/>"
-#~ msgstr ""
-
-#~ msgid ""
-#~ "Search matches on the names and descriptions of resources.\n"
-#~ "Additionally you can search for resources with specific tags by\n"
-#~ "adding <0/> to your search."
-#~ msgstr ""
 
 #: src/components/Searchbar/Searchbar.tsx
 msgid "Search (Cmd+K)"
@@ -3797,9 +3350,6 @@ msgstr "{0} résultat{1}"
 #: src/components/OverlayContainer.tsx
 msgid "Open search"
 msgstr "Ouvrir la recherche"
-
-#~ msgid "Toggle sidebar"
-#~ msgstr ""
 
 #: src/components/OverlayContainer.tsx
 msgid "Show data view"
@@ -3901,38 +3451,13 @@ msgstr "<0/> discuter"
 msgid "Drives"
 msgstr "Lecteurs"
 
-#~ msgid "That secret does not match. Please try again or start over."
-#~ msgstr ""
-
-#~ msgid "Something went wrong. You can start over if you lost your secret."
-#~ msgstr ""
-
 #: src/components/NewIdentitySection.tsx
 msgid "Verify your secret"
 msgstr "Vérifiez votre secret"
 
-#~ msgid ""
-#~ "You have been signed out to verify that you saved your secret. Enter it\n"
-#~ "below to sign in. If you lost it, you can start over."
-#~ msgstr ""
-
 #: src/components/NewIdentitySection.tsx
 msgid "Paste your secret here"
 msgstr "Collez votre secret ici"
-
-#~ msgid "Signing in..."
-#~ msgstr ""
-
-#~ msgid "Start over"
-#~ msgstr ""
-
-#~ msgid "You're signed in!"
-#~ msgstr ""
-
-#~ msgid ""
-#~ "Now, set your profile name. Note that this is only set for this specific\n"
-#~ "server, but you can use your secret also on other servers."
-#~ msgstr ""
 
 #: src/components/NewIdentitySection.tsx
 msgid "Enter your name"
@@ -3942,46 +3467,9 @@ msgstr "Entrez votre nom"
 msgid "Profile Name"
 msgstr "Nom du profil"
 
-#~ msgid "Saving..."
-#~ msgstr ""
-
-#~ msgid "Skip"
-#~ msgstr ""
-
-#~ msgid "Create your Drive"
-#~ msgstr ""
-
-#~ msgid ""
-#~ "A Drive is your personal data space on this server. You\n"
-#~ "can create more drives later."
-#~ msgstr ""
-
-#~ msgid "Drive Name"
-#~ msgstr ""
-
-#~ msgid "Creating..."
-#~ msgstr ""
-
-#~ msgid "Create Drive"
-#~ msgstr ""
-
-#~ msgid "Save & Next"
-#~ msgstr ""
-
-#~ msgid ""
-#~ "A Drive is your personal data space on this server. You can create more\n"
-#~ "drives later."
-#~ msgstr ""
-
 #: src/components/NewIdentitySection.tsx
 msgid "Generating your identity..."
 msgstr "Génération de votre identité..."
-
-#~ msgid ""
-#~ "<0>IMPORTANT:</0> Save this secret key. It is the only way to\n"
-#~ "access your data if you clear your browser cache or sign in from another\n"
-#~ "device."
-#~ msgstr ""
 
 #: src/components/NewIdentitySection.tsx
 msgid ""
@@ -3994,12 +3482,6 @@ msgstr ""
 #: src/components/NewIdentitySection.tsx
 msgid "Yes, I've stored it — sign me out to verify"
 msgstr "Oui, je l'ai stocké — déconnectez-moi pour vérifier"
-
-#~ msgid "The secret is invalid or this session has expired. You can start over."
-#~ msgstr ""
-
-#~ msgid "The secret is invalid. You can start over."
-#~ msgstr ""
 
 #: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
 msgid "Folder"
@@ -4027,11 +3509,6 @@ msgstr "Tags"
 msgid "More"
 msgstr "Plus"
 
-#. placeholder {0}: tags.length
-#: src/components/Tag/TagCountPopover.tsx
-msgid "Tags +{0}"
-msgstr ""
-
 #: src/views/Drive/DrivePage.tsx
 msgid "Remove tag"
 msgstr "Supprimer le tag"
@@ -4048,9 +3525,6 @@ msgstr "Aucun message pour le moment"
 msgid "Be the first to say something"
 msgstr "Soyez le premier à dire quelque chose"
 
-#~ msgid "The Ontology that"
-#~ msgstr ""
-
 #. placeholder {0}: shortcuts.search
 #: src/components/NavBar.tsx
 msgid "Search ({0})"
@@ -4059,15 +3533,6 @@ msgstr "Rechercher ({0})"
 #: src/routes/AppSettings.tsx
 msgid "NavBar position"
 msgstr "Position de la barre de navigation"
-
-#~ msgid "Replying to"
-#~ msgstr ""
-
-#~ msgid "Clear reply"
-#~ msgstr ""
-
-#~ msgid "Reply"
-#~ msgstr ""
 
 #: src/routes/AppSettings.tsx
 msgid "Language"
@@ -4098,13 +3563,6 @@ msgstr "<0/>{0} Masquer les modèles sur la nouvelle page de ressources"
 msgid "Panels & Templates"
 msgstr "Panneaux et modèles"
 
-#~ msgid ""
-#~ "OpenRouter provides a unified API that gives you access\n"
-#~ "to hundreds of AI models from all major vendors, while\n"
-#~ "automatically handling fallbacks and selecting the most\n"
-#~ "cost-effective options."
-#~ msgstr ""
-
 #: src/routes/AppSettings.tsx
 msgid "Search settings..."
 msgstr "Rechercher les paramètres..."
@@ -4125,15 +3583,6 @@ msgstr "Nouveau dossier"
 msgid "New ChatRoom"
 msgstr "Nouveau salon de discussion"
 
-#~ msgid "<0/> New"
-#~ msgstr ""
-
-#~ msgid ""
-#~ "You are connecting to <0/>. Create a new\n"
-#~ "identity and drive to get started, or use User Settings to sign in\n"
-#~ "with an existing secret."
-#~ msgstr ""
-
 #. placeholder {0}: ' '
 #: src/views/ErrorPage.tsx
 msgid "If you have not set up an identity on this server yet,{0} <0>create one here</0>."
@@ -4143,30 +3592,6 @@ msgstr "Si vous n'avez pas encore configuré d'identité sur ce serveur,{0} <0>c
 msgid "Could not parse that secret."
 msgstr "Impossible de décoder ce secret."
 
-#~ msgid "Welcome"
-#~ msgstr ""
-
-#~ msgid ""
-#~ "You are connected to <0/>. There is no default\n"
-#~ "data space at the site root yet, or you need to sign in. Create a\n"
-#~ "new identity on this server, or sign in with a secret you already\n"
-#~ "have."
-#~ msgstr ""
-
-#~ msgid "New here"
-#~ msgstr ""
-
-#~ msgid ""
-#~ "Create an agent and a personal drive. You will get a secret to\n"
-#~ "store safely—this is your account on this server."
-#~ msgstr ""
-
-#~ msgid "Create your account"
-#~ msgstr ""
-
-#~ msgid "Already have a secret"
-#~ msgstr ""
-
 #: src/components/LoggedOutAgentPanel.tsx
 #: src/components/LoggedOutAgentPanel.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
@@ -4174,56 +3599,14 @@ msgstr "Impossible de décoder ce secret."
 msgid "Agent secret"
 msgstr "Secret d'agent"
 
-#~ msgid "Paste the full secret (the long base64 string from when you created or exported your identity)."
-#~ msgstr ""
-
 #: src/components/LoggedOutAgentPanel.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Signing in…"
 msgstr "Connexion en cours…"
 
-#~ msgid "<0>Open User Settings</0>{0} for more options (e.g. switching drives)."
-#~ msgstr ""
-
 #: src/components/NewIdentitySection.tsx
 msgid "Set your profile name!"
 msgstr "Définissez votre nom de profil !"
-
-#~ msgid ""
-#~ "Note that this is only set for this specific\n"
-#~ "server, but you can use your secret also on other servers."
-#~ msgstr ""
-
-#~ msgid "Welcome to AtomicServer"
-#~ msgstr ""
-
-#~ msgid ""
-#~ "You are connected to <0/>. There is no default\n"
-#~ "data space at the site root yet, or you need to sign in. Use the\n"
-#~ "same options as in User Settings below."
-#~ msgstr ""
-
-#~ msgid "<0>User Settings</0>{0} for drive switching and your profile."
-#~ msgstr ""
-
-#~ msgid ""
-#~ "You are connected to <0/>. There is no default\n"
-#~ "data space at the site root yet, or you need to sign in."
-#~ msgstr ""
-
-#~ msgid "Set up your identity"
-#~ msgstr ""
-
-#~ msgid ""
-#~ "On <0/>. You already chose to create a new\n"
-#~ "identity — continue with your profile and drive below."
-#~ msgstr ""
-
-#~ msgid "On <0/>."
-#~ msgstr ""
-
-#~ msgid "Set up your Agent on <0/>."
-#~ msgstr ""
 
 #: src/components/AI/AISettings.tsx
 msgid ""
@@ -4236,11 +3619,6 @@ msgstr ""
 "accès à des centaines de modèles d'IA de tous les principaux\n"
 "fournisseurs, tout en gérant automatiquement les solutions de secours et\n"
 "en sélectionnant les options les plus rentables."
-
-#~ msgid ""
-#~ "Note that this is only set for this specific server, but you can use\n"
-#~ "your secret also on other servers."
-#~ msgstr ""
 
 #. placeholder {0}: ' '
 #. placeholder {1}: ' '
@@ -4274,14 +3652,6 @@ msgstr ""
 msgid "Creating your personal drive…"
 msgstr "Création de votre lecteur personnel…"
 
-#~ msgid ""
-#~ "This name is shown on this server. We also create a private drive named\n"
-#~ "after you as your home; you can add more drives later in settings."
-#~ msgstr ""
-
-#~ msgid "Agent: {0}"
-#~ msgstr ""
-
 #: src/components/NewIdentitySection.tsx
 msgid "Creating drive…"
 msgstr "Création du lecteur…"
@@ -4289,15 +3659,6 @@ msgstr "Création du lecteur…"
 #: src/components/NewIdentitySection.tsx
 msgid "Save & continue"
 msgstr "Enregistrer et continuer"
-
-#~ msgid "Skip (drive will be named \"Personal\")"
-#~ msgstr ""
-
-#~ msgid "Set up your Agent and personal drive on <0/>."
-#~ msgstr ""
-
-#~ msgid "Failed to update agent after invite"
-#~ msgstr ""
 
 #: src/components/SideBar/SideBarDrive.tsx
 msgid "Shared with me"
@@ -4310,11 +3671,6 @@ msgstr "Réduire"
 #: src/components/SideBar/SideBarPanel.tsx
 msgid "Expand"
 msgstr "Développer"
-
-#~ msgid ""
-#~ "Created via `/app/dev-drive` for local development and E2E. You can remove these with Prune test data on `/app/prunetests`.\n"
-#~ "{0}"
-#~ msgstr ""
 
 #. placeholder {0}: DEV_DRIVE_PRUNE_MARKER
 #: src/hooks/useDevDrive.ts
@@ -4344,212 +3700,24 @@ msgstr "Réorganiser {0}"
 msgid "New"
 msgstr "Nouveau"
 
-#~ msgid "Sign Up"
-#~ msgstr ""
-
-#~ msgid "Create Agetn"
-#~ msgstr ""
-
-#~ msgid "New User"
-#~ msgstr ""
-
 #: src/components/LoggedOutAgentPanel.tsx
 #: src/routes/SettingsAgent.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Create account"
 msgstr "Créer un compte"
 
-#~ msgid "Welcome{0}"
-#~ msgstr ""
-
 #: src/views/InvitePage.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "AtomicServer"
 msgstr "AtomicServer"
 
-#~ msgid ""
-#~ "A production-grade data workspace — graph-native, permission-aware,\n"
-#~ "and ready to self-host."
-#~ msgstr ""
-
-#~ msgid ""
-#~ "<0>Fastest all-in-one workspace</0> — documents, tables,\n"
-#~ "linked data, and HTTP APIs together, without duct-taping half a\n"
-#~ "dozen services."
-#~ msgstr ""
-
-#~ msgid ""
-#~ "<0>Open source</0> — inspect the stack, adapt it, and\n"
-#~ "run it wherever you need it."
-#~ msgstr ""
-
-#~ msgid ""
-#~ "<0>Offline-first</0> — keep working locally; sync and\n"
-#~ "resolve conflicts when you are back online."
-#~ msgstr ""
-
-#~ msgid ""
-#~ "<0>Fully featured</0> — realtime collaboration, search,\n"
-#~ "invites, fine-grained rights, and extensible ontologies out of the\n"
-#~ "box."
-#~ msgstr ""
-
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Get started"
 msgstr "Commencer"
 
-#~ msgid ""
-#~ "A production-grade data workspace. Graph-native, permission-aware, and ready\n"
-#~ "to self-host."
-#~ msgstr ""
-
-#~ msgid ""
-#~ "<0>Fastest all-in-one workspace</0>: documents, tables, linked\n"
-#~ "data, and HTTP APIs together, without duct-taping half a dozen services."
-#~ msgstr ""
-
-#~ msgid ""
-#~ "<0>Open source</0>: inspect the stack, adapt it, and run it\n"
-#~ "wherever you need it."
-#~ msgstr ""
-
-#~ msgid ""
-#~ "<0>Offline-first</0>: keep working locally; sync and resolve\n"
-#~ "conflicts when you are back online."
-#~ msgstr ""
-
-#~ msgid ""
-#~ "<0>Fully featured</0>: realtime collaboration, search, invites,\n"
-#~ "fine-grained rights, and extensible ontologies out of the box."
-#~ msgstr ""
-
-#~ msgid ""
-#~ "<0>Integrated knowledge environment</0>: build an AI-ready\n"
-#~ "knowledge base from your docs, linked data, and workflows."
-#~ msgstr ""
-
-#~ msgid ""
-#~ "A production-grade data workspace. Graph-native, permission-aware,\n"
-#~ "and ready to self-host."
-#~ msgstr ""
-
-#~ msgid ""
-#~ "<0>Fastest all-in-one workspace</0>: documents, tables,\n"
-#~ "linked data, and HTTP APIs together, without duct-taping half a\n"
-#~ "dozen services."
-#~ msgstr ""
-
-#~ msgid ""
-#~ "<0>Integrated knowledge environment</0>: build an\n"
-#~ "AI-ready knowledge base from your docs, structured data, and\n"
-#~ "files."
-#~ msgstr ""
-
-#~ msgid ""
-#~ "<0>Open source</0>: inspect the stack, adapt it, and run\n"
-#~ "it wherever you need it."
-#~ msgstr ""
-
-#~ msgid ""
-#~ "<0>Offline-first</0>: keep working locally; sync and\n"
-#~ "resolve conflicts when you are back online."
-#~ msgstr ""
-
-#~ msgid ""
-#~ "<0>Fully featured</0>: realtime collaboration, search,\n"
-#~ "invites, fine-grained rights, and extensible ontologies out of the\n"
-#~ "box."
-#~ msgstr ""
-
-#~ msgid ""
-#~ "<0>One workspace for knowledge and apps</0>: documents,\n"
-#~ "tables, files, and APIs in one graph, built to stay coherent as it\n"
-#~ "grows."
-#~ msgstr ""
-
-#~ msgid ""
-#~ "<0>Your data, your rules</0>: self-host and keep control\n"
-#~ "over access, structure, and sharing. No vendor lock-in."
-#~ msgstr ""
-
-#~ msgid ""
-#~ "<0>Linked data that is practical</0>: a developer-friendly\n"
-#~ "take on the semantic web, with strict schemas and predictable\n"
-#~ "behavior."
-#~ msgstr ""
-
-#~ msgid ""
-#~ "<0>Standardized from the start</0>: reuse properties and\n"
-#~ "models, validate automatically, and keep systems interoperable."
-#~ msgstr ""
-
-#~ msgid ""
-#~ "<0>Feature complete by default</0>: rights, history,\n"
-#~ "realtime sync, search, invites, and collaboration built in."
-#~ msgstr ""
-
-#~ msgid ""
-#~ "<0>Fast</0>: a snappy workspace and API, optimized for\n"
-#~ "realtime interaction."
-#~ msgstr ""
-
-#~ msgid ""
-#~ "<0>Lightweight</0>: small download, minimal dependencies,\n"
-#~ "runs anywhere."
-#~ msgstr ""
-
-#~ msgid ""
-#~ "<0>Open source</0>: inspect, fork, and self-host. Keep\n"
-#~ "control of your data and avoid lock-in."
-#~ msgstr ""
-
-#~ msgid ""
-#~ "<0>Feature complete by default</0>: rights, history,\n"
-#~ "search, invites, realtime sync, and collaboration built in."
-#~ msgstr ""
-
-#~ msgid ""
-#~ "<0>All-in-one workspace</0>: documents, tables, files,\n"
-#~ "and APIs in one place, designed to stay coherent as it grows."
-#~ msgstr ""
-
-#~ msgid ""
-#~ "<0>Fast and lightweight</0>: a snappy workspace and API,\n"
-#~ "small download, minimal dependencies, runs anywhere."
-#~ msgstr ""
-
-#~ msgid ""
-#~ "<0>Feature complete by default</0>: rights, history,\n"
-#~ "search, invites, realtime sync, collaboration, and AI chat built\n"
-#~ "in."
-#~ msgstr ""
-
-#~ msgid ""
-#~ "<0>Future of the web</0>: decentralized by design, built\n"
-#~ "for interoperability so your data and tools can work together."
-#~ msgstr ""
-
 #: src/components/NewIdentitySection.tsx
 msgid "Others can read this. You can change this later."
 msgstr "D'autres peuvent lire ceci. Vous pourrez le modifier plus tard."
-
-#~ msgid "Your Integrated Knowledge Environment"
-#~ msgstr ""
-
-#~ msgid "Make your knowledge work for you"
-#~ msgstr ""
-
-#~ msgid "Fast and lightweight"
-#~ msgstr ""
-
-#~ msgid "Open source"
-#~ msgstr ""
-
-#~ msgid "Future of the web"
-#~ msgstr ""
-
-#~ msgid "Feature complete by default"
-#~ msgstr ""
 
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Make your knowledge work for you."
@@ -4563,38 +3731,10 @@ msgstr "Fonctionnalités génératives"
 msgid "MCP servers"
 msgstr "Serveurs MCP"
 
-#~ msgid ""
-#~ "<0>All-in-one workspace</0>: documents, tables, files, and APIs\n"
-#~ "in one place, designed to stay coherent as it grows."
-#~ msgstr ""
-
-#~ msgid ""
-#~ "<0>Fast and lightweight</0>: a snappy workspace and API, small\n"
-#~ "download, minimal dependencies, runs anywhere."
-#~ msgstr ""
-
-#~ msgid ""
-#~ "<0>Open source</0>: inspect, fork, and self-host. Keep control\n"
-#~ "of your data and avoid lock-in."
-#~ msgstr ""
-
-#~ msgid ""
-#~ "<0>Future of the web</0>: decentralized by design, built for\n"
-#~ "interoperability so your data and tools can work together."
-#~ msgstr ""
-
-#~ msgid ""
-#~ "<0>Feature complete by default</0>: rights, history, search,\n"
-#~ "invites, realtime sync, collaboration, and AI chat built in."
-#~ msgstr ""
-
 #: src/views/getting-started/GettingStartedFlow.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "<0/> Back"
 msgstr "<0/> Retour"
-
-#~ msgid "The secret is invalid."
-#~ msgstr ""
 
 #: src/components/NewIdentitySection.tsx
 msgid ""
@@ -4628,11 +3768,6 @@ msgstr "Créé : {0}"
 #: src/components/NewIdentitySection.tsx
 msgid "Backup file downloaded — move it out of Downloads if you share this computer"
 msgstr "Fichier de sauvegarde téléchargé — déplacez-le hors des téléchargements si vous partagez cet ordinateur"
-
-#~ msgid ""
-#~ "<0>IMPORTANT:</0> You need this secret to sign in again. We\n"
-#~ "do not store a copy you can reset like a normal password."
-#~ msgstr ""
 
 #. placeholder {0}: ' '
 #: src/components/NewIdentitySection.tsx
@@ -4715,16 +3850,10 @@ msgstr ""
 "recherche, invitations, synchronisation en temps réel, collaboration et chat IA\n"
 "intégrés."
 
-#~ msgid "Loro document ({0} bytes)"
-#~ msgstr ""
-
 #: src/routes/History/HistoryDesktopView.tsx
 #: src/routes/History/HistoryMobileView.tsx
 msgid "Restore this version"
 msgstr "Restaurer cette version"
-
-#~ msgid "Version restore not yet implemented for Loro"
-#~ msgstr "La restauration de version n'est pas encore implémentée pour Loro"
 
 #. placeholder {0}: resource.title
 #: src/routes/History/HistoryRoute.tsx
@@ -4778,12 +3907,6 @@ msgstr "{0} {1} Instantané Loro ({2} {3})"
 msgid "Failed to decode Loro snapshot"
 msgstr "Échec du décodage de l'instantané Loro"
 
-#~ msgid "Connected to server over WebSocket"
-#~ msgstr ""
-
-#~ msgid "Offline / server connection unavailable"
-#~ msgstr ""
-
 #: src/components/SideBar/SyncMenuItem.tsx
 #: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
@@ -4791,98 +3914,9 @@ msgstr "Échec du décodage de l'instantané Loro"
 msgid "Sync"
 msgstr "Synchroniser"
 
-#~ msgid "Show current connection and sync state"
-#~ msgstr ""
-
-#~ msgid "connection"
-#~ msgstr ""
-
-#~ msgid "syncing"
-#~ msgstr ""
-
-#~ msgid "drive sync"
-#~ msgstr ""
-
-#~ msgid "dirty sync"
-#~ msgstr ""
-
-#~ msgid "pending dirty"
-#~ msgstr ""
-
-#~ msgid "ws state"
-#~ msgstr ""
-
-#~ msgid "ws protocol"
-#~ msgstr ""
-
-#~ msgid "client db"
-#~ msgstr ""
-
-#~ msgid "server"
-#~ msgstr ""
-
-#~ msgid "drive"
-#~ msgstr ""
-
-#~ msgid "last drive sync"
-#~ msgstr ""
-
-#~ msgid "Inspect sync and connection state"
-#~ msgstr ""
-
-#~ msgid ""
-#~ "Inspect the current connection state, background sync activity, and\n"
-#~ "websocket details for this client."
-#~ msgstr ""
-
-#~ msgid "Status"
-#~ msgstr ""
-
-#~ msgid "Connection"
-#~ msgstr ""
-
-#~ msgid "Last Drive Sync"
-#~ msgstr ""
-
-#~ msgid "resources"
-#~ msgstr ""
-
-#~ msgid "timestamp"
-#~ msgstr ""
-
-#~ msgid "No completed drive sync recorded yet."
-#~ msgstr ""
-
-#~ msgid "Commit Log"
-#~ msgstr ""
-
-#~ msgid "commit"
-#~ msgstr ""
-
-#~ msgid "previous"
-#~ msgstr ""
-
-#~ msgid "signer"
-#~ msgstr ""
-
-#~ msgid "No commits recorded in this session yet."
-#~ msgstr ""
-
-#~ msgid "by"
-#~ msgstr ""
-
 #: src/routes/SyncRoute.tsx
 msgid "destroy"
 msgstr "Détruire"
-
-#~ msgid "source:"
-#~ msgstr "source :"
-
-#~ msgid "Where this resource was last loaded from"
-#~ msgstr "D'où cette ressource a été chargée pour la dernière fois"
-
-#~ msgid "Running in offline mode"
-#~ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "In sync"
@@ -4909,18 +3943,10 @@ msgstr "Hors ligne"
 msgid "Unknown"
 msgstr "Inconnu"
 
-#~ msgid ""
-#~ "Your data is stored locally on this device. When connected to a\n"
-#~ "server, changes sync automatically."
-#~ msgstr ""
-
 #: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "This device"
 msgstr "Cet appareil"
-
-#~ msgid "{0} pending"
-#~ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
@@ -4940,12 +3966,6 @@ msgstr "Lecteur"
 msgid "Connected"
 msgstr "Connecté"
 
-#~ msgid "Local storage"
-#~ msgstr ""
-
-#~ msgid "Ready"
-#~ msgstr ""
-
 #: src/routes/SyncRoute.tsx
 msgid "Initializing..."
 msgstr "Initialisation..."
@@ -4961,15 +3981,9 @@ msgstr "Dernière synchronisation"
 msgid "{0} resources,{1} {2}"
 msgstr "{0} ressources,{1} {2}"
 
-#~ msgid "Activity"
-#~ msgstr ""
-
 #: src/routes/SyncRoute.tsx
 msgid "No activity recorded in this session yet."
 msgstr "Aucune activité enregistrée dans cette session pour le moment."
-
-#~ msgid "Connected to server"
-#~ msgstr ""
 
 #: src/components/NetworkIndicator.tsx
 msgid "Working offline — your changes are saved locally"
@@ -4997,16 +4011,10 @@ msgstr "Journal des commits {0}"
 msgid "Sorry, this invite has no usages left. Ask for a new one."
 msgstr "Désolé, cette invitation n'a plus d'utilisations restantes. Demandez-en une nouvelle."
 
-#~ msgid "{0} usages left"
-#~ msgstr ""
-
 #. placeholder {0}: showInherited ? <FaChevronDown /> : <FaChevronRight />
 #: src/components/Share/ShareDialog.tsx
 msgid "{0} Inherited permissions"
 msgstr "{0} Permissions héritées"
-
-#~ msgid "Create Invite"
-#~ msgstr ""
 
 #: src/components/Share/ShareDialog.tsx
 msgid "<0><0/> Back</0> Create Invite"
@@ -5016,15 +4024,6 @@ msgstr "<0><0/> Retour</0> Créer une invitation"
 msgid "No invite token provided."
 msgstr "Aucun jeton d'invitation fourni."
 
-#~ msgid "You've been invited"
-#~ msgstr ""
-
-#~ msgid "You've been invited to {0}{1} <0/>"
-#~ msgstr ""
-
-#~ msgid "You've been invited to {0} a resource"
-#~ msgstr ""
-
 #: src/views/InvitePage.tsx
 msgid "Create account and accept"
 msgstr "Créer un compte et accepter"
@@ -5032,18 +4031,6 @@ msgstr "Créer un compte et accepter"
 #: src/views/InvitePage.tsx
 msgid "I already have an account"
 msgstr "J'ai déjà un compte"
-
-#~ msgid "What is AtomicServer?"
-#~ msgstr ""
-
-#~ msgid "<0>All-in-one workspace</0>: documents, tables, files, and APIs in one place."
-#~ msgstr ""
-
-#~ msgid "<0>Real-time collaboration</0>: edit together with instant sync."
-#~ msgstr ""
-
-#~ msgid "<0>Open source</0>: inspect, fork, and self-host. Keep control of your data."
-#~ msgstr ""
 
 #. placeholder {0}: write ? 'edit' : 'view'
 #. placeholder {1}: resourceName ? ` "${resourceName}"` : ''
@@ -5085,27 +4072,15 @@ msgstr "+ Ajouter"
 msgid "/app/sync"
 msgstr "/app/sync"
 
-#~ msgid "Server settings have moved to the{0} <0>Sync page</0>."
-#~ msgstr "Les paramètres du serveur ont été déplacés vers la{0} <0>page de synchronisation</0>."
-
 #: src/routes/SyncRoute.tsx
 msgid "How to run your own server"
 msgstr "Comment exécuter votre propre serveur"
-
-#~ msgid "Peer ID"
-#~ msgstr ""
 
 #. placeholder {0}: data.count
 #. placeholder {1}: data.count !== 1 ? 's' : ''
 #: src/routes/SyncRoute.tsx
 msgid "Synced {0} resource{1}"
 msgstr "{0} ressource{1} synchronisée"
-
-#~ msgid "Peer sync"
-#~ msgstr ""
-
-#~ msgid "Paste device ID to sync with"
-#~ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Peers"
@@ -5114,9 +4089,6 @@ msgstr "Pairs"
 #: src/routes/SyncRoute.tsx
 msgid "No peers connected"
 msgstr "Aucun pair connecté"
-
-#~ msgid "Paste device ID"
-#~ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Node DID"
@@ -5155,12 +4127,6 @@ msgstr "Intégré (local)"
 msgid "Local DB"
 msgstr "Base de données locale"
 
-#~ msgid "WASM + OPFS enabled"
-#~ msgstr ""
-
-#~ msgid "Disabled (server-only, reload to apply)"
-#~ msgstr ""
-
 #: src/routes/SyncRoute.tsx
 msgid "Disabled (server-only)"
 msgstr "Désactivé (serveur uniquement)"
@@ -5186,15 +4152,6 @@ msgstr "La ressource à <0/> n'a pas été chargée après 15 secondes. Elle pou
 #: src/views/ResourcePage.tsx
 msgid "Check the browser console for details, or try navigating back."
 msgstr "Vérifiez la console du navigateur pour les détails, ou essayez de revenir en arrière."
-
-#~ msgid "Failed to set agent identity after invite"
-#~ msgstr ""
-
-#~ msgid "Failed to create personal drive after invite"
-#~ msgstr ""
-
-#~ msgid "Failed to link shared resource after invite"
-#~ msgstr ""
 
 #. placeholder {0}: e instanceof Error ? e.message : String(e)
 #: src/routes/History/HistoryRoute.tsx
@@ -5224,9 +4181,6 @@ msgstr ""
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Saving…"
 msgstr ""
-
-#~ msgid "Draw with left click · Pan with Alt+drag or middle mouse · Scroll to zoom"
-#~ msgstr ""
 
 #: src/views/Drive/DrivePage.tsx
 msgid "Resources"
