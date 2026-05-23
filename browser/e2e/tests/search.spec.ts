@@ -80,7 +80,11 @@ test.describe('search', async () => {
     // real scoped query (`parents` forces the server path) instead.
     await page.waitForFunction(
       async (args: { subject: string; parent: string }) => {
-        const store = (window as { store?: { search(q: string, o: object): Promise<string[]> } }).store;
+        const store = (
+          window as {
+            store?: { search(q: string, o: object): Promise<string[]> };
+          }
+        ).store;
 
         if (!store) return false;
 
@@ -193,15 +197,19 @@ test.describe('search', async () => {
 
     // It must be in the store (and therefore the local search index) before
     // we cut the connection.
-    await expect(
-      page.getByTestId('sidebar').getByText(unique),
-    ).toBeVisible({ timeout: 10000 });
+    await expect(page.getByTestId('sidebar').getByText(unique)).toBeVisible({
+      timeout: 10000,
+    });
 
     // Go offline: block the network and close the WebSocket.
     await context.setOffline(true);
     await page.evaluate(() => {
-      (window as unknown as { store?: { getDefaultWebSocket(): { close(): void } | undefined } })
-        .store?.getDefaultWebSocket()
+      (
+        window as unknown as {
+          store?: { getDefaultWebSocket(): { close(): void } | undefined };
+        }
+      ).store
+        ?.getDefaultWebSocket()
         ?.close();
     });
     await page.waitForFunction(

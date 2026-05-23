@@ -18,7 +18,10 @@ import type { DropdownTriggerComponent } from '../Dropdown/DropdownTrigger';
 import { useNewResourceUI } from '../forms/NewForm/useNewResourceUI';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 
-const DefaultTrigger = buildDefaultTrigger(<FaHardDrive />, 'Open Drive Settings');
+const DefaultTrigger = buildDefaultTrigger(
+  <FaHardDrive />,
+  'Open Drive Settings',
+);
 
 function getTitle(resource: Resource): string {
   return (resource.get(core.properties.name) as string) ?? resource.subject;

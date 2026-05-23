@@ -1096,10 +1096,7 @@ export class Store {
     // Update local full-text search index, partitioned by the resource's
     // drive (root of its parent chain).
     if (!resource.loading && !resource.new) {
-      this.localSearch.addResource(
-        resource,
-        this.driveOf(resource.subject),
-      );
+      this.localSearch.addResource(resource, this.driveOf(resource.subject));
     }
 
     // Atomic put queued BEFORE notify. The worker's serialised
@@ -1298,9 +1295,7 @@ export class Store {
     // The local search index is partitioned per drive. The `parents` scope
     // the overlay passes is either the drive itself or a folder inside it;
     // resolve it up to the drive so the right partition is searched.
-    const searchDrive = this.driveOf(
-      opts.parents ?? this.getDrive() ?? '',
-    );
+    const searchDrive = this.driveOf(opts.parents ?? this.getDrive() ?? '');
     console.debug('[search] search()', {
       query,
       hasFilters: !!opts.filters,

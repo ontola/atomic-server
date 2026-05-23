@@ -109,7 +109,10 @@ export function encodeGet(requestId: number, subject: string): Uint8Array {
   return buf;
 }
 
-export function encodeCommit(requestId: number, commitJson: string): Uint8Array {
+export function encodeCommit(
+  requestId: number,
+  commitJson: string,
+): Uint8Array {
   const payload = encoder.encode(commitJson);
   const buf = new Uint8Array(3 + payload.length);
   buf[0] = Tag.COMMIT;
