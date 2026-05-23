@@ -505,8 +505,8 @@ pub async fn import_sync_push(
             continue;
         }
 
-        let snapshot_key = crate::Subject::from_raw(&entry.subject, store.get_base_domain().as_deref())
-            .pure_id();
+        let snapshot_key =
+            crate::Subject::from_raw(&entry.subject, store.get_base_domain().as_deref()).pure_id();
 
         // Load existing doc or create new
         let doc = if let Ok(Some(existing)) =

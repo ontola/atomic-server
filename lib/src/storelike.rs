@@ -382,9 +382,7 @@ pub trait Storelike: Sized + Send + Sync {
                             Ok(r) => r,
                             Err(err) => err
                                 .into_resource(result_subject.to_string())
-                                .unwrap_or_else(|_| {
-                                    Resource::new(result_subject.to_string())
-                                }),
+                                .unwrap_or_else(|_| Resource::new(result_subject.to_string())),
                         }
                     })
                 } else {

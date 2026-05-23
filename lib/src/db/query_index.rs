@@ -299,7 +299,10 @@ pub fn check_if_atom_matches_watched_query_filters(
     resource: &Resource,
     transaction: &mut Transaction,
 ) -> AtomicResult<()> {
-    println!("DEBUG: check_if_atom_matches_watched_query_filters: subject={}", index_atom.subject);
+    println!(
+        "DEBUG: check_if_atom_matches_watched_query_filters: subject={}",
+        index_atom.subject
+    );
     let subject_str = index_atom.subject.as_str();
 
     let filters: Vec<Arc<QueryFilter>> = if subject_str.starts_with("did:") {
@@ -309,7 +312,12 @@ pub fn check_if_atom_matches_watched_query_filters(
         store.watched_queries_for_drive(drive_prefix.as_str())
     };
 
-    tracing::info!("check_if_atom_matches_watched_query_filters: subject={}, atom_prop={}, filters_count={}", subject_str, index_atom.property, filters.len());
+    tracing::info!(
+        "check_if_atom_matches_watched_query_filters: subject={}, atom_prop={}, filters_count={}",
+        subject_str,
+        index_atom.property,
+        filters.len()
+    );
 
     for q_filter in &filters {
         if let Some(prop) = should_update_property(q_filter, index_atom, resource) {
@@ -338,7 +346,13 @@ pub fn update_indexed_member(
     delete: bool,
     transaction: &mut Transaction,
 ) -> AtomicResult<()> {
-    tracing::info!("update_indexed_member: subject={}, value={}, delete={}, filter={:?}", subject, value, delete, collection);
+    tracing::info!(
+        "update_indexed_member: subject={}, value={}, delete={}, filter={:?}",
+        subject,
+        value,
+        delete,
+        collection
+    );
     let key = create_query_index_key(collection, Some(value), Some(subject))?;
     if delete {
         transaction.push(Operation {

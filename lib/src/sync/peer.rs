@@ -317,10 +317,7 @@ fn remove_live_peer_inner(peer_id: &str, notify: bool) {
         }
     }
     if removed {
-        tracing::info!(
-            "[live] removed peer {}",
-            &key[..key.len().min(12)]
-        );
+        tracing::info!("[live] removed peer {}", &key[..key.len().min(12)]);
         if notify {
             push_event(&key, 0, "disconnected");
         }
@@ -427,16 +424,14 @@ fn start_live_sync(store: Db) {
             }
 
             let subject_key = match &event {
-                crate::DbEvent::Changed { subject, .. } | crate::DbEvent::Destroyed { subject, .. } => {
-                    subject.pure_id()
-                }
+                crate::DbEvent::Changed { subject, .. }
+                | crate::DbEvent::Destroyed { subject, .. } => subject.pure_id(),
                 _ => continue,
             };
 
             let loro_bytes: Option<Vec<u8>> = match &event {
                 crate::DbEvent::Changed {
-                    delta: Some(delta),
-                    ..
+                    delta: Some(delta), ..
                 } if !delta.is_empty() => Some(delta.clone()),
                 crate::DbEvent::Changed { .. } => store
                     .kv
@@ -816,27 +811,23 @@ pub async fn sync_drive_with_peer_using(
 
     const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
     let remote_short = &node_id.to_string()[..node_id.to_string().len().min(16)];
-    let conn = match tokio::time::timeout(CONNECT_TIMEOUT, endpoint.connect(node_id, ATOMIC_ALPN))
-        .await
-    {
-        Ok(Ok(c)) => c,
-        Ok(Err(e)) => {
-            tracing::error!("[sync] connect failed to {remote_short}: {e}");
-            return Err(format!(
-                "Iroh connect to {remote_short} failed: {e}"
-            )
-            .into());
-        }
-        Err(_) => {
-            tracing::error!("[sync] connect timed out to {remote_short}");
-            return Err(format!(
-                "Iroh connect to {remote_short} timed out after {}s. \
+    let conn =
+        match tokio::time::timeout(CONNECT_TIMEOUT, endpoint.connect(node_id, ATOMIC_ALPN)).await {
+            Ok(Ok(c)) => c,
+            Ok(Err(e)) => {
+                tracing::error!("[sync] connect failed to {remote_short}: {e}");
+                return Err(format!("Iroh connect to {remote_short} failed: {e}").into());
+            }
+            Err(_) => {
+                tracing::error!("[sync] connect timed out to {remote_short}");
+                return Err(format!(
+                    "Iroh connect to {remote_short} timed out after {}s. \
                  Is the other device online, on the network, and running the app?",
-                CONNECT_TIMEOUT.as_secs()
-            )
-            .into());
-        }
-    };
+                    CONNECT_TIMEOUT.as_secs()
+                )
+                .into());
+            }
+        };
 
     tracing::info!("[sync] connected! Opening bi stream...");
 
@@ -1086,7 +1077,10 @@ pub fn get_known_peers(store: &Db) -> Vec<KnownPeer> {
 pub fn add_known_peer(store: &Db, node_id: &str, name: &str) {
     let key = normalize_node_id(node_id);
     let mut peers = get_known_peers(store);
-    if let Some(existing) = peers.iter_mut().find(|p| normalize_node_id(&p.node_id) == key) {
+    if let Some(existing) = peers
+        .iter_mut()
+        .find(|p| normalize_node_id(&p.node_id) == key)
+    {
         if !name.is_empty() {
             existing.name = name.to_string();
         }

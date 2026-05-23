@@ -158,8 +158,7 @@ mod peer_sync_tests {
         async fn pull_from_a(db_a: &Db, db_b: &Db, drive_a: &str) -> usize {
             let drive_subject =
                 crate::Subject::from_raw(drive_a, db_b.get_base_domain().as_deref());
-            let subjects =
-                crate::sync::engine::collect_drive_subjects(db_b, &drive_subject).await;
+            let subjects = crate::sync::engine::collect_drive_subjects(db_b, &drive_subject).await;
             let vvs = crate::sync::engine::build_drive_vvs(db_b, &subjects);
             let hash = crate::sync::engine::compute_drive_hash(&vvs);
             let frames = crate::sync::engine::handle_sync_vv(
@@ -740,9 +739,14 @@ mod peer_sync_tests {
         ep_b.add_node_addr(node_addr_a).unwrap();
 
         // Sync using the explicit endpoint
-        let result =
-            peer::sync_drive_with_peer_using(&ep_b, &node_id_a.to_string(), &drive_did, &db_b, true)
-                .await;
+        let result = peer::sync_drive_with_peer_using(
+            &ep_b,
+            &node_id_a.to_string(),
+            &drive_did,
+            &db_b,
+            true,
+        )
+        .await;
 
         // Device B has the same agent (restored from secret) so it SHOULD be able
         // to sync the private drive. If count == 0, auth is broken — the server
@@ -836,9 +840,10 @@ mod peer_sync_tests {
         );
 
         // Sync via Iroh using the discovered NodeID
-        let count = peer::sync_drive_with_peer_using(&ep_b, &discovered_node_id, &drive_a, &db_b, true)
-            .await
-            .expect("Iroh sync should succeed");
+        let count =
+            peer::sync_drive_with_peer_using(&ep_b, &discovered_node_id, &drive_a, &db_b, true)
+                .await
+                .expect("Iroh sync should succeed");
 
         println!("Device B synced {count} resources");
         assert!(

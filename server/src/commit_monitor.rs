@@ -242,10 +242,7 @@ impl Handler<Subscribe> for CommitMonitor {
             .map(|msg, actor, _ctx| {
                 #[allow(clippy::mutable_key_type)]
                 if let Some(msg) = msg {
-                    let set = actor
-                        .subscriptions
-                        .entry(msg.subject.clone())
-                        .or_default();
+                    let set = actor.subscriptions.entry(msg.subject.clone()).or_default();
                     set.insert(msg.addr, msg.source_id);
                     tracing::debug!("handle subscribe {} ", msg.subject);
                 }
