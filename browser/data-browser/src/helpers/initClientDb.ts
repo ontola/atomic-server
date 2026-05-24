@@ -1,4 +1,4 @@
-import { ClientDbWorker, type Store } from '@tomic/lib';
+import { ClientDbWorker, perfSpan, type Store } from '@tomic/lib';
 // Vite resolves the bundled worker from the lib's dist and gives us a URL
 // pointing at the asset it copies into the build output.
 import clientDbWorkerUrl from '@tomic/lib/client-db.worker.js?url';
@@ -104,7 +104,10 @@ export function initClientDb(store: Store): void {
   // before WASM loads will queue and process after init.
   // After WASM is ready, seed the DB from the Store's in-memory map
   // so tables/queries work even without OPFS persistence.
+  const endClientDbInit = perfSpan('clientdb.init');
   const initPromise = clientDb.init(store.getServerUrl()).then(async () => {
+    endClientDbInit();
+    const endPostInit = perfSpan('clientdb.postInit');
     // Skip the seed entirely when:
     //   - The WASM DB is already populated from OPFS (prior session), AND
     //   - The bundled bootstrap data hasn't changed since the last seed
@@ -118,17 +121,30 @@ export function initClientDb(store: Store): void {
     //   mismatch → reseeds (one-time cost for that version).
     let opfsHasData = false;
 
+    const endAllSubjects = perfSpan('clientdb.allSubjects');
+    // Subjects already in the WASM DB. The Rust `ClientDb` runs
+    // `populate::bootstrap` inside `init_redb_opfs`, so on a fresh OPFS the
+    // ~200 bundled defaults are ALREADY present here — re-seeding them from JS
+    // is ~1s of redundant wasm-bindgen crossings. We skip any subject the DB
+    // already has and only seed what's genuinely missing (drive, agent,
+    // fetched resources).
+    const existingSet = new Set<string>();
+
     try {
       const existing = await clientDb.allSubjects();
+      for (const s of existing) existingSet.add(s);
       opfsHasData = existing.length > 0;
     } catch {
       // allSubjects failed — proceed with seed as fallback.
     }
 
+    endAllSubjects({ count: existingSet.size });
+
     if (opfsHasData && !bootstrapChanged) {
       console.info(
         `[ClientDb] bootstrap fingerprint unchanged (${currentFingerprint}) and OPFS populated, skipping seed`,
       );
+      endPostInit({ seeded: false, opfsSubjects: existingSet.size });
 
       return;
     }
@@ -141,8 +157,28 @@ export function initClientDb(store: Store): void {
     const properties: string[] = [];
     const others: string[] = [];
 
+    let skippedAlreadyPresent = 0;
+
+    // The bundled-defaults fingerprint doubles as a version stamp. We may skip
+    // re-seeding subjects the Rust-side bootstrap already populated ONLY when we
+    // can trust those values are current — i.e. a genuine first visit, where
+    // `init_redb_opfs` just ran `populate::bootstrap` against a fresh OPFS with
+    // THIS build's defaults. On a version change (`storedFingerprint` present
+    // but different) a default's *value* may have changed under an existing
+    // subject, and the Rust bootstrap skips existing OPFS — so we must reseed
+    // unfiltered to overwrite. That full reseed is a one-time ~1s cost per
+    // version bump; the common first-visit and warm paths stay fast.
+    const trustWasmDefaults = storedFingerprint === null;
+
     for (const resource of store.resources.values()) {
       if (!resource.loading && !resource.new && resource.subject) {
+        // Already populated by the Rust-side bootstrap — don't pay the
+        // wasm-bindgen crossing to re-insert identical data.
+        if (trustWasmDefaults && existingSet.has(resource.subject)) {
+          skippedAlreadyPresent++;
+          continue;
+        }
+
         const isA = resource.get(isAProp);
         const isProperty = Array.isArray(isA) && isA.includes(propertyClass);
 
@@ -159,6 +195,7 @@ export function initClientDb(store: Store): void {
     // round-trips (~350 ms of dead time on cold start); batch them into
     // one worker call. The worker still processes them in order, so the
     // datatype-priming property is preserved.
+    const endSeed = perfSpan('clientdb.seed');
     const propertyJsonAds = properties
       .map(serializeResource)
       .filter((s): s is string => s !== undefined);
@@ -169,6 +206,10 @@ export function initClientDb(store: Store): void {
       .map(serializeResource)
       .filter((s): s is string => s !== undefined);
     await clientDb.putResources(otherJsonAds).catch(() => {});
+    endSeed({
+      properties: propertyJsonAds.length,
+      others: otherJsonAds.length,
+    });
 
     // Persist the fingerprint AFTER the seed lands so a crashed seed
     // forces a retry on the next load (the stored value would still
@@ -183,8 +224,14 @@ export function initClientDb(store: Store): void {
     }
 
     console.info(
-      `[ClientDb] seeded ${propertyJsonAds.length} properties + ${otherJsonAds.length} resources (fingerprint ${currentFingerprint}${bootstrapChanged && storedFingerprint ? `, was ${storedFingerprint}` : ''})`,
+      `[ClientDb] seeded ${propertyJsonAds.length} properties + ${otherJsonAds.length} resources, skipped ${skippedAlreadyPresent} already in WASM DB (fingerprint ${currentFingerprint}${bootstrapChanged && storedFingerprint ? `, was ${storedFingerprint}` : ''})`,
     );
+    endPostInit({
+      seeded: true,
+      properties: propertyJsonAds.length,
+      others: otherJsonAds.length,
+      skippedAlreadyPresent,
+    });
   });
 
   // Tell the clientDb to wait for seeding before reporting as ready.

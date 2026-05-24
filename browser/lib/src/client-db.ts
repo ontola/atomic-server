@@ -25,7 +25,12 @@
  * ```
  */
 
-import type { WorkerRequest, WorkerResponse } from './client-db.worker.js';
+import type {
+  WorkerRequest,
+  WorkerResponse,
+  ClientDbInitTimings,
+} from './client-db.worker.js';
+import { perfMark, perfSpan } from './perf-trace.js';
 
 export interface ClientDbQueryResult {
   subjects: string[];
@@ -174,6 +179,7 @@ export class ClientDbWorker {
     // `navigator.locks` lease but isn't responding on the BC — its bundle
     // crashed, was HMR-killed, or its tab is background-throttled into
     // ignoring BC messages.
+    const endElection = perfSpan('clientdb.election');
     const winner = await Promise.race([
       this.leadershipGained.then(() => 'leader' as const),
       this.leaderObserved.then(() => 'follower' as const),
@@ -181,6 +187,7 @@ export class ClientDbWorker {
         setTimeout(() => resolve('timeout'), LEADER_ELECTION_WAIT_MS),
       ),
     ]);
+    endElection({ winner });
 
     if (winner === 'timeout') {
       // Steal: forcibly take the lock from the ghost leader. The previous
@@ -269,7 +276,9 @@ export class ClientDbWorker {
    */
   private async becomeLeader(baseUrl?: string): Promise<void> {
     if (this.worker) return;
+    const endSpawn = perfSpan('clientdb.workerSpawn');
     this.worker = new Worker(this.workerUrl, { type: 'module' });
+    endSpawn();
 
     this.worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
       const { id, type, ...rest } = event.data;
@@ -288,11 +297,21 @@ export class ClientDbWorker {
       console.error('[ClientDb Worker Error]', event.message);
     };
 
-    await this.sendToWorker({
+    const endWorkerInit = perfSpan('clientdb.workerInit');
+    const timings = (await this.sendToWorker({
       type: 'init',
       wasmUrl: this.wasmUrl,
       baseUrl,
-    });
+    })) as ClientDbInitTimings | undefined;
+    endWorkerInit(timings);
+
+    // Fold the worker-side WASM/OPFS boot (otherwise invisible to the
+    // main-thread trace) into `__atomicPerf` as discrete marks.
+    if (timings) {
+      perfMark('clientdb.wasm.import', { ms: timings.wasmImportMs });
+      perfMark('clientdb.wasm.instantiate', { ms: timings.wasmInstantiateMs });
+      perfMark('clientdb.opfs.dbOpen', { ms: timings.dbOpenMs });
+    }
 
     this.role = 'leader';
     // Recover from a prior `'failed'` (leadership-timeout) state if the lock

@@ -9,7 +9,7 @@
 type WasmModule = any;
 
 let db: WasmModule | null = null;
-let initPromise: Promise<void> | null = null;
+let initPromise: Promise<ClientDbInitTimings> | null = null;
 
 /** Message types sent from main thread to worker */
 export type WorkerRequest =
@@ -57,16 +57,15 @@ export type WorkerResponse =
 async function handleMessage(msg: WorkerRequest): Promise<unknown> {
   switch (msg.type) {
     case 'init': {
+      // Return the per-phase init timings so the main thread can fold the
+      // worker-side WASM/OPFS boot into its perf trace.
       if (initPromise) {
-        await initPromise;
-
-        return;
+        return await initPromise;
       }
 
       initPromise = doInit(msg.wasmUrl, msg.baseUrl);
-      await initPromise;
 
-      return;
+      return await initPromise;
     }
 
     case 'getResource': {
@@ -223,12 +222,45 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
   }
 }
 
-async function doInit(wasmUrl: string, baseUrl?: string): Promise<void> {
+/**
+ * Per-phase init timings (ms), measured on the worker's own clock and returned
+ * to the main thread in the `init` ack so the OPFS/WASM boot — which is
+ * otherwise invisible to the main-thread perf trace — shows up in
+ * `__atomicPerf`. Durations are clock-independent, so no epoch reconciliation
+ * is needed.
+ */
+export interface ClientDbInitTimings {
+  wasmImportMs: number;
+  wasmInstantiateMs: number;
+  dbOpenMs: number;
+  totalMs: number;
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+async function doInit(
+  wasmUrl: string,
+  baseUrl?: string,
+): Promise<ClientDbInitTimings> {
   // Dynamic import of the WASM glue code.
   // The URL should point to the directory containing atomic_wasm.js and atomic_wasm_bg.wasm
+  const t0 = performance.now();
   const wasm = await import(/* webpackIgnore: true */ wasmUrl);
+  const t1 = performance.now();
+  // Compile + instantiate the WASM module.
   await wasm.default();
+  const t2 = performance.now();
+  // `new ClientDb` opens the OPFS-backed database (acquire OPFS handle, open
+  // redb, run migrations).
   db = await new wasm.ClientDb(baseUrl ?? null);
+  const t3 = performance.now();
+
+  return {
+    wasmImportMs: round2(t1 - t0),
+    wasmInstantiateMs: round2(t2 - t1),
+    dbOpenMs: round2(t3 - t2),
+    totalMs: round2(t3 - t0),
+  };
 }
 
 async function ensureInit(): Promise<void> {
