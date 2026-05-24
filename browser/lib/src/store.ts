@@ -2427,9 +2427,13 @@ export class Store {
     );
   }
 
-  /** v2 uses drive-level WS subscriptions, so per-resource subscribe
-   *  is a no-op kept for API stability — callers don't need to gate
-   *  themselves. The lookup confirms the origin's WS exists. */
+  /** v2 uses drive-level WS subscriptions — every resource in the drive
+   *  is delivered through the single `SUB <drive>` sent in
+   *  {@link WSClient.handleOpen}. The server's `CommitMonitor` fans
+   *  CommitMessages out to drive subscribers when the commit's target
+   *  lives under that drive. This per-resource entry-point is kept as
+   *  a no-op for API stability — callers don't need to gate themselves.
+   *  The lookup confirms the origin's WS exists. */
   public subscribeWebSocket(subject: string): void {
     if (!this._serverConnected) return;
     const normalized = this.normalizeSubject(subject);

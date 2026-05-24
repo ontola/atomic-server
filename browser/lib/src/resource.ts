@@ -2302,6 +2302,13 @@ export class Resource<C extends OptionalClass = any> {
       this.rebuildCacheFromLoro();
       this._cacheDirty = false;
       this.markLoroSaved();
+      // Mirror what `markDirty` / `undo` / `redo` already do: when the
+      // resource's Loro state changes out-of-band of `set` / `pushListItem`,
+      // emit a wildcard `LocalChange` so React consumers (canvas page,
+      // `useValue`, etc.) re-read the cache. Without this, an incoming
+      // WS `UPDATE` quietly mutates the doc and the UI keeps painting the
+      // pre-import state until the user navigates away and back.
+      this.eventManager.emit(ResourceEvents.LocalChange, '', undefined);
     } catch (e) {
       console.warn('Failed to import Loro update:', e);
     }

@@ -538,6 +538,31 @@ impl Handler<CommitMessage> for CommitMonitor {
             tracing::debug!("No subscribers for {}", target_subject);
         }
 
+        // Drive-wide subscribers also receive every commit for a resource
+        // that lives under their drive. The v2 client only sends a single
+        // `SUB <drive>`; without this fan-out a second tab viewing any
+        // child resource (canvas, document, folder…) never saw edits made
+        // elsewhere — `DriveNotification` only delivers membership
+        // changes, not edits. HTTP subjects prefix-match the drive URL
+        // exactly; DID-form subjects can't be prefix-matched so they fan
+        // out to every drive subscriber (the client's commit-id dedup in
+        // `applyIncoming` absorbs the noise). The connection-id source
+        // suppression still applies, so the originating tab doesn't get
+        // its own commit echoed back.
+        let subject_str = target_subject.to_string();
+        let is_did = subject_str.starts_with("did:");
+        for (drive, subscribers) in &self.drive_subscriptions {
+            if !is_did && !subject_str.starts_with(drive.as_str()) {
+                continue;
+            }
+            for (connection, sub_source) in subscribers {
+                if skip_same_source(event_source, sub_source) {
+                    continue;
+                }
+                connection.do_send(msg.clone());
+            }
+        }
+
         // Query-subscription notifications now flow through the DbEvents
         // listener task spawned in `started()`, not from this handler.
         // See `Handler<MembershipNotification>` and `Handler<DriveNotification>`.
