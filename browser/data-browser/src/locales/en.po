@@ -4370,3 +4370,15 @@ msgstr "Click to rename"
 #: src/components/SideBar/useSidebarDnd.ts
 msgid "Draggable item {0} was moved over droppable area in {1}"
 msgstr "Draggable item {0} was moved over droppable area in {1}"
+
+#: src/chunks/RTE/CollaborativeEditor.tsx
+msgid "Mod-z"
+msgstr "Mod-z"
+
+#: src/chunks/RTE/CollaborativeEditor.tsx
+msgid "Mod-Shift-z"
+msgstr "Mod-Shift-z"
+
+#: src/chunks/RTE/CollaborativeEditor.tsx
+msgid "Mod-y"
+msgstr "Mod-y"

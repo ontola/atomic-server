@@ -4334,3 +4334,15 @@ msgstr ""
 #: src/components/SideBar/useSidebarDnd.ts
 msgid "Draggable item {0} was moved over droppable area in {1}"
 msgstr ""
+
+#: src/chunks/RTE/CollaborativeEditor.tsx
+msgid "Mod-z"
+msgstr ""
+
+#: src/chunks/RTE/CollaborativeEditor.tsx
+msgid "Mod-Shift-z"
+msgstr ""
+
+#: src/chunks/RTE/CollaborativeEditor.tsx
+msgid "Mod-y"
+msgstr ""
