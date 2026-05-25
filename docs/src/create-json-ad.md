@@ -53,7 +53,7 @@ Adding a Class helps people to understand the data, and it can provide guarantee
 We can also use Classes to render Forms, which can be useful when the data should be edited later.
 For example, the BlogPost item
 
-## Using exsisting Ontologies, Classes and Ontologies
+## Using existing Ontologies, Classes and Ontologies
 
 Ontologies are groups of concepts that describe some domain.
 For example, we could have an Ontology for Blogs that links to a bunch of related _Classes_, such as BlogPost and Person.
