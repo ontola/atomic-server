@@ -2382,27 +2382,65 @@ export class Store {
     }
   }
 
-  /** Force-reconnect to the server by dropping and recreating the WebSocket. */
-  public reconnect(): void {
+  /**
+   * Force-reconnect to the server by dropping and recreating the WebSocket.
+   *
+   * Resolves once the new socket is open and `serverConnected` flips back
+   * to `true`. Rejects with the connection error if the socket closes or
+   * fails before that happens, or if `timeoutMs` elapses with no outcome.
+   *
+   * Returning a promise lets callers route reconnect failures through the
+   * standard `store.notifyError(e)` pipeline (and therefore through the
+   * global `StoreEvents.Error` toast) instead of polling sync status to
+   * detect the failure themselves.
+   */
+  public reconnect(timeoutMs = 15000): Promise<void> {
     const url = this.serverUrl;
 
-    if (!url) return;
+    if (!url) return Promise.resolve();
 
-    this.setServerConnected(false);
+    return new Promise<void>((resolve, reject) => {
+      let unsub: (() => void) | undefined;
+      const timer = setTimeout(() => {
+        unsub?.();
+        reject(
+          new Error(
+            `Reconnect to ${url} timed out after ${timeoutMs}ms. Check that the server is running and reachable.`,
+          ),
+        );
+      }, timeoutMs);
 
-    // Close existing WebSocket
-    const existing = this.webSockets.get(url);
+      unsub = this.on(StoreEvents.ConnectionChanged, connected => {
+        if (connected) {
+          clearTimeout(timer);
+          unsub?.();
+          resolve();
+        } else if (this._serverConnectionError) {
+          // A disconnect without an error message is the synchronous
+          // teardown step below — keep waiting for the real outcome.
+          clearTimeout(timer);
+          unsub?.();
+          reject(new Error(this._serverConnectionError));
+        }
+      });
 
-    if (existing) {
-      existing.close();
-      this.webSockets.delete(url);
-    }
+      // Tear down + reopen. The `setServerConnected(false)` here fires
+      // `ConnectionChanged` with `_serverConnectionError === undefined`,
+      // which the listener above ignores.
+      const existing = this.webSockets.get(url);
 
-    if (typeof localStorage !== 'undefined') {
-      localStorage.removeItem('ws-disconnected');
-    }
+      if (existing) {
+        existing.close();
+        this.webSockets.delete(url);
+      }
 
-    this.openWebSocket(url);
+      if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem('ws-disconnected');
+      }
+
+      this.setServerConnected(false);
+      this.openWebSocket(url);
+    });
   }
 
   /** Close the WebSocket connection. Persists across refresh until reconnect(). */

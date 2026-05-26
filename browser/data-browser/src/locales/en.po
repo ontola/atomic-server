@@ -4336,3 +4336,7 @@ msgstr "Dev agent created — secret copied to clipboard"
 #: src/hooks/useDevDrive.ts
 msgid "Dev agent created — secret available in localStorage (clipboard write blocked)"
 msgstr "Dev agent created — secret available in localStorage (clipboard write blocked)"
+
+#: src/routes/SyncRoute.tsx
+msgid "Node DID copied to clipboard"
+msgstr "Node DID copied to clipboard"

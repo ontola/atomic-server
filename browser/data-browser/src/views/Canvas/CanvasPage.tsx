@@ -1447,7 +1447,7 @@ const CanvasArea = styled.div<{
   min-height: 400px;
   overflow: hidden;
   touch-action: none;
-  background: ${p => (p.$dark ? '#1a1a1a' : '#f5f5f0')};
+  background: ${p => p.theme.colors.bg};
   cursor: ${p =>
     p.$panMode === 'ready'
       ? 'grab'
