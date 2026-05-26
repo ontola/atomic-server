@@ -1,0 +1,7 @@
+# When cargo is invoked from the desktop crate (e.g. `cargo tauri build`),
+# skip the server's duplicate pnpm/wasm-pack rebuild. The Tauri build already
+# runs `pnpm build:tauri` via `beforeBuildCommand`, and the embedded server's
+# bundled assets aren't served to the Tauri webview anyway — it loads
+# `dist-tauri/` via the custom protocol.
+[env]
+ATOMICSERVER_SKIP_JS_BUILD = "true"
