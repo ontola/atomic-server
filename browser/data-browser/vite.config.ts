@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react-swc';
+import react from '@vitejs/plugin-react';
+import babel from '@rolldown/plugin-babel';
 import { VitePWA } from 'vite-plugin-pwa';
 import webfontDownload from 'vite-plugin-webfont-dl';
 import prismjs from 'vite-plugin-prismjs';
@@ -38,171 +39,216 @@ export default defineConfig({
     wasm(),
     !isVitest && webfontDownload(),
     !isVitest && wuchale(),
-    react({
-      // SWC plugin pipeline — plugin-react v6 dropped babel for OXC, which
-      // silently ignores the old `babel.plugins` config. Use the SWC fork
-      // and load `@swc/plugin-styled-components` (Rust port of
-      // `babel-plugin-styled-components`) so styled components keep their
-      // dev-friendly `Foo-sc-XXX` class names.
+    // OXC handles the bulk JSX/TS transform via @vitejs/plugin-react v6.
+    // The two passes we still need babel for ride on @rolldown/plugin-babel,
+    // which MUST run before `react()` ("the compiler must run before other
+    // transforms" — React Compiler docs):
+    //
+    //  - babel-plugin-react-compiler: auto-memoising compiler. No SWC/OXC
+    //    port exists yet (Oct 2026); React's official Vite recipe is this
+    //    same two-pass setup.
+    //  - babel-plugin-styled-components: emits `displayName` so DOM classes
+    //    read `Foo-sc-XXX` instead of opaque `sc-XXX` hashes. plugin-react
+    //    v6 dropped its own `babel` option, so this is now the only hook.
+    babel({
+      include: /\.[jt]sx?$/,
+      exclude: /node_modules/,
       plugins: [
         [
-          '@swc/plugin-styled-components',
+          'babel-plugin-react-compiler',
+          {
+            logger: {
+              logEvent(filename, event) {
+                if (event.kind === 'CompileError') {
+                  console.error(`\nCompilation failed: ${filename}`);
+                  console.error(`Reason: ${event.detail.reason}`);
+
+                  if (event.detail.description) {
+                    console.error(`Details: ${event.detail.description}`);
+                  }
+
+                  if (event.detail.loc) {
+                    const { line, column } = event.detail.loc.start;
+                    console.error(`Location: Line ${line}, Column ${column}`);
+                  }
+
+                  if (event.detail.suggestions) {
+                    console.error('Suggestions:', event.detail.suggestions);
+                  }
+                }
+              },
+            },
+          },
+        ],
+        [
+          'babel-plugin-styled-components',
           { displayName: true, fileName: false },
         ],
       ],
     }),
-    !isVitest && !isTauri && VitePWA({
-      registerType: 'autoUpdate',
-      injectRegister: 'auto',
-      manifest: {
-        name: 'Atomic Data Browser',
-        short_name: 'Atomic',
-        description:
-          'The easiest way to create, share and model Linked Atomic Data.',
-        theme_color: '#ffffff',
-        icons: [
-          {
-            src: 'app_data/images/android-chrome-192x192.png',
-            sizes: '192x192',
-            type: 'image/png',
-            purpose: 'any',
-          },
-          {
-            src: 'app_data/images/android-chrome-512x512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'any',
-          },
-          {
-            src: 'app_data/images/maskable_icon.png',
-            sizes: '1024x1024',
-            type: 'image/png',
-            purpose: 'maskable',
-          },
-          {
-            src: 'app_data/images/maskable_icon_x512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'maskable',
-          },
-          {
-            src: 'app_data/images/maskable_icon_x384.png',
-            sizes: '384x384',
-            type: 'image/png',
-            purpose: 'maskable',
-          },
-          {
-            src: 'app_data/images/maskable_icon_x192.png',
-            sizes: '192x192',
-            type: 'image/png',
-            purpose: 'maskable',
-          },
-          {
-            src: 'app_data/images/maskable_icon_x128.png',
-            sizes: '128x128',
-            type: 'image/png',
-            purpose: 'maskable',
-          },
-        ],
-      },
-      workbox: {
-        // See https://github.com/atomicdata-dev/atomic-data-browser/issues/294
-        // index.html is excluded from precaching because atomic-server injects
-        // CSP nonces dynamically. Instead we use runtime caching with NetworkFirst
-        // so the SW caches whatever HTML the server serves (with nonce), and falls
-        // back to it offline.
-        globIgnores: ['**/index.html'],
-        // Increased for WASM binaries (loro-crdt + atomic-wasm)
-        maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
-        // index.html is NOT precached because atomic-server injects CSP nonces.
-        // Disable the default navigateFallback (which requires precached index.html).
-        // Instead we cache navigation responses at runtime with NetworkFirst.
-        navigateFallback: null,
-        runtimeCaching: [
-          {
-            // Cache ALL navigation requests (SPA — same HTML shell for all routes).
-            // NetworkFirst: use server when online, fall back to cache offline.
-            urlPattern: ({ request }) => request.mode === 'navigate',
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'html-cache',
-              expiration: {
-                maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 7, // 7 days
-              },
-              cacheableResponse: {
-                statuses: [200],
+    react(),
+    !isVitest &&
+      !isTauri &&
+      VitePWA({
+        registerType: 'autoUpdate',
+        injectRegister: 'auto',
+        manifest: {
+          name: 'Atomic Data Browser',
+          short_name: 'Atomic',
+          description:
+            'The easiest way to create, share and model Linked Atomic Data.',
+          theme_color: '#ffffff',
+          icons: [
+            {
+              src: 'app_data/images/android-chrome-192x192.png',
+              sizes: '192x192',
+              type: 'image/png',
+              purpose: 'any',
+            },
+            {
+              src: 'app_data/images/android-chrome-512x512.png',
+              sizes: '512x512',
+              type: 'image/png',
+              purpose: 'any',
+            },
+            {
+              src: 'app_data/images/maskable_icon.png',
+              sizes: '1024x1024',
+              type: 'image/png',
+              purpose: 'maskable',
+            },
+            {
+              src: 'app_data/images/maskable_icon_x512.png',
+              sizes: '512x512',
+              type: 'image/png',
+              purpose: 'maskable',
+            },
+            {
+              src: 'app_data/images/maskable_icon_x384.png',
+              sizes: '384x384',
+              type: 'image/png',
+              purpose: 'maskable',
+            },
+            {
+              src: 'app_data/images/maskable_icon_x192.png',
+              sizes: '192x192',
+              type: 'image/png',
+              purpose: 'maskable',
+            },
+            {
+              src: 'app_data/images/maskable_icon_x128.png',
+              sizes: '128x128',
+              type: 'image/png',
+              purpose: 'maskable',
+            },
+          ],
+        },
+        workbox: {
+          // See https://github.com/atomicdata-dev/atomic-data-browser/issues/294
+          // index.html is excluded from precaching because atomic-server injects
+          // CSP nonces dynamically. Instead we use runtime caching with NetworkFirst
+          // so the SW caches whatever HTML the server serves (with nonce), and falls
+          // back to it offline.
+          globIgnores: ['**/index.html'],
+          // Increased for WASM binaries (loro-crdt + atomic-wasm)
+          maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
+          // index.html is NOT precached because atomic-server injects CSP nonces.
+          // Disable the default navigateFallback (which requires precached index.html).
+          // Instead we cache navigation responses at runtime with NetworkFirst.
+          navigateFallback: null,
+          runtimeCaching: [
+            {
+              // Cache ALL navigation requests (SPA — same HTML shell for all routes).
+              // NetworkFirst: use server when online, fall back to cache offline.
+              urlPattern: ({ request }) => request.mode === 'navigate',
+              handler: 'NetworkFirst',
+              options: {
+                cacheName: 'html-cache',
+                expiration: {
+                  maxEntries: 10,
+                  maxAgeSeconds: 60 * 60 * 24 * 7, // 7 days
+                },
+                cacheableResponse: {
+                  statuses: [200],
+                },
               },
             },
-          },
-          {
-            // Cache WASM and worker files
-            urlPattern: /\/wasm\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'wasm-cache',
-              expiration: {
-                maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
-              },
-              cacheableResponse: {
-                statuses: [0, 200],
-              },
-            },
-          },
-          {
-            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'google-fonts-cache',
-              expiration: {
-                maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 365, // <== 365 days
-              },
-              cacheableResponse: {
-                statuses: [0, 200],
+            {
+              // Cache WASM and worker files
+              urlPattern: /\/wasm\/.*/i,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'wasm-cache',
+                expiration: {
+                  maxEntries: 10,
+                  maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
+                },
+                cacheableResponse: {
+                  statuses: [0, 200],
+                },
               },
             },
-          },
-          {
-            urlPattern:
-              /^https?:\/\/.*\.(?:png|jpg|jpeg|gif|bmp|svg|webp|ico)/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'images-cache',
-              expiration: {
-                maxEntries: 100,
-                maxAgeSeconds: 60 * 60 * 24 * 30, // <== 30 days
-              },
-              cacheableResponse: {
-                statuses: [0, 200],
-              },
-            },
-          },
-          {
-            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'gstatic-fonts-cache',
-              expiration: {
-                maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 365, // <== 365 days
-              },
-              cacheableResponse: {
-                statuses: [0, 200],
+            {
+              urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'google-fonts-cache',
+                expiration: {
+                  maxEntries: 10,
+                  maxAgeSeconds: 60 * 60 * 24 * 365, // <== 365 days
+                },
+                cacheableResponse: {
+                  statuses: [0, 200],
+                },
               },
             },
-          },
-        ],
-      },
-    }),
-    !isVitest && prismjs({
-      languages: ['typescript'],
-      css: true,
-      theme: 'default',
-    }),
+            {
+              urlPattern:
+                /^https?:\/\/.*\.(?:png|jpg|jpeg|gif|bmp|svg|webp|ico)/i,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'images-cache',
+                expiration: {
+                  maxEntries: 100,
+                  maxAgeSeconds: 60 * 60 * 24 * 30, // <== 30 days
+                },
+                cacheableResponse: {
+                  statuses: [0, 200],
+                },
+              },
+            },
+            {
+              urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'gstatic-fonts-cache',
+                expiration: {
+                  maxEntries: 10,
+                  maxAgeSeconds: 60 * 60 * 24 * 365, // <== 365 days
+                },
+                cacheableResponse: {
+                  statuses: [0, 200],
+                },
+              },
+            },
+          ],
+        },
+      }),
+    !isVitest &&
+      prismjs({
+        languages: ['typescript'],
+        css: true,
+        theme: 'default',
+      }),
   ],
   optimizeDeps: {
+    // React Compiler emits `import { c as _c } from "react/compiler-runtime"`
+    // in every memoised component. Without this hint, Vite only discovers
+    // the dep the first time a compiled module loads — it prebundles
+    // mid-session and serves a half-written file to the next request,
+    // surfacing as `NS_ERROR_CORRUPTED_CONTENT` + empty MIME type on the
+    // browser. Listing it up front makes the optimization happen at boot.
+    include: ['react/compiler-runtime'],
     // this may help when linking + HMR is not working
     // exclude: ['@tomic/lib', '@tomic/react'],
   },
