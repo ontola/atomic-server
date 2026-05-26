@@ -826,19 +826,18 @@ export async function changeDrive(
 export async function editTitle(title: string, page: Page) {
   const titleEl = editableTitle(page);
   // After resource creation, EditableTitle auto-enters edit mode (textbox).
-  // If we land on the heading variant (e.g. when reusing an existing resource),
-  // click to activate edit mode. Poll briefly because the heading→textbox
-  // transition is async on creation.
-  const deadline = Date.now() + 5000;
-  while (Date.now() < deadline) {
-    const tag = await titleEl.evaluate(el => el.tagName).catch(() => '');
-    if (tag === 'INPUT') break;
-    if (tag === 'H1') {
-      await titleEl.click();
-      await expect(titleEl).toHaveRole('textbox');
-      break;
-    }
-    await page.waitForTimeout(100);
+  // Wait for that to appear. Don't short-circuit on H1 — the previous page's
+  // title (e.g. "Cake Folder") can still be rendered as <h1> for a brief
+  // window after a Click 'New Document' triggers SPA navigation. Eagerly
+  // clicking it would activate the OLD page's title and rename the wrong
+  // resource. Only fall back to the click-H1 path after waiting long enough
+  // that the new page's textbox would have appeared if it was going to.
+  try {
+    await expect(titleEl).toHaveRole('textbox', { timeout: 5000 });
+  } catch {
+    // Pre-existing resource: title renders as <h1>. Click to enter edit mode.
+    await titleEl.click();
+    await expect(titleEl).toHaveRole('textbox');
   }
   // Watch for the commit BEFORE typing so we don't miss the response that
   // fires during the debounced save.

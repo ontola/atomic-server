@@ -1107,6 +1107,14 @@ export class Store {
     // placeholders.
     if (
       this.clientDb &&
+      // Skip persisting when the worker has a known init failure (e.g.
+      // OPFS leader-election couldn't steal the lock — Firefox doesn't
+      // support `navigator.locks.request({ steal: true })`). Without this
+      // gate every single `addResource` would queue a `putResourceWithSnapshot`
+      // that fails with the same error, flooding the console with one
+      // stack trace per resource. The worker itself has already warned
+      // once when init failed — that single line is the actionable signal.
+      !this.clientDb.initError &&
       !resource.loading &&
       !resource.new &&
       !resource.hasPendingCommits &&
