@@ -324,52 +324,6 @@ policy that drops grant evidence; only ordinary content commits are subject to
 class-level discard policy. This keeps the cryptographic audit story uniform
 across the ontology.
 
-## Comparison: Nextgraph
-
-Nextgraph has already made several choices that point in the same direction,
-but with a more capability- and quorum-oriented shape:
-
-- Repositories have explicit read capabilities and write capability secrets.
-  A `ReadCap` is an `ObjectRef`; repo write authority is a
-  `RepoWriteCapSecret`; branch write authority is a `BranchWriteCapSecret`.
-- Membership and permissions are first-class repo state. Users have permission
-  sets such as owner, admin, async write, sync write, compact, add member, add
-  write permission, and refresh caps.
-- Commit verification is split into signature verification and permission
-  verification. The commit author is resolved through repo membership, and the
-  commit body determines which permission is required.
-- Permission and capability changes are root-branch commits, not ordinary data
-  edits.
-- Nextgraph distinguishes soft snapshots from hard compaction. A hard compact
-  snapshot can erase ancestor commit bodies, but it is itself a permissioned
-  commit and requires the compact permission.
-- Nextgraph uses threshold signatures and certificates to sign sets of commits
-  or chain repo authority across epochs. That is close to the proposed Atomic
-  auth checkpoint, but richer: the checkpoint authority can be a quorum, not
-  merely one agent.
-
-The important lesson for Atomic is not to copy the whole repo/overlay model. It
-is to copy the separation of concerns:
-
-```text
-data state       -> snapshot / CRDT state
-write authority  -> signed commit + permission check
-sharing          -> read/write capability material
-compaction       -> permissioned checkpoint, not anonymous snapshot
-authority epoch  -> certificate/checkpoint that survives history pruning
-```
-
-Atomic can stay simpler:
-
-- Keep resource-level DIDs and hierarchy rights instead of repo-level overlays.
-- Keep Ed25519 agent signatures for ordinary commits.
-- Add an `AuthCheckpoint` as the compacted authority epoch.
-- Treat creator/grant/parent/destroy evidence like Nextgraph treats
-  root-branch / permission / cap-refresh commits: special evidence that cannot
-  be dropped like ordinary content edits.
-- Later, if groups/quorums become necessary, evolve `AuthCheckpoint.signed_by`
-  from a single agent to a threshold/group signature.
-
 ## Protocol direction
 
 Keep WS `COMMIT` as the authoritative write path. Do not make raw `SYNC_PUSH`
@@ -504,7 +458,7 @@ trusting B's snapshot.
 
 - **Checkpoint authority for shared resources.** Who is allowed to issue an
   auth checkpoint for a multi-writer resource? Options: the original creator
-  only; any current writer; a quorum of writers (Nextgraph-style); or any
+  only; any current writer; a quorum of writers; or any
   agent with an explicit checkpoint right. The choice affects compaction
   liveness — if only the creator can checkpoint and they go offline,
   collaborators can't compact.
