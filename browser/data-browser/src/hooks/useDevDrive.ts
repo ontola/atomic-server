@@ -1,5 +1,6 @@
 import { Agent, JSCryptoProvider, useStore } from '@tomic/react';
 import { useCallback, useState } from 'react';
+import toast from 'react-hot-toast';
 import { useSettings } from '../helpers/AppSettings';
 import { saveAgentToIDB } from '../helpers/agentStorage';
 import { constructOpenURL } from '../helpers/navigation';
@@ -77,6 +78,27 @@ export function useDevDrive() {
 
       // Expose for E2E tests so they can sign in as the same agent on other pages.
       localStorage.setItem('atomic-test.dev-drive-secret', finalSecret);
+
+      // Copy the agent secret to the clipboard so the dev can paste it
+      // into another browser, tab, or device to sign in as the same
+      // agent — handy for testing live cursor / collab without manually
+      // shuttling the secret out of localStorage. Clipboard access can
+      // throw on insecure origins or when the document is hidden;
+      // failure is non-fatal — the secret is still in localStorage and
+      // surfaced via the toast either way.
+      let copied = false;
+      try {
+        await navigator.clipboard.writeText(finalSecret);
+        copied = true;
+      } catch (e) {
+        console.warn('[DevDrive] clipboard.writeText failed:', e);
+      }
+
+      toast.success(
+        copied
+          ? 'Dev agent created — secret copied to clipboard'
+          : 'Dev agent created — secret available in localStorage (clipboard write blocked)',
+      );
 
       await saveAgentToIDB(finalSecret);
       const updatedAgent = await Agent.fromSecret(finalSecret);
