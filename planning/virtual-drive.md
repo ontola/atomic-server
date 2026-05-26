@@ -53,8 +53,10 @@ be:
 
 QR pairing is device handshake, not authorization — both devices are already
 signed in as the same agent. Mounting your own drive on a second device needs
-no consent flow. Cross-agent sharing is a separate problem; see
-[sync.md](./sync.md).
+no consent flow. Cross-agent sharing is a separate problem — primitives and
+trust model in
+[`authorization-sync.md`](./authorization-sync.md#application-patterns);
+handshake/UX notes in [`sync.md`](./sync.md).
 
 ## Platform layer — pick the abstraction
 

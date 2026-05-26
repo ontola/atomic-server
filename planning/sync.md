@@ -25,6 +25,11 @@ Outstanding product/UX issues (Iroh-era):
 
 - We can pair with QR code, and the QR code transfers some information about the name of the device. But this only gives ONE of the devices information about the other device - only the QR scanner knows the name of the other
 - The UX is odd. What if user A scans a QR of user B? That does not necessarily mean user B agrees that A should access this. I think this means we need to initialize a share request.
+  - **Proposed primitive:** the constrained append-only inbox in
+    [`authorization-sync.md` § Constrained append-only inbox](./authorization-sync.md#constrained-append-only-inbox-first-contact-and-bridges)
+    is the share-request mechanism. A first-contact "knock" is appended
+    to the target's inbox by the requesting agent; the target accepts
+    or rejects through normal owner-side commits.
 
 ## Deletes over bulk sync
 
