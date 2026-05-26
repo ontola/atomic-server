@@ -1,5 +1,5 @@
 import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
+import react from '@vitejs/plugin-react-swc';
 import { VitePWA } from 'vite-plugin-pwa';
 import webfontDownload from 'vite-plugin-webfont-dl';
 import prismjs from 'vite-plugin-prismjs';
@@ -39,14 +39,17 @@ export default defineConfig({
     !isVitest && webfontDownload(),
     !isVitest && wuchale(),
     react({
-      babel: {
-        plugins: [
-          [
-            'babel-plugin-styled-components',
-            { displayName: true, fileName: false },
-          ],
+      // SWC plugin pipeline — plugin-react v6 dropped babel for OXC, which
+      // silently ignores the old `babel.plugins` config. Use the SWC fork
+      // and load `@swc/plugin-styled-components` (Rust port of
+      // `babel-plugin-styled-components`) so styled components keep their
+      // dev-friendly `Foo-sc-XXX` class names.
+      plugins: [
+        [
+          '@swc/plugin-styled-components',
+          { displayName: true, fileName: false },
         ],
-      },
+      ],
     }),
     !isVitest && !isTauri && VitePWA({
       registerType: 'autoUpdate',
