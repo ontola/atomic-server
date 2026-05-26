@@ -9,7 +9,11 @@ members = [
   "plugin-examples/random-folder-extender",
   "plugin-examples/test-plugin",
   "atomic-plugin",
+  "tools/cargo-bin",
 ]
 exclude = ["flutter/rust"]
 
 # Tauri build is deprecated, see
+
+[workspace.metadata.bin]
+wasm-pack = { version = "0.15.0" }

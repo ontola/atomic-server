@@ -4143,167 +4143,177 @@ msgstr "Überprüfen Sie die Browserkonsole für Details, oder versuchen Sie, zu
 #. placeholder {0}: e instanceof Error ? e.message : String(e)
 #: src/routes/History/HistoryRoute.tsx
 msgid "Could not restore version: {0}"
-msgstr ""
+msgstr "Version konnte nicht wiederhergestellt werden: {0}"
 
 #: src/routes/SettingsServer/index.tsx
 msgid "Server settings have moved to the <0>Sync page</0>."
-msgstr ""
+msgstr "Server-Einstellungen wurden auf die <0>Synchronisierungsseite</0> verschoben."
 
 #: src/routes/SyncRoute.tsx
 msgid "Open Drive Settings"
-msgstr ""
+msgstr "Laufwerkseinstellungen öffnen"
 
 #: src/routes/SyncRoute.tsx
 msgid "DriveDetailTrigger"
-msgstr ""
+msgstr "Laufwerksdetailauslöser"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Pen color"
-msgstr ""
+msgstr "Stiftfarbe"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Saving…"
-msgstr ""
+msgstr "Wird gespeichert…"
 
 #: src/views/Drive/DrivePage.tsx
 msgid "Resources"
-msgstr ""
+msgstr "Ressourcen"
 
 #: src/routes/History/VersionContent.tsx
 msgid "Document body"
-msgstr ""
+msgstr "Dokumentkörper"
 
 #: src/routes/History/VersionContent.tsx
 msgid "(empty)"
-msgstr ""
+msgstr "(leer)"
 
 #: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Canvas"
-msgstr ""
+msgstr "Leinwand"
 
 #: src/views/Canvas/CanvasPage.tsx
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Space"
-msgstr ""
+msgstr "Platz"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Redo (Ctrl+Shift+Z)"
-msgstr ""
+msgstr "Wiederherstellen (Strg+Umschalt+Z)"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Undo (Ctrl+Z) — drag horizontally to scrub history"
-msgstr ""
+msgstr "Rückgängig (Strg+Z) — horizontal ziehen, um den Verlauf zu durchsuchen"
 
 #. placeholder {0}: saveError
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Save failed: {0}"
-msgstr ""
+msgstr "Speichern fehlgeschlagen: {0}"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "New canvas"
-msgstr ""
+msgstr "Neue Leinwand"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Switch to draw"
-msgstr ""
+msgstr "Zum Zeichnen wechseln"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Eraser"
-msgstr ""
+msgstr "Radiergummi"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Stroke width"
-msgstr ""
+msgstr "Strichstärke"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Pen color (tap to swap with previous, drag to pick from fan)"
-msgstr ""
+msgstr "Stiftfarbe (Tippen zum Tauschen mit der vorherigen, Ziehen zum Auswählen aus dem Fächer)"
 
 #. placeholder {0}: penWidth
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Stroke width: {0} (tap to swap with previous, drag to pick from fan)"
-msgstr ""
+msgstr "Strichstärke: {0} (Tippen zum Tauschen mit der vorherigen, Ziehen zum Auswählen aus dem Fächer)"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Zoom to fit (tap) — drag horizontally to zoom-scrub"
-msgstr ""
+msgstr "Anpassen (Tippen) — horizontal ziehen, um den Zoom zu scrubben"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Canvas help"
-msgstr ""
+msgstr "Leinwand-Hilfe"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Show canvas help"
-msgstr ""
+msgstr "Leinwand-Hilfe anzeigen"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Canvas controls"
-msgstr ""
+msgstr "Leinwand-Steuerelemente"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "<0>Left click</0> & drag — draw a stroke"
-msgstr ""
+msgstr "<0>Linksklick</0> & ziehen — einen Strich zeichnen"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid ""
 "<0>Scroll</0> · <1>Space</1>+drag · middle-mouse drag\n"
 "— pan the canvas"
 msgstr ""
+"<0>Scrollen</0> · <1>Leertaste</1>+ziehen · Mittelmaustaste ziehen\n"
+"— die Leinwand verschieben"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid ""
 "<0>Ctrl</0>+<1>scroll</1> · trackpad pinch — zoom\n"
 "toward the cursor"
 msgstr ""
+"<0>Strg</0>+<1>Scrollen</1> · Trackpad-Pinch — Zoom\n"
+"Richtung Cursor"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid ""
 "Tap the colour or width button to swap with the previous\n"
 "choice; press & drag to open the picker fan"
 msgstr ""
+"Tippen Sie auf die Farb- oder Breiten-Schaltfläche, um mit der vorherigen\n"
+"Auswahl zu tauschen; drücken & ziehen, um den Picker-Fächer zu öffnen"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid ""
 "Tap <0>Undo</0> / <1>Redo</1> to step through edits;\n"
 "drag the undo button left/right to scrub the full history"
 msgstr ""
+"Tippen Sie auf <0>Rückgängig</0> / <1>Wiederherstellen</1>, um Änderungen\n"
+"schrittweise zu durchlaufen; ziehen Sie die Rückgängig-Schaltfläche links/rechts, um den gesamten Verlauf zu durchsuchen"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid ""
 "Tap the zoom button to fit all strokes; drag left/right to\n"
 "zoom continuously"
 msgstr ""
+"Tippen Sie auf die Zoom-Schaltfläche, um alle Striche anzupassen; ziehen Sie links/rechts, um\n"
+"kontinuierlich zu zoomen"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "<0>Ctrl</0>+<1/> undo · <2>Ctrl</2>+ <3>Shift</3>+<4/> redo"
-msgstr ""
+msgstr "<0>Strg</0>+<1/> Rückgängig · <2>Strg</2>+ <3>Umschalt</3>+<4/> Wiederherstellen"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Tap the eraser button, then drag across strokes to remove them"
-msgstr ""
+msgstr "Tippen Sie auf die Radiergummi-Schaltfläche und ziehen Sie dann über Striche, um sie zu entfernen"
 
 #: src/components/NavBar.tsx
 msgid "Click to rename"
-msgstr ""
+msgstr "Klicken zum Umbenennen"
 
 #. placeholder {0}: dragResource.title
 #. placeholder {1}: dropResource.title
 #: src/components/SideBar/useSidebarDnd.ts
 msgid "Draggable item {0} was moved over droppable area in {1}"
-msgstr ""
+msgstr "Das ziehbare Element {0} wurde über den ablegbaren Bereich in {1} verschoben```"
 
 #: src/chunks/RTE/CollaborativeEditor.tsx
 msgid "Mod-z"
-msgstr ""
+msgstr "Mod-Z"
 
 #: src/chunks/RTE/CollaborativeEditor.tsx
 msgid "Mod-Shift-z"
-msgstr ""
+msgstr "Mod-Umschalt-Z"
 
 #: src/chunks/RTE/CollaborativeEditor.tsx
 msgid "Mod-y"
-msgstr ""
+msgstr "Mod-Y"
 
 #: src/hooks/useDevDrive.ts
 msgid "Dev agent created — secret copied to clipboard"
