@@ -18,11 +18,13 @@ const LOCAL_STORAGE_KEY = 'atomic-disable-client-db';
 export function isClientDbEnabled(): boolean {
   if (isRunningInTauri()) return false;
   if (typeof localStorage === 'undefined') return true;
+
   return localStorage.getItem(LOCAL_STORAGE_KEY) !== '1';
 }
 
 export function setClientDbEnabled(enabled: boolean): void {
   if (typeof localStorage === 'undefined') return;
+
   if (enabled) {
     localStorage.removeItem(LOCAL_STORAGE_KEY);
   } else {

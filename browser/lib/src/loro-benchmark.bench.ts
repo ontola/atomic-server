@@ -1,3 +1,4 @@
+// oxlint-disable no-console
 import { describe, it, bench } from 'vitest';
 import { enableLoro } from './loro-loader.js';
 import type { LoroDoc as LoroDocType } from 'loro-crdt';
@@ -157,9 +158,11 @@ describe('Loro vs Map performance', () => {
     const jsonAd: Record<string, unknown> = {
       '@id': 'https://example.com/resource',
     };
+
     for (const [k, v] of props) {
       jsonAd[k] = v;
     }
+
     const jsonAdStr = JSON.stringify(jsonAd);
     const jsonAdBytes = new TextEncoder().encode(jsonAdStr);
 
@@ -239,6 +242,7 @@ describe('Loro vs Map performance', () => {
         `My important document (edit ${i + 1})`,
       );
     }
+
     const afterEditsSnapshot = realisticDoc.export({ mode: 'snapshot' });
     console.log(`\n  After 10 edits to name:`);
     console.log(`    Loro snapshot:  ${afterEditsSnapshot.byteLength} bytes`);
@@ -253,6 +257,7 @@ describe('Loro vs Map performance', () => {
         `My important document (edit ${i + 1})`,
       );
     }
+
     const after100EditsSnapshot = realisticDoc.export({ mode: 'snapshot' });
     console.log(`\n  After 100 edits to name:`);
     console.log(

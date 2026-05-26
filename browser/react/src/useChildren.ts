@@ -116,6 +116,7 @@ export function useChildren(parentSubject: string | undefined): {
       // twice across pages.
       const seen = new Set<string>();
       const candidates: string[] = [];
+
       for (const member of resolved) {
         if (
           member &&
@@ -159,6 +160,7 @@ export function useChildren(parentSubject: string | undefined): {
 
     const unsub = store.on(StoreEvents.ResourceUpdated, async resource => {
       const current = subjectsRef.current;
+
       if (current.length === 0 || !current.includes(resource.subject)) {
         return;
       }

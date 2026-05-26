@@ -2,12 +2,7 @@ import { AtomicError } from './error.js';
 import { Client } from './index.js';
 import { server } from './ontologies/server.js';
 import { Resource, unknownSubject } from './resource.js';
-import {
-  type JSONObject,
-  type JSONValue,
-  type AtomicValue,
-  isJSONObject,
-} from './value.js';
+import { type JSONObject, type AtomicValue, isJSONObject } from './value.js';
 import { decodeB64 } from './base64.js';
 
 /**

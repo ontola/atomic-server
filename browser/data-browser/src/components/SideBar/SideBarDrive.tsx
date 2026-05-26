@@ -26,7 +26,6 @@ import { DropEdge } from './ResourceSideBar/DropEdge';
 import { createPortal } from 'react-dom';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { LoaderInline } from '../Loader';
-import { SkeletonButton } from '../SkeletonButton';
 import { QuickCreateRow } from '../NewInstanceButton';
 import { SideBarPanel } from './SideBarPanel';
 import { SharedWithMeLink } from './SharedWithMeLink';
@@ -65,13 +64,10 @@ export function SideBarDrive({
   const [ancestry, setAncestry] = useState<string[]>([]);
 
   useEffect(() => {
-    store.getResourceAncestry(currentResource).then(result => {
+    store.getResourceAncestry(currentResource.stable).then(result => {
       setAncestry(result);
     });
-    // Use currentSubject (string) instead of currentResource (proxy) to avoid
-    // recalculating ancestry on every resource property change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [store, currentSubject]);
+  }, [store, currentResource.stable]);
 
   const driveName = driveResource.isUnauthorized()
     ? 'Unauthorized'

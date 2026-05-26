@@ -1,5 +1,6 @@
 {
   "devDependencies": {
+    "@stylistic/eslint-plugin": "^4.4.1",
     "@types/node": "^25.9.1",
     "globals": "^17.6.0",
     "husky": "^9.1.7",

@@ -30,11 +30,13 @@ export const serverURLStorage = {
   },
   addKnownServer(url: string) {
     if (!isValidServerUrl(url)) return;
+
     try {
       const urlObj = new URL(url);
       const origin = urlObj.origin;
       if (!isValidServerUrl(origin)) return;
       const known = this.getKnownServers();
+
       if (!known.includes(origin)) {
         localStorage.setItem(
           KnownServersKEY,

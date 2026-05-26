@@ -31,7 +31,6 @@ import {
   waitForCommit,
   openAgentPage,
   fillSearchBox,
-  clickSidebarItem,
   selectHistoryVersionShowing,
   inDialog,
   acceptInvite,
@@ -120,8 +119,7 @@ test.describe('data-browser', async () => {
     // invitee opens its URL — otherwise the server returns 404. Wait for
     // the dirty queue to drain rather than guessing a fixed 200ms.
     await page.waitForFunction(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      () => (window as any).store?.getSyncStatus?.().pendingDirtyCount === 0,
+      () => window.store.getSyncStatus().pendingDirtyCount === 0,
       undefined,
       { timeout: 10000 },
     );
@@ -241,6 +239,7 @@ test.describe('data-browser', async () => {
 
     await acceptInvite(page2);
     await page2.waitForURL(/\/app\//, { timeout: 15_000 });
+
     try {
       await expect(page2.locator(`text=${teststring}`)).toBeVisible({
         timeout: 10_000,
@@ -362,7 +361,7 @@ test.describe('data-browser', async () => {
 
     // Wait for the doc's save to flush before navigating away.
     await page.waitForFunction(
-      () => (window as any).store?.getSyncStatus?.().pendingDirtyCount === 0,
+      () => window.store.getSyncStatus().pendingDirtyCount === 0,
       undefined,
       { timeout: 10000 },
     );
@@ -511,9 +510,7 @@ test.describe('data-browser', async () => {
     // page can tear down its in-memory store before the depth1 commit reaches
     // the server, and the sidebar query (post-reload below) misses depth1.
     await page.waitForFunction(
-      () =>
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (window as any).store?.getSyncStatus?.().pendingDirtyCount === 0,
+      () => window.store.getSyncStatus().pendingDirtyCount === 0,
       undefined,
       { timeout: 10000 },
     );
@@ -578,6 +575,7 @@ test.describe('data-browser', async () => {
     } else {
       await openSubject(page, `${parentSubject}/${localID}`);
     }
+
     await expect(page.getByRole('heading', { name })).toBeVisible();
   });
 

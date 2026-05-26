@@ -6,7 +6,6 @@ import {
   newDrive,
   signIn,
   sidebarNewResourceButton,
-  FRONTEND_URL,
   inDialog,
 } from './test-utils';
 import fs from 'node:fs';

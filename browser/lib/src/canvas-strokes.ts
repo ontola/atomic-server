@@ -141,6 +141,7 @@ function rgbToHsl(r: number, g: number, b: number) {
 function hslToRgb(h: number, s: number, l: number) {
   if (s === 0) {
     const v = Math.round(l * 255);
+
     return { r: v, g: v, b: v };
   }
 
@@ -152,6 +153,7 @@ function hslToRgb(h: number, s: number, l: number) {
     if (tt < 1 / 6) return p + (q - p) * 6 * tt;
     if (tt < 1 / 2) return q;
     if (tt < 2 / 3) return p + (q - p) * (2 / 3 - tt) * 6;
+
     return p;
   };
 

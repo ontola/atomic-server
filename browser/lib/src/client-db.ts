@@ -210,6 +210,7 @@ export class ClientDbWorker {
           `ClientDb leadership election failed: lock-steal did not yield ownership within ${LEADER_ELECTION_WAIT_MS}ms. The browser may not support \`navigator.locks.request({ steal: true })\` (Chromium-only). Close other tabs of this origin and reload.`,
         );
         console.warn('[ClientDb]', this._initError.message);
+
         return;
       }
     }
@@ -269,17 +270,20 @@ export class ClientDbWorker {
   private async becomeLeader(baseUrl?: string): Promise<void> {
     if (this.worker) return;
     this.worker = new Worker(this.workerUrl, { type: 'module' });
+
     this.worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
       const { id, type, ...rest } = event.data;
       const pending = this.pending.get(String(id));
       if (!pending) return;
       this.pending.delete(String(id));
+
       if (type === 'error') {
         pending.reject(new Error((rest as { message: string }).message));
       } else {
         pending.resolve((rest as { data?: unknown }).data);
       }
     };
+
     this.worker.onerror = (event: ErrorEvent) => {
       console.error('[ClientDb Worker Error]', event.message);
     };
@@ -310,6 +314,7 @@ export class ClientDbWorker {
             type: 'leader-announce',
           } satisfies BroadcastMessage);
         }
+
         break;
 
       case 'leader-announce':
@@ -322,9 +327,11 @@ export class ClientDbWorker {
             this._initError = undefined;
             this.ready = true;
           }
+
           this.role = 'follower';
           this.onObservedLeader();
         }
+
         break;
 
       case 'rpc-req':
@@ -355,6 +362,7 @@ export class ClientDbWorker {
 
       case 'rpc-res':
         if (msg.toTab !== this.tabId) return;
+
         {
           const pending = this.pending.get(msg.id);
           if (!pending) return;
@@ -362,6 +370,7 @@ export class ClientDbWorker {
           if (msg.ok) pending.resolve(msg.data);
           else pending.reject(new Error(msg.error));
         }
+
         break;
     }
   }
@@ -516,6 +525,7 @@ export class ClientDbWorker {
   async waitForInit(): Promise<boolean> {
     if (this.ready) return true;
     if (!this.initPromise) return false;
+
     try {
       await this.initPromise;
 
@@ -528,6 +538,7 @@ export class ClientDbWorker {
   async waitForReady(): Promise<boolean> {
     if (this.ready && this.seeded) return true;
     if (!this.initPromise) return false;
+
     try {
       await this.initPromise;
       if (this.seedPromise) await this.seedPromise;
@@ -547,9 +558,11 @@ export class ClientDbWorker {
     this.seeded = true;
     this.initPromise = null;
     this.seedPromise = null;
+
     for (const [, pending] of this.pending) {
       pending.reject(new Error('ClientDb worker destroyed'));
     }
+
     this.pending.clear();
   }
 
@@ -590,6 +603,7 @@ export class ClientDbWorker {
     if (!this.worker) {
       return Promise.reject(new Error('ClientDb worker not initialized'));
     }
+
     const id = String(this.nextId++);
 
     return new Promise((resolve, reject) => {
@@ -605,6 +619,7 @@ export class ClientDbWorker {
         new Error('ClientDb BroadcastChannel not initialized'),
       );
     }
+
     const id = String(this.nextId++);
 
     return new Promise((resolve, reject) => {

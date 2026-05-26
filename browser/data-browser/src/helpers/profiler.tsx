@@ -72,10 +72,12 @@ const onRender: ProfilerOnRenderCallback = (
   _commitTime,
 ) => {
   let phases = stats.byId.get(id);
+
   if (!phases) {
     phases = emptyPhaseBuckets();
     stats.byId.set(id, phases);
   }
+
   const bucket = phases[phase];
   bucket.count += 1;
   bucket.totalDuration += actualDuration;
@@ -85,11 +87,14 @@ const onRender: ProfilerOnRenderCallback = (
 
 function tick(name: string, payload?: unknown) {
   let entry = stats.events.get(name);
+
   if (!entry) {
     entry = { count: 0, payloads: [] };
     stats.events.set(name, entry);
   }
+
   entry.count += 1;
+
   if (payload !== undefined && entry.payloads.length < KEEP_RECENT_PAYLOADS) {
     entry.payloads.push(payload);
   }
@@ -123,6 +128,7 @@ function snapshot(): Snapshot {
   const rows: SnapshotRow[] = [];
   let totalRenders = 0;
   let totalRenderMs = 0;
+
   for (const [id, phases] of stats.byId) {
     for (const phase of ['mount', 'update', 'nested-update'] as const) {
       const b = phases[phase];
@@ -140,6 +146,7 @@ function snapshot(): Snapshot {
       });
     }
   }
+
   rows.sort((a, b) => b.totalMs - a.totalMs);
   const events = [...stats.events.entries()]
     .map(([name, e]) => ({
@@ -172,10 +179,12 @@ function dumpToConsole() {
   );
   console.log('Top by total render time:');
   console.table(snap.rows.slice(0, 25));
+
   if (snap.events.length > 0) {
     console.log('Events (subscribe / emit / fetch):');
     console.table(snap.events.slice(0, 25));
   }
+
   console.log('Full snapshot:', snap);
   console.log(
     'Reset with `window.__atomicProfiler.reset()`; full data via `window.__atomicProfiler.snapshot()`.',

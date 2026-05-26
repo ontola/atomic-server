@@ -60,6 +60,7 @@ test('first paint timing — meta-tag fast path', async ({ page }) => {
   // which used to wait for OPFS seed. With the race-server-vs-OPFS fix,
   // it should land well before the WASM seed completes.
   let firstSidebarChildMs = -1;
+
   try {
     await page.waitForSelector('[data-test="resource-sidebar"]', {
       timeout: 2000,
@@ -71,12 +72,14 @@ test('first paint timing — meta-tag fast path', async ({ page }) => {
 
   const loroLoadedAt = await page.evaluate(async () => {
     const start = performance.now();
+
     while (performance.now() - start < 5000) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const loaded = (globalThis as any).LoroLoader?.isLoaded?.();
       if (loaded) return performance.now();
       await new Promise(r => setTimeout(r, 50));
     }
+
     return -1;
   });
 

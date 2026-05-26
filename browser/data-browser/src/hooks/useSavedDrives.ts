@@ -1,22 +1,6 @@
 import { urls, useArray, useResource } from '@tomic/react';
-import { useCallback, useMemo } from 'react';
-import { isDev } from '../config';
+import { useCallback } from 'react';
 import { useSettings } from '../helpers/AppSettings';
-import { serverURLStorage } from '../helpers/serverURLStorage';
-import { getLocalServerOrigin } from '../helpers/tauri';
-
-const getRootDrives = () => {
-  const known = serverURLStorage.getKnownServers();
-  const current = isDev() ? 'http://localhost:9883' : getLocalServerOrigin();
-
-  const roots = new Set([current, ...known]);
-
-  if (isDev()) {
-    roots.add('http://localhost:9883');
-  }
-
-  return Array.from(roots);
-};
 
 const arrayOpts = {
   commit: true,
@@ -35,31 +19,26 @@ export function useSavedDrives(): [
     arrayOpts,
   );
 
-  const rootDrives = useMemo(() => getRootDrives(), []);
-  const extraDrives = useMemo(() => {
-    return drives;
-  }, [drives]);
-
   const add = useCallback(
     (drive: string) => {
       if (!drives.includes(drive)) {
         setDrives([...drives, drive]).then(() => {
-          agentResource.save();
+          agentResource.stable.save();
         });
       }
     },
-    [drives, setDrives],
+    [drives, setDrives, agentResource.stable],
   );
 
   const remove = useCallback(
     (drive: string) => {
       if (drives.includes(drive)) {
         setDrives(drives.filter(d => d !== drive)).then(() => {
-          agentResource.save();
+          agentResource.stable.save();
         });
       }
     },
-    [drives, setDrives],
+    [drives, setDrives, agentResource.stable],
   );
 
   return [drives, add, remove];

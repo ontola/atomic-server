@@ -62,11 +62,13 @@ function wrapWithTransition<F extends (...args: any[]) => Promise<void>>(
           // skipped/cancelled). Either way we unblock the queue. Cap the
           // wait so a hung transition can't permanently wedge the queue.
           let settled = false;
+
           const settle = () => {
             if (settled) return;
             settled = true;
             resolve();
           };
+
           transition.finished.then(settle, settle);
           setTimeout(settle, 1000);
         }),

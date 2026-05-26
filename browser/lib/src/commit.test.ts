@@ -88,6 +88,7 @@ describe('Commit signing and keys', () => {
           ...commit,
           id: `https://example.com/commits/${commit.signature}`,
         } as Commit;
+
         return mockCommit;
       });
 
@@ -479,9 +480,9 @@ describe('Commit parse and apply', () => {
       'My new string',
       false,
     );
-    const loroUpdate = (source as any)._loroDoc.export({
+    const loroUpdate = source.getLoroDoc()!.export({
       mode: 'snapshot',
-    }) as Uint8Array;
+    });
     const exampleCommit = JSON.stringify(
       commitToJsonADObject({
         subject: source.subject,
@@ -547,6 +548,7 @@ describe('Store.postCommit caches commit locally', () => {
           id: `https://example.com/commits/${commit.signature}`,
         } as Commit;
         posted.push(created);
+
         return created;
       },
     );

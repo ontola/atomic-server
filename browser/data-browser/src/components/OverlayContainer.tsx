@@ -33,15 +33,9 @@ import ResourceRow from '@views/ResourceRow';
 
 type OverlayType = 'search' | 'shortcuts' | null;
 
-let activeOverlay: OverlayType = null;
 const overlayListeners = new Set<(overlay: OverlayType) => void>();
 
-function getOverlay(): OverlayType {
-  return activeOverlay;
-}
-
 function setOverlay(overlay: OverlayType): void {
-  activeOverlay = overlay;
   overlayListeners.forEach(listener => listener(overlay));
 }
 
@@ -170,20 +164,6 @@ const ResultsArea = styled.div`
   flex: 1;
 `;
 
-const HeadingRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  background: ${p => p.theme.colors.bg1};
-  border-bottom: 1px solid ${p => p.theme.colors.bg2};
-  color: ${p => p.theme.colors.textLight};
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.025em;
-`;
-
 const TagHeading = styled.span`
   color: ${p => p.theme.colors.textLight};
   font-weight: 600;
@@ -257,13 +237,6 @@ const AIChatRow = styled.button<{ $selected?: boolean }>`
   }
 `;
 
-const TagSelectRow = styled.div`
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid ${p => p.theme.colors.bg2};
-  color: ${p => p.theme.colors.textLight};
-  font-size: 0.875rem;
-`;
-
 // ─── Search Overlay ────────────────────────────────────────────────────────────
 
 const tagTokenRegex = /\btag:([\w-]+)/g;
@@ -319,6 +292,7 @@ function SearchOverlay(): JSX.Element {
 
     n(constructOpenURL(chatResource.subject));
   };
+
   const resultsRef = useRef<HTMLDivElement | null>(null);
 
   const [query, setQuery] = useState('');
@@ -335,7 +309,7 @@ function SearchOverlay(): JSX.Element {
   const filterIsEmpty = Object.keys(filters).length === 0;
   const tags = tagSubjects;
 
-  const { results, loading, error } = useServerSearch(searchQuery, {
+  const { results, error } = useServerSearch(searchQuery, {
     debounce: 0,
     parents: scope || drive,
     include: true,
@@ -349,6 +323,7 @@ function SearchOverlay(): JSX.Element {
 
   useEffect(() => {
     const timer = setTimeout(() => inputRef.current?.focus(), 50);
+
     return () => clearTimeout(timer);
   }, []);
 
@@ -369,6 +344,7 @@ function SearchOverlay(): JSX.Element {
         break;
       case 'Enter':
         e.preventDefault();
+
         if (results[selectedIndex]) {
           const openURL = constructOpenURL(results[selectedIndex]);
           navigate(openURL);
@@ -378,6 +354,7 @@ function SearchOverlay(): JSX.Element {
           await handleStartAIChat(query, store, drive, navigate);
           closeOverlay();
         }
+
         break;
       case 'Escape':
         e.preventDefault();
@@ -391,6 +368,7 @@ function SearchOverlay(): JSX.Element {
     'shift+enter',
     e => {
       e.preventDefault();
+
       void (async () => {
         await handleStartAIChat(query, store, drive, navigate);
         closeOverlay();
@@ -605,6 +583,7 @@ function ShortcutsOverlay(): JSX.Element {
 
   useEffect(() => {
     const timer = setTimeout(() => inputRef.current?.focus(), 50);
+
     return () => clearTimeout(timer);
   }, []);
 
@@ -683,13 +662,14 @@ function ShortcutsOverlay(): JSX.Element {
 
 export function OverlayContainer(): JSX.Element | null {
   const [overlay, setOverlayState] = useState<OverlayType>(null);
-  const [previewState, setPreviewState] = useState({
+  const [, setPreviewState] = useState({
     results: [] as string[],
     index: 0,
   });
 
   useEffect(() => {
     overlayListeners.add(setOverlayState);
+
     return () => {
       overlayListeners.delete(setOverlayState);
     };
@@ -699,7 +679,9 @@ export function OverlayContainer(): JSX.Element | null {
     const handler = (isOpen: boolean, results: string[], index: number) => {
       setPreviewState({ results, index });
     };
+
     previewListeners.add(handler);
+
     return () => {
       previewListeners.delete(handler);
     };

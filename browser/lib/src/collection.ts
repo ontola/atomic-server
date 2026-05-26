@@ -205,6 +205,7 @@ export class Collection {
     // new page's. Members can move between pages on `refresh`, so we
     // can't just additively merge.
     const existing = this.pages.get(pageIdx);
+
     if (existing) {
       for (const s of existing.getSubjects(collections.properties.members)) {
         if (this._memberIndex.get(s) === pageIdx) {
@@ -212,13 +213,16 @@ export class Collection {
         }
       }
     }
+
     if (this._optimisticAdds.size > 0 && pageIdx === 0) {
       const incoming = resource.getSubjects(collections.properties.members);
       const incomingSet = new Set(incoming);
       const toAppend: string[] = [];
+
       for (const s of this._optimisticAdds) {
         if (!incomingSet.has(s)) toAppend.push(s);
       }
+
       if (toAppend.length > 0) {
         const merged = [...incoming, ...toAppend];
         const totalProp = resource.get(collections.properties.totalMembers);
@@ -231,7 +235,9 @@ export class Collection {
         // after setPage; ensure they read the post-merge value.
       }
     }
+
     this.pages.set(pageIdx, resource);
+
     for (const s of resource.getSubjects(collections.properties.members)) {
       this._memberIndex.set(s, pageIdx);
     }
@@ -410,19 +416,23 @@ export class Collection {
       const page = this.pages.get(foundInPage!)!;
       const members = page.getSubjects(collections.properties.members);
       const idx = members.indexOf(subject);
+
       if (idx === -1) {
         // Index drift — the subject was indexed but not present on the
         // page. Drop the stale index entry and treat as no-op rather
         // than corrupt state further.
         this._memberIndex.delete(subject);
+
         return 'unchanged';
       }
+
       const next = [...members];
       next.splice(idx, 1);
       this._totalMembers = Math.max(0, this._totalMembers - 1);
       this._memberIndex.delete(subject);
       this._optimisticAdds.delete(subject);
       this.writePageMembers(page, next, this._totalMembers);
+
       return 'member-removed';
     }
 
@@ -528,6 +538,7 @@ export class Collection {
 
     if (this.store.serverConnected) {
       await this.fetchPageFromServer(page).catch(() => undefined);
+
       return;
     }
 
@@ -536,6 +547,7 @@ export class Collection {
       // Without this, the constructor's `_waitForReady` resolves to
       // an empty page and the UI freezes in a "no rows" state.
       await this.waitForServerConnected(3000);
+
       if (this.store.serverConnected) {
         await this.fetchPageFromServer(page).catch(() => undefined);
       }
@@ -544,6 +556,7 @@ export class Collection {
 
   private waitForServerConnected(timeoutMs: number): Promise<void> {
     if (this.store.serverConnected) return Promise.resolve();
+
     return new Promise<void>(resolve => {
       const unsub = this.store.on(
         StoreEvents.ConnectionChanged,
@@ -626,8 +639,10 @@ export class Collection {
         if (!this.pages.has(page)) {
           this.setEmptyPage(page);
         }
+
         return 'ok';
       }
+
       return 'no-db';
     }
 
@@ -733,6 +748,7 @@ export class Collection {
       (m): m is string => m !== undefined,
     );
     const filteredMembers = filterIndexLeakage(rawMembers);
+
     if (filteredMembers.length !== rawMembers.length) {
       this.writePageMembers(resource, filteredMembers, filteredMembers.length);
     }

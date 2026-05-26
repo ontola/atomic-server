@@ -23,8 +23,7 @@ async function uploadGeneratedPng(
 ): Promise<string> {
   return page.evaluate(
     async ({ name: fileName, parent: parentArg }) => {
-      const store = (window as any).store;
-      const driveSubject = parentArg ?? store.getSyncStatus().drive;
+      const driveSubject = parentArg ?? window.store.getSyncStatus().drive;
       const canvas = new OffscreenCanvas(16, 16);
       const ctx = canvas.getContext('2d')!;
       ctx.fillStyle = 'red';
@@ -33,7 +32,8 @@ async function uploadGeneratedPng(
       const file = new File([await blob.arrayBuffer()], fileName, {
         type: 'image/png',
       });
-      const subjects = await store.uploadFiles([file], driveSubject);
+      const subjects = await window.store.uploadFiles([file], driveSubject!);
+
       return subjects[0] as string;
     },
     { name, parent },
@@ -47,17 +47,18 @@ test.describe('file upload + offline survival', () => {
     const subject = await uploadGeneratedPng(page, 'online.png');
 
     const result = await page.evaluate(async (s: string) => {
-      const r = (window as any).store._resources.get(s);
+      const r = window.store.resources.get(s)!;
       const downloadUrl = r.get(
         'https://atomicdata.dev/properties/downloadURL',
       );
       const parent = r.get('https://atomicdata.dev/properties/parent');
-      const drive = (window as any).store.getSyncStatus().drive;
+      const drive = window.store.getSyncStatus().drive;
       const resp = await fetch(downloadUrl);
       const buf = new Uint8Array(await resp.arrayBuffer());
       const hex = Array.from(buf.slice(0, 4))
         .map(b => b.toString(16).padStart(2, '0'))
         .join('');
+
       return { status: resp.status, parent, drive, header: hex };
     }, subject);
 
@@ -69,12 +70,12 @@ test.describe('file upload + offline survival', () => {
   test('offline upload renders from local blob (no network)', async ({
     page,
   }) => {
-    await page.evaluate(() => (window as any).store.disconnect());
+    await page.evaluate(() => window.store.disconnect());
     // syncStatus updates fire on the next event-loop tick after the WS
     // close is observed; under suite-wide load that can exceed the default
     // 5s waitForFunction timeout.
     await page.waitForFunction(
-      () => (window as any).store.getSyncStatus().serverConnected === false,
+      () => window.store.getSyncStatus().serverConnected === false,
       undefined,
       { timeout: 15000 },
     );
@@ -92,20 +93,21 @@ test.describe('file upload + offline survival', () => {
       const img = document.querySelector(
         '[data-test="image-viewer"]',
       ) as HTMLImageElement | null;
+
       return !!img && img.src.startsWith('blob:') && img.naturalWidth > 0;
     });
 
     // Reconnect for cleanup so the next test starts clean.
-    await page.evaluate(() => (window as any).store.reconnect());
+    await page.evaluate(() => window.store.reconnect());
   });
 
   test('offline upload survives reload + reconnect', async ({ page }) => {
-    await page.evaluate(() => (window as any).store.disconnect());
+    await page.evaluate(() => window.store.disconnect());
     // syncStatus updates fire on the next event-loop tick after the WS
     // close is observed; under suite-wide load that can exceed the default
     // 5s waitForFunction timeout.
     await page.waitForFunction(
-      () => (window as any).store.getSyncStatus().serverConnected === false,
+      () => window.store.getSyncStatus().serverConnected === false,
       undefined,
       { timeout: 15000 },
     );
@@ -125,29 +127,31 @@ test.describe('file upload + offline survival', () => {
     );
 
     // The store is set on window at module load; wait for it before the next eval.
-    await page.waitForFunction(() => !!(window as any).store);
+    await page.waitForFunction(() => !!window.store);
 
     // Touch the resource so hydrateResourceFromJson fires for it.
     await page.evaluate(async (s: string) => {
-      await (window as any).store.getResource(s);
+      await window.store.getResource(s);
     }, subject);
 
     // After hydration the queue should be re-attached.
     await page.waitForFunction((s: string) => {
-      const r = (window as any).store._resources.get(s);
+      const r = window.store.resources.get(s);
+
       return r?.hasPendingCommits === true;
     }, subject);
 
     // Reconnect and wait for the dirty queue to drain.
-    await page.evaluate(() => (window as any).store.reconnect());
+    await page.evaluate(() => window.store.reconnect());
     await page.waitForFunction(() => {
-      const st = (window as any).store.getSyncStatus();
+      const st = window.store.getSyncStatus();
+
       return st.serverConnected && st.pendingDirtyCount === 0;
     });
 
     // Now the server should return the bytes.
     const result = await page.evaluate(async (s: string) => {
-      const r = (window as any).store._resources.get(s);
+      const r = window.store.resources.get(s)!;
       const downloadUrl = r.get(
         'https://atomicdata.dev/properties/downloadURL',
       );
@@ -156,6 +160,7 @@ test.describe('file upload + offline survival', () => {
       const hex = Array.from(buf.slice(0, 4))
         .map(b => b.toString(16).padStart(2, '0'))
         .join('');
+
       return { status: resp.status, header: hex };
     }, subject);
 

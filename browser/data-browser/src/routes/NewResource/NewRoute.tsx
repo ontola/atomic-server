@@ -92,6 +92,7 @@ function NewResourceSelector() {
       // since opening N tabs would be hostile.
       if (files.length === 1) {
         navigate(constructOpenURL(files[0]));
+
         return;
       }
 

@@ -46,6 +46,7 @@ function drawStroke(
     ctx.beginPath();
     ctx.arc(x, y, stroke.width / 2, 0, Math.PI * 2);
     ctx.fill();
+
     return;
   }
 
@@ -73,5 +74,6 @@ export function screenToCanvas(
 ): [number, number] {
   const x = (clientX - rect.left - offsetX) / scale;
   const y = (clientY - rect.top - offsetY) / scale;
+
   return [x, y];
 }

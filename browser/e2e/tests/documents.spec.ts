@@ -67,9 +67,11 @@ test.describe('documents', async () => {
     // proper sign-in already sets the drive, so the button often isn't there.
     // Click only when present, ignore otherwise.
     const setDriveButton = page2.getByRole('button', { name: 'Set Drive' });
+
     if (await setDriveButton.isVisible({ timeout: 1500 }).catch(() => false)) {
       await setDriveButton.click();
     }
+
     // Sidebar may still show loading placeholders for unrelated children;
     // scope to `main` so we only wait for the document body to land. Bumped
     // timeout because the second tab needs WS auth + initial sync.

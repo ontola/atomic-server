@@ -29,7 +29,7 @@ import {
   debugFrameInfo,
 } from './ws-v2.js';
 import { BLOB } from './urls.js';
-import { hexToBytes, bytesToHex } from './value.js';
+import { hexToBytes } from './value.js';
 import { perfMark, perfSpan } from './perf-trace.js';
 
 // 5s is too tight for a shared atomic-server under suite-wide e2e load
@@ -87,6 +87,7 @@ export function shouldFetchOnQueryUpdate(
   if (subject.startsWith('did:ad:commit:') && store.resources.has(subject)) {
     return false;
   }
+
   return true;
 }
 
@@ -96,14 +97,18 @@ export function shouldFetchOnQueryUpdate(
 // of the Tag enum is cached so the hot path is just two property reads.
 const TAG_NAMES: Record<number, string> = (() => {
   const out: Record<number, string> = {};
+
   for (const [name, value] of Object.entries(Tag)) {
     out[value as number] = name;
   }
+
   return out;
 })();
+
 function tagName(tag: number): string {
   return TAG_NAMES[tag] ?? `0x${tag.toString(16)}`;
 }
+
 function profilerTick(name: string, payload?: unknown): void {
   const w = globalThis as {
     __atomicProfiler?: { tick: (n: string, p?: unknown) => void };
@@ -130,12 +135,13 @@ function logFrame(data: Uint8Array, direction: '→' | '←', color: string): vo
   const info = debugFrameInfo(data, direction);
 
   if (info.details === undefined) {
-    console.log(`%c${info.headline}`, `color: ${color}`);
+    console.debug(`%c${info.headline}`, `color: ${color}`);
 
     return;
   }
 
   console.groupCollapsed(`%c${info.headline}`, `color: ${color}`);
+
   try {
     const details = info.details() as Record<string, unknown>;
     // For UPDATE frames the raw `loroSnapshot` Uint8Array isn't useful at a
@@ -147,6 +153,7 @@ function logFrame(data: Uint8Array, direction: '→' | '←', color: string): vo
   } catch (e) {
     console.debug('(failed to decode frame details)', e);
   }
+
   console.groupEnd();
 }
 
@@ -248,6 +255,7 @@ export class WSClient {
     if (!pending) return undefined;
     clearTimeout(pending.timer);
     this.pendingGets.delete(requestId);
+
     return pending;
   }
 
@@ -257,6 +265,7 @@ export class WSClient {
     if (!pending) return undefined;
     clearTimeout(pending.timer);
     this.pendingCommits.delete(requestId);
+
     return pending;
   }
 
@@ -265,6 +274,7 @@ export class WSClient {
    *  — the next reconnect will fetch fresh state anyway. */
   private rejectAllPending(reason: string): void {
     const err = new AtomicError(reason, ErrorType.Server);
+
     // Fail any in-flight `waitForTag` calls (e.g. an AUTH_OK that
     // will never arrive because the socket died mid-handshake).
     if (this.tagRejectors.size > 0) {
@@ -273,17 +283,21 @@ export class WSClient {
       this.tagListeners.clear();
       for (const r of rejectors) r(err);
     }
+
     if (this.pendingGets.size > 0) {
       const entries = [...this.pendingGets.values()];
       this.pendingGets.clear();
+
       for (const p of entries) {
         clearTimeout(p.timer);
         p.reject(err);
       }
     }
+
     if (this.pendingCommits.size > 0) {
       const entries = [...this.pendingCommits.values()];
       this.pendingCommits.clear();
+
       for (const p of entries) {
         clearTimeout(p.timer);
         p.reject(err);
@@ -392,14 +406,17 @@ export class WSClient {
         if (this._closed) return;
         const rs = this.ws.readyState;
         if (rs === WebSocket.OPEN || rs === WebSocket.CONNECTING) return;
+
         if (this._retryTimer) {
           clearTimeout(this._retryTimer);
           this._retryTimer = undefined;
         }
+
         this._retryDelay = 1000;
         this.authenticatedWith = undefined;
         createSocket();
       };
+
       window.addEventListener('online', this._onlineListener);
     }
   }
@@ -434,6 +451,7 @@ export class WSClient {
 
     if (!agent?.subject) return;
     if (this.authenticatedWith === agent.subject && !fetchAll) return;
+
     // An in-flight auth might be for a DIFFERENT (e.g. now-stale) agent. Wait
     // for it to settle, then check whether we still need to authenticate as
     // the current agent. Without this re-check, calling `setAgent(newAgent)`
@@ -445,6 +463,7 @@ export class WSClient {
       try {
         await this.authPromise;
       } catch {}
+
       if (this.authenticatedWith === agent.subject && !fetchAll) return;
     }
 
@@ -574,6 +593,7 @@ export class WSClient {
 
     const serialized = serializeDeterministically({ ...commit });
     const requestId = this.nextRequestId++;
+
     if (this.nextRequestId > 0xffff) {
       this.nextRequestId = 1;
     }
@@ -613,9 +633,11 @@ export class WSClient {
    *  to binary later). No-op on non-open sockets. */
   private sendText(prefix: string, payload: string): void {
     if (this.readyState !== WebSocket.OPEN) return;
+
     if (this.debug) {
-      console.log(`[WS] sendText: ${prefix} ${payload.slice(0, 100)}...`);
+      console.debug(`[WS] sendText: ${prefix} ${payload.slice(0, 100)}...`);
     }
+
     // Must send a string: `ws.send(Uint8Array)` emits a *binary* frame, which
     // the server routes by tag byte and drops as an unknown tag.
     this.ws.send(`${prefix} ${payload}`);
@@ -661,6 +683,7 @@ export class WSClient {
     if (this.readyState !== WebSocket.OPEN) {
       return;
     }
+
     this.sendBinary(encodeBlobResponse(hash, bytes));
   }
 
@@ -702,9 +725,11 @@ export class WSClient {
       case Tag.ERROR: {
         const msg = decodeError(payload);
         if (!msg) break;
+
         if (msg.requestId) {
           const err = new AtomicError(msg.message, ErrorType.Server);
           const pendingGet = this.takePending(msg.requestId);
+
           if (pendingGet) {
             pendingGet.reject(err);
           } else {
@@ -713,6 +738,7 @@ export class WSClient {
         } else {
           this.store.notifyError(msg.message);
         }
+
         break;
       }
 
@@ -721,6 +747,7 @@ export class WSClient {
         if (!msg) break;
         const pending = this.takePendingCommit(msg.requestId);
         if (!pending) break;
+
         try {
           const created = parseCommitJSON(msg.commitJson);
           pending.resolve(created);
@@ -731,6 +758,7 @@ export class WSClient {
               : new AtomicError(String(e), ErrorType.Server),
           );
         }
+
         break;
       }
 
@@ -747,6 +775,7 @@ export class WSClient {
         const pending = msg.requestId
           ? this.takePending(msg.requestId)
           : undefined;
+
         if (pending) {
           this.store.applyIncoming({
             subject: msg.subject,
@@ -863,10 +892,12 @@ export class WSClient {
         for (const s of msg.removed) {
           this.store.removeResource(s);
         }
+
         for (const s of msg.added) {
           if (!shouldFetchOnQueryUpdate(s, this.store)) continue;
           this.store.fetchResourceFromServer(s).catch(() => undefined);
         }
+
         break;
       }
 
@@ -890,9 +921,11 @@ export class WSClient {
 
       case Tag.BLOB_RESPONSE: {
         const resp = decodeBlobResponse(payload);
+
         if (resp) {
           this.store.getClientDb()?.putBlob(resp.hash, resp.bytes);
         }
+
         break;
       }
 
@@ -912,8 +945,9 @@ export class WSClient {
   /** Handle legacy text messages that haven't been migrated to binary yet. */
   private handleText(text: string) {
     if (this.debug) {
-      console.log(`[WS] handleText: ${text.slice(0, 100)}...`);
+      console.debug(`[WS] handleText: ${text.slice(0, 100)}...`);
     }
+
     // Prefix lengths include the trailing space delimiter. Match the
     // exact length sent by `sendText(prefix, payload)` which writes
     // `${prefix} ${payload}`.
@@ -937,6 +971,7 @@ export class WSClient {
         for (const s of removed) {
           this.store.removeResource(s);
         }
+
         for (const s of added) {
           if (!shouldFetchOnQueryUpdate(s, this.store)) continue;
           this.store.fetchResourceFromServer(s).catch(() => {});
@@ -975,6 +1010,7 @@ export class WSClient {
       // pulls the pre-drain snapshot and the UI flickers back to
       // the offline-stale view.
       this.store.refetchOfflineErroredResources();
+
       // No drive selected (e.g. anon share-link cold open, fresh
       // /app/welcome before the user picks a drive): there's
       // nothing to VV-sync. The server's `collect_drive_subjects`
@@ -1098,12 +1134,14 @@ export class WSClient {
       // network blip). `send` on a non-OPEN socket throws — swallow it,
       // the next reconnect's handleOpen will redo the VV sync.
       if (this.readyState !== WebSocket.OPEN) return;
+
       try {
         this.ws.send(
           'SYNC_DELTAS ' + JSON.stringify({ drive: diff.drive, deltas }),
         );
       } catch (e) {
         console.warn('[WS] SYNC_DELTAS send failed:', e);
+
         return;
       }
     }
@@ -1171,12 +1209,14 @@ export class WSClient {
               );
             }, timeoutMs)
           : undefined;
+
       const rejector = (err: Error) => {
         if (timer) clearTimeout(timer);
         this.tagListeners.delete(tag);
         this.tagRejectors.delete(rejector);
         reject(err);
       };
+
       this.tagRejectors.add(rejector);
       this.tagListeners.set(tag, () => {
         if (timer) clearTimeout(timer);

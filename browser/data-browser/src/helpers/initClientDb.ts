@@ -45,12 +45,15 @@ export function initClientDb(store: Store): void {
 
     const obj: Record<string, unknown> = { '@id': resource.subject };
     let hasProps = false;
+
     for (const [key, value] of resource.getEntries()) {
       if (value instanceof Uint8Array) continue;
       obj[key] = value;
       hasProps = true;
     }
+
     if (!hasProps) return undefined;
+
     return JSON.stringify(obj);
   };
 
@@ -62,24 +65,29 @@ export function initClientDb(store: Store): void {
    *  unchanged bootstrap data skip the seed entirely. */
   const computeBootstrapFingerprint = (): string => {
     const subjects: string[] = [];
+
     for (const r of store.resources.values()) {
       if (r.loading || r.new || r.hasPendingCommits) continue;
       subjects.push(r.subject);
     }
+
     subjects.sort();
     // FNV-1a 32-bit hash of the sorted subject list. Cheap, deterministic,
     // good enough to detect added/removed bootstrap resources. We don't
     // need crypto-grade — the worst-case collision means we miss a
     // reseed on a single deployment, which the next deployment fixes.
     let hash = 0x811c9dc5;
+
     for (const s of subjects) {
       for (let i = 0; i < s.length; i++) {
         hash ^= s.charCodeAt(i);
         hash = Math.imul(hash, 0x01000193);
       }
+
       hash ^= 0x2c;
       hash = Math.imul(hash, 0x01000193);
     }
+
     return `${subjects.length}:${(hash >>> 0).toString(16)}`;
   };
 
@@ -109,16 +117,19 @@ export function initClientDb(store: Store): void {
     // Version bumps that add/remove bootstrap resources: fingerprint
     //   mismatch → reseeds (one-time cost for that version).
     let opfsHasData = false;
+
     try {
       const existing = await clientDb.allSubjects();
       opfsHasData = existing.length > 0;
     } catch {
       // allSubjects failed — proceed with seed as fallback.
     }
+
     if (opfsHasData && !bootstrapChanged) {
       console.info(
         `[ClientDb] bootstrap fingerprint unchanged (${currentFingerprint}) and OPFS populated, skipping seed`,
       );
+
       return;
     }
 

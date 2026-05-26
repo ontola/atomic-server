@@ -4332,4 +4332,4 @@ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Node DID copied to clipboard"
-msgstr ""
+msgstr "DID de nœud copié dans le presse-papiers"

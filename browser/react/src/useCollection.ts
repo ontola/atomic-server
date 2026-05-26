@@ -159,6 +159,7 @@ export function useCollection(
   const invalidateCollection = useCallback(async () => {
     const target = collection.__internalObject;
     await target.refresh();
+
     // Stale-write guard: a filter swap between when we kicked the
     // refresh and when it resolved would have replaced
     // `collectionRef.current` with a freshly-built Collection for the
@@ -220,6 +221,7 @@ export function useCollection(
 
     const unsubRemoved = store.on(StoreEvents.ResourceRemoved, subject => {
       const result = col.applyResourceChange(subject, undefined);
+
       if (result === 'member-removed') {
         setCollection(proxyCollection(col));
       }

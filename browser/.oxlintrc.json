@@ -1,12 +1,12 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "jsPlugins": ["@stylistic/eslint-plugin"],
   "plugins": ["eslint", "typescript", "react", "jsx-a11y"],
   "categories": {
     "correctness": "error",
     "suspicious": "off",
     "pedantic": "off",
-    "perf": "off",
-    "style": "off"
+    "perf": "off"
   },
   "rules": {
     "no-undef": "off",
@@ -17,19 +17,52 @@
     "eslint/no-shadow": "off",
     "class-methods-use-this": "off",
     "eqeqeq": "error",
-    "@typescript-eslint/no-unused-vars": "off",
-    "@typescript-eslint/no-explicit-any": "warn",
-    "@typescript-eslint/no-shadow": "warn",
-    "no-console": ["warn", { "allow": ["error", "warn", "debug"] }],
-    "react/no-unknown-property": ["warn", { "ignore": ["about"] }],
+    "@typescript-eslint/no-unused-vars": [
+      "error",
+      {
+        "argsIgnorePattern": "^_",
+        "varsIgnorePattern": "^_",
+        "caughtErrorsIgnorePattern": "^_|^e"
+      }
+    ],
+    "@typescript-eslint/no-explicit-any": "error",
+    "@typescript-eslint/no-shadow": "error",
+    "no-console": [
+      "warn",
+      {
+        "allow": [
+          "error",
+          "warn",
+          "debug",
+          "info",
+          "group",
+          "groupCollapsed",
+          "groupEnd"
+        ]
+      }
+    ],
+    "react/no-unknown-property": [
+      "warn",
+      {
+        "ignore": ["about"]
+      }
+    ],
     // Disabling this because of react compiler
-    "react-hooks/exhaustive-deps": "off",
+    "react-hooks/exhaustive-deps": "warn",
     "no-useless-escape": "off",
     "no-useless-rename": "off",
     "jsx-a11y/control-has-associated-label": "off",
     "jsx-a11y/interactive-supports-focus": "off",
     "jsx-a11y/no-autofocus": "off",
-    "jsx-a11y/prefer-tag-over-role": "off"
+    "jsx-a11y/prefer-tag-over-role": "off",
+    "@stylistic/padding-line-between-statements": [
+      "error",
+      { "blankLine": "always", "next": "return", "prev": "*" },
+      { "blankLine": "always", "next": "export", "prev": "*" },
+      { "blankLine": "always", "next": "multiline-block-like", "prev": "*" },
+      { "blankLine": "always", "next": "*", "prev": "multiline-block-like" },
+      { "blankLine": "any", "next": "export", "prev": "export" }
+    ]
   },
   "globals": {
     "React": "readonly"
@@ -42,5 +75,14 @@
     "**/.svelte-kit",
     "**/.netlify",
     "browser/data-browser/src/locales/**"
+  ],
+  "overrides": [
+    {
+      "files": ["**/*.spec.ts", "**/*.test.ts"],
+      "rules": {
+        "no-await-in-loop": "off",
+        "no-console": "off"
+      }
+    }
   ]
 }

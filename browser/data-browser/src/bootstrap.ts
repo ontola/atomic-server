@@ -31,8 +31,8 @@ export function bootstrap(store: Store): void {
   };
 
   try {
-    const baseCount = addBootstrapped(baseModels);
-    const storeCount = addBootstrapped(defaultStore);
+    addBootstrapped(baseModels);
+    addBootstrapped(defaultStore);
     addBootstrapped(tableDefaults);
     addBootstrapped(chatroomDefaults);
     addBootstrapped(ontologiesDefaults);

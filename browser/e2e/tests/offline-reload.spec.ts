@@ -16,6 +16,7 @@ test.describe('offline reload', () => {
   test('drive is available offline after reload', async ({ page }) => {
     page.on('console', msg => {
       const text = msg.text();
+
       if (
         text.startsWith('[offline-trace]') ||
         text.startsWith('[opfs-put-trace]') ||
@@ -29,7 +30,7 @@ test.describe('offline reload', () => {
     // Wait for the ClientDb to be ready (don't require pendingDirtyCount=0
     // — dev-drive may have persistent dirty state we don't care about here).
     await page.waitForFunction(
-      () => (window as any).store?.getClientDb()?.isReady === true,
+      () => window.store.getClientDb()?.isReady === true,
       undefined,
       { timeout: 30000 },
     );
@@ -37,11 +38,11 @@ test.describe('offline reload', () => {
     // about to assert on, so bind to it directly.
     await page.waitForFunction(
       async () => {
-        const store = (window as any).store;
-        const drive = store?.getSyncStatus?.().drive;
+        const drive = window.store.getSyncStatus().drive;
         if (!drive) return false;
-        const clientDb = store?.getClientDb?.();
+        const clientDb = window.store.getClientDb();
         const jsonAd = await clientDb?.getResource?.(drive);
+
         return !!jsonAd;
       },
       undefined,
@@ -50,19 +51,20 @@ test.describe('offline reload', () => {
 
     // Capture the drive subject + confirm OPFS actually has it.
     const { subject, opfsHas } = await page.evaluate(async () => {
-      const store = (window as any).store;
-      const drive = store.getSyncStatus().drive;
-      const clientDb = store.getClientDb();
+      const drive = window.store.getSyncStatus().drive!;
+      const clientDb = window.store.getClientDb()!;
       const jsonAd = await clientDb.getResource(drive);
+
       return { subject: drive, opfsHas: !!jsonAd };
     });
+
     console.log(`[setup] drive subject: ${subject}`);
     console.log(`[setup] OPFS has drive JSON-AD: ${opfsHas}`);
     expect(opfsHas).toBe(true);
 
     // Switch to offline mode.
     await page.evaluate(() => {
-      (window as any).store.disconnect();
+      window.store.disconnect();
     });
 
     // Reload.
@@ -72,10 +74,10 @@ test.describe('offline reload', () => {
     // log finalState below either way). Without this we sample mid-flight.
     await page.waitForFunction(
       () => {
-        const store = (window as any).store;
-        const drive = store?.getSyncStatus?.().drive;
+        const drive = window.store.getSyncStatus().drive;
         if (!drive) return false;
-        const r = store.resources.get(drive);
+        const r = window.store.resources.get(drive);
+
         return !!r && !r.loading;
       },
       undefined,
@@ -83,15 +85,15 @@ test.describe('offline reload', () => {
     );
 
     const finalState = await page.evaluate(async () => {
-      const store = (window as any).store;
-      const drive = store.getSyncStatus().drive;
-      const drivesResource = store.resources.get(drive);
+      const drive = window.store.getSyncStatus().drive!;
+      const drivesResource = window.store.resources.get(drive);
       const problematic: Array<{
         subject: string;
         loading?: boolean;
         error?: string;
       }> = [];
-      for (const [subj, r] of store.resources.entries()) {
+
+      for (const [subj, r] of window.store.resources.entries()) {
         if (r.loading || r.error) {
           problematic.push({
             subject: subj.slice(0, 80),
@@ -100,13 +102,14 @@ test.describe('offline reload', () => {
           });
         }
       }
+
       return {
         driveSubject: drive,
         driveLoading: drivesResource?.loading,
         driveError: drivesResource?.error?.message,
-        serverConnected: store.getSyncStatus().serverConnected,
-        clientDbReady: store.getClientDb()?.isReady,
-        totalResources: store.resources.size,
+        serverConnected: window.store.getSyncStatus().serverConnected,
+        clientDbReady: window.store.getClientDb()?.isReady,
+        totalResources: window.store.resources.size,
         problematic,
       };
     });

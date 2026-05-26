@@ -12,7 +12,6 @@ import {
   dataBrowser,
 } from '@tomic/react';
 import { constructOpenURL } from '../helpers/navigation';
-import { Row } from './Row';
 import {
   useNavigateWithTransition,
   useBackForward,

@@ -102,6 +102,7 @@ const cssEscape = (value: string) => {
   if (typeof CSS !== 'undefined' && CSS.escape) {
     return CSS.escape(value);
   }
+
   return value.replace(/([!"#$%&'()*+,.\/:;<=>?@[\\\]^`{|}~])/g, '\\$1');
 };
 

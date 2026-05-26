@@ -4325,4 +4325,4 @@ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Node DID copied to clipboard"
-msgstr ""
+msgstr "Node-DID in Zwischenablage kopiert"

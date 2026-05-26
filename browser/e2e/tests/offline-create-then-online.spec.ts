@@ -29,6 +29,7 @@ test.describe('offline create → online sync → disable localDB', () => {
     // Forward relevant browser-side logs so failures are diagnosable.
     page.on('console', msg => {
       const text = msg.text();
+
       if (
         text.startsWith('[Sync]') ||
         text.startsWith('[Store]') ||
@@ -42,10 +43,9 @@ test.describe('offline create → online sync → disable localDB', () => {
     // 1. Wait for the initial dev-drive setup: clientDb ready + server connected.
     await page.waitForFunction(
       () => {
-        const s = (window as any).store;
         return (
-          s?.getClientDb()?.isReady === true &&
-          s?.getSyncStatus()?.serverConnected === true
+          window.store.getClientDb()?.isReady === true &&
+          window.store.getSyncStatus().serverConnected === true
         );
       },
       undefined,
@@ -54,21 +54,22 @@ test.describe('offline create → online sync → disable localDB', () => {
 
     // 2. Go offline.
     await page.evaluate(() => {
-      (window as any).store.disconnect();
+      window.store.disconnect();
     });
     await page.waitForFunction(
-      () => (window as any).store.getSyncStatus().serverConnected === false,
+      () => window.store.getSyncStatus().serverConnected === false,
       undefined,
       { timeout: 15000 },
     );
 
     // 3. Create a drive while offline.
     const offlineDriveSubject = await page.evaluate(async () => {
-      const store = (window as any).store;
+      const store = window.store;
       const drive = await store.createDrive(
         'Offline-Created Drive',
         'Created while offline — must survive disabling localDB.',
       );
+
       return drive.subject as string;
     });
     console.log(`[setup] offline-created drive: ${offlineDriveSubject}`);
@@ -76,7 +77,7 @@ test.describe('offline create → online sync → disable localDB', () => {
 
     // Confirm it's in the dirty queue (waiting to be synced).
     const pendingBeforeReconnect = await page.evaluate(
-      () => (window as any).store.getSyncStatus().pendingDirtyCount,
+      () => window.store.getSyncStatus().pendingDirtyCount,
     );
     console.log(
       `[setup] pendingDirtyCount while offline: ${pendingBeforeReconnect}`,
@@ -85,11 +86,12 @@ test.describe('offline create → online sync → disable localDB', () => {
 
     // 4. Reconnect and wait for the dirty sync to drain.
     await page.evaluate(() => {
-      (window as any).store.reconnect();
+      window.store.reconnect();
     });
     await page.waitForFunction(
       () => {
-        const s = (window as any).store.getSyncStatus();
+        const s = window.store.getSyncStatus();
+
         return s.serverConnected === true && s.pendingDirtyCount === 0;
       },
       undefined,
@@ -102,14 +104,14 @@ test.describe('offline create → online sync → disable localDB', () => {
     // but DIDs aren't fetchable as URLs directly; use the store's live
     // Client to fetch once more and confirm the server returned a real object.
     const serverHas = await page.evaluate(async (subject: string) => {
-      const store = (window as any).store;
       try {
-        const res = await store.fetchResourceFromServer(subject);
+        const res = await window.store.fetchResourceFromServer(subject);
+
         return {
           fetched: true,
           hasName: !!res?.get?.('https://atomicdata.dev/properties/name'),
         };
-      } catch (e: any) {
+      } catch (e) {
         return { fetched: false, error: e?.message };
       }
     }, offlineDriveSubject);
@@ -118,8 +120,7 @@ test.describe('offline create → online sync → disable localDB', () => {
 
     // 6. Make the offline-created drive the active one, then disable localDB.
     await page.evaluate((subject: string) => {
-      const store = (window as any).store;
-      store.setDrive(subject);
+      window.store.setDrive(subject);
       // Disable client DB — same mechanism SyncRoute uses.
       localStorage.setItem('atomic-disable-client-db', '1');
     }, offlineDriveSubject);
@@ -135,10 +136,18 @@ test.describe('offline create → online sync → disable localDB', () => {
     await page
       .waitForFunction(
         () => {
-          const s = (window as any).store;
-          if (!s?.getSyncStatus()?.serverConnected) return false;
-          const drive = s.getSyncStatus().drive;
-          const r = s.resources.get(drive);
+          if (!window.store.getSyncStatus().serverConnected) {
+            return false;
+          }
+
+          const drive = window.store.getSyncStatus().drive;
+
+          if (!drive) {
+            return false;
+          }
+
+          const r = window.store.resources.get(drive);
+
           return (
             r &&
             !r.loading &&
@@ -157,17 +166,18 @@ test.describe('offline create → online sync → disable localDB', () => {
       });
 
     const finalState = await page.evaluate(() => {
-      const store = (window as any).store;
-      const status = store.getSyncStatus();
-      const drive = status.drive;
-      const r = store.resources.get(drive);
+      const status = window.store.getSyncStatus();
+      const drive = status.drive!;
+      const r = window.store.resources.get(drive);
       const props: Record<string, unknown> = {};
+
       if (r) {
         for (const [k, v] of r.getEntries()) {
           props[k] =
             v instanceof Uint8Array ? `<Uint8Array ${v.byteLength}b>` : v;
         }
       }
+
       return {
         drive,
         serverConnected: status.serverConnected,

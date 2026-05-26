@@ -9,7 +9,7 @@
  * worth tracking are *factor* changes (≥2× slower), not single-percent
  * drift.
  */
-import { bench, beforeAll, describe } from 'vitest';
+import { bench, describe } from 'vitest';
 
 import { Collection } from './collection.js';
 import { enableLoro } from './loro-loader.js';
@@ -34,17 +34,20 @@ function makeResource(
   lastCommit = 'did:ad:commit:base',
 ): Resource {
   const r = new Resource(subject);
+
   for (const [k, v] of Object.entries(props)) {
     // applyHydratedValues bypasses validation + commit machinery, just
     // populates the cache + Loro doc — closest analogue to a freshly
     // hydrated resource arriving from the WS UPDATE path.
     r.applyHydratedValues([[k, v as never]]);
   }
+
   // Stamp a lastCommit so the addResource gate has something to compare.
   r.applyHydratedValues([
     ['https://atomicdata.dev/properties/lastCommit', lastCommit as never],
   ]);
   r.loading = false;
+
   return r;
 }
 
@@ -123,6 +126,7 @@ describe('Store.notify fan-out (subscriber chain)', () => {
   // Subscribe N callbacks for the same subject — represents N mounted
   // useResource calls all watching the same resource.
   const N = 50;
+
   for (let i = 0; i < N; i++) {
     store.subscribe(subject, () => undefined);
   }
@@ -145,6 +149,7 @@ describe('Collection.applyResourceChange (B2: indexed lookup)', () => {
     { length: PAGE_SIZE },
     (_, i) => `https://example.com/member-${i}`,
   );
+
   for (const m of memberSubjects) {
     store.addResource(
       makeResource(m, {
@@ -153,6 +158,7 @@ describe('Collection.applyResourceChange (B2: indexed lookup)', () => {
       { skipCommitCompare: true },
     );
   }
+
   const collection = new Collection(
     store,
     'https://example.com',

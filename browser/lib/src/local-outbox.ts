@@ -72,6 +72,7 @@ export class LocalOutbox {
         enqueuedAt: existing?.enqueuedAt ?? Date.now(),
       });
     }
+
     this.persist();
     this.onChange();
   }
@@ -123,6 +124,7 @@ export class LocalOutbox {
         // If new commits arrived during the post, keep the unposted
         // tail; otherwise clear the entry.
         const after = this.entries.get(entry.subject);
+
         if (after && after.commits.length === live.commits.length) {
           this.entries.delete(entry.subject);
         } else if (after) {
@@ -131,6 +133,7 @@ export class LocalOutbox {
       } catch (e) {
         live.lastAttemptError = e instanceof Error ? e.message : String(e);
       }
+
       this.persist();
       this.onChange();
     }
@@ -138,12 +141,14 @@ export class LocalOutbox {
 
   private persist(): void {
     if (typeof localStorage === 'undefined') return;
+
     try {
       if (this.entries.size === 0) {
         localStorage.removeItem(STORAGE_KEY);
 
         return;
       }
+
       const out: PersistedEntry[] = [...this.entries.values()].map(e => ({
         subject: e.subject,
         commits: e.commits.map(c => commitToJsonADObject(c)),
@@ -161,8 +166,10 @@ export class LocalOutbox {
 
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
+
       if (raw) {
         const parsed = JSON.parse(raw);
+
         if (Array.isArray(parsed)) {
           for (const p of parsed as PersistedEntry[]) this.hydrateEntry(p);
 
@@ -180,10 +187,12 @@ export class LocalOutbox {
         localStorage.getItem(LEGACY_DIRTY_KEY) ?? 'null',
       );
       if (!Array.isArray(subjects)) return;
+
       for (const subject of subjects) {
         if (typeof subject !== 'string') continue;
         const raw = localStorage.getItem(LEGACY_OFFLINE_PREFIX + subject);
         if (!raw) continue;
+
         try {
           this.hydrateEntry({
             subject,
@@ -194,6 +203,7 @@ export class LocalOutbox {
           // skip bad entry
         }
       }
+
       localStorage.removeItem(LEGACY_DIRTY_KEY);
       for (const s of subjects)
         localStorage.removeItem(LEGACY_OFFLINE_PREFIX + s);
@@ -206,6 +216,7 @@ export class LocalOutbox {
   private hydrateEntry(p: PersistedEntry): void {
     if (!p.subject || !Array.isArray(p.commits)) return;
     const commits: Commit[] = [];
+
     for (const c of p.commits) {
       try {
         commits.push(parseCommitJSON(JSON.stringify(c)));
@@ -213,6 +224,7 @@ export class LocalOutbox {
         // skip individual bad commit
       }
     }
+
     if (commits.length > 0) {
       this.entries.set(p.subject, {
         subject: p.subject,

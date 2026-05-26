@@ -27,8 +27,9 @@ async function renameDrive(page: Page, text: string) {
   // In isolation, this completes in <1s.
   await page.waitForFunction(
     () => {
-      const status = (window as any).store?.getSyncStatus();
-      return status?.serverConnected && status?.pendingDirtyCount === 0;
+      const status = window.store.getSyncStatus();
+
+      return status.serverConnected && status.pendingDirtyCount === 0;
     },
     undefined,
     { timeout: 30000 },

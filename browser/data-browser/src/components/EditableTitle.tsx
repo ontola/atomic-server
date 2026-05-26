@@ -58,6 +58,7 @@ export function EditableTitle({
     if (store.consumeRecentlyCreated(resource.subject)) {
       setIsEditing(true);
     }
+
     return store.on(StoreEvents.ResourceManuallyCreated, created => {
       if (created.subject === resource.subject) {
         setIsEditing(true);

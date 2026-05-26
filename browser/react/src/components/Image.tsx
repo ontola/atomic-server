@@ -143,6 +143,7 @@ const ImageInner: React.FC<ImageInnerProps> = ({
   // blob hasn't been pushed yet), and a `blob:` URL has no query params for
   // the image-processing endpoint anyway.
   const localUrl = useFileObjectUrl(resource);
+
   if (localUrl) {
     return (
       // eslint-disable-next-line jsx-a11y/alt-text

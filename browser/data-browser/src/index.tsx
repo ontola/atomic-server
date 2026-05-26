@@ -25,6 +25,7 @@ if (
     // @ts-ignore
     window.crypto = {};
   }
+
   if (!window.crypto.subtle) {
     // @ts-ignore
     window.crypto.subtle = {};

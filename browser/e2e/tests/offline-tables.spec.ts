@@ -29,8 +29,7 @@ test.describe('offline tables', () => {
     // Wait for the WASM DB to be ready
     await page.waitForFunction(
       () => {
-        const store = (window as any).store;
-        return store?.getClientDb()?.isReady;
+        return window.store.getClientDb()?.isReady;
       },
       { timeout: 30000 },
     );
@@ -92,8 +91,7 @@ test.describe('offline tables', () => {
     // Wait for WASM DB
     await page.waitForFunction(
       () => {
-        const store = (window as any).store;
-        return store?.getClientDb()?.isReady;
+        return window.store.getClientDb()?.isReady;
       },
       { timeout: 30000 },
     );

@@ -73,9 +73,9 @@ describe('parse.ts', () => {
   }) => {
     const legacy = new Resource(EXAMPLE_SUBJECT);
     await legacy.set(STRING_PROPERTY, 'Hoi', false);
-    const snapshot = (legacy as any)._loroDoc.export({
+    const snapshot = legacy.getLoroDoc()!.export({
       mode: 'snapshot',
-    }) as Uint8Array;
+    });
 
     const parser = new JSONADParser();
     const [resource] = parser.parse({
@@ -96,7 +96,7 @@ describe('parse.ts', () => {
     ]);
     expect(resource.hasUnsavedChanges()).toBe(false);
 
-    const loroJson = (resource as any)._loroDoc.getMap('properties').toJSON();
+    const loroJson = resource.getLoroDoc()!.getMap('properties').toJSON();
     expect(loroJson[core.properties.parent]).toBe('did:ad:test-drive');
     // Arrays are stored as a native `LoroList` (per-element CRDT merge), not
     // as a JSON-stringified scalar — the original assertion predates that
@@ -131,9 +131,9 @@ describe('parse.ts', () => {
       false,
     );
     await message.set(core.properties.description, ':)', false);
-    const snapshot = (message as any)._loroDoc.export({
+    const snapshot = message.getLoroDoc()!.export({
       mode: 'snapshot',
-    }) as Uint8Array;
+    });
 
     // The shape the server returns when you GET `did:ad:commit:<sig>`:
     // a Commit resource whose `loroUpdate` carries the COMMITTED

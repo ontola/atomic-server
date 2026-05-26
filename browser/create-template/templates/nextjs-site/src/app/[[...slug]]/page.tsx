@@ -15,6 +15,7 @@ type Props = {
 
 const fetchResource = async (slug?: string[]) => {
   const path = slug ? `/${slug.join('/')}` : '/';
+
   return await getCurrentResource(path);
 };
 

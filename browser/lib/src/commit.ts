@@ -255,6 +255,7 @@ export class CommitBuilder {
     const subjectIsPlaceholder =
       commitPreSigned.subject.startsWith('_new:') ||
       commitPreSigned.subject === 'did:ad:genesis';
+
     if (isExplicitGenesis && subjectIsPlaceholder) {
       subject = `did:ad:${signature}`;
     }

@@ -60,9 +60,11 @@ test.describe('tables', async () => {
       // Bump the wait, and press Enter as a fallback open trigger if it
       // hasn't appeared yet — both paths land on the same picker.
       const filter = page.getByPlaceholder('filter tags');
+
       if (!(await filter.isVisible({ timeout: 2000 }).catch(() => false))) {
         await page.keyboard.press('Enter');
       }
+
       await expect(filter).toBeVisible({ timeout: 15000 });
       await page.keyboard.type(name);
       await page.keyboard.press('Enter');
@@ -207,8 +209,7 @@ test.describe('tables', async () => {
     // connections (commit subscriptions, the open WS, etc.). The dirty
     // queue is the actual saved-to-server signal.
     await page.waitForFunction(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      () => (window as any).store?.getSyncStatus?.().pendingDirtyCount === 0,
+      () => window.store.getSyncStatus().pendingDirtyCount === 0,
       undefined,
       { timeout: 10000 },
     );
@@ -344,8 +345,7 @@ test.describe('tables', async () => {
 
     // Wait for all debounced saves to drain into the server.
     await page.waitForFunction(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      () => (window as any).store?.getSyncStatus?.().pendingDirtyCount === 0,
+      () => window.store.getSyncStatus().pendingDirtyCount === 0,
       undefined,
       { timeout: 10000 },
     );

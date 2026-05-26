@@ -66,10 +66,12 @@ export const searchInput = (page: Page) =>
  */
 export async function openSearchOverlay(page: Page) {
   const input = searchInput(page);
+
   if (!(await input.isVisible().catch(() => false))) {
     await page.locator('nav button[title^="Search ("]').first().click();
     await input.waitFor({ state: 'visible', timeout: 3000 });
   }
+
   return input;
 }
 
@@ -200,6 +202,7 @@ export async function installCommitWatcher(page: Page) {
     ) {
       return;
     }
+
     (
       window as unknown as { __atomicCommitWatcherInstalled: boolean }
     ).__atomicCommitWatcherInstalled = true;
@@ -212,6 +215,7 @@ export async function installCommitWatcher(page: Page) {
     const COMMIT_CLASS = 'https://atomicdata.dev/classes/Commit';
 
     const origSend = WebSocket.prototype.send;
+
     WebSocket.prototype.send = function (
       data: string | ArrayBufferLike | Blob | ArrayBufferView,
     ) {
@@ -252,6 +256,7 @@ export async function installCommitWatcher(page: Page) {
       } catch {
         // Best-effort — never break the real send.
       }
+
       // eslint-disable-next-line prefer-rest-params
       return origSend.apply(this, arguments as unknown as [data: never]);
     };
@@ -289,6 +294,7 @@ export async function setTitle(page: Page, title: string) {
   // match the commit that carries this rename across either transport.
   const subject = await page.evaluate(() => {
     const main = document.querySelector('main[about]');
+
     return main?.getAttribute('about') ?? '';
   });
   const renameStartedAt = Date.now();
@@ -322,6 +328,7 @@ function waitForCommitForSubject(page: Page, subject: string, since: number) {
   const http = page.waitForResponse(
     r => {
       const request = r.request();
+
       return (
         r.url().endsWith('/commit') &&
         request.method() === 'POST' &&
@@ -344,6 +351,7 @@ function waitForCommitForSubject(page: Page, subject: string, since: number) {
             }>;
           }
         ).__atomicCommitLog ?? [];
+
       return log.some(
         entry => entry.sentAt >= sinceMs && entry.subject === targetSubject,
       );
@@ -351,6 +359,7 @@ function waitForCommitForSubject(page: Page, subject: string, since: number) {
     { targetSubject: subject, sinceMs: since },
     { polling: 100, timeout: 15000 },
   );
+
   return Promise.race([http, ws]);
 }
 
@@ -386,6 +395,7 @@ export async function signIn(page: Page, secret: string = SECRET) {
     name: 'Sign in',
     exact: true,
   });
+
   if (await signInButton.isVisible({ timeout: 1500 }).catch(() => false)) {
     await signInButton.click();
     await page.getByLabel('Agent secret').fill(secret);
@@ -407,17 +417,20 @@ export async function signIn(page: Page, secret: string = SECRET) {
       .getByRole('link', { name: 'User Settings' })
       .waitFor({ state: 'visible', timeout: 10_000 })
       .catch(() => undefined);
+
     return;
   }
 
   // State 3: sidebar login link (rare — shown when on a drive but not signed in).
   const loginLink = page.getByRole('link', { name: 'Login / New User' });
+
   if (await loginLink.isVisible({ timeout: 1500 }).catch(() => false)) {
     await loginLink.click();
     await page.getByRole('button', { name: 'Sign in', exact: true }).click();
     await page.getByLabel('Agent secret').fill(secret);
     await page.getByRole('button', { name: 'Continue' }).click();
     await page.goBack();
+
     return;
   }
 
@@ -586,6 +599,7 @@ export async function waitForCommitOnCurrentResource(
             }>;
           }
         ).__atomicCommitLog ?? [];
+
       return log.some(entry => {
         if (entry.sentAt < sinceMs) return false;
         const commit = entry.commit;
@@ -595,6 +609,7 @@ export async function waitForCommitOnCurrentResource(
         if (hasLoroUpdate) return true;
         const setMap = commit[setProp] as Record<string, unknown> | undefined;
         if (!setMap) return false;
+
         return Object.keys(matchSet).every(
           key => setMap[key] === matchSet[key],
         );
@@ -705,12 +720,6 @@ export async function newResource(klass: string, page: Page) {
   // Sidebar "New" navigates to /app/new?parentSubject=<parent> to preserve
   // the container context (see QuickCreateRow). Match pathname only.
   await expect(page).toHaveURL(/\/app\/new(\?|$)/);
-
-  const waitForResourcePage = async () => {
-    await page.waitForURL(url => !url.pathname.endsWith('/app/new'), {
-      timeout: 10000,
-    });
-  };
 
   const waitForResourceForm = async () => {
     await Promise.any([
@@ -825,6 +834,7 @@ export async function changeDrive(
 
 export async function editTitle(title: string, page: Page) {
   const titleEl = editableTitle(page);
+
   // After resource creation, EditableTitle auto-enters edit mode (textbox).
   // Wait for that to appear. Don't short-circuit on H1 — the previous page's
   // title (e.g. "Cake Folder") can still be rendered as <h1> for a brief
@@ -839,6 +849,7 @@ export async function editTitle(title: string, page: Page) {
     await titleEl.click();
     await expect(titleEl).toHaveRole('textbox');
   }
+
   // Watch for the commit BEFORE typing so we don't miss the response that
   // fires during the debounced save.
   const waiter = waitForCommitOnCurrentResource(page);
@@ -888,6 +899,7 @@ export const waitForCommit = async (page: Page, filter?: CommitFilter) => {
   // future-only semantics. Without this, pre-existing entries in
   // `__atomicCommitLog` would resolve the helper immediately.
   const since = Date.now();
+
   return Promise.any([
     waitForHttpCommit(page, filter),
     waitForWsCommit(page, filter, since),
@@ -928,6 +940,7 @@ const waitForWsCommit = (
 
         const setMap = commit[setProp] as Record<string, unknown> | undefined;
         if (!setMap) return false;
+
         return Object.keys(filterSet).every(key => key in setMap);
       });
     },

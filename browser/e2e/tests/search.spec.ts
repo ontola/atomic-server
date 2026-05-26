@@ -296,7 +296,7 @@ test.describe('search', async () => {
         ?.close();
     });
     await page.waitForFunction(
-      () => (window as any).store?.getSyncStatus()?.serverConnected === false,
+      () => window.store.getSyncStatus().serverConnected === false,
       undefined,
       { timeout: 15000 },
     );

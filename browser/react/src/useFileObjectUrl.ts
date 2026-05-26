@@ -29,6 +29,7 @@ export function useFileObjectUrl(resource: Resource): string | undefined {
     }
 
     const clientDb = store.getClientDb?.();
+
     if (!clientDb) {
       setUrl(undefined);
 

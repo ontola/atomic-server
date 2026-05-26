@@ -12,15 +12,12 @@ import { AtomicLink } from '../../components/AtomicLink';
 import { CommitDetail } from '../../components/CommitDetail';
 import { ViewProps } from './FolderDisplayStyle';
 import { getIconForClass } from '../../helpers/iconMap';
-import { FaPlus } from 'react-icons/fa6';
-import { Button } from '../../components/Button';
 import { QuickCreateRow } from '../../components/NewInstanceButton';
 
 import type { JSX } from 'react';
 
 export function ListView({
   subResources,
-  onNewClick,
   showNewButton,
   basic,
   parent,

@@ -94,6 +94,7 @@ export function perfSnapshot(): PerfSnapshot {
   for (const e of events) {
     const existing = rollupMap.get(e.name);
     const dur = e.d ?? 0;
+
     if (existing) {
       existing.count += 1;
       existing.totalMs += dur;
