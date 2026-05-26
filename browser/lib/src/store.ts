@@ -254,6 +254,21 @@ export interface IncomingChange {
 /** Returns True if the client has WebSocket support */
 const supportsWebSockets = () => typeof WebSocket !== 'undefined';
 
+/** Yield control back to the event loop so pending render/input tasks can run.
+ *  Uses a MessageChannel (macrotask without the ~4ms `setTimeout` clamp). */
+function yieldToEventLoop(): Promise<void> {
+  return new Promise<void>(resolve => {
+    if (typeof MessageChannel !== 'undefined') {
+      const { port1, port2 } = new MessageChannel();
+      port1.onmessage = () => resolve();
+      port2.postMessage(undefined);
+    } else {
+      setTimeout(resolve, 0);
+    }
+  });
+}
+
+
 /**
  * Cheap equality for commit-log property values. Strict `===` would always
  * report arrays/objects as different even when their contents match, so the
@@ -495,13 +510,13 @@ export class Store {
 
     if (!isNew) return;
 
-    // Rebuild the in-memory local search index from the persistent
-    // ClientDb. `LocalSearch` (MiniSearch) lives only in memory, so every
-    // page load starts it empty — without this, offline search after a
-    // reload finds only resources that happen to have been re-loaded into
-    // the store, not the whole local dataset. Runs in the background so it
-    // never blocks startup.
-    void this.rehydrateLocalSearch(clientDb);
+    // NB: the in-memory `LocalSearch` (MiniSearch) index is NOT eagerly rebuilt
+    // here. The local index is only ever consulted OFFLINE — online searches go
+    // to the server's Tantivy index — so rebuilding it on every load was ~2s of
+    // wasted work (export all of OPFS + index every drive) for a path the
+    // common online session never uses. Instead the per-drive index is built
+    // lazily, scoped to the current drive, the first time an offline search
+    // needs it: see `ensureDriveIndexed`, called from `search()`.
   }
 
   /**
@@ -529,35 +544,71 @@ export class Store {
     return current;
   }
 
-  /** Populate `localSearch` from every resource persisted in the ClientDb. */
-  private async rehydrateLocalSearch(clientDb: ClientDbWorker): Promise<void> {
+  /** Drives whose full local search index has been built (or is being built)
+   *  from OPFS — keyed to dedupe concurrent/repeat builds. */
+  private driveIndexBuilds = new Map<string, Promise<void>>();
+
+  /**
+   * Lazily build the in-memory `LocalSearch` (MiniSearch) index for ONE drive
+   * from the persistent ClientDb.
+   *
+   * The local index is only ever consulted offline (online searches hit the
+   * server's Tantivy index), so rather than rebuilding every drive's index on
+   * every page load, we build a drive's index on demand — the first time an
+   * offline search needs it (see `search()`). Deduped per drive; safe to call
+   * repeatedly.
+   */
+  public ensureDriveIndexed(drive: string): Promise<void> {
+    if (!drive) {
+      return Promise.resolve();
+    }
+
+    const existing = this.driveIndexBuilds.get(drive);
+
+    if (existing) {
+      return existing;
+    }
+
+    const build = this.buildDriveIndex(drive);
+    this.driveIndexBuilds.set(drive, build);
+
+    return build;
+  }
+
+  private async buildDriveIndex(drive: string): Promise<void> {
+    const clientDb = this.clientDb;
+
+    if (!clientDb) {
+      this.driveIndexBuilds.delete(drive);
+
+      return;
+    }
+
     try {
-      console.debug('[search] rehydrate: waiting for ClientDb ready…');
       const ready = await clientDb.waitForReady();
-      console.debug('[search] rehydrate: ClientDb ready =', ready);
 
       if (!ready) {
+        // Let a later call retry.
+        this.driveIndexBuilds.delete(drive);
+
         return;
       }
 
-      const endExport = perfSpan('clientdb.exportAllResources');
+      // TODO: a drive-scoped worker query would avoid pulling other drives'
+      // bytes across the boundary. For now export all and filter by drive —
+      // this runs at most once per drive per session (on first offline search),
+      // not on every load.
+      const endExport = perfSpan('clientdb.exportAllResources', { drive });
       const exported = await clientDb.exportAllResources();
       endExport({ bytes: exported.length });
-      const endParse = perfSpan('clientdb.rehydrateParse');
       const parsed = JSON.parse(exported);
-      endParse();
-      console.debug(
-        '[search] rehydrate: exportAllResources →',
-        Array.isArray(parsed) ? `${parsed.length} resources` : typeof parsed,
-      );
 
       if (!Array.isArray(parsed)) {
         return;
       }
 
-      // Build a subject→parent map over the whole export so each resource's
-      // drive (root of the chain) resolves even when ancestors are not in
-      // the in-memory store yet.
+      // subject→parent map over the whole export so `driveOf` resolves even
+      // for ancestors not in the in-memory store yet.
       const parentOf = new Map<string, string>();
 
       for (const obj of parsed) {
@@ -589,12 +640,26 @@ export class Store {
         return current;
       };
 
+      const endIndex = perfSpan('clientdb.buildDriveIndex', { drive });
       let indexed = 0;
+      let sinceYield = 0;
 
       for (const obj of parsed) {
         const subject = obj?.['@id'];
 
         if (typeof subject !== 'string') {
+          continue;
+        }
+
+        // Scope to the requested drive — don't index other cached drives.
+        if (driveOf(subject) !== drive) {
+          continue;
+        }
+
+        // Don't clobber a fresher entry already added via the live ingest
+        // path: the OPFS copy can lag a very recent edit (e.g. a rename whose
+        // commit hasn't persisted yet), and `addResource` replaces by id.
+        if (this.localSearch.hasResource(subject, drive)) {
           continue;
         }
 
@@ -606,21 +671,27 @@ export class Store {
           ][],
         );
         resource.loading = false;
-        const before = this.localSearch.size;
         // `addResource` is dedup-safe, so overlap with resources already
         // indexed via the normal ingest path is harmless.
-        this.localSearch.addResource(resource, driveOf(subject));
+        this.localSearch.addResource(resource, drive);
+        indexed++;
 
-        if (this.localSearch.size > before) {
-          indexed++;
+        // Yield periodically so a large drive's index build doesn't freeze the
+        // main thread / block input.
+        if (++sinceYield >= 1000) {
+          sinceYield = 0;
+          await yieldToEventLoop();
         }
       }
 
+      endIndex({ indexed });
       console.debug(
-        `[search] rehydrate: done — indexed=${indexed} totalSize=${this.localSearch.size}`,
+        `[search] drive index built — drive=${drive} indexed=${indexed}`,
       );
     } catch (e) {
-      console.warn('[search] rehydrate FAILED:', e);
+      console.warn('[search] drive index build FAILED:', e);
+      // Allow a retry on the next search.
+      this.driveIndexBuilds.delete(drive);
     }
   }
 
@@ -1684,6 +1755,10 @@ export class Store {
     // search overlay always passes `parents: <drive>`, so without this
     // fallback offline search would never consult the local index at all.
     if (!this._serverConnected) {
+      // Build this drive's local index on demand (first offline search only).
+      // The index isn't maintained eagerly on load — see `ensureDriveIndexed`.
+      await this.ensureDriveIndexed(searchDrive);
+
       const offline = this.localSearch.search(
         query,
         searchDrive,
