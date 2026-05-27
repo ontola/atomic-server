@@ -47,6 +47,27 @@ export const SyncRoute = createRoute({
 });
 
 type NodeStatus = 'synced' | 'syncing' | 'unsynced' | 'offline' | 'unknown';
+type KnownPeer = { nodeId: string; label: string; lastSync?: string };
+
+const NODE_DID_PREFIX = 'did:ad:node:';
+
+function nodeDidToRaw(nodeDid: string): string | undefined {
+  if (!nodeDid.startsWith(NODE_DID_PREFIX)) return undefined;
+
+  const raw = nodeDid.slice(NODE_DID_PREFIX.length).split(':')[0];
+
+  return /^[0-9a-f]{64}$/i.test(raw) ? raw.toLowerCase() : undefined;
+}
+
+function rawToNodeDid(raw: string): string {
+  return `${NODE_DID_PREFIX}${raw}`;
+}
+
+function normalizeStoredPeer(peer: KnownPeer): KnownPeer | undefined {
+  if (nodeDidToRaw(peer.nodeId)) return peer;
+
+  return undefined;
+}
 
 function deriveNodeStatuses(status: StoreSyncStatus): {
   local: NodeStatus;
@@ -126,16 +147,18 @@ function SyncPage() {
   const knownServers = serverURLStorage.getKnownServers();
   const [serverInput, setServerInput] = useState('');
   const [showAddServer, setShowAddServer] = useState(false);
-  const [irohNodeId, setIrohNodeId] = useState<string | null>(null);
+  const [localNodeId, setLocalNodeId] = useState<string | null>(null);
   const [peerInput, setPeerInput] = useState('');
   const [peerSyncing, setPeerSyncing] = useState(false);
   const [peerSyncResult, setPeerSyncResult] = useState<string | null>(null);
   const [showAddPeer, setShowAddPeer] = useState(false);
-  const [knownPeers, setKnownPeers] = useState<
-    { nodeId: string; label: string; lastSync?: string }[]
-  >(() => {
+  const [knownPeers, setKnownPeers] = useState<KnownPeer[]>(() => {
     try {
-      return JSON.parse(localStorage.getItem('atomic-peers') ?? '[]');
+      return (
+        JSON.parse(localStorage.getItem('atomic-peers') ?? '[]') as KnownPeer[]
+      )
+        .map(normalizeStoredPeer)
+        .filter((peer): peer is KnownPeer => peer !== undefined);
     } catch {
       return [];
     }
@@ -145,12 +168,10 @@ function SyncPage() {
     fetch('/iroh-node-id')
       .then(r => r.json())
       .then(data => {
-        if (data.nodeId) {
-          // Strip iroh: prefix if present, store raw hex
-          const raw = data.nodeId.startsWith('iroh:')
-            ? data.nodeId.slice(5)
-            : data.nodeId;
-          setIrohNodeId(raw);
+        if (typeof data.nodeId === 'string') {
+          const raw = nodeDidToRaw(data.nodeId);
+          if (!raw) return;
+          setLocalNodeId(raw);
         }
       })
       .catch(() => {});
@@ -179,15 +200,21 @@ function SyncPage() {
 
   const nodes = deriveNodeStatuses(status);
 
-  function savePeers(
-    peers: { nodeId: string; label: string; lastSync?: string }[],
-  ) {
+  function savePeers(peers: KnownPeer[]) {
     setKnownPeers(peers);
     localStorage.setItem('atomic-peers', JSON.stringify(peers));
   }
 
-  async function syncWithPeer(nodeId: string) {
-    if (!nodeId || !status.drive) return;
+  async function syncWithPeer(nodeDid: string) {
+    if (!nodeDid || !status.drive) return;
+
+    const rawNodeId = nodeDidToRaw(nodeDid);
+    if (!rawNodeId) {
+      setPeerSyncResult(`Error: Expected ${NODE_DID_PREFIX}<node-id>`);
+      return;
+    }
+
+    const canonicalNodeDid = rawToNodeDid(rawNodeId);
 
     setPeerSyncing(true);
     setPeerSyncResult(null);
@@ -196,25 +223,32 @@ function SyncPage() {
       const res = await fetch('/iroh-sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nodeId, drive: status.drive }),
+        body: JSON.stringify({ nodeId: canonicalNodeDid, drive: status.drive }),
       });
       const data = await res.json();
 
       if (data.error) {
         setPeerSyncResult(`Error: ${data.error}`);
       } else {
-        const msg = `Synced ${data.count} resource${data.count !== 1 ? 's' : ''}`;
+        // `peerName` is the remote's self-reported HELLO label. New servers
+        // populate it; older builds return null. Fall back to the truncated
+        // Node DID so the entry always has *something* to display.
+        const peerName: string | undefined =
+          typeof data.peerName === 'string' && data.peerName.trim()
+            ? data.peerName.trim()
+            : undefined;
+        const didFallback = `${NODE_DID_PREFIX}${rawNodeId.slice(0, 8)}...`;
+        const msg = peerName
+          ? `Synced ${data.count} resource${data.count !== 1 ? 's' : ''} with ${peerName}`
+          : `Synced ${data.count} resource${data.count !== 1 ? 's' : ''}`;
         setPeerSyncResult(msg);
 
-        // Save/update peer — strip any prefix to get raw hex
-        let cleaned = nodeId;
-        if (cleaned.startsWith('did:ad:node:'))
-          cleaned = cleaned.slice('did:ad:node:'.length);
-        else if (cleaned.startsWith('iroh:')) cleaned = cleaned.slice(5);
-        const existing = knownPeers.findIndex(p => p.nodeId === cleaned);
-        const entry = {
-          nodeId: cleaned,
-          label: `did:ad:node:${cleaned.slice(0, 8)}...`,
+        const existing = knownPeers.findIndex(
+          p => nodeDidToRaw(p.nodeId) === rawNodeId,
+        );
+        const entry: KnownPeer = {
+          nodeId: canonicalNodeDid,
+          label: peerName ?? didFallback,
           lastSync: new Date().toISOString(),
         };
 
@@ -344,16 +378,17 @@ function SyncPage() {
                   value={baseURL ?? ''}
                   onChange={e => setServer(e.target.value)}
                 >
-                  {knownServers.map(s => (
-                    <option key={s} value={s}>
-                      {s.startsWith('iroh:')
-                        ? `iroh:${s.slice(5, 13)}...`
-                        : isRunningInTauri() &&
-                            new URL(s).hostname === 'localhost'
+                  {knownServers.map(s => {
+                    const hostname = new URL(s).hostname;
+
+                    return (
+                      <option key={s} value={s}>
+                        {isRunningInTauri() && hostname === 'localhost'
                           ? 'Embedded (local)'
-                          : new URL(s).hostname}
-                    </option>
-                  ))}
+                          : hostname}
+                      </option>
+                    );
+                  })}
                 </ServerSelect>
                 {!showAddServer && (
                   <NodeAction onClick={() => setShowAddServer(true)}>
@@ -397,19 +432,19 @@ function SyncPage() {
                 </DetailValue>
               </DetailItem>
             )}
-            {irohNodeId && (
+            {localNodeId && (
               <DetailItem>
                 <DetailLabel>Node DID</DetailLabel>
                 <DetailValue>
                   <PeerIdRow>
-                    <PeerIdText title={`did:ad:node:${irohNodeId}`}>
-                      did:ad:node:{irohNodeId.slice(0, 12)}...
+                    <PeerIdText title={`did:ad:node:${localNodeId}`}>
+                      did:ad:node:{localNodeId.slice(0, 12)}...
                     </PeerIdText>
                     <NodeAction
                       onClick={async () => {
                         try {
                           await navigator.clipboard.writeText(
-                            `did:ad:node:${irohNodeId}`,
+                            `did:ad:node:${localNodeId}`,
                           );
                           toast.success('Node DID copied to clipboard');
                         } catch (e) {

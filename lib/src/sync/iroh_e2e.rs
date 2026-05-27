@@ -3,7 +3,7 @@
 //! Run (single-threaded — tests share global `LIVE_PEERS` / `ROUTER` state):
 //! `cargo test -p atomic_lib --features "iroh,db-redb" --lib -- sync::iroh_e2e -- --test-threads=1`
 
-use crate::{agents::ForAgent, Db, Storelike};
+use crate::{Db, Storelike, agents::ForAgent};
 use iroh::protocol::Router;
 
 const STROKE_DATA: &str = "https://atomicdata.dev/ontology/canvas/strokeData";
@@ -89,7 +89,7 @@ async fn wait_for_live_peers(min: usize, timeout: std::time::Duration) {
 async fn stroke_count(db: &Db, canvas: &str) -> usize {
     let r = db.get_resource(&canvas.into()).await.unwrap();
     match r.get(STROKE_DATA) {
-        Ok(crate::Value::JsonArray(arr)) => arr.len(),
+        Ok(crate::Value::Json(serde_json::Value::Array(arr))) => arr.len(),
         _ => 0,
     }
 }
@@ -110,6 +110,70 @@ async fn assign_folder(db: &Db, canvas: &str, folder: &str) {
     r.save_locally(db).await.unwrap();
 }
 
+/// Both sides surface the other's `HELLO` device name. Initiator gets it
+/// back in `PeerSyncOutcome`; accept side logs it (and routes it through the
+/// live peer machinery — checked indirectly here via the initiator path).
+#[tokio::test]
+async fn e2e_hello_exchanges_device_names() {
+    use crate::sync::peer;
+
+    let pair = setup_pair("e2e_hello").await;
+
+    // Pin a recognisable name on A so the assertion isn't at the mercy of
+    // whatever the test host's `hostname` happens to be.
+    peer::set_device_name(&pair.db_a, "Alice's Laptop");
+    // B too — its name flows back over the HELLO that A replies with
+    // (verified via the log only here; the rich outcome is initiator-side).
+    peer::set_device_name(&pair.db_b, "Bob's Phone");
+
+    let outcome = peer::sync_drive_with_peer_using_outcome(
+        &pair.ep_b,
+        &pair.node_id_a,
+        &pair.drive,
+        &pair.db_b,
+        true,
+    )
+    .await
+    .expect("B→A sync should succeed");
+
+    assert_eq!(
+        outcome.peer_name.as_deref(),
+        Some("Alice's Laptop"),
+        "initiator should see A's self-reported HELLO name"
+    );
+
+    // Both sides should persist the other's name into known-peers so the
+    // UI picks it up on its next refresh without us threading the name
+    // through every layer manually.
+    let b_known = peer::get_known_peers(&pair.db_b);
+    let alice_on_b = b_known
+        .iter()
+        .find(|p| peer::normalize_node_id(&p.node_id) == peer::normalize_node_id(&pair.node_id_a));
+    assert_eq!(
+        alice_on_b.map(|p| p.name.as_str()),
+        Some("Alice's Laptop"),
+        "B should have persisted A's HELLO name into known-peers"
+    );
+
+    // Accept side gets a few hundred ms to process the initiator's HELLO
+    // and write it down; the bulk sync exchange already round-tripped, so
+    // a short bounded wait is plenty.
+    let ok = wait_until(std::time::Duration::from_secs(2), || async {
+        let a_known = peer::get_known_peers(&pair.db_a);
+        let ep_b_node_id = pair.ep_b.node_id().to_string();
+        a_known
+            .iter()
+            .any(|p| peer::normalize_node_id(&p.node_id) == peer::normalize_node_id(&ep_b_node_id)
+                && p.name == "Bob's Phone")
+    })
+    .await;
+    assert!(
+        ok,
+        "A should have persisted B's HELLO name into known-peers (got {:?})",
+        peer::get_known_peers(&pair.db_a)
+    );
+}
+
 /// Initial bulk sync: canvases, strokes, and bidirectional merge (same agent / drive).
 #[tokio::test]
 async fn e2e_bidirectional_bulk_sync() {
@@ -123,7 +187,7 @@ async fn e2e_bidirectional_bulk_sync() {
             "Canvas A",
             Some(vec![(
                 STROKE_DATA,
-                crate::Value::JsonArray(vec![serde_json::json!({"color": 1})]),
+                crate::Value::Json(serde_json::Value::Array(vec![serde_json::json!({"color": 1})])),
             )]),
         )
         .await
@@ -137,7 +201,7 @@ async fn e2e_bidirectional_bulk_sync() {
             "Canvas B",
             Some(vec![(
                 STROKE_DATA,
-                crate::Value::JsonArray(vec![serde_json::json!({"color": 2})]),
+                crate::Value::Json(serde_json::Value::Array(vec![serde_json::json!({"color": 2})])),
             )]),
         )
         .await
@@ -159,7 +223,7 @@ async fn e2e_bidirectional_bulk_sync() {
         .expect("A should have B's canvas after bidirectional SYNC_PUSH");
 }
 
-/// After bulk sync, an edit on A reaches B via the live stream (or a follow-up bulk sync).
+/// After bulk sync, an edit on A reaches B via the live stream.
 #[tokio::test]
 async fn e2e_stroke_append_after_sync() {
     let pair = setup_pair("e2e_stroke").await;
@@ -172,9 +236,9 @@ async fn e2e_stroke_append_after_sync() {
             "Stroke canvas",
             Some(vec![(
                 STROKE_DATA,
-                crate::Value::JsonArray(vec![
+                crate::Value::Json(serde_json::Value::Array(vec![
                     serde_json::json!({"color": 1, "path": [[0.0, 0.0]]}),
-                ]),
+                ])),
             )]),
         )
         .await
@@ -204,15 +268,7 @@ async fn e2e_stroke_append_after_sync() {
     })
     .await;
 
-    if !live_ok {
-        let _ = sync_b_from_a(&pair).await;
-    }
-
-    assert_eq!(
-        stroke_count(&pair.db_b, &canvas).await,
-        2,
-        "B must see second stroke (live push or bulk resync)"
-    );
+    assert!(live_ok, "B must see second stroke via live push");
 }
 
 /// Gallery folder moves: `folderId` on a canvas propagates over Iroh.
@@ -274,7 +330,7 @@ async fn e2e_new_resource_after_bulk_resync() {
             "After sync",
             Some(vec![(
                 STROKE_DATA,
-                crate::Value::JsonArray(vec![serde_json::json!({"color": 99})]),
+                crate::Value::Json(serde_json::Value::Array(vec![serde_json::json!({"color": 99})])),
             )]),
         )
         .await
@@ -315,7 +371,7 @@ async fn e2e_engine_pull_after_iroh_bulk_sync() {
             "Pull test",
             Some(vec![(
                 STROKE_DATA,
-                crate::Value::JsonArray(vec![serde_json::json!({"n": 1})]),
+                crate::Value::Json(serde_json::Value::Array(vec![serde_json::json!({"n": 1})])),
             )]),
         )
         .await

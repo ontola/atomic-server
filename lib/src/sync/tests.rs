@@ -147,7 +147,7 @@ mod peer_sync_tests {
                 "https://atomicdata.dev/ontology/canvas/Canvas",
                 &drive_a,
                 "Undo sync canvas",
-                Some(vec![(STROKE_DATA, crate::Value::JsonArray(vec![]))]),
+                Some(vec![(STROKE_DATA, crate::Value::Json(serde_json::Value::Array(vec![])))]),
             )
             .await
             .unwrap();
@@ -187,7 +187,7 @@ mod peer_sync_tests {
         async fn stroke_count_on(db: &Db, canvas: &str) -> usize {
             let r = db.get_resource(&canvas.into()).await.unwrap();
             match r.get(STROKE_DATA) {
-                Ok(crate::Value::JsonArray(arr)) => arr.len(),
+                Ok(crate::Value::Json(serde_json::Value::Array(arr))) => arr.len(),
                 _ => 0,
             }
         }
@@ -1097,16 +1097,16 @@ mod peer_sync_tests {
         println!("TEST PASSED: resource change broadcast works");
     }
 
-    /// Test that JsonArray (stroke data) round-trips through Loro and syncs correctly.
+    /// Test that Json (stroke data) round-trips through Loro and syncs correctly.
     #[tokio::test]
-    async fn json_array_syncs_via_loro() {
+    async fn json_syncs_via_loro() {
         use crate::sync::peer;
 
-        let db_a = Db::init_temp("jsonarray_a").await.unwrap();
+        let db_a = Db::init_temp("json_sync_a").await.unwrap();
         let (agent_a, drive_a) = db_a.setup("Alice").await.unwrap();
         let secret = agent_a.build_secret().unwrap();
 
-        // Create a canvas with JsonArray stroke data
+        // Create a canvas with Json stroke data
         let strokes = vec![
             serde_json::json!({"color": 255, "width": 2.0, "path": [[1.0, 2.0], [3.0, 4.0]]}),
             serde_json::json!({"color": 16711680, "width": 5.0, "path": [[10.0, 20.0], [30.0, 40.0]]}),
@@ -1119,7 +1119,7 @@ mod peer_sync_tests {
                 "Stroke Test",
                 Some(vec![(
                     "https://atomicdata.dev/ontology/canvas/strokeData",
-                    crate::Value::JsonArray(strokes.clone()),
+                    crate::Value::Json(serde_json::Value::Array(strokes.clone())),
                 )]),
             )
             .await
@@ -1129,17 +1129,17 @@ mod peer_sync_tests {
         // Verify strokes are in the Loro snapshot
         let resource_a = db_a.get_resource(&canvas.as_str().into()).await.unwrap();
         match resource_a.get("https://atomicdata.dev/ontology/canvas/strokeData") {
-            Ok(crate::Value::JsonArray(arr)) => {
+            Ok(crate::Value::Json(serde_json::Value::Array(arr))) => {
                 println!("Device A has {} strokes", arr.len());
                 assert_eq!(arr.len(), 2);
                 assert_eq!(arr[0]["color"], 255);
                 assert_eq!(arr[1]["path"][0][0], 10.0);
             }
-            other => panic!("Expected JsonArray, got: {:?}", other),
+            other => panic!("Expected Json array, got: {:?}", other),
         }
 
         // Sync to device B
-        let db_b = Db::init_temp("jsonarray_b").await.unwrap();
+        let db_b = Db::init_temp("json_sync_b").await.unwrap();
         db_b.load_agent_from_secret(&secret).await.unwrap();
 
         let (node_id_a, router_a) = peer::start(db_a.clone()).await.unwrap();
@@ -1163,17 +1163,17 @@ mod peer_sync_tests {
         // Verify strokes arrived on device B
         let resource_b = db_b.get_resource(&canvas.as_str().into()).await.unwrap();
         match resource_b.get("https://atomicdata.dev/ontology/canvas/strokeData") {
-            Ok(crate::Value::JsonArray(arr)) => {
+            Ok(crate::Value::Json(serde_json::Value::Array(arr))) => {
                 println!("Device B has {} strokes", arr.len());
                 assert_eq!(arr.len(), 2, "Should have 2 strokes");
                 assert_eq!(arr[0]["color"], 255);
                 assert_eq!(arr[1]["color"], 16711680);
                 assert_eq!(arr[1]["path"][0][0], 10.0);
             }
-            other => panic!("Expected JsonArray on device B, got: {:?}", other),
+            other => panic!("Expected Json array on device B, got: {:?}", other),
         }
 
-        println!("TEST PASSED: JsonArray stroke data syncs via Loro");
+        println!("TEST PASSED: Json stroke data syncs via Loro");
     }
 
     /// Live sync test: after initial sync, Device A creates a new resource.
@@ -1230,9 +1230,9 @@ mod peer_sync_tests {
                 "Live Canvas",
                 Some(vec![(
                     "https://atomicdata.dev/ontology/canvas/strokeData",
-                    crate::Value::JsonArray(vec![
+                    crate::Value::Json(serde_json::Value::Array(vec![
                         serde_json::json!({"color": 255, "width": 3.0, "path": [[5.0, 10.0]]}),
-                    ]),
+                    ])),
                 )]),
             )
             .await
@@ -1252,7 +1252,7 @@ mod peer_sync_tests {
                 println!("Device B has '{name}' via live sync!");
 
                 match resource.get("https://atomicdata.dev/ontology/canvas/strokeData") {
-                    Ok(crate::Value::JsonArray(arr)) => {
+                    Ok(crate::Value::Json(serde_json::Value::Array(arr))) => {
                         assert_eq!(arr.len(), 1, "Should have 1 stroke");
                         println!("Device B has {} strokes via live sync", arr.len());
                     }
@@ -1285,9 +1285,9 @@ mod peer_sync_tests {
                 "Edit Test",
                 Some(vec![(
                     "https://atomicdata.dev/ontology/canvas/strokeData",
-                    crate::Value::JsonArray(vec![
+                    crate::Value::Json(serde_json::Value::Array(vec![
                         serde_json::json!({"color": 255, "width": 2.0, "path": [[1.0, 2.0]]}),
-                    ]),
+                    ])),
                 )]),
             )
             .await
@@ -1315,7 +1315,7 @@ mod peer_sync_tests {
         // Verify B has 1 stroke
         let resource_b = db_b.get_resource(&canvas.as_str().into()).await.unwrap();
         match resource_b.get("https://atomicdata.dev/ontology/canvas/strokeData") {
-            Ok(crate::Value::JsonArray(arr)) => assert_eq!(arr.len(), 1),
+            Ok(crate::Value::Json(serde_json::Value::Array(arr))) => assert_eq!(arr.len(), 1),
             _ => panic!("Should have 1 stroke after initial sync"),
         }
 
@@ -1326,11 +1326,11 @@ mod peer_sync_tests {
         resource_a
             .set_unsafe(
                 "https://atomicdata.dev/ontology/canvas/strokeData".into(),
-                crate::Value::JsonArray(vec![
+                crate::Value::Json(serde_json::Value::Array(vec![
                     serde_json::json!({"color": 255, "width": 2.0, "path": [[1.0, 2.0]]}),
                     serde_json::json!({"color": 16711680, "width": 5.0, "path": [[10.0, 20.0]]}),
                     serde_json::json!({"color": 65280, "width": 3.0, "path": [[30.0, 40.0]]}),
-                ]),
+                ])),
             )
             .unwrap();
         resource_a.save_locally(&db_a).await.unwrap();
@@ -1343,7 +1343,7 @@ mod peer_sync_tests {
         let resource_b2 = db_b.get_resource(&canvas.as_str().into()).await;
         match resource_b2 {
             Ok(r) => match r.get("https://atomicdata.dev/ontology/canvas/strokeData") {
-                Ok(crate::Value::JsonArray(arr)) => {
+                Ok(crate::Value::Json(serde_json::Value::Array(arr))) => {
                     println!("Device B now has {} strokes", arr.len());
                     if arr.len() == 3 {
                         println!("TEST PASSED: live sync pushed edits!");

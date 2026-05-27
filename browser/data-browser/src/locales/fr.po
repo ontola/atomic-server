@@ -2681,7 +2681,7 @@ msgstr "Menu de l'application"
 msgid "under <0/>"
 msgstr "sous <0/>"
 
-#. placeholder {0}: resource.title
+#. placeholder {0}: title
 #: src/components/SideBar/ResourceSideBar/SidebarItemTitle.tsx
 msgid "Rearange {0}"
 msgstr "Réorganiser {0}"
@@ -3685,7 +3685,7 @@ msgstr "Réduire le dossier"
 msgid "Expand folder"
 msgstr "Développer le dossier"
 
-#. placeholder {0}: resource.title
+#. placeholder {0}: title
 #: src/components/SideBar/ResourceSideBar/SidebarItemTitle.tsx
 msgid "Rearrange {0}"
 msgstr "Réorganiser {0}"
@@ -4088,7 +4088,7 @@ msgstr "Aucun pair connecté"
 msgid "Node DID"
 msgstr "Nœud DID"
 
-#. placeholder {0}: irohNodeId.slice(0, 12)
+#. placeholder {0}: localNodeId.slice(0, 12)
 #: src/routes/SyncRoute.tsx
 msgid "did:ad:node:{0}..."
 msgstr "did:ad:node:{0}..."
@@ -4333,3 +4333,15 @@ msgstr "Agent de développement créé — secret disponible dans le stockage lo
 #: src/routes/SyncRoute.tsx
 msgid "Node DID copied to clipboard"
 msgstr "DID de nœud copié dans le presse-papiers"
+
+#. placeholder {0}: NODE_DID_PREFIX
+#: src/routes/SyncRoute.tsx
+msgid "Error: Expected {0}<node-id>"
+msgstr ""
+
+#. placeholder {0}: data.count
+#. placeholder {1}: data.count !== 1 ? 's' : ''
+#. placeholder {2}: peerName
+#: src/routes/SyncRoute.tsx
+msgid "Synced {0} resource{1} with {2}"
+msgstr ""

@@ -17,7 +17,11 @@ pub(super) fn now_ms() -> i64 {
 }
 
 pub(super) fn touch_date_edited(resource: &mut atomic_lib::Resource) {
-    let _ = resource.patch_loro_property(
+    // `_sys` variant: tags the commit with a `sys:` origin so the user's
+    // undo button skips this op. Without it, `push_stroke + touch_date`
+    // produces two undo groups and the first tap of the undo button looks
+    // like a no-op (reverts the date tick, leaves the stroke).
+    let _ = resource.patch_loro_property_sys(
         CANVAS_DATE_EDITED,
         atomic_lib::Value::Timestamp(now_ms()),
     );

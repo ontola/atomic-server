@@ -22,6 +22,10 @@ ring = { version = "0.17", optional = true }
 iroh = { version = "0.35", optional = true, features = [
   "discovery-local-network",
 ] }
+# Looked up once at server startup so peer-sync can announce a friendly
+# device name in the `HELLO` frame. Gated to the iroh feature because
+# nothing else in the crate needs the OS hostname.
+hostname = { version = "0.4", optional = true }
 pkarr = { version = "3.10", default-features = false, features = [
   "relays",
   "keys",
@@ -80,7 +84,7 @@ db-redb = ["db", "redb"]
 ## Does NOT work in WASM.
 db-sled = ["db", "sled", "bincode1"]
 discovery = ["dep:pkarr"]
-iroh = ["dep:iroh", "anyhow"]
+iroh = ["dep:iroh", "anyhow", "dep:hostname"]
 ## WebSocket client. Depends on `db` for the v2 binary protocol (`sync::protocol`).
 ws = ["tokio-tungstenite", "db"]
 rdf = ["rio_api", "rio_turtle"]

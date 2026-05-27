@@ -20,10 +20,10 @@ describe('canvas-strokes', () => {
     expect(strokes[0].path).toHaveLength(2);
   });
 
-  it('returns empty for a legacy JSON-string payload (datatype migrated to jsonArray)', ({
+  it('returns empty for a legacy JSON-string payload (datatype migrated to json)', ({
     expect,
   }) => {
-    // `strokeData`'s declared datatype is now `jsonArray`. A property value
+    // `strokeData`'s declared datatype is now `json`. A property value
     // that is still a string indicates a pre-migration canvas; treat it as
     // empty rather than silently re-parsing — those resources need a rewrite.
     const legacy = JSON.stringify([{ color: 1, width: 2, path: [[1, 2]] }]);

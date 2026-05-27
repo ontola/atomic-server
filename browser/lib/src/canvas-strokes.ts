@@ -12,7 +12,7 @@ export const DEFAULT_STROKE_WIDTH = 10;
 /**
  * Parse `strokeData` from a resource property.
  *
- * `strokeData`'s declared datatype is `jsonArray`, materialized as a
+ * `strokeData`'s declared datatype is `json`, materialized as a
  * `LoroList<LoroMap>` — so `raw` is always a JSON array of stroke objects
  * (or `undefined` on an empty canvas). The earlier JSON-string fallback
  * was removed when the ontology moved off `string`; any pre-migration

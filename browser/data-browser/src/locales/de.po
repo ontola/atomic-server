@@ -2263,7 +2263,7 @@ msgstr "Laufwerkskonfiguration"
 msgid "Invalid Resource"
 msgstr "Ungültige Ressource"
 
-#. placeholder {0}: resource.title
+#. placeholder {0}: title
 #: src/components/SideBar/ResourceSideBar/SidebarItemTitle.tsx
 msgid "Rearange {0}"
 msgstr "{0} neu anordnen"
@@ -3680,7 +3680,7 @@ msgstr "Ordner einklappen"
 msgid "Expand folder"
 msgstr "Ordner ausklappen"
 
-#. placeholder {0}: resource.title
+#. placeholder {0}: title
 #: src/components/SideBar/ResourceSideBar/SidebarItemTitle.tsx
 msgid "Rearrange {0}"
 msgstr "{0} neu anordnen"
@@ -4079,7 +4079,7 @@ msgstr "Keine Peers verbunden"
 msgid "Node DID"
 msgstr "Node DID"
 
-#. placeholder {0}: irohNodeId.slice(0, 12)
+#. placeholder {0}: localNodeId.slice(0, 12)
 #: src/routes/SyncRoute.tsx
 msgid "did:ad:node:{0}..."
 msgstr "did:ad:node:{0}..."
@@ -4326,3 +4326,15 @@ msgstr "Dev-Agent erstellt – Geheimnis in localStorage verfügbar (Zwischenabl
 #: src/routes/SyncRoute.tsx
 msgid "Node DID copied to clipboard"
 msgstr "Node-DID in Zwischenablage kopiert"
+
+#. placeholder {0}: NODE_DID_PREFIX
+#: src/routes/SyncRoute.tsx
+msgid "Error: Expected {0}<node-id>"
+msgstr ""
+
+#. placeholder {0}: data.count
+#. placeholder {1}: data.count !== 1 ? 's' : ''
+#. placeholder {2}: peerName
+#: src/routes/SyncRoute.tsx
+msgid "Synced {0} resource{1} with {2}"
+msgstr ""

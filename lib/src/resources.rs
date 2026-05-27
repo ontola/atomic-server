@@ -230,6 +230,36 @@ impl Resource {
         Ok(())
     }
 
+    /// Like [`Self::patch_loro_property`] but tags the resulting Loro commit
+    /// with a system origin so the user's undo button skips it.
+    ///
+    /// Use for writes that aren't part of the user's edit history — touches
+    /// to `dateEdited`, sync bookkeeping like `lastCommit`, etc. Without
+    /// this, drawing a stroke and then ticking `dateEdited` produces two
+    /// undo steps and the user's first undo tap looks like a no-op.
+    pub fn patch_loro_property_sys(
+        &mut self,
+        property: &str,
+        value: Value,
+    ) -> AtomicResult<()> {
+        self.ensure_materialized()?;
+        // Flush any pending non-system ops first so they don't get lumped
+        // into the sys-tagged commit (which would smuggle a user edit past
+        // the undo filter). Their UndoManager group stays intact.
+        self.loro().commit();
+        self.propvals.insert(property.into(), value.clone());
+        self.loro().set_property(property, &value)?;
+        // `commit_with` binds the origin to *this* commit directly, so the
+        // event reaches the UndoManager with `origin = "sys:<prop>"` and the
+        // `add_exclude_origin_prefix("sys:")` filter skips it. Without this
+        // the date tick becomes its own undo step and the user's first
+        // undo tap looks like a no-op (it reverts the timestamp, not the
+        // visible stroke).
+        let origin = format!("{}{}", crate::loro::SYS_ORIGIN_PREFIX, property);
+        self.loro().commit_with_origin(&origin);
+        Ok(())
+    }
+
     /// Ensure the in-memory versioned state is loaded (from propvals or persisted snapshot).
     pub fn ensure_materialized(&mut self) -> AtomicResult<()> {
         if self.loro.is_none() {
@@ -610,7 +640,7 @@ impl Resource {
         Ok(self)
     }
 
-    /// Append a JSON item to a JsonArray property. CRDT-friendly — appends to the
+    /// Append a JSON item to a Json property. CRDT-friendly — appends to the
     /// LoroList instead of replacing it. Items from different devices merge cleanly.
     pub fn push_list_item(
         &mut self,
@@ -618,14 +648,16 @@ impl Resource {
         item: serde_json::Value,
     ) -> crate::errors::AtomicResult<()> {
         match self.propvals.get_mut(property) {
-            Some(Value::JsonArray(arr)) => arr.push(item.clone()),
+            Some(Value::Json(serde_json::Value::Array(arr))) => arr.push(item.clone()),
             _ => {
-                self.propvals
-                    .insert(property.into(), Value::JsonArray(vec![item.clone()]));
+                self.propvals.insert(
+                    property.into(),
+                    Value::Json(serde_json::Value::Array(vec![item.clone()])),
+                );
             }
         };
         self.ensure_materialized()?;
-        self.loro().push_to_json_array(property, &item)?;
+        self.loro().push_to_loro_list(property, &item)?;
         self.loro().commit();
         let _ = self.record_undo_checkpoint();
         Ok(())
@@ -640,7 +672,7 @@ impl Resource {
         self.push_list_item(property, item)
     }
 
-    /// Insert a JSON item at a specific index in a JsonArray property.
+    /// Insert a JSON item at a specific index in a Json property.
     /// CRDT-friendly — records a Loro list insert that merges across devices.
     pub fn insert_list_item(
         &mut self,
@@ -649,7 +681,7 @@ impl Resource {
         item: serde_json::Value,
     ) -> crate::errors::AtomicResult<()> {
         match self.propvals.get_mut(property) {
-            Some(Value::JsonArray(arr)) => {
+            Some(Value::Json(serde_json::Value::Array(arr))) => {
                 if index > arr.len() {
                     return Err(format!(
                         "Index {index} out of bounds for {property} (len {})",
@@ -661,27 +693,29 @@ impl Resource {
             }
             _ => {
                 if index != 0 {
-                    return Err(format!("{property} is not a JsonArray").into());
+                    return Err(format!("{property} is not a JSON array").into());
                 }
-                self.propvals
-                    .insert(property.into(), Value::JsonArray(vec![item.clone()]));
+                self.propvals.insert(
+                    property.into(),
+                    Value::Json(serde_json::Value::Array(vec![item.clone()])),
+                );
             }
         };
         self.ensure_materialized()?;
-        self.loro().insert_into_json_array(property, index, &item)?;
+        self.loro().insert_into_loro_list(property, index, &item)?;
         Ok(())
     }
 
-    /// Clear all items from a JsonArray property. Clears the LoroList too.
+    /// Clear all items from a Json property. Clears the LoroList too.
     pub fn clear_json_array(&mut self, property: &str) -> crate::errors::AtomicResult<()> {
-        self.propvals
-            .insert(property.into(), Value::JsonArray(vec![]));
+        let new_val = Value::Json(serde_json::Value::Array(vec![]));
+        self.propvals.insert(property.into(), new_val);
         self.ensure_materialized()?;
-        self.loro().clear_json_array(property)?;
+        self.loro().clear_loro_list(property)?;
         Ok(())
     }
 
-    /// Delete a single item from a JsonArray property by index. CRDT-friendly —
+    /// Delete a single item from a Json property by index. CRDT-friendly —
     /// records a Loro list delete operation that merges across devices.
     pub fn delete_list_item(
         &mut self,
@@ -690,7 +724,7 @@ impl Resource {
     ) -> crate::errors::AtomicResult<()> {
         // Update propvals cache
         match self.propvals.get_mut(property) {
-            Some(Value::JsonArray(arr)) => {
+            Some(Value::Json(serde_json::Value::Array(arr))) => {
                 if index >= arr.len() {
                     return Err(format!(
                         "Index {index} out of bounds for {property} (len {})",
@@ -701,12 +735,12 @@ impl Resource {
                 arr.remove(index);
             }
             _ => {
-                return Err(format!("{property} is not a JsonArray").into());
+                return Err(format!("{property} is not a JSON array").into());
             }
         }
 
         self.ensure_materialized()?;
-        self.loro().delete_from_json_array(property, index)?;
+        self.loro().delete_from_loro_list(property, index)?;
         self.loro().commit();
         let _ = self.record_undo_checkpoint();
         Ok(())
@@ -1749,9 +1783,58 @@ mod test {
 
     fn stroke_count(resource: &Resource) -> usize {
         match resource.get(STROKE_DATA) {
-            Ok(Value::JsonArray(arr)) => arr.len(),
+            Ok(Value::Json(serde_json::Value::Array(arr))) => arr.len(),
             _ => 0,
         }
+    }
+
+    /// Reproduce the Flutter canvas flow: after `push_list_item` the caller
+    /// updates an unrelated "system" property (e.g. `dateEdited`) before
+    /// `save_locally`. The user-visible undo should still revert the stroke
+    /// — the date touch must not become its own undo step that swallows
+    /// the user's first undo tap.
+    #[tokio::test]
+    async fn undo_after_touch_date_edited_reverts_user_edit_in_one_step() {
+        let store: crate::Db = init_store().await;
+        let (_agent, drive) = store.setup("test").await.unwrap();
+        let date_edited = "https://atomicdata.dev/ontology/canvas/dateEdited";
+        let canvas = store
+            .create_resource(
+                "https://atomicdata.dev/ontology/canvas/Canvas",
+                &drive,
+                "Date touch undo",
+                Some(vec![(STROKE_DATA, Value::Json(serde_json::Value::Array(vec![])))]),
+            )
+            .await
+            .unwrap();
+        let mut resource = store.get_resource(&canvas.as_str().into()).await.unwrap();
+        resource.ensure_editable().unwrap();
+
+        // User draws a single stroke.
+        resource
+            .push_list_item(
+                STROKE_DATA,
+                serde_json::json!({"color": 1, "width": 2.0, "path": [[0.0, 0.0]]}),
+            )
+            .unwrap();
+        // Caller (flutter `touch_date_edited`) writes a non-undoable
+        // system property before saving — mirrors `save_and_push`. Use the
+        // `_sys` variant so the UndoManager doesn't record it as its own
+        // step (which would otherwise swallow the user's first undo tap).
+        resource
+            .patch_loro_property_sys(date_edited, Value::Timestamp(1_700_000_000))
+            .unwrap();
+        resource.save_locally(&store).await.unwrap();
+        assert_eq!(stroke_count(&resource), 1, "stroke is in the doc");
+
+        // ONE undo tap from the user → stroke should be gone.
+        assert!(resource.can_undo(), "stroke push should be undoable");
+        assert!(resource.undo().unwrap(), "first undo must do something");
+        assert_eq!(
+            stroke_count(&resource),
+            0,
+            "one undo tap should revert the user-visible stroke, not just the dateEdited tick"
+        );
     }
 
     /// Undo must work after `save_locally` (which clones the in-memory Loro doc).
@@ -1764,7 +1847,7 @@ mod test {
                 "https://atomicdata.dev/ontology/canvas/Canvas",
                 &drive,
                 "Undo export test",
-                Some(vec![(STROKE_DATA, Value::JsonArray(vec![]))]),
+                Some(vec![(STROKE_DATA, Value::Json(serde_json::Value::Array(vec![])))]),
             )
             .await
             .unwrap();
@@ -1826,7 +1909,7 @@ mod test {
                 "https://atomicdata.dev/ontology/canvas/Canvas",
                 &drive,
                 "Stroke test",
-                Some(vec![(stroke_data, Value::JsonArray(vec![]))]),
+                Some(vec![(stroke_data, Value::Json(serde_json::Value::Array(vec![])))]),
             )
             .await
             .unwrap();
@@ -1859,7 +1942,7 @@ mod test {
 
         let reloaded = store.get_resource(&canvas.as_str().into()).await.unwrap();
         match reloaded.get(stroke_data) {
-            Ok(Value::JsonArray(arr)) => assert_eq!(arr.len(), 1),
+            Ok(Value::Json(serde_json::Value::Array(arr))) => assert_eq!(arr.len(), 1),
             other => panic!("expected 1 stroke after save_locally, got {other:?}"),
         }
     }
@@ -1874,7 +1957,7 @@ mod test {
                 "https://atomicdata.dev/ontology/canvas/Canvas",
                 &drive,
                 "Stroke test",
-                Some(vec![(stroke_data, Value::JsonArray(vec![]))]),
+                Some(vec![(stroke_data, Value::Json(serde_json::Value::Array(vec![])))]),
             )
             .await
             .unwrap();
@@ -1903,7 +1986,7 @@ mod test {
 
         let reloaded = store.get_resource(&canvas.as_str().into()).await.unwrap();
         match reloaded.get(stroke_data) {
-            Ok(Value::JsonArray(arr)) => assert_eq!(arr.len(), 1),
+            Ok(Value::Json(serde_json::Value::Array(arr))) => assert_eq!(arr.len(), 1),
             other => panic!("expected 1 stroke after save_locally, got {other:?}"),
         }
     }

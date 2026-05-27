@@ -330,8 +330,9 @@ async fn prompt_field(
                 None => return Ok(None),
             }
         }
-        DataType::LoroDoc | DataType::JsonArray => {
+        DataType::LoroDoc => {
             // Binary/complex types cannot be created via CLI prompt
+            // (`Json` and `JsonArray` were merged into `Json`, handled above).
             return Ok(None);
         }
     };

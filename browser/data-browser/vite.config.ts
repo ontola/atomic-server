@@ -276,6 +276,7 @@ export default defineConfig({
   server: {
     strictPort: true,
     host: true,
+    allowedHosts: ['.tunn.dev', 't-1sk9qbdw.tunn.dev'],
     proxy: {
       '/iroh-node-id': 'http://localhost:9883',
       '/iroh-sync': 'http://localhost:9883',

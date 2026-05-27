@@ -12,6 +12,7 @@ export default defineConfig({
     include: ['src/**/*.{test,spec}.{js,ts}'],
   },
   server: {
+    allowedHosts: ['t-1sk9qbdw.tunn.dev'],
     port: 5175,
   },
 });

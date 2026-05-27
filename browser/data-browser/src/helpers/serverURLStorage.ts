@@ -3,14 +3,12 @@ import { isDev } from '../config';
 const ServerURLStorageKEY = 'serverUrl';
 const KnownServersKEY = 'knownServers';
 
-// Atomic-Server URLs must be fetchable over HTTP/HTTPS (or iroh: for peer-to-peer).
+// Atomic-Server URLs must be fetchable over HTTP/HTTPS.
 // Anything else — notably `tauri://localhost` left over from earlier buggy builds —
 // is silently rejected on read so it can't poison downstream fetches.
 const isValidServerUrl = (url: unknown): url is string =>
   typeof url === 'string' &&
-  (url.startsWith('http://') ||
-    url.startsWith('https://') ||
-    url.startsWith('iroh:'));
+  (url.startsWith('http://') || url.startsWith('https://'));
 
 export const serverURLStorage = {
   set(url: string) {

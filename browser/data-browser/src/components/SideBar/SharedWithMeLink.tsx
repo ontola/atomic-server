@@ -1,4 +1,4 @@
-import { useArray, useResource, core } from '@tomic/react';
+import { useArray, useResource, useTitle, core } from '@tomic/react';
 import {
   SideBarMenuItemLink,
   SideBarMenuRow,
@@ -23,7 +23,10 @@ export function SharedWithMeLink({
   const resource = useResource(subject);
   const [isA] = useArray(resource, core.properties.isA);
   const Icon = getIconForClass(isA[0] ?? '');
-  const label = resource.title || subject;
+  // Reactive title — `resource.title` doesn't subscribe to LocalChange
+  // and goes stale when the shared resource is renamed.
+  const [title] = useTitle(resource);
+  const label = title || subject;
   const description = resource.get(core.properties.description) as
     | string
     | undefined;

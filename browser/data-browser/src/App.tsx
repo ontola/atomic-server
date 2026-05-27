@@ -34,12 +34,11 @@ const defaultServerUrl = isRunningInTauri()
   : fixDevUrl(window.location.origin);
 const storedServerUrl = serverURLStorage.get();
 // Reject obviously-invalid stored URLs (e.g. `tauri://localhost` left behind
-// by an earlier buggy release). The Store requires http(s) or iroh: URLs.
+// by an earlier buggy release). The Store requires http(s) URLs.
 const storedIsValid =
   !!storedServerUrl &&
   (storedServerUrl.startsWith('http://') ||
-    storedServerUrl.startsWith('https://') ||
-    storedServerUrl.startsWith('iroh:'));
+    storedServerUrl.startsWith('https://'));
 const serverUrl = storedIsValid ? storedServerUrl! : defaultServerUrl;
 
 // Fire-and-forget — first paint doesn't wait. Catch so a failed import

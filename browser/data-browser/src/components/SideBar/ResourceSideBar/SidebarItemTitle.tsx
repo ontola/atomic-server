@@ -3,7 +3,13 @@ import { styled, css, keyframes } from 'styled-components';
 import { SideBarItem } from '../SideBarItem';
 import { FloatingActions, floatingHoverStyles } from './FloatingActions';
 import { getIconForClass } from '../../../helpers/iconMap';
-import { useResource, useArray, core, useString } from '@tomic/react';
+import {
+  useResource,
+  useArray,
+  core,
+  useString,
+  useTitle,
+} from '@tomic/react';
 import { SyntheticListenerMap } from '@dnd-kit/core/dist/hooks/utilities';
 import { DraggableAttributes } from '@dnd-kit/core';
 import { StyledLink, TextWrapper } from './shared';
@@ -58,6 +64,13 @@ export const SidebarItemTitle = memo(
       const [classType] = useArray(resource, core.properties.isA);
       const [description] = useString(resource, core.properties.description);
       const Icon = getIconForClass(classType[0]!);
+      // Reactive title via `useTitle` (subscribes to `name`/`shortname`/
+      // `filename` LocalChange events through `useValue`'s
+      // `useSyncExternalStore`). Reading the bare `resource.title` getter
+      // here would render once at mount and never update — the row only
+      // refreshed when navigation forced a top-down re-render, which is
+      // the "title only updates when I click in the sidebar" symptom.
+      const [title] = useTitle(resource);
 
       const expandLabel = expanded ? 'Collapse folder' : 'Expand folder';
 
@@ -73,7 +86,7 @@ export const SidebarItemTitle = memo(
                   type='button'
                   aria-expanded={expanded}
                   aria-label={expandLabel}
-                  title={`Rearrange ${resource.title}`}
+                  title={`Rearrange ${title}`}
                   onClick={e => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -93,7 +106,7 @@ export const SidebarItemTitle = memo(
                       title={description}
                     >
                       <TextWrapper>
-                        <TreeRowTitle>{resource.title}</TreeRowTitle>
+                        <TreeRowTitle>{title}</TreeRowTitle>
                         <UnsavedIndicator resource={resource} />
                       </TextWrapper>
                     </ResourceLinkSideBarItem>
@@ -110,7 +123,7 @@ export const SidebarItemTitle = memo(
                 >
                   <TextWrapper>
                     <StyledIconButton
-                      title={`Rearange ${resource.title}`}
+                      title={`Rearange ${title}`}
                       {...(listeners ?? {})}
                       {...(attributes ?? {})}
                       role='link'
@@ -118,7 +131,7 @@ export const SidebarItemTitle = memo(
                       <Icon />
                       <FaGripVertical />
                     </StyledIconButton>
-                    <TreeRowTitle>{resource.title}</TreeRowTitle>
+                    <TreeRowTitle>{title}</TreeRowTitle>
                     <UnsavedIndicator resource={resource} />
                   </TextWrapper>
                 </ResourceTreeRow>
@@ -154,7 +167,7 @@ export const SidebarItemTitle = memo(
                     title={description}
                   >
                     <TextWrapper>
-                      <TreeRowTitle>{resource.title}</TreeRowTitle>
+                      <TreeRowTitle>{title}</TreeRowTitle>
                       <UnsavedIndicator resource={resource} />
                     </TextWrapper>
                   </ResourceLinkSideBarItem>
@@ -179,7 +192,7 @@ export const SidebarItemTitle = memo(
                   <LeadingSlot>
                     <Icon />
                   </LeadingSlot>
-                  <TreeRowTitle>{resource.title}</TreeRowTitle>
+                  <TreeRowTitle>{title}</TreeRowTitle>
                   <UnsavedIndicator resource={resource} />
                 </TextWrapper>
               </ResourceTreeRow>

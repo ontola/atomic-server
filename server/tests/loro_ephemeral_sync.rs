@@ -120,7 +120,8 @@ async fn ephemeral_update_broadcasts_to_other_subscribers() -> AtomicResult<()> 
     // payload would be `EphemeralStore.encodeAll()` from loro-crdt.
     // A non-empty distinctive blob is enough to verify the relay.
     let cursor_bytes: Vec<u8> = b"alice-cursor-blob".to_vec();
-    ws_a.send_loro_ephemeral_update(&subject, &cursor_bytes).await?;
+    ws_a.send_loro_ephemeral_update(&subject, &cursor_bytes)
+        .await?;
 
     // ----- Bob should receive it within 5s -----
     let received = tokio::time::timeout(Duration::from_secs(5), async {

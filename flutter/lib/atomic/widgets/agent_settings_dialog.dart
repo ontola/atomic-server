@@ -86,6 +86,34 @@ class _AgentSettingsDialogState extends State<AgentSettingsDialog> {
 
   // ── Actions ──────────────────────────────────────────────────────────
 
+  /// Look up the friendly display name for a peer by Node DID/hex, if it
+  /// was learnt from a previous HELLO exchange (stored on the Rust side via
+  /// `add_known_peer`). Returns null when the peer is brand new or only
+  /// known by its hex Node ID.
+  String? _peerNameFor(String nodeId) {
+    final normalized = nodeId.startsWith('did:ad:node:')
+        ? nodeId.substring('did:ad:node:'.length).split(':').first
+        : nodeId;
+    for (final peer in _knownPeers) {
+      final id = peer['node_id'] ?? '';
+      if (id == normalized || id == nodeId) {
+        final name = (peer['name'] ?? '').trim();
+        if (name.isNotEmpty) return name;
+      }
+    }
+    return null;
+  }
+
+  /// "Synced 12 resources with Alice's Laptop" (HELLO name known) or
+  /// "Synced 12 resources" (peer didn't introduce itself).
+  String _formatSyncResult(int count, String nodeId) {
+    final name = _peerNameFor(nodeId);
+    final noun = count == 1 ? 'resource' : 'resources';
+    return name == null
+        ? 'Synced $count $noun'
+        : 'Synced $count $noun with $name';
+  }
+
   Future<void> _loadData() async {
     setState(() => _loading = true);
     final agent = await AtomicClient.getActiveAgent();
@@ -177,15 +205,17 @@ class _AgentSettingsDialogState extends State<AgentSettingsDialog> {
         setState(() => _peerId = nodeId);
       }
       final count = await AtomicClient.peerSync(nodeId);
+      _peerController.clear();
+      // Refresh first so `_peerNameFor` sees the HELLO name `peerSync`
+      // just persisted into the known-peers DB.
+      await _loadData();
       setState(() {
-        _syncResult = 'Synced $count resources';
+        _syncResult = _formatSyncResult(count, nodeId);
         _lastSyncCount = count;
         _lastSyncTime = DateTime.now();
         _syncing = false;
         _showAddPeer = false;
       });
-      _peerController.clear();
-      await _loadData(); // Refresh drives etc.
     } catch (e) {
       setState(() {
         _syncResult = 'Error: $e';
@@ -497,13 +527,16 @@ class _AgentSettingsDialogState extends State<AgentSettingsDialog> {
                               try {
                                 final count =
                                     await AtomicClient.peerSync(nodeId);
+                                // Refresh first so the HELLO name persisted
+                                // by `peerSync` is reflected in the toast.
+                                await _loadData();
                                 setState(() {
-                                  _syncResult = 'Synced $count resources';
+                                  _syncResult =
+                                      _formatSyncResult(count, nodeId);
                                   _lastSyncCount = count;
                                   _lastSyncTime = DateTime.now();
                                   _syncing = false;
                                 });
-                                await _loadData();
                               } catch (e) {
                                 setState(() {
                                   _syncResult = 'Error: $e';
