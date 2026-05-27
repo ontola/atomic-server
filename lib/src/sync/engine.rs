@@ -311,8 +311,10 @@ pub fn build_drive_vvs(
     for subject_str in drive_subjects {
         if let Ok(Some(snapshot_bytes)) = store.kv.get(Tree::LoroSnapshots, subject_str.as_bytes())
         {
-            if let Ok(doc) = AtomicLoroDoc::from_snapshot(&snapshot_bytes) {
-                vvs.insert(subject_str.clone(), doc.oplog_vv_map());
+            // Read the version vector from the snapshot header instead of
+            // rebuilding the whole CRDT doc (see `vv_map_from_snapshot`).
+            if let Ok(vv) = AtomicLoroDoc::vv_map_from_snapshot(&snapshot_bytes) {
+                vvs.insert(subject_str.clone(), vv);
             }
         }
     }

@@ -256,9 +256,13 @@ impl ClientDb {
             let (key_bytes, snapshot_bytes) = item.map_err(to_js_err)?;
             let subject = String::from_utf8(key_bytes).map_err(|e| JsError::new(&e.to_string()))?;
 
-            match AtomicLoroDoc::from_snapshot(&snapshot_bytes) {
-                Ok(doc) => {
-                    result.insert(subject, doc.oplog_vv_map());
+            // Fast path: read the version vector straight from the snapshot
+            // header instead of rebuilding the whole CRDT doc (`from_snapshot`).
+            // For a large drive this turns ~N full imports at sync time into ~N
+            // cheap header decodes.
+            match AtomicLoroDoc::vv_map_from_snapshot(&snapshot_bytes) {
+                Ok(vv) => {
+                    result.insert(subject, vv);
                 }
                 Err(e) => {
                     web_sys::console::warn_1(
