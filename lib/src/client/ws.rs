@@ -442,48 +442,16 @@ fn parse_binary_message(bin: &[u8]) -> Option<WsMessage> {
 /// Decode an UPDATE frame payload (everything after the tag byte). Layout:
 /// `[flags: u8] [request_id: u16] [subject_len: u16] [subject] [optional
 /// commit_id_len: u16 + commit_id] [loro_bytes...]`.
+///
+/// Authoritative source of truth for the wire format: [docs/src/websockets.md](file:///Users/joep/dev/atomic-server/docs/src/websockets.md)
 fn decode_update_frame(payload: &[u8]) -> Option<WsMessage> {
     use protocol::flags;
-    if payload.len() < 5 {
-        return None;
-    }
-    let flag_bits = payload[0];
-    let _request_id = u16::from_be_bytes([payload[1], payload[2]]);
-    let subject_len = u16::from_be_bytes([payload[3], payload[4]]) as usize;
-    let mut cursor = 5;
-    if payload.len() < cursor + subject_len {
-        return None;
-    }
-    let subject = std::str::from_utf8(&payload[cursor..cursor + subject_len])
-        .ok()?
-        .to_string();
-    cursor += subject_len;
-
-    let mut commit_id = None;
-    if flag_bits & flags::HAS_COMMIT_ID != 0 {
-        if payload.len() < cursor + 2 {
-            return None;
-        }
-        let cid_len = u16::from_be_bytes([payload[cursor], payload[cursor + 1]]) as usize;
-        cursor += 2;
-        if payload.len() < cursor + cid_len {
-            return None;
-        }
-        commit_id = Some(
-            std::str::from_utf8(&payload[cursor..cursor + cid_len])
-                .ok()?
-                .to_string(),
-        );
-        cursor += cid_len;
-    }
-
-    let loro_bytes = payload[cursor..].to_vec();
-
+    let decoded = protocol::decode_update(payload)?;
     Some(WsMessage::Update {
-        subject,
-        loro_bytes,
-        commit_id,
-        is_snapshot: flag_bits & flags::SNAPSHOT != 0,
-        is_push: flag_bits & flags::PUSH != 0,
+        subject: decoded.subject,
+        loro_bytes: decoded.loro_bytes,
+        commit_id: decoded.commit_id,
+        is_snapshot: decoded.flag_bits & flags::SNAPSHOT != 0,
+        is_push: decoded.flag_bits & flags::PUSH != 0,
     })
 }

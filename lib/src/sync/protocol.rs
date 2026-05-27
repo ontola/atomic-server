@@ -25,8 +25,18 @@ pub mod tag {
     /// Server → client: a watched query's result set changed. Replaces the
     /// legacy text `QUERY_UPDATE <json>` frame.
     pub const QUERY_UPDATE: u8 = 0x36;
+    /// Self-reported display name swap on peer-sync streams. Sent by both
+    /// sides after `AUTH_OK`, before `SYNC_VV`. Display only; never used for
+    /// authorization (the authenticated agent + Iroh NodeId are).
+    pub const HELLO: u8 = 0x37;
     pub const EPHEMERAL: u8 = 0x40;
 }
+
+/// HELLO display name cap. Counted in Unicode scalar values, not bytes, so
+/// "🚀 prod-eu-3" doesn't get split mid-character on the wire. Anything
+/// longer is rejected by `decode_hello` rather than silently truncated —
+/// truncation hides config typos that would otherwise scream at the user.
+pub const HELLO_MAX_CHARS: usize = 64;
 
 /// UPDATE flags (bitfield)
 pub mod flags {
@@ -96,6 +106,14 @@ pub fn encode_update(
     let commit_id_bytes = commit_id.map(|s| s.as_bytes());
     let commit_len = commit_id_bytes.map(|b| 2 + b.len()).unwrap_or(0);
 
+    // Capacity layout:
+    // - 1 byte for UPDATE type tag
+    // - 1 byte for flag bits
+    // - 2 bytes for request_id (u16)
+    // - 2 bytes for subject_len (u16)
+    // - subject_bytes.len()
+    // - commit_len (optional 2 bytes len + commit_id bytes)
+    // - loro_bytes.len()
     let mut buf =
         Vec::with_capacity(1 + 1 + 2 + 2 + subject_bytes.len() + commit_len + loro_bytes.len());
 
@@ -280,6 +298,47 @@ pub fn encode_sync_push_chunks(drive: &str, entries: &[(&str, &[u8])]) -> Vec<Ve
     chunks
 }
 
+/// Encode a HELLO frame: `[0x37] [name_len: u16] [name_utf8]`.
+///
+/// `name` is the sender's self-reported display name. Pass an empty string
+/// if you don't have one — the receiver still decodes it; the UI just shows
+/// "Unknown device". This frame is purely informational; downstream auth
+/// decisions must use the authenticated agent or Iroh NodeId.
+pub fn encode_hello(name: &str) -> Vec<u8> {
+    let name_bytes = name.as_bytes();
+    // u16 length prefix bounds the wire size at ~64 KB even if the caller
+    // hands us a giant string. `decode_hello` enforces the real display cap.
+    let len = name_bytes.len().min(u16::MAX as usize);
+    let mut buf = Vec::with_capacity(3 + len);
+    buf.push(tag::HELLO);
+    buf.extend_from_slice(&(len as u16).to_be_bytes());
+    buf.extend_from_slice(&name_bytes[..len]);
+    buf
+}
+
+/// Decode the payload of a HELLO frame (slice *after* the tag byte).
+///
+/// Returns `None` if the frame is malformed (truncated, invalid UTF-8, or
+/// the decoded name exceeds [`HELLO_MAX_CHARS`] scalar values). Control
+/// characters are stripped so a hostile peer can't smuggle line breaks
+/// into log output.
+pub fn decode_hello(data: &[u8]) -> Option<String> {
+    if data.len() < 2 {
+        return None;
+    }
+    let len = u16::from_be_bytes([data[0], data[1]]) as usize;
+    if data.len() < 2 + len {
+        return None;
+    }
+    let raw = std::str::from_utf8(&data[2..2 + len]).ok()?;
+    // Strip control chars; we display the name in HTML/logs as-is.
+    let cleaned: String = raw.chars().filter(|c| !c.is_control()).collect();
+    if cleaned.chars().count() > HELLO_MAX_CHARS {
+        return None;
+    }
+    Some(cleaned)
+}
+
 /// Encode a BLOB_REQUEST message: [0x34] [hash: [u8; 32]]
 pub fn encode_blob_request(hash: &[u8; 32]) -> Vec<u8> {
     let mut buf = Vec::with_capacity(1 + 32);
@@ -400,6 +459,66 @@ pub fn decode_query_update(data: &[u8]) -> Option<DecodedQueryUpdate> {
         value: if value.is_empty() { None } else { Some(value) },
         added,
         removed,
+    })
+}
+
+/// Decoded UPDATE message.
+///
+/// Authoritative source of truth for the wire format: [docs/src/websockets.md](file:///Users/joep/dev/atomic-server/docs/src/websockets.md)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DecodedUpdate {
+    pub flag_bits: u8,
+    pub request_id: u16,
+    pub subject: String,
+    pub commit_id: Option<String>,
+    pub loro_bytes: Vec<u8>,
+}
+
+/// Decode an UPDATE message (after the type tag).
+///
+/// Authoritative source of truth for the wire format: [docs/src/websockets.md](file:///Users/joep/dev/atomic-server/docs/src/websockets.md)
+pub fn decode_update(payload: &[u8]) -> Option<DecodedUpdate> {
+    if payload.len() < 5 {
+        return None;
+    }
+    let flag_bits = payload[0];
+    let request_id = u16::from_be_bytes([payload[1], payload[2]]);
+    let subject_len = u16::from_be_bytes([payload[3], payload[4]]) as usize;
+    let mut cursor = 5;
+    if payload.len() < cursor + subject_len {
+        return None;
+    }
+    let subject = std::str::from_utf8(&payload[cursor..cursor + subject_len])
+        .ok()?
+        .to_string();
+    cursor += subject_len;
+
+    let mut commit_id = None;
+    if flag_bits & flags::HAS_COMMIT_ID != 0 {
+        if payload.len() < cursor + 2 {
+            return None;
+        }
+        let cid_len = u16::from_be_bytes([payload[cursor], payload[cursor + 1]]) as usize;
+        cursor += 2;
+        if payload.len() < cursor + cid_len {
+            return None;
+        }
+        commit_id = Some(
+            std::str::from_utf8(&payload[cursor..cursor + cid_len])
+                .ok()?
+                .to_string(),
+        );
+        cursor += cid_len;
+    }
+
+    let loro_bytes = payload[cursor..].to_vec();
+
+    Some(DecodedUpdate {
+        flag_bits,
+        request_id,
+        subject,
+        commit_id,
+        loro_bytes,
     })
 }
 
@@ -657,11 +776,46 @@ mod tests {
         );
 
         assert_eq!(encoded[0], tag::UPDATE);
-        // Verify structure: tag(1) + flags(1) + rid(2) + subj_len(2) + subj + cid_len(2) + cid + bytes
-        let flags_byte = encoded[1];
-        assert_eq!(flags_byte, flag_bits);
-        let rid = u16::from_be_bytes([encoded[2], encoded[3]]);
-        assert_eq!(rid, 42);
+        let decoded = decode_update(&encoded[1..]).expect("Should decode");
+        assert_eq!(decoded.flag_bits, flag_bits);
+        assert_eq!(decoded.request_id, 42);
+        assert_eq!(decoded.subject, "did:ad:test");
+        assert_eq!(decoded.commit_id.as_deref(), Some("did:ad:commit:abc"));
+        assert_eq!(decoded.loro_bytes, b"loro-snapshot-bytes");
+    }
+
+    #[test]
+    fn legacy_update_decoder_bug_regression() {
+        let flag_bits = flags::HAS_COMMIT_ID;
+        let original_loro = b"loro-payload";
+        let commit_id = "did:ad:commit:123";
+        let subject = "did:ad:test";
+
+        let encoded = encode_update(
+            flag_bits,
+            1,
+            subject,
+            Some(commit_id),
+            original_loro,
+        );
+
+        // Simulate legacy peer.rs slicing behavior:
+        let payload = &encoded[1..];
+        let subject_len = u16::from_be_bytes([payload[3], payload[4]]) as usize;
+        let legacy_loro_bytes = &payload[5 + subject_len..];
+
+        // The legacy parser slices starting at 5 + subject_len.
+        // Since HAS_COMMIT_ID is set, the payload at 5 + subject_len contains 
+        // 2 bytes of commit_id length, then the commit_id, then the original loro bytes.
+        // Therefore, legacy_loro_bytes starts with the commit ID data, not original_loro!
+        assert_ne!(legacy_loro_bytes, original_loro);
+
+        // The new unified decoder should parse it correctly.
+        let decoded = decode_update(&encoded[1..]).unwrap();
+        assert_eq!(decoded.loro_bytes, original_loro);
+        assert_eq!(decoded.commit_id.as_deref(), Some(commit_id));
+        assert_eq!(decoded.subject, subject);
+        assert_eq!(decoded.flag_bits, flag_bits);
     }
 
     #[test]
@@ -671,6 +825,52 @@ mod tests {
         let decoded = decode_get(&encoded[1..]).unwrap();
         assert_eq!(decoded.request_id, 7);
         assert_eq!(decoded.subject, "did:ad:agent:alice");
+    }
+
+    #[test]
+    fn hello_round_trip() {
+        let encoded = encode_hello("Joe's Laptop");
+        assert_eq!(encoded[0], tag::HELLO);
+        let decoded = decode_hello(&encoded[1..]).unwrap();
+        assert_eq!(decoded, "Joe's Laptop");
+    }
+
+    #[test]
+    fn hello_empty_name() {
+        let encoded = encode_hello("");
+        let decoded = decode_hello(&encoded[1..]).unwrap();
+        assert_eq!(decoded, "");
+    }
+
+    #[test]
+    fn hello_strips_control_chars() {
+        // A peer trying to smuggle newlines into our logs gets them stripped.
+        let encoded = encode_hello("OK\nFAKE-LINE");
+        let decoded = decode_hello(&encoded[1..]).unwrap();
+        assert_eq!(decoded, "OKFAKE-LINE");
+    }
+
+    #[test]
+    fn hello_rejects_oversize_name() {
+        // 65 ASCII chars > HELLO_MAX_CHARS (64) → reject.
+        let name = "x".repeat(HELLO_MAX_CHARS + 1);
+        let encoded = encode_hello(&name);
+        assert!(decode_hello(&encoded[1..]).is_none());
+    }
+
+    #[test]
+    fn hello_counts_unicode_scalars_not_bytes() {
+        // 64 emoji = 64 chars (well under the byte limit). Must decode.
+        let name = "🚀".repeat(HELLO_MAX_CHARS);
+        let encoded = encode_hello(&name);
+        assert_eq!(decode_hello(&encoded[1..]).unwrap(), name);
+    }
+
+    #[test]
+    fn hello_truncated_payload_returns_none() {
+        let mut encoded = encode_hello("hello");
+        encoded.truncate(encoded.len() - 2);
+        assert!(decode_hello(&encoded[1..]).is_none());
     }
 
     #[test]

@@ -6,8 +6,8 @@
 //! Addressing (relay URL, direct addresses) is handled by Iroh's `discovery_n0()`.
 //! Peer discovery (agent → NodeID) is handled by pkarr in `discovery.rs`.
 
-use crate::{agents::ForAgent, Db, Storelike};
-use iroh::{protocol::Router, Endpoint, NodeId};
+use crate::{Db, Storelike, agents::ForAgent};
+use iroh::{Endpoint, NodeId, protocol::Router};
 use std::sync::OnceLock;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -32,6 +32,36 @@ pub fn normalize_node_id(id: &str) -> String {
 
 /// Global NodeID, set once on startup.
 static NODE_ID: OnceLock<String> = OnceLock::new();
+
+/// Resolve the device name this node announces in `HELLO` frames.
+///
+/// Order of precedence:
+///  1. Whatever is persisted via [`set_device_name`] (flutter app UI, server
+///     `--device-name` / `ATOMIC_DEVICE_NAME` written at startup).
+///  2. The OS hostname (`gethostname()`).
+///  3. The literal `"Unknown"`.
+///
+/// Truncates to [`crate::sync::protocol::HELLO_MAX_CHARS`] scalar values
+/// so a misconfigured peer can't drive the on-wire length cap into reject.
+pub fn effective_device_name(store: &Db) -> String {
+    let from_db = get_device_name(store);
+    let raw = if !from_db.trim().is_empty() {
+        from_db
+    } else {
+        hostname::get()
+            .ok()
+            .and_then(|os| os.into_string().ok())
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "Unknown".to_string())
+    };
+    let max = super::protocol::HELLO_MAX_CHARS;
+    if raw.chars().count() > max {
+        raw.chars().take(max).collect()
+    } else {
+        raw
+    }
+}
 
 /// Returns the Iroh NodeID if the peer node is running.
 pub fn get_node_id() -> Option<&'static str> {
@@ -581,30 +611,18 @@ fn register_live_peer(
                 continue;
             }
 
-            // Handle UPDATE frames
+            // Handle UPDATE frames.
+            // Authoritative source of truth for the wire format: [docs/src/websockets.md](file:///Users/joep/dev/atomic-server/docs/src/websockets.md)
             if buf[0] == super::protocol::tag::UPDATE {
-                let payload = &buf[1..];
-                if payload.len() < 5 {
-                    continue;
-                }
-                let _flags = payload[0];
-                let _request_id = u16::from_be_bytes([payload[1], payload[2]]);
-                let subject_len = u16::from_be_bytes([payload[3], payload[4]]) as usize;
-                if payload.len() < 5 + subject_len {
-                    continue;
-                }
-                let subject = std::str::from_utf8(&payload[5..5 + subject_len])
-                    .unwrap_or_default()
-                    .to_string();
-                let loro_bytes = &payload[5 + subject_len..];
-
-                if !loro_bytes.is_empty() {
-                    let _ = super::ws_apply::apply_state_update(&store, &subject, loro_bytes).await;
-                    tracing::trace!(
-                        "[live] imported update for {} from {}",
-                        &subject[..subject.len().min(20)],
-                        &read_peer_id[..read_peer_id.len().min(12)]
-                    );
+                if let Some(decoded) = super::protocol::decode_update(&buf[1..]) {
+                    if !decoded.loro_bytes.is_empty() {
+                        let _ = super::ws_apply::apply_state_update(&store, &decoded.subject, &decoded.loro_bytes).await;
+                        tracing::trace!(
+                            "[live] imported update for {} from {}",
+                            &decoded.subject[..decoded.subject.len().min(20)],
+                            &read_peer_id[..read_peer_id.len().min(12)]
+                        );
+                    }
                 }
                 continue;
             }
@@ -752,6 +770,19 @@ pub async fn sync_drive_with_peer(
     sync_drive_with_peer_forced(remote_node_id, drive, store, true).await
 }
 
+/// Same as [`sync_drive_with_peer`] but returns the rich [`PeerSyncOutcome`]
+/// (resource count + remote's self-reported display name).
+pub async fn sync_drive_with_peer_outcome(
+    remote_node_id: &str,
+    drive: &str,
+    store: &Db,
+) -> crate::errors::AtomicResult<PeerSyncOutcome> {
+    let endpoint = ENDPOINT
+        .get()
+        .ok_or("Iroh peer not started. Call start() first.")?;
+    sync_drive_with_peer_using_outcome(endpoint, remote_node_id, drive, store, true).await
+}
+
 /// Bulk sync only when there is no healthy live stream to this peer (auto-connect / nudge).
 pub async fn sync_drive_with_peer_if_needed(
     remote_node_id: &str,
@@ -773,8 +804,21 @@ async fn sync_drive_with_peer_forced(
     sync_drive_with_peer_using(endpoint, remote_node_id, drive, store, force).await
 }
 
+/// Rich result for a peer sync round-trip. `peer_name` is whatever the
+/// remote announced in its `HELLO` frame (or `None` for old peers that
+/// don't speak HELLO yet). Display-only — see [`crate::sync::protocol::HELLO_MAX_CHARS`].
+#[derive(Debug, Clone)]
+pub struct PeerSyncOutcome {
+    pub count: usize,
+    pub peer_name: Option<String>,
+}
+
 /// Sync a drive using a specific Iroh endpoint. Useful for tests where
 /// multiple endpoints exist in the same process.
+///
+/// Returns the number of resources imported. For callers that also want
+/// the remote's self-reported display name, use
+/// [`sync_drive_with_peer_using_outcome`].
 pub async fn sync_drive_with_peer_using(
     endpoint: &Endpoint,
     remote_node_id: &str,
@@ -782,6 +826,20 @@ pub async fn sync_drive_with_peer_using(
     store: &Db,
     force: bool,
 ) -> crate::errors::AtomicResult<usize> {
+    sync_drive_with_peer_using_outcome(endpoint, remote_node_id, drive, store, force)
+        .await
+        .map(|o| o.count)
+}
+
+/// Same as [`sync_drive_with_peer_using`] but returns [`PeerSyncOutcome`]
+/// so callers can render the remote's friendly device name.
+pub async fn sync_drive_with_peer_using_outcome(
+    endpoint: &Endpoint,
+    remote_node_id: &str,
+    drive: &str,
+    store: &Db,
+    force: bool,
+) -> crate::errors::AtomicResult<PeerSyncOutcome> {
     let remote_key = normalize_node_id(remote_node_id);
     let node_id: NodeId = remote_key
         .parse()
@@ -792,7 +850,10 @@ pub async fn sync_drive_with_peer_using(
             "[sync] already live with {}, skipping bulk reconnect",
             &remote_key[..remote_key.len().min(12)]
         );
-        return Ok(0);
+        return Ok(PeerSyncOutcome {
+            count: 0,
+            peer_name: None,
+        });
     }
 
     if force && live_peer_ids().contains(&remote_key) {
@@ -863,6 +924,18 @@ pub async fn sync_drive_with_peer_using(
     }
     tracing::info!("Authenticated with peer");
 
+    // Self-introduce. We send unprompted right after AUTH_OK; the accept
+    // side does the same in `handle_stream`. Either side's HELLO can arrive
+    // at any time (TCP is ordered but we don't block on it here) — the
+    // read loop below captures it whenever it lands.
+    let hello_frame = super::protocol::encode_hello(&effective_device_name(store));
+    send.write_u32(hello_frame.len() as u32)
+        .await
+        .map_err(io_err)?;
+    send.write_all(&hello_frame).await.map_err(io_err)?;
+
+    let mut peer_display_name: Option<String> = None;
+
     // Build our local sync state
     let drive_subject = crate::Subject::from_raw(drive, store.get_base_domain().as_deref());
     let drive_subjects = super::engine::collect_drive_subjects(store, &drive_subject).await;
@@ -924,6 +997,30 @@ pub async fn sync_drive_with_peer_using(
         let payload = &buf[1..];
 
         match tag {
+            super::protocol::tag::HELLO => {
+                // First HELLO from the accept side wins; later ones are
+                // ignored. Decoder enforces 64-char cap + UTF-8 + strips
+                // control chars, so we don't need to sanitize again here.
+                if peer_display_name.is_none() {
+                    peer_display_name = super::protocol::decode_hello(payload);
+                    if let Some(name) = &peer_display_name {
+                        tracing::info!(
+                            "[sync] peer {} introduced itself as \"{}\"",
+                            &remote_key[..remote_key.len().min(12)],
+                            name
+                        );
+                        // Persist into the known-peers table so any UI that
+                        // re-reads `get_known_peers` (flutter dialog, server
+                        // sidebar) shows the friendly name without needing
+                        // a separate codepath. `add_known_peer` is upsert
+                        // and only overwrites `name` when non-empty.
+                        if !name.is_empty() {
+                            add_known_peer(store, &remote_key, name);
+                        }
+                    }
+                }
+                continue;
+            }
             super::protocol::tag::SYNC_OK => {
                 tracing::info!("Peer says drive {drive} is in sync");
                 break;
@@ -1047,7 +1144,10 @@ pub async fn sync_drive_with_peer_using(
     }
     register_live_peer(remote_key.clone(), send, recv, store.clone());
 
-    Ok(total_imported)
+    Ok(PeerSyncOutcome {
+        count: total_imported,
+        peer_name: peer_display_name,
+    })
 }
 
 // ── Known peers (persisted in DB) ────────────────────────────────────────
@@ -1135,6 +1235,8 @@ async fn handle_stream(
     let mut agent = ForAgent::Public;
     let mut total_imported = 0;
     let mut sent_sync_ok = false;
+    let mut hello_sent = false;
+    let mut peer_display_name: Option<String> = None;
 
     while let Ok(n) = recv.read_u32().await {
         let len = n as usize;
@@ -1146,6 +1248,29 @@ async fn handle_stream(
         let mut buf = vec![0u8; len];
         recv.read_exact(&mut buf).await.map_err(io_err)?;
 
+        // HELLO is a peer-stream concern, not an engine concern. Browser WS
+        // sessions never see it (they don't speak peer-sync). Intercept here
+        // so the engine doesn't have to know about it.
+        if !buf.is_empty() && buf[0] == super::protocol::tag::HELLO {
+            if peer_display_name.is_none() {
+                peer_display_name = super::protocol::decode_hello(&buf[1..]);
+                if let Some(name) = &peer_display_name {
+                    tracing::info!(
+                        "[accept] peer {} introduced itself as \"{}\"",
+                        &remote_key[..remote_key.len().min(12)],
+                        name
+                    );
+                    // Persist into known-peers so flutter/server UIs see
+                    // the name on their next refresh — even for unsolicited
+                    // inbound syncs the local user never initiated.
+                    if !name.is_empty() {
+                        add_known_peer(&store, &remote_key, name);
+                    }
+                }
+            }
+            continue;
+        }
+
         // Track imports from SYNC_PUSH frames
         if !buf.is_empty() && buf[0] == super::protocol::tag::SYNC_PUSH {
             if let Some(push) = super::protocol::decode_sync_push(&buf[1..]) {
@@ -1154,6 +1279,17 @@ async fn handle_stream(
         }
 
         let responses = super::engine::handle_frame(&buf, &store, &mut agent).await;
+
+        // Send our HELLO once, immediately after AUTH succeeded. We tack it
+        // on to the AUTH_OK response so old peers that don't read past
+        // AUTH_OK still get something coherent (an unknown tag they'll just
+        // skip). Skipping HELLO before AUTH_OK would leak our hostname to
+        // unauthenticated peers — small thing, but no reason to.
+        let just_authed = !buf.is_empty()
+            && buf[0] == super::protocol::tag::AUTH
+            && responses
+                .iter()
+                .any(|r| !r.is_empty() && r[0] == super::protocol::tag::AUTH_OK);
 
         // Check if the client sent us a SYNC_PUSH (bidirectional data exchange complete)
         let client_pushed = !buf.is_empty() && buf[0] == super::protocol::tag::SYNC_PUSH;
@@ -1164,6 +1300,16 @@ async fn handle_stream(
         if sync_ok {
             sent_sync_ok = true;
         }
+        // If our SYNC_DIFF does not ask the initiator to push anything back, the
+        // bulk exchange is complete once our responses are written. Without this
+        // transition, the accept side stays in handshake mode and later live
+        // UPDATE frames are dispatched to the sync engine, which ignores them.
+        let sync_diff_needs_no_pushback = responses.iter().any(|r| {
+            !r.is_empty()
+                && r[0] == super::protocol::tag::SYNC_DIFF
+                && super::protocol::decode_sync_diff(&r[1..])
+                    .is_some_and(|diff| diff.pull.is_empty())
+        });
 
         for response in responses {
             if let Err(e) = send.write_u32(response.len() as u32).await {
@@ -1182,12 +1328,31 @@ async fn handle_stream(
             }
         }
 
+        if just_authed && !hello_sent {
+            hello_sent = true;
+            let hello = super::protocol::encode_hello(&effective_device_name(&store));
+            // Two-step write so the ? in either step doesn't have to convert
+            // between io::Error (write_u32) and WriteError (write_all).
+            let header_ok = send.write_u32(hello.len() as u32).await;
+            if let Err(e) = header_ok {
+                tracing::warn!(
+                    "[accept] failed to write HELLO header to {}: {e}",
+                    &remote_key[..remote_key.len().min(12)]
+                );
+            } else if let Err(e) = send.write_all(&hello).await {
+                tracing::warn!(
+                    "[accept] failed to write HELLO body to {}: {e}",
+                    &remote_key[..remote_key.len().min(12)]
+                );
+            }
+        }
+
         // Transition to live mode after the sync exchange is fully complete:
         // - SYNC_OK: no data to exchange, we're done
         // - Client's SYNC_PUSH: bidirectional exchange complete
         // Register even if the last write failed — the initiator may already have
         // read SYNC_OK and registered, and we must not show "connected" only on one side.
-        if sync_ok || client_pushed {
+        if sync_ok || client_pushed || sync_diff_needs_no_pushback {
             tracing::info!(
                 "[accept] sync complete, transitioning to live mode with {}",
                 &remote_key[..remote_key.len().min(12)]
