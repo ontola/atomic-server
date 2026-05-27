@@ -5,7 +5,11 @@ Binary-first WebSocket protocol (v2). All resource data travels as raw Loro byte
 Text messages are only used for Loro collaborative editing sync (LORO_SYNC_*) and
 query subscription updates (QUERY_UPDATE), which will migrate to binary later.
 
-For protocol docs, see https://docs.atomicdata.dev/websockets.html
+**Canonical wire-format spec:** `docs/src/websockets.md` (published as
+<https://docs.atomicdata.dev/websockets.html>). Frame encoders/decoders live
+in [`atomic_lib::sync::protocol`]; the TypeScript counterparts are
+`browser/lib/src/ws-v2.ts` (encoding) and `browser/lib/src/websockets.ts`
+(high-level client). Update all four together when changing the protocol.
  */
 use actix::{
     Actor, ActorContext, ActorFutureExt, Addr, AsyncContext, Handler, StreamHandler, WrapFuture,

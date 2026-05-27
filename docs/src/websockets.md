@@ -48,6 +48,7 @@ A connection is established over a WebSocket (typically to a responder's `/ws` e
 | `0x34` | `BLOB_REQUEST`  | either      | `[blake3_hash: 32 bytes]`                                                                                                           |
 | `0x35` | `BLOB_RESPONSE` | either      | `[blake3_hash: 32 bytes] [bytes...]`                                                                                                |
 | `0x36` | `QUERY_UPDATE`  | Resp → Init | `[property_len: u16] [property] [value_len: u16] [value] [added_count: u16] entries... [removed_count: u16] entries...`             |
+| `0x37` | `HELLO`         | either      | `[name_len: u16] [name_utf8]` — peer-stream only (Iroh / QUIC). Browser WS connections do not use this frame.                        |
 | `0x40` | `EPHEMERAL`     | either      | (Protocol-specific transient data)                                                                                                  |
 
 ## UPDATE (0x11) Payload Layout and Flags
@@ -72,14 +73,41 @@ Before sending any other messages, the initiator must authenticate:
 1. The initiator sends `AUTH (0x01)` with a JSON payload containing signed credentials.
 2. The responder responds with `AUTH_OK (0x02)` or `ERROR (0x03)`.
 
+## Peer Handshake (HELLO, Iroh streams only)
+
+On Iroh peer-to-peer streams (not browser WS), each side announces a
+human-readable device name immediately after `AUTH_OK`:
+
+```
+-> HELLO (0x37) [name_len: u16] [name_utf8]
+<- HELLO (0x37) [name_len: u16] [name_utf8]
+```
+
+Display-only. The name is capped at `HELLO_MAX_CHARS` Unicode scalar values
+(see `lib/src/sync/protocol.rs`); over-long frames are rejected rather than
+truncated so receivers can show the literal value safely. Peers that don't
+implement `HELLO` simply skip it — receivers treat the absence as "unknown
+peer".
+
 ## Resource Fetching
 
 ```
 -> GET (0x10) [request_id] [subject]
-<- UPDATE (0x11) [flags] [request_id] [subject] [loro_snapshot_bytes]
+<- UPDATE (0x11) [flags=SNAPSHOT|HAS_COMMIT_ID] [request_id] [subject_len] [subject]
+                 [commit_id_len] [commit_id] [loro_snapshot_bytes]
 ```
 
-A peer fetches the current state of a resource as a binary Loro snapshot.
+A peer fetches the current state of a resource as a binary Loro snapshot. The
+responder should set `HAS_COMMIT_ID` and include the resource's current
+`lastCommit` subject so the requester can build follow-up commits with a
+correct `previousCommit` pointer. Without this field a client that received
+state only over WS has no way to know which commit produced the state and may
+incorrectly mark its next save as a genesis commit (the resource exists, so
+the server rejects it).
+
+> Implementation note: subscription pushes (`PUSH` flag) carry the commit id
+> today; direct GET responses currently omit it. Tracked in
+> [`planning/fix-canvas-genesis-save.md`](../../planning/fix-canvas-genesis-save.md).
 
 ## Persisted Commits
 
@@ -171,6 +199,7 @@ This allows binary files to sync across the mesh network independently of the Lo
 A few low-volume or registration-side messages still use text frames (prefixed by keyword) during the transition to v2:
 
 - `SUBSCRIBE_QUERY <json>` (Init → Resp): register a filter subscription. JSON shape: `{ property, value, drive, sort_by? }`. Drive is required.
+- `LORO_SYNC_SUBSCRIBE <json>` / `LORO_SYNC_UNSUBSCRIBE <json>`: register/unregister live collaborative-editing fanout for a Loro subject.
 - `LORO_SYNC_UPDATE <json>`: Collaborative editing deltas.
 - `LORO_EPHEMERAL_UPDATE <json>`: Cursors and presence.
 
@@ -207,6 +236,19 @@ Peer A                              Peer B
 
 ## Implementation
 
-- [Client implementation (TypeScript)](https://github.com/atomicdata-dev/atomic-server/blob/master/browser/lib/src/websockets.ts)
-- [Server implementation (Rust/Actix)](https://github.com/atomicdata-dev/atomic-server/blob/master/server/src/handlers/web_sockets.rs)
-- [Binary Protocol Encoding (TypeScript)](https://github.com/atomicdata-dev/atomic-server/blob/master/browser/lib/src/ws-v2.ts)
+This page is the canonical wire-format spec. Every implementation file below
+links back here in its module header; keep this doc in sync when you touch any
+of them.
+
+**Browser / TypeScript**
+
+- [`browser/lib/src/ws-v2.ts`](https://github.com/atomicdata-dev/atomic-server/blob/master/browser/lib/src/ws-v2.ts) — frame encode/decode (tags, flags, `Frame*` helpers).
+- [`browser/lib/src/websockets.ts`](https://github.com/atomicdata-dev/atomic-server/blob/master/browser/lib/src/websockets.ts) — high-level client (auth, pending requests, subscriptions, commit-over-WS).
+
+**Server / Rust**
+
+- [`server/src/handlers/web_sockets.rs`](https://github.com/atomicdata-dev/atomic-server/blob/master/server/src/handlers/web_sockets.rs) — Actix WebSocket handler (browser-facing).
+- [`lib/src/sync/protocol.rs`](https://github.com/atomicdata-dev/atomic-server/blob/master/lib/src/sync/protocol.rs) — shared tag constants, flag bits, encode/decode helpers used by both transports.
+- [`lib/src/sync/engine.rs`](https://github.com/atomicdata-dev/atomic-server/blob/master/lib/src/sync/engine.rs) — transport-agnostic drive sync engine (`SYNC`, `SYNC_DIFF`, `SYNC_PUSH`).
+- [`lib/src/sync/peer.rs`](https://github.com/atomicdata-dev/atomic-server/blob/master/lib/src/sync/peer.rs) — Iroh QUIC peer transport (HELLO handshake, peer streams).
+- [`lib/src/client/ws.rs`](https://github.com/atomicdata-dev/atomic-server/blob/master/lib/src/client/ws.rs) — Rust WebSocket client (used by CLI and tests).

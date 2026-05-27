@@ -1,3 +1,10 @@
+/**
+ * High-level WebSocket client (auth, pending requests, subscriptions,
+ * commit-over-WS). Wire format is defined by `ws-v2.ts` and
+ * documented in `docs/src/websockets.md` — the canonical spec.
+ * Server counterpart: `server/src/handlers/web_sockets.rs`.
+ */
+
 import { createAuthentication } from './authentication.js';
 import { Resource } from './resource.js';
 import { recordServerVersionFromWsProtocol } from './serverCapabilities.js';
