@@ -1006,6 +1006,15 @@ export class Resource<C extends OptionalClass = any> {
           );
         }
 
+        // Copy housekeeping properties from resourceB._cache to this._cache
+        // before rebuilding cache so they are preserved
+        const serverManaged = [properties.commit.lastCommit, commits.properties.createdAt];
+        for (const key of serverManaged) {
+          if (resourceB._cache[key] !== undefined) {
+            this._cache[key] = resourceB._cache[key];
+          }
+        }
+
         // Rebuild the read cache from the merged Loro doc
         this.rebuildCacheFromLoro();
         this._cacheDirty = false;
@@ -1023,12 +1032,19 @@ export class Resource<C extends OptionalClass = any> {
         this._loroSnapshotBytes = resourceB._loroSnapshotBytes;
       }
     } else {
-      // No Loro state on the incoming resource — use plain cache replacement.
-      // Don't touch the local Loro doc (if any) — incoming has no Loro data
-      // to contribute, so local Loro state should be preserved. Same
-      // ownership-transfer rationale as the branch above.
-      this._cache = resourceB._cache;
-      this._auxValues = new Map(resourceB._auxValues);
+      // No incoming Loro snapshot (e.g. metadata-only update or non-crdt resource)
+      // Copy housekeeping properties first
+      const serverManaged = [properties.commit.lastCommit, commits.properties.createdAt];
+      for (const key of serverManaged) {
+        if (resourceB._cache[key] !== undefined) {
+          this._cache[key] = resourceB._cache[key];
+        }
+      }
+      // Shallow copy other fields if no loro doc exists at all
+      if (!this._loroDoc) {
+        this._cache = resourceB._cache;
+        this._auxValues = new Map(resourceB._auxValues);
+      }
     }
 
     this.new = resourceB.new;
@@ -1042,7 +1058,12 @@ export class Resource<C extends OptionalClass = any> {
       ?.toString();
 
     if (remoteLastCommit && remoteLastCommit !== this._lastCommit) {
-      this._lastCommit = remoteLastCommit;
+      this.setLastCommitValue(remoteLastCommit);
+    }
+
+    const remoteCreatedAt = resourceB.get(commits.properties.createdAt);
+    if (typeof remoteCreatedAt === 'number') {
+      this.setCreatedAtValue(remoteCreatedAt);
     }
 
     // We set this last because it will trigger a loading change event.
